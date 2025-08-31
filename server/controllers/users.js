@@ -406,7 +406,7 @@ export const applyLeave = async (event) => {
   } catch (err) {
     console.log(err)
     await transaction.rollback();
-    return error(err.message || "Failed to apply leave");
+    return error(500, err.message);
   }
 };
 
@@ -419,12 +419,12 @@ export const allusersLeavesHistory = async (event) => {
         {
           model: User,
           as: "user",
-          attributes: ["id", "name", "email", "photo"],
+          attributes: ["id", "fullName", "email", "photo"],
         },
         {
           model: User,
           as: "approver",
-          attributes: ["id", "name", "email", "photo"],
+          attributes: ["id", "fullName", "email", "photo"],
         },
       ],
       order: [["startDate", "DESC"]],
@@ -440,8 +440,9 @@ export const allusersLeavesHistory = async (event) => {
       user: leave.user
         ? {
             id: leave.user.id,
-            name: leave.user.name,
+            fullName: leave.user.fullName,
             email: leave.user.email,
+            photo: leave.user.photo,
           }
         : null,
       approver: leave.approver

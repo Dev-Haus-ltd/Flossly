@@ -1,4 +1,5 @@
 import {
+  allusersLeavesHistory,
   applyLeave,
   leaveHistory,
   updateAllowedLeaves,
@@ -30,6 +31,8 @@ export default defineEventHandler(async (event) => {
       return await applyLeave(event);
     case "updateLeaveEntitlement":
       return await updateAllowedLeaves(event);
+    case "teamLeaves":
+      return await allusersLeavesHistory(event)
     default:
       return { code: 0, error: "Not found" };
   }

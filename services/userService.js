@@ -99,4 +99,15 @@ export default {
         });
     });
   },
+  getTeamLeaves(data) {
+    return new Promise((resolve, reject) => {
+      Post("/users/teamLeaves", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
 };

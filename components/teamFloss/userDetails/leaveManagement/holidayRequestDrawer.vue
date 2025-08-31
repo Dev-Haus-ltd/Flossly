@@ -152,7 +152,7 @@
             </v-col>
 
             <!-- Leave Hours -->
-            <v-col cols="6">
+            <v-col v-if="props.origin !== 'holidays'" cols="6">
               <label class="fld-lbl">Leave Hours</label>
               <v-select
                 v-model="form.totalHours"
@@ -165,7 +165,7 @@
             </v-col>
 
             <!-- Pay -->
-            <v-col cols="6">
+            <v-col v-if="props.origin !== 'holidays'" cols="6">
               <label class="fld-lbl">Is this leave paid?</label>
               <v-switch v-model="form.isPaid" inset color="primary" />
             </v-col>
@@ -183,7 +183,7 @@
             </v-col>
 
             <!-- Supporting Documents -->
-            <v-col cols="12">
+            <v-col v-if="props.origin !== 'holidays'" cols="12">
               <div v-if="!uploadedFile.length" class="mb-2">
                 <div>
                   <p class="text-body-2 text-grey-darken-1">
@@ -269,6 +269,7 @@ const userStore = useUserStore();
 const props = defineProps({
   modelValue: Boolean,
   user: Object,
+  origin: String,
 });
 const emit = defineEmits(["close", "success"]);
 const formRef = ref(null);
@@ -296,9 +297,16 @@ watch(
 );
 
 const setUsers = () => {
-  allUsers.value = userStore.orgUsers.find(
-    (x) => x.organisation.id === props.user.organisationId
-  ).orgUsers;
+  if (props.user) {
+    allUsers.value = userStore.orgUsers.find(
+      (x) => x.organisation.id === props.user.organisationId
+    ).orgUsers;
+  } else {
+    const localUser = JSON.parse(localStorage.getItem("user"));
+    allUsers.value = userStore.orgUsers.find(
+      (x) => x.organisation.id === localUser.currentLoggedInOrgId
+    ).orgUsers;
+  }
 };
 // file uploads
 const uploadedFile = ref([]);
@@ -361,7 +369,12 @@ const onSubmit = async () => {
       formData.append(el, form.value[el]);
     });
     formData.append("file", uploadedFile.value[0]);
-    formData.append("organisationId", props.user.organisationId);
+    if (props.user) {
+      formData.append("organisationId", props.user.organisationId);
+    } else {
+      const localUser = JSON.parse(localStorage.getItem("user"));
+      formData.append("organisationId", localUser.currentLoggedInOrgId);
+    }
     userStore.applyLeave(formData).then((res) => {
       if (res.code === 0) {
         emit("success");
