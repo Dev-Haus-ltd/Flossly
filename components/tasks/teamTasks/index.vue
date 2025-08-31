@@ -7,10 +7,16 @@
           <v-card
             :style="{ backgroundColor: item.color }"
             class="task-card pa-4"
-            elevation="0"
+            :elevation="0"
           >
-            <div class="card-number">{{ item.taskCount }}</div>
-            <div class="card-label">{{ item.categoryName }}</div>
+            <lord-icon
+              :src="getIcon(item.categoryName)"
+              trigger="hover"
+              style="width: 60px; height: 60px"
+            >
+            </lord-icon>
+            <div class="card-number ml-2">{{ item.taskCount }}</div>
+            <div class="card-label ml-2 mt-1">{{ item.categoryName }}</div>
           </v-card>
         </v-col>
       </v-row>
@@ -148,7 +154,20 @@ const updateTasks = () => {
   getTeamStats();
 };
 bus.on("updateTeamTasks", updateTasks);
-
+const getIcon = (categoryName) => {
+  switch (categoryName) {
+    case "Marketing":
+      return "https://cdn.lordicon.com/ldackjhr.json";
+    case "Staff Management":
+      return "https://cdn.lordicon.com/umjzhslu.json";
+    case "Finance":
+      return "https://cdn.lordicon.com/fmsnftap.json";
+    case "Compliance":
+      return "https://cdn.lordicon.com/umjzhslu.json";
+    default:
+      return "https://cdn.lordicon.com/fniqkimj.json"; // fallback
+  }
+};
 const availableHeaders = computed(() => {
   return mainStore.getTeamTaskAllHeaders;
 });

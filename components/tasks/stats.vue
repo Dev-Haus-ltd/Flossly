@@ -23,10 +23,10 @@
       </div>
 
       <v-row>
-    <CommonStatCard
+    <CommonStatCard 
       v-for="(stat, i) in taskStatsConfig"
       :key="i"
-      :image="stat.image"
+      :icon="stat.icon"
       :label="stat.label"
       :value="stat.value"
     />
@@ -72,10 +72,6 @@
 definePageMeta({
   layout: "home",
 });
-import Completed from '@/assets/images/tasks/completed.svg'
-import Total from '@/assets/images/tasks/total.svg'
-import Pending from '@/assets/images/tasks/pending.svg'
-import Upcoming from '@/assets/images/tasks/upcoming.svg'
 
 const teamTaskStats = ref([]);
 const taskStore = useTaskStore();
@@ -104,24 +100,24 @@ const getTeamTasksStats = () => {
 };
 const taskStatsConfig = computed(() => [
   {
-    image: Total,
+    icon: "https://cdn.lordicon.com/qtdtmioh.json",
     label: 'Total Tasks',
     value: myTaskCounts.value.pending
       ? myTaskCounts.value.pending + myTaskCounts.value.completed + myTaskCounts.value.upcoming
       : 0
   },
   {
-    image: Completed,
+    icon: "https://cdn.lordicon.com/txshdzva.json",
     label: 'Completed Tasks',
     value: myTaskCounts.value.completed
   },
   {
-    image: Pending,
+    icon: "https://cdn.lordicon.com/cvcslrjt.json",
     label: 'In Progress Tasks',
     value: myTaskCounts.value.pending
   },
   {
-    image: Upcoming,
+    icon: "https://cdn.lordicon.com/cvcslrjt.json",
     label: 'Upcoming Tasks',
     value: myTaskCounts.value.upcoming
   }

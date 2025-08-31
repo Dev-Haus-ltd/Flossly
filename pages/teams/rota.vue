@@ -470,11 +470,11 @@
               <div
                 class="content-wrapper d-flex flex-column align-center justify-center"
               >
-                <img
+                <!-- <img
                   src="@/assets/icons/teamfloss/userDetails/createRota/logo.svg"
                   alt="practice icon"
                   class="practice-img mb-4"
-                />
+                /> -->
                 <p class="practice-title">
                   {{ practice.label }}
                 </p>
