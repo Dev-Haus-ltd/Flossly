@@ -491,6 +491,7 @@
                 class="d-flex flex-column align-center justify-center pa-6 option-card"
                 :class="{ 'selected-card': selectedOption === option.value }"
                 @click="selectedOptionHandle(option.value)"
+                :elevation="0"
               >
                 <v-radio
                   :value="option.value"
@@ -523,6 +524,102 @@
               </v-card>
             </v-col>
           </v-row>
+        </div>
+        <div class="mt-2" v-if="isCreateRota">
+          <v-row>
+            <v-col cols="4">
+             <!-- Title -->
+             <h2 class="rota-title">Create a new rota</h2>
+
+<!-- Form -->
+<v-form v-model="isValid" ref="rotaForm" class="mt-4">
+  <!-- Rota Name -->
+  <label class="field-label">
+    Rota name<span class="required">*</span>
+  </label>
+  <v-text-field
+    v-model="form.rotaName"
+    variant="solo"
+    flat
+    density="compact"
+    class="input-bordered"
+    :rules="[rules.required]"
+  />
+
+  <!-- Rota Duration -->
+  <label class="field-label">
+    Rota duration<span class="required">*</span>
+  </label>
+  <v-text-field
+    v-model="form.rotaDuration"
+    variant="solo"
+    flat
+    density="compact"
+    class="input-bordered"
+    :rules="[rules.required]"
+  />
+
+  <!-- Rota Start Date -->
+  <label class="field-label">
+    Rota start date<span class="required">*</span>
+  </label>
+  <v-menu
+    v-model="menuDateCreaterota"
+    :close-on-content-click="false"
+    transition="scale-transition"
+    offset-y
+  >
+    <template #activator="{ props }">
+      <v-text-field
+        v-bind="props"
+        v-model="form.rotaStartDate"
+        readonly
+        variant="solo"
+        flat
+        density="compact"
+        class="input-bordered"
+        :rules="[rules.required]"
+        append-inner-icon="mdi-calendar"
+      />
+    </template>
+    <v-date-picker
+      v-model="form.rotaStartDate"
+      color="primary"
+      @update:model-value="menuDateCreaterota = false"
+    />
+  </v-menu>
+
+  <!-- Add Employee -->
+  <h2 class="rota-title mb-1">Add Employee</h2>
+
+  <label class="field-label">
+    Employee<span class="required">*</span>
+  </label>
+  <v-autocomplete
+  v-model="form.employees"
+  :items="employees"
+  item-title="name"
+  item-value="id"
+  multiple
+  chips
+  closable-chips
+  variant="solo"
+  flat
+  density="compact"
+  class="input-bordered"
+  :rules="[rules.required]"
+  :menu-props="{ eager: true }" 
+/>
+  <!-- Submit -->
+  <div class="mt-6 text-right">
+    <v-btn color="primary" type="button" @click="submitForm">
+      Create Rota
+    </v-btn>
+  </div>
+</v-form>
+            </v-col>
+   
+  </v-row>
         </div>
       </div>
     </div>
@@ -724,7 +821,7 @@ const selectPractice = (value) => {
 };
 
 const selectedOption = ref(null);
-
+const isCreateRota= ref(false)
 const rotaOptions = [
   {
     value: "new",
@@ -739,7 +836,44 @@ const rotaOptions = [
 ];
 const selectedOptionHandle = (value) => {
   selectedOption.value = value;
+  if(selectedOption.value==="new"){
+    isCreateRota.value=true
+  } else{
+    isCreateRota.value=false
+
+  }
   console.log("Selected Option:", value);
+};
+// form
+const rotaForm = ref(null);
+const isValid = ref(false);
+const menuDateCreaterota = ref(false);
+
+const form = ref({
+  rotaName: '',
+  rotaDuration: '',
+  rotaStartDate: '',
+  employees: [],
+});
+
+const employees = ref([
+  { id: 1, name: 'Alice' },
+  { id: 2, name: 'Bob' },
+  { id: 3, name: 'Charlie' },
+]);
+
+const rules = {
+  required: (v) =>
+    (Array.isArray(v) ? v.length > 0 : !!v) || 'This field is required',
+};
+
+const submitForm = async () => {
+  const { valid } = await rotaForm.value.validate(); // <-- triggers validation & shows errors
+  if (!valid) {
+    console.warn('Form invalid:', form.value);
+    return;
+  }
+  console.log('Form submitted:', form.value);
 };
 </script>
 <style scoped>
@@ -753,7 +887,7 @@ const selectedOptionHandle = (value) => {
   color: #c3c3c3;
 }
 .stat-card {
-  border: 1px solid #dbdbdb;
+  border: 1px solid #dbdbdb; 
   background-color: #f3f6fa;
   border-radius: 16px;
 }
@@ -966,5 +1100,19 @@ const selectedOptionHandle = (value) => {
 /* radio border color */
 ::v-deep(.option-radio .v-selection-control__input .v-icon) {
   color: #3adf8d !important;
+}
+/* create rota form */
+.field-label {
+  display: block;
+  margin-bottom: 4px;
+  font-family: Poppins;
+  font-weight: 400;
+  font-size: 14px;
+  color: #737373;
+}
+
+.required {
+  color: red !important;
+  margin-left: 2px;
 }
 </style>
