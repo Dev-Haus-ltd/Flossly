@@ -162,6 +162,21 @@
             hover
           >
             <template
+              v-slot:[`item.data-table-select`]="{
+                internalItem,
+                isSelected,
+                toggleSelect,
+              }"
+            >
+              <input
+                type="checkbox"
+                :checked="isSelected(internalItem)"
+                @change="() => toggleSelect(internalItem)"
+                class="cust-checkbox"
+              />
+            </template>
+
+            <template
               v-slot:headers="{
                 columns,
                 getSortIcon,
@@ -216,14 +231,13 @@
                       ></span>
                     </div>
                     <div v-else>
-                      <v-checkbox
-                        :model-value="allSelected"
-                        :indeterminate="someSelected && !allSelected"
-                        @update:model-value="toggleAll(group)"
-                        density="compact"
-                        hide-details
-                        variant="outlined"
-                        class="custom-checkbox"
+                      <input
+                        type="checkbox"
+                        class="cust-checkbox"
+                        style="margin-left: 5px"
+                        :checked="allSelected"
+                        :indeterminate.prop="someSelected && !allSelected"
+                        @change="toggleAll"
                       />
                     </div>
                   </th>
@@ -993,5 +1007,33 @@ const onSelectionChange = (newSelected) => {
   background-color: #fff;
   margin-top: 16px;
   gap: 16px;
+}
+.cust-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  /* remove default styling in some browsers if you want a fully custom look */
+  -webkit-appearance: none;
+  appearance: none;
+  border: 2px solid #cfcfcf;
+  border-radius: 4px;
+  display: inline-block;
+  position: relative;
+  margin-left: 11px;
+}
+.cust-checkbox:checked {
+  background: black;
+  border-color: black;
+}
+.cust-checkbox:checked::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 0px;
+  width: 6px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 </style>
