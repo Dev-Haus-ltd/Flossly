@@ -1,4 +1,4 @@
-Add checks for normal users
-update design of selected tray
-
-
+1. Add API for users Tasks as events for calender
+2. Add API to return Pending leaves for Admin
+3. Add API to approve leaves
+4. Design fixes

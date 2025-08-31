@@ -84,9 +84,12 @@ export const listMyTasks = async (event) => {
       offset: Number(offset),
       order: [["createdAt", "DESC"]],
     });
+    const data = tasks.rows.map((el) => {
+      return { ...el, start: el.dueDate || el.createdAt };
+    });
     return success({
       total: tasks.count,
-      data: tasks.rows,
+      data,
     });
   } catch (err) {
     return error(500, err.message);
@@ -192,15 +195,6 @@ export const assignBulkTasks = async (event) => {
         };
       })
       .filter(Boolean);
-
-    console.log(
-      "already",
-      alreadyAssignedTaskIds,
-      "new",
-      newTasks,
-      "userTas",
-      userTasks
-    );
     await UserTask.bulkCreate(userTasks);
     return success(userTasks);
     //TODO: Send new task assigned email
@@ -351,53 +345,7 @@ export const viewTeamTasksTaskWise = async (event) => {
     return error(500, err.message);
   }
 };
-export const viewTeamTasksUserWise = async (event) => {
-  try {
-    const loggedUser = event.context.user;
-    const organisationId = loggedUser.orgId;
-    const userTasks = await UserTask.findAll({
-      where: { organisationId },
-      include: [
-        {
-          model: Task,
-          as: "taskDetails",
-          include: [
-            {
-              model: TaskCategory,
-              as: "category",
-              attributes: ["id", "name"],
-            },
-          ],
-        },
-        {
-          model: UserTaskAttachment,
-          as: "attachments",
-          attributes: ["id", "title", "link", "type"],
-        },
-        {
-          model: User,
-          as: "assignedUser",
-          attributes: ["id", "fullName", "photo"],
-        },
-        {
-          model: OrganisationPriority,
-          as: "priority",
-          attributes: ["id", "key", "name", "color"],
-        },
-        {
-          model: OrganisationStatus,
-          as: "status",
-          attributes: ["id", "key", "name", "color"],
-        },
-      ],
-    });
-    const taskMap = new Map();
 
-    return success(userTasks);
-  } catch (err) {
-    return error(500, err.message);
-  }
-};
 export const unAssignTask = async (event) => {
   try {
     const loggedUser = event.context.user;
@@ -612,7 +560,7 @@ export const createNewTask = async (event) => {
     await transaction.commit();
     return success("Task Added");
   } catch (err) {
-    console.log(err)
+    console.log(err);
     await transaction.rollback();
     return error(500, err);
   }
@@ -1129,7 +1077,7 @@ export const getCategoriesforPool = async (event) => {
         {
           model: Task,
           attributes: [],
-          as: 'tasks'
+          as: "tasks",
         },
       ],
       group: ["TaskCategories.id"],

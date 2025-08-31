@@ -48,8 +48,6 @@ export default defineEventHandler(async (event) => {
       return await unAssignTask(event);
     case "teamTasks":
       return await viewTeamTasksTaskWise(event);
-    case "teamTasksDetails":
-      return await viewTeamTasksUserWise(event);
     case "updateUserTask":
       return await updateTask(event);
     case "addAttachments":
