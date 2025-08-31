@@ -84,11 +84,7 @@
                   :to="item.to"
                   :active="isParentActive(item)"
                   @click="navigate(item.to)"
-                  :class="[
-                    'custom-list-item',
-                    isParentActive(item) && 'active-item',
-                    isParentActive(item) && 'right-border',
-                  ]"
+                  :class="['custom-list-item']"
                 >
                   <template #prepend>
                     <img :src="item.imgPath" class="list-icon" alt="icon" />
@@ -105,11 +101,7 @@
                         v-bind="tooltipProps"
                         :to="child.to"
                         :active="isExact(child.to)"
-                        :class="[
-                          'custom-list-item',
-                          isExact(child.to) && 'active-item',
-                          isExact(child.to) && 'right-border',
-                        ]"
+                        :class="['custom-list-item']"
                       >
                         <template #prepend>
                           <img
@@ -128,11 +120,7 @@
                     :title="child.title"
                     :to="child.to"
                     :active="isExact(child.to)"
-                    :class="[
-                      'custom-list-item not-intended',
-                      isExact(child.to) && 'active-item',
-                      isExact(child.to) && 'right-border',
-                    ]"
+                    :class="['custom-list-item not-intended']"
                   >
                     <template #title>
                       <span>{{ child.title }}</span>
@@ -255,12 +243,12 @@ const currentOrg = ref({});
   border-radius: 6px;
   .v-list-group--open {
     background-color: #f6f6f6;
+    border-right: 5px solid #60e5a3;
     border-radius: 6px;
     .active-item {
       background-color: transparent;
     }
   }
-
 }
 .group-with-line.no-line .child-wrapper::before {
   display: none;
@@ -274,10 +262,10 @@ const currentOrg = ref({});
 .child-wrapper::before {
   content: "";
   position: absolute;
-  top: -12px;
+  top: -15px;
   left: 17px;
   width: 2px;
-  height: calc(100% + 22px);
+  height: calc(100% + 1px);
   background-color: #dbdbdb;
   z-index: 0;
 }

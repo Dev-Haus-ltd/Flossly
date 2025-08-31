@@ -8,11 +8,10 @@
     <!-- Checkbox Cell -->
     <div class="table-cell checkbox-cell">
       <v-checkbox
-        v-model="isChecked"
+        v-model="localChecked"
         hide-details
         density="compact"
         class="ma-0 pa-0"
-        @update:model-value="onChecked"
       />
     </div>
 
@@ -27,22 +26,24 @@
 const props = defineProps({
   title: String,
   id: [String, Number],
-  hasBorder: {
-    type: Boolean,
-    default: true, // Let parent disable top border for first row
-  },
+  hasBorder: { type: Boolean, default: true },
+  checked: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['checked'])
+const emit = defineEmits(['update:checked'])
 
-const isChecked = ref(false)
 const hover = ref(false)
+const localChecked = ref(props.checked)
 
-function onChecked(value) {
-  emit('checked', { id: props.id, checked: value })
-}
+watch(
+  () => props.checked,
+  (val) => { localChecked.value = val }
+)
+
+watch(localChecked, (val) => {
+  emit('update:checked', val)
+})
 </script>
-
 <style scoped>
 .checklist-row {
   display: flex;
@@ -67,7 +68,7 @@ function onChecked(value) {
 }
 
 .checkbox-cell {
-  width: 56px;
+  width: 60px;
   justify-content: center;
   border-right: 1px solid #e0e0e0;
 

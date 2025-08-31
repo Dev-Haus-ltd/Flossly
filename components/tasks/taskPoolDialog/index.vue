@@ -41,7 +41,7 @@
                   :title="card.name"
                   :description="card.description"
                   :count="card.taskCount"
-                  @click="fetchGeneralTasks(card.id)"
+                  @click="fetchGeneralTasks(card)"
                 />
               </v-col>
             </v-row>
@@ -52,19 +52,46 @@
               style="border-color: #dbdbdb"
               :elevation="0"
             >
-              <v-icon
+              <v-card-title
+                class="px-2 py-4"
                 v-if="subCategories.length"
-                @click="subCategoryView = true"
-                size="36"
-                color="gray"
-                >mdi-arrow-left</v-icon
+                style="
+                  border-bottom: 1px solid #dbdbdb;
+                  background-color: #f1f1f1;
+                "
               >
+                <div class="d-flex align-center">
+                  <v-icon
+                    @click="subCategoryView = true"
+                    size="24"
+                    color="gray"
+                    class="mr-3"
+                    >mdi-arrow-left</v-icon
+                  >
+                  <p style="font-size: 16px">{{ selectedSubCategory.name }}</p>
+                </div>
+              </v-card-title>
               <v-list v-if="tasks.length" class="pa-0">
+                <div class="checklist-row has-border" style="background-color: #f6f6f6;">
+                  <div class="table-cell checkbox-cell">
+                    <v-checkbox
+                      v-model="selectAll"
+                      hide-details
+                      density="compact"
+                      class="ma-0 pa-0"
+                      @change="toggleAll"
+                    />
+                  </div>
+                  <div class="table-cell title-cell font-weight-bold">
+                    Tasks
+                  </div>
+                </div>
                 <TasksTaskPoolDialogTaskRow
                   v-for="item in tasks"
                   :key="item.id"
                   :id="item.id"
                   :title="item.title"
+                  v-model:checked="item.checked"
                   @checked="handleCheck"
                 />
               </v-list>
@@ -105,14 +132,16 @@ const categoryList = ref([]);
 const subCategories = ref();
 const subCategoryView = ref(true);
 const selectedTasks = ref([]);
+const selectedSubCategory = ref(null);
 const props = defineProps({
   modelValue: Boolean,
 });
 
 const emit = defineEmits(["onUpdate"]);
-const fetchGeneralTasks = (id) => {
+const fetchGeneralTasks = (category) => {
+  selectedSubCategory.value = category;
   taskStore
-    .generalTasks({ categoryId: id })
+    .generalTasks({ categoryId: category.id })
     .then((res) => {
       if (res.code === 0) {
         subCategoryView.value = false;
@@ -145,7 +174,7 @@ const fetchListCategories = () => {
           subCategories.value = firstCatSubCat;
           subCategoryView.value = true;
         } else {
-          fetchGeneralTasks(categoryList.value[0].id);
+          fetchGeneralTasks(categoryList.value[0]);
         }
       } else {
         mainStore.setSnackbar({
@@ -179,7 +208,8 @@ watch(tab, async (newId) => {
     } else {
       subCategories.value = [];
       subCategoryView.value = true;
-      fetchGeneralTasks(newId);
+      const category = categoryList.value.filter((x) => x.id === newId);
+      fetchGeneralTasks(category);
     }
   }
 });
@@ -214,21 +244,28 @@ const addTaskToBoard = async () => {
   }
 };
 
-function handleCheck({ id, checked }) {
+const handleCheck = ({ id, checked }) => {
   const task = tasks.value.find((task) => task.id === id);
   if (!task) return;
-
   if (checked) {
-    // Add if not already in selectedTasks
     if (!selectedTasks.value.some((t) => t.id === id)) {
       selectedTasks.value.push(task);
     }
   } else {
-    // Remove if unchecked
     selectedTasks.value = selectedTasks.value.filter((t) => t.id !== id);
   }
+};
 
-  console.log("Selected tasks:", selectedTasks.value);
+const selectAll = computed({
+  get: () => tasks.value.every((i) => i.checked),
+  set: (val) => {
+    tasks.value.forEach((i) => (i.checked = val));
+  },
+});
+
+function toggleAll() {
+  const value = selectAll.value;
+  tasks.value.forEach((i) => (i.checked = value));
 }
 
 function goBack() {
@@ -261,5 +298,37 @@ function goBack() {
 }
 ::v-deep(.bonus-chip .v-icon) {
   color: #fea200;
+}
+.checklist-row {
+  display: flex;
+  min-height: 48px;
+  transition: background-color 0.2s ease;
+  cursor: pointer;
+}
+
+.checklist-row.has-border {
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.checklist-row:hover {
+  background-color: #f5f5f5;
+}
+
+.table-cell {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+}
+
+.checkbox-cell {
+  width: 60px;
+  justify-content: center;
+  border-right: 1px solid #e0e0e0;
+
+}
+
+.title-cell {
+  flex: 1;
 }
 </style>

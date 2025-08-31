@@ -4,7 +4,7 @@
     class="rounded-lg border-sm"
   >
     <v-calendar
-      v-model="selectedItem"
+      v-model="calender"
       :events="tasks"
       hide-week-number
       color="primary"
@@ -67,6 +67,7 @@
 const emit = defineEmits(["onOpen"]);
 const detailsDialog = ref(false);
 const selectedItem = ref(null);
+const calender = ref(null)
 const { tasks } = defineProps({
   tasks: Array,
 });
