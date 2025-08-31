@@ -17,7 +17,7 @@
           <CommonStatCard
             v-for="(stat, i) in teamStats"
             :key="i"
-            :image="stat.image"
+            :icon="stat.icon"
             :label="stat.label"
             :value="stat.value"
             hide-chip
@@ -42,10 +42,7 @@
 </template>
 
 <script setup>
-import Total from "@/assets/icons/teamfloss/total.svg";
-import NewJoiner from "@/assets/icons/teamfloss/new.svg";
-import Birthday from "@/assets/icons/teamfloss/birthday.svg";
-import Pending from "@/assets/icons/teamfloss/pending.svg";
+
 
 const bus = useBus();
 const showUserDetails = ref(false);
@@ -107,22 +104,22 @@ const teamStats = computed(() => {
 
   return [
     {
-      image: Total,
+      icon: "https://cdn.lordicon.com/umvndfds.json",
       label: "Total Staff",
       value: totalMembers,
     },
     {
-      image: NewJoiner,
+      icon: "https://cdn.lordicon.com/rprwxqaf.json",
       label: "New Joiner",
       value: newcomers,
     },
     {
-      image: Birthday,
+      icon: "https://cdn.lordicon.com/bwmsmpql.json",
       label: "Staff Birthday",
       value: birthdays,
     },
     {
-      image: Pending,
+      icon: "https://cdn.lordicon.com/hrwiqpqi.json",
       label: "Pending Approvals",
       value: approvals,
     },
