@@ -230,11 +230,10 @@
                         @mousedown="startResize($event, column)"
                       ></span>
                     </div>
-                    <div v-else>
+                    <div v-else class="d-flex align-center justify-center">
                       <input
                         type="checkbox"
-                        class="cust-checkbox"
-                        style="margin-left: 5px"
+                        class="cust-checkbox ma-0"
                         :checked="allSelected"
                         :indeterminate.prop="someSelected && !allSelected"
                         @change="toggleAll"
@@ -1015,22 +1014,23 @@ const onSelectionChange = (newSelected) => {
   /* remove default styling in some browsers if you want a fully custom look */
   -webkit-appearance: none;
   appearance: none;
-  border: 2px solid #cfcfcf;
+  border: 1px solid #cfcfcf;
   border-radius: 4px;
   display: inline-block;
   position: relative;
-  margin-left: 11px;
+  margin-left: 14px;
+  margin-top: 5px;
 }
 .cust-checkbox:checked {
-  background: black;
+  background: rgb(23, 23, 23);
   border-color: black;
 }
 .cust-checkbox:checked::after {
   content: "";
   position: absolute;
-  left: 4px;
-  top: 0px;
-  width: 6px;
+  left: 6px;
+  top: 2px;
+  width: 4px;
   height: 10px;
   border: solid white;
   border-width: 0 2px 2px 0;
