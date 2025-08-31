@@ -2,6 +2,16 @@
   <div>
     <div class="d-flex justify-space-between align-center my-2">
       <div class="d-flex align-center py-1">
+        <v-btn-toggle v-model="viewType" mandatory class="custom-toggle">
+          <v-btn value="list" class="toggle-btn">
+            <v-icon size="16" class="mr-1">mdi-format-align-right</v-icon>
+            List
+          </v-btn>
+          <v-btn value="calender" class="toggle-btn">
+            <v-icon size="16" class="mr-1">mdi-calendar</v-icon>
+            Calender
+          </v-btn>
+        </v-btn-toggle>
         <!-- Search Field -->
         <div style="width: 150px">
           <v-text-field
@@ -101,7 +111,13 @@
       </div>
     </div>
 
-    <v-expansion-panels v-model="openedPanels" :elevation="0" flat multiple>
+    <v-expansion-panels
+      v-if="viewType === 'list'"
+      v-model="openedPanels"
+      :elevation="0"
+      flat
+      multiple
+    >
       <v-expansion-panel
         v-for="(group, index) in taskDetails"
         :key="index"
@@ -508,6 +524,8 @@
       </v-expansion-panel>
     </v-expansion-panels>
 
+    <TasksCalenderView v-else :tasks="tasksForCalender" />
+
     <TasksTaskDetailsDialog
       v-model="dialogOpen"
       :selectedItem="selectedItem"
@@ -537,7 +555,7 @@ const {
   orgStatuses,
   priorities,
   users,
-  categories, 
+  categories,
   clearSelection,
 } = defineProps({
   headers: Array,
@@ -553,8 +571,8 @@ watch(
   () => clearSelection,
   (newVal) => {
     if (newVal) {
-      isAllSelected.value=false
-    selectedTasks.value = [];
+      isAllSelected.value = false;
+      selectedTasks.value = [];
     }
   }
 );
@@ -585,7 +603,7 @@ const expanded = ref([]);
 const focusedField = ref({});
 const statuses = ref([]);
 const priorityStatuses = ref([]);
-
+const viewType = ref("list");
 const selectedHeaders = ref([]);
 const toggleStatusEdit = ref(false);
 const selectedTasks = ref([]);
@@ -598,21 +616,32 @@ const drawerOpen = ref(false);
 const openedPanels = ref([0]);
 const dialogOpen = ref(false);
 const taskPoolDialog = ref(false);
-const isAllSelected= ref(false);
+const isAllSelected = ref(false);
+const tasksForCalender = ref([]);
 onMounted(() => {
   selectedHeaders.value = sortHeaders(headers);
   statuses.value = orgStatuses;
   priorityStatuses.value = priorities;
   user.value = JSON.parse(localStorage.getItem("user"));
 });
-watch(selectedHeaders, (newVal) => {
-  console.log(newVal);
-});
-
 watch(
   () => taskDetails,
   (newVal) => {
     selectedItem.value = [];
+    tasksForCalender.value = newVal.flatMap((group) =>
+      group.tasks.map((task) => ({
+        id: task.id,
+        title: task.title,
+        start: new Date(task.dueDate || task.createdAt),
+        end: new Date(task.dueDate || task.createdAt),
+        color: task.status?.color || task.priority?.color || "#2196F3",
+        status: task.status,
+        priority: task.priority,
+        userId: task.userId,
+        assignedUsers: task.assignedUsers ? task.assignedUsers : [user.value],
+        category: task.taskDetails?.category,
+      }))
+    );
   }
 );
 const getTaskUsers = (task) => {
@@ -620,7 +649,6 @@ const getTaskUsers = (task) => {
     return users.filter((x) => x.roleId !== task.taskDetails.roleId);
   } else return [];
 };
-
 const updateTasks = () => {
   drawerOpen.value = false;
   taskPoolDialog.value = false;
@@ -703,6 +731,7 @@ const unAssign = async (task, user) => {
 
 const assignTask = async (task, user) => {
   try {
+    task.id = task.taskId;
     const res = await taskStore.assignTask({ userId: user.id, tasks: [task] });
 
     if (res.code === 0) {
@@ -835,21 +864,20 @@ const updateSubtaskHeaderTitle = (key, value) => {
 };
 
 const toggleAll = () => {
-  console.log(isAllSelected.value)
   if (isAllSelected.value) {
-    isAllSelected.value=false
-    selectedTasks.value = []
+    isAllSelected.value = false;
+    selectedTasks.value = [];
   } else {
-    const selected = []
+    const selected = [];
     taskDetails.forEach((el) => {
       el.tasks.forEach((t) => {
-        selected.push(t)
-      })
-    })
-    selectedTasks.value = selected
-    isAllSelected.value = true
+        selected.push(t);
+      });
+    });
+    selectedTasks.value = selected;
+    isAllSelected.value = true;
   }
-  
+
   emit("updateSelectedRowItems", selectedTasks.value);
 };
 const getDetails = (item) => {
@@ -887,6 +915,24 @@ const onSelectionChange = (newSelected) => {
 :deep() .v-table .v-table__wrapper > table > tbody > tr > td:not(:last-child),
 .v-table .v-table__wrapper > table > tbody > tr > th:not(:last-child) {
   border-right: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+.custom-toggle {
+  /* background-color: transparent; */
+  height: 40px;
+}
+
+.toggle-btn {
+  background-color: #f3f6fa !important;
+  text-transform: none;
+  font-size: 14px;
+  color: #333;
+  transition: all 0.2s ease-in-out;
+}
+
+.v-btn--active.toggle-btn {
+  background-color: #ffffff !important;
+  box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px); /* small lift effect */
 }
 .custom-search,
 .tbl-top-btn {

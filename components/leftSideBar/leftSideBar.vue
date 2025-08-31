@@ -253,7 +253,13 @@ const currentOrg = ref({});
 .group-with-line {
   position: relative;
   border-radius: 6px;
-  background-color: #f6f6f6;
+  .v-list-group--open {
+    background-color: #f6f6f6;
+    border-radius: 6px;
+    .active-item {
+      background-color: transparent;
+    }
+  }
 
 }
 .group-with-line.no-line .child-wrapper::before {
@@ -277,6 +283,7 @@ const currentOrg = ref({});
 }
 .active-item {
   font-weight: 600 !important;
+  background-color: #f6f6f6;
 }
 .right-border {
   border-right: 5px solid #60e5a3;
