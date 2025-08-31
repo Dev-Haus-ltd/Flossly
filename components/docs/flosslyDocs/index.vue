@@ -1,12 +1,14 @@
 <template>
   <div class="parent">
-    <div class="cust-border py-2 px-5">
-      <h3 class="head">
-        Flossly docs /
-        <span @click="goBack" style="color: blue !important; cursor: pointer">{{
-          selectedFolder?.name
-        }}</span>
-      </h3>
+    <div class="cust-border d-flex align-center">
+      <p class="mr-1">Flossly docs</p>
+      <p
+        v-if="selectedFolder?.name"
+        @click="goBack"
+        style="color: blue !important; cursor: pointer"
+      >
+        {{ " / " + selectedFolder.name }}
+      </p>
     </div>
     <div v-if="!showFolderDetails">
       <!-- recently assessed  -->
@@ -59,7 +61,7 @@
     <div v-else>
       <div class="my-5 px-5">
         <DocsMyDocsAllFiles
-        :hideAddFileButton="true"
+          :hideAddFileButton="true"
           :files="files.filter((x) => x.folderId === selectedFolder.id)"
           :folder="selectedFolder"
           @view-file="openFile"
@@ -69,10 +71,7 @@
       </div>
     </div>
 
-    <DocsMyDocsViewFileDialog
-      v-model="viewFileDialog"
-      :doc="selectedDoc"
-    />
+    <DocsMyDocsViewFileDialog v-model="viewFileDialog" :doc="selectedDoc" />
   </div>
 </template>
 
@@ -164,12 +163,17 @@ const goBack = () => {
 };
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .parent {
   background-color: white;
 }
 .cust-border {
   border-bottom: 1px solid #dbdbdb;
+  padding: 17px;
+  p {
+    font-size: 12px;
+    color: #c3c3c3;
+  }
 }
 .head {
   font-family: "Poppins";

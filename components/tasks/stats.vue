@@ -1,11 +1,8 @@
 <template>
-  <div class="cust-border py-2 px-5">
-    <v-row align="center">
-      <v-col cols="6">
-        <h3 class="task-head">Flossy Dashboard</h3>
-      </v-col>
-      
-    </v-row>
+  <div class="cust-border d-flex align-center">
+
+        <p class="mr-1">Flossy Dashboard</p>
+   
   </div>
   <div class="main pa-4">
     <v-card
@@ -133,6 +130,11 @@ const taskStatsConfig = computed(() => [
 }
 .cust-border {
   border-bottom: 1px solid #dbdbdb;
+  padding: 17px;
+  p {
+    font-size: 12px;
+    color: #c3c3c3;
+  }
 }
 
 </style>
