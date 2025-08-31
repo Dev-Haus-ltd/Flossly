@@ -5,7 +5,7 @@
       <v-row dense>
         <v-col cols="12" md="2" v-for="(item, i) in taskStats" :key="i">
           <v-card
-            :style="{ backgroundColor: item.color }"
+            :style="{ backgroundColor: '#F3F6FA' }"
             class="task-card pa-4"
             :elevation="0"
           >
@@ -431,22 +431,22 @@ const handleComplete = async () => {
 }
 
 .task-card {
-  background-color: #ffffff;
   border-radius: 8px;
+  border: 1px solid #DBDBDB;
 }
 
 .card-number {
   font-family: "Poppins", sans-serif;
   font-weight: 600;
   font-size: 24px;
-  color: #fff;
+  color: #1E1E1E;
 }
 
 .card-label {
   font-family: "Poppins", sans-serif;
   font-weight: 400;
   font-size: 13px;
-  color: #fff;
+  color: #737373;
 }
 .custom-tabs {
   border-bottom: 1px solid #dbdbdb;
