@@ -26,6 +26,7 @@
         {{ file.name }}
       </div>
       <div
+      v-if="file.folder?.name || folder?.name"
         style="
           color: #737373;
           font-family: Poppins;

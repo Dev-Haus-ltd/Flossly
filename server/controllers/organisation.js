@@ -36,8 +36,7 @@ export const updateOrganisationDetails = async (event) => {
     organisation.type = fields.type[0] || organisation.type;
 
 
-    organisation.managerId = fields.managerId ? fields.managerId[0] : organisation.type;
-    organisation.managerId = fields.managerId ? fields.managerId[0] : organisation.type;
+    organisation.managerId = fields.managerId ? fields.managerId[0] : organisation.managerId;
     organisation.teamCount = fields.teamCount ? fields.teamCount[0] : organisation.teamCount;
     organisation.surgeryCount = fields.surgeryCount ? fields.surgeryCount[0] : organisation.surgeryCount;
     organisation.cqcInspectionDate = fields.cqcInspectionDate ? fields.cqcInspectionDate[0] : organisation.cqcInspectionDate;

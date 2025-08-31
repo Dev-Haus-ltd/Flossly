@@ -7,7 +7,7 @@
         alt="John"
         :src="props?.user?.photo || props?.user?.logo"
       ></v-img>
-      <span v-else class="text-lg">{{ getInitials() }}</span> 
+      <span v-else>{{ getInitials() }}</span> 
     </v-avatar>
   </div>
 </template>

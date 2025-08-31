@@ -63,7 +63,6 @@
 </template>
 
 <script setup>
-
 const emit = defineEmits(["getDetails", "onUpdate"]);
 const props = defineProps({
   teams: Array,
@@ -127,7 +126,7 @@ const filteredTeams = computed(() => {
 
 const updateTeams = () => {
   emit("onUpdate");
-  addStaffDrawer.value = false; 
+  addStaffDrawer.value = false;
 };
 const selectedHeaders = ref([
   { title: "Name", key: "name", width: 200, sortable: true },
@@ -168,8 +167,9 @@ const handleAdd = (item) => {
   console.log("Add clicked:", item);
 };
 
-const getUserDetails = (item) => {
-  emit("getDetails", item);
+const getUserDetails = (data) => {
+  data.item.organisationId = data.org.organisation.id;
+  emit("getDetails", data.item);
 };
 </script>
 

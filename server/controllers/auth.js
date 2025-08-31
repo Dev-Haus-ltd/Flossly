@@ -175,12 +175,11 @@ export const profile = async (event) => {
 };
 
 export const updateProfile = async (event) => {
-  const { userId } = event.context.user;
   const body = await readBody(event);
-  const { phone, address, dob, gender, nextOfKin, nextOfKinContact } =
+  const { id, phone, address, dob, gender, nextOfKin, nextOfKinContact } =
     JSON.parse(body);
   try {
-    const user = await User.findByPk(userId);
+    const user = await User.findByPk(id);
     user.phone = phone || user.phone;
     user.address = address || user.address;
     user.dob = dob || user.dob;
@@ -291,15 +290,15 @@ export const updatePassword = async (event) => {
   try {
     if (!oldPassword || !newPassword)
       return error(402, "Missing required fields");
-    const user = await User.findOne({ where: { userId } });
+    const user = await User.findOne({ where: { id: userId } });
     if (!user || !(await bcrypt.compare(oldPassword, user.password))) {
       return error(401, "Invalid credentials");
     }
     const hashed = await bcrypt.hash(newPassword, 10);
-    await User.update({ password: hashed }, { where: { userId } });
+    await User.update({ password: hashed }, { where: { id: userId } });
     return success("Password updated");
   } catch (err) {
-    return error(500, err);
+    return error(500, err.message);
   }
 };
 

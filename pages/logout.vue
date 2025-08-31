@@ -3,11 +3,15 @@ definePageMeta({
   layout: "default",
 });
 const token = useCookie("accessToken");
-token.value = null;
-if (window) {
-  window.location.replace("/login");
-} else {
   const router = useRouter()
-  router.push('/login')
-}
+
+token.value = null;
+
+  const savedRoute = localStorage.getItem("route");
+   if(savedRoute==="forgetpassword"){
+    router.push({ name: savedRoute, params: { step: 2 }});
+  } else {
+    router.push("/login");
+  }
+
 </script>

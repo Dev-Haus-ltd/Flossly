@@ -13,12 +13,12 @@
                 <!-- Current Password -->
                 <label class="input-label">Current Password</label>
                 <v-text-field
-                  v-model="form.currentPassword"
+                  v-model="form.oldPassword"
                   type="password"
                   density="comfortable"
                   variant="solo"
                   single-line
-                  required
+                  :rules="[rules.required]"
                   class="mb-2 custom-input"
                   flat
                 />
@@ -26,7 +26,7 @@
                 <!-- Forgot Password -->
                 <div class="forgot-line">
                   Forgot your password?
-                  <a href="#" class="reset-link">Reset password via email</a>
+                  <a  class="reset-link" @click="resetPassword">Reset password via email</a>
                 </div>
 
                 <!-- New Password -->
@@ -37,7 +37,7 @@
                   density="comfortable"
                   variant="solo"
                   single-line
-                  required
+                  :rules="[rules.required]"
                   class="mb-2 custom-input"
                   flat
                 />
@@ -50,7 +50,7 @@
                   density="comfortable"
                   variant="solo"
                   single-line
-                  required
+                  :rules="[rules.required, rules.matchPassword]"
                   class="mb-4 custom-input"
                   flat
                 />
@@ -75,28 +75,96 @@
 </template>
 
 <script setup>
-import { reactive, computed } from "vue";
 
+const { user } = defineProps({
+  user: Object,
+});
+
+const authStore= useAuthStore();
+const store=useMainStore();
+const router= useRouter();
 const form = reactive({
-  currentPassword: "",
+  oldPassword: "",
   newPassword: "",
   confirmPassword: "",
 });
 
+const rules = {
+  required: (value) => !!value || "This field is required",
+  matchPassword: (value) =>
+    value === form.newPassword || "Passwords do not match",
+};
+
 const isFormValid = computed(() => {
   return (
-    form.currentPassword &&
+    form.oldPassword &&
     form.newPassword &&
-    form.confirmPassword &&
-    form.newPassword === form.confirmPassword
+    form.confirmPassword 
   );
 });
 
-function onSave() {
-  console.log("Saving new password:", form);
-  // handle API call here
+async function onSave() { 
+  if (!isFormValid.value) return;
+  console.log("Saving new password:", form); 
+
+  try {
+    const res = await authStore.updatePassword({
+      oldPassword: form.oldPassword,
+      newPassword: form.newPassword,
+    });
+
+    if (res.code === 0) {
+      store.setSnackbar({
+        title: res.data?.message || res.message || "Password updated successfully",
+        type: "success",
+      });
+
+      form.oldPassword = "";
+      form.newPassword = "";
+      form.confirmPassword =""
+    } else {
+      store.setSnackbar({
+        title: res.data?.message || res.message || "Failed to update password",
+        type: "error",
+      });
+    }
+  } catch (err) {
+    console.error("Error updating password:", err);
+
+    store.setSnackbar({
+      title: err?.response?.data?.message || err?.message || "Failed to update password",
+      type: "error",
+    });
+  }
 }
+const resetPassword= async()=>{
+  try {
+    const res = await authStore.requestReset({ email: user.email });
+    if (res.code === 0) {
+      
+      store.setSnackbar({
+        title: res.message || "Reset code sent to your email",
+        type: "success",
+      });
+      localStorage.setItem("route", "forgetpassword");
+      router.push("/logout");
+
+    } else {
+      store.setSnackbar({
+        title: res.message || "Something went wrong",
+        type: "error",
+      });
+    }
+  } catch (err) {
+    store.setSnackbar({
+      title: err.message,
+      type: "error",
+    });
+  }
+}
+
 </script>
+
 
 <style scoped>
 .input-label {

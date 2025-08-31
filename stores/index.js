@@ -10,6 +10,8 @@ import settingsIcon from "@/assets/icons/mainDrawerIcons/settings.svg";
 import cleanIcon from "@/assets/icons/mainDrawerIcons/clean.svg";
 import profileIcon from "@/assets/icons/mainDrawerIcons/profile.svg";
 import flosslyDocs from '@/assets/icons/mainDrawerIcons/docs.svg'
+import crmIcon from '@/assets/icons/mainDrawerIcons/crm.svg'
+
 
 export const useMainStore = defineStore("mainStore", {
   state: () => ({
@@ -80,8 +82,46 @@ export const useMainStore = defineStore("mainStore", {
           value: "teamFloss",
           to: "/teams",
           children: [
-           
+            {
+              title: "Rota Management",
+              value: "rotaManagement",
+              imgPath: teamIcon,
+              to: "/teams/rota",
+            },
+            {
+              title: "Holiday Tracker",
+              value: "holidayTracker",
+              imgPath: teamIcon,
+              to: "/teams/holiday",
+            },
+            {
+              title: "Payroll",
+              value: "payroll",
+              imgPath: teamIcon,
+              to: "/teams/payroll",
+            },
+            {
+              title: "Invoice",
+              value: "invoice",
+              imgPath: teamIcon,
+              to: "/teams/invoice",
+            }, 
+        
           ],
+        },
+        {
+          title: "CRM",
+          imgPath: crmIcon,
+          value: "crm",
+          to:"/crm",
+          children: [],
+        },
+        {
+          title: "Flossy Diary",
+          imgPath: tasksIcon,
+          value: "flosslyDiary",
+          to:"/diary",
+          children: [],
         },
         // {
         //   title: "Staff",

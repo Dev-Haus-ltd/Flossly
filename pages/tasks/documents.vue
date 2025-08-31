@@ -1,5 +1,7 @@
 <template>
-    team docs
+ <div>
+  team docs
+ </div>  
 </template>
 <script setup>
 definePageMeta({

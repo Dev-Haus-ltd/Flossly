@@ -259,15 +259,22 @@ const openEmail = () => {
   overflow: auto;
   width: 100%;
 }
-
-.v-calendar-month__days {
+.team-holidays-calender {
+  .v-calendar-header {
+    padding-left: 20px;
+  }
+  .v-calendar__container {
+    .v-calendar-weekly__head {
+      border-bottom: 1px solid lightgray;
+    }
+  }
+  .v-calendar-month__days {
   .v-calendar-month__day {
-    min-height: 60px !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: end;
+    // min-height: 100px !important;
 }
 } 
+}
+
 
 @media (min-width: 1400px) and (max-width: 1610px) {
   .v-container {

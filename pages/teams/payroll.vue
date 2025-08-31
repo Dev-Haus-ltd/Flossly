@@ -1,8 +1,8 @@
 <template>
+    <TeamFlossPayroll/>
+    
 
-<TeamFloss/>
 </template>
-
 <script setup>
 definePageMeta({
   layout: 'home'

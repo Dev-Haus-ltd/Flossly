@@ -196,6 +196,7 @@
 const { user } = defineProps({
   user: Object,
 });
+console.log(user)
 const mainStore= useMainStore();
 const dbMenu = ref(false)
 const authStore = useAuthStore()
@@ -212,7 +213,7 @@ const getAccountType = () => {
 };
 
 const getPracticeName = () => {
-  return user?.userOrganisations.find(
+  return user?.userOrganisations?.find(
     (x) => x.organisationId === user.currentLoggedInOrgId
   ).organisation.name;
 };

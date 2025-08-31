@@ -12,7 +12,7 @@
       <!-- Text -->
       <div class="ml-4 mt-2">
         <div class="rewards-title">My Rewards Points</div>
-        <div class="rewards-points">{{ user?.userPoints && user?.userPoints[0].balance || 0 }}</div>
+        <div class="rewards-points">{{ userBalance }}</div>
       </div>
     </div>
     <h5 class="sub-head mt-5">Points History</h5>
@@ -39,6 +39,9 @@ const getRewardHistory = () => {
     }
   })
 }
+const userBalance = computed(() => {
+  return user?.userPoints?.[0]?.balance ?? 0;
+});
 </script>
 
 <style scoped>

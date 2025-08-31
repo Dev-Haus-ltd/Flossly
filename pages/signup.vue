@@ -1,3 +1,8 @@
 <template>
-  <sign-up />
+  <div>
+
+    <sign-up />
+   
+
+  </div>
 </template>

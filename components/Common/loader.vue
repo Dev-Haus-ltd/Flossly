@@ -23,11 +23,13 @@ const mainStore = useMainStore();
 const orgStore = useOrgStore();
 const taskStore = useTaskStore();
 const docStore = useDocStore();
+const userStore = useUserStore();
 const { isLoading: authLoading } = storeToRefs(authStore);
 const { isLoading: mainLoading } = storeToRefs(mainStore);
 const { isLoading: orgLoadong } = storeToRefs(orgStore);
 const { isLoading: taskLoading } = storeToRefs(taskStore);
 const { isLoading: docLoading } = storeToRefs(docStore);
+const { isLoading: userLoading } = storeToRefs(userStore);
 
 const anyLoading = computed(
   () =>
@@ -35,7 +37,8 @@ const anyLoading = computed(
     mainLoading.value ||
     orgLoadong.value ||
     taskLoading.value ||
-    docLoading.value
+    docLoading.value ||
+    userLoading.value
 );
 </script>
 

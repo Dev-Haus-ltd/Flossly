@@ -49,6 +49,44 @@ export const UserContract = sequelize.define(
       type: DataTypes.DECIMAL,
       allowNull: true,
     },
+    holidaysCashBack: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    holidaysEntitledUnit: {
+      type: DataTypes.ENUM("Hour", "Day"),
+      allowNull: true,
+      defaultValue: "Day",
+    },
+    holidayAllowedAfterDate: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    pensionEligible: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false,
+    },
+    payrolNumber: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    paymentFrequency: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    paymentStartDate: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    reportsTo: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: "Users",
+        key: "id",
+      },
+    },
   },
   {
     modelName: "UserContracts",

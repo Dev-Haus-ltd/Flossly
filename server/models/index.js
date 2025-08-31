@@ -353,7 +353,12 @@ Organisation.hasMany(UserContract, {
   as: "userContracts",
 });
 
-// User Leaves Management
+// Accounts
+
+UserAccount.belongsTo(User, { foreignKey: "userId", as: "user" })
+User.hasOne(UserAccount, { foreignKey: "userId", as: "account" })
+
+// system documents
 
 User.hasMany(UserLeaveHistory, { foreignKey: "userId", as: "leaveHistory" });
 UserLeaveHistory.belongsTo(User, { foreignKey: "userId", as: "user" });
@@ -365,7 +370,7 @@ User.hasOne(UserLeaveEntitlement, {
 });
 UserLeaveEntitlement.belongsTo(User, { foreignKey: "userId", as: "user" });
 
-UserLeaveHistory.belongsTo(User, { foreignKey: "approvedBy", as: "Approver" });
+UserLeaveHistory.belongsTo(User, { foreignKey: "approvedBy", as: "approver" });
 
 // SystemDocument ↔ SystemDocumentFolder
 SystemDocument.belongsTo(SystemDocumentFolder, {

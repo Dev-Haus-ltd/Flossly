@@ -196,5 +196,20 @@ export const useAuthStore = defineStore("authStore", {
           });
       });
     },
+    updatePassword(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService 
+          .updatePassword(data)
+          .then((res) =>  {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false; 
+            reject(err); 
+          });
+      });
+    },
   },
 });

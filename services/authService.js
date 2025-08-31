@@ -188,4 +188,15 @@ export default {
         });
     });
   },
+  updatePassword(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/updatePassword", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
 };

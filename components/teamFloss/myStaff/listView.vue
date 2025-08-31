@@ -99,7 +99,7 @@
                   src="@/assets/dashboard/expandIcon.svg"
                   alt=""
                   class="ml-2"
-                  @click="$emit('onUserSelect', item)"
+                  @click="$emit('onUserSelect', {org, item})"
                   style="cursor: pointer"
                 />
               </div>

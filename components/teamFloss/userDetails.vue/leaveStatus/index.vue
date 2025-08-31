@@ -1,1 +1,0 @@
-<template>leave status</template>

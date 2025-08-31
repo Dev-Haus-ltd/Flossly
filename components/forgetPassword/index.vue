@@ -19,7 +19,7 @@
         <!-- Right side form -->
         <v-col
           cols="12"
-          md="7"
+          md="7" 
           class="d-flex align-center justify-center px-12"
         >
           <div style="width: 100%; max-width: 500px">
@@ -112,7 +112,6 @@ import { useRouter } from "vue-router";
 const authStore = useAuthStore();
 const store = useMainStore(); // ✅ main snackbar store
 const router = useRouter();
-
 const step = ref(1);
 
 const email = ref("");
@@ -197,6 +196,13 @@ const submitReset = async () => {
     });
   }
 };
+
+onMounted(() => {
+  if (localStorage.getItem('route')) {
+    step.value = 2
+    localStorage.removeItem('route')
+  }
+})
 
 const goToLogin = () => {
   router.push("/login");

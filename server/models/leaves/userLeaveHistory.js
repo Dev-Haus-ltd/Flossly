@@ -54,6 +54,14 @@ export const UserLeaveHistory = sequelize.define(
       type: DataTypes.DECIMAL,
       allowNull: true,
     },
+    isPaid: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true
+    },
+    document: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
     approvedBy: {
       type: DataTypes.INTEGER,
       allowNull: true,
