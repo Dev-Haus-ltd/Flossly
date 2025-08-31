@@ -154,48 +154,6 @@ export const useMainStore = defineStore("mainStore", {
         //     },
         //   ],
         // },
-        {
-          title: "Floss Academy",
-          imgPath: academyIcon,
-          value: "flossAcademy-group",
-          children: [],
-        },
-        {
-          title: "Floss Flow",
-          imgPath: flowIcon,
-          value: "flossFlow-group",
-          children: [],
-        },
-        {
-          title: "Content Cavity",
-          imgPath: contentIcon,
-          value: "contentCavity-group",
-          children: [],
-        },
-        {
-          title: "Cavity Check",
-          imgPath: checkIcon,
-          value: "cavityCheck-group",
-          children: [],
-        },
-        {
-          title: "Settings",
-          imgPath: settingsIcon,
-          value: "settings",
-          to: "/settings",
-        },
-        {
-          title: "Clean Sweep",
-          imgPath: cleanIcon,
-          value: "cleanSweep",
-          to: "/cleanSweep",
-        },
-        {
-          title: "Practice Profile",
-          imgPath: profileIcon,
-          value: "practiceProfile",
-          to: "/practiceProfile",
-        },
       ];
     },
     getuserOptions() {
