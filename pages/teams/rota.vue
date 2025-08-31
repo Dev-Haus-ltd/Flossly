@@ -528,100 +528,210 @@
         <div class="mt-2" v-if="isCreateRota">
           <v-row>
             <v-col cols="4">
-             <!-- Title -->
-             <h2 class="rota-title">Create a new rota</h2>
+              <!-- Title -->
+              <h2 class="rota-title">Create a new rota</h2>
 
-<!-- Form -->
-<v-form v-model="isValid" ref="rotaForm" class="mt-4">
-  <!-- Rota Name -->
-  <label class="field-label">
-    Rota name<span class="required">*</span>
-  </label>
-  <v-text-field
-    v-model="form.rotaName"
-    variant="solo"
-    flat
-    density="compact"
-    class="input-bordered"
-    :rules="[rules.required]"
-  />
+              <!-- Form -->
+              <v-form v-model="isValid" ref="rotaForm" class="mt-4">
+                <!-- Rota Name -->
+                <label class="field-label">
+                  Rota name<span class="required">*</span>
+                </label>
+                <v-text-field
+                  v-model="form.rotaName"
+                  variant="solo"
+                  flat
+                  density="compact"
+                  class="input-bordered"
+                  :rules="[rules.required]"
+                />
 
-  <!-- Rota Duration -->
-  <label class="field-label">
-    Rota duration<span class="required">*</span>
-  </label>
-  <v-text-field
-    v-model="form.rotaDuration"
-    variant="solo"
-    flat
-    density="compact"
-    class="input-bordered"
-    :rules="[rules.required]"
-  />
+                <!-- Rota Duration -->
+                <label class="field-label">
+                  Rota duration<span class="required">*</span>
+                </label>
+                <v-text-field
+                  v-model="form.rotaDuration"
+                  variant="solo"
+                  flat
+                  density="compact"
+                  class="input-bordered"
+                  :rules="[rules.required]"
+                />
 
-  <!-- Rota Start Date -->
-  <label class="field-label">
-    Rota start date<span class="required">*</span>
-  </label>
-  <v-menu
-    v-model="menuDateCreaterota"
-    :close-on-content-click="false"
-    transition="scale-transition"
-    offset-y
-  >
-    <template #activator="{ props }">
-      <v-text-field
-        v-bind="props"
-        v-model="form.rotaStartDate"
-        readonly
-        variant="solo"
-        flat
-        density="compact"
-        class="input-bordered"
-        :rules="[rules.required]"
-        append-inner-icon="mdi-calendar"
-      />
-    </template>
-    <v-date-picker
-      v-model="form.rotaStartDate"
-      color="primary"
-      @update:model-value="menuDateCreaterota = false"
-    />
-  </v-menu>
+                <!-- Rota Start Date -->
+                <label class="field-label">
+                  Rota start date<span class="required">*</span>
+                </label>
+                <v-menu
+                  v-model="menuDateCreaterota"
+                  :close-on-content-click="false"
+                  transition="scale-transition"
+                  offset-y
+                >
+                  <template #activator="{ props }">
+                    <v-text-field
+                      v-bind="props"
+                      v-model="form.rotaStartDate"
+                      readonly
+                      variant="solo"
+                      flat
+                      density="compact"
+                      class="input-bordered"
+                      :rules="[rules.required]"
+                      append-inner-icon="mdi-calendar"
+                    />
+                  </template>
+                  <v-date-picker
+                    v-model="form.rotaStartDate"
+                    color="primary"
+                    @update:model-value="menuDateCreaterota = false"
+                  />
+                </v-menu>
 
-  <!-- Add Employee -->
-  <h2 class="rota-title mb-1">Add Employee</h2>
+                <!-- Add Employee -->
+                <h2 class="rota-title mb-1">Add Employee</h2>
 
-  <label class="field-label">
-    Employee<span class="required">*</span>
-  </label>
-  <v-autocomplete
-  v-model="form.employees"
-  :items="employees"
-  item-title="name"
-  item-value="id"
-  multiple
-  chips
-  closable-chips
-  variant="solo"
-  flat
-  density="compact"
-  class="input-bordered"
-  :rules="[rules.required]"
-  :menu-props="{ eager: true }" 
-/>
-  <!-- Submit -->
-  <div class="mt-6 text-right">
-    <v-btn color="primary" type="button" @click="submitForm">
-      Create Rota
-    </v-btn>
-  </div>
-</v-form>
+                <label class="field-label">
+                  Employee<span class="required">*</span>
+                </label>
+                <v-autocomplete
+                  v-model="form.employees"
+                  :items="employees"
+                  item-title="name"
+                  item-value="id"
+                  multiple
+                  chips
+                  closable-chips
+                  variant="solo"
+                  flat
+                  density="compact"
+                  class="input-bordered"
+                  :rules="[rules.required]"
+                  :menu-props="{ eager: true }"
+                />
+                <!-- Submit -->
+                <div class="mt-6 text-right">
+                  <v-btn type="button" @click="step = 3"> next step </v-btn>
+                  <v-btn color="primary" type="submit" @click="submitForm">
+                    Create Rota
+                  </v-btn>
+                </div>
+              </v-form>
             </v-col>
-   
-  </v-row>
+          </v-row>
         </div>
       </div>
+    </div>
+    <!-- calender view -->
+    <div class="pa-5 bg-white" v-else-if="step === 3">
+      <div class="mt-5">
+        <!-- Title -->
+        <h3 class="rota-title mb-2">Dentozen London</h3>
+
+        <!-- Top Bar -->
+        <div class="d-flex justify-space-between align-center">
+          <!-- Left Side -->
+          <div class="d-flex align-center ga-3">
+            <!-- Search -->
+            <v-text-field
+              v-model="searchCal"
+              variant="solo"
+              flat
+              density="compact"
+              class="input-bordered"
+              append-inner-icon="mdi-magnify"
+              placeholder="Search"
+              hide-details
+              style="width: 240px"
+            />
+
+            <!-- Filter Menu -->
+            <v-menu
+              v-model="filterMenu"
+              offset-y
+              :close-on-content-click="false"
+              :elevation="0"
+            >
+              <template #activator="{ props }">
+                <v-text-field
+                  v-bind="props"
+                  readonly
+                  variant="solo"
+                  flat
+                  density="compact"
+                  class="input-bordered"
+                  append-inner-icon="mdi-filter-outline"
+                  placeholder="Filter"
+                  hide-details
+                  style="width: 200px"
+                />
+              </template>
+
+              <v-card min-width="280">
+                <v-card-title class="d-flex align-center justify-space-between">
+                  <span class="text-subtitle-1 font-weight-600">Filter by</span>
+                  <v-btn
+                    color="primary"
+                    class="text-sm"
+                    @click="clearFilters"
+                    variant="outlined"
+                  >
+                    Clear Filters
+                  </v-btn>
+                </v-card-title>
+                <v-divider />
+                <v-card-text>
+                  <label class="filter-label">Select Rota View</label>
+                  <v-select
+                    v-model="selectedView"
+                    :items="rotaViews"
+                    variant="solo"
+                    flat
+                    density="compact"
+                    class="input-bordered mt-2"
+                  />
+                </v-card-text>
+              </v-card>
+            </v-menu>
+          </div>
+
+          <!-- Right Side Buttons -->
+          <div class="d-flex align-center ga-3">
+            <!-- Save Button -->
+            <v-btn
+              variant="outlined"
+              color="#3ADF8D"
+              class="text-none rounded-lg"
+            >
+              Save
+            </v-btn>
+
+            <!-- Unpublished Rota -->
+            <v-btn
+              color="secondary"
+              class="text-none rounded-lg"
+              prepend-icon="mdi-open-in-new"
+            >
+              Unpublished Rota
+            </v-btn>
+
+            <!-- Add Shift -->
+            <v-btn
+              color="primary"
+              class="text-none rounded-lg"
+              prepend-icon="mdi-plus-circle-outline"
+              @click="showShiftDialog = true"
+            >
+              Add Shift
+            </v-btn>
+          </div>
+        </div>
+      </div>
+      <TeamFlossRotaManagementShiftDialog
+        v-model="showShiftDialog"
+        @onSubmit="handleShiftSubmit"
+      />
     </div>
   </div>
 </template>
@@ -821,7 +931,7 @@ const selectPractice = (value) => {
 };
 
 const selectedOption = ref(null);
-const isCreateRota= ref(false)
+const isCreateRota = ref(false);
 const rotaOptions = [
   {
     value: "new",
@@ -836,11 +946,10 @@ const rotaOptions = [
 ];
 const selectedOptionHandle = (value) => {
   selectedOption.value = value;
-  if(selectedOption.value==="new"){
-    isCreateRota.value=true
-  } else{
-    isCreateRota.value=false
-
+  if (selectedOption.value === "new") {
+    isCreateRota.value = true;
+  } else {
+    isCreateRota.value = false;
   }
   console.log("Selected Option:", value);
 };
@@ -850,30 +959,45 @@ const isValid = ref(false);
 const menuDateCreaterota = ref(false);
 
 const form = ref({
-  rotaName: '',
-  rotaDuration: '',
-  rotaStartDate: '',
+  rotaName: "",
+  rotaDuration: "",
+  rotaStartDate: "",
   employees: [],
 });
 
 const employees = ref([
-  { id: 1, name: 'Alice' },
-  { id: 2, name: 'Bob' },
-  { id: 3, name: 'Charlie' },
+  { id: 1, name: "Alice" },
+  { id: 2, name: "Bob" },
+  { id: 3, name: "Charlie" },
 ]);
 
 const rules = {
   required: (v) =>
-    (Array.isArray(v) ? v.length > 0 : !!v) || 'This field is required',
+    (Array.isArray(v) ? v.length > 0 : !!v) || "This field is required",
 };
 
 const submitForm = async () => {
   const { valid } = await rotaForm.value.validate(); // <-- triggers validation & shows errors
   if (!valid) {
-    console.warn('Form invalid:', form.value);
+    console.warn("Form invalid:", form.value);
     return;
   }
-  console.log('Form submitted:', form.value);
+  console.log("Form submitted:", form.value);
+};
+
+//  calender view
+const showShiftDialog = ref(false);
+const searchCal = ref("");
+const filterMenu = ref(false);
+const selectedView = ref(null);
+
+const rotaViews = ["Surgery View", "Dentist View", "Nurse View"];
+const clearFilters = () => {
+  selectedView.value = null;
+};
+const handleShiftSubmit = (formData) => {
+  console.log("Shift submitted:", formData);
+  // 🔥 You can call your API/store action here to save the shift
 };
 </script>
 <style scoped>
@@ -887,7 +1011,7 @@ const submitForm = async () => {
   color: #c3c3c3;
 }
 .stat-card {
-  border: 1px solid #dbdbdb; 
+  border: 1px solid #dbdbdb;
   background-color: #f3f6fa;
   border-radius: 16px;
 }
@@ -1114,5 +1238,14 @@ const submitForm = async () => {
 .required {
   color: red !important;
   margin-left: 2px;
+}
+
+/* calender view */
+
+.filter-label {
+  font-family: Poppins;
+  font-weight: 400;
+  font-size: 14px;
+  color: #737373;
 }
 </style>
