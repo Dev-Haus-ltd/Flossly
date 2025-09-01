@@ -11,8 +11,11 @@
       type="month"
       class="team-holidays-calender"
     >
-      <template v-slot:day-event="{ event }">
-        <div class="tooltip-wrapper">
+      <template v-slot:day-body="{ events }">
+      <div class="day-cell">
+        <!-- Show max 3 events -->
+        <div class="tooltip-wrapper" v-for="(event, index) in limitedEvents(events)"
+        :key="index">
           <div
             @click="openTaskDetails(event)"
             class="d-flex align-center px-1 mb-1"
@@ -50,7 +53,17 @@
             </v-card>
           </div>
         </div>
-      </template>
+
+        <!-- "+X others" -->
+        <div
+          v-if="extraEventsCount(events) > 0"
+          class="more-chip"
+          @click="openEventList(events)"
+        >
+         <span class="more-tasks-label"> +{{ extraEventsCount(events) }} others</span>
+        </div>
+      </div>
+    </template>
       <template v-slot:day-title="{ title }">
         <span style="font-size: 12px">{{ title }}</span>
       </template>
@@ -76,6 +89,16 @@ const openTaskDetails = (task) => {
   detailsDialog.value = true;
   selectedItem.value = task;
 };
+
+const limitedEvents = (events) => {
+  console.log(events)
+  return events?.slice(0, 3) || []
+}
+
+const extraEventsCount = (events) => {
+  const total = events?.length || 0
+  return total > 3 ? total - 3 : 0
+}
 </script>
 <style lang="scss" scoped>
 .tooltip-wrapper {
@@ -96,5 +119,9 @@ const openTaskDetails = (task) => {
 
 .tooltip-wrapper:hover .tooltip-content {
   display: block;
+}
+.more-tasks-label {
+  font-size: 12px;
+  color: blue;
 }
 </style>
