@@ -191,6 +191,7 @@ export const assignBulkTasks = async (event) => {
           title: t.title,
           documentLink: "",
           frequency: t.defaultFrequency,
+          dueDate: getDueDate(t.defaultFrequency),
           comments: "",
         };
       })
@@ -203,7 +204,31 @@ export const assignBulkTasks = async (event) => {
     return error(500, err.message);
   }
 };
+const getDueDate = (frequency) => {
+  if (!frequency) return null;
+  switch (frequency) {
+    case "Daily":
+      return addDays(new Date(), 1);
+    case "Weekly":
+      return addDays(new Date(), 7);
+    case "Fortnightly":
+      return addDays(new Date(), 14);
+    case "Monthly":
+      return addDays(new Date(), 30);
+    case "Annualy":
+      return addDays(new Date(), 365);
+    case "Every 24 Months":
+      return addDays(new Date(), 730);
+    default:
+      return null;
+  }
+};
 
+const addDays = (date, days) => {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+};
 export const assignTaskAndPrioritiesToOrg = async (event) => {
   const loggedUser = event.context.user;
   try {

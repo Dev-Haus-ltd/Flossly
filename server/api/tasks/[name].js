@@ -19,7 +19,6 @@ import {
   getCategoriesforPool,
   viewTeamTasksTaskWise,
   getCategories,
-  viewTeamTasksUserWise,
   myTasksCountByCategory,
   getUserTasksStatusWise,
   groupTeamTasksByTaskId,
