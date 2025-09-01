@@ -32,25 +32,43 @@
           </v-col>
           <v-col cols="12" md="6">
             <label class="field-label">Contract Start Date</label>
-            <p
-              class="field-value"
-              :class="{ 'is-placeholder': !data.contractStartDate }"
-              contenteditable="true"
-              @focus="onFocus($event)"
-              @blur="onBlur($event, 'contractStartDate')"
-              @keydown.enter.prevent="onEnter($event, 'contractStartDate')"
+            <v-menu
+              v-model="menu"
+              :close-on-content-click="false"
+              transition="scale-transition"
+              offset-y
+              min-width="auto"
             >
-              {{ data.contractStartDate || "Not specified" }}
-            </p>
+              <template #activator="{ props }">
+                <v-text-field
+                  v-bind="props"
+                  :model-value="
+                    parsedDate(data.contractStartDate) || 'Not specified'
+                  "
+                  placeholder="Not specified"
+                  class="no-pad-textfield"
+                  readonly
+                  variant="solo"
+                  density="compact"
+                  hide-details
+                  flat
+                ></v-text-field>
+              </template>
+              <v-date-picker
+                v-model="data.contractStartDate"
+                @update:model-value="onDateChange"
+              ></v-date-picker>
+            </v-menu>
           </v-col>
+
           <v-col cols="12" md="6">
             <label class="field-label">Eligible for Pension?</label>
-            <v-switch
-              v-model="data.pensionEligible"
-              @change="onEnter($event, 'pensionEligible')"
-            ></v-switch>
+            <v-switch v-model="data.pensionEligible"></v-switch>
           </v-col>
         </v-row>
+        <div class="d-flex justify-end mt-4">
+          <v-btn color="primary" @click="savePanel"> Save </v-btn>
+        </div>
       </v-expansion-panel-text>
     </v-expansion-panel>
   </v-expansion-panels>
@@ -58,7 +76,8 @@
 
 <script setup>
 import { ref } from "vue";
-
+import { parsedDate } from "~/lib/dateFormatter";
+const menu = ref(false);
 const props = defineProps({
   data: { type: Object, required: true },
 });
@@ -97,6 +116,18 @@ const onEnter = (e, key) => {
   }
   emit("updateField", { sync: true, updated });
   e.target.blur();
+};
+const onDateChange = (val) => {
+  if (val) {
+    props.data.contractStartDate = val;
+  }
+  menu.value = false;
+};
+
+const savePanel = () => {
+  const updated = props.data;
+
+  emit("updateField", { sync: true, updated });
 };
 </script>
 
@@ -194,6 +225,13 @@ const onEnter = (e, key) => {
 /* Optional: selection color while editing */
 .field-value::selection {
   background: #d9eef0;
+}
+.no-pad-textfield :deep(.v-field) {
+  /* remove left/right internal padding */
+  --v-field-padding-start: 0px;
+  --v-field-padding-end: 0px;
+  /* optionally shrink control height if needed */
+  --v-input-control-height: 28px;
 }
 
 /* Optional: compact spacing on smaller screens */

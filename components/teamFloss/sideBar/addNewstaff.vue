@@ -118,12 +118,13 @@
 
 <script setup>
 
-const { modelValue } = defineProps({
+const { modelValue, rolesList } = defineProps({
   modelValue: Boolean,
+  rolesList: Array
 });
 
 const mainStore = useMainStore();
-const rolesList = ref([]);
+
 const emit = defineEmits(["close", "success"]);
 const formRef = ref(null);
 const requiredRule = [(v) => !!v || "This field is required"];
@@ -133,29 +134,9 @@ const form = ref({
   email: "",
   roleId: null,
 });
-const modelValueRef = toRef(() => modelValue);
 
-const getRoles = () => {
-  mainStore
-    .getRoles()
-    .then((res) => {
-      if (res.code === 0 && res.data) {
-        rolesList.value = res.data;
-      }
-    })
-    .catch((err) => {
-      return err;
-    });
-};
-watch(
-  modelValueRef,
-  (newValue) => {
-    if (newValue) {
-      getRoles();
-    }
-  },
-  { immediate: true }
-);
+
+
 
 const onSubmit = async () => {
   const formValidation = await formRef.value.validate();

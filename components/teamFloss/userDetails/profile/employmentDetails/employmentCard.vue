@@ -19,20 +19,32 @@
         <v-row>
           <v-col cols="12" md="6">
             <label class="field-label">role</label>
-            // V-select role
+            <v-select
+              v-model="role"
+              :items="rolesList"
+              item-title="title"
+              item-value="id"
+              class="field-value"
+              flat
+              density="compact"
+              variant="solo"
+              bg-color="white"
+              @update:modelValue="updateRole"
+            />
           </v-col>
           <v-col cols="12" md="6">
             <label class="field-label">Reports to</label>
-            <p
+            <v-select
+              v-model="data.reportsTo"
+              :items="userList"
+              item-title="fullName"
+              item-value="id"
               class="field-value"
-              :class="{ 'is-placeholder': !data.reportsTo }"
-              contenteditable="true"
-              @focus="onFocus($event)"
-              @blur="onBlur($event, 'reportsTo')"
-              @keydown.enter.prevent="onEnter($event, 'reportsTo')"
-            >
-              {{ data.reportsTo || "Not specified" }}
-            </p>
+              flat
+              density="compact"
+              variant="solo"
+              bg-color="white"
+            />
           </v-col>
           <v-col cols="12" md="6">
             <label class="field-label">Payroll Number</label>
@@ -48,6 +60,9 @@
             </p>
           </v-col>
         </v-row>
+        <div class="d-flex justify-end mt-4">
+          <v-btn color="primary" @click="savePanel"> Save </v-btn>
+        </div>
       </v-expansion-panel-text>
     </v-expansion-panel>
   </v-expansion-panels>
@@ -56,10 +71,15 @@
 <script setup>
 import { ref } from "vue";
 
-const props = defineProps({
+const { data, rolesList, userList, roleId } = defineProps({
   data: { type: Object, required: true },
+  rolesList: { type: Array, required: true },
+  userList: { type: Array, required: true },
+  roleId: { type: Number, required: true },
 });
-const emit = defineEmits(["updateField"]);
+const initialRoleId = ref(roleId);
+const role = ref(roleId);
+const emit = defineEmits(["updateField", "updateRole"]);
 
 const panel = ref(0);
 const togglePanel = () => {
@@ -73,13 +93,15 @@ const onFocus = (e) => {
   }
 };
 
+const updateRole = () => {};
+
 // restore placeholder if left empty
 const onBlur = (e, key) => {
   if (!e.target.innerText.trim()) {
     e.target.innerText = "Not specified";
   } else {
     const value = e.target.innerText.trim();
-    const updated = props.data;
+    const updated = data;
     updated[key] = value;
     emit("updateField", { sync: false, updated });
   }
@@ -87,11 +109,19 @@ const onBlur = (e, key) => {
 
 // only update on Enter
 const onEnter = (e, key) => {
-  const value = e.target.innerText.trim();
-  const updated = props.data;
+  const value = e.target.innerText.trim(); 
+  const updated = data;
   updated[key] = value;
   emit("updateField", { sync: true, updated });
   e.target.blur(); // exit editing mode
+};
+
+const savePanel = () => {
+  const updated = data;
+  emit("updateField", { sync: true, updated });
+  if (role.value !== initialRoleId.value) {
+    emit("updateRole", { sync: false, roleId: role.value });
+  }
 };
 </script>
 

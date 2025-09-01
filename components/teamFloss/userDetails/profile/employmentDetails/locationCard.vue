@@ -31,6 +31,11 @@
             </p>
           </v-col>
         </v-row>
+        <div class="d-flex justify-end mt-4" >
+    <v-btn color="primary" @click="savePanel">
+      Save
+    </v-btn>
+  </div>
       </v-expansion-panel-text>
     </v-expansion-panel>
   </v-expansion-panels>
@@ -38,7 +43,6 @@
 
 <script setup>
 import { ref } from "vue";
-
 const props = defineProps({
   data: { type: Object, required: true },
 });
@@ -75,6 +79,10 @@ const onEnter = (e, key) => {
   updated[key] = value;
   emit("updateField", { sync: true, updated });
   e.target.blur(); // exit editing mode
+};
+const savePanel = () => {
+  const updated = { ...props.data };
+  emit("updateField", { sync: true, updated });
 };
 </script>
 

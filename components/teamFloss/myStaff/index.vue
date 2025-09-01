@@ -53,10 +53,12 @@
     :selectedHeaders="selectedHeaders"
     :search="search"
     @add="handleAdd"
-    @onUserSelect="getUserDetails"
+    @onUserSelect="getUserDetails" 
   />
+
   <TeamFlossSideBarAddNewstaff
     v-model="addStaffDrawer"
+    :rolesList="rolesList"
     @close="addStaffDrawer = false"
     @success="updateTeams"
   />
@@ -66,6 +68,7 @@
 const emit = defineEmits(["getDetails", "onUpdate"]);
 const props = defineProps({
   teams: Array,
+  rolesList: Array
 });
 const addStaffDrawer = ref(false);
 
@@ -123,7 +126,7 @@ const filteredTeams = computed(() => {
     };
   });
 });
-
+console.log(filteredTeams.value)
 const updateTeams = () => {
   emit("onUpdate");
   addStaffDrawer.value = false;

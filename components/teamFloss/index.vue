@@ -26,17 +26,18 @@
       </div>
       <!-- my staff -->
       <div class="mt-5 px-5">
-        <TeamFlossMyStaff
+        <TeamFlossMyStaff 
           v-if="teams.length"
           :teams="teams"
           @getDetails="getDetails"
           @onUpdate="getTeams()"
+          :rolesList="rolesList"
         />
       </div>
     </div>
     <!-- user Details -->
     <div v-else>
-      <TeamFlossUserDetails :user="selectedItem" />
+      <TeamFlossUserDetails :user="selectedItem" :rolesList="rolesList" />
     </div>
   </div>
 </template>
@@ -49,13 +50,27 @@ const showUserDetails = ref(false);
 const selectedItem = ref(null);
 const userStore = useUserStore();
 const teams = ref([]);
-
+const mainStore = useMainStore();
+const rolesList = ref([]);
 const getDetails = (item) => {
   selectedItem.value = item;
+  console.log(selectedItem.value)
   showUserDetails.value = true;
 };
-
+const getRoles = () => {
+  mainStore
+    .getRoles()
+    .then((res) => {
+      if (res.code === 0 && res.data) {
+        rolesList.value = res.data;
+      }
+    }) 
+    .catch((err) => {
+      return err;
+    });
+};
 onMounted(() => {
+  getRoles();
   getTeams();
 });
 

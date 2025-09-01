@@ -27,8 +27,13 @@
       </v-col>
       <v-col cols="12" md="6">
         <TeamFlossUserDetailsProfileEmploymentDetailsEmploymentCard
-          :data="userDetails"
-          @updateField="updateGeneralDetails"
+          v-if="userDetails.id"
+          :data="userDetails.contract || {}"
+          :userList="userList"
+          :roleId="userDetails.roleId"
+          @updateField="updateEmploymentData"
+          @updateRole="updaterole"
+          :rolesList="rolesList"
         />
       </v-col>
       <v-col cols="12" md="6">
@@ -43,13 +48,15 @@
 
 <script setup>
 import { ref } from "vue";
-const { user } = defineProps({
+const { user, rolesList } = defineProps({
   user: Object,
+  rolesList: Array,
 });
 const userStore = useUserStore();
 const authStore = useAuthStore();
 
 const userDetails = ref({});
+const userList = ref([]);
 
 onMounted(() => {
   userStore
@@ -57,6 +64,10 @@ onMounted(() => {
     .then((res) => {
       if (res.code === 0) {
         userDetails.value = res.data;
+        userDetails.value.organisationId = user.organisationId;
+        userList.value = userStore.orgUsers.find(
+          (x) => x.organisation.id === user.organisationId
+        )?.orgUsers;
       }
     });
 });
@@ -72,6 +83,13 @@ const updateBankDetails = (data) => {
   userDetails.value.account = data.updated;
   if (data.sync) {
     updateUserBankDetails();
+  }
+};
+
+const updateEmploymentData = (data) => {
+  userDetails.value.contract = data.updated;
+  if (data.sync) {
+    updateContractDetails();
   }
 };
 
@@ -99,7 +117,14 @@ const updateAddress = (data) => {
     });
   }
 };
-
+const updaterole = (role) => {
+  userDetails.value.roleId = role.roleId;
+  authStore.updateProfile(userDetails.value).then((res) => {
+    if (res.code === 0) {
+      // set snack
+    }
+  });
+};
 const updateLeaveDetails = (data) => {
   userDetails.value.leaveEntitlement = data.updated;
   if (data.sync) {

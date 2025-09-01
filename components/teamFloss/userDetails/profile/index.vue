@@ -14,6 +14,7 @@
           :selected="selectedSection"
           @select="selectedSection = $event"
           class="mr-4 sidebar"
+
         />
 
         <!-- Main Content -->
@@ -23,6 +24,7 @@
             :is="currentComponent"
             :details="mockDetails"
             :user="user"
+            :rolesList="rolesList"
           />
         </div>
       </div>
@@ -31,8 +33,9 @@
 </template>
 
 <script setup>
-const { user } = defineProps({
+const { user, rolesList } = defineProps({
   user: Object,
+  rolesList: Array
 });
 import { ref, computed } from "vue";
 

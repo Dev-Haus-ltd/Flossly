@@ -30,7 +30,7 @@
     <!-- Tab Content -->
     <v-tabs-window v-model="currentTab">
       <v-tabs-window-item value="profile">
-          <TeamFlossUserDetailsProfile :user="user" /> 
+          <TeamFlossUserDetailsProfile :user="user" :rolesList="rolesList" /> 
       </v-tabs-window-item>
 
       <v-tabs-window-item value="leave">
@@ -42,15 +42,16 @@
       </v-tabs-window-item>
 
       <v-tabs-window-item value="performance">
-          <TeamFlossUserDetailsPerformance />
+            <TeamFlossUserDetailsPerformance />
       </v-tabs-window-item>
     </v-tabs-window>
   </div>
 </template>
 
 <script setup>
-const { user } = defineProps({
-  user: Object
+const { user, rolesList } = defineProps({
+  user: Object,
+  rolesList: Array
 })
 const currentTab = ref("profile");
 </script>
