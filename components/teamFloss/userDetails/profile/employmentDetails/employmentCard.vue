@@ -93,7 +93,6 @@ const onFocus = (e) => {
   }
 };
 
-const updateRole = () => {};
 
 // restore placeholder if left empty
 const onBlur = (e, key) => {
