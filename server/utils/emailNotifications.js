@@ -78,7 +78,7 @@ export const sendInvitationEmail = async (data) => {
       <br/>
       <p> Please click on the link below to get started with Flossly. </p>
        <a href=${
-        config.public.BASE_URL + "/acceptInvitation/" + data.link
+        config.public.BASE_URL + "/invite/" + data.link
       } target="blank"> Get Started </a>
       </body>
       </html>`,

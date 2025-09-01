@@ -101,7 +101,6 @@ const credentials = ref({
   onMounted(() => {
     const { token } = route.params
     credentials.value.inviteToken = token
-    console.log(credentials.value)
   })
   
   const acceptInvite = async () => {
