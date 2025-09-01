@@ -459,7 +459,7 @@ const inviteNewUsers = async (
     .map((i) => ({
       email: i.email,
       roleId: i.roleId,
-      fullName: i.email.split("@")[0],
+      fullName: i.fullName || i.email.split("@")[0],
       profileCompletion: 1,
       isEmailVerified: false,
       status: "Invited",
@@ -473,7 +473,7 @@ const inviteNewUsers = async (
     return { userId: u.id, organisationId: currentOrg };
   });
   await UserOrganisation.bulkCreate(orgAssociations, { transaction });
-  newUsersData.forEach(async (el) => {
+  newUsers.forEach(async (el) => {
     await sendInvitationEmail({
       email: el.email,
       orgTitle: currentOrganisation.name,
