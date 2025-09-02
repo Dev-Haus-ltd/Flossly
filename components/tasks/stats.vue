@@ -1,69 +1,68 @@
 <template>
-  <div class="cust-border d-flex align-center">
+  <div>
 
-        <p class="mr-1">Flossy Dashboard</p>
-   
-  </div>
-  <div class="main pa-4">
-    <v-card
-      color="#fff"
-      class="pa-1"
-      rounded="lg"
-      style="border-radius: 20px !important"
-      flat
-      min-width="100%"
-    >
-      <div class="d-flex justify-lg-space-between mb-4">
-        <p style="color: #1e1e1e; font-size: 14px; font-weight: 600">
-          Overview
-        </p>
-      </div>
-
-      <v-row>
-    <CommonStatCard 
-      v-for="(stat, i) in taskStatsConfig"
-      :key="i"
-      :icon="stat.icon"
-      :label="stat.label"
-      :value="stat.value"
-    />
-  </v-row>
-    </v-card>
-
-    <div class="myTeamTasks pa-1 my-6">
-      <div class="d-flex align-center mb-4">
-        <h3
-          class="ma-0"
-          style="color: #1e1e1e; font-size: 14px; font-weight: 600"
-        >
-          My Team Tasks
-        </h3>
-      </div>
-
-      <v-row
-        v-if="teamTaskStats && teamTaskStats.length && !showListView"
-        dense
+    <div class="cust-border d-flex align-center">
+  
+          <p class="mr-1">Flossy Dashboard</p>
+     
+    </div>
+    <div class="main pa-4">
+      <v-card
+        color="#fff"
+        class="pa-1"
+        rounded="lg"
+        style="border-radius: 20px !important"
+        flat
+        min-width="100%"
       >
-        <v-col
-          cols="12"
-          sm="12"
-          md="3"
-          lg="3"
-          xl="2"
-          v-for="(userStat, index) in teamTaskStats"
-          :key="index"
+        <div class="d-flex justify-lg-space-between mb-4">
+          <p style="color: #1e1e1e; font-size: 14px; font-weight: 600">
+            Overview
+          </p>
+        </div>
+  
+        <v-row>
+      <CommonStatCard 
+        v-for="(stat, i) in taskStatsConfig"
+        :key="i"
+        :icon="stat.icon"
+        :label="stat.label"
+        :value="stat.value"
+      />
+    </v-row>
+      </v-card>
+  
+      <div class="myTeamTasks pa-1 my-6">
+        <div class="d-flex align-center mb-4">
+          <h3
+            class="ma-0"
+            style="color: #1e1e1e; font-size: 14px; font-weight: 600"
+          >
+            My Team Tasks
+          </h3>
+        </div>
+  
+        <v-row
+          v-if="teamTaskStats && teamTaskStats.length && !showListView"
+          dense
         >
-          <TasksTeamTaskCountTile :userStat="userStat" />
-        </v-col>
-      </v-row>
+          <v-col
+            cols="12"
+            sm="12"
+            md="3"
+            lg="3"
+            xl="2"
+            v-for="(userStat, index) in teamTaskStats"
+            :key="index"
+          >
+            <TasksTeamTaskCountTile :userStat="userStat" />
+          </v-col>
+        </v-row>
+      </div>
     </div>
   </div>
 
-  <TasksAddTask
-    v-model="drawerOpen"
-    @success="getTeamTasks()"
-    @close="drawerOpen = false"
-  />
+
 </template>
 <script setup>
 definePageMeta({
@@ -72,7 +71,6 @@ definePageMeta({
 
 const teamTaskStats = ref([]);
 const taskStore = useTaskStore();
-const drawerOpen = ref(false);
 const showListView = ref(false);
 const myTaskCounts = ref({});
 const user = ref({});
@@ -85,7 +83,6 @@ onMounted(() => {
 });
 
 const getTeamTasksStats = () => {
-  drawerOpen.value = false;
   taskStore.getMyTeamTaskStats().then((res) => {
     if (res.code === 0) {
       teamTaskStats.value = res.data;

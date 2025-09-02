@@ -92,7 +92,7 @@
                     class="mb-1 input-bordered"
                     flat
                     readonly
-                    :rules="requiredRule"
+                    :rules="startDateRule"
                     required
                   >
                     <template #append-inner>
@@ -107,10 +107,10 @@
 
                 <v-date-picker
                   v-model="form.startDate"
+                  :min="new Date().toISOString().split('T')[0]"
                   @update:modelValue="onStartDateSelected"
                 />
               </v-menu>
-              
             </v-col>
 
             <!-- End Date -->
@@ -132,7 +132,7 @@
                     class="mb-1 input-bordered"
                     flat
                     readonly
-                    :rules="requiredRule"
+                    :rules="endDateRule"
                     required
                   >
                     <template #append-inner>
@@ -147,6 +147,7 @@
 
                 <v-date-picker
                   v-model="form.endDate"
+                  :min="new Date().toISOString().split('T')[0]"
                   @update:modelValue="onEndDateSelected"
                 />
               </v-menu>
@@ -170,7 +171,11 @@
               <label class="fld-lbl">Is this leave paid?</label>
               <v-switch v-model="form.isPaid" inset color="primary" />
             </v-col>
-
+            <v-col cols="12" v-if="leaveSummary">
+              <p class="text-body-2 text-secondary font-weight-medium ml-1">
+                {{ leaveSummary }}
+              </p>
+            </v-col>
             <!-- Comment -->
             <v-col cols="12">
               <label class="fld-lbl">Comment</label>
@@ -263,8 +268,7 @@
 </template>
 
 <script setup>
-import { format } from "date-fns";
-
+import { format, differenceInCalendarDays, parseISO } from "date-fns";
 const userStore = useUserStore();
 
 const props = defineProps({
@@ -320,6 +324,44 @@ const handleFileUpload = (event) => {
 const leaveTypes = ref(["Sick", "Casual", "Annual", "Compationate", "Other"]);
 const leaveHoursOptions = ref(["Half Day", "Full Day"]);
 const requiredRule = [(v) => !!v || "This field is required"];
+const startDateRule = [
+  (v) => !!v || "Start date is required",
+  (v) => {
+    if (form.value.endDate && v > form.value.endDate) {
+      return "Start date cannot be after end date";
+    }
+    return true;
+  },
+];
+
+const endDateRule = [
+  (v) => !!v || "This field is required",
+  (v) =>
+    !form.value.startDate ||
+    !v ||
+    v >= form.value.startDate ||
+    "End date must be after start date",
+];
+const leaveSummary = computed(() => {
+  if (!form.value.startDate || !form.value.endDate) return "";
+
+  const start = parseISO(form.value.startDate);
+  const end = parseISO(form.value.endDate);
+  const days = differenceInCalendarDays(end, start) + 1;
+
+  let hoursPerDay = 0;
+  if (form.value.totalHours === "Full Day") hoursPerDay = 8;
+  if (form.value.totalHours === "Half Day") hoursPerDay = 4;
+
+  const totalHours = hoursPerDay ? days * hoursPerDay : 0;
+
+  let msg = `Leave from ${form.value.startDate} to ${
+    form.value.endDate
+  } (${days} day${days > 1 ? "s" : ""})`;
+  if (totalHours) msg += `, Total Hours: ${totalHours}`;
+
+  return msg;
+});
 
 // formatted date computed props
 const formattedStartDate = computed({
@@ -359,12 +401,9 @@ const onEndDateSelected = (val) => {
 };
 
 const onSubmit = async () => {
-  const isValid =
-    typeof formRef.value?.validate === "function"
-      ? await formRef.value.validate()
-      : true;
+  const formValidation = await formRef.value.validate();
 
-  if (isValid) {
+  if (formValidation.valid) {
     const formData = new FormData();
     Object.keys(form.value).forEach((el) => {
       formData.append(el, form.value[el]);
@@ -399,6 +438,7 @@ const resetForm = () => {
 const onClose = () => {
   emit("close");
   resetForm();
+  formRef.value?.reset();
 };
 </script>
 

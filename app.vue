@@ -3,7 +3,8 @@
     <NuxtPage class="bck-org" />
     <CommonLoader />
     <Snackbar />
-    <div class="floating-buttons" v-if="isAuthenticated()">
+    <ClientOnly>
+    <div class="floating-buttons" v-if="loggedIn">
       <FloatingButtonsQuickActions
         @create-task="handleCreateTask"
         @add-staff="handleAddStaff"
@@ -15,29 +16,30 @@
       />
     </div>
     <TasksAddTask
-    v-if="isAuthenticated()"
+    v-if="loggedIn"
       v-model="drawerOpen"
       @close="drawerOpen = false"
       @success="updateTasks"
     />
     <TeamFlossSideBarAddNewstaff
-    v-if="isAuthenticated()"
+    v-if="loggedIn"
       v-model="addStaffDrawer"
       @close="addStaffDrawer = false"
       @success="updateTeams"
     />
+  </ClientOnly>
   </NuxtLayout>
 </template>
 
 <script setup>
 import { CommonLoader } from "#components";
 import { isAuthenticated } from "./lib/auth.js";
+const loggedIn = computed(() => isAuthenticated());
 
 const bus = useBus();
 const drawerOpen = ref(false);
 const addStaffDrawer = ref(false);
 
-const router = useRouter();
 const route = useRoute();
 
 const handleCreateTask = () => {
