@@ -11,9 +11,9 @@ export default {
         });
     });
   },
-  addRota() {
+  addRota(data) {
     return new Promise((resolve, reject) => {
-      Post("/rota/add")
+      Post("/rota/add",data)
         .then((res) => {
           resolve(res);
         })
@@ -22,9 +22,9 @@ export default {
         });
     });
   },
-  updateRota() {
+  updateRota(data) {
     return new Promise((resolve, reject) => {
-      Post("/rota/update")
+      Post("/rota/update",data)
         .then((res) => {
           resolve(res);
         })
@@ -33,9 +33,9 @@ export default {
         });
     });
   },
-  publishRota() {
+  publishRota(data) {
     return new Promise((resolve, reject) => {
-      Post("/rota/publish")
+      Post("/rota/publish",data)
         .then((res) => {
           resolve(res);
         })
@@ -44,9 +44,9 @@ export default {
         });
     });
   },
-  unPublishRota() {
+  unPublishRota(data) {
     return new Promise((resolve, reject) => {
-      Post("/rota/unpublish")
+      Post("/rota/unpublish",data)
         .then((res) => {
           resolve(res);
         })
@@ -55,9 +55,9 @@ export default {
         });
     });
   },
-  removeRotaUser() {
+  removeRotaUser(data) {
     return new Promise((resolve, reject) => {
-      Post("/rota/removeUser")
+      Post("/rota/removeUser",data)
         .then((res) => {
           resolve(res);
         })
@@ -66,9 +66,9 @@ export default {
         });
     });
   },
-  addRotaUsers() {
+  addRotaUsers(data) {
     return new Promise((resolve, reject) => {
-      Post("/rota/addUser")
+      Post("/rota/addUser",data)
         .then((res) => {
           resolve(res);
         })
@@ -77,9 +77,9 @@ export default {
         });
     });
   },
-  addRotaShift() {
+  addRotaShift(data) {
     return new Promise((resolve, reject) => {
-      Post("/rota/addShift")
+      Post("/rota/addShift",data)
         .then((res) => {
           resolve(res);
         })
@@ -88,9 +88,9 @@ export default {
         });
     });
   },
-  updateShift() {
+  updateShift(data) {
     return new Promise((resolve, reject) => {
-      Post("/rota/updateShift")
+      Post("/rota/updateShift",data)
         .then((res) => {
           resolve(res);
         })
@@ -99,9 +99,9 @@ export default {
         });
     });
   },
-  startShift() {
+  startShift(data) {
     return new Promise((resolve, reject) => {
-      Post("/rota/startShift")
+      Post("/rota/startShift",data)
         .then((res) => {
           resolve(res);
         })
@@ -110,9 +110,9 @@ export default {
         });
     });
   },
-  completeShift() {
+  completeShift(data) {
     return new Promise((resolve, reject) => {
-      Post("/rota/completeShift")
+      Post("/rota/completeShift",data)
         .then((res) => {
           resolve(res);
         })
@@ -121,9 +121,9 @@ export default {
         });
     });
   },
-  getAllShifts() {
+  getAllShifts(data) {
     return new Promise((resolve, reject) => {
-      Post("/rota/shifts")
+      Post("/rota/shifts",data)
         .then((res) => {
           resolve(res);
         })

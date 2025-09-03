@@ -4,7 +4,7 @@ export const addRota = async (event) => {
   const { orgId } = event.context.user;
   try {
     const body = await readBody(event);
-    const { name, startDate, endDate, duration, notes } = body;
+    const { name, startDate, endDate, duration, notes } = JSON.parse(body);
     if (new Date(endDate) < new Date(startDate)) {
       return error("End date cannot be before start date");
     }

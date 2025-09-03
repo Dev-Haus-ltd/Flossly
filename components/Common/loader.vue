@@ -24,12 +24,15 @@ const orgStore = useOrgStore();
 const taskStore = useTaskStore();
 const docStore = useDocStore();
 const userStore = useUserStore();
+const rotaStore= useRotaStore();
 const { isLoading: authLoading } = storeToRefs(authStore);
 const { isLoading: mainLoading } = storeToRefs(mainStore);
 const { isLoading: orgLoadong } = storeToRefs(orgStore);
 const { isLoading: taskLoading } = storeToRefs(taskStore);
 const { isLoading: docLoading } = storeToRefs(docStore);
 const { isLoading: userLoading } = storeToRefs(userStore);
+const { isLoading: rotaLoading } = storeToRefs(rotaStore);
+
 
 const anyLoading = computed(
   () =>
@@ -38,7 +41,8 @@ const anyLoading = computed(
     orgLoadong.value ||
     taskLoading.value ||
     docLoading.value ||
-    userLoading.value
+    userLoading.value ||
+    rotaLoading.value
 );
 </script>
 

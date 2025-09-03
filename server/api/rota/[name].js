@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
     case "list":
       return await getRotas(event);
     case "add":
-      return await addRota(event);
+      return await addRota(event); 
     case "update":
       return await updateRota(event);
     case "publish":

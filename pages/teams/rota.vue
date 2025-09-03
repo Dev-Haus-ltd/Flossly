@@ -139,7 +139,7 @@
                       @update:modelValue="onSelectionChangePublished"
                       return-object
                     >
-                      <!-- Header slot (same structure as your original code) -->
+                      <!-- Header slot -->
                       <template
                         v-slot:headers="{
                           columns,
@@ -202,27 +202,31 @@
 
                       <template v-slot:[`item.startDate`]="{ item }">
                         <div class="px-2">
-                          {{ formattedDate(item.startDate) }}
+                          {{ parsedDate(item.startDate) }}
                         </div>
                       </template>
 
                       <template v-slot:[`item.employees`]="{ item }">
-                        <div class="px-2">{{ item.employees }}</div>
+                        <div class="px-2">
+                          {{ item.employees ?? "No data" }}
+                        </div>
                       </template>
 
                       <template v-slot:[`item.status`]="{ item }">
                         <div class="px-2">
                           <v-chip
+                            v-if="item.status"
                             size="small"
                             :style="{
                               backgroundColor:
-                                item.status === 'In Progress'
+                                item?.status === 'In Progress'
                                   ? '#33B93C1A'
                                   : '#FF7C001A',
                             }"
                           >
-                            {{ item.status }}
+                            {{ item.status ?? "No data" }}
                           </v-chip>
+                          <span v-else>No data</span>
                         </div>
                       </template>
 
@@ -287,7 +291,7 @@
                       @update:modelValue="onSelectionChangeUnPublished"
                       return-object
                     >
-                      <!-- Header slot (same as above) -->
+                      <!-- Header slot -->
                       <template
                         v-slot:headers="{
                           columns,
@@ -350,27 +354,31 @@
 
                       <template v-slot:[`item.startDate`]="{ item }">
                         <div class="px-2">
-                          {{ formattedDate(item.startDate) }}
+                          {{ parsedDate(item.startDate) }}
                         </div>
                       </template>
 
                       <template v-slot:[`item.employees`]="{ item }">
-                        <div class="px-2">{{ item.employees }}</div>
+                        <div class="px-2">
+                          {{ item.employees ?? "No data" }}
+                        </div>
                       </template>
 
                       <template v-slot:[`item.status`]="{ item }">
                         <div class="px-2">
                           <v-chip
+                            v-if="item.status"
                             size="small"
                             :style="{
                               backgroundColor:
-                                item.status === 'In Progress'
+                                item?.status === 'In Progress'
                                   ? '#33B93C1A'
                                   : '#FF7C001A',
                             }"
                           >
-                            {{ item.status }}
+                            {{ item.status ?? "No data" }}
                           </v-chip>
+                          <span v-else>No data</span>
                         </div>
                       </template>
 
@@ -532,13 +540,13 @@
               <h2 class="rota-title">Create a new rota</h2>
 
               <!-- Form -->
-              <v-form v-model="isValid" ref="rotaForm" class="mt-4">
+              <v-form ref="rotaForm" class="mt-4" @submit.prevent="submitForm">
                 <!-- Rota Name -->
                 <label class="field-label">
                   Rota name<span class="required">*</span>
                 </label>
                 <v-text-field
-                  v-model="form.rotaName"
+                  v-model="form.name"
                   variant="solo"
                   flat
                   density="compact"
@@ -551,7 +559,7 @@
                   Rota duration<span class="required">*</span>
                 </label>
                 <v-text-field
-                  v-model="form.rotaDuration"
+                  v-model="form.duration"
                   variant="solo"
                   flat
                   density="compact"
@@ -564,7 +572,7 @@
                   Rota start date<span class="required">*</span>
                 </label>
                 <v-menu
-                  v-model="menuDateCreaterota"
+                  v-model="menuStartDateCreaterota"
                   :close-on-content-click="false"
                   transition="scale-transition"
                   offset-y
@@ -572,7 +580,9 @@
                   <template #activator="{ props }">
                     <v-text-field
                       v-bind="props"
-                      v-model="form.rotaStartDate"
+                      :model-value="
+                        form.startDate ? parsedDate(form.startDate) : ''
+                      "
                       readonly
                       variant="solo"
                       flat
@@ -583,12 +593,41 @@
                     />
                   </template>
                   <v-date-picker
-                    v-model="form.rotaStartDate"
+                    v-model="form.startDate"
                     color="primary"
-                    @update:model-value="menuDateCreaterota = false"
+                    @update:model-value="menuStartDateCreaterota = false"
                   />
                 </v-menu>
-
+                <label class="field-label">
+                  Rota End date<span class="required">*</span>
+                </label>
+                <v-menu
+                  v-model="menuEndDateCreaterota"
+                  :close-on-content-click="false"
+                  transition="scale-transition"
+                  offset-y
+                >
+                  <template #activator="{ props }">
+                    <v-text-field
+                      v-bind="props"
+                      :model-value="
+                        form.endDate ? parsedDate(form.endDate) : ''
+                      "
+                      readonly
+                      variant="solo"
+                      flat
+                      density="compact"
+                      class="input-bordered"
+                      :rules="[rules.required]"
+                      append-inner-icon="mdi-calendar"
+                    />
+                  </template>
+                  <v-date-picker
+                    v-model="form.endDate"
+                    color="primary"
+                    @update:model-value="menuEndDateCreaterota = false"
+                  />
+                </v-menu>
                 <!-- Add Employee -->
                 <h2 class="rota-title mb-1">Add Employee</h2>
 
@@ -607,15 +646,12 @@
                   flat
                   density="compact"
                   class="input-bordered"
-                  :rules="[rules.required]"
                   :menu-props="{ eager: true }"
                 />
                 <!-- Submit -->
                 <div class="mt-6 text-right">
                   <v-btn type="button" @click="step = 3"> next step </v-btn>
-                  <v-btn color="primary" type="submit" @click="submitForm">
-                    Create Rota
-                  </v-btn>
+                  <v-btn color="primary" type="submit"> Create Rota </v-btn>
                 </div>
               </v-form>
             </v-col>
@@ -736,8 +772,24 @@
   </div>
 </template>
 <script setup>
+import { parsedDate } from "~/lib/dateFormatter";
+
 definePageMeta({
   layout: "home",
+});
+const rotaStore = useRotaStore();
+const mainStore = useMainStore();
+const rotas = ref([]);
+const getRotas = async () => {
+  const res = await rotaStore.getRotas();
+  console.log(res);
+  if (res.code === 0) {
+    rotas.value = res.data;
+  }
+};
+onMounted(() => {
+  getRotas();
+  getAllShifts();
 });
 const step = ref(1);
 const currentTab = ref("active");
@@ -771,33 +823,8 @@ const dateRangeModel = ref([]); // applied range
 const search = ref("");
 
 // Data (replace these with API data later)
-const published = ref([
-  {
-    id: 1,
-    name: "Rota A",
-    startDate: "2025-08-20",
-    employees: 10,
-    status: "In Progress",
-  },
-  {
-    id: 2,
-    name: "Rota B",
-    startDate: "2025-09-01",
-    employees: 8,
-    status: "Future",
-  },
-]);
-
-const unpublished = ref([
-  {
-    id: 3,
-    name: "Rota C",
-    startDate: "2025-09-10",
-    employees: 12,
-    status: "Future",
-  },
-]);
-
+const published = computed(() => rotas.value.filter((r) => r.isPublished));
+const unpublished = computed(() => rotas.value.filter((r) => !r.isPublished));
 // Selection models
 const selectedPublished = ref([]);
 const selectedUnpublished = ref([]);
@@ -810,17 +837,6 @@ const headers = [
   { title: "Status", key: "status", sortable: true },
   { title: "Actions", key: "actions", sortable: false },
 ];
-
-// formatting helper
-const formattedDate = (dateStr) => {
-  if (!dateStr) return "-";
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-};
 
 // Filtering: search + date range
 const matchesSearch = (item) => {
@@ -876,9 +892,71 @@ function toggleAll(which, val) {
 // Actions
 const onView = (item) => console.log("View", item);
 const onEdit = (item) => console.log("Edit", item);
-const onPublish = (item) => console.log("Publish", item);
-const onUnpublish = (item) => console.log("unPublish", item);
+const onPublish = async (item) => {
+  try {
+    const res = await rotaStore.publishRota(item);
 
+    if (res.code === 0) {
+      mainStore.setSnackbar({
+        type: "success",
+        title: res?.message || "Rota published successfully",
+      });
+      getRotas();
+    } else {
+      mainStore.setSnackbar({
+        type: "error",
+        title: res?.message || "Failed to publish rota",
+      });
+    }
+  } catch (error) {
+    console.error("Publish error:", error);
+    mainStore.setSnackbar({
+      type: "error",
+      title: "Something went wrong while publishing rota",
+    });
+  }
+};
+
+const onUnpublish = async (item) => {
+  try {
+    const res = await rotaStore.unPublishRota(item);
+
+    if (res.code === 0) {
+      mainStore.setSnackbar({
+        type: "success",
+        title: res?.message || "Rota unpublished successfully",
+      });
+      getRotas();
+    } else {
+      mainStore.setSnackbar({
+        type: "error",
+        title: res?.message || "Failed to unpublish rota",
+      });
+    }
+  } catch (error) {
+    console.error("Unpublish error:", error);
+    mainStore.setSnackbar({
+      type: "error",
+      title: "Something went wrong while unpublishing rota",
+    });
+  }
+};
+const getAllShifts = async () => {
+  try {
+    const res = await rotaStore.getAllShifts({ rotaId: 7 });
+
+    if (res.code === 0) {
+      console.log(res.data);
+    }
+  } catch (error) {
+    console.error("GetAllShifts error:", error);
+    mainStore.setSnackbar({
+      type: "error",
+      title: "Something went wrong while fetching shifts",
+    });
+    return [];
+  }
+};
 const onCreateNewRota = () => {
   step.value = 2;
 };
@@ -896,7 +974,7 @@ function clearDate() {
 // date-range display text
 const dateRangeText = computed(() => {
   if (!dateRangeModel.value || dateRangeModel.value.length !== 2) return "";
-  return `${formattedDate(dateRangeModel.value[0])} - ${formattedDate(
+  return `${parsedDate(dateRangeModel.value[0])} - ${parsedDate(
     dateRangeModel.value[1]
   )}`;
 });
@@ -955,13 +1033,15 @@ const selectedOptionHandle = (value) => {
 };
 // form
 const rotaForm = ref(null);
-const isValid = ref(false);
-const menuDateCreaterota = ref(false);
+const menuStartDateCreaterota = ref(false);
+const menuEndDateCreaterota = ref(false);
 
 const form = ref({
-  rotaName: "",
-  rotaDuration: "",
-  rotaStartDate: "",
+  name: "",
+  duration: "",
+  startDate: "",
+  endDate: "",
+  notes: "",
   employees: [],
 });
 
@@ -977,12 +1057,29 @@ const rules = {
 };
 
 const submitForm = async () => {
-  const { valid } = await rotaForm.value.validate(); // <-- triggers validation & shows errors
-  if (!valid) {
-    console.warn("Form invalid:", form.value);
-    return;
+  const { valid } = await rotaForm.value.validate();
+  if (!valid) return;
+
+  try {
+    const res = await rotaStore.addRota(form.value);
+
+    if (res.code === 0) {
+      mainStore.setSnackbar({
+        type: "success",
+        title: res?.message || "Rota added successfully",
+      });
+    } else {
+      mainStore.setSnackbar({
+        type: "error",
+        title: res.message || "Something went wrong",
+      });
+    }
+  } catch (err) {
+    mainStore.setSnackbar({
+      type: "error",
+      title: err.message || "An error occurred",
+    });
   }
-  console.log("Form submitted:", form.value);
 };
 
 //  calender view
