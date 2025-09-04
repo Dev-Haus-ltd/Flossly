@@ -439,108 +439,116 @@
           </p>
         </div>
 
-        <!-- Second block -->
-        <div class="mt-4">
-          <h3 class="rota-title">Select Practice</h3>
-          <p class="rota-subtitle">
-            Choose the practice for which you would like to create a rota.
-          </p>
-        </div>
-        <v-row cols="2" class="d-flex flex-wrap mt-5">
-          <v-col
-            v-for="(practice, index) in practices"
-            :key="index"
-            cols="12"
-            sm="6"
-            md="2"
-          >
-            <v-card
-              class="practice-card"
-              :class="{ selected: selectedPractice === practice.value }"
-              :elevation="0"
-              :style="{
-                border: '1px solid #3ADF8D',
-                position: 'relative',
-                cursor: 'pointer',
-                height: '100%',
-              }"
-              @click="selectPractice(practice.value)"
+        <!-- ✅ Wrap everything in v-form -->
+        <v-form ref="rotaForm" class="mt-4" @submit.prevent="submitForm">
+          <!-- Select Practice -->
+          <div class="mt-4">
+            <h3 class="rota-title">Select Practice</h3>
+            <p class="rota-subtitle">
+              Choose the practice for which you would like to create a rota.
+            </p>
+          </div>
+
+          <v-row cols="2" class="d-flex flex-wrap mt-5">
+            <v-col
+              v-for="(practice, index) in practices"
+              :key="index"
+              cols="12"
+              sm="6"
+              md="2"
             >
-              <!-- Radio at top-right -->
-              <v-radio
-                :value="practice.value"
-                :model-value="selectedPractice"
-                color="#3ADF8D"
-                class="practice-radio"
-              />
-
-              <!-- Center content -->
-              <div
-                class="content-wrapper d-flex flex-column align-center justify-center"
-              >
-                <!-- <img
-                  src="@/assets/icons/teamfloss/userDetails/createRota/logo.svg"
-                  alt="practice icon"
-                  class="practice-img mb-4"
-                /> -->
-                <p class="practice-title">
-                  {{ practice.label }}
-                </p>
-              </div>
-            </v-card>
-          </v-col>
-        </v-row>
-        <div>
-          <h3 class="rota-title my-4">What would you like to do?</h3>
-
-          <v-row>
-            <v-col cols="2" v-for="option in rotaOptions" :key="option.value">
               <v-card
-                class="d-flex flex-column align-center justify-center pa-6 option-card"
-                :class="{ 'selected-card': selectedOption === option.value }"
-                @click="selectedOptionHandle(option.value)"
+                class="practice-card"
+                :class="{ selected: form.orgId === practice.value }"
                 :elevation="0"
+                :style="{
+                  border: '1px solid #3ADF8D',
+                  position: 'relative',
+                  cursor: 'pointer',
+                  height: '100%',
+                }"
+                @click="selectPractice(practice.value)"
               >
+                <!-- Radio at top-right -->
                 <v-radio
-                  :value="option.value"
-                  :model-value="selectedOption"
+                  :value="practice.value"
+                  :model-value="form.orgId"
                   color="#3ADF8D"
-                  class="option-radio"
+                  class="practice-radio"
                 />
 
+                <!-- Center content -->
                 <div
-                  class="d-flex flex-column align-center justify-center text-center flex-1"
+                  class="content-wrapper d-flex flex-column align-center justify-center"
                 >
-                  <v-icon
-                    size="40"
-                    :color="
-                      selectedOption === option.value ? '#FFFFFF' : '#1E1E1E'
-                    "
-                    class="mb-4"
-                  >
-                    {{ option.icon }}
-                  </v-icon>
-                  <p
-                    class="option-title"
-                    :class="{
-                      'selected-text': selectedOption === option.value,
-                    }"
-                  >
-                    {{ option.label }}
+                  <p class="practice-title">
+                    {{ practice.label }}
                   </p>
                 </div>
               </v-card>
             </v-col>
           </v-row>
-        </div>
-        <div class="mt-2" v-if="isCreateRota">
-          <v-row>
-            <v-col cols="4">
-              <!-- Title -->
-              <h2 class="rota-title">Create a new rota</h2>
 
-              <!-- Form -->
-              <v-form ref="rotaForm" class="mt-4" @submit.prevent="submitForm">
+          <!-- Validation error under practice selection -->
+          <div
+            v-if="practiceError"
+            class="text-caption mt-1"
+            style="color: #b00020"
+          >
+            {{ practiceError }}
+          </div>
+
+          <!-- Rota Options -->
+          <div>
+            <h3 class="rota-title my-4">What would you like to do?</h3>
+            <v-row>
+              <v-col cols="2" v-for="option in rotaOptions" :key="option.value">
+                <v-card
+                  class="d-flex flex-column align-center justify-center pa-6 option-card"
+                  :class="{ 'selected-card': selectedOption === option.value }"
+                  @click="selectedOptionHandle(option.value)"
+                  :elevation="0"
+                >
+                  <v-radio
+                    :value="option.value"
+                    v-model="selectedOption"
+                    color="#3ADF8D"
+                    class="option-radio"
+                  />
+
+                  <div
+                    class="d-flex flex-column align-center justify-center text-center flex-1"
+                  >
+                    <v-icon
+                      size="40"
+                      :color="
+                        selectedOption === option.value ? '#FFFFFF' : '#1E1E1E'
+                      "
+                      class="mb-4"
+                    >
+                      {{ option.icon }}
+                    </v-icon>
+                    <p
+                      class="option-title"
+                      :class="{
+                        'selected-text': selectedOption === option.value,
+                      }"
+                    >
+                      {{ option.label }}
+                    </p>
+                  </div>
+                </v-card>
+              </v-col>
+            </v-row>
+          </div>
+
+          <!-- Create Rota block -->
+          <div class="mt-2" v-if="isCreateRota">
+            <v-row>
+              <v-col cols="4">
+                <!-- Title -->
+                <h2 class="rota-title">Create a new rota</h2>
+
                 <!-- Rota Name -->
                 <label class="field-label">
                   Rota name<span class="required">*</span>
@@ -598,6 +606,8 @@
                     @update:model-value="menuStartDateCreaterota = false"
                   />
                 </v-menu>
+
+                <!-- Rota End Date -->
                 <label class="field-label">
                   Rota End date<span class="required">*</span>
                 </label>
@@ -628,16 +638,16 @@
                     @update:model-value="menuEndDateCreaterota = false"
                   />
                 </v-menu>
-                <!-- Add Employee -->
-                <h2 class="rota-title mb-1">Add Employee</h2>
 
+                <!-- Employees -->
+                <h2 class="rota-title mb-1">Add Employee</h2>
                 <label class="field-label">
                   Employee<span class="required">*</span>
                 </label>
                 <v-autocomplete
                   v-model="form.employees"
                   :items="employees"
-                  item-title="name"
+                  item-title="fullName"
                   item-value="id"
                   multiple
                   chips
@@ -646,19 +656,22 @@
                   flat
                   density="compact"
                   class="input-bordered"
+                  :rules="[rules.required]"
                   :menu-props="{ eager: true }"
                 />
+
                 <!-- Submit -->
                 <div class="mt-6 text-right">
                   <v-btn type="button" @click="step = 3"> next step </v-btn>
                   <v-btn color="primary" type="submit"> Create Rota </v-btn>
                 </div>
-              </v-form>
-            </v-col>
-          </v-row>
-        </div>
+              </v-col>
+            </v-row>
+          </div>
+        </v-form>
       </div>
     </div>
+
     <!-- calender view -->
     <div class="pa-5 bg-white" v-else-if="step === 3">
       <div class="mt-5">
@@ -767,6 +780,7 @@
       <TeamFlossRotaManagementShiftDialog
         v-model="showShiftDialog"
         @onSubmit="handleShiftSubmit"
+        :rotaId="selectedRotaId"
       />
     </div>
   </div>
@@ -789,7 +803,7 @@ const getRotas = async () => {
 };
 onMounted(() => {
   getRotas();
-  getAllShifts();
+  getUsers();
 });
 const step = ref(1);
 const currentTab = ref("active");
@@ -890,7 +904,10 @@ function toggleAll(which, val) {
 }
 
 // Actions
-const onView = (item) => console.log("View", item);
+const onView = (item) => {
+  console.log("View", item);
+  getAllShifts(item);
+};
 const onEdit = (item) => console.log("Edit", item);
 const onPublish = async (item) => {
   try {
@@ -941,12 +958,15 @@ const onUnpublish = async (item) => {
     });
   }
 };
-const getAllShifts = async () => {
+const selectedRotaId = ref(null);
+const getAllShifts = async (item) => {
   try {
-    const res = await rotaStore.getAllShifts({ rotaId: 7 });
+    const res = await rotaStore.getAllShifts({ rotaId: item.id });
 
     if (res.code === 0) {
       console.log(res.data);
+      selectedRotaId.value = item.id;
+      step.value = 3;
     }
   } catch (error) {
     console.error("GetAllShifts error:", error);
@@ -986,57 +1006,12 @@ const onSelectionChangeUnPublished = () => {
   console.log(selectedUnpublished.value);
 };
 // create rota section
-const selectedPractice = ref(null);
-
-const practices = [
-  {
-    label: "Smile Dental Care - London",
-    value: "london",
-  },
-  {
-    label: "Smile Dental Care - Essex",
-    value: "essex",
-  },
-  {
-    label: "Smile Dental Care - York",
-    value: "york",
-  },
-];
-
-const selectPractice = (value) => {
-  selectedPractice.value = value;
-  console.log("Selected practice:", value);
-};
-
-const selectedOption = ref(null);
-const isCreateRota = ref(false);
-const rotaOptions = [
-  {
-    value: "new",
-    label: "Create a new rota",
-    icon: "mdi-calendar-plus",
-  },
-  {
-    value: "copy",
-    label: "Copy an existing rota",
-    icon: "mdi-content-copy",
-  },
-];
-const selectedOptionHandle = (value) => {
-  selectedOption.value = value;
-  if (selectedOption.value === "new") {
-    isCreateRota.value = true;
-  } else {
-    isCreateRota.value = false;
-  }
-  console.log("Selected Option:", value);
-};
-// form
-const rotaForm = ref(null);
-const menuStartDateCreaterota = ref(false);
-const menuEndDateCreaterota = ref(false);
+const user = process.client
+  ? JSON.parse(localStorage.getItem("user") || "{}")
+  : {};
 
 const form = ref({
+  orgId: null,
   name: "",
   duration: "",
   startDate: "",
@@ -1045,24 +1020,79 @@ const form = ref({
   employees: [],
 });
 
-const employees = ref([
-  { id: 1, name: "Alice" },
-  { id: 2, name: "Bob" },
-  { id: 3, name: "Charlie" },
-]);
+// Practices list
+const practices = computed(
+  () =>
+    user?.userOrganisations?.map((uo) => ({
+      label: uo.organisation.name,
+      value: uo.organisation.id,
+    })) || []
+);
+
+// Rota options
+const selectedOption = ref(null);
+const isCreateRota = ref(false);
+const rotaOptions = [
+  { value: "new", label: "Create a new rota", icon: "mdi-calendar-plus" },
+  { value: "copy", label: "Copy an existing rota", icon: "mdi-content-copy" },
+];
+const selectedOptionHandle = (value) => {
+  selectedOption.value = value;
+  isCreateRota.value = value === "new";
+};
+
+const userStore = useUserStore();
+const getUsers = () => {
+  userStore.getUserList({ roleId: null }).then((res) => {
+    if (res.code === 0) {
+      employees.value = res.data;
+    }
+  });
+};
+const employees = ref([]);
+const selectPractice = (value) => {
+  form.value.orgId = value;
+  practiceError.value = ""; // clear error once selected
+};
+// Validation helpers
+const rotaForm = ref(null);
+const menuStartDateCreaterota = ref(false);
+const menuEndDateCreaterota = ref(false);
 
 const rules = {
   required: (v) =>
     (Array.isArray(v) ? v.length > 0 : !!v) || "This field is required",
 };
 
+// Extra state for practice validation
+const practiceError = ref("");
+
+// Submit
 const submitForm = async () => {
+  practiceError.value = "";
+
+  // manual check for practice selection
+  if (!form.value.orgId) {
+    practiceError.value = "Please select a practice";
+    return;
+  }
+
   const { valid } = await rotaForm.value.validate();
   if (!valid) return;
 
   try {
     const res = await rotaStore.addRota(form.value);
+    if (res.code === 0) {
+      handleAddRotaUser(res.data.id, form.value.employees);
+    }
+  } catch (err) {
+    console.log(err);
+  }
+};
 
+const handleAddRotaUser = async (rotaId, users) => {
+  try {
+    const res = await rotaStore.addRotaUsers({ rotaId, users });
     if (res.code === 0) {
       mainStore.setSnackbar({
         type: "success",
@@ -1094,7 +1124,6 @@ const clearFilters = () => {
 };
 const handleShiftSubmit = (formData) => {
   console.log("Shift submitted:", formData);
-  // 🔥 You can call your API/store action here to save the shift
 };
 </script>
 <style scoped>

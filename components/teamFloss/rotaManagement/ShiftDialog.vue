@@ -89,8 +89,10 @@
             >
             <v-col cols="9">
               <v-select
-                v-model="form.surgery"
+                v-model="form.surgeryId"
                 :items="surgeryOptions"
+                  item-title="name"
+  item-value="id"
                 variant="solo"
                 flat
                 density="compact"
@@ -104,8 +106,10 @@
             >
             <v-col cols="9">
               <v-select
-                v-model="form.dentist"
+                v-model="form.dentistId"
                 :items="dentistOptions"
+                  item-title="name"
+  item-value="id"
                 variant="solo"
                 flat
                 density="compact"
@@ -119,8 +123,10 @@
             >
             <v-col cols="9">
               <v-select
-                v-model="form.nurse"
+                v-model="form.nurseId"
                 :items="nurseOptions"
+                  item-title="name"
+  item-value="id"
                 variant="solo"
                 flat
                 density="compact"
@@ -251,18 +257,18 @@
           height: '24px',
           borderRadius: '50%',
           border:
-            form.shiftColor === color
+            form.color === color
               ? '2px solid black'
               : '1px solid #ccc',
           cursor: 'pointer',
           marginRight: '10px',
         }"
-        @click="form.shiftColor = color"
+        @click="form.color = color"
       ></div>
     </div>
 
     <!-- Error message -->
-    <small v-if="!form.shiftColor && showErrors" class="error-text">
+    <small v-if="!form.color && showErrors" class="error-text">
       Shift color is required
     </small>
   </div>
@@ -274,7 +280,7 @@
             >
             <v-col cols="9">
               <v-text-field
-                v-model="form.shiftLabel"
+                v-model="form.label"
                 variant="solo"
                 flat
                 density="compact"
@@ -312,9 +318,10 @@
 <script setup>
 import { ref, watch } from "vue";
 
-const props = defineProps({ modelValue: Boolean });
+const props = defineProps({ modelValue: Boolean, rotaId: Number });
 const emit = defineEmits(["update:modelValue", "onSubmit"]);
-
+const rotaStore= useRotaStore();
+const mainStore= useMainStore();
 const isOpen = ref(props.modelValue);
 watch(
   () => props.modelValue,
@@ -325,18 +332,19 @@ watch(isOpen, (val) => emit("update:modelValue", val));
 const close = () => (isOpen.value = false);
 
 const form = ref({
+  rotaId:props.rotaId,
   shiftLibrary: null,
   shiftName: "",
-  surgery: null,
-  dentist: null,
-  nurse: null,
+  surgeryId: null,
+  dentistId: null,
+  nurseId: null,
   startTime: "",
   endTime: "",
   breakHrs: "",
   breakMins: "",
   notes: "",
-  shiftColor: "",
-  shiftLabel: "",
+  color: "",
+  label: "",
 });
 
 // Example shift templates
@@ -352,7 +360,7 @@ const shiftLibrary = [
     breakHrs: "0",
     breakMins: "30",
     notes: "Regular morning duty",
-    shiftColor: "#B9308A",
+    color: "#B9308A",
     shiftLabel: "Morning",
   },
   {
@@ -366,14 +374,24 @@ const shiftLibrary = [
     breakHrs: "1",
     breakMins: "0",
     notes: "Evening coverage",
-    shiftColor: "#1B3D9F",
+    color: "#1B3D9F",
     shiftLabel: "Evening",
   },
 ];
 
-const surgeryOptions = ["Surgery A", "Surgery B"];
-const dentistOptions = ["Dentist X", "Dentist Y"];
-const nurseOptions = ["Nurse A", "Nurse B"];
+const surgeryOptions = [
+  { id: 1, name: "Surgery A" },
+  { id: 2, name: "Surgery B" },
+]
+const dentistOptions = [
+  { id: 1, name: "Dentist X" },
+  { id: 2, name: "Dentist Y" },
+]
+const nurseOptions = [
+  { id: 1, name: "Nurse A" },
+  { id: 2, name: "Nurse B" },
+]
+
 
 const colors = [
   "#B9308A",
@@ -409,16 +427,16 @@ const resetForm = () => {
   form.value = {
     shiftLibrary: null,
     shiftName: "",
-    surgery: null,
-    dentist: null,
-    nurse: null,
+    surgeryId: null,
+    dentistId: null,
+    nurseId: null,
     startTime: "",
     endTime: "",
     breakHrs: "",
     breakMins: "",
     notes: "",
-    shiftColor: "",
-    shiftLabel: "",
+    color: "",
+    label: "",
   };
 };
 
@@ -430,11 +448,32 @@ const submitForm = async () => {
   // force error messages for color
   showErrors.value = true;
 
-  if (!valid || !form.value.shiftColor) return; // ⛔ don’t close if invalid
+  if (!valid || !form.value.color) return; // ⛔ don’t close if invalid
+  try {
+  const res = await rotaStore.addRotaShift(form.value)
 
-  emit("onSubmit", form.value);
-  close();
+  if (res.code === 0) {
+    mainStore.setSnackbar({
+      type: "success",
+      title: res?.message || "Shift added successfully",
+    })
+    // emit("onSubmit", form.value);
+    // close();
+  } else {
+    mainStore.setSnackbar({
+      type: "error",
+      title: res?.message || "Failed to add shift",
+    })
+  }
+} catch (err) {
+  mainStore.setSnackbar({
+    type: "error",
+    title: "Something went wrong while adding shift",
+  })
+}
+ 
 };
+
 </script>
 
 <style scoped>

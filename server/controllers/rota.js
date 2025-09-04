@@ -1,10 +1,9 @@
 import { Rota, RotaShift, RotaUser } from "../models";
 
 export const addRota = async (event) => {
-  const { orgId } = event.context.user;
   try {
     const body = await readBody(event);
-    const { name, startDate, endDate, duration, notes } = JSON.parse(body);
+    const { name, startDate, endDate, duration, notes,orgId } = JSON.parse(body);
     if (new Date(endDate) < new Date(startDate)) {
       return error("End date cannot be before start date");
     }
@@ -99,7 +98,7 @@ export const removeRotaUser = async (event) => {
 export const addRotaUsers = async (event) => {
   try {
     const body = await readBody(event);
-    const { rotaId, users } = body;
+    const { rotaId, users } = JSON.parse(body);
     if (!rotaId) throw createError({ message: "Rota id required " });
     if (!Array.isArray(users) || users.length === 0) {
       throw createError({ message: "users required" });
@@ -155,7 +154,7 @@ export const addRotaShift = async (event) => {
       endDate,
       breakTime,
       notes,
-    } = body;
+    } = JSON.parse(body) ;
     if (
       !rotaId ||
       !dentistId ||
