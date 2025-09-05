@@ -91,8 +91,8 @@
               <v-select
                 v-model="form.surgeryId"
                 :items="surgeryOptions"
-                  item-title="name"
-  item-value="id"
+                item-title="name"
+                item-value="id"
                 variant="solo"
                 flat
                 density="compact"
@@ -108,8 +108,8 @@
               <v-select
                 v-model="form.dentistId"
                 :items="dentistOptions"
-                  item-title="name"
-  item-value="id"
+                item-title="name"
+                item-value="id"
                 variant="solo"
                 flat
                 density="compact"
@@ -125,8 +125,8 @@
               <v-select
                 v-model="form.nurseId"
                 :items="nurseOptions"
-                  item-title="name"
-  item-value="id"
+                item-title="name"
+                item-value="id"
                 variant="solo"
                 flat
                 density="compact"
@@ -140,49 +140,19 @@
               ><label class="field-label">Start Shift</label></v-col
             >
             <v-col cols="9">
-              <v-menu v-model="startMenu" :close-on-content-click="false">
-                <template #activator="{ props }">
-                  <v-text-field
-                    v-model="form.startTime"
-                    readonly
-                    v-bind="props"
-                    variant="solo"
-                    flat
-                    density="compact"
-                    class="input-bordered"
-                    :rules="[requiredRule]"
-                    append-inner-icon="mdi-clock-outline"
-                  />
-                </template>
-                <v-time-picker
-                  v-model="form.startTime"
-                  @update:modelValue="startMenu = false"
-                />
-              </v-menu>
+              <TeamFlossRotaManagementDateTimePicker
+                v-model="form.startDate"
+                :rules="[requiredRule]"
+              />
             </v-col>
 
             <!-- End Shift -->
             <v-col cols="3"><label class="field-label">End Shift</label></v-col>
             <v-col cols="9">
-              <v-menu v-model="endMenu" :close-on-content-click="false">
-                <template #activator="{ props }">
-                  <v-text-field
-                    v-model="form.endTime"
-                    readonly
-                    v-bind="props"
-                    variant="solo"
-                    flat
-                    density="compact"
-                    class="input-bordered"
-                    :rules="[requiredRule]"
-                    append-inner-icon="mdi-clock-outline"
-                  />
-                </template>
-                <v-time-picker
-                  v-model="form.endTime"
-                  @update:modelValue="endMenu = false"
-                />
-              </v-menu>
+              <TeamFlossRotaManagementDateTimePicker
+                v-model="form.endDate"
+                :rules="[requiredRule]"
+              />
             </v-col>
 
             <!-- Break -->
@@ -197,7 +167,7 @@
               >
                 <!-- Hours -->
                 <v-text-field
-                  v-model="form.breakHrs"
+                  v-model="breakHrs"
                   variant="solo"
                   flat
                   density="compact"
@@ -212,7 +182,7 @@
 
                 <!-- Minutes -->
                 <v-text-field
-                  v-model="form.breakMins"
+                  v-model="breakMins"
                   variant="solo"
                   flat
                   density="compact"
@@ -246,33 +216,33 @@
               ><label class="field-label">Add Shift Colour</label></v-col
             >
             <v-col cols="9">
-  <div class="mb-5">
-    <div class="d-flex flex-wrap gap-2 mt-2">
-      <div
-        v-for="color in colors"
-        :key="color"
-        :style="{
-          backgroundColor: color,
-          width: '24px',
-          height: '24px',
-          borderRadius: '50%',
-          border:
-            form.color === color
-              ? '2px solid black'
-              : '1px solid #ccc',
-          cursor: 'pointer',
-          marginRight: '10px',
-        }"
-        @click="form.color = color"
-      ></div>
-    </div>
+              <div class="mb-5">
+                <div class="d-flex flex-wrap gap-2 mt-2">
+                  <div
+                    v-for="color in colors"
+                    :key="color"
+                    :style="{
+                      backgroundColor: color,
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '50%',
+                      border:
+                        form.color === color
+                          ? '2px solid black'
+                          : '1px solid #ccc',
+                      cursor: 'pointer',
+                      marginRight: '10px',
+                    }"
+                    @click="form.color = color"
+                  ></div>
+                </div>
 
-    <!-- Error message -->
-    <small v-if="!form.color && showErrors" class="error-text">
-      Shift color is required
-    </small>
-  </div>
-</v-col>
+                <!-- Error message -->
+                <small v-if="!form.color && showErrors" class="error-text">
+                  Shift color is required
+                </small>
+              </div>
+            </v-col>
 
             <!-- Label -->
             <v-col cols="3"
@@ -316,13 +286,16 @@
 </template>
 
 <script setup>
+import { TeamFlossRotaManagementDateTimePicker } from "#components";
 import { ref, watch } from "vue";
 
 const props = defineProps({ modelValue: Boolean, rotaId: Number });
 const emit = defineEmits(["update:modelValue", "onSubmit"]);
-const rotaStore= useRotaStore();
-const mainStore= useMainStore();
+const rotaStore = useRotaStore();
+const mainStore = useMainStore();
 const isOpen = ref(props.modelValue);
+const breakHrs = ref("");
+const breakMins = ref("");
 watch(
   () => props.modelValue,
   (val) => (isOpen.value = val)
@@ -332,66 +305,62 @@ watch(isOpen, (val) => emit("update:modelValue", val));
 const close = () => (isOpen.value = false);
 
 const form = ref({
-  rotaId:props.rotaId,
+  rotaId: props.rotaId,
   shiftLibrary: null,
   shiftName: "",
   surgeryId: null,
   dentistId: null,
   nurseId: null,
-  startTime: "",
-  endTime: "",
-  breakHrs: "",
-  breakMins: "",
+  startDate: null,
+  endDate: null,
+  breakTime: 0,
   notes: "",
   color: "",
   label: "",
+  userId: 1,
 });
 
-// Example shift templates
 const shiftLibrary = [
   {
     name: "Morning Shift",
     shiftName: "Morning Shift",
-    surgery: "Surgery A",
-    dentist: "Dentist X",
-    nurse: "Nurse A",
+    surgeryId: 1, // ✅ reference ID
+    dentistId: 2,
+    nurseId: 5,
     startTime: "08:00",
     endTime: "12:00",
-    breakHrs: "0",
-    breakMins: "30",
+    breakTime: 30,
     notes: "Regular morning duty",
     color: "#B9308A",
-    shiftLabel: "Morning",
+    label: "Morning",
   },
   {
     name: "Evening Shift",
     shiftName: "Evening Shift",
-    surgery: "Surgery B",
-    dentist: "Dentist Y",
-    nurse: "Nurse B",
+    surgeryId: 2,
+    dentistId: 3,
+    nurseId: 6,
     startTime: "14:00",
     endTime: "20:00",
-    breakHrs: "1",
-    breakMins: "0",
+    breakTime: 60,
     notes: "Evening coverage",
     color: "#1B3D9F",
-    shiftLabel: "Evening",
+    label: "Evening",
   },
 ];
 
 const surgeryOptions = [
   { id: 1, name: "Surgery A" },
   { id: 2, name: "Surgery B" },
-]
+];
 const dentistOptions = [
   { id: 1, name: "Dentist X" },
   { id: 2, name: "Dentist Y" },
-]
+];
 const nurseOptions = [
   { id: 1, name: "Nurse A" },
   { id: 2, name: "Nurse B" },
-]
-
+];
 
 const colors = [
   "#B9308A",
@@ -425,18 +394,19 @@ const prefillForm = (selectedName) => {
 
 const resetForm = () => {
   form.value = {
+    rotaId: props.rotaId,
     shiftLibrary: null,
     shiftName: "",
     surgeryId: null,
     dentistId: null,
     nurseId: null,
-    startTime: "",
-    endTime: "",
-    breakHrs: "",
-    breakMins: "",
+    startDate: null,
+    endDate: null,
+    breakTime: 0,
     notes: "",
     color: "",
     label: "",
+    userId: 1,
   };
 };
 
@@ -449,31 +419,40 @@ const submitForm = async () => {
   showErrors.value = true;
 
   if (!valid || !form.value.color) return; // ⛔ don’t close if invalid
-  try {
-  const res = await rotaStore.addRotaShift(form.value)
 
-  if (res.code === 0) {
-    mainStore.setSnackbar({
-      type: "success",
-      title: res?.message || "Shift added successfully",
-    })
-    // emit("onSubmit", form.value);
-    // close();
-  } else {
+  try {
+    // 🟢 compute breakTime in minutes
+    const breakTime =
+      (Number(breakHrs.value) || 0) * 60 + (Number(breakMins.value) || 0);
+
+    // 🟢 build payload without breakHrs/breakMins
+    const payload = {
+      ...form.value,
+      breakTime,
+    };
+
+    const res = await rotaStore.addRotaShift(payload);
+
+    if (res.code === 0) {
+      mainStore.setSnackbar({
+        type: "success",
+        title: res?.message || "Shift added successfully",
+      });
+      // emit("onSubmit", payload);
+      // close();
+    } else {
+      mainStore.setSnackbar({
+        type: "error",
+        title: res?.message || "Failed to add shift",
+      });
+    }
+  } catch (err) {
     mainStore.setSnackbar({
       type: "error",
-      title: res?.message || "Failed to add shift",
-    })
+      title: "Something went wrong while adding shift",
+    });
   }
-} catch (err) {
-  mainStore.setSnackbar({
-    type: "error",
-    title: "Something went wrong while adding shift",
-  })
-}
- 
 };
-
 </script>
 
 <style scoped>
@@ -498,5 +477,4 @@ const submitForm = async () => {
   margin-top: 4px;
   display: block;
 }
-
 </style>
