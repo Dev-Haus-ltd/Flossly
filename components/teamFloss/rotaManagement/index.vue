@@ -6,20 +6,15 @@
     </div>
     <div class="pa-5 bg-white" v-if="activeComponent === 1">
       <v-row>
-    <v-col
-      v-for="(item, idx) in data"
-      :key="idx"
-      cols="12"
-      md="3"
-    >
-      <TeamFlossRotaManagementStatCard
-        :title="item.title"
-        :count="item.count"
-        :color="item.color"
-        :icon="item.icon"
-      />
-    </v-col>
-  </v-row>
+        <v-col v-for="(item, idx) in data" :key="idx" cols="12" md="3">
+          <TeamFlossRotaManagementStatCard
+            :title="item.title"
+            :count="item.count"
+            :color="item.color"
+            :icon="item.icon"
+          />
+        </v-col>
+      </v-row>
       <TeamFlossRotaManagementRotaListing
         v-if="activeComponent === 1"
         @changeComponent="changecomponent"
@@ -28,14 +23,14 @@
         :rotaList="rotas"
       />
     </div>
-      <TeamFlossRotaManagementAddRota v-if="activeComponent === 2" />
+    <TeamFlossRotaManagementAddRota v-if="activeComponent === 2" />
 
-      <TeamFlossRotaManagementShifts
-        v-if="activeComponent === 3"
-        :shifts="shifts"
-        :rotaId="selectedRotaId"
-      />
-    
+    <TeamFlossRotaManagementShifts
+      v-if="activeComponent === 3"
+      :shifts="shifts"
+      :users="rotaUsers"
+      :rota="selectedRota"
+    />
   </div>
 </template>
 <script setup>
@@ -46,14 +41,19 @@ const rotaStore = useRotaStore();
 const mainStore = useMainStore();
 const rotas = ref([]);
 const shifts = ref([]);
+const rotaUsers = ref([]);
 const activeComponent = ref(1);
-const selectedRotaId=ref(null)
+const selectedRota = ref(null);
 onMounted(() => {
   getRotas();
 });
 const totalCount = computed(() => rotas.value.length);
-const publishedCount = computed(() => rotas.value.filter(r => r.isPublished).length);
-const unPublishedCount = computed(() => rotas.value.filter(r => !r.isPublished).length);
+const publishedCount = computed(
+  () => rotas.value.filter((r) => r.isPublished).length
+);
+const unPublishedCount = computed(
+  () => rotas.value.filter((r) => !r.isPublished).length
+);
 const data = [
   {
     icon: "https://cdn.lordicon.com/pnlvdria.json",
@@ -82,7 +82,7 @@ const getRotas = async () => {
   const res = await rotaStore.getRotas();
   if (res.code === 0) {
     rotas.value = res.data;
-    console.log(rotas.value)
+    console.log(rotas.value);
   }
 };
 
@@ -125,8 +125,8 @@ const getAllShifts = async (item) => {
     const res = await rotaStore.getAllShifts({ rotaId: item.id });
     if (res.code === 0) {
       shifts.value = res.data;
-      activeComponent.value = 3;
-      selectedRotaId.value=item.id
+      selectedRota.value = item;
+      getRotaUsers()
     }
   } catch (error) {
     mainStore.setSnackbar({
@@ -134,6 +134,15 @@ const getAllShifts = async (item) => {
       title: "Something went wrong while fetching shifts",
     });
   }
+};
+
+const getRotaUsers = async () => {
+  rotaStore.getRotaUsers({ rotaId: selectedRota.value.id }).then((res) => {
+    if (res.code === 0) {
+      rotaUsers.value = res.data;
+      activeComponent.value = 3;
+    }
+  });
 };
 
 const changecomponent = (id) => {
@@ -151,8 +160,4 @@ const changecomponent = (id) => {
   font-size: 12px;
   color: #c3c3c3;
 }
-
-
-
-
 </style>

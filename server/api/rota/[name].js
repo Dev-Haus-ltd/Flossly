@@ -5,6 +5,7 @@ import {
   completeShift,
   getAllShifts,
   getRotas,
+  getRotaUsers,
   publishRota,
   removeRotaUser,
   startShift,
@@ -20,6 +21,8 @@ export default defineEventHandler(async (event) => {
       return await getRotas(event);
     case "add":
       return await addRota(event); 
+    case "users":
+      return await getRotaUsers(event)
     case "update":
       return await updateRota(event);
     case "publish":

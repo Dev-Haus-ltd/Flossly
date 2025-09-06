@@ -15,9 +15,12 @@ import fs from "fs";
 import path from "path";
 export const usersList = async (event) => {
   const loggedUser = event.context.user;
-  const currentOrg = loggedUser.orgId;
+  let currentOrg = loggedUser.orgId;
   const body = await readBody(event);
-  const { roleId } = JSON.parse(body);
+  const { roleId, orgId } = JSON.parse(body);
+  if (orgId) {
+    currentOrg = orgId
+  }
   const where = {};
   if (roleId) {
     where.roleId = roleId;

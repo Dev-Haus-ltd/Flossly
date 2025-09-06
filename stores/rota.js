@@ -188,5 +188,20 @@ export const useRotaStore = defineStore("rotaStore", {
           });
       });
     },
+    getRotaUsers(data) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        rotaService
+          .getRotaUsers(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
   },
 });

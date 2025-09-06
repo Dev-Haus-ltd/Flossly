@@ -1,9 +1,10 @@
-import { Rota, RotaShift, RotaUser } from "../models";
+import { Role, Rota, RotaShift, RotaUser, User } from "../models";
 
 export const addRota = async (event) => {
   try {
     const body = await readBody(event);
-    const { name, startDate, endDate, duration, notes,orgId } = JSON.parse(body);
+    const { name, startDate, endDate, duration, notes, orgId } =
+      JSON.parse(body);
     if (new Date(endDate) < new Date(startDate)) {
       return error("End date cannot be before start date");
     }
@@ -154,7 +155,7 @@ export const addRotaShift = async (event) => {
       endDate,
       breakTime,
       notes,
-    } = JSON.parse(body) ;
+    } = JSON.parse(body);
     if (
       !rotaId ||
       !dentistId ||
@@ -239,6 +240,38 @@ export const completeShift = async (event) => {
     shift.completedAt = new Date();
     await shift.save();
     return success(shift);
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const getRotaUsers = async (event) => {
+  try {
+    const body = await readBody(event);
+    const { rotaId } = JSON.parse(body);
+    if (!rotaId) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: "rotaId is required",
+      });
+    }
+    const rotaUsers = await RotaUser.findAll({
+      where: { rotaId },
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "fullName", "email", "roleId", "photo"],
+          include: [
+            {
+              model: Role,
+              as: "role",
+            },
+          ],
+        },
+      ],
+    });
+    return success(rotaUsers);
   } catch (err) {
     return error(500, err.message);
   }

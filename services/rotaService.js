@@ -132,4 +132,15 @@ export default {
         });
     });
   },
+  getRotaUsers(data) {
+    return new Promise((resolve, reject) => {
+      Post("/rota/users",data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  }
 };
