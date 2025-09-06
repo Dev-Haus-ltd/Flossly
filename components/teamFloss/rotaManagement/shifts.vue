@@ -70,35 +70,13 @@
             </v-card>
           </v-menu>
         </div>
-
-        <!-- Right Side Buttons -->
         <div class="d-flex align-center ga-3">
-          <!-- Save Button -->
-          <v-btn
-            variant="outlined"
-            color="#3ADF8D"
-            class="text-none rounded-lg"
-          >
-            Save
-          </v-btn>
-
-          <!-- Unpublished Rota -->
           <v-btn
             color="secondary"
             class="text-none rounded-lg"
             prepend-icon="mdi-open-in-new"
           >
             Unpublished Rota
-          </v-btn>
-
-          <!-- Add Shift -->
-          <v-btn
-            color="primary"
-            class="text-none rounded-lg"
-            prepend-icon="mdi-plus-circle-outline"
-            @click="showShiftDialog = true"
-          >
-            Add Shift
           </v-btn>
         </div>
       </div>
@@ -107,11 +85,15 @@
       :users="users"
       :shifts="shifts"
       :rota="rota"
+      @onAddShift="addNewShift"
     />
     <TeamFlossRotaManagementShiftDialog
       v-model="showShiftDialog"
       @onSubmit="handleShiftSubmit"
-      :rotaId="rota.id"
+      :rota="rota"
+      :shifts="shifts"
+      :users="users"
+      :shiftData="shiftData"
     />
   </div>
 </template>
@@ -123,7 +105,7 @@ const props = defineProps({
   users: Array,
 });
 const searchCal = ref("");
-
+const shiftData = ref({});
 const filterMenu = ref(false);
 
 const rotaViews = [
@@ -132,6 +114,13 @@ const rotaViews = [
   { title: "Month View", value: "month" },
 ];
 
+const addNewShift = (data) => {
+  shiftData.value = {
+    day: data.day.date,
+    user: data.user.user,
+  };
+  showShiftDialog.value = true;
+};
 const selectedView = ref(null);
 
 const clearFilters = () => {

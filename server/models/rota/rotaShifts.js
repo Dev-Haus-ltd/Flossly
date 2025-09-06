@@ -19,7 +19,7 @@ export const RotaShift = sequelize.define(
     },
     dentistId: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: "Users",
         key: "id",
@@ -27,7 +27,7 @@ export const RotaShift = sequelize.define(
     },
     nurseId: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: "Users",
         key: "id",
@@ -35,7 +35,7 @@ export const RotaShift = sequelize.define(
     },
     userId: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: "Users",
         key: "id",
@@ -43,7 +43,7 @@ export const RotaShift = sequelize.define(
     },
     surgeryId: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: "OrganisationSurgeries",
         key: "id",

@@ -12,7 +12,8 @@ import {
   updateOrganisationDetails,
   updatePriorities,
   updateStatuses,
-  deleteAttribute
+  deleteAttribute,
+  getSurgeries
 } from "~/server/controllers/organisation";
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, "name");
@@ -45,6 +46,8 @@ export default defineEventHandler(async (event) => {
       return await updateAttributes(event);
     case "deleteAttribute":
       return await deleteAttribute(event)
+      case "surgeries":
+        return await getSurgeries(event)
     default:
       return { code: 0, error: "Not found" };
   }

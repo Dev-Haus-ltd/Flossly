@@ -158,9 +158,7 @@ export const addRotaShift = async (event) => {
     } = JSON.parse(body);
     if (
       !rotaId ||
-      !dentistId ||
-      !nurseId ||
-      !surgeryId ||
+      !userId ||
       !label ||
       !startDate ||
       !endDate
@@ -182,6 +180,7 @@ export const addRotaShift = async (event) => {
     });
     return success(shift);
   } catch (err) {
+    console.log(err)
     return error(500, err.message);
   }
 };

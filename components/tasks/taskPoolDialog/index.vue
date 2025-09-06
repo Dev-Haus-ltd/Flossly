@@ -105,12 +105,13 @@
       <div
         class="d-flex justify-end pa-6 bg-white"
         style="border-top: 1px solid #eee"
-        v-if="selectedTasks.length"
+      
       >
         <v-btn
           color="primary"
           flat
           rounded="lg"
+          :disabled="!selectedTasks.length"
           class="px-7"
           style="height: 44px"
           @click="addTaskToBoard"

@@ -440,3 +440,14 @@ export const deleteAttribute = async (event) => {
     return error(500, err.message);
   }
 }
+
+export const getSurgeries = async (event) => {
+  const body = await readBody(event)
+  const { organisationId } = JSON.parse(body)
+  try {
+    const surgeries = await OrganisationSurgery.findAll({ where: { organisationId }})
+    return success(surgeries)
+  } catch(err) {
+    return error(500, err.message)
+  }
+}

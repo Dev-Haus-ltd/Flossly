@@ -45,8 +45,10 @@
             <v-col cols="9">
               <v-select
                 v-model="form.shiftLibrary"
-                :items="shiftLibrary.map((s) => s.name)"
+                :items="props.shifts"
                 variant="solo"
+                item-title="label"
+                item-value="id"
                 flat
                 density="compact"
                 class="input-bordered"
@@ -75,7 +77,7 @@
             >
             <v-col cols="9">
               <v-text-field
-                v-model="form.shiftName"
+                v-model="form.label"
                 variant="solo"
                 flat
                 density="compact"
@@ -84,54 +86,56 @@
               />
             </v-col>
 
-            <v-col cols="3"
+            <v-col
+              v-if="selectedUserRole === 5 || selectedUserRole === 6"
+              cols="3"
               ><label class="field-label">Select Surgery</label></v-col
             >
-            <v-col cols="9">
+            <v-col
+              v-if="selectedUserRole === 5 || selectedUserRole === 6"
+              cols="9"
+            >
               <v-select
                 v-model="form.surgeryId"
-                :items="surgeryOptions"
+                :items="surgries"
                 item-title="name"
                 item-value="id"
                 variant="solo"
                 flat
                 density="compact"
                 class="input-bordered"
-                :rules="[requiredRule]"
               />
             </v-col>
 
-            <v-col cols="3"
+            <v-col v-if="selectedUserRole === 6" cols="3"
               ><label class="field-label">Select Dentist</label></v-col
             >
-            <v-col cols="9">
+            <v-col v-if="selectedUserRole === 6" cols="9">
               <v-select
                 v-model="form.dentistId"
                 :items="dentistOptions"
-                item-title="name"
+                item-title="fullName"
                 item-value="id"
                 variant="solo"
                 flat
                 density="compact"
                 class="input-bordered"
-                :rules="[requiredRule]"
               />
             </v-col>
 
-            <v-col cols="3"
+            <v-col v-if="selectedUserRole === 5" cols="3"
               ><label class="field-label">Select Nurse</label></v-col
             >
-            <v-col cols="9">
+            <v-col v-if="selectedUserRole === 5" cols="9">
               <v-select
                 v-model="form.nurseId"
                 :items="nurseOptions"
-                item-title="name"
+                item-title="fullName"
                 item-value="id"
                 variant="solo"
                 flat
                 density="compact"
                 class="input-bordered"
-                :rules="[requiredRule]"
               />
             </v-col>
 
@@ -140,8 +144,13 @@
               ><label class="field-label">Start Shift</label></v-col
             >
             <v-col cols="9">
-              <TeamFlossRotaManagementDateTimePicker
+              <v-select
                 v-model="form.startDate"
+                :items="timeOptions"
+                variant="solo"
+                flat
+                density="compact"
+                class="input-bordered"
                 :rules="[requiredRule]"
               />
             </v-col>
@@ -149,8 +158,14 @@
             <!-- End Shift -->
             <v-col cols="3"><label class="field-label">End Shift</label></v-col>
             <v-col cols="9">
-              <TeamFlossRotaManagementDateTimePicker
+              <v-select
                 v-model="form.endDate"
+                :items="endTimeOptions"
+                variant="solo"
+                flat
+                :disabled="!form.startDate"
+                density="compact"
+                class="input-bordered"
                 :rules="[requiredRule]"
               />
             </v-col>
@@ -172,7 +187,6 @@
                   flat
                   density="compact"
                   class="input-bordered"
-                  :rules="[requiredRule]"
                   style="flex: 0 0 48%"
                 >
                   <template #append-inner>
@@ -187,7 +201,6 @@
                   flat
                   density="compact"
                   class="input-bordered"
-                  :rules="[requiredRule]"
                   style="flex: 0 0 48%"
                 >
                   <template #append-inner>
@@ -207,7 +220,6 @@
                 density="compact"
                 class="input-bordered"
                 rows="3"
-                :rules="[requiredRule]"
               />
             </v-col>
 
@@ -236,11 +248,6 @@
                     @click="form.color = color"
                   ></div>
                 </div>
-
-                <!-- Error message -->
-                <small v-if="!form.color && showErrors" class="error-text">
-                  Shift color is required
-                </small>
               </div>
             </v-col>
 
@@ -286,28 +293,36 @@
 </template>
 
 <script setup>
-import { TeamFlossRotaManagementDateTimePicker } from "#components";
 import { ref, watch } from "vue";
 
-const props = defineProps({ modelValue: Boolean, rotaId: Number });
+const props = defineProps({
+  modelValue: Boolean,
+  rota: Object,
+  users: Array,
+  shifts: Array,
+  shiftData: Object,
+});
 const emit = defineEmits(["update:modelValue", "onSubmit"]);
 const rotaStore = useRotaStore();
 const mainStore = useMainStore();
+const orgStore = useOrgStore();
 const isOpen = ref(props.modelValue);
 const breakHrs = ref("");
 const breakMins = ref("");
+const selectedUserRole = ref(null);
 watch(
   () => props.modelValue,
-  (val) => (isOpen.value = val)
+  (val) => {
+    isOpen.value = val;
+    getSurgeries();
+    handleShiftData();
+  }
 );
 watch(isOpen, (val) => emit("update:modelValue", val));
-
-const close = () => (isOpen.value = false);
-
 const form = ref({
-  rotaId: props.rotaId,
+  rotaId: props?.rota?.id,
   shiftLibrary: null,
-  shiftName: "",
+  label: "",
   surgeryId: null,
   dentistId: null,
   nurseId: null,
@@ -317,51 +332,10 @@ const form = ref({
   notes: "",
   color: "",
   label: "",
-  userId: 1,
+  userId: null,
 });
 
-const shiftLibrary = [
-  {
-    name: "Morning Shift",
-    shiftName: "Morning Shift",
-    surgeryId: 1, // ✅ reference ID
-    dentistId: 2,
-    nurseId: 5,
-    startTime: "08:00",
-    endTime: "12:00",
-    breakTime: 30,
-    notes: "Regular morning duty",
-    color: "#B9308A",
-    label: "Morning",
-  },
-  {
-    name: "Evening Shift",
-    shiftName: "Evening Shift",
-    surgeryId: 2,
-    dentistId: 3,
-    nurseId: 6,
-    startTime: "14:00",
-    endTime: "20:00",
-    breakTime: 60,
-    notes: "Evening coverage",
-    color: "#1B3D9F",
-    label: "Evening",
-  },
-];
-
-const surgeryOptions = [
-  { id: 1, name: "Surgery A" },
-  { id: 2, name: "Surgery B" },
-];
-const dentistOptions = [
-  { id: 1, name: "Dentist X" },
-  { id: 2, name: "Dentist Y" },
-];
-const nurseOptions = [
-  { id: 1, name: "Nurse A" },
-  { id: 2, name: "Nurse B" },
-];
-
+const surgries = ref([]);
 const colors = [
   "#B9308A",
   "#892E88",
@@ -375,28 +349,74 @@ const colors = [
   "#FF7C00",
   "#FF2531",
 ];
-
-// Time pickers
-const startMenu = ref(false);
-const endMenu = ref(false);
-
-// Validation
 const formRef = ref();
 const isValid = ref(false);
 const requiredRule = (v) => !!v || "Field is required";
 
-const prefillForm = (selectedName) => {
-  const template = shiftLibrary.find((s) => s.name === selectedName);
-  if (template) {
-    form.value = { ...template, shiftLibrary: selectedName };
-  }
+const dentistOptions = computed(() => {
+  const dentist =
+    props?.users?.filter((x) => !x.isTempUser && x.user.roleId === 5) || [];
+  const dentistUsers = dentist.map((el) => el.user);
+  return dentistUsers;
+});
+const timeOptions = Array.from({ length: 48 }, (_, i) => {
+  const h = Math.floor(i / 2);
+  const m = i % 2 === 0 ? "00" : "30";
+  return `${String(h).padStart(2, "0")}:${m}`;
+});
+
+const toMinutes = (time) => {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+};
+const isEndTimeValid = (end) => {
+  if (!form.value.startDate) return false;
+  let diff = toMinutes(end) - toMinutes(form.value.startDate);
+  if (diff < 0) diff += 24 * 60;
+  return diff >= 240; // 4 hours = 240 mins
 };
 
+const endTimeOptions = computed(() => {
+  if (!form.value.startDate) return timeOptions;
+  return timeOptions.map((t) => ({
+    title: t,
+    value: t,
+    props: { disabled: !isEndTimeValid(t) },
+  }));
+});
+const nurseOptions = computed(() => {
+  const nurses =
+    props?.users?.filter((x) => !x.isTempUser && x.user.roleId === 6) || [];
+  const nurseUsers = nurses.map((el) => el.user);
+  return nurseUsers;
+});
+
+const handleShiftData = () => {
+  const data = props.shiftData;
+  form.value.userId = data.user.id;
+  selectedUserRole.value = data.user.role.id;
+};
+const close = () => (isOpen.value = false);
+const prefillForm = (id) => {
+  const template = props.shifts.find((s) => s.id === id);
+  if (template) {
+    form.value = { ...template, shiftLibrary: id };
+  }
+};
+const getSurgeries = () => {
+  orgStore
+    .getSurgeries({ organisationId: props?.rota.organisationId })
+    .then((res) => {
+      if (res.code === 0) {
+        surgries.value = res.data;
+      }
+    });
+};
 const resetForm = () => {
   form.value = {
     rotaId: props.rotaId,
     shiftLibrary: null,
-    shiftName: "",
+    label: "",
     surgeryId: null,
     dentistId: null,
     nurseId: null,
@@ -406,40 +426,42 @@ const resetForm = () => {
     notes: "",
     color: "",
     label: "",
-    userId: 1,
+    userId: null,
   };
 };
-
-const showErrors = ref(false);
+const buildDateTime = (date, timeStr) => {
+  const [h, m] = timeStr.split(":").map(Number);
+  const d = new Date(date);
+  d.setHours(h, m, 0, 0);
+  return d;
+};
 
 const submitForm = async () => {
   const { valid } = await formRef.value.validate();
-
-  // force error messages for color
-  showErrors.value = true;
-
-  if (!valid || !form.value.color) return; // ⛔ don’t close if invalid
-
+  if (!valid || !form.value.color) return;
   try {
-    // 🟢 compute breakTime in minutes
     const breakTime =
       (Number(breakHrs.value) || 0) * 60 + (Number(breakMins.value) || 0);
-
-    // 🟢 build payload without breakHrs/breakMins
+    const startDateObj = buildDateTime(
+      props.shiftData.day,
+      form.value.startDate
+    );
+    let endDateObj = buildDateTime(props.shiftData.day, form.value.endDate);
+    if (endDateObj <= startDateObj) {
+      endDateObj.setDate(endDateObj.getDate() + 1);
+    }
+    form.value.startDate = startDateObj;
+    form.value.endDate = endDateObj;
     const payload = {
       ...form.value,
       breakTime,
     };
-
     const res = await rotaStore.addRotaShift(payload);
-
     if (res.code === 0) {
       mainStore.setSnackbar({
         type: "success",
         title: res?.message || "Shift added successfully",
       });
-      // emit("onSubmit", payload);
-      // close();
     } else {
       mainStore.setSnackbar({
         type: "error",
@@ -447,6 +469,7 @@ const submitForm = async () => {
       });
     }
   } catch (err) {
+    console.log(err);
     mainStore.setSnackbar({
       type: "error",
       title: "Something went wrong while adding shift",

@@ -148,5 +148,20 @@ export const useOrgStore = defineStore("orgStore", {
           });
       });
     },
+    getSurgeries(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        orgService
+          .getSurgeries(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    }
   },
 });
