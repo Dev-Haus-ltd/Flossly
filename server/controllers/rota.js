@@ -184,6 +184,30 @@ export const addRotaShift = async (event) => {
     return error(500, err.message);
   }
 };
+export const deleteRotaShift = async (event) => {
+  try {
+    const body = await readBody(event);
+    const { rotaId, shiftId } = JSON.parse(body);
+
+    if (!rotaId || !shiftId) throw createError({ message: "rotaId and shiftId are required" });
+
+    // Find the shift belonging to the rota
+    const shift = await RotaShift.findOne({
+      where: { id: shiftId, rotaId, isDeleted: false }
+    });
+
+    if (!shift) throw createError({ message: "Shift not found in the specified rota" });
+
+    // Soft delete
+    shift.isDeleted = true;
+    await shift.save();
+
+    return success({ message: "Shift deleted from rota successfully" });
+  } catch (err) {
+    console.log(err);
+    return error(500, err.message);
+  }
+};
 
 export const updateShift = async (event) => {
   try {

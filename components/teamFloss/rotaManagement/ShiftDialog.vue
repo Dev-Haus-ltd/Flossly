@@ -48,6 +48,7 @@
                 :items="props.shifts"
                 variant="solo"
                 item-title="label"
+                placeholder="select"
                 item-value="id"
                 flat
                 density="compact"
@@ -101,6 +102,7 @@
                 item-title="name"
                 item-value="id"
                 variant="solo"
+                placeholder="Select"
                 flat
                 density="compact"
                 class="input-bordered"
@@ -117,6 +119,7 @@
                 item-title="fullName"
                 item-value="id"
                 variant="solo"
+                placeholder="Select"
                 flat
                 density="compact"
                 class="input-bordered"
@@ -133,6 +136,7 @@
                 item-title="fullName"
                 item-value="id"
                 variant="solo"
+                placeholder="Select"
                 flat
                 density="compact"
                 class="input-bordered"
@@ -149,6 +153,7 @@
                 :items="timeOptions"
                 variant="solo"
                 flat
+                placeholder="Select"
                 density="compact"
                 class="input-bordered"
                 :rules="[requiredRule]"
@@ -163,6 +168,7 @@
                 :items="endTimeOptions"
                 variant="solo"
                 flat
+                placeholder="Select"
                 :disabled="!form.startDate"
                 density="compact"
                 class="input-bordered"
@@ -261,6 +267,7 @@
                 variant="solo"
                 flat
                 density="compact"
+                placeholder="Max. 20 chrs"
                 class="input-bordered"
                 :rules="[requiredRule]"
               />
@@ -275,6 +282,7 @@
           text
           @click="resetForm"
           style="font-weight: 500; text-transform: none"
+          flat
         >
           Reset Form
         </v-btn>
@@ -284,6 +292,7 @@
           width="100"
           @click="submitForm"
           style="font-weight: 500; text-transform: none"
+          flat
         >
           Add Shift
         </v-btn>

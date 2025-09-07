@@ -76,6 +76,7 @@
             class="text-none rounded-lg"
             prepend-icon="mdi-open-in-new"
             flat
+            @click="unPublishRota"
           >
             Unpublished Rota
           </v-btn>
@@ -87,6 +88,7 @@
       :shifts="shifts"
       :rota="rota"
       @onAddShift="addNewShift"
+      @updateShifts="updateShifts"
     />
     <TeamFlossRotaManagementShiftDialog
       v-model="showShiftDialog"
@@ -105,6 +107,7 @@ const props = defineProps({
   rota: Object,
   users: Array,
 });
+const emit= defineEmits(['onChangeStatus','updateShifts'])
 const searchCal = ref("");
 const shiftData = ref({});
 const filterMenu = ref(false);
@@ -134,6 +137,12 @@ const handleShiftSubmit = (shiftData) => {
   console.log("Shift submitted:", shiftData);
   showShiftDialog.value = false;
 };
+const unPublishRota=()=>{
+ emit("onChangeStatus", {type:'unPublish', id: props.rota.id})
+}
+const updateShifts=(rota)=>{
+  emit('updateShifts', rota)
+}
 </script>
 
 <style scoped>

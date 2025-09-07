@@ -12,6 +12,7 @@ import {
   unPublishRota,
   updateRota,
   updateShift,
+  deleteRotaShift
 } from "~/server/controllers/rota";
 
 export default defineEventHandler(async (event) => {
@@ -43,6 +44,8 @@ export default defineEventHandler(async (event) => {
       return await completeShift(event);
     case "shifts":
       return await getAllShifts(event);
+      case "deleteShift":
+        return await deleteRotaShift(event);
     default:
       return { code: 0, error: "Not found" };
   }

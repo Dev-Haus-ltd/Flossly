@@ -73,7 +73,7 @@
         <CommonAvatar :user="user?.user" class="mr-2" size="45" />
         <div>
           <h3 class="fst-col-title">{{ user?.user.fullName }}</h3>
-          <small class="text-grey">{{ user?.user.role.title }}</small>
+          <small class="fst-col--subtit">{{ user?.user.role.title }}</small>
         </div>
       </div>
 
@@ -81,36 +81,178 @@
       <div
         v-for="day in visibleDays"
         :key="day.date + '-' + user.id"
-        class="day-col shift-cell"
+        class="day-col shift-cell d-flex align-center justify-center"
         @click="addShift(user, day)"
       >
         <div
           v-for="shift in getShifts(user.user.id, day.date)"
           :key="shift.id"
-          @click="viewShift(shift)"
-          class="shift-chip"
+          class="w-100"
         >
-          {{ shift.label }} ({{ getShiftDuration(shift) }}h)
+          <!-- Hover menu wrapping the chip -->
+          <v-menu open-on-hover location="bottom">
+            <template #activator="{ props }">
+              <div
+                v-bind="props"
+                class="shift-chip"
+                @click="viewShift(shift)"
+                :style="{
+                  backgroundColor: shift.color + '1A',
+                  borderBottom: `4px solid ${shift.color}`,
+                }"
+              >
+                <!-- Top row -->
+                <div class="chip-header">
+                  <span class="chip-text mx-auto mt-2">
+                    {{ formatTime(shift.startDate) }} -
+                    {{ formatTime(shift.endDate) }}
+                  </span>
+
+                  <!-- Existing three-dot menu -->
+                  <v-menu>
+                    <template #activator="{ props }">
+                      <v-btn
+                        v-bind="props"
+                        icon
+                        variant="text"
+                        size="small"
+                        class="menu-btn"
+                      >
+                        <v-icon color="#6D6D6D">mdi-dots-vertical</v-icon>
+                      </v-btn>
+                    </template>
+
+                    <v-list width="220" class="rounded-xl" :elevation="2">
+                      <v-list-item @click="editShift(shift)">
+                        <div class="menu-item">
+                          <img
+                            src="@/assets/icons/teamfloss/shifts/edit.svg"
+                            class="menu-icon"
+                          />
+                          <span class="menu-item-title">Info / Edit</span>
+                        </div>
+                      </v-list-item>
+
+                      <v-list-item @click="copyShift(shift)">
+                        <div class="menu-item">
+                          <img
+                            src="@/assets/icons/teamfloss/shifts/copy.svg"
+                            class="menu-icon"
+                          />
+                          <span class="menu-item-title">Copy</span>
+                        </div>
+                      </v-list-item>
+
+                      <v-list-item @click="addShift(shift)">
+                        <div class="menu-item">
+                          <img
+                            src="@/assets/icons/teamfloss/shifts/add.svg"
+                            class="menu-icon"
+                          />
+                          <span class="menu-item-title">Add Shift</span>
+                        </div>
+                      </v-list-item>
+
+                      <v-list-item @click="deleteShift(shift)">
+                        <div class="menu-item">
+                          <img
+                            src="@/assets/icons/teamfloss/shifts/delete.svg"
+                            class="menu-icon"
+                          />
+                          <span class="text-red menu-item-title">Delete</span>
+                        </div>
+                      </v-list-item>
+                    </v-list>
+                  </v-menu>
+                </div>
+
+                <!-- File icon under text -->
+                <div class="chip-footer mt-2">
+                  <v-icon size="30" :color="shift.color"
+                    >mdi-file-outline</v-icon
+                  >
+                </div>
+              </div>
+            </template>
+
+            <!-- Hover menu content (read-only) -->
+            <v-list width="320" class="rounded-lg px-4 py-3" :elevation="2">
+              <!-- Top row: start-end time + shift label chip -->
+              <div class="d-flex justify-space-between align-center mb-2">
+                <span class="hover-menu-item">
+                  {{ formatTime(shift.startDate) }} -
+                  {{ formatTime(shift.endDate) }}
+                </span>
+                <v-chip
+                  small
+                  class="ma-0"
+                  :style="{
+                    backgroundColor: shift.color,
+                    color: '#ffffff',
+                  }"
+                >
+                  {{ shift.label }}
+                </v-chip>
+              </div>
+
+              <div class="mb-3 hover-menu-item">
+                Surgery: Surgery 3{{ shift.rotaId }}
+              </div>
+              <div class="mb-3 hover-menu-item">Dentist name: Dr. John Doe</div>
+              <div class="mb-3 hover-menu-item">Nurse name: Sarah Wright</div>
+
+              <!-- Bottom row: file icon + text -->
+              <div class="d-flex align-center">
+                <v-icon :color="shift.color" size="28">mdi-file-outline</v-icon>
+                <span class="ml-2 hover-menu-item">
+                  Complete Cross Infection Audit
+                </span>
+              </div>
+            </v-list>
+          </v-menu>
         </div>
       </div>
 
       <!-- Weekly total per user -->
-      <div class="total-col">
-        {{ getUserTotalHours(user.user.id, visibleDays) }} hrs
+      <div class="total-col d-flex align-center justify-center">
+        <h3 class="total-hrs">
+          {{ getUserTotalHours(user.user.id, visibleDays) }} hrs
+        </h3>
+      </div>
+    </div>
+    <div class="rota-grid row" :style="gridStyle">
+      <div
+        class="staff-col first-col-color d-flex align-center justify-center pa-4"
+      >
+        <v-btn
+          class="add-staff-btn"
+          color="#3ADF8D"
+          rounded="lg"
+          width="100%"
+          style="background-color: white; color: #1e1e1e"
+          flat
+        >
+          <template #prepend>
+            <v-icon size="20" style="color: #1e1e1e">
+              mdi-plus-circle-outline
+            </v-icon>
+          </template>
+          Add New Staff
+        </v-btn>
       </div>
     </div>
 
     <!-- Footer daily totals -->
     <div class="rota-grid footer" :style="gridStyle">
-      <div class="staff-col d-flex align-center justify-center">
-        <h3 class="day-total-row">Daily total</h3>
+      <div class="staff-col day-total-box d-flex align-center justify-center">
+        <h3 class="day-total-row-item">Daily total</h3>
       </div>
       <div
         v-for="day in visibleDays"
         :key="day.date"
-        class="day-col d-flex justify-center align-center"
+        class="day-col d-flex justify-center align-center day-total-box"
       >
-        <h3 class="day-total-row">{{ getDayTotalHours(day.date) }} hrs</h3>
+        <h3 class="day-total-row-item">{{ getDayTotalHours(day.date) }} hrs</h3>
       </div>
       <div class="total-col"></div>
     </div>
@@ -126,12 +268,25 @@ const { shifts, rota, users } = defineProps({
   rota: Object,
   users: Array,
 });
+const mainStore = useMainStore();
+const rotaStore = useRotaStore();
+const orgStore = useOrgStore();
+const surgries = ref([]);
 
 onMounted(() => {
   console.log(users, shifts);
+  getSurgeries();
 });
 
-const emit = defineEmits(["onAddShift"]);
+const getSurgeries = () => {
+  orgStore.getSurgeries({ organisationId: rota.organisationId }).then((res) => {
+    if (res.code === 0) {
+      surgries.value = res.data;
+      console.log(surgries.value);
+    }
+  });
+};
+const emit = defineEmits(["onAddShift", "updateShifts"]);
 
 // Build full day list
 const start = parseISO(rota.startDate);
@@ -163,8 +318,7 @@ function formatDate(date, pattern) {
 const gridStyle = computed(() => ({
   display: "grid",
   gridTemplateColumns: `280px repeat(${visibleDays.value.length}, 1fr) 147px`,
-  height: "90px",
-  borderBottom: "1px solid #eee",
+  borderBottom: "1px solid #DBDBDB",
 }));
 
 // Helpers
@@ -215,6 +369,42 @@ const getShiftDuration = (shift) => {
 
   return diffHours;
 };
+function formatTime(value) {
+  if (!value) return "";
+  const d = value instanceof Date ? value : new Date(value);
+  if (isNaN(d)) return "";
+  const h = String(d.getHours()).padStart(2, "0");
+  const m = String(d.getMinutes()).padStart(2, "0");
+  return `${h}:${m}`;
+}
+const deleteShift = async (shift) => {
+  try {
+    const res = await rotaStore.deleteRotaShift({
+      rotaId: rota.id,
+      shiftId: shift.id,
+    });
+
+    if (res.code === 0) {
+      // Show success snackbar
+      mainStore.setSnackbar({
+        title: "Shift deleted successfully",
+        type: "success",
+      });
+      const updatedShifts = shifts.filter((s) => s.id !== shift.id);
+      emit("updateShifts", { id: rota.id });
+    } else {
+      mainStore.setSnackbar({
+        title: res.message || "Failed to delete shift",
+        type: "error",
+      });
+    }
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: "Something went wrong while deleting the shift",
+      type: "error",
+    });
+  }
+};
 </script>
 
 <style scoped>
@@ -237,6 +427,13 @@ const getShiftDuration = (shift) => {
   font-size: 14px;
   color: #1e1e1e;
 }
+.fst-col--subtit {
+  font-family: "Poppins";
+  font-weight: 400;
+  font-style: Regular;
+  font-size: 14px;
+  color: #1e1e1e;
+}
 .head-date {
   font-family: "Poppins";
   font-weight: 400;
@@ -244,7 +441,7 @@ const getShiftDuration = (shift) => {
   font-size: 14px;
   color: #737373;
 }
-.day-total-row {
+.day-total-row-item {
   font-family: "Poppins";
   font-weight: 400;
   font-style: "Regular";
@@ -253,9 +450,12 @@ const getShiftDuration = (shift) => {
 }
 .rota-grid.header,
 .rota-grid.footer {
-  background: #f9f9f9;
+  /* background: #EFEFEF; */
 }
-
+.day-total-box {
+  background: #efefef;
+  height: 60px;
+}
 .rota-grid.row {
   min-height: 64px;
   align-items: center;
@@ -266,26 +466,106 @@ const getShiftDuration = (shift) => {
 .staff-col {
   height: 100%;
 }
+.total-col {
+  background-color: #f3f6fa;
+  height: 100%;
+}
+.total-hrs {
+  font-family: "Poppins";
+  font-weight: 400;
+  font-style: "Regular";
+  font-size: 14px;
+  color: #737373;
+}
 .staff-col,
 .day-col,
 .total-col {
   padding: 8px;
-  border-right: 1px solid #eee;
+  border-right: 1px solid #dbdbdb;
 }
 
 .shift-cell {
   cursor: pointer;
   min-height: 48px;
+  height: 100%;
 }
 
 .shift-chip {
-  font-size: 12px;
-  background: #e3f2fd;
-  border-radius: 4px;
-  padding: 2px 6px;
+  border-radius: 12px; /* lg rounded */
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
   position: relative;
-  margin-bottom: 4px;
-  z-index: 99999999;
-  display: inline-block;
+  min-width: 120px;
+  width: 100%;
+}
+
+.chip-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.chip-text {
+  font-family: "Poppins";
+  font-weight: 400;
+  font-style: "Regular";
+  font-size: 14px;
+  color: #1e1e1e;
+}
+
+.menu-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* space between icon & text */
+}
+
+.menu-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.text-red {
+  color: #ff010b;
+}
+.menu-item-title {
+  font-family: "Poppins";
+  font-weight: 400;
+  font-style: "Regular";
+  font-size: 14px;
+  color: #1e1e1e;
+  margin-left: 5px;
+}
+.chip-footer {
+  margin-top: 6px;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+.hover-menu-item {
+  font-family: "Poppins";
+  font-weight: 400;
+  font-style: "Regular";
+  font-size: 14px;
+
+  color: #1e1e1e;
+}
+.add-staff-btn {
+  font-family: "Poppins", sans-serif;
+  font-weight: 400;
+  font-style: normal;
+  font-size: 14px;
+  border: 1px solid #3adf8d;
+  height: 50px;
 }
 </style>

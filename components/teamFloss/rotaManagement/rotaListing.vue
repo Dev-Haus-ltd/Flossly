@@ -89,7 +89,8 @@
                       <v-chip
                         class="rounded-lg mr-2"
                         size="large"
-                        :style="{ backgroundColor: '#8C3BC51A' }"
+                        
+                       :style="{ backgroundColor: 'rgba(140, 59, 197, 0.1)', color: '#8C3BC5' }"
                         prepend-icon="mdi-open-in-new"
                       >
                         Published
@@ -97,7 +98,7 @@
                       <v-chip
                         class="rounded-lg"
                         size="large"
-                        :style="{ backgroundColor: '#8C3BC51A' }"
+                      :style="{ backgroundColor: 'rgba(140, 59, 197, 0.1)', color: '#8C3BC5' }"
                       >
                         {{ filteredPublished.length }}
                       </v-chip>
@@ -241,7 +242,7 @@
                       <v-chip
                         class="rounded-lg mr-2"
                         size="large"
-                        :style="{ backgroundColor: '#0165B91A' }"
+                        :style="{ backgroundColor: 'rgba(1, 101, 185, 0.1)', color: '#0165B9' }"
                         prepend-icon="mdi-cancel"
                       >
                         Unpublished
@@ -249,7 +250,7 @@
                       <v-chip
                         class="rounded-lg"
                         size="large"
-                        :style="{ backgroundColor: '#0165B91A' }"
+                        :style="{ backgroundColor: 'rgba(1, 101, 185, 0.1)', color: '#0165B9' }"
                       >
                         {{ filteredUnpublished.length }}
                       </v-chip>

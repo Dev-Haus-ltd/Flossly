@@ -30,6 +30,8 @@
       :shifts="shifts"
       :users="rotaUsers"
       :rota="selectedRota"
+       @onChangeStatus="changeRotaStatus"
+       @updateShifts="getAllShifts"
     />
   </div>
 </template>
@@ -104,6 +106,7 @@ const changeRotaStatus = async (data) => {
             data.type === "publish" ? "published" : "unpublished"
           } successfully`,
       });
+      activeComponent.value=1
     } else {
       mainStore.setSnackbar({
         type: "error",

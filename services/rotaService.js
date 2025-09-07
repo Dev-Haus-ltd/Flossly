@@ -142,5 +142,16 @@ export default {
           reject(err);
         });
     });
+  },
+  deleteRotaShift(data) {
+    return new Promise((resolve, reject) => {
+      Post("/rota/deleteShift",data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
   }
 };
