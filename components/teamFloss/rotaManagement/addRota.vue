@@ -37,7 +37,6 @@
                 border: '1px solid #3ADF8D',
                 position: 'relative',
                 cursor: 'pointer',
-         
               }"
               @click="selectPractice(practice.value)"
             >
@@ -144,19 +143,6 @@
                 :rules="[rules.required]"
               />
 
-              <!-- Rota Duration -->
-              <label class="field-label">
-                Rota duration<span class="required">*</span>
-              </label>
-              <v-text-field
-                v-model="form.duration"
-                variant="solo"
-                flat
-                density="compact"
-                class="input-bordered"
-                :rules="[rules.required]"
-              />
-
               <!-- Rota Start Date -->
               <label class="field-label">
                 Rota start date<span class="required">*</span>
@@ -218,6 +204,21 @@
                   @update:model-value="menuEndDateCreaterota = false"
                 />
               </v-menu>
+
+               <!-- Rota Duration -->
+               <label class="field-label">
+                Rota duration<span class="required">*</span>
+              </label>
+              <v-text-field
+                v-model="form.duration"
+                variant="solo"
+                flat
+                density="compact"
+                class="input-bordered"
+                :disabled="form.endDate"
+                :rules="[rules.required]"
+              />
+
 
               <!-- Employees -->
               <h2 class="rota-title mb-1">Add Employee</h2>
@@ -297,7 +298,9 @@
 
               <!-- Submit -->
               <div class="mt-6 text-right">
-                <v-btn color="primary" type="submit"> Create Rota </v-btn>
+                <v-btn color="primary" variant="flat" type="submit">
+                  Create Rota
+                </v-btn>
               </div>
             </v-col>
           </v-row>
@@ -309,6 +312,7 @@
 
 <script setup>
 import { parsedDate } from "~/lib/dateFormatter";
+import { differenceInDays, addDays } from "date-fns";
 const mainStore = useMainStore();
 const rotaStore = useRotaStore();
 const userStore = useUserStore();
@@ -319,9 +323,9 @@ const isCreateRota = ref(false);
 const form = ref({
   orgId: null,
   name: "",
-  duration: "",
-  startDate: "",
-  endDate: "",
+  duration: null,
+  startDate: null,
+  endDate: null,
   notes: "",
   employees: [],
 });
@@ -348,6 +352,26 @@ const rotaOptions = [
   { value: "new", label: "Create a new rota", icon: "mdi-calendar-plus" },
   { value: "copy", label: "Copy an existing rota", icon: "mdi-content-copy" },
 ];
+
+watch(
+  () => [form.value.startDate, form.value.endDate],
+  ([start, end]) => {
+    if (start && end) {
+      const days = differenceInDays(new Date(end), new Date(start)) + 1;
+      form.value.duration = days > 0 ? days.toString() : "";
+    }
+  }
+);
+
+watch(
+  () => [form.value.startDate, form.value.duration],
+  ([start, duration]) => {
+    if (start && duration) {
+      const end = addDays(new Date(start), parseInt(duration) - 1);
+      form.value.endDate = end;
+    }
+  }
+);
 const selectedOptionHandle = (value) => {
   selectedOption.value = value;
   isCreateRota.value = value === "new";
