@@ -3,6 +3,13 @@
   <div>
     <div class="cust-border d-flex align-center">
       <p class="mr-1">Rota management</p>
+      <p
+        v-if="selectedRota"
+        @click="activeComponent = 1; selectedRota = null;"
+        style="color: blue !important; cursor: pointer"
+      >
+        {{ " / " + selectedRota.name }}
+      </p>
     </div>
     <div class="pa-5 bg-white" v-if="activeComponent === 1">
       <v-row>
