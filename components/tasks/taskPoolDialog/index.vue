@@ -111,7 +111,6 @@
           color="primary"
           flat
           rounded="lg"
-          :disabled="!selectedTasks.length"
           class="px-7"
           style="height: 44px"
           @click="addTaskToBoard"
