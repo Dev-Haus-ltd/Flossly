@@ -92,7 +92,7 @@
     />
     <TeamFlossRotaManagementShiftDialog
       v-model="showShiftDialog"
-      @onSubmit="handleShiftSubmit"
+      @onUpdate="handleShiftSubmit"
       :rota="rota"
       :shifts="shifts"
       :users="users"
@@ -107,7 +107,7 @@ const props = defineProps({
   rota: Object,
   users: Array,
 });
-const emit= defineEmits(['onChangeStatus','updateShifts'])
+const emit= defineEmits(['onChangeStatus','onUpdate'])
 const searchCal = ref("");
 const shiftData = ref({});
 const filterMenu = ref(false);
@@ -134,14 +134,14 @@ const clearFilters = () => {
 const showShiftDialog = ref(false);
 
 const handleShiftSubmit = (shiftData) => {
-  console.log("Shift submitted:", shiftData);
   showShiftDialog.value = false;
+  emit("onUpdate")
 };
 const unPublishRota=()=>{
  emit("onChangeStatus", {type:'unPublish', id: props.rota.id})
 }
 const updateShifts=(rota)=>{
-  emit('updateShifts', rota)
+  emit('onUpdate')
 }
 </script>
 

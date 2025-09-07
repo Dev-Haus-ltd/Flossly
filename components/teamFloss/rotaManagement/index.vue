@@ -38,7 +38,7 @@
       :users="rotaUsers"
       :rota="selectedRota"
        @onChangeStatus="changeRotaStatus"
-       @updateShifts="getAllShifts"
+       @onUpdate="getAllShifts"
     />
   </div>
 </template>

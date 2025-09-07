@@ -412,7 +412,7 @@ const { rotaList } = defineProps({
     rotaList: Array
 })
 
-const emit= defineEmits(['onChangeStatus','changeComponent']);
+const emit= defineEmits(['onChangeStatus','changeComponent', 'getAllShifts']);
 
 const currentTab = ref(0)
 const menuDate = ref(false)

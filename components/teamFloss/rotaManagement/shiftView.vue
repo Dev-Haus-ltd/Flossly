@@ -391,7 +391,7 @@ const deleteShift = async (shift) => {
         type: "success",
       });
       const updatedShifts = shifts.filter((s) => s.id !== shift.id);
-      emit("updateShifts", { id: rota.id });
+      emit("updateShifts");
     } else {
       mainStore.setSnackbar({
         title: res.message || "Failed to delete shift",

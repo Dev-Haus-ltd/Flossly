@@ -311,7 +311,7 @@ const props = defineProps({
   shifts: Array,
   shiftData: Object,
 });
-const emit = defineEmits(["update:modelValue", "onSubmit"]);
+const emit = defineEmits(["update:modelValue", "onUpdate"]);
 const rotaStore = useRotaStore();
 const mainStore = useMainStore();
 const orgStore = useOrgStore();
@@ -467,6 +467,7 @@ const submitForm = async () => {
     };
     const res = await rotaStore.addRotaShift(payload);
     if (res.code === 0) {
+      emit("onUpdate")
       mainStore.setSnackbar({
         type: "success",
         title: res?.message || "Shift added successfully",
