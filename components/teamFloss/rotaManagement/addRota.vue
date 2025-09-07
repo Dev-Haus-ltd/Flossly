@@ -21,7 +21,7 @@
           </p>
         </div>
 
-        <v-row cols="2" class="d-flex flex-wrap mt-5">
+        <v-row cols="2" class="d-flex flex-wrap mt-1">
           <v-col
             v-for="(practice, index) in practices"
             :key="index"
@@ -37,7 +37,7 @@
                 border: '1px solid #3ADF8D',
                 position: 'relative',
                 cursor: 'pointer',
-                height: '100%',
+         
               }"
               @click="selectPractice(practice.value)"
             >
@@ -47,12 +47,22 @@
                 :model-value="form.orgId"
                 color="#3ADF8D"
                 class="practice-radio"
+                true-icon="mdi-check-circle"
               />
 
               <!-- Center content -->
               <div
                 class="content-wrapper d-flex flex-column align-center justify-center"
               >
+                <div class="mb-2">
+                  <img
+                    v-if="practice.logo"
+                    :src="practice.logo"
+                    alt="logo"
+                    style="height: 40px; width: 40px; border-radius: 50%"
+                  />
+                  <CommonAvatar v-else :user="{ fullName: practice.label }" />
+                </div>
                 <p class="practice-title">
                   {{ practice.label }}
                 </p>
@@ -84,15 +94,15 @@
                 <v-radio
                   :value="option.value"
                   v-model="selectedOption"
-                  color="#3ADF8D"
                   class="option-radio"
+                  true-icon="mdi-check-circle"
                 />
 
                 <div
                   class="d-flex flex-column align-center justify-center text-center flex-1"
                 >
                   <v-icon
-                    size="40"
+                    size="30"
                     :color="
                       selectedOption === option.value ? '#FFFFFF' : '#1E1E1E'
                     "
@@ -214,20 +224,76 @@
               <label class="field-label">
                 Employee<span class="required">*</span>
               </label>
-              <v-autocomplete
-                v-model="form.employees"
-                :items="employees"
-                item-title="fullName"
-                item-value="id"
-                multiple
-                chips
-                closable-chips
-                variant="solo"
-                flat
-                density="compact"
-                class="input-bordered"
-                :menu-props="{ eager: true }"
-              />
+              <div>
+                <v-autocomplete
+                  v-model="form.employees"
+                  :items="employees"
+                  item-title="fullName"
+                  item-value="id"
+                  multiple
+                  variant="solo"
+                  flat
+                  density="compact"
+                  class="input-bordered"
+                  :menu-props="{ eager: true }"
+                  :rules="[rules.required]"
+                >
+                  <!-- hide chips inside field -->
+                  <template #selection="{ index }">
+                    <span v-if="index === -1"></span>
+                  </template>
+
+                  <!-- custom dropdown item -->
+                  <template #item="{ props, item }">
+                    <v-list-item v-bind="props">
+                      <template #prepend>
+                        <v-checkbox-btn
+                          :model-value="isSelected(item)"
+                          density="compact"
+                          readonly
+                          tabindex="-1"
+                        />
+                      </template>
+                      <template #title>
+                        <div class="d-flex align-center">
+                          <CommonAvatar
+                            :user="{ fullName: item.raw.fullName }"
+                            class="mx-2"
+                            size="32"
+                          />
+                          {{ item.raw.fullName }}
+                        </div>
+                      </template>
+                    </v-list-item>
+                  </template>
+                </v-autocomplete>
+
+                <!-- chips below field -->
+                <div class="d-flex flex-wrap">
+                  <v-chip
+                    v-for="id in form.employees"
+                    :key="id"
+                    closable
+                    close-icon="mdi-close"
+                    class="ma-1 py-5 rounded-lg"
+                    style="background-color: #d0e1e2"
+                    @click:close="
+                      form.employees = form.employees.filter((e) => e !== id)
+                    "
+                  >
+                    <CommonAvatar
+                      :user="{
+                        fullName: employees.find((e) => e.id === id)?.fullName,
+                      }"
+                      class="mr-2"
+                      size="30"
+                    />
+                    <span class="chip-content">{{
+                      employees.find((e) => e.id === id)?.fullName
+                    }}</span>
+                  </v-chip>
+                </div>
+              </div>
 
               <!-- Submit -->
               <div class="mt-6 text-right">
@@ -249,7 +315,6 @@ const userStore = useUserStore();
 const user = process.client
   ? JSON.parse(localStorage.getItem("user") || "{}")
   : {};
-
 const isCreateRota = ref(false);
 const form = ref({
   orgId: null,
@@ -260,6 +325,7 @@ const form = ref({
   notes: "",
   employees: [],
 });
+
 const practiceError = ref("");
 const rotaForm = ref(null);
 const menuStartDateCreaterota = ref(false);
@@ -274,6 +340,7 @@ const practices = computed(
     user?.userOrganisations?.map((uo) => ({
       label: uo.organisation.name,
       value: uo.organisation.id,
+      logo: uo.organisation.logo,
     })) || []
 );
 const selectedOption = ref(null);
@@ -297,6 +364,7 @@ const selectPractice = (value) => {
   practiceError.value = "";
   getUsers(form.value.orgId);
 };
+
 const submitForm = async () => {
   practiceError.value = "";
   if (!form.value.orgId) {
@@ -317,15 +385,16 @@ const submitForm = async () => {
 
 const handleAddRotaUser = async (rotaId, users) => {
   try {
-   const rotaUsers = users.map((el) => {
-    return { userId: el }
-   })
+    const rotaUsers = users.map((el) => {
+      return { userId: el };
+    });
     const res = await rotaStore.addRotaUsers({ rotaId, users: rotaUsers });
     if (res.code === 0) {
       mainStore.setSnackbar({
         type: "success",
         title: res?.message || "Rota added successfully",
       });
+      resetForm();
     } else {
       mainStore.setSnackbar({
         type: "error",
@@ -339,6 +408,24 @@ const handleAddRotaUser = async (rotaId, users) => {
     });
   }
 };
+
+function resetForm() {
+  form.value = {
+    orgId: null,
+    name: "",
+    duration: "",
+    startDate: "",
+    endDate: "",
+    notes: "",
+    employees: [],
+  };
+  isCreateRota.value = false;
+  selectedOption.value = null;
+}
+function isSelected(item) {
+  const id = item?.raw?.id ?? item?.id;
+  return form.value.employees.includes(id);
+}
 </script>
 <style scoped>
 .input-bordered :deep(.v-field) {
@@ -367,14 +454,15 @@ const handleAddRotaUser = async (rotaId, users) => {
   margin: 0;
 }
 .practice-card {
-  border-radius: 12px;
+  border-radius: 20px;
   transition: all 0.3s ease;
   text-align: center;
-  min-height: 180px;
+  min-height: 124px; /* adjust as needed */
+  display: flex; /* make card a flex container */
 }
 
 .practice-card.selected {
-  background-color: #1e1e1e !important;
+  background-color: #213536;
 }
 
 .practice-card.selected .practice-title {
@@ -390,14 +478,6 @@ const handleAddRotaUser = async (rotaId, users) => {
   color: #3adf8d !important;
 }
 
-.practice-card {
-  border-radius: 12px;
-  transition: all 0.3s ease;
-  text-align: center;
-  min-height: 200px; /* adjust as needed */
-  display: flex; /* make card a flex container */
-}
-
 .content-wrapper {
   flex: 1; /* take full height */
   display: flex;
@@ -408,15 +488,15 @@ const handleAddRotaUser = async (rotaId, users) => {
 
 .option-card {
   border: 1px solid #3adf8d;
-  border-radius: 12px;
-  background-color: #f3f6fa;
+  border-radius: 20px;
+  background-color: linear-gradient(to bottom, #f3f6fa, #ffffff);
   cursor: pointer;
   position: relative;
-  min-height: 200px;
+  min-height: 124px;
 }
 
 .selected-card {
-  background-color: #1e1e1e !important;
+  background-color: #213536;
 }
 
 .option-radio {
@@ -464,5 +544,17 @@ const handleAddRotaUser = async (rotaId, users) => {
   font-weight: 400;
   font-size: 14px;
   color: #737373;
+}
+
+.chip-content {
+  font-family: "Poppins";
+  font-weight: 500;
+  font-style: Medium;
+  font-size: 14px;
+}
+:deep(.v-chip .v-chip__close .mdi-close:before) {
+  color: #000 !important;
+  font-size: 18px; /* make it bigger */
+  font-weight: 600; /* adds visual boldness */
 }
 </style>

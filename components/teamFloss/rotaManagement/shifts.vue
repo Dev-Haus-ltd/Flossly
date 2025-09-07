@@ -75,6 +75,7 @@
             color="secondary"
             class="text-none rounded-lg"
             prepend-icon="mdi-open-in-new"
+            flat
           >
             Unpublished Rota
           </v-btn>

@@ -1,31 +1,64 @@
 <template>
-  <v-card class="pa-4 rounded-lg">
+  <v-card class="rounded-lg parent-card mt-6" :elevation="0">
     <!-- Header controls -->
-    <div class="d-flex justify-space-between align-center mb-2">
-      <v-btn icon @click="prevWeek" :disabled="weekStartIndex === 0">
-        <v-icon>mdi-chevron-left</v-icon>
-      </v-btn>
-      <div class="text-h6">
-        {{ rota?.name }} ({{ formatDate(rota?.startDate, "dd MMM") }} -
-        {{ formatDate(rota?.endDate, "dd MMM") }})
-      </div>
+    <div class="d-flex align-center head pa-4">
       <v-btn
         icon
+        variant="text"
+        class="no-bg-btn"
+        density="comfortable"
+        @click="prevWeek"
+        :disabled="weekStartIndex === 0"
+      >
+        <v-icon color="#000000">mdi-chevron-left</v-icon>
+      </v-btn>
+
+      <v-btn
+        icon
+        variant="text"
+        class="no-bg-btn"
+        density="comfortable"
         @click="nextWeek"
         :disabled="weekStartIndex + 7 >= allDays.length"
       >
-        <v-icon>mdi-chevron-right</v-icon>
+        <v-icon color="#000000">mdi-chevron-right</v-icon>
       </v-btn>
+      <div class="date-text">
+        {{ rota?.name }} ({{ formatDate(rota?.startDate, "dd MMM") }} -
+        {{ formatDate(rota?.endDate, "dd MMM") }})
+      </div>
     </div>
 
     <!-- Header (dates of current visible week) -->
-    <div class="rota-grid header" :style="gridStyle">
-      <div class="staff-col">Staff</div>
-      <div v-for="day in visibleDays" :key="day.date" class="day-col">
-        <div>{{ formatDate(day.date, "dd MMM") }}</div>
-        <small>{{ formatDate(day.date, "EEE") }}</small>
+    <div class="rota-grid" :style="gridStyle">
+      <div class="staff-col first-col-color d-flex align-center pa-4">
+        <div class="d-flex flex-column align-center ml-2">
+          <v-icon color="#000000" size="small" style="cursor: pointer"
+            >mdi-chevron-up</v-icon
+          >
+          <v-icon color="#000000" size="small" style="cursor: pointer"
+            >mdi-chevron-down</v-icon
+          >
+        </div>
+        <h3 class="fst-col-title ml-2">Staff custom order</h3>
       </div>
-      <div class="total-col">Total Hours</div>
+      <div
+        v-for="day in visibleDays"
+        :key="day.date"
+        class="day-col d-flex align-center justify-center"
+      >
+        <div>
+          <h3 class="head-date text-center">
+            {{ formatDate(day.date, "dd MMM") }}
+          </h3>
+          <h3 class="head-date text-center mt-2">
+            {{ formatDate(day.date, "EEE") }}
+          </h3>
+        </div>
+      </div>
+      <div class="total-col d-flex align-center justify-center">
+        <h3 class="head-date">Total Hours</h3>
+      </div>
     </div>
 
     <!-- Rows: staff × days -->
@@ -36,10 +69,10 @@
       :style="gridStyle"
     >
       <!-- Staff Info -->
-      <div class="staff-col d-flex align-center">
-        <CommonAvatar :user="user?.user" />
+      <div class="staff-col first-col-color d-flex align-center pa-4">
+        <CommonAvatar :user="user?.user" class="mr-2" size="45" />
         <div>
-          <div>{{ user?.user.fullName }}</div>
+          <h3 class="fst-col-title">{{ user?.user.fullName }}</h3>
           <small class="text-grey">{{ user?.user.role.title }}</small>
         </div>
       </div>
@@ -69,9 +102,15 @@
 
     <!-- Footer daily totals -->
     <div class="rota-grid footer" :style="gridStyle">
-      <div class="staff-col">Daily total</div>
-      <div v-for="day in visibleDays" :key="day.date" class="day-col">
-        {{ getDayTotalHours(day.date) }} hrs
+      <div class="staff-col d-flex align-center justify-center">
+        <h3 class="day-total-row">Daily total</h3>
+      </div>
+      <div
+        v-for="day in visibleDays"
+        :key="day.date"
+        class="day-col d-flex justify-center align-center"
+      >
+        <h3 class="day-total-row">{{ getDayTotalHours(day.date) }} hrs</h3>
       </div>
       <div class="total-col"></div>
     </div>
@@ -123,7 +162,8 @@ function formatDate(date, pattern) {
 // Dynamic grid style (200px staff + N days + 120px total col)
 const gridStyle = computed(() => ({
   display: "grid",
-  gridTemplateColumns: `200px repeat(${visibleDays.value.length}, 1fr) 120px`,
+  gridTemplateColumns: `280px repeat(${visibleDays.value.length}, 1fr) 147px`,
+  height: "90px",
   borderBottom: "1px solid #eee",
 }));
 
@@ -163,13 +203,14 @@ const addShift = (user, day) => {
 };
 
 const viewShift = (shift) => {
-  console.log(shift)
-}
+  console.log(shift);
+};
 
 const getShiftDuration = (shift) => {
   if (!shift.startDate || !shift.endDate) return 0;
 
-  const diffMs = new Date(shift.endDate).getTime() - new Date(shift.startDate).getTime();
+  const diffMs =
+    new Date(shift.endDate).getTime() - new Date(shift.startDate).getTime();
   const diffHours = diffMs / (1000 * 60 * 60); // convert ms → hours
 
   return diffHours;
@@ -177,17 +218,54 @@ const getShiftDuration = (shift) => {
 </script>
 
 <style scoped>
+.parent-card {
+  border: 1px solid #dbdbdb;
+}
+.head {
+  border-bottom: 1px solid #dbdbdb;
+}
+.date-text {
+  font-family: "Poppins";
+  font-weight: 600;
+  font-style: "SemiBold";
+  font-size: 14px;
+}
+.fst-col-title {
+  font-family: "Poppins";
+  font-weight: 600;
+  font-style: "SemiBold";
+  font-size: 14px;
+  color: #1e1e1e;
+}
+.head-date {
+  font-family: "Poppins";
+  font-weight: 400;
+  font-style: "Regular";
+  font-size: 14px;
+  color: #737373;
+}
+.day-total-row {
+  font-family: "Poppins";
+  font-weight: 400;
+  font-style: "Regular";
+  font-size: 14px;
+  color: #000000;
+}
 .rota-grid.header,
 .rota-grid.footer {
   background: #f9f9f9;
-  font-weight: bold;
 }
 
 .rota-grid.row {
   min-height: 64px;
   align-items: center;
 }
-
+.first-col-color {
+  background-color: #f3f6fa;
+}
+.staff-col {
+  height: 100%;
+}
 .staff-col,
 .day-col,
 .total-col {

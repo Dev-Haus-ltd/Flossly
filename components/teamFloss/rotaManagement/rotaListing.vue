@@ -74,6 +74,7 @@
                   color="primary"
                   class="rounded-lg"
                 @click="emit('changeComponent', 2)"
+                flat
                 >
                   Create New Rota
                 </v-btn>
