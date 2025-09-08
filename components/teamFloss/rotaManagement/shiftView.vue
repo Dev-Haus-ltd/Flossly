@@ -1,7 +1,14 @@
 <template>
-  <v-card class="rounded-lg parent-card mt-6" :elevation="0">
+  <v-card
+    class="rounded-lg parent-card mt-6"
+    :elevation="0"
+    style="overflow-x: auto"
+  >
     <!-- Header controls -->
-    <div class="d-flex align-center head pa-4">
+    <div
+      class="d-flex align-center head pa-4 pos-sticky-left"
+      style="position: sticky; left: 0px"
+    >
       <v-btn
         icon
         variant="text"
@@ -31,7 +38,9 @@
 
     <!-- Header (dates of current visible week) -->
     <div class="rota-grid" :style="gridStyle">
-      <div class="staff-col first-col-color d-flex align-center pa-4">
+      <div
+        class="staff-col first-col-color d-flex align-center pa-4 pos-sticky-left"
+      >
         <div class="d-flex flex-column align-center ml-2">
           <v-icon color="#000000" size="small" style="cursor: pointer"
             >mdi-chevron-up</v-icon
@@ -56,7 +65,9 @@
           </h3>
         </div>
       </div>
-      <div class="total-col d-flex align-center justify-center">
+      <div
+        class="total-col d-flex align-center justify-center pos-sticky-right"
+      >
         <h3 class="head-date">Total Hours</h3>
       </div>
     </div>
@@ -69,7 +80,9 @@
       :style="gridStyle"
     >
       <!-- Staff Info -->
-      <div class="staff-col first-col-color d-flex align-center pa-4">
+      <div
+        class="staff-col first-col-color d-flex align-center pa-4 pos-sticky-left"
+      >
         <CommonAvatar :user="user?.user" class="mr-2" size="45" />
         <div>
           <h3 class="fst-col-title">{{ user?.user.fullName }}</h3>
@@ -219,7 +232,9 @@
       </div>
 
       <!-- Weekly total per user -->
-      <div class="total-col d-flex align-center justify-center">
+      <div
+        class="total-col d-flex align-center justify-center pos-sticky-right"
+      >
         <h3 class="total-hrs">
           {{ getUserTotalHours(user.user.id, visibleDays) }} hrs
         </h3>
@@ -227,7 +242,7 @@
     </div>
     <div class="rota-grid row" :style="gridStyle">
       <div
-        class="staff-col first-col-color d-flex align-center justify-center pa-4"
+        class="staff-col first-col-color d-flex align-center justify-center pa-4 pos-sticky-left"
       >
         <v-btn
           class="add-staff-btn"
@@ -249,7 +264,9 @@
 
     <!-- Footer daily totals -->
     <div class="rota-grid footer" :style="gridStyle">
-      <div class="staff-col day-total-box d-flex align-center justify-center">
+      <div
+        class="staff-col day-total-box d-flex align-center justify-center pos-sticky-left"
+      >
         <h3 class="day-total-row-item">Daily total</h3>
       </div>
       <div
@@ -259,7 +276,7 @@
       >
         <h3 class="day-total-row-item">{{ getDayTotalHours(day.date) }} hrs</h3>
       </div>
-      <div class="total-col"></div>
+      <div class="total-col pos-sticky-right"></div>
     </div>
   </v-card>
 </template>
@@ -323,8 +340,11 @@ function formatDate(date, pattern) {
 // Dynamic grid style (200px staff + N days + 120px total col)
 const gridStyle = computed(() => ({
   display: "grid",
-  gridTemplateColumns: `280px repeat(${visibleDays.value.length}, 1fr) 147px`,
+  gridTemplateColumns: `280px repeat(${visibleDays.value.length}, ${
+    visibleDays.value.length >= 7 ? "300px" : "1fr"
+  }) 147px`,
   borderBottom: "1px solid #DBDBDB",
+  width: visibleDays.value.length >= 7 ? "max-content" : "",
 }));
 
 // Helpers
@@ -515,7 +535,14 @@ const getNurseName = (nurseId) => {
   padding: 8px;
   border-right: 1px solid #dbdbdb;
 }
-
+.pos-sticky-left {
+  position: sticky;
+  left: 0px;
+}
+.pos-sticky-right {
+  position: sticky;
+  right: 0px;
+}
 .shift-cell {
   cursor: pointer;
   min-height: 48px;
