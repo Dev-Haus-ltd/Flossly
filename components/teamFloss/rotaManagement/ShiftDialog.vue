@@ -372,7 +372,7 @@ const timeOptions = Array.from({ length: 48 }, (_, i) => {
   const h = Math.floor(i / 2);
   const m = i % 2 === 0 ? "00" : "30";
   return `${String(h).padStart(2, "0")}:${m}`;
-}); 
+});
 
 const toMinutes = (time) => {
   const [h, m] = time.split(":").map(Number);
@@ -467,11 +467,11 @@ const submitForm = async () => {
     };
     const res = await rotaStore.addRotaShift(payload);
     if (res.code === 0) {
-      emit("onUpdate")
       mainStore.setSnackbar({
         type: "success",
         title: res?.message || "Shift added successfully",
       });
+      emit("updateShifts", props.rota);
     } else {
       mainStore.setSnackbar({
         type: "error",

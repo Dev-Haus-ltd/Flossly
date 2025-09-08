@@ -97,6 +97,7 @@
       :shifts="shifts"
       :users="users"
       :shiftData="shiftData"
+      @updateShifts="updateShifts"
     />
   </div>
 </template>
@@ -107,7 +108,7 @@ const props = defineProps({
   rota: Object,
   users: Array,
 });
-const emit= defineEmits(['onChangeStatus','onUpdate'])
+const emit = defineEmits(["onChangeStatus", "onUpdate"]);
 const searchCal = ref("");
 const shiftData = ref({});
 const filterMenu = ref(false);
@@ -133,16 +134,13 @@ const clearFilters = () => {
 
 const showShiftDialog = ref(false);
 
-const handleShiftSubmit = (shiftData) => {
-  showShiftDialog.value = false;
-  emit("onUpdate")
+const unPublishRota = () => {
+  emit("onChangeStatus", { type: "unPublish", id: props.rota.id });
 };
-const unPublishRota=()=>{
- emit("onChangeStatus", {type:'unPublish', id: props.rota.id})
-}
-const updateShifts=(rota)=>{
-  emit('onUpdate')
-}
+const updateShifts = (rota) => {
+  showShiftDialog.value = false;
+  emit("onUpdate", rota);
+};
 </script>
 
 <style scoped>
