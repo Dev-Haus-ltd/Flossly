@@ -391,10 +391,13 @@ export const inviteMembers = async (event) => {
       if (newOrgUsers.length) {
         const newUserIds = newOrgUsers.map((u) => u.userId);
         const newUsersEmails = existingUsers
-          .filter((x) => newUserIds.includes(x))
+          .filter((x) => newUserIds.includes(x.id))
           .map((e) => e.email);
-        const newUserOrgAssociation = newOrgUsers.forEach((el) => {
-          el.organisationId = currentOrg;
+        const newUserOrgAssociation = newOrgUsers.map((el) => {
+         return {
+          userId: el.userId,
+          organisationId: currentOrg
+         }
         });
         await UserOrganisation.bulkCreate(newUserOrgAssociation, {
           transaction,
