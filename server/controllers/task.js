@@ -553,7 +553,7 @@ export const createNewTask = async (event) => {
         taskId: task.id,
         title,
         documentLink: "",
-        frequency: defaultFrequency,
+        frequency: defaultFrequency || null,
         priorityId,
         statusId: orgStatuses.find((x) => x.key === "progress").id,
         asignedBy: loggedUser.userId,
