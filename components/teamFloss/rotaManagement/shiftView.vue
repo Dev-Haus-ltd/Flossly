@@ -81,13 +81,14 @@
       <div
         v-for="day in visibleDays"
         :key="day.date + '-' + user.id"
-        class="day-col shift-cell d-flex align-center justify-center"
+        class="day-col shift-cell"
         @click="addShift(user, day)"
       >
         <div
-          v-for="shift in getShifts(user.user.id, day.date)"
+          v-for="(shift, i) in getShifts(user.user.id, day.date)"
           :key="shift.id"
-          class="w-100"
+          class="w-100 mx-auto"
+          :style="{ marginTop: i > 0 ? '10px' : '', maxWidth: '220px' }"
         >
           <!-- Hover menu wrapping the chip -->
           <v-menu open-on-hover location="bottom">
@@ -195,11 +196,15 @@
                 </v-chip>
               </div>
 
-              <div class="mb-3 hover-menu-item">
-                Surgery: Surgery 3{{ shift.rotaId }}
+              <div class="mb-3 hover-menu-item" v-if="shift.surgeryId">
+                Surgery: {{ getSurgeryName(shift.surgeryId) }}
               </div>
-              <div class="mb-3 hover-menu-item">Dentist name: Dr. John Doe</div>
-              <div class="mb-3 hover-menu-item">Nurse name: Sarah Wright</div>
+              <div class="mb-3 hover-menu-item" v-if="shift.dentistId">
+                Dentist name: {{ getDentistName(shift.dentistId) }}
+              </div>
+              <div class="mb-3 hover-menu-item" v-if="shift.nurseId">
+                Nurse name: {{ getNurseName(shift.nurseId) }}
+              </div>
 
               <!-- Bottom row: file icon + text -->
               <div class="d-flex align-center">
@@ -286,6 +291,7 @@ const getSurgeries = () => {
     }
   });
 };
+
 const emit = defineEmits(["onAddShift", "updateShifts"]);
 
 // Build full day list
@@ -405,6 +411,32 @@ const deleteShift = async (shift) => {
     });
   }
 };
+const dentistOptions = computed(() => {
+  const dentist =
+    users?.filter((x) => !x.isTempUser && x.user.roleId === 5) || [];
+  const dentistUsers = dentist.map((el) => el.user);
+  return dentistUsers;
+});
+const nurseOptions = computed(() => {
+  const nurses =
+    users?.filter((x) => !x.isTempUser && x.user.roleId === 6) || [];
+  const nurseUsers = nurses.map((el) => el.user);
+  return nurseUsers;
+});
+const getSurgeryName = (shiftId) => {
+  const surgeryName = surgries.value?.find((s) => s.id === shiftId).name;
+  return surgeryName;
+};
+const getDentistName = (dentistId) => {
+  const dentistName = dentistOptions.value.find(
+    (d) => d.id === dentistId
+  ).fullName;
+  return dentistName;
+};
+const getNurseName = (nurseId) => {
+  const nurseName = nurseOptions.value.find((n) => n.id === nurseId).fullName;
+  return nurseName;
+};
 </script>
 
 <style scoped>
@@ -448,10 +480,10 @@ const deleteShift = async (shift) => {
   font-size: 14px;
   color: #000000;
 }
-.rota-grid.header,
+/* .rota-grid.header,
 .rota-grid.footer {
-  /* background: #EFEFEF; */
-}
+  background: #EFEFEF;
+} */
 .day-total-box {
   background: #efefef;
   height: 60px;
