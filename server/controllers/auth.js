@@ -94,6 +94,8 @@ export const signupRequest = async (event) => {
       { fullName, email, password: hashed, profileCompletion: 0, roleId },
       { transaction }
     );
+    org.managerId = user.id;
+    await org.save({ transaction });
     const today = new Date().getDate();
     const renewalDate = new Date(new Date().setDate(today + 15));
     await UserPreference.create(
@@ -394,17 +396,17 @@ export const inviteMembers = async (event) => {
           .filter((x) => newUserIds.includes(x.id))
           .map((e) => e.email);
         const newUserOrgAssociation = newOrgUsers.map((el) => {
-         return {
-          userId: el.userId,
-          organisationId: currentOrg
-         }
+          return {
+            userId: el.userId,
+            organisationId: currentOrg,
+          };
         });
         await UserOrganisation.bulkCreate(newUserOrgAssociation, {
           transaction,
         });
         await sendOrgnisationAddedToRegisteredUsers({
           users: newUsersEmails,
-          orgTitle: currentOrganisation.title,
+          orgTitle: currentOrganisation.name,
           manager: currentUser.fullName,
         });
       } else {
@@ -503,6 +505,9 @@ export const acceptInvitation = async (event) => {
     if (!userOrg) {
       return error(400, "User not linked to any organisation");
     }
+    const userOrgDetails = await Organisation.findOne({
+      where: { id: userOrg.organisationId },
+    });
     const hashedPassword = await bcrypt.hash(password, 10);
     user.password = hashedPassword;
     user.fullName = fullName;
@@ -516,10 +521,23 @@ export const acceptInvitation = async (event) => {
       { userId: user.id, orgId: userOrg.organisationId, roleId: user.roleId },
       config.JWT_SECRET
     );
+    const manager = await UserPreference.findOne({
+      where: { userId: userOrgDetails.managerId },
+    });
+    const today = new Date().getDate();
+    const renewalDate = new Date(new Date().setDate(today + 15));
+    let licenseType = "Trial";
+    let licenseRenewalDate = renewalDate;
+    if (manager) {
+      licenseType = manager.licenseType;
+      licenseRenewalDate = manager.licenseRenewalDate;
+    }
     await UserPreference.create({
       userId: user.id,
       lastLoginDate: new Date(),
       lastLoginOrganisationId: userOrg.organisationId,
+      licenseType,
+      licenseRenewalDate,
     });
     setCookie(event, "accessToken", token, { maxAge: 31536000 });
     return success("User updated");
