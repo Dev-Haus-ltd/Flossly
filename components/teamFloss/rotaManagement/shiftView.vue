@@ -74,7 +74,7 @@
 
     <!-- Rows: staff × days -->
     <div
-      v-for="user in users"
+      v-for="(user) in users"
       :key="user.id"
       class="rota-grid row"
       :style="gridStyle"
@@ -104,7 +104,7 @@
           :style="{ marginTop: i > 0 ? '10px' : '', maxWidth: '220px' }"
         >
           <!-- Hover menu wrapping the chip -->
-          <v-menu open-on-hover location="bottom">
+          <v-menu open-on-hover location="bottom" :z-index="5" :attach="true" >
             <template #activator="{ props }">
               <div
                 v-bind="props"
@@ -190,7 +190,7 @@
             </template>
 
             <!-- Hover menu content (read-only) -->
-            <v-list width="320" class="rounded-lg px-4 py-3" :elevation="2">
+            <v-list width="320" class="rounded-lg px-4 py-3" :elevation="2" >
               <!-- Top row: start-end time + shift label chip -->
               <div class="d-flex justify-space-between align-center mb-2">
                 <span class="hover-menu-item">
@@ -444,17 +444,17 @@ const nurseOptions = computed(() => {
   return nurseUsers;
 });
 const getSurgeryName = (shiftId) => {
-  const surgeryName = surgries.value?.find((s) => s.id === shiftId).name;
+  const surgeryName = surgries.value?.find((s) => s.id === shiftId)?.name;
   return surgeryName;
 };
 const getDentistName = (dentistId) => {
   const dentistName = dentistOptions.value.find(
     (d) => d.id === dentistId
-  ).fullName;
+  )?.fullName;
   return dentistName;
 };
 const getNurseName = (nurseId) => {
-  const nurseName = nurseOptions.value.find((n) => n.id === nurseId).fullName;
+  const nurseName = nurseOptions.value.find((n) => n.id === nurseId)?.fullName;
   return nurseName;
 };
 </script>
@@ -538,10 +538,13 @@ const getNurseName = (nurseId) => {
 .pos-sticky-left {
   position: sticky;
   left: 0px;
+  z-index: 10;
+
 }
 .pos-sticky-right {
   position: sticky;
   right: 0px;
+  z-index: 10;
 }
 .shift-cell {
   cursor: pointer;

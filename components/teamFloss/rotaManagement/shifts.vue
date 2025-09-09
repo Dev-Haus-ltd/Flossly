@@ -114,9 +114,9 @@ const shiftData = ref({});
 const filterMenu = ref(false);
 
 const rotaViews = [
-  { title: "Day View", value: "day" },
-  { title: "Week View", value: "week" },
-  { title: "Month View", value: "month" },
+  { title: "Surgery View", value: 0 },
+  { title: "Dentist View", value: 5 },
+  { title: "Nurse View", value: 6 },
 ];
 
 const addNewShift = (data) => {
@@ -130,8 +130,13 @@ const selectedView = ref(null);
 
 const clearFilters = () => {
   selectedView.value = null;
+  nextTick(() => {
+    emit('onFilterUsers', 'clear');
+  });
 };
-
+watch(selectedView, (newVal) => {
+  emit('onFilterUsers', newVal)
+});
 const showShiftDialog = ref(false);
 
 const unPublishRota = () => {
