@@ -1,8 +1,8 @@
 import { Sequelize } from 'sequelize'
 const config = useRuntimeConfig()
-const sequelize = new Sequelize('flossly', 'neondb_owner', 'npg_hlVU5KX3Lmbs', {
-    host: 'ep-plain-shape-abembemo-pooler.eu-west-2.aws.neon.tech',
-    port: 5432,
+const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASSWORD,  {
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT,
     schema: 'dev',
     dialect: 'postgres', 
     dialectOptions: {
