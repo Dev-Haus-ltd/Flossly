@@ -70,6 +70,10 @@ export const User = sequelize.define(
       type: DataTypes.STRING(50),
       allowNull: true
     },
+    requiredCpdHours: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
     createdBy: {
       type: DataTypes.INTEGER,
       allowNull: true,
@@ -97,3 +101,4 @@ export const User = sequelize.define(
     timestamps: true,
   }
 );
+//on Onboarding  we can allocate how many cpd hours the user will have to achieve

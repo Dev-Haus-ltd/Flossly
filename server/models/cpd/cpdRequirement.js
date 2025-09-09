@@ -8,7 +8,7 @@ const CpdRequirement = sequelize.define("cpd_requirements", {
   framework_id: { type: DataTypes.INTEGER, allowNull: false },
   role_id: { type: DataTypes.INTEGER, allowNull: true }, // tie requirement to role, optional
   category: {
-    type: DataTypes.ENUM("All","Dentist Courses", "Nurse Courses", "Reptionist Courses", "Practice Management Courses"),
+    type: DataTypes.ENUM("Delegated","All","Dentist Courses", "Nurse Courses", "Reptionist Courses", "Practice Management Courses"),
     allowNull: false,
     defaultValue: "All",
   },

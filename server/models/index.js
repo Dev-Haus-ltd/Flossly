@@ -1,4 +1,4 @@
-import { DefaultPriority } from "./defaultPriorities";
+﻿import { DefaultPriority } from "./defaultPriorities";
 import { DefaultStatus } from "./defaultStatuses";
 import { OrganisationPriority } from "./organisations/organisationPriorities";
 import { Organisation } from "./organisations/organisations";
@@ -38,6 +38,12 @@ import { SystemDocumentFolder } from "./documents/systemDocumentFolders";
 import { SystemDocument } from "./documents/systemDocuments";
 import { UserLeaveHistory } from "./leaves/userLeaveHistory";
 import { UserLeaveEntitlement } from "./leaves/userLeaveEntitlements";
+
+// CPD Models
+
+import CpdCourse from "./cpd/cpdCourse";
+import CpdCourseQuestionaire from "./cpd/courseQuestionaire";
+import UserCourseHistory from "./cpd/userCourseHistory";
 
 /* Relations and Associations */
 
@@ -391,6 +397,21 @@ TaskCategory.hasMany(SystemDocument, {
   as: "documents",
 });
 
+// CPD Associations
+
+// CPD Associations
+// CpdCourse -> CpdCourseQuestionaire (1:M)
+CpdCourse.hasMany(CpdCourseQuestionaire, { foreignKey: "course_id", as: "questionaires" });
+CpdCourseQuestionaire.belongsTo(CpdCourse, { foreignKey: "course_id", as: "course" });
+
+// User -> UserCourseHistory (1:M)
+User.hasMany(UserCourseHistory, { foreignKey: "user_id", as: "courseHistory" });
+UserCourseHistory.belongsTo(User, { foreignKey: "user_id", as: "user" });
+
+// CpdCourse -> UserCourseHistory (1:M)
+CpdCourse.hasMany(UserCourseHistory, { foreignKey: "course_id", as: "userHistory" });
+UserCourseHistory.belongsTo(CpdCourse, { foreignKey: "course_id", as: "course" });
+
 export {
   User,
   UserAccount,
@@ -432,4 +453,7 @@ export {
   UserLoyaltyPoint,
   SystemDocument,
   SystemDocumentFolder,
+  CpdCourse,
+  CpdCourseQuestionaire,
+  UserCourseHistory,
 };

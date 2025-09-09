@@ -1,0 +1,62 @@
+
+
+
+
+Define a Framework → e.g., “Doctors – Annual CPD (12 months)”.
+
+Add Requirements under that framework → category rules (e.g., General ≥ 10h, Ethics ≥ 5h). Optionally scoped to a Role.
+
+Create Providers (Internal/External) → add Courses (each with category + credit hours).
+
+Schedule Sessions of those courses (time/location/capacity).
+
+Users Enroll; managers approve; users Attend (or you import attendance).
+
+System Awards Credits for attended sessions (and/or Approves Activities self-reported by users).
+
+A Progress view aggregates credits vs. requirements for the current period.
+
+Users Maintain Certifications (with expiry/reminders), leveraging CPD credits as evidence.
+
+//cpd certifications || course || auth --> user rewards already exists
+//cpd credites ( total credits required for completion || revieved || completed)
+
+// credit history
+
+//courses comes from youtube
+//each course have only one video
+//course complteion creteria 
+
+ideas:
+youtube api  (funcs() pause resume etc)
+//we are setting up a consent form 
+
+//On adding a course we need to store a certificate against that 
+//store that in users documents
+
+
+//finalyze
+
+3 moduels so framework
+
+courses
+userCourse history
+Questionare
+
+
+
+//template for a certifications
+//dynamic values user name ||  score || course title || completion date
+
+
+on course completion we have to add rewardsPoint in the reward point history table already impleted insdie users
+
+on start quiz update user course history (he can resume )
+
+total apis
+list courses based on categories
+start quiz ( post api c_id payload and in response entry kary ki user history )
+submit quiz () DB will match saved answers and from user payload and update user and generate certificate
+
+//todo create a script for prettier rc
+
