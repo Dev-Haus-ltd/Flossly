@@ -39,11 +39,9 @@ import { SystemDocument } from "./documents/systemDocuments";
 import { UserLeaveHistory } from "./leaves/userLeaveHistory";
 import { UserLeaveEntitlement } from "./leaves/userLeaveEntitlements";
 
-// CPD Models
-
-import CpdCourse from "./cpd/cpdCourse";
-import CpdCourseQuestionaire from "./cpd/courseQuestionaire";
-import UserCourseHistory from "./cpd/userCourseHistory";
+import { Course } from "./cpd/course";
+import { CourseQuestionaire } from "./cpd/courseQuestionaire";
+import { UserCourseHistory } from "./cpd/userCourseHistory";
 
 /* Relations and Associations */
 
@@ -361,8 +359,8 @@ Organisation.hasMany(UserContract, {
 
 // Accounts
 
-UserAccount.belongsTo(User, { foreignKey: "userId", as: "user" })
-User.hasOne(UserAccount, { foreignKey: "userId", as: "account" })
+UserAccount.belongsTo(User, { foreignKey: "userId", as: "user" });
+User.hasOne(UserAccount, { foreignKey: "userId", as: "account" });
 
 // system documents
 
@@ -398,19 +396,19 @@ TaskCategory.hasMany(SystemDocument, {
 });
 
 // CPD Associations
+Course.hasMany(CourseQuestionaire, { foreignKey: "courseId", as: "questions" });
+CourseQuestionaire.belongsTo(Course, { foreignKey: "courseId", as: "course" });
 
-// CPD Associations
-// CpdCourse -> CpdCourseQuestionaire (1:M)
-CpdCourse.hasMany(CpdCourseQuestionaire, { foreignKey: "course_id", as: "questionaires" });
-CpdCourseQuestionaire.belongsTo(CpdCourse, { foreignKey: "course_id", as: "course" });
-
-// User -> UserCourseHistory (1:M)
-User.hasMany(UserCourseHistory, { foreignKey: "user_id", as: "courseHistory" });
-UserCourseHistory.belongsTo(User, { foreignKey: "user_id", as: "user" });
-
-// CpdCourse -> UserCourseHistory (1:M)
-CpdCourse.hasMany(UserCourseHistory, { foreignKey: "course_id", as: "userHistory" });
-UserCourseHistory.belongsTo(CpdCourse, { foreignKey: "course_id", as: "course" });
+Course.hasMany(UserCourseHistory, {
+  foreignKey: "courseId",
+  as: "userHistories",
+});
+UserCourseHistory.belongsTo(Course, { foreignKey: "courseId", as: "course" });
+UserCourseHistory.belongsTo(User, { foreignKey: "userId", as: "user" });
+User.hasMany(UserCourseHistory, {
+  foreignKey: "userId",
+  as: "courseHistories",
+});
 
 export {
   User,
@@ -453,7 +451,7 @@ export {
   UserLoyaltyPoint,
   SystemDocument,
   SystemDocumentFolder,
-  CpdCourse,
-  CpdCourseQuestionaire,
+  Course,
+  CourseQuestionaire,
   UserCourseHistory,
 };

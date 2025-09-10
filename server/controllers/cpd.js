@@ -1,19 +1,21 @@
-import { CpdCourse, CpdCourseQuestionaire, UserCourseHistory, User } from "../models/index.js";
+import {
+  Course,
+  CourseQuestionaire,
+  UserCourseHistory,
+  User,
+} from "../models/index.js";
 
-// List Courses API - GET /api/cpd/listCourses
 export const listCourses = async (event) => {
   try {
     const query = getQuery(event);
     const { category, page = 1, limit = 10 } = query;
-    
+
     const whereClause = {};
     if (category) {
       whereClause.category = category;
     }
-
     const offset = (page - 1) * limit;
-
-    const courses = await CpdCourse.findAndCountAll({
+    const courses = await Course.findAndCountAll({
       where: whereClause,
       attributes: [
         "id",
@@ -28,11 +30,11 @@ export const listCourses = async (event) => {
         "description",
         "provider_name",
         "provider_type",
-        "createdAt"
+        "createdAt",
       ],
       limit: parseInt(limit),
       offset: parseInt(offset),
-      order: [["createdAt", "DESC"]]
+      order: [["createdAt", "DESC"]],
     });
 
     return {
@@ -43,122 +45,68 @@ export const listCourses = async (event) => {
           total: courses.count,
           page: parseInt(page),
           limit: parseInt(limit),
-          totalPages: Math.ceil(courses.count / limit)
-        }
-      }
+          totalPages: Math.ceil(courses.count / limit),
+        },
+      },
     };
   } catch (error) {
     console.error("Error listing courses:", error);
     setResponseStatus(event, 500);
     return {
       success: false,
-      error: "Failed to fetch courses"
+      error: "Failed to fetch courses",
     };
   }
 };
-
-// Start Quiz API - POST /api/cpd/startQuiz
 export const startQuiz = async (event) => {
   try {
     const body = await readBody(event);
-    const { course_id } = body;
-    const userId = event.context.user?.id;
-
+    const { courseId } = JSON.parse(body);
+    const { userId } = event.context.user;
     if (!userId) {
-      setResponseStatus(event, 401);
-      return {
-        success: false,
-        error: "User not authenticated"
-      };
+      throw createError({ statusCode: 400, message: "UserId is required" });
     }
-
-    if (!course_id) {
-      setResponseStatus(event, 400);
-      return {
-        success: false,
-        error: "Course ID is required"
-      };
+    if (!courseId) {
+      throw createError({ message: "courseId is required" });
     }
-
-    // Check if course exists
-    const course = await CpdCourse.findByPk(course_id);
-
+    const course = await Course.findByPk(courseId);
     if (!course) {
-      setResponseStatus(event, 404);
-      return {
-        success: false,
-        error: "Course not found"
-      };
+      throw createError({ message: "couse not found" });
     }
-
-    // Check if user already has a history for this course
     let userHistory = await UserCourseHistory.findOne({
       where: {
-        user_id: userId,
-        course_id: course_id
-      }
+        userId,
+        courseId,
+      },
     });
 
     if (!userHistory) {
-      // Create new user course history
       userHistory = await UserCourseHistory.create({
-        user_id: userId,
-        course_id: course_id,
-        status: "In Progress"
+        userId,
+        courseId,
+        status: "In Progress",
       });
     } else if (userHistory.status === "Completed") {
-      setResponseStatus(event, 400);
-      return {
-        success: false,
-        error: "Course already completed"
-      };
+      throw createError({ message: "course already completed" });
     }
-
-    // Get course questionnaire (without correct answers)
-    const questionnaire = await CpdCourseQuestionaire.findOne({
-      where: { course_id },
-      attributes: ["id", "questionaire", "options"] // Exclude correct_answers
+    const questionnaire = await CourseQuestionaire.findAll({
+      where: { courseId },
+      attributes: [
+        "id",
+        "question",
+        "optionA",
+        "optionB",
+        "optionC",
+        "optionD",
+      ], // Exclude correct_answers
     });
 
-    if (!questionnaire) {
-      setResponseStatus(event, 404);
-      return {
-        success: false,
-        error: "No questionnaire found for this course"
-      };
+    if (!questionnaire.length) {
+      throw createError({ message: "No questions found for this course" });
     }
-
-    return {
-      success: true,
-      data: {
-        course: {
-          id: course.id,
-          title: course.title,
-          category: course.category,
-          credit_hours: course.credit_hours,
-          mode: course.mode,
-          provider_name: course.provider_name,
-          provider_type: course.provider_type
-        },
-        questionnaire: {
-          id: questionnaire.id,
-          questions: questionnaire.questionaire,
-          options: questionnaire.options
-        },
-        userHistory: {
-          id: userHistory.id,
-          status: userHistory.status,
-          startedAt: userHistory.createdAt
-        }
-      }
-    };
-  } catch (error) {
-    console.error("Error starting quiz:", error);
-    setResponseStatus(event, 500);
-    return {
-      success: false,
-      error: "Failed to start quiz"
-    };
+    return success(questionnaire);
+  } catch (err) {
+    return error(500, err);
   }
 };
 
@@ -166,22 +114,22 @@ export const startQuiz = async (event) => {
 export const submitQuiz = async (event) => {
   try {
     const body = await readBody(event);
-    const { course_id, answers } = body;
+    const { courseId, answers } = body;
     const userId = event.context.user?.id;
 
     if (!userId) {
       setResponseStatus(event, 401);
       return {
         success: false,
-        error: "User not authenticated"
+        error: "User not authenticated",
       };
     }
 
-    if (!course_id || !answers) {
+    if (!courseId || !answers) {
       setResponseStatus(event, 400);
       return {
         success: false,
-        error: "Course ID and answers are required"
+        error: "Course ID and answers are required",
       };
     }
 
@@ -189,26 +137,26 @@ export const submitQuiz = async (event) => {
     const userHistory = await UserCourseHistory.findOne({
       where: {
         user_id: userId,
-        course_id: course_id
+        courseId: courseId,
       },
       include: [
         {
-          model: CpdCourse,
-          as: "course"
+          model: Course,
+          as: "course",
         },
         {
           model: User,
           as: "user",
-          attributes: ["id", "fullName", "email"]
-        }
-      ]
+          attributes: ["id", "fullName", "email"],
+        },
+      ],
     });
 
     if (!userHistory) {
       setResponseStatus(event, 404);
       return {
         success: false,
-        error: "Course history not found. Please start the quiz first."
+        error: "Course history not found. Please start the quiz first.",
       };
     }
 
@@ -216,21 +164,21 @@ export const submitQuiz = async (event) => {
       setResponseStatus(event, 400);
       return {
         success: false,
-        error: "Quiz already submitted"
+        error: "Quiz already submitted",
       };
     }
 
     // Get correct answers
-    const questionnaire = await CpdCourseQuestionaire.findOne({
-      where: { course_id },
-      attributes: ["correct_answers"]
+    const questionnaire = await CourseQuestionaire.findOne({
+      where: { courseId },
+      attributes: ["correct_answers"],
     });
 
     if (!questionnaire) {
       setResponseStatus(event, 404);
       return {
         success: false,
-        error: "Questionnaire not found"
+        error: "Questionnaire not found",
       };
     }
 
@@ -254,7 +202,7 @@ export const submitQuiz = async (event) => {
       status: passed ? "Completed" : "Failed",
       completed_date: new Date(),
       total_score: totalQuestions,
-      obtained_score: correctCount
+      obtained_score: correctCount,
     });
 
     // Generate certificate if passed
@@ -268,7 +216,7 @@ export const submitQuiz = async (event) => {
         completion_date: userHistory.completed_date,
         score: `${correctCount}/${totalQuestions}`,
         percentage: Math.round(percentage),
-        credit_hours: userHistory.course.credit_hours
+        credit_hours: userHistory.course.credit_hours,
       };
     }
 
@@ -280,7 +228,7 @@ export const submitQuiz = async (event) => {
           score: `${correctCount}/${totalQuestions}`,
           percentage: Math.round(percentage),
           passed: passed,
-          completed_date: userHistory.completed_date
+          completed_date: userHistory.completed_date,
         },
         course: {
           id: userHistory.course.id,
@@ -288,17 +236,17 @@ export const submitQuiz = async (event) => {
           category: userHistory.course.category,
           credit_hours: userHistory.course.credit_hours,
           provider_name: userHistory.course.provider_name,
-          provider_type: userHistory.course.provider_type
+          provider_type: userHistory.course.provider_type,
         },
-        certificate: certificate
-      }
+        certificate: certificate,
+      },
     };
   } catch (error) {
     console.error("Error submitting quiz:", error);
     setResponseStatus(event, 500);
     return {
       success: false,
-      error: "Failed to submit quiz"
+      error: "Failed to submit quiz",
     };
   }
 };
