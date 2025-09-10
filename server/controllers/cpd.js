@@ -6,57 +6,38 @@ import {
 } from "../models/index.js";
 
 export const listCourses = async (event) => {
-  try {
-    const query = getQuery(event);
-    const { category, page = 1, limit = 10 } = query;
-
-    const whereClause = {};
-    if (category) {
-      whereClause.category = category;
+    try {
+      const courses = await Course.findAll({
+        attributes: [
+          "id",
+          "title",
+          "category",
+          "credit_hours",
+          "mode",
+          "is_verified",
+          "thumbnail",
+          "course_objectives",
+          "course_outcome",
+          "description",
+          "provider_name",
+          "provider_type",
+          "createdAt",
+        ],
+        order: [["createdAt", "DESC"]],
+      });
+  
+      const groupedByCategory = courses.reduce((acc, course) => {
+        const coursePlain = course.get({ plain: true });
+        const cat = coursePlain.category || "Uncategorized";
+        if (!acc[cat]) acc[cat] = [];
+        acc[cat].push(coursePlain);
+        return acc;
+      }, {});
+  
+      return success(groupedByCategory);
+    } catch (err) {
+      return error(500, err);
     }
-    const offset = (page - 1) * limit;
-    const courses = await Course.findAndCountAll({
-      where: whereClause,
-      attributes: [
-        "id",
-        "title",
-        "category",
-        "credit_hours",
-        "mode",
-        "is_verified",
-        "thumbnail",
-        "course_objectives",
-        "course_outcome",
-        "description",
-        "provider_name",
-        "provider_type",
-        "createdAt",
-      ],
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-      order: [["createdAt", "DESC"]],
-    });
-
-    return {
-      success: true,
-      data: {
-        courses: courses.rows,
-        pagination: {
-          total: courses.count,
-          page: parseInt(page),
-          limit: parseInt(limit),
-          totalPages: Math.ceil(courses.count / limit),
-        },
-      },
-    };
-  } catch (error) {
-    console.error("Error listing courses:", error);
-    setResponseStatus(event, 500);
-    return {
-      success: false,
-      error: "Failed to fetch courses",
-    };
-  }
 };
 export const startQuiz = async (event) => {
   try {
@@ -71,7 +52,7 @@ export const startQuiz = async (event) => {
     }
     const course = await Course.findByPk(courseId);
     if (!course) {
-      throw createError({ message: "couse not found" });
+      throw createError({ message: "course not found" });
     }
     let userHistory = await UserCourseHistory.findOne({
       where: {
@@ -109,144 +90,110 @@ export const startQuiz = async (event) => {
     return error(500, err);
   }
 };
-
 // Submit Quiz API - POST /api/cpd/submitQuiz
 export const submitQuiz = async (event) => {
-  try {
-    const body = await readBody(event);
-    const { courseId, answers } = body;
-    const userId = event.context.user?.id;
-
-    if (!userId) {
-      setResponseStatus(event, 401);
-      return {
-        success: false,
-        error: "User not authenticated",
-      };
-    }
-
-    if (!courseId || !answers) {
-      setResponseStatus(event, 400);
-      return {
-        success: false,
-        error: "Course ID and answers are required",
-      };
-    }
-
-    // Get user course history
-    const userHistory = await UserCourseHistory.findOne({
-      where: {
-        user_id: userId,
-        courseId: courseId,
-      },
-      include: [
-        {
-          model: Course,
-          as: "course",
-        },
-        {
-          model: User,
-          as: "user",
-          attributes: ["id", "fullName", "email"],
-        },
-      ],
-    });
-
-    if (!userHistory) {
-      setResponseStatus(event, 404);
-      return {
-        success: false,
-        error: "Course history not found. Please start the quiz first.",
-      };
-    }
-
-    if (userHistory.status === "Completed") {
-      setResponseStatus(event, 400);
-      return {
-        success: false,
-        error: "Quiz already submitted",
-      };
-    }
-
-    // Get correct answers
-    const questionnaire = await CourseQuestionaire.findOne({
-      where: { courseId },
-      attributes: ["correct_answers"],
-    });
-
-    if (!questionnaire) {
-      setResponseStatus(event, 404);
-      return {
-        success: false,
-        error: "Questionnaire not found",
-      };
-    }
-
-    // Calculate score
-    const correctAnswers = questionnaire.correct_answers;
-    let correctCount = 0;
-    const totalQuestions = Object.keys(correctAnswers).length;
-
-    // Compare user answers with correct answers
-    for (const [questionId, userAnswer] of Object.entries(answers)) {
-      if (correctAnswers[questionId] === userAnswer) {
-        correctCount++;
+    try {
+      const body = await readBody(event);
+      const { courseId, answers } = typeof body === "string" ? JSON.parse(body) : body;
+      const { userId } = event.context.user || {};
+  
+      if (!userId) {
+        throw createError({ statusCode: 400, message: "UserId is required" });
       }
-    }
-
-    const percentage = (correctCount / totalQuestions) * 100;
-    const passed = percentage >= 70; // 70% passing threshold
-
-    // Update user course history
-    await userHistory.update({
-      status: passed ? "Completed" : "Failed",
-      completed_date: new Date(),
-      total_score: totalQuestions,
-      obtained_score: correctCount,
-    });
-
-    // Generate certificate if passed
-    let certificate = null;
-    if (passed) {
-      certificate = {
-        id: `CERT-${userHistory.id}-${Date.now()}`,
-        user_name: userHistory.user.fullName,
-        course_title: userHistory.course.title,
-        provider_name: userHistory.course.provider_name,
-        completion_date: userHistory.completed_date,
-        score: `${correctCount}/${totalQuestions}`,
-        percentage: Math.round(percentage),
-        credit_hours: userHistory.course.credit_hours,
-      };
-    }
-
-    return {
-      success: true,
-      data: {
+      if (!courseId) {
+        throw createError({ message: "courseId is required" });
+      }
+      if (!answers || (typeof answers !== "object")) {
+        throw createError({ message: "answers are required" });
+      }
+  
+      // Make sure course exists
+      const course = await Course.findByPk(courseId);
+      if (!course) {
+        throw createError({ message: "course not found" });
+      }
+  
+      // Find user course history
+      const userHistory = await UserCourseHistory.findOne({
+        where: { userId, courseId },
+        include: [
+          { model: Course, as: "course" },
+          { model: User, as: "user", attributes: ["id", "fullName", "email"] },
+        ],
+      });
+  
+      if (!userHistory) {
+        throw createError({ message: "Course history not found. Please start the quiz first." });
+      }
+      if (userHistory.status === "Completed") {
+        throw createError({ message: "Quiz already submitted" });
+      }
+  
+      // Fetch all questions for the course
+      const questions = await CourseQuestionaire.findAll({
+        where: { courseId },
+        attributes: ["id", "correctAnswer"],
+        order: [["id", "ASC"]],
+      });
+  
+      if (!questions.length) {
+        throw createError({ message: "No questions found for this course" });
+      }
+  
+      // Score calculation
+      // Expected answers format: { [questionId]: "A" | "B" | "C" | "D" } OR the actual answer string matching correctAnswer
+      // We will compare by string equality with correctAnswer.
+      let correctCount = 0;
+      for (const q of questions) {
+        const userAnswer = answers[q.id];
+        if (userAnswer && String(userAnswer).trim() === String(q.correctAnswer).trim()) {
+          correctCount++;
+        }
+      }
+  
+      const totalQuestions = questions.length;
+      const percentage = (correctCount / totalQuestions) * 100;
+      const passed = percentage >= 50;
+  
+      // Update user course history
+      await userHistory.update({
+        status: passed ? "Completed" : "Failed",
+        completedDate: new Date(),
+        totalScore: totalQuestions,
+        obtainedScore: correctCount,
+      });
+  
+      // Generate certificate if passed
+      let certificate = null;
+      if (passed) {
+        certificate = {
+          id: `CERT-${userHistory.id}-${Date.now()}`,
+          user_name: userHistory.user.fullName,
+          course_title: userHistory.course.title,
+          completion_date: userHistory.completedDate,
+          score: `${correctCount}/${totalQuestions}`,
+          percentage: Math.round(percentage),
+          credit_hours: userHistory.course.credit_hours,
+        };
+      }
+  
+      return success({
         result: {
           status: userHistory.status,
           score: `${correctCount}/${totalQuestions}`,
           percentage: Math.round(percentage),
-          passed: passed,
-          completed_date: userHistory.completed_date,
+          passed,
+          completed_date: userHistory.completedDate,
         },
         course: {
           id: userHistory.course.id,
           title: userHistory.course.title,
           category: userHistory.course.category,
           credit_hours: userHistory.course.credit_hours,
-          provider_name: userHistory.course.provider_name,
-          provider_type: userHistory.course.provider_type,
         },
-        certificate: certificate,
-      },
-    };
-  } catch (error) {
-    console.error("Error submitting quiz:", error);
-    setResponseStatus(event, 500);
-    return {
-      success: false,
-      error: "Failed to submit quiz",
-    };
-  }
+        certificate,
+      });
+    } catch (err) {
+      return error(500, err);
+    }
 };
