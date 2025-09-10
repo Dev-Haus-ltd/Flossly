@@ -52,36 +52,63 @@ export const updateRota = async (event) => {
 };
 
 export const publishRota = async (event) => {
-  const body = await readBody(event);
-  const { id } = JSON.parse(body);
   try {
-    const rota = await Rota.findByPk(id);
-    if (!rota) throw createError({ message: "Rota not found " });
-    await rota.update({
-      isPublished: true,
-      publishedDate: new Date(),
-    });
-    return success(rota);
+    const body = await readBody(event);
+    const { id, ids } = JSON.parse(body || "{}");
+    const targetIds = Array.isArray(ids) ? ids : (id !== undefined ? [id] : []);
+
+    if (!targetIds.length) return error("id or ids required");
+
+    const where = { id: targetIds };
+    // optional org scoping if present in context (keeps behavior safe)
+    if (event?.context?.user?.orgId) where.organisationId = event.context.user.orgId;
+
+    const [updated] = await Rota.update(
+      { isPublished: true, publishedDate: new Date() },
+      { where }
+    );
+    if (!updated) return error("Rota not found");
+
+    // keep response shape sensible
+    if (targetIds.length === 1) {
+      const rota = await Rota.findByPk(targetIds[0]);
+      return success(rota);
+    }
+    const rotas = await Rota.findAll({ where });
+    return success({ updated, rotas });
   } catch (err) {
     return error(500, err.message);
   }
 };
 
 export const unPublishRota = async (event) => {
-  const body = await readBody(event);
-  const { id } = JSON.parse(body);
   try {
-    const rota = await Rota.findByPk(id);
-    if (!rota) throw createError({ message: "Rota not found " });
-    await rota.update({
-      isPublished: false,
-    });
+    const body = await readBody(event);
+    const { id, ids } = JSON.parse(body || "{}");
+    const targetIds = Array.isArray(ids) ? ids : (id !== undefined ? [id] : []);
 
-    return success(rota);
+    if (!targetIds.length) return error("id or ids required");
+
+    const where = { id: targetIds };
+    if (event?.context?.user?.orgId) where.organisationId = event.context.user.orgId;
+
+    const [updated] = await Rota.update(
+      { isPublished: false }, // keeping your existing rule (don’t clear publishedDate)
+      { where }
+    );
+    if (!updated) return error("Rota not found");
+
+    if (targetIds.length === 1) {
+      const rota = await Rota.findByPk(targetIds[0]);
+      return success(rota);
+    }
+    const rotas = await Rota.findAll({ where });
+    return success({ updated, rotas });
   } catch (err) {
     return error(500, err.message);
   }
 };
+ 
 
 export const removeRotaUser = async (event) => {
   const body = await readBody(event);

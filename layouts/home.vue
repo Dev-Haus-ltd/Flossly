@@ -18,6 +18,8 @@
     <v-main>
       <slot />
     </v-main>
+    <CommonPopup />
+    <CommonBulkactionbar />
   </v-layout>
 </template>
 

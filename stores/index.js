@@ -159,6 +159,12 @@ export const useMainStore = defineStore("mainStore", {
     getuserOptions() {
       return [
         {
+          title: "DashBoard",
+          imgPath: dashBoard,
+          value: "dashBoard",
+          to: "/",
+        },
+        {
           title: "My Tasks",
           value: "myTasks",
           imgPath: tasksIcon,

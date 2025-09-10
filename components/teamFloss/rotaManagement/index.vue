@@ -46,16 +46,47 @@
 definePageMeta({
   layout: "home",
 });
+
+import { useBus } from "~/composables/useBus";
+import {usePopupStore} from "~/stores/popup";
+import unpublish  from "~/assets/logos/unpublish.svg";
+import publish  from "~/assets/logos/publish.svg";
+
+const popup = usePopupStore();
+const bus = useBus();
 const rotaStore = useRotaStore();
 const mainStore = useMainStore();
+
 const rotas = ref([]);
 const shifts = ref([]);
 const rotaUsers = ref([]);
 const activeComponent = ref(1);
 const selectedRota = ref(null);
 onMounted(() => {
-  getRotas();
+  getRotas(); // Fetch the initial rota data if needed
+
+  // Listen for bulk execution requests from the floating BulkActionBar
+  bus.on('bulk:execute', async ({ context, action1Label, icon1, ids }) => {
+    if (context === 'rota') {
+      // Map display label to API verb precisely
+      const normalized = (action1Label || '').trim().toLowerCase()
+      const actionType = normalized === 'published' ? 'publish'
+        : normalized === 'unpublished' ? 'unpublish'
+        : 'unpublish'
+      await changeRotaStatus({ type: actionType, ids })
+
+      // After execution, emit an event to clear selections
+      bus.emit('bulk:clear-selection', { context: 'rota' });
+
+      // Optionally log
+      console.log(`Bulk action ${actionType} executed for ids:`, ids)
+    }
+  });
 });
+onBeforeUnmount(() => {
+  bus.all.clear && bus.all.clear(); // safety in case of hot-reloads; mitt supports off but not stored refs here
+});
+
 const totalCount = computed(() => rotas.value.length);
 const publishedCount = computed(
   () => rotas.value.filter((r) => r.isPublished).length
@@ -95,40 +126,53 @@ const getRotas = async () => {
   }
 };
 
-const changeRotaStatus = async (data) => {
-  let res = null;
-  try {
-    if (data.type === "publish") {
-      res = await rotaStore.publishRota({ id: data.id });
-    } else {
-      res = await rotaStore.unPublishRota({ id: data.id });
-    }
-    if (res.code === 0) {
-      getRotas();
-      mainStore.setSnackbar({
-        type: "success",
-        title:
-          res?.message ||
-          `Rota ${
-            data.type === "publish" ? "published" : "unpublished"
-          } successfully`,
-      });
-      activeComponent.value=1
-    } else {
-      mainStore.setSnackbar({
-        type: "error",
-        title:
-          res?.message ||
-          `Failed to ${data.type === "publish" ? "publish" : "unpublish"} rota`,
-      });
-    }
-  } catch (error) {
-    mainStore.setSnackbar({
-      type: "error",
-      title: "Something went wrong",
-    });
+const changeRotaStatus = async (data /* { type:'publish'|'unpublish', id?, ids? } */) => {
+  const isBulk = Array.isArray(data.ids) && data.ids.length > 0
+  const verb = data.type === 'publish' ? 'publish' : 'unpublish'
+
+  let subject = ''
+  if (!isBulk && data.id != null) {
+    const found = rotas.value.find(r => r.id === data.id)
+    subject = found?.name ? `“${found.name}”` : `#${data.id}`
   }
-};
+
+  const ok = await popup.ask({
+    text: isBulk
+      ? `Are you sure you want to ${verb} ${data.ids.length} rota(s)?`
+      : `Are you sure you want to ${verb} rota ${subject}?`,
+    confirmLabel: 'Yes',
+    cancelLabel: 'No',
+    logo: data.type === 'publish' ? publish : unpublish,
+    logoAlt: 'Rota'
+  })
+  if (!ok) return
+
+  popup.setLoading(true)
+  try {
+    const res = data.type === 'publish'
+      ? await rotaStore.publishRota(isBulk ? { ids: data.ids } : { id: data.id })
+      : await rotaStore.unPublishRota(isBulk ? { ids: data.ids } : { id: data.id })
+
+    if (res.code === 0) {
+      await getRotas()
+      mainStore.setSnackbar({
+        type: 'success',
+        title: `${isBulk ? 'Rotas' : 'Rota'} ${data.type === 'publish' ? 'published' : 'unpublished'} successfully`,
+      })
+      activeComponent.value = 1
+    } else {
+      mainStore.setSnackbar({
+        type: 'error',
+        title: `Failed to ${verb} ${isBulk ? 'rotas' : 'rota'}`,
+      })
+    }
+  } catch {
+    mainStore.setSnackbar({ type: 'error', title: 'Something went wrong' })
+  } finally {
+    popup.setLoading(false)
+  }
+}
+
 
 const getAllShifts = async (item) => {
   try {
