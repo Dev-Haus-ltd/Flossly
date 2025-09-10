@@ -1,6 +1,6 @@
 <template>
   <div
-    :style="`background-color: ${getRandomHexColor()}; height: 100%;`"
+    :style="`background-color: ${getHexColor()}; height: 100%;color:#fff;`"
     class="pa-1 d-flex align-center"
   >
     <v-menu
@@ -19,7 +19,7 @@
           <v-list-item
             v-for="(s, i) in frequencyStatuses"
             :key="i"
-            :style="`background-color: ${getRandomHexColor()}; color:#fff; margin-bottom: 6px; min-height: 30px;`"
+            :style="`background-color: ${s.color}; color:#fff; margin-bottom: 6px; min-height: 30px;`"
             @click="
               () => {
                 selected.frequency = s.name;
@@ -36,17 +36,20 @@
   </div>
 </template>
 <script setup>
-import { getRandomHexColor } from '~/lib/misc';
 
 const { selected, column } = defineProps(["selected", "column"]);
 const emit = defineEmits(["update"]);
 const frequencyStatuses = ref([
-  { key: "daily", name: "Daily", color: "#4CAF50" }, // Green
-  { key: "weekly", name: "Weekly", color: "#2196F3" }, // Blue
-  { key: "biweekly", name: "Biweekly", color: "#3F51B5" }, // Indigo
-  { key: "monthly", name: "Monthly", color: "#9C27B0" }, // Purple
-  { key: "quarterly", name: "Quarterly", color: "#FF9800" }, // Orange
-  { key: "yearly", name: "Yearly", color: "#795548" }, // Brown
-  { key: "adhoc", name: "Ad Hoc", color: "#607D8B" }, // Blue Grey
+  { key: "daily", name: "Daily", color: "#B9308A" }, // Green
+  { key: "weekly", name: "Weekly", color: "#892E88" }, // Blue
+  { key: "biweekly", name: "Biweekly", color: "#5D2684" }, // Indigo
+  { key: "monthly", name: "Monthly", color: "#1B3D9F" }, // Purple
+  { key: "quarterly", name: "Quarterly", color: "#0165B9" }, // Orange
+  { key: "yearly", name: "Yearly", color: "#02AFAE" }, // Brown
+  { key: "adhoc", name: "Ad Hoc", color: "#00A856" }, // Blue Grey
 ]);
+
+const getHexColor = () => {
+  return frequencyStatuses.value.find((x) => x.name === selected.frequency)?.color
+}
 </script>

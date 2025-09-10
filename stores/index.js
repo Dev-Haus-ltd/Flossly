@@ -2,13 +2,6 @@ import authService from "../services/authService";
 import dashBoard from "@/assets/icons/mainDrawerIcons/dashboard.svg";
 import tasksIcon from "@/assets/icons/mainDrawerIcons/tasks.svg";
 import teamIcon from "@/assets/icons/mainDrawerIcons/team.svg";
-import academyIcon from "@/assets/icons/mainDrawerIcons/academy.svg";
-import flowIcon from "@/assets/icons/mainDrawerIcons/flow.svg";
-import contentIcon from "@/assets/icons/mainDrawerIcons/content.svg";
-import checkIcon from "@/assets/icons/mainDrawerIcons/check.svg";
-import settingsIcon from "@/assets/icons/mainDrawerIcons/settings.svg";
-import cleanIcon from "@/assets/icons/mainDrawerIcons/clean.svg";
-import profileIcon from "@/assets/icons/mainDrawerIcons/profile.svg";
 import flosslyDocs from '@/assets/icons/mainDrawerIcons/docs.svg'
 import crmIcon from '@/assets/icons/mainDrawerIcons/crm.svg'
 
@@ -202,12 +195,6 @@ export const useMainStore = defineStore("mainStore", {
           width: 200,
         },
         {
-          key: "status.name",
-          title: "Status",
-          sortable: true,
-          width: 200,
-        },
-        {
           key: "assignedUser.fullName",
           title: "Assigned User",
           sortable: true,
@@ -245,12 +232,6 @@ export const useMainStore = defineStore("mainStore", {
         {
           key: "priority.name",
           title: "Priority",
-          sortable: true,
-          width: 200,
-        },
-        {
-          key: "status.name",
-          title: "Status",
           sortable: true,
           width: 200,
         },
