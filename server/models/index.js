@@ -38,6 +38,7 @@ import { SystemDocumentFolder } from "./documents/systemDocumentFolders";
 import { SystemDocument } from "./documents/systemDocuments";
 import { UserLeaveHistory } from "./leaves/userLeaveHistory";
 import { UserLeaveEntitlement } from "./leaves/userLeaveEntitlements";
+import { UserHrDocument } from "./auth/userHrDocuments";
 
 /* Relations and Associations */
 
@@ -391,6 +392,11 @@ TaskCategory.hasMany(SystemDocument, {
   as: "documents",
 });
 
+// User ↔ UserHrDocuments
+User.hasMany(UserHrDocument, { foreignKey: "userId", as: "hrDocuments" });
+UserHrDocument.belongsTo(User, { foreignKey: "userId", as: "user" });
+
+
 export {
   User,
   UserAccount,
@@ -405,6 +411,7 @@ export {
   UserTaskAttachment,
   UserLeaveEntitlement,
   UserLeaveHistory,
+  UserHrDocument,
   TaskChecklist,
   Role,
   Organisation,

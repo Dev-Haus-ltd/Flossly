@@ -12,7 +12,10 @@ import {
   verifyEmail,
   updateProfile,
   updatePassword,
-  updateBankDetails
+  updateBankDetails,
+  getUserHrDocuments,
+  addUserHrDoc,
+  removeUserDoc
 } from "../../controllers/auth";
 import bcrypt from "bcrypt";
 export default defineEventHandler(async (event) => {
@@ -48,6 +51,12 @@ export default defineEventHandler(async (event) => {
       return await updateBankDetails(event);
     case "contractDetails":
       return await contractDetails(event);
+    case "hrDocs":
+      return await getUserHrDocuments(event)
+    case "addHrDoc":
+      return await addUserHrDoc(event)
+    case "removeHrDoc":
+      return await removeUserDoc(event)
     default:
       return { code: 0, error: "Not found" };
   }

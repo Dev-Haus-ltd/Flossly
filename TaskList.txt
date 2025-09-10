@@ -1,4 +1,40 @@
-1. Add API for users Tasks as events for calender
-2. Add API to return Pending leaves for Admin
-3. Add API to approve leaves
-4. Design fixes
+Backend
+User HR documents APIs
+User's Rota list
+Validations in Add rota API
+1. Conflicting dates. There could be one rota for any date within the rota range.
+
+Validations in Add shift API
+1. Conflicting dates. There could be one shift for any time within the time range.
+2. There could only be a single dentist for a single surgery shift. (2 docs can't have a similar shift in a single surgery).
+3. There could only be a single Nurse for a single surgery shift.  (2 nurses can't have a similar shift in a single surgery).
+
+Front End
+1. Shifts view => All users view / surgery View / Dentist view / Nurse View (Refer to figma designs).
+2. Add copy feature (copy / paste existing rota. copy / pasete shift details) to be used for filling new rota / shift form.
+3. Edit shift (open same dialog with prefilled details).
+4. Update lord icons on all screens (refer to figma designs).
+5. Add confirmation pop ups on critical actions (deleting any item etc).
+6. Design fixes (refer to figma defect page).
+7. Add dashoboard on user view along with dynamic information.
+8. Add Rota and Holilday view in User view (AS disscused with aqib).
+9. Team Details => Documents view to be created.
+10. Fix Save button in user detail sections.
+11. Update date format for fixed dates.
+12. Membership view to be updated (Aqib to provide new design).
+13. Month / Week View for Tasks calender.
+14. User view dashboard fixes. recent hidden if no item.
+15. Update rota details button
+16. Add new staff => Manage Staff. Dialog should have the multi select option with added users in rota already selected.
+17. Rota Tray => bulk publish / unpublish. bulk delete.
+18. update task priority and status colors
+19. remove status from column
+20. draggable columns in datatable
+
+
+New feature
+1. User Documents. Both Manager and User side. Each document contains 5% profilecompletion. Folder completion 100 points.
+2. Completing a course gives reward points as per the minutes of the course.
+3. Private videos / links to be added in app / youtube video tracking.
+4. CRM Meta Adds integration, sending emails, updating lead information etc, whatsapp messages.
+5. CPD courses

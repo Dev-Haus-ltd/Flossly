@@ -14,6 +14,7 @@ import {
   UserAccount,
   UserPoint,
   UserContract,
+  UserHrDocument,
 } from "../models";
 import { generateOTP, generateVerificationLink } from "../utils/misc";
 import bcrypt from "bcrypt";
@@ -25,6 +26,7 @@ import {
   sendOrgnisationAddedToRegisteredUsers,
 } from "../utils/emailNotifications";
 import requestIp from "request-ip";
+import { HrDocument } from "../models/hrDocuments";
 const config = useRuntimeConfig();
 export const login = async (event) => {
   let browserAgent = getHeader(event, "User-Agent");
@@ -356,6 +358,7 @@ export const verifyEmail = async (event) => {
           comments: "",
         }));
         await UserTask.bulkCreate(userTasks);
+        await assignDefaultHRDocsToUser(user.id);
       }
       return success("Email Verified");
     } else {
@@ -516,6 +519,7 @@ export const acceptInvitation = async (event) => {
     user.status = "Active";
     await user.save();
     await assignDefaultTasksToUser(user, userOrg.organisationId);
+    await assignDefaultHRDocsToUser(user.id);
     await sendOnBoardingMail(user);
     const token = jwt.sign(
       { userId: user.id, orgId: userOrg.organisationId, roleId: user.roleId },
@@ -589,6 +593,19 @@ const assignDefaultTasksToUser = async (user, organisationId) => {
   }
 };
 
+const assignDefaultHRDocsToUser = async (userId) => {
+  const defaultDocs = await HrDocument.findAll();
+
+  const userDocs = defaultDocs.map((doc) => ({
+    userId,
+    name: doc.name,
+    type: doc.type,
+    status: "Pending",
+  }));
+
+  await UserHrDocument.bulkCreate(userDocs);
+};
+
 export const userLoginHistory = async (event) => {
   const body = await readBody(event);
   const { userId } = JSON.parse(body);
@@ -596,6 +613,77 @@ export const userLoginHistory = async (event) => {
   try {
     const loginHistory = await LoginHistory.findAll({ where: { userId } });
     return success(loginHistory);
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const getUserHrDocuments = async (event) => {
+  const body = await readBody(event);
+  const { userId } = JSON.parse(body);
+  if (!userId) throw createError({ message: "userId required" });
+  try {
+    const docs = await UserHrDocument.findAll({ where: { userId } });
+    return success(docs);
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const addUserHrDoc = async (event) => {
+  const form = await readMultipartFormData(event);
+  if (!form) return error("Invalid form data");
+  const fields = {};
+  let documentFile = null;
+  form.forEach((item) => {
+    if (item.type) {
+      documentFile = item;
+    } else {
+      fields[item.name] = item.data.toString();
+    }
+  });
+  const { type, userId, name } = fields;
+  try {
+    let documentPath = null;
+    if (documentFile) {
+      const uploadDir = path.join(process.cwd(), "public", "hr-documents");
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      const fileName = `${Date.now()}-${documentFile.filename}`;
+      const filePath = path.join(uploadDir, fileName);
+      fs.writeFileSync(filePath, documentFile.data);
+      documentPath = `/hr-documents/${fileName}`;
+    }
+    const userDoc = await UserHrDocument.findOne({
+      where: { userId, type, name },
+    });
+    if (!userDoc) throw createError({ message: "Document not found for user" });
+    userDoc.link = documentPath;
+    userDoc.uploadedDate = new Date();
+    userDoc.status = "Completed";
+    await userDoc.save();
+    return success("Added");
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const removeUserDoc = async (event) => {
+  const body = await readBody(event);
+  const { id } = body;
+  try {
+    const userDoc = await UserHrDocument.findByPk(id);
+    if (!userDoc) throw createError({ message: "Document not found for user" });
+    const prevLink = path.join(process.cwd(), "public", userDoc.link);
+    if (prevLink && fs.existsSync(prevLink)) {
+      fs.unlinkSync(prevLink);
+    }
+    userDoc.link = "";
+    userDoc.uploadedDate = null;
+    userDoc.status = "Pending";
+    await userDoc.save();
+    return success("Deleted");
   } catch (err) {
     return error(500, err.message);
   }

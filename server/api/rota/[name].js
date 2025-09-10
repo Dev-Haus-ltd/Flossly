@@ -12,7 +12,8 @@ import {
   unPublishRota,
   updateRota,
   updateShift,
-  deleteRotaShift
+  deleteRotaShift,
+  getUserRotas,
 } from "~/server/controllers/rota";
 
 export default defineEventHandler(async (event) => {
@@ -21,9 +22,9 @@ export default defineEventHandler(async (event) => {
     case "list":
       return await getRotas(event);
     case "add":
-      return await addRota(event); 
+      return await addRota(event);
     case "users":
-      return await getRotaUsers(event)
+      return await getRotaUsers(event);
     case "update":
       return await updateRota(event);
     case "publish":
@@ -44,8 +45,10 @@ export default defineEventHandler(async (event) => {
       return await completeShift(event);
     case "shifts":
       return await getAllShifts(event);
-      case "deleteShift":
-        return await deleteRotaShift(event);
+    case "deleteShift":
+      return await deleteRotaShift(event);
+    case "myRotas":
+      return await getUserRotas(event);
     default:
       return { code: 0, error: "Not found" };
   }

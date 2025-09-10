@@ -1,4 +1,5 @@
-import { Role, UserPreference, UserSubscription } from "../models";
+import { Role } from "../models";
+import { HrDocument } from "../models/hrDocuments";
 import { success, error } from "../utils/response";
 export const addRoles = async (event) => {
   const body = await readBody(event);
@@ -32,5 +33,18 @@ export const getConfigs = async (event) => {
   //   const configs = {
   // subscriptionStatus: subscription.stripeSubscriptionStatus,
   // }
+};
 
-}
+export const addHRDocuments = async (event) => {
+  try {
+    const body = await readBody(event);
+    const { name, type } = body;
+    await HrDocument.create({
+      name,
+      type,
+    });
+    return success("Added");
+  } catch (err) {
+    return error(500, err.message);
+  }
+};

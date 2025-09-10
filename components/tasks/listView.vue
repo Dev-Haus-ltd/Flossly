@@ -271,14 +271,14 @@
               </template>
 
               <!-- Inside v-slot:[`item.${col.key}`] -->
-              <template v-else-if="col.key === 'status.name'">
+              <!-- <template v-else-if="col.key === 'status.name'">
                 <DataTableColumnsStatus
                   :statuses="statuses"
                   :selected="item"
                   :column="col"
                   @update="updateValueRow(item, 'status')"
                 />
-              </template>
+              </template> -->
               <template v-else-if="col.key === 'priority.name'">
                 <DataTableColumnsPriorities
                   :priorities="priorities"
@@ -594,7 +594,6 @@ const fixedColumnOrder = [
   "title",
   "frequency",
   "priority.name",
-  "status.name",
   "assignedUser.fullName",
   "dueDate",
   "comments",
