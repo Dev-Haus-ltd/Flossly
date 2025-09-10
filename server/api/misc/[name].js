@@ -1,4 +1,4 @@
-import { addRoles, getConfigs, getRoles } from "~/server/controllers/misc";
+import { addRoles, getConfigs, getRoles, addHRDocuments } from "~/server/controllers/misc";
 
 export default defineEventHandler(async (event) => {
     const path = getRouterParam(event, "name");
@@ -9,6 +9,8 @@ export default defineEventHandler(async (event) => {
         return await getRoles(event);
       case "getConfigs":
         return await getConfigs(event)
+      case "addHrDocuments":
+        return await addHRDocuments(event)
       default:
         return { code: 0, error: "Not found" };
     }

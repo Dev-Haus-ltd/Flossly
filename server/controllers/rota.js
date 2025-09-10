@@ -1,12 +1,36 @@
 import { Role, Rota, RotaShift, RotaUser, User } from "../models";
+import { Op } from "sequelize";
 
 export const addRota = async (event) => {
   try {
     const body = await readBody(event);
-    const { name, startDate, endDate, duration, notes, orgId } =
-      JSON.parse(body);
+    const { name, startDate, endDate, duration, notes, orgId } = JSON.parse(body);
+
+    if (!orgId || !name || !startDate || !endDate) {
+      return error("Required fields missing");
+    }
+
     if (new Date(endDate) < new Date(startDate)) {
       return error("End date cannot be before start date");
+    }
+    const conflictRota = await Rota.findOne({
+      where: {
+        organisationId: orgId,
+        [Op.or]: [
+          { startDate: { [Op.between]: [startDate, endDate] } },
+          { endDate: { [Op.between]: [startDate, endDate] } },
+          {
+            [Op.and]: [
+              { startDate: { [Op.lte]: startDate } },
+              { endDate: { [Op.gte]: endDate } },
+            ],
+          },
+        ],
+      },
+    });
+
+    if (conflictRota) {
+      throw createError({ message: "A rota already exists for this organisation in the given date range"});
     }
     const rota = await Rota.create({
       organisationId: orgId,
@@ -16,6 +40,7 @@ export const addRota = async (event) => {
       duration,
       notes,
     });
+
     return success(rota);
   } catch (err) {
     return error(500, err.message);
@@ -34,6 +59,35 @@ export const getRotas = async (event) => {
     return error(500, err.message);
   }
 };
+
+export const getUserRotas = async (event) => {
+  const body = await readBody(event)
+  const { userId } = JSON.parse(body)
+  try {
+    if (!userId) throw createError({ message: "UserID required"})
+    const rotas = await Rota.findAll({
+      include: [
+        {
+          model: RotaUser,
+          as: 'users',
+          required: true,
+          where: { userId },
+          include: [
+            {
+              model: User,
+              as: 'user',
+              attributes: ['id', 'fullName', 'email', "photo"]
+            }
+          ]
+        },
+      ],
+      order: [['startDate', 'ASC']]
+    })
+    return success(rotas)
+  } catch (err) {
+    return error(500, err.message)
+  }
+}
 
 export const updateRota = async (event) => {
   try {
@@ -156,14 +210,55 @@ export const addRotaShift = async (event) => {
       breakTime,
       notes,
     } = JSON.parse(body);
-    if (
-      !rotaId ||
-      !userId ||
-      !label ||
-      !startDate ||
-      !endDate
-    ) {
-      throw createError({ message: "required fields missing" });
+
+    if (!rotaId || !userId || !label || !startDate || !endDate) {
+      throw createError({ message: "Required fields missing" });
+    }
+
+    const conflictConditions = [];
+
+    if (surgeryId) {
+      conflictConditions.push({ surgeryId });
+    }
+    if (dentistId) {
+      conflictConditions.push({ dentistId });
+    }
+    if (nurseId) {
+      conflictConditions.push({ nurseId });
+    }
+
+    if (conflictConditions.length > 0) {
+      const conflictShift = await RotaShift.findOne({
+        where: {
+          rotaId,
+          [Op.or]: conflictConditions,
+          [Op.and]: [
+            {
+              [Op.or]: [
+                {
+                  startDate: { [Op.between]: [startDate, endDate] },
+                },
+                {
+                  endDate: { [Op.between]: [startDate, endDate] },
+                },
+                {
+                  [Op.and]: [
+                    { startDate: { [Op.lte]: startDate } },
+                    { endDate: { [Op.gte]: endDate } },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      });
+
+      if (conflictShift) {
+        throw createError({
+          statusCode: 400,
+          message: "Shift conflict: another shift already exists in this time range",
+        });
+      }
     }
     const shift = await RotaShift.create({
       rotaId,
@@ -180,7 +275,7 @@ export const addRotaShift = async (event) => {
     });
     return success(shift);
   } catch (err) {
-    console.log(err)
+    console.error(err);
     return error(500, err.message);
   }
 };

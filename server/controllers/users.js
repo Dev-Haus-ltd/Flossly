@@ -19,7 +19,7 @@ export const usersList = async (event) => {
   const body = await readBody(event);
   const { roleId, orgId } = JSON.parse(body);
   if (orgId) {
-    currentOrg = orgId
+    currentOrg = orgId;
   }
   const where = {};
   if (roleId) {
@@ -288,6 +288,7 @@ export const updateBankDetails = async (event) => {
   }
 };
 export const applyLeave = async (event) => {
+  const actor = event.context.user;
   const transaction = await DB.transaction();
   try {
     const form = await readMultipartFormData(event);
@@ -316,7 +317,7 @@ export const applyLeave = async (event) => {
       endDate,
       reason,
       isPaid,
-      totalHours
+      totalHours,
     } = fields;
 
     if (!userId || !leaveType || !startDate || !endDate) {
@@ -396,10 +397,10 @@ export const applyLeave = async (event) => {
         startDate,
         endDate,
         reason,
-        totalHours: totalHours === 'Full Day' ? 8 : 4,
+        totalHours: totalHours === "Full Day" ? 8 : 4,
         isPaid: isPaid === "true", // because form data sends strings
         document: documentPath,
-        status: "Pending",
+        status: userId === actor.userId ? "Pending" : "Approved",
       },
       { transaction }
     );
@@ -407,7 +408,6 @@ export const applyLeave = async (event) => {
     await transaction.commit();
     return success(leave);
   } catch (err) {
-    console.log(err)
     await transaction.rollback();
     return error(500, err.message);
   }
