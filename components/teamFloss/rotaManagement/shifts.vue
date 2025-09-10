@@ -87,8 +87,10 @@
       :users="users"
       :shifts="shifts"
       :rota="rota"
+      :selectedView="selectedView"
       @onAddShift="addNewShift"
       @updateShifts="updateShifts"
+      @onAddUser="emit('onAddUser')"
     />
     <TeamFlossRotaManagementShiftDialog
       v-model="showShiftDialog"
@@ -108,7 +110,7 @@ const props = defineProps({
   rota: Object,
   users: Array,
 });
-const emit = defineEmits(["onChangeStatus", "onUpdate"]);
+const emit = defineEmits(["onChangeStatus", "onUpdate",'onAddUser']);
 const searchCal = ref("");
 const shiftData = ref({});
 const filterMenu = ref(false);
@@ -134,7 +136,9 @@ const clearFilters = () => {
     emit('onFilterUsers', 'clear');
   });
 };
+
 watch(selectedView, (newVal) => {
+    
   emit('onFilterUsers', newVal)
 });
 const showShiftDialog = ref(false);

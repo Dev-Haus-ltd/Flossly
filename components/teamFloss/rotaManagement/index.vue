@@ -43,6 +43,7 @@
       @onChangeStatus="changeRotaStatus"
       @onUpdate="getAllShifts"
       @onFilterUsers="filterUsers"
+      @onAddUser="getRotaUsers"
     />
   </div>
 </template>
@@ -56,6 +57,7 @@ const rotas = ref([]);
 const shifts = ref([]);
 const rotaUsers = ref([]);
 const allRotaUsers = ref([]);
+const allShifts=ref([])
 const activeComponent = ref(1);
 const selectedRota = ref(null);
 onMounted(() => {
@@ -140,6 +142,7 @@ const getAllShifts = async (item) => {
     const res = await rotaStore.getAllShifts({ rotaId: item.id });
     if (res.code === 0) {
       shifts.value = res.data;
+    allShifts.value=res.data
       selectedRota.value = item;
       getRotaUsers();
     }
@@ -161,14 +164,28 @@ const getRotaUsers = async () => {
   });
 };
 const filterUsers = (payload) => {
-  if (payload === "clear") {
+  if (payload === "clear" ) {
     rotaUsers.value = [...allRotaUsers.value];
-  } else {
+    shifts.value = [...allShifts.value];
+  } else if (payload===0){
+    rotaUsers.value = [...allRotaUsers.value];
+     shifts.value= allShifts.value.filter(sh=> sh.surgeryId)
+  }
+  
+  else {
+    // Filter users by role
     rotaUsers.value = allRotaUsers.value.filter(
       (ru) => ru.user.roleId === payload
     );
+    // Collect userIds of those users
+    const userIds = rotaUsers.value.map((ru) => ru.userId);
+    // Filter shifts belonging to those userIds
+    shifts.value = allShifts.value.filter((shf) =>
+      userIds.includes(shf.userId)
+    );
   }
 };
+
 const changecomponent = (id) => {
   console.log(id);
   activeComponent.value = id;
