@@ -306,8 +306,9 @@ export const deleteRotaShift = async (event) => {
 
 export const updateShift = async (event) => {
   try {
-    const body = await JSON.parse(readBody(event));
-    const shift = await RotaShift.findByPk(body.id);
+    const body = await readBody(event);
+    const {id}= JSON.parse(body)
+    const shift = await RotaShift.findByPk(id);
     if (!shift) throw createError({ message: "shift not found" });
     await shift.update(body);
     return success(shift);

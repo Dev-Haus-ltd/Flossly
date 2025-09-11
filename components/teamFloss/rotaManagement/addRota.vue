@@ -263,7 +263,7 @@ const form = ref({
   notes: "",
   employees: [],
 });
-
+const emit= defineEmits(['onAddRota'])
 const practiceError = ref("");
 const rotaForm = ref(null);
 const menuStartDateCreaterota = ref(false);
@@ -335,9 +335,17 @@ const submitForm = async () => {
     const res = await rotaStore.addRota(form.value);
     if (res.code === 0) {
       handleAddRotaUser(res.data.id, form.value.employees);
+    } else{
+      mainStore.setSnackbar({
+        type: "error",
+        title: res.message || res?.data?.message || "Something went wrong",
+      });
     }
   } catch (err) {
-    console.log(err);
+    mainStore.setSnackbar({
+      type: "error",
+      title: err.message || "An error occurred",
+    });
   }
 };
 
@@ -350,13 +358,14 @@ const handleAddRotaUser = async (rotaId, users) => {
     if (res.code === 0) {
       mainStore.setSnackbar({
         type: "success",
-        title: res?.message || "Rota added successfully",
+        title: "Rota added successfully",
       });
       resetForm();
+      emit('onAddRota')
     } else {
       mainStore.setSnackbar({
         type: "error",
-        title: res.message || "Something went wrong",
+        title: res.message || res?.data?.message  || "Something went wrong",
       });
     }
   } catch (err) {

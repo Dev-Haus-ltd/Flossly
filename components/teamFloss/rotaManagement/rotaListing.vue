@@ -1,421 +1,408 @@
 <template>
-     <div style="background-color: white" class="rounded-lg mt-5">
-        <!-- Tabs -->
-        <v-tabs v-model="currentTab" class="custom-tabs" slider-color="primary">
-          <v-tab class="tab-text" value="active"> Active Rotas </v-tab>
+  <div style="background-color: white" class="rounded-lg mt-5">
+    <!-- Tabs -->
+    <v-tabs v-model="currentTab" class="custom-tabs" slider-color="primary">
+      <v-tab class="tab-text" value="active"> Active Rotas </v-tab>
 
-          <v-tab class="tab-text" value="old"> Old Rotas </v-tab>
+      <v-tab class="tab-text" value="old"> Old Rotas </v-tab>
 
-          <v-tab class="tab-text" value="shifts"> Shifts </v-tab>
-        </v-tabs>
+      <v-tab class="tab-text" value="shifts"> Shifts </v-tab>
+    </v-tabs>
 
-        <!-- Tab Content -->
-        <v-tabs-window v-model="currentTab">
-          <v-tabs-window-item value="active">
-            <div>
-              <!-- Toolbar: left = date range + search, right = create button -->
-              <div class="d-flex align-center justify-space-between my-4">
-                <div class="d-flex align-center" style="gap: 12px">
-                  <v-menu
-                    v-model="menuDate"
-                    max-width="420"
-                    offset-y
-                    :close-on-content-click="false"
-                  >
-                    <template #activator="{ props }">
-                      <v-text-field
-                        v-bind="props"
-                        readonly
-                        variant="solo"
-                        density="compact"
-                        hide-details
-                        class="date-activator rounded-lg input-bordered"
-                        width="200"
-                        :placeholder="dateRangeText || 'Select date range'"
-                        :value="dateRangeText"
-                        append-inner-icon="mdi-calendar-range"
-                        flat
-                      />
-                    </template>
-
-                    <v-card>
-                      <v-date-picker
-                        v-model="tempRange"
-                        range
-                        color="primary"
-                        locale="en-GB"
-                      />
-                      <v-card-actions class="px-3">
-                        <v-spacer />
-                        <v-btn text @click="clearDate">Clear</v-btn>
-                        <v-btn color="primary" variant="text" @click="applyDate"
-                          >Apply</v-btn
-                        >
-                      </v-card-actions>
-                    </v-card>
-                  </v-menu>
-
-                  <!-- Search -->
+    <!-- Tab Content -->
+    <v-tabs-window v-model="currentTab">
+      <v-tabs-window-item value="active">
+        <div>
+          <!-- Toolbar: left = date range + search, right = create button -->
+          <div class="d-flex align-center justify-space-between my-4">
+            <div class="d-flex align-center" style="gap: 12px">
+              <v-menu
+                v-model="menuDate"
+                max-width="420"
+                offset-y
+                :close-on-content-click="false"
+              >
+                <template #activator="{ props }">
                   <v-text-field
-                    v-model="search"
-                    placeholder="Search "
+                    v-bind="props"
+                    readonly
+                    variant="solo"
                     density="compact"
                     hide-details
-                    append-inner-icon="mdi-magnify"
-                    class="rounded-lg input-bordered"
+                    class="date-activator rounded-lg input-bordered"
                     width="200"
-                    variant="solo"
+                    :placeholder="dateRangeText || 'Select date range'"
+                    :value="dateRangeText"
+                    append-inner-icon="mdi-calendar-range"
                     flat
                   />
-                </div>
+                </template>
 
-                <!-- Create new rota -->
-                <v-btn
-                  color="primary"
-                  class="rounded-lg"
-                @click="emit('changeComponent', 2)"
+                <v-card>
+                  <v-date-picker
+                    v-model="tempRange"
+                    range
+                    color="primary"
+                    locale="en-GB"
+                  />
+                  <v-card-actions class="px-3">
+                    <v-spacer />
+                    <v-btn text @click="clearDate">Clear</v-btn>
+                    <v-btn color="primary" variant="text" @click="applyDate"
+                      >Apply</v-btn
+                    >
+                  </v-card-actions>
+                </v-card>
+              </v-menu>
+
+              <!-- Search -->
+              <v-text-field
+                v-model="search"
+                placeholder="Search "
+                density="compact"
+                hide-details
+                append-inner-icon="mdi-magnify"
+                class="rounded-lg input-bordered"
+                width="200"
+                variant="solo"
                 flat
+              />
+            </div>
+
+            <!-- Create new rota -->
+            <v-btn
+              color="primary"
+              class="rounded-lg"
+              @click="emit('changeComponent', 2)"
+              flat
+            >
+              Create New Rota
+            </v-btn>
+          </div>
+
+          <!-- Expansion panels -->
+          <v-expansion-panels v-model="openedPanels" multiple flat>
+            <!-- Published -->
+            <v-expansion-panel class="border-sm">
+              <v-expansion-panel-title>
+                <div class="d-flex align-center">
+                  <v-chip
+                    class="rounded-lg mr-2"
+                    size="large"
+                    color="#8C3BC5"
+                    prepend-icon="mdi-open-in-new"
+                  >
+                    Published
+                  </v-chip>
+                  <v-chip class="rounded-lg" size="large" color="#8C3BC5">
+                    {{ filteredPublished.length }}
+                  </v-chip>
+                </div>
+              </v-expansion-panel-title>
+
+              <v-expansion-panel-text>
+                <v-data-table
+                  :headers="headers"
+                  :items="filteredPublished"
+                  item-value="id"
+                  show-select
+                  hover
+                  class="rota-table"
+                  v-model="selectedPublished"
+                  :item-selectable="() => true"
+                  @update:modelValue="onSelectionChangePublished"
+                  return-object
                 >
-                  Create New Rota
-                </v-btn>
-              </div>
+                  <!-- Header slot -->
+                  <template
+                    v-slot:headers="{
+                      columns,
+                      getSortIcon,
+                      toggleSort,
+                      allSelected,
+                      someSelected,
+                    }"
+                  >
+                    <tr>
+                      <template
+                        v-for="(column, i) in columns"
+                        :key="column.key"
+                      >
+                        <th
+                          :style="{
+                            width: i === 0 ? '50px' : '',
+                            padding: '6px 8px',
+                            backgroundColor: '#F6F6F6',
+                            fontSize: '14px',
+                          }"
+                        >
+                          <div
+                            v-if="i !== 0"
+                            class="d-flex align-center justify-space-between"
+                          >
+                            <span>{{ column.title }}</span>
+                            <v-icon
+                              v-if="column.sortable"
+                              size="14"
+                              class="ml-1"
+                              @click="toggleSort(column)"
+                            >
+                              {{ getSortIcon(column) }}
+                            </v-icon>
+                          </div>
 
-              <!-- Expansion panels -->
-              <v-expansion-panels v-model="openedPanels" multiple flat>
-                <!-- Published -->
-                <v-expansion-panel class="border-sm">
-                  <v-expansion-panel-title>
-                    <div class="d-flex align-center">
+                          <div v-else>
+                            <v-checkbox
+                              :model-value="allSelected"
+                              :indeterminate="someSelected && !allSelected"
+                              @update:model-value="
+                                (val) => toggleAll('published', val)
+                              "
+                              density="compact"
+                              hide-details
+                              variant="outlined"
+                              class="custom-checkbox"
+                            />
+                          </div>
+                        </th>
+                      </template>
+                    </tr>
+                  </template>
+
+                  <!-- Cells -->
+                  <template v-slot:[`item.name`]="{ item }">
+                    <div class="px-2">{{ item.name }}</div>
+                  </template>
+
+                  <template v-slot:[`item.startDate`]="{ item }">
+                    <div class="px-2">
+                      {{ parsedDate(item.startDate) }}
+                    </div>
+                  </template>
+
+                  <template v-slot:[`item.employees`]="{ item }">
+                    <div class="px-2">
+                      {{ item.employees ?? "No data" }}
+                    </div>
+                  </template>
+                  <template v-slot:[`item.duration`]="{ item }">
+                    <div class="px-2">
+                      {{ item?.duration + " days" }}
+                    </div>
+                  </template>
+
+                  <template v-slot:[`item.status`]="{ item }">
+                    <div class="px-2">
                       <v-chip
-                        class="rounded-lg mr-2"
-                        size="large"
-                        
-                       :style="{ backgroundColor: 'rgba(140, 59, 197, 0.1)', color: '#8C3BC5' }"
-                        prepend-icon="mdi-open-in-new"
+                        :color="getRotaStatusColor(getRotaStatus(item))"
+                        size="default"
                       >
-                        Published
-                      </v-chip>
-                      <v-chip
-                        class="rounded-lg"
-                        size="large"
-                      :style="{ backgroundColor: 'rgba(140, 59, 197, 0.1)', color: '#8C3BC5' }"
-                      >
-                        {{ filteredPublished.length }}
+                        {{ getRotaStatus(item) }}
                       </v-chip>
                     </div>
-                  </v-expansion-panel-title>
+                  </template>
 
-                  <v-expansion-panel-text>
-                    <v-data-table
-                      :headers="headers"
-                      :items="filteredPublished"
-                      item-value="id"
-                      show-select
-                      hover
-                      class="rota-table"
-                      v-model="selectedPublished"
-                      :item-selectable="() => true"
-                      @update:modelValue="onSelectionChangePublished"
-                      return-object
-                    >
-                      <!-- Header slot -->
+                  <template v-slot:[`item.actions`]="{ item }">
+                    <div class="px-4 d-flex align-center">
+                      <img
+                        src="@/assets/icons/teamfloss/userDetails/view.svg"
+                        alt="View"
+                        class="action-icon"
+                        @click.stop="onView(item)"
+                      />
+                      <img
+                        src="@/assets/icons/teamfloss/userDetails/edit.svg"
+                        alt="Edit"
+                        class="action-icon ml-3"
+                        @click.stop="onEdit(item)"
+                      />
+                      <img
+                        src="@/assets/icons/teamfloss/userDetails/unpublish.svg"
+                        alt="Edit"
+                        class="action-icon ml-3"
+                        @click.stop="changeRotaStatus('unpublish', item)"
+                      />
+                    </div>
+                  </template>
+                </v-data-table>
+              </v-expansion-panel-text>
+            </v-expansion-panel>
+
+            <!-- Unpublished -->
+            <v-expansion-panel class="border-sm">
+              <v-expansion-panel-title>
+                <div class="d-flex align-center">
+                  <v-chip
+                    class="rounded-lg mr-2"
+                    size="large"
+                    color="#0165B9"
+                    prepend-icon="mdi-cancel"
+                  >
+                    Unpublished
+                  </v-chip>
+                  <v-chip class="rounded-lg" size="large" color="#0165B9">
+                    {{ filteredUnpublished.length }}
+                  </v-chip>
+                </div>
+              </v-expansion-panel-title>
+
+              <v-expansion-panel-text>
+                <v-data-table
+                  :headers="headers"
+                  :items="filteredUnpublished"
+                  item-value="id"
+                  show-select
+                  hover
+                  class="rota-table"
+                  v-model="selectedUnpublished"
+                  :item-selectable="() => true"
+                  @update:modelValue="onSelectionChangeUnPublished"
+                  return-object
+                >
+                  <!-- Header slot -->
+                  <template
+                    v-slot:headers="{
+                      columns,
+                      getSortIcon,
+                      toggleSort,
+                      allSelected,
+                      someSelected,
+                    }"
+                  >
+                    <tr>
                       <template
-                        v-slot:headers="{
-                          columns,
-                          getSortIcon,
-                          toggleSort,
-                          allSelected,
-                          someSelected,
-                        }"
+                        v-for="(column, i) in columns"
+                        :key="column.key"
                       >
-                        <tr>
-                          <template
-                            v-for="(column, i) in columns"
-                            :key="column.key"
+                        <th
+                          :style="{
+                            width: i === 0 ? '50px' : column.width + 'px',
+                            padding: '6px 8px',
+                            backgroundColor: '#F6F6F6',
+                            fontSize: '14px',
+                          }"
+                        >
+                          <div
+                            v-if="i !== 0"
+                            class="d-flex align-center justify-space-between"
                           >
-                            <th
-                              :style="{
-                                width: i === 0 ? '50px' : '',
-                                padding: '6px 8px',
-                                backgroundColor: '#F6F6F6',
-                                fontSize: '14px',
-                              }"
+                            <span>{{ column.title }}</span>
+                            <v-icon
+                              v-if="column.sortable"
+                              size="14"
+                              class="ml-1"
+                              @click="toggleSort(column)"
                             >
-                              <div
-                                v-if="i !== 0"
-                                class="d-flex align-center justify-space-between"
-                              >
-                                <span>{{ column.title }}</span>
-                                <v-icon
-                                  v-if="column.sortable"
-                                  size="14"
-                                  class="ml-1"
-                                  @click="toggleSort(column)"
-                                >
-                                  {{ getSortIcon(column) }}
-                                </v-icon>
-                              </div>
+                              {{ getSortIcon(column) }}
+                            </v-icon>
+                          </div>
 
-                              <div v-else>
-                                <v-checkbox
-                                  :model-value="allSelected"
-                                  :indeterminate="someSelected && !allSelected"
-                                  @update:model-value="
-                                    (val) => toggleAll('published', val)
-                                  "
-                                  density="compact"
-                                  hide-details
-                                  variant="outlined"
-                                  class="custom-checkbox"
-                                />
-                              </div>
-                            </th>
-                          </template>
-                        </tr>
+                          <div v-else>
+                            <v-checkbox
+                              :model-value="allSelected"
+                              :indeterminate="someSelected && !allSelected"
+                              @update:model-value="
+                                (val) => toggleAll('unpublished', val)
+                              "
+                              density="compact"
+                              hide-details
+                              variant="outlined"
+                              class="custom-checkbox"
+                            />
+                          </div>
+                        </th>
                       </template>
+                    </tr>
+                  </template>
 
-                      <!-- Cells -->
-                      <template v-slot:[`item.name`]="{ item }">
-                        <div class="px-2">{{ item.name }}</div>
-                      </template>
+                  <!-- Cells -->
+                  <template v-slot:[`item.name`]="{ item }">
+                    <div class="px-2">{{ item.name }}</div>
+                  </template>
 
-                      <template v-slot:[`item.startDate`]="{ item }">
-                        <div class="px-2">
-                          {{ parsedDate(item.startDate) }}
-                        </div>
-                      </template>
+                  <template v-slot:[`item.startDate`]="{ item }">
+                    <div class="px-2">
+                      {{ parsedDate(item.startDate) }}
+                    </div>
+                  </template>
 
-                      <template v-slot:[`item.employees`]="{ item }">
-                        <div class="px-2">
-                          {{ item.employees ?? "No data" }}
-                        </div>
-                      </template>
+                  <template v-slot:[`item.employees`]="{ item }">
+                    <div class="px-2">
+                      {{ item.employees ?? "No data" }}
+                    </div>
+                  </template>
+                  <template v-slot:[`item.duration`]="{ item }">
+                    <div class="px-2">
+                      {{ item?.duration + " days" }}
+                    </div>
+                  </template>
 
-                      <template v-slot:[`item.status`]="{ item }">
-                        <div class="px-2">
-                          <v-chip
-                            v-if="item.status"
-                            size="small"
-                            :style="{
-                              backgroundColor:
-                                item?.status === 'In Progress'
-                                  ? '#33B93C1A'
-                                  : '#FF7C001A',
-                            }"
-                          >
-                            {{ item.status ?? "No data" }}
-                          </v-chip>
-                          <span v-else>No data</span>
-                        </div>
-                      </template>
-
-                      <template v-slot:[`item.actions`]="{ item }">
-                        <div class="px-4 d-flex align-center">
-                          <img
-                            src="@/assets/icons/teamfloss/userDetails/view.svg"
-                            alt="View"
-                            class="action-icon"
-                            @click.stop="onView(item)"
-                          />
-                          <img
-                            src="@/assets/icons/teamfloss/userDetails/edit.svg"
-                            alt="Edit"
-                            class="action-icon ml-3"
-                            @click.stop="onEdit(item)"
-                          />
-                          <img
-                            src="@/assets/icons/teamfloss/userDetails/unpublish.svg"
-                            alt="Edit"
-                            class="action-icon ml-3"
-                            @click.stop="changeRotaStatus('unpublish', item)"
-                          />
-                        </div>
-                      </template>
-                    </v-data-table>
-                  </v-expansion-panel-text>
-                </v-expansion-panel>
-
-                <!-- Unpublished -->
-                <v-expansion-panel class="border-sm">
-                  <v-expansion-panel-title>
-                    <div class="d-flex align-center">
+                  <template v-slot:[`item.status`]="{ item }">
+                    <div class="px-2">
                       <v-chip
-                        class="rounded-lg mr-2"
-                        size="large"
-                        :style="{ backgroundColor: 'rgba(1, 101, 185, 0.1)', color: '#0165B9' }"
-                        prepend-icon="mdi-cancel"
+                        :color="getRotaStatusColor(getRotaStatus(item))"
+                        size="default"
                       >
-                        Unpublished
-                      </v-chip>
-                      <v-chip
-                        class="rounded-lg"
-                        size="large"
-                        :style="{ backgroundColor: 'rgba(1, 101, 185, 0.1)', color: '#0165B9' }"
-                      >
-                        {{ filteredUnpublished.length }}
+                        {{ getRotaStatus(item) }}
                       </v-chip>
                     </div>
-                  </v-expansion-panel-title>
+                  </template>
 
-                  <v-expansion-panel-text>
-                    <v-data-table
-                      :headers="headers"
-                      :items="filteredUnpublished"
-                      item-value="id"
-                      show-select
-                      hover
-                      class="rota-table"
-                      v-model="selectedUnpublished"
-                      :item-selectable="() => true"
-                      @update:modelValue="onSelectionChangeUnPublished"
-                      return-object
-                    >
-                      <!-- Header slot -->
-                      <template
-                        v-slot:headers="{
-                          columns,
-                          getSortIcon,
-                          toggleSort,
-                          allSelected,
-                          someSelected,
-                        }"
-                      >
-                        <tr>
-                          <template
-                            v-for="(column, i) in columns"
-                            :key="column.key"
-                          >
-                            <th
-                              :style="{
-                                width: i === 0 ? '50px' : column.width + 'px',
-                                padding: '6px 8px',
-                                backgroundColor: '#F6F6F6',
-                                fontSize: '14px',
-                              }"
-                            >
-                              <div
-                                v-if="i !== 0"
-                                class="d-flex align-center justify-space-between"
-                              >
-                                <span>{{ column.title }}</span>
-                                <v-icon
-                                  v-if="column.sortable"
-                                  size="14"
-                                  class="ml-1"
-                                  @click="toggleSort(column)"
-                                >
-                                  {{ getSortIcon(column) }}
-                                </v-icon>
-                              </div>
+                  <template v-slot:[`item.actions`]="{ item }">
+                    <div class="px-4 d-flex align-center">
+                      <img
+                        src="@/assets/icons/teamfloss/userDetails/view.svg"
+                        alt="View"
+                        class="action-icon"
+                        @click.stop="onView(item)"
+                      />
+                      <img
+                        src="@/assets/icons/teamfloss/userDetails/edit.svg"
+                        alt="Edit"
+                        class="action-icon ml-3"
+                        @click.stop="onEdit(item)"
+                      />
+                      <img
+                        src="@/assets/icons/teamfloss/userDetails/publish.svg"
+                        alt="Publish"
+                        class="action-icon ml-3"
+                        @click.stop="changeRotaStatus('publish', item)"
+                      />
+                    </div>
+                  </template>
+                </v-data-table>
+              </v-expansion-panel-text>
+            </v-expansion-panel>
+          </v-expansion-panels>
+        </div>
+      </v-tabs-window-item>
 
-                              <div v-else>
-                                <v-checkbox
-                                  :model-value="allSelected"
-                                  :indeterminate="someSelected && !allSelected"
-                                  @update:model-value="
-                                    (val) => toggleAll('unpublished', val)
-                                  "
-                                  density="compact"
-                                  hide-details
-                                  variant="outlined"
-                                  class="custom-checkbox"
-                                />
-                              </div>
-                            </th>
-                          </template>
-                        </tr>
-                      </template>
+      <v-tabs-window-item value="old">
+        <div class="pa-4">
+          <h3 class="tab-content-title">Old Rotas Content</h3>
+          <p>Here goes the hardcoded content for Old Rotas.</p>
+        </div>
+      </v-tabs-window-item>
 
-                      <!-- Cells -->
-                      <template v-slot:[`item.name`]="{ item }">
-                        <div class="px-2">{{ item.name }}</div>
-                      </template>
-
-                      <template v-slot:[`item.startDate`]="{ item }">
-                        <div class="px-2">
-                          {{ parsedDate(item.startDate) }}
-                        </div>
-                      </template>
-
-                      <template v-slot:[`item.employees`]="{ item }">
-                        <div class="px-2">
-                          {{ item.employees ?? "No data" }}
-                        </div>
-                      </template>
-
-                      <template v-slot:[`item.status`]="{ item }">
-                        <div class="px-2">
-                          <v-chip
-                            v-if="item.status"
-                            size="small"
-                            :style="{
-                              backgroundColor:
-                                item?.status === 'In Progress'
-                                  ? '#33B93C1A'
-                                  : '#FF7C001A',
-                            }"
-                          >
-                            {{ item.status ?? "No data" }}
-                          </v-chip>
-                          <span v-else>No data</span>
-                        </div>
-                      </template>
-
-                      <template v-slot:[`item.actions`]="{ item }">
-                        <div class="px-4 d-flex align-center">
-                          <img
-                            src="@/assets/icons/teamfloss/userDetails/view.svg"
-                            alt="View"
-                            class="action-icon"
-                            @click.stop="onView(item)"
-                          />
-                          <img
-                            src="@/assets/icons/teamfloss/userDetails/edit.svg"
-                            alt="Edit"
-                            class="action-icon ml-3"
-                            @click.stop="onEdit(item)"
-                          />
-                          <img
-                            src="@/assets/icons/teamfloss/userDetails/publish.svg"
-                            alt="Publish"
-                            class="action-icon ml-3"
-                            @click.stop="changeRotaStatus('publish', item)"
-                          />
-                        </div>
-                      </template>
-                    </v-data-table>
-                  </v-expansion-panel-text>
-                </v-expansion-panel>
-              </v-expansion-panels>
-            </div>
-          </v-tabs-window-item>
-
-          <v-tabs-window-item value="old">
-            <div class="pa-4">
-              <h3 class="tab-content-title">Old Rotas Content</h3>
-              <p>Here goes the hardcoded content for Old Rotas.</p>
-            </div>
-          </v-tabs-window-item>
-
-          <v-tabs-window-item value="shifts">
-            <div class="pa-4">
-              <h3 class="tab-content-title">Shifts Content</h3>
-              <p>Here goes the hardcoded content for Shifts.</p>
-            </div>
-          </v-tabs-window-item>
-        </v-tabs-window>
-      </div>
+      <v-tabs-window-item value="shifts">
+        <div class="pa-4">
+          <h3 class="tab-content-title">Shifts Content</h3>
+          <p>Here goes the hardcoded content for Shifts.</p>
+        </div>
+      </v-tabs-window-item>
+    </v-tabs-window>
+  </div>
 </template>
 <script setup>
-import { parsedDate } from '~/lib/dateFormatter';
+import { parsedDate } from "~/lib/dateFormatter";
 const { rotaList } = defineProps({
-    rotaList: Array
-})
+  rotaList: Array,
+});
 
-const emit= defineEmits(['onChangeStatus','changeComponent', 'getAllShifts']);
+const emit = defineEmits(["onChangeStatus", "changeComponent", "getAllShifts"]);
 
-const currentTab = ref(0)
-const menuDate = ref(false)
+const currentTab = ref(0);
+const menuDate = ref(false);
 const tempRange = ref([]); // temporary picker selection (array: [start, end])
 const dateRangeModel = ref([]); // applied range
 const search = ref("");
@@ -429,6 +416,7 @@ const headers = [
   { title: "Rota Name", key: "name", sortable: true },
   { title: "Start Date", key: "startDate", sortable: true },
   { title: "No of Employees", key: "employees", sortable: false },
+  { title: "Rota Duration", key: "duration", sortable: true },
   { title: "Status", key: "status", sortable: true },
   { title: "Actions", key: "actions", sortable: false },
 ];
@@ -490,17 +478,39 @@ const dateRangeText = computed(() => {
     dateRangeModel.value[1]
   )}`;
 });
-const changeRotaStatus=(type,item)=>{
+const changeRotaStatus = (type, item) => {
+  emit("onChangeStatus", { type, id: item.id });
+};
+const onView = (item) => {
+  emit("getAllShifts", item);
+};
+function getRotaStatus(item) {
+  const now = new Date();
+  const start = new Date(item.startDate);
+  const end = new Date(item.endDate);
 
-   emit("onChangeStatus", {type, id: item.id})
-
+  if (now < start) {
+    return "Future";
+  } else if (now >= start && now <= end) {
+    return "In Progress";
+  } else {
+    return "Expired";
+  }
 }
-const onView=(item)=>{
-    emit('getAllShifts',item)
+function getRotaStatusColor(status) {
+  switch (status) {
+    case "In Progress":
+      return "#33B93C"; // green
+    case "Future":
+      return "#FF7C00"; // blue
+    case "Expired":
+      return "#D32F2F"; // red
+    default:
+      return "#6D6D6D"; // gray fallback
+  }
 }
 </script>
 <style scoped>
-
 .custom-tabs {
   border-bottom: 1px solid #dbdbdb;
 }

@@ -76,9 +76,9 @@
             class="text-none rounded-lg"
             prepend-icon="mdi-open-in-new"
             flat
-            @click="unPublishRota"
+            @click="changeRotaStatus"
           >
-            Unpublished Rota
+            {{ props?.rota?.isPublished ? "Unpublished Rota" : "Publish Rota" }}
           </v-btn>
         </div>
       </div>
@@ -91,6 +91,7 @@
       @onAddShift="addNewShift"
       @updateShifts="updateShifts"
       @onAddUser="emit('onAddUser')"
+      @handleShiftEdit="handleShiftEdit"
     />
     <TeamFlossRotaManagementShiftDialog
       v-model="showShiftDialog"
@@ -100,6 +101,7 @@
       :users="users"
       :shiftData="shiftData"
       @updateShifts="updateShifts"
+      :currentShift="currentShift ?? currentShift"
     />
   </div>
 </template>
@@ -110,17 +112,20 @@ const props = defineProps({
   rota: Object,
   users: Array,
 });
-const emit = defineEmits(["onChangeStatus", "onUpdate",'onAddUser']);
+
+const emit = defineEmits(["onChangeStatus", "onUpdate", "onAddUser"]);
 const searchCal = ref("");
 const shiftData = ref({});
 const filterMenu = ref(false);
-
+const currentShift = ref({});
 const rotaViews = [
   { title: "Surgery View", value: 0 },
   { title: "Dentist View", value: 5 },
   { title: "Nurse View", value: 6 },
 ];
-
+const handleShiftEdit = (shift) => {
+  currentShift.value = shift;
+};
 const addNewShift = (data) => {
   shiftData.value = {
     day: data.day.date,
@@ -133,18 +138,20 @@ const selectedView = ref(null);
 const clearFilters = () => {
   selectedView.value = null;
   nextTick(() => {
-    emit('onFilterUsers', 'clear');
+    emit("onFilterUsers", "clear");
   });
 };
 
 watch(selectedView, (newVal) => {
-    
-  emit('onFilterUsers', newVal)
+  emit("onFilterUsers", newVal);
 });
 const showShiftDialog = ref(false);
 
-const unPublishRota = () => {
-  emit("onChangeStatus", { type: "unPublish", id: props.rota.id });
+const changeRotaStatus = () => {
+  emit("onChangeStatus", {
+    type: `${props?.rota?.isPublished ? "unPublish" : "publish"}`,
+    id: props.rota.id,
+  });
 };
 const updateShifts = (rota) => {
   showShiftDialog.value = false;

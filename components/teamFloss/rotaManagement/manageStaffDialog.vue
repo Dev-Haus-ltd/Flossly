@@ -9,6 +9,8 @@
           font-weight: 600;
           font-size: 16px;
           border-bottom: 1px solid #dbdbdb;
+          padding-left: 24px;
+          padding-bottom: 4px;
         "
       >
         Add/Remove employees from rota
@@ -35,7 +37,10 @@
       </v-card-text>
 
       <!-- Actions -->
-      <v-card-actions class="justify-end">
+      <v-card-actions
+        class="justify-end px-5"
+        style="border-top: 1px solid #dbdbdb"
+      >
         <v-btn text @click="close" variant="text">Cancel</v-btn>
         <v-btn color="primary" @click="save" variant="flat">Save</v-btn>
       </v-card-actions>
@@ -94,14 +99,14 @@ const save = async () => {
     const res = await rotaStore.addRotaUsers({
       rotaId: props.rota.id,
       users: rotaUsers,
-    }); 
+    });
     if (res.code === 0) {
       mainStore.setSnackbar({
         type: "success",
         title: res?.message || "Rota added successfully",
       });
-      emit('onAddUser')
-  close();
+      emit("onAddUser");
+      close();
     } else {
       mainStore.setSnackbar({
         type: "error",
@@ -114,6 +119,5 @@ const save = async () => {
       title: err.message || "An error occurred",
     });
   }
-
 };
 </script>

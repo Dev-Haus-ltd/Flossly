@@ -33,7 +33,10 @@
         :rotaList="rotas"
       />
     </div>
-    <TeamFlossRotaManagementAddRota v-if="activeComponent === 2" />
+    <TeamFlossRotaManagementAddRota
+      v-if="activeComponent === 2"
+      @onAddRota="onAddRotaHandle"
+    />
 
     <TeamFlossRotaManagementShifts
       v-if="activeComponent === 3"
@@ -57,7 +60,7 @@ const rotas = ref([]);
 const shifts = ref([]);
 const rotaUsers = ref([]);
 const allRotaUsers = ref([]);
-const allShifts=ref([])
+const allShifts = ref([]);
 const activeComponent = ref(1);
 const selectedRota = ref(null);
 onMounted(() => {
@@ -142,7 +145,7 @@ const getAllShifts = async (item) => {
     const res = await rotaStore.getAllShifts({ rotaId: item.id });
     if (res.code === 0) {
       shifts.value = res.data;
-    allShifts.value=res.data
+      allShifts.value = res.data;
       selectedRota.value = item;
       getRotaUsers();
     }
@@ -164,15 +167,13 @@ const getRotaUsers = async () => {
   });
 };
 const filterUsers = (payload) => {
-  if (payload === "clear" ) {
+  if (payload === "clear") {
     rotaUsers.value = [...allRotaUsers.value];
     shifts.value = [...allShifts.value];
-  } else if (payload===0){
+  } else if (payload === 0) {
     rotaUsers.value = [...allRotaUsers.value];
-     shifts.value= allShifts.value.filter(sh=> sh.surgeryId)
-  }
-  
-  else {
+    shifts.value = allShifts.value.filter((sh) => sh.surgeryId);
+  } else {
     // Filter users by role
     rotaUsers.value = allRotaUsers.value.filter(
       (ru) => ru.user.roleId === payload
@@ -187,8 +188,11 @@ const filterUsers = (payload) => {
 };
 
 const changecomponent = (id) => {
-  console.log(id);
   activeComponent.value = id;
+};
+const onAddRotaHandle = () => {
+  getRotas();
+  activeComponent.value = 1;
 };
 </script>
 <style scoped>
