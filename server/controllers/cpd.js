@@ -12,16 +12,13 @@ export const listCourses = async (event) => {
           "id",
           "title",
           "category",
-          "credit_hours",
+          "creditHours",
           "mode",
-          "is_verified",
+          "isVerified",
           "thumbnail",
-          "course_objectives",
-          "course_outcome",
+          "courseObjectives",
+          "courseOutcome",
           "description",
-          "provider_name",
-          "provider_type",
-          "createdAt",
         ],
         order: [["createdAt", "DESC"]],
       });
@@ -36,7 +33,7 @@ export const listCourses = async (event) => {
   
       return success(groupedByCategory);
     } catch (err) {
-      return error(500, err);
+      return error(500, err.message);
     }
 };
 export const startQuiz = async (event) => {
@@ -87,7 +84,7 @@ export const startQuiz = async (event) => {
     }
     return success(questionnaire);
   } catch (err) {
-    return error(500, err);
+    return error(500, err.message);
   }
 };
 // Submit Quiz API - POST /api/cpd/submitQuiz
@@ -156,7 +153,7 @@ export const submitQuiz = async (event) => {
       const passed = percentage >= 50;
   
       // Update user course history
-      await userHistory.update({
+      await UserCourseHistory.update({
         status: passed ? "Completed" : "Failed",
         completedDate: new Date(),
         totalScore: totalQuestions,
@@ -194,6 +191,6 @@ export const submitQuiz = async (event) => {
         certificate,
       });
     } catch (err) {
-      return error(500, err);
+      return error(500, err.message);
     }
 };
