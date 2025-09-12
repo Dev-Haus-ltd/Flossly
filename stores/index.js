@@ -4,6 +4,7 @@ import tasksIcon from "@/assets/icons/mainDrawerIcons/tasks.svg";
 import teamIcon from "@/assets/icons/mainDrawerIcons/team.svg";
 import flosslyDocs from '@/assets/icons/mainDrawerIcons/docs.svg'
 import crmIcon from '@/assets/icons/mainDrawerIcons/crm.svg'
+import academyIcon from '@/assets/icons/mainDrawerIcons/academy.svg'
 
 
 export const useMainStore = defineStore("mainStore", {
@@ -100,6 +101,20 @@ export const useMainStore = defineStore("mainStore", {
               to: "/teams/invoice",
             }, 
         
+          ],
+        },
+        {
+          title: "Floss Academy",
+          imgPath: academyIcon,
+          value: "flossAcademy",
+          to:"/academy",
+          children: [
+            {
+              title: "My Courses",
+              value: "myCourses",
+              imgPath: academyIcon,
+              to: "/academy/mycourses",
+            },
           ],
         },
         {
