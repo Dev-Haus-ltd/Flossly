@@ -153,5 +153,16 @@ export default {
           reject(err);
         });
     });
+  },
+  deleteRota(data) {
+    return new Promise((resolve, reject) => {
+      Post("/rota/delete",data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
   }
 };

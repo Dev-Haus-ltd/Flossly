@@ -26,7 +26,7 @@ export const getRotas = async (event) => {
   const { orgId } = event.context.user;
   try {
     const rotas = await Rota.findAll({
-      where: { organisationId: orgId },
+      where: { organisationId: orgId, isDeleted: false },
       order: [["createdAt", "DESC"]],
     });
     return success(rotas);
@@ -42,7 +42,7 @@ export const updateRota = async (event) => {
     if (endDate && startDate && new Date(endDate) < new Date(startDate)) {
       return error("End date cannot be before start date");
     }
-    const rota = await Rota.findByPk(id);
+    const rota = await Rota.findOne({ where: { id, isDeleted: false } });
     if (!rota) throw createError({ message: "Rota not found " });
     await rota.update({ name, startDate, endDate, duration, notes });
     return success(rota);
@@ -54,13 +54,12 @@ export const updateRota = async (event) => {
 export const publishRota = async (event) => {
   try {
     const body = await readBody(event);
-    const { id, ids } = JSON.parse(body || "{}");
-    const targetIds = Array.isArray(ids) ? ids : (id !== undefined ? [id] : []);
+    const { ids } = JSON.parse(body || "{}");
+    const targetIds = Array.isArray(ids) ? ids : [];
 
-    if (!targetIds.length) return error("id or ids required");
+    if (!targetIds.length) return error("ids required");
 
-    const where = { id: targetIds };
-    // optional org scoping if present in context (keeps behavior safe)
+    const where = { id: targetIds, isDeleted: false };
     if (event?.context?.user?.orgId) where.organisationId = event.context.user.orgId;
 
     const [updated] = await Rota.update(
@@ -69,11 +68,11 @@ export const publishRota = async (event) => {
     );
     if (!updated) return error("Rota not found");
 
-    // keep response shape sensible
     if (targetIds.length === 1) {
       const rota = await Rota.findByPk(targetIds[0]);
       return success(rota);
     }
+
     const rotas = await Rota.findAll({ where });
     return success({ updated, rotas });
   } catch (err) {
@@ -81,19 +80,20 @@ export const publishRota = async (event) => {
   }
 };
 
+
 export const unPublishRota = async (event) => {
   try {
     const body = await readBody(event);
-    const { id, ids } = JSON.parse(body || "{}");
-    const targetIds = Array.isArray(ids) ? ids : (id !== undefined ? [id] : []);
+    const { ids } = JSON.parse(body || "{}");
+    const targetIds = Array.isArray(ids) ? ids : [];
 
-    if (!targetIds.length) return error("id or ids required");
+    if (!targetIds.length) return error("ids required");
 
-    const where = { id: targetIds };
+    const where = { id: targetIds, isDeleted: false };
     if (event?.context?.user?.orgId) where.organisationId = event.context.user.orgId;
 
     const [updated] = await Rota.update(
-      { isPublished: false }, // keeping your existing rule (don’t clear publishedDate)
+      { isPublished: false }, // keep publishedDate untouched
       { where }
     );
     if (!updated) return error("Rota not found");
@@ -102,12 +102,37 @@ export const unPublishRota = async (event) => {
       const rota = await Rota.findByPk(targetIds[0]);
       return success(rota);
     }
+
     const rotas = await Rota.findAll({ where });
     return success({ updated, rotas });
   } catch (err) {
     return error(500, err.message);
   }
 };
+
+export const deleteRota = async (event) => {
+  try {
+    const body = await readBody(event);
+    const { ids } = JSON.parse(body || "{}");
+    const targetIds = Array.isArray(ids) ? ids : [];
+
+    if (!targetIds.length) return error("ids required");
+
+    const where = { id: targetIds, isDeleted: false };
+    if (event?.context?.user?.orgId) where.organisationId = event.context.user.orgId;
+
+    const [updated] = await Rota.update(
+      { isDeleted: true },
+      { where }
+    );
+    if (!updated) return error("Rota not found or already deleted");
+
+    return success({ message: "Rota(s) deleted successfully", deletedCount: updated });
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
  
 
 export const removeRotaUser = async (event) => {

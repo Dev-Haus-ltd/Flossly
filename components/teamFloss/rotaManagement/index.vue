@@ -48,11 +48,10 @@ definePageMeta({
 });
 
 import { useBus } from "~/composables/useBus";
-import {usePopupStore} from "~/stores/popup";
 import unpublish  from "~/assets/logos/unpublish.svg";
 import publish  from "~/assets/logos/publish.svg";
 
-const popup = usePopupStore();
+
 const bus = useBus();
 const rotaStore = useRotaStore();
 const mainStore = useMainStore();
@@ -62,29 +61,75 @@ const shifts = ref([]);
 const rotaUsers = ref([]);
 const activeComponent = ref(1);
 const selectedRota = ref(null);
+const popup = inject("popup")
+const bulkBar = inject("bulkBar")
+
 onMounted(() => {
   getRotas(); // Fetch the initial rota data if needed
 
   // Listen for bulk execution requests from the floating BulkActionBar
-  bus.on('bulk:execute', async ({ context, action1Label, icon1, ids }) => {
-    if (context === 'rota') {
-      // Map display label to API verb precisely
-      const normalized = (action1Label || '').trim().toLowerCase()
-      const actionType = normalized === 'published' ? 'publish'
-        : normalized === 'unpublished' ? 'unpublish'
-        : 'unpublish'
-      await changeRotaStatus({ type: actionType, ids })
+  bus.on("bulk:execute", async ({ context, ids, action1Label }) => {
+    if (context === "rota") {
+      const verb =
+        (action1Label || "").trim().toLowerCase() === "publish"
+          ? "publish"
+          : "unpublish"
 
-      // After execution, emit an event to clear selections
-      bus.emit('bulk:clear-selection', { context: 'rota' });
+      await changeRotaStatus({ type: verb, ids })
 
-      // Optionally log
-      console.log(`Bulk action ${actionType} executed for ids:`, ids)
+      bus.emit("bulk:clear-selection", { context: "rota" })
+      bulkBar.value?.clear?.()
     }
   });
+
+  // Listen for bulk delete from the floating BulkActionBar
+  bus.on("bulk:delete", async ({ context, ids }) => {
+    if (context === "rota" && Array.isArray(ids) && ids.length) {
+      const isBulk = ids.length > 1
+
+      let subject = ''
+      if (!isBulk && ids.length === 1) {
+        const found = rotas.value.find(r => r.id === ids[0])
+        subject = found?.name ? `“${found.name}”` : `#${ids[0]}`
+      }
+
+      const ok = await popup.ask({
+        text: isBulk
+          ? `Are you sure you want to delete ${ids.length} rota(s)?`
+          : `Are you sure you want to delete rota ${subject}?`,
+        confirmLabel: 'Yes',
+        cancelLabel: 'No',
+      })
+      if (!ok) return
+
+      popup.setLoading(true)
+      try {
+        const res = await rotaStore.deleteRota({ ids })
+        if (res.code === 0) {
+          await getRotas()
+          mainStore.setSnackbar({
+            type: 'success',
+            title: `${isBulk ? 'Rotas' : 'Rota'} deleted successfully`,
+          })
+        } else {
+          mainStore.setSnackbar({
+            type: 'error',
+            title: `Failed to delete ${isBulk ? 'rotas' : 'rota'}`,
+          })
+        }
+      } catch {
+        mainStore.setSnackbar({ type: 'error', title: 'Something went wrong' })
+      } finally {
+        popup.setLoading(false)
+        bus.emit('bulk:clear-selection', { context: 'rota' })
+        bulkBar.value?.clear?.()
+      }
+    }
+  })
 });
+
 onBeforeUnmount(() => {
-  bus.all.clear && bus.all.clear(); // safety in case of hot-reloads; mitt supports off but not stored refs here
+  bus.all.clear && bus.all.clear();
 });
 
 const totalCount = computed(() => rotas.value.length);
@@ -126,19 +171,25 @@ const getRotas = async () => {
   }
 };
 
-const changeRotaStatus = async (data /* { type:'publish'|'unpublish', id?, ids? } */) => {
-  const isBulk = Array.isArray(data.ids) && data.ids.length > 0
+const changeRotaStatus = async (data) => {
+  const ids = Array.isArray(data.ids)
+    ? data.ids
+    : data.id != null
+      ? [data.id]
+      : []
+
+  const isBulk = ids.length > 1
   const verb = data.type === 'publish' ? 'publish' : 'unpublish'
 
   let subject = ''
-  if (!isBulk && data.id != null) {
-    const found = rotas.value.find(r => r.id === data.id)
-    subject = found?.name ? `“${found.name}”` : `#${data.id}`
+  if (!isBulk && ids.length === 1) {
+    const found = rotas.value.find(r => r.id === ids[0])
+    subject = found?.name ? `“${found.name}”` : `#${ids[0]}`
   }
 
   const ok = await popup.ask({
     text: isBulk
-      ? `Are you sure you want to ${verb} ${data.ids.length} rota(s)?`
+      ? `Are you sure you want to ${verb} ${ids.length} rota(s)?`
       : `Are you sure you want to ${verb} rota ${subject}?`,
     confirmLabel: 'Yes',
     cancelLabel: 'No',
@@ -150,14 +201,14 @@ const changeRotaStatus = async (data /* { type:'publish'|'unpublish', id?, ids? 
   popup.setLoading(true)
   try {
     const res = data.type === 'publish'
-      ? await rotaStore.publishRota(isBulk ? { ids: data.ids } : { id: data.id })
-      : await rotaStore.unPublishRota(isBulk ? { ids: data.ids } : { id: data.id })
+      ? await rotaStore.publishRota({ ids })
+      : await rotaStore.unPublishRota({ ids })
 
     if (res.code === 0) {
       await getRotas()
       mainStore.setSnackbar({
         type: 'success',
-        title: `${isBulk ? 'Rotas' : 'Rota'} ${data.type === 'publish' ? 'published' : 'unpublished'} successfully`,
+        title: `${isBulk ? 'Rotas' : 'Rota'} ${verb}ed successfully`,
       })
       activeComponent.value = 1
     } else {
@@ -172,6 +223,7 @@ const changeRotaStatus = async (data /* { type:'publish'|'unpublish', id?, ids? 
     popup.setLoading(false)
   }
 }
+
 
 
 const getAllShifts = async (item) => {

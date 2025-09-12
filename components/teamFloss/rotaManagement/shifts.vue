@@ -76,9 +76,9 @@
             class="text-none rounded-lg"
             prepend-icon="mdi-open-in-new"
             flat
-            @click="unPublishRota"
+            @click="toggleRotaStatus"
           >
-            Unpublished Rota
+            {{ rota?.isPublished ? 'Unpublish Rota' : 'Publish Rota' }}
           </v-btn>
         </div>
       </div>
@@ -134,8 +134,9 @@ const clearFilters = () => {
 
 const showShiftDialog = ref(false);
 
-const unPublishRota = () => {
-  emit("onChangeStatus", { type: "unPublish", id: props.rota.id });
+const toggleRotaStatus = () => {
+  const action = props.rota?.isPublished ? "unpublish" : "publish";
+  emit("onChangeStatus", { type: action, id: props.rota.id });
 };
 const updateShifts = (rota) => {
   showShiftDialog.value = false;

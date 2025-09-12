@@ -24,7 +24,7 @@
               variant="flat"
               height="44"
               :disabled="popup.loading"
-              @click="popup.cancel()"
+              @click="cancel"
             >
               {{ popup.cancelLabel || 'No' }}
             </v-btn>
@@ -33,7 +33,7 @@
               variant="flat"
               height="44"
               :loading="popup.loading"
-              @click="popup.confirm()"
+              @click="confirm"
             >
               {{ popup.confirmLabel || 'Yes' }}
             </v-btn>
@@ -44,8 +44,65 @@
   </template>  
   
   <script setup>
-  import { usePopupStore } from '~/stores/popup'
-  const popup = usePopupStore()
+
+    const popup = ref({
+      open: false,
+      title: '',
+      text: '',
+      confirmLabel: 'Yes',
+      cancelLabel: 'No',
+      loading: false,
+      logo: null,
+      logoAlt: 'Logo',
+      _resolver: null,
+    })
+
+    function ask({
+      title = '',
+      text = '',
+      confirmLabel = 'Yes',
+      cancelLabel = 'No',
+      logo = null,
+      logoAlt = 'Logo',
+    } = {}) {
+      popup.value.title = title
+      popup.value.text = text
+      popup.value.confirmLabel = confirmLabel
+      popup.value.cancelLabel = cancelLabel
+      popup.value.logo = logo
+      popup.value.logoAlt = logoAlt
+      popup.value.open = true
+      return new Promise((resolve) => { popup.value._resolver = resolve })
+    }
+
+    function confirm() {
+      if (popup.value._resolver) popup.value._resolver(true)
+      reset()
+    }
+
+    function cancel() {
+      if (popup.value._resolver) popup.value._resolver(false)
+      reset()
+    }
+
+    function setLoading(v) {
+      popup.value.loading = v
+    }
+
+    function reset() {
+      popup.value.open = false
+      popup.value.loading = false
+      popup.value._resolver = null
+      popup.value.title = ''
+      popup.value.text = ''
+      popup.value.confirmLabel = 'Yes'
+      popup.value.cancelLabel = 'No'
+      popup.value.logo = null
+      popup.value.logoAlt = 'Logo'
+    }
+
+    // expose for parent usage
+    defineExpose({ ask, confirm, cancel, setLoading })
   </script>
   
   <style scoped>

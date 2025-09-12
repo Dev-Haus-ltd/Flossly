@@ -410,9 +410,8 @@
 </template>
 <script setup>
 import { parsedDate } from '~/lib/dateFormatter';
-import { useMyBulkactionbarStore } from '~/stores/bulkactionbar'
 import { useBus } from '~/composables/useBus'
-import unpublishedIcon from "~/assets/logos/unpublish.svg";
+
 const { rotaList } = defineProps({
  rotaList: Array
 })
@@ -427,9 +426,11 @@ const search = ref("");
 const openedPanels = ref([0]);
 const published = computed(() => rotaList.filter((r) => r.isPublished));
 const unpublished = computed(() => rotaList.filter((r) => !r.isPublished));
+
 // Selection models
 const selectedPublished = ref([]);
 const selectedUnpublished = ref([]);
+
 const headers = [
 { title: "Rota Name", key: "name", sortable: true },
 { title: "Start Date", key: "startDate", sortable: true },
@@ -439,8 +440,8 @@ const headers = [
 ];
 
 // Bulk action bar store and event bus
-const bulkBar = useMyBulkactionbarStore()
 const bus = useBus()
+const bulkBar = inject("bulkBar")
 
 const matchesSearch = (item) => {
 if (!search.value) return true;
@@ -471,33 +472,41 @@ const filteredUnpublished = computed(() =>
 unpublished.value.filter((it) => matchesSearch(it) && inDateRange(it))
 );
 
+/* ----------------- Bulk Selection ---------------- */
+function setBulk({ context, ids, action1Label }) {
+  bulkBar.value.context = context
+  bulkBar.value.ids = ids
+  bulkBar.value.action1Label = action1Label
+  bulkBar.value.icon1 = (action1Label || '').toLowerCase() === 'publish'
+    ? 'mdi-check-circle-outline'
+    : 'mdi-cancel'
+  // Always offer Delete as the second action when there is a selection
+  bulkBar.value.action2Label = ids.length > 0 ? 'Delete' : ''
+  bulkBar.value.icon2 = ids.length > 0 ? 'mdi-delete-outline' : ''
+  bulkBar.value.isOpen = ids.length > 0
+}
+
 function toggleAll(which, val) {
   if (which === "published") {
     if (val) {
-      selectedPublished.value = filteredPublished.value.slice();
-      selectedUnpublished.value = [];
-      const ids = selectedPublished.value.map(r => r.id)
-      // Open the bulk bar with published items and set action to "Unpublished"
-      bulkBar.open({ context: 'rota', action1Label: 'Unpublished', icon1: unpublishedIcon, ids })
+      selectedPublished.value = filteredPublished.value.slice()
+      selectedUnpublished.value = []
+      setBulk({ context: "rota", ids: selectedPublished.value.map(r => r.id), action1Label: "Unpublish" })
     } else {
-      selectedPublished.value = [];
-      if (selectedUnpublished.value.length === 0) bulkBar.clear();
-      else bulkBar.updateSelection(selectedUnpublished.value.map(r => r.id))
+      selectedPublished.value = []
+      if (selectedUnpublished.value.length === 0) bus.emit("bulk:clear-selection", { context: "rota" })
+      else setBulk({ context: "rota", ids: selectedUnpublished.value.map(r => r.id), action1Label: "Publish" })
     }
-    console.log("Select All (published):", val);
   } else {
     if (val) {
-      selectedUnpublished.value = filteredUnpublished.value.slice();
-      selectedPublished.value = [];
-      const ids = selectedUnpublished.value.map(r => r.id)
-      // Open the bulk bar with unpublished items and set action to "Published"
-      bulkBar.open({ context: 'rota', action1Label: 'Published', icon1: unpublishedIcon, ids })
+      selectedUnpublished.value = filteredUnpublished.value.slice()
+      selectedPublished.value = []
+      setBulk({ context: "rota", ids: selectedUnpublished.value.map(r => r.id), action1Label: "Publish" })
     } else {
-      selectedUnpublished.value = [];
-      if (selectedPublished.value.length === 0) bulkBar.clear();
-      else bulkBar.updateSelection(selectedPublished.value.map(r => r.id))
+      selectedUnpublished.value = []
+      if (selectedPublished.value.length === 0) bus.emit("bulk:clear-selection", { context: "rota" })
+      else setBulk({ context: "rota", ids: selectedPublished.value.map(r => r.id), action1Label: "Unpublish" })
     }
-    console.log("Select All (unpublished):", val);
   }
 }
 
@@ -520,37 +529,24 @@ return `${parsedDate(dateRangeModel.value[0])} - ${parsedDate(
 });
 
 // Ensure only one table can have selections at a time
+
 function onSelectionChangePublished(val) {
-  // If any rows are selected in Published, clear Unpublished selections
   if (Array.isArray(val) && val.length > 0) {
-    selectedUnpublished.value = [];
-    // open/update bulk bar for unpublish action (published table implies unpublish)
-    const ids = val.map((r) => r.id)
-    bulkBar.open({ context: 'rota', action1Label: 'Unpublished', icon1: unpublishedIcon, ids })
+    selectedUnpublished.value = []
+    setBulk({ context: "rota", ids: val.map(r => r.id), action1Label: "Unpublish" })
   } else {
-    // if no selection on either table, close the bar
-    if (selectedUnpublished.value.length === 0) {
-      bulkBar.clear()
-    } else {
-      // ensure bar reflects other table selection
-      bulkBar.updateSelection(selectedUnpublished.value.map((r) => r.id))
-    }
+    if (selectedUnpublished.value.length === 0) bus.emit("bulk:clear-selection", { context: "rota" })
+    else setBulk({ context: "rota", ids: selectedUnpublished.value.map(r => r.id), action1Label: "Publish" })
   }
 }
 
 function onSelectionChangeUnPublished(val) {
-  // If any rows are selected in Unpublished, clear Published selections
   if (Array.isArray(val) && val.length > 0) {
-    selectedPublished.value = [];
-    // open/update bulk bar for publish action (unpublished table implies publish)
-    const ids = val.map((r) => r.id)
-    bulkBar.open({ context: 'rota', action1Label: 'Published', icon1: unpublishedIcon, ids })
+    selectedPublished.value = []
+    setBulk({ context: "rota", ids: val.map(r => r.id), action1Label: "Publish" })
   } else {
-    if (selectedPublished.value.length === 0) {
-      bulkBar.clear()
-    } else {
-      bulkBar.updateSelection(selectedPublished.value.map((r) => r.id))
-    }
+    if (selectedPublished.value.length === 0) bus.emit("bulk:clear-selection", { context: "rota" })
+    else setBulk({ context: "rota", ids: selectedPublished.value.map(r => r.id), action1Label: "Unpublish" })
   }
 }
 
@@ -560,7 +556,8 @@ onMounted(() => {
     if (context === 'rota') {
       selectedPublished.value = []
       selectedUnpublished.value = []
-      bulkBar.clear()
+      bulkBar.value.isOpen = false
+      bulkBar.value.ids = []
     }
   })
 })
