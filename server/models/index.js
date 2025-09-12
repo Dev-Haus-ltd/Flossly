@@ -1,4 +1,4 @@
-import { DefaultPriority } from "./defaultPriorities";
+﻿import { DefaultPriority } from "./defaultPriorities";
 import { DefaultStatus } from "./defaultStatuses";
 import { OrganisationPriority } from "./organisations/organisationPriorities";
 import { Organisation } from "./organisations/organisations";
@@ -39,6 +39,10 @@ import { SystemDocument } from "./documents/systemDocuments";
 import { UserLeaveHistory } from "./leaves/userLeaveHistory";
 import { UserLeaveEntitlement } from "./leaves/userLeaveEntitlements";
 import { UserHrDocument } from "./auth/userHrDocuments";
+
+import { Course } from "./cpd/course";
+import { CourseQuestionaire } from "./cpd/courseQuestionaire";
+import { UserCourseHistory } from "./cpd/userCourseHistory";
 
 /* Relations and Associations */
 
@@ -356,8 +360,8 @@ Organisation.hasMany(UserContract, {
 
 // Accounts
 
-UserAccount.belongsTo(User, { foreignKey: "userId", as: "user" })
-User.hasOne(UserAccount, { foreignKey: "userId", as: "account" })
+UserAccount.belongsTo(User, { foreignKey: "userId", as: "user" });
+User.hasOne(UserAccount, { foreignKey: "userId", as: "account" });
 
 // system documents
 
@@ -392,6 +396,20 @@ TaskCategory.hasMany(SystemDocument, {
   as: "documents",
 });
 
+// CPD Associations
+Course.hasMany(CourseQuestionaire, { foreignKey: "courseId", as: "questions" });
+CourseQuestionaire.belongsTo(Course, { foreignKey: "courseId", as: "course" });
+
+Course.hasMany(UserCourseHistory, {
+  foreignKey: "courseId",
+  as: "userHistories",
+});
+UserCourseHistory.belongsTo(Course, { foreignKey: "courseId", as: "course" });
+UserCourseHistory.belongsTo(User, { foreignKey: "userId", as: "user" });
+User.hasMany(UserCourseHistory, {
+  foreignKey: "userId",
+  as: "courseHistories",
+});
 // User ↔ UserHrDocuments
 User.hasMany(UserHrDocument, { foreignKey: "userId", as: "hrDocuments" });
 UserHrDocument.belongsTo(User, { foreignKey: "userId", as: "user" });
@@ -439,4 +457,7 @@ export {
   UserLoyaltyPoint,
   SystemDocument,
   SystemDocumentFolder,
+  Course,
+  CourseQuestionaire,
+  UserCourseHistory,
 };

@@ -28,11 +28,11 @@
       <v-tabs v-model="tab" class="custom-tabs mt-5" slider-color="primary">
         <v-tab
           v-for="category in categories"
-          :key="category.id"
-          :value="category.id"
+          :key="category"
+          :value="category"
           class="tab-text"
         >
-          {{ category.name }}
+          {{ category }}
         </v-tab>
       </v-tabs>
 
@@ -40,30 +40,25 @@
       <v-tabs-window v-model="tab">
         <v-tabs-window-item
           v-for="category in categories"
-          :key="category.id"
-          :value="category.id"
+          :key="category + 'ss'"
+          :value="category"
         >
           <v-row class="py-6" align="stretch">
             <v-col
-              v-for="(card, index) in filteredCards(category.id)"
+              v-for="(card, index) in filteredCards(category)"
               :key="index"
               cols="12"
               sm="6"
               md="3"
             >
               <FlossAcademyCourseCard
-                :id="card.id"
-                :title="card.title"
-                :category-id="card.categoryId"
-                :img="card.img"
-                :total-time="card.totalTime"
-                :is-verified="card.isVerified"
+                :course="card"
                 @showCourse="showCourse"
               />
             </v-col>
 
             <!-- No cards -->
-            <v-col v-if="!filteredCards(category.id).length" cols="12">
+            <v-col v-if="!filteredCards(category).length" cols="12">
               <div class="text-center py-10 text-grey">No cards available</div>
             </v-col>
           </v-row>
@@ -72,13 +67,7 @@
     </div>
     <div class="px-5" v-if="step===2">
       <FlossAcademyCourseDetail
-      video-url="https://www.w3schools.com/html/mov_bbb.mp4"
-      aim="To provide comprehensive understanding of dental hygiene practices."
-      :objectives="[
-        'Learn correct brushing techniques',
-        'Understand gum disease prevention',
-        'Apply hygienic practices in daily routines'
-      ]"
+      :course="selectedCourse"
     />
 
     </div>
@@ -86,6 +75,10 @@
 </template>
 <script setup>
 const step = ref(1);
+const cpdStore = useCpdStore()
+const courses = ref([])
+const categories = ref([])
+const selectedCourse = ref(null)
 const cards = [
   {
     title: "Required CPD Hours",
@@ -107,16 +100,6 @@ const cards = [
   },
 ];
 const tab = ref(0); // "All" by default (id = 0)
-
-// Categories with ids
-const categories = [
-  { id: 0, name: "All" },
-  { id: 1, name: "Delegatedcc" },
-  { id: 2, name: "Dentist Courses" },
-  { id: 3, name: "Nurse Courses" },
-  { id: 4, name: "Receptionist Courses" },
-  { id: 5, name: "Practice Manager Courses" },
-];
 
 // Dummy cards with categoryId
 const allCards = [
@@ -163,13 +146,27 @@ const allCards = [
 ];
 
 // Filtering logic
-function filteredCards(categoryId) {
-  if (categoryId === 0) return allCards;
-  return allCards.filter((card) => card.categoryId === categoryId);
+function filteredCards(category) {
+  if (!category) return courses.value;
+  return courses.value[category]
 }
-const showCourse = () => {
+const showCourse = (course) => {
+  selectedCourse.value = course
   step.value = 2;
 };
+
+onMounted(() => {
+  getCourses()
+})
+
+const getCourses = () => {
+  cpdStore.getCourses().then((res) => {
+    if (res.code === 0) {
+      courses.value = res.data
+      categories.value = Object.keys(res.data)
+    }
+  })
+}
 </script>
 <style scoped lang="scss">
 .parent {
