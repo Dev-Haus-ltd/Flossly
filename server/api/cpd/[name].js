@@ -2,6 +2,7 @@ import {
     listCourses,
     startQuiz,
     submitQuiz,
+    addCourse,
   } from "../../controllers/cpd.js";
   
   export default defineEventHandler(async (event) => {
@@ -17,6 +18,9 @@ import {
   
         case "submitQuiz":
           return await submitQuiz(event);
+  
+        case "addCourse":
+          return await addCourse(event);
   
         case "ping":
           return { ok: true, ts: Date.now() };

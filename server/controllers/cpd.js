@@ -4,6 +4,7 @@ import {
   UserCourseHistory,
   User,
 } from "../models/index.js";
+import { success, error } from "../utils/response";
 
 export const listCourses = async (event) => {
     try {
@@ -196,4 +197,62 @@ export const submitQuiz = async (event) => {
     } catch (err) {
       return error(500, err);
     }
+};
+
+export const addCourse = async (event) => {
+  try {
+    const body = await readBody(event);
+    const payload = typeof body === "string" ? JSON.parse(body) : body;
+
+    const requiredTitle = payload.title;
+    const requiredCategory = payload.category;
+
+    if (!requiredTitle) {
+      throw createError({ statusCode: 400, message: "title is required" });
+    }
+    if (!requiredCategory) {
+      throw createError({ statusCode: 400, message: "category is required" });
+    }
+
+    // Expect camelCase only
+    const toNumber = (v) => (v === undefined || v === null || v === "" ? undefined : Number(v));
+
+    const normalized = {
+      title: requiredTitle,
+      category: requiredCategory,
+      creditHours: toNumber(payload.creditHours),
+      mode: payload.mode,
+      isVerified: payload.isVerified,
+      thumbnail: payload.thumbnail,
+      courseObjectives: payload.courseObjectives,
+      courseOutcome: payload.courseOutcome,
+      description: payload.description,
+      metaData: payload.metaData || {},
+    };
+
+    if (normalized.creditHours === undefined) delete normalized.creditHours;
+    if (normalized.isVerified === undefined) delete normalized.isVerified;
+
+    // Create course
+    const course = await Course.create(normalized);
+
+    // Optionally create questionnaire
+    const questions = payload.questions;
+    if (Array.isArray(questions) && questions.length) {
+      const rows = questions.map((q) => ({
+        courseId: course.id,
+        question: q.question,
+        correctAnswer: q.correctAnswer,
+        optionA: q.optionA,
+        optionB: q.optionB,
+        optionC: q.optionC,
+        optionD: q.optionD,
+      }));
+      await CourseQuestionaire.bulkCreate(rows);
+    }
+
+    return success({ id: course.id });
+  } catch (err) {
+    return error(500, err);
+  }
 };

@@ -59,4 +59,242 @@ start quiz ( post api c_id payload and in response entry kary ki user history )
 submit quiz () DB will match saved answers and from user payload and update user and generate certificate
 
 //todo create a script for prettier rc
+//Post api
+
+//Meta ads + whatsapp cloud api + lead gen (email )
+
+High Level Overview:
+
+Meta Lead Ad  ──(webhook)──>  /webhooks/meta/leads
+                               │
+                               ├─ verify signature (HMAC SHA-256)
+                               ├─ fetch full lead via Graph API
+                               ├─ upsert contact + lead in Postgres
+                               ├─ enqueue jobs:
+                               │    • send email (provider)
+                               │    • send WhatsApp template (Cloud API)
+                               └─ respond 200 quickly
+
+
+//Requirements
+
+A Meta app connected to your Page + “Leads Access” for your CRM.
+Subscribe your app to Page Webhooks for leadgen (Leads Ads).
+Use Page access token (ideally long-lived via user → page token flow). Long-lived tokens last ~60 days.
+
+------------------- >>>>>>>  get Lead from Meta:
+
+// webhooks/meta.js
+import crypto from 'crypto';
+import express from 'express';
+const router = express.Router();
+
+const APP_SECRET = process.env.META_APP_SECRET;
+const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN;
+
+// 1) Verification (one-time setup on Meta dashboard)
+router.get('/leads', (req, res) => {
+  const { 'hub.mode': mode, 'hub.verify_token': token, 'hub.challenge': challenge } = req.query;
+  if (mode === 'subscribe' && token === VERIFY_TOKEN) return res.status(200).send(challenge);
+  return res.sendStatus(403);
+});
+
+// 2) Notifications (must verify signature)
+router.post('/leads', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.get('x-hub-signature-256') || '';
+  const expected = 'sha256=' + crypto.createHmac('sha256', APP_SECRET).update(req.body).digest('hex');
+  if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sig))) return res.sendStatus(401);
+
+  // Parse and enqueue work fast
+  const body = JSON.parse(req.body);
+  for (const entry of body.entry || []) {
+    for (const ch of entry.changes || []) {
+      if (ch.field === 'leadgen') {
+        const leadgenId = ch.value?.leadgen_id;
+        queue.add('fetch-lead', { leadgenId }); // BullMQ / agenda / bree
+      }
+    }
+  }
+  res.sendStatus(200);
+});
+
+export default router;
+
+---------------- >>>>>>>   Fetch Full Lead
+
+// jobs/fetchLead.js
+import fetch from 'node-fetch';
+import { db } from '../db.js';
+
+const PAGE_TOKEN = process.env.META_PAGE_ACCESS_TOKEN;
+
+export async function fetchLead({ leadgenId }) {
+  const url = `https://graph.facebook.com/v19.0/${leadgenId}?fields=created_time,ad_id,adset_id,campaign_id,form_id,field_data`;
+  const r = await fetch(url, { headers: { Authorization: `Bearer ${PAGE_TOKEN}` }});
+  const lead = await r.json();
+
+  // Map field_data → { name, email, phone, etc. }
+  const data = Object.fromEntries(lead.field_data.map(f => [f.name, f.values?.[0] ?? null]));
+
+  await db.tx(async t => {
+    const contact = await t.oneOrNone(
+      'INSERT INTO contacts(email, name, phone) VALUES($1,$2,$3) ON CONFLICT (email) DO UPDATE SET name=EXCLUDED.name RETURNING id',
+      [data.email, data.full_name || data.name, data.phone_number]
+    );
+    await t.none(
+      'INSERT INTO leads(id, contact_id, source, form_id, campaign_id, raw) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING',
+      [lead.id, contact.id, 'meta', lead.form_id, lead.campaign_id, lead]
+    );
+  });
+
+  // Kick off comms
+  queue.add('send-lead-email', { email: data.email, name: data.full_name || data.name });
+  queue.add('send-whatsapp',    { to: data.phone_number, template: 'lead_welcome' });
+}
+
+
+--------------- >>>>>>>> Email New Leads
+SES , MailGUn , SendGrid
+
+// jobs/sendEmail.js
+import sg from '@sendgrid/mail';
+sg.setApiKey(process.env.SENDGRID_KEY);
+
+export async function sendLeadEmail({ email, name }) {
+  if (!email) return;
+  await sg.send({
+    to: email,
+    from: 'leads@yourcrm.com',
+    subject: 'Thanks for your interest!',
+    templateId: process.env.SENDGRID_TMPL_WELCOME,
+    dynamicTemplateData: { name }
+  });
+}
+
+
+
+
+
+
+---->>>WhatsApp (Cloud API)
+
+Requirements
+
+WhatsApp Phone Number ID, WABA business set up, and an access token.
+
+Send messages to /PHONE_NUMBER_ID/messages with Bearer token; use webhooks to receive inbound messages and delivery statuses.
+
+
+
+// jobs/sendWhatsapp.js
+
+
+import fetch from 'node-fetch';
+const WA_TOKEN = process.env.WHATSAPP_TOKEN;
+const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_ID;
+
+export async function sendWhatsapp({ to, template }) {
+  if (!to) return;
+  await fetch(`https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      to: to.replace(/\D/g, ''), // E.164
+      type: 'template',
+      template: { name: template, language: { code: 'en' } }
+    })
+  });
+}
+
+WhatsApp webhook (verify + receive)
+
+Setup exactly like Meta webhooks (GET verify + POST events)
+
+// webhooks/whatsapp.js
+import express from 'express';
+const router = express.Router();
+const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
+
+router.get('/', (req, res) => {
+  const { 'hub.mode': mode, 'hub.verify_token': token, 'hub.challenge': challenge } = req.query;
+  if (mode === 'subscribe' && token === VERIFY_TOKEN) return res.status(200).send(challenge);
+  return res.sendStatus(403);
+});
+
+router.post('/', express.json(), async (req, res) => {
+  // Handle messages and statuses
+  // Save inbound messages to DB, open 24h window, trigger auto-reply if needed
+  res.sendStatus(200);
+});
+
+export default router;
+
+
+-----------     >>>>         Postgres Schemas
+
+
+-- contacts (unique by email or phone)
+
+
+CREATE TABLE contacts (
+  id BIGSERIAL PRIMARY KEY,
+  email TEXT UNIQUE,
+  phone TEXT,
+  name  TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- leads
+
+
+CREATE TABLE leads (
+  id TEXT PRIMARY KEY,             -- meta lead id
+  contact_id BIGINT REFERENCES contacts(id),
+  source TEXT NOT NULL,            -- 'meta'
+  form_id TEXT, campaign_id TEXT,
+  status TEXT DEFAULT 'new',
+  raw JSONB,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- messages log (email/whatsapp)
+
+
+CREATE TABLE messages (
+  id BIGSERIAL PRIMARY KEY,
+  contact_id BIGINT REFERENCES contacts(id),
+  channel TEXT CHECK (channel IN ('email','whatsapp')),
+  template TEXT,
+  to_addr TEXT,
+  payload JSONB,
+  status TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- integration secrets (encrypt at rest)
+
+
+CREATE TABLE integration_secrets (
+  id BIGSERIAL PRIMARY KEY,
+  kind TEXT,                       -- 'meta_page', 'whatsapp'
+  account_id TEXT,
+  token TEXT,                      -- store encrypted / KMS
+  meta JSONB,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+
+------                  >>>  Required EP's
+
+
+app.use('/webhooks/meta/leads', metaWebhookRouter);
+app.use('/webhooks/whatsapp', whatsappWebhookRouter);
+
+// operational endpoints
+app.post('/leads/:id/email', requireAuth, enqueueEmail);
+app.post('/whatsapp/send',   requireAuth, enqueueWhatsapp);
+
+// health
+app.get('/healthz', (_,res)=>res.send('ok'));
 
