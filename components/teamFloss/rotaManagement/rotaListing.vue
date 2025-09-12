@@ -195,7 +195,7 @@
                     <div class="px-2">
                       <v-chip
                         :color="getRotaStatusColor(getRotaStatus(item))"
-                        size="default"
+                        label
                       >
                         {{ getRotaStatus(item) }}
                       </v-chip>
@@ -341,7 +341,7 @@
                     <div class="px-2">
                       <v-chip
                         :color="getRotaStatusColor(getRotaStatus(item))"
-                        size="default"
+                        label
                       >
                         {{ getRotaStatus(item) }}
                       </v-chip>
@@ -490,7 +490,7 @@ function getRotaStatus(item) {
   const end = new Date(item.endDate);
 
   if (now < start) {
-    return "Future";
+    return "Up Coming";
   } else if (now >= start && now <= end) {
     return "In Progress";
   } else {
@@ -501,7 +501,7 @@ function getRotaStatusColor(status) {
   switch (status) {
     case "In Progress":
       return "#33B93C"; // green
-    case "Future":
+    case "Up Coming":
       return "#FF7C00"; // blue
     case "Expired":
       return "#D32F2F"; // red

@@ -1,5 +1,6 @@
 import { Role, Rota, RotaShift, RotaUser, User } from "../models";
-import { Op } from "sequelize";
+import { Op, fn, col } from "sequelize";
+import DB from "../utils/db";
 
 export const addRota = async (event) => {
   try {
@@ -52,8 +53,22 @@ export const getRotas = async (event) => {
   try {
     const rotas = await Rota.findAll({
       where: { organisationId: orgId },
+      attributes: {
+        include: [
+          [fn("COUNT", col("users.id")), "userCount"],
+        ],
+      },
+      include: [
+        {
+          model: RotaUser,
+          as: "users",
+          attributes: [],
+        },
+      ],
+      group: ["Rota.id"],
       order: [["createdAt", "DESC"]],
     });
+
     return success(rotas);
   } catch (err) {
     return error(500, err.message);
@@ -151,45 +166,34 @@ export const removeRotaUser = async (event) => {
 };
 
 export const addRotaUsers = async (event) => {
+  const transaction = await DB.transaction();
   try {
     const body = await readBody(event);
     const { rotaId, users } = JSON.parse(body);
-    if (!rotaId) throw createError({ message: "Rota id required " });
+    if (!rotaId) throw createError({ message: "Rota id required" });
     if (!Array.isArray(users) || users.length === 0) {
       throw createError({ message: "users required" });
     }
-    const addedUsers = [];
-    const skippedUsers = [];
-    for (const user of users) {
-      const { userId, isTempUser, tempUserName, tempUserRoleId } = user;
-      let exists = null;
-      if (userId) {
-        exists = await RotaUser.findOne({
-          where: { rotaId, userId },
-        });
-      } else if (isTempUser && tempUserName && tempUserRoleId) {
-        exists = await RotaUser.findOne({
-          where: { rotaId, tempUserName, tempUserRoleId },
-        });
-      }
-      if (exists) {
-        skippedUsers.push(user);
-        continue;
-      }
-      const rotaUser = await RotaUser.create({
-        rotaId,
-        userId: userId || null,
-        isTempUser: isTempUser || false,
-        tempUserName: tempUserName || null,
-        tempUserRoleId: tempUserRoleId || null,
-      });
-      addedUsers.push(rotaUser);
-    }
-    return success({
-      added: addedUsers,
-      skipped: skippedUsers,
-    });
+    await RotaUser.destroy({ where: { rotaId }, transaction });
+    const addedUsers = await Promise.all(
+      users.map((user) => {
+        const { userId, isTempUser, tempUserName, tempUserRoleId } = user;
+        return RotaUser.create(
+          {
+            rotaId,
+            userId: userId || null,
+            isTempUser: isTempUser || false,
+            tempUserName: tempUserName || null,
+            tempUserRoleId: tempUserRoleId || null,
+          },
+          { transaction }
+        );
+      })
+    );
+    await transaction.commit();
+    return success({ added: addedUsers });
   } catch (err) {
+    await transaction.rollback();
     return error(500, err.message);
   }
 };
@@ -310,7 +314,7 @@ export const updateShift = async (event) => {
     const {id}= JSON.parse(body)
     const shift = await RotaShift.findByPk(id);
     if (!shift) throw createError({ message: "shift not found" });
-    await shift.update(body);
+    await shift.update(JSON.parse(body));
     return success(shift);
   } catch (err) {
     return error(500, err.message);
