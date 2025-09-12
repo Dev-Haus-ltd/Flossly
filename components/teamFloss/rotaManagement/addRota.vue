@@ -205,8 +205,8 @@
                 />
               </v-menu>
 
-               <!-- Rota Duration -->
-               <label class="field-label">
+              <!-- Rota Duration -->
+              <label class="field-label">
                 Rota duration<span class="required">*</span>
               </label>
               <v-text-field
@@ -219,82 +219,16 @@
                 :rules="[rules.required]"
               />
 
-
               <!-- Employees -->
               <h2 class="rota-title mb-1">Add Employee</h2>
               <label class="field-label">
                 Employee<span class="required">*</span>
               </label>
-              <div>
-                <v-autocomplete
-                  v-model="form.employees"
-                  :items="employees"
-                  item-title="fullName"
-                  item-value="id"
-                  multiple
-                  variant="solo"
-                  flat
-                  density="compact"
-                  class="input-bordered"
-                  :menu-props="{ eager: true }"
-                  :rules="[rules.required]"
-                >
-                  <!-- hide chips inside field -->
-                  <template #selection="{ index }">
-                    <span v-if="index === -1"></span>
-                  </template>
-
-                  <!-- custom dropdown item -->
-                  <template #item="{ props, item }">
-                    <v-list-item v-bind="props">
-                      <template #prepend>
-                        <v-checkbox-btn
-                          :model-value="isSelected(item)"
-                          density="compact"
-                          readonly
-                          tabindex="-1"
-                        />
-                      </template>
-                      <template #title>
-                        <div class="d-flex align-center">
-                          <CommonAvatar
-                            :user="{ fullName: item.raw.fullName }"
-                            class="mx-2"
-                            size="32"
-                          />
-                          {{ item.raw.fullName }}
-                        </div>
-                      </template>
-                    </v-list-item>
-                  </template>
-                </v-autocomplete>
-
-                <!-- chips below field -->
-                <div class="d-flex flex-wrap">
-                  <v-chip
-                    v-for="id in form.employees"
-                    :key="id"
-                    closable
-                    close-icon="mdi-close"
-                    class="ma-1 py-5 rounded-lg"
-                    style="background-color: #d0e1e2"
-                    @click:close="
-                      form.employees = form.employees.filter((e) => e !== id)
-                    "
-                  >
-                    <CommonAvatar
-                      :user="{
-                        fullName: employees.find((e) => e.id === id)?.fullName,
-                      }"
-                      class="mr-2"
-                      size="30"
-                    />
-                    <span class="chip-content">{{
-                      employees.find((e) => e.id === id)?.fullName
-                    }}</span>
-                  </v-chip>
-                </div>
-              </div>
+              <TeamFlossRotaManagementEmployeeSelect
+                v-model="form.employees"
+                :employees="employees"
+                :rules="[rules.required]"
+              />
 
               <!-- Submit -->
               <div class="mt-6 text-right">
@@ -329,7 +263,7 @@ const form = ref({
   notes: "",
   employees: [],
 });
-
+const emit= defineEmits(['onAddRota'])
 const practiceError = ref("");
 const rotaForm = ref(null);
 const menuStartDateCreaterota = ref(false);
@@ -401,9 +335,17 @@ const submitForm = async () => {
     const res = await rotaStore.addRota(form.value);
     if (res.code === 0) {
       handleAddRotaUser(res.data.id, form.value.employees);
+    } else{
+      mainStore.setSnackbar({
+        type: "error",
+        title: res.message || res?.data?.message || "Something went wrong",
+      });
     }
   } catch (err) {
-    console.log(err);
+    mainStore.setSnackbar({
+      type: "error",
+      title: err.message || "An error occurred",
+    });
   }
 };
 
@@ -416,13 +358,14 @@ const handleAddRotaUser = async (rotaId, users) => {
     if (res.code === 0) {
       mainStore.setSnackbar({
         type: "success",
-        title: res?.message || "Rota added successfully",
+        title: "Rota added successfully",
       });
       resetForm();
+      emit('onAddRota')
     } else {
       mainStore.setSnackbar({
         type: "error",
-        title: res.message || "Something went wrong",
+        title: res.message || res?.data?.message  || "Something went wrong",
       });
     }
   } catch (err) {
@@ -445,10 +388,6 @@ function resetForm() {
   };
   isCreateRota.value = false;
   selectedOption.value = null;
-}
-function isSelected(item) {
-  const id = item?.raw?.id ?? item?.id;
-  return form.value.employees.includes(id);
 }
 </script>
 <style scoped>

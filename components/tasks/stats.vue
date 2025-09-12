@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="bg-white">
 
     <div class="cust-border d-flex align-center">
   

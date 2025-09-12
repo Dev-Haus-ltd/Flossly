@@ -5,7 +5,10 @@
       <p class="mr-1">Rota management</p>
       <p
         v-if="selectedRota"
-        @click="activeComponent = 1; selectedRota = null;"
+        @click="
+          activeComponent = 1;
+          selectedRota = null;
+        "
         style="color: blue !important; cursor: pointer"
       >
         {{ " / " + selectedRota.name }}
@@ -30,15 +33,20 @@
         :rotaList="rotas"
       />
     </div>
-    <TeamFlossRotaManagementAddRota v-if="activeComponent === 2" />
+    <TeamFlossRotaManagementAddRota
+      v-if="activeComponent === 2"
+      @onAddRota="onAddRotaHandle"
+    />
 
     <TeamFlossRotaManagementShifts
       v-if="activeComponent === 3"
       :shifts="shifts"
       :users="rotaUsers"
       :rota="selectedRota"
-       @onChangeStatus="changeRotaStatus"
-       @onUpdate="getAllShifts"
+      @onChangeStatus="changeRotaStatus"
+      @onUpdate="getAllShifts"
+      @onFilterUsers="filterUsers"
+      @onAddUser="getRotaUsers"
     />
   </div>
 </template>
@@ -51,6 +59,8 @@ const mainStore = useMainStore();
 const rotas = ref([]);
 const shifts = ref([]);
 const rotaUsers = ref([]);
+const allRotaUsers = ref([]);
+const allShifts = ref([]);
 const activeComponent = ref(1);
 const selectedRota = ref(null);
 onMounted(() => {
@@ -113,7 +123,7 @@ const changeRotaStatus = async (data) => {
             data.type === "publish" ? "published" : "unpublished"
           } successfully`,
       });
-      activeComponent.value=1
+      activeComponent.value = 1;
     } else {
       mainStore.setSnackbar({
         type: "error",
@@ -135,8 +145,9 @@ const getAllShifts = async (item) => {
     const res = await rotaStore.getAllShifts({ rotaId: item.id });
     if (res.code === 0) {
       shifts.value = res.data;
+      allShifts.value = res.data;
       selectedRota.value = item;
-      getRotaUsers()
+      getRotaUsers();
     }
   } catch (error) {
     mainStore.setSnackbar({
@@ -150,14 +161,38 @@ const getRotaUsers = async () => {
   rotaStore.getRotaUsers({ rotaId: selectedRota.value.id }).then((res) => {
     if (res.code === 0) {
       rotaUsers.value = res.data;
+      allRotaUsers.value = res.data;
       activeComponent.value = 3;
     }
   });
 };
+const filterUsers = (payload) => {
+  if (payload === "clear") {
+    rotaUsers.value = [...allRotaUsers.value];
+    shifts.value = [...allShifts.value];
+  } else if (payload === 0) {
+    rotaUsers.value = [...allRotaUsers.value];
+    shifts.value = allShifts.value.filter((sh) => sh.surgeryId);
+  } else {
+    // Filter users by role
+    rotaUsers.value = allRotaUsers.value.filter(
+      (ru) => ru.user.roleId === payload
+    );
+    // Collect userIds of those users
+    const userIds = rotaUsers.value.map((ru) => ru.userId);
+    // Filter shifts belonging to those userIds
+    shifts.value = allShifts.value.filter((shf) =>
+      userIds.includes(shf.userId)
+    );
+  }
+};
 
 const changecomponent = (id) => {
-  console.log(id);
   activeComponent.value = id;
+};
+const onAddRotaHandle = () => {
+  getRotas();
+  activeComponent.value = 1;
 };
 </script>
 <style scoped>

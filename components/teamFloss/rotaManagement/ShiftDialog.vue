@@ -9,9 +9,10 @@
           font-weight: 600;
           font-size: 16px;
           border-bottom: 1px solid #dbdbdb;
+          padding-left: 24px;
         "
       >
-        Add or Create a Shift
+        {{ currentShift.id ? "Update shift" : "Add or Create a Shift" }}
         <v-btn
           icon
           variant="text"
@@ -277,7 +278,10 @@
       </v-card-text>
 
       <!-- Fixed footer -->
-      <v-card-actions class="justify-end" style="border-top: 1px solid #dbdbdb">
+      <v-card-actions
+        class="justify-end px-5"
+        style="border-top: 1px solid #dbdbdb"
+      >
         <v-btn
           text
           @click="resetForm"
@@ -294,7 +298,7 @@
           style="font-weight: 500; text-transform: none"
           flat
         >
-          Add Shift
+          {{ currentShift.id ? "Update" : "Add" }}
         </v-btn>
       </v-card-actions>
     </v-card>
@@ -302,7 +306,8 @@
 </template>
 
 <script setup>
-import { ref, watch } from "vue";
+import { format } from "date-fns";
+import { getRandomHexColor } from "~/lib/misc";
 
 const props = defineProps({
   modelValue: Boolean,
@@ -310,8 +315,10 @@ const props = defineProps({
   users: Array,
   shifts: Array,
   shiftData: Object,
+  currentShift: Object,
 });
-const emit = defineEmits(["update:modelValue", "onUpdate"]);
+
+const emit = defineEmits(["update:modelValue", "onUpdate", "updateShifts"]);
 const rotaStore = useRotaStore();
 const mainStore = useMainStore();
 const orgStore = useOrgStore();
@@ -402,12 +409,17 @@ const nurseOptions = computed(() => {
 
 const handleShiftData = () => {
   const data = props.shiftData;
+  // const currentShift= props.shifts.find(s=> s.userId===data.user.id && format(s.startDate, "yyyy-MM-dd") === format(data.day, "yyyy-MM-dd"))
   form.value.userId = data.user.id;
   selectedUserRole.value = data.user.role.id;
 };
-const close = () => (isOpen.value = false);
+const close = () => {
+  isOpen.value = false;
+  resetForm();
+};
 const prefillForm = (id) => {
   const template = props.shifts.find((s) => s.id === id);
+
   if (template) {
     form.value = { ...template, shiftLibrary: id };
   }
@@ -423,7 +435,7 @@ const getSurgeries = () => {
 };
 const resetForm = () => {
   form.value = {
-    rotaId: props.rotaId,
+    rotaId: props?.rota?.id,
     shiftLibrary: null,
     label: "",
     surgeryId: null,
@@ -437,6 +449,8 @@ const resetForm = () => {
     label: "",
     userId: null,
   };
+  breakHrs.value = "";
+  breakMins.value = "";
 };
 const buildDateTime = (date, timeStr) => {
   const [h, m] = timeStr.split(":").map(Number);
@@ -447,7 +461,7 @@ const buildDateTime = (date, timeStr) => {
 
 const submitForm = async () => {
   const { valid } = await formRef.value.validate();
-  if (!valid || !form.value.color) return;
+  if (!valid) return;
   try {
     const breakTime =
       (Number(breakHrs.value) || 0) * 60 + (Number(breakMins.value) || 0);
@@ -461,31 +475,74 @@ const submitForm = async () => {
     }
     form.value.startDate = startDateObj;
     form.value.endDate = endDateObj;
+    const color = form.value.color ? form.value.color : getRandomHexColor();
     const payload = {
       ...form.value,
       breakTime,
+      color,
     };
-    const res = await rotaStore.addRotaShift(payload);
+    let res;
+    if (props.currentShift?.id) {
+      // update existing shift
+      res = await rotaStore.updateShift(payload);
+    } else {
+      // add new shift
+      res = await rotaStore.addRotaShift(payload);
+    }
     if (res.code === 0) {
-      emit("onUpdate")
       mainStore.setSnackbar({
         type: "success",
-        title: res?.message || "Shift added successfully",
+        title:
+          res?.message ||
+          (props.currentShift?.id
+            ? "Shift updated successfully"
+            : "Shift added successfully"),
       });
+      emit("updateShifts", props?.rota);
+      close();
     } else {
       mainStore.setSnackbar({
         type: "error",
-        title: res?.message || "Failed to add shift",
+        title:
+          res?.message ||
+          (props.currentShift?.id
+            ? "Failed to update shift"
+            : "Failed to add shift"),
       });
     }
   } catch (err) {
-    console.log(err);
     mainStore.setSnackbar({
       type: "error",
-      title: "Something went wrong while adding shift",
+      title: props.currentShift?.id
+        ? "Something went wrong while updating shift"
+        : "Something went wrong while adding shift",
     });
   }
 };
+const safeFormat = (val) => {
+  if (!val) return null;
+  const d = new Date(val);
+  return isNaN(d) ? val : format(d, "HH:mm"); // if it's not a valid date, keep it as-is
+};
+watch(
+  () => props.currentShift,
+  (newShift) => {
+    if (newShift?.id) {
+      const breakTime = newShift.breakTime || 0;
+
+      form.value = {
+        ...newShift,
+        rotaId: props?.rota?.id,
+        startDate: safeFormat(newShift.startDate),
+        endDate: safeFormat(newShift.endDate),
+      };
+
+      breakHrs.value = Math.floor(breakTime / 60);
+      breakMins.value = breakTime % 60;
+    }
+  },
+  { immediate: true, deep: true } // also run the first time when component mounts
+);
 </script>
 
 <style scoped>

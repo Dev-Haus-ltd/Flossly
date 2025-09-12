@@ -38,6 +38,7 @@ import { SystemDocumentFolder } from "./documents/systemDocumentFolders";
 import { SystemDocument } from "./documents/systemDocuments";
 import { UserLeaveHistory } from "./leaves/userLeaveHistory";
 import { UserLeaveEntitlement } from "./leaves/userLeaveEntitlements";
+import { UserHrDocument } from "./auth/userHrDocuments";
 
 import { Course } from "./cpd/course";
 import { CourseQuestionaire } from "./cpd/courseQuestionaire";
@@ -409,6 +410,10 @@ User.hasMany(UserCourseHistory, {
   foreignKey: "userId",
   as: "courseHistories",
 });
+// User ↔ UserHrDocuments
+User.hasMany(UserHrDocument, { foreignKey: "userId", as: "hrDocuments" });
+UserHrDocument.belongsTo(User, { foreignKey: "userId", as: "user" });
+
 
 export {
   User,
@@ -424,6 +429,7 @@ export {
   UserTaskAttachment,
   UserLeaveEntitlement,
   UserLeaveHistory,
+  UserHrDocument,
   TaskChecklist,
   Role,
   Organisation,
