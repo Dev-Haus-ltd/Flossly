@@ -4,7 +4,6 @@ import {
   UserCourseHistory,
   User,
 } from "../models/index.js";
-import { success, error } from "../utils/response";
 
 export const listCourses = async (event) => {
     try {
