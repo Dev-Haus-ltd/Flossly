@@ -29,9 +29,34 @@
         <div class="title-text mb-6">
           {{ course?.title }}
         </div>
+   <!-- Actions -->
+   <div  v-if="isMyCourses">
+          <!-- start course -->
+          <v-btn
+            variant="outlined"
+            size="default"
+            class="learn-more-btn"
+            append-icon="mdi-arrow-right"
+            @click="onLearnMore"
+            flat
+          >
+            Start course
+          </v-btn>
   
+          <!-- continue -->
+          <!-- <v-btn
+            variant="text"
+            size="default"
+            class="assign-btn"
+            append-icon="mdi-arrow-top-right"
+            @click="onAssign"
+            flat
+          >
+           Continue
+          </v-btn> -->
+        </div>
         <!-- Actions -->
-        <div class="d-flex justify-space-between align-center">
+        <div class="d-flex justify-space-between align-center" v-if="!isMyCourses">
           <!-- Learn More -->
           <v-btn
             variant="outlined"
@@ -66,6 +91,10 @@
     course: {
       type: Object,
       required: true,
+    },
+    isMyCourses:{
+      type:Boolean,
+      required:false
     }
   })
   

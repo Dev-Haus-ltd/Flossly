@@ -101,49 +101,6 @@ const cards = [
 ];
 const tab = ref(0); // "All" by default (id = 0)
 
-// Dummy cards with categoryId
-const allCards = [
-  {
-    id: 1,
-    title: "Safeguarding Adults and Children Level 1",
-    categoryId: 2,
-    img: "https://picsum.photos/400/240?random=1",
-    totalTime: "2h 30m",
-    isVerified: true,
-  },
-  {
-    id: 2,
-    title: "Safeguarding Adults and Children Level 2",
-    categoryId: 3,
-    img: "https://picsum.photos/400/240?random=2",
-    totalTime: "1h 45m",
-    isVerified: false,
-  },
-  {
-    id: 3,
-    title: "Safeguarding Adults and Children Level 3",
-    categoryId: 4,
-    img: "https://picsum.photos/400/240?random=3",
-    totalTime: "3h 10m",
-    isVerified: true,
-  },
-  {
-    id: 4,
-    title: "Safeguarding Adults and Children Level 4",
-    categoryId: 5,
-    img: "https://picsum.photos/400/240?random=4",
-    totalTime: "4h 00m",
-    isVerified: false,
-  },
-  {
-    id: 5,
-    title: "Course E",
-    categoryId: 1,
-    img: "https://picsum.photos/400/240?random=5",
-    totalTime: "2h 15m",
-    isVerified: true,
-  },
-];
 
 // Filtering logic
 function filteredCards(category) {
