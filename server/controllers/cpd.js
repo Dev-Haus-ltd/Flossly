@@ -185,7 +185,7 @@ export const submitQuiz = async (event) => {
         certificate,
       });
     } catch (err) {
-      return error(500, err);
+      return error(500, err.message);
     }
 };
 
@@ -299,6 +299,9 @@ export const getUserCourseHistory = async (event) => {
             "mode",
             "isVerified",
             "thumbnail",
+            "objectives",
+            "aim",
+            "outcome",
             "description"
           ]
         },
