@@ -182,10 +182,8 @@ const getProfile = () => {
           user.profileCompletion <= 1
         ) {
           router.push("/onboarding");
-        } else if (user.roleId === 8 || user.roleId === 1) {
-          router.push("/");
         } else {
-          router.push("/tasks/mytasks");
+          router.push("/");
         }
       } else {
         store.setSnackbar({

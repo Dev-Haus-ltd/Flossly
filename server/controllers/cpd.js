@@ -59,7 +59,7 @@ export const startQuiz = async (event) => {
         status: "In Progress",
       });
     } else if (userHistory.status === "Completed") {
-      throw createError({ message: "course already completed" });
+      throw createError({ message: `You have already completed this course on ${new Date(userHistory.completedDate).toLocaleDateString()}` });
     }
     const questionnaire = await CourseQuestionaire.findAll({
       where: { courseId },
@@ -78,7 +78,7 @@ export const startQuiz = async (event) => {
     }
     return success(questionnaire);
   } catch (err) {
-    return error(500, err);
+    return error(500, err.message);
   }
 };
 // Submit Quiz API - POST /api/cpd/submitQuiz
@@ -169,6 +169,7 @@ export const submitQuiz = async (event) => {
       }
   
       return success({
+        message: `Congratulations! You've completed the course with ${Math.round(percentage)}% score. You'll get the Certificate in 2 days.`,
         result: {
           status: userHistory.status,
           score: `${correctCount}/${totalQuestions}`,
@@ -334,85 +335,72 @@ export const getUserCourseHistory = async (event) => {
       }
     });
   } catch (err) {
-    return error(500, err);
+    return error(500, err.message);
   }
 };
 
-// Assign course to team member API (for managers)
-export const assignCourseToUser = async (event) => {
+export const assignCourseToUsers = async (event) => {
   try {
     const body = await readBody(event);
-    const { userId, courseId } = typeof body === "string" ? JSON.parse(body) : body;
+    const { userIds, courseId } = typeof body === "string" ? JSON.parse(body) : body;
     const { userId: managerId, orgId } = event.context.user;
-
-    if (!userId) {
-      throw createError({ statusCode: 400, message: "userId is required" });
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      throw createError({ statusCode: 400, message: "userIds (array) is required" });
     }
     if (!courseId) {
       throw createError({ statusCode: 400, message: "courseId is required" });
     }
-
     // Check if the logged user is a manager
     const organisation = await Organisation.findOne({
-      where: { id: orgId, managerId: managerId }
+      where: { id: orgId, managerId }
     });
-
     if (!organisation) {
-      throw createError({ statusCode: 403, message: "Access denied. Only managers can assign courses to team members." });
+      throw createError({
+        statusCode: 403,
+        message: "Access denied. Only managers can assign courses to team members."
+      });
     }
-
-    // Check if the target user belongs to the same organization
-    const userOrganisation = await UserOrganisation.findOne({
-      where: { userId, organisationId: orgId }
-    });
-
-    if (!userOrganisation) {
-      throw createError({ statusCode: 400, message: "User does not belong to your organization." });
-    }
-
     // Check if course exists
     const course = await Course.findByPk(courseId);
     if (!course) {
       throw createError({ statusCode: 404, message: "Course not found" });
     }
+    const results = {
+      assigned: [],
+      skipped: []
+    };
+    for (const uid of userIds) {
+      // Check if the target user belongs to the same organization
+      const userOrganisation = await UserOrganisation.findOne({
+        where: { userId: uid, organisationId: orgId }
+      });
+      if (!userOrganisation) {
+        results.skipped.push({ userId: uid, reason: "User not in organisation" });
+        continue;
+      }
+      // Check if course already assigned
+      const existingAssignment = await UserCourseHistory.findOne({
+        where: { userId: uid, courseId }
+      });
 
-    // Check if course is already assigned to the user
-    const existingAssignment = await UserCourseHistory.findOne({
-      where: { userId, courseId }
-    });
-
-    if (existingAssignment) {
-      throw createError({ statusCode: 400, message: "Course is already assigned to this user" });
+      if (existingAssignment) {
+        results.skipped.push({ userId: uid, reason: "Already assigned" });
+        continue;
+      }
+      // Assign course
+      const courseAssignment = await UserCourseHistory.create({
+        userId: uid,
+        courseId,
+        status: "In Progress"
+      });
+      results.assigned.push(courseAssignment);
     }
 
-    // Create course assignment with "In Progress" status
-    const courseAssignment = await UserCourseHistory.create({
-      userId,
-      courseId,
-      status: "In Progress"
-    });
-
-    // Fetch the created assignment with course and user details
-    const assignmentWithDetails = await UserCourseHistory.findByPk(courseAssignment.id, {
-      include: [
-        {
-          model: Course,
-          as: "course",
-          attributes: ["id", "title", "category", "creditHours", "mode"]
-        },
-        {
-          model: User,
-          as: "user",
-          attributes: ["id", "fullName", "email"]
-        }
-      ]
-    });
-
     return success({
-      message: "Course assigned successfully",
-      assignment: assignmentWithDetails
+      message: "Course assignment process completed",
+      ...results
     });
   } catch (err) {
-    return error(500, err);
+    return error(500, err.message);
   }
 };

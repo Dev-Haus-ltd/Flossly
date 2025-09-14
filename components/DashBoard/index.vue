@@ -40,9 +40,11 @@
               slider-color="primary"
             >
               <v-tab
-                v-for="category in categoryList.filter((x) => !x.parentId)"
+                v-for="(category, index) in categoryList.filter(
+                  (x) => !x.parentId
+                )"
                 :key="category.id"
-                :value="category.id"
+                :value="index + 1"
                 class="tab-text"
               >
                 {{ category.name }}
@@ -51,11 +53,7 @@
 
             <!-- Tab content -->
             <v-tabs-window v-model="tab">
-              <v-tabs-window-item
-                v-for="category in categoryList"
-                :key="category.id"
-                :value="category.id"
-              >
+              <v-tabs-window-item :value="tab">
                 <v-row class="my-2 mx-1">
                   <v-col
                     v-for="stat in stats"
@@ -80,6 +78,7 @@
 
         <!-- ✅ Quick Actions under Recent + CPD -->
         <v-card
+          v-if="recentFiles && recentFiles.length"
           class="mt-3 card flex-grow-1"
           color="white"
           elevation="0"
@@ -163,6 +162,7 @@
             hide-header
             color="primary"
             type="month"
+            class="user-dashboard-calender"
           >
             <template v-slot:day-event="{ event }">
               <v-tooltip>
@@ -180,7 +180,7 @@
               </v-tooltip>
             </template>
             <template v-slot:day-title="{ title }">
-              <span style="font-size: 10px;">{{ title }}</span>
+              <span style="font-size: 10px">{{ title }}</span>
             </template>
           </v-calendar>
         </v-card>
@@ -319,7 +319,7 @@ const mainStore = useMainStore();
 const docStore = useDocStore();
 const recentFiles = ref([]);
 const user = ref({});
-const value = ref(null)
+const value = ref(null);
 const inquirySources = ref([
   { label: "Meta Adverts", count: 16, percent: 35 },
   { label: "Google Adverts", count: 13, percent: 28 },
@@ -412,7 +412,7 @@ const flosslyItems = ref([
     isLocked: true,
   },
 ]);
-const tab = ref(null);
+const tab = ref(1);
 const categoryList = ref([]);
 const stats = ref([]);
 const getRecentDocs = () => {
@@ -506,17 +506,13 @@ onMounted(() => {
     user.value = JSON.parse(localStorage.getItem("user"));
   }
   if (user.value.roleId === 8 || user.value.roleId === 1) {
-    getMyTasks() 
+    getMyTasks();
   }
 });
-const getMyTasks = () => {
-
-};
+const getMyTasks = () => {};
 </script>
 
 <style scoped>
-
-
 .font-weight-semi {
   font-weight: 600 !important;
 }

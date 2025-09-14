@@ -4,7 +4,7 @@ import {
     submitQuiz,
     addCourse,
     getUserCourseHistory,
-    assignCourseToUser,
+    assignCourseToUsers,
   } from "../../controllers/cpd.js";
   
   export default defineEventHandler(async (event) => {
@@ -27,7 +27,7 @@ import {
           return await getUserCourseHistory(event);
 
         case "assignCourseToUser":
-          return await assignCourseToUser(event);
+          return await assignCourseToUsers(event);
   
         case "ping":
           return { ok: true, ts: Date.now() };

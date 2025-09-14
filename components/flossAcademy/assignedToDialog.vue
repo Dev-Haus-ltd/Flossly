@@ -98,7 +98,7 @@ const save = async () => {
     // });
     const res = await cpdStore.assignCourseToUser({
       courseId: props.course.id,
-      userId: localSelectedUsers.value[0],
+      userIds: localSelectedUsers.value,
     });
     if (res.code === 0) {
       mainStore.setSnackbar({

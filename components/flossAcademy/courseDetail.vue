@@ -179,20 +179,16 @@
               v-if="notification.message"
               :type="notification.type"
               variant="tonal"
-              border="start"
               border-color="primary"
-              closable
               density="compact"
               width="600"
-              @click:close="initialState"
+              :icon="false"
+              height="200"
             >
-              <template #prepend>
-                <v-icon size="20"></v-icon>
-                <!-- smaller icon -->
-              </template>
-
-              <v-alert-title style="font-size: 16px">
-                {{ notification.message }}
+              <v-alert-title style="font-size: 16px; flex-direction: column;">
+               <v-icon size="40">mdi-check-circle-outline</v-icon>
+               <p class="mb-7"> {{ notification.message }}</p>
+               <v-btn @click="initialState" class="px-7" variant="outlined" color="#000">Close</v-btn>
               </v-alert-title>
             </v-alert>
           </v-card-text>
@@ -240,7 +236,7 @@ const submitQuiz = async () => {
       notification.value = {
         message:
           res.data?.message || res?.message || "Quiz submitted successfully",
-        type: "Success",
+        type: "success",
       };
     } else {
       store.setSnackbar({

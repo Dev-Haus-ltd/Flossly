@@ -167,6 +167,12 @@ export const useMainStore = defineStore("mainStore", {
     getuserOptions() {
       return [
         {
+          title: "DashBoard",
+          imgPath: dashBoard,
+          value: "dashBoard",
+          to: "/",
+        },
+        {
           title: "My Tasks",
           value: "myTasks",
           imgPath: tasksIcon,
@@ -185,6 +191,32 @@ export const useMainStore = defineStore("mainStore", {
               to: "/documents/mydocs",
             },
         
+          ],
+        },
+        {
+          title: "Rota",
+          value: "rotaManagement",
+          imgPath: teamIcon,
+          to: "/teams/rota",
+        },
+        {
+          title: "Holiday Tracker",
+          value: "holidayTracker",
+          imgPath: teamIcon,
+          to: "/teams/holiday",
+        },
+        {
+          title: "Floss Academy",
+          imgPath: academyIcon,
+          value: "flossAcademy",
+          to:"/academy",
+          children: [
+            {
+              title: "My Courses",
+              value: "myCourses",
+              imgPath: academyIcon,
+              to: "/academy/mycourses",
+            },
           ],
         },
       ];

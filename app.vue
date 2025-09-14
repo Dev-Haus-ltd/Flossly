@@ -276,7 +276,13 @@ const openEmail = () => {
 }
 } 
 }
-
+.user-dashboard-calender {
+  .v-calendar-month__days {
+  .v-calendar-month__day {
+    min-height: 70px !important;
+}
+} 
+}
 
 @media (min-width: 1400px) and (max-width: 1610px) {
   .v-container {
