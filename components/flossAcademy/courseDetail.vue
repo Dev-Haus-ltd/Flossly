@@ -3,7 +3,7 @@
     <v-row align="stretch" class="video-row">
       <!-- Left Side: Video -->
       <v-col cols="9" class="d-flex">
-        <video controls :src="videoUrl" class="course-video flex-grow-1">
+        <video controls :src="course?.link" autoplay  class="course-video flex-grow-1">
           Your browser does not support the video tag.
         </video>
       </v-col>
@@ -33,19 +33,11 @@
           <v-card-text class="pa-4">
             <!-- Aim -->
             <h4 class="section-title">Aim:</h4>
-            <p class="section-text">{{ aim }}</p>
+            <p class="section-text">{{ course?.aim }}</p>
 
             <!-- Objectives -->
             <h4 class="section-title">Objectives:</h4>
-            <ul class="objectives-list">
-              <li
-                v-for="(objective, index) in objectives"
-                :key="index"
-                class="section-text"
-              >
-                {{ objective }}
-              </li>
-            </ul>
+           <div v-html="course?.objectives" class="pa-5" style="line-height: 30px;" ></div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -105,7 +97,7 @@
               <div class="question-header">Question {{ index + 1 }}</div>
               <div class="px-3">
                 <!-- Question Text -->
-                <p class="question-text">{{ question.statement }}</p>
+                <p class="question-text">{{ question.question }}</p>
 
                 <!-- Options -->
                 <v-radio-group
@@ -113,12 +105,26 @@
                   class="options-group"
                 >
                   <v-radio
-                    v-for="(option, oIndex) in question.options"
-                    :key="oIndex"
-                    :label="option"
-                    :value="option"
+                    :label="question.optionA"
+                    :value="question.optionA"
                     class="option-item"
                   />
+                  <v-radio
+                    :label="question.optionB"
+                    :value="question.optionB"
+                    class="option-item"
+                  />
+                  <v-radio
+                    :label="question.optionC"
+                    :value="question.optionC"
+                    class="option-item"
+                  />
+                  <v-radio
+                    :label="question.optionD"
+                    :value="question.optionD"
+                    class="option-item"
+                  />
+
                 </v-radio-group>
               </div>
             </div>
@@ -145,49 +151,37 @@
 import { ref } from "vue";
 
 const props = defineProps({
-  videoUrl: {
-    type: String,
-    default: "https://www.w3schools.com/html/mov_bbb.mp4", // dummy video
-  },
-  aim: {
-    type: String,
-    default: "This course aims to provide basic knowledge.",
-  },
-  objectives: {
-    type: Array,
-    default: () => [
-      "Understand fundamentals",
-      "Apply concepts in real-world cases",
-      "Evaluate outcomes effectively",
-    ],
+  course: {
+    type: Object,
+    default: {}, // dummy video
   },
 });
 
+const cpdStore = useCpdStore()
 const toggleStartQuizButton = ref(false);
 const quizStarted = ref(false);
+const quizResult = ref(null)
 
 // Dummy API response
-const questions = ref([
-  {
-    id: 1,
-    statement: "What is the capital of France?",
-    options: ["A) Paris", "B) London", "C) Rome", "D) Berlin"],
-  },
-  {
-    id: 2,
-    statement: "Which planet is known as the Red Planet?",
-    options: ["A) Earth", "B) Mars", "C) Venus", "D) Jupiter"],
-  },
-]);
+const questions = ref([]);
 
 // Store selected answers keyed by question id
 const answers = ref({});
 
 function submitQuiz() {
-  console.log("Submitted answers:", answers.value);
+  cpdStore.submitQuiz({courseId: props.course.id, answers: answers.value}).then((res) => {
+    if (res.code === 0) {
+      quizResult.value = res.data
+    }
+  })
 }
 const startQuiz = () => {
   quizStarted.value = true;
+  cpdStore.startQuiz({ courseId: props.course.id }).then((res) => {
+    if (res.code === 0) {
+      questions.value = res.data
+    }
+  })
 };
 </script>
 

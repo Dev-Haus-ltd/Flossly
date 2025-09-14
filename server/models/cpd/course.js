@@ -33,9 +33,11 @@ export const Course = sequelize.define(
       defaultValue: false,
     },
     thumbnail: { type: DataTypes.STRING(200), allowNull: true },
-    courseObjectives: { type: DataTypes.TEXT, allowNull: true },
-    courseOutcome: { type: DataTypes.TEXT, allowNull: true },
+    objectives: { type: DataTypes.TEXT, allowNull: true },
+    aim: { type: DataTypes.TEXT, allowNull: true },
+    outcome: { type: DataTypes.TEXT, allowNull: true },
     description: { type: DataTypes.TEXT, allowNull: true },
+    link: { type: DataTypes.TEXT, allowNull: false },
     metaData: { type: DataTypes.JSONB, allowNull: true, defaultValue: {} },
   },
   { modelName: "Courses", timestamps: true }

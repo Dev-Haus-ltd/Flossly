@@ -2,7 +2,7 @@
     <v-card class="course-card pa-1" flat>
       <!-- Image -->
       <v-img
-        :src="img"
+        :src="course?.thumbnail"
         height="240px"
         cover
         class="card-image rounded-lg"
@@ -15,11 +15,11 @@
           <!-- Time -->
           <div class="d-flex align-center">
             <v-icon size="16" color="#737373" class="mr-1">mdi-clock-outline</v-icon>
-            <span class="time-text">{{ totalTime }}</span>
+            <span class="time-text">{{ course?.creditHours }}</span>
           </div>
   
           <!-- Verified -->
-          <div v-if="isVerified" class="d-flex align-center">
+          <div v-if="course?.isVerified" class="d-flex align-center">
             <v-icon size="16" color="#33B93C" class="mr-1">mdi-check-circle-outline</v-icon>
             <span class="verified-text">Verified CPD</span>
           </div>
@@ -27,11 +27,36 @@
   
         <!-- Title -->
         <div class="title-text mb-6">
-          {{ title }}
+          {{ course?.title }}
         </div>
+   <!-- Actions -->
+   <div  v-if="isMyCourses">
+          <!-- start course -->
+          <v-btn
+            variant="outlined"
+            size="default"
+            class="learn-more-btn"
+            append-icon="mdi-arrow-right"
+            @click="onLearnMore"
+            flat
+          >
+            Start course
+          </v-btn>
   
+          <!-- continue -->
+          <!-- <v-btn
+            variant="text"
+            size="default"
+            class="assign-btn"
+            append-icon="mdi-arrow-top-right"
+            @click="onAssign"
+            flat
+          >
+           Continue
+          </v-btn> -->
+        </div>
         <!-- Actions -->
-        <div class="d-flex justify-space-between align-center">
+        <div class="d-flex justify-space-between align-center" v-if="!isMyCourses">
           <!-- Learn More -->
           <v-btn
             variant="outlined"
@@ -63,39 +88,23 @@
   <script setup>
   const emit= defineEmits(['showCourse'])
   const props = defineProps({
-    id: {
-      type: [String, Number],
+    course: {
+      type: Object,
       required: true,
     },
-    categoryId: {
-      type: [String, Number],
-      required: true,
-    },
-    title: {
-      type: String,
-      required: true,
-    },
-    img: {
-      type: String,
-      default: "https://picsum.photos/400/240", // dummy fallback
-    },
-    totalTime: {
-      type: String,
-      default: "0h",
-    },
-    isVerified: {
-      type: Boolean,
-      default: false,
-    },
+    isMyCourses:{
+      type:Boolean,
+      required:false
+    }
   })
   
   function onLearnMore() {
-    console.log("Learn More clicked, ID:", props.id)
-    emit('showCourse', props.id)
+    console.log("Learn More clicked, ID:", props.course)
+    emit('showCourse', props.course)
   }
   
   function onAssign() {
-    console.log("Assign clicked, ID:", props.id)
+    console.log("Assign clicked, ID:", props.course)
   }
   </script>
   

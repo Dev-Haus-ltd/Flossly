@@ -25,6 +25,7 @@ const taskStore = useTaskStore();
 const docStore = useDocStore();
 const userStore = useUserStore();
 const rotaStore= useRotaStore();
+const cpdStore = useCpdStore()
 const { isLoading: authLoading } = storeToRefs(authStore);
 const { isLoading: mainLoading } = storeToRefs(mainStore);
 const { isLoading: orgLoadong } = storeToRefs(orgStore);
@@ -32,6 +33,8 @@ const { isLoading: taskLoading } = storeToRefs(taskStore);
 const { isLoading: docLoading } = storeToRefs(docStore);
 const { isLoading: userLoading } = storeToRefs(userStore);
 const { isLoading: rotaLoading } = storeToRefs(rotaStore);
+const { isLoading: cpdLoading } = storeToRefs(cpdStore);
+
 
 
 const anyLoading = computed(
@@ -42,7 +45,8 @@ const anyLoading = computed(
     taskLoading.value ||
     docLoading.value ||
     userLoading.value ||
-    rotaLoading.value
+    rotaLoading.value ||
+    cpdLoading.value
 );
 </script>
 

@@ -6,26 +6,10 @@ import {
   Organisation,
   UserOrganisation,
 } from "../models/index.js";
-import { success, error } from "../utils/response";
 
 export const listCourses = async (event) => {
     try {
       const courses = await Course.findAll({
-        attributes: [
-          "id",
-          "title",
-          "category",
-          "credit_hours",
-          "mode",
-          "is_verified",
-          "thumbnail",
-          "course_objectives",
-          "course_outcome",
-          "description",
-          "provider_name",
-          "provider_type",
-          "createdAt",
-        ],
         order: [["createdAt", "DESC"]],
       });
   
@@ -42,6 +26,10 @@ export const listCourses = async (event) => {
       return error(500, err);
     }
 };
+
+export const myCourses = async (event) => {
+  
+}
 export const startQuiz = async (event) => {
   try {
     const body = await readBody(event);
@@ -164,7 +152,7 @@ export const submitQuiz = async (event) => {
         completedDate: new Date(),
         totalScore: totalQuestions,
         obtainedScore: correctCount,
-      });
+      }, { where: { courseId }});
   
       // Generate certificate if passed
       let certificate = null;
@@ -226,8 +214,10 @@ export const addCourse = async (event) => {
       mode: payload.mode,
       isVerified: payload.isVerified,
       thumbnail: payload.thumbnail,
-      courseObjectives: payload.courseObjectives,
-      courseOutcome: payload.courseOutcome,
+      objectives: payload.objectives,
+      outcome: payload.outcome,
+      aim: payload.aim,
+      link: payload.link,
       description: payload.description,
       metaData: payload.metaData || {},
     };
@@ -255,7 +245,7 @@ export const addCourse = async (event) => {
 
     return success({ id: course.id });
   } catch (err) {
-    return error(500, err);
+    return error(500, err.message);
   }
 };
 
