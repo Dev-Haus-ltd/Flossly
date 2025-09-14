@@ -3,6 +3,8 @@ import {
   CourseQuestionaire,
   UserCourseHistory,
   User,
+  Organisation,
+  UserOrganisation,
 } from "../models/index.js";
 
 export const listCourses = async (event) => {
@@ -21,7 +23,7 @@ export const listCourses = async (event) => {
   
       return success(groupedByCategory);
     } catch (err) {
-      return error(500, err.message);
+      return error(500, err);
     }
 };
 
@@ -76,7 +78,7 @@ export const startQuiz = async (event) => {
     }
     return success(questionnaire);
   } catch (err) {
-    return error(500, err.message);
+    return error(500, err);
   }
 };
 // Submit Quiz API - POST /api/cpd/submitQuiz
@@ -145,7 +147,7 @@ export const submitQuiz = async (event) => {
       const passed = percentage >= 50;
   
       // Update user course history
-      await UserCourseHistory.update({
+      await userHistory.update({
         status: passed ? "Completed" : "Failed",
         completedDate: new Date(),
         totalScore: totalQuestions,
@@ -183,8 +185,7 @@ export const submitQuiz = async (event) => {
         certificate,
       });
     } catch (err) {
-      console.log(err.message)
-      return error(500, err.message);
+      return error(500, err);
     }
 };
 
@@ -203,7 +204,7 @@ export const addCourse = async (event) => {
       throw createError({ statusCode: 400, message: "category is required" });
     }
 
-    // Expect camelCase only
+    
     const toNumber = (v) => (v === undefined || v === null || v === "" ? undefined : Number(v));
 
     const normalized = {
@@ -245,5 +246,170 @@ export const addCourse = async (event) => {
     return success({ id: course.id });
   } catch (err) {
     return error(500, err.message);
+  }
+};
+
+// Get user course history API
+export const getUserCourseHistory = async (event) => {
+  try {
+    const { userId } = event.context.user;
+    const query = getQuery(event);
+    const targetUserId = query.userId || userId; // Allow managers to view other users' history
+
+    if (!targetUserId) {
+      throw createError({ statusCode: 400, message: "UserId is required" });
+    }
+
+    // Check if user is requesting their own history or if they're a manager
+    const loggedUser = event.context.user;
+    if (targetUserId !== userId) {
+      // Check if the logged user is a manager of the target user's organization
+      const targetUser = await User.findByPk(targetUserId, {
+        include: [
+          {
+            model: UserOrganisation,
+            as: "userOrganisations",
+            include: [
+              {
+                model: Organisation,
+                as: "organisation",
+                where: { managerId: loggedUser.userId }
+              }
+            ]
+          }
+        ]
+      });
+
+      if (!targetUser || !targetUser.userOrganisations.length) {
+        throw createError({ statusCode: 403, message: "Access denied. You can only view your own course history or manage your team members." });
+      }
+    }
+
+    const courseHistory = await UserCourseHistory.findAll({
+      where: { userId: targetUserId },
+      include: [
+        {
+          model: Course,
+          as: "course",
+          attributes: [
+            "id",
+            "title",
+            "category",
+            "creditHours",
+            "mode",
+            "isVerified",
+            "thumbnail",
+            "description"
+          ]
+        },
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "fullName", "email"]
+        }
+      ],
+      order: [["createdAt", "DESC"]]
+    });
+
+    // Calculate summary statistics
+    const totalCourses = courseHistory.length;
+    const completedCourses = courseHistory.filter(h => h.status === "Completed").length;
+    const inProgressCourses = courseHistory.filter(h => h.status === "In Progress").length;
+    const failedCourses = courseHistory.filter(h => h.status === "Failed").length;
+    const totalCredits = courseHistory
+      .filter(h => h.status === "Completed")
+      .reduce((sum, h) => sum + (h.credits || h.course.creditHours || 0), 0);
+
+    return success({
+      courseHistory,
+      summary: {
+        totalCourses,
+        completedCourses,
+        inProgressCourses,
+        failedCourses,
+        totalCredits
+      }
+    });
+  } catch (err) {
+    return error(500, err);
+  }
+};
+
+// Assign course to team member API (for managers)
+export const assignCourseToUser = async (event) => {
+  try {
+    const body = await readBody(event);
+    const { userId, courseId } = typeof body === "string" ? JSON.parse(body) : body;
+    const { userId: managerId, orgId } = event.context.user;
+
+    if (!userId) {
+      throw createError({ statusCode: 400, message: "userId is required" });
+    }
+    if (!courseId) {
+      throw createError({ statusCode: 400, message: "courseId is required" });
+    }
+
+    // Check if the logged user is a manager
+    const organisation = await Organisation.findOne({
+      where: { id: orgId, managerId: managerId }
+    });
+
+    if (!organisation) {
+      throw createError({ statusCode: 403, message: "Access denied. Only managers can assign courses to team members." });
+    }
+
+    // Check if the target user belongs to the same organization
+    const userOrganisation = await UserOrganisation.findOne({
+      where: { userId, organisationId: orgId }
+    });
+
+    if (!userOrganisation) {
+      throw createError({ statusCode: 400, message: "User does not belong to your organization." });
+    }
+
+    // Check if course exists
+    const course = await Course.findByPk(courseId);
+    if (!course) {
+      throw createError({ statusCode: 404, message: "Course not found" });
+    }
+
+    // Check if course is already assigned to the user
+    const existingAssignment = await UserCourseHistory.findOne({
+      where: { userId, courseId }
+    });
+
+    if (existingAssignment) {
+      throw createError({ statusCode: 400, message: "Course is already assigned to this user" });
+    }
+
+    // Create course assignment with "In Progress" status
+    const courseAssignment = await UserCourseHistory.create({
+      userId,
+      courseId,
+      status: "In Progress"
+    });
+
+    // Fetch the created assignment with course and user details
+    const assignmentWithDetails = await UserCourseHistory.findByPk(courseAssignment.id, {
+      include: [
+        {
+          model: Course,
+          as: "course",
+          attributes: ["id", "title", "category", "creditHours", "mode"]
+        },
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "fullName", "email"]
+        }
+      ]
+    });
+
+    return success({
+      message: "Course assigned successfully",
+      assignment: assignmentWithDetails
+    });
+  } catch (err) {
+    return error(500, err);
   }
 };
