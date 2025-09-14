@@ -3,11 +3,11 @@
     <div class="cust-border d-flex align-center">
       <p class="mr-1">Team CPD</p>
       <p
-        v-if="step===2"
-        @click="step=1"
+        v-if="step === 2"
+        @click="step = 1"
         style="color: blue !important; cursor: pointer"
       >
-        {{ "/Course Details"  }}
+        {{ "/Course Details" }}
       </p>
     </div>
     <div class="mt-5 px-5" v-if="step === 1">
@@ -53,7 +53,7 @@
             >
               <FlossAcademyCourseCard
                 :course="card"
-                @showCourse="showCourse"
+                @handleCourseClick="showCourse"
               />
             </v-col>
 
@@ -65,65 +65,103 @@
         </v-tabs-window-item>
       </v-tabs-window>
     </div>
-    <div class="px-5" v-if="step===2">
-      <FlossAcademyCourseDetail
+    <div class="px-5" v-if="step === 2">
+      <FlossAcademyCourseDetail :course="selectedCourse" />
+    </div>
+    <FlossAcademyAssignedToDialog
+      v-model="assignToDialogOpen"
+      :employees="employees"
+      :selectedUsers="[]"
       :course="selectedCourse"
     />
-
-    </div>
   </div>
 </template>
 <script setup>
+const user = useUser();
 const step = ref(1);
-const cpdStore = useCpdStore()
-const courses = ref([])
-const categories = ref([])
-const selectedCourse = ref(null)
-const cards = [
+const cpdStore = useCpdStore();
+const userStore = useUserStore();
+const courses = ref([]);
+const categories = ref([]);
+const selectedCourse = ref(null);
+const assignToDialogOpen = ref(false);
+const employees = ref([]);
+const currentLoggedInOrgId = computed(
+  () => user.value?.currentLoggedInOrgId || null
+);
+const completedHours = computed(() => {
+  return Number(cpdStore.courseHistory?.summary?.totalCredits || 0) ; 
+});
+
+const totalCpdHours = computed(() => user.value?.requiredCpdHours || 50);
+
+const cards = computed(() => [
   {
     title: "Required CPD Hours",
     points: 200,
     icon: "https://cdn.lordicon.com/odxsdugo.json",
-    totalHours: 12,
+    totalHours: totalCpdHours.value,
   },
   {
     title: "Completed CPD Hours",
     points: 150,
     icon: "https://cdn.lordicon.com/itlfjzxp.json",
-    totalHours: 8,
+    totalHours: completedHours.value,
   },
   {
     title: "Remaining CPD Hours",
     points: 100,
     icon: "https://cdn.lordicon.com/amdfceua.json",
-    totalHours: 5,
+    totalHours: totalCpdHours.value - completedHours.value,
   },
-];
-const tab = ref(0); // "All" by default (id = 0)
+]);
 
+const tab = ref(0); // "All" by default (id = 0)
 
 // Filtering logic
 function filteredCards(category) {
   if (!category) return courses.value;
-  return courses.value[category]
+  return courses.value[category];
 }
-const showCourse = (course) => {
-  selectedCourse.value = course
-  step.value = 2;
+const showCourse = (payload) => {
+  selectedCourse.value = payload.course;
+  if (payload.type === "learnMore") {
+    step.value = 2;
+  } else if (payload.type === "assign") {
+    assignToDialogOpen.value = true;
+  }
 };
 
+const getAllUsers = () => {
+  userStore
+    .getUserList({ roleId: null, orgId: currentLoggedInOrgId.value })
+    .then((res) => {
+      if (res.code === 0) {
+        employees.value = res.data;
+      }
+    });
+};
 onMounted(() => {
-  getCourses()
-})
+  getCourses();
+
+  getAllUsers();
+  getUserCourseHistory();
+});
 
 const getCourses = () => {
   cpdStore.getCourses().then((res) => {
     if (res.code === 0) {
-      courses.value = res.data
-      categories.value = Object.keys(res.data)
+      courses.value = res.data;
+      categories.value = Object.keys(res.data);
     }
-  })
-}
+  });
+};
+const getUserCourseHistory = () => {
+  cpdStore.getUserCourseHistory().then((res) => {
+    if (res.code === 0) {
+    }
+  });
+};
 </script>
 <style scoped lang="scss">
 .parent {

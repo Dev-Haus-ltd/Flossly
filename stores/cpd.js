@@ -5,6 +5,8 @@ export const useCpdStore = defineStore("cpdStore", {
     isLoading: false,
     courses: [],
     myCourses: [],
+    courseHistory: [] 
+
   }),
 
   getters: {},
@@ -51,6 +53,39 @@ export const useCpdStore = defineStore("cpdStore", {
       return new Promise((resolve, reject) => {
         cpdService
           .startQuiz(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    getUserCourseHistory() {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        cpdService
+          .getUserCourseHistory()
+          .then((res) => {
+            this.isLoading = false;
+            if (res.code === 0) {
+              this.courseHistory = res.data;
+            }
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    assignCourseToUser(data) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        cpdService
+          .assignCourseToUser(data)
           .then((res) => {
             this.isLoading = false;
             resolve(res);

@@ -21,7 +21,7 @@
         >
           <FlossAcademyCourseCard
             :course="card"
-            @showCourse="showCourse"
+            @handleCourseClick="showCourse"
             :isMyCourses="true"
           />
         </v-col>
@@ -36,54 +36,35 @@
 <script setup>
 const step = ref(1);
 const selectedCourse = ref(null);
-const cards = ref([
-  {
-    id: 2,
-    title: "Safeguarding Level 1",
-    category: "All",
-    creditHours: "5.00",
-    mode: "eLearning",
-    isVerified: true,
-    thumbnail: "Training",
-    objectives:
-      "<p>By the end of this course, learners will:</p><ul><li>Understand what safeguarding means and why it is important.</li><li>Recognise key signs and types of abuse and neglect.</li><li>Know their individual role and responsibility for safeguarding.</li><li>Know how to respond to safeguarding concerns.</li><li>Understand how and when to report concerns using the correct procedures.</li><li>Value their duty to “whistleblow” in case of unsafe or poor practice.</li></ul>",
-    aim: "To provide all staff and volunteers with the fundamental knowledge and confidence to recognise and report abuse or neglect, fulfilling statutory and ethical duties to safeguard children, young people, and adults at risk.",
-    outcome: "Certificate",
-    description:
-      "It's Safeguarding level 1 course which is basic and first part of the Safeguarding course series",
-    link: "https://www.youtube.com/watch?v=DMENM_KA0wA&ab_channel=CharlottePerospero",
-    metaData: {},
-    createdAt: "2025-09-12T20:31:41.473Z",
-    updatedAt: "2025-09-12T20:31:41.473Z",
-  },
-  {
-    id: 2,
-    title: "Safeguarding Level 2",
-    category: "All",
-    creditHours: "5.00",
-    mode: "eLearning",
-    isVerified: true,
-    thumbnail: "Training",
-    objectives:
-      "<p>By the end of this course, learners will:</p><ul><li>Understand what safeguarding means and why it is important.</li><li>Recognise key signs and types of abuse and neglect.</li><li>Know their individual role and responsibility for safeguarding.</li><li>Know how to respond to safeguarding concerns.</li><li>Understand how and when to report concerns using the correct procedures.</li><li>Value their duty to “whistleblow” in case of unsafe or poor practice.</li></ul>",
-    aim: "To provide all staff and volunteers with the fundamental knowledge and confidence to recognise and report abuse or neglect, fulfilling statutory and ethical duties to safeguard children, young people, and adults at risk.",
-    outcome: "Certificate",
-    description:
-      "It's Safeguarding level 1 course which is basic and first part of the Safeguarding course series",
-    link: "https://www.youtube.com/watch?v=DMENM_KA0wA&ab_channel=CharlottePerospero",
-    metaData: {},
-    createdAt: "2025-09-12T20:31:41.473Z",
-    updatedAt: "2025-09-12T20:31:41.473Z",
-  },
-]);
-const myCourses = ref([
-  { name: "Course A", date: "2025-09-10", status: "Completed" },
-  { name: "Course B", date: "2025-09-05", status: "In Progress" },
-  { name: "Course C", date: "2025-08-28", status: "Pending" },
-]);
-const showCourse = (course) => {
-  selectedCourse.value = course;
-  step.value = 2;
+const cpdStore = useCpdStore();
+const cards = computed(() => {
+  return (cpdStore.courseHistory?.courseHistory || []).map(crd => ({
+    ...crd.course,   
+    status: crd.status 
+  }))
+})
+
+const myCourses = computed(() =>
+  cpdStore.courseHistory?.courseHistory.map((item) => ({
+    name: item.course?.title || "Untitled",
+    date: item.createdAt,
+    status: item.status,
+  }))
+);
+const showCourse = (payload) => {
+  selectedCourse.value = payload.course;
+  if (payload.type === "learnMore") {
+    step.value = 2;
+  }
+};
+onMounted(()=>{
+  getUserCourseHistory()
+})
+const getUserCourseHistory = () => {
+  cpdStore.getUserCourseHistory().then((res) => {
+    if (res.code === 0) {
+    }
+  });
 };
 </script>
 

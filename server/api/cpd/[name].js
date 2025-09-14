@@ -16,7 +16,7 @@ import {
   
         case "startQuiz":
           return await startQuiz(event);
-  
+   
         case "submitQuiz":
           return await submitQuiz(event);
   

@@ -47,7 +47,7 @@
           <!-- Date -->
           <td>
             <div class="px-3">
-              <p class="course-text">{{ course.date }}</p>
+              <p class="course-text">{{ parsedDate(course.date) }}</p>
             </div>
           </td>
 
@@ -106,6 +106,7 @@
 </template>
 
 <script setup>
+import { parsedDate } from '~/lib/dateFormatter';
 const props = defineProps({
   courses: {
     type: Array,

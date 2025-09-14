@@ -3,7 +3,12 @@
     <v-row align="stretch" class="video-row">
       <!-- Left Side: Video -->
       <v-col cols="9" class="d-flex">
-        <video controls :src="course?.link" autoplay  class="course-video flex-grow-1">
+        <video
+          controls
+          :src="course?.link"
+          autoplay
+          class="course-video flex-grow-1"
+        >
           Your browser does not support the video tag.
         </video>
       </v-col>
@@ -17,7 +22,9 @@
           </v-card-title>
 
           <v-card-text class="course-card-body">
-            <p class="placeholder-text">Course content details go here...</p>
+            <p class="placeholder-text pa-3">Title: {{ course?.title }}</p>
+            <p class="placeholder-text pa-3">Mode: {{ course?.mode }}</p>
+            <p class="placeholder-text pa-3">Outcome: {{ course?.outcome }}</p>
           </v-card-text>
         </v-card>
       </v-col>
@@ -37,13 +44,21 @@
 
             <!-- Objectives -->
             <h4 class="section-title">Objectives:</h4>
-           <div v-html="course?.objectives" class="pa-5" style="line-height: 30px;" ></div>
+            <div
+              v-html="course?.objectives"
+              class="pa-5"
+              style="line-height: 30px"
+            ></div>
           </v-card-text>
         </v-card>
       </v-col>
     </v-row>
 
-    <v-row class="mt-4" align="stretch" v-if="!quizStarted">
+    <v-row
+      class="mt-4"
+      align="stretch"
+      v-if="!quizStarted && !notification.message"
+    >
       <!-- Quiz Card -->
       <v-col cols="9">
         <v-card
@@ -59,8 +74,10 @@
                 class="quiz-btn"
                 @click="toggleStartQuizButton = true"
               >
-              <v-icon start color="#737373" class="mr-1 mb-1">mdi-lightbulb-on-outline</v-icon>
-              Complete the course to Start Quiz
+                <v-icon start color="#737373" class="mr-1 mb-1"
+                  >mdi-lightbulb-on-outline</v-icon
+                >
+                Complete the course to Start Quiz
               </v-btn>
             </template>
 
@@ -79,7 +96,11 @@
         </v-card>
       </v-col>
     </v-row>
-    <v-row class="mt-4" align="stretch" v-if="quizStarted">
+    <v-row
+      class="mt-4"
+      align="stretch"
+      v-if="quizStarted && !notification.message"
+    >
       <!-- Quiz Card -->
       <v-col cols="9">
         <v-card class="course-card" :elevation="0">
@@ -124,7 +145,6 @@
                     :value="question.optionD"
                     class="option-item"
                   />
-
                 </v-radio-group>
               </div>
             </div>
@@ -144,6 +164,41 @@
         </v-card>
       </v-col>
     </v-row>
+
+    <v-row class="mt-4" align="stretch" v-if="notification.message">
+      <!-- Quiz Card -->
+      <v-col cols="9">
+        <v-card
+          class="course-card d-flex flex-column justify-center align-center text-center"
+          :elevation="0"
+        >
+          <v-card-title class="course-card-header w-100"> Quiz </v-card-title>
+
+          <v-card-text class="w-70 mt-4 quiz-text">
+            <v-alert
+              v-if="notification.message"
+              :type="notification.type"
+              variant="tonal"
+              border="start"
+              border-color="primary"
+              closable
+              density="compact"
+              width="600"
+              @click:close="initialState"
+            >
+              <template #prepend>
+                <v-icon size="20"></v-icon>
+                <!-- smaller icon -->
+              </template>
+
+              <v-alert-title style="font-size: 16px">
+                {{ notification.message }}
+              </v-alert-title>
+            </v-alert>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
   </div>
 </template>
 
@@ -157,31 +212,81 @@ const props = defineProps({
   },
 });
 
-const cpdStore = useCpdStore()
+const cpdStore = useCpdStore();
 const toggleStartQuizButton = ref(false);
 const quizStarted = ref(false);
-const quizResult = ref(null)
+const quizResult = ref(null);
 
 // Dummy API response
 const questions = ref([]);
 
 // Store selected answers keyed by question id
 const answers = ref({});
+const store = useMainStore();
+const notification = ref({
+  message: "",
+  type: "", // 'success' | 'error' | 'info' | 'warning'
+});
 
-function submitQuiz() {
-  cpdStore.submitQuiz({courseId: props.course.id, answers: answers.value}).then((res) => {
+const submitQuiz = async () => {
+  try {
+    const res = await cpdStore.submitQuiz({
+      courseId: props.course.id,
+      answers: answers.value,
+    });
     if (res.code === 0) {
-      quizResult.value = res.data
+      quizResult.value = res.data;
+
+      notification.value = {
+        message:
+          res.data?.message || res?.message || "Quiz submitted successfully",
+        type: "Success",
+      };
+    } else {
+      store.setSnackbar({
+        title: res.data?.message || res?.message || "Failed to submit quiz",
+        type: "Error",
+      });
     }
-  })
-}
-const startQuiz = () => {
-  quizStarted.value = true;
-  cpdStore.startQuiz({ courseId: props.course.id }).then((res) => {
+  } catch (err) {
+    store.setSnackbar({
+      title: err.message || "Something went wrong while submitting the quiz",
+      type: "Error",
+    });
+  }
+};
+
+const startQuiz = async () => {
+  try {
+    const res = await cpdStore.startQuiz({ courseId: props.course.id });
+
     if (res.code === 0) {
-      questions.value = res.data
+      questions.value = res.data;
+      store.setSnackbar({
+        title: res.data?.message || res?.message || "Quiz started successfully",
+        type: "Success",
+      });
+      quizStarted.value = true;
+    } else {
+      notification.value = {
+        message: res.data?.message || res?.message || "Failed to start quiz",
+        type: "error",
+      };
     }
-  })
+  } catch (err) {
+    store.setSnackbar({
+      title: err.message || "Something went wrong while starting the quiz",
+      type: "Error",
+    });
+  }
+};
+const initialState = () => {
+  notification.value = {
+    message: "",
+    type: "",
+  };
+  quizStarted.value = false;
+  toggleStartQuizButton.value = false;
 };
 </script>
 
@@ -212,16 +317,17 @@ const startQuiz = () => {
 }
 
 .course-card-body {
-  padding: 16px;
   background: #ffffff;
+  padding: 0px 0px 40px 0px;
 }
 
 .placeholder-text {
-  color: #737373;
+  color: #1e1e1e;
   font-size: 14px;
   font-family: Poppins;
+  border-bottom: 1px solid #dbdbdb;
 }
- 
+
 .section-title {
   font-family: Poppins;
   font-weight: 600;
