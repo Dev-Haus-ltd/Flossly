@@ -1,40 +1,18 @@
 <template>
   <div class="mt-6">
-    <v-row align="stretch" class="video-row">
+    <v-row align="start" class="video-row">
       <!-- Left Side: Video -->
-      <v-col cols="9" class="d-flex">
+      <v-col cols="9">
         <video
           controls
           :src="course?.link"
           autoplay
-          class="course-video flex-grow-1"
+          height="400"
+          class="course-video flex-grow-1 mb-3"
         >
           Your browser does not support the video tag.
         </video>
-      </v-col>
-
-      <!-- Right Side: Course Content Card -->
-      <v-col cols="3" class="d-flex">
-        <v-card class="course-card flex-grow-1" :elevation="0">
-          <!-- Header -->
-          <v-card-title class="course-card-header">
-            Course Content
-          </v-card-title>
-
-          <v-card-text class="course-card-body">
-            <p class="placeholder-text pa-3">Title: {{ course?.title }}</p>
-            <p class="placeholder-text pa-3">Mode: {{ course?.mode }}</p>
-            <p class="placeholder-text pa-3">Outcome: {{ course?.outcome }}</p>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
-
-    <!-- Below rows -->
-    <v-row class="mt-4" align="stretch">
-      <!-- Overview Card -->
-      <v-col cols="9">
-        <v-card class="course-card" :elevation="0">
+        <v-card class="course-card mb-3" :elevation="0">
           <v-card-title class="course-card-header"> Overview </v-card-title>
 
           <v-card-text class="pa-4">
@@ -51,18 +29,9 @@
             ></div>
           </v-card-text>
         </v-card>
-      </v-col>
-    </v-row>
-
-    <v-row
-      class="mt-4"
-      align="stretch"
-      v-if="!quizStarted && !notification.message"
-    >
-      <!-- Quiz Card -->
-      <v-col cols="9">
         <v-card
-          class="course-card d-flex flex-column justify-center align-center text-center"
+         v-if="!quizStarted && !notification.message"
+          class="course-card d-flex flex-column justify-center align-center text-center mb-3"
           :elevation="0"
         >
           <v-card-title class="course-card-header w-100"> Quiz </v-card-title>
@@ -94,16 +63,7 @@
             </template>
           </v-card-text>
         </v-card>
-      </v-col>
-    </v-row>
-    <v-row
-      class="mt-4"
-      align="stretch"
-      v-if="quizStarted && !notification.message"
-    >
-      <!-- Quiz Card -->
-      <v-col cols="9">
-        <v-card class="course-card" :elevation="0">
+        <v-card  v-if="quizStarted && !notification.message" class="course-card mb-3" :elevation="0">
           <!-- Quiz Header -->
           <v-card-title class="course-card-header w-100"> Quiz </v-card-title>
 
@@ -162,14 +122,9 @@
             </div>
           </v-card-text>
         </v-card>
-      </v-col>
-    </v-row>
-
-    <v-row class="mt-4" align="stretch" v-if="notification.message">
-      <!-- Quiz Card -->
-      <v-col cols="9">
         <v-card
-          class="course-card d-flex flex-column justify-center align-center text-center"
+        v-if="notification.message"
+          class="course-card d-flex mb-3 flex-column justify-center align-center text-center"
           :elevation="0"
         >
           <v-card-title class="course-card-header w-100"> Quiz </v-card-title>
@@ -191,6 +146,22 @@
                <v-btn @click="initialState" class="px-7" variant="outlined" color="#000">Close</v-btn>
               </v-alert-title>
             </v-alert>
+          </v-card-text>
+        </v-card>
+      </v-col>
+
+      <!-- Right Side: Course Content Card -->
+      <v-col cols="3" class="d-flex">
+        <v-card class="course-card flex-grow-1" :elevation="0">
+          <!-- Header -->
+          <v-card-title class="course-card-header">
+            Course Content
+          </v-card-title>
+
+          <v-card-text class="course-card-body">
+            <p class="placeholder-text pa-3">Title: {{ course?.title }}</p>
+            <p class="placeholder-text pa-3">Mode: {{ course?.mode }}</p>
+            <p class="placeholder-text pa-5" v-html="course?.objectives"></p>
           </v-card-text>
         </v-card>
       </v-col>
@@ -289,7 +260,6 @@ const initialState = () => {
 <style scoped>
 .course-video {
   width: 100%;
-  height: 100%; /* match column height */
   object-fit: cover;
   border: 1px solid #dbdbdb;
 }

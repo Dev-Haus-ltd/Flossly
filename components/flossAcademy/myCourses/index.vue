@@ -11,7 +11,7 @@
       </p>
     </div>
     <div class="px-5" v-if="step === 1">
-      <v-row class="py-6" align="stretch">
+      <v-row v-if="cards && cards.length" class="py-6" align="stretch">
         <v-col
           v-for="(card, index) in cards"
           :key="index"
@@ -38,14 +38,14 @@ const step = ref(1);
 const selectedCourse = ref(null);
 const cpdStore = useCpdStore();
 const cards = computed(() => {
-  return (cpdStore.courseHistory?.courseHistory || []).map(crd => ({
+  return (cpdStore.courseHistory?.courseHistory || [])?.map(crd => ({
     ...crd.course,   
     status: crd.status 
   }))
 })
 
 const myCourses = computed(() =>
-  cpdStore.courseHistory?.courseHistory.map((item) => ({
+  cpdStore.courseHistory?.courseHistory?.map((item) => ({
     name: item.course?.title || "Untitled",
     date: item.createdAt,
     status: item.status,

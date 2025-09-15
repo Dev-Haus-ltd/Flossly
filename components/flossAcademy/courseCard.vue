@@ -2,7 +2,7 @@
   <v-card class="course-card pa-1" flat>
     <!-- Image -->
     <v-img
-      :src="course?.thumbnail"
+      :src="getImage()"
       height="240px"
       cover
       class="card-image rounded-lg"
@@ -50,13 +50,12 @@
 
         <!-- continue -->
         <v-btn
-          v-if="course.status==='In progress'"
-            variant="text"
+          v-if="course.status==='In Progress'"
+            variant="flat"
             size="default"
-            class="assign-btn"
+            color="primary"
             append-icon="mdi-arrow-top-right"
-            @click="onAssign"
-            flat
+            @click="onLearnMore"
           >
            Continue
           </v-btn>
@@ -102,6 +101,10 @@
 </template>
 
 <script setup>
+import safeGuard from '@/assets/images/courses/safeguard.png'
+import act from '@/assets/images/courses/act.png'
+import health from '@/assets/images/courses/health.png'
+import infection from '@/assets/images/courses/infection.png'
 const emit = defineEmits(["handleCourseClick"]);
 const props = defineProps({
   course: {
@@ -114,11 +117,22 @@ const props = defineProps({
   },
 });
 
-function onLearnMore() {
+const getImage = () => {
+  if (!props.course) return
+  if (props.course.title === 'Safeguarding Level 1' || props.course.title === 'Safeguarding Level 2')
+  return safeGuard
+else if (props.course.title === 'Infection Control for Infection Control Leads')
+return infection
+else if (props.course.title === 'Health and Safety Awareness')
+return health
+else return act
+}
+
+const onLearnMore = () => {
   emit("handleCourseClick", { course: props.course, type: "learnMore" });
 }
 
-function onAssign() {
+const onAssign = () => {
   emit("handleCourseClick", { course: props.course, type: "assign" });
 }
 </script>
