@@ -163,6 +163,11 @@ const onSubmit = async () => {
           };
           //set snack
           emit("close");
+        } else {
+          mainStore.setSnackbar({
+    type: 'Error',
+    title: res.data.message || res.data,
+  });
         }
       })
       .catch((err) => {
