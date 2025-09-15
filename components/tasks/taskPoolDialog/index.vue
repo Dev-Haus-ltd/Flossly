@@ -100,10 +100,10 @@
                   </div>
                 </div>
                 <TasksTaskPoolDialogTaskRow
-                  v-for="item in tasks.filter((x) => x.title.toLowerCase().includes(search))"
+                  v-for="item in tasks.filter((x) => x?.title?.toLowerCase().includes(search))"
                   :key="item.id"
                   :id="item.id"
-                  :title="item.title + ' --- ' + item.id"
+                  :title="item.title"
                   v-model:checked="item.checked"
                   @checked="handleCheck"
                 />
