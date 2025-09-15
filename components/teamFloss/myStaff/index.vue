@@ -52,6 +52,7 @@
     :teams="filteredTeams"
     :selectedHeaders="selectedHeaders"
     :search="search"
+    :roleList="rolesList"
     @add="handleAdd"
     @onUserSelect="getUserDetails" 
   />

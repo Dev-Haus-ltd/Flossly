@@ -47,22 +47,7 @@
 </template>
 <script setup>
 const mainStore = useMainStore();
-const { selected, column } = defineProps(["selected", "column"]);
+const { selected, column } = defineProps(["selected", "column", "rolesList"]);
 const emit = defineEmits(["update"]);
-const rolesList = ref([]);
-const getRoles = () => {
-  mainStore
-    .getRoles()
-    .then((res) => {
-      if (res.code === 0 && res.data) {
-        rolesList.value = res.data;
-      }
-    })
-    .catch((err) => {
-      return err;
-    });
-};
-onMounted(() => {
-  getRoles();
-});
+
 </script>

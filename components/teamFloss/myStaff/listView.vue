@@ -110,6 +110,7 @@
               <DataTableColumnsRoles
                 :selected="item"
                 :column="col"
+                :rolesList="roleList"
                 @update="updateValueRow(item, 'role')"
               />
             </template>
@@ -172,6 +173,7 @@ const props = defineProps({
   teams: { type: Array, required: true },
   selectedHeaders: { type: Array, required: true },
   search: { type: String, default: "" },
+  roleList: { type: Array, default: []}
 });
 
 const focusedField = ref({});
