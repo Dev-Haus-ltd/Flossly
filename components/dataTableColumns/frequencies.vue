@@ -11,7 +11,7 @@
       <template #activator="{ props }">
         <p
           v-bind="props"
-        style="width: 100%;"> {{ selected?.frequency }}</p>
+        style="width: 100%;"> {{ selected?.frequency || 'N/A' }}</p>
       </template>
 
       <v-card width="250" class="pa-4">
