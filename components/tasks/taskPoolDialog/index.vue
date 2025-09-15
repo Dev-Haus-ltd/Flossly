@@ -60,6 +60,7 @@
                   background-color: #f1f1f1;
                 "
               >
+           
                 <div class="d-flex align-center">
                   <v-icon
                     @click="subCategoryView = true"
@@ -71,6 +72,18 @@
                   <p style="font-size: 16px">{{ selectedSubCategory.name }}</p>
                 </div>
               </v-card-title>
+              <v-text-field
+            v-model="search"
+            placeholder="Search"
+            append-inner-icon="mdi-magnify"
+            variant="solo"
+            density="compact"
+            hide-details
+            bg-color="#FAFAFA"
+            flat
+            class="ma-2"
+            width="500"
+          />
               <v-list v-if="tasks.length" class="pa-0">
                 <div class="checklist-row has-border" style="background-color: #f6f6f6;">
                   <div class="table-cell checkbox-cell">
@@ -87,10 +100,10 @@
                   </div>
                 </div>
                 <TasksTaskPoolDialogTaskRow
-                  v-for="item in tasks"
+                  v-for="item in tasks.filter((x) => x.title.toLowerCase().includes(search))"
                   :key="item.id"
                   :id="item.id"
-                  :title="item.title"
+                  :title="item.title + ' --- ' + item.id"
                   v-model:checked="item.checked"
                   @checked="handleCheck"
                 />
@@ -133,6 +146,7 @@ const subCategories = ref();
 const subCategoryView = ref(true);
 const selectedTasks = ref([]);
 const selectedSubCategory = ref(null);
+const search = ref("")
 const props = defineProps({
   modelValue: Boolean,
 });
