@@ -7,14 +7,14 @@
       <!-- Tabs -->
       <v-tabs v-model="currentTab" class="custom-tabs" slider-color="primary">
         <v-tab class="tab-text" :value="0"> Calender </v-tab>
-        <v-tab class="tab-text" :value="1"> Pending Requests </v-tab>
+        <v-tab class="tab-text" :value="1" v-if="isManager"> Pending Requests </v-tab>
       </v-tabs>
 
       <!-- Tab Content -->
       <v-tabs-window v-model="currentTab">
         <v-tabs-window-item :value="0">
           <TeamFlossHolidayTrackerCalender
-            v-if="teamHolidays.length"
+         
             :events="teamHolidays"
             @onUpdate="getTeamHolidays"
           />
@@ -27,6 +27,7 @@
 </template>
 
 <script setup>
+const { isManager } = useUser();
 const userStore = useUserStore();
 const teamHolidays = ref([]);
 const currentTab = ref(0);

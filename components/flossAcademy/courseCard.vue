@@ -1,5 +1,5 @@
 <template>
-  <v-card class="course-card pa-1" flat>
+  <v-card class="course-card pa-1 h-100" flat>
     <!-- Image -->
     <v-img
       :src="getImage()"
@@ -86,6 +86,7 @@
 
         <!-- Assign To -->
         <v-btn
+        v-if="isManager"
           variant="text"
           size="default"
           class="assign-btn"
@@ -106,6 +107,7 @@ import act from '@/assets/images/courses/act.png'
 import health from '@/assets/images/courses/health.png'
 import infection from '@/assets/images/courses/infection.png'
 const emit = defineEmits(["handleCourseClick"]);
+const { isManager } = useUser();
 const props = defineProps({
   course: {
     type: Object,

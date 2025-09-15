@@ -42,7 +42,7 @@
         <v-form ref="formRef" @submit.prevent="onSubmit">
           <v-row>
             <!-- Select Employee -->
-            <v-col cols="6">
+            <v-col cols="6" v-if="isManager">
               <label class="fld-lbl">Select Employee</label>
               <v-select
                 v-model="form.userId"
@@ -154,7 +154,7 @@
             </v-col>
 
             <!-- Leave Hours -->
-            <v-col v-if="props.origin !== 'holidays'" cols="6">
+            <v-col cols="6">
               <label class="fld-lbl">Leave Hours</label>
               <v-select
                 v-model="form.totalHours"
@@ -167,7 +167,7 @@
             </v-col>
 
             <!-- Pay -->
-            <v-col v-if="props.origin !== 'holidays'" cols="6">
+            <v-col cols="6">
               <label class="fld-lbl">Is this leave paid?</label>
               <v-switch v-model="form.isPaid" inset color="primary" />
             </v-col>
@@ -189,7 +189,7 @@
             </v-col>
 
             <!-- Supporting Documents -->
-            <v-col v-if="props.origin !== 'holidays'" cols="12">
+            <v-col cols="12">
               <div v-if="!uploadedFile.length" class="mb-2">
                 <div>
                   <p class="text-body-2 text-grey-darken-1">
@@ -270,6 +270,8 @@
 <script setup>
 import { format, differenceInCalendarDays, parseISO } from "date-fns";
 const userStore = useUserStore();
+const mainStore = useMainStore();
+const { user, isManager } = useUser();
 
 const props = defineProps({
   modelValue: Boolean,
@@ -295,7 +297,11 @@ watch(
   modelValueRef,
   (newValue) => {
     if (newValue) {
-      setUsers();
+      if (isManager.value) {
+        setUsers();
+      } else {
+        form.value.userId = user.value.id;
+      }
     }
   },
   { immediate: true }
@@ -415,12 +421,30 @@ const onSubmit = async () => {
       const localUser = JSON.parse(localStorage.getItem("user"));
       formData.append("organisationId", localUser.currentLoggedInOrgId);
     }
-    userStore.applyLeave(formData).then((res) => {
+    try {
+      const res = await userStore.applyLeave(formData);
+
       if (res.code === 0) {
         emit("success");
         resetForm();
+        mainStore.setSnackbar({
+          title:
+            res?.message || res?.data?.message || "Leave applied successfully",
+          type: "success",
+        });
+      } else {
+        mainStore.setSnackbar({
+          title: res?.message || res?.data?.message || "Leave apply failed",
+          type: "error",
+        });
       }
-    });
+    } catch (err) {
+      mainStore.setSnackbar({
+        title:
+          err.message || "An unexpected error occurred while applying leave",
+        type: "error",
+      });
+    }
   }
 };
 const resetForm = () => {

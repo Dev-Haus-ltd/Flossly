@@ -153,5 +153,16 @@ export default {
           reject(err);
         });
     });
+  },
+  getUserRotas(data) {
+    return new Promise((resolve, reject) => {
+      Post("/rota/myRotas",data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
   }
 };

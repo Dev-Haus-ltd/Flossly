@@ -1,5 +1,5 @@
 <template>
-  <div v-if="events.length" class="main">
+  <div class="main">
     <div class="d-flex align-center justify-space-between my-2">
       <div class="d-flex align-center">
         <TeamFlossHolidayTrackerFilters @update:filters="onFiltersUpdated" />

@@ -123,7 +123,9 @@
                     </span>
 
                     <!-- Existing three-dot menu -->
-                    <v-menu>
+                    <v-menu 
+                      v-if="isManager"
+                    >
                       <template #activator="{ props }">
                         <v-btn
                           v-bind="props"
@@ -414,7 +416,12 @@
         </div>
       </div>
     </div>
-    <div class="rota-grid row" :style="gridStyle">
+    <div
+    v-if="isManager"
+     class="rota-grid row" 
+     :style="gridStyle" 
+    
+    >
       <div
         class="staff-col first-col-color d-flex align-center justify-center pa-4 pos-sticky-left"
       >
@@ -465,7 +472,7 @@
 
 <script setup>
 import { differenceInCalendarDays, addDays, parseISO, format } from "date-fns";
-
+const { isManager } = useUser();
 const { shifts, rota, users, selectedView } = defineProps({
   shifts: Array,
   rota: Object,
@@ -590,6 +597,10 @@ const getDayTotalHours = (date) =>
     .reduce((acc, s) => acc + getShiftDuration(s), 0);
 
 const addShift = (user, day) => {
+ if(!isManager.value){
+  return
+ }
+
   emit("handleShiftEdit", {});
   emit("onAddShift", { user, day });
 };

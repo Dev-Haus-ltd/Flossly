@@ -2,24 +2,14 @@
   <div class="pa-5 bg-white">
     <div class="mt-5">
       <!-- Title -->
-      <h3 class="rota-title mb-2">Dentozen London</h3>
+      <h3 class="rota-title mb-2">{{ rota.name }}</h3>
 
       <!-- Top Bar -->
       <div class="d-flex justify-space-between align-center">
         <!-- Left Side -->
         <div class="d-flex align-center ga-3">
           <!-- Search -->
-          <v-text-field
-            v-model="searchCal"
-            variant="solo"
-            flat
-            density="compact"
-            class="input-bordered"
-            append-inner-icon="mdi-magnify"
-            placeholder="Search"
-            hide-details
-            style="width: 240px"
-          />
+        
 
           <!-- Filter Menu -->
           <v-menu
@@ -72,6 +62,7 @@
         </div>
         <div class="d-flex align-center ga-3">
           <v-btn
+          v-if="isManager"
             color="secondary"
             class="text-none rounded-lg"
             prepend-icon="mdi-open-in-new"
@@ -107,12 +98,13 @@
 </template>
 
 <script setup>
+
 const props = defineProps({
   shifts: Array,
   rota: Object,
   users: Array,
 });
-
+const { isManager } = useUser();
 const emit = defineEmits(["onChangeStatus", "onUpdate", "onAddUser"]);
 const searchCal = ref("");
 const shiftData = ref({});

@@ -63,6 +63,7 @@ const allRotaUsers = ref([]);
 const allShifts = ref([]);
 const activeComponent = ref(1);
 const selectedRota = ref(null);
+const { isManager} = useUser()
 onMounted(() => {
   getRotas();
 });
@@ -98,12 +99,21 @@ watch(activeComponent, (newVal) => {
   console.log(newVal);
 });
 const getRotas = async () => {
-  const res = await rotaStore.getRotas();
-  if (res.code === 0) {
-    rotas.value = res.data;
-    console.log(rotas.value);
+  let res
+
+  if (isManager.value) {
+    res = await rotaStore.getRotas()
+
+  } else {
+    res = await rotaStore.getUserRotas()
+
   }
-};
+
+  if (res.code === 0) {
+    rotas.value = res.data
+    console.log(rotas.value)
+  }
+}
 
 const changeRotaStatus = async (data) => {
   let res = null;

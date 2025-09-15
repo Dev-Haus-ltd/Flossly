@@ -76,8 +76,7 @@ export const getRotas = async (event) => {
 };
 
 export const getUserRotas = async (event) => {
-  const body = await readBody(event)
-  const { userId } = JSON.parse(body)
+  const { userId } = event.context.user
   try {
     if (!userId) throw createError({ message: "UserID required"})
     const rotas = await Rota.findAll({

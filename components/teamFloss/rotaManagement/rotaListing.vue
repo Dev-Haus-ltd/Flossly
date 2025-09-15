@@ -71,6 +71,7 @@
 
             <!-- Create new rota -->
             <v-btn
+              v-if="isManager"
               color="primary"
               class="rounded-lg"
               @click="emit('changeComponent', 2)"
@@ -211,12 +212,14 @@
                         @click.stop="onView(item)"
                       />
                       <img
+                        v-if="isManager"
                         src="@/assets/icons/teamfloss/userDetails/edit.svg"
                         alt="Edit"
                         class="action-icon ml-3"
                         @click.stop="onEdit(item)"
                       />
                       <img
+                        v-if="isManager"
                         src="@/assets/icons/teamfloss/userDetails/unpublish.svg"
                         alt="Edit"
                         class="action-icon ml-3"
@@ -357,12 +360,14 @@
                         @click.stop="onView(item)"
                       />
                       <img
+                        v-if="isManager"
                         src="@/assets/icons/teamfloss/userDetails/edit.svg"
                         alt="Edit"
                         class="action-icon ml-3"
                         @click.stop="onEdit(item)"
                       />
                       <img
+                        v-if="isManager"
                         src="@/assets/icons/teamfloss/userDetails/publish.svg"
                         alt="Publish"
                         class="action-icon ml-3"
@@ -394,6 +399,7 @@
   </div>
 </template>
 <script setup>
+const { isManager } = useUser();
 import { parsedDate } from "~/lib/dateFormatter";
 const { rotaList } = defineProps({
   rotaList: Array,

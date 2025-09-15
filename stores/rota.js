@@ -218,5 +218,20 @@ export const useRotaStore = defineStore("rotaStore", {
           });
       });
     },
+    getUserRotas(data) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        rotaService
+          .getUserRotas(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
   },
 });
