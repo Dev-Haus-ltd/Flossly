@@ -905,7 +905,6 @@ export const addTaskChecklist = async (event) => {
   const body = await readBody(event);
   const {
     taskId,
-    organisationId,
     question,
     category,
     fieldOneTitle,
@@ -915,7 +914,7 @@ export const addTaskChecklist = async (event) => {
     showDate = false,
     radioValue = "N/A",
   } = body;
-  if (!taskId || !organisationId || !question) {
+  if (!taskId || !question) {
     throw createError({
       message: "taskId, organisationId, and question are required",
     });
@@ -938,8 +937,7 @@ export const addTaskChecklist = async (event) => {
     );
     const userTasks = await UserTask.findAll({
       where: {
-        taskId,
-        organisationId,
+        taskId
       },
     });
     const userChecklistPayload = userTasks.map((task) => ({
