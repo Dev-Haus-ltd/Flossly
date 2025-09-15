@@ -180,11 +180,12 @@ export const profile = async (event) => {
 
 export const updateProfile = async (event) => {
   const body = await readBody(event);
-  const { id, phone, address, dob, gender, nextOfKin, nextOfKinContact } =
+  const { id, phone, address, dob, gender, nextOfKin, fullName, nextOfKinContact } =
     JSON.parse(body);
   try {
     const user = await User.findByPk(id);
     user.phone = phone || user.phone;
+    user.fullName = fullName || user.fullName
     user.address = address || user.address;
     user.dob = dob || user.dob;
     user.gender = gender || user.gender;

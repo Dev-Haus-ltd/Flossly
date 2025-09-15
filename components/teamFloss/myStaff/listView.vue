@@ -90,6 +90,7 @@
                   :variant="isFocused(item.id, 'name') ? 'outlined' : 'plain'"
                   @focus="setFocus(item.id, 'name', true)"
                   @blur="updateValueRow(item, 'name')"
+                  @keyup.enter="updateUser(item, 'name')"
                   density="compact"
                   hide-details
                   class="small-input"
@@ -179,6 +180,8 @@ const props = defineProps({
 const focusedField = ref({});
 
 const openedPanels = ref([0]);
+const authStore = useAuthStore()
+const mainStore = useMainStore()
 const emit = defineEmits(["add", "details"]);
 
 const formattedDate = (dateStr) => {
@@ -191,29 +194,32 @@ const setFocus = (id, key, state) => {
   focusedField.value[`${id}-${key}`] = state;
 };
 const updateValueRow = (row, key) => {
-  console.log(row);
   setFocus(row.id, key, false);
-  // taskStore
-  //   .updateUserTask(row)
-  //   .then((res) => {
-  //     if (res.code !== 0) {
-  //       mainStore.setSnackbar({
-  //         title: "Error while updating the task",
-  //         type: "error",
-  //       });
-  //     } else {
-  //       if (key === 'status') {
-  //         emit("onUpdate")
-  //       }
-  //     }
-  //   })
-  //   .catch((err) => {
-  //     mainStore.setSnackbar({
-  //       title: "Error while updating the task",
-  //       type: "error",
-  //     });
-  //   });
 };
+const updateUser = (user, key) => {
+  setFocus(user.id, key, false);
+  authStore
+    .updateProfile(user)
+    .then((res) => {
+      if (res.code === 0) {
+        mainStore.setSnackbar({
+          title: res?.data?.message || "Profile updated successfully",
+          type: "success",
+        })
+      } else {
+        mainStore.setSnackbar({
+          title: res?.data?.message || res?.message || "Failed to update profile",
+          type: "error",
+        })
+      }
+    })
+    .catch((err) => {
+      mainStore.setSnackbar({
+        title: err?.message || "Something went wrong",
+        type: "error",
+      })
+    })
+}
 </script>
 
 <style scoped>

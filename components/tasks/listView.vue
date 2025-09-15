@@ -592,16 +592,16 @@ watch(
 const emit = defineEmits(["onFilter", "onUpdate", "updateSelectedRowItems"]);
 const fixedColumnOrder = [
   "title",
-  "frequency",
   "priority.name",
+  "taskDetails.category.name",
+  "frequency",
   "assignedUser.fullName",
+  "createdAt",
   "dueDate",
   "comments",
   "documentLink",
   "assignedBy",
   "attachments",
-  "createdAt",
-  "taskDetails.category.name",
   "taskDetails.description",
   "updatedAt",
 ];
