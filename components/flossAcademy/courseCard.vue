@@ -17,7 +17,7 @@
           <v-icon size="16" color="#737373" class="mr-1"
             >mdi-clock-outline</v-icon
           >
-          <span class="time-text">{{ course?.creditHours }}</span>
+          <span class="time-text">{{ course?.creditHours }} hrs</span>
         </div>
 
         <!-- Verified -->
