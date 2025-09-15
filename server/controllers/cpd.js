@@ -8,28 +8,26 @@ import {
 } from "../models/index.js";
 
 export const listCourses = async (event) => {
-    try {
-      const courses = await Course.findAll({
-        order: [["createdAt", "DESC"]],
-      });
-  
-      const groupedByCategory = courses.reduce((acc, course) => {
-        const coursePlain = course.get({ plain: true });
-        const cat = coursePlain.category || "Uncategorized";
-        if (!acc[cat]) acc[cat] = [];
-        acc[cat].push(coursePlain);
-        return acc;
-      }, {});
-  
-      return success(groupedByCategory);
-    } catch (err) {
-      return error(500, err);
-    }
+  try {
+    const courses = await Course.findAll({
+      order: [["createdAt", "DESC"]],
+    });
+
+    const groupedByCategory = courses.reduce((acc, course) => {
+      const coursePlain = course.get({ plain: true });
+      const cat = coursePlain.category || "Uncategorized";
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(coursePlain);
+      return acc;
+    }, {});
+
+    return success(groupedByCategory);
+  } catch (err) {
+    return error(500, err);
+  }
 };
 
-export const myCourses = async (event) => {
-  
-}
+export const myCourses = async (event) => {};
 export const startQuiz = async (event) => {
   try {
     const body = await readBody(event);
@@ -59,7 +57,11 @@ export const startQuiz = async (event) => {
         status: "In Progress",
       });
     } else if (userHistory.status === "Completed") {
-      throw createError({ message: `You have already completed this course on ${new Date(userHistory.completedDate).toLocaleDateString()}` });
+      throw createError({
+        message: `You have already completed this course on ${new Date(
+          userHistory.completedDate
+        ).toLocaleDateString()}`,
+      });
     }
     const questionnaire = await CourseQuestionaire.findAll({
       where: { courseId },
@@ -83,111 +85,122 @@ export const startQuiz = async (event) => {
 };
 // Submit Quiz API - POST /api/cpd/submitQuiz
 export const submitQuiz = async (event) => {
-    try {
-      const body = await readBody(event);
-      const { courseId, answers } = typeof body === "string" ? JSON.parse(body) : body;
-      const { userId } = event.context.user || {};
-  
-      if (!userId) {
-        throw createError({ statusCode: 400, message: "UserId is required" });
-      }
-      if (!courseId) {
-        throw createError({ message: "courseId is required" });
-      }
-      if (!answers || (typeof answers !== "object")) {
-        throw createError({ message: "answers are required" });
-      }
-  
-      // Make sure course exists
-      const course = await Course.findByPk(courseId);
-      if (!course) {
-        throw createError({ message: "course not found" });
-      }
-  
-      // Find user course history
-      const userHistory = await UserCourseHistory.findOne({
-        where: { userId, courseId },
-        include: [
-          { model: Course, as: "course" },
-          { model: User, as: "user", attributes: ["id", "fullName", "email"] },
-        ],
+  try {
+    const body = await readBody(event);
+    const { courseId, answers } =
+      typeof body === "string" ? JSON.parse(body) : body;
+    const { userId } = event.context.user || {};
+
+    if (!userId) {
+      throw createError({ statusCode: 400, message: "UserId is required" });
+    }
+    if (!courseId) {
+      throw createError({ message: "courseId is required" });
+    }
+    if (!answers || typeof answers !== "object") {
+      throw createError({ message: "answers are required" });
+    }
+
+    // Make sure course exists
+    const course = await Course.findByPk(courseId);
+    if (!course) {
+      throw createError({ message: "course not found" });
+    }
+
+    // Find user course history
+    const userHistory = await UserCourseHistory.findOne({
+      where: { userId, courseId },
+      include: [
+        { model: Course, as: "course" },
+        { model: User, as: "user", attributes: ["id", "fullName", "email"] },
+      ],
+    });
+
+    if (!userHistory) {
+      throw createError({
+        message: "Course history not found. Please start the quiz first.",
       });
-  
-      if (!userHistory) {
-        throw createError({ message: "Course history not found. Please start the quiz first." });
+    }
+    if (userHistory.status === "Completed") {
+      throw createError({ message: "Quiz already submitted" });
+    }
+
+    // Fetch all questions for the course
+    const questions = await CourseQuestionaire.findAll({
+      where: { courseId },
+      attributes: ["id", "correctAnswer"],
+      order: [["id", "ASC"]],
+    });
+
+    if (!questions.length) {
+      throw createError({ message: "No questions found for this course" });
+    }
+
+    // Score calculation
+    // Expected answers format: { [questionId]: "A" | "B" | "C" | "D" } OR the actual answer string matching correctAnswer
+    // We will compare by string equality with correctAnswer.
+    let correctCount = 0;
+    for (const q of questions) {
+      const userAnswer = answers[q.id];
+      if (
+        userAnswer &&
+        String(userAnswer).trim() === String(q.correctAnswer).trim()
+      ) {
+        correctCount++;
       }
-      if (userHistory.status === "Completed") {
-        throw createError({ message: "Quiz already submitted" });
-      }
-  
-      // Fetch all questions for the course
-      const questions = await CourseQuestionaire.findAll({
-        where: { courseId },
-        attributes: ["id", "correctAnswer"],
-        order: [["id", "ASC"]],
-      });
-  
-      if (!questions.length) {
-        throw createError({ message: "No questions found for this course" });
-      }
-  
-      // Score calculation
-      // Expected answers format: { [questionId]: "A" | "B" | "C" | "D" } OR the actual answer string matching correctAnswer
-      // We will compare by string equality with correctAnswer.
-      let correctCount = 0;
-      for (const q of questions) {
-        const userAnswer = answers[q.id];
-        if (userAnswer && String(userAnswer).trim() === String(q.correctAnswer).trim()) {
-          correctCount++;
-        }
-      }
-  
-      const totalQuestions = questions.length;
-      const percentage = (correctCount / totalQuestions) * 100;
-      const passed = percentage >= 50;
-  
-      // Update user course history
-      await userHistory.update({
+    }
+
+    const totalQuestions = questions.length;
+    const percentage = (correctCount / totalQuestions) * 100;
+    const passed = percentage >= 50;
+
+    // Update user course history
+    await userHistory.update(
+      {
         status: passed ? "Completed" : "Failed",
         completedDate: new Date(),
         totalScore: totalQuestions,
         obtainedScore: correctCount,
-      }, { where: { courseId }});
-  
-      // Generate certificate if passed
-      let certificate = null;
-      if (passed) {
-        certificate = {
-          id: `CERT-${userHistory.id}-${Date.now()}`,
-          user_name: userHistory.user.fullName,
-          course_title: userHistory.course.title,
-          completion_date: userHistory.completedDate,
-          score: `${correctCount}/${totalQuestions}`,
-          percentage: Math.round(percentage),
-          credit_hours: userHistory.course.credit_hours,
-        };
-      }
-  
-      return success({
-        message: `Congratulations! You've completed the course with ${Math.round(percentage)}% score. You'll get the Certificate in 2 days.`,
-        result: {
-          status: userHistory.status,
-          score: `${correctCount}/${totalQuestions}`,
-          percentage: Math.round(percentage),
-          passed,
-          completed_date: userHistory.completedDate,
-        },
-        course: {
-          id: userHistory.course.id,
-          title: userHistory.course.title,
-          category: userHistory.course.category,
-          credit_hours: userHistory.course.credit_hours,
-        },
-        certificate,
-      });
-    } catch (err) {
-      return error(500, err.message);
+      },
+      { where: { courseId } }
+    );
+
+    // Generate certificate if passed
+    let certificate = null;
+    if (passed) {
+      certificate = {
+        id: `CERT-${userHistory.id}-${Date.now()}`,
+        user_name: userHistory.user.fullName,
+        course_title: userHistory.course.title,
+        completion_date: userHistory.completedDate,
+        score: `${correctCount}/${totalQuestions}`,
+        percentage: Math.round(percentage),
+        credit_hours: userHistory.course.credit_hours,
+      };
     }
+
+    return success({
+      message: `Congratulations! You've completed the course with ${Math.round(
+        percentage
+      )}% score. You'll get the Certificate in 2 days.`,
+      result: {
+        status: userHistory.status,
+        score: `${correctCount}/${totalQuestions}`,
+        percentage: Math.round(percentage),
+        passed,
+        completed_date: userHistory.completedDate,
+      },
+      course: {
+        id: userHistory.course.id,
+        title: userHistory.course.title,
+        category: userHistory.course.category,
+        credit_hours: userHistory.course.credit_hours,
+      },
+      certificate,
+    });
+  } catch (err) {
+    return error(500, err.message);
+  }
 };
 
 export const addCourse = async (event) => {
@@ -205,8 +218,8 @@ export const addCourse = async (event) => {
       throw createError({ statusCode: 400, message: "category is required" });
     }
 
-    
-    const toNumber = (v) => (v === undefined || v === null || v === "" ? undefined : Number(v));
+    const toNumber = (v) =>
+      v === undefined || v === null || v === "" ? undefined : Number(v);
 
     const normalized = {
       title: requiredTitle,
@@ -274,15 +287,19 @@ export const getUserCourseHistory = async (event) => {
               {
                 model: Organisation,
                 as: "organisation",
-                where: { managerId: loggedUser.userId }
-              }
-            ]
-          }
-        ]
+                where: { managerId: loggedUser.userId },
+              },
+            ],
+          },
+        ],
       });
 
       if (!targetUser || !targetUser.userOrganisations.length) {
-        throw createError({ statusCode: 403, message: "Access denied. You can only view your own course history or manage your team members." });
+        throw createError({
+          statusCode: 403,
+          message:
+            "Access denied. You can only view your own course history or manage your team members.",
+        });
       }
     }
 
@@ -303,26 +320,32 @@ export const getUserCourseHistory = async (event) => {
             "objectives",
             "aim",
             "outcome",
-            "description"
-          ]
+            "description",
+          ],
         },
         {
           model: User,
           as: "user",
-          attributes: ["id", "fullName", "email"]
-        }
+          attributes: ["id", "fullName", "email"],
+        },
       ],
-      order: [["createdAt", "DESC"]]
+      order: [["createdAt", "DESC"]],
     });
 
     // Calculate summary statistics
     const totalCourses = courseHistory.length;
-    const completedCourses = courseHistory.filter(h => h.status === "Completed").length;
-    const inProgressCourses = courseHistory.filter(h => h.status === "In Progress").length;
-    const failedCourses = courseHistory.filter(h => h.status === "Failed").length;
+    const completedCourses = courseHistory.filter(
+      (h) => h.status === "Completed"
+    ).length;
+    const inProgressCourses = courseHistory.filter(
+      (h) => h.status === "In Progress"
+    ).length;
+    const failedCourses = courseHistory.filter(
+      (h) => h.status === "Failed"
+    ).length;
     const totalCredits = courseHistory
-      .filter(h => h.status === "Completed")
-      .reduce((sum, h) => sum + (h.credits || h.course.creditHours || 0), 0);
+      .filter((h) => h.status === "Completed")
+      .reduce((sum, h) => sum + parseInt(h.course.creditHours, 10), 0);
 
     return success({
       courseHistory,
@@ -331,8 +354,8 @@ export const getUserCourseHistory = async (event) => {
         completedCourses,
         inProgressCourses,
         failedCourses,
-        totalCredits
-      }
+        totalCredits,
+      },
     });
   } catch (err) {
     return error(500, err.message);
@@ -342,22 +365,27 @@ export const getUserCourseHistory = async (event) => {
 export const assignCourseToUsers = async (event) => {
   try {
     const body = await readBody(event);
-    const { userIds, courseId } = typeof body === "string" ? JSON.parse(body) : body;
+    const { userIds, courseId } =
+      typeof body === "string" ? JSON.parse(body) : body;
     const { userId: managerId, orgId } = event.context.user;
     if (!Array.isArray(userIds) || userIds.length === 0) {
-      throw createError({ statusCode: 400, message: "userIds (array) is required" });
+      throw createError({
+        statusCode: 400,
+        message: "userIds (array) is required",
+      });
     }
     if (!courseId) {
       throw createError({ statusCode: 400, message: "courseId is required" });
     }
     // Check if the logged user is a manager
     const organisation = await Organisation.findOne({
-      where: { id: orgId, managerId }
+      where: { id: orgId, managerId },
     });
     if (!organisation) {
       throw createError({
         statusCode: 403,
-        message: "Access denied. Only managers can assign courses to team members."
+        message:
+          "Access denied. Only managers can assign courses to team members.",
       });
     }
     // Check if course exists
@@ -367,20 +395,23 @@ export const assignCourseToUsers = async (event) => {
     }
     const results = {
       assigned: [],
-      skipped: []
+      skipped: [],
     };
     for (const uid of userIds) {
       // Check if the target user belongs to the same organization
       const userOrganisation = await UserOrganisation.findOne({
-        where: { userId: uid, organisationId: orgId }
+        where: { userId: uid, organisationId: orgId },
       });
       if (!userOrganisation) {
-        results.skipped.push({ userId: uid, reason: "User not in organisation" });
+        results.skipped.push({
+          userId: uid,
+          reason: "User not in organisation",
+        });
         continue;
       }
       // Check if course already assigned
       const existingAssignment = await UserCourseHistory.findOne({
-        where: { userId: uid, courseId }
+        where: { userId: uid, courseId },
       });
 
       if (existingAssignment) {
@@ -391,14 +422,14 @@ export const assignCourseToUsers = async (event) => {
       const courseAssignment = await UserCourseHistory.create({
         userId: uid,
         courseId,
-        status: "In Progress"
+        status: "In Progress",
       });
       results.assigned.push(courseAssignment);
     }
 
     return success({
       message: "Course assignment process completed",
-      ...results
+      ...results,
     });
   } catch (err) {
     return error(500, err.message);
