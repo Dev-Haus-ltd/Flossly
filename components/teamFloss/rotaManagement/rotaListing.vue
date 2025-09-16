@@ -302,7 +302,7 @@
 
                           <div v-else>
                             <v-checkbox
-                              :model-value="allSelected"
+                              :model-value="allSelected" 
                               :indeterminate="someSelected && !allSelected"
                               @update:model-value="
                                 (val) => toggleAll('unpublished', val)

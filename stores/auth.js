@@ -200,7 +200,52 @@ export const useAuthStore = defineStore("authStore", {
       return new Promise((resolve, reject) => {
         this.isLoading = true;
         authService 
-          .updatePassword(data)
+          .updatePassword(data) 
+          .then((res) =>  {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false; 
+            reject(err); 
+          });
+      });
+    },
+    getUserHrDocuments(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService 
+          .getUserHrDocuments(data) 
+          .then((res) =>  {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false; 
+            reject(err); 
+          });
+      });
+    },
+    addUserHrDoc(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService 
+          .addUserHrDoc(data) 
+          .then((res) =>  {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false; 
+            reject(err); 
+          });
+      });
+    },
+    removeUserDoc(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService 
+          .removeUserDoc(data) 
           .then((res) =>  {
             this.isLoading = false;
             resolve(res);

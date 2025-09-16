@@ -194,6 +194,39 @@ export default {
         .then((res) => {
           resolve(res);
         })
+        .catch((err) => { 
+          reject(err);
+        });
+    });
+  },
+  getUserHrDocuments(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/hrDocs", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  addUserHrDoc(data) {
+    return new Promise((resolve, reject) => {
+      PostFormData("/auth/addHrDoc", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  removeUserDoc(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/removeHrDoc", data)
+        .then((res) => {
+          resolve(res);
+        })
         .catch((err) => {
           reject(err);
         });

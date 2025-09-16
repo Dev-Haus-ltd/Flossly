@@ -44,7 +44,7 @@
       <thead>
         <tr>
           <th>Name</th>
-          <th>Color</th>
+       
           <th>Description</th>
           <th>Details</th>
           <th>Action</th>
@@ -64,17 +64,7 @@
               </p>
             </div>
           </td>
-          <td>
-            <div class="px-3">
-              <p
-                class="editable"
-                contenteditable="true"
-                @keydown.enter.prevent="updateField($event, index, 'color')"
-              >
-                {{ room.color }}
-              </p>
-            </div>
-          </td>
+         
 
           <!-- Editable Description -->
           <td>

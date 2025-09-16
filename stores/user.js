@@ -19,7 +19,7 @@ export const useUserStore = defineStore("userStore", {
             this.isLoading = false;
             resolve(res);
           })
-          .catch((err) => {
+          .catch((err) => { 
             this.isLoading = false;
             reject(err);
           });

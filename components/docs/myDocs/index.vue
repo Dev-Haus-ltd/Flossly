@@ -61,7 +61,7 @@
     </div>
     <div v-else>
       <div class="my-5 px-5">
-        <DocsMyDocsAllFiles
+        <DocsMyDocsAllFiles 
           :files="files.filter((x) => x.folderId === selectedFolder.id)"
           :folder="selectedFolder"
         

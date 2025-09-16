@@ -81,7 +81,7 @@
           @click="onLearnMore"
           flat
         >
-          Learn More
+          Start course
         </v-btn>
 
         <!-- Assign To -->

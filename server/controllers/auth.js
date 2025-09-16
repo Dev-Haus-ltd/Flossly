@@ -27,6 +27,10 @@ import {
 } from "../utils/emailNotifications";
 import requestIp from "request-ip";
 import { HrDocument } from "../models/hrDocuments";
+import path from "path";
+import fs from "fs";
+
+
 const config = useRuntimeConfig();
 export const login = async (event) => {
   let browserAgent = getHeader(event, "User-Agent");
@@ -635,7 +639,7 @@ export const addUserHrDoc = async (event) => {
   const form = await readMultipartFormData(event);
   if (!form) return error("Invalid form data");
   const fields = {};
-  let documentFile = null;
+  let documentFile = null; 
   form.forEach((item) => {
     if (item.type) {
       documentFile = item;
@@ -672,7 +676,7 @@ export const addUserHrDoc = async (event) => {
 
 export const removeUserDoc = async (event) => {
   const body = await readBody(event);
-  const { id } = body;
+  const { id } = JSON.parse(body);
   try {
     const userDoc = await UserHrDocument.findByPk(id);
     if (!userDoc) throw createError({ message: "Document not found for user" });

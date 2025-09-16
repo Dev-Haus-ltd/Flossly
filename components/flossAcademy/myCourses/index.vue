@@ -35,7 +35,7 @@
 </template>
 <script setup>
 const step = ref(1);
-const selectedCourse = ref(null);
+const selectedCourse = ref(null); 
 const cpdStore = useCpdStore();
 const cards = computed(() => {
   return (cpdStore.courseHistory?.courseHistory || [])?.map(crd => ({

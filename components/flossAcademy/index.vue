@@ -1,7 +1,7 @@
 <template>
   <div class="parent">
     <div class="cust-border d-flex align-center">
-      <p class="mr-1">Team CPD</p>
+      <p class="mr-1">Floss academy</p>
       <p
         v-if="step === 2"
         @click="step = 1"
@@ -90,7 +90,7 @@ const currentLoggedInOrgId = computed(
   () => user.value?.currentLoggedInOrgId || null
 );
 const completedHours = computed(() => {
-  return Number(cpdStore.courseHistory?.summary?.totalCredits || 0) ; 
+  return Number(cpdStore.courseHistory?.summary?.totalCredits || 0);
 });
 
 const totalCpdHours = computed(() => user.value?.requiredCpdHours || 50);
@@ -116,7 +116,7 @@ const cards = computed(() => [
   },
 ]);
 
-const tab = ref(0); // "All" by default (id = 0)
+const tab = ref("All"); // "All" by default (id = 0)
 
 // Filtering logic
 function filteredCards(category) {

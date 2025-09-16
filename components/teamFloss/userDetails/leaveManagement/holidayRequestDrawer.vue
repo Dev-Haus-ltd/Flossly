@@ -107,7 +107,7 @@
 
                 <v-date-picker
                   v-model="form.startDate"
-                  :min="new Date().toISOString().split('T')[0]"
+                 
                   @update:modelValue="onStartDateSelected"
                 />
               </v-menu>
@@ -328,7 +328,7 @@ const handleFileUpload = (event) => {
   uploadedFile.value = files;
 };
 const leaveTypes = ref(["Sick", "Casual", "Annual", "Compationate", "Other"]);
-const leaveHoursOptions = ref(["Half Day", "Full Day"]);
+const leaveHoursOptions = ref(["8 hrs", "4 hrs"]);
 const requiredRule = [(v) => !!v || "This field is required"];
 const startDateRule = [
   (v) => !!v || "Start date is required",
@@ -356,8 +356,8 @@ const leaveSummary = computed(() => {
   const days = differenceInCalendarDays(end, start) + 1;
 
   let hoursPerDay = 0;
-  if (form.value.totalHours === "Full Day") hoursPerDay = 8;
-  if (form.value.totalHours === "Half Day") hoursPerDay = 4;
+  if (form.value.totalHours === "8 hrs") hoursPerDay = 8;
+  if (form.value.totalHours === "4 hrs") hoursPerDay = 4;
 
   const totalHours = hoursPerDay ? days * hoursPerDay : 0;
 

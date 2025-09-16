@@ -37,8 +37,8 @@
           <TeamFlossUserDetailsLeaveManagement :user="user" />
       </v-tabs-window-item>
 
-      <v-tabs-window-item value="documents">
-          <TeamFlossUserDetailsDocuments />
+      <v-tabs-window-item value="documents" >
+          <TeamFlossUserDetailsDocuments :user="user"/> 
       </v-tabs-window-item>
 
       <v-tabs-window-item value="performance">
@@ -53,6 +53,7 @@ const { user, rolesList } = defineProps({
   user: Object,
   rolesList: Array
 })
+
 const currentTab = ref("profile");
 </script>
 

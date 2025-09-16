@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
     case "getDetails":
       return await userDetails(event);
     case "updateContract":
-      return await updateContractDetails(event);
+      return await updateContractDetails(event); 
     case "updateAccount":
       return await updateBankDetails(event);
     case "leaveHistory":

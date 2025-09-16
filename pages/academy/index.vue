@@ -1,6 +1,6 @@
 <template>
     <FlossAcademy/>
-</template>
+</template> 
 
 <script setup>
 

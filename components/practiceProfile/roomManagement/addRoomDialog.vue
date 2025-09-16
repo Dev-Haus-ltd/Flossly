@@ -50,19 +50,8 @@
               flat
             />
           </div>
-        <!-- Color -->
-        <div class="mb-4">
-            <label class="field-label">Color</label>
-            <v-text-field
-              v-model="room.color"
-             
-              hide-details
-              variant="solo"
-              density="compact"
-              class="input-bordered"
-              flat
-            />
-          </div>
+      
+    
           <!-- Details (Textarea) -->
           <div class="mb-4">
             <label class="field-label">Details</label>
@@ -111,7 +100,7 @@
   const emit = defineEmits(["update:modelValue", "onUpdate"]);
   
   const isOpen = ref(props.modelValue);
-  const room = ref({ name: "", description: "", details: "", color: "" });
+  const room = ref({ name: "", description: "", details: "",  });
   
   watch(
     () => props.modelValue,
@@ -130,7 +119,7 @@
     emit("onUpdate", { ...room.value });
   
     // reset after save
-    room.value = { name: "", description: "", details: "", color: "" };
+    room.value = { name: "", description: "", details: "", };
   };
   </script>
   

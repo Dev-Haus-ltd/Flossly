@@ -13,14 +13,14 @@
     />
 
     <p class="upload-text">
-      Drag & drop your file(s) here or
+      Drag & drop your file<span v-if="!isSingle">s</span> here or
       <span class="browse-text" @click.stop="triggerFileInput">Browse</span>
     </p>
 
     <input
       ref="fileInput"
       type="file"
-      multiple
+      :multiple="!isSingle"
       class="hidden-input"
       @change="handleFileChange"
     />
@@ -29,24 +29,49 @@
 
 <script setup>
 import { ref, defineExpose } from "vue";
-const emit = defineEmits(["onFiles"])
-const selectedFiles = ref([]); // store multiple files
+
+const props = defineProps({
+  isSingle: {
+    type: Boolean,
+    default: false, // default keeps multiple upload
+  },
+});
+
+const emit = defineEmits(["onFiles"]);
+const selectedFiles = ref([]);
 const fileInput = ref(null);
 
 const triggerFileInput = () => fileInput.value?.click();
 
 const handleFileChange = (e) => {
-  if (e.target.files.length) {
-    selectedFiles.value = [...selectedFiles.value, ...Array.from(e.target.files)];
+  if (!e.target.files.length) return;
+
+  if (props.isSingle) {
+    // only keep the last selected file
+    selectedFiles.value = [e.target.files[0]];
+  } else {
+    selectedFiles.value = [
+      ...selectedFiles.value,
+      ...Array.from(e.target.files),
+    ];
   }
-  emit("onFiles", selectedFiles.value)
+
+  emit("onFiles", selectedFiles.value);
 };
 
 const handleDrop = (e) => {
-  if (e.dataTransfer.files.length) {
-    selectedFiles.value = [...selectedFiles.value, ...Array.from(e.dataTransfer.files)];
+  if (!e.dataTransfer.files.length) return;
+
+  if (props.isSingle) {
+    selectedFiles.value = [e.dataTransfer.files[0]];
+  } else {
+    selectedFiles.value = [
+      ...selectedFiles.value,
+      ...Array.from(e.dataTransfer.files),
+    ];
   }
-  emit("onFiles", selectedFiles.value)
+
+  emit("onFiles", selectedFiles.value);
 };
 
 defineExpose({

@@ -81,8 +81,8 @@
             hide-details
             bg-color="#FAFAFA"
             flat
-            class="ma-2"
-            width="500"
+            class="input-bordered ma-2 ml-auto"
+            width="300"
           />
               <v-list v-if="tasks.length" class="pa-0">
                 <div class="checklist-row has-border" style="background-color: #f6f6f6;">
@@ -344,5 +344,13 @@ function goBack() {
 
 .title-cell {
   flex: 1;
+}
+.input-bordered :deep(.v-field) {
+  border: 1px solid #dfdfdf !important;
+  border-radius: 8px !important;
+  background-color: white !important;
+  min-height: 40px;
+  font-size: 14px;
+  font-family: "Poppins", sans-serif;
 }
 </style>
