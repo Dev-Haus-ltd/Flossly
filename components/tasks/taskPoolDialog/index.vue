@@ -238,7 +238,7 @@ watch(tab, async (newId) => {
     } else {
       subCategories.value = [];
       subCategoryView.value = true;
-      const category = categoryList.value.filter((x) => x.id === newId);
+      const category = categoryList.value.find((x) => x.id === newId);
       fetchGeneralTasks(category);
     }
   }

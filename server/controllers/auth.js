@@ -30,7 +30,6 @@ import { HrDocument } from "../models/hrDocuments";
 import path from "path";
 import fs from "fs";
 
-
 const config = useRuntimeConfig();
 export const login = async (event) => {
   let browserAgent = getHeader(event, "User-Agent");
@@ -184,12 +183,20 @@ export const profile = async (event) => {
 
 export const updateProfile = async (event) => {
   const body = await readBody(event);
-  const { id, phone, address, dob, gender, nextOfKin, fullName, nextOfKinContact } =
-    JSON.parse(body);
+  const {
+    id,
+    phone,
+    address,
+    dob,
+    gender,
+    nextOfKin,
+    fullName,
+    nextOfKinContact,
+  } = JSON.parse(body);
   try {
     const user = await User.findByPk(id);
     user.phone = phone || user.phone;
-    user.fullName = fullName || user.fullName
+    user.fullName = fullName || user.fullName;
     user.address = address || user.address;
     user.dob = dob || user.dob;
     user.gender = gender || user.gender;
@@ -340,7 +347,12 @@ export const verifyEmail = async (event) => {
       user.isEmailVerified = true;
       await user.save();
       await EmailVerification.destroy({ where: { link } });
-      const tasks = await Task.findAll({ limit: 100 });
+      const tasks = await Task.findAll({
+        limit: 100,
+        where: {
+          categoryId: 6,
+        },
+      });
       const userOrg = await UserOrganisation.findAll({
         where: { userId: user.id },
       });
@@ -639,7 +651,7 @@ export const addUserHrDoc = async (event) => {
   const form = await readMultipartFormData(event);
   if (!form) return error("Invalid form data");
   const fields = {};
-  let documentFile = null; 
+  let documentFile = null;
   form.forEach((item) => {
     if (item.type) {
       documentFile = item;
