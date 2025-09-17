@@ -23,7 +23,7 @@
                 </v-chip>
               </template>
             </v-tooltip>
-            <v-menu location="bottom right">
+            <!-- <v-menu location="bottom right">
               <template #activator="{ props }">
                 <v-btn
                   icon
@@ -57,7 +57,7 @@
                   </v-list-item>
                 </v-list>
               </v-card>
-            </v-menu>
+            </v-menu> -->
 
             <v-btn flat icon size="32" @click="$emit('close')">
               <v-icon size="20">mdi-close</v-icon>
@@ -252,6 +252,7 @@
                 <div class="mt-3">
                   <label class="cust-lbl">Comments</label>
                   <v-textarea
+                  v-model="taskDetails.comments"
                     variant="solo"
                     placeholder="Type here"
                     density="compact"
@@ -360,7 +361,7 @@
           <v-btn
             color="primary"
             style=" height: 44px"
-            @click="$emit('close')"
+            @click="$emit('save', taskDetails)"
             flat
             :elevation="0"
             rounded="lg"

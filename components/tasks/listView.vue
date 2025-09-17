@@ -557,6 +557,7 @@
       v-model="dialogOpen"
       :selectedItem="selectedItem"
       @close="dialogOpen = false"
+      @save="updateTaskInfo"
     />
 
     <TasksAddTask
@@ -834,6 +835,28 @@ const updateValueColumn = (column) => {
 const updateSubtaskValueColumn = (column) => {
   setFocus("subheader", column.key, false);
 };
+
+const updateTaskInfo = (task) => {
+  taskStore
+    .updateUserTask(task)
+    .then((res) => {
+      if (res.code === 0) {
+        dialogOpen.value = false
+          emit("onUpdate");
+      } else {
+        mainStore.setSnackbar({
+          title: "Error while updating the task",
+          type: "error",
+        });
+      }
+    })
+    .catch((err) => {
+      mainStore.setSnackbar({
+        title: "Error while updating the task",
+        type: "error",
+      });
+    });
+}
 const updateValueRow = (row, key) => {
   setFocus(row.id, key, false);
   if (key === "name" || key === "comments" || key === "documentLink") return;
