@@ -38,6 +38,7 @@ import { ref, computed } from "vue";
 import PracticeProfile from "./practiceProfile/index.vue";
 import Contact from "./contact/index.vue";
 import RoomManagement from "./roomManagement/index.vue";
+import ImportantPeople from "./importantPeople/index.vue";
 import GroupManagement from "./groupManagement/index.vue";
 import Equipment from "./equipment/index.vue";
 
@@ -45,6 +46,7 @@ import profileImg from "@/assets/icons/practiceProfile/profile.svg";
 import RoomImg from "@/assets/icons/practiceProfile/room.svg";
 import ContactImg from "@/assets/icons/practiceProfile/contact.svg";
 import GroupImg from "@/assets/icons/practiceProfile/group.svg";
+import ImportantPeopleImg from "@/assets/icons/practiceProfile/importantPeople.svg";
 
 // Sidebar menu items
 const menuItems = [
@@ -56,6 +58,7 @@ const menuItems = [
     icon: ContactImg,
   },
   { key: "room", label: "Room Management", icon: RoomImg },
+  { key: "importantPeople", label: "Important People", icon: ImportantPeopleImg },
   { key: "group", label: "Group Management", icon: GroupImg },
 ];
 
@@ -68,6 +71,7 @@ const componentsMap = {
   contact: Contact,
   equipment: Equipment,
   room: RoomManagement,
+  importantPeople: ImportantPeople,
   group: GroupManagement,
 };
 

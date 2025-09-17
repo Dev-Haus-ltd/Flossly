@@ -19,6 +19,7 @@
           :colors="item.colors"
           :isLocked="item.isLocked"
           :route="item.route"
+          :uid="index"
         />
       </v-col>
     </v-row>

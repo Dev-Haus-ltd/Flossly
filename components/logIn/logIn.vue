@@ -80,17 +80,33 @@
               <p v-if="loginError" style="color: red" class="pb-2">
                 {{ loginError }}
               </p>
-              <div class="d-flex justify-space-between align-center">
-                <v-switch
-                  label="Remember me"
-                  color="primary"
-                  density="compact"
-                  inset
-                  hide-details
-                ></v-switch>
-                <v-btn color="primary" variant="text" @click="forgetPass"
-                  >Forgot Password</v-btn
-                >
+              <div class="d-flex justify-space-between align-center " style="height: 48px;">
+                <v-row align="center" class="py-0" style="height:48px;" no-gutters>
+                  <v-col cols="auto" class="pa-0 text-right">
+                    <v-switch
+                      label="Remember me"
+                      color="#266DF0"
+                      density="compact"
+                      inset
+                      hide-details
+                    />
+                  </v-col>
+
+                  <!-- This will expand and push the next col to the far right -->
+                  <v-spacer />
+
+                  <v-col cols="auto">
+                    <v-btn
+                      color="#266DF0"
+                      variant="text"
+                      class="pa-0"
+                      min-width="0"
+                      @click="forgetPass"
+                    >
+                      Forgot Password
+                    </v-btn>
+                  </v-col>
+                </v-row>
               </div>
               <v-btn
                 type="submit"
@@ -98,12 +114,13 @@
                 block
                 variant="flat"
                 class="mt-5 rounded-lg"
+                height="48"
               >
                 Log In & Tidy Up
               </v-btn>
-              <div class="mt-4 text-body-2 text-center">
+              <div class="mt-5 text-body-2 text-center " style="height: 48px;">
                 Don't have an account?
-                <v-btn variant="text" color="primary" @click="goToSignup">
+                <v-btn class="pa-0 ma-0 v-btn--plain" min-width="0" height="auto" variant="text" color="#266DF0" style="vertical-align: baseline;" @click="goToSignup">
                   Sign up now.
                 </v-btn>
               </div>
@@ -221,6 +238,11 @@ const forgetPass = () => {
   transform: translate(-50%, -50%);
   max-width: 700px;
 }
+.login-page .v-container {
+  max-width: 100% !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
 .water-mark {
   background-image: url("/assets/logos/loginLogos/watermark.svg");
   background-size: contain;
@@ -248,7 +270,7 @@ const forgetPass = () => {
 .background-image {
   background-image: url("/assets/images/loginBanner.svg");
   background-size: cover;
-  width: 90%;
+  width: 80%;
   height: 90vh;
 }
 .login-heading {
@@ -264,4 +286,5 @@ const forgetPass = () => {
   bottom: 0;
   left: 0;
 } */
+
 </style>

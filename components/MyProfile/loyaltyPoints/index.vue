@@ -4,6 +4,7 @@
         <!-- My Rewards Points -->
         <v-col cols="6">
           <div
+            id="redeem-card"
             class="rewards-card d-flex align-center rounded-xl pa-4"
             :class="{ active: activeTab === 'rewards' }"
             @click="setActive('rewards')"
@@ -12,6 +13,7 @@
             <lord-icon
               src="https://cdn.lordicon.com/uihwbzln.json"
               trigger="hover"
+              target="#redeem-card"
               style="width: 86px; height: 86px"
             />
   
@@ -29,14 +31,16 @@
         <!-- Redeem Basket -->
         <v-col cols="6">
           <div
+            id="redeem-card"
             class="redeem-card d-flex align-center rounded-xl pa-4"
             :class="{ active: activeTab === 'redeem' }"
             @click="setActive('redeem')"
           >
             <!-- Icon -->
             <lord-icon
-               src="https://cdn.lordicon.com/jijcyrgq.json"
-    trigger="hover"
+              src="https://cdn.lordicon.com/jijcyrgq.json"
+              trigger="hover"
+              target="#redeem-card"
               style="width: 86px; height: 86px"
             />
   

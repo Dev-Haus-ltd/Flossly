@@ -1,6 +1,7 @@
 <template>
   <div
     class="flossly-card"
+    :id="`flossly-card-${uid}`"
     :class="{ clickable: !isLocked }"
     :style="{ backgroundColor: !isLocked ? '#FFFFFF' : '#F2F2F2' }"
     @click="handleClick"
@@ -13,6 +14,7 @@
       <lord-icon
         :src="img"
         trigger="hover"
+        :target="`#flossly-card-${uid}`"
         :colors="colors || ''"
         class="main-img"
       />
@@ -33,6 +35,8 @@ const props = defineProps({
   colors: { type: String, default: "" },
   isLocked: { type: Boolean, default: false },
   route: { type: String, default: "/" }, // route to navigate
+  uid: { type: [String, Number], required: true },
+  isHovered: Boolean,
 });
 console.log(props);
 const handleClick = () => {
@@ -88,4 +92,5 @@ const handleClick = () => {
   font-weight: 500;
   text-align: center;
 }
+
 </style>
