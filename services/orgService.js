@@ -109,5 +109,12 @@ export default {
           reject(err);
         });
     });
+  },
+  updateImportantPeople(data) {
+    return new Promise((resolve, reject) => {
+      Post("/organisations/updatePeople", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
   }
 };

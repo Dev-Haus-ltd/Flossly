@@ -254,7 +254,7 @@ export const updateImportantPeople = async (event) => {
       rpa
     } = JSON.parse(body);
 
-    const people = await OrganisationPeople.findOne({ where: { organisationId, id } });
+    let people = await OrganisationPeople.findOne({ where: { organisationId, id } });
 
     if (people) {
       await people.update({

@@ -11,7 +11,6 @@ import {
   UserPreference,
 } from "../models";
 import DB from "../utils/db";
-import bcrypt from 'bcrypt'
 import { sendFeedBack } from "../utils/emailNotifications";
 import bcrypt from "bcrypt";
 export const getPointHistory = async (event) => {

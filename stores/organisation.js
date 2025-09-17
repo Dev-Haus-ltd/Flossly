@@ -162,6 +162,24 @@ export const useOrgStore = defineStore("orgStore", {
             reject(err);
           });
       });
-    }
+    },
+    updateImportantPeople(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        orgService
+          .updateImportantPeople(data)
+          .then((res) => {
+            this.isLoading = false;
+            if (this.organisation) {
+              this.organisation.importantPeople = res.data;
+            }
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
   },
 });
