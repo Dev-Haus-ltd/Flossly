@@ -43,6 +43,7 @@ import { UserHrDocument } from "./auth/userHrDocuments";
 import { Course } from "./cpd/course";
 import { CourseQuestionaire } from "./cpd/courseQuestionaire";
 import { UserCourseHistory } from "./cpd/userCourseHistory";
+import { OrganisationPeople } from "./organisations/organisationPeople";
 
 /* Relations and Associations */
 
@@ -396,6 +397,17 @@ TaskCategory.hasMany(SystemDocument, {
   as: "documents",
 });
 
+//Important people
+
+Organisation.hasOne(OrganisationPeople, {
+  foreignKey: "organisationId",
+  as: "importantPeople",
+});
+OrganisationPeople.belongsTo(Organisation, {
+  foreignKey: "organisationId",
+  as: "organisation",
+});
+
 // CPD Associations
 Course.hasMany(CourseQuestionaire, { foreignKey: "courseId", as: "questions" });
 CourseQuestionaire.belongsTo(Course, { foreignKey: "courseId", as: "course" });
@@ -436,6 +448,7 @@ export {
   OrganisationPriority,
   OrganisationStatus,
   OrganisationContact,
+  OrganisationPeople,
   OrganisationEquipment,
   OrganisationGroup,
   OrganisationGroupUser,

@@ -4,6 +4,7 @@ import {
   OrganisationEquipment,
   OrganisationGroup,
   OrganisationGroupUser,
+  OrganisationPeople,
   OrganisationPriority,
   OrganisationStatus,
   OrganisationSurgery,
@@ -210,6 +211,10 @@ export const getdetails = async (event) => {
           as: "surgeries",
         },
         {
+          model: OrganisationPeople,
+          as: "importantPeople"
+        },
+        {
           model: OrganisationGroup,
           as: "groups",
           include: [
@@ -231,6 +236,53 @@ export const getdetails = async (event) => {
     return success(organisation);
   } catch (err) {
     return error(500, err.message);
+  }
+};
+
+export const updateImportantPeople = async (event) => {
+  try {
+    const body = await readBody(event)
+    const {
+      id,
+      organisationId,
+      safeguardingLead,
+      firstAider,
+      fireMarshal,
+      crossInfectionLead,
+      complaintsHandler,
+      dpo,
+      rpa
+    } = JSON.parse(body);
+
+    const people = await OrganisationPeople.findOne({ where: { organisationId, id } });
+
+    if (people) {
+      await people.update({
+        safeguardingLead,
+        firstAider,
+        fireMarshal,
+        crossInfectionLead,
+        complaintsHandler,
+        dpo,
+        rpa
+      });
+    } else {
+      people = await OrganisationPeople.create({
+        organisationId,
+        safeguardingLead,
+        firstAider,
+        fireMarshal,
+        crossInfectionLead,
+        complaintsHandler,
+        dpo,
+        rpa
+      });
+    }
+
+
+    return success(people);
+  } catch (err) {
+    return error(500, err.message)
   }
 };
 
