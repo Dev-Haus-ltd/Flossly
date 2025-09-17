@@ -199,9 +199,11 @@
                       backgroundColor: '#F6F6F6',
                       fontSize: '14px',
                     }"
+                    @mouseover="showHandles(column.key)"
+                    @mouseleave="hideHandles(column.key)"
                   >
                     <div
-                      v-if="!column.title"
+                      v-if="!column.title && i === 0"
                       class="d-flex align-center justify-center"
                     >
                       <input
@@ -212,7 +214,7 @@
                         @change="toggleAll"
                       />
                     </div>
-                    <div v-else class="d-flex align-center th-content">
+                    <div v-else class="d-flex align-center th-content"  >
                       <v-text-field
                         v-model="column.title"
                         @update:model-value="
@@ -245,8 +247,11 @@
                       </v-icon>
                       <span
                         class="resize-handle"
+                        :id="`resize-handle-${column.key}`"
                         @mousedown="startResize($event, column)"
-                      ></span>
+                      >
+                    <v-icon>mdi-drag</v-icon>
+                    </span>
                     </div>
                   </th>
                 </template>
@@ -600,7 +605,9 @@ watch(
   }
 );
 const updateHeaderOrder = (newOrder) => {
-  selectedHeaders.value = newOrder;
+  const selectable = newOrder.findIndex((x) => !x.title)
+  newOrder.splice(selectable, 1);
+  selectedHeaders.value = newOrder
 };
 const emit = defineEmits(["onFilter", "onUpdate", "updateSelectedRowItems"]);
 const fixedColumnOrder = [
@@ -623,6 +630,18 @@ const sortHeaders = (headers) => {
     .map((key) => headers.find((h) => h.key === key))
     .filter(Boolean);
 };
+const showHandles = (key) => {
+  const handle = document.getElementById('resize-handle-' +  key)
+  if (handle) {
+    handle.style.display = 'block'
+  }
+}
+const hideHandles = (key) => {
+  const handle = document.getElementById('resize-handle-' +  key)
+  if (handle) {
+    handle.style.display = 'none'
+  }
+}
 const search = ref("");
 const expanded = ref([]);
 const focusedField = ref({});
@@ -991,12 +1010,14 @@ const onSelectionChange = (newSelected) => {
 }
 
 .resize-handle {
-  width: 5px;
+  width: 8px;
   cursor: col-resize;
-  height: 100%;
+  height: 70%;
+  display: none;
   position: absolute;
-  right: -16px;
-  top: 0;
+  right: -5px;
+  z-index: 99999;
+  top: 5;
 }
 .table-border {
   border: 1px solid #dbdbdb;
