@@ -23,7 +23,7 @@
     "sass": "^1.69.6",
     "vite-plugin-vuetify": "^2.0.1",
     "vue-router": "^4.2.5",
-    "vuetify": "^3.4.9"
+    "vuetify": "^3.10.0"
   },
   "dependencies": {
     "@lordicon/element": "^2.0.1",

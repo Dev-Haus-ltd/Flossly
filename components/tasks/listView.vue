@@ -158,7 +158,6 @@
             @update:modelValue="onSelectionChange"
             return-object
             show-select
-            :show-expand="true"
             hover
           >
             <template
@@ -658,8 +657,9 @@ watch(
       group.tasks.map((task) => ({
         id: task.id,
         title: task.title,
-        start: new Date(task.dueDate || task.createdAt),
-        end: new Date(task.dueDate || task.createdAt),
+        name: task.title,
+        start: calenderDate(task.dueDate || task.createdAt),
+        end: calenderDate(task.dueDate || task.createdAt),
         color: task.status?.color || task.priority?.color || "#2196F3",
         status: task.status,
         priority: task.priority,
@@ -670,6 +670,19 @@ watch(
     );
   }
 );
+const calenderDate = (data) => {
+  const date = new Date(data);
+const year = date.getFullYear();
+const month = String(date.getMonth() + 1).padStart(2, '0');
+const day = String(date.getDate()).padStart(2, '0');
+const hours = String(date.getHours()).padStart(2, '0');
+const minutes = String(date.getMinutes()).padStart(2, '0');
+
+const formatted = `${year}-${month}-${day} ${hours}:${minutes}`;
+
+return formatted
+
+}
 const getTaskUsers = (task) => {
   if (users) {
     return users.filter((x) => x.roleId !== task.taskDetails.roleId);

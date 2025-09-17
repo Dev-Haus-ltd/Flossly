@@ -11,6 +11,7 @@ import {
   UserPreference,
 } from "../models";
 import DB from "../utils/db";
+import bcrypt from 'bcrypt'
 import { sendFeedBack } from "../utils/emailNotifications";
 export const getPointHistory = async (event) => {
   try {
@@ -120,7 +121,7 @@ export const referPractice = async (event) => {
   if (!practiceName || !managerEmail) {
     throw createError({ message: "practice name and manager email required" });
   }
-  const transaction = DB.transaction();
+  const transaction = await DB.transaction();
   try {
     const organisation = {
       name: practiceName,

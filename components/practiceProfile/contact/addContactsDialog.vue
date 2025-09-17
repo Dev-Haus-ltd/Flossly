@@ -28,7 +28,7 @@
         <div
           v-for="(contact, index) in contacts"
           :key="index"
-          class="d-flex mb-4 align-center rounded-lg border-sm"
+          class="d-flex align-center rounded-lg border-sm"
           style="gap: 10px; padding: 10px; background-color: #f7f8f9;"
         >
           <!-- Name -->
@@ -75,6 +75,7 @@
               <v-icon size="18" @click="removeContact(index)">mdi-close</v-icon>
           </div>
         </div>
+        <p style="color: red; font-size: 12px;" v-if="invalidContact">Each contact must have a name, phone and email</p>
 
         <!-- Add contact button -->
         <v-btn
@@ -120,7 +121,7 @@ const emit = defineEmits(["update:modelValue", "onUpdate"]);
 
 const isOpen = ref(props.modelValue);
 const contacts = ref([{ name: "", contact: "" }]); // start with one row
-
+const invalidContact = ref(false)
 watch(
   () => props.modelValue,
   (val) => (isOpen.value = val)
@@ -140,6 +141,11 @@ const removeContact = (index) => {
 };
 
 const save = () => {
+  if (contacts.value.find((x) => !x.email || !x.contact)){
+  invalidContact.value = true
+  return
+  }
+
   emit("update:modelValue", false);
   emit("onUpdate", contacts.value);
   contacts.value = [{ name: "", contact: "" }];

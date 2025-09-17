@@ -270,10 +270,14 @@ const openEmail = () => {
       border-bottom: 1px solid lightgray;
     }
   }
-  .v-calendar-month__days {
-  .v-calendar-month__day {
-    // min-height: 100px !important;
-}
+  .v-calendar-weekly__day {
+    min-height: 100px !important;
+    .v-event, .v-event-timed {
+      margin: auto !important;
+      margin-bottom: 0px !important;
+      height: auto !important;
+    }
+
 } 
 }
 .user-dashboard-calender {
