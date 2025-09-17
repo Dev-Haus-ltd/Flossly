@@ -5,6 +5,7 @@
     style="overflow-x: auto"
   >
     <!-- Header controls -->
+
     <div
       class="d-flex align-center head pa-4 pos-sticky-left"
       style="position: sticky; left: 0px"
@@ -85,8 +86,19 @@
           class="staff-col first-col-color d-flex align-center pa-4 pos-sticky-left"
         >
           <CommonAvatar :user="user?.user" class="mr-2" size="45" />
-          <div>
-            <h3 class="fst-col-title">{{ user?.user.fullName }}</h3>
+          <div class="w-100">
+            <div class="d-flex align-center w-100">
+              <h3 class="fst-col-title">{{ user?.user.fullName }}</h3>
+              <v-btn
+                color="#000000"
+                size="small"
+                variant="text"
+                class="ml-auto"
+                @click="removeStaff(user)"
+              >
+                <v-icon>mdi-close</v-icon>
+              </v-btn>
+            </div>
             <small class="fst-col--subtit">{{ user?.user.role.title }}</small>
           </div>
         </div>
@@ -123,9 +135,7 @@
                     </span>
 
                     <!-- Existing three-dot menu -->
-                    <v-menu 
-                      v-if="isManager"
-                    >
+                    <v-menu v-if="isManager">
                       <template #activator="{ props }">
                         <v-btn
                           v-bind="props"
@@ -416,12 +426,7 @@
         </div>
       </div>
     </div>
-    <div
-    v-if="isManager"
-     class="rota-grid row" 
-     :style="gridStyle" 
-    
-    >
+    <div v-if="isManager" class="rota-grid row" :style="gridStyle">
       <div
         class="staff-col first-col-color d-flex align-center justify-center pa-4 pos-sticky-left"
       >
@@ -463,6 +468,7 @@
     <TeamFlossRotaManagementManageStaffDialog
       v-model="manageStaffDialogOpen"
       :employees="employees"
+      :rolesList="rolesList"
       :selectedUsers="slecteduserIds"
       :rota="rota"
       @onAddUser="emit('onAddUser')"
@@ -488,13 +494,26 @@ const userStore = useUserStore();
 const surgries = ref([]);
 const manageStaffDialogOpen = ref(false);
 const employees = ref([]);
+const rolesList = ref([]);
 
 const slecteduserIds = computed(() => users.map((ru) => ru.userId));
 onMounted(() => {
   getSurgeries();
   getAllUsers();
+  getRoles();
 });
-
+const getRoles = () => {
+  mainStore
+    .getRoles()
+    .then((res) => {
+      if (res.code === 0 && res.data) {
+        rolesList.value = res.data;
+      }
+    })
+    .catch((err) => {
+      return err;
+    });
+};
 const getAllUsers = () => {
   userStore
     .getUserList({ roleId: null, orgId: rota.organisationId })
@@ -597,9 +616,9 @@ const getDayTotalHours = (date) =>
     .reduce((acc, s) => acc + getShiftDuration(s), 0);
 
 const addShift = (user, day) => {
- if(!isManager.value){
-  return
- }
+  if (!isManager.value) {
+    return;
+  }
 
   emit("handleShiftEdit", {});
   emit("onAddShift", { user, day });
@@ -667,6 +686,33 @@ const getDentistName = (dentistId) => {
 const getNurseName = (nurseId) => {
   const nurseName = users.find((n) => n.userId === nurseId)?.user?.fullName;
   return nurseName;
+};
+const removeStaff = async (user) => {
+  try {
+    const res = await rotaStore.removeRotaUser({
+      rotaId: rota.id,
+      id: user.id,
+    });
+    if (res.code === 0) {
+      mainStore.setSnackbar({
+        type: "success",
+        title:
+          res?.message || res?.data?.message || "User removed successfully",
+      });
+      emit("onAddUser");
+      close();
+    } else {
+      mainStore.setSnackbar({
+        type: "error",
+        title: res.message || "Something went wrong",
+      });
+    }
+  } catch (err) {
+    mainStore.setSnackbar({
+      type: "error",
+      title: err.message || "An error occurred",
+    });
+  }
 };
 </script>
 
@@ -842,5 +888,13 @@ const getNurseName = (nurseId) => {
   font-size: 14px;
   border: 1px solid #3adf8d;
   height: 50px;
+}
+.add-locum-staff-btn {
+  font-family: "Poppins", sans-serif;
+  font-weight: 400;
+  font-style: normal;
+  font-size: 14px;
+  border: 1px solid #3adf8d;
+  height: 40px;
 }
 </style>

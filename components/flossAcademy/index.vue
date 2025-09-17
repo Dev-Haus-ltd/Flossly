@@ -1,11 +1,14 @@
 <template>
   <div class="parent">
     <div class="cust-border d-flex align-center">
-      <p class="mr-1">Floss academy</p>
+      <p class="mr-1"
+      :style="step === 2 ? 'color: blue; cursor: pointer;' : ''"
+      @click="step = 1"
+      
+      >Floss academy</p>
       <p
         v-if="step === 2"
-        @click="step = 1"
-        style="color: blue !important; cursor: pointer"
+     
       >
         {{ "/Course Details" }}
       </p>

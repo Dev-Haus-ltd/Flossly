@@ -29,87 +29,102 @@
 
         <v-tabs-window v-model="tab">
           <v-tabs-window-item :value="tab">
-            <v-row v-if="subCategoryView" class="ma-5" align="stretch">
-              <v-col
-                v-for="(card, index) in subCategories"
-                :key="index"
-                cols="12"
-                sm="6"
-                md="3"
-              >
-                <TasksTaskPoolDialogTaskCards
-                  :title="card.name"
-                  :description="card.description"
-                  :count="card.taskCount"
-                  @click="fetchGeneralTasks(card)"
-                />
-              </v-col>
-            </v-row>
-            <v-card
-              v-else
-              class="rounded-xl ma-5"
-              border
-              style="border-color: #dbdbdb"
-              :elevation="0"
-            >
-              <v-card-title
-                class="px-2 py-4"
-                v-if="subCategories.length"
-                style="
-                  border-bottom: 1px solid #dbdbdb;
-                  background-color: #f1f1f1;
-                "
-              >
-           
-                <div class="d-flex align-center">
-                  <v-icon
-                    @click="subCategoryView = true"
-                    size="24"
-                    color="gray"
-                    class="mr-3"
-                    >mdi-arrow-left</v-icon
-                  >
-                  <p style="font-size: 16px">{{ selectedSubCategory.name }}</p>
-                </div>
-              </v-card-title>
+            <div>
               <v-text-field
-            v-model="search"
-            placeholder="Search"
-            append-inner-icon="mdi-magnify"
-            variant="solo"
-            density="compact"
-            hide-details
-            bg-color="#FAFAFA"
-            flat
-            class="input-bordered ma-2 ml-auto"
-            width="300"
-          />
-              <v-list v-if="tasks.length" class="pa-0">
-                <div class="checklist-row has-border" style="background-color: #f6f6f6;">
-                  <div class="table-cell checkbox-cell">
-                    <v-checkbox
-                      v-model="selectAll"
-                      hide-details
-                      density="compact"
-                      class="ma-0 pa-0"
-                      @change="toggleAll"
-                    />
+              v-if="subCategoryView"
+              v-model="searchSubCategory"
+              placeholder="Search"
+              append-inner-icon="mdi-magnify"
+              variant="solo"
+              density="compact"
+              hide-details
+              bg-color="#FAFAFA"
+              flat
+              class="input-bordered mt-5 mr-8 ml-auto"
+              width="300"
+            />
+              <v-row v-if="subCategoryView" class="mx-5 mt-2" align="stretch">
+                <v-col
+                  v-for="(card, index) in subCategories?.filter((x) => x?.name?.toLowerCase().includes(searchSubCategory))"
+                  :key="index"
+                  cols="12"
+                  sm="6"
+                  md="3"
+                >
+                  <TasksTaskPoolDialogTaskCards 
+                    :title="card.name"
+                    :description="card.description"
+                    :count="card.taskCount"
+                    @click="fetchGeneralTasks(card)"
+                  />
+                </v-col>
+              </v-row>
+              <v-card
+                v-else
+                class="rounded-xl ma-5"
+                border
+                style="border-color: #dbdbdb"
+                :elevation="0"
+              >
+                <v-card-title
+                  class="px-2 py-4"
+                  v-if="subCategories.length"
+                  style="
+                    border-bottom: 1px solid #dbdbdb;
+                    background-color: #f1f1f1;
+                  "
+                >
+             
+                  <div class="d-flex align-center">
+                    <v-icon
+                      @click="subCategoryView = true"
+                      size="24"
+                      color="gray"
+                      class="mr-3"
+                      >mdi-arrow-left</v-icon
+                    >
+                    <p style="font-size: 16px">{{ selectedSubCategory.name }}</p>
                   </div>
-                  <div class="table-cell title-cell font-weight-bold">
-                    Tasks
+                </v-card-title>
+                <v-text-field
+              v-model="search"
+              placeholder="Search"
+              append-inner-icon="mdi-magnify"
+              variant="solo"
+              density="compact"
+              hide-details
+              bg-color="#FAFAFA"
+              flat
+              class="input-bordered ma-2 ml-auto"
+              width="300"
+            />
+                <v-list v-if="tasks.length" class="pa-0">
+                  <div class="checklist-row has-border" style="background-color: #f6f6f6;">
+                    <div class="table-cell checkbox-cell">
+                      <v-checkbox
+                        v-model="selectAll"
+                        hide-details
+                        density="compact"
+                        class="ma-0 pa-0"
+                        @change="toggleAll"
+                      />
+                    </div>
+                    <div class="table-cell title-cell font-weight-bold">
+                      Tasks
+                    </div>
                   </div>
-                </div>
-                <TasksTaskPoolDialogTaskRow
-                  v-for="item in tasks.filter((x) => x?.title?.toLowerCase().includes(search))"
-                  :key="item.id"
-                  :id="item.id"
-                  :title="item.title"
-                  v-model:checked="item.checked"
-                  @checked="handleCheck"
-                />
-              </v-list>
-              <h3 v-else>No Tasks Found.</h3>
-            </v-card>
+                  <TasksTaskPoolDialogTaskRow
+                    v-for="item in tasks.filter((x) => x?.title?.toLowerCase().includes(search))"
+                    :key="item.id"
+                    :id="item.id"
+                    :title="item.title"
+                    v-model:checked="item.checked"
+                    @checked="handleCheck"
+                  />
+                </v-list>
+                <h3 v-else class="ma-6">No Tasks Found.</h3>
+              </v-card>
+            </div>
           </v-tabs-window-item>
         </v-tabs-window>
       </div>
@@ -146,7 +161,8 @@ const subCategories = ref();
 const subCategoryView = ref(true);
 const selectedTasks = ref([]);
 const selectedSubCategory = ref(null);
-const search = ref("")
+const search = ref("");
+const searchSubCategory = ref("")
 const props = defineProps({
   modelValue: Boolean,
 });

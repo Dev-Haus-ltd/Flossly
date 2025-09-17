@@ -1,11 +1,13 @@
 <template>
   <div class="parent">
     <div class="cust-border d-flex align-center">
-      <p class="mr-1">Team Floss</p>
+      <p class="mr-1"
+      :style="showUserDetails ? 'color: blue; cursor: pointer;' : ''"
+      @click="showUserDetails=false"
+      >Team Floss</p>
       <p
         v-if="showUserDetails"
-        @click="showUserDetails = false"
-        style="color: blue !important; cursor: pointer"
+     
       >
         {{ " / " + selectedItem.fullName }}
       </p>

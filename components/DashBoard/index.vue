@@ -78,15 +78,19 @@
 
         <!-- ✅ Quick Actions under Recent + CPD -->
         <v-card
-          v-if="recentFiles && recentFiles.length"
+       
           class="mt-3 card flex-grow-1"
           color="white"
           elevation="0"
           rounded="lg"
         >
           <h4 class="card-head mb-4">Recently Accessed Files</h4>
-
-          <v-row class="ma-5">
+          <div 
+          :class="recentFiles && recentFiles.length ? '' : 'd-flex align-center justify-center'"
+          
+          >
+       
+          <v-row class="ma-5"    v-if="recentFiles && recentFiles.length">
             <v-col
               v-for="(file, index) in recentFiles"
               :key="index"
@@ -97,6 +101,12 @@
               <DashBoardRecentlyAccessed :file="file" @open="openFile" />
             </v-col>
           </v-row>
+          <div class="text-center pa-5">
+    <v-icon size="48" color="grey">mdi-file-clock-outline</v-icon>
+    <p class="mt-3 text-grey">No recently accessed files</p>
+    
+  </div>
+</div>
         </v-card>
       </v-col>
       <v-col cols="4" class="d-flex">

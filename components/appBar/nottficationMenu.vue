@@ -16,7 +16,7 @@
           }"
           size="40"
           elevation="0"
-          class="mr-3"
+          class="mx-3"
         >
         <v-icon :style="{ color: '#6D6D6D' }">mdi-bell-outline</v-icon>
         </v-btn>

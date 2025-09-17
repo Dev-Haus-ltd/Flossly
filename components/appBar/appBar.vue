@@ -31,7 +31,7 @@
     <!-- Right: Icon -->
     <div class="d-flex align-center">
       <CommonRewardChip text="+20" tooltip="Reward points" />
-      <v-text-field
+      <!-- <v-text-field
         placeholder="Search..."
         append-inner-icon="mdi-magnify"
         variant="solo"
@@ -42,7 +42,7 @@
         rounded="xl"
         class="mx-3"
         style="width: 202px"
-      />
+      /> -->
       <AppBarNottficationMenu />
       <appBarRightMenu :user="props.user" />
     </div>

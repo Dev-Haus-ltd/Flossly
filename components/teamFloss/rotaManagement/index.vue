@@ -2,16 +2,18 @@
   <!-- <TeamFlossRotaManagement/> -->
   <div>
     <div class="cust-border d-flex align-center">
-      <p class="mr-1">Rota management</p>
       <p
-        v-if="selectedRota"
-        @click="
-          activeComponent = 1;
-          selectedRota = null;
-        "
-        style="color: blue !important; cursor: pointer"
+        class="mr-1"
+        @click="home()"
+         :style="breadcrumbStyle"
       >
+        Rota management
+      </p>
+      <p v-if="selectedRota">
         {{ " / " + selectedRota.name }}
+      </p>
+      <p v-if="activeComponent === 2">
+        {{ " / " + "Add rota" }}
       </p>
     </div>
     <div class="pa-5 bg-white" v-if="activeComponent === 1">
@@ -63,7 +65,7 @@ const allRotaUsers = ref([]);
 const allShifts = ref([]);
 const activeComponent = ref(1);
 const selectedRota = ref(null);
-const { isManager} = useUser()
+const { isManager } = useUser();
 onMounted(() => {
   getRotas();
 });
@@ -99,21 +101,19 @@ watch(activeComponent, (newVal) => {
   console.log(newVal);
 });
 const getRotas = async () => {
-  let res
+  let res;
 
   if (isManager.value) {
-    res = await rotaStore.getRotas()
-
+    res = await rotaStore.getRotas();
   } else {
-    res = await rotaStore.getUserRotas()
-
+    res = await rotaStore.getUserRotas();
   }
 
   if (res.code === 0) {
-    rotas.value = res.data
-    console.log(rotas.value)
+    rotas.value = res.data;
+    console.log(rotas.value);
   }
-}
+};
 
 const changeRotaStatus = async (data) => {
   let res = null;
@@ -203,6 +203,15 @@ const changecomponent = (id) => {
 const onAddRotaHandle = () => {
   getRotas();
   activeComponent.value = 1;
+};
+const breadcrumbStyle = computed(() => {
+  return (selectedRota.value || activeComponent.value === 2)
+    ? 'color: blue; cursor: pointer;'
+    : '';
+});
+const home = () => {
+  activeComponent.value = 1;
+  selectedRota.value = null;
 };
 </script>
 <style scoped>

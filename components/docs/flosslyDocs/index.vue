@@ -1,12 +1,14 @@
 <template>
   <div class="parent">
     <div class="cust-border d-flex align-center">
-      <p class="mr-1">Flossly docs</p>
       <p
-        v-if="selectedFolder?.name"
+        class="mr-1"
         @click="goBack"
-        style="color: blue !important; cursor: pointer"
+        :style="selectedFolder?.name ? 'color: blue; cursor: pointer;' : ''"
       >
+        Flossly docs
+      </p>
+      <p v-if="selectedFolder?.name">
         {{ " / " + selectedFolder.name }}
       </p>
     </div>
