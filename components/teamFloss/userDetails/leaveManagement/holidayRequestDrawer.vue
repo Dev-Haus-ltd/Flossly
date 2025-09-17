@@ -327,8 +327,22 @@ const handleFileUpload = (event) => {
   const files = event.target.files;
   uploadedFile.value = files;
 };
-const leaveTypes = ref(["Sick", "Casual", "Annual", "Compationate", "Other"]);
 const leaveHoursOptions = ref(["8 hrs", "4 hrs"]);
+const leaveTypes = ref([
+  "Annual",
+  "Casual",
+  "Sick",
+  "Compationate",
+  "Maternity",
+  "Paternity",
+  "Adoption",
+  "Shared Parental",
+  "Public Holiday",
+  "Sabbatical",
+  "Study",
+  "Volunteer",
+  "Others",
+]);
 const requiredRule = [(v) => !!v || "This field is required"];
 const startDateRule = [
   (v) => !!v || "Start date is required",

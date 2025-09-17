@@ -45,6 +45,7 @@
     "request-ip": "^3.3.0",
     "sequelize": "^6.37.7",
     "stripe": "^18.4.0",
-    "vue": "^3.5.17"
+    "vue": "^3.5.17",
+    "vuedraggable": "^4.1.0"
   }
 }

@@ -185,19 +185,37 @@
                 someSelected,
               }"
             >
-              <tr>
-                <template v-for="(column, i) in columns" :key="column.key">
+              <draggable
+                tag="tr"
+                :model-value="columns"
+                item-key="key"
+                direction="horizontal"
+                @update:model-value="updateHeaderOrder"
+              >
+                <template #item="{ element: column, index: i }">
                   <th
                     :style="{
-                      width: column.width + 'px',
+                      minWidth: column.width + 'px',
                       padding: '0px 7px',
                       backgroundColor: '#F6F6F6',
                       fontSize: '14px',
                     }"
                   >
-                    <div v-if="i !== 0" class="d-flex align-center th-content">
+                    <div
+                      v-if="!column.title"
+                      class="d-flex align-center justify-center"
+                    >
+                      <input
+                        type="checkbox"
+                        class="cust-checkbox ma-0"
+                        :checked="allSelected"
+                        :indeterminate.prop="someSelected && !allSelected"
+                        @change="toggleAll"
+                      />
+                    </div>
+                    <div v-else class="d-flex align-center th-content">
                       <v-text-field
-                        :model-value="column.title"
+                        v-model="column.title"
                         @update:model-value="
                           (val) => updateHeaderTitle(column.key, val)
                         "
@@ -215,8 +233,9 @@
                         color="black"
                         style="cursor: pointer"
                         @click="removeHeaderFromSeleted(column)"
-                        >mdi-minus</v-icon
                       >
+                        mdi-minus
+                      </v-icon>
                       <v-icon
                         v-if="column.sortable"
                         size="12"
@@ -230,18 +249,9 @@
                         @mousedown="startResize($event, column)"
                       ></span>
                     </div>
-                    <div v-else class="d-flex align-center justify-center">
-                      <input
-                        type="checkbox"
-                        class="cust-checkbox ma-0"
-                        :checked="allSelected"
-                        :indeterminate.prop="someSelected && !allSelected"
-                        @change="toggleAll"
-                      />
-                    </div>
                   </th>
                 </template>
-              </tr>
+              </draggable>
             </template>
             <template
               v-for="col in selectedHeaders"
@@ -561,6 +571,7 @@
 <script setup>
 import { getRandomHexColor } from "~/lib/misc";
 import { parsedDate } from "@/lib/dateFormatter";
+import draggable from "vuedraggable";
 const {
   headers,
   availableHeaders,
@@ -589,6 +600,9 @@ watch(
     }
   }
 );
+const updateHeaderOrder = (newOrder) => {
+  selectedHeaders.value = newOrder;
+};
 const emit = defineEmits(["onFilter", "onUpdate", "updateSelectedRowItems"]);
 const fixedColumnOrder = [
   "title",

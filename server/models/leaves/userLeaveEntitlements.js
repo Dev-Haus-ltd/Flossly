@@ -27,22 +27,27 @@ export const UserLeaveEntitlement = sequelize.define(
     allowedAnnualLeaves: {
       type: DataTypes.INTEGER,
       allowNull: true,
+      defaultValue: 12
     },
     takenAnnualLeaves: {
       type: DataTypes.INTEGER,
       allowNull: true,
+      defaultValue: 0,
     },
     allowedCasualLeaves: {
       type: DataTypes.INTEGER,
       allowNull: true,
+      defaultValue: 10
     },
     takenCasualLeaves: {
       type: DataTypes.INTEGER,
       allowNull: true,
+      defaultValue: 0,
     },
     allowedSickLeaves: {
       type: DataTypes.INTEGER,
       allowNull: true,
+      defaultValue: 10
     },
     takenSickLeaves: {
       type: DataTypes.INTEGER,
@@ -52,6 +57,7 @@ export const UserLeaveEntitlement = sequelize.define(
     allowedCompationateLeaves: {
       type: DataTypes.INTEGER,
       allowNull: true,
+      defaultValue: 5
     },
     takenCompationateLeaves: {
       type: DataTypes.INTEGER,
@@ -61,10 +67,12 @@ export const UserLeaveEntitlement = sequelize.define(
     allowedOtherLeaves: {
       type: DataTypes.INTEGER,
       allowNull: true,
+      defaultValue: 5,
     },
     takenOtherLeaves: {
       type: DataTypes.INTEGER,
       allowNull: true,
+      defaultValue: 0,
     },
   },
   {

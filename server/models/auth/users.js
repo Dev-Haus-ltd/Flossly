@@ -72,7 +72,8 @@ export const User = sequelize.define(
     },
     requiredCpdHours: {
       type: DataTypes.INTEGER,
-      allowNull: true
+      allowNull: true,
+      defaultValue: 50
     },
     createdBy: {
       type: DataTypes.INTEGER,
