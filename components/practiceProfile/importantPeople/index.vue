@@ -8,71 +8,103 @@
           class="pa-7 flex-grow-1"
           style="border: 1px solid #dbdbdb; border-radius: 12px"
         >
-          <!-- Top Section: Avatar + Name + Practice -->
-          <div class="d-flex align-center mb-6">
-            <!-- <CommonAvatar
-              :user="{ fullName: organisation.fullName, photo: organisation.logo }"
-              size="80"
-            /> -->
-            <div class="ml-4">
-              <!-- <p class="user-name">{{ organisation.fullName }}</p>
-              <p class="practice-name">{{ organisation.practice }}</p> -->
-            </div>
-          </div>
-
-          <!-- Info Section -->
           <div class="info-section">
-            <!-- Practice Manager -->
-            <!-- <div class="mb-1" style="width: 40%">
-              <label class="info-label">Practice Manager</label>
-              <v-select
-                v-model="organisation.managerId"
-                :items="practiceManagers"
-                item-title="fullName"
-                single-line
-                title="Select"
-                density="compact"
-                outlined
-                variant="plain"
-                item-value="id"
-              ></v-select>
-            </div> -->
-
-            <!-- Substitute Lead Name -->
-            <!-- <div class="mb-4">
-              <label class="info-label">Substitute Lead Name</label>
+            <!-- Safeguarding Lead -->
+            <div class="mb-4">
+              <label class="info-label">Safeguarding Lead</label>
               <p
                 class="editable"
                 contenteditable="true"
-                @blur="logValue($event, 'substituteLead')"
+                @blur="logValue($event, 'safeguardingLead')"
               >
-                {{ organisation.substituteLead || "Add Substitute Lead Name" }}
+                {{ importantPeople.safeguardingLead || "Add name" }}
               </p>
-            </div> -->
+            </div>
 
-            <!-- Address -->
-            <!-- <div class="mb-4">
-              <label class="info-label">Address</label>
+            <!-- First Aider -->
+            <div class="mb-4">
+              <label class="info-label">First Aider</label>
               <p
                 class="editable"
                 contenteditable="true"
-                @blur="logValue($event, 'address')"
+                @blur="logValue($event, 'firstAider')"
               >
-                {{ organisation.address || "Add Address" }}
+                {{ importantPeople.firstAider || "Add name" }}
               </p>
-            </div> -->
+            </div>
 
-            <!-- contact -->
-            <!-- <div class="mb-4">
-              <label class="info-label">Telephone</label>
+            <!-- Fire Marshal -->
+            <div class="mb-4">
+              <label class="info-label">Fire Marshal</label>
               <p
                 class="editable"
                 contenteditable="true"
-                @blur="logValue($event, 'contact')"
+                @blur="logValue($event, 'fireMarshal')"
               >
-                {{ organisation.contact || "Add contact" }}
+                {{ importantPeople.fireMarshal || "Add name" }}
               </p>
-            </div> -->
+            </div>
+
+            <!-- Cross Infection Lead -->
+            <div class="mb-4">
+              <label class="info-label">Cross Infection Lead</label>
+              <p
+                class="editable"
+                contenteditable="true"
+                @blur="logValue($event, 'crossInfectionLead')"
+              >
+                {{ importantPeople.crossInfectionLead || "Add name" }}
+              </p>
+            </div>
+
+            <!-- Complaints Handler -->
+            <div class="mb-4">
+              <label class="info-label">Complaints Handler</label>
+              <p
+                class="editable"
+                contenteditable="true"
+                @blur="logValue($event, 'complaintsHandler')"
+              >
+                {{ importantPeople.complaintsHandler || "Add name" }}
+              </p>
+            </div>
+
+            <!-- Data Protection Officer (DPO) -->
+            <div class="mb-4">
+              <label class="info-label">Data Protection Officer</label>
+              <p
+                class="editable"
+                contenteditable="true"
+                @blur="logValue($event, 'dpo')"
+              >
+                {{ importantPeople.dpo || "Add name" }}
+              </p>
+            </div>
+
+            <!-- Radiation Protection Advisor (RPA) -->
+            <div class="mb-4">
+              <label class="info-label">Radiation Protection Advisor</label>
+              <p
+                class="editable"
+                contenteditable="true"
+                @blur="logValue($event, 'rpa')"
+              >
+                {{ importantPeople.rpa || "Add name" }}
+              </p>
+            </div>
+
+            <!-- Update Button -->
+            <div class="d-flex justify-end pr-5 pt-3">
+              <v-btn
+                color="primary"
+                width="200"
+                flat
+                :loading="orgStore.isLoading"
+                @click="updateImportantPeopleDetails"
+              >
+                Update Details
+              </v-btn>
+            </div>
           </div>
         </v-card>
       </v-col>
@@ -82,59 +114,61 @@
 
 <script setup>
 
-// const props = defineProps({
-//   practiceDetails: {
-//     type: Object,
-//     required: true,
-//   },
-// });
-// const localOrg = ref({ ...props.practiceDetails });
-// const organisation = reactive({
-//   logo: localOrg.value.logo,
-//   fullName: localOrg.value.name,
-//   id: localOrg.value.id,
-//   managerId: localOrg.value.managerId,
-//   substituteLead: "",
-//   address: localOrg.value.address,
-//   contact: localOrg.value.contact,
-// });
-// const userStore = useUserStore();
-// const practiceManagers = ref([]);
+const props = defineProps({
+  practiceDetails: {
+    type: Object,
+    required: true,
+  },
+});
 
-// function getPracticeManagers() {
-//   userStore.getUserList({ roleId: 8 }).then((res) => {
-//     if (res.code === 0) {
-//       practiceManagers.value = res.data;
-//     }
-//   });
-// }
+const mainStore = useMainStore();
+const orgStore = useOrgStore();
 
-// onMounted(() => {
-//   getPracticeManagers();
-// });
 
-// const logValue = (e, key) => {
-//   organisation[key] = e.target.innerText.trim();
-// };
+const localImportantPeople = ref({ ...props.practiceDetails.importantPeople });
+const importantPeople = reactive({
+  id: localImportantPeople.value?.id,
+  organisationId: props.practiceDetails.id,
+  safeguardingLead: localImportantPeople.value?.safeguardingLead || "",
+  firstAider: localImportantPeople.value?.firstAider || "",
+  fireMarshal: localImportantPeople.value?.fireMarshal || "",
+  crossInfectionLead: localImportantPeople.value?.crossInfectionLead || "",
+  complaintsHandler: localImportantPeople.value?.complaintsHandler || "",
+  dpo: localImportantPeople.value?.dpo || "",
+  rpa: localImportantPeople.value?.rpa || "",
+});
 
+const logValue = (e, key) => {
+  importantPeople[key] = e.target.innerText.trim();
+};
+
+const updateImportantPeopleDetails = () => {
+  orgStore
+    .updateImportantPeople({ ...importantPeople })
+    .then((res) => {
+      if (res.code === 0) {
+        mainStore.setSnackbar({
+          title: res?.data?.message || "Important People updated successfully",
+          type: "success",
+        });
+      } else {
+        mainStore.setSnackbar({
+          title: res?.data?.message || res?.message || "Failed to update Important People",
+          type: "error",
+        });
+      }
+    })
+    .catch((err) => {
+      mainStore.setSnackbar({
+        title: err.message || "Something went wrong",
+        type: "error",
+      });
+    });
+};
 </script>
 
+
 <style scoped>
-.user-name {
-  font-family: "Poppins";
-  font-weight: 400;
-  font-size: 24px;
-  margin: 0;
-}
-
-.practice-name {
-  font-family: "Poppins";
-  font-weight: 400;
-  font-size: 13px;
-  color: #737373;
-  margin: 0;
-}
-
 .info-label {
   display: block;
   font-family: "Poppins";
@@ -160,25 +194,5 @@
 .editable:focus {
   border: 1px solid #dfdfdf;
   padding: 4px 6px;
-}
-
-/* PIN toggle */
-.toggle-btn {
-  text-transform: none;
-  background: #f5f5f5;
-  color: #1e1e1e;
-  font-family: Poppins;
-  font-weight: 500;
-  font-size: 13px;
-  border-radius: 6px;
-}
-.toggle-btn.active {
-  background: #213536 !important;
-  color: #ffffff !important;
-}
-
-/* Checkbox style */
-.day-checkbox .v-input--selection-controls__input {
-  border: 1px solid #dfdfdf !important;
 }
 </style>
