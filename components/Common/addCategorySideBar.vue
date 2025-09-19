@@ -78,7 +78,7 @@
             <v-col cols="12">
               <label class="mb-1 fld-lbl"> Color </label>
               <v-text-field
-                v-model="form.name"
+              
                 density="compact"
                 variant="solo"
                 hide-details

@@ -94,33 +94,24 @@
             </div>
           </td>
           <td class="cursor-pointer p-0">
-            <v-menu
-              :model-value="colorMenuIndex === index"
-              @update:model-value="
-                (val) => (colorMenuIndex = val ? index : null)
-              "
-              :close-on-content-click="false"
-              transition="scale-transition"
-              offset-y
-            >
-              <!-- activator must be a block inside td -->
-              <template v-slot:activator="{ props }">
-                <div
-                  v-bind="props"
-                  class="w-full h-full py-6"
-                  :style="{ backgroundColor: room.color }"
-                ></div>
-              </template>
-
-              <v-color-picker
-                v-model="room.color"
-                mode="hex"
-                hide-inputs
-                @update:model-value="
-                  (color) => updateField(color, index, 'color')
-                "
-              />
-            </v-menu>
+            <v-text-field
+  
+  density="compact"
+  variant="solo"
+  hide-details
+  class="w-100"
+  flat
+>
+  <template #prepend-inner>
+    <CommonColorPickerInput
+      :item="room"
+      @update="(payload) => updateField(payload.color, index, 'color')"
+      noBorder
+    />
+  </template>
+</v-text-field>
+     
+            
           </td>
           <!-- Action -->
           <td>
@@ -191,6 +182,7 @@ const filteredRooms = computed(() => {
 
 // Update editable field
 const updateField = (e, index, field) => {
+  console.log(e)
   const room = roomList.value[index];
   if (!room) return;
 
