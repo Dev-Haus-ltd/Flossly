@@ -44,9 +44,10 @@
       <thead>
         <tr>
           <th>Name</th>
-       
-          <th>Description</th>
+
           <th>Details</th>
+          <th>Description</th>
+          <th>Color</th>
           <th>Action</th>
         </tr>
       </thead>
@@ -64,7 +65,6 @@
               </p>
             </div>
           </td>
-         
 
           <!-- Editable Description -->
           <td>
@@ -72,7 +72,9 @@
               <p
                 class="editable-des"
                 contenteditable="true"
-                @keydown.enter.prevent="updateField($event, index, 'description')"
+                @keydown.enter.prevent="
+                  updateField($event, index, 'description')
+                "
               >
                 {{ room.description }}
               </p>
@@ -91,7 +93,37 @@
               </p>
             </div>
           </td>
+          <td
+            class="cursor-pointer p-0"
+          >
+            <v-menu
+              :model-value="colorMenuIndex === index"
+              @update:model-value="
+                (val) => (colorMenuIndex = val ? index : null)
+              "
+              :close-on-content-click="false"
+              transition="scale-transition"
+              offset-y
+            >
+              <!-- activator must be a block inside td -->
+              <template v-slot:activator="{ props }">
+                <div v-bind="props" class="w-full h-full py-6" 
+                :style="{ backgroundColor: room.color }"
+            
+            ></div>
+              </template>
 
+              <v-color-picker
+                v-model="room.color"
+                mode="hexa"
+                hide-inputs
+                show-swatches
+                @update:model-value="
+                  (color) => updateField(color, index, 'color')
+                "
+              />
+            </v-menu>
+          </td>
           <!-- Action -->
           <td>
             <div class="px-4">
@@ -116,7 +148,7 @@
 </template>
 
 <script setup>
-
+const colorMenuIndex = ref(null);
 const props = defineProps({
   practiceDetails: {
     type: Object,
@@ -129,9 +161,7 @@ const orgStore = useOrgStore();
 const mainStore = useMainStore();
 const roomList = ref([]);
 
-const showDialog=ref(false);
-
-
+const showDialog = ref(false);
 
 const search = ref("");
 watch(
@@ -166,7 +196,17 @@ const updateField = (e, index, field) => {
   const room = roomList.value[index];
   if (!room) return;
 
-  const updatedRoom = { ...room, [field]: e.target.innerText.trim() };
+  let value;
+
+  if (typeof e === "string") {
+    // v-color-picker gives us a hex string like "#FF0000"
+    value = e;
+  } else {
+    // contenteditable gives us an event
+    value = e.target.innerText.trim();
+  }
+
+  const updatedRoom = { ...room, [field]: value };
 
   // ✅ update local copy immediately
   roomList.value[index] = updatedRoom;
@@ -174,6 +214,7 @@ const updateField = (e, index, field) => {
   // Call API
   handleAttributeUpdate(updatedRoom);
 };
+
 const handleAttributeUpdate = async (updated) => {
   try {
     const res = await orgStore.updateAttributes({
@@ -195,8 +236,7 @@ const handleAttributeUpdate = async (updated) => {
     }
   } catch (err) {
     mainStore.setSnackbar({
-      title:
-        err.message || `An unexpected error occurred while updating room`,
+      title: err.message || `An unexpected error occurred while updating room`,
       type: "error",
     });
   }
