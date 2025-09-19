@@ -95,23 +95,22 @@
           </td>
           <td class="cursor-pointer p-0">
             <v-text-field
-  
-  density="compact"
-  variant="solo"
-  hide-details
-  class="w-100"
-  flat
->
-  <template #prepend-inner>
-    <CommonColorPickerInput
-      :item="room"
-      @update="(payload) => updateField(payload.color, index, 'color')"
-      noBorder
-    />
-  </template>
-</v-text-field>
-     
-            
+              density="compact"
+              variant="solo"
+              hide-details
+              class="w-100"
+              flat
+            >
+              <template #prepend-inner>
+                <CommonColorPickerInput
+                  :item="room"
+                  @update="
+                    (payload) => updateField(payload.color, index, 'color')
+                  "
+                  noBorder
+                />
+              </template>
+            </v-text-field>
           </td>
           <!-- Action -->
           <td>
@@ -182,7 +181,7 @@ const filteredRooms = computed(() => {
 
 // Update editable field
 const updateField = (e, index, field) => {
-  console.log(e)
+  console.log(e);
   const room = roomList.value[index];
   if (!room) return;
 
