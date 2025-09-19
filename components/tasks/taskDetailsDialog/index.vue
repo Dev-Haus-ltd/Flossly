@@ -272,6 +272,7 @@
               <TasksTaskDetailsDialogChecklistTabDetails
                 :checklist="taskDetails.userTaskChecklist"
                 :userTaskId="taskDetails.id" 
+                :title="taskDetails?.taskDetails?.title"
               />
             </v-tabs-window-item>
             <v-tabs-window-item value="files">

@@ -2,7 +2,7 @@
   <div class="px-7 py-3">
     <div class="d-flex align-center justify-space-between my-4">
       <h3 class="heading-text">E-Form</h3>
-      <v-btn flat color="primary" variant="outlined" @click="downloadChecklist"
+      <v-btn v-if="checklist?.length" prepend-icon="mdi-download" flat color="primary" variant="outlined" @click="downloadChecklist"
         >download checklist</v-btn
       >
     </div>
@@ -13,7 +13,7 @@
         class="pa-4 rounded-lg border-card mb-4"
         elevation="0"
         style="border: 1px solid #dbdbdb"
-      >
+      > 
         <TasksTaskDetailsDialogTaskChecklist 
           :item="item"
           :index="index"
@@ -44,9 +44,10 @@
 <script setup>
 const { $jsPDF } = useNuxtApp();
 import html2canvas from "html2canvas";
-const { checklist, userTaskId } = defineProps({
+const { checklist, userTaskId , title} = defineProps({
   checklist: Array,
   userTaskId: Number,
+  title:String
 });
 const checklistRef = ref(null);
 const taskStore = useTaskStore();
@@ -101,29 +102,35 @@ const downloadChecklist = async () => {
   document.body.appendChild(tempContainer);
 
   try {
-
     const canvas = await html2canvas(clone, { scale: 2 });
     const imgData = canvas.toDataURL("image/png");
 
     const pdf = new $jsPDF("p", "mm", "a4");
+
     const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
     const margin = 10;
     const availableWidth = pageWidth - 2 * margin;
     const imgHeight = (canvas.height * availableWidth) / canvas.width;
 
+    // add title (centered)
+    pdf.setFontSize(16);
+    pdf.text(`${title}-checklist`, pageWidth / 2, 15, { align: "center" });
+    pdf.setFontSize(12);
+
     let heightLeft = imgHeight;
-    let position = margin;
+    let position = 25; // start lower so it doesn’t overlap the title
 
     while (heightLeft > 0) {
       pdf.addImage(imgData, "PNG", margin, position, availableWidth, imgHeight);
-      heightLeft -= pdf.internal.pageSize.getHeight() - 2 * margin;
+      heightLeft -= pageHeight - 2 * margin;
       if (heightLeft > 0) {
         pdf.addPage();
         position = margin;
       }
     }
 
-    pdf.save("checklist.pdf");
+    pdf.save(`${title}-checklist.pdf`);
   } catch (err) {
     console.error("PDF generation failed:", err);
   } finally {
@@ -131,12 +138,6 @@ const downloadChecklist = async () => {
     document.body.removeChild(tempContainer);
   }
 };
-
-
-
-
-
-
 
 </script>
 <style scoped>

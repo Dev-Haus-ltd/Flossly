@@ -110,7 +110,7 @@
         >
           <v-icon color="gray" size="24">mdi-close</v-icon>
         </div>
-      </v-card>
+      </v-card> 
     </v-tabs-window>
     <CommonAddCategorySideBar
       v-model="addCategoryDialog"

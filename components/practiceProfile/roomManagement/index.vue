@@ -93,9 +93,7 @@
               </p>
             </div>
           </td>
-          <td
-            class="cursor-pointer p-0"
-          >
+          <td class="cursor-pointer p-0">
             <v-menu
               :model-value="colorMenuIndex === index"
               @update:model-value="
@@ -107,17 +105,17 @@
             >
               <!-- activator must be a block inside td -->
               <template v-slot:activator="{ props }">
-                <div v-bind="props" class="w-full h-full py-6" 
-                :style="{ backgroundColor: room.color }"
-            
-            ></div>
+                <div
+                  v-bind="props"
+                  class="w-full h-full py-6"
+                  :style="{ backgroundColor: room.color }"
+                ></div>
               </template>
 
               <v-color-picker
                 v-model="room.color"
-                mode="hexa"
+                mode="hex"
                 hide-inputs
-                show-swatches
                 @update:model-value="
                   (color) => updateField(color, index, 'color')
                 "

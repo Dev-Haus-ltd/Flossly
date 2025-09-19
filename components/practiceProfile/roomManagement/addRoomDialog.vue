@@ -52,28 +52,20 @@
         </div>
         <div class="mb-4">
           <label class="field-label">Color</label>
-          <v-menu
-            v-model="colorMenu"
-            close-on-content-click="false"
-            transition="scale-transition"
-            offset-y
-          >
-            <template #activator="{ props }">
-              <v-text-field
+       
+          <v-text-field
                 v-model="room.color"
-                v-bind="props"
-                variant="solo"
                 density="compact"
-                class="input-bordered"
-                flat
+                variant="solo"
                 hide-details
-                readonly
-                :append-inner-icon="'mdi-palette'"
-              />
-            </template>
+                class="w-100 input-bordered"
+                flat
+              >
+                <template #prepend-inner>
+                  <CommonColorPickerInput :item="room" />
+                </template>
+              </v-text-field>
 
-            <v-color-picker v-model="room.color" mode="hexa" show-swatches />
-          </v-menu>
         </div>
 
         <!-- Details (Textarea) -->
@@ -111,7 +103,6 @@ const emit = defineEmits(["update:modelValue", "onUpdate"]);
 
 const isOpen = ref(props.modelValue);
 const room = ref({ name: "", description: "", details: "", color: "#FF0000" });
-const colorMenu = ref(false);
 watch(
   () => props.modelValue,
   (val) => (isOpen.value = val)
