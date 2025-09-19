@@ -20,7 +20,7 @@
           color="error"
           variant="text"
           @click="emit('deleteItem', item)"
-          class="mr-2"
+          class="mr-2 action-btn"
         >
           <v-icon>mdi-delete</v-icon>
         </v-btn>
@@ -30,7 +30,7 @@
           color="info"
           variant="text"
           @click="isEditing = true"
-          class="ml-2"
+          class="ml-2 action-btn"
         >
           <v-icon>mdi-pencil</v-icon>
         </v-btn>

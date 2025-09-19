@@ -14,7 +14,7 @@
         elevation="0"
         style="border: 1px solid #dbdbdb"
       >
-        <TasksTaskDetailsDialogTaskChecklist
+        <TasksTaskDetailsDialogTaskChecklist 
           :item="item"
           :index="index"
           @deleteItem="deleteItem"
@@ -80,28 +80,64 @@ const addNewChecklist = () => {
     dateValue: null,
   });
 };
+
 const downloadChecklist = async () => {
   const element = checklistRef.value;
-  if (!element) return;
+  if (!element || !checklist.length) return;
 
-  const canvas = await html2canvas(element, { scale: 2 });
-  const imgData = canvas.toDataURL("image/png");
+  // clone the element
+  const clone = element.cloneNode(true);
 
-  const pdf = new $jsPDF("p", "mm", "a4");
-  const pageWidth = pdf.internal.pageSize.getWidth();
-  const pageHeight = pdf.internal.pageSize.getHeight();
+  // hide buttons inside the clone
+  clone.querySelectorAll(".action-btn").forEach((el) => (el.style.display = "none"));
 
-  // padding in mm
-  const margin = 10;
+  // temporary container offscreen
+  const tempContainer = document.createElement("div");
+  tempContainer.style.position = "fixed";
+  tempContainer.style.left = "-9999px";
+  tempContainer.style.top = "0";
+  tempContainer.style.width = `${element.offsetWidth}px`; // keep width
+  tempContainer.appendChild(clone);
+  document.body.appendChild(tempContainer);
 
-  const availableWidth = pageWidth - 2 * margin;
-  const imgHeight = (canvas.height * availableWidth) / canvas.width;
+  try {
 
-  // if the height exceeds page height, you’d need pagination handling (optional)
-  pdf.addImage(imgData, "PNG", margin, margin, availableWidth, imgHeight);
+    const canvas = await html2canvas(clone, { scale: 2 });
+    const imgData = canvas.toDataURL("image/png");
 
-  pdf.save("checklist.pdf");
+    const pdf = new $jsPDF("p", "mm", "a4");
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const margin = 10;
+    const availableWidth = pageWidth - 2 * margin;
+    const imgHeight = (canvas.height * availableWidth) / canvas.width;
+
+    let heightLeft = imgHeight;
+    let position = margin;
+
+    while (heightLeft > 0) {
+      pdf.addImage(imgData, "PNG", margin, position, availableWidth, imgHeight);
+      heightLeft -= pdf.internal.pageSize.getHeight() - 2 * margin;
+      if (heightLeft > 0) {
+        pdf.addPage();
+        position = margin;
+      }
+    }
+
+    pdf.save("checklist.pdf");
+  } catch (err) {
+    console.error("PDF generation failed:", err);
+  } finally {
+    // clean up
+    document.body.removeChild(tempContainer);
+  }
 };
+
+
+
+
+
+
+
 </script>
 <style scoped>
 .add-qs-btn {
