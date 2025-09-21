@@ -28,7 +28,7 @@
       </div>
       <!-- my staff -->
       <div class="mt-5 px-5">
-        <TeamFlossMyStaff 
+        <TeamFlossMyStaff  
           v-if="teams.length"
           :teams="teams"
           @getDetails="getDetails"

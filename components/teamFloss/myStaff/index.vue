@@ -1,4 +1,5 @@
 <template>
+  <div>
   <!-- Filter Row -->
   <h3 class="head mb-4">My Staff</h3>
   <div class="d-flex align-center justify-space-between mb-4">
@@ -47,7 +48,7 @@
   </div>
 
   <!-- Table -->
-  <TeamFlossMyStaffListView
+  <TeamFlossMyStaffListView 
     v-if="props.teams.length"
     :teams="filteredTeams"
     :selectedHeaders="selectedHeaders"
@@ -63,6 +64,7 @@
     @close="addStaffDrawer = false"
     @success="updateTeams"
   />
+</div>
 </template>
 
 <script setup>

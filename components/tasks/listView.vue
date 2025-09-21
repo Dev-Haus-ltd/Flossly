@@ -302,7 +302,7 @@
                 />
               </template>
               <template v-else-if="col.key === 'frequency'">
-                <DataTableColumnsFrequencies
+                <DataTableColumnsFrequencies 
                   :selected="item"
                   :column="col"
                   @update="updateValueRow(item, 'frequency')"
