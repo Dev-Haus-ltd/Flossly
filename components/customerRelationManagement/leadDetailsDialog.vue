@@ -302,7 +302,7 @@
               <div class="pa-6">
                 <CustomerRelationManagementCommunicationLog
                   :initialNotes="[]"
-                  initialPreferences="{
+                  :initialPreferences="{
         preferredContactMethod: 'Phone',
         preferredAppointmentDay: 'Monday',
         bestTimesToContact: ['Morning']
