@@ -377,7 +377,6 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
 import { parsedDate } from "@/lib/dateFormatter";
 import Avatar from "~/components/Common/avatar.vue";
 const modelValue = ref(false);

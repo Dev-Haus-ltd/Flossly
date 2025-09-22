@@ -61,7 +61,7 @@
               src="@/assets/dashboard/expandIcon.svg"
               alt="Expand"
               class="ml-2 cursor-pointer"
-              @click="$emit('openLead', item)"
+              @click="openLeadDialog(item)"
             />
           </div>
         </template>
@@ -103,10 +103,17 @@
         </template>
       </template>
     </v-data-table>
+    <CustomerRelationManagementLeadDetailsDialog
+      v-model="showLeadDetailDialog"
+      :selected-lead="selectedLead"
+      @close="showLeadDetailDialog = false"
+    
+    />
   </div>
 </template>
 
 <script setup>
+
 
 const props = defineProps({
   leads: { type: Array, required: true },
@@ -118,6 +125,8 @@ const props = defineProps({
 
 const emit = defineEmits(["select", "openLead"]);
 
+const showLeadDetailDialog = ref(false);
+const selectedLead=ref({});
 
 const onSelect = (selection) => {
   if (selection.length === props.leads.length) {
@@ -128,6 +137,13 @@ const onSelect = (selection) => {
 };
 const updateValueRow = (row, key) => {
   console.log(row, key);
+};
+
+const openLeadDialog = (lead) => {
+    selectedLead.value=lead
+    showLeadDetailDialog.value=true
+  console.log("Open lead dialog:", lead);
+
 };
 </script>
 

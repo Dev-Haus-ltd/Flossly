@@ -61,7 +61,7 @@
         :leadSources="leadSources"
         :treatmentSources="treatmentSources"
         @select="onSelect"
-        @openLead="openLeadDialog"
+    
       />
 
       <!-- Sidebar drawer for add -->
@@ -73,6 +73,7 @@
       @close="addLeadDrawer = false"
       @success="handleSuccess"
     />
+
     </div>
   </div>
 </template>
@@ -189,9 +190,6 @@ const onSelect = (selection) => {
   }
 };
 
-const openLeadDialog = (lead) => {
-  console.log("Open lead dialog:", lead);
-};
 
 const updateLeads = (newLead) => {
   leads.value.push(newLead);
