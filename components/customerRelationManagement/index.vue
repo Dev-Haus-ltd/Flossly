@@ -17,11 +17,10 @@
       </v-row>
     </div>
     <div class="mt-5 px-5">
-
       <div class="d-flex justify-space-between align-center mb-4">
         <!-- Left: Search + Filters -->
         <div class="d-flex align-center">
-          <div style="width: 150px" > 
+          <div style="width: 150px">
             <v-text-field
               v-model="search"
               placeholder="Search"
@@ -34,7 +33,11 @@
               class="custom-search"
             />
           </div>
-          <TeamFlossMyLeadsFilterMenu @update:filters="onFiltersUpdated" />
+          <CustomerRelationManagementFilterMenu
+            :leadSources="leadSources"
+            :treatmentSources="treatmentSources"
+            @update:filters="onLeadsFilterUpdate"
+          />
         </div>
 
         <!-- Right: Add Button -->
@@ -60,26 +63,28 @@
         :search="search"
         :leadSources="leadSources"
         :treatmentSources="treatmentSources"
+        :users="userList"
         @select="onSelect"
-    
       />
 
       <!-- Sidebar drawer for add -->
       <CustomerRelationManagementAddNewLead
-      v-model="addLeadDrawer"
-      :lead-sources="leadSources"
-      :treatment-sources="treatmentSources"
-      :staff-list="staffList"
-      @close="addLeadDrawer = false"
-      @success="handleSuccess"
-    />
-
+        v-model="addLeadDrawer"
+        :lead-sources="leadSources"
+        :treatment-sources="treatmentSources"
+        :staff-list="staffList"
+        @close="addLeadDrawer = false"
+        @success="handleSuccess"
+      />
     </div>
   </div>
 </template>
 
 <script setup>
+const userStore = useUserStore();
+const userList = ref([]);
 const addLeadDrawer = ref(false);
+
 const leadStats = ref([
   {
     icon: "https://cdn.lordicon.com/pfvaixkr.json",
@@ -112,21 +117,24 @@ const search = ref("");
 const leads = ref([
   {
     id: 1,
-    alert:"🔥",
+    alert: "🔥",
     name: "John Doe",
     email: "john@demo.com",
     telephone: "1234567890",
     inquiryDate: "2025-09-01",
     leadSource: { id: 1, name: "Website" },
     leadStatus: "New",
-    treatment: { id: 1, name: "Consultation" }, 
-    assigned: "Alice",
+    treatment: { id: 1, name: "Consultation" },
+    assigned: [
+      { id: 1, fullName: "john doe" },
+      { id: 2, fullName: "Usama Naeem" },
+    ],
     followUpDate: "2025-09-15",
     comments: "Interested in product A",
   },
   {
     id: 2,
-    alert:"🔥",
+    alert: "🔥",
     name: "Jane Smith",
     email: "jane@demo.com",
     telephone: "9876543210",
@@ -134,15 +142,18 @@ const leads = ref([
     leadSource: { id: 2, name: "Referral" },
     leadStatus: "In Progress",
     treatment: { id: 2, name: "Demo" },
-    assigned: "Bob",
+    assigned: [
+      { id: 1, fullName: "Bob" },
+      { id: 2, fullName: "john" },
+    ],
     followUpDate: "2025-09-18",
     comments: "Asked for discount",
   },
 ]);
 
 const headers = [
-{ key: "alert", title: "Alert",  width: 70 },
-  { key: "name", title: "Name",  width: 200 },
+  { key: "alert", title: "Alert", width: 70 },
+  { key: "name", title: "Name", width: 200 },
   { key: "email", title: "Email", width: 220 },
   { key: "telephone", title: "Telephone", width: 150 },
   { key: "inquiryDate", title: "Inquiry Date", width: 160 },
@@ -178,7 +189,7 @@ const filteredLeads = computed(() =>
   )
 );
 
-const onFiltersUpdated = (filters) => {
+const onLeadsFilterUpdate = (filters) => {
   console.log("Filters applied:", filters);
 };
 
@@ -189,7 +200,14 @@ const onSelect = (selection) => {
     console.log("Selected:", selection);
   }
 };
-
+onMounted(() => {
+  getUsers();
+});
+const getUsers = () => {
+  userStore.getUserList({ roleId: null }).then((res) => {
+    if (res.code === 0) userList.value = res.data;
+  });
+};
 
 const updateLeads = (newLead) => {
   leads.value.push(newLead);

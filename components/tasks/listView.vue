@@ -336,7 +336,7 @@
               </template>
               <!-- avatar assignedUser -->
               <template v-else-if="col.key === 'assignedUser.fullName'">
-                <DataTableColumnsAssignedUsers
+                <DataTableColumnsAssignedUsers 
                   :assigned-users="item.assignedUsers || [user]"
                   :all-users="getTaskUsers(item)"
                   :current-user="user"
@@ -591,7 +591,7 @@ const {
   taskDetails: Array,
   availableHeaders: Array,
   orgStatuses: Array,
-  priorities: Array,
+  priorities: Array, 
   users: Array,
   categories: Array,
   clearSelection: Boolean,

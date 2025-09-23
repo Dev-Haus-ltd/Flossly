@@ -9,7 +9,7 @@
           :items="contactMethods"
           variant="solo"
           density="compact"
-          class="mb-1 input-bordered"
+          class="mb-1 input-bordered" 
           flat 
           @update:model-value="onPrefChange"
         />

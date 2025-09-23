@@ -31,7 +31,7 @@
           class="custom-search"
         />
       </div>
-      <TeamFlossMyStaffFilterMenu @update:filters="onFiltersUpdated" />
+      <TeamFlossMyStaffFilterMenu @update:filters="onFiltersUpdated" /> 
     </div>
     <v-btn
       color="primary"
