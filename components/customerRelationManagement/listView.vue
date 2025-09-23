@@ -123,7 +123,8 @@
     </v-data-table>
     <v-card
       v-if="selectedLeads.length"
-      class="action-bar py-3 px-6 d-flex justify-space-between align-center rounded-lg w-66"
+      style="width: 72%;"
+      class="action-bar py-3 px-6 d-flex justify-space-between align-center rounded-lg"
       :elevation="5"
       flat
     >
