@@ -1,14 +1,14 @@
 <template>
   <div>
     <div class="d-flex justify-space-between align-center my-2">
-      <div class="d-flex align-center py-1">
+      <div class="toolbar-actions d-flex align-center py-1">
         <v-btn-toggle v-model="viewType" mandatory class="custom-toggle">
           <v-btn value="list" class="toggle-btn">
-            <v-icon size="16" class="mr-1">mdi-format-align-right</v-icon>
+            <img :src="listicon" alt="list icon" class="mr-1" width="16" height="16" />
             List
           </v-btn>
           <v-btn value="calender" class="toggle-btn">
-            <v-icon size="16" class="mr-1">mdi-calendar</v-icon>
+            <img :src="calendericon" alt="calendar icon" class="mr-1" width="16" height="16" />
             Calender
           </v-btn>
         </v-btn-toggle>
@@ -40,7 +40,7 @@
                 v-bind="props"
                 variant="flat"
                 density="compact"
-                class="tbl-top-btn ml-2"
+                class="tbl-top-btn"
                 style="width: 200px"
               >
                 <span>Manage Columns</span>
@@ -127,7 +127,7 @@
         <v-expansion-panel-title>
           <template v-slot:default="{}">
             <div class="d-flex">
-              <v-chip :color="getColor(group.status)" label>
+              <v-chip :text-color="getColor(group.status)" label>
                 <v-icon v-if="group.status === 'todo'" class="mr-2"
                   >mdi-calendar-clock</v-icon
                 >
@@ -137,7 +137,7 @@
 
                 {{ getStatuses(group.status) }}
               </v-chip>
-              <v-chip class="ml-2" :color="getColor(group.status)" label>
+              <v-chip class="ml-2" :text-color="getColor(group.status)" label>
                 {{ group.tasks.length }}
               </v-chip>
             </div>
@@ -577,6 +577,8 @@
 import { getRandomHexColor } from "~/lib/misc";
 import { parsedDate } from "@/lib/dateFormatter";
 import draggable from "vuedraggable";
+import listicon from "@/assets/icons/listView/listicon.svg";
+import calendericon from "@/assets/icons/listView/calendericon.svg";
 const {
   headers,
   availableHeaders,
@@ -730,7 +732,7 @@ const getColor = (key) => {
   if (statuses.value.find((x) => x.key === key)) {
     return statuses.value.find((x) => x.key === key).color;
   } else {
-    return "#e9e9e9";
+    return "#EF3131";
   }
 };
 const formattedDate = (date) => {
@@ -1000,29 +1002,36 @@ const onSelectionChange = (newSelected) => {
 .custom-toggle {
   /* background-color: transparent; */
   height: 40px;
+  display: flex;
+  gap: 12px;
 }
 
 .toggle-btn {
-  background-color: #f3f6fa !important;
+  background-color: #FFFFFF !important;
   text-transform: none;
   font-size: 14px;
   color: #333;
   transition: all 0.2s ease-in-out;
+  border-radius: 8px;
+  box-shadow: 0px 2px 4px rgba(0,0,0,0.08); /* subtle shadow under */
 }
 
 .v-btn--active.toggle-btn {
   background-color: #ffffff !important;
-  box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.12);
-  transform: translateY(-1px); /* small lift effect */
+  --v-theme-overlay-multiplier: 0 !important; /* reset overlay */
+  --v-theme-primary: #ffffff !important;      /* force white */
+  box-shadow: 0px 6px 12px rgba(0,0,0,0.15);
+  transform: translateY(-2px);
 }
 .custom-search,
 .tbl-top-btn {
   height: 40px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 14px;
-  background-color: #fafafa !important;
+  background-color: #FFFFFF !important;
   text-transform: none;
   box-shadow: none;
+  box-shadow: 0px 4px 11px 0px #0000001C;
   color: #737373;
 }
 .resizable-table .th-content {
@@ -1106,4 +1115,10 @@ const onSelectionChange = (newSelected) => {
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px; /* consistent spacing between all items */
+}
+
 </style>

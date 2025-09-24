@@ -5,6 +5,7 @@
       <v-row dense>
         <v-col cols="12" md="2" v-for="(item, i) in taskStats" :key="i">
           <v-card
+            :id="`task-card-${i}`"
             :style="{ backgroundColor: '#F3F6FA' }"
             class="task-card pa-4"
             :elevation="0"
@@ -12,6 +13,7 @@
             <lord-icon
               :src="getIcon(item.categoryName)"
               trigger="hover"
+              :target="`#task-card-${i}`"
               style="width: 60px; height: 60px"
             >
             </lord-icon>

@@ -1,10 +1,11 @@
 <template>
   <v-col :cols="cols">
-    <div class="task-div">
+    <div class="task-div" :id="`stat-card-${uid}`">
       <div class="d-flex justify-space-between w-100">
         <lord-icon
           :src="icon"
           trigger="hover"
+          :target="`#stat-card-${uid}`"
           style="width: 60px; height: 60px"
         >
         </lord-icon>

@@ -28,6 +28,7 @@
         :icon="stat.icon"
         :label="stat.label"
         :value="stat.value"
+        :uid="i"
       />
     </v-row>
       </v-card>
