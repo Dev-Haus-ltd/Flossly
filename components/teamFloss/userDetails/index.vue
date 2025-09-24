@@ -47,13 +47,13 @@
     </v-tabs-window>
   </div>
 </template>
-
+ 
 <script setup>
 const { user, rolesList } = defineProps({
   user: Object,
   rolesList: Array
 })
-
+console.log(user)
 const currentTab = ref("profile");
 </script>
 
