@@ -44,6 +44,15 @@ import { Course } from "./cpd/course";
 import { CourseQuestionaire } from "./cpd/courseQuestionaire";
 import { UserCourseHistory } from "./cpd/userCourseHistory";
 
+// CRM
+import { CrmContact } from "./crm/contact";
+import { CrmLead } from "./crm/lead";
+import { CrmPipeline } from "./crm/pipeline";
+import { CrmPipelineStage } from "./crm/pipelineStage";
+import { CrmActivity } from "./crm/activity";
+import { CrmConversation } from "./crm/conversation";
+import { CrmMessage } from "./crm/message";
+
 /* Relations and Associations */
 
 TaskCategory.hasMany(Task, { foreignKey: "categoryId", as: "tasks" });
@@ -414,6 +423,25 @@ User.hasMany(UserCourseHistory, {
 User.hasMany(UserHrDocument, { foreignKey: "userId", as: "hrDocuments" });
 UserHrDocument.belongsTo(User, { foreignKey: "userId", as: "user" });
 
+// CRM Associations
+CrmPipeline.hasMany(CrmPipelineStage, { foreignKey: "pipelineId", as: "stages" });
+CrmPipelineStage.belongsTo(CrmPipeline, { foreignKey: "pipelineId", as: "pipeline" });
+
+CrmContact.hasMany(CrmLead, { foreignKey: "contactId", as: "leads" });
+CrmLead.belongsTo(CrmContact, { foreignKey: "contactId", as: "contact" });
+
+CrmPipeline.hasMany(CrmLead, { foreignKey: "pipelineId", as: "leads" });
+CrmLead.belongsTo(CrmPipeline, { foreignKey: "pipelineId", as: "pipeline" });
+
+CrmPipelineStage.hasMany(CrmLead, { foreignKey: "stageId", as: "leads" });
+CrmLead.belongsTo(CrmPipelineStage, { foreignKey: "stageId", as: "stage" });
+
+CrmConversation.hasMany(CrmMessage, { foreignKey: "conversationId", as: "messages" });
+CrmMessage.belongsTo(CrmConversation, { foreignKey: "conversationId", as: "conversation" });
+
+CrmConversation.belongsTo(CrmContact, { foreignKey: "contactId", as: "contact" });
+CrmContact.hasMany(CrmConversation, { foreignKey: "contactId", as: "conversations" });
+
 
 export {
   User,
@@ -460,4 +488,11 @@ export {
   Course,
   CourseQuestionaire,
   UserCourseHistory,
+  CrmContact,
+  CrmLead,
+  CrmPipeline,
+  CrmPipelineStage,
+  CrmActivity,
+  CrmConversation,
+  CrmMessage,
 };
