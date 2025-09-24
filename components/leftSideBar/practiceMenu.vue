@@ -2,12 +2,17 @@
   <div class="header-container" :class="!rail ? 'pl-2' : ''">
     <!-- Left: Avatar + Title -->
     <div class="left-content">
-      <CommonAvatar v-if="currentOrg.name" :user="currentOrg" />
-      <span class="ml-2 title-text" v-if="!rail">{{ currentOrg.name }}</span>
+      <CommonAvatar v-if="currentOrg?.name" :user="currentOrg" />
+      <span class="ml-2 title-text" v-if="!rail">{{ currentOrg?.name }}</span>
     </div>
 
-    <!-- Right: Menu Icon -->
-    <v-menu v-model="menu" location="bottom end" offset-y>
+    <!-- Right: Org Switch Menu -->
+    <v-menu
+      v-model="menu"
+      :close-on-content-click="false"
+      location="bottom right"
+      offset-y
+    >
       <template #activator="{ props }">
         <v-btn v-bind="props" icon flat>
           <div class="d-flex flex-column align-center justify-center">
@@ -16,12 +21,19 @@
           </div>
         </v-btn>
       </template>
-      <v-list>
-        <v-list-item @click="handleAction('Edit')">
-          <v-list-item-title>Edit</v-list-item-title>
-        </v-list-item>
-        <v-list-item @click="handleAction('Delete')">
-          <v-list-item-title>Delete</v-list-item-title>
+
+      <v-list style="width: 235px">
+        <v-list-item
+          v-for="orgWrapper in user?.userOrganisations || []"
+          :key="orgWrapper.organisation.id"
+          @click="handleOrgClick(orgWrapper.organisation)"
+        >
+          <div class="d-flex align-center">
+            <CommonAvatar :user="orgWrapper.organisation" />
+            <span class="ml-2 title-text">{{
+              orgWrapper.organisation.name
+            }}</span>
+          </div>
         </v-list-item>
       </v-list>
     </v-menu>
@@ -33,13 +45,33 @@ const { currentOrg, rail } = defineProps({
   currentOrg: Object,
   rail: Boolean,
 });
+const authStore = useAuthStore();
+const mainStore = useMainStore();
+const { user } = useUser();
 const menu = ref(false);
-onMounted(() => {
-  currentOrg.fullName = currentOrg.name;
-});
-const handleAction = (action) => {
-  console.log(`${action} clicked`);
-  menu.value = false;
+const handleOrgClick = async (org) => {
+  try {
+    const res = await authStore.switchOrgnanisation({ orgId: org.id });
+
+    if (res.code === 0) {
+      mainStore.setSnackbar({
+        type: "success",
+        title: "Organisation switched successfully",
+      });
+      menu.value = false;
+    } else {
+      mainStore.setSnackbar({
+        type: "error",
+        title:
+          res.message || res?.data?.message || "Failed to switch organisation",
+      });
+    }
+  } catch (err) {
+    mainStore.setSnackbar({
+      type: "error",
+      title: err.message || "An error occurred while switching organisation",
+    });
+  }
 };
 </script>
 
@@ -49,7 +81,7 @@ const handleAction = (action) => {
   font-size: 24px;
 }
 .custom-avatar {
-  border-radius: 6px !important; /* makes avatar slightly rounded */
+  border-radius: 6px !important;
 }
 .header-container {
   display: flex;
@@ -58,12 +90,10 @@ const handleAction = (action) => {
   padding: 2px 8px;
   border-bottom: 1px solid #dbdbdb;
 }
-
 .left-content {
   display: flex;
   align-items: center;
 }
-
 .title-text {
   font-family: "Poppins";
   font-weight: 500;

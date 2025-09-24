@@ -256,5 +256,20 @@ export const useAuthStore = defineStore("authStore", {
           });
       });
     },
+    switchOrgnanisation(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService 
+          .switchOrgnanisation(data) 
+          .then((res) =>  {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false; 
+            reject(err); 
+          });
+      });
+    },
   },
 });

@@ -271,7 +271,7 @@ const currentOrg = ref({});
 }
 .active-item {
   font-weight: 600 !important;
-  background-color: #EFF5F5;
+  background-color: #eff5f5;
   border-radius: 8px;
 }
 .right-border {

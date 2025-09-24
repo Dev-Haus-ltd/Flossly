@@ -319,7 +319,8 @@ export const updatePassword = async (event) => {
 };
 
 export const switchOrgnanisation = async (event) => {
-  const { orgId } = await readBody(event);
+  const body = await readBody(event);
+  const { orgId }= JSON.parse(body)
   const user = event.context.user;
   try {
     const record = await UserOrganisation.findOne({
