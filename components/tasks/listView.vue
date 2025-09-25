@@ -2,7 +2,7 @@
   <div>
     <div class="d-flex justify-space-between align-center my-2">
       <div class="toolbar-actions d-flex align-center py-1">
-        <v-btn-toggle v-model="viewType" mandatory class="custom-toggle">
+        <v-btn-toggle v-model="viewType" mandatory class="custom-toggle px-1 pt-1">
           <v-btn value="list" class="toggle-btn">
             <img :src="listicon" alt="list icon" class="mr-1" width="16" height="16" />
             List
@@ -19,6 +19,7 @@
             placeholder="Search"
             append-inner-icon="mdi-magnify"
             variant="solo"
+            :elevation="0"
             density="compact"
             hide-details
             bg-color="#FAFAFA"
@@ -127,7 +128,7 @@
         <v-expansion-panel-title>
           <template v-slot:default="{}">
             <div class="d-flex">
-              <v-chip :text-color="getColor(group.status)" label>
+              <v-chip :color="getColor(group.status)" label>
                 <v-icon v-if="group.status === 'todo'" class="mr-2"
                   >mdi-calendar-clock</v-icon
                 >
@@ -137,7 +138,7 @@
 
                 {{ getStatuses(group.status) }}
               </v-chip>
-              <v-chip class="ml-2" :text-color="getColor(group.status)" label>
+              <v-chip class="ml-2" :color="getColor(group.status)" label>
                 {{ group.tasks.length }}
               </v-chip>
             </div>
@@ -1000,20 +1001,17 @@ const onSelectionChange = (newSelected) => {
   border-right: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 .custom-toggle {
-  /* background-color: transparent; */
-  height: 40px;
+  background-color: #F3F6FA;
   display: flex;
-  gap: 12px;
+  height: 40px;
 }
 
 .toggle-btn {
-  background-color: #FFFFFF !important;
+  background-color: #F3F6FA !important;
   text-transform: none;
   font-size: 14px;
   color: #333;
   transition: all 0.2s ease-in-out;
-  border-radius: 8px;
-  box-shadow: 0px 2px 4px rgba(0,0,0,0.08); /* subtle shadow under */
 }
 
 .v-btn--active.toggle-btn {
@@ -1022,6 +1020,8 @@ const onSelectionChange = (newSelected) => {
   --v-theme-primary: #ffffff !important;      /* force white */
   box-shadow: 0px 6px 12px rgba(0,0,0,0.15);
   transform: translateY(-2px);
+  border-radius: 6px;
+  box-shadow: 0px 2px 4px rgba(0,0,0,0.08); /* subtle shadow under */
 }
 .custom-search,
 .tbl-top-btn {
@@ -1031,7 +1031,6 @@ const onSelectionChange = (newSelected) => {
   background-color: #FFFFFF !important;
   text-transform: none;
   box-shadow: none;
-  box-shadow: 0px 4px 11px 0px #0000001C;
   color: #737373;
 }
 .resizable-table .th-content {
