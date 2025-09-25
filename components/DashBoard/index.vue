@@ -14,7 +14,7 @@
         class="flossly-col"
       >
         <DashBoardProductCard
-          :title="item.title"
+          :title="item.title" 
           :img="item.img"
           :colors="item.colors"
           :isLocked="item.isLocked"

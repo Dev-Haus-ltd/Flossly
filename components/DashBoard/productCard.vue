@@ -4,7 +4,7 @@
     :id="`flossly-card-${uid}`"
     :class="{ clickable: !isLocked }"
     :style="{ backgroundColor: !isLocked ? '#FFFFFF' : '#F2F2F2' }"
-    @click="handleClick"
+    @click="handleClick(uid)"
   >
     <div v-if="isLocked" class="lock-icon">
       <img :src="lockImg" alt="Locked" />
@@ -26,7 +26,7 @@
 <script setup>
 import lockImg from "@/assets/icons/dashBoard/lock.svg";
 import { useRouter } from "vue-router";
-
+const emit= defineEmits(['handleClick']);
 const router = useRouter();
 
 const props = defineProps({
@@ -34,14 +34,17 @@ const props = defineProps({
   img: { type: String, required: true },
   colors: { type: String, default: "" },
   isLocked: { type: Boolean, default: false },
-  route: { type: String, default: "/" }, // route to navigate
+  route: { type: String, required:false }, // route to navigate
   uid: { type: [String, Number], required: true },
   isHovered: Boolean,
 });
 console.log(props);
 const handleClick = () => {
-  if (!props.isLocked) {
+  if (!props.isLocked && props.route) {
     router.push(props.route);
+  }
+  else{
+    emit('handleClick', props.uid)
   }
 };
 </script>
@@ -58,6 +61,7 @@ const handleClick = () => {
   justify-content: center;
   cursor: default;
   height: 200px;
+  width: 100%;
 }
 
 .flossly-card.clickable {
