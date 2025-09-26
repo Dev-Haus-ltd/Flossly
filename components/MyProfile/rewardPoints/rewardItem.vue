@@ -33,7 +33,7 @@
           prepend-icon="mdi-star"
           label
         >
-          +{{ task?.rewardPoint?.points }} Points
+          {{ task?.rewardPoint?.points }} Points
         </v-chip>
       </div>
     </div>

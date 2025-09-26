@@ -91,7 +91,7 @@
 
 <script setup>
 import { ref, watch } from "vue";
-
+const { user } = useUser();
 const props = defineProps({
   modelValue: Boolean,
 });
@@ -126,15 +126,22 @@ const submit = async () => {
     message: message.value,
   };
 
-  try { 
+  try {
     const res = await pointStore.feedback(data);
 
     if (res.code === 0) {
-      // const user = JSON.parse(localStorage.getItem("user"));
-      // if (user && user.userPoints) {
-      //   user.userPoints[0].balance += 50;
-      // }
-      // localStorage.setItem("user", JSON.stringify(user));
+      if (user.value.id) {
+        // Add 50 points
+        user.value.userPoints.balance =
+          (user.value.userPoints?.balance ?? 0) + 50;
+
+        // Optionally also update `totalPointsRewarded`
+        user.value.userPoints.totalPointsRewarded =
+          (user.value.userPoints?.totalPointsRewarded ?? 0) + 50;
+
+        // Save updated object back to localStorage
+        localStorage.setItem("user", JSON.stringify(user));
+      }
 
       mainStore.setSnackbar({
         title: res?.data?.message || "Feedback submitted successfully",

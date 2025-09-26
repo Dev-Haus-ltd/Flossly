@@ -30,7 +30,10 @@
 
     <!-- Right: Icon -->
     <div class="d-flex align-center">
-      <CommonRewardChip text="+20" tooltip="Reward points" />
+      <CommonRewardChip
+        :text="user?.userPoints?.balance"
+        tooltip="Reward points"
+      />
       <!-- <v-text-field
         placeholder="Search..."
         append-inner-icon="mdi-magnify"
@@ -50,6 +53,7 @@
 </template>
 
 <script setup>
+const { user } = useUser();
 import headerLogo from "@/assets/logos/headerLogo.svg";
 import logoIcon from "@/assets/logos/Logoicon2.svg";
 const emit = defineEmits(["small-screen-drawer"]);

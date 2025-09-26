@@ -12,7 +12,7 @@
       <!-- Text -->
       <div class="ml-4 mt-2">
         <div class="rewards-title">My Rewards Points</div>
-        <div class="rewards-points">{{ userBalance }}</div>
+        <div class="rewards-points">{{ user?.userPoints?.balance }}</div>
       </div>
     </div>
     <h5 class="sub-head mt-5">Points History</h5>
@@ -25,11 +25,11 @@
 </template>
 
 <script setup>
+
+const {user}=useUser();
 const pointStore = usePointStore()
 const history = ref([])
-const user = ref({})
 onMounted(() => {
-  user.value = JSON.parse(localStorage.getItem('user'))
   getRewardHistory()
 })
 const getRewardHistory = () => {
@@ -39,13 +39,7 @@ const getRewardHistory = () => {
     }
   })
 }
-const userBalance = computed(() => {
-  if (!history.value?.length) return 0;
 
-  return history.value.reduce((total, item) => {
-    return total + (item?.points ?? 0);
-  }, 0);
-});
 </script>
 
 <style scoped>
