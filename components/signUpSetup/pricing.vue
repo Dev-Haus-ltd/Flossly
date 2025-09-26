@@ -11,7 +11,7 @@
       >
         <v-card
           class="pa-7 d-flex flex-column justify-space-between"
-          height="510"
+          height="520"
           :elevation="0"
           :style="{
             border: '1px solid #DCDCDC',
