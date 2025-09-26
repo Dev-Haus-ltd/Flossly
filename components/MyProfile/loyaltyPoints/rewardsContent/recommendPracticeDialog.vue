@@ -155,7 +155,9 @@ const submit = () => {
   pointStore
     .referPractice(organisation.value)
     .then((res) => {
-      if (user.value.id) {
+    
+      if (res.code === 0) {
+        if (user.value.id) {
         // Add 50 points
         user.value.userPoints.balance =
           (user.value.userPoints?.balance ?? 0) + 2000;
@@ -167,7 +169,6 @@ const submit = () => {
         // Save updated object back to localStorage
         localStorage.setItem("user", JSON.stringify(user));
       }
-      if (res.code === 0) {
         mainStore.setSnackbar({
           title: res?.data?.message || "Practice referred successfully",
           type: "success",
