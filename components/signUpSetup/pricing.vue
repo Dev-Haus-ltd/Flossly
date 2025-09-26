@@ -16,7 +16,7 @@
           :style="{
             border: '1px solid #DCDCDC',
             borderRadius: '40px',
-            backgroundColor: plan.bgColor,
+            backgroundColor: plan.product.name === 'Flossly - Glide Package' ? '#EFF5F5' : plan.bgColor
           }"
         >
           <div>
