@@ -321,6 +321,7 @@ export const updateTask = async (event) => {
     } else {
       throw createError({ message: "Task not found" });
     }
+    // add reward points if status === completed and prioirty === high / critical
     return success("UserTask updated");
   } catch (err) {
     return error(500, err.message);
@@ -412,6 +413,7 @@ export const completeBulkTasks = async (event) => {
         },
       }
     );
+    // add reward points
     return success("All tasks compeleted successfully.");
   } catch (err) {
     return error(500, err.message);

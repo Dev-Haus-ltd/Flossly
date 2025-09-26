@@ -10,11 +10,11 @@
         :lg="col"
       >
         <v-card
-          class="pa-6 d-flex flex-column justify-space-between"
-          height="780"
+          class="pa-7 d-flex flex-column justify-space-between"
+          height="510"
           :elevation="0"
           :style="{
-            border: '1px solid #ccc',
+            border: '1px solid #DCDCDC',
             borderRadius: '40px',
             backgroundColor: plan.bgColor,
           }"
@@ -35,19 +35,43 @@
 
             <!-- Core Features -->
             <div class="font-section-title mb-2">Core Features</div>
-            <v-checkbox
+            <div
               v-for="(feature, i) in features.find(
                 (x) => x.type === plan.product.name
               )?.features"
               :key="i"
-              :label="feature"
-              :model-value="true"
-              color="blue"
-              density="compact"
-              disabled
-              hide-details
-              class="font-feature align-top mt-1"
-            />
+              class="flex items-start gap-2 mt-2"
+            >
+              <div class="d-flex align-center mt-3">
+                <img
+                  src="@/assets/icons/checkbox.svg"
+                  alt="checkbox"
+                  class="mr-2"
+                style="width: 20px; height: 20px;"
+                />
+
+                <!-- Label with tooltip -->
+                <v-tooltip v-if="feature.length > 30" location="top">
+                  <template #activator="{ props }">
+                    <span
+                      v-bind="props"
+                      class="feature-statement"
+                      :title="feature"
+                    >
+                      {{ feature }}
+                    </span>
+                  </template>
+
+                  <!-- Tooltip text goes here -->
+                  {{ feature }}
+                </v-tooltip>
+
+                <span v-else style="font-size: 14px">
+                  {{ feature }}
+                </span>
+              </div>
+              <!-- Checkbox image -->
+            </div>
           </div>
           <v-btn
             color="primary"
@@ -126,7 +150,7 @@ const {
   formatPrice,
   handleSubscribe,
 } = useStripe();
-
+console.log(prices)
 const props = defineProps({
   col: {
     type: String,
@@ -192,7 +216,7 @@ onMounted(fetchPrices);
 .font-title {
   font-family: "Poppins";
   font-weight: 400;
-  font-size: 30px;
+  font-size: 20px;
   line-height: 100%;
 }
 
@@ -206,15 +230,17 @@ onMounted(fetchPrices);
 .font-price {
   font-family: "Poppins";
   font-weight: 700;
-  font-size: 50px;
+  font-size: 30px;
   line-height: 100%;
 }
 
 .font-price-desc {
-  font-family: "Poppins";
-  font-weight: 400;
-  font-size: 12px;
-  line-height: 100%;
+  font-family: Poppins;
+font-weight: 400;
+font-style: Regular;
+font-size: 14px;
+color: #878787;
+
 }
 
 .font-section-title {
@@ -235,6 +261,7 @@ onMounted(fetchPrices);
   font-weight: 500;
   font-size: 14px;
   text-transform: none;
+  height: 42px;
 }
 ::v-deep(.v-selection-control) {
   align-items: baseline !important;
@@ -244,5 +271,20 @@ onMounted(fetchPrices);
   border: 1px solid #e0e0e0;
   padding: 12px;
   border-radius: 6px;
+}
+.feature-statement {
+  max-width: 250px;
+  display: inline-block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  color: #414141;
+  font-family: Poppins;
+font-weight: 400;
+font-style: Regular;
+font-size: 14px;
+
+
 }
 </style>

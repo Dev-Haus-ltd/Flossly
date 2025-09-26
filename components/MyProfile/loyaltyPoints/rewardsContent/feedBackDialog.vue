@@ -117,7 +117,7 @@ const close = () => {
   message.value = "";
 };
 
-const submit = () => {
+const submit = async () => {
   if (!name.value || !email.value || !message.value) return;
 
   const data = {
@@ -126,36 +126,36 @@ const submit = () => {
     message: message.value,
   };
 
-  pointStore
-    .feedback(data)
-    .then((res) => {
-      if (res.code === 0) {
-        const user = JSON.parse(localStorage.getItem("user"));
-        if (user && user.userPoints) {
-          user.userPoints[0].balance += 50;
-        }
-        localStorage.setItem("user", JSON.stringify(user));
-        mainStore.setSnackbar({
-          title: res?.data?.message || "Feedback submitted successfully",
-          type: "success",
-        });
+  try { 
+    const res = await pointStore.feedback(data);
 
-        emit("onSubmit", data);
-        close();
-      } else {
-        mainStore.setSnackbar({
-          title:
-            res?.data?.message || res?.message || "Failed to submit feedback",
-          type: "error",
-        });
-      }
-    })
-    .catch((err) => {
+    if (res.code === 0) {
+      // const user = JSON.parse(localStorage.getItem("user"));
+      // if (user && user.userPoints) {
+      //   user.userPoints[0].balance += 50;
+      // }
+      // localStorage.setItem("user", JSON.stringify(user));
+
       mainStore.setSnackbar({
-        title: err?.message || "Something went wrong",
+        title: res?.data?.message || "Feedback submitted successfully",
+        type: "success",
+      });
+
+      emit("onSubmit", data);
+      close();
+    } else {
+      mainStore.setSnackbar({
+        title:
+          res?.data?.message || res?.message || "Failed to submit feedback",
         type: "error",
       });
+    }
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: err?.message || "Something went wrong",
+      type: "error",
     });
+  }
 };
 </script>
 

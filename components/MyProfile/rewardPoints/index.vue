@@ -17,7 +17,7 @@
     </div>
     <h5 class="sub-head mt-5">Points History</h5>
     <div class="mt-5">
-      <MyProfileRewardPointsRewardItem
+      <MyProfileRewardPointsRewardItem 
         :tasks="history"
       />
     </div>
@@ -40,7 +40,11 @@ const getRewardHistory = () => {
   })
 }
 const userBalance = computed(() => {
-  return user?.userPoints?.[0]?.balance ?? 0;
+  if (!history.value?.length) return 0;
+
+  return history.value.reduce((total, item) => {
+    return total + (item?.points ?? 0);
+  }, 0);
 });
 </script>
 

@@ -26,6 +26,7 @@ const docStore = useDocStore();
 const userStore = useUserStore();
 const rotaStore= useRotaStore();
 const cpdStore = useCpdStore()
+const pointStore=usePointStore();
 const { isLoading: authLoading } = storeToRefs(authStore);
 const { isLoading: mainLoading } = storeToRefs(mainStore);
 const { isLoading: orgLoadong } = storeToRefs(orgStore);
@@ -34,6 +35,8 @@ const { isLoading: docLoading } = storeToRefs(docStore);
 const { isLoading: userLoading } = storeToRefs(userStore);
 const { isLoading: rotaLoading } = storeToRefs(rotaStore);
 const { isLoading: cpdLoading } = storeToRefs(cpdStore);
+const { isLoading: pointLoading } = storeToRefs(pointStore);
+
 
 
 
@@ -46,7 +49,8 @@ const anyLoading = computed(
     docLoading.value ||
     userLoading.value ||
     rotaLoading.value ||
-    cpdLoading.value
+    cpdLoading.value  ||
+    pointLoading.value
 );
 </script>
 

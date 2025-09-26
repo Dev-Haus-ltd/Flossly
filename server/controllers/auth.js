@@ -681,6 +681,7 @@ export const addUserHrDoc = async (event) => {
     userDoc.uploadedDate = new Date();
     userDoc.status = "Completed";
     await userDoc.save();
+    // add reward points
     return success("Added");
   } catch (err) {
     return error(500, err.message);

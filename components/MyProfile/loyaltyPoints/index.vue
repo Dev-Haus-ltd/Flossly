@@ -60,7 +60,7 @@
       <div class="mt-6">
         <div v-if="activeTab === 'rewards'">
           <!-- Rewards content here -->
-          <MyProfileLoyaltyPointsRewardsContent/>
+          <MyProfileLoyaltyPointsRewardsContent /> 
 
         </div>
         <div v-else>
