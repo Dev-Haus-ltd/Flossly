@@ -1,14 +1,10 @@
 <template>
   <v-dialog v-model="isOpen" max-width="90%" class="rounded-lg">
     <v-card>
+      <!-- Header -->
       <v-card-title
         class="d-flex align-center justify-space-between"
-        style="
-          font-family: Poppins;
-          font-weight: 600;
-          font-size: 16px;
-          border-bottom: 1px solid #dbdbdb;
-        "
+        style="font-family: Poppins; font-weight: 600; font-size: 16px; border-bottom: 1px solid #dbdbdb;"
       >
         {{ doc?.name }}
         <v-btn
@@ -22,8 +18,10 @@
         </v-btn>
       </v-card-title>
 
+      <!-- Editable Document -->
       <div v-if="doc.type === 'editable'" class="pa-5">
         <DocumentEditorContainerComponent
+          v-if="isClient"
           ref="editor"
           height="500px"
           :serviceUrl="serviceUrl"
@@ -31,6 +29,8 @@
           :enableRibbon="true"
         />
       </div>
+
+      <!-- PDF Viewer -->
       <div v-else class="pa-5" style="height: 700px">
         <iframe
           v-if="pdfurl"
@@ -51,11 +51,13 @@
         >
           Cancel
         </v-btn>
-        <v-btn color="primary" @click="updateFile" flat
-          >{{ doc.type === "editable" ? "Save" : "Close" }}
+        <v-btn color="primary" @click="updateFile" flat>
+          {{ doc.type === "editable" ? "Save" : "Close" }}
         </v-btn>
       </v-card-actions>
     </v-card>
+
+    <!-- Loader -->
     <v-overlay
       v-model="isLoading"
       contained
@@ -76,145 +78,129 @@
 </template>
 
 <script setup>
-import { registerLicense } from "@syncfusion/ej2-base";
-registerLicense(
-  "Ngo9BigBOggjHTQxAR8/V1JEaF1cWWhAYVJwWmFZfVtgd19HaVZQR2YuP1ZhSXxWdk1iXn9dcX1UTmlUU0Z9XEI="
-);
-import pkg from '@syncfusion/ej2-vue-documenteditor';
+import { registerLicense } from "@syncfusion/ej2-base"
+registerLicense("Ngo9BigBOggjHTQxAR8/V1JEaF1cWWhAYVJwWmFZfVtgd19HaVZQR2YuP1ZhSXxWdk1iXn9dcX1UTmlUU0Z9XEI=")
 
-const { 
-  Toolbar, 
-  Print, 
-  Ribbon, 
-  SfdtExport, 
-  WordExport, 
-  TextExport, 
-  Selection, 
-  Search, 
-  Editor, 
-  EditorHistory, 
-  OptionsPane, 
-  ContextMenu, 
-  ImageResizer, 
-  HyperlinkDialog, 
-  TableDialog, 
-  BookmarkDialog, 
-  TableOfContentsDialog, 
-  PageSetupDialog, 
-  StyleDialog, 
-  ListDialog, 
-  ParagraphDialog, 
-  BulletsAndNumberingDialog, 
-  FontDialog, 
-  TablePropertiesDialog, 
-  BordersAndShadingDialog, 
-  TableOptionsDialog, 
-  CellOptionsDialog, 
-  StylesDialog, 
-  Comment, 
-  DocumentEditorContainerComponent 
-} = pkg;
+// ✅ Mark as client-only
+const isClient = process.client
 
-const editor = ref(null);
-const pdfurl = ref(null);
-const serviceUrl =
-  "https://services.syncfusion.com/vue/production/api/documenteditor/";
-provide("editor", [
-  Toolbar,
-  Print,
-  Ribbon,
-  SfdtExport,
-  WordExport,
-  TextExport,
-  Selection,
-  Search,
-  Editor,
-  EditorHistory,
-  OptionsPane,
-  ContextMenu,
-  ImageResizer,
-  HyperlinkDialog,
-  TableDialog,
-  BookmarkDialog,
-  TableOfContentsDialog,
-  PageSetupDialog,
-  StyleDialog,
-  ListDialog,
-  ParagraphDialog,
-  BulletsAndNumberingDialog,
-  FontDialog,
-  TablePropertiesDialog,
-  BordersAndShadingDialog,
-  TableOptionsDialog,
-  CellOptionsDialog,
-  StylesDialog,
-  Comment,
-]);
-const isLoading = ref(false);
+let DocumentEditorContainerComponent
+let editorModules = {}
+
+if (isClient) {
+  const pkg = await import('@syncfusion/ej2-vue-documenteditor')
+  DocumentEditorContainerComponent = pkg.DocumentEditorContainerComponent
+
+  editorModules = {
+    Toolbar: pkg.Toolbar,
+    Print: pkg.Print,
+    Ribbon: pkg.Ribbon,
+    SfdtExport: pkg.SfdtExport,
+    WordExport: pkg.WordExport,
+    TextExport: pkg.TextExport,
+    Selection: pkg.Selection,
+    Search: pkg.Search,
+    Editor: pkg.Editor,
+    EditorHistory: pkg.EditorHistory,
+    OptionsPane: pkg.OptionsPane,
+    ContextMenu: pkg.ContextMenu,
+    ImageResizer: pkg.ImageResizer,
+    HyperlinkDialog: pkg.HyperlinkDialog,
+    TableDialog: pkg.TableDialog,
+    BookmarkDialog: pkg.BookmarkDialog,
+    TableOfContentsDialog: pkg.TableOfContentsDialog,
+    PageSetupDialog: pkg.PageSetupDialog,
+    StyleDialog: pkg.StyleDialog,
+    ListDialog: pkg.ListDialog,
+    ParagraphDialog: pkg.ParagraphDialog,
+    BulletsAndNumberingDialog: pkg.BulletsAndNumberingDialog,
+    FontDialog: pkg.FontDialog,
+    TablePropertiesDialog: pkg.TablePropertiesDialog,
+    BordersAndShadingDialog: pkg.BordersAndShadingDialog,
+    TableOptionsDialog: pkg.TableOptionsDialog,
+    CellOptionsDialog: pkg.CellOptionsDialog,
+    StylesDialog: pkg.StylesDialog,
+    Comment: pkg.Comment
+  }
+
+  provide("editor", Object.values(editorModules))
+}
+
+const editor = ref(null)
+const pdfurl = ref(null)
+const serviceUrl = "https://services.syncfusion.com/vue/production/api/documenteditor/"
+const isLoading = ref(false)
+
 const props = defineProps({
   modelValue: Boolean,
-  doc: Object,
-});
-const docStore = useDocStore();
+  doc: Object
+})
+const emit = defineEmits(["update:modelValue", "onUpdate"])
+const docStore = useDocStore()
 
-const emit = defineEmits(["update:modelValue", "onUpdate"]);
-
-const isOpen = ref(props.modelValue);
+const isOpen = ref(props.modelValue)
 
 // Sync prop with local state
 watch(
   () => props.modelValue,
   async (val) => {
-    isLoading.value = true;
-    isOpen.value = val;
-    if (props.doc.type === "editable") {
+    isOpen.value = val
+    if (!val) return
+
+    isLoading.value = true
+    if (props.doc.type === "editable" && isClient) {
       const response = await fetch(`/api/docs/view`, {
-        method: "Post",
-        body: JSON.stringify({ id: props.doc.id }),
-      });
-      const blob = await response.blob();
-      const formData = new FormData();
-      formData.append("files", blob, "sample.docx");
+        method: "POST",
+        body: JSON.stringify({ id: props.doc.id })
+      })
+      const blob = await response.blob()
+
+      const formData = new FormData()
+      formData.append("files", blob, "sample.docx")
+
       // Send to Syncfusion service to convert into SFDT
       const res = await fetch(serviceUrl + "Import", {
         method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
-      editor.value.ej2Instances.documentEditor.open(data);
-      isLoading.value = false;
+        body: formData
+      })
+      const data = await res.json()
+
+      editor.value?.ej2Instances?.documentEditor.open(data)
+      isLoading.value = false
     } else {
-      const config = useRuntimeConfig();
-      pdfurl.value = `${config.public.BASE_URL}${props.doc.link}`;
-      isLoading.value = false;
+      const config = useRuntimeConfig()
+      pdfurl.value = `${config.public.BASE_URL}${props.doc.link}`
+      isLoading.value = false
     }
   }
-);
-watch(isOpen, (val) => emit("update:modelValue", val));
+)
+
+watch(isOpen, (val) => emit("update:modelValue", val))
 
 const close = () => {
-  isOpen.value = false;
-};
+  isOpen.value = false
+}
 
 const updateFile = () => {
   if (props.doc.type === "readonly") {
-    close();
-    return;
+    close()
+    return
   }
-  const docEditor = editor.value.ej2Instances.documentEditor;
-  const exported = docEditor.saveAsBlob("Docx");
+  const docEditor = editor.value?.ej2Instances?.documentEditor
+  const exported = docEditor.saveAsBlob("Docx")
   exported.then(async (blob) => {
-    const formData = new FormData();
-    formData.append("id", props.doc.id);
-    formData.append("file", blob, `sample.docx`);
+    const formData = new FormData()
+    formData.append("id", props.doc.id)
+    formData.append("file", blob, "sample.docx")
     docStore.updateDocument(formData).then((res) => {
       if (res.code === 0) {
-        close();
+        close()
       }
-    });
-  });
-};
+    })
+  })
+}
 </script>
+
 <style scoped>
 .input-bordered :deep(.v-field) {
   border: 1px solid #dfdfdf !important;
