@@ -49,7 +49,8 @@ export default defineNuxtConfig({
           content: process.env.npm_package_description || "",
         },
       ],
-      script: [{ src: "https://js.stripe.com/v3/", defer: true }],
+      script: [{ src: "https://js.stripe.com/v3/", defer: true }
+      ],
     },
   },
   imports: {

@@ -48,6 +48,7 @@ watch(
 )
 const user = ref(null);
 const mainStore = useMainStore();
+const router = useRouter()
 const menuItems = ref([]);
 onMounted(() => {
   if (localStorage.getItem("user")) {
@@ -57,6 +58,8 @@ onMounted(() => {
     } else {
       menuItems.value = mainStore.getuserOptions;
     }
+  } else {
+    router.push('/logout')
   }
 });
 </script>
