@@ -1,25 +1,56 @@
 import { DataTypes } from "sequelize";
 import sequelize from "../../utils/db.js";
 
-export const CrmLead = sequelize.define(
-  "CrmLeads",
+export const Lead = sequelize.define(
+  "Leads",
   {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    organisationId: { type: DataTypes.INTEGER, allowNull: false },
-    contactId: { type: DataTypes.INTEGER, allowNull: false },
-    ownerUserId: { type: DataTypes.INTEGER, allowNull: true },
-    pipelineId: { type: DataTypes.INTEGER, allowNull: false },
-    stageId: { type: DataTypes.INTEGER, allowNull: false },
+    organisationId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: "Organisations",
+        key: "id",
+      },
+    },
     status: {
       type: DataTypes.ENUM("Open", "Won", "Lost", "Disqualified"),
       allowNull: false,
       defaultValue: "Open",
     },
-    value: { type: DataTypes.DECIMAL(14, 2), allowNull: true },
-    currency: { type: DataTypes.STRING(10), allowNull: true, defaultValue: "GBP" },
+    createdBy: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: "Users",
+        key: "id",
+      },
+    },
+    fullName: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    email: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    phone: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    source: {
+      type: DataTypes.ENUM("Meta", "Manual", "Import", "Other"),
+      allowNull: false,
+    },
     meta: { type: DataTypes.JSONB, allowNull: true, defaultValue: {} },
+    assigned_to: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: "Users",
+        key: "id",
+      },
+    },
   },
-  { modelName: "CrmLeads", timestamps: true }
+  { modelName: "Leads", timestamps: true }
 );
-
-
