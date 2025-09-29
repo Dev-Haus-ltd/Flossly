@@ -88,18 +88,18 @@ export const useMainStore = defineStore("mainStore", {
               imgPath: teamIcon,
               to: "/teams/holiday",
             },
-            {
-              title: "Payroll",
-              value: "payroll",
-              imgPath: teamIcon,
-              to: "/teams/payroll",
-            },
-            {
-              title: "Invoice",
-              value: "invoice",
-              imgPath: teamIcon,
-              to: "/teams/invoice",
-            }, 
+            // {
+            //   title: "Payroll",
+            //   value: "payroll",
+            //   imgPath: teamIcon,
+            //   to: "/teams/payroll",
+            // },
+            // {
+            //   title: "Invoice",
+            //   value: "invoice",
+            //   imgPath: teamIcon,
+            //   to: "/teams/invoice",
+            // }, 
         
           ],
         },
