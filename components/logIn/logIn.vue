@@ -1,11 +1,11 @@
 <template>
-  <div class="init-page" v-if="initialPage">
+  <div class="init-page bg-secondary" v-if="initialPage">
     <div class="water-mark"></div>
     <div class="init-pg-content">
       <div class="text-center">
         <img
-          src="/assets/logos/loginLogos/logoWithTitle.svg"
-          class="mx-auto h-20 w-20"
+          src="@/assets/logos/loginLogos/logoWithTitle.svg"
+          class="mx-auto h-20 w-20 mb-5"
           alt=""
         />
 
@@ -13,6 +13,7 @@
           class="d-block mx-auto"
           @click="initialPage = false"
           color="secondary-dark"
+          flat
           >Sign-in</v-btn
         >
         <h2 class="mt-5">
@@ -20,27 +21,14 @@
           clean operations.
         </h2>
       </div>
-    </div>
+    </div> 
   </div>
   <div class="login-page" v-else>
     <v-container>
       <v-row>
         <v-col
           cols="12"
-          md="5"
-          class="d-flex align-center justify-center px-4 py-9"
-        >
-          <div class="background-image rounded-xl pa-10 relative">
-            <img src="@/assets/logos/loginLogos/white-logo.svg" alt="My Logo" />
-            <h1 class="mt-5 login-banner-heading">
-              Login to keep your clinic running clean & clear.
-            </h1>
-            <!-- <img src="/assets/watermark/horizontal-wat-mrk.svg" alt="wat-mark" class="horizontal-wat-mark"> -->
-          </div>
-        </v-col>
-        <v-col
-          cols="12"
-          md="7"
+          md="6"
           class="d-flex align-center justify-center px-12"
         >
           <div style="width: 100%; max-width: 500px">
@@ -127,6 +115,54 @@
             </v-form>
           </div>
         </v-col>
+        <v-col
+          cols="12"
+          md="6"
+          class="d-flex align-center justify-center px-4"
+        >
+        <div class="background-image rounded-xl pa-10 relative d-flex align-center justify-center">
+  <!-- Centered content box -->
+  <div class="overlay-box pa-8">
+    <!-- Logo -->
+    <img
+      src="@/assets/logos/loginLogos/white-logo.svg"
+      alt="My Logo"
+      class="mb-6"
+      style="max-width: 180px"
+    />
+
+    <!-- Heading -->
+    <h1
+      style="
+        font-family: 'Garnett Semibold';
+        font-weight: 600;
+        font-size: 44px;
+        color: #fff;
+        margin-bottom: 16px;
+        text-align: left;
+      "
+    >
+      All-in-One CRM and Task Manager
+    </h1>
+
+    <!-- Subheading -->
+    <p
+      style="
+        font-size: 18px;
+        line-height: 1.5;
+        color: #fff;
+        text-align: left;
+        max-width: 600px;
+      "
+    >
+    <strong> Automate patient flows, manage staff, and track clinic performance</strong>
+      with the only dental-specific platform you'll ever need.
+    </p>
+  </div>
+</div>
+
+        </v-col>
+     
       </v-row>
     </v-container>
   </div>
@@ -228,6 +264,7 @@ const forgetPass = () => {
 <style scoped>
 .init-page {
   position: relative;
+  
 }
 .init-pg-content {
   margin: 0;
@@ -245,23 +282,29 @@ const forgetPass = () => {
 }
 .water-mark {
   background-image: url("/assets/logos/loginLogos/watermark.svg");
-  background-size: contain;
+  background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   height: 100vh;
   width: 100%;
   opacity: 0.3;
 }
-.login-banner-heading {
-  color: #fff;
-  font-family: "Poppins";
-  font-weight: 600;
-  font-size: 30px;
+.overlay-box {
+  border: 1px solid #fff;
+  background-color: rgba(255, 255, 255, 0.1); /* translucent white */
+  backdrop-filter: blur(10px); /* blur effect */
+  -webkit-backdrop-filter: blur(10px); /* Safari support */
+  max-width: 500px;
+  width: 100%;
+  text-align: left;
+  border-radius: 15px;
 }
 
 .login-page {
   height: 100vh;
   width: 100%;
+  display: flex;
+  align-items: center;
 }
 .logoimg {
   width: 250px;
@@ -281,10 +324,6 @@ const forgetPass = () => {
   font-weight: 400;
   font-size: 16px;
 }
-/* .horizontal-wat-mark{
-  position: absolute;
-  bottom: 0;
-  left: 0;
-} */
+
 
 </style>

@@ -15,7 +15,7 @@ export default defineNuxtConfig({
         "primary-light": "#008AFE",
         secondary: "#171952",
         "secondary-dark": "#171952",
-        "secondary-light": "#263AAD",
+        "secondary-light": "#263AAD", 
       },
       Stripe_PK: process.env.STRIPE_PK,
     },

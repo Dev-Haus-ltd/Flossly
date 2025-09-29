@@ -51,10 +51,9 @@ const handleClick = () => {
 
 <style scoped>
 .flossly-card {
-  border: 1px solid #60e5a3;
+  position: relative;
   border-radius: 12px;
   padding: 20px;
-  position: relative;
   background: white;
   display: flex;
   align-items: center;
@@ -62,7 +61,30 @@ const handleClick = () => {
   cursor: default;
   height: 200px;
   width: 100%;
+  z-index: 0; /* ensures pseudo-element stays behind content */
 }
+
+.flossly-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  padding: 1px; /* thickness of the border */
+  background: linear-gradient(
+    90deg,
+    #ffa977,
+    #ff85da,
+    #7d77ff,
+    #68ece6
+  );
+  -webkit-mask: 
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  z-index: -1; /* keep it behind the content */
+}
+
 
 .flossly-card.clickable {
   cursor: pointer;

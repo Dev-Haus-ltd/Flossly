@@ -1,5 +1,5 @@
 <template>
-  <div class="init-page">
+  <div class="init-page bg-secondary"> 
     <div class="water-mark"></div>
     <div class="init-pg-content">
       <div class="text-center">
@@ -55,7 +55,7 @@ const handleScreen = () => {
   max-width: 800px;
 }
 .water-mark {
-  background-image: url("/assets/logos/signupSetupScreen/init-wat-mark.svg");
+  background-image: url("/assets/logos/loginLogos/watermark.svg");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;

@@ -3,7 +3,7 @@
     <div class="task-summary">
       <!-- Cards Grid -->
       <v-row dense>
-        <v-col cols="12" md="2" v-for="(item, i) in taskStats" :key="i">
+        <v-col cols="12" sm="6" md="2" v-for="(item, i) in taskStats" :key="i">
           <v-card
             :style="{ backgroundColor: '#F3F6FA' }"
             class="task-card pa-4"
@@ -68,6 +68,10 @@
       <v-card
         v-if="selectedRowItems.length"
         class="action-bar py-4 d-flex justify-center align-center rounded-lg"
+        :style="{
+      padding: xs ? '0px 20px' : '0px 50px',
+      gap: xs ? '10px' : '40px'
+    }"
         :elevation="5"
         flat
       >
@@ -121,9 +125,10 @@
 </template>
 
 <script setup>
+import { useDisplay } from 'vuetify'
 const bus = useBus();
 // Stores
-
+const { xs } = useDisplay()
 const taskStore = useTaskStore();
 const mainStore = useMainStore();
 const orgStore = useOrgStore();
@@ -467,11 +472,11 @@ const handleComplete = async () => {
   height: 2px;
 }
 .action-bar {
-  gap: 40px;
+ 
   position: fixed;
   bottom: 30px;
   left: 50%;
-  padding: 0px 50px;
+ 
   transform: translateX(-50%);
   background-color: white;
   z-index: 1000;

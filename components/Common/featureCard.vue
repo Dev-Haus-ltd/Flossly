@@ -20,9 +20,9 @@
       </div>
   
       <!-- Background image (static) -->
-      <div
+      <!-- <div
         class="bg-image"
-      ></div>
+      ></div> -->
   
       <!-- Close icon -->
       <v-icon class="close-icon" @click="$emit('close')">mdi-close</v-icon>
@@ -46,10 +46,15 @@
   
   <style scoped>
   .feature-card {
-    border-left: 9px solid #60e5a3;
+    background-image: url('@/assets/images/dashboard/feature-card.svg');
+    background-size: cover;
+    background-repeat: no-repeat;
     border-radius: 0.5rem; /* rounded-lg */
     position: relative;
     overflow: hidden;
+    width: 100%;
+    height: 100%;
+    border-radius: 24px;
   }
   
   /* Left image */

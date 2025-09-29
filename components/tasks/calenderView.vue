@@ -28,7 +28,7 @@
         >
           <v-icon size="small"> mdi-chevron-right </v-icon>
         </v-btn>
-        <v-toolbar-title v-if="calender">
+        <v-toolbar-title v-if="calender" :class="xs ? 'text-caption' : 'text-body-1'">
           {{ calender.title }}
         </v-toolbar-title>
       </v-toolbar>
@@ -93,6 +93,9 @@
 </template>
 
 <script setup>
+import { useDisplay } from 'vuetify'
+
+const { xs } = useDisplay()
 const emit = defineEmits(["onOpen"]);
 const detailsDialog = ref(false);
 const selectedItem = ref(null);

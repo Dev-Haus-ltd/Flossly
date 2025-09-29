@@ -45,7 +45,7 @@
 
       <v-btn
         v-if="step === steps.length - 1"
-        color="success"
+        color="primary"
         @click="navigateToDashboard"
       >
         Go to Dashboard
@@ -61,7 +61,7 @@ import Pricing from "./pricing.vue";
 
 const orgStore = useOrgStore();
 const authStore = useAuthStore();
-const mainStore = useMainStore();
+const mainStore = useMainStore(); 
 const router = useRouter();
 // Steps metadata
 const step = ref(0);

@@ -10,7 +10,7 @@
         v-bind="props"
         variant="flat"
         density="compact"
-        class="tbl-top-btn ml-2"
+        class="tbl-top-btn ml-md-2"
         style="width: 100px"
       >
         <span>Filter</span>

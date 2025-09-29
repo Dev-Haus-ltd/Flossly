@@ -1,7 +1,7 @@
 <template>
   <div>
-    <div class="d-flex justify-space-between align-center my-2">
-      <div class="d-flex align-center py-1">
+    <div class="d-inline-flex flex-wrap d-md-flex justify-space-between align-center my-2">
+      <div class="d-inline-flex flex-wrap d-md-flex align-center py-1">
         <v-btn-toggle v-model="viewType" mandatory class="custom-toggle">
           <v-btn value="list" class="toggle-btn">
             <v-icon size="16" class="mr-1">mdi-format-align-right</v-icon>
@@ -40,7 +40,7 @@
                 v-bind="props"
                 variant="flat"
                 density="compact"
-                class="tbl-top-btn ml-2"
+                class="tbl-top-btn ml-md-2"
                 style="width: 200px"
               >
                 <span>Manage Columns</span>
@@ -83,7 +83,7 @@
           </v-menu>
         </div>
       </div>
-      <div>
+      <div class="d-inline-flex flex-wrap d-md-flex">
         <v-btn
           color="secondary"
           variant="flat"

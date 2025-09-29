@@ -1,5 +1,5 @@
 <template>
-  <v-col :cols="cols">
+  <v-col cols="12" sm="4"  :md="cols">
     <div class="task-div">
       <div class="d-flex justify-space-between w-100">
         <lord-icon

@@ -4,6 +4,7 @@
     :rail="rail"
     :temporary="smAndDown"
     :permanent="!smAndDown"
+    
   >
     <LeftSideBarPracticeMenu :currentOrg="currentOrg" :rail="rail" />
     <v-card
@@ -243,7 +244,7 @@ const currentOrg = ref({});
   border-radius: 6px;
   .v-list-group--open {
     background-color: #f6f6f6;
-    border-right: 5px solid #60e5a3;
+    border-right: 5px solid #0061FB;
     border-radius: 6px;
     .active-item {
       background-color: transparent;
@@ -275,7 +276,7 @@ const currentOrg = ref({});
   border-radius: 8px;
 }
 .right-border {
-  border-right: 5px solid #60e5a3;
+  border-right: 5px solid #0061FB;
 }
 :deep(.v-list-item--active) {
   color: #1e1e1e !important;

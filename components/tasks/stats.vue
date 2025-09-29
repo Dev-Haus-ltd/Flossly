@@ -48,8 +48,8 @@
         >
           <v-col
             cols="12"
-            sm="12"
-            md="3"
+            sm="6"
+            md="4"
             lg="3"
             xl="2"
             v-for="(userStat, index) in teamTaskStats"
