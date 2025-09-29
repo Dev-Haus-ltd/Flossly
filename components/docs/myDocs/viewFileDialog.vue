@@ -80,38 +80,41 @@ import { registerLicense } from "@syncfusion/ej2-base";
 registerLicense(
   "Ngo9BigBOggjHTQxAR8/V1JEaF1cWWhAYVJwWmFZfVtgd19HaVZQR2YuP1ZhSXxWdk1iXn9dcX1UTmlUU0Z9XEI="
 );
-import {
-  DocumentEditorContainerComponent,
-  Toolbar,
-  Print,
-  Ribbon,
-  SfdtExport,
-  WordExport,
-  TextExport,
-  Selection,
-  Search,
-  Editor,
-  EditorHistory,
-  OptionsPane,
-  ContextMenu,
-  ImageResizer,
-  HyperlinkDialog,
-  TableDialog,
-  BookmarkDialog,
-  TableOfContentsDialog,
-  PageSetupDialog,
-  StyleDialog,
-  ListDialog,
-  ParagraphDialog,
-  BulletsAndNumberingDialog,
-  FontDialog,
-  TablePropertiesDialog,
-  BordersAndShadingDialog,
-  TableOptionsDialog,
-  CellOptionsDialog,
-  StylesDialog,
-  Comment,
-} from "@syncfusion/ej2-vue-documenteditor";
+import pkg from '@syncfusion/ej2-vue-documenteditor';
+
+const { 
+  Toolbar, 
+  Print, 
+  Ribbon, 
+  SfdtExport, 
+  WordExport, 
+  TextExport, 
+  Selection, 
+  Search, 
+  Editor, 
+  EditorHistory, 
+  OptionsPane, 
+  ContextMenu, 
+  ImageResizer, 
+  HyperlinkDialog, 
+  TableDialog, 
+  BookmarkDialog, 
+  TableOfContentsDialog, 
+  PageSetupDialog, 
+  StyleDialog, 
+  ListDialog, 
+  ParagraphDialog, 
+  BulletsAndNumberingDialog, 
+  FontDialog, 
+  TablePropertiesDialog, 
+  BordersAndShadingDialog, 
+  TableOptionsDialog, 
+  CellOptionsDialog, 
+  StylesDialog, 
+  Comment, 
+  DocumentEditorContainerComponent 
+} = pkg;
+
 const editor = ref(null);
 const pdfurl = ref(null);
 const serviceUrl =
