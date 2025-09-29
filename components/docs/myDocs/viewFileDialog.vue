@@ -78,17 +78,16 @@
 </template>
 
 <script setup>
-import { registerLicense } from "@syncfusion/ej2-base"
-registerLicense("Ngo9BigBOggjHTQxAR8/V1JEaF1cWWhAYVJwWmFZfVtgd19HaVZQR2YuP1ZhSXxWdk1iXn9dcX1UTmlUU0Z9XEI=")
-
-// ✅ Mark as client-only
 const isClient = process.client
 
 let DocumentEditorContainerComponent
 let editorModules = {}
 
 if (isClient) {
-  const pkg = await import('@syncfusion/ej2-vue-documenteditor')
+  const basePkg = await import("@syncfusion/ej2-base")
+  const { registerLicense } = basePkg
+  registerLicense("Ngo9BigBOggjHTQxAR8/V1JEaF1cWWhAYVJwWmFZfVtgd19HaVZQR2YuP1ZhSXxWdk1iXn9dcX1UTmlUU0Z9XEI=")
+  const pkg = await import("@syncfusion/ej2-vue-documenteditor")
   DocumentEditorContainerComponent = pkg.DocumentEditorContainerComponent
 
   editorModules = {
@@ -120,9 +119,8 @@ if (isClient) {
     TableOptionsDialog: pkg.TableOptionsDialog,
     CellOptionsDialog: pkg.CellOptionsDialog,
     StylesDialog: pkg.StylesDialog,
-    Comment: pkg.Comment
+    Comment: pkg.Comment,
   }
-
   provide("editor", Object.values(editorModules))
 }
 
@@ -133,7 +131,7 @@ const isLoading = ref(false)
 
 const props = defineProps({
   modelValue: Boolean,
-  doc: Object
+  doc: Object,
 })
 const emit = defineEmits(["update:modelValue", "onUpdate"])
 const docStore = useDocStore()
@@ -151,7 +149,7 @@ watch(
     if (props.doc.type === "editable" && isClient) {
       const response = await fetch(`/api/docs/view`, {
         method: "POST",
-        body: JSON.stringify({ id: props.doc.id })
+        body: JSON.stringify({ id: props.doc.id }),
       })
       const blob = await response.blob()
 
@@ -161,7 +159,7 @@ watch(
       // Send to Syncfusion service to convert into SFDT
       const res = await fetch(serviceUrl + "Import", {
         method: "POST",
-        body: formData
+        body: formData,
       })
       const data = await res.json()
 
