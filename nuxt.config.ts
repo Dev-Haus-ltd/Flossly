@@ -10,12 +10,12 @@ export default defineNuxtConfig({
     public: {
       BASE_URL: process.env.BASE_URL,
       colors: {
-        primary: "#60E5A3",
-        "primary-dark": "#39C487",
-        "primary-light": "#C8F6E5",
-        secondary: "#213536",
-        "secondary-dark": "#162627",
-        "secondary-light": "#334A4A",
+        primary: "#0061FB",
+        "primary-dark": "#0061FB",
+        "primary-light": "#008AFE",
+        secondary: "#171952",
+        "secondary-dark": "#171952",
+        "secondary-light": "#263AAD",
       },
       Stripe_PK: process.env.STRIPE_PK,
     },
@@ -49,8 +49,7 @@ export default defineNuxtConfig({
           content: process.env.npm_package_description || "",
         },
       ],
-      script: [{ src: "https://js.stripe.com/v3/", defer: true }
-      ],
+      script: [{ src: "https://js.stripe.com/v3/", defer: true }],
     },
   },
   imports: {
