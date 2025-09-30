@@ -64,7 +64,6 @@ const handleScreen = () => {
   opacity: 0.3;
 }
 .init-title {
-  font-family: "Poppins";
   font-weight: 600;
   font-size: 60px;
   line-height: 100%;
@@ -73,7 +72,6 @@ const handleScreen = () => {
 }
 
 .init-sub-title {
-  font-family: "Poppins";
   font-weight: 600;
   font-size: 24px;
   line-height: 100%;
@@ -81,7 +79,6 @@ const handleScreen = () => {
   color: #ffffff;
 }
 .init-info {
-  font-family: "Poppins";
   font-weight: 600;
   font-size: 40px;
   line-height: 100%;

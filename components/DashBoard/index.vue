@@ -13,8 +13,8 @@
         :key="index"
         class="flossly-col"
       >
-        <DashBoardProductCard 
-          :title="item.title" 
+        <DashBoardProductCard
+          :title="item.title"
           :img="item.img"
           :colors="item.colors"
           :isLocked="item.isLocked"
@@ -25,9 +25,7 @@
     </v-row>
 
     <v-row class="d-flex align-stretch">
-      <v-col   cols="12"
-  sm="12"
-  md="8" class="pr-md-0 d-flex flex-column">
+      <v-col cols="12" sm="12" md="8" class="pr-md-0 d-flex flex-column">
         <v-card
           class="card flex-grow-1"
           color="white"
@@ -65,7 +63,6 @@
                     sm="6"
                     md="4"
                     lg="3"
-                
                   >
                     <DashBoardStatCard
                       :image="stat.image"
@@ -114,9 +111,7 @@
           </div>
         </v-card>
       </v-col>
-      <v-col   cols="12"
-  sm="12"
-  md="4" class="d-flex">
+      <v-col cols="12" sm="12" md="4" class="d-flex">
         <v-card
           class="card flex-grow-1"
           color="white"
@@ -204,9 +199,7 @@
       </v-col>
     </v-row>
     <v-row class="d-flex align-stretch">
-      <v-col cols="12"
-  sm="12"
-  md="8" class="pr-md-0 pt-0">
+      <v-col cols="12" sm="12" md="8" class="pr-md-0 pt-0">
         <v-card
           class="refer-card card pa-5"
           color="white"
@@ -214,9 +207,7 @@
           rounded="lg"
         >
           <v-row no-gutters>
-            <v-col cols="12"
-  xs="12"
-  sm="5" class="left-side">
+            <v-col cols="12" xs="12" sm="5" class="left-side">
               <v-chip
                 class="bonus-chip"
                 variant="flat"
@@ -233,21 +224,24 @@
                   colors="primary:#e8b730,secondary:#ffc738,tertiary:#2ca58d"
                   trigger="hover"
                   :style="{
-      width: mdAndDown ? '100px' : '150px',
-      height: mdAndDown ? '100px' : '150px'
-    }"
+                    width: mdAndDown ? '100px' : '150px',
+                    height: mdAndDown ? '100px' : '150px',
+                  }"
                 ></lord-icon>
               </div>
             </v-col>
 
-            <v-col cols="12"
-  xs="12"
-  sm="7"
+            <v-col
+              cols="12"
+              xs="12"
+              sm="7"
               class="right-side d-flex flex-column justify-center"
             >
               <div class="ml-5">
                 <!-- Heading -->
-                <h3 class="refer-heading mb-4 mt-2 mt-sm-0">Refer & Earn with Flossly</h3>
+                <h3 class="refer-heading mb-4 mt-2 mt-sm-0">
+                  Refer & Earn with Flossly
+                </h3>
 
                 <!-- Points -->
                 <div class="refer-point d-flex align-center mb-3">
@@ -300,9 +294,7 @@
           </v-row>
         </v-card>
       </v-col>
-      <v-col cols="12"
-  sm="12"
-  md="4" class="pt-0">
+      <v-col cols="12" sm="12" md="4" class="pt-0">
         <v-card
           class="review-card card pa-5"
           color="white"
@@ -326,9 +318,9 @@
               src="https://cdn.lordicon.com/wstfgfud.json"
               trigger="hover"
               :style="{
-      width: mdAndDown ? '100px' : '150px',
-      height: mdAndDown ? '100px' : '150px'
-    }"
+                width: mdAndDown ? '100px' : '150px',
+                height: mdAndDown ? '100px' : '150px',
+              }"
             ></lord-icon>
 
             <p class="review-text">
@@ -343,9 +335,9 @@
 </template>
 
 <script setup>
-import { useDisplay } from 'vuetify'
+import { useDisplay } from "vuetify";
 
-const { mdAndDown } = useDisplay()
+const { mdAndDown } = useDisplay();
 
 const showCard = ref(true);
 const taskStore = useTaskStore();
@@ -551,14 +543,13 @@ const getMyTasks = () => {};
   font-weight: 600 !important;
 }
 .card {
-  border: 1px solid #DBDBDB;
+  border: 1px solid #dbdbdb;
 }
 .card-head {
-  font-family: "Poppins";
   font-weight: 600;
   font-size: 16px;
   padding: 24px;
- border-bottom: 1px solid #DBDBDB;
+  border-bottom: 1px solid #dbdbdb;
 }
 .custom-tabs {
   border-bottom: 1px solid #dbdbdb;

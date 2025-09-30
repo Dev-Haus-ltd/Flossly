@@ -70,8 +70,8 @@
   background-position: center;
   background-repeat: no-repeat;
   color: #fff;
-  width: 90%;
-  height: 96vh;
+  width: 100%;
+  height: 99vh;
 
   /* Center the content-box */
   display: flex;

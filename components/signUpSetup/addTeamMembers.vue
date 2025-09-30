@@ -4,13 +4,15 @@
     <div v-for="(user, index) in model.users" :key="index">
       <v-text-field
         v-model="user.email"
-        variant="outlined"
+        variant="solo"
         density="comfortable"
         type="email"
         single-line
         placeholder="example@email.com"
+        
         :rules="[required, emailRule]"
-        class="mt-2"
+        class="mt-2 input-bordered "
+        flat
       >
         <!-- Appended dropdown inside text field -->
         <template #append-inner>
@@ -23,11 +25,12 @@
             <template #activator="{ props }">
               <v-btn
                 v-bind="props"
-                variant="outlined"
+                variant="solo"
                 density="default"
                 size="small"
                 class="text-lowercase text-wrap"
-                style="max-width: 140px"
+                style="max-width: 140px; background-color: #F2F2F2;"
+                flat
               >
                 <span style="max-width: 130px" class="px-2">
                   {{
@@ -54,7 +57,7 @@
         </template>
       </v-text-field>
     </div>
-    <v-btn @click="updateModel" variant="flat" color="primary"
+    <v-btn @click="updateModel" variant="flat" height="48" color="primary"
       >+ Add More</v-btn
     >
   </v-form>
@@ -109,10 +112,17 @@ defineExpose({
 </script>
 <style scoped>
 .lbl {
-  font-family: "Poppins";
   font-weight: 400;
   font-size: 16px;
   line-height: 100%;
   color: "#1E1E1E";
+}
+.input-bordered :deep(.v-field) {
+  border: 1px solid #dfdfdf !important;
+  border-radius: 8px !important;
+  background-color: white !important;
+  min-height: 40px;
+  font-size: 14px;
+  font-family: "Poppins", sans-serif;
 }
 </style>
