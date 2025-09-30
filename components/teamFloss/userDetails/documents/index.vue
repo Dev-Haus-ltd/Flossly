@@ -438,7 +438,7 @@ const handleUpdate = () => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 
 /* Action icons */
@@ -453,7 +453,7 @@ const handleUpdate = () => {
   opacity: 1;
 }
 .expan-title {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-style: "SemiBold";
   font-size: 14px;

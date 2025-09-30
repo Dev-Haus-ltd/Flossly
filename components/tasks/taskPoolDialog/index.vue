@@ -305,7 +305,7 @@ function goBack() {
 
 <style scoped>
 .title {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 16px;
 }
@@ -367,6 +367,6 @@ function goBack() {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 </style>

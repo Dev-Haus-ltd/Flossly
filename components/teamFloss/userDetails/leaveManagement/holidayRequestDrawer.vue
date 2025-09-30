@@ -482,12 +482,12 @@ const onClose = () => {
 
 <style scoped>
 .title-text {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 16px;
 }
 .fld-lbl {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 14px;
   color: #737373;

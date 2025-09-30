@@ -334,7 +334,7 @@ const deleteNote = (index) => {
   border-radius: 8px;
 }
 .notes-title {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 14px;
   color: #000000;
@@ -346,26 +346,26 @@ const deleteNote = (index) => {
   border-radius: 8px;
 }
 .note-title {
-  font-family: "Poppins";
+  
   font-weight: 700;
   font-size: 14px;
   color: #000000;
 }
 .note-label {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 14px;
   color: #737373;
   margin-right: 6px;
 }
 .note-value {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 14px;
   color: #000000;
 }
 .note-summary {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 13px;
   color: #000000;
@@ -374,7 +374,7 @@ const deleteNote = (index) => {
 
 /* inputs */
 .fld-lbl {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 14px;
   color: #737373;
@@ -385,6 +385,6 @@ const deleteNote = (index) => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 </style>

@@ -94,7 +94,7 @@
 }
 
 .banner-heading {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 44px;
   margin-bottom: 2rem;

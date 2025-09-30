@@ -402,12 +402,12 @@ const onSubmit = async () => {
 
 <style scoped>
 .title-text {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 16px;
 }
 .fld-lbl {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 14px;
   color: #737373;
@@ -418,6 +418,6 @@ const onSubmit = async () => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 </style>

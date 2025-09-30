@@ -17,7 +17,7 @@
     <div>
       <div
         style="
-          font-family: Poppins;
+          
           font-weight: 400;
           font-size: 13px;
           font-style: Regular;
@@ -29,7 +29,7 @@
       v-if="file.folder?.name || folder?.name"
         style="
           color: #737373;
-          font-family: Poppins;
+          
           font-weight: 400;
           font-size: 13px;
           font-style: Regular;

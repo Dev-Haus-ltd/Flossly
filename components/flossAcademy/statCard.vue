@@ -84,7 +84,7 @@
   }
   
   .card-title {
-    font-family: Poppins, sans-serif;
+    
     font-weight: 600;
     font-size: 14px;
     color: #000000;
@@ -121,7 +121,7 @@
   }
   
   .total-hours {
-    font-family: Poppins, sans-serif;
+    
     font-weight: 500;
     font-size: 40px;
     color: #000000;
@@ -129,7 +129,7 @@
   }
   
   .hours-label {
-    font-family: Poppins, sans-serif;
+    
     font-weight: 500;
     font-size: 14px;
     color: #000000;

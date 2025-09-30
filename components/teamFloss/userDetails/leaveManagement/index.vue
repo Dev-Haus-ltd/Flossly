@@ -40,7 +40,7 @@
       >
         <h3
           style="
-            font-family: Poppins;
+            
             font-weight: 600;
             font-size: 14px;
             color: #1e1e1e;

@@ -544,7 +544,7 @@ function getRotaStatusColor(status) {
 }
 
 .tab-content-title {
-  font-family: "Poppins", sans-serif;
+  
   font-size: 16px;
   font-weight: 600;
   margin-bottom: 8px;
@@ -607,6 +607,6 @@ function getRotaStatusColor(status) {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 </style>

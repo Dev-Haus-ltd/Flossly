@@ -637,7 +637,7 @@ const getMyTasks = () => {};
 .review-text {
   font-size: 24px;
   color: #1e1e1e;
-  font-family: "Poppins", sans-serif;
+  
 }
 
 .review-text .highlight {
@@ -701,14 +701,14 @@ const getMyTasks = () => {};
 }
 /* Right side */
 .refer-heading {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 600; /* SemiBold */
   font-size: 24px;
   color: #1e1e1e;
 }
 
 .refer-point {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 400; /* Regular */
   font-size: 14px;
   color: #1e1e1e;

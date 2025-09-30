@@ -229,7 +229,7 @@ const currentOrg = ref({});
 
 <style scoped lang="scss">
 .custom-list-item {
-  font-family: "Poppins";
+  
   font-size: 13px;
   font-weight: 400;
   color: #737373;

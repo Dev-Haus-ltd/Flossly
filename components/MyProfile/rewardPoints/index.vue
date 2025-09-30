@@ -50,20 +50,20 @@ const getRewardHistory = () => {
 }
 
 .rewards-title {
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 16px;
   color: #ffffff;
 }
 
 .rewards-points {
-  font-family: Poppins;
+  
   font-weight: 600;
   font-size: 32px;
   color: #ffffff;
 }
 .sub-head {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 16px;
   color: #1e1e1e;

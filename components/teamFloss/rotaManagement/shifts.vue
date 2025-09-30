@@ -153,7 +153,7 @@ const updateShifts = (rota) => {
 
 <style scoped>
 .rota-title {
-  font-family: Poppins, sans-serif;
+  
   font-weight: 600;
   font-style: SemiBold;
   font-size: 14px;
@@ -165,6 +165,6 @@ const updateShifts = (rota) => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 </style>

@@ -1062,10 +1062,10 @@ const onSelectionChange = (newSelected) => {
 }
 ::v-deep(.small-input input) {
   font-size: 14px !important;
-  font-family: "Poppins";
+  
 }
 .add-task-btn {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 16px;
   text-align: center;

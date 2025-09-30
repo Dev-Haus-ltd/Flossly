@@ -75,14 +75,13 @@ const emitCardId = (id) => {
 }
 
 .card-title {
-  font-family: 'Poppins';
   font-weight: 500;
   font-size: 16px;
   color: #1e1e1e;
 }
 
 .link-btn {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 14px;
   text-transform: none;

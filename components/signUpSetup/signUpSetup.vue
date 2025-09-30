@@ -197,7 +197,7 @@ const navigateToDashboard = () => {
   
 }
 .title {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 40px;
   line-height: 60px;
@@ -205,7 +205,7 @@ const navigateToDashboard = () => {
   color: #1e1e1e;
 }
 .sub-title {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 16px;
   line-height: 100%;

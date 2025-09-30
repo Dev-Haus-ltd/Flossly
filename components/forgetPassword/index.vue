@@ -254,7 +254,7 @@ const goToLogin = () => {
 }
 .login-banner-heading {
   color: #fff;
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 30px;
 }
@@ -284,6 +284,6 @@ const goToLogin = () => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 </style>

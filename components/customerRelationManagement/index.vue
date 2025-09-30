@@ -227,7 +227,7 @@ const updateLeads = (newLead) => {
   }
 }
 :deep(.v-breadcrumbs) {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 400;
   font-size: 14px;
 }

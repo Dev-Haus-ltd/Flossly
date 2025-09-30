@@ -199,7 +199,7 @@ const getUserDetails = (data) => {
   transform: translateY(-1px); /* small lift effect */
 }
 .head {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-style: "SemiBold";
   font-size: 18px;

@@ -95,7 +95,7 @@ const handleOrgClick = async (org) => {
   align-items: center;
 }
 .title-text {
-  font-family: "Poppins";
+  
   font-weight: 500;
   font-style: Medium;
   font-size: 12px;

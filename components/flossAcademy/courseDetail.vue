@@ -274,7 +274,7 @@ const initialState = () => {
 .course-card-header {
   background: #eff5f5;
   border-bottom: 1px solid #dbdbdb;
-  font-family: Poppins;
+  
   font-weight: 600;
   font-size: 16px;
   height: 62px;
@@ -290,19 +290,19 @@ const initialState = () => {
 .placeholder-text {
   color: #1e1e1e;
   font-size: 14px;
-  font-family: Poppins;
+  
   border-bottom: 1px solid #dbdbdb;
 }
 
 .section-title {
-  font-family: Poppins;
+  
   font-weight: 600;
   font-size: 16px;
   margin-bottom: 6px;
 }
 
 .section-text {
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 14px;
   margin-bottom: 12px;
@@ -323,14 +323,14 @@ const initialState = () => {
 
 .quiz-btn {
   color: #737373;
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 14px;
 }
 
 .quiz-start-btn {
   color: #1e1e1e;
-  font-family: Poppins;
+  
   font-weight: 500;
   font-size: 14px;
 }
@@ -344,7 +344,7 @@ const initialState = () => {
 .question-header {
   background: #213536;
   color: #ffffff;
-  font-family: Poppins;
+  
   font-weight: 600;
   font-size: 14px;
   padding: 8px;
@@ -358,7 +358,7 @@ const initialState = () => {
 }
 
 .question-text {
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 14px;
   color: #000000;
@@ -371,14 +371,14 @@ const initialState = () => {
 }
 
 .option-item {
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 14px;
   color: #000000;
 }
 
 .submit-btn {
-  font-family: Poppins;
+  
   font-weight: 500;
   font-size: 14px;
   color: #1e1e1e;

@@ -83,7 +83,7 @@ function selectRole(role) {
   padding: 6px 8px;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
   cursor: pointer;
   color: #101010;
 }
@@ -119,6 +119,6 @@ function selectRole(role) {
   background-color: white !important; 
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 </style>

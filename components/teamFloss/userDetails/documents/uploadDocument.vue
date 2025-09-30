@@ -141,7 +141,7 @@ import { ref, watch } from "vue";
   
   <style scoped>
   .dialog-title {
-    font-family: Poppins;
+    
     font-weight: 600;
     font-size: 16px;
     border-bottom: 1px solid #dbdbdb;

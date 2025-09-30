@@ -52,6 +52,6 @@ function emitColor(newColor) {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 </style>

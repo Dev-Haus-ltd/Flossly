@@ -21,7 +21,7 @@
       <v-card style="min-width: 300px; border-radius: 12px; padding: 16px">
         <v-list class="pa-0">
           <div class="pa-0 d-flex align-center justify-space-between">
-            <div style="font-family: Poppins; font-weight: 500; font-size: 14px">
+            <div style=" font-weight: 500; font-size: 14px">
               Filters by
             </div>
   
@@ -29,7 +29,7 @@
               variant="text"
               density="comfortable"
               color="primary"
-              style="text-transform: none; font-family: Poppins; font-weight: 500; font-size: 13px"
+              style="text-transform: none;  font-weight: 500; font-size: 13px"
               @click="clearFilters"
             >
               Clear filters
@@ -39,7 +39,7 @@
           <v-divider style="background-color: #dbdbdb" class="my-3" />
   
           <!-- Inquiry Date -->
-          <v-label class="my-1" style="font-family: Poppins; font-size: 14px">
+          <v-label class="my-1" style=" font-size: 14px">
             Inquiry Date
           </v-label>
           <v-menu
@@ -76,7 +76,7 @@
           </v-menu>
   
           <!-- Lead Source -->
-          <v-label class="my-1" style="font-family: Poppins; font-size: 14px">
+          <v-label class="my-1" style=" font-size: 14px">
             Lead Source
           </v-label>
           <v-select
@@ -92,7 +92,7 @@
           />
   
           <!-- Lead Status -->
-          <v-label class="my-1" style="font-family: Poppins; font-size: 14px">
+          <v-label class="my-1" style=" font-size: 14px">
             Lead Status
           </v-label>
           <v-select
@@ -108,7 +108,7 @@
           />
   
           <!-- Treatment -->
-          <v-label class="my-1" style="font-family: Poppins; font-size: 14px">
+          <v-label class="my-1" style=" font-size: 14px">
             Treatment
           </v-label>
           <v-select
@@ -194,7 +194,7 @@
     background-color: white !important;
     min-height: 40px;
     font-size: 14px;
-    font-family: "Poppins", sans-serif;
+    
   }
   .tbl-top-btn {
     height: 40px;

@@ -724,34 +724,34 @@ const removeStaff = async (user) => {
   border-bottom: 1px solid #dbdbdb;
 }
 .date-text {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-style: "SemiBold";
   font-size: 14px;
 }
 .fst-col-title {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-style: "SemiBold";
   font-size: 14px;
   color: #1e1e1e;
 }
 .fst-col--subtit {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-style: Regular;
   font-size: 14px;
   color: #1e1e1e;
 }
 .head-date {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-style: "Regular";
   font-size: 14px;
   color: #737373;
 }
 .day-total-row-item {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-style: "Regular";
   font-size: 14px;
@@ -780,7 +780,7 @@ const removeStaff = async (user) => {
   height: 100%;
 }
 .total-hrs {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-style: "Regular";
   font-size: 14px;
@@ -829,7 +829,7 @@ const removeStaff = async (user) => {
 }
 
 .chip-text {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-style: "Regular";
   font-size: 14px;
@@ -860,7 +860,7 @@ const removeStaff = async (user) => {
   color: #ff010b;
 }
 .menu-item-title {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-style: "Regular";
   font-size: 14px;
@@ -874,7 +874,7 @@ const removeStaff = async (user) => {
   width: 100%;
 }
 .hover-menu-item {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-style: "Regular";
   font-size: 14px;
@@ -882,7 +882,7 @@ const removeStaff = async (user) => {
   color: #1e1e1e;
 }
 .add-staff-btn {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 400;
   font-style: normal;
   font-size: 14px;
@@ -890,7 +890,7 @@ const removeStaff = async (user) => {
   height: 50px;
 }
 .add-locum-staff-btn {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 400;
   font-style: normal;
   font-size: 14px;

@@ -51,7 +51,7 @@
     :key="index"
     color="#1E1E1E"
     class="me-1 mb-1 py-5 d-flex align-center rounded-lg"
-    style="font-family: Poppins; font-weight: 500; font-size: 14px; background-color: #d0e1e2;"
+    style=" font-weight: 500; font-size: 14px; background-color: #d0e1e2;"
     label
       closable
     @click:close="emit('unassign', a)"
@@ -196,7 +196,7 @@ const selectUser = (user) => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 /* make trigger elements inline-block so event.currentTarget is that wrapper */
 .avatar-trigger {

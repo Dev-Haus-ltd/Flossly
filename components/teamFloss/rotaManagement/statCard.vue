@@ -36,7 +36,7 @@
 }
 
 .stat-title {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 600;
   font-size: 14px;
   font-style: normal; /* SemiBold is represented by font-weight 600 */
@@ -44,7 +44,7 @@
 }
 
 .stat-count {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 600;
   font-size: 40px;
   font-style: normal;

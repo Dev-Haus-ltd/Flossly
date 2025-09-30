@@ -218,13 +218,13 @@ const updateChecklist = () => {
 }
 
 .card-title {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 400;
   font-size: 14px;
 }
 
 .card-subtitle {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 500;
   font-size: 14px;
 }
@@ -240,6 +240,6 @@ const updateChecklist = () => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 </style>

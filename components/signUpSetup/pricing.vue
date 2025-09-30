@@ -214,28 +214,28 @@ onMounted(fetchPrices);
 
 <style scoped>
 .font-title {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 20px;
   line-height: 100%;
 }
 
 .font-subtitle {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 12px;
   line-height: 100%;
 }
 
 .font-price {
-  font-family: "Poppins";
+  
   font-weight: 700;
   font-size: 30px;
   line-height: 100%;
 }
 
 .font-price-desc {
-  font-family: Poppins;
+  
 font-weight: 400;
 font-style: Regular;
 font-size: 14px;
@@ -244,20 +244,20 @@ color: #878787;
 }
 
 .font-section-title {
-  font-family: "Poppins";
+  
   font-weight: 700;
   font-size: 14px;
   line-height: 100%;
 }
 
 .font-feature {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 14px;
 }
 
 .font-button {
-  font-family: "Poppins";
+  
   font-weight: 500;
   font-size: 14px;
   text-transform: none;
@@ -280,7 +280,7 @@ color: #878787;
   text-overflow: ellipsis;
   cursor: pointer;
   color: #414141;
-  font-family: Poppins;
+  
 font-weight: 400;
 font-style: Regular;
 font-size: 14px;

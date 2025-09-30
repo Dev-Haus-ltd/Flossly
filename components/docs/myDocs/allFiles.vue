@@ -7,7 +7,7 @@
     >
       <h3
         style="
-          font-family: Poppins;
+          
           font-weight: 600;
           font-size: 14px;
           margin: 0;
@@ -160,7 +160,7 @@ const updateValueRow = (file, field, event) => {
 
 .custom-table th,
 .custom-table td {
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 13px;
   padding: 8px 12px; /* same for both */
@@ -202,11 +202,11 @@ const updateValueRow = (file, field, event) => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
   width: 200px;
 }
 ::v-deep(.small-input input) {
   font-size: 14px !important;
-  font-family: "Poppins";
+  
 }
 </style>

@@ -128,7 +128,7 @@
     margin-top: 28px;
   }
   .message-txt {
-    font-family: "Poppins";
+    
     font-size: 14px;
     text-align: left;
     color: #000000 !important;
@@ -140,7 +140,7 @@
     font-weight: bold;
     height: 20px;
     text-align: left;
-    font-family: "Poppins";
+    
   }
   .cust-ma{
     margin-top: 2.5px;

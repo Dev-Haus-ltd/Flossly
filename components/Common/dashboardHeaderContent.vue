@@ -24,7 +24,7 @@ align-items: center;
 }
 
 .dashboard-title {
-  font-family: 'Poppins', sans-serif;
+  
   font-weight: 400;
   font-size: 24px;
   margin: 0;
@@ -32,7 +32,7 @@ align-items: center;
 }
 
 .dashboard-subtitle {
-  font-family: 'Poppins', sans-serif;
+  
   font-weight: 400;
   font-size: 14px;
   color: #737373;

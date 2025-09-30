@@ -10,7 +10,7 @@
     >
       <h3
         style="
-          font-family: Poppins;
+          
           font-weight: 600;
           font-size: 14px;
           color: #1e1e1e;
@@ -226,7 +226,7 @@ const handleAddContacts = async (newContacts) => {
 
 .contact-table th,
 .contact-table td {
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 13px;
   padding: 10px 12px;
@@ -258,7 +258,7 @@ const handleAddContacts = async (newContacts) => {
 }
 
 .editable {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 14px;
   color: #101010;
@@ -283,6 +283,6 @@ const handleAddContacts = async (newContacts) => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 </style>

@@ -53,21 +53,21 @@ defineProps({
 }
 
 .count {
-  font-family: Poppins;
+  
   font-weight: 700;
   font-size: 24px;
   color: #1e1e1e;
 }
 
 .title {
-  font-family: Poppins;
+  
   font-weight: 500;
   font-size: 14px;
   color: #737373;
 }
 
 .percentage {
-  font-family: Poppins;
+  
   font-weight: 600;
   font-size: 14px;
   display: flex;

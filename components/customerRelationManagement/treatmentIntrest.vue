@@ -270,7 +270,7 @@ const onSave = () => {
 
 <style scoped>
 .fld-lbl {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 14px;
   color: #737373;
@@ -282,7 +282,7 @@ const onSave = () => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 
 /* Summary table styling */
@@ -316,7 +316,7 @@ const onSave = () => {
 }
 
 .room-table td {
-  font-family: Poppins, sans-serif;
+  
   font-weight: 400;
   font-size: 13px;
   padding: 10px 12px;

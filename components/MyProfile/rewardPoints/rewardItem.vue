@@ -54,7 +54,7 @@ defineProps({
 }
 
 .date-label {
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 14px;
   color: #737373;
@@ -89,7 +89,7 @@ defineProps({
 }
 
 .task-name {
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 14px;
   color: #1e1e1e;

@@ -59,14 +59,14 @@
   }
   
   .file-name {
-    font-family: Poppins;
+    
     font-weight: 400;
     font-size: 13px;
     color: #1e1e1e;
   }
   
   .folder-name {
-    font-family: Poppins;
+    
     font-weight: 400;
     font-size: 13px;
     color: #737373;

@@ -53,20 +53,20 @@ defineProps({
 }
 
 .title {
-  font-family: Poppins;
+  
   font-weight: 600;
   font-size: 14px;
 }
 
 .subtitle {
-  font-family: Poppins;
+  
   font-weight: 700;
   font-size: 40px;
   margin-top: 4px;
 }
 
 .label {
-  font-family: Poppins;
+  
   font-weight: 600;
   font-size: 14px;
   margin-top: 8px;
