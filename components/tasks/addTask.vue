@@ -178,20 +178,21 @@
                 </v-card-title>
 
                 <!-- Container with rounded edges for checklists -->
-                <v-card
-                  class="mx-3 mt-8 pa-2"
-                  elevation="0"
-                  style="border: 1px solid #dfdfdf; border-radius: 12px;"
-                >
-                  <TasksCreateChecklist
+                <div class="mx-3 mt-8">
+                  <v-card
                     v-for="(cl, index) in form.checklist"
-                    :checklist="cl"
                     :key="cl._id || index"
-                    :index="index"
-                    @remove="removeChecklist"
-                  />
-                </v-card>
-
+                    class="mb-4 pa-2"
+                    elevation="0"
+                    style="border: 1px solid #dfdfdf; border-radius: 12px;"
+                  >
+                    <TasksCreateChecklist
+                      :checklist="cl"
+                      :index="index"
+                      @remove="removeChecklist"
+                    />
+                  </v-card>
+                </div>
                 <!-- Add More Questions Button -->
                 <div class="mx-3">
                     <v-btn
