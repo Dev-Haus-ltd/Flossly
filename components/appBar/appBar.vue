@@ -1,24 +1,38 @@
 <template>
-  <v-app-bar dark elevation="0" height="70" class="pr-5 cust-border">
+  <v-app-bar dark elevation="0" height="70" class="pr-5 cust-border bg-secondary">
     <v-btn icon class="d-md-none" @click="handleDrawer">
       <v-icon>mdi-menu</v-icon>
     </v-btn>
     <template v-slot:prepend>
-      <div
+      <div 
         :class="
           !rail
             ? 'logo-parent pl-5 bg-secondary'
-            : 'logo-parent-sm pl-2 bg-secondary'
+            : 'logo-parent-sm pl-3 bg-secondary'
         "
       >
-        <img
-          :src="!rail ? headerLogo : logoIcon"
-          alt="My Logo"
-          max-height="40"
-          :width="!rail ? '107px' : '25px'"
-          height="100%"
-          contain
-        />
+        <div class="logo-wrapper">
+          <!-- Expanded state: logo + title -->
+          <template v-if="!rail">
+            <img
+              :src="headerLogo"
+              alt="My Logo"
+              width="35"
+              height="100%"
+            />
+            <span class="dashboard-title">Flossly Dashboard</span>
+          </template>
+
+          <!-- Collapsed state: only icon -->
+          <template v-else>
+            <img
+              :src="logoIcon"
+              alt="My Logo"
+              width="30"
+              height="100%"
+            />
+          </template>
+        </div>
       </div>
     </template>
     <!-- Middle: Spacer to push icons right -->
@@ -30,7 +44,10 @@
 
     <!-- Right: Icon -->
     <div class="d-flex align-center">
-      <CommonRewardChip text="+20" tooltip="Reward points" />
+      <CommonRewardChip
+        :text="user?.userPoints?.balance"
+        tooltip="Reward points"
+      />
       <!-- <v-text-field
         placeholder="Search..."
         append-inner-icon="mdi-magnify"
@@ -50,8 +67,9 @@
 </template>
 
 <script setup>
-import headerLogo from "@/assets/logos/headerLogo.svg";
-import logoIcon from "@/assets/logos/Logoicon2.svg";
+const { user } = useUser();
+import headerLogo from "@/assets/logos/logoIcon2.svg";
+import logoIcon from "@/assets/logos/logoIcon2.svg";
 const emit = defineEmits(["small-screen-drawer"]);
 
 const props = defineProps({
@@ -60,7 +78,7 @@ const props = defineProps({
   rail: Boolean,
 });
 const handleDrawer = () => {
-  emit("small-screen-drawer");
+  emit("small-screen-drawer",!props.rail);
 };
 console.log(props.drawer);
 watch(
@@ -76,16 +94,34 @@ watch(
   width: 255px;
   /* background-color: black; */
   height: 100%;
+  margin-left: 20px; /* spacing from logo */
 }
 .logo-parent-sm {
   width: 56px;
   /* background-color: black; */
   height: 100%;
+  margin-left: 20px; /* spacing from logo */
 }
 .cust-border {
   border-bottom: 1px solid #dbdbdb;
 }
 ::v-deep(.v-toolbar__prepend) {
   margin-inline: 0 !important;
+}
+.logo-wrapper {
+  display: flex;
+  align-items: center; /* align title vertically with logo */
+  height: 100%;
+}
+
+/* Title typography */
+.dashboard-title {
+  height: 26px;
+  font-family: "Inter", sans-serif;
+  font-weight: 700;
+  font-size: 20px;
+  line-height: 130%; /* ~26px */
+  color: #ffffff;
+  margin-left: 20px; /* spacing from logo */
 }
 </style>

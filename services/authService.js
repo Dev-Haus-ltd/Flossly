@@ -232,4 +232,15 @@ export default {
         });
     });
   },
+  switchOrgnanisation(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/switchOrg", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
 };

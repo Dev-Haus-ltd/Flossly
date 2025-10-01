@@ -1,0 +1,116 @@
+<template>
+    <div class="pa-1 d-flex align-center" style="height: 100%;">
+      <v-menu
+        v-model="selected.treatmentMenu"
+        :close-on-content-click="false"
+        offset-y
+      >
+        <template #activator="{ props }">
+          <p v-bind="props" class="px-2" style="width: 100%;">
+            {{ selected?.treatment?.name || 'N/A' }}
+          </p>
+        </template>
+  
+        <v-card width="250" class="pa-4">
+          <v-list class="pa-0">
+            <template v-if="!toggleEdit">
+              <!-- List existing treatment sources -->
+              <v-list-item
+                v-for="(t, i) in treatmentSources"
+                :key="i"
+                style="margin-bottom: 6px; min-height: 30px; cursor: pointer"
+                class="rounded-sm"
+                @click="
+                  () => {
+                    selected.treatmentId = t.id;
+                    selected.treatment = t;
+                    selected.treatmentMenu = false;
+                    emit('update');
+                  }
+                "
+              >
+                <v-list-item-title>{{ t.name }}</v-list-item-title>
+              </v-list-item>
+            </template>
+  
+            <template v-else>
+              <!-- Editable mode -->
+              <v-list-item v-for="(t, i) in treatmentSources" :key="i">
+                <v-text-field
+                  v-model="t.name"
+                  density="compact"
+                  variant="solo"
+                  hide-details
+                  class="w-100 input-bordered"
+                  flat
+                />
+              </v-list-item>
+  
+              <!-- Add new treatment source -->
+              <v-list-item style="cursor: pointer">
+                <v-btn
+                  class="add-label-btn"
+                  density="default"
+                  variant="plain"
+                  @click="addTreatmentAndEdit"
+                >
+                  + New Treatment
+                </v-btn>
+              </v-list-item>
+            </template>
+          </v-list>
+  
+          <br />
+          <v-divider class="mb-2"></v-divider>
+          <div class="pa-2 d-flex justify-center">
+            <v-btn
+              @click="toggleEdit = !toggleEdit"
+              variant="flat"
+              color="primary"
+            >
+              {{ toggleEdit ? "Apply" : "Edit Treatments" }}
+            </v-btn>
+          </div>
+        </v-card>
+      </v-menu>
+    </div>
+  </template>
+  
+  <script setup>
+  const { selected, column, treatmentSources } = defineProps([
+    "selected",
+    "column",
+    "treatmentSources",
+  ]);
+  const emit = defineEmits(["update"]);
+  
+  const toggleEdit = ref(false);
+  
+  const addTreatmentAndEdit = () => {
+    if (!toggleEdit.value) {
+      toggleEdit.value = true;
+    }
+    treatmentSources.push({
+      id: Date.now(), // temp unique id
+      name: "",
+    });
+  };
+  </script>
+  
+  <style scoped>
+  .add-label-btn {
+    width: 100%;
+    border: 1px solid #dfdfdf !important;
+    min-height: 40px;
+    border-radius: 8px;
+  }
+  .input-bordered :deep(.v-field) {
+    border: 1px solid #dfdfdf !important;
+    background-color: white !important;
+    min-height: 40px;
+    font-size: 14px;
+    font-family: "Poppins", sans-serif;
+    border-radius: 8px;
+  }
+  </style>
+  

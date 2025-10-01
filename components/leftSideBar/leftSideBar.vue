@@ -4,11 +4,13 @@
     :rail="rail"
     :temporary="smAndDown"
     :permanent="!smAndDown"
+    style="background-color: #F3F4F6;"
+    
   >
     <LeftSideBarPracticeMenu :currentOrg="currentOrg" :rail="rail" />
     <v-card
       class="d-flex flex-column py-1"
-      style="height: 87vh; overflow: auto"
+      style="height: 87vh; overflow: auto; background-color: #F3F4F6;"
     >
       <v-list density="compact" nav :class="[rail ? 'pr-0 rail-closed' : '']">
         <template v-for="item in menuItems" :key="item.value">
@@ -242,8 +244,8 @@ const currentOrg = ref({});
   position: relative;
   border-radius: 6px;
   .v-list-group--open {
-    background-color: #f6f6f6;
-    border-right: 5px solid #60e5a3;
+    background-color: #FFFFFF;
+    border-right: 5px solid #0061FB;
     border-radius: 6px;
     .active-item {
       background-color: transparent;
@@ -266,19 +268,19 @@ const currentOrg = ref({});
   left: 17px;
   width: 2px;
   height: calc(100% + 1px);
-  background-color: #dbdbdb;
+  background-color: #737373;
   z-index: 0;
 }
 .active-item {
   font-weight: 600 !important;
-  background-color: #EFF5F5;
+  background-color: #FFFFFF;
   border-radius: 8px;
 }
 .right-border {
-  border-right: 5px solid #60e5a3;
+  border-right: 5px solid #0061FB;
 }
 :deep(.v-list-item--active) {
-  color: #1e1e1e !important;
+  color: #0061FB !important;
   font-weight: 600 !important;
 }
 .list-icon {

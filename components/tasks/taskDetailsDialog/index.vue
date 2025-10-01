@@ -267,11 +267,12 @@
             </v-tabs-window-item>
 
             <v-tabs-window-item value="checklist"> 
-    <h3 class="heading-text mb-1 pl-8 mt-2">E-Form</h3>
+           
 
               <TasksTaskDetailsDialogChecklistTabDetails
                 :checklist="taskDetails.userTaskChecklist"
-                :userTaskId="taskDetails.id"
+                :userTaskId="taskDetails.id" 
+                :title="taskDetails?.taskDetails?.title"
               />
             </v-tabs-window-item>
             <v-tabs-window-item value="files">
@@ -376,7 +377,6 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
 import { parsedDate } from "@/lib/dateFormatter";
 import Avatar from "~/components/Common/avatar.vue";
 const modelValue = ref(false);

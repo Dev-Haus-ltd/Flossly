@@ -84,7 +84,7 @@
           </v-menu>
         </div>
       </div>
-      <div>
+      <div class="d-inline-flex flex-wrap d-md-flex">
         <v-btn
           color="secondary"
           variant="flat"
@@ -303,7 +303,7 @@
                 />
               </template>
               <template v-else-if="col.key === 'frequency'">
-                <DataTableColumnsFrequencies
+                <DataTableColumnsFrequencies 
                   :selected="item"
                   :column="col"
                   @update="updateValueRow(item, 'frequency')"
@@ -337,7 +337,7 @@
               </template>
               <!-- avatar assignedUser -->
               <template v-else-if="col.key === 'assignedUser.fullName'">
-                <DataTableColumnsAssignedUsers
+                <DataTableColumnsAssignedUsers 
                   :assigned-users="item.assignedUsers || [user]"
                   :all-users="getTaskUsers(item)"
                   :current-user="user"
@@ -594,7 +594,7 @@ const {
   taskDetails: Array,
   availableHeaders: Array,
   orgStatuses: Array,
-  priorities: Array,
+  priorities: Array, 
   users: Array,
   categories: Array,
   clearSelection: Boolean,

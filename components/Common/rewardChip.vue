@@ -19,8 +19,8 @@
   <script setup>
   defineProps({
     text: {
-      type: String,
-      default: '+10',
+      type: Number,
+      default: 10,
     },
     tooltip: {
       type: String,

@@ -1,5 +1,7 @@
 <!-- components/LogoUpload.vue -->
 <template>
+  <div>
+
     <div
       class="dotted-box"
       @dragover.prevent
@@ -23,6 +25,7 @@
       <p>Selected: {{ modelValue.name }}</p>
       <v-img :src="previewUrl" max-width="120" class="mt-2" v-if="previewUrl" />
     </div>
+  </div>
   </template>
   
   <script setup>
@@ -92,8 +95,8 @@ onBeforeUnmount(() => {
     text-align: center;
   }
   .dotted-box:hover {
-    border-color: #60E5A3;
-    color: #60E5A3;
+    border-color: #008AFE;
+    color: #0061FB;
   }
   .hidden-input {
     display: none;

@@ -177,6 +177,8 @@ export const submitQuiz = async (event) => {
         percentage: Math.round(percentage),
         credit_hours: userHistory.course.credit_hours,
       };
+      
+    // add reward points
     }
 
     return success({

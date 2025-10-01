@@ -94,6 +94,7 @@ const props = defineProps({
   modelValue: Boolean,
   folder: Object,
   foldersList: Array,
+  isSystemDocs:Boolean
 });
 const selectedFolder = ref(null);
 const uploadedFiles = ref([]);
@@ -110,8 +111,8 @@ const saveFile = () => {
   uploadedFiles.value.forEach((file) => {
     form.append("file", file);
   });
-  docStore
-    .addDocs(form)
+  const uploadFn = props.isSystemDocs ? docStore.addSystemDocs : docStore.addDocs;
+  uploadFn(form)
     .then((res) => {
       if (res.code === 0) {
         close();
@@ -143,7 +144,6 @@ const saveFile = () => {
       });
     });
 };
-
 const emit = defineEmits(["update:modelValue", "onUpdate"]);
 
 const isOpen = ref(props.modelValue);

@@ -31,7 +31,7 @@
 </template>
 
 <script setup>
-const { item, color } = defineProps({
+const { item } = defineProps({
   item: {
     type: Object,
     required: true,
@@ -40,10 +40,10 @@ const { item, color } = defineProps({
 
 const emit = defineEmits(["update"]);
 
-function emitColor() {
+function emitColor(newColor) {
   item.showPicker = false
-  emit("update", { color });
-}
+  emit("update", { color: newColor });
+  }
 </script>
 <style scoped>
 .input-bordered :deep(.v-field) {

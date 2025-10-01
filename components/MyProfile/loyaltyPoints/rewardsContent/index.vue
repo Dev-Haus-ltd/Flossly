@@ -47,6 +47,13 @@ const getRewardHistory = () => {
     }
   })
 }
+const userBalance = computed(() => {
+  if (!history.value?.length) return 0;
+
+  return history.value.reduce((total, item) => {
+    return total + (item?.points ?? 0);
+  }, 0);
+});
 const cards = [
   {
     id: 1,
@@ -92,4 +99,7 @@ const handleCardClick = (id) => {
     openFeedbackDialog.value = true;
   }
 };
+const handleSubmit=()=>{
+  getRewardHistory()
+}
 </script>

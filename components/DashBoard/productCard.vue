@@ -4,7 +4,7 @@
     :id="`flossly-card-${uid}`"
     :class="{ clickable: !isLocked }"
     :style="{ backgroundColor: !isLocked ? '#FFFFFF' : '#F2F2F2' }"
-    @click="handleClick"
+    @click="handleClick(uid)"
   >
     <div v-if="isLocked" class="lock-icon">
       <img :src="lockImg" alt="Locked" />
@@ -26,7 +26,7 @@
 <script setup>
 import lockImg from "@/assets/icons/dashBoard/lock.svg";
 import { useRouter } from "vue-router";
-
+const emit= defineEmits(['handleClick']);
 const router = useRouter();
 
 const props = defineProps({
@@ -34,31 +34,57 @@ const props = defineProps({
   img: { type: String, required: true },
   colors: { type: String, default: "" },
   isLocked: { type: Boolean, default: false },
-  route: { type: String, default: "/" }, // route to navigate
+  route: { type: String, required:false }, // route to navigate
   uid: { type: [String, Number], required: true },
   isHovered: Boolean,
 });
 console.log(props);
 const handleClick = () => {
-  if (!props.isLocked) {
+  if (!props.isLocked && props.route) {
     router.push(props.route);
+  }
+  else{
+    emit('handleClick', props.uid)
   }
 };
 </script>
 
 <style scoped>
 .flossly-card {
-  border: 1px solid #60e5a3;
+  position: relative;
   border-radius: 12px;
   padding: 20px;
-  position: relative;
   background: white;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: default;
   height: 200px;
+  width: 100%;
+  z-index: 0; /* ensures pseudo-element stays behind content */
 }
+
+.flossly-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  padding: 1px; /* thickness of the border */
+  background: linear-gradient(
+    90deg,
+    #ffa977,
+    #ff85da,
+    #7d77ff,
+    #68ece6
+  );
+  -webkit-mask: 
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  z-index: -1; /* keep it behind the content */
+}
+
 
 .flossly-card.clickable {
   cursor: pointer;

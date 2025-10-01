@@ -37,6 +37,7 @@ import Password from "./password/index.vue";
 import Membership from "./membership/index.vue";
 import RewardPoints from "./rewardPoints/index.vue";
 import LoyaltyPoints from "./loyaltyPoints/index.vue";
+import { TeamFlossUserDetailsDocuments } from "#components";
 
 
 // imgs
@@ -53,7 +54,6 @@ import LoyaltyImg from "@/assets/icons/myProfile/loyalty.svg";
 const { user } = defineProps({
   user: Object
 })
-
 const authStore = useAuthStore()
 const acccoutDetails = ref({})
 const contractDetails = ref({})
@@ -72,8 +72,7 @@ const menuItems = ref([
   // { key: "super", label: "Super User", icon: SuperImg },
   { key: "reward", label: "Reward Points", icon: RewardImg },
   { key: "loyalty", label: "Loaylty Points", icon: LoyaltyImg },
-
-
+  { key: "hrDocs", label: "Hr Documents", icon: PaymentImg },
 ]);
 const addMembership=()=>{
   if (user?.roleId === 1 || user?.roleId === 8) {
@@ -119,7 +118,8 @@ const componentsMap = {
   // super: SuperUser,
   membership: Membership,
   reward: RewardPoints,
-  loyalty: LoyaltyPoints
+  loyalty: LoyaltyPoints,
+  hrDocs: TeamFlossUserDetailsDocuments
 
 };
 

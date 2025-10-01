@@ -5,19 +5,19 @@
   <div class="parent" v-else>
     <v-container>
       <v-row>
-        <v-col cols="12" md="5">
+        <v-col cols="12" md="6">
           <left-stepper-template />
         </v-col>
-        <v-col cols="12" md="7" class="d-flex align-center">
+        <v-col cols="12" md="6" class="d-flex align-center">
           <sign-up-setup />
         </v-col>
       </v-row>
     </v-container>
-    <img
+    <!-- <img
       src="../../assets/logos/signupSetupScreen/waterMark.svg"
       alt="watermark"
       class="watermark"
-    />
+    /> -->
   </div>
 </template>
 

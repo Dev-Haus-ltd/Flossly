@@ -310,18 +310,8 @@ UserPoint.belongsTo(User, {
   foreignKey: "userId",
   as: "user",
 });
-User.hasMany(UserPoint, {
+User.hasOne(UserPoint, {
   foreignKey: "userId",
-  as: "userPoints",
-});
-
-// 2. UserPoints ↔ RewardPoints
-UserPoint.belongsTo(RewardPoint, {
-  foreignKey: "rewardPointId",
-  as: "rewardPoint",
-});
-RewardPoint.hasMany(UserPoint, {
-  foreignKey: "rewardPointId",
   as: "userPoints",
 });
 

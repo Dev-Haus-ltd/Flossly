@@ -9,6 +9,7 @@
     />
     <!-- side bar -->
     <leftSideBar
+         v-if="!(smAndDown && rail)"
       :rail="rail"
       :drawer="drawer"
       :menuItems="menuItems"
@@ -22,10 +23,13 @@
 </template>
 
 <script setup>
+import { useDisplay } from "vuetify";
+
+const { smAndDown } = useDisplay();
 const drawer = ref(true);
 const rail = ref(false);
 const onDrawerChange = () => {
-  drawer.value = !drawer.value;
+  rail.value = !rail.value ;
 };
 const updateDrawer = (val) => {
   drawer.value = val;
@@ -33,11 +37,18 @@ const updateDrawer = (val) => {
 const updateRail = (val) => {
   rail.value = val;
 };
-watch(drawer, (newVal) => {
-  console.log("Drawer changed:", newVal);
-});
+watch(
+  () => smAndDown.value,
+  (isSmall) => {
+    if (isSmall) {
+      rail.value = true   
+    }
+  },
+  { immediate: true } 
+)
 const user = ref(null);
 const mainStore = useMainStore();
+const router = useRouter()
 const menuItems = ref([]);
 onMounted(() => {
   if (localStorage.getItem("user")) {
@@ -47,6 +58,8 @@ onMounted(() => {
     } else {
       menuItems.value = mainStore.getuserOptions;
     }
+  } else {
+    router.push('/logout')
   }
 });
 </script>

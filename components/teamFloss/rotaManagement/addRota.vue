@@ -62,7 +62,7 @@
                   />
                   <CommonAvatar v-else :user="{ fullName: practice.label }" />
                 </div>
-                <p class="practice-title">
+                <p class="practice-title"> 
                   {{ practice.label }}
                 </p>
               </div>
@@ -268,7 +268,7 @@ const practiceError = ref("");
 const rotaForm = ref(null);
 const menuStartDateCreaterota = ref(false);
 const menuEndDateCreaterota = ref(false);
-const rules = {
+const rules = { 
   required: (v) =>
     (Array.isArray(v) ? v.length > 0 : !!v) || "This field is required",
 };

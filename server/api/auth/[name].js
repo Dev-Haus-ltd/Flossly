@@ -15,7 +15,8 @@ import {
   updateBankDetails,
   getUserHrDocuments,
   addUserHrDoc,
-  removeUserDoc
+  removeUserDoc,
+  switchOrgnanisation
 } from "../../controllers/auth";
 import bcrypt from "bcrypt";
 export default defineEventHandler(async (event) => {
@@ -57,6 +58,8 @@ export default defineEventHandler(async (event) => {
       return await addUserHrDoc(event)
     case "removeHrDoc":
       return await removeUserDoc(event)
+      case "switchOrg":
+        return await switchOrgnanisation(event)
     default:
       return { code: 0, error: "Not found" };
   }

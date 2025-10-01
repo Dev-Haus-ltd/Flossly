@@ -65,6 +65,10 @@
         <v-card
           v-if="selectedRowItems.length"
           class="action-bar py-4 d-flex justify-center align-center rounded-lg"
+          :style="{
+      padding: xs ? '0px 20px' : '0px 50px',
+      gap: xs ? '10px' : '40px'
+    }"
           :elevation="5"
           flat
         >
@@ -121,7 +125,11 @@
 </template>
 
 <script setup>
+import { useDisplay } from 'vuetify'
+
 const bus = useBus();
+const { xs } = useDisplay()
+
 // Stores
 const taskStore = useTaskStore();
 const mainStore = useMainStore();
@@ -470,11 +478,10 @@ const handleComplete = async () => {
   height: 2px;
 }
 .action-bar {
-  gap: 40px;
+
   position: fixed;
   bottom: 30px;
   left: 50%;
-  padding: 0px 50px;
   transform: translateX(-50%);
   background-color: white;
   z-index: 1000;
