@@ -69,6 +69,7 @@
                       density="compact"
                       hide-details
                       variant="outlined"
+                     color="tertiary"
                       class="custom-checkbox"
                     />
                   </div>
@@ -255,5 +256,9 @@ const updateUser = (user, key) => {
 ::v-deep(.small-input input) {
   font-size: 14px !important;
   
+}
+.custom-checkbox:checked {
+  background: #0061FB;
+  border-color: #0061FB;
 }
 </style>

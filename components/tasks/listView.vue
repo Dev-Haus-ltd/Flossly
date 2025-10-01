@@ -85,7 +85,7 @@
       </div>
       <div class="d-inline-flex flex-wrap d-md-flex">
         <v-btn
-          color="secondary"
+          color="tertiary"
           variant="flat"
           rounded="lg"
           @click="taskPoolDialog = true"
@@ -1092,8 +1092,8 @@ const onSelectionChange = (newSelected) => {
   margin-top: 5px;
 }
 .cust-checkbox:checked {
-  background: rgb(23, 23, 23);
-  border-color: black;
+  background: #0061FB;
+  border-color: #0061FB;
 }
 .cust-checkbox:checked::after {
   content: "";

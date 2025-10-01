@@ -163,6 +163,7 @@
                               hide-details
                               variant="outlined"
                               class="custom-checkbox"
+                              
                             />
                           </div>
                         </th>
