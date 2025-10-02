@@ -1,13 +1,19 @@
 <template>
-  <v-col cols="12" sm="4"  :md="cols">
-    <div class="task-div">
-      <div class="d-flex justify-space-between w-100">
-        <lord-icon
-          :src="icon"
-          trigger="hover"
-          style="width: 60px; height: 60px"
-        >
-        </lord-icon>
+
+    <div class="task-div" :id="`stat-card-${uid}`">
+      <div class="d-flex justify-space-between w-100 border-b pb-3">
+        <div class="d-flex align-center">
+          <lord-icon
+            :src="icon"
+            trigger="hover"
+             :target="`#stat-card-${uid}`"
+             colors="primary:#1e2b80"
+            style="width: 24px; height: 24px"
+          >
+          </lord-icon>
+          <p class="ml-2">{{ label }}</p>
+
+        </div>
 
         <v-tooltip :text="tooltip">
           <template #activator="{ props }">
@@ -26,10 +32,9 @@
           </template>
         </v-tooltip>
       </div>
-      <p class="mt-2 ml-2">{{ label }}</p>
       <h2 class="ml-2 mt-1">{{ value }}</h2>
     </div>
-  </v-col>
+ 
 </template>
 
 <script setup>
@@ -41,6 +46,8 @@ defineProps({
   bonus: { type: String, default: "+10" },
   tooltip: { type: String, default: "Bonus points awarded" },
   hideChip: { type: Boolean, default: false },
+  uid: { type: [String, Number], required: true },
+
 });
 </script>
 <style scoped lang="scss">
@@ -48,11 +55,13 @@ defineProps({
   border: 1px solid #dbdbdb;
   border-radius: 20px;
   padding: 15px;
-  background: linear-gradient(135deg, #f3f6fa, #ffffff);
-  height: 160px;
-  display: flex;
+  background: #ffffff;
+  height: 120px;
+  display: flex; 
   flex-direction: column;
   gap: 5px;
+  cursor:pointer;
+  transition: box-shadow 0.3s ease;
 
   img {
     width: 50px;
@@ -65,13 +74,16 @@ defineProps({
     font-weight: 400;
   }
 
-  h1 {
-    font-size: 40px;
+  h2 {
+    font-size: 28px;
     color: #101010;
     font-weight: 700;
   }
 }
+.task-div:hover{
+  box-shadow: 0px 0px 0px 3px #FF85DA29;
 
+}
 .bonus-chip {
   border: 1px solid #fea200;
   background-color: #fff0d5;

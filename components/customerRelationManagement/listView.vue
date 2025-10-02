@@ -345,8 +345,8 @@ const assignLead = (task, user) => {
   margin-top: 5px;
 }
 .cust-checkbox:checked {
-  background: rgb(23, 23, 23);
-  border-color: black;
+  background: #0061FB;
+  border-color: #0061FB;
 }
 .cust-checkbox:checked::after {
   content: "";
@@ -376,7 +376,7 @@ const assignLead = (task, user) => {
   padding: 5px 13px;
   border-radius: 50%;
   color: #fff;
-  background: #000;
+  background: #0061FB;
 }
 
 .action-item {

@@ -3,7 +3,7 @@
 
     <div class="cust-border d-flex align-center">
   
-          <p class="mr-1">Flossy Dashboard</p>
+          <p class="mr-1">Flossy Tasks</p>
      
     </div>
     <div class="main pa-4">
@@ -22,13 +22,17 @@
         </div>
   
         <v-row>
-      <CommonStatCard 
-        v-for="(stat, i) in taskStatsConfig"
-        :key="i"
-        :icon="stat.icon"
-        :label="stat.label"
-        :value="stat.value"
-      />
+   
+      <v-col cols="12" sm="4"  md="3" v-for="(stat, i) in taskStatsConfig" :key="i">
+          <CommonStatCard
+            :icon="stat.icon"
+            :label="stat.label"
+            :value="stat.value"
+            :uid="i"
+
+            hide-chip
+          />
+          </v-col>
     </v-row>
       </v-card>
   
@@ -94,24 +98,24 @@ const getTeamTasksStats = () => {
 };
 const taskStatsConfig = computed(() => [
   {
-    icon: "https://cdn.lordicon.com/qtdtmioh.json",
+    icon: "https://cdn.lordicon.com/wwcdwkaf.json",
     label: 'Total Tasks',
     value: myTaskCounts.value.pending
       ? myTaskCounts.value.pending + myTaskCounts.value.completed + myTaskCounts.value.upcoming
       : 0
   },
   {
-    icon: "https://cdn.lordicon.com/txshdzva.json",
+    icon: "https://cdn.lordicon.com/uvofdfal.json",
     label: 'Completed Tasks',
     value: myTaskCounts.value.completed
   },
   {
-    icon: "https://cdn.lordicon.com/cvcslrjt.json",
+    icon: "https://cdn.lordicon.com/ibjcmcbv.json",
     label: 'In Progress Tasks',
     value: myTaskCounts.value.pending
   },
   {
-    icon: "https://cdn.lordicon.com/cvcslrjt.json",
+    icon: "https://cdn.lordicon.com/ibjcmcbv.json",
     label: 'Upcoming Tasks',
     value: myTaskCounts.value.upcoming
   }

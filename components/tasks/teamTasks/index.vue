@@ -1,124 +1,131 @@
 <template>
-  <div style="background-color: white" class="pa-5 rounded-lg">
-    <div class="task-summary">
-      <!-- Cards Grid -->
-      <v-row dense>
-        <v-col cols="12" md="2" v-for="(item, i) in taskStats" :key="i">
-          <v-card
-            :style="{ backgroundColor: '#F3F6FA' }"
-            class="task-card pa-4"
-            :elevation="0"
-          >
-            <lord-icon
-              :src="getIcon(item.categoryName)"
-              trigger="hover"
-              style="width: 60px; height: 60px"
-            >
-            </lord-icon>
-            <div class="card-number ml-2">{{ item.taskCount }}</div>
-            <div class="card-label ml-2 mt-1">{{ item.categoryName }}</div>
-          </v-card>
-        </v-col>
-      </v-row>
+  <div>
+
+    <div class="cust-border d-flex align-center">
+      <p
+        class="mr-1"
+      
+      >
+       My Team Tasks
+      </p>
+     
     </div>
-    <v-tabs
-      v-model="currentTab"
-      class="custom-tabs mt-5"
-      slider-color="primary"
-    >
-      <v-tab
-        v-for="(cat, index) in taskStats"
-        :value="cat.categoryId"
-        :key="index"
-        class="tab-text"
-        @click="updateTasksList"
-        >{{ cat.categoryName }}</v-tab
+    <div style="background-color: white;" class="pa-5 rounded-lg" >
+      <div class="task-summary">
+        <!-- Cards Grid -->
+        <v-row>
+          <v-col cols="12" md="2" v-for="(item, i) in taskStats" :key="i">
+         
+            <CommonStatCard
+              :icon="getIcon(item.categoryName)"
+              :label="item.categoryName"
+              :value="item.taskCount"
+              :uid="i"
+  
+              hide-chip
+            />
+          </v-col>
+        </v-row>
+      </div>
+      <v-tabs
+        v-model="currentTab"
+        class="custom-tabs mt-5"
+        slider-color="primary"
       >
-
-      <!-- Plus Button Tab -->
-      <v-tab
-        class="tab-text d-flex align-center justify-center"
-        style="min-width: 40px; padding: 0 8px"
-        @click="addNewCategoryDialog"
-      >
-        <v-icon size="20" color="#737373">mdi-plus</v-icon>
-      </v-tab>
-    </v-tabs>
-    <v-tabs-window v-model="currentTab">
-      <v-tabs-window-item :value="currentTab">
-        <TasksListView
-          v-if="taskStatuses.length && taskPriorities.length && userList.length"
-          :headers="headers"
-          :availableHeaders="availableHeaders"
-          :taskDetails="taskDetails"
-          :orgStatuses="taskStatuses"
-          :priorities="taskPriorities"
-          :categories="categories"
-          :users="userList"
-          :clearSelection="isTrayHidden"
-          @onFilter="applyFilters"
-          @onUpdate="updateTasks"
-          @updateSelectedRowItems="updateSelectedRowItems"
-        />
-        <v-card
-          v-if="selectedRowItems.length"
-          class="action-bar py-4 d-flex justify-center align-center rounded-lg"
-          :style="{
-      padding: xs ? '0px 20px' : '0px 50px',
-      gap: xs ? '10px' : '40px'
-    }"
-          :elevation="5"
-          flat
+        <v-tab
+          v-for="(cat, index) in taskStats"
+          :value="cat.categoryId"
+          :key="index"
+          class="tab-text"
+          @click="updateTasksList"
+          >{{ cat.categoryName }}</v-tab
         >
-          <div class="selected-count d-flex align-center">
-            <span class="selected-text">
-              {{ selectedRowItems.length }}
-            </span>
-            <p class="ml-3 mt-1">Items Selected</p>
-          </div>
-
-          <div
-            class="action-item d-flex flex-column align-center"
-            @click="handleDelete"
+  
+        <!-- Plus Button Tab -->
+        <v-tab
+          class="tab-text d-flex align-center justify-center"
+          style="min-width: 40px; padding: 0 8px"
+          @click="addNewCategoryDialog"
+        >
+          <v-icon size="20" color="#737373">mdi-plus</v-icon>
+        </v-tab>
+      </v-tabs>
+      <v-tabs-window v-model="currentTab">
+        <v-tabs-window-item :value="currentTab">
+          <TasksListView
+            v-if="taskStatuses.length && taskPriorities.length && userList.length"
+            :headers="headers"
+            :availableHeaders="availableHeaders"
+            :taskDetails="taskDetails"
+            :orgStatuses="taskStatuses"
+            :priorities="taskPriorities"
+            :categories="categories"
+            :users="userList"
+            :clearSelection="isTrayHidden"
+            @onFilter="applyFilters"
+            @onUpdate="updateTasks"
+            @updateSelectedRowItems="updateSelectedRowItems"
+          />
+          <v-card
+            v-if="selectedRowItems.length"
+            class="action-bar py-4 d-flex justify-center align-center rounded-lg"
+            :style="{
+        padding: xs ? '0px 20px' : '0px 50px',
+        gap: xs ? '10px' : '40px'
+      }"
+            :elevation="5"
+            flat
           >
-            <v-icon color="gray" size="24">mdi-delete-outline</v-icon>
-            <span class="action-label">Delete</span>
-          </div>
-
-          <div
-            class="action-item d-flex flex-column align-center"
-            @click="handleArchive"
-          >
-            <v-icon color="gray" size="24">mdi-archive-outline</v-icon>
-            <span class="action-label">Archive</span>
-          </div>
-
-          <div
-            class="action-item d-flex flex-column align-center"
-            @click="handleComplete"
-          >
-            <v-icon color="gray" size="24">mdi-check-circle-outline</v-icon>
-            <span class="action-label">Complete</span>
-          </div>
-
-          <!-- Divider before close -->
-          <v-divider vertical class="ml-4" />
-
-          <!-- Close Icon -->
-          <div
-            class="action-item d-flex flex-column align-center"
-            @click="hideTray()"
-          >
-            <v-icon color="gray" size="24">mdi-close</v-icon>
-          </div>
-        </v-card>
-      </v-tabs-window-item>
-    </v-tabs-window>
-    <CommonAddCategorySideBar
-      v-model="addCategoryDialog"
-      @close="addCategoryDialog = false"
-      :categories="categories"
-    />
+            <div class="selected-count d-flex align-center">
+              <span class="selected-text">
+                {{ selectedRowItems.length }}
+              </span>
+              <p class="ml-3 mt-1">Items Selected</p>
+            </div>
+  
+            <div
+              class="action-item d-flex flex-column align-center"
+              @click="handleDelete"
+            >
+              <v-icon color="gray" size="24">mdi-delete-outline</v-icon>
+              <span class="action-label">Delete</span>
+            </div>
+  
+            <div
+              class="action-item d-flex flex-column align-center"
+              @click="handleArchive"
+            >
+              <v-icon color="gray" size="24">mdi-archive-outline</v-icon>
+              <span class="action-label">Archive</span>
+            </div>
+  
+            <div
+              class="action-item d-flex flex-column align-center"
+              @click="handleComplete"
+            >
+              <v-icon color="gray" size="24">mdi-check-circle-outline</v-icon>
+              <span class="action-label">Complete</span>
+            </div>
+  
+            <!-- Divider before close -->
+            <v-divider vertical class="ml-4" />
+  
+            <!-- Close Icon -->
+            <div
+              class="action-item d-flex flex-column align-center"
+              @click="hideTray()"
+            >
+              <v-icon color="gray" size="24">mdi-close</v-icon>
+            </div>
+          </v-card>
+        </v-tabs-window-item>
+      </v-tabs-window>
+      <CommonAddCategorySideBar
+        v-model="addCategoryDialog"
+        @close="addCategoryDialog = false"
+        :categories="categories"
+      />
+    </div>
   </div>
 </template>
 
@@ -163,17 +170,17 @@ const updateTasks = () => {
 };
 bus.on("updateTeamTasks", updateTasks);
 const getIcon = (categoryName) => {
-  switch (categoryName) {
+  switch (categoryName) { 
     case "Marketing":
-      return "https://cdn.lordicon.com/ldackjhr.json";
+      return "https://cdn.lordicon.com/excswhey.json";
     case "Staff Management":
-      return "https://cdn.lordicon.com/umjzhslu.json";
+      return "https://cdn.lordicon.com/kphwxuxr.json";
     case "Finance":
-      return "https://cdn.lordicon.com/fmsnftap.json";
+      return "https://cdn.lordicon.com/tzynxkwl.json";
     case "Compliance":
-      return "https://cdn.lordicon.com/umjzhslu.json";
+      return "https://cdn.lordicon.com/yraqammt.json";
     default:
-      return "https://cdn.lordicon.com/fniqkimj.json"; // fallback
+      return "https://cdn.lordicon.com/qlpudrww.json"; // fallback
   }
 };
 const availableHeaders = computed(() => {
@@ -492,7 +499,7 @@ const handleComplete = async () => {
   padding: 5px 13px;
   border-radius: 50%;
   color: #fff;
-  background: #000;
+  background: #0061FB;
 }
 
 .action-item {
@@ -504,4 +511,13 @@ const handleComplete = async () => {
   font-size: 13px;
   margin-top: 4px;
 }
+.cust-border {
+  border-bottom: 1px solid #dbdbdb;
+  padding: 17px;
+
+}
+.cust-border   p {
+    font-size: 12px;
+    color: #c3c3c3;
+  }
 </style>
