@@ -100,7 +100,6 @@ watch(
   width: 56px;
   /* background-color: black; */
   height: 100%;
-  margin-left: 20px; /* spacing from logo */
 }
 .cust-border {
   border-bottom: 1px solid #dbdbdb;
