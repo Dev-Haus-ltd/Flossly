@@ -61,17 +61,17 @@
   </template>
   
   <script setup>
-import labImg from "@/assets/icons/dashBoard/toolBox/lab.svg"
-import stockImg from "@/assets/icons/dashBoard/toolBox/stock.svg"
-import twoothMatchImg from "@/assets/icons/dashBoard/toolBox/twooth.svg"
-import payrollImg from "@/assets/icons/dashBoard/toolBox/payroll.svg"
-import invoiceImg from "@/assets/icons/dashBoard/toolBox/invoice.svg"
-import cpdCoursesImg from "@/assets/icons/dashBoard/toolBox/cpd.svg"
-import patientPortalImg from "@/assets/icons/dashBoard/toolBox/patient.svg"
-import clockInImg from "@/assets/icons/dashBoard/toolBox/clock.svg"
-import emailMarketingImg from "@/assets/icons/dashBoard/toolBox/email.svg"
-import socialMediaImg from "@/assets/icons/dashBoard/toolBox/social.svg"
-import teamChatImg from "@/assets/icons/dashBoard/toolBox/team.svg"
+import labImg from "@/assets/icons/dashBoard/toolbox/lab.svg"
+import stockImg from "@/assets/icons/dashBoard/toolbox/stock.svg"
+import twoothMatchImg from "@/assets/icons/dashBoard/toolbox/twooth.svg"
+import payrollImg from "@/assets/icons/dashBoard/toolbox/payroll.svg"
+import invoiceImg from "@/assets/icons/dashBoard/toolbox/invoice.svg"
+import cpdCoursesImg from "@/assets/icons/dashBoard/toolbox/cpd.svg"
+import patientPortalImg from "@/assets/icons/dashBoard/toolbox/patient.svg"
+import clockInImg from "@/assets/icons/dashBoard/toolbox/clock.svg"
+import emailMarketingImg from "@/assets/icons/dashBoard/toolbox/email.svg"
+import socialMediaImg from "@/assets/icons/dashBoard/toolbox/social.svg"
+import teamChatImg from "@/assets/icons/dashBoard/toolbox/team.svg"
 
 
   const props = defineProps({

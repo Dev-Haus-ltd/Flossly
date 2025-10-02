@@ -55,7 +55,7 @@
 <script setup>
 const { user } = useUser();
 import headerLogo from "@/assets/logos/headerLogo.svg";
-import logoIcon from "@/assets/logos/logoIcon2.svg";
+import logoIcon from "@/assets/logos/Logoicon2.svg";
 const emit = defineEmits(["small-screen-drawer"]);
 
 const props = defineProps({
