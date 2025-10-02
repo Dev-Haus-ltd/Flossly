@@ -175,7 +175,7 @@
       </v-card-text>
     </v-card>
   </v-dialog>
-</template>
+</template> 
 
 <script setup>
 import { computed } from "vue";
