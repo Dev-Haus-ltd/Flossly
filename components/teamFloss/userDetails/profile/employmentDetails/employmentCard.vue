@@ -136,14 +136,14 @@ const savePanel = () => {
 
 /* Heading & subtitle */
 .title-text {
-  font-family: Poppins, sans-serif;
+  
   font-weight: 600;
   font-size: 16px;
   color: #1e1e1e;
   margin: 0;
 }
 .subtitle-text {
-  font-family: Poppins, sans-serif;
+  
   font-weight: 400;
   font-size: 13px;
   color: #1e1e1e;
@@ -155,7 +155,7 @@ const savePanel = () => {
   border-radius: 8px;
   padding: 12px;
   margin: 16px 0;
-  font-family: Poppins, sans-serif;
+  
   font-weight: 400;
   font-size: 13px;
   background-color: #f9fafa;
@@ -178,7 +178,7 @@ const savePanel = () => {
 /* Field label + value */
 .field-label {
   display: block;
-  font-family: Poppins, sans-serif;
+  
   font-weight: 600;
   font-size: 13px;
   color: #1e1e1e;
@@ -186,7 +186,7 @@ const savePanel = () => {
 }
 
 .field-value {
-  font-family: Poppins, sans-serif;
+  
   font-weight: 400;
   font-size: 14px;
   color: #101010;

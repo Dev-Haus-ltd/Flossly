@@ -254,6 +254,6 @@ const updateUser = (user, key) => {
 }
 ::v-deep(.small-input input) {
   font-size: 14px !important;
-  font-family: "Poppins";
+  
 }
 </style>

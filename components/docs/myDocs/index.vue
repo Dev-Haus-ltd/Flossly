@@ -18,7 +18,7 @@
         <!-- Heading -->
         <div
           style="
-            font-family: Poppins;
+            
             font-weight: 600;
             font-size: 14px;
             font-style: SemiBold;
@@ -191,7 +191,7 @@ const goBack = () => {
   }
 }
 .head {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-style: "Regular";
   font-size: 14px;

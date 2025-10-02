@@ -21,7 +21,7 @@
     <v-card style="min-width: 300px; border-radius: 12px; padding: 16px">
       <v-list class="pa-0">
         <div class="pa-0 d-flex align-center justify-space-between">
-          <div style="font-family: Poppins; font-weight: 500; font-size: 14px">
+          <div style=" font-weight: 500; font-size: 14px">
             Filters by
           </div>
 
@@ -31,7 +31,7 @@
             color="primary"
             style="
               text-transform: none;
-              font-family: Poppins;
+              
               font-weight: 500;
               font-size: 13px;
             "
@@ -44,7 +44,7 @@
         <v-divider style="background-color: #dbdbdb" class="my-3" />
 
         <!-- Role -->
-        <v-label class="my-1" style="font-family: Poppins; font-size: 14px">
+        <v-label class="my-1" style=" font-size: 14px">
           Status
         </v-label>
         <v-select
@@ -60,13 +60,13 @@
         />
 
         <!-- Date of Joining -->
-        <v-label class="my-1" style="font-family: Poppins; font-size: 14px">
+        <v-label class="my-1" style=" font-size: 14px">
           Date Range
         </v-label>
         // Date Range Picker
 
         <!-- Profile Completion % -->
-        <v-label class="my-1" style="font-family: Poppins; font-size: 14px">
+        <v-label class="my-1" style=" font-size: 14px">
           Type
         </v-label>
         <v-select
@@ -123,7 +123,7 @@ const clearFilters = () => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 .tbl-top-btn {
   height: 40px;

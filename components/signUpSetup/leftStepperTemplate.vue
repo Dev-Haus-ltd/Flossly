@@ -70,8 +70,8 @@
   background-position: center;
   background-repeat: no-repeat;
   color: #fff;
-  width: 90%;
-  height: 96vh;
+  width: 100%;
+  height: 99vh;
 
   /* Center the content-box */
   display: flex;
@@ -94,7 +94,7 @@
 }
 
 .banner-heading {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 44px;
   margin-bottom: 2rem;

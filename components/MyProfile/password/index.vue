@@ -169,7 +169,7 @@ const resetPassword= async()=>{
 <style scoped>
 .input-label {
   display: block;
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 14px;
   margin-bottom: 4px;
@@ -182,11 +182,11 @@ const resetPassword= async()=>{
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 
 .forgot-line {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 16px;
   margin: 8px 0 16px;
@@ -196,7 +196,7 @@ const resetPassword= async()=>{
 .reset-link {
   display: block;
   margin-top: 4px;
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 16px;
   color: #1976d2; /* primary blue link */

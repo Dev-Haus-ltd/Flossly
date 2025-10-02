@@ -293,14 +293,14 @@ const updateOrgDetails = () => {
 
 <style scoped>
 .user-name {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 24px;
   margin: 0;
 }
 
 .practice-name {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 13px;
   color: #737373;
@@ -309,7 +309,7 @@ const updateOrgDetails = () => {
 
 .info-label {
   display: block;
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 13px;
   color: #1e1e1e;
@@ -317,7 +317,7 @@ const updateOrgDetails = () => {
 }
 
 .editable {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 14px;
   color: #101010;
@@ -339,7 +339,7 @@ const updateOrgDetails = () => {
   text-transform: none;
   background: #f5f5f5;
   color: #1e1e1e;
-  font-family: Poppins;
+  
   font-weight: 500;
   font-size: 13px;
   border-radius: 6px;

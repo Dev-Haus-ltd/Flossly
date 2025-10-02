@@ -21,150 +21,168 @@
           clean operations.
         </h2>
       </div>
-    </div> 
+    </div>
   </div>
   <div class="login-page" v-else>
-    <v-container>
-      <v-row>
-        <v-col
-          cols="12"
-          md="6"
-          class="d-flex align-center justify-center px-12"
-        >
-          <div style="width: 100%; max-width: 500px">
-            <h2 class="text-center login-heading">Welcome Back!</h2>
-            <h2
-              class="mb-6 text-center login-sub-heading"
-              style="color: #8b8b8b"
+    <v-row>
+      <v-col cols="12" md="6" class="d-flex align-center justify-center px-12">
+        <div style="width: 100%; max-width: 500px">
+          <h2 class="text-center login-heading">Welcome Back!</h2>
+          <h2 class="mb-6 text-center login-sub-heading" style="color: #8b8b8b">
+            Let's get signed in securely.
+          </h2>
+          <v-form ref="form" @submit.prevent="login">
+            <label class="lbl">Email</label>
+            <v-text-field
+              v-model="credentials.email"
+              label="Email"
+              type="email"
+              :rules="emailRules"
+              density="comfortable"
+              variant="solo"
+              single-line
+              required
+              class="mb-2 input-bordered"
+              flat
+            />
+            <label class="lbl">Password</label>
+
+            <v-text-field
+              v-model="credentials.password"
+              label="Password"
+              :type="showPassword ? 'text' : 'password'"
+              :rules="passwordRules"
+              required
+              variant="solo"
+              single-line
+              density="comfortable"
+              class="input-bordered"
+              :append-inner-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'"
+              @click:append-inner="togglePasswordVisibility"
+              flat
+            />
+            <p v-if="loginError" style="color: red" class="pb-2">
+              {{ loginError }}
+            </p>
+            <div
+              class="d-flex justify-space-between align-center"
+              style="height: 48px"
             >
-              Let's get signed in securely.
-            </h2>
-            <v-form ref="form" @submit.prevent="login">
-              <v-label>Email</v-label>
-              <v-text-field
-                v-model="credentials.email"
-                label="Email"
-                type="email"
-                :rules="emailRules"
-                density="comfortable"
-                variant="outlined"
-                single-line
-                required
-                class="mb-2"
-              />
-              <v-label>Password</v-label>
-              <v-text-field
-                v-model="credentials.password"
-                label="Password"
-                :type="showPassword ? 'text' : 'password'"
-                :rules="passwordRules"
-                required
-                variant="outlined"
-                single-line
-                density="comfortable"
-                :append-inner-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'"
-                @click:append-inner="togglePasswordVisibility"
-              />
-              <p v-if="loginError" style="color: red" class="pb-2">
-                {{ loginError }}
-              </p>
-              <div class="d-flex justify-space-between align-center " style="height: 48px;">
-                <v-row align="center" class="py-0" style="height:48px;" no-gutters>
-                  <v-col cols="auto" class="pa-0 text-right">
-                    <v-switch
-                      label="Remember me"
-                      color="#266DF0"
-                      density="compact"
-                      inset
-                      hide-details
-                    />
-                  </v-col>
-
-                  <!-- This will expand and push the next col to the far right -->
-                  <v-spacer />
-
-                  <v-col cols="auto">
-                    <v-btn
-                      color="#266DF0"
-                      variant="text"
-                      class="pa-0"
-                      min-width="0"
-                      @click="forgetPass"
-                    >
-                      Forgot Password
-                    </v-btn>
-                  </v-col>
-                </v-row>
-              </div>
-              <v-btn
-                type="submit"
-                color="primary"
-                block
-                variant="flat"
-                class="mt-5 rounded-lg"
-                height="48"
+              <v-row
+                align="center"
+                class="py-0"
+                style="height: 48px"
+                no-gutters
               >
-                Log In & Tidy Up
+                <v-col cols="auto" class="pa-0 text-right">
+                  <v-switch
+                    label="Remember me"
+                    color="#266DF0"
+                    density="compact"
+                    inset
+                    hide-details
+                  />
+                </v-col>
+
+                <!-- This will expand and push the next col to the far right -->
+                <v-spacer />
+
+                <v-col cols="auto">
+                  <v-btn
+                    color="#266DF0"
+                    variant="text"
+                    class="pa-0"
+                    min-width="0"
+                    @click="forgetPass"
+                  >
+                    Forgot Password
+                  </v-btn>
+                </v-col>
+              </v-row>
+            </div>
+            <v-btn
+              type="submit"
+              color="primary"
+              block
+              variant="flat"
+              class="mt-5 rounded-lg"
+              height="48"
+            >
+              Log In & Tidy Up
+            </v-btn>
+            <div class="agreement-text mt-5">
+              By signing up you agree to Flossly&nbsp;
+              <a href="#">Terms</a>,&nbsp;
+              <a href="#">Privacy Policy</a>&nbsp;and&nbsp;
+              <a href="#">Security Policy</a>.
+            </div>
+            <div class="mt-5 text-body-2 text-center" style="height: 48px">
+              Don't have an account?
+              <v-btn
+                class="pa-0 ma-0 v-btn--plain"
+                min-width="0"
+                height="auto"
+                variant="text"
+                color="#266DF0"
+                style="vertical-align: baseline"
+                @click="goToSignup"
+              >
+                Sign up now.
               </v-btn>
-              <div class="mt-5 text-body-2 text-center " style="height: 48px;">
-                Don't have an account?
-                <v-btn class="pa-0 ma-0 v-btn--plain" min-width="0" height="auto" variant="text" color="#266DF0" style="vertical-align: baseline;" @click="goToSignup">
-                  Sign up now.
-                </v-btn>
-              </div>
-            </v-form>
+            </div>
+          </v-form>
+        </div>
+      </v-col>
+      <v-col cols="12" md="6" class="d-flex align-center justify-center pa-0">
+        <div class="px-4 w-100">
+          <div
+            class="background-image relative d-flex align-center justify-center"
+          >
+            <!-- Centered content box -->
+            <div class="overlay-box pa-8">
+              <!-- Logo -->
+              <img
+                src="@/assets/logos/loginLogos/white-logo.svg"
+                alt="My Logo"
+                class="mb-6"
+                style="max-width: 180px"
+              />
+
+              <!-- Heading -->
+              <h1
+                style="
+                  font-family: 'Garnett';
+                  font-weight: 600;
+                  font-size: 44px;
+                  color: #fff;
+                  margin-bottom: 16px;
+                  text-align: left;
+                "
+              >
+                All-in-One CRM and Task Manager
+              </h1>
+
+              <!-- Subheading -->
+              <p
+                style="
+                  font-size: 18px;
+                  line-height: 1.5;
+                  color: #fff;
+                  text-align: left;
+                  max-width: 600px;
+                "
+              >
+                <strong>
+                  Automate patient flows, manage staff, and track clinic
+                  performance</strong
+                >
+                with the only dental-specific platform you'll ever need.
+              </p>
+            </div>
           </div>
-        </v-col>
-        <v-col
-          cols="12"
-          md="6"
-          class="d-flex align-center justify-center px-4"
-        >
-        <div class="background-image rounded-xl pa-10 relative d-flex align-center justify-center">
-  <!-- Centered content box -->
-  <div class="overlay-box pa-8">
-    <!-- Logo -->
-    <img
-      src="@/assets/logos/loginLogos/white-logo.svg"
-      alt="My Logo"
-      class="mb-6"
-      style="max-width: 180px"
-    />
-
-    <!-- Heading -->
-    <h1
-      style="
-        font-family: 'Garnett Semibold';
-        font-weight: 600;
-        font-size: 44px;
-        color: #fff;
-        margin-bottom: 16px;
-        text-align: left;
-      "
-    >
-      All-in-One CRM and Task Manager
-    </h1>
-
-    <!-- Subheading -->
-    <p
-      style="
-        font-size: 18px;
-        line-height: 1.5;
-        color: #fff;
-        text-align: left;
-        max-width: 600px;
-      "
-    >
-    <strong> Automate patient flows, manage staff, and track clinic performance</strong>
-      with the only dental-specific platform you'll ever need.
-    </p>
-  </div>
-</div>
-
-        </v-col>
-     
-      </v-row>
-    </v-container>
+        </div>
+      </v-col>
+    </v-row>
   </div>
 </template>
 
@@ -264,7 +282,6 @@ const forgetPass = () => {
 <style scoped>
 .init-page {
   position: relative;
-  
 }
 .init-pg-content {
   margin: 0;
@@ -294,7 +311,7 @@ const forgetPass = () => {
   background-color: rgba(255, 255, 255, 0.1); /* translucent white */
   backdrop-filter: blur(10px); /* blur effect */
   -webkit-backdrop-filter: blur(10px); /* Safari support */
-  max-width: 500px;
+  max-width: 530px;
   width: 100%;
   text-align: left;
   border-radius: 15px;
@@ -305,6 +322,7 @@ const forgetPass = () => {
   width: 100%;
   display: flex;
   align-items: center;
+  background-color: white;
 }
 .logoimg {
   width: 250px;
@@ -313,17 +331,48 @@ const forgetPass = () => {
 .background-image {
   background-image: url("/assets/images/loginBanner.svg");
   background-size: cover;
-  width: 80%;
-  height: 90vh;
+  width: 100%;
+  height: 99vh;
+  border-radius: 12px;
 }
 .login-heading {
+  font-family: "Garnett";
   font-weight: 600;
-  font-size: 50px;
+  font-size: 44px;
 }
 .login-sub-heading {
+  font-family: "Inter";
   font-weight: 400;
   font-size: 16px;
 }
+.lbl {
+  font-family: "Inter";
+  font-weight: 400;
+  font-style: "Regular";
+  font-size: 16px;
+  color: #1e1e1e;
+}
+.agreement-text {
+  font-family: "Inter";
+  font-weight: 400;
+  font-style: normal;
+  font-size: 14px;
+  text-align: center;
+  color: #8b8b8b;
+  width: 70%;
+  margin: auto;
+}
 
-
+.agreement-text a {
+  color: #8b8b8b;
+  text-decoration: underline;
+}
+.input-bordered :deep(.v-field) {
+  border: 1px solid #dfdfdf !important;
+  border-radius: 8px !important;
+  background-color: white !important;
+  min-height: 40px;
+  font-size: 14px;
+  
+}
 </style>

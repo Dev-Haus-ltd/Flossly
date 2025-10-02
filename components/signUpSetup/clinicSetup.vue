@@ -1,39 +1,47 @@
 <template>
   <v-form ref="form" v-model="valid">
-    <v-label class="mb-2">Clinic Name </v-label>
+    <label class="lbl">Clinic Name </label>
     <v-text-field
       v-model="clinic.name"
       :rules="[required]"
-      variant="outlined"
+      variant="solo"
       single-line
       density="comfortable"
+      class="input-bordered mt-2"
+      flat
     />
-    <v-label class="mb-2">Logo Upload </v-label>
-    <imgUpload v-model="clinic.logo" />
-    <v-label class="mb-2">Contact </v-label>
+    <label class="lbl">Logo Upload </label>
+    <imgUpload v-model="clinic.logo" class="my-2"/>
+    <label class="lbl">Contact </label>
     <v-text-field
-      variant="outlined"
+      variant="solo"
       v-model="clinic.contact"
       :rules="[required]"
       single-line
       density="comfortable"
+      class="input-bordered mt-2"
+      flat
     />
-    <v-label class="mb-2">Location Address</v-label>
+    <label class="mb-2 lbl">Location Address</label>
     <v-text-field
-      variant="outlined"
+      variant="solo"
       v-model="clinic.address"
       :rules="[required]"
       single-line
       density="comfortable"
+      class="input-bordered mt-2"
+      flat
     />
-    <v-label class="mb-2"> Clinic Type</v-label>
+    <label class="mb-2 lbl"> Clinic Type</label>
     <v-select
-      variant="outlined"
+      variant="solo"
       :items="['Dental', 'General Practice', 'Dermatology', 'Physiotherapy']"
       v-model="clinic.type"
       :rules="[required]"
       single-line
       density="comfortable"
+      class="input-bordered mt-2"
+      flat
     />
   </v-form>
 </template>
@@ -52,3 +60,21 @@ defineExpose({
   valid,
 });
 </script>
+<style scoped>
+.input-bordered :deep(.v-field) {
+  border: 1px solid #dfdfdf !important;
+  border-radius: 8px !important;
+  background-color: white !important;
+  min-height: 40px;
+  font-size: 14px;
+  
+}
+.lbl {
+  font-family: "Inter";
+  font-weight: 400;
+  font-style: "Regular";
+  font-size: 16px;
+  color: #1e1e1e;
+  margin-bottom: 8px;
+}
+</style>

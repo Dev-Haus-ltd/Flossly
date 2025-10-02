@@ -5,7 +5,7 @@
       <v-card-title
         class="d-flex align-center justify-space-between"
         style="
-          font-family: Poppins;
+          
           font-weight: 600;
           font-size: 16px;
           border-bottom: 1px solid #dbdbdb;
@@ -201,10 +201,10 @@ const submit = () => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 .field-label {
-  font-family: "Poppins", sans-serif;
+  
   font-size: 13px;
   font-weight: 500;
   color: #1e1e1e;

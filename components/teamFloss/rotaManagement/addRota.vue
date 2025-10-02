@@ -397,11 +397,11 @@ function resetForm() {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 /* create rota screen */
 .rota-title {
-  font-family: Poppins, sans-serif;
+  
   font-weight: 600;
   font-style: SemiBold;
   font-size: 14px;
@@ -409,7 +409,7 @@ function resetForm() {
 }
 
 .rota-subtitle {
-  font-family: Poppins, sans-serif;
+  
   font-weight: 400;
   font-style: normal;
   font-size: 14px;
@@ -469,7 +469,7 @@ function resetForm() {
 }
 
 .option-title {
-  font-family: Poppins, sans-serif;
+  
   font-weight: 500;
   font-size: 14px;
   line-height: 130%;
@@ -489,7 +489,7 @@ function resetForm() {
 .field-label {
   display: block;
   margin-bottom: 4px;
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 14px;
   color: #737373;
@@ -503,14 +503,14 @@ function resetForm() {
 /* calender view */
 
 .filter-label {
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 14px;
   color: #737373;
 }
 
 .chip-content {
-  font-family: "Poppins";
+  
   font-weight: 500;
   font-style: Medium;
   font-size: 14px;

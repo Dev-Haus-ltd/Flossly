@@ -88,7 +88,7 @@
     border: 1px solid #dfdfdf;
     background-color: #ffffff;
     color: #1e1e1e;
-    font-family: "Poppins", sans-serif;
+    
     font-weight: 400;
     font-size: 14px;
   }
@@ -98,7 +98,7 @@
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
   </style>
   

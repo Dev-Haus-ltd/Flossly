@@ -3,16 +3,16 @@
     <initial-screen @handle-init-screen="isInitScreen = false" />
   </div>
   <div class="parent" v-else>
-    <v-container>
+
       <v-row>
-        <v-col cols="12" md="6">
+        <v-col cols="12" md="5" class="pa-0 px-4">
           <left-stepper-template />
         </v-col>
-        <v-col cols="12" md="6" class="d-flex align-center">
+        <v-col cols="12" md="7" class="d-flex align-center">
           <sign-up-setup />
         </v-col>
       </v-row>
-    </v-container>
+   
     <!-- <img
       src="../../assets/logos/signupSetupScreen/waterMark.svg"
       alt="watermark"
@@ -30,6 +30,9 @@ const isInitScreen = ref(true);
 <style scoped>
 .parent {
   position: relative;
+  height: 100vh;
+  display: flex;
+  align-items: center;
 }
 
 .watermark {

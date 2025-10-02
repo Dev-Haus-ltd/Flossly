@@ -109,7 +109,7 @@
     background-color: white !important;
     min-height: 40px;
     font-size: 14px;
-    font-family: "Poppins", sans-serif;
+    
     border-radius: 8px;
   }
   </style>

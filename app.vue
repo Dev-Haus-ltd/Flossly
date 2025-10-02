@@ -83,137 +83,22 @@ const openEmail = () => {
 </script>
 
 <style lang="scss">
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-Thin.ttf") format("truetype");
-  font-weight: 100;
-  font-style: normal;
-}
 
 @font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-ThinItalic.ttf") format("truetype");
-  font-weight: 100;
-  font-style: italic;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-ExtraLight.ttf") format("truetype");
-  font-weight: 200;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-ExtraLightItalic.ttf") format("truetype");
-  font-weight: 200;
-  font-style: italic;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-Light.ttf") format("truetype");
-  font-weight: 300;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-LightItalic.ttf") format("truetype");
-  font-weight: 300;
-  font-style: italic;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-Regular.ttf") format("truetype");
+  font-family: "Garnett";
+  src: url("@/assets/fonts/Garnett/Garnett-Regular.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
 }
 
 @font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-Italic.ttf") format("truetype");
+  font-family: "Inter";
+  src: url("@/assets/fonts/Inter/Inter_18pt-Regular.ttf") format("truetype");
   font-weight: 400;
-  font-style: italic;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-Medium.ttf") format("truetype");
-  font-weight: 500;
   font-style: normal;
 }
 
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-MediumItalic.ttf") format("truetype");
-  font-weight: 500;
-  font-style: italic;
-}
 
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-SemiBold.ttf") format("truetype");
-  font-weight: 600;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-SemiBoldItalic.ttf") format("truetype");
-  font-weight: 600;
-  font-style: italic;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-Bold.ttf") format("truetype");
-  font-weight: 700;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-BoldItalic.ttf") format("truetype");
-  font-weight: 700;
-  font-style: italic;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-ExtraBold.ttf") format("truetype");
-  font-weight: 800;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-ExtraBoldItalic.ttf") format("truetype");
-  font-weight: 800;
-  font-style: italic;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-Black.ttf") format("truetype");
-  font-weight: 900;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-BlackItalic.ttf") format("truetype");
-  font-weight: 900;
-  font-style: italic;
-}
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-Thin.ttf") format("truetype");
-  font-weight: 100;
-  font-style: normal;
-}
 @import "@/node_modules/@syncfusion/ej2-base/styles/material.css";
 @import "@/node_modules/@syncfusion/ej2-buttons/styles/material.css";
 @import "@/node_modules/@syncfusion/ej2-inputs/styles/material.css";
@@ -223,6 +108,7 @@ const openEmail = () => {
 @import "@/node_modules/@syncfusion/ej2-splitbuttons/styles/material.css";
 @import "@/node_modules/@syncfusion/ej2-dropdowns/styles/material.css";
 @import "@/node_modules/@syncfusion/ej2-vue-documenteditor/styles/material.css";
+
 .floating-buttons {
   position: fixed;
   bottom: 20px;
@@ -237,7 +123,7 @@ const openEmail = () => {
   text-transform: none;
 }
 .bck-org {
-  background-color: #f5f7f8;
+  background-color: white;
 }
 .cust-field .v-field {
   border-radius: 10px !important;

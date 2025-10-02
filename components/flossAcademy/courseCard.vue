@@ -154,21 +154,21 @@ const onAssign = () => {
 }
 
 .time-text {
-  font-family: Poppins, sans-serif;
+  
   font-weight: 400;
   font-size: 12px;
   color: #737373;
 }
 
 .verified-text {
-  font-family: Poppins, sans-serif;
+  
   font-weight: 400;
   font-size: 12px;
   color: #33b93c;
 }
 
 .title-text {
-  font-family: Poppins, sans-serif;
+  
   font-weight: 600;
   font-size: 14px;
   color: #1e1e1e;

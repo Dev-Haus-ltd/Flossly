@@ -1,25 +1,11 @@
 <template>
-  <div class="bg-white">
-    <v-container>
+  <div class="bg-white parent">
+   
       <v-row>
         <!-- Left banner -->
-        <v-col
-          cols="12"
-          md="5"
-          class="d-flex align-center justify-center px-4 py-9"
-        >
-          <div class="background-image rounded-xl pa-10 relative">
-            <img src="@/assets/logos/loginLogos/white-logo.svg" alt="Logo" />
-            <h1 class="mt-5 login-banner-heading">
-              Reset your password to get back on track.
-            </h1>
-          </div>
-        </v-col>
-
-        <!-- Right side form -->
         <v-col 
           cols="12"
-          md="7" 
+          md="6" 
           class="d-flex align-center justify-center px-12"
         >
           <div style="width: 100%; max-width: 500px">
@@ -44,16 +30,20 @@
                 type="email"
                 :rules="emailRules"
                 density="comfortable"
-                variant="outlined"
+                variant="solo"
                 single-line
                 required
-                class="mb-4"
+                class="mb-4 input-bordered"
+                
+                flat
               />
               <v-btn
                 type="submit"
                 color="primary"
                 block
                 class="mt-2 rounded-lg"
+                height="48"
+                flat
               >
                 Send Reset Code
               </v-btn>
@@ -70,7 +60,8 @@
                 @click:append-inner="showPassword = !showPassword"
                 :rules="passwordRules"
                 required
-                variant="outlined"
+                variant="solo"
+                class="input-bordered"
                 single-line
                 density="comfortable"
               />
@@ -101,8 +92,46 @@
             </div>
           </div>
         </v-col>
+          <!-- Right side form -->
+          <v-col cols="12" md="6" class="d-flex align-center justify-center pa-0">
+        <div class="px-4 w-100">
+          <div
+            class="background-image relative d-flex align-center justify-center"
+          >
+            <!-- Centered content box -->
+            <div class="overlay-box pa-8">
+              <!-- Logo -->
+              <img
+                src="@/assets/logos/loginLogos/white-logo.svg"
+                alt="My Logo"
+                class="mb-6"
+                style="max-width: 180px"
+              />
+
+              <!-- Heading -->
+              <h1
+                style="
+                  font-family: 'Garnett';
+                  font-weight: 600;
+                  font-size: 40px;
+                  color: #fff;
+                  margin-bottom: 16px;
+                  text-align: left;
+                "
+              >
+                A  Reset your password to get back on track.
+              </h1>
+
+             
+            </div>
+          </div>
+        </div>
+      </v-col>
+
+      
+      
       </v-row>
-    </v-container>
+   
   </div>
 </template>
 
@@ -210,24 +239,51 @@ const goToLogin = () => {
 </script>
 
 <style scoped>
+.parent{
+  height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
 .background-image {
   background-image: url("/assets/images/loginBanner.svg");
   background-size: cover;
-  width: 90%;
-  height: 90vh;
+  width: 100%;
+  height: 99vh;
+  border-radius: 12px;
 }
 .login-banner-heading {
   color: #fff;
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 30px;
 }
 .login-heading {
+  font-family: "Garnett";
+
   font-weight: 600;
   font-size: 32px;
 }
 .login-sub-heading {
   font-weight: 400;
   font-size: 16px;
+}
+.overlay-box {
+  border: 1px solid #fff;
+  background-color: rgba(255, 255, 255, 0.1); /* translucent white */
+  backdrop-filter: blur(10px); /* blur effect */
+  -webkit-backdrop-filter: blur(10px); /* Safari support */
+  max-width: 530px;
+  width: 100%;
+  text-align: left;
+  border-radius: 15px;
+}
+.input-bordered :deep(.v-field) {
+  border: 1px solid #dfdfdf !important;
+  border-radius: 8px !important;
+  background-color: white !important;
+  min-height: 40px;
+  font-size: 14px;
+  
 }
 </style>

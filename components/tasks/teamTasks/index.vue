@@ -424,7 +424,7 @@ const handleComplete = async () => {
 
 <style scoped>
 .page-title {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 400;
   font-size: 28px;
   line-height: 100%;
@@ -432,7 +432,7 @@ const handleComplete = async () => {
 }
 
 .page-description {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 400;
   font-size: 13px;
   line-height: 130%;
@@ -446,14 +446,14 @@ const handleComplete = async () => {
 }
 
 .card-number {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 600;
   font-size: 24px;
   color: #1E1E1E;
 }
 
 .card-label {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 400;
   font-size: 13px;
   color: #737373;
@@ -488,7 +488,7 @@ const handleComplete = async () => {
 }
 
 .selected-text {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 14px;
   padding: 5px 13px;
@@ -502,7 +502,7 @@ const handleComplete = async () => {
 }
 
 .action-label {
-  font-family: "Poppins";
+  
   font-size: 13px;
   margin-top: 4px;
 }

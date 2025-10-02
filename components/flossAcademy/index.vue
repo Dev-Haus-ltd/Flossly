@@ -179,12 +179,12 @@ const getUserCourseHistory = () => {
   }
 }
 :deep(.v-breadcrumbs) {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 400;
   font-size: 14px;
 }
 .tab-text {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-style: "Regular";
   font-size: 14px;

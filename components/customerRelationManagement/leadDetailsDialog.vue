@@ -369,7 +369,7 @@ const onAutomationTypeChange = (newType) => {
 
 <style scoped>
 .title {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 16px;
 }
@@ -383,12 +383,12 @@ const onAutomationTypeChange = (newType) => {
   font-weight: 500;
 }
 .cust-lbl {
-  font-family: "Poppins";
+  
   font-weight: bold;
   font-size: 14px;
 }
 .value-text {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 14px;
   color: #1e1e1e;
@@ -403,14 +403,14 @@ const onAutomationTypeChange = (newType) => {
   color: white;
 }
 .key-text {
-  font-family: Poppins;
+  
   font-weight: 400;
   font-style: Regular;
   font-size: 14px;
   color: #737373;
 }
 .cust-lbl {
-  font-family: Poppins;
+  
   font-weight: 700;
   font-style: Bold;
   font-size: 14px;
@@ -422,6 +422,6 @@ const onAutomationTypeChange = (newType) => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 </style>

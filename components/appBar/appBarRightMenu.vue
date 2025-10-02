@@ -99,7 +99,7 @@ const handleLogout = () => {
 
 <style scoped>
 .user-name {
-  font-family: "Poppins";
+  
   font-weight: 500;
   font-size: 16px;
   font-style: Medium;
@@ -107,7 +107,7 @@ const handleLogout = () => {
 }
 
 .menu-option {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 16px;
   color: #1e1e1e;

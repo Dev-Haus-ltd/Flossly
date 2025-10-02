@@ -3,10 +3,10 @@
     :class="
       steps[step].key === 3
         ? 'py-5 d-flex flex-column fill-height'
-        : 'parent py-5 d-flex flex-column fill-height'
+        : 'parent py-5 d-flex flex-column fill-height align-start ml-6'
     "
   >
-    <div>
+    <div class="w-100">
       <h2 class="mb-4 title">{{ steps[step].title }}</h2>
       <h2 class="mb-4 sub-title">{{ steps[step].subTitle }}</h2>
 
@@ -26,6 +26,8 @@
         :disabled="step === 0"
         @click="step--"
         class="me-2"
+        height="48"
+        width="100"
       >
         Back
       </v-btn>
@@ -35,11 +37,17 @@
         variant="outlined"
         @click="step++"
         class="me-2"
+          height="48"
+        width="100"
       >
         Skip
       </v-btn>
 
-      <v-btn color="primary" @click="nextStep" v-if="step < steps.length - 1">
+      <v-btn color="primary" 
+      height="48"
+      width="100"
+        
+        @click="nextStep" v-if="step < steps.length - 1">
         Next
       </v-btn>
 
@@ -47,6 +55,8 @@
         v-if="step === steps.length - 1"
         color="primary"
         @click="navigateToDashboard"
+        height="48"
+        width="150"
       >
         Go to Dashboard
       </v-btn>
@@ -184,9 +194,10 @@ const navigateToDashboard = () => {
 <style scoped>
 .parent {
   width: 70%;
+  
 }
 .title {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 40px;
   line-height: 60px;
@@ -194,7 +205,7 @@ const navigateToDashboard = () => {
   color: #1e1e1e;
 }
 .sub-title {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 16px;
   line-height: 100%;

@@ -471,7 +471,7 @@ const uploadFile = async (file) => {
 <style scoped>
 /* Keep text color default, even when tab is active */
 .title {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 16px;
 }
@@ -488,7 +488,7 @@ const uploadFile = async (file) => {
   font-weight: 500;
 }
 .key-text {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 400;
   font-size: 14px;
   color: #737373;
@@ -496,7 +496,7 @@ const uploadFile = async (file) => {
 }
 
 .value-text {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 400;
   font-size: 14px;
   color: #1e1e1e;
@@ -526,7 +526,7 @@ const uploadFile = async (file) => {
   color: #fea200;
 }
 .cust-lbl {
-  font-family: "Poppins";
+  
   font-weight: bold;
   font-size: 14px;
 }

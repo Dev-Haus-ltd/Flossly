@@ -44,7 +44,7 @@
   
   <style scoped>
   .fld-lbl {
-    font-family: "Poppins";
+    
     font-weight: 400;
     font-size: 14px;
     color: #737373;
@@ -55,7 +55,7 @@
     background-color: white !important;
     min-height: 40px;
     font-size: 14px;
-    font-family: "Poppins", sans-serif;
+    
   }
   .placeholder-area {
     height: 100%;

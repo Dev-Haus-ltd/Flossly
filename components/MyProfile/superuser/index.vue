@@ -197,7 +197,7 @@ function setRow(row, value) {
 <style scoped>
 /* Heading style (Super User) */
 .super-heading {
-  font-family: Poppins;
+  
   font-weight: 600;
   font-style: SemiBold;
   font-size: 13px;
@@ -212,7 +212,7 @@ function setRow(row, value) {
   text-transform: none;
   background: #f5f5f5;
   color: #1e1e1e;
-  font-family: Poppins;
+  
   font-weight: 500;
   font-size: 13px;
   border-radius: 6px;
@@ -233,7 +233,7 @@ function setRow(row, value) {
   border: 0;
   padding: 12px 16px;
   vertical-align: middle;
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 14px;
 }
@@ -275,7 +275,7 @@ function setRow(row, value) {
   flex-direction: column;
 }
 .head-title {
-  font-family: Poppins;
+  
   font-weight: 600;
   font-style: SemiBold;
   font-size: 13px;
@@ -286,7 +286,7 @@ function setRow(row, value) {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  font-family: Poppins;
+  
   font-weight: 500;
   font-size: 14px;
 }

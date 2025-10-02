@@ -98,13 +98,13 @@ function setActive(tab) {
 }
 
 .rewards-title {
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 16px;
   color: #ffffff;
 }
 .rewards-points {
-  font-family: Poppins;
+  
   font-weight: 600;
   font-size: 32px;
   color: #ffffff;

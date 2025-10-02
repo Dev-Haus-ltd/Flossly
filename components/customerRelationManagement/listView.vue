@@ -293,7 +293,7 @@ const assignLead = (task, user) => {
 
 <style scoped>
 .head {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-style: "SemiBold";
   font-size: 14px;
@@ -370,7 +370,7 @@ const assignLead = (task, user) => {
 }
 
 .selected-text {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 14px;
   padding: 5px 13px;
@@ -384,7 +384,7 @@ const assignLead = (task, user) => {
 }
 
 .action-label {
-  font-family: "Poppins";
+  
   font-size: 13px;
 }
 </style>

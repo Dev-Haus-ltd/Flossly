@@ -138,7 +138,7 @@ const printCourse = (course) => {
 
 <style scoped>
 .table-title {
-  font-family: Poppins;
+  
   font-weight: 600;
   font-size: 14px;
   color: #1e1e1e;
@@ -153,7 +153,7 @@ const printCourse = (course) => {
 
 .course-table th,
 .course-table td {
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 13px;
   padding: 10px 12px;
@@ -186,14 +186,14 @@ const printCourse = (course) => {
 }
 
 .course-text {
-  font-family: "Poppins";
+  
   font-size: 14px;
   color: #101010;
   margin: 0;
 }
 
 .status-chip {
-  font-family: "Poppins";
+  
   font-size: 12px;
   font-weight: 500;
   border-radius: 12px;
@@ -206,6 +206,6 @@ const printCourse = (course) => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 </style>

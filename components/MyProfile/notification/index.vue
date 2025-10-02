@@ -271,7 +271,7 @@ function onToggle(row, key) {
   border: 0;
   padding: 12px 16px;
   vertical-align: middle;
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 14px;
 }

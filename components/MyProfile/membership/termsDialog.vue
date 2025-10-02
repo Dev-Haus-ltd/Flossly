@@ -22,7 +22,7 @@
         <div class="d-flex align-center gap-2">
           <div
             style="
-              font-family: Poppins;
+              
               font-weight: 400;
               font-size: 14px;
               color: #737373;
@@ -47,7 +47,7 @@
       <!-- Scrollable Content -->
       <v-card-text
         style="
-          font-family: Poppins;
+          
           font-weight: 400;
           font-size: 14px;
           color: #1e1e1e;
@@ -193,13 +193,13 @@ const internalValue = computed({
 
 <style scoped>
 .terms-heading {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 20px;
   color: #1e1e1e;
 }
 .dialog-title {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 18px;
 }

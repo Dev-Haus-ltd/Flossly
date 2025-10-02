@@ -5,7 +5,7 @@
       <v-card-title
         class="d-flex align-center justify-space-between"
         style="
-          font-family: Poppins;
+          
           font-weight: 600;
           font-size: 16px;
           border-bottom: 1px solid #dbdbdb;
@@ -30,7 +30,7 @@
           <!-- Add shift from library -->
           <h3
             style="
-              font-family: Poppins;
+              
               font-weight: 600;
               font-size: 14px;
               color: #1e1e1e;
@@ -63,7 +63,7 @@
           <h3
             class="mb-5"
             style="
-              font-family: Poppins;
+              
               font-weight: 600;
               font-size: 14px;
               color: #1e1e1e;
@@ -552,10 +552,10 @@ watch(
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 .field-label {
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 14px;
   color: #737373;
@@ -563,7 +563,7 @@ watch(
 .error-text {
   color: #b00020;
   font-size: 12px;
-  font-family: "Poppins", sans-serif;
+  
   margin-top: 4px;
   display: block;
 }

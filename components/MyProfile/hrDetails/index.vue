@@ -94,7 +94,7 @@ function logValue(e, key) {
 <style scoped>
 .info-label {
   display: block;
-  font-family: Poppins;
+  
   font-weight: 600;
   font-size: 13px;
   color: #1e1e1e;
@@ -102,7 +102,7 @@ function logValue(e, key) {
 }
 
 .editable {
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 14px;
   color: #101010;

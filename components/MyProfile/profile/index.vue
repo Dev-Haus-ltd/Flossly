@@ -250,14 +250,14 @@ const updateProfile = () => {
 
 <style scoped>
 .user-name {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 24px;
   margin: 0;
 }
 
 .practice-name {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 13px;
   color: #737373;
@@ -266,7 +266,7 @@ const updateProfile = () => {
 
 .info-label {
   display: block;
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 13px;
   color: #1e1e1e; /* second column labels */
@@ -274,7 +274,7 @@ const updateProfile = () => {
 }
 
 .editable {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 14px;
   color: #101010;

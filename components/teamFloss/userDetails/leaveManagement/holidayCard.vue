@@ -67,14 +67,14 @@
   }
   
   .holiday-title {
-    font-family: Poppins;
+    
     font-weight: 600;
     font-size: 14px;
     color: #1e1e1e;
   }
   
   .holiday-days {
-    font-family: Poppins;
+    
     font-weight: 700;
     font-size: 40px;
     line-height: 130%;
@@ -82,7 +82,7 @@
   }
   
   .holiday-days-text {
-    font-family: Poppins;
+    
     font-weight: 400;
     font-size: 14px;
     color: #6e6e6e;
@@ -97,13 +97,13 @@
 }
   
   .chip-title {
-    font-family: Poppins;
+    
     font-weight: 400;
     font-size: 14px;
   }
   
   .chip-count {
-    font-family: Poppins;
+    
     font-weight: 600;
     font-size: 14px;
   }

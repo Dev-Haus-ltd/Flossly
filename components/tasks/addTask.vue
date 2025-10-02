@@ -446,12 +446,12 @@ const setSnack = (type, title) => {
 </script>
 <style scoped>
 .title-text {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 16px;
 }
 .fld-lbl {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-style: "Regular";
   font-size: 14px;
@@ -464,10 +464,10 @@ const setSnack = (type, title) => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 .checklist {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 16px;
   background-color: #f6f7fb;

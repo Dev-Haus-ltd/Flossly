@@ -25,7 +25,7 @@ export default defineNuxtConfig({
     Sripte_SK: process.env.STRIPE_SK,
     StripeWS: process.env.STRIPE_WS,
   },
-  modules: [
+  modules: [ 
     async (options, nuxt) => {
       nuxt.hooks.hook("vite:extendConfig", (config) =>
         // @ts-ignore

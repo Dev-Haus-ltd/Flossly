@@ -121,7 +121,7 @@ const taskStatsConfig = computed(() => [
 <style scoped lang="scss">
 
 .task-head {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 14px;
   color: #1e1e1e;

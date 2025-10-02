@@ -114,7 +114,7 @@ const emit = defineEmits(['remove']);
   background-color: white !important;
   min-height: 52px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 .fld-lbl {
   color: #737373;

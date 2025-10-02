@@ -74,14 +74,14 @@
   }
   
   .heading {
-    font-family: "Poppins", sans-serif;
+    
     font-weight: 600;
     font-size: 16px;
     color: #ffffff;
   }
   
   .sub-heading {
-    font-family: "Poppins", sans-serif;
+    
     font-weight: 400;
     font-size: 14px;
     margin-top: 4px;
