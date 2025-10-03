@@ -14,7 +14,7 @@
     </div>
 
     <p class="mt-2">{{ label }}</p>
-    <h1>{{ value }}</h1>
+    <h1>{{ value }} </h1>
   </div>
 </template>
 
@@ -64,11 +64,11 @@ const resolvedImage = computed(() => {
   height: 170px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 
   img {
-    width: 40px;
-    height: 40px;
+    width: 52px;
+    height: 52px;
     cursor: pointer;
   }
 

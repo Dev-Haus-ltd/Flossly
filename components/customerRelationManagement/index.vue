@@ -5,15 +5,15 @@
     </div>
     <div class="mt-5 px-5">
       <v-row>
-        <CommonStatCard
-          v-for="(stat, i) in leadStats"
-          :key="i"
-          :icon="stat.icon"
-          :label="stat.label"
-          :value="stat.value"
-          :cols="2"
-          hide-chip
-        />
+        <v-col cols="12" sm="4"  md="2" v-for="(stat, i) in leadStats" :key="i">
+          <CommonStatCard
+            :icon="stat.icon"
+            :label="stat.label"
+            :value="stat.value"
+            :uid="i"
+            hide-chip
+          />
+          </v-col>
       </v-row>
     </div>
     <div class="mt-5 px-5">
@@ -87,27 +87,27 @@ const addLeadDrawer = ref(false);
 
 const leadStats = ref([
   {
-    icon: "https://cdn.lordicon.com/pfvaixkr.json",
+    icon: "https://cdn.lordicon.com/asyunleq.json",
     label: "Total Lead",
     value: 10,
   },
   {
-    icon: "https://cdn.lordicon.com/oymjxfrg.json",
+    icon: "https://cdn.lordicon.com/kphwxuxr.json",
     label: "New",
     value: 2,
   },
   {
-    icon: "https://cdn.lordicon.com/ugzybkbe.json",
+    icon: "https://cdn.lordicon.com/qlpudrww.json",
     label: "Converted",
     value: 2,
   },
   {
-    icon: "https://cdn.lordicon.com/ojbonimq.json",
+    icon: "https://cdn.lordicon.com/excswhey.json",
     label: "Contacted",
     value: 2,
   },
   {
-    icon: "https://cdn.lordicon.com/thsuumsm.json",
+    icon: "https://cdn.lordicon.com/tzynxkwl.json",
     label: "Lost",
     value: 2,
   },

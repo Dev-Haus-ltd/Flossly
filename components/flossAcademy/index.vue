@@ -16,12 +16,20 @@
     <div class="mt-5 px-5" v-if="step === 1">
       <v-row>
         <v-col v-for="(item, i) in cards" :key="i" cols="3">
-          <FlossAcademyStatCard
+          <!-- <FlossAcademyStatCard
             :title="item.title"
             :points="item.points"
             :icon="item.icon"
             :total-hours="item.totalHours"
-          />
+          /> -->
+          <CommonStatCard
+              :icon="item.icon"
+              :label="item.title"
+              :value="item.totalHours"
+              :uid="i"
+  
+              hide-chip
+            />
         </v-col>
       </v-row>
     </div>
@@ -102,19 +110,19 @@ const cards = computed(() => [
   {
     title: "Required CPD Hours",
     points: 200,
-    icon: "https://cdn.lordicon.com/odxsdugo.json",
+    icon: "https://cdn.lordicon.com/caohjrll.json",
     totalHours: totalCpdHours.value,
   },
   {
     title: "Completed CPD Hours",
     points: 150,
-    icon: "https://cdn.lordicon.com/itlfjzxp.json",
+    icon: "https://cdn.lordicon.com/rjonjcrj.json",
     totalHours: completedHours.value,
   },
   {
     title: "Remaining CPD Hours",
     points: 100,
-    icon: "https://cdn.lordicon.com/amdfceua.json",
+    icon: "https://cdn.lordicon.com/ofrdcast.json",
     totalHours: totalCpdHours.value - completedHours.value,
   },
 ]);

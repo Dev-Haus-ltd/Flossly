@@ -12,6 +12,7 @@
         hide-details
         density="compact"
         class="ma-0 pa-0"
+        color="primary"
       />
     </div>
 

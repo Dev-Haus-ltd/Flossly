@@ -16,14 +16,15 @@
       <!-- stats -->
       <div class="mt-5 px-5">
         <v-row>
+          <v-col cols="12" sm="4"  md="3" v-for="(stat, i) in teamStats" :key="i">
           <CommonStatCard
-            v-for="(stat, i) in teamStats"
-            :key="i"
             :icon="stat.icon"
             :label="stat.label"
             :value="stat.value"
+            :uid="i"
             hide-chip
           />
+          </v-col>
         </v-row>
       </div>
       <!-- my staff -->
@@ -121,22 +122,22 @@ const teamStats = computed(() => {
 
   return [
     {
-      icon: "https://cdn.lordicon.com/umvndfds.json",
+      icon: "https://cdn.lordicon.com/kphwxuxr.json",
       label: "Total Staff",
       value: totalMembers,
     },
     {
-      icon: "https://cdn.lordicon.com/rprwxqaf.json",
+      icon: "https://cdn.lordicon.com/bushiqea.json",
       label: "New Joiner",
       value: newcomers,
     },
     {
-      icon: "https://cdn.lordicon.com/bwmsmpql.json",
+      icon: "https://cdn.lordicon.com/namwvlmv.json",
       label: "Staff Birthday",
       value: birthdays,
     },
     {
-      icon: "https://cdn.lordicon.com/hrwiqpqi.json",
+      icon: "https://cdn.lordicon.com/wpequvda.json",
       label: "Pending Approvals",
       value: approvals,
     },

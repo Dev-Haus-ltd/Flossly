@@ -6,7 +6,7 @@
       rounded="lg"
       class="border-sm pb-1"
     >
-      <!-- Panel title -->
+      <!-- Panel title --> 
       <v-expansion-panel-title>
         <div class="d-flex align-center">
           <CommonAvatar :user="org.organisation" class="mr-2" />
@@ -23,9 +23,30 @@
           class="full-width-table"
           :items="org.orgUsers"
           item-value="id"
-          show-select
+          v-model="selectedStaff"
+          :item-selectable="() => true"
+           @update:modelValue="onSelectionChange"
+            return-object
+            show-select
           hover
         >
+        <template
+              v-slot:[`item.data-table-select`]="{
+                internalItem,
+                isSelected,
+                toggleSelect,
+              }"
+            >
+            <div class="text-center">
+
+              <input
+                type="checkbox"
+                :checked="isSelected(internalItem)"
+                @change="() => toggleSelect(internalItem)"
+                class="cust-checkbox"
+              />
+            </div>
+            </template>
           <!-- Editable / resizable headers -->
           <template
             v-slot:headers="{
@@ -36,6 +57,7 @@
               someSelected,
             }"
           >
+
             <tr>
               <template v-for="(column, i) in columns" :key="column.key">
                 <th
@@ -59,19 +81,21 @@
                     <span
                       class="resize-handle"
                       @mousedown="startResize($event, column)"
-                    ></span>
+                    ></span> 
                   </div>
-                  <div v-else>
-                    <v-checkbox
-                      :model-value="allSelected"
-                      :indeterminate="someSelected && !allSelected"
-                      @update:model-value="toggleAll(org)"
-                      density="compact"
-                      hide-details
-                      variant="outlined"
-                      class="custom-checkbox"
-                    />
-                  </div>
+                  <div
+                      v-if=" i === 0"
+                      class="d-flex align-center justify-center"
+                    >
+                      <input
+                        type="checkbox"
+                        class="cust-checkbox"
+                        style="margin-left: 2px;"
+                        :checked="allSelected"
+                        :indeterminate.prop="someSelected && !allSelected"
+                        @change="toggleAll"
+                      />
+                    </div>
                 </th>
               </template>
             </tr>
@@ -176,6 +200,8 @@ const props = defineProps({
   search: { type: String, default: "" },
   roleList: { type: Array, default: []}
 });
+const selectedStaff=ref([]);
+const isAllSelected=ref(false);
 
 const focusedField = ref({});
 
@@ -220,6 +246,25 @@ const updateUser = (user, key) => {
       })
     })
 }
+const toggleAll = () => {
+  if (isAllSelected.value) {
+    isAllSelected.value = false;
+    selectedStaff.value = [];
+  } else {
+    const selected = [];
+    props.teams.forEach((el) => {
+      el.orgUsers.forEach((u) => {
+        selected.push(u);
+      });
+    });
+    selectedStaff.value = selected;
+    isAllSelected.value = true;
+  }
+   console.log(selectedStaff.value)
+};
+const onSelectionChange = (newSelected) => {
+  console.log( selectedStaff.value);
+};
 </script>
 
 <style scoped>
@@ -255,5 +300,33 @@ const updateUser = (user, key) => {
 ::v-deep(.small-input input) {
   font-size: 14px !important;
   
+}
+.cust-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  /* remove default styling in some browsers if you want a fully custom look */
+  -webkit-appearance: none;
+  appearance: none;
+  border: 1px solid #cfcfcf;
+  border-radius: 4px;
+  display: inline-block;
+  position: relative;
+  margin-top: 5px;
+}
+.cust-checkbox:checked {
+  background: #0061FB;
+  border-color: #0061FB;
+}
+.cust-checkbox:checked::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  width: 4px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 </style>

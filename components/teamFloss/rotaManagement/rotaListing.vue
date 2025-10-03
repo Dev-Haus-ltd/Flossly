@@ -76,6 +76,7 @@
               class="rounded-lg"
               @click="emit('changeComponent', 2)"
               flat
+              height="40"
             >
               Create New Rota
             </v-btn>
@@ -114,6 +115,23 @@
                   @update:modelValue="onSelectionChangePublished"
                   return-object
                 >
+                <template
+              v-slot:[`item.data-table-select`]="{
+                internalItem,
+                isSelected,
+                toggleSelect,
+              }"
+            >
+            <div class="text-center">
+
+              <input
+                type="checkbox"
+                :checked="isSelected(internalItem)"
+                @change="() => toggleSelect(internalItem)"
+                class="cust-checkbox"
+              />
+            </div>
+            </template>
                   <!-- Header slot -->
                   <template
                     v-slot:headers="{
@@ -152,19 +170,21 @@
                             </v-icon>
                           </div>
 
-                          <div v-else>
-                            <v-checkbox
-                              :model-value="allSelected"
-                              :indeterminate="someSelected && !allSelected"
-                              @update:model-value="
-                                (val) => toggleAll('published', val)
-                              "
-                              density="compact"
-                              hide-details
-                              variant="outlined"
-                              class="custom-checkbox"
-                            />
-                          </div>
+                         
+                            <div
+                         v-else
+                      class="d-flex align-center justify-center"
+                    >
+                      <input
+                        type="checkbox"
+                        class="cust-checkbox"
+                        style="margin-left: 2px;"
+                        :checked="allSelected"
+                        :indeterminate.prop="someSelected && !allSelected"
+                        @change="toggleAll('published')"
+                      />
+                    </div>
+                      
                         </th>
                       </template>
                     </tr>
@@ -262,6 +282,23 @@
                   @update:modelValue="onSelectionChangeUnPublished"
                   return-object
                 >
+                <template
+              v-slot:[`item.data-table-select`]="{
+                internalItem,
+                isSelected,
+                toggleSelect,
+              }"
+            >
+            <div class="text-center">
+
+              <input
+                type="checkbox"
+                :checked="isSelected(internalItem)"
+                @change="() => toggleSelect(internalItem)"
+                class="cust-checkbox"
+              />
+            </div>
+            </template>
                   <!-- Header slot -->
                   <template
                     v-slot:headers="{
@@ -300,19 +337,19 @@
                             </v-icon>
                           </div>
 
-                          <div v-else>
-                            <v-checkbox
-                              :model-value="allSelected" 
-                              :indeterminate="someSelected && !allSelected"
-                              @update:model-value="
-                                (val) => toggleAll('unpublished', val)
-                              "
-                              density="compact"
-                              hide-details
-                              variant="outlined"
-                              class="custom-checkbox"
-                            />
-                          </div>
+                          <div
+                         v-else
+                      class="d-flex align-center justify-center"
+                    >
+                      <input
+                        type="checkbox"
+                        class="cust-checkbox"
+                        style="margin-left: 2px;"
+                        :checked="allSelected"
+                        :indeterminate.prop="someSelected && !allSelected"
+                        @change="toggleAll('unpublished')"
+                      />
+                    </div>
                         </th>
                       </template>
                     </tr>
@@ -418,6 +455,9 @@ const unpublished = computed(() => rotaList.filter((r) => !r.isPublished));
 // Selection models
 const selectedPublished = ref([]);
 const selectedUnpublished = ref([]);
+const isAllPublishedSelected=ref(false);
+const isAllUnPublishedSelected=ref(false);
+
 const headers = [
   { title: "Rota Name", key: "name", sortable: true },
   { title: "Start Date", key: "startDate", sortable: true },
@@ -456,18 +496,46 @@ const filteredUnpublished = computed(() =>
   unpublished.value.filter((it) => matchesSearch(it) && inDateRange(it))
 );
 
-function toggleAll(which, val) {
+const toggleAll = (which) => {
   if (which === "published") {
-    if (val) selectedPublished.value = filteredPublished.value.slice();
-    else selectedPublished.value = [];
-    console.log("Select All (published):", val);
-  } else {
-    if (val) selectedUnpublished.value = filteredUnpublished.value.slice();
-    else selectedUnpublished.value = [];
-    console.log("Select All (unpublished):", val);
-  }
-}
 
+    if (isAllPublishedSelected.value) {
+      isAllPublishedSelected.value = false;
+      selectedPublished.value = [];
+    } else {
+      const selected = [];
+      filteredPublished.value.forEach((r) => {
+        
+          selected.push(r);
+      
+      });
+      selectedPublished.value = selected;
+      isAllPublishedSelected.value = true;
+    }
+     console.log(selectedPublished.value)
+  } else if(which === "unpublished"){
+    if (isAllUnPublishedSelected.value) {
+      isAllUnPublishedSelected.value = false;
+      selectedUnpublished.value = [];
+    } else {
+      const selected = [];
+      filteredUnpublished.value.forEach((r) => {
+        
+          selected.push(r);
+      
+      });
+      selectedUnpublished.value = selected;
+      isAllUnPublishedSelected.value = true;
+    }
+     console.log(selectedUnpublished.value)
+  }
+};
+const onSelectionChangePublished=(newSelected) => {
+  console.log( selectedPublished.value);
+};
+const onSelectionChangeUnPublished=(newSelected) => {
+  console.log( selectedUnpublished.value);
+};
 function applyDate() {
   dateRangeModel.value = tempRange.value ? [...tempRange.value] : [];
   menuDate.value = false;
@@ -515,6 +583,7 @@ function getRotaStatusColor(status) {
       return "#6D6D6D"; // gray fallback
   }
 }
+
 </script>
 <style scoped>
 .custom-tabs {
@@ -596,9 +665,33 @@ function getRotaStatusColor(status) {
   margin-right: 10px;
   cursor: pointer;
 }
-
-.custom-checkbox .v-input--selection-controls__ripple {
-  display: none;
+.cust-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  /* remove default styling in some browsers if you want a fully custom look */
+  -webkit-appearance: none;
+  appearance: none;
+  border: 1px solid #cfcfcf;
+  border-radius: 4px;
+  display: inline-block;
+  position: relative;
+  margin-top: 5px;
+}
+.cust-checkbox:checked {
+  background: #0061FB;
+  border-color: #0061FB;
+}
+.cust-checkbox:checked::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  width: 4px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 
 .input-bordered :deep(.v-field) {

@@ -17,9 +17,10 @@
           :title="item.title"
           :img="item.img"
           :colors="item.colors"
-          :isLocked="item.isLocked"
+          :isToolBox="item.isToolBox"
           :route="item.route"
           :uid="index"
+          @handleClick="handleClickProductCard"
         />
       </v-col>
     </v-row>
@@ -286,6 +287,7 @@
                   variant="flat"
                   append-icon="mdi-open-in-new"
                   color="primary"
+                  height="46"
                 >
                   Refer a business
                 </v-btn>
@@ -331,6 +333,8 @@
         </v-card>
       </v-col>
     </v-row>
+    <DashBoardToolBoxDialog v-model="showToolboxDialog" @close="showToolboxDialog = false" />
+
   </v-container>
 </template>
 
@@ -338,7 +342,7 @@
 import { useDisplay } from "vuetify";
 
 const { mdAndDown } = useDisplay();
-
+const showToolboxDialog = ref(false);
 const showCard = ref(true);
 const taskStore = useTaskStore();
 const mainStore = useMainStore();
@@ -394,48 +398,37 @@ const performaces = ref([
 const flosslyItems = ref([
   {
     title: "Flossly Tasks",
-    img: "https://cdn.lordicon.com/qtdtmioh.json",
-    isLocked: false,
+    img: "https://cdn.lordicon.com/wwcdwkaf.json",
+    isToolBox: false,
     route: "/tasks",
+    colors:"#008AFE"
   },
   {
     title: "Flossly Team",
-    img: "https://cdn.lordicon.com/umvndfds.json",
-    colors:
-      "primary:#121331,secondary:#f9c9c0,tertiary:#b26836,quaternary:#ffc738,quinary:#646e78,senary:#ebe6ef,septenary:#f24c00,octonary:#f28ba8,nonary:#92140c,denary:#60e5a3,undenary:#3a3347",
-    isLocked: false,
+    img: "https://cdn.lordicon.com/kphwxuxr.json",
+    isToolBox: false,
     route: "/teams",
-  },
-  {
-    title: "Flossly CPD",
-    img: "https://cdn.lordicon.com/kfjxtwnh.json",
-    colors:
-      "primary:#121331,secondary:#3a3347,tertiary:#ebe6ef,quaternary:#60e5a3",
-    isLocked: true,
+    colors:"#7D77FF"
   },
   {
     title: "Flossly CRM",
-    img: "https://cdn.lordicon.com/nhekwutf.json",
-    isLocked: true,
-  },
-  {
-    title: "Flossly Social",
-    img: "https://cdn.lordicon.com/qbkxnzyi.json",
-    colors:
-      "primary:#121331,secondary:#ffc738,tertiary:#2ca58d,quaternary:#ebe6ef,quinary:#f9c9c0,senary:#60e5a3,septenary:#f24c00,octonary:#3a3347",
-    isLocked: true,
+    img: "https://cdn.lordicon.com/gcmzyunj.json",
+    isToolBox: false,
+    route: "/crm",
+    colors:"#FF85DA"
   },
   {
     title: "Flossly Diary",
-    img: "https://cdn.lordicon.com/mjpqfjjs.json",
-    colors:
-      "primary:#121331,secondary:#60e5a3,tertiary:#3a3347,quaternary:#ebe6ef,quinary:#60e5a3",
-    isLocked: true,
+    img: "https://cdn.lordicon.com/uoljexdg.json",
+    route: "/diary",
+    isToolBox: false,
+    colors:"#FFA977"
   },
   {
-    title: "Flossly Reports",
-    img: "https://cdn.lordicon.com/hbeigkvk.json",
-    isLocked: true,
+    title: "Tool Box",
+    img: "https://cdn.lordicon.com/ajcbrren.json",
+    isToolBox: true,
+    colors:"rgba(255, 255, 255, 0.2);"
   },
 ]);
 const tab = ref(1);
@@ -491,7 +484,7 @@ const fetchDummyStats = () => {
   stats.value = [
     {
       status: "Completed",
-      key: "complted",
+      key: "completed",
       total: 12,
       link: "/tasks/teamtasks",
       image: "/images/open-icon.svg",
@@ -535,7 +528,15 @@ onMounted(() => {
     getMyTasks();
   }
 });
-const getMyTasks = () => {};
+const getMyTasks = () => {
+  return;
+};
+const handleClickProductCard = (uid) => {
+  console.log(uid);
+  if(uid === 4){
+    showToolboxDialog.value = true;
+  }
+};
 </script>
 
 <style scoped>
@@ -597,8 +598,8 @@ const getMyTasks = () => {};
   border-bottom: none;
 }
 .flossly-col {
-  flex: 0 0 calc(100% / 7);
-  max-width: calc(100% / 7);
+  flex: 0 0 calc(100% / 5);
+  max-width: calc(100% / 5);
 }
 .review-card {
   position: relative;
@@ -663,6 +664,8 @@ const getMyTasks = () => {};
   justify-content: center;
   position: relative;
   border-radius: 6px;
+
+
 }
 
 /* Chip inside left side */

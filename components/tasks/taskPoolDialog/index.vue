@@ -48,7 +48,7 @@
                   v-for="(card, index) in subCategories?.filter((x) => x?.name?.toLowerCase().includes(searchSubCategory))"
                   :key="index"
                   cols="12"
-                  sm="6"
+                  sm="6" 
                   md="3"
                 >
                   <TasksTaskPoolDialogTaskCards 
@@ -107,6 +107,7 @@
                         density="compact"
                         class="ma-0 pa-0"
                         @change="toggleAll"
+                        color="primary"
                       />
                     </div>
                     <div class="table-cell title-cell font-weight-bold">

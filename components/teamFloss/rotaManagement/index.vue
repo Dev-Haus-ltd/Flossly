@@ -19,11 +19,12 @@
     <div class="pa-5 bg-white" v-if="activeComponent === 1">
       <v-row>
         <v-col v-for="(item, idx) in data" :key="idx" cols="12" md="3">
-          <TeamFlossRotaManagementStatCard
-            :title="item.title"
-            :count="item.count"
-            :color="item.color"
+          <CommonStatCard
             :icon="item.icon"
+            :label="item.title"
+            :value="item.count"
+            :uid="idx"
+            hide-chip
           />
         </v-col>
       </v-row>
@@ -78,19 +79,19 @@ const unPublishedCount = computed(
 );
 const data = [
   {
-    icon: "https://cdn.lordicon.com/pnlvdria.json",
+    icon: "https://cdn.lordicon.com/uoljexdg.json",
     title: "Total Rotas",
     count: totalCount,
     color: "#1E1E1E",
   },
   {
-    icon: "https://cdn.lordicon.com/txshdzva.json",
+    icon: "https://cdn.lordicon.com/tctltdwj.json",
     title: "Published Rotas",
     count: publishedCount,
     color: "#8C3BC5",
   },
   {
-    icon: "https://cdn.lordicon.com/ltlvgdli.json",
+    icon: "https://cdn.lordicon.com/lsrvqnws.json",
     title: "Unpublished Rotas",
     count: unPublishedCount,
     color: "#0165B9",
@@ -217,7 +218,7 @@ const home = () => {
 <style scoped>
 .cust-border {
   border-bottom: 1px solid #dbdbdb;
-  padding: 20px;
+  padding: 17px;
   background-color: white;
 }
 .cust-border p {

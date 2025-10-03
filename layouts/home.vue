@@ -41,7 +41,7 @@ watch(
   () => smAndDown.value,
   (isSmall) => {
     if (isSmall) {
-      rail.value = true   
+      // rail.value = false   
     }
   },
   { immediate: true } 
