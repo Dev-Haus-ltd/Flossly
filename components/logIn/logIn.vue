@@ -64,41 +64,17 @@
             <p v-if="loginError" style="color: red" class="pb-2">
               {{ loginError }}
             </p>
-            <div
-              class="d-flex justify-space-between align-center"
-              style="height: 48px"
-            >
-              <v-row
-                align="center"
-                class="py-0"
-                style="height: 48px"
-                no-gutters
+            <div class="d-flex justify-end align-center">
+              <v-btn
+                color="#266DF0"
+                variant="text"
+                class="pa-0"
+                height="20"
+                min-width="0"
+                @click="forgetPass"
               >
-                <v-col cols="auto" class="pa-0 text-right">
-                  <v-switch
-                    label="Remember me"
-                    color="#266DF0"
-                    density="compact"
-                    inset
-                    hide-details
-                  />
-                </v-col>
-
-                <!-- This will expand and push the next col to the far right -->
-                <v-spacer />
-
-                <v-col cols="auto">
-                  <v-btn
-                    color="#266DF0"
-                    variant="text"
-                    class="pa-0"
-                    min-width="0"
-                    @click="forgetPass"
-                  >
-                    Forgot Password
-                  </v-btn>
-                </v-col>
-              </v-row>
+                Forgot Password
+              </v-btn>
             </div>
             <v-btn
               type="submit"
@@ -373,6 +349,5 @@ const forgetPass = () => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  
 }
 </style>

@@ -36,14 +36,14 @@
     >
       <v-card class="pa-4" color="white" elevation="0">
         <v-form ref="formRef" @submit.prevent="onSubmit">
-          <v-row>
+          <v-row dense>
             <v-col cols="6">
-              <label class="mb-1 fld-lbl">Task Title</label>
+              <label class="fld-lbl">Task Title</label>
               <v-text-field
                 v-model="form.title"
                 variant="solo"
                 density="compact"
-                class="mb-1 input-bordered"
+                class="input-bordered mb-0"
                 bg-color="white"
                 :rules="requiredRule"
                 required
@@ -51,7 +51,7 @@
               />
             </v-col>
             <v-col cols="6">
-              <label class="mb-1 fld-lbl">Task Category</label>
+              <label class="fld-lbl">Task Category</label>
               <v-select
                 v-model="form.categoryId"
                 :items="taskCategories"
@@ -59,7 +59,7 @@
                 item-value="id"
                 variant="solo"
                 density="compact"
-                class="mb-1 input-bordered"
+                class="input-bordered mb-0"
                 :rules="requiredRule"
                 bg-color="white"
                 required
@@ -67,7 +67,7 @@
               />
             </v-col>
             <v-col cols="6">
-              <label class="mb-1 fld-lbl">Due Date</label>
+              <label class="fld-lbl">Due Date</label>
               <v-menu
                 v-model="menu"
                 :close-on-content-click="false"
@@ -81,7 +81,7 @@
                     v-bind="props"
                     variant="solo"
                     density="compact"
-                    class="mb-1 input-bordered"
+                    class="input-bordered mb-0"
                     bg-color="white"
                     flat
                     readonly
@@ -102,7 +102,7 @@
               </v-menu>
             </v-col>
             <v-col cols="6">
-              <label class="mb-1 fld-lbl">Role</label>
+              <label class="fld-lbl">Role</label>
               <v-select
                 v-model="form.roleId"
                 :items="rolesList"
@@ -110,13 +110,13 @@
                 item-value="id"
                 variant="solo"
                 density="compact"
-                class="mb-1 input-bordered"
+                class="input-bordered mb-0"
                 bg-color="white"
                 flat
               />
             </v-col>
             <v-col cols="6">
-              <label class="mb-1 fld-lbl">Assign to Team Member</label>
+              <label class="fld-lbl">Assign to Team Member</label>
               <v-select
                 v-model="form.userId"
                 :items="userList"
@@ -124,13 +124,13 @@
                 item-value="id"
                 variant="solo"
                 density="compact"
-                class="mb-1 input-bordered"
+                class="input-bordered mb-0"
                 bg-color="white"
                 flat
               />
             </v-col>
             <v-col cols="6">
-              <label class="mb-1 fld-lbl">Frequency</label>
+              <label class="fld-lbl">Frequency</label>
               <v-select
                 v-model="form.defaultFrequency"
                 :items="frequencies"
@@ -138,13 +138,13 @@
                 item-value="name"
                 variant="solo"
                 density="compact"
-                class="mb-1 input-bordered"
+                class="input-bordered mb-0"
                 bg-color="white"
                 flat
               />
             </v-col>
             <v-col cols="12">
-              <label class="mb-1 fld-lbl">Priority</label>
+              <label class="fld-lbl">Priority</label>
               <v-select
                 v-model="form.priorityId"
                 :items="taskPriorities"
@@ -152,7 +152,7 @@
                 item-value="id"
                 variant="solo"
                 density="compact"
-                class="mb-1 input-bordered"
+                class="input-bordered mb-0"
                 item-color="color"
                 bg-color="white"
                 flat
@@ -160,46 +160,62 @@
               </v-select>
             </v-col>
             <v-col cols="12">
-              <label class="mb-1 fld-lbl">Description</label>
+              <label class="fld-lbl">Description</label>
               <v-textarea
                 v-model="form.description"
                 variant="solo"
                 density="compact"
                 bg-color="white"
-                class="mb-1 input-bordered"
+                class="input-bordered mb-0 "
                 flat
               />
             </v-col>
             <v-col cols="12">
-              <v-card :elevation="0" rounded="lg" class="border-sm px-2 pb-2">
-                <v-card-title class="border-b py-3 checklist"
-                  >Add Custom Questions</v-card-title
-                >
-                <TasksCreateChecklist
-                  v-for="(cl, index) in form.checklist"
-                  :checklist="cl"
-                  :key="index"
-                />
-                <v-btn
-                  @click="addNewChecklist"
-                  class="w-100 justify-center add-qs-btn"
-                  variant="outlined"
-                  flat
-                >
-                  <v-icon
-                    start
-                    class="me-2"
-                    color="primary"
-                    style="
-                      border: 1px solid currentColor;
-                      border-radius: 50%;
-                      padding: 4px;
-                    "
+              <v-card :elevation="0" rounded="lg" class="border-sm pb-2">
+                <!-- Header -->
+                <v-card-title class="border-b py-3 checklist">
+                  Add Custom Questions
+                </v-card-title>
+
+                <!-- Container with rounded edges for checklists -->
+                <div class="mx-3 mt-8">
+                  <v-card
+                    v-for="(cl, index) in form.checklist"
+                    :key="cl._id || index"
+                    class="mb-4 pa-2"
+                    elevation="0"
+                    style="border: 1px solid #dfdfdf; border-radius: 12px;"
                   >
-                    mdi-plus
-                  </v-icon>
-                  Add More Questions
-                </v-btn>
+                    <TasksCreateChecklist
+                      :checklist="cl"
+                      :index="index"
+                      @remove="removeChecklist"
+                    />
+                  </v-card>
+                </div>
+                <!-- Add More Questions Button -->
+                <div class="mx-3">
+                    <v-btn
+                    @click="addNewChecklist"
+                    class="w-100 justify-center add-qs-btn mt-8 mb-3"
+                    variant="outlined"
+                    flat
+                  >
+                    <v-icon
+                      start
+                      class="me-2"
+                      color="primary"
+                      style="
+                        border: 1px solid #DFDFDF !important;
+                        border-radius: 12px !important;
+                        padding: 4px;
+                      "
+                    >
+                      mdi-plus
+                    </v-icon>
+                    Add More Questions
+                  </v-btn>
+                </div>
               </v-card>
             </v-col>
           </v-row>
@@ -211,22 +227,22 @@
     <!-- Footer -->
     <div
       class="d-flex justify-space-between align-center px-4 py-2"
-      style="background-color: white; height: 64px"
+      style="background-color: white; padding: 12px 16px;"
     >
       <v-btn
         color="white"
         class="text-primary"
-        style="width: 48%; border-radius: 8px; border: 1px solid #dfdfdf"
+        style="width: 48%; border-radius: 8px; border: 1px solid #DFDFDF !important; min-height: 40px;"
         @click="emit('close')"
         flat
       >
-        Back
+        Cancel
       </v-btn>
 
       <v-btn
         color="primary"
         class="text-white"
-        style="width: 48%; border-radius: 8px"
+        style="width: 48%; border-radius: 8px; border: 1px solid #DFDFDF !important; min-height: 40px;"
         @click="onSubmit()"
         flat
       >
@@ -402,6 +418,24 @@ const onSubmit = async () => {
 function deleteItem() {
   item.value = {};
 }
+const removeChecklist = (index) => {
+  // optional safety: keep at least one checklist and just clear it instead of removing
+  if (form.value.checklist.length === 1) {
+    form.value.checklist[0] = {
+      _id: Date.now(),
+      question: "",
+      category: "",
+      fieldOneTitle: "",
+      fieldTwoTitle: "",
+      showDate: false,
+      showTime: false,
+      showRadio: false,
+    };
+    return;
+  }
+
+  form.value.checklist.splice(index, 1);
+}
 
 const setSnack = (type, title) => {
   mainStore.setSnackbar({
@@ -441,5 +475,9 @@ const setSnack = (type, title) => {
 .add-qs-btn {
   border: 1px solid #dfdfdf;
   height: 52px;
+}
+.v-row > .v-col {
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
 }
 </style>

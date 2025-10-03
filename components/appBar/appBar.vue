@@ -11,14 +11,28 @@
             : 'logo-parent-sm pl-3 bg-secondary'
         "
       >
-        <img
-          :src="!rail ? headerLogo : logoIcon"
-          alt="My Logo"
-          max-height="40"
-          :width="!rail ? '107px' : '30px'"
-          height="100%"
-          contain
-        />
+        <div class="logo-wrapper">
+          <!-- Expanded state: logo + title -->
+          <template v-if="!rail">
+            <img
+              :src="headerLogo"
+              alt="My Logo"
+              width="35"
+              height="100%"
+            />
+            <span class="dashboard-title">Flossly Dashboard</span>
+          </template>
+
+          <!-- Collapsed state: only icon -->
+          <template v-else>
+            <img
+              :src="logoIcon"
+              alt="My Logo"
+              width="30"
+              height="100%"
+            />
+          </template>
+        </div>
       </div>
     </template>
     <!-- Middle: Spacer to push icons right -->
@@ -54,8 +68,8 @@
 
 <script setup>
 const { user } = useUser();
-import headerLogo from "@/assets/logos/headerLogo.svg";
-import logoIcon from "@/assets/logos/Logoicon2.svg";
+import headerLogo from "@/assets/logos/logoIcon2.svg";
+import logoIcon from "@/assets/logos/logoIcon2.svg";
 const emit = defineEmits(["small-screen-drawer"]);
 
 const props = defineProps({
@@ -80,6 +94,7 @@ watch(
   width: 255px;
   /* background-color: black; */
   height: 100%;
+  margin-left: 20px; /* spacing from logo */
 }
 .logo-parent-sm {
   width: 56px;
@@ -91,5 +106,21 @@ watch(
 }
 ::v-deep(.v-toolbar__prepend) {
   margin-inline: 0 !important;
+}
+.logo-wrapper {
+  display: flex;
+  align-items: center; /* align title vertically with logo */
+  height: 100%;
+}
+
+/* Title typography */
+.dashboard-title {
+  height: 26px;
+  font-family: "Inter", sans-serif;
+  font-weight: 700;
+  font-size: 20px;
+  line-height: 130%; /* ~26px */
+  color: #ffffff;
+  margin-left: 20px; /* spacing from logo */
 }
 </style>

@@ -6,11 +6,11 @@
       <div class="d-inline-flex flex-wrap d-md-flex align-center py-1">
         <v-btn-toggle v-model="viewType" mandatory class="custom-toggle">
           <v-btn value="list" class="toggle-btn">
-            <v-icon size="16" class="mr-1">mdi-format-align-right</v-icon>
+            <img :src="listicon" alt="list icon" class="mr-1" width="16" height="16" />
             List
           </v-btn>
           <v-btn value="calender" class="toggle-btn">
-            <v-icon size="16" class="mr-1">mdi-calendar</v-icon>
+            <img :src="calendericon" alt="calendar icon" class="mr-1" width="16" height="16" />
             Calender
           </v-btn>
         </v-btn-toggle>
@@ -21,6 +21,7 @@
             placeholder="Search"
             append-inner-icon="mdi-magnify"
             variant="solo"
+            :elevation="0"
             density="compact"
             hide-details
             bg-color="#FAFAFA"
@@ -42,7 +43,7 @@
                 v-bind="props"
                 variant="flat"
                 density="compact"
-                class="tbl-top-btn ml-md-2"
+                class="tbl-top-btn"
                 style="width: 200px"
               >
                 <span>Manage Columns</span>
@@ -579,6 +580,8 @@
 import { getRandomHexColor } from "~/lib/misc";
 import { parsedDate } from "@/lib/dateFormatter";
 import draggable from "vuedraggable";
+import listicon from "@/assets/icons/listView/listicon.svg";
+import calendericon from "@/assets/icons/listView/calendericon.svg";
 const {
   headers,
   availableHeaders,
@@ -731,7 +734,7 @@ const getColor = (key) => {
   if (statuses.value.find((x) => x.key === key)) {
     return statuses.value.find((x) => x.key === key).color;
   } else {
-    return "#e9e9e9";
+    return "#EF3131";
   }
 };
 const formattedDate = (date) => {
@@ -1002,12 +1005,13 @@ const onSelectionChange = (newSelected) => {
   border-right: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 .custom-toggle {
-  /* background-color: transparent; */
+  background-color: #F3F6FA;
+  display: flex;
   height: 40px;
 }
 
 .toggle-btn {
-  background-color: #f3f6fa !important;
+  background-color: #F3F6FA !important;
   text-transform: none;
   font-size: 14px;
   color: #333;
@@ -1016,15 +1020,19 @@ const onSelectionChange = (newSelected) => {
 
 .v-btn--active.toggle-btn {
   background-color: #ffffff !important;
-  box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.12);
-  transform: translateY(-1px); /* small lift effect */
+  --v-theme-overlay-multiplier: 0 !important; /* reset overlay */
+  --v-theme-primary: #ffffff !important;      /* force white */
+  box-shadow: 0px 6px 12px rgba(0,0,0,0.15);
+  transform: translateY(-2px);
+  border-radius: 6px;
+  box-shadow: 0px 2px 4px rgba(0,0,0,0.08); /* subtle shadow under */
 }
 .custom-search,
 .tbl-top-btn {
   height: 40px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 14px;
-  background-color: #fafafa !important;
+  background-color: #FFFFFF !important;
   text-transform: none;
   box-shadow: none;
   color: #737373;
@@ -1108,4 +1116,10 @@ const onSelectionChange = (newSelected) => {
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px; /* consistent spacing between all items */
+}
+
 </style>

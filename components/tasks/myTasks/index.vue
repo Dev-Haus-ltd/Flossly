@@ -475,7 +475,7 @@ const handleComplete = async () => {
   color: #1e1e1e !important;
 }
 .custom-tabs .v-tabs-slider {
-  height: 2px;
+  height: 4px;
 }
 .action-bar {
   position: fixed;
