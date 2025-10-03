@@ -70,7 +70,7 @@ const updateTeams = () => {
   }
 };
 const openChat = () => {
-  console.log("Open live chat modal here");
+  console.log("Open live chat modal");
 };
 
 const openCall = () => {

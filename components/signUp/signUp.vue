@@ -89,12 +89,12 @@
               />
 
               <v-btn
-                type="submit"
-                color="primary"
-                block
-                variant="flat"
-                :elevation="0"
-                class="mt-5 text-none"
+              type="submit"
+              color="primary"
+              block
+              variant="flat"
+              class="mt-5 rounded-lg"
+              height="48"
               >
                 Create My Flossly Account
               </v-btn>
