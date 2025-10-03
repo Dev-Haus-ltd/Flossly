@@ -1,6 +1,8 @@
 <template>
   <div>
-    <div class="d-inline-flex flex-wrap d-md-flex justify-space-between align-center my-2">
+    <div
+      class="d-inline-flex flex-wrap d-md-flex justify-space-between align-center my-2"
+    >
       <div class="d-inline-flex flex-wrap d-md-flex align-center py-1">
         <v-btn-toggle v-model="viewType" mandatory class="custom-toggle">
           <v-btn value="list" class="toggle-btn">
@@ -211,10 +213,10 @@
                         class="cust-checkbox ma-0"
                         :checked="allSelected"
                         :indeterminate.prop="someSelected && !allSelected"
-                        @change="toggleAll"
+                        @change="toggleAll(group)"
                       />
                     </div>
-                    <div v-else class="d-flex align-center th-content"  >
+                    <div v-else class="d-flex align-center th-content">
                       <v-text-field
                         v-model="column.title"
                         @update:model-value="
@@ -250,8 +252,8 @@
                         :id="`resize-handle-${column.key}`"
                         @mousedown="startResize($event, column)"
                       >
-                    <v-icon>mdi-drag</v-icon>
-                    </span>
+                        <v-icon>mdi-drag</v-icon>
+                      </span>
                     </div>
                   </th>
                 </template>
@@ -302,7 +304,7 @@
                 />
               </template>
               <template v-else-if="col.key === 'frequency'">
-                <DataTableColumnsFrequencies 
+                <DataTableColumnsFrequencies
                   :selected="item"
                   :column="col"
                   @update="updateValueRow(item, 'frequency')"
@@ -336,7 +338,7 @@
               </template>
               <!-- avatar assignedUser -->
               <template v-else-if="col.key === 'assignedUser.fullName'">
-                <DataTableColumnsAssignedUsers 
+                <DataTableColumnsAssignedUsers
                   :assigned-users="item.assignedUsers || [user]"
                   :all-users="getTaskUsers(item)"
                   :current-user="user"
@@ -591,7 +593,7 @@ const {
   taskDetails: Array,
   availableHeaders: Array,
   orgStatuses: Array,
-  priorities: Array, 
+  priorities: Array,
   users: Array,
   categories: Array,
   clearSelection: Boolean,
@@ -606,9 +608,9 @@ watch(
   }
 );
 const updateHeaderOrder = (newOrder) => {
-  const selectable = newOrder.findIndex((x) => !x.title)
+  const selectable = newOrder.findIndex((x) => !x.title);
   newOrder.splice(selectable, 1);
-  selectedHeaders.value = newOrder
+  selectedHeaders.value = newOrder;
 };
 const emit = defineEmits(["onFilter", "onUpdate", "updateSelectedRowItems"]);
 const fixedColumnOrder = [
@@ -632,17 +634,17 @@ const sortHeaders = (headers) => {
     .filter(Boolean);
 };
 const showHandles = (key) => {
-  const handle = document.getElementById('resize-handle-' +  key)
+  const handle = document.getElementById("resize-handle-" + key);
   if (handle) {
-    handle.style.display = 'block'
+    handle.style.display = "block";
   }
-}
+};
 const hideHandles = (key) => {
-  const handle = document.getElementById('resize-handle-' +  key)
+  const handle = document.getElementById("resize-handle-" + key);
   if (handle) {
-    handle.style.display = 'none'
+    handle.style.display = "none";
   }
-}
+};
 const search = ref("");
 const expanded = ref([]);
 const focusedField = ref({});
@@ -692,17 +694,16 @@ watch(
 );
 const calenderDate = (data) => {
   const date = new Date(data);
-const year = date.getFullYear();
-const month = String(date.getMonth() + 1).padStart(2, '0');
-const day = String(date.getDate()).padStart(2, '0');
-const hours = String(date.getHours()).padStart(2, '0');
-const minutes = String(date.getMinutes()).padStart(2, '0');
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
 
-const formatted = `${year}-${month}-${day} ${hours}:${minutes}`;
+  const formatted = `${year}-${month}-${day} ${hours}:${minutes}`;
 
-return formatted
-
-}
+  return formatted;
+};
 const getTaskUsers = (task) => {
   if (users) {
     return users.filter((x) => x.roleId !== task.taskDetails.roleId);
@@ -841,8 +842,8 @@ const updateTaskInfo = (task) => {
     .updateUserTask(task)
     .then((res) => {
       if (res.code === 0) {
-        dialogOpen.value = false
-          emit("onUpdate");
+        dialogOpen.value = false;
+        emit("onUpdate");
       } else {
         mainStore.setSnackbar({
           title: "Error while updating the task",
@@ -856,7 +857,7 @@ const updateTaskInfo = (task) => {
         type: "error",
       });
     });
-}
+};
 const updateValueRow = (row, key) => {
   setFocus(row.id, key, false);
   if (key === "name" || key === "comments" || key === "documentLink") return;
@@ -944,22 +945,25 @@ const updateSubtaskHeaderTitle = (key, value) => {
   }
 };
 
-const toggleAll = () => {
+const toggleAll = (group) => {
   if (isAllSelected.value) {
     isAllSelected.value = false;
     selectedTasks.value = [];
   } else {
     const selected = [];
     taskDetails.forEach((el) => {
-      el.tasks.forEach((t) => {
-        selected.push(t);
-      });
+      if (el.status === group.status) {
+        el.tasks.forEach((t) => {
+          selected.push(t);
+        });
+      }
     });
     selectedTasks.value = selected;
     isAllSelected.value = true;
   }
 
   emit("updateSelectedRowItems", selectedTasks.value);
+  console.log(selectedTasks.value);
 };
 const getDetails = (item) => {
   selectedItem.value = item;
@@ -1062,10 +1066,8 @@ const onSelectionChange = (newSelected) => {
 }
 ::v-deep(.small-input input) {
   font-size: 14px !important;
-  
 }
 .add-task-btn {
-  
   font-weight: 400;
   font-size: 16px;
   text-align: center;
@@ -1092,8 +1094,8 @@ const onSelectionChange = (newSelected) => {
   margin-top: 5px;
 }
 .cust-checkbox:checked {
-  background: #0061FB;
-  border-color: #0061FB;
+  background: #0061fb;
+  border-color: #0061fb;
 }
 .cust-checkbox:checked::after {
   content: "";

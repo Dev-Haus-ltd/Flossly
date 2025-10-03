@@ -1,27 +1,18 @@
 <template>
   <div>
-
     <div class="cust-border d-flex align-center">
-      <p
-        class="mr-1"
-      
-      >
-       My Team Tasks
-      </p>
-     
+      <p class="mr-1">My Team Tasks</p>
     </div>
-    <div style="background-color: white;" class="pa-5 rounded-lg" >
+    <div style="background-color: white" class="pa-5 rounded-lg">
       <div class="task-summary">
         <!-- Cards Grid -->
         <v-row>
           <v-col cols="12" md="2" v-for="(item, i) in taskStats" :key="i">
-         
             <CommonStatCard
               :icon="getIcon(item.categoryName)"
               :label="item.categoryName"
               :value="item.taskCount"
               :uid="i"
-  
               hide-chip
             />
           </v-col>
@@ -40,7 +31,7 @@
           @click="updateTasksList"
           >{{ cat.categoryName }}</v-tab
         >
-  
+
         <!-- Plus Button Tab -->
         <v-tab
           class="tab-text d-flex align-center justify-center"
@@ -53,7 +44,9 @@
       <v-tabs-window v-model="currentTab">
         <v-tabs-window-item :value="currentTab">
           <TasksListView
-            v-if="taskStatuses.length && taskPriorities.length && userList.length"
+            v-if="
+              taskStatuses.length && taskPriorities.length && userList.length
+            "
             :headers="headers"
             :availableHeaders="availableHeaders"
             :taskDetails="taskDetails"
@@ -70,9 +63,9 @@
             v-if="selectedRowItems.length"
             class="action-bar py-4 d-flex justify-center align-center rounded-lg"
             :style="{
-        padding: xs ? '0px 20px' : '0px 50px',
-        gap: xs ? '10px' : '40px'
-      }"
+              padding: xs ? '0px 20px' : '0px 50px',
+              gap: xs ? '10px' : '40px',
+            }"
             :elevation="5"
             flat
           >
@@ -82,7 +75,7 @@
               </span>
               <p class="ml-3 mt-1">Items Selected</p>
             </div>
-  
+
             <div
               class="action-item d-flex flex-column align-center"
               @click="handleDelete"
@@ -90,7 +83,7 @@
               <v-icon color="gray" size="24">mdi-delete-outline</v-icon>
               <span class="action-label">Delete</span>
             </div>
-  
+
             <div
               class="action-item d-flex flex-column align-center"
               @click="handleArchive"
@@ -98,7 +91,7 @@
               <v-icon color="gray" size="24">mdi-archive-outline</v-icon>
               <span class="action-label">Archive</span>
             </div>
-  
+
             <div
               class="action-item d-flex flex-column align-center"
               @click="handleComplete"
@@ -106,10 +99,10 @@
               <v-icon color="gray" size="24">mdi-check-circle-outline</v-icon>
               <span class="action-label">Complete</span>
             </div>
-  
+
             <!-- Divider before close -->
             <v-divider vertical class="ml-4" />
-  
+
             <!-- Close Icon -->
             <div
               class="action-item d-flex flex-column align-center"
@@ -130,10 +123,10 @@
 </template>
 
 <script setup>
-import { useDisplay } from 'vuetify'
+import { useDisplay } from "vuetify";
 
 const bus = useBus();
-const { xs } = useDisplay()
+const { xs } = useDisplay();
 
 // Stores
 const taskStore = useTaskStore();
@@ -170,7 +163,7 @@ const updateTasks = () => {
 };
 bus.on("updateTeamTasks", updateTasks);
 const getIcon = (categoryName) => {
-  switch (categoryName) { 
+  switch (categoryName) {
     case "Marketing":
       return "https://cdn.lordicon.com/excswhey.json";
     case "Staff Management":
@@ -429,7 +422,6 @@ const handleComplete = async () => {
 
 <style scoped>
 .page-title {
-  
   font-weight: 400;
   font-size: 28px;
   line-height: 100%;
@@ -437,7 +429,6 @@ const handleComplete = async () => {
 }
 
 .page-description {
-  
   font-weight: 400;
   font-size: 13px;
   line-height: 130%;
@@ -447,18 +438,16 @@ const handleComplete = async () => {
 
 .task-card {
   border-radius: 8px;
-  border: 1px solid #DBDBDB;
+  border: 1px solid #dbdbdb;
 }
 
 .card-number {
-  
   font-weight: 600;
   font-size: 24px;
-  color: #1E1E1E;
+  color: #1e1e1e;
 }
 
 .card-label {
-  
   font-weight: 400;
   font-size: 13px;
   color: #737373;
@@ -483,7 +472,6 @@ const handleComplete = async () => {
   height: 2px;
 }
 .action-bar {
-
   position: fixed;
   bottom: 30px;
   left: 50%;
@@ -493,13 +481,12 @@ const handleComplete = async () => {
 }
 
 .selected-text {
-  
   font-weight: 600;
   font-size: 14px;
   padding: 5px 13px;
   border-radius: 50%;
   color: #fff;
-  background: #0061FB;
+  background: #0061fb;
 }
 
 .action-item {
@@ -507,17 +494,15 @@ const handleComplete = async () => {
 }
 
 .action-label {
-  
   font-size: 13px;
   margin-top: 4px;
 }
 .cust-border {
   border-bottom: 1px solid #dbdbdb;
   padding: 17px;
-
 }
-.cust-border   p {
-    font-size: 12px;
-    color: #c3c3c3;
-  }
+.cust-border p {
+  font-size: 12px;
+  color: #c3c3c3;
+}
 </style>

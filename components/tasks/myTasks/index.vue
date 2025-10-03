@@ -56,6 +56,7 @@
               userList.length &&
               categories.length
             "
+            :clearSelection="isTrayHidden"
             :headers="headers"
             :availableHeaders="availableHeaders"
             :taskDetails="taskDetails"
@@ -113,7 +114,7 @@
 
           <div
             class="action-item d-flex flex-column align-center"
-            @click="selectedRowItems = []"
+            @click="hideTray()"
           >
             <v-icon color="gray" size="24">mdi-close</v-icon>
           </div>
@@ -148,6 +149,8 @@ const taskStats = ref([]);
 const user = ref(null);
 const userList = ref([]);
 const addCategoryDialog = ref(false);
+const isTrayHidden = ref(false);
+
 onMounted(() => {
   user.value = JSON.parse(localStorage.getItem("user"));
   if (user && user.preferences) {
@@ -296,10 +299,13 @@ const getMyTasks = (categoryId) => {
     });
 };
 const selectedRowItems = ref([]);
-
+const hideTray = () => {
+  selectedRowItems.value = [];
+  isTrayHidden.value = true;
+};
 const updateSelectedRowItems = (items) => {
+  isTrayHidden.value = false;
   selectedRowItems.value = items;
-  console.log(selectedRowItems.value);
 };
 const handleDelete = async () => {
   if (!selectedRowItems.value.length) {
@@ -487,7 +493,7 @@ const handleComplete = async () => {
   padding: 5px 13px;
   border-radius: 50%;
   color: #fff;
-  background: #0061FB;
+  background: #0061fb;
 }
 
 .action-item {
@@ -495,7 +501,7 @@ const handleComplete = async () => {
 }
 
 .action-label {
-  font-size: 13px; 
+  font-size: 13px;
   margin-top: 4px;
 }
 .cust-border {
