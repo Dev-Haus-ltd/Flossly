@@ -21,10 +21,7 @@
         Documents
       </v-tab>
 
-      <v-tab class="tab-text" value="performance">
-        <img src="@/assets/icons/teamfloss/userDetails/performance.svg" alt="Performance Management" class="tab-icon" />
-        Performance Management
-      </v-tab>
+   
     </v-tabs>
 
     <!-- Tab Content -->
@@ -41,9 +38,7 @@
           <TeamFlossUserDetailsDocuments :user="user"/> 
       </v-tabs-window-item>
 
-      <v-tabs-window-item value="performance">
-            <TeamFlossUserDetailsPerformance />
-      </v-tabs-window-item>
+
     </v-tabs-window>
   </div>
 </template>

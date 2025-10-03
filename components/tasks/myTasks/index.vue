@@ -10,7 +10,8 @@
           <v-col
             cols="12"
             sm="6"
-            md="2"
+            md="3"
+            lg="2"
             v-for="(item, i) in taskStats"
             :key="i"
           >

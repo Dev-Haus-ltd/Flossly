@@ -10,14 +10,42 @@
         >
           <!-- Top Section: Avatar + Name + Practice -->
           <div class="d-flex align-center mb-6">
-            <CommonAvatar :user="{ fullName: user?.fullName }" size="80" />
+            <CommonAvatar :user="user" size="80" /> 
 
-            <div class="ml-4">
-              <p class="user-name">{{ user.fullName }}</p>
+            <div class="ml-4 w-100">
+            
+              <p
+                class="editable"
+                style="font-size: 20px;"
+                contenteditable="true"
+                @blur="logValue($event, 'fullName')"
+              >
+                {{ user.fullName }}
+              </p>
               <p class="practice-name">{{ getPracticeName() }}</p>
+              <div class="mt-1">
+  <v-btn
+   color="tertiary" variant="outlined"
+    size="small"
+    class="upload-btn"
+    @click="$refs.fileInput.click()"
+    flat
+  >
+    <v-icon size="18" class="upload-btn__icon">mdi-upload</v-icon>
+    <span class="upload-btn__label">Add avatar</span>
+  </v-btn>
+
+  <input
+    ref="fileInput"
+    type="file"
+    accept="image/*"
+    class="d-none"
+    @change="handleFileUpload"
+  />
+</div>
             </div>
           </div>
-
+        
           <!-- Info Section: Labels + Editable -->
           <div class="info-section">
             <!-- Email -->
@@ -223,7 +251,7 @@ const getUserRole = () => {
 };
 const updateProfile = () => {
   authStore
-    .updateProfile(user)
+    .updateProfile(user) 
     .then((res) => {
       if (res.code === 0) {
         localStorage.setItem("user", JSON.stringify(user))
@@ -245,7 +273,14 @@ const updateProfile = () => {
       })
     })
 }
-
+const handleFileUpload = (event) => {
+  const file = event.target.files[0]
+  console.log(file)
+  if (file) {
+    user.photo = file
+    
+  }
+}
 </script>
 
 <style scoped>
@@ -289,6 +324,8 @@ const updateProfile = () => {
 .editable:focus {
   border: 1px solid #dfdfdf;
   padding: 4px 6px;
+
+  
 }
 
 .gender-radio .v-input--selection-controls__input {
@@ -308,5 +345,18 @@ const updateProfile = () => {
 
 .day-checkbox input:checked + .v-selection-control__wrapper .v-icon {
   color: white !important;
+}
+.upload-icon {
+  color: #b0b0b0;
+  min-width: 28px !important;
+  min-height: 28px !important;
+  width: 28px !important;
+  height: 28px !important;
+}
+
+.upload-icon:hover {
+  color: #8a8a8a;
+  transform: scale(1.05);
+  transition: transform 0.15s ease;
 }
 </style>
