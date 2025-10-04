@@ -89,12 +89,12 @@
               />
 
               <v-btn
-              type="submit"
-              color="primary"
-              block
-              variant="flat"
-              class="mt-5 rounded-lg"
-              height="48"
+                type="submit"
+                color="primary"
+                block
+                variant="flat"
+                class="mt-5 rounded-lg"
+                height="48"
               >
                 Create My Flossly Account
               </v-btn>
@@ -316,16 +316,23 @@ const goToLogin = () => {
   font-size: 14px;
 }
 
-/* Match login: tint background when focused or when field has value */
-.input-bordered :deep(.v-field--focused .v-field__overlay),
-.input-bordered :deep(.v-field--dirty .v-field__overlay),
-.input-bordered :deep(.v-field--active .v-field__overlay),
-/* Broaden coverage for selects and any solo variant fields */
-.input-bordered :deep(.v-field--variant-solo.v-field--focused .v-field__overlay),
+/* Vertically center input text, selections and icons across all fields */
+.input-bordered :deep(.v-field__input) {
+  align-items: center;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.input-bordered :deep(.v-field__append-inner),
+.input-bordered :deep(.v-field__prepend-inner) {
+  align-self: center;
+}
+
+.input-bordered
+  :deep(.v-field--variant-solo.v-field--focused .v-field__overlay),
 .input-bordered :deep(.v-field--variant-solo.v-field--dirty .v-field__overlay),
 .input-bordered :deep(.v-field--variant-solo.v-field--active .v-field__overlay),
 .input-bordered :deep(.v-field--selected .v-field__overlay) {
-  background-color: rgba(38, 109, 240, 0.06) !important; /* #266DF0 @ ~6% */
+  background-color: rgba(38, 109, 240, 0.06) !important;
 }
 
 @media (max-width: 960px) {
