@@ -224,7 +224,6 @@
 const { user } = defineProps({
   user: Object,
 });
-console.log(user)
 const mainStore= useMainStore();
 const dbMenu = ref(false)
 const authStore = useAuthStore()

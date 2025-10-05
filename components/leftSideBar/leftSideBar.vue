@@ -4,13 +4,12 @@
     :rail="rail"
     :temporary="smAndDown"
     :permanent="!smAndDown"
-    style="background-color: #F3F4F6;"
-    
+    style="background-color: #f3f4f6"
   >
     <LeftSideBarPracticeMenu :currentOrg="currentOrg" :rail="rail" />
     <v-card
       class="d-flex flex-column py-1"
-      style="height: 87vh; overflow: auto; background-color: #F3F4F6;"
+      style="height: 87vh; overflow: auto; background-color: #f3f4f6"
     >
       <v-list density="compact" nav :class="[rail ? 'pr-0 rail-closed' : '']">
         <template v-for="item in menuItems" :key="item.value">
@@ -59,7 +58,7 @@
 
           <!-- Parent with children -->
           <div v-else class="group-with-line" :class="{ 'no-line': rail }">
-            <v-list-group v-model="openGroups[item.value]" :value="item.value">
+            <v-list-group v-model="openGroups[item.value]">
               <template #activator="{ props }">
                 <v-tooltip v-if="rail" location="right">
                   <template #activator="{ props: tooltipProps }">
@@ -83,9 +82,8 @@
                   v-else
                   v-bind="props"
                   :title="item.title"
-                  :to="item.to"
                   :active="isParentActive(item)"
-                  @click="navigate(item.to)"
+                  @click.stop="(e) => handleParentClick(e, item)"
                   :class="['custom-list-item']"
                 >
                   <template #prepend>
@@ -218,19 +216,48 @@ const syncOpenGroups = () => {
     }
   });
 };
-watch(() => route.fullPath, syncOpenGroups, { immediate: true });
 
 const navigate = (to) => {
   if (to) router.push(to);
 };
+const handleParentClick = (e, item) => {
+  // Navigate to the parent's route if it exists
+  if (item.to) router.push(item.to);
 
+  // If the parent has children
+  if (item.children?.length && item.value) {
+    // Store the current state of this group before closing others
+    const currentState = openGroups[item.value];
+
+    // Close all other open groups first
+    Object.keys(openGroups).forEach((key) => {
+      if (key !== item.value) {
+        openGroups[key] = false;
+      }
+    });
+
+    openGroups[item.value] = !currentState;
+  }
+};
+
+// keep this watcher AFTER handleParentClick
+watch(
+  () => route.fullPath,
+  () => {
+    // only auto-sync if user hasn’t manually opened something
+    const activeKey = Object.keys(openGroups).find((k) => openGroups[k]);
+    if (!activeKey) {
+      syncOpenGroups();
+    }
+  },
+  { immediate: true }
+);
 const user = ref(null);
 const currentOrg = ref({});
 </script>
 
 <style scoped lang="scss">
 .custom-list-item {
-  
   font-size: 13px;
   font-weight: 400;
   color: #737373;
@@ -244,8 +271,8 @@ const currentOrg = ref({});
   position: relative;
   border-radius: 6px;
   .v-list-group--open {
-    background-color: #FFFFFF;
-    border-right: 5px solid #0061FB;
+    background-color: #ffffff;
+    border-right: 5px solid #0061fb;
     border-radius: 6px;
     .active-item {
       background-color: transparent;
@@ -273,14 +300,14 @@ const currentOrg = ref({});
 }
 .active-item {
   font-weight: 600 !important;
-  background-color: #FFFFFF;
+  background-color: #ffffff;
   border-radius: 8px;
 }
 .right-border {
-  border-right: 5px solid #0061FB;
+  border-right: 5px solid #0061fb;
 }
 :deep(.v-list-item--active) {
-  color: #0061FB !important;
+  color: #0061fb !important;
   font-weight: 600 !important;
 }
 .list-icon {
