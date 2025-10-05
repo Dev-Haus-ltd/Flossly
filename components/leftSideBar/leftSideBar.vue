@@ -64,9 +64,9 @@
                   <template #activator="{ props: tooltipProps }">
                     <v-list-item
                       v-bind="{ ...props, ...tooltipProps }"
-                      :to="item.to"
+                    
                       :active="isParentActive(item)"
-                      @click="navigate(item.to)"
+                      @click="(e) => handleParentClick(e, item)"
                       :class="[
                         'custom-list-item',
                         isParentActive(item) && 'active-item',
@@ -83,7 +83,7 @@
                   v-bind="props"
                   :title="item.title"
                   :active="isParentActive(item)"
-                  @click.stop="(e) => handleParentClick(e, item)"
+                  @click="(e) => handleParentClick(e, item)"
                   :class="['custom-list-item']"
                 >
                   <template #prepend>
