@@ -103,20 +103,20 @@ export const useMainStore = defineStore("mainStore", {
         
           ],
         },
-        {
-          title: "Floss Academy",
-          imgPath: academyIcon,
-          value: "flossAcademy",
-          to:"/academy",
-          children: [
-            {
-              title: "My Courses",
-              value: "myCourses",
-              imgPath: academyIcon,
-              to: "/academy/mycourses",
-            },
-          ],
-        },
+        // {
+        //   title: "Floss Academy",
+        //   imgPath: academyIcon,
+        //   value: "flossAcademy",
+        //   to:"/academy",
+        //   children: [
+        //     {
+        //       title: "My Courses",
+        //       value: "myCourses",
+        //       imgPath: academyIcon,
+        //       to: "/academy/mycourses",
+        //     },
+        //   ],
+        // },
         {
           title: "CRM",
           imgPath: crmIcon,
@@ -205,20 +205,20 @@ export const useMainStore = defineStore("mainStore", {
           imgPath: teamIcon,
           to: "/teams/holiday",
         },
-        {
-          title: "Floss Academy",
-          imgPath: academyIcon,
-          value: "flossAcademy",
-          to:"/academy",
-          children: [
-            {
-              title: "My Courses",
-              value: "myCourses",
-              imgPath: academyIcon,
-              to: "/academy/mycourses",
-            },
-          ],
-        },
+        // {
+        //   title: "Floss Academy",
+        //   imgPath: academyIcon,
+        //   value: "flossAcademy",
+        //   to:"/academy",
+        //   children: [
+        //     {
+        //       title: "My Courses",
+        //       value: "myCourses",
+        //       imgPath: academyIcon,
+        //       to: "/academy/mycourses",
+        //     },
+        //   ],
+        // },
       ];
     },
     getTeamTaskTableHeaders() {
