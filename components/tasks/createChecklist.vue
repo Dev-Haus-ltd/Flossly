@@ -120,10 +120,5 @@ const emit = defineEmits(["remove"]);
 :deep(.v-checkbox .v-selection-control__input .v-icon) {
   color: #dbdbdb !important; // sets the stroke/border color for unchecked state
 }
-/* Center text inside text fields */
-.input-bordered :deep(.v-field__input),
-.input-bordered :deep(.v-field__input input),
-.input-bordered :deep(.v-field__input textarea) {
-  text-align: center !important;
-}
+
 </style>
