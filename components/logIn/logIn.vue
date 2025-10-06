@@ -89,7 +89,8 @@
             <div class="agreement-text mt-5">
               By signing up you agree to Flossly&nbsp;
               <a href="/privacy-policy" target="_blank">Terms</a>,&nbsp;
-              <a href="/privacy-policy" target="_blank">Privacy Policy</a>&nbsp;and&nbsp;
+              <a href="/privacy-policy" target="_blank">Privacy Policy</a
+              >&nbsp;and&nbsp;
               <a href="/privacy-policy" target="_blank">Security Policy</a>.
             </div>
             <div class="mt-5 text-body-2 text-center" style="height: 48px">
@@ -186,6 +187,14 @@ const passwordRules = [
 const togglePasswordVisibility = () => {
   showPassword.value = !showPassword.value;
 };
+
+onMounted(() => {
+  if (store.loginSkipSplash) {
+    initialPage.value = false;
+    // clear the flag so direct visits still show splash later
+    store.setLoginSkipSplash(false);
+  }
+});
 
 const login = async () => {
   const formValidation = await form.value.validate();

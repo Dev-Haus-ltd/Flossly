@@ -12,6 +12,7 @@ export const useMainStore = defineStore("mainStore", {
     locale: "en",
     roles: [],
     isLoading: false,
+    loginSkipSplash: false,
     snackbar: {
       title: "",
       subtitle: "",
@@ -347,6 +348,9 @@ export const useMainStore = defineStore("mainStore", {
   },
 
   actions: {
+    setLoginSkipSplash(value) {
+      this.loginSkipSplash = !!value;
+    },
     getRoles() {
       return new Promise((resolve, reject) => {
         this.isLoading = true;

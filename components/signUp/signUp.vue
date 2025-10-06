@@ -248,7 +248,8 @@ const signUp = async () => {
   }
 };
 const goToLogin = () => {
-  router.push("login");
+  mainStore.setLoginSkipSplash(true);
+  router.push("/login");
 };
 </script>
 
