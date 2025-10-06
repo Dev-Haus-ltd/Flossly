@@ -1,7 +1,7 @@
 <template>
   <div class="signup-page">
     <v-row>
-      <v-col cols="12" md="6" class="d-flex align-start justify-center px-12">
+      <v-col cols="12" md="6" class="d-flex align-center justify-center px-12">
         <div class="form-scroll" style="width: 100%; max-width: 500px">
           <template v-if="!isSignedUp">
             <h2 class="text-center login-heading">Sign Up</h2>
