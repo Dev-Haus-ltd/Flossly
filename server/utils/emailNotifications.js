@@ -43,6 +43,10 @@ export const sendOtpForPasswordReset = async (data) => {
       <p>Your one time password for reset password request is:</p>
       <br/>
       <h2> ${data.otp} </h2>
+      <br/>
+      <p> If you did not request this change, please ignore this email. </p>
+       <br/><br/>
+          <p>Best regards,<br/>The Flossly Team</p>
       </body>
       </html>`,
   });
@@ -63,7 +67,7 @@ export const sendOrgnisationAddedToRegisteredUsers = async (data) => {
       </body>
       </html>`,
   });
-}
+};
 
 export const sendInvitationEmail = async (data) => {
   await transporter.sendMail({
@@ -74,12 +78,14 @@ export const sendInvitationEmail = async (data) => {
       <body> 
       <p>Dear User</p>
       <br />
-      <p>Welcome to Flossly! You are invited to Flossly by ${data.manager} to join their ${data.orgTitle}.</p>
+      <p>Welcome to Flossly! You are invited to Flossly by ${
+        data.manager
+      } to join their ${data.orgTitle}.</p>
       <br/>
       <p> Please click on the link below to get started with Flossly. </p>
        <a href=${
-        config.public.BASE_URL + "/invite/" + data.link
-      } target="blank"> Get Started </a>
+         config.public.BASE_URL + "/invite/" + data.link
+       } target="blank"> Get Started </a>
       </body>
       </html>`,
   });
@@ -102,8 +108,6 @@ export const sendOnBoardingMail = async (data) => {
   });
 };
 
-
-
 export const sendFeedBack = async (data) => {
   await transporter.sendMail({
     from: "Flossly <helloflossly@gmail.com>",
@@ -118,41 +122,64 @@ export const sendFeedBack = async (data) => {
       </body>
       </html>`,
   });
-}
+};
 
 // on borarding and staff invitations
-export const welcomeEmailUponSignup = async (data) => {
+// export const welcomeEmailUponSignup = async (data) => {
+//   await transporter.sendMail({
+//     from: "Flossly <helloflossly@gmail.com>",
+//     to: [data.email],
+//     subject: "Welcome to Flossly!",
+//     html: `<html>
+//       <body>
+//       <p>Welcome to Flossly—where dental dreams go digital! Let's get your practice running smoother than a fresh polish. ✨</p>
+//       <br/>
+//       <a href="${config.public.BASE_URL}" target="_blank">👉Watch Quick Start Video</a>
+//       <a href="${config.public.BASE_URL}" target="_blank">👉Explore Your Dashboard</a>
+//       <br/>
+//       </body>
+//       </html>`,
+//   });
+// }
+// export const firstLoginTipNotification = async (data) => {
+//   await transporter.sendMail({
+//     from: "Flossly <helloflossly@gmail.com>",
+//     to: [data.email],
+//     subject: "First Login Tip Notification",
+//     html: `<html>
+//       <body>
+//       <p>👋 “Hey superstar! First time on Flossly? Let's take a quick spin around the block. 🚀</p>
+//       <br/>
+//       <a href="${config.public.BASE_URL}" target="_blank">🎥 Watch: Flossly in 2 Minutes</a>
+//       <a href="${config.public.BASE_URL}" target="_blank">📝 Set Up Your Profile”</a>
+//       <br/>
+//       </body>
+//       </html>`,
+//   });
+// }
+export const accountCreationNotification = async (data) => {
   await transporter.sendMail({
     from: "Flossly <helloflossly@gmail.com>",
     to: [data.email],
-    subject: "Welcome to Flossly!",
-    html: `<html>
-      <body> 
-      <p>Welcome to Flossly—where dental dreams go digital! Let's get your practice running smoother than a fresh polish. ✨</p>
-      <br/>
-      <a href="${config.public.BASE_URL}" target="_blank">👉Watch Quick Start Video</a>
-      <a href="${config.public.BASE_URL}" target="_blank">👉Explore Your Dashboard</a>
-      <br/>
-      </body>
-      </html>`,
+    subject: "Your Flossly Account Has Been Created",
+    html: `
+      <html>
+        <body>
+          <p>Dear ${data.fullName},</p>
+          <br/>
+          <p>Your account has been successfully created.</p>
+          <p>For your first login, please use the default password: <strong>welcome1</strong></p>
+          <p>(We recommend updating your password immediately for security.)</p>
+          <br/>
+          <p>Welcome to the team!</p>
+          <br/>
+          <p>Best regards,<br/>The Flossly Team</p>
+        </body>
+      </html>
+    `,
   });
-}
-export const firstLoginTipNotification = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
-    to: [data.email],
-    subject: "First Login Tip Notification",
-    html: `<html>
-      <body> 
-      <p>👋 “Hey superstar! First time on Flossly? Let's take a quick spin around the block. 🚀</p>
-      <br/>
-      <a href="${config.public.BASE_URL}" target="_blank">🎥 Watch: Flossly in 2 Minutes</a>
-      <a href="${config.public.BASE_URL}" target="_blank">📝 Set Up Your Profile”</a>
-      <br/>
-      </body>
-      </html>`,
-  });
-}
+};
+
 export const completeProfileReminder = async (data) => {
   await transporter.sendMail({
     from: "Flossly <helloflossly@gmail.com>",
@@ -168,7 +195,7 @@ export const completeProfileReminder = async (data) => {
       </body>
       </html>`,
   });
-}
+};
 export const inviteStaffMemberPrompt = async (data) => {
   await transporter.sendMail({
     from: "Flossly <helloflossly@gmail.com>",
@@ -184,7 +211,7 @@ export const inviteStaffMemberPrompt = async (data) => {
       </body>
       </html>`,
   });
-}
+};
 export const staffInvitationAcceptedNotification = async (data) => {
   await transporter.sendMail({
     from: "Flossly <helloflossly@gmail.com>",
@@ -301,14 +328,21 @@ export const paymentSuccessNotification = async (data) => {
   await transporter.sendMail({
     from: "Flossly <helloflossly@gmail.com>",
     to: [data.email],
-    subject: "Payment Success Notification 💳",
+    subject: "Welcome to Flossly – Subscription Confirmed",
     html: `
       <html>
         <body>
-          <p>💳 Woohoo! Payment received—your Flossly flow keeps going.</p>
+          <p>Dear ${data.fullName},</p>
           <br/>
-          <a href="${config.public.BASE_URL}" target="_blank">👉 View Receipt</a>
+          <p>Welcome to Flossly!</p>
+          <p>We're excited to confirm your subscription to our platform. Your account is now active, and you can begin exploring all the features available to you.</p>
           <br/>
+          <p>To get started, simply log in here:</p>
+          <a href="${config.public.BASE_URL}/login" target="_blank">👉 Log In</a>
+          <br/><br/>
+          <p>If you have any questions or need assistance, our support team is here to help.</p>
+          <br/>
+          <p>Best regards,<br/>The Flossly Team</p>
         </body>
       </html>
     `,
@@ -450,15 +484,19 @@ export const sendTaskAssignmentEmail = async (data) => {
   await transporter.sendMail({
     from: "Flossly <helloflossly@gmail.com>",
     to: [data.email],
-    subject: "New Task Assigned to You",
-    html: `<html>
-      <body> 
-     <p>📝 Hey ${data.name}, you've got a shiny new task: '${data.taskTitle}'—let's crush it!</p>
-      <p>Please log in to Flossly to view and complete the task.</p>
-      <br/>
-      <a href="${config.public.BASE_URL}/taskmanagement/mytasks" target="_blank">👉 View My Task</a>
-      </body>
-      </html>`,
+    subject: "New Task Assigned",
+    html: `
+      <html>
+        <body>
+          <p>Dear ${data.fullName},</p>
+          <br/>
+          <p>We would like to inform you that a new task has been assigned to you:</p>
+          <p><strong>Task:</strong> ${data.taskTitle}</p>
+          <br/>
+          <p>Best regards,<br/>Flossly Team</p>
+        </body>
+      </html>
+    `,
   });
 };
 
@@ -466,14 +504,19 @@ export const taskDueReminderTeam = async (data) => {
   await transporter.sendMail({
     from: "Flossly <helloflossly@gmail.com>",
     to: [data.email],
-    subject: "Task Due Reminder (for Team) ⏰",
+    subject: "Task Due Reminder",
     html: `
       <html>
         <body>
-          <p>⏰ Gentle nudge: Your task '${data.task}' is due soon. Let's wrap this up like a pro!</p>
+          <p>Dear ${data.fullName},</p>
           <br/>
-          <a href="${config.public.BASE_URL}" target="_blank">👉 Open Task</a>
+          <p>We hope you are doing well.</p>
+          <p>The following tasks have not yet been completed. Please submit them to stay up to date with your tasks.</p>
           <br/>
+          <p>You can log in here to review and complete your events:</p>
+          <a href="${config.public.BASE_URL}/login" target="_blank">👉 Login Here</a>
+          <br/><br/>
+          <p>Best regards,<br/>The Flossly Team</p>
         </body>
       </html>
     `,
@@ -484,14 +527,15 @@ export const taskCompletedNotification = async (data) => {
   await transporter.sendMail({
     from: "Flossly <helloflossly@gmail.com>",
     to: [data.email],
-    subject: "Task Completed Notification 🎉",
+    subject: `New Task Completed – ${data.task}`,
     html: `
       <html>
         <body>
-          <p>🎉 ${data.name} just completed '${data.task}'—round of applause! 👏</p>
+          <p>Dear ${data.fullName},</p>
           <br/>
-          <a href="${config.public.BASE_URL}" target="_blank">👉 See Task</a>
+          <p>A new task, “${data.task}”, has been completed by ${data.name}.</p>
           <br/>
+          <p>Best regards,<br/>The Flossly Team</p>
         </body>
       </html>
     `,
@@ -548,6 +592,31 @@ export const newCpdCourseAvailable = async (data) => {
           <a href="${config.public.BASE_URL}" target="_blank">👉 Explore Course</a> |
           <a href="${config.public.BASE_URL}" target="_blank">🎥 How to Get Started</a>
           <br/>
+        </body>
+      </html>
+    `,
+  });
+};
+
+export const newCpdActivityAssigned = async (data) => {
+  await transporter.sendMail({
+    from: "Flossly <helloflossly@gmail.com>",
+    to: [data.email],
+    subject: "New CPD Activity Assigned",
+    html: `
+      <html>
+        <body>
+          <p>Dear ${data.fullName},</p>
+          <br/>
+          <p>A new CPD activity has been assigned to you:</p>
+          <p><strong>Activity:</strong> ${data.activityName}</p>
+          <br/>
+          <p>Please log in to your portal to review and complete the activity:</p>
+          <a href="${config.public.BASE_URL}" target="_blank">👉 Access CPD Portal</a>
+          <br/><br/>
+          <p>Completing your assigned CPD on time will help you stay up to date with your professional requirements.</p>
+          <br/>
+          <p>Best regards,<br/>The Flossly Team</p>
         </body>
       </html>
     `,
@@ -644,5 +713,176 @@ export const mandatoryTrainingAlert = async (data) => {
   });
 };
 
+// latest word file
+export const portalReadyTrainingInvite = async (data) => {
+  await transporter.sendMail({
+    from: "Flossly <helloflossly@gmail.com>",
+    to: [data.email],
+    subject: "Your Portal is Ready - Book Your Training Today",
+    html: `
+      <html>
+        <body>
+          <p>Dear ${data.fullName},</p>
+          <br/>
+          <p>We're excited to let you know that your portal is now ready! 🎉</p>
+          <p>To help you get the most out of it, please book your training session at your earliest convenience.</p>
+          <br/>
+          <a href="https://calendly.com/helloflossly/flossly-training" target="_blank">👉 Book Your Training</a>
+          <br/><br/>
+          <p>If you have any questions or need assistance, our support team will be happy to help.</p>
+          <br/>
+          <p>Best regards,<br/>The Flossly Team</p>
+        </body>
+      </html>
+    `,
+  });
+};
 
+// rota
+export const newRotaAvailableNotification = async (data) => {
+  await transporter.sendMail({
+    from: "Flossly <helloflossly@gmail.com>",
+    to: [data.email],
+    subject: `New Rota Available - Week of ${data.rotaWeek}`,
+    html: `
+      <html>
+        <body>
+          <p>Dear ${data.fullName},</p>
+          <br/>
+          <p>A new rota has been created for the week starting ${data.rotaWeek}.</p>
+          <p>Please log in to your portal to review your schedule.</p>
+          <br/>
+          <p>Best regards,<br/>The Flossly Team</p>
+        </body>
+      </html>
+    `,
+  });
+};
+export const upcomingRotaShiftReminder = async (data) => {
+  await transporter.sendMail({
+    from: "Flossly <helloflossly@gmail.com>",
+    to: [data.email],
+    subject: `Upcoming Shift Reminder – ${data.date}`,
+    html: `
+      <html>
+        <body>
+          <p>Hi ${data.fullName},</p>
+          <br/>
+          <p>This is a reminder that you are scheduled for a shift on:</p>
+          <p><strong>Date:</strong> ${data.date}</p>
+          <p><strong>Time:</strong> ${data.time}</p>
+          ${
+            data.location
+              ? `<p><strong>Location/Department:</strong> ${data.location}</p>`
+              : ""
+          }
+          <br/>
+          <p>Please log in to your portal to confirm your schedule.</p>
+          <a href="${
+            config.public.BASE_URL
+          }/rota" target="_blank">👉 View My Rota</a>
+          <br/><br/>
+          <p>Best regards,<br/>The Flossly Team</p>
+        </body>
+      </html>
+    `,
+  });
+};
 
+//  CRM (Leads) Notifications
+export const newLeadAddedNotification = async (data) => {
+  await transporter.sendMail({
+    from: "Flossly <helloflossly@gmail.com>",
+    to: [data.email],
+    subject: `New Lead Added - ${data.leadName}`,
+    html: `
+      <html>
+        <body>
+          <p>Dear ${data.fullName},</p>
+          <br/>
+          <p>A new lead has been added to the CRM:</p>
+          <p><strong>Lead Name:</strong> ${data.leadName}</p>
+          <p><strong>Added by:</strong> ${data.addedBy}</p>
+          <p><strong>Date Added:</strong> ${data.dateAdded}</p>
+          <br/>
+          <p>Please log in to the CRM to review the lead details and assign follow-up actions.</p>
+          <a href="${config.public.BASE_URL}/crm/leads" target="_blank">👉 View Lead in CRM</a>
+          <br/><br/>
+          <p>Best regards,<br/>The Flossly Team</p>
+        </body>
+      </html>
+    `,
+  });
+};
+export const leadStatusChangedNotification = async (data) => {
+  await transporter.sendMail({
+    from: "Flossly <helloflossly@gmail.com>",
+    to: [data.email],
+    subject: `Lead Status Changed - ${data.leadName}`,
+    html: `
+      <html>
+        <body>
+          <p>Dear ${data.fullName},</p>
+          <br/>
+          <p>The status of the following lead has been updated in the CRM:</p>
+          <p><strong>Lead Name:</strong> ${data.leadName}</p>
+          <p><strong>New Status:</strong> ${data.newStatus}</p>
+          <p><strong>Updated by:</strong> ${data.updatedBy}</p>
+          <p><strong>Date:</strong> ${data.date}</p>
+          <br/>
+          <p>Please log in to the CRM to review the details and continue managing this lead.</p>
+          <a href="${config.public.BASE_URL}" target="_blank">👉 View Lead in CRM</a>
+          <br/><br/>
+          <p>Best regards,<br/>The Flossly Team</p>
+        </body>
+      </html>
+    `,
+  });
+};
+
+// leaves
+export const leaveRequestApprovedNotification = async (data) => {
+  await transporter.sendMail({
+    from: "Flossly <helloflossly@gmail.com>",
+    to: [data.email],
+    subject: `Leave Request Approved - ${data.dates}`,
+    html: `
+      <html>
+        <body>
+          <p>Hi ${data.fullName},</p>
+          <br/>
+          <p>Good news — your leave request for <strong>${data.dates}</strong> has been approved.</p>
+          <p>The rota has been updated accordingly to reflect your absence.</p>
+          <br/>
+          <p>You can log in to your portal anytime to review your updated schedule:</p>
+          <a href="${config.public.BASE_URL}/rota" target="_blank">👉 View My Rota</a>
+          <br/><br/>
+          <p>Best regards,<br/>The Flossly Team</p>
+        </body>
+      </html>
+    `,
+  });
+};
+
+export const leaveRequestDeniedNotification = async (data) => {
+  await transporter.sendMail({
+    from: "Flossly <helloflossly@gmail.com>",
+    to: [data.email],
+    subject: `Leave Request Denied - ${data.dates}`,
+    html: `
+      <html>
+        <body>
+          <p>Hi ${data.fullName},</p>
+          <br/>
+          <p>Your leave request for <strong>${data.dates}</strong> has unfortunately been denied.</p>
+          <p>The rota will remain unchanged, and you are still scheduled to work during this period.</p>
+          <p>If you'd like to discuss this further, please contact your manager.</p>
+          <br/>
+          <a href="${config.public.BASE_URL}/rota" target="_blank">👉 View My Rota</a>
+          <br/><br/>
+          <p>Best regards,<br/>The Flossly Team</p>
+        </body>
+      </html>
+    `,
+  });
+};
