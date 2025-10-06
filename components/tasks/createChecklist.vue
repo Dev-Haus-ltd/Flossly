@@ -120,5 +120,15 @@ const emit = defineEmits(["remove"]);
 :deep(.v-checkbox .v-selection-control__input .v-icon) {
   color: #dbdbdb !important; // sets the stroke/border color for unchecked state
 }
-
+/* Ensure text-field height and vertical centering at 52px */
+.input-bordered :deep(.v-field) {
+  --v-input-control-height: 52px;
+}
+.input-bordered :deep(.v-field--single-line .v-field__input) {
+  min-height: 52px;
+}
+.input-bordered :deep(.v-field--single-line .v-field__input input) {
+  height: 52px;
+  line-height: 52px;
+}
 </style>
