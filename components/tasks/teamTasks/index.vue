@@ -7,7 +7,8 @@
       <div class="task-summary">
         <!-- Cards Grid -->
         <v-row>
-          <v-col cols="12" md="2" v-for="(item, i) in taskStats" :key="i">
+          <v-col cols="12"  md="3"
+          lg="2" v-for="(item, i) in taskStats" :key="i">
             <CommonStatCard
               :icon="getIcon(item.categoryName)"
               :label="item.categoryName"

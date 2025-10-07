@@ -57,6 +57,7 @@ export const listMyTasks = async (event) => {
           {
             model: TaskCategory,
             as: "category",
+            where: { isDeleted: false },
             attributes: ["id", "name"],
           },
         ],
@@ -101,8 +102,9 @@ export const addTaskCategory = async (event) => {
   const { name, description, parentId, color } = JSON.parse(body);
   if (!name) return error(400, "Name required");
   try {
-    const cat = await TaskCategory.findOne({ where: { name }})
-    if (cat) throw createError({ message: `Category ${name} is already added`})
+    const cat = await TaskCategory.findOne({ where: { name } });
+    if (cat)
+      throw createError({ message: `Category ${name} is already added` });
     await TaskCategory.create({ name, description, parentId, color });
     return success("Saved");
   } catch (err) {
@@ -728,6 +730,7 @@ export const groupTeamTasksByTaskId = async (event) => {
   const categories = await TaskCategory.findAll({
     where: {
       [Op.or]: [{ id: categoryId }, { parentId: categoryId }],
+      isDeleted: false,
     },
     attributes: ["id"],
   });
@@ -763,6 +766,7 @@ export const groupTeamTasksByTaskId = async (event) => {
             {
               model: TaskCategory,
               as: "category",
+              where: { isDeleted: false },
               attributes: ["id", "name"],
             },
           ],
@@ -871,6 +875,7 @@ export const getUserTaskDetails = async (event) => {
             {
               model: TaskCategory,
               as: "category",
+              where: { isDeleted: false },
               attributes: ["id", "name"],
             },
           ],
@@ -939,7 +944,7 @@ export const addTaskChecklist = async (event) => {
     );
     const userTasks = await UserTask.findAll({
       where: {
-        taskId
+        taskId,
       },
     });
     const userChecklistPayload = userTasks.map((task) => ({
@@ -1087,7 +1092,9 @@ export const deleteTaskChecklist = async (event) => {
 
 export const getCategories = async (event) => {
   try {
-    const categories = await TaskCategory.findAll();
+    const categories = await TaskCategory.findAll({
+      where: { isDeleted: false },
+    });
     return success(categories);
   } catch (err) {
     return error(500, err.message);
@@ -1097,6 +1104,7 @@ export const getCategories = async (event) => {
 export const getCategoriesforPool = async (event) => {
   try {
     const categories = await TaskCategory.findAll({
+      where: { isDeleted: false },
       attributes: {
         include: [[fn("COUNT", col("tasks.id")), "taskCount"]],
       },
@@ -1129,11 +1137,13 @@ export const myTasksCountByCategory = async (event) => {
             {
               model: TaskCategory,
               as: "category",
+              where: { isDeleted: false },
               attributes: ["id", "name", "color", "parentId"],
               include: [
                 {
                   model: TaskCategory,
                   as: "parent",
+                  where: { isDeleted: false },
                   attributes: ["id", "name", "color"],
                 },
               ],
@@ -1182,11 +1192,13 @@ export const teamTasksCountByCategory = async (event) => {
             {
               model: TaskCategory,
               as: "category",
+              where: { isDeleted: false },
               attributes: ["id", "name", "color", "parentId"],
               include: [
                 {
                   model: TaskCategory,
                   as: "parent",
+                  where: { isDeleted: false },
                   attributes: ["id", "name", "color"],
                 },
               ],
@@ -1228,6 +1240,7 @@ export const getUserTasksStatusWise = async (event) => {
     const categories = await TaskCategory.findAll({
       where: {
         [Op.or]: [{ id: categoryId }, { parentId: categoryId }],
+        isDeleted: false,
       },
       attributes: ["id"],
     });
@@ -1244,7 +1257,13 @@ export const getUserTasksStatusWise = async (event) => {
           as: "taskDetails",
           where: { categoryId: { [Op.in]: categoryIds } },
           required: true,
-          include: [{ model: TaskCategory, as: "category" }],
+          include: [
+            {
+              model: TaskCategory,
+              as: "category",
+              where: { isDeleted: false },
+            },
+          ],
         },
         {
           model: OrganisationPriority,

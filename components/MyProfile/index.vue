@@ -41,7 +41,7 @@ import { TeamFlossUserDetailsDocuments } from "#components";
 
 
 // imgs
-import ProfileImg from "@/assets/icons/myProfile/profile.svg";
+import ProfileImg from "@/assets/icons/myProfile/profile.svg"; 
 import HrImg from "@/assets/icons/myProfile/hr.svg";
 import PaymentImg from "@/assets/icons/myProfile/payment.svg";
 import PasswordImg from "@/assets/icons/myProfile/password.svg";
@@ -54,6 +54,7 @@ import LoyaltyImg from "@/assets/icons/myProfile/loyalty.svg";
 const { user } = defineProps({
   user: Object
 })
+console.log(user)
 const authStore = useAuthStore()
 const acccoutDetails = ref({})
 const contractDetails = ref({})

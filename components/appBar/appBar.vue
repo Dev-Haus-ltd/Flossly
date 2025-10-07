@@ -15,7 +15,7 @@
           <!-- Expanded state: logo + title -->
           <template v-if="!rail">
             <img
-              :src="headerLogo"
+              :src="logoIcon"
               alt="My Logo"
               width="35"
               height="100%"
@@ -68,8 +68,7 @@
 
 <script setup>
 const { user } = useUser();
-import headerLogo from "@/assets/logos/logoIcon2.svg";
-import logoIcon from "@/assets/logos/logoIcon2.svg";
+import logoIcon from "@/assets/logos/Logoicon2.svg";
 const emit = defineEmits(["small-screen-drawer"]);
 
 const props = defineProps({
