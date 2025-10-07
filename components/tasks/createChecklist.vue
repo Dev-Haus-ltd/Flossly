@@ -10,7 +10,7 @@
               icon
               variant="text"
               color="#8B8B8B"
-              style="width: 20px; height: 20px; min-width: 20px;"
+              style="width: 20px; height: 20px; min-width: 20px"
               @click="$emit('remove', index)"
             >
               <v-icon size="14">mdi-close</v-icon>
@@ -49,12 +49,11 @@
             v-model="checklist.fieldOneTitle"
             variant="solo"
             density="compact"
-            class="mb-1 input-bordered"
+            class="mb-1 input-bordered align-content-center"
             bg-color="white"
             flat
             single-line
             hide-details
-
           ></v-text-field>
         </v-col>
         <v-col cols="4">
@@ -68,11 +67,10 @@
             flat
             single-line
             hide-details
-
           ></v-text-field>
         </v-col>
       </v-row>
-      <div class="d-flex align-center flex-wrap" style="gap: 12px;">
+      <div class="d-flex align-center flex-wrap" style="gap: 12px">
         <v-checkbox
           v-model="checklist.showDate"
           color="primary"
@@ -103,25 +101,34 @@
 <script setup>
 const { checklist, index } = defineProps({
   checklist: Object,
-  index: Number
+  index: Number,
 });
-const emit = defineEmits(['remove']);
+const emit = defineEmits(["remove"]);
 </script>
 <style lang="scss" scoped>
 .input-bordered :deep(.v-field) {
-  border: 1px solid #DFDFDF !important;
+  border: 1px solid #dfdfdf !important;
   border-radius: 12px !important;
   background-color: white !important;
   min-height: 52px;
   font-size: 14px;
-  
 }
 .fld-lbl {
   color: #737373;
 }
 /* Target the actual checkbox box (the square) */
 :deep(.v-checkbox .v-selection-control__input .v-icon) {
-  color: #DBDBDB !important; // sets the stroke/border color for unchecked state
+  color: #dbdbdb !important; // sets the stroke/border color for unchecked state
 }
-
+/* Ensure text-field height and vertical centering at 52px */
+.input-bordered :deep(.v-field) {
+  --v-input-control-height: 52px;
+}
+.input-bordered :deep(.v-field--single-line .v-field__input) {
+  min-height: 52px;
+}
+.input-bordered :deep(.v-field--single-line .v-field__input input) {
+  height: 52px;
+  line-height: 52px;
+}
 </style>
