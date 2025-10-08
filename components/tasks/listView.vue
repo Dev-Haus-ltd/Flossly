@@ -592,7 +592,7 @@
       :roles="rolesList"
       :users="users"
       @close="bulkTaskUploadDialog = false"
-      @onUpdate="updateTasks"
+      @onUpdate="updateTasks" 
     />
   </div>
 </template>

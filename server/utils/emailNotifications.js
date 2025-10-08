@@ -480,7 +480,7 @@ export const customerSuccessCheckIn = async (data) => {
 // tasks and workflow notifications
 // USER NOTIFICATIONS
 
-export const sendTaskAssignmentEmail = async (data) => {
+export const sendTaskAssignmentEmail = async (data) => { 
   await transporter.sendMail({
     from: "Flossly <helloflossly@gmail.com>",
     to: [data.email],
@@ -488,7 +488,7 @@ export const sendTaskAssignmentEmail = async (data) => {
     html: `
       <html>
         <body>
-          <p>Dear ${data.fullName},</p>
+          <p>Dear ${data.name},</p>
           <br/>
           <p>We would like to inform you that a new task has been assigned to you:</p>
           <p><strong>Task:</strong> ${data.taskTitle}</p>

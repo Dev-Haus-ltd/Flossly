@@ -86,7 +86,7 @@ const props = defineProps({
   users: Array,
 });
 
-const emit = defineEmits(["update:modelValue"]);
+const emit = defineEmits(["update:modelValue","onUpdate"]);
 const excelError = ref(null);
 const isOpen = ref(props.modelValue);
 const uploadedFiles = ref([]);
@@ -258,16 +258,20 @@ const uploadBulkTask = async (tasks) => {
       type: "Success",
       title: `All ${successCount} tasks uploaded successfully ✅`,
     });
+    emit("onUpdate");
+    close();
   } else if (successCount && failCount) {
     mainStore.setSnackbar({
       type: "Warning",
       title: `${successCount} tasks uploaded, ${failCount} failed ⚠️`,
     });
+    emit("onUpdate");
   } else {
     mainStore.setSnackbar({
       type: "Error",
       title: "All task uploads failed ❌",
     });
+
   }
 
   return results;
