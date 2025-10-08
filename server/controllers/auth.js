@@ -51,7 +51,7 @@ export const login = async (event) => {
   });
   if (userPreference && userPreference.licenseRenewalDate) {
     const renewalDate = new Date(userPreference.licenseRenewalDate);
-    if (renewalDate < new Date()) {
+    if (renewalDate < new Date() && userPreference.licenseType === "Trial") {
       return error(401, "License Expired");
     }
   }
@@ -320,7 +320,7 @@ export const updatePassword = async (event) => {
 
 export const switchOrgnanisation = async (event) => {
   const body = await readBody(event);
-  const { orgId }= JSON.parse(body)
+  const { orgId } = JSON.parse(body);
   const user = event.context.user;
   try {
     const record = await UserOrganisation.findOne({
@@ -377,6 +377,7 @@ export const verifyEmail = async (event) => {
         }));
         await UserTask.bulkCreate(userTasks);
         await assignDefaultHRDocsToUser(user.id);
+        await portalReadyTrainingInvite(user);
       }
       return success("Email Verified");
     } else {
@@ -538,7 +539,8 @@ export const acceptInvitation = async (event) => {
     await user.save();
     await assignDefaultTasksToUser(user, userOrg.organisationId);
     await assignDefaultHRDocsToUser(user.id);
-    await sendOnBoardingMail(user);
+    await accountCreationNotification(user);
+    await portalReadyTrainingInvite(user);
     const token = jwt.sign(
       { userId: user.id, orgId: userOrg.organisationId, roleId: user.roleId },
       config.JWT_SECRET
