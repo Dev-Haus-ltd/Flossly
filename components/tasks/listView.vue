@@ -92,12 +92,24 @@
           variant="flat"
           rounded="lg"
           @click="taskPoolDialog = true"
-          class="add-task-btn mr-2"
+          class="add-task-btn"
         >
           <template #prepend>
             <v-icon size="18">mdi-checkbox-marked-outline</v-icon>
           </template>
           Tasks Pool
+        </v-btn>
+           <v-btn
+          color="secondary"
+          variant="flat"
+          rounded="lg"
+          @click="bulkTaskUploadDialog = true"
+          class="add-task-btn mx-2"
+        >
+          <template #prepend>
+            <v-icon size="18">mdi-upload</v-icon>
+          </template>
+         Upload bulk tasks
         </v-btn>
         <v-btn
           color="primary"
@@ -563,7 +575,7 @@
       @save="updateTaskInfo"
     />
 
-    <TasksAddTask
+    <TasksAddTask 
       v-model="drawerOpen"
       @close="drawerOpen = false"
       @success="updateTasks"
@@ -571,6 +583,15 @@
     <TasksTaskPoolDialog
       :model-value="taskPoolDialog"
       @close="taskPoolDialog = false"
+      @onUpdate="updateTasks"
+    />
+    <TasksBulkTaskUploadDialog
+      v-model="bulkTaskUploadDialog"
+      :categories="categories"
+      :priorities="priorities"
+      :roles="rolesList"
+      :users="users"
+      @close="bulkTaskUploadDialog = false"
       @onUpdate="updateTasks"
     />
   </div>
@@ -668,7 +689,22 @@ const dialogOpen = ref(false);
 const taskPoolDialog = ref(false);
 const isAllSelected = ref(false);
 const tasksForCalender = ref([]);
+const bulkTaskUploadDialog=ref(false);
+const rolesList=ref([])
+const getRoles = () => {
+  mainStore
+    .getRoles()
+    .then((res) => {
+      if (res.code === 0 && res.data) {
+        rolesList.value = res.data;
+      }
+    })
+    .catch((err) => {
+      return err;
+    });
+};
 onMounted(() => {
+  getRoles();
   selectedHeaders.value = sortHeaders(headers);
   statuses.value = orgStatuses;
   priorityStatuses.value = priorities;

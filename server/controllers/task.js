@@ -102,7 +102,13 @@ export const addTaskCategory = async (event) => {
   const { name, description, parentId, color } = JSON.parse(body);
   if (!name) return error(400, "Name required");
   try {
-    const cat = await TaskCategory.findOne({ where: { name } });
+    const cat = await TaskCategory.findOne({
+      where: {
+        name: {
+          [Op.iLike]: name, // case-insensitive match
+        },
+      },
+    });
     if (cat)
       throw createError({ message: `Category ${name} is already added` });
     await TaskCategory.create({ name, description, parentId, color });

@@ -31,7 +31,7 @@ const props = defineProps({
   checked: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['update:checked'])
+const emit = defineEmits(['checked'])
 
 const hover = ref(false)
 const localChecked = ref(props.checked)
@@ -42,8 +42,11 @@ watch(
 )
 
 watch(localChecked, (val) => {
-  emit('update:checked', val)
+ // Child
+emit('checked', { id: props.id, checked: val })
+
 })
+
 </script>
 <style scoped>
 .checklist-row {
