@@ -256,20 +256,20 @@ const uploadBulkTask = async (tasks) => {
   if (successCount && !failCount) {
     mainStore.setSnackbar({
       type: "Success",
-      title: `All ${successCount} tasks uploaded successfully ✅`,
+      title: `All ${successCount} tasks uploaded successfully`,
     });
     emit("onUpdate");
     close();
   } else if (successCount && failCount) {
     mainStore.setSnackbar({
       type: "Warning",
-      title: `${successCount} tasks uploaded, ${failCount} failed ⚠️`,
+      title: `${successCount} tasks uploaded, ${failCount} failed`,
     });
     emit("onUpdate");
   } else {
     mainStore.setSnackbar({
       type: "Error",
-      title: "All task uploads failed ❌",
+      title: "All task uploads failed",
     });
 
   }
