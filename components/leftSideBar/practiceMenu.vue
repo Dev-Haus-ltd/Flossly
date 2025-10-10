@@ -14,7 +14,7 @@
       offset-y
     >
       <template #activator="{ props }">
-        <v-btn v-bind="props" icon flat>
+        <v-btn v-bind="props" icon flat color="#f3f4f6">
           <div class="d-flex flex-column align-center justify-center">
             <v-icon size="16">mdi-chevron-up</v-icon>
             <v-icon size="16">mdi-chevron-down</v-icon>
@@ -47,8 +47,11 @@ const { currentOrg, rail } = defineProps({
 });
 const authStore = useAuthStore();
 const mainStore = useMainStore();
-const { user } = useUser();
+const user = ref({});
 const menu = ref(false);
+onMounted(() => {
+  user.value = JSON.parse(localStorage.getItem("user"));
+});
 const handleOrgClick = async (org) => {
   try {
     const res = await authStore.switchOrgnanisation({ orgId: org.id });
@@ -59,6 +62,7 @@ const handleOrgClick = async (org) => {
         title: "Organisation switched successfully",
       });
       menu.value = false;
+      getProfile();
     } else {
       mainStore.setSnackbar({
         type: "error",
@@ -72,6 +76,16 @@ const handleOrgClick = async (org) => {
       title: err.message || "An error occurred while switching organisation",
     });
   }
+};
+
+const getProfile = () => {
+  authStore.profile().then((res) => {
+    if (res.code === 0) {
+      const user = res.data;
+      localStorage.setItem("user", JSON.stringify(user));
+      window.location.reload();
+    }
+  });
 };
 </script>
 
@@ -95,7 +109,6 @@ const handleOrgClick = async (org) => {
   align-items: center;
 }
 .title-text {
-  
   font-weight: 500;
   font-style: Medium;
   font-size: 12px;

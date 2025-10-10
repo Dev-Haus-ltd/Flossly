@@ -15,6 +15,7 @@ import {
   UserPoint,
   UserContract,
   UserHrDocument,
+  UserPointsHistory,
 } from "../models";
 import { generateOTP, generateVerificationLink } from "../utils/misc";
 import bcrypt from "bcrypt";
@@ -331,6 +332,8 @@ export const switchOrgnanisation = async (event) => {
       { userId: user.userId, roleId: user.roleId, orgId },
       config.JWT_SECRET
     );
+
+    setCookie(event, "accessToken", newToken, { maxAge: 31536000 });
     return success(newToken);
   } catch (err) {
     return error(500, err);
@@ -683,7 +686,29 @@ export const addUserHrDoc = async (event) => {
     userDoc.uploadedDate = new Date();
     userDoc.status = "Completed";
     await userDoc.save();
-    // add reward points
+    await UserPointsHistory.create({
+      userId,
+      rewardPointId: 7,
+      points: 50,
+      description: name,
+    });
+    const userPoints = await UserPoint.findOne({
+      where: { userId },
+    });
+    if (!userPoints) {
+      await UserPoint.create({
+        userId,
+        balance: 50,
+        totalPointsRewarded: 50,
+        redeemed: 0,
+      });
+    }
+    if (userPoints) {
+      userPoints.balance += 50;
+      userPoints.totalPointsRewarded += 50;
+      await userPoints.save();
+    }
+    // Notification
     return success("Added");
   } catch (err) {
     return error(500, err.message);

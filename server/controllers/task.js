@@ -18,6 +18,8 @@ import {
   UserTaskAttachment,
   TaskChecklist,
   UserTaskChecklist,
+  UserPointsHistory,
+  UserPoint,
 } from "../models";
 export const listMyTasks = async (event) => {
   const loggedUser = event.context.user;
@@ -207,6 +209,12 @@ export const assignBulkTasks = async (event) => {
       })
       .filter(Boolean);
     await UserTask.bulkCreate(userTasks);
+    const user = await User.findOne({ where: { id: userId } });
+    await sendTaskAssignmentEmail({
+      email: user.email,
+      name: user.fullName,
+      taskTitle: userTasks.length === 1 ? userTasks[0].title : "Bulk Tasks",
+    });
     return success(userTasks);
     //TODO: Send new task assigned email
   } catch (err) {
@@ -317,6 +325,43 @@ export const updateTask = async (event) => {
       if (comments) userTask.comments = comments;
       if (documentLink) userTask.documentLink = documentLink;
       await userTask.save();
+      if (
+        statusId &&
+        orgStatuses.find((x) => x.id === statusId)?.key === "completed"
+      ) {
+        const user = await User.findOne({ where: { id: loggedUser.userId } });
+        await taskCompletedNotification({
+          fullName: user.fullName,
+          task: userTask.title,
+        });
+        if (
+          priorityId &&
+          orgPriorities.find((x) => x.id === priorityId)?.key === "critical"
+        ) {
+          await UserPointsHistory.create({
+            userId: loggedUser.userId,
+            rewardPointId: 4,
+            points: 10,
+            description: userTask.title,
+          });
+          const userPoints = await UserPoint.findOne({
+            where: { userId: loggedUser.userId },
+          });
+          if (!userPoints) {
+            await UserPoint.create({
+              userId: loggedUser.userId,
+              balance: 10,
+              totalPointsRewarded: 10,
+              redeemed: 0,
+            });
+          }
+          if (userPoints) {
+            userPoints.balance += 10;
+            userPoints.totalPointsRewarded += 10;
+            await userPoints.save();
+          }
+        }
+      }
     } else if (!id && taskId) {
       if (assignedUsers && assignedUsers.length) {
         assignedUsers.forEach(async (el) => {
@@ -421,6 +466,12 @@ export const completeBulkTasks = async (event) => {
         },
       }
     );
+    const user = await User.findOne({ where: { id: loggedUser.userId }})
+    await taskCompletedNotification({
+      fullName: user.fullName,
+      email: user.email,
+      task: 'Multiple',
+    });
     // add reward points
     return success("All tasks compeleted successfully.");
   } catch (err) {
@@ -1133,8 +1184,20 @@ export const getCategoriesforPool = async (event) => {
 export const myTasksCountByCategory = async (event) => {
   try {
     const loggedUser = event.context.user;
-    const results = await UserTask.findAll({
-      where: { userId: loggedUser.userId, organisationId: loggedUser.orgId },
+    const allCategories = await TaskCategory.findAll({
+      where: { isDeleted: false },
+      attributes: ["id", "name", "color", "parentId"],
+      raw: true,
+    });
+
+    const categoryMap = new Map();
+    allCategories.forEach((cat) => categoryMap.set(cat.id, cat));
+
+    const userTasks = await UserTask.findAll({
+      where: {
+        userId: loggedUser.userId,
+        organisationId: loggedUser.orgId,
+      },
       include: [
         {
           model: Task,
@@ -1144,51 +1207,61 @@ export const myTasksCountByCategory = async (event) => {
               model: TaskCategory,
               as: "category",
               where: { isDeleted: false },
-              attributes: ["id", "name", "color", "parentId"],
-              include: [
-                {
-                  model: TaskCategory,
-                  as: "parent",
-                  where: { isDeleted: false },
-                  attributes: ["id", "name", "color"],
-                },
-              ],
+              attributes: ["id", "parentId"],
             },
           ],
         },
       ],
+      raw: true,
+      nest: true,
     });
+    const parentCounts = {};
 
-    const countsMap = new Map();
+    for (const task of userTasks) {
+      const cat = task.taskDetails?.category;
+      if (!cat) continue;
 
-    results.forEach((userTask) => {
-      const category = userTask.taskDetails?.category;
-      if (!category) return;
+      let currentCat = categoryMap.get(cat.id);
+      if (!currentCat) continue;
 
-      const target = category.parent || category;
-
-      if (!countsMap.has(target.id)) {
-        countsMap.set(target.id, {
-          categoryId: target.id,
-          categoryName: target.name,
-          color: target.color,
-          taskCount: 1,
-        });
-      } else {
-        countsMap.get(target.id).taskCount += 1;
+      while (currentCat.parentId) {
+        const parent = categoryMap.get(currentCat.parentId);
+        if (!parent) {
+          currentCat = null;
+          break;
+        }
+        currentCat = parent;
       }
-    });
-    return success(Array.from(countsMap.values()));
+      if (!currentCat) continue;
+      if (!parentCounts[currentCat.id]) {
+        parentCounts[currentCat.id] = {
+          categoryId: currentCat.id,
+          categoryName: currentCat.name,
+          color: currentCat.color,
+          taskCount: 0,
+        };
+      }
+      parentCounts[currentCat.id].taskCount += 1;
+    }
+    return success(Object.values(parentCounts));
   } catch (err) {
-    console.log(err);
-    return error(500, err.message);
+    console.error(err);
+    return error("Something went wrong while counting tasks.");
   }
 };
 
 export const teamTasksCountByCategory = async (event) => {
   try {
     const loggedUser = event.context.user;
-    const results = await UserTask.findAll({
+    const allCategories = await TaskCategory.findAll({
+      where: { isDeleted: false },
+      attributes: ["id", "name", "color", "parentId"],
+      raw: true,
+    });
+
+    const categoryMap = new Map();
+    allCategories.forEach((cat) => categoryMap.set(cat.id, cat));
+    const teamTasks = await UserTask.findAll({
       where: { organisationId: loggedUser.orgId },
       include: [
         {
@@ -1199,45 +1272,54 @@ export const teamTasksCountByCategory = async (event) => {
               model: TaskCategory,
               as: "category",
               where: { isDeleted: false },
-              attributes: ["id", "name", "color", "parentId"],
-              include: [
-                {
-                  model: TaskCategory,
-                  as: "parent",
-                  where: { isDeleted: false },
-                  attributes: ["id", "name", "color"],
-                },
-              ],
+              attributes: ["id", "parentId"],
             },
           ],
         },
       ],
+      raw: true,
+      nest: true,
     });
+    const parentCounts = {};
 
-    const countsMap = new Map();
+    for (const task of teamTasks) {
+      const cat = task.taskDetails?.category;
+      if (!cat) continue;
 
-    results.forEach((userTask) => {
-      const category = userTask.taskDetails?.category;
-      if (!category) return;
+      // Start from current category
+      let currentCat = categoryMap.get(cat.id);
+      if (!currentCat) continue; // skip deleted or missing
 
-      const target = category.parent || category;
-
-      if (!countsMap.has(target.id)) {
-        countsMap.set(target.id, {
-          categoryId: target.id,
-          categoryName: target.name,
-          color: target.color,
-          taskCount: 1,
-        });
-      } else {
-        countsMap.get(target.id).taskCount += 1;
+      // Climb up to top-level parent
+      while (currentCat.parentId) {
+        const parent = categoryMap.get(currentCat.parentId);
+        if (!parent) {
+          currentCat = null; // parent missing/deleted
+          break;
+        }
+        currentCat = parent;
       }
-    });
-    return success(Array.from(countsMap.values()));
+
+      if (!currentCat) continue;
+
+      // Add or increment count for top-level category
+      if (!parentCounts[currentCat.id]) {
+        parentCounts[currentCat.id] = {
+          categoryId: currentCat.id,
+          categoryName: currentCat.name,
+          color: currentCat.color,
+          taskCount: 0,
+        };
+      }
+
+      parentCounts[currentCat.id].taskCount += 1;
+    }
+    return success(Object.values(parentCounts));
   } catch (err) {
     return error(500, err.message);
   }
 };
+
 export const getUserTasksStatusWise = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);

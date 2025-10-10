@@ -47,12 +47,14 @@ watch(
   { immediate: true } 
 )
 const user = ref(null);
+const { setUser } = useUser();
 const mainStore = useMainStore();
 const router = useRouter()
 const menuItems = ref([]);
 onMounted(() => {
   if (localStorage.getItem("user")) {
     user.value = JSON.parse(localStorage.getItem("user"));
+    setUser(user.value)
     if (user.value.roleId === 8 || user.value.roleId === 1) {
       menuItems.value = mainStore.getManagerOptions;
     } else {

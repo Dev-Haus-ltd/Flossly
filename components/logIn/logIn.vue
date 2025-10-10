@@ -164,6 +164,7 @@
 </template>
 
 <script setup>
+const { setUser } = useUser()
 const initialPage = ref(true);
 const credentials = ref({
   email: "",
@@ -227,6 +228,7 @@ const getProfile = () => {
     .then((res) => {
       if (res.code === 0) {
         const user = res.data;
+        setUser(user)
         localStorage.setItem("user", JSON.stringify(user));
         store.setSnackbar({
           title: "Login Successful",
