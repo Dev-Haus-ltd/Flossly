@@ -86,7 +86,7 @@ const props = defineProps({
   users: Array,
 });
 
-const emit = defineEmits(["update:modelValue","onUpdate"]);
+const emit = defineEmits(["update:modelValue", "onUpdate"]);
 const excelError = ref(null);
 const isOpen = ref(props.modelValue);
 const uploadedFiles = ref([]);
@@ -199,29 +199,25 @@ const uploadTasks = async () => {
   reader.readAsArrayBuffer(file);
 };
 
-
 const uploadBulkTask = async (tasks) => {
   try {
     // ✅ Send tasks in correct format
     const res = await taskStore.addBulkTasks({ tasks });
 
-
-
     // ✅ On success, refresh and close modal
     if (res.code === 0) {
       emit("onUpdate");
       close();
-          // ✅ Show API message
-    mainStore.setSnackbar({
-      type:  "Success",
-      title: res.message || "Bulk upload completed",
-    });
-    } else{
-       
-    mainStore.setSnackbar({
-      type: "Error",
-      title: res.message || "Failed to upload tasks",
-    });
+      // ✅ Show API message
+      mainStore.setSnackbar({
+        type: "Success",
+        title: res.message || "Bulk upload completed",
+      });
+    } else {
+      mainStore.setSnackbar({
+        type: "Error",
+        title: res.message || "Failed to upload tasks",
+      });
     }
   } catch (err) {
     console.error(" Bulk upload error:", err);
