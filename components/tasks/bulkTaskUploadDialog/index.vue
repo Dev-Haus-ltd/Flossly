@@ -24,7 +24,7 @@
 
       <!-- Upload area -->
       <div class="pa-5">
-        <CommonFileUpload 
+        <CommonFileUpload
           @onFiles="getFiles"
           :isSingle="true"
           ref="fileUploader"
@@ -59,15 +59,23 @@
           text
           @click="close"
           style="font-weight: 500; text-transform: none"
-         
         >
           Cancel
         </v-btn>
         <v-btn
+          color="secondary"
+          style="font-weight: 500; text-transform: none"
+          variant="flat"
+          @click="downloadSample"
+        >
+          Download sample
+        </v-btn>
+        <v-btn
           color="primary"
           @click="uploadTasks"
-          class="mx-3"
+          class="mr-3"
           style="font-weight: 500; text-transform: none"
+          variant="flat"
         >
           Upload Tasks
         </v-btn>
@@ -234,6 +242,12 @@ const close = () => {
   fileUploader.value?.clearFiles?.();
   uploadedFiles.value = [];
   isOpen.value = false;
+};
+const downloadSample = () => {
+  const link = document.createElement("a");
+  link.href = "/samples/task-sample.xlsx"; // since it's in /public
+  link.download = "sample.xlsx"; // optional, forces download name
+  link.click();
 };
 </script>
 
