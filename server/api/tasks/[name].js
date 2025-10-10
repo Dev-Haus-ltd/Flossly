@@ -5,6 +5,7 @@ import {
   assignBulkTasks,
   bulkUploadTasks,
   createNewTask,
+  uploadBulkTasks,
   createUserTaskChecklist,
   deleteTaskChecklist,
   deleteUserTaskChecklist,
@@ -52,7 +53,9 @@ export default defineEventHandler(async (event) => {
     case "addAttachments":
       return await addAttachments(event);
     case "addNewTask":
-      return await createNewTask(event);
+      return await createNewTask(event); 
+    case "addBulkTasks":
+      return await uploadBulkTasks(event);
     case "teamTaskCounts":
       return await teamTasksCounts(event);
     case "createChecklist":

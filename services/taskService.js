@@ -33,6 +33,17 @@ export default {
         });
     });
   },
+    addBulkTasks(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/addBulkTasks", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
   getMyTeamTasks() {
     return new Promise((resolve, reject) => {
       Get("/tasks/teamTasks")

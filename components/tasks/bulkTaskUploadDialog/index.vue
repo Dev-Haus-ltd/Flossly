@@ -198,85 +198,39 @@ const uploadTasks = async () => {
 
   reader.readAsArrayBuffer(file);
 };
+
+
 const uploadBulkTask = async (tasks) => {
-  if (!Array.isArray(tasks) || !tasks.length) {
-    console.warn("⚠️ No tasks to upload.");
+  try {
+    // ✅ Send tasks in correct format
+    const res = await taskStore.addBulkTasks({ tasks });
+
+
+
+    // ✅ On success, refresh and close modal
+    if (res.code === 0) {
+      emit("onUpdate");
+      close();
+          // ✅ Show API message
+    mainStore.setSnackbar({
+      type:  "Success",
+      title: res.message || "Bulk upload completed",
+    });
+    } else{
+       
     mainStore.setSnackbar({
       type: "Error",
-      title: "No tasks to upload.",
+      title: res.message || "Failed to upload tasks",
     });
-    return;
-  }
-
-  console.log(`📦 Uploading ${tasks.length} tasks...`);
-  const results = [];
-
-  for (const [index, task] of tasks.entries()) {
-    try {
-      console.log(
-        `🚀 Uploading task ${index + 1}/${tasks.length}:`,
-        task.title
-      );
-
-      const res = await taskStore.addNewTask(task);
-
-      if (res.code === 0) {
-        mainStore.setSnackbar({
-          type: "Success",
-          title: `Task ${index + 1}: Added successfully`,
-        });
-        results.push({ task, status: "success" });
-      } else {
-        mainStore.setSnackbar({
-          type: "Error",
-          title: res.data?.message || res.message || "Unknown error",
-        });
-        results.push({
-          task,
-          status: "failed",
-          message: res.data?.message || res.message,
-        });
-      }
-    } catch (err) {
-      console.error(`❌ Error uploading task ${index + 1}:`, err);
-      mainStore.setSnackbar({
-        type: "Error",
-        title: err.message || "Task upload failed",
-      });
-      results.push({ task, status: "error", message: err.message });
     }
-  }
-
-  console.log("📊 Bulk upload completed:", results);
-
-  // Optional: summary snackbar
-  const successCount = results.filter((r) => r.status === "success").length;
-  const failCount = results.length - successCount;
-
-  if (successCount && !failCount) {
-    mainStore.setSnackbar({
-      type: "Success",
-      title: `All ${successCount} tasks uploaded successfully`,
-    });
-    emit("onUpdate");
-    close();
-  } else if (successCount && failCount) {
-    mainStore.setSnackbar({
-      type: "Warning",
-      title: `${successCount} tasks uploaded, ${failCount} failed`,
-    });
-    emit("onUpdate");
-  } else {
+  } catch (err) {
+    console.error(" Bulk upload error:", err);
     mainStore.setSnackbar({
       type: "Error",
-      title: "All task uploads failed",
+      title: err.message || "Failed to upload tasks",
     });
-
   }
-
-  return results;
 };
-
 // Close dialog and reset
 const close = () => {
   fileUploader.value?.clearFiles?.();

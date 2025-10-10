@@ -602,6 +602,139 @@ export const createNewTask = async (event) => {
     return error(500, err);
   }
 };
+export const uploadBulkTasks = async (event) => {
+  const loggedUser = event.context.user;
+  const body = await readBody(event);
+  const { tasks } = JSON.parse(body);
+
+  if (!Array.isArray(tasks) || !tasks.length) {
+    throw createError({ message: "No tasks provided" });
+  }
+
+  const results = [];
+
+  for (const [index, t] of tasks.entries()) {
+    const {
+      title,
+      description,
+      roleId,
+      categoryId,
+      defaultFrequency,
+      userId,
+      priorityId,
+      checklist,
+      dueDate,
+    } = t;
+
+    if (!title || !categoryId) {
+      results.push({
+        index,
+        title,
+        status: "failed",
+        message: "Required fields missing",
+      });
+      continue;
+    }
+
+    const transaction = await DB.transaction();
+    try {
+      // --- 1️⃣ Create Task ---
+      const newTask = {
+        title,
+        description,
+        roleId,
+        categoryId,
+        defaultFrequency: defaultFrequency || null,
+      };
+      const task = await Task.create(newTask, { transaction });
+
+      // --- 2️⃣ Create Task Checklist (if any) ---
+      if (checklist?.length) {
+        const checklistData = checklist.map((item) => ({
+          taskId: task.id,
+          question: item.question,
+          category: item.category,
+          showRadio: item.showRadio,
+          showDate: item.showDate,
+          showTime: item.showTime,
+          fieldOneTitle: item.fieldOneTitle,
+          fieldTwoTitle: item.fieldTwoTitle,
+          radioValue: "N/A",
+        }));
+        await TaskChecklist.bulkCreate(checklistData, { transaction });
+      }
+
+      // --- 3️⃣ Assign Task to User (if provided) ---
+      if (userId) {
+        const orgStatuses = await OrganisationStatus.findAll({
+          where: { organisationId: loggedUser.orgId },
+        });
+
+        const newUserTask = {
+          userId,
+          organisationId: loggedUser.orgId,
+          dueDate,
+          taskId: task.id,
+          title,
+          documentLink: "",
+          frequency: defaultFrequency || null,
+          priorityId,
+          statusId: orgStatuses.find((x) => x.key === "progress").id,
+          asignedBy: loggedUser.userId,
+        };
+
+        const userTask = await UserTask.create(newUserTask, { transaction });
+        const user = await User.findByPk(userId);
+
+        // --- 4️⃣ Send notification email ---
+        if (user?.email) {
+          await sendTaskAssignmentEmail({
+            email: user.email,
+            name: user.fullName,
+            taskTitle: title,
+          });
+        }
+
+        // --- 5️⃣ Create UserTask Checklist (if any) ---
+        if (checklist?.length) {
+          const checklistData = checklist.map((item) => ({
+            userTaskId: userTask.id,
+            question: item.question,
+            category: item.category,
+            showRadio: item.showRadio,
+            showDate: item.showDate,
+            showTime: item.showTime,
+            fieldOneTitle: item.fieldOneTitle,
+            fieldTwoTitle: item.fieldTwoTitle,
+            radioValue: "N/A",
+          }));
+          await UserTaskChecklist.bulkCreate(checklistData, { transaction });
+        }
+      }
+
+      await transaction.commit();
+      results.push({ index, title, status: "success" });
+    } catch (err) {
+      console.error(`❌ Error creating task at index ${index}:`, err);
+      await transaction.rollback();
+      results.push({
+        index,
+        title,
+        status: "failed",
+        message: err.message,
+      });
+    }
+  }
+
+  const successCount = results.filter((r) => r.status === "success").length;
+  const failCount = results.length - successCount;
+
+  return {
+    code: 0,
+    message: `${successCount} tasks added successfully, ${failCount} failed`,
+    results,
+  };
+};
 
 export const teamTasksCounts = async (event) => {
   const loggedUser = event.context.user;

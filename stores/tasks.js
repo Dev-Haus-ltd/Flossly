@@ -47,7 +47,22 @@ export const useTaskStore = defineStore("taskStore", {
         this.isLoading = true;
         taskService
           .addNewTask(data)
-          .then((res) => {
+          .then((res) => { 
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    addBulkTasks(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        taskService
+          .addBulkTasks(data)
+          .then((res) => { 
             this.isLoading = false;
             resolve(res);
           })
