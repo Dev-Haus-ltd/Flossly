@@ -5,6 +5,7 @@ import {
   updateAllowedLeaves,
   updateBankDetails,
   updateContractDetails,
+  updateLeaveStatus,
   updateUserPreferences,
   userAcrossOrgs,
   userDetails,
@@ -22,7 +23,7 @@ export default defineEventHandler(async (event) => {
     case "getDetails":
       return await userDetails(event);
     case "updateContract":
-      return await updateContractDetails(event); 
+      return await updateContractDetails(event);
     case "updateAccount":
       return await updateBankDetails(event);
     case "leaveHistory":
@@ -32,7 +33,9 @@ export default defineEventHandler(async (event) => {
     case "updateLeaveEntitlement":
       return await updateAllowedLeaves(event);
     case "teamLeaves":
-      return await allusersLeavesHistory(event)
+      return await allusersLeavesHistory(event);
+    case "updateLeave":
+      return await updateLeaveStatus(event);
     default:
       return { code: 0, error: "Not found" };
   }

@@ -162,5 +162,20 @@ export const useUserStore = defineStore("userStore", {
           });
       });
     },
+    updateLeaveStatus(data) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        userService
+          .updateLeaveStatus(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
   },
 });
