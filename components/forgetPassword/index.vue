@@ -23,7 +23,7 @@
 
             <!-- Step 1: Email -->
             <v-form v-if="step === 1" ref="form" @submit.prevent="submitEmail">
-              <v-label>Email</v-label>
+              <v-label class="lbl">Email</v-label>
               <v-text-field
                 v-model="email"
                 label="Email"
@@ -33,8 +33,7 @@
                 variant="solo"
                 single-line
                 required
-                class="mb-4 input-bordered"
-                
+                class="mb-2 input-bordered"
                 flat
               />
               <v-btn
@@ -51,7 +50,7 @@
 
             <!-- Step 2: Reset -->
             <v-form v-else ref="form" @submit.prevent="submitReset">
-              <v-label>New Password</v-label>
+              <v-label class="lbl">New Password</v-label>
               <v-text-field
                 v-model="newPassword"
                 label="New Password"
@@ -64,6 +63,7 @@
                 class="input-bordered"
                 single-line
                 density="comfortable"
+                flat
               />
 
               <v-label>Enter OTP</v-label>
@@ -78,14 +78,16 @@
                 type="submit"
                 color="primary"
                 block
-                class="mt-2 rounded-lg"
+                variant="flat"
+                class="mt-5 rounded-lg"
+                height="48"
                 :disabled="otp.length < 6"
               >
                 Reset Password
               </v-btn>
             </v-form>
 
-            <div class="mt-4 text-body-2 text-center">
+            <div class="mt-5 text-body-2 text-center" style="height: 48px">
               <v-btn variant="text" color="primary" @click="goToLogin">
                 Back to Login
               </v-btn>
@@ -93,7 +95,7 @@
           </div>
         </v-col>
           <!-- Right side form -->
-          <v-col cols="12" md="6" class="d-flex align-center justify-center pa-0">
+          <v-col v-if="mdAndUp" cols="12" md="6" class="d-flex align-center justify-center pa-0">
         <div class="px-4 w-100">
           <div
             class="background-image relative d-flex align-center justify-center"
@@ -137,7 +139,9 @@
 
 <script setup>
 import { useRouter } from "vue-router";
+import { useDisplay } from 'vuetify';
 
+const { mdAndUp } = useDisplay();
 const authStore = useAuthStore();
 const store = useMainStore(); // ✅ main snackbar store
 const router = useRouter();
@@ -285,5 +289,12 @@ const goToLogin = () => {
   min-height: 40px;
   font-size: 14px;
   
+}
+.lbl {
+  font-family: "Inter";
+  font-weight: 400;
+  font-style: "Regular";
+  font-size: 16px;
+  color: #1e1e1e;
 }
 </style>

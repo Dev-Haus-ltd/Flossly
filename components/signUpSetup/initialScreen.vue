@@ -1,15 +1,19 @@
 <template>
   <div class="init-page bg-secondary"> 
     <div class="water-mark"></div>
-    <div class="init-pg-content">
+    <div class="init-pg-content" :style="{ padding: smAndDown ? '0 20px' : '0' }">
       <div class="text-center">
         <img
           src="/assets/logos/signupSetupScreen/init-logo.svg"
           class="mx-auto h-20 w-20"
+          :style="{
+            width: smAndDown ? '70%' : mdAndUp && !lgAndUp ? '50%' : '33.33%',
+            maxWidth: smAndDown ? '280px' : mdAndUp && !lgAndUp ? '250px' : '220px'
+          }"
           alt=""
         />
-        <h2 class="init-title mt-2">Welcome to Flossly</h2>
-        <p class="init-sub-title mt-2">Let's tidy up your dental ops.</p>
+        <h2 class="init-title mt-2 text-h2 text-md-h3 text-sm-h4">Welcome to Flossly</h2>
+        <p class="init-sub-title mt-2 text-subtitle-1 text-sm-body-1">Let's tidy up your dental ops.</p>
         <div class="d-flex justify-center my-7">
           <v-btn
             class="button rounded-lg"
@@ -25,7 +29,7 @@
           >
         </div>
 
-        <h2 class="mt-5 init-info">
+        <h2 class="mt-5 init-info text-h4 text-md-h5 text-sm-h6">
           This setup takes 4-5 mins and gives your clinic a clean start.
         </h2>
       </div>
@@ -34,6 +38,8 @@
 </template>
 
 <script setup>
+import { useDisplay } from "vuetify";
+const { smAndDown, mdAndUp, lgAndUp } = useDisplay();
 const emit = defineEmits(["handle-init-screen"]);
 const handleScreen = () => {
   emit("handle-init-screen");
@@ -53,6 +59,8 @@ const handleScreen = () => {
   -ms-transform: translate(-50%, -50%);
   transform: translate(-50%, -50%);
   max-width: 800px;
+  width: 100%;
+  box-sizing: border-box;
 }
 .water-mark {
   background-image: url("/assets/logos/loginLogos/watermark.svg");
@@ -65,24 +73,18 @@ const handleScreen = () => {
 }
 .init-title {
   font-weight: 600;
-  font-size: 60px;
   line-height: 100%;
-  letter-spacing: 0%;
   color: #ffffff;
 }
 
 .init-sub-title {
   font-weight: 600;
-  font-size: 24px;
   line-height: 100%;
-  letter-spacing: 0%;
   color: #ffffff;
 }
 .init-info {
   font-weight: 600;
-  font-size: 40px;
   line-height: 100%;
-  letter-spacing: 0%;
   color: #ffffff;
 }
 .button {
