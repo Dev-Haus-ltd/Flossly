@@ -27,6 +27,11 @@ export default defineNuxtConfig({
     Stripe_PK: process.env.STRIPE_PK,
     Sripte_SK: process.env.STRIPE_SK,
     StripeWS: process.env.STRIPE_WS,
+    // Meta (Facebook) App Credentials
+    META_APP_ID: process.env.META_APP_ID,
+    META_APP_SECRET: process.env.META_APP_SECRET,
+    META_REDIRECT_URI: process.env.META_REDIRECT_URI,
+    META_VERIFY_TOKEN: process.env.META_VERIFY_TOKEN,
   },
   modules: [ 
     async (options, nuxt) => {

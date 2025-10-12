@@ -32,7 +32,9 @@ const publicPath = (path) => {
     "/api/auth/requestResetPassword",
     "/api/auth/resetPassword",
     "/api/auth/acceptInvitation",
-    "/api/misc/getRoles"
+    "/api/misc/getRoles",
+    "/api/meta/callback",
+    "/api/meta/webhook"
   ];
   return publicPaths.includes(path);
 };

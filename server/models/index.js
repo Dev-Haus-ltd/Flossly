@@ -44,6 +44,8 @@ import { Course } from "./cpd/course";
 import { CourseQuestionaire } from "./cpd/courseQuestionaire";
 import { UserCourseHistory } from "./cpd/userCourseHistory";
 import { OrganisationPeople } from "./organisations/organisationPeople";
+import { MetaPage } from "./crm/metaPages";
+import { CrmLead } from "./crm/leads";
 
 /* Relations and Associations */
 
@@ -398,6 +400,14 @@ OrganisationPeople.belongsTo(Organisation, {
   as: "organisation",
 });
 
+// CRM (Meta Integration) - basic associations
+MetaPage.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
+MetaPage.belongsTo(User, { foreignKey: 'userId', as: 'user' })
+Organisation.hasMany(MetaPage, { foreignKey: 'organisationId', as: 'metaPages' })
+
+CrmLead.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
+Organisation.hasMany(CrmLead, { foreignKey: 'organisationId', as: 'crmLeads' })
+
 // CPD Associations
 Course.hasMany(CourseQuestionaire, { foreignKey: "courseId", as: "questions" });
 CourseQuestionaire.belongsTo(Course, { foreignKey: "courseId", as: "course" });
@@ -463,4 +473,7 @@ export {
   Course,
   CourseQuestionaire,
   UserCourseHistory,
+  // CRM
+  MetaPage,
+  CrmLead,
 };

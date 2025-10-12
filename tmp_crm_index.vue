@@ -40,18 +40,18 @@
           />
         </div>
 
-        <!-- Right: Integrate Meta Button -->
+        <!-- Right: Add Button -->
         <v-btn
           color="primary"
           variant="flat"
           rounded="lg"
-          @click="integrateMeta"
+          @click="addLeadDrawer = true"
           class="add-task-btn"
         >
           <template #prepend>
-            <v-icon size="18">mdi-link-variant</v-icon>
+            <v-icon size="18">mdi-plus-circle-outline</v-icon>
           </template>
-          Integrate Meta
+          Add New Lead
         </v-btn>
       </div>
 
@@ -81,7 +81,6 @@
 </template>
 
 <script setup>
-import crmService from '@/services/crmService'
 const userStore = useUserStore();
 const userList = ref([]);
 const addLeadDrawer = ref(false);
@@ -203,7 +202,6 @@ const onSelect = (selection) => {
 };
 onMounted(() => {
   getUsers();
-  initLeads();
 });
 const getUsers = () => {
   userStore.getUserList({ roleId: null }).then((res) => {
@@ -213,37 +211,6 @@ const getUsers = () => {
 
 const updateLeads = (newLead) => {
   leads.value.push(newLead);
-};
-
-const route = useRoute();
-const initLeads = async () => {
-  if (route.query.meta === 'connected') {
-    try { await crmService.fetchLeadsNow(); } catch (e) {}
-  }
-  const res = await crmService.fetchLeads();
-  if (res && res.code === 0) {
-    leads.value = (res.data || []).map((l) => ({
-      alert: l.alert || '',
-      name: l.name || '',
-      email: l.email || '',
-      telephone: l.telephone || '',
-      inquiryDate: l.inquiryDate || '',
-      leadSource: l.leadSource || { id: 99, name: 'Meta Leadgen' },
-      leadStatus: l.leadStatus || 'New',
-      treatment: l.treatment || { id: null, name: '' },
-      assigned: l.assigned || [],
-      followUpDate: l.followUpDate || '',
-      comments: l.comments || '',
-      id: l.id,
-    }));
-  }
-};
-
-const integrateMeta = async () => {
-  const res = await crmService.startMetaAuth();
-  if (res && res.code === 0 && res.data?.url) {
-    window.location.href = res.data.url;
-  }
 };
 </script>
 
