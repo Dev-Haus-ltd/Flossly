@@ -2,7 +2,7 @@ import { CrmLead, MetaPage, Organisation, User } from '../models'
 import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
 
-const META_VERSION = 'v20.0'
+const META_VERSION = 'v24.0'
 
 const getRedirectUri = (config) => {
   // Prefer explicit META_REDIRECT_URI, else use public BASE_URL + api path
