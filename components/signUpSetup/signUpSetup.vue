@@ -34,7 +34,8 @@
       </v-btn>
 
       <v-btn 
-        color="primary" 
+        color="primary"
+        variant="flat" 
         height="48"
         width="100"
         class="nav-button"
@@ -66,6 +67,7 @@
         width="150"
         class="nav-button"
         rounded="lg" size="x-large"
+        variant="flat"
       >
         Go to Dashboard
       </v-btn>
