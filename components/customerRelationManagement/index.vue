@@ -40,19 +40,26 @@
           />
         </div>
 
-        <!-- Right: Integrate Meta Button -->
-        <v-btn
-          color="primary"
-          variant="flat"
-          rounded="lg"
-          @click="integrateMeta"
-          class="add-task-btn"
-        >
-          <template #prepend>
-            <v-icon size="18">mdi-link-variant</v-icon>
-          </template>
-          Integrate Meta App
-        </v-btn>
+        <!-- Right: Connection Controls -->
+        <div class="d-flex align-center" style="gap: 8px;">
+          <v-chip :color="isConnected ? 'green' : 'grey'" size="small" class="text-white" variant="flat">
+            {{ isConnected ? 'Meta Connected' : 'Not Connected' }}
+          </v-chip>
+          <v-btn size="small" variant="text" @click="fetchNow" :disabled="!isConnected">
+            <v-icon size="16" class="mr-1">mdi-refresh</v-icon> Fetch Leads Now
+          </v-btn>
+          <v-btn
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            @click="integrateMeta"
+          >
+            <template #prepend>
+              <v-icon size="18">mdi-link-variant</v-icon>
+            </template>
+            {{ isConnected ? 'Reconnect Meta' : 'Integrate Meta' }}
+          </v-btn>
+        </div>
       </div>
 
       <!-- List View (child) -->
@@ -86,33 +93,17 @@ const userStore = useUserStore();
 const userList = ref([]);
 const addLeadDrawer = ref(false);
 
-const leadStats = ref([
-  {
-    icon: "https://cdn.lordicon.com/asyunleq.json",
-    label: "Total Lead",
-    value: 10,
-  },
-  {
-    icon: "https://cdn.lordicon.com/kphwxuxr.json",
-    label: "New",
-    value: 2,
-  },
-  {
-    icon: "https://cdn.lordicon.com/qlpudrww.json",
-    label: "Converted",
-    value: 2,
-  },
-  {
-    icon: "https://cdn.lordicon.com/excswhey.json",
-    label: "Contacted",
-    value: 2,
-  },
-  {
-    icon: "https://cdn.lordicon.com/tzynxkwl.json",
-    label: "Lost",
-    value: 2,
-  },
-]);
+const leadStats = computed(() => {
+  const total = leads.value.length
+  const byStatus = (s) => leads.value.filter(l => (l.leadStatus || '').toLowerCase() === s).length
+  return [
+    { icon: 'https://cdn.lordicon.com/asyunleq.json', label: 'Total Lead', value: total },
+    { icon: 'https://cdn.lordicon.com/kphwxuxr.json', label: 'New', value: byStatus('new') },
+    { icon: 'https://cdn.lordicon.com/qlpudrww.json', label: 'Converted', value: byStatus('converted') },
+    { icon: 'https://cdn.lordicon.com/excswhey.json', label: 'Contacted', value: byStatus('contacted') },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Lost', value: byStatus('lost') },
+  ]
+})
 const search = ref("");
 
 const leads = ref([
@@ -204,6 +195,7 @@ const onSelect = (selection) => {
 onMounted(() => {
   getUsers();
   initLeads();
+  checkConnection();
 });
 const getUsers = () => {
   userStore.getUserList({ roleId: null }).then((res) => {
@@ -245,6 +237,25 @@ const integrateMeta = async () => {
     window.location.href = res.data.url;
   }
 };
+
+const isConnected = ref(false)
+const connection = ref({ count: 0, pages: [], lastConnectedAt: null })
+const checkConnection = async () => {
+  try {
+    const res = await crmService.connectionStatus()
+    if (res && res.code === 0) {
+      connection.value = res.data || { count: 0, pages: [] }
+      isConnected.value = (connection.value.count || 0) > 0
+    }
+  } catch (e) { isConnected.value = false }
+}
+
+const fetchNow = async () => {
+  try {
+    await crmService.fetchLeadsNow()
+    await initLeads()
+  } catch (e) {}
+}
 </script>
 
 <style scoped lang="scss">

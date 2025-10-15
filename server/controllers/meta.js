@@ -1,4 +1,4 @@
-import { CrmLead, MetaPage, Organisation, User } from '../models'
+import { CrmLead, MetaPage, Organisation, User, MetaUserToken } from '../models'
 import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
 
@@ -83,6 +83,22 @@ export const authCallback = async (event) => {
 
   // Ensure tables exist (non-destructive)
   try { await MetaPage.sync(); await CrmLead.sync(); } catch (_) {}
+
+  // Store/refresh the long-lived user token (encrypted)
+  try {
+    await MetaUserToken.sync()
+    const encUser = encrypt(userToken)
+    const expiresIn = Number(longResp?.expires_in || 0)
+    const expiry = expiresIn ? new Date(Date.now() + expiresIn * 1000) : null
+    const existingUserTok = await MetaUserToken.findOne({ where: { organisationId: orgId, userId } })
+    if (existingUserTok) {
+      existingUserTok.userTokenEnc = encUser
+      existingUserTok.expiresAt = expiry
+      await existingUserTok.save()
+    } else {
+      await MetaUserToken.create({ organisationId: orgId, userId, userTokenEnc: encUser, expiresAt: expiry })
+    }
+  } catch (_) {}
 
   // Upsert pages
   for (const p of pages) {
@@ -230,6 +246,74 @@ export const subscribePages = async (event) => {
     } catch (_) {}
   }
   return success({ subscribed })
+}
+
+export const connectionStatus = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+  const pages = await MetaPage.findAll({ where: { organisationId: orgId } })
+  const count = pages.length
+  const lastConnectedAt = pages.reduce((acc, p) => {
+    const t = p.connectedAt || p.updatedAt || p.createdAt
+    return !acc || (t && t > acc) ? t : acc
+  }, null)
+  const data = pages.map((p) => ({ id: p.pageId, name: p.pageName, status: p.status }))
+  return success({ count, lastConnectedAt, pages: data })
+}
+
+const getLongLivedUserToken = async (orgId, userId) => {
+  const rec = await MetaUserToken.findOne({ where: { organisationId: orgId, userId } })
+  if (!rec) return null
+  return decrypt(rec.userTokenEnc)
+}
+
+export const adAccounts = async (event) => {
+  const { orgId, userId } = event.context.user || {}
+  if (!orgId || !userId) return error(401, 'Unauthenticated')
+  const token = await getLongLivedUserToken(orgId, userId)
+  if (!token) return error(400, 'Meta ads not connected')
+  const url = `https://graph.facebook.com/${META_VERSION}/me/adaccounts?fields=id,account_status,name,currency,timezone_name&limit=100&access_token=${encodeURIComponent(token)}`
+  const resp = await $fetch(url, { method: 'GET' })
+  const data = Array.isArray(resp?.data) ? resp.data : []
+  return success(data)
+}
+
+export const campaigns = async (event) => {
+  const { orgId, userId } = event.context.user || {}
+  if (!orgId || !userId) return error(401, 'Unauthenticated')
+  const q = getQuery(event)
+  const accountId = q.account_id || q.accountId
+  if (!accountId) return error(400, 'Missing account_id')
+  const token = await getLongLivedUserToken(orgId, userId)
+  if (!token) return error(400, 'Meta ads not connected')
+  const act = accountId.startsWith('act_') ? accountId : `act_${accountId}`
+  const fields = 'id,name,status,objective,daily_budget,created_time,updated_time'
+  const url = `https://graph.facebook.com/${META_VERSION}/${act}/campaigns?effective_status=%5B%22ACTIVE%22,%22PAUSED%22%5D&fields=${encodeURIComponent(fields)}&limit=100&access_token=${encodeURIComponent(token)}`
+  const resp = await $fetch(url, { method: 'GET' })
+  const data = Array.isArray(resp?.data) ? resp.data : []
+  return success(data)
+}
+
+export const ads = async (event) => {
+  const { orgId, userId } = event.context.user || {}
+  if (!orgId || !userId) return error(401, 'Unauthenticated')
+  const q = getQuery(event)
+  const accountId = q.account_id || q.accountId
+  const campaignId = q.campaign_id || q.campaignId
+  const token = await getLongLivedUserToken(orgId, userId)
+  if (!token) return error(400, 'Meta ads not connected')
+  let url
+  const fields = 'id,name,status,adset{id,name},campaign{id,name},created_time,updated_time'
+  if (campaignId) {
+    url = `https://graph.facebook.com/${META_VERSION}/${campaignId}/ads?fields=${encodeURIComponent(fields)}&limit=100&access_token=${encodeURIComponent(token)}`
+  } else {
+    if (!accountId) return error(400, 'Missing account_id or campaign_id')
+    const act = accountId.startsWith('act_') ? accountId : `act_${accountId}`
+    url = `https://graph.facebook.com/${META_VERSION}/${act}/ads?fields=${encodeURIComponent(fields)}&limit=100&access_token=${encodeURIComponent(token)}`
+  }
+  const resp = await $fetch(url, { method: 'GET' })
+  const data = Array.isArray(resp?.data) ? resp.data : []
+  return success(data)
 }
 
 // Webhook verification (GET) and receiver (POST)

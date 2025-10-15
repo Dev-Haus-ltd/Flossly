@@ -8,6 +8,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  connectionStatus() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/connection")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   fetchLeads() {
     return new Promise((resolve, reject) => {
       Get("/meta/leads")
@@ -29,5 +36,26 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  getAdAccounts() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/adaccounts")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getCampaigns(accountId) {
+    return new Promise((resolve, reject) => {
+      Get(`/meta/campaigns?account_id=${encodeURIComponent(accountId)}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getAds({ accountId, campaignId }) {
+    const q = campaignId ? `campaign_id=${encodeURIComponent(campaignId)}` : `account_id=${encodeURIComponent(accountId)}`
+    return new Promise((resolve, reject) => {
+      Get(`/meta/ads?${q}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
 };
-
