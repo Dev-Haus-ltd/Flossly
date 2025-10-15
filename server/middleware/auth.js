@@ -1,8 +1,15 @@
 import jwt from 'jsonwebtoken'
+
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig();
-  if (publicPath(event.path) || !event.path.includes('/api')) return;
-  let token =  getCookie(event, 'accessToken')
+  
+  // Skip non-API routes
+  if (!event.path.includes('/api')) return;
+  
+  // Check if this is a public path BEFORE checking for auth
+  if (isPublicPath(event.path)) return;
+  
+  let token = getCookie(event, 'accessToken')
   if (!token) {
     const authHeader = getHeader(event, 'Authorization')
     if (!authHeader) {
@@ -11,9 +18,11 @@ export default defineEventHandler(async (event) => {
       token = authHeader.split(' ')[1]
     }
   }
+  
   if (!token) {
     return error(401, "Missing Authentication");
   }
+  
   try {
     const decoded = jwt.verify(token, config.JWT_SECRET);
     event.context.user = decoded;
@@ -23,7 +32,7 @@ export default defineEventHandler(async (event) => {
   }
 });
 
-const publicPath = (path) => {
+const isPublicPath = (path) => {
   const publicPaths = [
     "/api/auth/login",
     "/api/auth/signUpRequest",
@@ -35,7 +44,10 @@ const publicPath = (path) => {
     "/api/misc/getRoles",
     "/api/meta/callback",
     "/api/meta/webhook",
-    "/api/meta/webhook/"
   ];
-  return publicPaths.includes(path);
+  
+  // Check for exact match or if path starts with the public path
+  return publicPaths.some(publicPath => 
+    path === publicPath || path.startsWith(publicPath + '/')
+  );
 };
