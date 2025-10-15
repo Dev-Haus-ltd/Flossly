@@ -95,7 +95,8 @@ export const createShortLivedToken = async (event) => {
 
 export const exchangeShortLivedToken = async (event) => {
   const body = await readBody(event);
-  const { shortToken } = JSON.parse(body || "{}");
+  const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+  const { shortToken } = parsed;
   try {
     if (!shortToken) return error(400, "shortToken required");
     const payload = jwt.verify(shortToken, config.JWT_SECRET);

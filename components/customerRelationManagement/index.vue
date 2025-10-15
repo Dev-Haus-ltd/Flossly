@@ -40,19 +40,33 @@
           />
         </div>
 
-        <!-- Right: Add Button -->
-        <v-btn
-          color="primary"
-          variant="flat"
-          rounded="lg"
-          @click="addLeadDrawer = true"
-          class="add-task-btn"
-        >
-          <template #prepend>
-            <v-icon size="18">mdi-plus-circle-outline</v-icon>
-          </template>
-          Add New Lead
-        </v-btn>
+        <!-- Right: Buttons inline -->
+        <div class="d-flex align-center">
+          <v-btn
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            @click="addLeadDrawer = true"
+            class="add-task-btn"
+          >
+            <template #prepend>
+              <v-icon size="18">mdi-plus-circle-outline</v-icon>
+            </template>
+            Add New Lead
+          </v-btn>
+          <v-btn
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            class="add-task-btn ml-2"
+            @click="onConnectChatbot"
+          >
+            <template #prepend>
+              <v-icon size="18">mdi-robot-outline</v-icon>
+            </template>
+            Connect to Chatbot
+          </v-btn>
+        </div>
       </div>
 
       <!-- List View (child) -->
@@ -207,6 +221,22 @@ const getUsers = () => {
   userStore.getUserList({ roleId: null }).then((res) => {
     if (res.code === 0) userList.value = res.data;
   });
+};
+
+const chatbotToken = ref(null);
+const onConnectChatbot = async () => {
+  try {
+    const res = await $fetch('/api/auth/createShortToken', { method: 'POST' });
+    const token = res && res.code === 0 ? res.data : null;
+    if (!token) {
+      console.error('Failed to get short token');
+      return;
+    }
+    chatbotToken.value = token;
+    console.log('Short-lived chatbot token:', token);
+  } catch (err) {
+    console.error('Chatbot connect failed', err);
+  }
 };
 
 const updateLeads = (newLead) => {

@@ -32,6 +32,7 @@ const publicPath = (path) => {
     "/api/auth/requestResetPassword",
     "/api/auth/resetPassword",
     "/api/auth/acceptInvitation",
+    "/api/auth/exchangeShortToken",
     "/api/misc/getRoles"
   ];
   return publicPaths.includes(path);
