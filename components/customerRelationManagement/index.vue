@@ -51,7 +51,7 @@
           <template #prepend>
             <v-icon size="18">mdi-link-variant</v-icon>
           </template>
-          Integrate Meta
+          Integrate Meta App
         </v-btn>
       </div>
 

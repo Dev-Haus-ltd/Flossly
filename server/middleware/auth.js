@@ -34,7 +34,8 @@ const publicPath = (path) => {
     "/api/auth/acceptInvitation",
     "/api/misc/getRoles",
     "/api/meta/callback",
-    "/api/meta/webhook"
+    "/api/meta/webhook",
+    "/api/meta/webhook/"
   ];
   return publicPaths.includes(path);
 };

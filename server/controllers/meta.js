@@ -235,6 +235,10 @@ export const subscribePages = async (event) => {
 // Webhook verification (GET) and receiver (POST)
 export const webhook = async (event) => {
   const config = useRuntimeConfig()
+  if (getMethod(event) === 'HEAD') {
+    try { console.log('[META][WEBHOOK][HEAD] ping') } catch (_) {}
+    return send(event, 'ok')
+  }
   if (getMethod(event) === 'GET') {
     const q = getQuery(event)
     try {
