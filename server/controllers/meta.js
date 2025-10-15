@@ -50,7 +50,7 @@ export const authCallback = async (event) => {
   if (!code) return error(400, 'Missing code')
   if (!state || state !== stateCookie) return error(401, 'Invalid state')
 
-  // Exchange code -> short lived token
+  // short lived token
   const tokenUrl = `https://graph.facebook.com/${META_VERSION}/oauth/access_token?client_id=${encodeURIComponent(
     appId
   )}&redirect_uri=${encodeURIComponent(redirectUri)}&client_secret=${encodeURIComponent(
@@ -60,7 +60,7 @@ export const authCallback = async (event) => {
   const shortToken = shortResp.access_token
   if (!shortToken) return error(500, 'Failed to get access token')
 
-  // Exchange to long-lived user token
+  //  long-lived  token
   const longUrl = `https://graph.facebook.com/${META_VERSION}/oauth/access_token?grant_type=fb_exchange_token&client_id=${encodeURIComponent(
     appId
   )}&client_secret=${encodeURIComponent(appSecret)}&fb_exchange_token=${encodeURIComponent(shortToken)}`
@@ -237,6 +237,13 @@ export const webhook = async (event) => {
   const config = useRuntimeConfig()
   if (getMethod(event) === 'GET') {
     const q = getQuery(event)
+    try {
+      console.log('[META][WEBHOOK][VERIFY][GET]', {
+        mode: q['hub.mode'],
+        hasToken: Boolean(q['hub.verify_token']),
+        challengeLen: (q['hub.challenge'] || '').length,
+      })
+    } catch (_) {}
     if (q['hub.mode'] === 'subscribe' && q['hub.verify_token'] === config.META_VERIFY_TOKEN) {
       return send(event, q['hub.challenge'] || '')
     }
@@ -244,7 +251,67 @@ export const webhook = async (event) => {
   }
   if (getMethod(event) === 'POST') {
     const body = await readBody(event)
-    // Typically, handle leadgen events here; for now just acknowledge
+    try {
+      const preview = typeof body === 'string' ? body : JSON.stringify(body)
+      console.log('[META][WEBHOOK][EVENT][POST]', preview?.slice(0, 2000) || '')
+    } catch (_) {}
+    try {
+      const entries = Array.isArray(body?.entry) ? body.entry : []
+      for (const entry of entries) {
+        const pageId = String(entry.id || '')
+        const changes = Array.isArray(entry.changes) ? entry.changes : []
+        for (const ch of changes) {
+          if (ch.field !== 'leadgen') continue
+          const v = ch.value || {}
+          const leadId = v.leadgen_id || v.lead_id || v.leadId
+          const formId = v.form_id || v.formId
+          if (!leadId || !pageId) continue
+          // Find page token
+          const mp = await MetaPage.findOne({ where: { pageId, status: 'Active' } })
+          if (!mp) continue
+          const pageToken = decrypt(mp.accessTokenEnc)
+          if (!pageToken) continue
+          // Fetch lead details
+          const url = `https://graph.facebook.com/${META_VERSION}/${leadId}?fields=created_time,field_data&access_token=${encodeURIComponent(pageToken)}`
+          const leadData = await $fetch(url, { method: 'GET' })
+          const fld = (leadData?.field_data || []).reduce((acc, f) => {
+            acc[f.name] = Array.isArray(f.values) ? f.values[0] : f.values
+            return acc
+          }, {})
+          const fullName = fld.full_name || fld.name || ''
+          const email = fld.email || fld.email_address || ''
+          const phone = fld.phone_number || fld.phone || ''
+          const on = leadData?.created_time ? new Date(leadData.created_time) : new Date()
+
+          // Upsert by leadId across organisations linked to this page
+          const existing = await CrmLead.findOne({ where: { leadId } })
+          if (existing) {
+            existing.name = existing.name || fullName
+            existing.email = existing.email || email
+            existing.telephone = existing.telephone || phone
+            existing.inquiryDate = existing.inquiryDate || on
+            existing.rawData = existing.rawData || leadData
+            await existing.save()
+          } else {
+            await CrmLead.create({
+              organisationId: mp.organisationId,
+              pageId,
+              formId: formId || null,
+              leadId,
+              name: fullName,
+              email,
+              telephone: phone,
+              inquiryDate: on,
+              rawData: leadData,
+              leadSource: 'Meta Leadgen',
+              leadStatus: 'New',
+            })
+          }
+        }
+      }
+    } catch (_) {
+      // swallow to avoid retries storm; operational logging can be added later
+    }
     return success({ received: true })
   }
   return success('ok')
