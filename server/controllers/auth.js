@@ -71,6 +71,48 @@ export const login = async (event) => {
   return success(token);
 };
 
+export const createShortLivedToken = async (event) => {
+  const loggedUser = event.context.user;
+  try {
+    if (!loggedUser || !loggedUser.userId || !loggedUser.orgId || !loggedUser.roleId) {
+      return error(401, "Unauthenticated");
+    }
+    const shortToken = jwt.sign(
+      {
+        userId: loggedUser.userId,
+        orgId: loggedUser.orgId,
+        roleId: loggedUser.roleId,
+        purpose: "third_party_redirect",
+      },
+      config.JWT_SECRET,
+      { expiresIn: "60s" }
+    );
+    return success(shortToken);
+  } catch (err) {
+    return error(500, err.message || err);
+  }
+};
+
+export const exchangeShortLivedToken = async (event) => {
+  const body = await readBody(event);
+  const { shortToken } = JSON.parse(body || "{}");
+  try {
+    if (!shortToken) return error(400, "shortToken required");
+    const payload = jwt.verify(shortToken, config.JWT_SECRET);
+    if (!payload || payload.purpose !== "third_party_redirect") {
+      return error(400, "Invalid token purpose");
+    }
+    const token = jwt.sign(
+      { userId: payload.userId, orgId: payload.orgId, roleId: payload.roleId },
+      config.JWT_SECRET
+    );
+    setCookie(event, "accessToken", token, { maxAge: 31536000 });
+    return success(token);
+  } catch (err) {
+    return error(400, err.message || "Invalid/Expired token");
+  }
+};
+
 export const signupRequest = async (event) => {
   const body = JSON.parse(await readBody(event));
   const { fullName, email, password, organisationName, roleId } = body;
