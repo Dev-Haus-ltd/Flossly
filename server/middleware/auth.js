@@ -2,13 +2,18 @@ import jwt from 'jsonwebtoken'
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig();
+  const path = event.path;
   
-  // Skip non-API routes
-  if (!event.path.includes('/api')) return;
+  // Skip non-API routes entirely
+  if (!path.includes('/api')) return;
   
-  // Check if this is a public path BEFORE checking for auth
-  if (isPublicPath(event.path)) return;
+  // CRITICAL: Check public paths FIRST before any auth logic
+  if (isPublicPath(path)) {
+    console.log('[AUTH] Public path allowed:', path); // Add logging
+    return; // Exit immediately for public paths
+  }
   
+  // Now check for authentication
   let token = getCookie(event, 'accessToken')
   if (!token) {
     const authHeader = getHeader(event, 'Authorization')
@@ -27,7 +32,7 @@ export default defineEventHandler(async (event) => {
     const decoded = jwt.verify(token, config.JWT_SECRET);
     event.context.user = decoded;
   } catch (err) {
-    console.log(err)
+    console.log('[AUTH] Token verification failed:', err.message);
     return error(401, "Invalid/Expired Token");
   }
 });
@@ -46,8 +51,10 @@ const isPublicPath = (path) => {
     "/api/meta/webhook",
   ];
   
-  // Check for exact match or if path starts with the public path
-  return publicPaths.some(publicPath => 
-    path === publicPath || path.startsWith(publicPath + '/')
+  // Exact match or starts with the path (to handle query params and trailing slashes)
+  const isPublic = publicPaths.some(publicPath => 
+    path === publicPath || path.startsWith(publicPath + '?') || path.startsWith(publicPath + '/')
   );
+  
+  return isPublic;
 };
