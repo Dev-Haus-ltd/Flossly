@@ -224,6 +224,7 @@ const getUsers = () => {
 };
 
 const chatbotToken = ref(null);
+// TODO: this needs to be enhanced. there should be a registered chatbots model in DB to store information of each practice creating chatbot
 const onConnectChatbot = async () => {
   try {
     const res = await $fetch('/api/auth/createShortToken', { method: 'POST' });

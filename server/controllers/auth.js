@@ -107,7 +107,7 @@ export const exchangeShortLivedToken = async (event) => {
       { userId: payload.userId, orgId: payload.orgId, roleId: payload.roleId },
       config.JWT_SECRET
     );
-    setCookie(event, "accessToken", token, { maxAge: 31536000 });
+    // setCookie(event, "accessToken", token, { maxAge: 31536000 });
     return success(token);
   } catch (err) {
     return error(400, err.message || "Invalid/Expired token");
