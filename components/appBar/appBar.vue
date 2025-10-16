@@ -1,5 +1,5 @@
 <template>
-  <v-app-bar dark elevation="0" height="70" class="pr-5 cust-border bg-secondary">
+  <v-app-bar elevation="0" height="70" class="pr-5 cust-border bg-secondary">
     <v-btn icon class="d-md-none" @click="handleDrawer">
       <v-icon>mdi-menu</v-icon>
     </v-btn>
@@ -60,6 +60,9 @@
         class="mx-3"
         style="width: 202px"
       /> -->
+      <v-btn icon variant="text" @click="toggleTheme" :title="isDark ? 'Switch to light' : 'Switch to dark'">
+        <v-icon>{{ isDark ? 'mdi-weather-sunny' : 'mdi-weather-night' }}</v-icon>
+      </v-btn>
       <AppBarNottficationMenu />
       <appBarRightMenu :user="props.user" />
     </div>
@@ -69,6 +72,8 @@
 <script setup>
 const { user } = useUser();
 import logoIcon from "@/assets/logos/Logoicon2.svg";
+import { useTheme } from 'vuetify'
+import { useUIStore } from '@/stores/ui'
 const emit = defineEmits(["small-screen-drawer"]);
 
 const props = defineProps({
@@ -86,6 +91,15 @@ watch(
     console.log("Drawer changed:", newVal);
   }
 );
+
+// Theme toggle
+const ui = useUIStore()
+ui.initTheme()
+const theme = useTheme()
+const isDark = computed(() => theme.global.current.value.dark)
+const applyTheme = (name) => { theme.global.name.value = name === 'dark' ? 'dark' : 'light' }
+onMounted(() => applyTheme(ui.theme))
+const toggleTheme = () => { ui.toggleTheme(); applyTheme(ui.theme) }
 </script>
 
 <style scoped>
@@ -100,9 +114,7 @@ watch(
   /* background-color: black; */
   height: 100%;
 }
-.cust-border {
-  border-bottom: 1px solid #dbdbdb;
-}
+.cust-border { border-bottom: 1px solid rgba(0,0,0,0.08); }
 ::v-deep(.v-toolbar__prepend) {
   margin-inline: 0 !important;
 }
