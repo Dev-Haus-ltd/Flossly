@@ -9,6 +9,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       BASE_URL: process.env.BASE_URL,
+      CHATBOT_URL: process.env.CHATBOT_URL,
       colors: {
         primary: "#0061FB",
         "primary-dark": "#0061FB",

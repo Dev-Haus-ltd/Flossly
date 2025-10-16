@@ -98,37 +98,37 @@
             </v-btn>
           </div>
         </div>
-
-  </div>
-
-        <!-- List View (child) -->
-        <CustomerRelationManagementListView
-          v-if="leads.length"
-          :leads="filteredLeads"
-          :headers="headers"
-          :search="search"
-          :leadSources="leadSources"
-          :treatmentSources="treatmentSources"
-          :users="userList"
-          @select="onSelect"
-        />
-
-        <!-- Sidebar drawer for add -->
-        <CustomerRelationManagementAddNewLead
-          v-model="addLeadDrawer"
-          :lead-sources="leadSources"
-          :treatment-sources="treatmentSources"
-          :staff-list="staffList"
-          @close="addLeadDrawer = false"
-          @success="handleSuccess"
-        />
       </div>
+
+      <!-- List View (child) -->
+      <CustomerRelationManagementListView
+        v-if="leads.length"
+        :leads="filteredLeads"
+        :headers="headers"
+        :search="search"
+        :leadSources="leadSources"
+        :treatmentSources="treatmentSources"
+        :users="userList"
+        @select="onSelect"
+      />
+
+      <!-- Sidebar drawer for add -->
+      <CustomerRelationManagementAddNewLead
+        v-model="addLeadDrawer"
+        :lead-sources="leadSources"
+        :treatment-sources="treatmentSources"
+        :staff-list="staffList"
+        @close="addLeadDrawer = false"
+        @success="handleSuccess"
+      />
     </div>
+  </div>
 </template>
 
 <script setup>
 import crmService from "@/services/crmService";
 const userStore = useUserStore();
+const authStore = useAuthStore();
 const userList = ref([]);
 const addLeadDrawer = ref(false);
 
@@ -262,22 +262,17 @@ const getUsers = () => {
     if (res.code === 0) userList.value = res.data;
   });
 };
-
-const chatbotToken = ref(null);
 // TODO: this needs to be enhanced. there should be a registered chatbots model in DB to store information of each practice creating chatbot
 const onConnectChatbot = async () => {
-  try {
-    const res = await $fetch("/api/auth/createShortToken", { method: "POST" });
-    const token = res && res.code === 0 ? res.data : null;
-    if (!token) {
-      console.error("Failed to get short token");
-      return;
+  authStore.createShortToken().then((res) => {
+    if (res.code === 0 && res.data) {
+      const config = useRuntimeConfig();
+      window.open(
+        config.public.CHATBOT_URL + `/botbuilder/auth?token=${res.data}`,
+        "_blank"
+      );
     }
-    chatbotToken.value = token;
-    console.log("Short-lived chatbot token:", token);
-  } catch (err) {
-    console.error("Chatbot connect failed", err);
-  }
+  });
 };
 
 const updateLeads = (newLead) => {

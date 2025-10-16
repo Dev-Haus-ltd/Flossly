@@ -243,4 +243,15 @@ export default {
         });
     });
   },
+  createShortToken() {
+    return new Promise((resolve, reject) => {
+      Get("/auth/createShortToken")
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
 };
