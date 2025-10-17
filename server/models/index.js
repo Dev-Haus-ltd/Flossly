@@ -47,6 +47,7 @@ import { OrganisationPeople } from "./organisations/organisationPeople";
 import { MetaPage } from "./crm/metaPages";
 import { CrmLead } from "./crm/leads";
 import { MetaUserToken } from "./crm/metaUserTokens";
+import { ChatbotConfig } from "./crm/chatbotConfig";
 
 /* Relations and Associations */
 
@@ -412,6 +413,12 @@ MetaUserToken.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organ
 MetaUserToken.belongsTo(User, { foreignKey: 'userId', as: 'user' })
 Organisation.hasMany(MetaUserToken, { foreignKey: 'organisationId', as: 'metaUserTokens' })
 
+// Chatbot Configuration associations
+ChatbotConfig.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
+ChatbotConfig.belongsTo(User, { foreignKey: 'managerId', as: 'manager' })
+Organisation.hasOne(ChatbotConfig, { foreignKey: 'organisationId', as: 'chatbotConfig' })
+User.hasMany(ChatbotConfig, { foreignKey: 'managerId', as: 'managedChatbots' })
+
 // CPD Associations
 Course.hasMany(CourseQuestionaire, { foreignKey: "courseId", as: "questions" });
 CourseQuestionaire.belongsTo(Course, { foreignKey: "courseId", as: "course" });
@@ -481,4 +488,5 @@ export {
   MetaPage,
   CrmLead,
   MetaUserToken,
+  ChatbotConfig,
 };
