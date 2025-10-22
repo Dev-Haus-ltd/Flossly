@@ -5,43 +5,121 @@ export const ChatbotConfig = sequelize.define(
   'ChatbotConfigs',
   {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    organisationId: { 
-      type: DataTypes.INTEGER, 
-      allowNull: false, 
-      references: { model: 'Organisations', key: 'id' } 
+    botId: { 
+      type: DataTypes.UUID, 
+      allowNull: false,
+      unique: true,
+      defaultValue: DataTypes.UUIDV4
     },
-    managerId: { 
+    userId: { 
       type: DataTypes.INTEGER, 
       allowNull: false, 
       references: { model: 'Users', key: 'id' } 
     },
-    messages: { 
+    organizationId: { 
+      type: DataTypes.INTEGER, 
+      allowNull: false, 
+      references: { model: 'Organisations', key: 'id' } 
+    },
+    name: { 
+      type: DataTypes.STRING(255), 
+      allowNull: false 
+    },
+    companyName: { 
+      type: DataTypes.STRING(255), 
+      allowNull: true 
+    },
+    avatar: { 
+      type: DataTypes.JSONB, 
+      allowNull: true 
+    },
+    openingMessages: { 
       type: DataTypes.JSONB, 
       allowNull: true,
       defaultValue: []
     },
-    prompt: { 
+    appointmentGreeting: { 
       type: DataTypes.TEXT, 
       allowNull: true 
     },
-    color: { 
-      type: DataTypes.STRING(50), 
-      allowNull: true,
-      defaultValue: '#007bff'
-    },
-    avatar: { 
+    privacyPolicyUrl: { 
       type: DataTypes.STRING(500), 
       allowNull: true 
     },
-    welcomeMessage: { 
-      type: DataTypes.TEXT, 
-      allowNull: true,
-      defaultValue: 'Hello! How can I help you today?'
+    companyOwnerEmail: { 
+      type: DataTypes.STRING(255), 
+      allowNull: true 
     },
-    isActive: {
-      type: DataTypes.BOOLEAN,
+    companyPhone: { 
+      type: DataTypes.STRING(50), 
+      allowNull: true 
+    },
+    companyWebsite: { 
+      type: DataTypes.STRING(500), 
+      allowNull: true 
+    },
+    webhookUrl: { 
+      type: DataTypes.STRING(500), 
+      allowNull: true 
+    },
+    gmailBrochureUrl: { 
+      type: DataTypes.STRING(500), 
+      allowNull: true 
+    },
+    gmailCallbackUrl: { 
+      type: DataTypes.STRING(500), 
+      allowNull: true 
+    },
+    themeColor: { 
+      type: DataTypes.STRING(50), 
+      allowNull: true,
+      defaultValue: '#3B82F6'
+    },
+    position: { 
+      type: DataTypes.STRING(20), 
+      allowNull: true,
+      defaultValue: 'right'
+    },
+    sideSpacing: { 
+      type: DataTypes.INTEGER, 
+      allowNull: true,
+      defaultValue: 25
+    },
+    bottomSpacing: { 
+      type: DataTypes.INTEGER, 
+      allowNull: true,
+      defaultValue: 25
+    },
+    showDesktop: { 
+      type: DataTypes.BOOLEAN, 
       allowNull: false,
       defaultValue: true
+    },
+    showMobile: { 
+      type: DataTypes.BOOLEAN, 
+      allowNull: false,
+      defaultValue: true
+    },
+    googleCalendarConnected: { 
+      type: DataTypes.BOOLEAN, 
+      allowNull: false,
+      defaultValue: false
+    },
+    calendarStatus: { 
+      type: DataTypes.STRING(50), 
+      allowNull: true 
+    },
+    appointmentFlow: { 
+      type: DataTypes.JSONB, 
+      allowNull: true 
+    },
+    treatmentFlow: { 
+      type: DataTypes.JSONB, 
+      allowNull: true 
+    },
+    callbackFlow: { 
+      type: DataTypes.JSONB, 
+      allowNull: true 
     }
   },
   { 
@@ -50,7 +128,11 @@ export const ChatbotConfig = sequelize.define(
     indexes: [
       {
         unique: true,
-        fields: ['organisationId']
+        fields: ['organizationId']
+      },
+      {
+        unique: true,
+        fields: ['botId']
       }
     ]
   }

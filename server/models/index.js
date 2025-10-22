@@ -414,10 +414,10 @@ MetaUserToken.belongsTo(User, { foreignKey: 'userId', as: 'user' })
 Organisation.hasMany(MetaUserToken, { foreignKey: 'organisationId', as: 'metaUserTokens' })
 
 // Chatbot Configuration associations
-ChatbotConfig.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
-ChatbotConfig.belongsTo(User, { foreignKey: 'managerId', as: 'manager' })
-Organisation.hasOne(ChatbotConfig, { foreignKey: 'organisationId', as: 'chatbotConfig' })
-User.hasMany(ChatbotConfig, { foreignKey: 'managerId', as: 'managedChatbots' })
+ChatbotConfig.belongsTo(Organisation, { foreignKey: 'organizationId', as: 'organisation' })
+ChatbotConfig.belongsTo(User, { foreignKey: 'userId', as: 'user' })
+Organisation.hasOne(ChatbotConfig, { foreignKey: 'organizationId', as: 'chatbotConfig' })
+User.hasMany(ChatbotConfig, { foreignKey: 'userId', as: 'chatbotConfigs' })
 
 // CPD Associations
 Course.hasMany(CourseQuestionaire, { foreignKey: "courseId", as: "questions" });
