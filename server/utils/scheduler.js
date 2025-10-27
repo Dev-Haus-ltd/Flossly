@@ -6,6 +6,7 @@ const frequencyMap = {
   Weekly: "0 0 * * 1", // every Monday
   Fortnightly: "0 0 */14 * *", // every 14 days
   Monthly: "0 0 1 * *", // first day of month
+  "6 Monthly": "0 0 1 */6 *", // first day every 6 months
   Annualy: "0 0 1 1 *", // Jan 1st every year
   "Every 24 Months": "0 0 1 1 */2", // Jan 1st every 2 years
 };
@@ -42,6 +43,9 @@ export const startTaskScheduler = () => {
               break;
             case "Monthly":
               nextDueDate = addDays(new Date(), 30);
+              break;
+            case "6 Monthly":
+              nextDueDate = addDays(new Date(), 180);
               break;
             case "Annualy":
               nextDueDate = addDays(new Date(), 365);

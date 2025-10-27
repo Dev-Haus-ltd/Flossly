@@ -47,6 +47,7 @@ const isPublicPath = (path) => {
     "/api/auth/resetPassword",
     "/api/auth/acceptInvitation",
     "/api/auth/exchangeShortToken",
+    "/api/auth/resendVerificationEmail",
     "/api/misc/getRoles",
     "/api/meta/callback",
     "/api/meta/webhook",

@@ -184,8 +184,10 @@ const submitEmail = async () => {
       });
     }
   } catch (err) {
+    console.log('Forgot password error:', err); // Debug log
+    const errorMessage = err.data?.message || err.message || 'An error occurred';
     store.setSnackbar({
-      title: err.message,
+      title: errorMessage,
       type: "error",
     });
   }
@@ -223,8 +225,10 @@ const submitReset = async () => {
       });
     }
   } catch (err) {
+    console.log('Forgot password error:', err); // Debug log
+    const errorMessage = err.data?.message || err.message || 'An error occurred';
     store.setSnackbar({
-      title: err.message,
+      title: errorMessage,
       type: "error",
     });
   }

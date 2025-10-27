@@ -80,13 +80,19 @@
                 class="input-bordered"
                 flat
               />
-              <v-checkbox
-                v-model="agreeTerms"
-                :rules="[(v) => !!v || 'You must agree to continue']"
-                label="I agree to the Terms and Conditions"
-                required
-                hide-details
-              />
+              <div class="d-flex align-center">
+                <v-checkbox
+                  v-model="agreeTerms"
+                  :rules="[(v) => !!v || 'You must agree to continue']"
+                  required
+                  hide-details
+                  class="mt-n1"
+                />
+                <div class="agreement-text">
+                  I agree to the 
+                  <a href="/terms-of-use" target="_blank">Terms and Conditions</a>
+                </div>
+              </div>
 
               <v-btn
                 type="submit"
@@ -117,8 +123,8 @@
           <template v-else>
             <h1>Congratulations!</h1>
             <br />
-            <p style="width: 600px">
-              You are successfully onbaorded on Flossly! We have sent you a
+            <p style="max-width: 100%; line-height: 1.5;">
+              You are successfully onboarded on Flossly! We have sent you a
               verification link. Please check your inbox and verify your email
               to get started.
             </p>
@@ -170,6 +176,7 @@
         </div>
       </v-col>
     </v-row>
+
   </div>
 </template>
 <script setup>
@@ -242,8 +249,10 @@ const signUp = async () => {
         }
       })
       .catch((err) => {
+        console.log('Signup error:', err); // Debug log
+        const errorMessage = err.data?.message || err.message || 'An error occurred during signup';
         mainStore.setSnackbar({
-          title: err.message,
+          title: errorMessage,
           type: "error",
         });
       });
@@ -253,7 +262,9 @@ const goToLogin = () => {
   mainStore.setLoginSkipSplash(true);
   router.push("/login");
 };
+
 </script>
+
 
 <style scoped>
 .signup-page {
@@ -273,6 +284,24 @@ const goToLogin = () => {
   overflow-y: auto;
   padding-top: 24px;
   padding-bottom: 24px;
+}
+
+.form-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.form-scroll::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.form-scroll::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.form-scroll::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 .overlay-box {
@@ -310,6 +339,19 @@ const goToLogin = () => {
   font-style: "Regular";
   font-size: 16px;
   color: #1e1e1e;
+}
+
+.agreement-text {
+  font-family: "Inter";
+  font-weight: 400;
+  font-style: normal;
+  font-size: 14px;
+  color: #8b8b8b;
+}
+
+.agreement-text a {
+  color: #8b8b8b;
+  text-decoration: underline;
 }
 .input-bordered :deep(.v-field) {
   border: 1px solid #dfdfdf !important;

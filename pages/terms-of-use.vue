@@ -1,5 +1,5 @@
 <template>
-    <log-in/>
+  <TermsOfUse />
 </template>
 
 <script setup>

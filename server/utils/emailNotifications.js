@@ -209,13 +209,16 @@ export const leaveRequestDeniedNotification = async (data) => {
 
 export const sendEmailVerificationEmail = async (data) => {
   const subject = "Verify Email";
+  const baseUrl = config.public.BASE_URL.endsWith('/') 
+    ? config.public.BASE_URL.slice(0, -1) 
+    : config.public.BASE_URL;
   const content = `
   <p>Dear ${data.fullName}</p>
       <br />
       <p>Welcome on board. Please click the link below the verify your email.</p>
       <br/>
       <a href=${
-        config.public.BASE_URL + "/verifyemail/" + data.link
+        baseUrl + "/verifyemail/" + data.link
       } target="blank"> Verify Email </a>
           <br/><br/>
           <p>Best regards,<br/>The Flossly Team</p>`;

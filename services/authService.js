@@ -11,6 +11,17 @@ export default {
         });
     });
   },
+  resendVerificationEmail(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/resendVerificationEmail", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
   getRoles() {
     return new Promise((resolve, reject) => {
       Get("/misc/getRoles")
