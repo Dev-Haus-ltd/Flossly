@@ -6,6 +6,13 @@ export default defineNuxtConfig({
     { path: "/api", handler: "@/server/api.js" },
     { path: "/api/**", handler: "@/server/api.js" },
   ],
+  router: {
+    prefetchLinks: true,
+  },
+  experimental: {
+    payloadExtraction: true,
+    renderJsonPayloads: true,
+  },
   runtimeConfig: {
     public: {
       BASE_URL: process.env.BASE_URL,

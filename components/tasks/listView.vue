@@ -6,11 +6,23 @@
       <div class="d-inline-flex flex-wrap d-md-flex align-center py-1">
         <v-btn-toggle v-model="viewType" mandatory class="custom-toggle">
           <v-btn value="list" class="toggle-btn">
-            <img :src="listicon" alt="list icon" class="mr-1" width="16" height="16" />
+            <img
+              :src="listicon"
+              alt="list icon"
+              class="mr-1"
+              width="16"
+              height="16"
+            />
             List
           </v-btn>
           <v-btn value="calender" class="toggle-btn">
-            <img :src="calendericon" alt="calendar icon" class="mr-1" width="16" height="16" />
+            <img
+              :src="calendericon"
+              alt="calendar icon"
+              class="mr-1"
+              width="16"
+              height="16"
+            />
             Calender
           </v-btn>
         </v-btn-toggle>
@@ -58,7 +70,7 @@
                   v-for="(item, index) in selectedHeaders"
                   :key="index"
                   class="color-box ma-1 pa-2 d-flex align-center justify-space-between position-relative"
-                  :style="{ backgroundColor: getRandomHexColor() }"
+                  :style="{ backgroundColor: getRandomHexColor(item.title) }"
                 >
                   <span> {{ item.title }}</span>
                   <v-icon
@@ -76,7 +88,7 @@
                   v-for="(item, index) in availableHeaders"
                   :key="index"
                   class="color-box ma-1 pa-2 d-flex align-center justify-center"
-                  :style="{ backgroundColor: getRandomHexColor() }"
+                  :style="{ backgroundColor: getRandomHexColor(item.title) }"
                   @click="addHeaderInSelected(item)"
                 >
                   {{ item.title }}
@@ -99,7 +111,7 @@
           </template>
           Tasks Pool
         </v-btn>
-           <v-btn
+        <v-btn
           color="secondary"
           variant="flat"
           rounded="lg"
@@ -109,7 +121,7 @@
           <template #prepend>
             <v-icon size="18">mdi-upload</v-icon>
           </template>
-         Upload bulk tasks
+          Upload bulk tasks
         </v-btn>
         <v-btn
           color="primary"
@@ -204,6 +216,8 @@
                 :model-value="columns"
                 item-key="key"
                 direction="horizontal"
+                :disabled="isResizing"
+                handle=".th-content"
                 @update:model-value="updateHeaderOrder"
               >
                 <template #item="{ element: column, index: i }">
@@ -213,6 +227,7 @@
                       padding: '0px 7px',
                       backgroundColor: '#F6F6F6',
                       fontSize: '14px',
+                      position: 'relative',
                     }"
                     @mouseover="showHandles(column.key)"
                     @mouseleave="hideHandles(column.key)"
@@ -230,7 +245,15 @@
                       />
                     </div>
                     <div v-else class="d-flex align-center th-content">
+                      <p
+                        v-if="!isEditing(column)"
+                        @click="enableEditing(column)"
+                        style="cursor: text;"
+                      >
+                        {{ column.title }}
+                      </p>
                       <v-text-field
+                        v-else
                         v-model="column.title"
                         @update:model-value="
                           (val) => updateHeaderTitle(column.key, val)
@@ -244,11 +267,13 @@
                         @blur="updateValueColumn(column)"
                         class="small-input"
                       />
+
+                     <div class="d-flex justify-end">
                       <v-icon
                         size="14"
                         color="black"
                         style="cursor: pointer"
-                        @click="removeHeaderFromSeleted(column)"
+                        @click.stop="removeHeaderFromSeleted(column)"
                       >
                         mdi-minus
                       </v-icon>
@@ -260,12 +285,15 @@
                       >
                         {{ getSortIcon(column) }}
                       </v-icon>
+                     </div>
                       <span
                         class="resize-handle"
                         :id="`resize-handle-${column.key}`"
-                        @mousedown="startResize($event, column)"
+                        @pointerdown="startResize($event, column)"
                       >
-                        <v-icon>mdi-drag</v-icon>
+                        <v-icon color="grey" style="cursor: grab"
+                          >mdi-drag</v-icon
+                        >
                       </span>
                     </div>
                   </th>
@@ -438,8 +466,10 @@
                               </v-icon>
                               <span
                                 class="resize-handle"
-                                @mousedown="startResize($event, column)"
-                              ></span>
+                                @pointerdown="startResize($event, column)"
+                              >
+                                <v-icon size="12">mdi-drag</v-icon>
+                              </span>
                             </div>
                             <div v-else>
                               <v-checkbox
@@ -575,7 +605,7 @@
       @save="updateTaskInfo"
     />
 
-    <TasksAddTask 
+    <TasksAddTask
       v-model="drawerOpen"
       @close="drawerOpen = false"
       @success="updateTasks"
@@ -592,13 +622,12 @@
       :roles="rolesList"
       :users="users"
       @close="bulkTaskUploadDialog = false"
-      @onUpdate="updateTasks" 
+      @onUpdate="updateTasks"
     />
   </div>
 </template>
 
 <script setup>
-import { getRandomHexColor } from "~/lib/misc";
 import { parsedDate } from "@/lib/dateFormatter";
 import draggable from "vuedraggable";
 import listicon from "@/assets/icons/listView/listicon.svg";
@@ -657,6 +686,40 @@ const sortHeaders = (headers) => {
     .map((key) => headers.find((h) => h.key === key))
     .filter(Boolean);
 };
+const getRandomHexColor = (name) => {
+  if (!name) return "#999999";
+  const firstChar = name.trim().charAt(0).toUpperCase();
+  const colors = [
+    "#FF6B6B",
+    "#FF8E72",
+    "#FFD93D",
+    "#6BCB77",
+    "#4D96FF",
+    "#8358E8",
+    "#FF6EC7",
+    "#00B8A9",
+    "#F15BB5",
+    "#FF7F11",
+    "#FF9F1C",
+    "#2EC4B6",
+    "#6A4C93",
+    "#8338EC",
+    "#3A86FF",
+    "#FF006E",
+    "#FB5607",
+    "#FFBE0B",
+    "#06D6A0",
+    "#118AB2",
+    "#073B4C",
+    "#EF476F",
+    "#06AED5",
+    "#4CC9F0",
+    "#8AC926",
+    "#FF595E",
+  ];
+  const index = firstChar.charCodeAt(0) - 65;
+  return index >= 0 && index < 26 ? colors[index] : "#999999";
+};
 const showHandles = (key) => {
   const handle = document.getElementById("resize-handle-" + key);
   if (handle) {
@@ -689,8 +752,19 @@ const dialogOpen = ref(false);
 const taskPoolDialog = ref(false);
 const isAllSelected = ref(false);
 const tasksForCalender = ref([]);
-const bulkTaskUploadDialog=ref(false);
-const rolesList=ref([])
+const bulkTaskUploadDialog = ref(false);
+const rolesList = ref([]);
+const isResizing = ref(false);
+const editingColumn = ref(null)
+
+const enableEditing = (column) => {
+  editingColumn.value = column.key
+  setFocus('header', column.key, true)
+}
+
+const isEditing = (column) => {
+  return editingColumn.value === column.key
+}
 const getRoles = () => {
   mainStore
     .getRoles()
@@ -870,6 +944,7 @@ const updateUserPreferences = async () => {
 };
 
 const updateValueColumn = (column) => {
+  editingColumn.value = null
   setFocus("header", column.key, false);
 };
 const updateSubtaskValueColumn = (column) => {
@@ -949,28 +1024,39 @@ function getNestedValue(obj, path) {
     .split(".")
     .reduce((o, key) => (o && o[key] !== undefined ? o[key] : ""), obj);
 }
-let currentCol = null;
+
 let startX = 0;
 let startWidth = 0;
+let currentCol = null;
+
 function startResize(e, col) {
+  e.stopPropagation(); // ✅ Block draggable from detecting drag
+  e.preventDefault();
+
+  isResizing.value = true;
   currentCol = col;
   startX = e.clientX;
   startWidth = col.width;
-  document.addEventListener("mousemove", resizeColumn);
-  document.addEventListener("mouseup", stopResize);
+
+  e.target.setPointerCapture(e.pointerId);
+  e.target.addEventListener("pointermove", resizeColumn);
+  e.target.addEventListener("pointerup", stopResize);
 }
 
 function resizeColumn(e) {
-  if (!currentCol) return;
+  if (!isResizing.value || !currentCol) return;
   const diff = e.clientX - startX;
-  currentCol.width = Math.max(150, startWidth + diff);
+  currentCol.width = Math.max(120, startWidth + diff);
 }
 
-function stopResize() {
-  document.removeEventListener("mousemove", resizeColumn);
-  document.removeEventListener("mouseup", stopResize);
+function stopResize(e) {
+  isResizing.value = false;
+  e.target.releasePointerCapture(e.pointerId);
+  e.target.removeEventListener("pointermove", resizeColumn);
+  e.target.removeEventListener("pointerup", stopResize);
   currentCol = null;
 }
+
 const updateHeaderTitle = (key, value) => {
   const target = selectedHeaders.value.find((col) => col.key === key);
   if (target) {
@@ -1022,7 +1108,10 @@ const onSelectionChange = (newSelected) => {
 .v-data-table tbody tr {
   height: 30px !important;
 }
-
+th {
+  position: relative;
+  user-select: none;
+}
 /* Make all cells match that height */
 .v-data-table td {
   height: 30px !important;
@@ -1041,13 +1130,13 @@ const onSelectionChange = (newSelected) => {
   border-right: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 .custom-toggle {
-  background-color: #F3F6FA;
+  background-color: #f3f6fa;
   display: flex;
   height: 40px;
 }
 
 .toggle-btn {
-  background-color: #F3F6FA !important;
+  background-color: #f3f6fa !important;
   text-transform: none;
   font-size: 14px;
   color: #333;
@@ -1057,18 +1146,18 @@ const onSelectionChange = (newSelected) => {
 .v-btn--active.toggle-btn {
   background-color: #ffffff !important;
   --v-theme-overlay-multiplier: 0 !important; /* reset overlay */
-  --v-theme-primary: #ffffff !important;      /* force white */
-  box-shadow: 0px 6px 12px rgba(0,0,0,0.15);
+  --v-theme-primary: #ffffff !important; /* force white */
+  box-shadow: 0px 6px 12px rgba(0, 0, 0, 0.15);
   transform: translateY(-2px);
   border-radius: 6px;
-  box-shadow: 0px 2px 4px rgba(0,0,0,0.08); /* subtle shadow under */
+  box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.08); /* subtle shadow under */
 }
 .custom-search,
 .tbl-top-btn {
   height: 40px;
   border-radius: 8px;
   font-size: 14px;
-  background-color: #FFFFFF !important;
+  background-color: #ffffff !important;
   text-transform: none;
   box-shadow: none;
   color: #737373;
@@ -1088,7 +1177,8 @@ const onSelectionChange = (newSelected) => {
   position: absolute;
   right: -5px;
   z-index: 99999;
-  top: 5;
+  top: 0px;
+  user-select: none;
 }
 .table-border {
   border: 1px solid #dbdbdb;
@@ -1157,5 +1247,4 @@ const onSelectionChange = (newSelected) => {
   align-items: center;
   gap: 12px; /* consistent spacing between all items */
 }
-
 </style>

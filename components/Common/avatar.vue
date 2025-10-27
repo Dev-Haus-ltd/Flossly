@@ -31,6 +31,18 @@ const getInitials = () => {
 };
 
 const getRandomHexColor = () => {
-  return '#' + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0')
+  const name = props?.user?.fullName || props.user.name || props.user.title; 
+  if (!name) return '#999999'
+  const firstChar = name.trim().charAt(0).toUpperCase()
+  const colors = [
+    '#FF6B6B', '#FF8E72', '#FFD93D', '#6BCB77', '#4D96FF', '#8358E8',
+    '#FF6EC7', '#00B8A9', '#F15BB5', '#FF7F11', '#FF9F1C', '#2EC4B6',
+    '#6A4C93', '#8338EC', '#3A86FF', '#FF006E', '#FB5607', '#FFBE0B',
+    '#06D6A0', '#118AB2', '#073B4C', '#EF476F', '#06AED5', '#4CC9F0',
+    '#8AC926', '#FF595E'
+  ]
+  const index = firstChar.charCodeAt(0) - 65
+  return index >= 0 && index < 26 ? colors[index] : '#999999'
 }
+
 </script>
