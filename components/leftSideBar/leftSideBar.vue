@@ -311,8 +311,13 @@ const currentOrg = ref({});
   height: 20px;
   object-fit: contain;
   margin-right: 8px;
-  color: #737373;
+  filter: grayscale(100%) brightness(0) invert(40%) sepia(5%) saturate(200%) hue-rotate(180deg);
+  transition: filter 0.2s ease;
   margin-bottom: 4px;
+}
+.active-item .list-icon,
+.v-list-item--active .list-icon {
+  filter: invert(33%) sepia(98%) saturate(7455%) hue-rotate(213deg) brightness(97%) contrast(101%);
 }
 .rail-closed .v-list-group__items .v-list-item {
   padding-inline-start: 8px !important; /* match parent padding */

@@ -1,6 +1,6 @@
 <template>
   <v-form v-if="showform" ref="form" v-model="valid">
-    <sapn class="lbl">Invite people to collaborate</sapn>
+    <span class="lbl">Invite people to collaborate</span>
     <div v-for="(user, index) in model.users" :key="index">
       <v-text-field
         v-model="user.email"
@@ -42,7 +42,7 @@
               </v-btn>
             </template>
 
-            <v-list>
+            <v-list class="role-list-dropdown">
               <v-list-item
                 v-for="role in rolesList"
                 :key="role"
@@ -57,7 +57,7 @@
         </template>
       </v-text-field>
     </div>
-    <v-btn @click="updateModel" variant="flat" height="48" color="primary"
+    <v-btn @click="updateModel" variant="text" height="48" color="primary" class="add-more-btn"
       >+ Add More</v-btn
     >
   </v-form>
@@ -124,5 +124,19 @@ defineExpose({
   min-height: 40px;
   font-size: 14px;
   
+}
+
+/* Make dropdown list scrollable with max height */
+.role-list-dropdown {
+  max-height: 300px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Align Add More button with form fields */
+.add-more-btn {
+  margin-left: 0;
+  padding-left: 0;
+  justify-content: flex-start;
 }
 </style>

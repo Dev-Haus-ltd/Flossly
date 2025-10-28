@@ -49,7 +49,7 @@
           </v-form>
         </div>
       </v-col>
-      <v-col cols="12" md="6" class="d-flex align-center justify-center pa-0">
+      <v-col v-if="mdAndUp" cols="12" md="6" class="d-flex align-center justify-center pa-0">
         <div class="px-4 w-100">
           <div
             class="background-image relative d-flex align-center justify-center"
@@ -85,6 +85,9 @@
   </div>
 </template>
 <script setup>
+import { useDisplay } from 'vuetify';
+
+const { mdAndUp } = useDisplay();
 const credentials = ref({
   fullName: "",
   password: "",

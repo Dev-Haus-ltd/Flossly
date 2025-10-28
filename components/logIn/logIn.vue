@@ -1,11 +1,15 @@
 <template>
   <div class="init-page bg-secondary" v-if="initialPage">
     <div class="water-mark"></div>
-    <div class="init-pg-content">
+    <div class="init-pg-content" :style="{ padding: smAndDown ? '0 20px' : '0' }">
       <div class="text-center">
         <img
           src="@/assets/logos/loginLogos/logoWithTitle.svg"
           class="mx-auto h-20 w-20 mb-5"
+          :style="{
+            width: smAndDown ? '70%' : mdAndUp && !lgAndUp ? '50%' : '33.33%',
+            maxWidth: smAndDown ? '280px' : mdAndUp && !lgAndUp ? '250px' : '220px'
+          }"
           alt=""
         />
 
@@ -27,6 +31,15 @@
     <v-row>
       <v-col cols="12" md="6" class="d-flex align-center justify-center px-12">
         <div style="width: 100%; max-width: 500px">
+          <img
+            src="@/assets/logos/loginLogos/logoWithTitle_1.svg"
+            class="d-block mx-auto w-1/3 max-w-[220px] h-auto mb-6"
+            :style="{
+              width: smAndDown ? '70%' : mdAndUp && !lgAndUp ? '50%' : '33.33%',
+              maxWidth: smAndDown ? '280px' : mdAndUp && !lgAndUp ? '250px' : '220px'
+            }"
+            alt=""
+          />
           <h2 class="text-center login-heading">Welcome Back!</h2>
           <h2 class="mb-6 text-center login-sub-heading" style="color: #8b8b8b">
             Let's get signed in securely.
@@ -110,7 +123,7 @@
           </v-form>
         </div>
       </v-col>
-      <v-col cols="12" md="6" class="d-flex align-center justify-center pa-0">
+      <v-col v-if="!smAndDown" cols="12" md="6" class="d-flex align-center justify-center pa-0">
         <div class="px-4 w-100">
           <div
             class="background-image relative d-flex align-center justify-center"
@@ -165,6 +178,8 @@
 
 <script setup>
 const { setUser } = useUser()
+import { useDisplay } from "vuetify";
+const { smAndDown, mdAndUp, lgAndUp } = useDisplay();
 const initialPage = ref(true);
 const credentials = ref({
   email: "",
@@ -269,6 +284,9 @@ const forgetPass = () => {
 <style scoped>
 .init-page {
   position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
 }
 .init-pg-content {
   margin: 0;
@@ -278,6 +296,8 @@ const forgetPass = () => {
   -ms-transform: translate(-50%, -50%);
   transform: translate(-50%, -50%);
   max-width: 700px;
+  width: 100%;
+  box-sizing: border-box;
 }
 .login-page .v-container {
   max-width: 100% !important;
