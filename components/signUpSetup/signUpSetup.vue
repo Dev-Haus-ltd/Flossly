@@ -29,18 +29,21 @@
         height="48"
         width="100"
         rounded="lg" size="x-large"
+        style="font-size: 16px;"
       >
         Back
       </v-btn>
 
       <v-btn 
-        color="primary" 
+        color="primary"
+        variant="flat" 
         height="48"
         width="100"
         class="nav-button"
         @click="nextStep" 
         v-if="step < steps.length - 1"
         rounded="lg" size="x-large"
+        style="font-size: 16px;"
       >
         Next
       </v-btn>
@@ -54,6 +57,7 @@
         height="48"
         width="100"
         rounded="lg" size="x-large"
+        style="font-size: 16px;"
       >
       Skip for now
       </v-btn>
@@ -66,6 +70,8 @@
         width="150"
         class="nav-button"
         rounded="lg" size="x-large"
+        variant="flat"
+        style="font-size: 16px;"
       >
         Go to Dashboard
       </v-btn>
@@ -98,14 +104,14 @@ const steps = [
     key: 1,
     title: "Quick Clinic Setup",
     subTitle:
-      "Enter your clinic details to personalize your Flossly workspace.",
+      "Enter your clinic details to personlise your Flossly workspace.",
     component: clinicSetup,
   },
   {
     key: 2,
     title: "Add Team Members",
     subTitle:
-      "Enhance your team's collaboration and efficiency by inviting new members to your Key Stone platform.",
+      "Enhance your team's collaboration and efficiency by inviting new members to your Flossly workspace.",
     component: AddTeamMembers,
   },
   {

@@ -63,7 +63,7 @@ defineExpose({
 <style scoped>
 .input-bordered :deep(.v-field) {
   border: 1px solid #dfdfdf !important;
-  border-radius: 8px !important;
+  border-radius: 12px !important;
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;

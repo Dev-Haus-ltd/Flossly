@@ -10,7 +10,7 @@
     >
       <img src="../../assets/logos/signupSetupScreen/uploadimg.svg" class="mr-2" alt="">
       <span>
-        Drag and Drop file here or <strong>Choose file</strong>
+        Drag and drop a file here or <strong>choose one to upload</strong>
       </span>
       <input
         ref="fileInput"
@@ -93,6 +93,7 @@ onBeforeUnmount(() => {
     cursor: pointer;
     transition: border-color 0.2s;
     text-align: center;
+    font-size: 14px;
   }
   .dotted-box:hover {
     border-color: #008AFE;
