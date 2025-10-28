@@ -271,5 +271,20 @@ export const useAuthStore = defineStore("authStore", {
           });
       });
     },
+    createShortToken() {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService 
+          .createShortToken() 
+          .then((res) =>  {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false; 
+            reject(err); 
+          });
+      });
+    },
   },
 });

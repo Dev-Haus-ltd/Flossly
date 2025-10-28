@@ -8,10 +8,14 @@ import 'vuetify/styles' // Ensure global styles are loaded
 
 export default defineNuxtPlugin((nuxtApp) => {
   const config = useRuntimeConfig()
-  const theme = {
-    dark: false,
-    colors: config.public.colors,
-  };
+  let defaultTheme = 'light'
+  if (process.client) {
+    const saved = localStorage.getItem('flossly_theme')
+    if (saved === 'dark' || saved === 'light') defaultTheme = saved
+    else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) defaultTheme = 'dark'
+  }
+  const light = { dark: false, colors: { ...config.public.colors, background: '#FFFFFF', surface: '#FFFFFF' } }
+  const dark = { dark: true, colors: { ...config.public.colors, background: '#121212', surface: '#1E1E1E' } }
   const vuetify = createVuetify({
     ssr: true,
     components: {
@@ -22,9 +26,10 @@ export default defineNuxtPlugin((nuxtApp) => {
       options: {
         customProperties: true,
       },
-      defaultTheme: "theme",
+      defaultTheme,
       themes: {
-        theme,
+        light,
+        dark,
       },
     },
     icons: {

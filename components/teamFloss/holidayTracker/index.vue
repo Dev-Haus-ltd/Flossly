@@ -7,20 +7,74 @@
       <!-- Tabs -->
       <v-tabs v-model="currentTab" class="custom-tabs" slider-color="primary">
         <v-tab class="tab-text" :value="0"> Calender </v-tab>
-        <v-tab class="tab-text" :value="1" v-if="isManager"> Pending Requests </v-tab>
+        <v-tab class="tab-text" :value="1" v-if="isManager">
+          Pending Requests
+        </v-tab>
       </v-tabs>
 
       <!-- Tab Content -->
       <v-tabs-window v-model="currentTab">
         <v-tabs-window-item :value="0">
           <TeamFlossHolidayTrackerCalender
-         
             :events="teamHolidays"
             @onUpdate="getTeamHolidays"
           />
         </v-tabs-window-item>
 
-        <v-tabs-window-item :value="1"> </v-tabs-window-item>
+        <v-tabs-window-item :value="1">
+          <v-table class="custom-table mt-3" density="comfortable">
+            <thead>
+              <tr>
+                <th style="width: 300px">User</th>
+                <th>Leave Type</th>
+                <th>Start Date</th>
+                <th>End Date</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(leave, index) in teamHolidays" :key="index">
+                <td>
+                  <div class="px-4" style="width: 300px">
+                    <p class="editable-text">
+                      {{ leave.user.fullName }}
+                    </p>
+                  </div>
+                </td>
+                <td>
+                  <div class="px-4">{{ leave.title }}</div>
+                </td>
+                <td>
+                  <div class="px-4">{{ getParsedDate(leave.start) }}</div>
+                </td>
+                <td>
+                  <div class="px-4">{{ getParsedDate(leave.end) }}</div>
+                </td>
+                <td>
+                  <div class="px-4">{{ leave.status }}</div>
+                </td>
+                <td>
+                  <div class="px-4 d-flex align-center cursor-pointer">
+                    <v-icon
+                      @click="updateStatus('Approved', leave.id)"
+                      v-if="leave.status === 'Pending'"
+                      class="mr-5"
+                      color="primary"
+                      >mdi-check-circle-outline</v-icon
+                    >
+                    <v-icon
+                      @click="updateStatus('Rejected', leave.id)"
+                      v-if="leave.status === 'Pending'"
+                      color="error"
+                      >mdi-minus-circle-outline</v-icon
+                    >
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </v-table>
+        </v-tabs-window-item>
       </v-tabs-window>
     </div>
   </div>
@@ -29,6 +83,7 @@
 <script setup>
 const { isManager } = useUser();
 const userStore = useUserStore();
+const mainStore = useMainStore();
 const teamHolidays = ref([]);
 const currentTab = ref(0);
 
@@ -44,6 +99,26 @@ const getTeamHolidays = () => {
         el.end = new Date(el.end);
       });
       teamHolidays.value = res.data;
+    }
+  });
+};
+const getParsedDate = (date) => {
+  return new Date(date).toLocaleDateString();
+};
+
+const updateStatus = (status, id) => {
+  userStore.updateLeaveStatus({ id, status }).then((res) => {
+    if (res.code === 0) {
+      mainStore.setSnackbar({
+        title: "Leave Status updated successfully",
+        type: "success",
+      });
+      getTeamHolidays()
+    } else {
+      mainStore.setSnackbar({
+        title: res.data.message || res.data,
+        type: "error",
+      });
     }
   });
 };
@@ -90,5 +165,50 @@ const getTeamHolidays = () => {
     font-size: 12px;
     color: #c3c3c3;
   }
+}
+:deep(.v-table__wrapper table) {
+  width: 100% !important;
+  border-collapse: collapse;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  table-layout: fixed; /* Ensures columns align */
+}
+
+.custom-table th,
+.custom-table td {
+  font-weight: 400;
+  font-size: 13px;
+  padding: 8px 12px; /* same for both */
+  border: 1px solid #dbdbdb;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.custom-table th {
+  background-color: #f6f6f6;
+  font-weight: 500;
+}
+
+.custom-table tbody tr:hover {
+  background-color: #f9f9f9;
+}
+
+/* Remove borders overlapping with parent container */
+.custom-table th:first-child,
+.custom-table td:first-child {
+  border-left: none;
+}
+
+.custom-table th:last-child,
+.custom-table td:last-child {
+  border-right: none;
+}
+
+.custom-table thead tr:first-child th {
+  border-top: none;
+}
+
+.custom-table tbody tr:last-child td {
+  border-bottom: none;
 }
 </style>

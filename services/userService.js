@@ -110,4 +110,15 @@ export default {
         });
     });
   },
+  updateLeaveStatus(data) {
+    return new Promise((resolve, reject) => {
+      Post("/users/updateLeave", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
 };

@@ -5,13 +5,18 @@
     @click="$emit('open', file)"
     flat
   >
-    <!-- File Image -->
-    <img
-      src="@/assets/images/flosslydocs/file.svg"
-      :width="34"
-      :height="45.8"
-      class="mr-3"
-    />
+   
+   
+       <img
+    :src="isExcel 
+      ? 'https://cdn-icons-png.flaticon.com/512/732/732220.png' 
+      : '@/assets/images/flosslydocs/file.svg'"
+    :width="34"
+    :height="45.8"
+    class="mr-3"
+    alt="file icon"
+  />
+
 
     <!-- File Details --> 
     <div>
@@ -42,6 +47,7 @@
 </template>
 
 <script setup>
+
 defineProps({
   file: {
     type: Object,
@@ -50,7 +56,11 @@ defineProps({
   folder: {
     type: Object,
     required: false
-  }
+  },
+   isExcel: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 defineEmits(["open"]);

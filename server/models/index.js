@@ -44,6 +44,10 @@ import { Course } from "./cpd/course";
 import { CourseQuestionaire } from "./cpd/courseQuestionaire";
 import { UserCourseHistory } from "./cpd/userCourseHistory";
 import { OrganisationPeople } from "./organisations/organisationPeople";
+import { MetaPage } from "./crm/metaPages";
+import { CrmLead } from "./crm/leads";
+import { MetaUserToken } from "./crm/metaUserTokens";
+import { ChatbotConfig } from "./crm/chatbotConfig";
 
 /* Relations and Associations */
 
@@ -398,6 +402,23 @@ OrganisationPeople.belongsTo(Organisation, {
   as: "organisation",
 });
 
+// CRM (Meta Integration) - basic associations
+MetaPage.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
+MetaPage.belongsTo(User, { foreignKey: 'userId', as: 'user' })
+Organisation.hasMany(MetaPage, { foreignKey: 'organisationId', as: 'metaPages' })
+
+CrmLead.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
+Organisation.hasMany(CrmLead, { foreignKey: 'organisationId', as: 'crmLeads' })
+MetaUserToken.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
+MetaUserToken.belongsTo(User, { foreignKey: 'userId', as: 'user' })
+Organisation.hasMany(MetaUserToken, { foreignKey: 'organisationId', as: 'metaUserTokens' })
+
+// Chatbot Configuration associations
+ChatbotConfig.belongsTo(Organisation, { foreignKey: 'organizationId', as: 'organisation' })
+ChatbotConfig.belongsTo(User, { foreignKey: 'userId', as: 'user' })
+Organisation.hasOne(ChatbotConfig, { foreignKey: 'organizationId', as: 'chatbotConfig' })
+User.hasMany(ChatbotConfig, { foreignKey: 'userId', as: 'chatbotConfigs' })
+
 // CPD Associations
 Course.hasMany(CourseQuestionaire, { foreignKey: "courseId", as: "questions" });
 CourseQuestionaire.belongsTo(Course, { foreignKey: "courseId", as: "course" });
@@ -463,4 +484,9 @@ export {
   Course,
   CourseQuestionaire,
   UserCourseHistory,
+  // CRM
+  MetaPage,
+  CrmLead,
+  MetaUserToken,
+  ChatbotConfig,
 };

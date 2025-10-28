@@ -1,4 +1,5 @@
 <script setup>
+const { setUser } = useUser();
 definePageMeta({
   layout: "default",
 });
@@ -11,6 +12,7 @@ if (import.meta.client) {
   savedRoute = localStorage.getItem("route");
   localStorage.clear();
 }
+setUser(null);
 if (savedRoute === "forgetpassword") {
   router.push({ name: savedRoute, params: { step: 2 } });
 } else {

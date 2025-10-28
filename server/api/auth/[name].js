@@ -16,7 +16,9 @@ import {
   getUserHrDocuments,
   addUserHrDoc,
   removeUserDoc,
-  switchOrgnanisation
+  switchOrgnanisation,
+  createShortLivedToken,
+  exchangeShortLivedToken
 } from "../../controllers/auth";
 import bcrypt from "bcrypt";
 export default defineEventHandler(async (event) => {
@@ -60,6 +62,10 @@ export default defineEventHandler(async (event) => {
       return await removeUserDoc(event)
       case "switchOrg":
         return await switchOrgnanisation(event)
+    case "createShortToken":
+      return await createShortLivedToken(event);
+    case "exchangeShortToken":
+      return await exchangeShortLivedToken(event);
     default:
       return { code: 0, error: "Not found" };
   }

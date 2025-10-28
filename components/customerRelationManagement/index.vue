@@ -5,7 +5,7 @@
     </div>
     <div class="mt-5 px-5">
       <v-row>
-        <v-col cols="12" sm="4"  md="2" v-for="(stat, i) in leadStats" :key="i">
+        <v-col cols="12" sm="4" md="2" v-for="(stat, i) in leadStats" :key="i">
           <CommonStatCard
             :icon="stat.icon"
             :label="stat.label"
@@ -13,7 +13,7 @@
             :uid="i"
             hide-chip
           />
-          </v-col>
+        </v-col>
       </v-row>
     </div>
     <div class="mt-5 px-5">
@@ -40,19 +40,64 @@
           />
         </div>
 
-        <!-- Right: Add Button -->
-        <v-btn
-          color="primary"
-          variant="flat"
-          rounded="lg"
-          @click="addLeadDrawer = true"
-          class="add-task-btn"
-        >
-          <template #prepend>
-            <v-icon size="18">mdi-plus-circle-outline</v-icon>
-          </template>
-          Add New Lead
-        </v-btn>
+        <!-- Right: Connection Controls -->
+        <div class="d-flex align-center" style="gap: 8px">
+          <div class="d-flex align-center">
+            <v-btn
+              color="primary"
+              variant="flat"
+              rounded="lg"
+              @click="addLeadDrawer = true"
+              class="add-task-btn"
+            >
+              <template #prepend>
+                <v-icon size="18">mdi-plus-circle-outline</v-icon>
+              </template>
+              Add New Lead
+            </v-btn>
+            <v-chip
+              :color="isConnected ? 'green' : 'grey'"
+              size="small"
+              class="text-white"
+              variant="flat"
+            >
+              {{ isConnected ? "Meta Connected" : "Not Connected" }}
+            </v-chip>
+            <v-btn
+              size="small"
+              variant="text"
+              @click="fetchNow"
+              :disabled="!isConnected"
+            >
+              <v-icon size="16" class="mr-1">mdi-refresh</v-icon> Fetch Leads
+              Now
+            </v-btn>
+            <v-btn
+              color="primary"
+              variant="flat"
+              rounded="lg"
+              class="add-task-btn ml-2"
+              @click="onConnectChatbot"
+            >
+              <template #prepend>
+                <v-icon size="18">mdi-robot-outline</v-icon>
+              </template>
+              Connect to Chatbot
+            </v-btn>
+            <v-btn
+              color="primary"
+              variant="flat"
+              rounded="lg"
+              class="add-task-btn ml-2"
+              @click="integrateMeta"
+            >
+              <template #prepend>
+                <v-icon size="18">mdi-link-variant</v-icon>
+              </template>
+              {{ isConnected ? "Reconnect Meta" : "Integrate Meta" }}
+            </v-btn>
+          </div>
+        </div>
       </div>
 
       <!-- List View (child) -->
@@ -81,37 +126,44 @@
 </template>
 
 <script setup>
+import crmService from "@/services/crmService";
 const userStore = useUserStore();
+const authStore = useAuthStore();
 const userList = ref([]);
 const addLeadDrawer = ref(false);
 
-const leadStats = ref([
-  {
-    icon: "https://cdn.lordicon.com/asyunleq.json",
-    label: "Total Lead",
-    value: 10,
-  },
-  {
-    icon: "https://cdn.lordicon.com/kphwxuxr.json",
-    label: "New",
-    value: 2,
-  },
-  {
-    icon: "https://cdn.lordicon.com/qlpudrww.json",
-    label: "Converted",
-    value: 2,
-  },
-  {
-    icon: "https://cdn.lordicon.com/excswhey.json",
-    label: "Contacted",
-    value: 2,
-  },
-  {
-    icon: "https://cdn.lordicon.com/tzynxkwl.json",
-    label: "Lost",
-    value: 2,
-  },
-]);
+const leadStats = computed(() => {
+  const total = leads.value.length;
+  const byStatus = (s) =>
+    leads.value.filter((l) => (l.leadStatus || "").toLowerCase() === s).length;
+  return [
+    {
+      icon: "https://cdn.lordicon.com/asyunleq.json",
+      label: "Total Lead",
+      value: total,
+    },
+    {
+      icon: "https://cdn.lordicon.com/kphwxuxr.json",
+      label: "New",
+      value: byStatus("new"),
+    },
+    {
+      icon: "https://cdn.lordicon.com/qlpudrww.json",
+      label: "Converted",
+      value: byStatus("converted"),
+    },
+    {
+      icon: "https://cdn.lordicon.com/excswhey.json",
+      label: "Contacted",
+      value: byStatus("contacted"),
+    },
+    {
+      icon: "https://cdn.lordicon.com/tzynxkwl.json",
+      label: "Lost",
+      value: byStatus("lost"),
+    },
+  ];
+});
 const search = ref("");
 
 const leads = ref([
@@ -202,15 +254,83 @@ const onSelect = (selection) => {
 };
 onMounted(() => {
   getUsers();
+  initLeads();
+  checkConnection();
 });
 const getUsers = () => {
   userStore.getUserList({ roleId: null }).then((res) => {
     if (res.code === 0) userList.value = res.data;
   });
 };
+// TODO: this needs to be enhanced. there should be a registered chatbots model in DB to store information of each practice creating chatbot
+const onConnectChatbot = async () => {
+  authStore.createShortToken().then((res) => {
+    if (res.code === 0 && res.data) {
+      const config = useRuntimeConfig();
+      window.open(
+        config.public.CHATBOT_URL + `/botbuilder/auth?token=${res.data}`,
+        "_blank"
+      );
+    }
+  });
+};
 
 const updateLeads = (newLead) => {
   leads.value.push(newLead);
+};
+
+const route = useRoute();
+const initLeads = async () => {
+  if (route.query.meta === "connected") {
+    try {
+      await crmService.fetchLeadsNow();
+    } catch (e) {}
+  }
+  const res = await crmService.fetchLeads();
+  if (res && res.code === 0) {
+    leads.value = (res.data || []).map((l) => ({
+      alert: l.alert || "",
+      name: l.name || "",
+      email: l.email || "",
+      telephone: l.telephone || "",
+      inquiryDate: l.inquiryDate || "",
+      leadSource: l.leadSource || { id: 99, name: "Meta Leadgen" },
+      leadStatus: l.leadStatus || "New",
+      treatment: l.treatment || { id: null, name: "" },
+      assigned: l.assigned || [],
+      followUpDate: l.followUpDate || "",
+      comments: l.comments || "",
+      id: l.id,
+    }));
+  }
+};
+
+const integrateMeta = async () => {
+  const res = await crmService.startMetaAuth();
+  if (res && res.code === 0 && res.data?.url) {
+    window.location.href = res.data.url;
+  }
+};
+
+const isConnected = ref(false);
+const connection = ref({ count: 0, pages: [], lastConnectedAt: null });
+const checkConnection = async () => {
+  try {
+    const res = await crmService.connectionStatus();
+    if (res && res.code === 0) {
+      connection.value = res.data || { count: 0, pages: [] };
+      isConnected.value = (connection.value.count || 0) > 0;
+    }
+  } catch (e) {
+    isConnected.value = false;
+  }
+};
+
+const fetchNow = async () => {
+  try {
+    await crmService.fetchLeadsNow();
+    await initLeads();
+  } catch (e) {}
 };
 </script>
 
@@ -227,7 +347,6 @@ const updateLeads = (newLead) => {
   }
 }
 :deep(.v-breadcrumbs) {
-  
   font-weight: 400;
   font-size: 14px;
 }

@@ -177,6 +177,7 @@
 </template>
 
 <script setup>
+const { setUser } = useUser()
 import { useDisplay } from "vuetify";
 const { smAndDown, mdAndUp, lgAndUp } = useDisplay();
 const initialPage = ref(true);
@@ -242,6 +243,7 @@ const getProfile = () => {
     .then((res) => {
       if (res.code === 0) {
         const user = res.data;
+        setUser(user)
         localStorage.setItem("user", JSON.stringify(user));
         store.setSnackbar({
           title: "Login Successful",

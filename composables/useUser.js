@@ -1,17 +1,29 @@
 // composables/useUser.js
 export const useUser = () => {
-  const user = useState('user', () => null)
+  const user = useState('user', () => {
+    if (process.client) {
+      const storedUser = localStorage.getItem('user')
+      return storedUser ? JSON.parse(storedUser) : null
+    }
+    return null
+  })
 
-  if (process.client && !user.value) {
-    const storedUser = localStorage.getItem('user')
-    user.value = storedUser ? JSON.parse(storedUser) : null
+  const isManager = computed(() => [1, 8].includes(user.value?.roleId))
+
+  const setUser = (newUser) => {
+    user.value = newUser
+    if (process.client) {
+      if (newUser) {
+        localStorage.setItem('user', JSON.stringify(newUser))
+      } else {
+        localStorage.removeItem('user')
+      }
+    }
   }
-
-  // Derived booleans
-  const isManager = computed(() => user.value?.roleId === 8 || user.value?.roleId === 1)
 
   return {
     user,
-    isManager
+    isManager,
+    setUser
   }
 }

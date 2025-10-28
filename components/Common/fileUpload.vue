@@ -6,7 +6,7 @@
     @click="triggerFileInput"
   >
     <img
-      src="@/assets/images/flosslydocs/fileupload.svg"
+      src="@/assets/logos/signupSetupScreen/uploadimg.svg"
       alt="Upload File"
       width="50"
       height="50"
@@ -93,7 +93,7 @@ defineExpose({
   background-color: #ffffff;
 }
 .upload-box:hover {
-  border-color: #60e5a3;
+  border-color: #0061fb;
 }
 .upload-text {
   margin-top: 12px;
@@ -101,7 +101,7 @@ defineExpose({
   font-size: 14px;
 }
 .browse-text {
-  color: #60e5a3;
+  color: #0061fb;
   font-weight: 500;
   cursor: pointer;
   margin-left: 4px;

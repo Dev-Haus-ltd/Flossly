@@ -41,7 +41,7 @@
           "
           flat
         />
-        <CommonFileUpload
+        <CommonFileUpload 
           v-if="selectedFolder?.id || folder?.id"
           ref="fileUploader"
           @onFiles="getFiles"

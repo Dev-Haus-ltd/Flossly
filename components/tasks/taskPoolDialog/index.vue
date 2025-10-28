@@ -120,7 +120,7 @@
                     :id="item.id"
                     :title="item.title"
                     v-model:checked="item.checked"
-                    @checked="handleCheck"
+                 @checked="(data) => handleCheck( data)"
                   />
                 </v-list>
                 <h3 v-else class="ma-6">No Tasks Found.</h3>
@@ -275,15 +275,15 @@ const addTaskToBoard = async () => {
   }
 };
 
-const handleCheck = ({ id, checked }) => {
-  const task = tasks.value.find((task) => task.id === id);
+const handleCheck = ( data ) => {
+  const task = tasks.value.find((task) => task.id === data.id);
   if (!task) return;
-  if (checked) {
-    if (!selectedTasks.value.some((t) => t.id === id)) {
+  if (data.checked) {
+    if (!selectedTasks.value.some((t) => t.id === data.id)) {
       selectedTasks.value.push(task);
     }
   } else {
-    selectedTasks.value = selectedTasks.value.filter((t) => t.id !== id);
+    selectedTasks.value = selectedTasks.value.filter((t) => t.id !== data.id);
   }
 };
 

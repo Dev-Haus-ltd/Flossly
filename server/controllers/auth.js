@@ -15,6 +15,7 @@ import {
   UserPoint,
   UserContract,
   UserHrDocument,
+  UserPointsHistory,
 } from "../models";
 import { generateOTP, generateVerificationLink } from "../utils/misc";
 import bcrypt from "bcrypt";
@@ -68,6 +69,49 @@ export const login = async (event) => {
   await LoginHistory.create({ userId: user.id, browserAgent });
   setCookie(event, "accessToken", token, { maxAge: 31536000 });
   return success(token);
+};
+
+export const createShortLivedToken = async (event) => {
+  const loggedUser = event.context.user;
+  try {
+    if (!loggedUser || !loggedUser.userId || !loggedUser.orgId || !loggedUser.roleId) {
+      return error(401, "Unauthenticated");
+    }
+    const shortToken = jwt.sign(
+      {
+        userId: loggedUser.userId,
+        orgId: loggedUser.orgId,
+        roleId: loggedUser.roleId,
+        purpose: "third_party_redirect",
+      },
+      config.JWT_SECRET,
+      { expiresIn: "60s" }
+    );
+    return success(shortToken);
+  } catch (err) {
+    return error(500, err.message || err);
+  }
+};
+
+export const exchangeShortLivedToken = async (event) => {
+  const body = await readBody(event);
+  const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+  const { shortToken } = parsed;
+  try {
+    if (!shortToken) return error(400, "shortToken required");
+    const payload = jwt.verify(shortToken, config.JWT_SECRET);
+    if (!payload || payload.purpose !== "third_party_redirect") {
+      return error(400, "Invalid token purpose");
+    }
+    const token = jwt.sign(
+      { userId: payload.userId, orgId: payload.orgId, roleId: payload.roleId },
+      config.JWT_SECRET
+    );
+    // setCookie(event, "accessToken", token, { maxAge: 31536000 });
+    return success(token);
+  } catch (err) {
+    return error(400, err.message || "Invalid/Expired token");
+  }
 };
 
 export const signupRequest = async (event) => {
@@ -331,6 +375,8 @@ export const switchOrgnanisation = async (event) => {
       { userId: user.userId, roleId: user.roleId, orgId },
       config.JWT_SECRET
     );
+
+    setCookie(event, "accessToken", newToken, { maxAge: 31536000 });
     return success(newToken);
   } catch (err) {
     return error(500, err);
@@ -683,7 +729,29 @@ export const addUserHrDoc = async (event) => {
     userDoc.uploadedDate = new Date();
     userDoc.status = "Completed";
     await userDoc.save();
-    // add reward points
+    await UserPointsHistory.create({
+      userId,
+      rewardPointId: 7,
+      points: 50,
+      description: name,
+    });
+    const userPoints = await UserPoint.findOne({
+      where: { userId },
+    });
+    if (!userPoints) {
+      await UserPoint.create({
+        userId,
+        balance: 50,
+        totalPointsRewarded: 50,
+        redeemed: 0,
+      });
+    }
+    if (userPoints) {
+      userPoints.balance += 50;
+      userPoints.totalPointsRewarded += 50;
+      await userPoints.save();
+    }
+    // Notification
     return success("Added");
   } catch (err) {
     return error(500, err.message);
