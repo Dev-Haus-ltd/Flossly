@@ -1,27 +1,27 @@
 <template>
-  <v-container>
-    <v-row v-if="prices && !selectedPriceId">
+    <v-row v-if="prices && !selectedPriceId" class="pricing-row">
       <v-col
         v-for="(plan, index) in prices"
         :key="index"
         cols="12"
-        sm="6"
-        :md="col"
-        :lg="col"
+        sm="12"
+        md="6"
+        lg="6"
+        xl="6"
+        class="d-flex"
       >
         <v-card
-          class="pa-7 d-flex flex-column justify-space-between"
-          height="520"
+          class="pa-6 pa-md-8 d-flex flex-column justify-space-between pricing-card"
           :elevation="0"
           :style="{
             border: '1px solid #DCDCDC',
-            borderRadius: '40px',
+            borderRadius: '24px',
             backgroundColor: plan.product.name === 'Flossly - Glide Package' ? '#EFF5F5' : plan.bgColor
           }"
         >
-          <div>
-            <div class="font-title mb-1">{{ plan.product.name }}</div>
-            <div class="font-subtitle text-grey-darken-1 mb-4">
+          <div class="card-content flex-grow-1">
+            <div class="font-title mb-2">{{ plan.product.name }}</div>
+            <div class="font-subtitle text-grey-darken-1 mb-5">
               {{ plan.description }}
             </div>
 
@@ -29,25 +29,25 @@
             <div class="font-price mb-1">
               {{ formatPrice(plan.unit_amount, plan.currency) }}
             </div>
-            <div class="font-price-desc mb-6">
+            <div class="font-price-desc mb-5">
               Per user/month, billed monthly
             </div>
 
             <!-- Core Features -->
-            <div class="font-section-title mb-2">Core Features</div>
+            <div class="font-section-title mb-3">Core Features</div>
             <div
               v-for="(feature, i) in features.find(
                 (x) => x.type === plan.product.name
               )?.features"
               :key="i"
-              class="flex items-start gap-2 mt-2"
+              class="feature-item mb-2"
             >
-              <div class="d-flex align-center mt-3">
+              <div class="d-flex align-start">
                 <img
                   src="@/assets/icons/checkbox.svg"
                   alt="checkbox"
-                  class="mr-2"
-                style="width: 20px; height: 20px;"
+                  class="mr-3 mt-1 flex-shrink-0"
+                  style="width: 18px; height: 18px;"
                 />
 
                 <!-- Label with tooltip -->
@@ -55,7 +55,7 @@
                   <template #activator="{ props }">
                     <span
                       v-bind="props"
-                      class="feature-statement"
+                      class="feature-text"
                       :title="feature"
                     >
                       {{ feature }}
@@ -66,24 +66,29 @@
                   {{ feature }}
                 </v-tooltip>
 
-                <span v-else style="font-size: 14px">
+                <span v-else class="feature-text">
                   {{ feature }}
                 </span>
               </div>
               <!-- Checkbox image -->
             </div>
           </div>
-          <v-btn
-            color="primary"
-            class="font-button mt-4"
-            :disabled="licenseType === plan.product.id"
-            @click="handleSubscribe(plan.id)"
-          >
-            <span v-if="licenseType === plan.product.id">Active</span>
-            <span v-else-if="!licenseType">Start Now</span>
+          <div class="card-footer mt-6">
+            <v-btn
+              variant="flat"
+              rounded="lg" size="x-large"
+              color="primary"
+              class="font-button"
+              block
+              :disabled="licenseType === plan.product.id"
+              @click="handleSubscribe(plan.id)"
+            >
+              <span v-if="licenseType === plan.product.id">Active</span>
+              <span v-else-if="!licenseType">Start Now</span>
 
-            <span v-else>Upgrade</span>
-          </v-btn>
+              <span v-else>Upgrade</span>
+            </v-btn>
+          </div>
         </v-card>
       </v-col>
     </v-row>
@@ -134,7 +139,6 @@
         />
       </div>
     </v-overlay>
-  </v-container>
 </template>
 <script setup>
 import { useStripe } from "@/composables/useStripe";
@@ -213,6 +217,43 @@ onMounted(fetchPrices);
 </script>
 
 <style scoped>
+.pricing-row {
+  margin: 0 -12px;
+}
+
+.pricing-row > .v-col {
+  padding: 12px;
+}
+
+.pricing-card {
+  width: 100%;
+  min-height: 600px;
+  height: auto;
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.pricing-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Ensure equal height cards in the same row */
+.d-flex > .pricing-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.card-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-footer {
+  flex-shrink: 0;
+  margin-top: auto;
+}
+
 .font-title {
   
   font-weight: 400;
@@ -257,11 +298,11 @@ color: #878787;
 }
 
 .font-button {
-  
   font-weight: 500;
   font-size: 14px;
   text-transform: none;
-  height: 42px;
+  height: 44px !important;
+  letter-spacing: 0.5px;
 }
 ::v-deep(.v-selection-control) {
   align-items: baseline !important;
@@ -272,19 +313,51 @@ color: #878787;
   padding: 12px;
   border-radius: 6px;
 }
-.feature-statement {
-  max-width: 250px;
-  display: inline-block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: pointer;
+.feature-item {
+  line-height: 1.5;
+}
+
+.feature-text {
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 1.6;
   color: #414141;
+  display: block;
+}
+
+/* For responsive screens */
+@media (max-width: 1280px) {
+  .pricing-row {
+    margin: 0 -8px;
+  }
   
-font-weight: 400;
-font-style: Regular;
-font-size: 14px;
+  .pricing-row > .v-col {
+    padding: 8px;
+  }
+  
+  .pricing-card {
+    min-height: 550px;
+  }
+}
 
+@media (max-width: 960px) {
+  .pricing-card {
+    min-height: auto;
+  }
+  
+  .pricing-row {
+    margin: 0 -4px;
+  }
+  
+  .pricing-row > .v-col {
+    padding: 4px;
+  }
+}
 
+@media (max-width: 600px) {
+  .pricing-card {
+    min-height: auto;
+    padding: 20px !important;
+  }
 }
 </style>

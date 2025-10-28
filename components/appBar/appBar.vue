@@ -20,7 +20,7 @@
               width="35"
               height="100%"
             />
-            <span class="dashboard-title">Flossly Dashboard</span>
+            <span class="text-h6 text-sm-h5 text-md-h5 font-weight-bold text-white ml-4 text-no-wrap">Flossly Dashboard</span>
           </template>
 
           <!-- Collapsed state: only icon -->
@@ -122,16 +122,5 @@ const toggleTheme = () => { ui.toggleTheme(); applyTheme(ui.theme) }
   display: flex;
   align-items: center; /* align title vertically with logo */
   height: 100%;
-}
-
-/* Title typography */
-.dashboard-title {
-  height: 26px;
-  font-family: "Inter", sans-serif;
-  font-weight: 700;
-  font-size: 20px;
-  line-height: 130%; /* ~26px */
-  color: #ffffff;
-  margin-left: 20px; /* spacing from logo */
 }
 </style>

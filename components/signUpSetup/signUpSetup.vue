@@ -2,13 +2,13 @@
   <div
     :class="
       steps[step].key === 3
-        ? 'py-5 d-flex flex-column fill-height'
-        : 'parent py-5 d-flex flex-column fill-height align-start ml-6'
+        ? 'form-container py-3 py-md-5 px-3 d-flex flex-column'
+        : 'form-container py-3 py-md-5 px-3 d-flex flex-column align-start ml-0 ml-md-6'
     "
   >
-    <div class="w-100">
-      <h2 class="mb-4 title">{{ steps[step].title }}</h2>
-      <h2 class="mb-4 sub-title">{{ steps[step].subTitle }}</h2>
+    <div class="form-content-wrapper">
+      <h2 class="mb-3 mb-md-4 title">{{ steps[step].title }}</h2>
+      <h2 class="mb-3 mb-md-4 sub-title">{{ steps[step].subTitle }}</h2>
 
       <!-- Dynamic Step Component -->
       <component
@@ -19,36 +19,47 @@
     </div>
 
     <!-- Navigation Buttons -->
-    <div class="mt-6 mt-auto" style="margin-left: 14px">
+    <div class="button-container">
       <v-btn
         color="grey-darken-1"
-        variant="outlined"
+        variant="tonal"
         :disabled="step === 0"
         @click="step--"
-        class="me-2"
+        class="me-2 nav-button"
         height="48"
         width="100"
+        rounded="lg" size="x-large"
+        style="font-size: 16px;"
       >
         Back
       </v-btn>
+
+      <v-btn 
+        color="primary"
+        variant="flat" 
+        height="48"
+        width="100"
+        class="nav-button"
+        @click="nextStep" 
+        v-if="step < steps.length - 1"
+        rounded="lg" size="x-large"
+        style="font-size: 16px;"
+      >
+        Next
+      </v-btn>
+
       <v-btn
         v-if="step === 1"
         color="grey-darken-1"
-        variant="outlined"
+        variant="text"
         @click="step++"
-        class="me-2"
-          height="48"
+        class="me-2 nav-button"
+        height="48"
         width="100"
+        rounded="lg" size="x-large"
+        style="font-size: 16px;"
       >
-        Skip
-      </v-btn>
-
-      <v-btn color="primary" 
-      height="48"
-      width="100"
-        
-        @click="nextStep" v-if="step < steps.length - 1">
-        Next
+      Skip for now
       </v-btn>
 
       <v-btn
@@ -57,6 +68,10 @@
         @click="navigateToDashboard"
         height="48"
         width="150"
+        class="nav-button"
+        rounded="lg" size="x-large"
+        variant="flat"
+        style="font-size: 16px;"
       >
         Go to Dashboard
       </v-btn>
@@ -73,21 +88,30 @@ const orgStore = useOrgStore();
 const authStore = useAuthStore();
 const mainStore = useMainStore(); 
 const router = useRouter();
+
+// Define emit to send current step to parent
+const emit = defineEmits(['update:currentStep']);
+
 // Steps metadata
 const step = ref(0);
+
+// Watch step changes and emit to parent
+watch(step, (newStep) => {
+  emit('update:currentStep', newStep);
+}, { immediate: true });
 const steps = [
   {
     key: 1,
     title: "Quick Clinic Setup",
     subTitle:
-      "Enter your clinic details to personalize your Flossly workspace.",
+      "Enter your clinic details to personlise your Flossly workspace.",
     component: clinicSetup,
   },
   {
     key: 2,
     title: "Add Team Members",
     subTitle:
-      "Enhance your team's collaboration and efficiency by inviting new members to your Key Stone platform.",
+      "Enhance your team's collaboration and efficiency by inviting new members to your Flossly workspace.",
     component: AddTeamMembers,
   },
   {
@@ -192,23 +216,109 @@ const navigateToDashboard = () => {
 };
 </script>
 <style scoped>
-.parent {
-  width: 70%;
-  
+.form-container {
+  width: 100%;
+  min-height: 100%;
 }
+
+.form-content-wrapper {
+  width: 100%;
+  max-width: 600px;
+}
+
 .title {
-  
   font-weight: 600;
   font-size: 40px;
   line-height: 60px;
   letter-spacing: 0%;
   color: #1e1e1e;
 }
+
 .sub-title {
-  
   font-weight: 400;
   font-size: 16px;
   line-height: 100%;
   color: #8b8b8b;
+}
+
+/* Button container */
+.button-container {
+  margin-left: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* Mobile Responsive Adjustments */
+@media (max-width: 959px) {
+  .form-container {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+  
+  .title {
+    font-size: 28px;
+    line-height: 1.3;
+  }
+  
+  .sub-title {
+    font-size: 14px;
+    line-height: 1.4;
+  }
+  
+  .button-container {
+    margin-left: 0;
+  }
+}
+
+/* Tablet Adjustments (600px - 959px) */
+@media (min-width: 600px) and (max-width: 959px) {
+  .title {
+    font-size: 32px;
+    line-height: 1.3;
+  }
+  
+  .sub-title {
+    font-size: 15px;
+  }
+}
+
+/* Small Mobile (320px - 599px) */
+@media (max-width: 599px) {
+  .form-container {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+  
+  .title {
+    font-size: 24px;
+    line-height: 1.25;
+  }
+  
+  .sub-title {
+    font-size: 13px;
+  }
+  
+  .form-content-wrapper {
+    max-width: 100%;
+  }
+  
+  .button-container {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  
+  .nav-button {
+    min-width: 80px !important;
+  }
+}
+
+/* Medium Laptop (960px - 1279px) */
+@media (min-width: 960px) and (max-width: 1279px) {
+  .title {
+    font-size: 36px;
+    line-height: 1.3;
+  }
 }
 </style>
