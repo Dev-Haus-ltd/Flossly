@@ -34,7 +34,7 @@
     </v-card>
     <div
       class="mt-5"
-      style="border: 1px solid #dbdbdb; border-radius: 6px; overflow: hidden"
+      style="border: 1px solid rgba(var(--v-theme-on-surface), 0.12); border-radius: 6px; overflow: hidden"
     >
       <v-table class="notif-table" density="comfortable" divider>
         <thead>
@@ -67,7 +67,6 @@
                   <v-card class="pa-2">
                     <v-checkbox
                       class="menu-checkbox"
-                      color="black"
                       :model-value="emailAll"
                       :indeterminate="!emailAll && !emailNone"
                       label="Select All"
@@ -76,7 +75,6 @@
                     />
                     <v-checkbox
                       class="menu-checkbox"
-                      color="black"
                       :model-value="emailNone"
                       :indeterminate="!emailAll && !emailNone"
                       label="Select None"
@@ -106,7 +104,6 @@
                   <v-card class="pa-2">
                     <v-checkbox
                       class="menu-checkbox"
-                      color="black"
                       :model-value="pushAll"
                       :indeterminate="!pushAll && !pushNone"
                       label="Select All"
@@ -115,7 +112,6 @@
                     />
                     <v-checkbox
                       class="menu-checkbox"
-                      color="black"
                       :model-value="pushNone"
                       :indeterminate="!pushAll && !pushNone"
                       label="Select None"
@@ -139,7 +135,6 @@
               <v-checkbox
                 v-model="row.email"
                 class="row-checkbox"
-                color="black"
                 hide-details
                 @update:model-value="onToggle(row, 'email')"
               />
@@ -149,7 +144,6 @@
               <v-checkbox
                 v-model="row.push"
                 class="row-checkbox"
-                color="black"
                 hide-details
                 @update:model-value="onToggle(row, 'push')"
               />
@@ -203,9 +197,8 @@ function onToggle(row, key) {
 
 <style scoped>
 .notif-desktop-card {
-  border: 1px solid #dbdbdb;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
   border-radius: 6px;
-  background-color: #eff5f5;
 }
 
 .card-content {
@@ -234,13 +227,11 @@ function onToggle(row, key) {
 .head-title {
   font-weight: 600;
   font-size: 14px;
-  color: #1e1e1e;
 }
 
 .head-subtitle {
   font-weight: 400;
   font-size: 12px;
-  color: #737373;
   margin-top: 2px;
 }
 
@@ -251,7 +242,6 @@ function onToggle(row, key) {
 }
 
 .dismiss-btn {
-  color: #1e1e1e !important;
   text-transform: none;
   font-weight: 500;
 }
@@ -276,7 +266,6 @@ function onToggle(row, key) {
   font-size: 14px;
 }
 .notif-table thead th {
-  background: #fff;
 }
 
 .left-head {
@@ -310,7 +299,6 @@ function onToggle(row, key) {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #101010;
   padding: 0px 16px;
 }
 .head-left-wrap {
@@ -320,12 +308,10 @@ function onToggle(row, key) {
 .head-title {
   font-weight: 600;
   font-size: 14px;
-  color: #1e1e1e;
 }
 .head-subtitle {
   font-weight: 400;
   font-size: 12px;
-  color: #737373;
   margin-top: 2px;
 }
 
@@ -342,7 +328,6 @@ function onToggle(row, key) {
 }
 
 .menu-checkbox :deep(.v-label) {
-  color: #737373;
   font-size: 14px;
 }
 /* Remove all default td/th borders */
@@ -353,6 +338,6 @@ function onToggle(row, key) {
 
 /* Add only header bottom border */
 :deep(.notif-table thead th) {
-  border-bottom: 1px solid #dbdbdb !important;
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.12) !important;
 }
 </style>

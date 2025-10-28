@@ -1,5 +1,5 @@
 <template>
-  <v-container fluid class="pa-4 bg-white">
+  <v-container fluid class="pa-4">
     <CommonFeatureCard
       heading="Updated Features"
       subheading="Flossly — finally, a platform built for dental practices, handling everything from rotas to compliance in one smart space."
@@ -29,7 +29,6 @@
       <v-col cols="12" sm="12" md="8" class="pr-md-0 d-flex flex-column">
         <v-card
           class="card flex-grow-1"
-          color="white"
           elevation="0"
           rounded="lg"
         >
@@ -106,8 +105,8 @@
               </v-col>
             </v-row>
             <div v-else class="text-center pa-5">
-              <v-icon size="48" color="grey">mdi-file-clock-outline</v-icon>
-              <p class="mt-3 text-grey">No recently accessed files</p>
+              <v-icon size="48">mdi-file-clock-outline</v-icon>
+              <p class="mt-3">No recently accessed files</p>
             </div>
           </div>
         </v-card>
@@ -115,7 +114,6 @@
       <v-col cols="12" sm="12" md="4" class="d-flex">
         <v-card
           class="card flex-grow-1"
-          color="white"
           elevation="0"
           rounded="lg"
           v-if="user?.roleId === 8 || user?.roleId === 1"
@@ -153,14 +151,13 @@
               <span>{{ source.label }}</span>
               <div class="d-flex align-center" style="gap: 70px">
                 <span>{{ source.count }}</span>
-                <span class="text-grey-darken-1">{{ source.percent }}%</span>
+                <span>{{ source.percent }}%</span>
               </div>
             </div>
           </div>
         </v-card>
         <v-card
           class="card flex-grow-1"
-          color="white"
           elevation="0"
           rounded="lg"
           v-else
@@ -183,11 +180,11 @@
                   <v-icon
                     v-bind="tooltipProps"
                     class="mx-auto"
-                    :color="event.color"
-                    size="8"
-                  >
-                    mdi-circle
-                  </v-icon>
+                  :color="event.color"
+                  size="8"
+                >
+                  mdi-circle
+                </v-icon>
                 </template>
                 <span>{{ event.title }}</span>
               </v-tooltip>
@@ -203,7 +200,6 @@
       <v-col cols="12" sm="12" md="8" class="pr-md-0 pt-0">
         <v-card
           class="refer-card card pa-5"
-          color="white"
           elevation="0"
           rounded="lg"
         >

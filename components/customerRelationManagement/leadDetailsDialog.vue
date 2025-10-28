@@ -197,7 +197,7 @@
                     </div>
                   </v-col>
                   <v-col cols="12" md="5">
-                    <CommonAvatar :user="{ fullName: selectedLead.assigned[0].fullName }" />
+                    <CommonAvatarAvatar :user="{ fullName: selectedLead?.assigned[0]?.fullName }" />
                   </v-col>
 
               

@@ -392,10 +392,22 @@ const onDobSelected = (val) => {
   form.value.dob = val;
 };
 
+import crmService from "@/services/crmService";
+const mainStore = useMainStore();
 const onSubmit = async () => {
   const validation = await formRef.value.validate();
-  if (validation.valid) {
-    emit("success", form.value);
+  if (!validation.valid) return;
+  try {
+    const payload = { ...form.value };
+    const res = await crmService.createLead(payload);
+    if (res.code === 0) {
+      mainStore.setSnackbar({ title: "Lead created", type: "success" });
+      emit("success", res.data);
+    } else {
+      mainStore.setSnackbar({ title: res.message || "Failed to create lead", type: "error" });
+    }
+  } catch (e) {
+    mainStore.setSnackbar({ title: e.message || "Failed to create lead", type: "error" });
   }
 };
 </script>

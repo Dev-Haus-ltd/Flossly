@@ -5,7 +5,6 @@
         <!-- Header -->
         <div
           class="pa-4 d-flex justify-space-between align-center"
-          style="background-color: white"
         >
           <h3 class="title m-0">{{ taskDetails.title }}</h3>
           <div class="d-flex align-center">
@@ -68,7 +67,7 @@
         <!-- Scrollable content -->
         <div
           class="flex-grow-1 px-4 py-2"
-          style="overflow-y: auto; background-color: #f9f9f9"
+          style="overflow-y: auto;"
         >
           <v-tabs v-model="tab" class="custom-tabs px-4" slider-color="primary">
             <v-tab value="overview" class="tab-text">
@@ -257,7 +256,6 @@
                     placeholder="Type here"
                     density="compact"
                     :rules="requiredRule"
-                    bg-color="white"
                     elevation="0"
                     class="mt-1"
                     flat
@@ -287,7 +285,7 @@
                     <v-card
                       class="d-flex flex-column justify-space-between pa-3"
                       style="
-                        border: 1px solid #e0e0e0;
+                        border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
                         border-radius: 8px;
                         position: relative;
                         min-height: 150px;
@@ -319,7 +317,7 @@
                           variant="text"
                           @click="deleteFile(file)"
                         >
-                          <v-icon size="16" color="red">mdi-delete</v-icon>
+                          <v-icon size="16" color="error">mdi-delete</v-icon>
                         </v-btn>
                       </div>
 
@@ -328,7 +326,7 @@
                         class="d-flex align-center justify-center"
                         style="margin-top: 30px"
                       >
-                        <v-icon size="60" color="#9e9e9e">mdi-file</v-icon>
+                        <v-icon size="60">mdi-file</v-icon>
                       </div>
 
                       <!-- Divider -->
@@ -355,7 +353,7 @@
         <!-- Footer -->
         <div
           class="d-flex justify-end pa-6"
-          style="background-color: white; border-top: 1px solid #eee"
+          style="border-top: 1px solid rgba(var(--v-theme-on-surface), 0.12)"
         >
         
 

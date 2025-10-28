@@ -4,12 +4,11 @@
     :rail="rail"
     :temporary="smAndDown"
     :permanent="!smAndDown"
-    style="background-color: #f3f4f6"
   >
     <LeftSideBarPracticeMenu :currentOrg="currentOrg" :rail="rail" />
     <v-card
       class="d-flex flex-column py-1"
-      style="height: 87vh; overflow: auto; background-color: #f3f4f6"
+      style="height: 87vh; overflow: auto;"
     >
       <v-list density="compact" nav :class="[rail ? 'pr-0 rail-closed' : '']">
         <template v-for="item in menuItems" :key="item.value">
@@ -140,7 +139,6 @@
         variant="text"
         @click.stop="emit('update:rail', !rail)"
         class="d-flex align-center"
-        style="color: #737373"
       >
         <template v-if="!rail">
           Close
@@ -271,7 +269,6 @@ const currentOrg = ref({});
   position: relative;
   border-radius: 6px;
   .v-list-group--open {
-    background-color: #ffffff;
     border-right: 5px solid #0061fb;
     border-radius: 6px;
     .active-item {
@@ -300,7 +297,6 @@ const currentOrg = ref({});
 }
 .active-item {
   font-weight: 600 !important;
-  background-color: #ffffff;
   border-radius: 8px;
 }
 .right-border {

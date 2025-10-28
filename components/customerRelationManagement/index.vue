@@ -28,7 +28,6 @@
               variant="solo"
               density="compact"
               hide-details
-              bg-color="#FAFAFA"
               flat
               class="custom-search"
             />
@@ -56,9 +55,8 @@
               Add New Lead
             </v-btn>
             <v-chip
-              :color="isConnected ? 'green' : 'grey'"
+              :color="isConnected ? 'success' : undefined"
               size="small"
-              class="text-white"
               variant="flat"
             >
               {{ isConnected ? "Meta Connected" : "Not Connected" }}
@@ -335,15 +333,12 @@ const fetchNow = async () => {
 </script>
 
 <style scoped lang="scss">
-.parent {
-  background-color: white;
-}
+
 .cust-border {
   border-bottom: 1px solid #dbdbdb;
   padding: 17px;
   p {
     font-size: 12px;
-    color: #c3c3c3;
   }
 }
 :deep(.v-breadcrumbs) {

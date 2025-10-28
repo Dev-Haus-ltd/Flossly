@@ -6,7 +6,7 @@
         <v-card
           elevation="0"
           class="pa-7 flex-grow-1"
-          style="border: 1px solid #dbdbdb; border-radius: 12px"
+          style="border: 1px solid rgba(var(--v-theme-on-surface), 0.12); border-radius: 12px"
         >
           <!-- Top Section: Avatar + Name + Practice -->
           <div class="d-flex align-center mb-6">
@@ -82,7 +82,7 @@
         <v-card
           elevation="0"
           class="pa-7 flex-grow-1"
-          style="border: 1px solid #dbdbdb; border-radius: 12px"
+          style="border: 1px solid rgba(var(--v-theme-on-surface), 0.12); border-radius: 12px"
         >
           <div class="info-section">
             <!-- teamCount -->
@@ -148,7 +148,7 @@
               <label class="info-label">PIN Code Verification</label>
               <div
                 class="btn-group pa-1 rounded-lg"
-                style="border: 1px solid #dbdbdb; width: fit-content"
+                style="border: 1px solid rgba(var(--v-theme-on-surface), 0.12); width: fit-content"
               >
                 <v-btn
                   class="toggle-btn"
@@ -183,7 +183,6 @@
                   :label="day"
                   :value="day"
                   v-model="organisation.nonWorkingDays"
-                  color="black"
                   hide-details
                   class="day-checkbox mr-4 mb-2"
                 />
