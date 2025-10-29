@@ -1,7 +1,16 @@
 <template>
   <v-card>
     <v-card-title class="d-flex justify-space-between align-center">
-      Practice profile
+      <div class="d-flex align-center">
+        <v-btn
+          v-if="smAndDown"
+          icon="mdi-menu"
+          variant="text"
+          class="mr-2"
+          @click="showMobileSidebar = !showMobileSidebar"
+        />
+        <span>Practice profile</span>
+      </div>
       <v-btn icon="mdi-close" variant="text" @click="$emit('close')"></v-btn>
     </v-card-title>
 
@@ -10,15 +19,23 @@
     <v-card-text class="px-5 py-0" style="max-height: 100%; overflow: auto">
       <div class="d-flex">
         <!-- Sidebar -->
-        <CommonSideBar
-          :items="menuItems"
-          :selected="selectedSection"
-          @select="selectedSection = $event"
-          class="mr-4 sidebar"
+        <v-slide-x-transition>
+          <CommonSideBar
+            v-if="!smAndDown || showMobileSidebar"
+            :items="menuItems"
+            :selected="selectedSection"
+            @select="selectedSection = $event"
+            class="mr-4 sidebar"
+          />
+        </v-slide-x-transition>
+        <div
+          v-if="smAndDown && showMobileSidebar"
+          class="mobile-sidebar-backdrop"
+          @click="showMobileSidebar = false"
         />
 
         <!-- Main Content -->
-        <div class="flex-grow-1" style="margin-left: 200px; height: 85vh">
+        <div class="flex-grow-1" :style="{ marginLeft: smAndDown ? '0' : '200px', height: '85vh' }">
           <component
             v-if="practiceDetails && practiceDetails.id"
             :is="currentComponent"
@@ -32,7 +49,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, onMounted } from "vue";
 
 // Dummy components for each section
 import PracticeProfile from "./practiceProfile/index.vue";
@@ -41,12 +58,18 @@ import RoomManagement from "./roomManagement/index.vue";
 import ImportantPeople from "./importantPeople/index.vue";
 import GroupManagement from "./groupManagement/index.vue";
 import Equipment from "./equipment/index.vue";
+import { useDisplay } from "vuetify";
+
 
 import profileImg from "@/assets/icons/practiceProfile/profile.svg";
 import RoomImg from "@/assets/icons/practiceProfile/room.svg";
 import ContactImg from "@/assets/icons/practiceProfile/contact.svg";
+const { smAndDown } = useDisplay();
+
 import GroupImg from "@/assets/icons/practiceProfile/group.svg";
 import ImportantPeopleImg from "@/assets/icons/practiceProfile/importantPeople.svg";
+const showMobileSidebar = ref(false);
+
 
 // Sidebar menu items
 const menuItems = [
@@ -102,5 +125,25 @@ const getDetails = async () => {
   top: 65px;
   left: 0;
   position: fixed;
+}
+
+@media (max-width: 600px) {
+  .sidebar {
+    position: fixed;
+    top: 64px;
+    left: 0;
+    height: calc(100vh - 64px);
+    width: 80vw;
+    min-width: unset;
+    background: white;
+    z-index: 2001;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+  }
+  .mobile-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.3);
+    z-index: 2000;
+  }
 }
 </style>

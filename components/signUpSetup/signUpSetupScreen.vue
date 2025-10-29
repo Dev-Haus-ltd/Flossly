@@ -3,43 +3,87 @@
     <initial-screen @handle-init-screen="isInitScreen = false" />
   </div>
   <div class="parent" v-else>
-
-      <v-row>
-        <v-col cols="12" md="5" class="pa-0 px-4">
-          <left-stepper-template />
-        </v-col>
-        <v-col cols="12" md="7" class="d-flex align-center">
-          <sign-up-setup />
-        </v-col>
-      </v-row>
-   
-    <!-- <img
-      src="../../assets/logos/signupSetupScreen/waterMark.svg"
-      alt="watermark"
-      class="watermark"
-    /> -->
+    <v-row class="ma-0">
+      <!-- Left Column: Banner (hidden on mobile) -->
+      <v-col class="pa-0 d-none d-md-flex">
+        <left-stepper-template 
+          :active-step="currentStep" 
+          :is-mobile-view="false"
+        />
+      </v-col>
+      
+      <!-- Right Column: Form (full-width on mobile) -->
+      <v-col class="right-column" :class="{ 'mobile-view': true }">
+        <!-- Mobile Stepper (shown only on mobile/tablet) -->
+        <div class="d-flex d-md-none mobile-stepper-container">
+          <left-stepper-template 
+            :active-step="currentStep" 
+            :is-mobile-view="true"
+          />
+        </div>
+        
+        <!-- Form Content -->
+        <sign-up-setup @update:current-step="currentStep = $event" />
+      </v-col>
+    </v-row>
   </div>
 </template>
 
 <script setup>
 import initialScreen from "./initialScreen.vue";
 import leftStepperTemplate from "./leftStepperTemplate.vue";
+
 const isInitScreen = ref(true);
+const currentStep = ref(0);
 </script>
 
 <style scoped>
 .parent {
   position: relative;
   height: 100vh;
-  display: flex;
-  align-items: center;
+  overflow: hidden;
 }
 
-.watermark {
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 1000;
-  pointer-events: none;
+
+.right-column {
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-left: 48px;
+  padding-right: 48px;
+  padding-top: 48px;
+}
+
+/* Mobile view adjustments */
+@media (max-width: 959px) {
+  .right-column {
+    padding: 0 !important;
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .mobile-stepper-container {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    width: 100%;
+    margin-bottom: 0;
+  }
+}
+
+/* Tablet adjustments */
+@media (min-width: 600px) and (max-width: 959px) {
+  .right-column {
+    padding: 0 24px !important;
+  }
+}
+
+/* Medium laptop adjustments */
+@media (min-width: 960px) and (max-width: 1279px) {
+  .right-column {
+    padding-left: 32px;
+    padding-right: 32px;
+    padding-top: 32px;
+  }
 }
 </style>
