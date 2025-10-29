@@ -40,6 +40,8 @@ export default defineNuxtConfig({
     META_APP_SECRET: process.env.META_APP_SECRET,
     META_REDIRECT_URI: process.env.META_REDIRECT_URI,
     META_VERIFY_TOKEN: process.env.META_VERIFY_TOKEN,
+    //file size
+    MAX_FILE_SIZE_FOR_TASK_SHEET: process.env.MAX_FILE_SIZE_FOR_TASK_SHEET,
   },
   modules: [ 
     async (options, nuxt) => {
