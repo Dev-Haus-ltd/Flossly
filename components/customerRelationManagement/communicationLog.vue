@@ -1,7 +1,7 @@
 <template>
   <div>
     <!-- ░░░ Top Row: Preferences ░░░ -->
-    <v-row class="mb-4">
+    <v-row>
       <v-col cols="12" md="4">
         <label class="mb-1 fld-lbl">Preferred contact method</label>
         <v-select

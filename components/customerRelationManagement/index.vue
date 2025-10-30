@@ -234,14 +234,35 @@ const headers = [
 ];
 const leadSources = ref([]);
 const treatmentSources = ref([]);
-const filteredLeads = computed(() =>
-  leads.value.filter((l) =>
-    l.name.toLowerCase().includes(search.value.toLowerCase())
-  )
-);
+const filteredLeads = computed(() => {
+  const q = (search.value || "").toLowerCase();
+  const f = activeFilters.value || {};
+  return leads.value.filter((l) => {
+    const matchesText = (l.name || "").toLowerCase().includes(q) || (l.email || "").toLowerCase().includes(q) || (l.telephone || "").includes(q);
+    if (!matchesText) return false;
+    if (f.inquiryDate) {
+      const d = new Date(l.inquiryDate);
+      const fd = new Date(f.inquiryDate);
+      if (d.toDateString() !== fd.toDateString()) return false;
+    }
+    if (f.leadSourceId) {
+      const srcId = (l.leadSource && l.leadSource.id) ? l.leadSource.id : null;
+      if (String(srcId) !== String(f.leadSourceId)) return false;
+    }
+    if (f.leadStatus) {
+      if (String((l.leadStatus || "")).toLowerCase() !== String(f.leadStatus).toLowerCase()) return false;
+    }
+    if (f.treatmentId) {
+      const trId = (l.treatment && l.treatment.id) ? l.treatment.id : null;
+      if (String(trId) !== String(f.treatmentId)) return false;
+    }
+    return true;
+  });
+});
 
+const activeFilters = ref({});
 const onLeadsFilterUpdate = (filters) => {
-  console.log("Filters applied:", filters);
+  activeFilters.value = filters || {};
 };
 
 const onSelect = (selection) => {
@@ -298,6 +319,9 @@ const handleSuccess = (newLead) => {
     email: newLead.email,
     telephone: newLead.telephone,
     inquiryDate: newLead.inquiryDate,
+    dob: newLead.dob || null,
+    occupation: newLead.occupation || "",
+    location: newLead.location || "",
     leadSource: newLead.leadSource || { id: 99, name: 'Meta Leadgen' },
     leadStatus: newLead.leadStatus || 'New',
     treatment: newLead.treatment || { id: null, name: '' },
@@ -324,6 +348,9 @@ const initLeads = async () => {
       email: l.email || "",
       telephone: l.telephone || "",
       inquiryDate: l.inquiryDate || "",
+      dob: l.dob || null,
+      occupation: l.occupation || "",
+      location: l.location || "",
       leadSource: l.leadSource?.name ? l.leadSource : { id: 99, name: l.leadSource || "Meta Leadgen" },
       leadStatus: l.leadStatus || "New",
       treatment: l.treatment || { id: null, name: "" },

@@ -118,6 +118,9 @@
           />
         </template>
         <!-- Default renderer for other columns -->
+        <template v-else-if="col.key === 'inquiryDate' || col.key === 'followUpDate'">
+          <p class="ml-2 mb-0">{{ formatDate(item[col.key]) }}</p>
+        </template>
         <template v-else>
           <p class="ml-2 mb-0">{{ item[col.key] }}</p>
         </template>
@@ -180,11 +183,11 @@
 <script setup>
 import crmService from "@/services/crmService";
 const { user } = useUser();
-const emit = defineEmits(["select", "openLead", "delete"]);
+const emit = defineEmits(['select','openLead','delete']);
 const props = defineProps({
   leads: { type: Array, required: true },
   headers: { type: Array, required: true },
-  search: { type: String, default: "" },
+  search: { type: String, default: '' },
   leadSources: { type: Array, required: true },
   treatmentSources: { type: Array, required: true },
   users: { type: Array, required: true },
@@ -205,19 +208,27 @@ const actions = [
   { key: "archive", label: "Archive", icon: "mdi-archive-outline", color: "on-surface" },
   { key: "delete", label: "Delete", icon: "mdi-delete-outline", color: "on-surface" },
 ];
-
-const confirmDelete = ref(false)
-const deleting = ref(false)
-const converting = ref(false)
+const confirmDelete = ref(false);
+const deleting = ref(false);
+const converting = ref(false);
 const onActionClick = (key) => {
-  if (!selectedLeads.value.length) return
-  if (key === 'delete') {
-    confirmDelete.value = true
-  } else if (key === 'archive') {
-    doArchive()
-  } else if (key === 'convert') {
-    convertSelected()
+  if (!selectedLeads.value.length) return;
+  if (key === 'delete') confirmDelete.value = true;
+  else if (key === 'archive') doArchive();
+  else if (key === 'convert') convertSelected();
+};
+const formatDate = (d) => {
+  if (!d) return "";
+  if (typeof d === 'string') {
+    const m = d.match(/^\d{4}-\d{2}-\d{2}/);
+    if (m) return m[0];
   }
+  const dt = new Date(d);
+  if (isNaN(dt)) return "";
+  const y = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  return `${y}-${mm}-${dd}`;
 };
 const onSelect = (selection) => {
   console.log(selection);
@@ -265,12 +276,22 @@ const getLeadUsers = (lead) => {
   // } else return [];
   return props.users;
 };
-const unAssign = (task, user) => {
-  console.log(task, user);
+const unAssign = async (lead, user) => {
+  try {
+    const newAssigned = (lead.assigned || []).filter(u => u?.id !== user.id);
+    const res = await crmService.updateLead({ id: lead.id, assigned: newAssigned });
+    if (res?.code === 0) lead.assigned = newAssigned;
+  } catch (e) { /* noop */ }
 };
 
-const assignLead = (task, user) => {
-  console.log(task, user);
+const assignLead = async (lead, user) => {
+  try {
+    const already = (lead.assigned || []).some(u => u?.id === user.id);
+    if (already) return;
+    const newAssigned = [...(lead.assigned || []), { id: user.id, fullName: user.fullName, email: user.email }];
+    const res = await crmService.updateLead({ id: lead.id, assigned: newAssigned });
+    if (res?.code === 0) lead.assigned = newAssigned;
+  } catch (e) { /* noop */ }
 };
 
 const doDelete = async () => {

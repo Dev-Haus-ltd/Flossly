@@ -179,10 +179,12 @@
               <label class="mb-1 fld-lbl">Assign To</label>
               <v-select
                 v-model="form.assigned"
-                :items="staffList"
-                item-title="name"
+                :items="staffList || []"
+                item-title="fullName"
                 item-value="id"
+                multiple
                 return-object
+                chips
                 variant="solo"
                 density="compact"
                 class="mb-1 input-bordered"
@@ -360,7 +362,7 @@ const form = ref({
   leadStatus: null,
   contactMethod: null,
   treatment: null,
-  assigned: null,
+  assigned: [],
   followUpDate: null,
   dob: null,
   occupation: "",
@@ -445,35 +447,4 @@ const onSubmit = async () => {
   
 }
 </style>
-            <!-- Preferred Contact Method -->
-            <v-col cols="6">
-              <label class="mb-1 fld-lbl">Preferred Contact Method</label>
-              <v-select
-                v-model="form.contactMethod"
-                :items="contactMethods"
-                variant="solo"
-                density="compact"
-                class="mb-1 input-bordered"
-                flat
-                bg-color="white"
-              />
-            </v-col>
 
-            <!-- Assigned Staff -->
-            <v-col cols="12">
-              <label class="mb-1 fld-lbl">Assign To</label>
-              <v-select
-                v-model="form.assigned"
-                :items="staffList || []"
-                item-title="fullName"
-                item-value="id"
-                multiple
-                return-object
-                chips
-                variant="solo"
-                density="compact"
-                class="mb-1 input-bordered"
-                flat
-                bg-color="white"
-              />
-            </v-col>

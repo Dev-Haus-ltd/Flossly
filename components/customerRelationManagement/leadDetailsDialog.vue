@@ -7,7 +7,7 @@
           class="pa-4 d-flex justify-space-between align-center"
           style="background-color: rgb(var(--v-theme-surface))"
         >
-          <h3 class="title m-0">{{ selectedLead?.name + "'s profile" }}</h3>
+          <h3 class="title ml-4">{{ selectedLead?.name + "'s profile" }}</h3>
           <v-btn flat icon size="32" @click="$emit('close')">
             <v-icon size="20">mdi-close</v-icon>
           </v-btn>
@@ -197,7 +197,7 @@
                     </div>
                   </v-col>
                   <v-col cols="12" md="5">
-                    <CommonAvatarAvatar :user="{ fullName: selectedLead?.assigned[0]?.fullName }" />
+                    <CommonAvatar :user="{ fullName: selectedLead?.assigned[0]?.fullName }" />
                   </v-col>
 
               
@@ -230,8 +230,8 @@
                   </v-col>
                   <v-col cols="12" md="5">
                     <span class="value-text">{{
-                      selectedLead.dateOfBirth
-                        ? formatDate(selectedLead.dateOfBirth)
+                      selectedLead.dob
+                        ? formatDate(selectedLead.dob)
                         : "N/A"
                     }}</span>
                   </v-col>
@@ -441,7 +441,6 @@ const savePreferences = async () => {
   font-weight: 400;
   font-style: Regular;
   font-size: 14px;
-  color: rgb(var(--v-theme-on-surface-variant));
 }
 .cust-lbl {
   

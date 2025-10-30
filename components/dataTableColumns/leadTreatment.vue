@@ -11,7 +11,7 @@
           </p>
         </template>
   
-        <v-card width="250" class="pa-4">
+        <v-card width="250" class="pa-4" style="border-radius: 12px;">
           <v-list class="pa-0">
             <template v-if="!toggleEdit">
               <!-- List existing treatment sources -->

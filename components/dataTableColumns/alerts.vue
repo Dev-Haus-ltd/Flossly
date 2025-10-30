@@ -6,7 +6,6 @@
           <v-icon :color="current?.color || 'on-surface-variant'" size="18" class="mr-1">
             {{ current?.icon || 'mdi-plus' }}
           </v-icon>
-          <span class="text-truncate">{{ current?.label || 'Add alert' }}</span>
         </div>
       </template>
       <v-card width="260" class="pa-2">
