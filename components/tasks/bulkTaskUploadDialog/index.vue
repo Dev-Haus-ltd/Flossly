@@ -173,13 +173,16 @@
                 <!-- Frequency -->
                 <td :class="{ 'cell-error': task.errors?.frequency }">
                   <div class="relative">
-                    <v-text-field
+                    <v-select
                       v-model="task.defaultFrequency"
+                      :items="frequencies"
+                      item-title="name"
+                      item-value="name"
                       density="compact"
                       variant="outlined"
                       hide-details
-                      @input="validateTask(index)"
-                    ></v-text-field>
+                      @update:modelValue="validateTask(index)"
+                    ></v-select>
                     <v-tooltip v-show="task.errors?.frequency" location="top">
                       <template #activator="{ props: tooltipProps }">
                         <div v-bind="tooltipProps" class="absolute inset-0"></div>
@@ -367,15 +370,22 @@ const isUploading = ref(false);
 
 const taskStore = useTaskStore();
 const mainStore = useMainStore();
+const config = useRuntimeConfig();
 
 // Environment variable for max file size (5MB)
-const MAX_FILE_SIZE = parseInt(import.meta.env.MAX_FILE_SIZE_FOR_TASK_SHEET) || 5 * 1024 * 1024;
+const MAX_FILE_SIZE = parseInt(config.public.MAX_FILE_SIZE_FOR_TASK_SHEET) || 5 * 1024 * 1024
 
 // Computed - Use props directly for dropdowns
 const categories = computed(() => props.categories || []);
 const priorities = computed(() => props.priorities || []);
 const roles = computed(() => props.roles || []);
 const users = computed(() => props.users || []);
+
+const frequencies = ref([
+  { id: 1, name: "Daily" },
+  { id: 2, name: "Weekly" },
+  { id: 3, name: "Monthly" },
+]);
 
 // Computed
 const validationErrors = computed(() => {
@@ -625,36 +635,80 @@ const validateTaskRow = (task, index) => {
     task.hasErrors = true;
   }
 
-  // Category
+  // --- Category Validation ---
   if (!task.categoryId) {
-    task.errors.category = `Category "${task.originalCategory}" not found. Please select from dropdown.`;
-    task.hasErrors = true;
+    // If user hasn’t selected yet but has originalCategory value
+    if (!task.originalCategory?.trim()) {
+      task.errors.category = "Category is missing. Please select from dropdown.";
+    } else {
+      const matched = props.categories?.find(
+        c => c.name?.trim()?.toLowerCase() === task.originalCategory.trim().toLowerCase()
+      );
+      if (!matched) {
+        task.errors.category = `Category "${task.originalCategory}" is invalid. Please select from dropdown.`;
+      }
+    }
+    if (task.errors.category) task.hasErrors = true;
+  } else {
+    delete task.errors.category;
   }
 
-  // Priority
+  // --- Priority Validation ---
   if (!task.priorityId) {
-    task.errors.priority = `Priority "${task.originalPriority}" not found. Please select from dropdown.`;
-    task.hasErrors = true;
+    if (!task.originalPriority?.trim()) {
+      task.errors.priority = "Priority is missing. Please select from dropdown.";
+    } else {
+      const matched = props.priorities?.find(
+        p => p.name?.trim()?.toLowerCase() === task.originalPriority.trim().toLowerCase()
+      );
+      if (!matched) {
+        task.errors.priority = `Priority "${task.originalPriority}" is invalid. Please select from dropdown.`;
+      }
+    }
+    if (task.errors.priority) task.hasErrors = true;
+  } else {
+    delete task.errors.priority;
   }
 
-  // Role
+  // --- Role Validation ---
   if (!task.roleId) {
-    task.errors.role = `Role "${task.originalRole}" not found. Please select from dropdown.`;
-    task.hasErrors = true;
+    if (!task.originalRole?.trim()) {
+      task.errors.role = "Role is missing. Please select from dropdown.";
+    } else {
+      const matched = props.roles?.find(
+        r => r.title?.trim()?.toLowerCase() === task.originalRole.trim().toLowerCase()
+      );
+      if (!matched) {
+        task.errors.role = `Role "${task.originalRole}" is invalid. Please select from dropdown.`;
+      }
+    }
+    if (task.errors.role) task.hasErrors = true;
+  } else {
+    delete task.errors.role;
   }
 
-  // User
+  // --- User Validation ---
   if (!task.userId) {
-    task.errors.user = `User "${task.originalUser}" not found. Please select correct user from dropdown.`;
-    task.hasErrors = true;
+    if (!task.originalUser?.trim()) {
+      task.errors.user = "User is missing. Please select from dropdown.";
+    } else {
+      const matched = props.users?.find(
+        u => u.fullName?.trim()?.toLowerCase() === task.originalUser.trim().toLowerCase()
+      );
+      if (!matched) {
+        task.errors.user = `User "${task.originalUser}" is invalid. Please select from dropdown.`;
+      }
+    }
+    if (task.errors.user) task.hasErrors = true;
+  } else {
+    delete task.errors.user;
   }
 
-  // Duplicate detection
+  // --- Duplicate Detection ---
   const titleKey = task.title?.trim()?.toLowerCase();
   const userKey = task.userId;
   const duplicates = parsedTasks.value.filter(
-    (t, i) =>
-      i !== index &&
+    (t, i) => i !== index &&
       t.title?.trim()?.toLowerCase() === titleKey &&
       t.userId === userKey
   );
