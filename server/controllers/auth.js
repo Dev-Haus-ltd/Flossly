@@ -150,8 +150,16 @@ export const signupRequest = async (event) => {
   const body = await readBody(event);
   const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
   const { fullName, email, password, organisationName, roleId } = parsed;
-  if (!fullName || !email || !password || !organisationName) {
+  
+  // Trim and validate fullName
+  const trimmedFullName = fullName ? fullName.trim() : '';
+  if (!trimmedFullName || !email || !password || !organisationName) {
     return error(400, "Missing required fields");
+  }
+  
+  // Additional validation for fullName
+  if (trimmedFullName.length === 0) {
+    return error(400, "Full name cannot be empty or contain only spaces");
   }
 
   // Check if organization already exists
@@ -177,7 +185,7 @@ export const signupRequest = async (event) => {
     // hash password
     const hashed = await bcrypt.hash(password, 10);
     user = await User.create(
-      { fullName, email, password: hashed, profileCompletion: 0, roleId },
+      { fullName: trimmedFullName, email, password: hashed, profileCompletion: 0, roleId },
       { transaction }
     );
     org.managerId = user.id;
@@ -203,7 +211,7 @@ export const signupRequest = async (event) => {
       { email, link, userId: user.id },
       { transaction }
     );
-    await sendEmailVerificationEmail({ email, fullName, link });
+    await sendEmailVerificationEmail({ email, fullName: trimmedFullName, link });
     await transaction.commit();
     return success("Email sent");
   } catch (err) {
@@ -276,8 +284,19 @@ export const updateProfile = async (event) => {
   } = JSON.parse(body);
   try {
     const user = await User.findByPk(id);
+    
+    // Validate fullName if provided
+    if (fullName !== undefined) {
+      const trimmedFullName = fullName ? fullName.trim() : '';
+      if (trimmedFullName.length === 0) {
+        return error(400, "Full name cannot be empty or contain only spaces");
+      }
+      user.fullName = trimmedFullName;
+    } else {
+      user.fullName = user.fullName;
+    }
+    
     user.phone = phone || user.phone;
-    user.fullName = fullName || user.fullName;
     user.address = address || user.address;
     user.dob = dob || user.dob;
     user.gender = gender || user.gender;
@@ -613,8 +632,15 @@ export const acceptInvitation = async (event) => {
   const body = await readBody(event);
   const { inviteToken, password, fullName } = JSON.parse(body);
   try {
-    if (!inviteToken || !password || !fullName) {
+    // Trim and validate fullName
+    const trimmedFullName = fullName ? fullName.trim() : '';
+    if (!inviteToken || !password || !trimmedFullName) {
       return error(400, "Missing required fields");
+    }
+    
+    // Additional validation for fullName
+    if (trimmedFullName.length === 0) {
+      return error(400, "Full name cannot be empty or contain only spaces");
     }
     const user = await User.findOne({ where: { inviteToken } });
     if (!user) {
@@ -631,7 +657,7 @@ export const acceptInvitation = async (event) => {
     });
     const hashedPassword = await bcrypt.hash(password, 10);
     user.password = hashedPassword;
-    user.fullName = fullName;
+    user.fullName = trimmedFullName;
     user.profileCompletion = 1;
     user.isEmailVerified = true;
     user.status = "Active";

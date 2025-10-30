@@ -4,7 +4,7 @@
     <div class="content-wrapper">
       <div class="content-box pa-2 pa-sm-4 pa-md-5 pa-lg-7 pa-xl-9">
         <h1 class="banner-heading text-subtitle-1 text-sm-h6 text-md-h5 text-lg-h4 text-xl-h3 mb-2 mb-sm-4 mb-md-5 mb-lg-7 mb-xl-9">
-          A few clicks away from tidying your dental practice.
+          A few clicks away from organising your dental practice.
         </h1>
 
         <div class="steps-container d-flex flex-column">

@@ -102,6 +102,7 @@ const loginError = ref(null);
 const route = useRoute();
 const nameRules = [
   (v) => !!v || "Name is required",
+  (v) => (v && v.trim().length > 0) || "Name cannot be just spaces",
   // (v) => /.+@.+\..+/.test(v) || "Name must be valid",
 ];
 

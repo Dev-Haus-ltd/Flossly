@@ -58,6 +58,17 @@ const handleDrop = (e) => {
 }
 
 const setFile = (file) => {
+  // Check file size (5MB limit)
+  const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+  if (file && file.size > maxSize) {
+    const mainStore = useMainStore();
+    mainStore.setSnackbar({
+      title: "Image file is too large. Please choose an image smaller than 5MB.",
+      type: "Error",
+    });
+    return;
+  }
+
   modelValue.value = file
 
   // Revoke previous preview URL if any

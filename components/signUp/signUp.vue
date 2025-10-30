@@ -18,7 +18,10 @@
                 label="Full Name"
                 single-line
                 density="comfortable"
-                :rules="[(v) => !!v || 'Full name is required']"
+                :rules="[
+                  (v) => !!v || 'Full name is required',
+                  (v) => (v && v.trim().length > 0) || 'Full name cannot be just spaces'
+                ]"
                 variant="solo"
                 required
                 class="mb-2 input-bordered"
