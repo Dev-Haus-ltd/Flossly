@@ -19,7 +19,7 @@
             <v-list-item
               v-for="(s, i) in leadStatuses"
               :key="i"
-              :style="`background-color: ${s.color}; color: #fff; margin-bottom: 6px; min-height: 30px;`"
+              :style="`background-color: ${s.color}; color: #fff; margin-bottom: 6px; min-height: 30px; text-align:center; border-radius:4px`"
               @click="
                 () => {
                   selected.leadStatus = s.name;
@@ -41,12 +41,10 @@
   const emit = defineEmits(["update"]);
   
   const leadStatuses = ref([
-    { key: "new", name: "New", color: "#007BFF" },       // Blue
-    { key: "contacted", name: "Contacted", color: "#28A745" }, // Green
-    { key: "qualified", name: "Qualified", color: "#FFC107" }, // Yellow
-    { key: "proposal", name: "Proposal Sent", color: "#17A2B8" }, // Teal
-    { key: "won", name: "Won", color: "#20C997" },       // Emerald
-    { key: "lost", name: "Lost", color: "#DC3545" },     // Red
+    { key: "new", name: "New", color: "#00A856" },       // Blue
+    { key: "converted", name: "Converted", color: "#0155B9" }, // Yellow
+    { key: "contacted", name: "Contacted", color: "#ffc107" }, // Green
+    { key: "lost", name: "Lost", color: "#dc3545" },     // Red
   ]);
   
   const getHexColor = () => {

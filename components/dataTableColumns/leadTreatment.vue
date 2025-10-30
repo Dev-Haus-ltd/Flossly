@@ -77,13 +77,14 @@
   </template>
   
   <script setup>
+  import crmService from '@/services/crmService'
   const { selected, column, treatmentSources } = defineProps([
     "selected",
     "column",
     "treatmentSources",
   ]);
   const emit = defineEmits(["update"]);
-  
+
   const toggleEdit = ref(false);
   
   const addTreatmentAndEdit = () => {
@@ -95,6 +96,18 @@
       name: "",
     });
   };
+
+  watch(toggleEdit, async (val, old) => {
+    if (old === true && val === false) {
+      const toCreate = treatmentSources.filter(t => (!t.id || String(t.id).length > 10) && (t.name || '').trim().length)
+      for (const t of toCreate) {
+        try {
+          const res = await crmService.addOption('treatment', t.name)
+          if (res?.code === 0) t.id = res.data.id
+        } catch(e){}
+      }
+    }
+  })
   </script>
   
   <style scoped>

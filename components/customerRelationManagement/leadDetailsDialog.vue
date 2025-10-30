@@ -5,7 +5,7 @@
         <!-- Header -->
         <div
           class="pa-4 d-flex justify-space-between align-center"
-          style="background-color: white"
+          style="background-color: rgb(var(--v-theme-surface))"
         >
           <h3 class="title m-0">{{ selectedLead?.name + "'s profile" }}</h3>
           <v-btn flat icon size="32" @click="$emit('close')">
@@ -181,7 +181,7 @@
                   </v-col>
                   <v-col cols="12" md="5">
                     <span class="value-text">{{
-                      selectedLead.preferredContact || "N/A"
+                      commPrefs?.preferredContactMethod || selectedLead.preferredContact || "N/A"
                     }}</span>
                   </v-col>
 
@@ -283,6 +283,9 @@
                         class="mt-3 input-bordered"
                         flat
                       />
+                      <div class="d-flex justify-end mt-2">
+                        <v-btn color="primary" variant="flat" :loading="savingComment" @click="saveComment">Save</v-btn>
+                      </div>
                     </div>
                   </v-col>
                 </v-row>
@@ -301,15 +304,15 @@
             <v-tabs-window-item value="communication">
               <div class="pa-6">
                 <CustomerRelationManagementCommunicationLog
+                  :lead-id="selectedLead?.id"
                   :initialNotes="[]"
-                  :initialPreferences="{
-        preferredContactMethod: 'Phone',
-        preferredAppointmentDay: 'Monday',
-        bestTimesToContact: ['Morning']
-      }"
+                  :initialPreferences="commPrefs"
                   @save="onCommunicationSave"
                   @update:preferences="onPreferencesUpdated"
                 />
+                <div class="d-flex justify-end mt-3">
+                  <v-btn color="primary" variant="flat" :loading="savingPrefs" @click="savePreferences">Save Preferences</v-btn>
+                </div>
               </div>
             </v-tabs-window-item>
 
@@ -340,24 +343,36 @@ const tab = ref("lead-info");
 const formatDate = (date) => {
   return parsedDate(date);
 };
-const selectedTreatment = ref({
-  primaryTreatment: 1,
-  secondaryTreatments: [2, 3],
-  concerns: 1,
-  treatmentAreas: 2,
-  previousExperience: "Had braces as a teenager",
-  budget: "2000-3000 USD",
-  specialOccasion: "Wedding in 6 months",
-});
+const selectedTreatment = ref({})
+const commPrefs = ref({})
+import crmService from '@/services/crmService'
+watch(
+  () => props.selectedLead,
+  async (lead) => {
+    if (!lead?.id) return
+    try {
+      const res = await crmService.getLeadTreatment(lead.id)
+      if (res && res.code === 0) selectedTreatment.value = res.data || {}
+    } catch (e) {}
+    try {
+      const comm = await crmService.getLeadCommunication(lead.id)
+      if (comm && comm.code === 0) commPrefs.value = comm.data || {}
+    } catch (e) {}
+  },
+  { immediate: true }
+)
 
-const onTreatmentSave = (updatedTreatment) => {
-  console.log("Updated Treatment:", updatedTreatment);
-
-  // Example: merge into selectedLead
+const onTreatmentSave = async (updatedTreatment) => {
+  try {
+    const res = await crmService.saveLeadTreatment(props.selectedLead.id, updatedTreatment)
+    if (res && res.code === 0) {
+      selectedTreatment.value = res.data
+    }
+  } catch (e) {}
 };
 const onPreferencesUpdated = (newPreferences) => {
   console.log("Updated communication preferences:", newPreferences);
-
+  pendingPrefs.value = newPreferences
 };
 const onCommunicationSave = (updatedNotes) => {
   console.log("Updated Communication Logs:", updatedNotes);
@@ -365,6 +380,25 @@ const onCommunicationSave = (updatedNotes) => {
 const onAutomationTypeChange = (newType) => {
   console.log("Automation type selected:", newType);
 };
+
+const savingComment = ref(false)
+const saveComment = async () => {
+  try {
+    savingComment.value = true
+    await crmService.updateLead({ id: props.selectedLead.id, comments: props.selectedLead.comments })
+  } finally { savingComment.value = false }
+}
+
+const pendingPrefs = ref(null)
+const savingPrefs = ref(false)
+const savePreferences = async () => {
+  try {
+    savingPrefs.value = true
+    const prefs = pendingPrefs.value || commPrefs.value || {}
+    const res = await crmService.saveLeadCommunication({ leadId: props.selectedLead.id, ...prefs })
+    if (res && res.code === 0) commPrefs.value = res.data
+  } finally { savingPrefs.value = false }
+}
 </script>
 
 <style scoped>
@@ -374,7 +408,7 @@ const onAutomationTypeChange = (newType) => {
   font-size: 16px;
 }
 .custom-tabs {
-  border-bottom: 1px solid #dbdbdb;
+  border-bottom: 1px solid rgb(var(--v-theme-outline));
 }
 .custom-tabs .v-tab {
   color: inherit !important;
@@ -391,7 +425,7 @@ const onAutomationTypeChange = (newType) => {
   
   font-weight: 400;
   font-size: 14px;
-  color: #1e1e1e;
+  color: rgb(var(--v-theme-on-surface));
 }
 .status-dot {
   display: inline-block;
@@ -407,19 +441,19 @@ const onAutomationTypeChange = (newType) => {
   font-weight: 400;
   font-style: Regular;
   font-size: 14px;
-  color: #737373;
+  color: rgb(var(--v-theme-on-surface-variant));
 }
 .cust-lbl {
   
   font-weight: 700;
   font-style: Bold;
   font-size: 14px;
-  color: #000000;
+  color: rgb(var(--v-theme-on-surface));
 }
 .input-bordered :deep(.v-field) {
-  border: 1px solid #dfdfdf !important;
+  border: 1px solid rgb(var(--v-theme-outline)) !important;
   border-radius: 8px !important;
-  background-color: white !important;
+  background-color: rgb(var(--v-theme-surface)) !important;
   min-height: 40px;
   font-size: 14px;
   

@@ -77,15 +77,16 @@
   </template>
   
   <script setup>
+  import crmService from '@/services/crmService'
   const { selected, column, leadSources } = defineProps([
     "selected",
     "column",
     "leadSources",
   ]);
   const emit = defineEmits(["update"]);
-  
+
   const toggleEdit = ref(false);
-  
+
   const addLeadSourceAndEdit = () => {
     if (!toggleEdit.value) {
       toggleEdit.value = true;
@@ -95,6 +96,21 @@
       name: "",
     });
   };
+
+  watch(toggleEdit, async (val, old) => {
+    // when toggling off (Apply), persist any new rows without real id
+    if (old === true && val === false) {
+      const toCreate = leadSources.filter(s => (!s.id || String(s.id).length > 10) && (s.name || '').trim().length)
+      for (const s of toCreate) {
+        try {
+          const res = await crmService.addOption('lead_source', s.name)
+          if (res?.code === 0) {
+            s.id = res.data.id
+          }
+        } catch(e){}
+      }
+    }
+  })
   </script>
   
   <style scoped>

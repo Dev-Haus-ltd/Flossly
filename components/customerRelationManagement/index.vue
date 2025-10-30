@@ -1,15 +1,19 @@
 <template>
-  <div class="parent">
+  <v-sheet 
+  color="background"
+
+  >
     <div class="cust-border d-flex align-center">
       <p class="mr-1">CRM</p>
     </div>
     <div class="mt-5 px-5">
-      <v-row>
-        <v-col cols="12" sm="4" md="2" v-for="(stat, i) in leadStats" :key="i">
+      <v-row class="stat-row" align="stretch">
+        <v-col style="flex: 1 1 0;" v-for="(stat, i) in leadStats" :key="i">
           <CommonStatCard
             :icon="stat.icon"
             :label="stat.label"
             :value="stat.value"
+            :value-color="stat.valueColor"
             :uid="i"
             hide-chip
           />
@@ -40,61 +44,68 @@
         </div>
 
         <!-- Right: Connection Controls -->
-        <div class="d-flex align-center" style="gap: 8px">
-          <div class="d-flex align-center">
-            <v-btn
-              color="primary"
-              variant="flat"
-              rounded="lg"
-              @click="addLeadDrawer = true"
-              class="add-task-btn"
-            >
-              <template #prepend>
-                <v-icon size="18">mdi-plus-circle-outline</v-icon>
-              </template>
-              Add New Lead
-            </v-btn>
-            <v-chip
-              :color="isConnected ? 'success' : undefined"
-              size="small"
-              variant="flat"
-            >
-              {{ isConnected ? "Meta Connected" : "Not Connected" }}
-            </v-chip>
-            <v-btn
-              size="small"
-              variant="text"
-              @click="fetchNow"
-              :disabled="!isConnected"
-            >
-              <v-icon size="16" class="mr-1">mdi-refresh</v-icon> Fetch Leads
-              Now
-            </v-btn>
-            <v-btn
-              color="primary"
-              variant="flat"
-              rounded="lg"
-              class="add-task-btn ml-2"
-              @click="onConnectChatbot"
-            >
-              <template #prepend>
-                <v-icon size="18">mdi-robot-outline</v-icon>
-              </template>
-              Connect to Chatbot
-            </v-btn>
-            <v-btn
-              color="primary"
-              variant="flat"
-              rounded="lg"
-              class="add-task-btn ml-2"
-              @click="integrateMeta"
-            >
-              <template #prepend>
-                <v-icon size="18">mdi-link-variant</v-icon>
-              </template>
-              {{ isConnected ? "Reconnect Meta" : "Integrate Meta" }}
-            </v-btn>
-          </div>
+        <div class="d-flex align-center" style="gap: 12px">
+          <div class="d-flex align-center" style="gap: 12px">
+  <template v-if="isConnected">
+    <v-chip
+      color="success"
+      size="small"
+      variant="flat"
+    >
+      Meta Connected
+    </v-chip>
+
+    <v-btn
+      size="small"
+      variant="text"
+      @click="fetchNow"
+      :disabled="!isConnected"
+    >
+      <v-icon size="16" class="mr-1">mdi-refresh</v-icon>
+      Fetch Leads Now
+    </v-btn>
+  </template>
+
+  <v-btn
+    color="primary"
+    variant="flat"
+    rounded="lg"
+    class="add-task-btn"
+    @click="integrateMeta"
+  >
+    <template #prepend>
+      <v-icon size="18">mdi-link-variant</v-icon>
+    </template>
+    {{ isConnected ? 'Reconnect Meta' : 'Integrate Meta' }}
+  </v-btn>
+
+  <v-btn
+    color="primary"
+    variant="flat"
+    rounded="lg"
+    class="add-task-btn"
+    @click="onConnectChatbot"
+  >
+    <template #prepend>
+      <v-icon size="18">mdi-robot-outline</v-icon>
+    </template>
+    Connect to Chatbot
+  </v-btn>
+
+  <v-btn
+    color="primary"
+    variant="flat"
+    rounded="lg"
+    class="add-task-btn"
+    @click="addLeadDrawer = true"
+  >
+    <template #prepend>
+      <v-icon size="18">mdi-plus-circle-outline</v-icon>
+    </template>
+    Add New Lead
+  </v-btn>
+</div>
+
         </div>
       </div>
 
@@ -108,6 +119,7 @@
         :treatmentSources="treatmentSources"
         :users="userList"
         @select="onSelect"
+        @delete="onDeleteSelected"
       />
 
       <!-- Sidebar drawer for add -->
@@ -115,12 +127,12 @@
         v-model="addLeadDrawer"
         :lead-sources="leadSources"
         :treatment-sources="treatmentSources"
-        :staff-list="staffList"
+        :staff-list="userList"
         @close="addLeadDrawer = false"
         @success="handleSuccess"
       />
     </div>
-  </div>
+  </v-sheet>
 </template>
 
 <script setup>
@@ -129,6 +141,7 @@ const userStore = useUserStore();
 const authStore = useAuthStore();
 const userList = ref([]);
 const addLeadDrawer = ref(false);
+
 
 const leadStats = computed(() => {
   const total = leads.value.length;
@@ -139,26 +152,31 @@ const leadStats = computed(() => {
       icon: "https://cdn.lordicon.com/asyunleq.json",
       label: "Total Lead",
       value: total,
+      valueColor: 'on-surface'
     },
     {
       icon: "https://cdn.lordicon.com/kphwxuxr.json",
       label: "New",
       value: byStatus("new"),
+      valueColor: 'success'
     },
     {
       icon: "https://cdn.lordicon.com/qlpudrww.json",
       label: "Converted",
       value: byStatus("converted"),
+      valueColor: 'primary'
     },
     {
       icon: "https://cdn.lordicon.com/excswhey.json",
       label: "Contacted",
       value: byStatus("contacted"),
+      valueColor: 'warning'
     },
     {
       icon: "https://cdn.lordicon.com/tzynxkwl.json",
       label: "Lost",
       value: byStatus("lost"),
+      valueColor: 'error'
     },
   ];
 });
@@ -214,25 +232,8 @@ const headers = [
   { key: "followUpDate", title: "Follow-up Date", width: 160 },
   { key: "comments", title: "Comments", width: 200 },
 ];
-const leadSources = ref([
-  { id: 1, name: "Website" },
-  { id: 2, name: "Referral" },
-  { id: 3, name: "Social Media" },
-  { id: 4, name: "Cold Call" },
-  { id: 5, name: "Email Campaign" },
-  { id: 6, name: "Event / Conference" },
-  { id: 7, name: "Advertisement" },
-  { id: 8, name: "Partner" },
-]);
-const treatmentSources = ref([
-  { id: 1, name: "Consultation" },
-  { id: 2, name: "Demo" },
-  { id: 3, name: "Follow-up" },
-  { id: 4, name: "Proposal Sent" },
-  { id: 5, name: "Negotiation" },
-  { id: 6, name: "Trial" },
-  { id: 7, name: "Onboarding" },
-]);
+const leadSources = ref([]);
+const treatmentSources = ref([]);
 const filteredLeads = computed(() =>
   leads.value.filter((l) =>
     l.name.toLowerCase().includes(search.value.toLowerCase())
@@ -254,12 +255,23 @@ onMounted(() => {
   getUsers();
   initLeads();
   checkConnection();
+  initOptions();
 });
 const getUsers = () => {
   userStore.getUserList({ roleId: null }).then((res) => {
     if (res.code === 0) userList.value = res.data;
   });
 };
+const initOptions = async () => {
+  try {
+    const [src, tr] = await Promise.all([
+      crmService.listOptions('lead_source'),
+      crmService.listOptions('treatment'),
+    ])
+    if (src?.code === 0) leadSources.value = (src.data || []).map(o => ({ id: o.id, name: o.name }))
+    if (tr?.code === 0) treatmentSources.value = (tr.data || []).map(o => ({ id: o.id, name: o.name }))
+  } catch (e) {}
+}
 // TODO: this needs to be enhanced. there should be a registered chatbots model in DB to store information of each practice creating chatbot
 const onConnectChatbot = async () => {
   authStore.createShortToken().then((res) => {
@@ -277,6 +289,25 @@ const updateLeads = (newLead) => {
   leads.value.push(newLead);
 };
 
+const handleSuccess = (newLead) => {
+  addLeadDrawer.value = false;
+  const mapped = {
+    id: newLead.id,
+    alert: newLead.alert || '',
+    name: newLead.name,
+    email: newLead.email,
+    telephone: newLead.telephone,
+    inquiryDate: newLead.inquiryDate,
+    leadSource: newLead.leadSource || { id: 99, name: 'Meta Leadgen' },
+    leadStatus: newLead.leadStatus || 'New',
+    treatment: newLead.treatment || { id: null, name: '' },
+    assigned: newLead.assigned || [],
+    followUpDate: newLead.followUpDate || '',
+    comments: newLead.comments || '',
+  };
+  leads.value.unshift(mapped);
+};
+
 const route = useRoute();
 const initLeads = async () => {
   if (route.query.meta === "connected") {
@@ -284,7 +315,8 @@ const initLeads = async () => {
       await crmService.fetchLeadsNow();
     } catch (e) {}
   }
-  const res = await crmService.fetchLeads();
+  // Show all leads from our database (which also stores Meta imports)
+  const res = await crmService.listLeads();
   if (res && res.code === 0) {
     leads.value = (res.data || []).map((l) => ({
       alert: l.alert || "",
@@ -292,7 +324,7 @@ const initLeads = async () => {
       email: l.email || "",
       telephone: l.telephone || "",
       inquiryDate: l.inquiryDate || "",
-      leadSource: l.leadSource || { id: 99, name: "Meta Leadgen" },
+      leadSource: l.leadSource?.name ? l.leadSource : { id: 99, name: l.leadSource || "Meta Leadgen" },
       leadStatus: l.leadStatus || "New",
       treatment: l.treatment || { id: null, name: "" },
       assigned: l.assigned || [],
@@ -330,6 +362,15 @@ const fetchNow = async () => {
     await initLeads();
   } catch (e) {}
 };
+
+const onDeleteSelected = async (ids) => {
+  try {
+    const res = await crmService.deleteLeads(ids)
+    if (res && res.code === 0) {
+      leads.value = leads.value.filter(l => !ids.includes(l.id))
+    }
+  } catch (e) {}
+}
 </script>
 
 <style scoped lang="scss">
