@@ -118,8 +118,16 @@ export const referPractice = async (event) => {
   const body = await readBody(event);
   const { practiceName, managerName, managerEmail, address, contact } =
     JSON.parse(body);
-  if (!practiceName || !managerEmail) {
-    throw createError({ message: "practice name and manager email required" });
+  
+  // Trim and validate managerName
+  const trimmedManagerName = managerName ? managerName.trim() : '';
+  if (!practiceName || !managerEmail || !trimmedManagerName) {
+    throw createError({ message: "practice name, manager name and manager email required" });
+  }
+  
+  // Additional validation for managerName
+  if (trimmedManagerName.length === 0) {
+    throw createError({ message: "Manager name cannot be empty or contain only spaces" });
   }
   const transaction = await DB.transaction();
   try {
@@ -144,7 +152,7 @@ export const referPractice = async (event) => {
     const hashed = await bcrypt.hash(password, 10);
     user = await User.create(
       {
-        fullName: managerName,
+        fullName: trimmedManagerName,
         email: managerEmail,
         password: hashed,
         profileCompletion: 0,
@@ -175,7 +183,7 @@ export const referPractice = async (event) => {
     );
     await sendEmailVerificationEmail({
       email: managerEmail,
-      fullName: managerName,
+      fullName: trimmedManagerName,
       link,
     });
     await transaction.commit();

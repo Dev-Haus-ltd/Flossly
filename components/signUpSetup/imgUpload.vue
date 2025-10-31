@@ -10,7 +10,7 @@
     >
       <img src="../../assets/logos/signupSetupScreen/uploadimg.svg" class="mr-2" alt="">
       <span>
-        Drag and Drop file here or <strong>Choose file</strong>
+        Drag and drop a file here or <strong>choose one to upload</strong>
       </span>
       <input
         ref="fileInput"
@@ -58,6 +58,17 @@ const handleDrop = (e) => {
 }
 
 const setFile = (file) => {
+  // Check file size (5MB limit)
+  const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+  if (file && file.size > maxSize) {
+    const mainStore = useMainStore();
+    mainStore.setSnackbar({
+      title: "Image file is too large. Please choose an image smaller than 5MB.",
+      type: "Error",
+    });
+    return;
+  }
+
   modelValue.value = file
 
   // Revoke previous preview URL if any
@@ -93,6 +104,7 @@ onBeforeUnmount(() => {
     cursor: pointer;
     transition: border-color 0.2s;
     text-align: center;
+    font-size: 14px;
   }
   .dotted-box:hover {
     border-color: #008AFE;

@@ -1,6 +1,7 @@
 <template>
   <v-navigation-drawer
-    :model-value="modelValue"
+    :model-value="props.modelValue"
+    @update:model-value="handleDrawerClose"
     location="right"
     temporary
     :width="600"
@@ -13,7 +14,7 @@
         icon
         variant="outlined"
         color="#8B8B8B"
-        @click="emit('close')"
+        @click="closeDrawer"
         class="mr-4"
         style="
           width: 20px;
@@ -314,7 +315,7 @@
         color="white"
         class="text-primary"
         style="width: 48%; border-radius: 8px; border: 1px solid #dfdfdf"
-        @click="emit('close')"
+        @click="closeDrawer"
         flat
       >
         Back
@@ -336,14 +337,15 @@
 </template>
 
 <script setup>
-const { modelValue, leadSources, treatmentSources, staffList } = defineProps({
+import crmService from "@/services/crmService";
+const props = defineProps({
   modelValue: Boolean,
   leadSources: Array,
   treatmentSources: Array,
   staffList: Array,
 });
 
-const emit = defineEmits(["close", "success"]);
+const emit = defineEmits(["close", "success", "update:modelValue"]);
 const formRef = ref(null);
 const saving = ref(false)
 
@@ -404,7 +406,6 @@ const onDobSelected = (val) => {
   form.value.dob = val;
 };
 
-import crmService from "@/services/crmService";
 const mainStore = useMainStore();
 const onSubmit = async () => {
   const validation = await formRef.value.validate();

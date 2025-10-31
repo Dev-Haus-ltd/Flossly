@@ -63,6 +63,7 @@ export const UserTask = sequelize.define(
         "Weekly",
         "Fortnightly",
         "Monthly",
+        "6 Monthly",
         "Annualy",
         "Every 24 Months"
       ),

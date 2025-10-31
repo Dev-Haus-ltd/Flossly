@@ -109,9 +109,14 @@
         </div>
       </div>
 
+      <!-- Loading State - Blank -->
+      <div v-if="isLoading" class="loading-blank">
+        <!-- Empty space while loading -->
+      </div>
+
       <!-- List View (child) -->
       <CustomerRelationManagementListView
-        v-if="leads.length"
+        v-else-if="leads.length"
         :leads="filteredLeads"
         :headers="headers"
         :search="search"
@@ -121,6 +126,8 @@
         @select="onSelect"
         @delete="onDeleteSelected"
       />
+
+    
 
       <!-- Sidebar drawer for add -->
       <CustomerRelationManagementAddNewLead
@@ -141,6 +148,7 @@ const userStore = useUserStore();
 const authStore = useAuthStore();
 const userList = ref([]);
 const addLeadDrawer = ref(false);
+const isLoading = ref(false);
 
 
 const leadStats = computed(() => {
@@ -412,5 +420,37 @@ const onDeleteSelected = async (ids) => {
 :deep(.v-breadcrumbs) {
   font-weight: 400;
   font-size: 14px;
+}
+
+/* Stats Container - Fill available space */
+.stats-container {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+}
+
+.stat-card {
+  flex: 1;
+  min-width: 0; /* Allows flex items to shrink below their content size */
+}
+
+/* Responsive behavior */
+@media (max-width: 768px) {
+  .stats-container {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-container {
+    gap: 8px;
+  }
+}
+
+/* Loading State - Blank */
+.loading-blank {
+  min-height: 400px;
+  /* Just empty space while loading */
 }
 </style>

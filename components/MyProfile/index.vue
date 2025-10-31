@@ -1,7 +1,16 @@
 <template>
   <v-card>
     <v-card-title class="d-flex justify-space-between align-center">
-      My Profile
+      <div class="d-flex align-center">
+        <v-btn
+          v-if="smAndDown"
+          icon="mdi-menu"
+          variant="text"
+          class="mr-2"
+          @click="showMobileSidebar = !showMobileSidebar"
+        />
+        <span>My Profile</span>
+      </div>
       <v-btn icon="mdi-close" variant="text" @click="$emit('close')"></v-btn>
     </v-card-title>
 
@@ -10,16 +19,28 @@
     <v-card-text class="px-5 py-0" style="max-height: 100%; overflow: auto">
       <div class="d-flex">
         <!-- Sidebar -->
-        <CommonSideBar
-          :items="menuItems"
-          :selected="selectedSection"
-          @select="selectedSection = $event"
-          class="mr-4 sidebar"
-        />
+         <v-slide-x-transition>
+          <CommonSideBar
+            v-if="!smAndDown || showMobileSidebar"
+            :items="menuItems"
+            :selected="selectedSection"
+            @select="selectedSection = $event"
+            class="mr-4 sidebar"
+          />
+         </v-slide-x-transition>
+         <div
+            v-if="smAndDown && showMobileSidebar"
+            class="mobile-sidebar-backdrop"
+            @click="showMobileSidebar = false"
+          />
 
         <!-- Main Content -->
-        <div class="flex-grow-1" style="margin-left: 200px; height: 85vh">
-          <component v-if="selectedSection" :is="currentComponent" :user="user" :bankDetails="acccoutDetails" :contractDetails="contractDetails" />
+        <div class="flex-grow-1" :style="{ marginLeft: smAndDown ? '0' : '200px', height: '85vh' }">
+          <component 
+          v-if="selectedSection" 
+          :is="currentComponent" 
+          :user="user" :bankDetails="acccoutDetails" 
+          :contractDetails="contractDetails" />
         </div>
       </div>
     </v-card-text>
@@ -27,6 +48,8 @@
 </template>
 
 <script setup>
+import { useDisplay } from "vuetify";
+const { smAndDown } = useDisplay();
 // Dummy components for each section
 import ProfileDetails from "./profile/index.vue";
 import HRDetails from "./hrDetails/index.vue";
@@ -50,6 +73,8 @@ import PasswordImg from "@/assets/icons/myProfile/password.svg";
 import MembershipImg from "@/assets/icons/myProfile/membership.svg";
 import RewardImg from "@/assets/icons/myProfile/rewards.svg";
 import LoyaltyImg from "@/assets/icons/myProfile/loyalty.svg";
+
+const showMobileSidebar = ref(false);
 
 const { user } = defineProps({
   user: Object
@@ -133,5 +158,25 @@ const currentComponent = computed(() => componentsMap[selectedSection.value]);
   top: 65px;
   left: 0;
   position: fixed;
+}
+
+@media (max-width: 600px) {
+  .sidebar {
+    position: fixed;
+    top: 64px;
+    left: 0;
+    height: calc(100vh - 64px);
+    width: 80vw;
+    min-width: unset;
+    background: white;
+    z-index: 2001;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+  }
+  .mobile-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.3);
+    z-index: 2000;
+  }
 }
 </style>

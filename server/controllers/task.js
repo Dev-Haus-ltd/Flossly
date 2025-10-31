@@ -664,7 +664,11 @@ export const uploadBulkTasks = async (event) => {
 
   const results = [];
 
-  for (const [index, t] of tasks.entries()) {
+  // Pre-validate tasks and separate valid from invalid
+  const validTasks = [];
+  const invalidTasks = [];
+
+  tasks.forEach((t, index) => {
     const {
       title,
       description,
@@ -678,31 +682,63 @@ export const uploadBulkTasks = async (event) => {
     } = t;
 
     if (!title || !categoryId) {
-      results.push({
+      invalidTasks.push({
         index,
         title,
         status: "failed",
         message: "Required fields missing",
       });
-      continue;
-    }
-
-    const transaction = await DB.transaction();
-    try {
-      // --- 1️⃣ Create Task ---
-      const newTask = {
+    } else {
+      validTasks.push({
+        index,
+        data: t,
         title,
         description,
         roleId,
         categoryId,
         defaultFrequency: defaultFrequency || null,
-      };
-      const task = await Task.create(newTask, { transaction });
+        userId,
+        priorityId,
+        checklist,
+        dueDate,
+      });
+    }
+  });
 
-      // --- 2️⃣ Create Task Checklist (if any) ---
-      if (checklist?.length) {
-        const checklistData = checklist.map((item) => ({
-          taskId: task.id,
+  // Add invalid tasks to results
+  results.push(...invalidTasks);
+
+  if (validTasks.length === 0) {
+    return {
+      code: 0,
+      message: `0 tasks added successfully, ${invalidTasks.length} failed`,
+      results,
+    };
+  }
+
+  const transaction = await DB.transaction();
+  try {
+    // --- 1️⃣ Bulk Create Tasks ---
+    const taskData = validTasks.map((t) => ({
+      title: t.title,
+      description: t.description,
+      roleId: t.roleId,
+      categoryId: t.categoryId,
+      defaultFrequency: t.defaultFrequency,
+    }));
+
+    const createdTasks = await Task.bulkCreate(taskData, {
+      transaction,
+      returning: true
+    });
+
+    // --- 2️⃣ Bulk Create Task Checklists ---
+    const allTaskChecklistData = [];
+    validTasks.forEach((t, taskIndex) => {
+      if (t.checklist?.length) {
+        const taskId = createdTasks[taskIndex].id;
+        const checklistData = t.checklist.map((item) => ({
+          taskId,
           question: item.question,
           category: item.category,
           showRadio: item.showRadio,
@@ -712,44 +748,53 @@ export const uploadBulkTasks = async (event) => {
           fieldTwoTitle: item.fieldTwoTitle,
           radioValue: "N/A",
         }));
-        await TaskChecklist.bulkCreate(checklistData, { transaction });
+        allTaskChecklistData.push(...checklistData);
       }
+    });
 
-      // --- 3️⃣ Assign Task to User (if provided) ---
-      if (userId) {
-        const orgStatuses = await OrganisationStatus.findAll({
-          where: { organisationId: loggedUser.orgId },
-        });
+    if (allTaskChecklistData.length > 0) {
+      await TaskChecklist.bulkCreate(allTaskChecklistData, { transaction });
+    }
 
-        const newUserTask = {
-          userId,
+    // --- 3️⃣ Handle User Assignments ---
+    const tasksWithUsers = validTasks.filter(t => t.userId);
+
+    if (tasksWithUsers.length > 0) {
+      // Get organization statuses once
+      const orgStatuses = await OrganisationStatus.findAll({
+        where: { organisationId: loggedUser.orgId },
+      });
+      const progressStatusId = orgStatuses.find((x) => x.key === "progress")?.id;
+
+      // Bulk create UserTasks
+      const userTaskData = tasksWithUsers.map((t, userTaskIndex) => {
+        const taskIndex = validTasks.findIndex(vt => vt.index === t.index);
+        return {
+          userId: t.userId,
           organisationId: loggedUser.orgId,
-          dueDate,
-          taskId: task.id,
-          title,
+          dueDate: t.dueDate,
+          taskId: createdTasks[taskIndex].id,
+          title: t.title,
           documentLink: "",
-          frequency: defaultFrequency || null,
-          priorityId,
-          statusId: orgStatuses.find((x) => x.key === "progress").id,
+          frequency: t.defaultFrequency,
+          priorityId: t.priorityId,
+          statusId: progressStatusId,
           asignedBy: loggedUser.userId,
         };
+      });
 
-        const userTask = await UserTask.create(newUserTask, { transaction });
-        const user = await User.findByPk(userId);
+      const createdUserTasks = await UserTask.bulkCreate(userTaskData, {
+        transaction,
+        returning: true
+      });
 
-        // --- 4️⃣ Send notification email ---
-        if (user?.email) {
-          await sendTaskAssignmentEmail({
-            email: user.email,
-            name: user.fullName,
-            taskTitle: title,
-          });
-        }
-
-        // --- 5️⃣ Create UserTask Checklist (if any) ---
-        if (checklist?.length) {
-          const checklistData = checklist.map((item) => ({
-            userTaskId: userTask.id,
+      // --- 4️⃣ Bulk Create UserTask Checklists ---
+      const allUserTaskChecklistData = [];
+      tasksWithUsers.forEach((t, userTaskIndex) => {
+        if (t.checklist?.length) {
+          const userTaskId = createdUserTasks[userTaskIndex].id;
+          const checklistData = t.checklist.map((item) => ({
+            userTaskId,
             question: item.question,
             category: item.category,
             showRadio: item.showRadio,
@@ -759,22 +804,53 @@ export const uploadBulkTasks = async (event) => {
             fieldTwoTitle: item.fieldTwoTitle,
             radioValue: "N/A",
           }));
-          await UserTaskChecklist.bulkCreate(checklistData, { transaction });
+          allUserTaskChecklistData.push(...checklistData);
         }
+      });
+
+      if (allUserTaskChecklistData.length > 0) {
+        await UserTaskChecklist.bulkCreate(allUserTaskChecklistData, { transaction });
       }
 
-      await transaction.commit();
-      results.push({ index, title, status: "success" });
-    } catch (err) {
-      console.error(`❌ Error creating task at index ${index}:`, err);
-      await transaction.rollback();
+      // --- 5️⃣ Send notification emails (individual operations) ---
+      const userIds = [...new Set(tasksWithUsers.map(t => t.userId))];
+      const users = await User.findAll({
+        where: { id: userIds }
+      });
+      const userMap = new Map(users.map(u => [u.id, u]));
+
+      for (const t of tasksWithUsers) {
+        const user = userMap.get(t.userId);
+        if (user?.email) {
+          await sendTaskAssignmentEmail({
+            email: user.email,
+            name: user.fullName,
+            taskTitle: t.title,
+          });
+        }
+      }
+    }
+
+    await transaction.commit();
+
+    // Add success results for all valid tasks
+    validTasks.forEach((t) => {
+      results.push({ index: t.index, title: t.title, status: "success" });
+    });
+
+  } catch (err) {
+    console.error(`❌ Error in bulk task creation:`, err);
+    await transaction.rollback();
+
+    // Mark all valid tasks as failed
+    validTasks.forEach((t) => {
       results.push({
-        index,
-        title,
+        index: t.index,
+        title: t.title,
         status: "failed",
         message: err.message,
       });
-    }
+    });
   }
 
   const successCount = results.filter((r) => r.status === "success").length;

@@ -48,7 +48,7 @@ defineProps({
   flex-direction: column;
   align-items: flex-start;
   background-color: #fff;
-  border-radius: 0px !important;
+  border-radius: 12px !important;
   width: 100%;
 }
 

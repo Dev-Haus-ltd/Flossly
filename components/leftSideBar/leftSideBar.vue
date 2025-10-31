@@ -175,14 +175,69 @@ const model = computed({
 watch(rail, (newVal) => {
   emit("update:rail", newVal);
 });
+// Helper function to get organization data consistently
+const getOrgData = (orgWrapper) => {
+  // Check if org has nested organisation object
+  if (orgWrapper?.organisation?.id && orgWrapper?.organisation?.name) {
+    return orgWrapper.organisation;
+  }
+  
+  // Check if org is the organisation object itself
+  if (orgWrapper?.id && orgWrapper?.name) {
+    return orgWrapper;
+  }
+  
+  return null;
+};
+
 onMounted(() => {
   const storedUser = JSON.parse(localStorage.getItem("user"));
   user.value = storedUser;
+  console.log('Left Sidebar - Stored User:', storedUser);
+  console.log('Left Sidebar - User Organisations:', storedUser?.userOrganisations);
+  console.log('Left Sidebar - Current Logged In Org ID:', storedUser?.currentLoggedInOrgId);
+  
   if (storedUser?.userOrganisations?.length) {
-    currentOrg.value =
-      storedUser.userOrganisations.find(
+    // Log each organization structure for debugging
+    storedUser.userOrganisations.forEach((org, index) => {
+      console.log(`Left Sidebar - Org ${index}:`, org);
+      console.log(`Left Sidebar - Org ${index} organisation:`, org?.organisation);
+      console.log(`Left Sidebar - Org ${index} orgData:`, getOrgData(org));
+    });
+    
+    // Try to find the current organization
+    let foundOrg = null;
+    
+    // First try to find by organisationId
+    if (storedUser.currentLoggedInOrgId) {
+      const orgWrapper = storedUser.userOrganisations.find(
         (org) => org.organisationId === storedUser.currentLoggedInOrgId
-      )?.organisation || {};
+      );
+      if (orgWrapper) {
+        foundOrg = getOrgData(orgWrapper);
+      }
+    }
+    
+    // If not found, try to find by id
+    if (!foundOrg && storedUser.currentLoggedInOrgId) {
+      const orgWrapper = storedUser.userOrganisations.find(
+        (org) => getOrgData(org)?.id === storedUser.currentLoggedInOrgId
+      );
+      if (orgWrapper) {
+        foundOrg = getOrgData(orgWrapper);
+      }
+    }
+    
+    // If still not found, use the first available organization
+    if (!foundOrg) {
+      const firstOrg = storedUser.userOrganisations[0];
+      foundOrg = getOrgData(firstOrg);
+    }
+    
+    currentOrg.value = foundOrg || {};
+    console.log('Left Sidebar - Current Org:', currentOrg.value);
+  } else {
+    console.log('Left Sidebar - No user organisations found');
   }
 });
 const norm = (p) => (p || "").replace(/\/+$/, "") || "/";
@@ -252,6 +307,42 @@ watch(
 );
 const user = ref(null);
 const currentOrg = ref({});
+
+// Watch for changes in user data and update currentOrg accordingly
+watch(() => user.value, (newUser) => {
+  if (newUser?.userOrganisations?.length) {
+    // Try to find the current organization
+    let foundOrg = null;
+    
+    // First try to find by organisationId
+    if (newUser.currentLoggedInOrgId) {
+      const orgWrapper = newUser.userOrganisations.find(
+        (org) => org.organisationId === newUser.currentLoggedInOrgId
+      );
+      if (orgWrapper) {
+        foundOrg = getOrgData(orgWrapper);
+      }
+    }
+    
+    // If not found, try to find by id
+    if (!foundOrg && newUser.currentLoggedInOrgId) {
+      const orgWrapper = newUser.userOrganisations.find(
+        (org) => getOrgData(org)?.id === newUser.currentLoggedInOrgId
+      );
+      if (orgWrapper) {
+        foundOrg = getOrgData(orgWrapper);
+      }
+    }
+    
+    // If still not found, use the first available organization
+    if (!foundOrg) {
+      const firstOrg = newUser.userOrganisations[0];
+      foundOrg = getOrgData(firstOrg);
+    }
+    
+    currentOrg.value = foundOrg || {};
+  }
+}, { deep: true });
 </script>
 
 <style scoped lang="scss">

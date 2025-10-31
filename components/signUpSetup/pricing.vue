@@ -75,6 +75,8 @@
           </div>
           <div class="card-footer mt-6">
             <v-btn
+              variant="flat"
+              rounded="lg" size="x-large"
               color="primary"
               class="font-button"
               block
@@ -212,6 +214,20 @@ const gotoHome = () => {
 };
 
 onMounted(fetchPrices);
+
+// Expose helpers for parent (onboarding) to manage back navigation
+const isPaymentOpen = computed(() => {
+  return Boolean(selectedPriceId.value) && !isPaymentCompleted.value;
+});
+
+const cancelPaymentFlow = () => {
+  // Reset the selection to go back to pricing cards
+  selectedPriceId.value = null;
+  // Also clear any previous error state
+  if (error.value) error.value = "";
+};
+
+defineExpose({ isPaymentOpen, cancelPaymentFlow });
 </script>
 
 <style scoped>
@@ -300,7 +316,6 @@ color: #878787;
   font-size: 14px;
   text-transform: none;
   height: 44px !important;
-  border-radius: 8px !important;
   letter-spacing: 0.5px;
 }
 ::v-deep(.v-selection-control) {

@@ -228,7 +228,19 @@ const authStore = useAuthStore()
 // const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const logValue = (e, key) => {
-  user[key] = e.target.innerText.trim();
+  const trimmedValue = e.target.innerText.trim();
+  
+  // Validate fullName specifically
+  if (key === 'fullName' && trimmedValue.length === 0) {
+    e.target.innerText = user[key]; // Revert to original value
+    mainStore.setSnackbar({
+      title: "Full name cannot be empty or contain only spaces",
+      type: "error",
+    });
+    return;
+  }
+  
+  user[key] = trimmedValue;
   console.log(`${key}:`, user[key]);
 };
 
@@ -246,6 +258,15 @@ const getUserRole = () => {
   return user?.role.title;
 };
 const updateProfile = () => {
+  // Validate fullName before sending request
+  if (user.fullName && user.fullName.trim().length === 0) {
+    mainStore.setSnackbar({
+      title: "Full name cannot be empty or contain only spaces",
+      type: "error",
+    });
+    return;
+  }
+  
   authStore
     .updateProfile(user) 
     .then((res) => {

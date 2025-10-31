@@ -74,9 +74,18 @@
               @click:append-inner="togglePasswordVisibility"
               flat
             />
-            <p v-if="loginError" style="color: red" class="pb-2">
-              {{ loginError }}
-            </p>
+            <div v-if="loginError" class="error-message pa-3 mb-4" style="background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 8px;">
+              <p style="color: #856404; margin-bottom: 8px;">{{ loginError }}</p>
+              <v-btn
+                v-if="showResendButton"
+                @click="resendVerificationEmail"
+                variant="outlined"
+                size="small"
+                color="primary"
+              >
+                Resend Verification Email
+              </v-btn>
+            </div>
             <div class="d-flex justify-end align-center">
               <v-btn
                 color="#266DF0"
@@ -191,6 +200,7 @@ const router = useRouter();
 const authStore = useAuthStore();
 const store = useMainStore();
 const loginError = ref(null);
+const showResendButton = ref(false);
 const emailRules = [
   (v) => !!v || "Email is required",
   (v) => /.+@.+\..+/.test(v) || "E-mail must be valid",
@@ -215,22 +225,40 @@ onMounted(() => {
 const login = async () => {
   const formValidation = await form.value.validate();
   if (formValidation.valid) {
+    loginError.value = null;
+    showResendButton.value = false;
+    
     authStore
       .login(credentials.value)
       .then((res) => {
         if (res.code === 0) {
           getProfile();
         } else {
+          const errorMessage = res.data?.message || res.message || "Login failed";
+          loginError.value = errorMessage;
+          
+          // Show resend button if email not verified
+          if (errorMessage.toLowerCase().includes("email not verified")) {
+            showResendButton.value = true;
+          }
+          
           store.setSnackbar({
-            title: res.data.message || res.message,
+            title: errorMessage,
             type: "error",
           });
-          loginError.value = res.data.message;
         }
       })
       .catch((err) => {
+        const errorMessage = err.data?.message || err.message || "Login failed";
+        loginError.value = errorMessage;
+        
+        // Show resend button if email not verified
+        if (errorMessage.toLowerCase().includes("email not verified")) {
+          showResendButton.value = true;
+        }
+        
         store.setSnackbar({
-          title: err.message,
+          title: errorMessage,
           type: "error",
         });
       });
@@ -278,6 +306,37 @@ const goToSignup = () => {
 };
 const forgetPass = () => {
   router.push("/forgetpassword");
+};
+
+const resendVerificationEmail = async () => {
+  showResendButton.value = false;
+  
+  authStore
+    .resendVerificationEmail({ email: credentials.value.email })
+    .then((res) => {
+      if (res.code === 0) {
+        store.setSnackbar({
+          title: "Verification email sent successfully!",
+          subtitle: "Please check your inbox and verify your email.",
+          type: "success",
+        });
+        loginError.value = null;
+      } else {
+        store.setSnackbar({
+          title: res.data?.message || res.message || "Failed to send verification email",
+          type: "error",
+        });
+        showResendButton.value = true;
+      }
+    })
+    .catch((err) => {
+      const errorMessage = err.data?.message || err.message || "Failed to send verification email";
+      store.setSnackbar({
+        title: errorMessage,
+        type: "error",
+      });
+      showResendButton.value = true;
+    });
 };
 </script>
 

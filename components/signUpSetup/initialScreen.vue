@@ -30,7 +30,7 @@
         </div>
 
         <h2 class="mt-5 init-info text-h4 text-md-h5 text-sm-h6">
-          This setup takes 4-5 mins and gives your clinic a clean start.
+          This setup takes 4-5 minutes and gives your clinic a clean start.
         </h2>
       </div>
     </div>
