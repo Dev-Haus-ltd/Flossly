@@ -78,3 +78,36 @@ export const startTaskScheduler = () => {
     });
   });
 }
+
+import { CrmLead } from "../models/index.js";
+import { transporter } from "./nodeMailer.js";
+
+export const startLeadAutomationScheduler = () => {
+  const minutes = Number(process.env.CRM_LEAD_AUTOMATION_MINUTES || 2);
+  const pattern = minutes > 0 ? `*/${minutes} * * * *` : null;
+  if (!pattern) return;
+  cron.schedule(pattern, async () => {
+    try {
+      const leads = await CrmLead.findAll({ where: { softDeleted: false }, limit: 25, order: [['createdAt','DESC']] });
+      for (const lead of leads) {
+        if (!lead?.email) continue;
+        const raw = lead.rawData || {};
+        if (raw.automationWelcomeSent) continue; 
+        try {
+          await transporter.sendMail({
+            to: lead.email,
+            from: process.env.MAIL_FROM || 'helloflossly@gmail.com',
+            subject: 'Welcome to Our Practice',
+            html: `<p>Hi ${lead.name || 'there'},</p><p>Thanks for your interest. We will contact you soon.</p>`,
+          });
+          lead.rawData = { ...raw, automationWelcomeSent: true };
+          await lead.save();
+        } catch (e) {
+          console.error('[CRM] automation email failed', e?.message);
+        }
+      }
+    } catch (e) {
+      console.error('[CRM] automation tick error', e?.message);
+    }
+  });
+};

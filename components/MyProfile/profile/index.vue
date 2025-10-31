@@ -6,7 +6,7 @@
         <v-card
           elevation="0"
           class="pa-7 flex-grow-1"
-          style="border: 1px solid #dbdbdb; border-radius: 12px"
+          style="border: 1px solid rgba(var(--v-theme-on-surface), 0.12); border-radius: 12px"
         >
           <!-- Top Section: Avatar + Name + Practice -->
           <div class="d-flex align-center mb-6">
@@ -96,19 +96,16 @@
                   <v-radio
                     label="Male"
                     value="Male"
-                    color="black"
                     class="gender-radio"
                   />
                   <v-radio
                     label="Female"
                     value="Female"
-                    color="black"
                     class="gender-radio ml-2"
                   />
                   <v-radio
                     label="Other"
                     value="Other"
-                    color="black"
                     class="gender-radio ml-2"
                   />
                 </v-radio-group>
@@ -123,7 +120,7 @@
         <v-card
           elevation="0"
           class="pa-7 flex-grow-1"
-          style="border: 1px solid #dbdbdb; border-radius: 12px"
+          style="border: 1px solid rgba(var(--v-theme-on-surface), 0.12); border-radius: 12px"
         >
           <!-- Info Section -->
           <div class="info-section">

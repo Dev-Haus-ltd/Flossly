@@ -7,7 +7,7 @@
           title="Annual Leaves"
           :total="entitlementStats.allowedAnnualLeaves"
           :taken="entitlementStats.takenAnnualLeaves"
-          color="#E8FAE8"
+          color="success"
         />
       </v-col>
       <v-col cols="4">
@@ -16,7 +16,7 @@
           title="Sick Leaves"
           :total="entitlementStats.allowedSickLeaves"
           :taken="entitlementStats.takenSickLeaves"
-          color="#FDE8E8"
+          color="error"
         />
       </v-col>
       <v-col cols="4">
@@ -25,25 +25,23 @@
           title="Other Leaves"
           :total="entitlementStats.allowedOtherLeaves"
           :taken="entitlementStats.takenOtherLeaves"
-          color="#FFF3E8"
+          color="warning"
         />
       </v-col>
     </v-row>
     <div
-      style="border: 1px solid #dbdbdb; border-radius: 6px; overflow: auto"
+      style="border: 1px solid rgba(var(--v-theme-on-surface), 0.12); border-radius: 6px; overflow: auto"
       class="my-5"
     >
       <!-- Header -->
       <div
-        style="border-bottom: 1px solid #dbdbdb"
+        style="border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.12)"
         class="d-flex align-center justify-space-between px-4 py-2"
       >
         <h3
           style="
-            
             font-weight: 600;
             font-size: 14px;
-            color: #1e1e1e;
             margin: 0;
           "
         >
@@ -213,27 +211,26 @@ const handleSuccess = (data) => {
 
 <style scoped>
 .leave-table th {
-  background-color: #f6f6f6;
+  background-color: rgb(var(--v-theme-surface-variant));
   font-weight: 500;
 }
 
 .status-chip-accepted {
-  background-color: #33b93c1a !important;
-  color: #33b93c !important;
+  background-color: rgba(var(--v-theme-success), 0.12) !important;
+  color: rgb(var(--v-theme-success)) !important;
 }
 .status-chip-pending {
-  background-color: #fdd8351a !important;
-  color: #fbc02d !important;
+  background-color: rgba(var(--v-theme-warning), 0.12) !important;
+  color: rgb(var(--v-theme-warning)) !important;
 }
 .status-chip-rejected {
-  background-color: #ff52521a !important;
-  color: #ff5252 !important;
+  background-color: rgba(var(--v-theme-error), 0.12) !important;
+  color: rgb(var(--v-theme-error)) !important;
 }
 
 .input-bordered :deep(.v-field) {
-  border: 1px solid #dfdfdf !important;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.12) !important;
   border-radius: 8px !important;
-  background-color: white !important;
 }
 :deep(.v-table__wrapper table) {
   width: 100% !important;
@@ -248,7 +245,7 @@ const handleSuccess = (data) => {
   border-right: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 :deep(.v-data-table .v-table__wrapper tbody tr:hover) {
-  background-color: #f5f5f5;
+  background-color: rgba(var(--v-theme-on-surface), 0.06);
   transition: background-color 0.2s ease;
 }
 </style>

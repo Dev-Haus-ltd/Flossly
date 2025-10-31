@@ -2,7 +2,7 @@
   <v-dialog :model-value="props.modelValue" max-width="1500px" persistent>
     <v-card class="d-flex flex-column rounded-xl" style="min-height: 75vh">
       <!-- Header -->
-      <div class="pa-4 d-flex justify-space-between align-center bg-white">
+      <div class="pa-4 d-flex justify-space-between align-center">
         <h3 class="title m-0">Task pool</h3>
         <div class="d-flex align-center">
           <v-btn flat icon size="32" class="ml-2" @click="$emit('close')">
@@ -14,7 +14,7 @@
       <!-- Content -->
       <div
         class="flex-grow-1 px-4 py-2"
-        style="overflow-y: auto; background-color: #f9f9f9"
+        style="overflow-y: auto;"
       >
         <v-tabs v-model="tab" class="custom-tabs px-4" slider-color="primary">
           <v-tab
@@ -38,7 +38,6 @@
               variant="solo"
               density="compact"
               hide-details
-              bg-color="#FAFAFA"
               flat
               class="input-bordered mt-5 mr-8 ml-auto"
               width="300"
@@ -63,15 +62,14 @@
                 v-else
                 class="rounded-xl ma-5"
                 border
-                style="border-color: #dbdbdb"
+                style="border-color: rgba(var(--v-theme-on-surface), 0.12)"
                 :elevation="0"
               >
                 <v-card-title
                   class="px-2 py-4"
                   v-if="subCategories.length"
                   style="
-                    border-bottom: 1px solid #dbdbdb;
-                    background-color: #f1f1f1;
+                    border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.12);
                   "
                 >
              
@@ -79,7 +77,6 @@
                     <v-icon
                       @click="subCategoryView = true"
                       size="24"
-                      color="gray"
                       class="mr-3"
                       >mdi-arrow-left</v-icon
                     >
@@ -93,13 +90,12 @@
               variant="solo"
               density="compact"
               hide-details
-              bg-color="#FAFAFA"
               flat
               class="input-bordered ma-2 ml-auto"
               width="300"
             />
                 <v-list v-if="tasks.length" class="pa-0">
-                  <div class="checklist-row has-border" style="background-color: #f6f6f6;">
+                  <div class="checklist-row has-border">
                     <div class="table-cell checkbox-cell">
                       <v-checkbox
                         v-model="selectAll"
@@ -132,9 +128,8 @@
 
       <!-- Footer -->
       <div
-        class="d-flex justify-end pa-6 bg-white"
-        style="border-top: 1px solid #eee"
-      
+        class="d-flex justify-end pa-6"
+        style="border-top: 1px solid rgba(var(--v-theme-on-surface), 0.12)"
       >
         <v-btn
           color="primary"
