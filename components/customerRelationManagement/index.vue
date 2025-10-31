@@ -116,7 +116,7 @@
 
       <!-- List View (child) -->
       <CustomerRelationManagementListView
-        v-else-if="leads.length"
+        v-else-if="!isLoading && leads.length"
         :leads="filteredLeads"
         :headers="headers"
         :search="search"
@@ -126,6 +126,8 @@
         @select="onSelect"
         @delete="onDeleteSelected"
       />
+
+   
 
     
 
@@ -190,42 +192,7 @@ const leadStats = computed(() => {
 });
 const search = ref("");
 
-const leads = ref([
-  {
-    id: 1,
-    alert: "🔥",
-    name: "John Doe",
-    email: "john@demo.com",
-    telephone: "1234567890",
-    inquiryDate: "2025-09-01",
-    leadSource: { id: 1, name: "Website" },
-    leadStatus: "New",
-    treatment: { id: 1, name: "Consultation" },
-    assigned: [
-      { id: 1, fullName: "john doe" },
-      { id: 2, fullName: "Usama Naeem" },
-    ],
-    followUpDate: "2025-09-15",
-    comments: "Interested in product A",
-  },
-  {
-    id: 2,
-    alert: "🔥",
-    name: "Jane Smith",
-    email: "jane@demo.com",
-    telephone: "9876543210",
-    inquiryDate: "2025-09-05",
-    leadSource: { id: 2, name: "Referral" },
-    leadStatus: "In Progress",
-    treatment: { id: 2, name: "Demo" },
-    assigned: [
-      { id: 1, fullName: "Bob" },
-      { id: 2, fullName: "john" },
-    ],
-    followUpDate: "2025-09-18",
-    comments: "Asked for discount",
-  },
-]);
+const leads = ref([]);
 
 const headers = [
   { key: "alert", title: "Alert", width: 70 },
@@ -342,31 +309,38 @@ const handleSuccess = (newLead) => {
 
 const route = useRoute();
 const initLeads = async () => {
-  if (route.query.meta === "connected") {
-    try {
-      await crmService.fetchLeadsNow();
-    } catch (e) {}
-  }
-  // Show all leads from our database (which also stores Meta imports)
-  const res = await crmService.listLeads();
-  if (res && res.code === 0) {
-    leads.value = (res.data || []).map((l) => ({
-      alert: l.alert || "",
-      name: l.name || "",
-      email: l.email || "",
-      telephone: l.telephone || "",
-      inquiryDate: l.inquiryDate || "",
-      dob: l.dob || null,
-      occupation: l.occupation || "",
-      location: l.location || "",
-      leadSource: l.leadSource?.name ? l.leadSource : { id: 99, name: l.leadSource || "Meta Leadgen" },
-      leadStatus: l.leadStatus || "New",
-      treatment: l.treatment || { id: null, name: "" },
-      assigned: l.assigned || [],
-      followUpDate: l.followUpDate || "",
-      comments: l.comments || "",
-      id: l.id,
-    }));
+  try {
+    isLoading.value = true;
+    if (route.query.meta === "connected") {
+      try {
+        await crmService.fetchLeadsNow();
+      } catch (e) {}
+    }
+    // Show all leads from our database (which also stores Meta imports)
+    const res = await crmService.listLeads();
+    if (res && res.code === 0) {
+      leads.value = (res.data || []).map((l) => ({
+        alert: l.alert || "",
+        name: l.name || "",
+        email: l.email || "",
+        telephone: l.telephone || "",
+        inquiryDate: l.inquiryDate || "",
+        dob: l.dob || null,
+        occupation: l.occupation || "",
+        location: l.location || "",
+        leadSource: l.leadSource?.name ? l.leadSource : { id: 99, name: l.leadSource || "Meta Leadgen" },
+        leadStatus: l.leadStatus || "New",
+        treatment: l.treatment || { id: null, name: "" },
+        assigned: l.assigned || [],
+        followUpDate: l.followUpDate || "",
+        comments: l.comments || "",
+        id: l.id,
+      }));
+    }
+  } catch (e) {
+    // Handle error
+  } finally {
+    isLoading.value = false;
   }
 };
 
@@ -393,9 +367,12 @@ const checkConnection = async () => {
 
 const fetchNow = async () => {
   try {
+    isLoading.value = true;
     await crmService.fetchLeadsNow();
     await initLeads();
-  } catch (e) {}
+  } catch (e) {
+    isLoading.value = false;
+  }
 };
 
 const onDeleteSelected = async (ids) => {

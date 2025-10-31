@@ -463,9 +463,19 @@ export const verifyEmail = async (event) => {
       where: { id: verification.userId, email: verification.email },
     });
     if (user) {
+      // If already verified (either user or verification record), return success
+      if (verification.verified || user.isEmailVerified) {
+        return success("Email already verified");
+      }
+      
+      // Verify the email
       user.isEmailVerified = true;
       await user.save();
-      await EmailVerification.destroy({ where: { link } });
+      
+      // Mark verification as verified instead of deleting
+      verification.verified = true;
+      await verification.save();
+      
       const tasks = await Task.findAll({
         limit: 100,
         where: {

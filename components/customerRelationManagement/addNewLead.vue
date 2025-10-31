@@ -398,15 +398,69 @@ const formattedDob = computed(() =>
 
 const onInquiryDateSelected = (val) => {
   form.value.inquiryDate = val;
+  inquiryMenu.value = false;
 };
 const onFollowUpDateSelected = (val) => {
   form.value.followUpDate = val;
+  followUpMenu.value = false;
 };
 const onDobSelected = (val) => {
   form.value.dob = val;
+  dobMenu.value = false;
 };
 
 const mainStore = useMainStore();
+
+// Reset form to initial state
+const resetForm = () => {
+  form.value = {
+    name: "",
+    email: "",
+    telephone: "",
+    inquiryDate: null,
+    leadSource: null,
+    leadStatus: null,
+    contactMethod: null,
+    treatment: null,
+    assigned: [],
+    followUpDate: null,
+    dob: null,
+    occupation: "",
+    location: "",
+    comments: "",
+  };
+  // Reset form validation state
+  if (formRef.value) {
+    formRef.value.resetValidation();
+  }
+  // Close date picker menus
+  inquiryMenu.value = false;
+  followUpMenu.value = false;
+  dobMenu.value = false;
+};
+
+// Handle drawer close - emit close event and reset form
+const closeDrawer = () => {
+  emit("close");
+  emit("update:modelValue", false);
+  resetForm();
+};
+
+// Handle model value change (when drawer is closed externally)
+const handleDrawerClose = (newValue) => {
+  if (!newValue) {
+    resetForm();
+  }
+  emit("update:modelValue", newValue);
+};
+
+// Watch for modelValue changes to reset form when drawer closes
+watch(() => props.modelValue, (newValue) => {
+  if (!newValue) {
+    resetForm();
+  }
+});
+
 const onSubmit = async () => {
   const validation = await formRef.value.validate();
   if (!validation.valid) return;
@@ -417,6 +471,7 @@ const onSubmit = async () => {
     if (res.code === 0) {
       mainStore.setSnackbar({ title: "Lead created", type: "success" });
       emit("success", res.data);
+      closeDrawer(); // Close and reset after successful save
     } else {
       mainStore.setSnackbar({ title: res.message || "Failed to create lead", type: "error" });
     }
