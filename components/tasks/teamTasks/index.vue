@@ -246,7 +246,14 @@ const applyFilters = (filters) => {
     .teamTasksGroupedByStatus(filters)
     .then((res) => {
       if (res.code === 0) {
-        taskDetails.value = sortByCustomStatus(res.data);
+        const myId = user.value?.id;
+        const filteredData = res.data.map(group => ({
+          ...group,
+          tasks: group.tasks.filter(task =>
+            !task.assignedUsers?.some(u => u.id === myId)
+          )
+        }));
+        taskDetails.value = sortByCustomStatus(filteredData);
       } else {
         // set snack
       }
@@ -278,7 +285,14 @@ const getTeamTasks = (categoryId) => {
     .teamTasksGroupedByStatus({ categoryId })
     .then((res) => {
       if (res.code === 0) {
-        taskDetails.value = sortByCustomStatus(res.data);
+        const myId = user.value?.id;
+        const filteredData = res.data.map(group => ({
+          ...group,
+          tasks: group.tasks.filter(task =>
+            !task.assignedUsers?.some(u => u.id === myId)
+          )
+        }));
+        taskDetails.value = sortByCustomStatus(filteredData);
       } else {
         // set snack
       }

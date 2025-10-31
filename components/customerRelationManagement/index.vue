@@ -4,17 +4,18 @@
       <p class="mr-1">CRM</p>
     </div>
     <div class="mt-5 px-5">
-      <v-row>
-        <v-col cols="12" sm="4" md="2" v-for="(stat, i) in leadStats" :key="i">
-          <CommonStatCard
-            :icon="stat.icon"
-            :label="stat.label"
-            :value="stat.value"
-            :uid="i"
-            hide-chip
-          />
-        </v-col>
-      </v-row>
+      <div class="stats-container">
+        <CommonStatCard
+          v-for="(stat, i) in leadStats"
+          :key="i"
+          :icon="stat.icon"
+          :label="stat.label"
+          :value="stat.value"
+          :uid="i"
+          hide-chip
+          class="stat-card"
+        />
+      </div>
     </div>
     <div class="mt-5 px-5">
       <div class="d-flex justify-space-between align-center mb-4">
@@ -100,9 +101,14 @@
         </div>
       </div>
 
+      <!-- Loading State - Blank -->
+      <div v-if="isLoading" class="loading-blank">
+        <!-- Empty space while loading -->
+      </div>
+
       <!-- List View (child) -->
       <CustomerRelationManagementListView
-        v-if="leads.length"
+        v-else-if="leads.length"
         :leads="filteredLeads"
         :headers="headers"
         :search="search"
@@ -112,13 +118,14 @@
         @select="onSelect"
       />
 
+    
+
       <!-- Sidebar drawer for add -->
       <CustomerRelationManagementAddNewLead
         v-model="addLeadDrawer"
         :lead-sources="leadSources"
         :treatment-sources="treatmentSources"
         :staff-list="staffList"
-        @close="addLeadDrawer = false"
         @success="handleSuccess"
       />
     </div>
@@ -131,6 +138,7 @@ const userStore = useUserStore();
 const authStore = useAuthStore();
 const userList = ref([]);
 const addLeadDrawer = ref(false);
+const isLoading = ref(false);
 
 const leadStats = computed(() => {
   const total = leads.value.length;
@@ -281,27 +289,34 @@ const updateLeads = (newLead) => {
 
 const route = useRoute();
 const initLeads = async () => {
-  if (route.query.meta === "connected") {
-    try {
-      await crmService.fetchLeadsNow();
-    } catch (e) {}
-  }
-  const res = await crmService.fetchLeads();
-  if (res && res.code === 0) {
-    leads.value = (res.data || []).map((l) => ({
-      alert: l.alert || "",
-      name: l.name || "",
-      email: l.email || "",
-      telephone: l.telephone || "",
-      inquiryDate: l.inquiryDate || "",
-      leadSource: l.leadSource || { id: 99, name: "Meta Leadgen" },
-      leadStatus: l.leadStatus || "New",
-      treatment: l.treatment || { id: null, name: "" },
-      assigned: l.assigned || [],
-      followUpDate: l.followUpDate || "",
-      comments: l.comments || "",
-      id: l.id,
-    }));
+  isLoading.value = true;
+  try {
+    if (route.query.meta === "connected") {
+      try {
+        await crmService.fetchLeadsNow();
+      } catch (e) {}
+    }
+    const res = await crmService.fetchLeads();
+    if (res && res.code === 0) {
+      leads.value = (res.data || []).map((l) => ({
+        alert: l.alert || "",
+        name: l.name || "",
+        email: l.email || "",
+        telephone: l.telephone || "",
+        inquiryDate: l.inquiryDate || "",
+        leadSource: l.leadSource || { id: 99, name: "Meta Leadgen" },
+        leadStatus: l.leadStatus || "New",
+        treatment: l.treatment || { id: null, name: "" },
+        assigned: l.assigned || [],
+        followUpDate: l.followUpDate || "",
+        comments: l.comments || "",
+        id: l.id,
+      }));
+    }
+  } catch (error) {
+    console.error("Error fetching leads:", error);
+  } finally {
+    isLoading.value = false;
   }
 };
 
@@ -332,6 +347,14 @@ const fetchNow = async () => {
     await initLeads();
   } catch (e) {}
 };
+
+const handleSuccess = (formData) => {
+  // Here you would typically save the lead data
+  console.log('New lead data:', formData);
+  
+  // You can add the lead to the list or refresh the data
+  // The drawer closing is now handled by the component itself
+};
 </script>
 
 <style scoped lang="scss">
@@ -349,5 +372,37 @@ const fetchNow = async () => {
 :deep(.v-breadcrumbs) {
   font-weight: 400;
   font-size: 14px;
+}
+
+/* Stats Container - Fill available space */
+.stats-container {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+}
+
+.stat-card {
+  flex: 1;
+  min-width: 0; /* Allows flex items to shrink below their content size */
+}
+
+/* Responsive behavior */
+@media (max-width: 768px) {
+  .stats-container {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-container {
+    gap: 8px;
+  }
+}
+
+/* Loading State - Blank */
+.loading-blank {
+  min-height: 400px;
+  /* Just empty space while loading */
 }
 </style>

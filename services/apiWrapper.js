@@ -13,7 +13,13 @@ export const Post = async (url, body) => {
     body: JSON.stringify(body),
   };
   const response = await fetch(APIURL + url, args);
-  return response.json();
+  const data = await response.json();
+  
+  if (!response.ok) {
+    throw data;
+  }
+  
+  return data;
 };
 // 
 export const Delete = async (url, itemId) => {

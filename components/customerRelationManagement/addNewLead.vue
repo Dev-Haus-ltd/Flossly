@@ -1,6 +1,7 @@
 <template>
   <v-navigation-drawer
-    :model-value="modelValue"
+    :model-value="props.modelValue"
+    @update:model-value="handleDrawerClose"
     location="right"
     temporary
     :width="600"
@@ -13,7 +14,7 @@
         icon
         variant="outlined"
         color="#8B8B8B"
-        @click="emit('close')"
+        @click="closeDrawer"
         class="mr-4"
         style="
           width: 20px;
@@ -309,7 +310,7 @@
         color="white"
         class="text-primary"
         style="width: 48%; border-radius: 8px; border: 1px solid #dfdfdf"
-        @click="emit('close')"
+        @click="closeDrawer"
         flat
       >
         Back
@@ -329,14 +330,14 @@
 </template>
 
 <script setup>
-const { modelValue, leadSources, treatmentSources, staffList } = defineProps({
+const props = defineProps({
   modelValue: Boolean,
   leadSources: Array,
   treatmentSources: Array,
   staffList: Array,
 });
 
-const emit = defineEmits(["close", "success"]);
+const emit = defineEmits(["close", "success", "update:modelValue"]);
 const formRef = ref(null);
 
 const requiredRule = [(v) => !!v || "This field is required"];
@@ -392,10 +393,62 @@ const onDobSelected = (val) => {
   form.value.dob = val;
 };
 
+const closeDrawer = () => {
+  emit("update:modelValue", false);
+  emit("close");
+};
+
 const onSubmit = async () => {
   const validation = await formRef.value.validate();
   if (validation.valid) {
     emit("success", form.value);
+    // Reset form after successful submission
+    resetForm();
+    // Close drawer after successful submission
+    closeDrawer();
+  }
+};
+
+const resetForm = () => {
+  form.value = {
+    name: "",
+    email: "",
+    telephone: "",
+    inquiryDate: null,
+    leadSource: null,
+    leadStatus: null,
+    contactMethod: null,
+    treatment: null,
+    assigned: null,
+    followUpDate: null,
+    dob: null,
+    occupation: "",
+    location: "",
+    comments: "",
+  };
+  // Reset form validation
+  if (formRef.value) {
+    formRef.value.reset();
+  }
+  // Close date menus
+  inquiryMenu.value = false;
+  followUpMenu.value = false;
+  dobMenu.value = false;
+};
+
+// Watch for drawer close to reset form (handles all close scenarios)
+watch(() => props.modelValue, (newValue) => {
+  if (!newValue) {
+    resetForm();
+  }
+});
+
+// Handle drawer close when clicking outside (v-navigation-drawer built-in behavior)
+const handleDrawerClose = (newValue) => {
+  if (!newValue) {
+    // Only emit if the drawer is being closed
+    emit("update:modelValue", false);
+    emit("close");
   }
 };
 </script>

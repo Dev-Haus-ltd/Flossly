@@ -24,7 +24,7 @@
         color="grey-darken-1"
         variant="tonal"
         :disabled="step === 0"
-        @click="step--"
+        @click="handleBack"
         class="me-2 nav-button"
         height="48"
         width="100"
@@ -104,7 +104,7 @@ const steps = [
     key: 1,
     title: "Quick Clinic Setup",
     subTitle:
-      "Enter your clinic details to personlise your Flossly workspace.",
+      "Enter your clinic details to personalise your Flossly workspace.",
     component: clinicSetup,
   },
   {
@@ -182,8 +182,17 @@ const nextStep = async () => {
         }
       })
       .catch((err) => {
+        let errorMessage = err.message;
+        
+        // Handle specific error cases for logo upload
+        if (err.response?.status === 413) {
+          errorMessage = "Logo image is too large. Please choose an image smaller than 5MB.";
+        } else if (err.response?.status === 400) {
+          errorMessage = "Invalid image format. Please upload a valid image file (JPG, PNG, GIF).";
+        }
+        
         mainStore.setSnackbar({
-          title: err.message,
+          title: errorMessage,
           type: "Error",
         });
       });
@@ -213,6 +222,22 @@ const nextStep = async () => {
 
 const navigateToDashboard = () => {
   router.push("/");
+};
+
+// Handle back navigation with awareness of Pricing payment modal
+const handleBack = () => {
+  // Pricing step is index 2 (0-based)
+  if (step.value === 2) {
+    const pricingRef = stepComponent.value;
+    // If payment modal is open, close it instead of moving to previous step
+    if (pricingRef?.isPaymentOpen) {
+      if (pricingRef.isPaymentOpen) {
+        pricingRef.cancelPaymentFlow?.();
+        return;
+      }
+    }
+  }
+  step.value--;
 };
 </script>
 <style scoped>
@@ -248,6 +273,11 @@ const navigateToDashboard = () => {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 16px;
+}
+
+/* Button font size */
+.nav-button {
+  font-size: 16px !important;
 }
 
 /* Mobile Responsive Adjustments */

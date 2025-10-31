@@ -30,6 +30,7 @@ import requestIp from "request-ip";
 import { HrDocument } from "../models/hrDocuments";
 import path from "path";
 import fs from "fs";
+import { createError } from "h3";
 
 const config = useRuntimeConfig();
 export const login = async (event) => {
@@ -114,33 +115,77 @@ export const exchangeShortLivedToken = async (event) => {
   }
 };
 
+export const resendVerificationEmail = async (event) => {
+  const body = await readBody(event);
+  const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+  const { email } = parsed;
+  
+  if (!email) return error(400, "Email required");
+  
+  try {
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      return error(404, "User not found");
+    }
+    
+    if (user.isEmailVerified) {
+      return error(400, "Email already verified");
+    }
+    
+    // Delete old verification links
+    await EmailVerification.destroy({ where: { userId: user.id } });
+    
+    // Create new verification link
+    const link = generateVerificationLink();
+    await EmailVerification.create({ email, link, userId: user.id });
+    await sendEmailVerificationEmail({ email, fullName: user.fullName, link });
+    
+    return success("Verification email sent");
+  } catch (err) {
+    return error(500, err.message || "Failed to send verification email");
+  }
+};
+
 export const signupRequest = async (event) => {
-  const body = JSON.parse(await readBody(event));
-  const { fullName, email, password, organisationName, roleId } = body;
-  if (!fullName || !email || !password || !organisationName) {
+  const body = await readBody(event);
+  const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+  const { fullName, email, password, organisationName, roleId } = parsed;
+  
+  // Trim and validate fullName
+  const trimmedFullName = fullName ? fullName.trim() : '';
+  if (!trimmedFullName || !email || !password || !organisationName) {
     return error(400, "Missing required fields");
   }
+  
+  // Additional validation for fullName
+  if (trimmedFullName.length === 0) {
+    return error(400, "Full name cannot be empty or contain only spaces");
+  }
+
+  // Check if organization already exists
+  let org = await Organisation.findOne({ where: { name: organisationName } });
+  if (org) {
+    return error(402, "Organization already exists. Please choose a different organization name or contact support if you believe this is an error.");
+  }
+
+  // Check if user already exists
+  let user = await User.findOne({ where: { email } });
+  if (user) {
+    return error(409, "Email already exists. Please use a different email address or try logging in instead.");
+  }
+
   const transaction = await DB.transaction();
   try {
-    // find or create organisation
-    let org = await Organisation.findOne({ where: { name: organisationName } });
-    if (!org) {
-      org = await Organisation.create(
-        { name: organisationName },
-        { transaction }
-      );
-    } else {
-      return error(402, "orgAlreadyExist");
-    }
-
-    // check duplicate user
-    let user = await User.findOne({ where: { email } });
-    if (user) error(409, "email already exist");
+    // create organisation
+    org = await Organisation.create(
+      { name: organisationName },
+      { transaction }
+    );
 
     // hash password
     const hashed = await bcrypt.hash(password, 10);
     user = await User.create(
-      { fullName, email, password: hashed, profileCompletion: 0, roleId },
+      { fullName: trimmedFullName, email, password: hashed, profileCompletion: 0, roleId },
       { transaction }
     );
     org.managerId = user.id;
@@ -166,7 +211,7 @@ export const signupRequest = async (event) => {
       { email, link, userId: user.id },
       { transaction }
     );
-    await sendEmailVerificationEmail({ email, fullName, link });
+    await sendEmailVerificationEmail({ email, fullName: trimmedFullName, link });
     await transaction.commit();
     return success("Email sent");
   } catch (err) {
@@ -239,8 +284,19 @@ export const updateProfile = async (event) => {
   } = JSON.parse(body);
   try {
     const user = await User.findByPk(id);
+    
+    // Validate fullName if provided
+    if (fullName !== undefined) {
+      const trimmedFullName = fullName ? fullName.trim() : '';
+      if (trimmedFullName.length === 0) {
+        return error(400, "Full name cannot be empty or contain only spaces");
+      }
+      user.fullName = trimmedFullName;
+    } else {
+      user.fullName = user.fullName;
+    }
+    
     user.phone = phone || user.phone;
-    user.fullName = fullName || user.fullName;
     user.address = address || user.address;
     user.dob = dob || user.dob;
     user.gender = gender || user.gender;
@@ -307,17 +363,33 @@ export const updateBankDetails = async (event) => {
 
 export const forgetPasswordRequest = async (event) => {
   const body = await readBody(event);
-  const { email } = JSON.parse(body);
+  const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+  const { email } = parsed;
+  
+  if (!email) return error(403, "Email required");
+  
   try {
-    if (!email) return error(403, "Email required");
     const user = await User.findOne({ where: { email } });
-    if (!user) error(403, "User not found");
+    if (!user) {
+      throw createError({
+        statusCode: 403,
+        statusMessage: "User not found",
+        data: {
+          code: 1,
+          success: false,
+          message: "User not found"
+        }
+      });
+    }
     const otp = generateOTP();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
     await Verification.upsert({ email, otp, expiresAt });
     await sendOtpForPasswordReset({ email, otp, name: user.fullName });
     return success("OTP sent");
   } catch (err) {
+    if (err.statusCode) {
+      throw err; // Re-throw if it's already a proper error
+    }
     return error(500, err);
   }
 };
@@ -418,7 +490,7 @@ export const verifyEmail = async (event) => {
           priorityId: priorities.find((x) => x.key === "medium").id,
           title: task.title,
           documentLink: "",
-          frequency: task.defaultFrequency,
+          frequency: task.defaultFrequency === "6 Monthly" ? "Monthly" : task.defaultFrequency,
           comments: "",
         }));
         await UserTask.bulkCreate(userTasks);
@@ -560,8 +632,15 @@ export const acceptInvitation = async (event) => {
   const body = await readBody(event);
   const { inviteToken, password, fullName } = JSON.parse(body);
   try {
-    if (!inviteToken || !password || !fullName) {
+    // Trim and validate fullName
+    const trimmedFullName = fullName ? fullName.trim() : '';
+    if (!inviteToken || !password || !trimmedFullName) {
       return error(400, "Missing required fields");
+    }
+    
+    // Additional validation for fullName
+    if (trimmedFullName.length === 0) {
+      return error(400, "Full name cannot be empty or contain only spaces");
     }
     const user = await User.findOne({ where: { inviteToken } });
     if (!user) {
@@ -578,7 +657,7 @@ export const acceptInvitation = async (event) => {
     });
     const hashedPassword = await bcrypt.hash(password, 10);
     user.password = hashedPassword;
-    user.fullName = fullName;
+    user.fullName = trimmedFullName;
     user.profileCompletion = 1;
     user.isEmailVerified = true;
     user.status = "Active";

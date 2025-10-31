@@ -1,5 +1,5 @@
 <template>
-    <log-in/>
+  <SecurityPolicy />
 </template>
 
 <script setup>
