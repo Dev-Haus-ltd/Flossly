@@ -3,6 +3,8 @@
     :class="
       steps[step].key === 3
         ? 'form-container py-3 py-md-5 px-3 d-flex flex-column'
+        : step === 1
+        ? 'form-container py-3 py-md-5 px-3 d-flex flex-column align-start ml-0 ml-md-6 buttons-bottom'
         : 'form-container py-3 py-md-5 px-3 d-flex flex-column align-start ml-0 ml-md-6'
     "
   >
@@ -129,7 +131,7 @@ const currentComponent = computed(() => steps[step.value].component);
 const stepComponent = ref();
 const stepModels = ref([
   { name: "", logo: null, contact: "", address: "", type: "" }, // Clinic model
-  { users: [{ roleId: 1, email: "" }] }, // Team model
+  { users: [{ roleId: null, email: "" }] }, // Team model
   {}, // Pricing model
 ]);
 
@@ -273,6 +275,16 @@ const handleBack = () => {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 16px;
+}
+
+/* For Add Team Members step (step 1), move buttons to bottom */
+.form-container.buttons-bottom {
+  min-height: calc(100vh - 96px);
+}
+
+.form-container.buttons-bottom .button-container {
+  margin-top: auto;
+  padding-top: 24px;
 }
 
 /* Button font size */
