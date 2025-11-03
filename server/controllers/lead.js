@@ -3,6 +3,7 @@ import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
 import { success, error } from '../utils/response'
 import { transporter } from '../utils/nodeMailer.js'
+import { template as EMAIL_TEMPLATE } from '../utils/emailTemplate.js'
  
 
 export const listLeads = async (event) => {
@@ -437,7 +438,10 @@ export const sendLeadMail = async (event) => {
         .replaceAll('[Your Name]', fullName || 'Team')
 
       try {
-        await transporter.sendMail({ to: l.email, from, subject, html: content })
+        const wrapped = EMAIL_TEMPLATE
+          .replaceAll('{subject}', subject)
+          .replace('{content}', content)
+        await transporter.sendMail({ to: l.email, from, subject, html: wrapped })
       } catch (e) {
         // continue with others
       }

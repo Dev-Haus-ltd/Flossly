@@ -8,7 +8,7 @@
           style="background-color: rgb(var(--v-theme-surface))"
         >
           <h3 class="title ml-4">{{ selectedLead?.name + "'s profile" }}</h3>
-          <v-btn flat icon size="32" @click="$emit('close')">
+          <v-btn flat icon size="32" @click="onClose">
             <v-icon size="20">mdi-close</v-icon>
           </v-btn>
         </div>
@@ -335,6 +335,8 @@ const props = defineProps({
   modelValue: Boolean,
   selectedLead: Object,
 });
+const emit = defineEmits(['close','update:modelValue'])
+const onClose = () => { emit('update:modelValue', false); emit('close') }
 const tab = ref("lead-info");
 const formatDate = (date) => {
   return parsedDate(date);

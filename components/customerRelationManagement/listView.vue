@@ -167,6 +167,7 @@
     </v-card>
 
     <CustomerRelationManagementLeadDetailsDialog
+      v-if="showLeadDetailDialog"
       v-model="showLeadDetailDialog"
       :selected-lead="selectedLead"
       @close="showLeadDetailDialog = false"
@@ -308,14 +309,14 @@ const openLeadDialog = (lead) => {
   console.log("Open lead dialog:", lead);
 };
 
-// Compose mail dialog using Editor.js
-import EditorJS from '@editorjs/editorjs'
-import Header from '@editorjs/header'
-import List from '@editorjs/list'
+// Compose mail dialog using Editor.js (client-only)
 const showCompose = ref(false)
 const composeLoading = ref(false)
 const composeHolder = ref(null)
 let composeEditor = null
+let EditorCtor = null
+let Header = null
+let List = null
 const compose = reactive({ key: 'mail', subject: '', recipients: [], html: '' })
 
 const defaultTemplates = {
@@ -381,7 +382,7 @@ function blocksToHtml(data) {
   }).join('')
 }
 
-function openCompose(actionKey) {
+async function openCompose(actionKey) {
   compose.key = actionKey
   const emails = (selectedLeads.value || []).map(l => l?.email).filter(Boolean)
   compose.recipients = [...new Set(emails)]
@@ -389,17 +390,25 @@ function openCompose(actionKey) {
   compose.subject = def.subject
   compose.html = def.html
   showCompose.value = true
-  nextTick(() => {
-    if (composeEditor) { composeEditor.destroy(); composeEditor = null }
-    composeEditor = new EditorJS({
-      holder: composeHolder.value,
-      tools: { header: Header, list: List },
-      data: htmlToBlocks(compose.html),
-      async onChange(api) {
-        const saved = await api.saver.save()
-        compose.html = blocksToHtml(saved)
-      }
-    })
+  await nextTick()
+  if (typeof window === 'undefined') return
+  if (!EditorCtor || !Header || !List) {
+    const [{ default: E }, { default: H }, { default: L }] = await Promise.all([
+      import('@editorjs/editorjs'),
+      import('@editorjs/header'),
+      import('@editorjs/list'),
+    ])
+    EditorCtor = E; Header = H; List = L
+  }
+  if (composeEditor) { composeEditor.destroy(); composeEditor = null }
+  composeEditor = new EditorCtor({
+    holder: composeHolder.value,
+    tools: { header: Header, list: List },
+    data: htmlToBlocks(compose.html),
+    async onChange(api) {
+      const saved = await api.saver.save()
+      compose.html = blocksToHtml(saved)
+    }
   })
 }
 
@@ -547,7 +556,7 @@ const convertSelected = async () => {
   color: rgb(var(--v-theme-on-primary));
   background: rgb(var(--v-theme-primary));
 }
-
+.action-bar { position: fixed; bottom: 30px; left: 60%; transform: translateX(-50%); z-index: 1000; }
 .actions-container {
   display: flex;
   flex-wrap: nowrap; 
