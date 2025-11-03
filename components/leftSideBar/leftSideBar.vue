@@ -134,20 +134,25 @@
 
       <v-spacer />
 
-      <v-btn
+      <div 
+        :class="['sidebar-toggle-wrapper', rail ? 'collapsed-state' : 'expanded-state']" 
         v-if="!smAndDown"
-        variant="text"
-        @click.stop="emit('update:rail', !rail)"
-        class="d-flex align-center"
       >
-        <template v-if="!rail">
-          Close
-          <v-icon class="ml-2">mdi-chevron-left</v-icon>
-        </template>
-        <template v-else>
-          <v-icon>mdi-chevron-right</v-icon>
-        </template>
-      </v-btn>
+        <v-btn
+          :class="['sidebar-toggle-btn', rail ? 'collapsed' : 'expanded']"
+          variant="text"
+          icon
+          size="small"
+          @click.stop="emit('update:rail', !rail)"
+        >
+          <v-icon 
+            :class="['toggle-icon', rail ? 'icon-right' : 'icon-left']"
+            size="18"
+          >
+            {{ rail ? 'mdi-chevron-right' : 'mdi-chevron-left' }}
+          </v-icon>
+        </v-btn>
+      </div>
     </v-card>
   </v-navigation-drawer>
 </template>
@@ -412,5 +417,54 @@ watch(() => user.value, (newUser) => {
 }
 .rail-closed .v-list-group__items .v-list-item {
   padding-inline-start: 8px !important; /* match parent padding */
+}
+
+/* Sidebar Toggle Button Styles - Minimal Design */
+.sidebar-toggle-wrapper {
+  padding: 12px 8px;
+  margin-top: auto;
+  display: flex;
+  position: sticky;
+  bottom: 0;
+  background: inherit;
+  z-index: 1;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.sidebar-toggle-wrapper.expanded-state {
+  justify-content: flex-end;
+}
+
+.sidebar-toggle-wrapper.collapsed-state {
+  justify-content: center;
+  padding: 12px 4px;
+}
+
+.sidebar-toggle-btn {
+  color: #737373 !important;
+  transition: all 0.2s ease;
+  min-width: 28px !important;
+  width: 28px !important;
+  height: 28px !important;
+  opacity: 0.6;
+}
+
+.sidebar-toggle-btn:hover {
+  opacity: 1;
+  color: #0061fb !important;
+  background-color: rgba(0, 97, 251, 0.08) !important;
+}
+
+.sidebar-toggle-btn:active {
+  opacity: 0.8;
+}
+
+.toggle-icon {
+  transition: transform 0.2s ease;
+}
+
+/* Smooth transition for the entire sidebar */
+:deep(.v-navigation-drawer) {
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 </style>

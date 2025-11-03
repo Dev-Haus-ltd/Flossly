@@ -40,7 +40,7 @@
             }"
             alt=""
           />
-          <h2 class="text-center login-heading">Welcome Back!</h2>
+          <h2 class="text-center login-heading">Welcome!</h2>
           <h2 class="mb-6 text-center login-sub-heading" style="color: #8b8b8b">
             Let's get signed in securely.
           </h2>

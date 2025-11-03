@@ -22,8 +22,20 @@
     </div>
   
     <div v-if="modelValue" class="mt-2">
-      <p>Selected: {{ modelValue.name }}</p>
-      <v-img :src="previewUrl" max-width="120" class="mt-2" v-if="previewUrl" />
+      <p class="mb-2">Selected: {{ modelValue.name }}</p>
+      <div class="image-preview-container" v-if="previewUrl">
+        <img :src="previewUrl" alt="Preview" class="preview-image" />
+        <v-btn
+          icon
+          size="small"
+          variant="flat"
+          color="error"
+          class="remove-image-btn"
+          @click.stop="removeImage"
+        >
+          <v-icon size="20">mdi-close</v-icon>
+        </v-btn>
+      </div>
     </div>
   </div>
   </template>
@@ -85,6 +97,23 @@ const setFile = (file) => {
   }
 }
 
+const removeImage = () => {
+  // Clear the model value
+  modelValue.value = null
+  
+  // Revoke and clear preview URL
+  if (previousUrl) {
+    URL.revokeObjectURL(previousUrl)
+    previousUrl = null
+  }
+  previewUrl.value = null
+  
+  // Clear file input
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
+}
+
 // Clean up when component is destroyed
 onBeforeUnmount(() => {
   if (previousUrl) URL.revokeObjectURL(previousUrl)
@@ -112,6 +141,39 @@ onBeforeUnmount(() => {
   }
   .hidden-input {
     display: none;
+  }
+  
+  .image-preview-container {
+    position: relative;
+    display: inline-block;
+    margin-top: 8px;
+  }
+  
+  .preview-image {
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    display: block;
+  }
+  
+  .remove-image-btn {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    min-width: 28px;
+    width: 28px;
+    height: 28px;
+    z-index: 1;
+    background-color: #f44336 !important;
+  }
+  
+  .remove-image-btn:hover {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    background-color: #d32f2f !important;
   }
   </style>
   

@@ -25,7 +25,6 @@
       <v-btn
         color="grey-darken-1"
         variant="tonal"
-        :disabled="step === 0"
         @click="handleBack"
         class="me-2 nav-button"
         height="48"
@@ -92,7 +91,7 @@ const mainStore = useMainStore();
 const router = useRouter();
 
 // Define emit to send current step to parent
-const emit = defineEmits(['update:currentStep']);
+const emit = defineEmits(['update:currentStep', 'go-to-initial-screen']);
 
 // Steps metadata
 const step = ref(0);
@@ -228,6 +227,12 @@ const navigateToDashboard = () => {
 
 // Handle back navigation with awareness of Pricing payment modal
 const handleBack = () => {
+  // If on first step (step 0), go back to initial screen
+  if (step.value === 0) {
+    emit('go-to-initial-screen');
+    return;
+  }
+  
   // Pricing step is index 2 (0-based)
   if (step.value === 2) {
     const pricingRef = stepComponent.value;

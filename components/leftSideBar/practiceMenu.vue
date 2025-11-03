@@ -154,6 +154,17 @@ const handleOrgClick = async (org) => {
     return;
   }
 
+  // Check if the selected organization is the same as the current one
+  const currentOrgId = user.value?.currentLoggedInOrgId;
+  if (currentOrgId && Number(org.id) === Number(currentOrgId)) {
+    mainStore.setSnackbar({
+      type: "info",
+      title: "Already in the same organization",
+    });
+    menu.value = false;
+    return;
+  }
+
   try {
     const res = await authStore.switchOrgnanisation({ orgId: org.id });
 

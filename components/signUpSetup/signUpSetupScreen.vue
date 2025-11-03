@@ -14,6 +14,20 @@
       
       <!-- Right Column: Form (full-width on mobile) -->
       <v-col class="right-column" :class="{ 'mobile-view': true }">
+        <!-- Logout Button - Top Right -->
+        <div class="logout-container">
+          <v-btn
+            color="grey-darken-1"
+            variant="text"
+            @click="handleLogout"
+            class="logout-button"
+            size="small"
+            rounded="lg"
+          >
+            Logout
+          </v-btn>
+        </div>
+        
         <!-- Mobile Stepper (shown only on mobile/tablet) -->
         <div class="d-flex d-md-none mobile-stepper-container">
           <left-stepper-template 
@@ -23,7 +37,10 @@
         </div>
         
         <!-- Form Content -->
-        <sign-up-setup @update:current-step="currentStep = $event" />
+        <sign-up-setup 
+          @update:current-step="currentStep = $event"
+          @go-to-initial-screen="isInitScreen = true"
+        />
       </v-col>
     </v-row>
   </div>
@@ -35,6 +52,11 @@ import leftStepperTemplate from "./leftStepperTemplate.vue";
 
 const isInitScreen = ref(true);
 const currentStep = ref(0);
+const router = useRouter();
+
+const handleLogout = () => {
+  router.push("/logout");
+};
 </script>
 
 <style scoped>
@@ -52,6 +74,20 @@ const currentStep = ref(0);
   padding-left: 48px;
   padding-right: 48px;
   padding-top: 48px;
+  position: relative;
+}
+
+.logout-container {
+  position: absolute;
+  top: 48px;
+  right: 48px;
+  z-index: 100;
+}
+
+.logout-button {
+  text-transform: none;
+  font-size: 14px;
+  font-weight: 400;
 }
 
 /* Mobile view adjustments */
@@ -60,6 +96,11 @@ const currentStep = ref(0);
     padding: 0 !important;
     width: 100%;
     max-width: 100%;
+  }
+  
+  .logout-container {
+    top: 12px;
+    right: 12px;
   }
   
   .mobile-stepper-container {
@@ -76,6 +117,11 @@ const currentStep = ref(0);
   .right-column {
     padding: 0 24px !important;
   }
+  
+  .logout-container {
+    top: 24px;
+    right: 24px;
+  }
 }
 
 /* Medium laptop adjustments */
@@ -84,6 +130,11 @@ const currentStep = ref(0);
     padding-left: 32px;
     padding-right: 32px;
     padding-top: 32px;
+  }
+  
+  .logout-container {
+    top: 32px;
+    right: 32px;
   }
 }
 </style>

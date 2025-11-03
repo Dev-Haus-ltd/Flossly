@@ -316,7 +316,7 @@
             ></lord-icon>
 
             <p class="review-text">
-              <span class="highlight">Happy with Flossly?</span>
+              <span class="highlight">Happy with Flossly? </span>
               <span class="normal">Give us a Google review.</span>
             </p>
           </div>
@@ -439,29 +439,27 @@ const getRecentDocs = () => {
       //snack
     });
 };
-const fetchListCategories = () => {
-  return taskStore
-    .listCategories()
-    .then((res) => {
-      if (res.code === 0) {
-        categoryList.value = res.data;
-        if (categoryList.value.length > 0) {
-          tab.value = categoryList.value[0].id;
-          fetchDummyStats();
-        }
-      } else {
-        mainStore.setSnackbar({
-          title: res.data.message || res.message,
-          type: "Error",
-        });
+const fetchListCategories = async () => {
+  try {
+    const res = await taskStore.listCategories();
+    if (res.code === 0) {
+      categoryList.value = res.data;
+      if (categoryList.value.length > 0) {
+        tab.value = 1; // Set to first tab index
+        await fetchDummyStats();
       }
-    })
-    .catch((err) => {
+    } else {
       mainStore.setSnackbar({
-        title: err.message,
+        title: res.data.message || res.message,
         type: "Error",
       });
+    }
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: err.message,
+      type: "Error",
     });
+  }
 };
 const openFile = async (file) => {
   await docStore.viewDoc({ id: file.id });
@@ -471,42 +469,116 @@ const openFile = async (file) => {
     showPdf.value = true;
   }
 };
-const fetchDummyStats = () => {
-  stats.value = [
-    {
-      status: "Completed",
-      key: "completed",
-      total: 12,
-      link: "/tasks/teamtasks",
-      image: "/images/open-icon.svg",
-    },
-    {
-      status: "Overdue Tasks",
-      key: "overdue",
-      total: 5,
-      link: "/tasks/teamtasks",
-      image: "/images/inprogress-icon.svg",
-    },
-    {
-      status: "In Progress Tasks",
-      key: "progress",
-      total: 8,
-      link: "/tasks/teamtasks",
-      image: "/images/completed-icon.svg",
-    },
-    {
-      status: "Upcoming Tasks",
-      key: "upcoming",
-      total: 8,
-      link: "/tasks/teamtasks",
-      image: "/images/completed-icon.svg",
-    },
-  ];
+const fetchDummyStats = async () => {
+  try {
+    const selectedCategory = categoryList.value.find((c, idx) => idx + 1 === tab.value);
+    const categoryId = selectedCategory?.id || null;
+    
+    const res = await taskStore.getTeamTaskStatsByCategory(categoryId);
+    if (res && res.code === 0) {
+      const data = res.data || {};
+      stats.value = [
+        {
+          status: "Completed",
+          key: "completed",
+          total: data.completed || 0,
+          link: "/tasks/teamtasks",
+          image: "/images/open-icon.svg",
+        },
+        {
+          status: "Overdue Tasks",
+          key: "overdue",
+          total: data.overdue || 0,
+          link: "/tasks/teamtasks",
+          image: "/images/inprogress-icon.svg",
+        },
+        {
+          status: "In Progress Tasks",
+          key: "progress",
+          total: data.progress || 0,
+          link: "/tasks/teamtasks",
+          image: "/images/completed-icon.svg",
+        },
+        {
+          status: "Upcoming Tasks",
+          key: "upcoming",
+          total: data.upcoming || 0,
+          link: "/tasks/teamtasks",
+          image: "/images/completed-icon.svg",
+        },
+      ];
+    } else {
+      // Fallback to zeros if API fails
+      stats.value = [
+        {
+          status: "Completed",
+          key: "completed",
+          total: 0,
+          link: "/tasks/teamtasks",
+          image: "/images/open-icon.svg",
+        },
+        {
+          status: "Overdue Tasks",
+          key: "overdue",
+          total: 0,
+          link: "/tasks/teamtasks",
+          image: "/images/inprogress-icon.svg",
+        },
+        {
+          status: "In Progress Tasks",
+          key: "progress",
+          total: 0,
+          link: "/tasks/teamtasks",
+          image: "/images/completed-icon.svg",
+        },
+        {
+          status: "Upcoming Tasks",
+          key: "upcoming",
+          total: 0,
+          link: "/tasks/teamtasks",
+          image: "/images/completed-icon.svg",
+        },
+      ];
+    }
+  } catch (err) {
+    console.error("Error fetching task stats:", err);
+    // Fallback to zeros on error
+    stats.value = [
+      {
+        status: "Completed",
+        key: "completed",
+        total: 0,
+        link: "/tasks/teamtasks",
+        image: "/images/open-icon.svg",
+      },
+      {
+        status: "Overdue Tasks",
+        key: "overdue",
+        total: 0,
+        link: "/tasks/teamtasks",
+        image: "/images/inprogress-icon.svg",
+      },
+      {
+        status: "In Progress Tasks",
+        key: "progress",
+        total: 0,
+        link: "/tasks/teamtasks",
+        image: "/images/completed-icon.svg",
+      },
+      {
+        status: "Upcoming Tasks",
+        key: "upcoming",
+        total: 0,
+        link: "/tasks/teamtasks",
+        image: "/images/completed-icon.svg",
+      },
+    ];
+  }
 };
 
-watch(tab, (newId) => {
-  if (newId) {
-    fetchDummyStats();
+watch(tab, async (newId) => {
+  if (newId && categoryList.value.length > 0) {
+    await fetchDummyStats();
   }
 });
 onMounted(async () => {
