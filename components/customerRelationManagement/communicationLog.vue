@@ -376,13 +376,11 @@ onMounted(async () => {
 <style scoped>
 .notes-form {
   border: 1px solid #dfdfdf;
-  background-color: #fcfcfc;
   border-radius: 8px;
 }
 .notes-title {
   font-weight: 600;
   font-size: 14px;
-  color: #000;
 }
 .note-card {
   background-color: color-mix(in oklab, rgb(var(--v-theme-warning)) 12%, transparent);
@@ -399,11 +397,9 @@ onMounted(async () => {
 }
 .note-value {
   font-size: 14px;
-  color: #000;
 }
 .note-summary {
   font-size: 13px;
-  color: #000;
   margin-top: 6px;
 }
 .fld-lbl {
@@ -413,7 +409,6 @@ onMounted(async () => {
 .input-bordered :deep(.v-field) {
   border: 1px solid #dfdfdf !important;
   border-radius: 8px !important;
-  background-color: white !important;
   min-height: 40px;
   font-size: 14px;
 }

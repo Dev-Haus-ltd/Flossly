@@ -1,4 +1,4 @@
-import { createLead, deleteLeads, listLeads, updateLead, getLeadTreatment, saveLeadTreatment, deleteLeadTreatment, listLeadNotes, addLeadNote, deleteLeadNote, listOptions, addOption, deleteOption, getLeadCommunication, saveLeadCommunication, listAutomation, saveAutomation } from '~/server/controllers/lead'
+import { createLead, deleteLeads, listLeads, updateLead, getLeadTreatment, saveLeadTreatment, deleteLeadTreatment, listLeadNotes, addLeadNote, deleteLeadNote, listOptions, addOption, deleteOption, getLeadCommunication, saveLeadCommunication, listAutomation, saveAutomation, sendLeadMail } from '~/server/controllers/lead'
 
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, 'name')
@@ -37,6 +37,8 @@ export default defineEventHandler(async (event) => {
       return await listAutomation(event)
     case 'automationSave':
       return await saveAutomation(event)
+    case 'mailSend':
+      return await sendLeadMail(event)
     default:
       return { code: 1, message: 'Not found' }
   }

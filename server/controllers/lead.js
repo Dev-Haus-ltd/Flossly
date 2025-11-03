@@ -2,6 +2,8 @@ import { Op } from 'sequelize'
 import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, User } from '../models'
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
 import { success, error } from '../utils/response'
+import { transporter } from '../utils/nodeMailer.js'
+ 
 
 export const listLeads = async (event) => {
   try {
@@ -395,6 +397,53 @@ export const saveAutomation = async (event) => {
     }
     const created = await CrmAutomationTemplate.create({ organisationId: Number(orgId), key, type, name: name || key, sending: sending || '', enabled: !!enabled, template: template || null })
     return success(created)
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+// Send email to selected leads
+export const sendLeadMail = async (event) => {
+  try {
+    const { orgId, fullName } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const { leadIds = [], subject, html, key } = payload || {}
+    if (!subject || !html) return error(400, 'subject and html required')
+    if (!Array.isArray(leadIds) || !leadIds.length) return error(400, 'leadIds required')
+
+    // Optionally fetch a template to persist edits
+    if (key) {
+      const where = { organisationId: Number(orgId), key }
+      const existing = await CrmAutomationTemplate.findOne({ where })
+      if (existing) {
+        existing.name = existing.name || subject
+        existing.template = html
+        await existing.save()
+      } else {
+        await CrmAutomationTemplate.create({ organisationId: Number(orgId), key, type: 'Email', name: subject, sending: 'Manual', enabled: true, template: html })
+      }
+    }
+
+    const leads = await CrmLead.findAll({ where: { id: { [Op.in]: leadIds }, organisationId: Number(orgId), softDeleted: false } })
+    const from = process.env.MAIL_FROM || 'helloflossly@gmail.com'
+
+    for (const l of leads) {
+      if (!l?.email) continue
+      const content = html
+        .replaceAll('[Patient Name]', l.name || 'there')
+        .replaceAll('[First Name]', (l.name || '').split(' ')[0] || 'there')
+        .replaceAll('[Your Name]', fullName || 'Team')
+
+      try {
+        await transporter.sendMail({ to: l.email, from, subject, html: content })
+      } catch (e) {
+        // continue with others
+      }
+    }
+
+    return success({ sent: leads.filter(l => !!l.email).length })
   } catch (e) {
     return error(500, e.message)
   }

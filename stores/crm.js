@@ -59,5 +59,8 @@ export const useCrmStore = defineStore("crmStore", {
     // Automation
     listAutomation() { return this._wrap(() => Get('/lead/automationList')); },
     saveAutomation(payload) { return this._wrap(() => Post('/lead/automationSave', payload)); },
+
+    // Mail
+    sendLeadMail(payload) { return this._wrap(() => Post('/lead/mailSend', payload)); },
   },
 });
