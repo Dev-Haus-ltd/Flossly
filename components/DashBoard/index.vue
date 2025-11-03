@@ -471,7 +471,10 @@ const openFile = async (file) => {
 };
 const fetchDummyStats = async () => {
   try {
-    const selectedCategory = categoryList.value.find((c, idx) => idx + 1 === tab.value);
+    // Filter to only parent categories (same as tabs)
+    const parentCategories = categoryList.value.filter((x) => !x.parentId);
+    // Find the selected category based on tab index
+    const selectedCategory = parentCategories[tab.value - 1];
     const categoryId = selectedCategory?.id || null;
     
     const res = await taskStore.getTeamTaskStatsByCategory(categoryId);

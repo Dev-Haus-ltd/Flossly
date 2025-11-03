@@ -14,20 +14,6 @@
       
       <!-- Right Column: Form (full-width on mobile) -->
       <v-col class="right-column" :class="{ 'mobile-view': true }">
-        <!-- Logout Button - Top Right -->
-        <div class="logout-container">
-          <v-btn
-            color="grey-darken-1"
-            variant="text"
-            @click="handleLogout"
-            class="logout-button"
-            size="small"
-            rounded="lg"
-          >
-            Logout
-          </v-btn>
-        </div>
-        
         <!-- Mobile Stepper (shown only on mobile/tablet) -->
         <div class="d-flex d-md-none mobile-stepper-container">
           <left-stepper-template 
@@ -52,11 +38,6 @@ import leftStepperTemplate from "./leftStepperTemplate.vue";
 
 const isInitScreen = ref(true);
 const currentStep = ref(0);
-const router = useRouter();
-
-const handleLogout = () => {
-  router.push("/logout");
-};
 </script>
 
 <style scoped>
@@ -77,30 +58,12 @@ const handleLogout = () => {
   position: relative;
 }
 
-.logout-container {
-  position: absolute;
-  top: 48px;
-  right: 48px;
-  z-index: 100;
-}
-
-.logout-button {
-  text-transform: none;
-  font-size: 14px;
-  font-weight: 400;
-}
-
 /* Mobile view adjustments */
 @media (max-width: 959px) {
   .right-column {
     padding: 0 !important;
     width: 100%;
     max-width: 100%;
-  }
-  
-  .logout-container {
-    top: 12px;
-    right: 12px;
   }
   
   .mobile-stepper-container {
@@ -117,11 +80,6 @@ const handleLogout = () => {
   .right-column {
     padding: 0 24px !important;
   }
-  
-  .logout-container {
-    top: 24px;
-    right: 24px;
-  }
 }
 
 /* Medium laptop adjustments */
@@ -130,11 +88,6 @@ const handleLogout = () => {
     padding-left: 32px;
     padding-right: 32px;
     padding-top: 32px;
-  }
-  
-  .logout-container {
-    top: 32px;
-    right: 32px;
   }
 }
 </style>

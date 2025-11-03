@@ -612,6 +612,10 @@ export const createNewTask = async (event) => {
       where: { organisationId: loggedUser.orgId },
     });
 
+    // If no userId provided (auto-assigned to creator), use "upcoming" status, otherwise "progress"
+    const isAutoAssigned = !userId;
+    const defaultStatusKey = isAutoAssigned ? "upcoming" : "progress";
+
     const newUuserTask = {
       userId: assignToUserId,
       organisationId: loggedUser.orgId,
@@ -621,7 +625,7 @@ export const createNewTask = async (event) => {
       documentLink: "",
       frequency: defaultFrequency || null,
       priorityId,
-      statusId: orgStatuses.find((x) => x.key === "progress").id,
+      statusId: orgStatuses.find((x) => x.key === defaultStatusKey).id,
       asignedBy: loggedUser.userId,
     };
     const userTask = await UserTask.create(newUuserTask, { transaction });
@@ -764,69 +768,69 @@ export const uploadBulkTasks = async (event) => {
     }
 
     // --- 3️⃣ Handle User Assignments ---
-    // Assign all tasks - if userId not provided, assign to creator
-    // Get organization statuses once
-    const orgStatuses = await OrganisationStatus.findAll({
-      where: { organisationId: loggedUser.orgId },
-    });
-    const progressStatusId = orgStatuses.find((x) => x.key === "progress")?.id;
+    const tasksWithUsers = validTasks.filter(t => t.userId);
 
-    // Bulk create UserTasks - assign to creator if userId not provided
-    const userTaskData = validTasks.map((t, taskIndex) => {
-      const assignToUserId = t.userId || loggedUser.userId;
-      return {
-        userId: assignToUserId,
-        organisationId: loggedUser.orgId,
-        dueDate: t.dueDate,
-        taskId: createdTasks[taskIndex].id,
-        title: t.title,
-        documentLink: "",
-        frequency: t.defaultFrequency,
-        priorityId: t.priorityId,
-        statusId: progressStatusId,
-        asignedBy: loggedUser.userId,
-      };
-    });
+    if (tasksWithUsers.length > 0) {
+      // Get organization statuses once
+      const orgStatuses = await OrganisationStatus.findAll({
+        where: { organisationId: loggedUser.orgId },
+      });
+      const progressStatusId = orgStatuses.find((x) => x.key === "progress")?.id;
 
-    const createdUserTasks = await UserTask.bulkCreate(userTaskData, {
-      transaction,
-      returning: true
-    });
+      // Bulk create UserTasks
+      const userTaskData = tasksWithUsers.map((t, userTaskIndex) => {
+        const taskIndex = validTasks.findIndex(vt => vt.index === t.index);
+        return {
+          userId: t.userId,
+          organisationId: loggedUser.orgId,
+          dueDate: t.dueDate,
+          taskId: createdTasks[taskIndex].id,
+          title: t.title,
+          documentLink: "",
+          frequency: t.defaultFrequency,
+          priorityId: t.priorityId,
+          statusId: progressStatusId,
+          asignedBy: loggedUser.userId,
+        };
+      });
 
-    // --- 4️⃣ Bulk Create UserTask Checklists ---
-    const allUserTaskChecklistData = [];
-    validTasks.forEach((t, taskIndex) => {
-      if (t.checklist?.length) {
-        const userTaskId = createdUserTasks[taskIndex].id;
-        const checklistData = t.checklist.map((item) => ({
-          userTaskId,
-          question: item.question,
-          category: item.category,
-          showRadio: item.showRadio,
-          showDate: item.showDate,
-          showTime: item.showTime,
-          fieldOneTitle: item.fieldOneTitle,
-          fieldTwoTitle: item.fieldTwoTitle,
-          radioValue: "N/A",
-        }));
-        allUserTaskChecklistData.push(...checklistData);
+      const createdUserTasks = await UserTask.bulkCreate(userTaskData, {
+        transaction,
+        returning: true
+      });
+
+      // --- 4️⃣ Bulk Create UserTask Checklists ---
+      const allUserTaskChecklistData = [];
+      tasksWithUsers.forEach((t, userTaskIndex) => {
+        if (t.checklist?.length) {
+          const userTaskId = createdUserTasks[userTaskIndex].id;
+          const checklistData = t.checklist.map((item) => ({
+            userTaskId,
+            question: item.question,
+            category: item.category,
+            showRadio: item.showRadio,
+            showDate: item.showDate,
+            showTime: item.showTime,
+            fieldOneTitle: item.fieldOneTitle,
+            fieldTwoTitle: item.fieldTwoTitle,
+            radioValue: "N/A",
+          }));
+          allUserTaskChecklistData.push(...checklistData);
+        }
+      });
+
+      if (allUserTaskChecklistData.length > 0) {
+        await UserTaskChecklist.bulkCreate(allUserTaskChecklistData, { transaction });
       }
-    });
 
-    if (allUserTaskChecklistData.length > 0) {
-      await UserTaskChecklist.bulkCreate(allUserTaskChecklistData, { transaction });
-    }
-
-    // --- 5️⃣ Send notification emails (only for explicitly assigned tasks, not auto-assigned to creator) ---
-    const tasksWithExplicitAssignment = validTasks.filter(t => t.userId && t.userId !== loggedUser.userId);
-    if (tasksWithExplicitAssignment.length > 0) {
-      const userIds = [...new Set(tasksWithExplicitAssignment.map(t => t.userId))];
+      // --- 5️⃣ Send notification emails (individual operations) ---
+      const userIds = [...new Set(tasksWithUsers.map(t => t.userId))];
       const users = await User.findAll({
         where: { id: userIds }
       });
       const userMap = new Map(users.map(u => [u.id, u]));
 
-      for (const t of tasksWithExplicitAssignment) {
+      for (const t of tasksWithUsers) {
         const user = userMap.get(t.userId);
         if (user?.email) {
           await sendTaskAssignmentEmail({
@@ -1623,21 +1627,12 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = Number(loggedUser.orgId);
     
-    // Get query params - support both query string and body
-    let categoryId = null;
-    try {
-      const query = event.query || {};
-      categoryId = query.categoryId ? Number(query.categoryId) : null;
-    } catch (e) {
-      // If query doesn't work, try reading from body
-      try {
-        const body = await readBody(event);
-        const parsed = typeof body === 'string' ? JSON.parse(body) : body;
-        categoryId = parsed?.categoryId ? Number(parsed.categoryId) : null;
-      } catch (e2) {
-        // No categoryId provided, use null
-      }
-    }
+  
+    const query = getQuery(event) || {};
+    let categoryId = query.categoryId ? Number(query.categoryId) : null;
+    
+    console.log("[getTeamTaskStatsByStatusAndCategory] Query params:", query);
+    console.log("[getTeamTaskStatsByStatusAndCategory] categoryId:", categoryId);
 
     if (!organisationId) {
       return error(400, "organisationId is required");
@@ -1664,7 +1659,9 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
         attributes: ["id"],
       });
       categoryIds = categories.map((c) => c.id);
+      console.log("[getTeamTaskStatsByStatusAndCategory] Found categories:", categoryIds);
       if (categoryIds.length === 0) {
+        console.log("[getTeamTaskStatsByStatusAndCategory] No categories found, returning zeros");
         return success({
           completed: 0,
           overdue: 0,
@@ -1672,6 +1669,8 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
           upcoming: 0,
         });
       }
+    } else {
+      console.log("[getTeamTaskStatsByStatusAndCategory] No categoryId provided, showing all tasks");
     }
 
     // Build base where clause
@@ -1692,17 +1691,20 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
               model: TaskCategory,
               as: "category",
               where: { isDeleted: false },
+              required: true,
             },
           ],
         }
       : {
           model: Task,
           as: "taskDetails",
+          required: true,
           include: [
             {
               model: TaskCategory,
               as: "category",
               where: { isDeleted: false },
+              required: true,
             },
           ],
         };
@@ -1717,7 +1719,6 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
             },
             include: [taskInclude],
             distinct: true,
-            col: 'UserTask.id',
           })
         : 0,
       statusMap.progress
@@ -1728,7 +1729,6 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
             },
             include: [taskInclude],
             distinct: true,
-            col: 'UserTask.id',
           })
         : 0,
       statusMap.upcoming
@@ -1739,7 +1739,6 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
             },
             include: [taskInclude],
             distinct: true,
-            col: 'UserTask.id',
           })
         : 0,
     ]);
@@ -1748,15 +1747,20 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    const overdueWhere = {
+      ...baseWhere,
+      dueDate: { [Op.lt]: today },
+    };
+    
+    // Only add statusId condition if completed status exists
+    if (statusMap.completed) {
+      overdueWhere.statusId = { [Op.ne]: statusMap.completed };
+    }
+
     const overdue = await UserTask.count({
-      where: {
-        ...baseWhere,
-        dueDate: { [Op.lt]: today },
-        statusId: statusMap.completed ? { [Op.ne]: statusMap.completed } : undefined,
-      },
+      where: overdueWhere,
       include: [taskInclude],
       distinct: true,
-      col: 'UserTask.id',
     });
 
     return success({
