@@ -337,7 +337,7 @@
 </template>
 
 <script setup>
-import crmService from "@/services/crmService";
+const crmStore = useCrmStore();
 const props = defineProps({
   modelValue: Boolean,
   leadSources: Array,
@@ -413,7 +413,7 @@ const onSubmit = async () => {
   try {
     saving.value = true
     const payload = { ...form.value };
-    const res = await crmService.createLead(payload);
+    const res = await crmStore.createLead(payload);
     if (res.code === 0) {
       mainStore.setSnackbar({ title: "Lead created", type: "success" });
       emit("success", res.data);

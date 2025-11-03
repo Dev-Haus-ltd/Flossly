@@ -79,7 +79,7 @@ export const startTaskScheduler = () => {
   });
 }
 
-import { CrmLead } from "../models/index.js";
+import { CrmLead, CrmAutomationTemplate } from "../models/index.js";
 import { transporter } from "./nodeMailer.js";
 
 export const startLeadAutomationScheduler = () => {
@@ -88,22 +88,58 @@ export const startLeadAutomationScheduler = () => {
   if (!pattern) return;
   cron.schedule(pattern, async () => {
     try {
-      const leads = await CrmLead.findAll({ where: { softDeleted: false }, limit: 25, order: [['createdAt','DESC']] });
-      for (const lead of leads) {
-        if (!lead?.email) continue;
-        const raw = lead.rawData || {};
-        if (raw.automationWelcomeSent) continue; 
-        try {
-          await transporter.sendMail({
-            to: lead.email,
-            from: process.env.MAIL_FROM || 'helloflossly@gmail.com',
-            subject: 'Welcome to Our Practice',
-            html: `<p>Hi ${lead.name || 'there'},</p><p>Thanks for your interest. We will contact you soon.</p>`,
-          });
-          lead.rawData = { ...raw, automationWelcomeSent: true };
-          await lead.save();
-        } catch (e) {
-          console.error('[CRM] automation email failed', e?.message);
+      try { await CrmAutomationTemplate.sync() } catch {}
+      // Load enabled templates for all orgs
+      const templates = await CrmAutomationTemplate.findAll({ where: { enabled: true } })
+      if (!templates.length) return
+      const leads = await CrmLead.findAll({ where: { softDeleted: false }, limit: 200, order: [['createdAt','DESC']] });
+      const today = new Date()
+      const todayMD = `${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
+      
+      for (const tpl of templates) {
+        const orgLeads = leads.filter(l => Number(l.organisationId) === Number(tpl.organisationId))
+        for (const lead of orgLeads) {
+          if (!lead?.email) continue
+          const raw = lead.rawData || {}
+          const name = lead.name || 'there'
+          const subject = tpl.name || 'Message from Flossly'
+          const html = (tpl.template || '').replaceAll('{{name}}', name).replaceAll('{{email}}', lead.email)
+          try {
+            if (tpl.key === 'welcome_email') {
+              if (!raw.automationWelcomeSent) {
+                await transporter.sendMail({ to: lead.email, from: process.env.MAIL_FROM || 'helloflossly@gmail.com', subject, html })
+                lead.rawData = { ...raw, automationWelcomeSent: true }
+                await lead.save()
+              }
+            } else if (tpl.key === 'birthday') {
+              if (lead.dob) {
+                const dob = new Date(lead.dob)
+                const md = `${String(dob.getMonth()+1).padStart(2,'0')}-${String(dob.getDate()).padStart(2,'0')}`
+                const yearKey = String(today.getFullYear())
+                if (md === todayMD && raw.automationBirthdaySentYear !== yearKey) {
+                  await transporter.sendMail({ to: lead.email, from: process.env.MAIL_FROM || 'helloflossly@gmail.com', subject, html })
+                  lead.rawData = { ...raw, automationBirthdaySentYear: yearKey }
+                  await lead.save()
+                }
+              }
+            } else if (tpl.key === 'followup') {
+              const inquiry = lead.inquiryDate ? new Date(lead.inquiryDate) : null
+              if (inquiry && (today - inquiry) > 30*24*60*60*1000 && !raw.automationFollowupSent) {
+                await transporter.sendMail({ to: lead.email, from: process.env.MAIL_FROM || 'helloflossly@gmail.com', subject, html })
+                lead.rawData = { ...raw, automationFollowupSent: true }
+                await lead.save()
+              }
+            } else if (tpl.key === 'inactive_lead') {
+              const updatedAt = new Date(lead.updatedAt)
+              if ((today - updatedAt) > 14*24*60*60*1000 && !raw.automationInactiveSent) {
+                await transporter.sendMail({ to: lead.email, from: process.env.MAIL_FROM || 'helloflossly@gmail.com', subject, html })
+                lead.rawData = { ...raw, automationInactiveSent: true }
+                await lead.save()
+              }
+            }
+          } catch (e) {
+            console.error('[CRM] automation email failed', e?.message)
+          }
         }
       }
     } catch (e) {

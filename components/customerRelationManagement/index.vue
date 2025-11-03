@@ -143,7 +143,7 @@
 </template>
 
 <script setup>
-import crmService from "@/services/crmService";
+const crmStore = useCrmStore();
 const userStore = useUserStore();
 const authStore = useAuthStore();
 const userList = ref([]);
@@ -294,8 +294,8 @@ const getUsers = () => {
 const initOptions = async () => {
   try {
     const [src, tr] = await Promise.all([
-      crmService.listOptions('lead_source'),
-      crmService.listOptions('treatment'),
+      crmStore.listOptions('lead_source'),
+      crmStore.listOptions('treatment'),
     ])
     if (src?.code === 0) leadSources.value = (src.data || []).map(o => ({ id: o.id, name: o.name }))
     if (tr?.code === 0) treatmentSources.value = (tr.data || []).map(o => ({ id: o.id, name: o.name }))
@@ -348,7 +348,7 @@ const initLeads = async () => {
     } catch (e) {}
   }
   // Show all leads from our database (which also stores Meta imports)
-  const res = await crmService.listLeads();
+  const res = await crmStore.listLeads();
   if (res && res.code === 0) {
     leads.value = (res.data || []).map((l) => ({
       alert: l.alert || "",
@@ -371,7 +371,7 @@ const initLeads = async () => {
 };
 
 const integrateMeta = async () => {
-  const res = await crmService.startMetaAuth();
+  const res = await crmStore.startMetaAuth();
   if (res && res.code === 0 && res.data?.url) {
     window.location.href = res.data.url;
   }
@@ -381,7 +381,7 @@ const isConnected = ref(false);
 const connection = ref({ count: 0, pages: [], lastConnectedAt: null });
 const checkConnection = async () => {
   try {
-    const res = await crmService.connectionStatus();
+    const res = await crmStore.connectionStatus();
     if (res && res.code === 0) {
       connection.value = res.data || { count: 0, pages: [] };
       isConnected.value = (connection.value.count || 0) > 0;
@@ -393,14 +393,14 @@ const checkConnection = async () => {
 
 const fetchNow = async () => {
   try {
-    await crmService.fetchLeadsNow();
+    await crmStore.fetchLeadsNow();
     await initLeads();
   } catch (e) {}
 };
 
 const onDeleteSelected = async (ids) => {
   try {
-    const res = await crmService.deleteLeads(ids)
+    const res = await crmStore.deleteLeads(ids)
     if (res && res.code === 0) {
       leads.value = leads.value.filter(l => !ids.includes(l.id))
     }

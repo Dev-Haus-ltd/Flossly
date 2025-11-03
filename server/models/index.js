@@ -52,6 +52,8 @@ import { CrmLeadTreatment } from "./crm/leadTreatments";
 import { CrmLeadNote } from "./crm/leadNotes";
 import { CrmOption } from "./crm/options";
 import { CrmLeadCommunication } from "./crm/leadCommunications";
+import { CrmLeadAssignee } from "./crm/leadAssignees";
+import { CrmAutomationTemplate } from "./crm/automationTemplates";
 
 /* Relations and Associations */
 
@@ -429,6 +431,15 @@ CrmLeadNote.belongsTo(CrmLead, { foreignKey: 'leadId', as: 'lead' })
 CrmLead.hasOne(CrmLeadCommunication, { foreignKey: 'leadId', as: 'communication' })
 CrmLeadCommunication.belongsTo(CrmLead, { foreignKey: 'leadId', as: 'lead' })
 
+// CRM Lead Assignees association
+CrmLead.hasMany(CrmLeadAssignee, { foreignKey: 'leadId', as: 'assignees' })
+CrmLeadAssignee.belongsTo(CrmLead, { foreignKey: 'leadId', as: 'lead' })
+CrmLeadAssignee.belongsTo(User, { foreignKey: 'userId', as: 'user' })
+
+// CRM Automation templates
+Organisation.hasMany(CrmAutomationTemplate, { foreignKey: 'organisationId', as: 'crmAutomationTemplates' })
+CrmAutomationTemplate.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
+
 // Chatbot Configuration associations
 ChatbotConfig.belongsTo(Organisation, { foreignKey: 'organizationId', as: 'organisation' })
 ChatbotConfig.belongsTo(User, { foreignKey: 'userId', as: 'user' })
@@ -507,6 +518,8 @@ export {
   CrmLeadNote,
   CrmOption,
   CrmLeadCommunication,
+  CrmLeadAssignee,
+  CrmAutomationTemplate,
   MetaUserToken,
   ChatbotConfig,
 };

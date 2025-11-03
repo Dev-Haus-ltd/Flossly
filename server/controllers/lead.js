@@ -1,5 +1,5 @@
 import { Op } from 'sequelize'
-import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication } from '../models'
+import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, User } from '../models'
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
 import { success, error } from '../utils/response'
 
@@ -14,9 +14,26 @@ export const listLeads = async (event) => {
     if (archivedOnly) where.softDeleted = true
     const rows = await CrmLead.findAll({
       where,
-      order: [['createdAt', 'DESC']]
+      include: [
+        {
+          model: CrmLeadAssignee,
+          as: 'assignees',
+          include: [{ model: User, as: 'user', attributes: ['id', 'fullName', 'email'] }],
+        },
+      ],
+      order: [['createdAt', 'DESC']],
     })
-    return success(rows)
+    const shaped = rows.map((l) => {
+      const assigned = (l.assignees || [])
+        .map((a) => (a.user ? { id: a.user.id, fullName: a.user.fullName, email: a.user.email } : null))
+        .filter(Boolean)
+      l.setDataValue('assigned', assigned)
+      const tname = l.treatment || ''
+      l.setDataValue('treatment', { id: null, name: tname || '' })
+      // do not expose raw assignees relation by default
+      return l
+    })
+    return success(shaped)
   } catch (e) {
     return error(500, e.message)
   }
@@ -41,13 +58,27 @@ export const createLead = async (event) => {
       location: payload.location || null,
       leadSource: payload.leadSource?.name || payload.leadSource || 'Meta Leadgen',
       leadStatus: payload.leadStatus || 'New',
-      treatment: payload.treatment || null,
-      assigned: payload.assigned || [],
+      treatment: payload.treatment?.name || payload.treatment || null,
       followUpDate: payload.followUpDate || null,
       comments: payload.comments || null,
       rawData: payload.rawData || null
     }
     const created = await CrmLead.create(data)
+    // shape treatment in response
+    created.setDataValue('treatment', { id: null, name: created.treatment || '' })
+    // handle assignees if provided
+    const assignedUsers = Array.isArray(payload.assigned) ? payload.assigned : []
+    if (assignedUsers.length) {
+      const rows = assignedUsers
+        .map((u) => (u && u.id ? { organisationId: Number(logged.orgId), leadId: created.id, userId: Number(u.id) } : null))
+        .filter(Boolean)
+      if (rows.length) await CrmLeadAssignee.bulkCreate(rows, { ignoreDuplicates: true })
+      // shape response
+      const users = await User.findAll({ where: { id: rows.map((r) => r.userId) }, attributes: ['id', 'fullName', 'email'] })
+      created.setDataValue('assigned', users.map((u) => ({ id: u.id, fullName: u.fullName, email: u.email })))
+    } else {
+      created.setDataValue('assigned', [])
+    }
     if (payload.contactMethod && CONTACT_METHODS.includes(payload.contactMethod)) {
       await CrmLeadCommunication.create({
         organisationId: Number(logged.orgId),
@@ -71,9 +102,30 @@ export const updateLead = async (event) => {
     if (!id) return error(400, 'id required')
     const lead = await CrmLead.findOne({ where: { id, organisationId: Number(logged.orgId) } })
     if (!lead) return error(404, 'Lead not found')
-    const fields = ['alert', 'name', 'email', 'telephone', 'inquiryDate', 'dob', 'occupation', 'location', 'leadSource', 'leadStatus', 'treatment', 'assigned', 'followUpDate', 'comments', 'softDeleted']
+    const fields = ['alert', 'name', 'email', 'telephone', 'inquiryDate', 'dob', 'occupation', 'location', 'leadSource', 'leadStatus', 'followUpDate', 'comments', 'softDeleted']
     for (const f of fields) if (payload[f] !== undefined) lead[f] = payload[f]
+    if (payload.treatment !== undefined) {
+      lead.treatment = payload.treatment?.name || payload.treatment || null
+    }
     await lead.save()
+    // Sync assignees if provided
+    if (payload.assigned !== undefined && Array.isArray(payload.assigned)) {
+      const desiredUserIds = payload.assigned.filter((u) => u && u.id).map((u) => Number(u.id))
+      const existing = await CrmLeadAssignee.findAll({ where: { organisationId: Number(logged.orgId), leadId: lead.id } })
+      const existingUserIds = existing.map((a) => a.userId)
+      const toAdd = desiredUserIds.filter((id) => !existingUserIds.includes(id))
+      const toRemove = existing.filter((a) => !desiredUserIds.includes(a.userId)).map((a) => a.id)
+      if (toRemove.length) await CrmLeadAssignee.destroy({ where: { id: { [Op.in]: toRemove } } })
+      if (toAdd.length) {
+        const rows = toAdd.map((userId) => ({ organisationId: Number(logged.orgId), leadId: lead.id, userId }))
+        await CrmLeadAssignee.bulkCreate(rows, { ignoreDuplicates: true })
+      }
+      // shape response assigned
+      const users = await User.findAll({ where: { id: desiredUserIds }, attributes: ['id', 'fullName', 'email'] })
+      lead.setDataValue('assigned', users.map((u) => ({ id: u.id, fullName: u.fullName, email: u.email })))
+    }
+    // shape treatment in response
+    lead.setDataValue('treatment', { id: null, name: lead.treatment || '' })
     return success(lead)
   } catch (e) {
     return error(500, e.message)
@@ -305,6 +357,44 @@ export const deleteLeadNote = async (event) => {
     if (!id) return error(400, 'id required')
     await CrmLeadNote.destroy({ where: { id, organisationId: Number(orgId) } })
     return success('deleted')
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+// Automation templates
+export const listAutomation = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const rows = await CrmAutomationTemplate.findAll({ where: { organisationId: Number(orgId) }, order: [['createdAt','ASC']] })
+    return success(rows)
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const saveAutomation = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const { key, type = 'Email', name, sending, enabled, template } = payload || {}
+    if (!key) return error(400, 'key required')
+    const where = { organisationId: Number(orgId), key }
+    const exists = await CrmAutomationTemplate.findOne({ where })
+    if (exists) {
+      if (name !== undefined) exists.name = name
+      if (sending !== undefined) exists.sending = sending
+      if (enabled !== undefined) exists.enabled = !!enabled
+      if (type !== undefined) exists.type = type
+      if (template !== undefined) exists.template = template
+      await exists.save()
+      return success(exists)
+    }
+    const created = await CrmAutomationTemplate.create({ organisationId: Number(orgId), key, type, name: name || key, sending: sending || '', enabled: !!enabled, template: template || null })
+    return success(created)
   } catch (e) {
     return error(500, e.message)
   }

@@ -181,7 +181,7 @@
 </template>
 
 <script setup>
-import crmService from "@/services/crmService";
+const crmStore = useCrmStore();
 const { user } = useUser();
 const emit = defineEmits(['select','openLead','delete']);
 const props = defineProps({
@@ -261,7 +261,7 @@ const updateValueRow = async (row, key) => {
     else if (key === 'leadStatus') payload.leadStatus = row?.leadStatus || null
     else if (key === 'alert') payload.alert = row?.alert || null
     else return
-    await crmService.updateLead(payload)
+    await crmStore.updateLead(payload)
   } catch (e) {}
 };
 
@@ -279,7 +279,7 @@ const getLeadUsers = (lead) => {
 const unAssign = async (lead, user) => {
   try {
     const newAssigned = (lead.assigned || []).filter(u => u?.id !== user.id);
-    const res = await crmService.updateLead({ id: lead.id, assigned: newAssigned });
+    const res = await crmStore.updateLead({ id: lead.id, assigned: newAssigned });
     if (res?.code === 0) lead.assigned = newAssigned;
   } catch (e) { /* noop */ }
 };
@@ -289,7 +289,7 @@ const assignLead = async (lead, user) => {
     const already = (lead.assigned || []).some(u => u?.id === user.id);
     if (already) return;
     const newAssigned = [...(lead.assigned || []), { id: user.id, fullName: user.fullName, email: user.email }];
-    const res = await crmService.updateLead({ id: lead.id, assigned: newAssigned });
+    const res = await crmStore.updateLead({ id: lead.id, assigned: newAssigned });
     if (res?.code === 0) lead.assigned = newAssigned;
   } catch (e) { /* noop */ }
 };
@@ -298,7 +298,7 @@ const doDelete = async () => {
   try {
     deleting.value = true
     const ids = selectedLeads.value.map(l => l.id)
-    const res = await crmService.deleteLeads(ids)
+    const res = await crmStore.deleteLeads(ids)
     if (res?.code === 0) emit('delete', ids)
   } finally {
     deleting.value = false
@@ -312,7 +312,7 @@ const convertSelected = async () => {
     converting.value = true
     const updates = selectedLeads.value.map(l => {
       l.leadStatus = 'Converted'
-      return crmService.updateLead({ id: l.id, leadStatus: 'Converted' })
+      return crmStore.updateLead({ id: l.id, leadStatus: 'Converted' })
     })
     await Promise.all(updates)
     closeTray()

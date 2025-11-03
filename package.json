@@ -50,5 +50,9 @@
     "vue": "^3.5.17",
     "vuedraggable": "^4.1.0",
     "xlsx": "^0.18.5"
+    ,"@tiptap/vue-3": "^2.4.0"
+    ,"@tiptap/starter-kit": "^2.4.0"
+    ,"@tiptap/extension-underline": "^2.4.0"
+    ,"@tiptap/extension-link": "^2.4.0"
   }
 }

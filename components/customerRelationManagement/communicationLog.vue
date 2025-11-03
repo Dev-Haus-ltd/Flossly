@@ -240,7 +240,7 @@
 <script setup>
 import { ref, onMounted } from "vue";
 import { parsedDate } from "@/lib/dateFormatter";
-import crmService from "@/services/crmService";
+const crmStore = useCrmStore();
 
 const emit = defineEmits(["save", "update:preferences"]);
 
@@ -297,7 +297,7 @@ const onPrefChange = async () => {
   emit("update:preferences", { ...preferences.value });
   try {
     prefSaving.value = true;
-    await crmService.saveLeadCommunication({
+    await crmStore.saveLeadCommunication({
       leadId: Number(leadId),
       ...preferences.value,
     });
@@ -314,7 +314,7 @@ const onAddNote = async () => {
   try {
     saving.value = true;
     const payload = { leadId: Number(leadId), ...form.value };
-    const res = await crmService.addLeadNote(payload);
+    const res = await crmStore.addLeadNote(payload);
     if (res?.code === 0) {
       notes.value.unshift(res.data);
       emit("save", notes.value);
@@ -340,7 +340,7 @@ const confirmDelete = async () => {
   try {
     deleting.value = true;
     if (note?.id) {
-      const res = await crmService.deleteLeadNote(note.id);
+      const res = await crmStore.deleteLeadNote(note.id);
       if (res && res.code !== 0) return;
     }
     notes.value.splice(index, 1);
@@ -354,12 +354,12 @@ const confirmDelete = async () => {
 // Load notes and preferences
 onMounted(async () => {
   try {
-    const res = await crmService.getLeadNotes(Number(leadId));
+    const res = await crmStore.getLeadNotes(Number(leadId));
     if (res?.code === 0 && Array.isArray(res.data)) notes.value = res.data;
   } catch {}
 
   try {
-    const comm = await crmService.getLeadCommunication(Number(leadId));
+    const comm = await crmStore.getLeadCommunication(Number(leadId));
     if (comm?.code === 0 && comm.data) {
       preferences.value = {
         preferredContactMethod: comm.data.preferredContactMethod || null,
