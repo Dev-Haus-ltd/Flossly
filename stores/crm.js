@@ -1,4 +1,4 @@
-import { Get, Post } from "../services/apiWrapper";
+import crmService from "../services/crmService";
 
 export const useCrmStore = defineStore("crmStore", {
   state: () => ({
@@ -16,51 +16,44 @@ export const useCrmStore = defineStore("crmStore", {
     },
 
     // Meta connections
-    startMetaAuth() { return this._wrap(() => Get("/meta/authStart")); },
-    connectionStatus() { return this._wrap(() => Get("/meta/connection")); },
-    fetchLeadsNow() { return this._wrap(() => Get("/meta/fetchLeads")); },
-    subscribePages() { return this._wrap(() => Get("/meta/subscribe")); },
-    getAdAccounts() { return this._wrap(() => Get("/meta/adaccounts")); },
-    getCampaigns(accountId) {
-      return this._wrap(() => Get(`/meta/campaigns?account_id=${encodeURIComponent(accountId)}`));
-    },
-    getAds({ accountId, campaignId }) {
-      const q = campaignId
-        ? `campaign_id=${encodeURIComponent(campaignId)}`
-        : `account_id=${encodeURIComponent(accountId)}`
-      return this._wrap(() => Get(`/meta/ads?${q}`));
-    },
+    startMetaAuth() { return this._wrap(() => crmService.startMetaAuth()); },
+    connectionStatus() { return this._wrap(() => crmService.connectionStatus()); },
+    fetchLeadsNow() { return this._wrap(() => crmService.fetchLeadsNow()); },
+    subscribePages() { return this._wrap(() => crmService.subscribePages()); },
+    getAdAccounts() { return this._wrap(() => crmService.getAdAccounts()); },
+    getCampaigns(accountId) { return this._wrap(() => crmService.getCampaigns(accountId)); },
+    getAds({ accountId, campaignId }) { return this._wrap(() => crmService.getAds({ accountId, campaignId })); },
 
     // Leads
-    listLeads() { return this._wrap(() => Get("/lead/list")); },
-    createLead(payload) { return this._wrap(() => Post("/lead/create", payload)); },
-    updateLead(payload) { return this._wrap(() => Post("/lead/update", payload)); },
-    deleteLeads(ids) { return this._wrap(() => Post("/lead/delete", { ids })); },
+    listLeads(filters = {}) { return this._wrap(() => crmService.listLeads(filters)); },
+    createLead(payload) { return this._wrap(() => crmService.createLead(payload)); },
+    updateLead(payload) { return this._wrap(() => crmService.updateLead(payload)); },
+    deleteLeads(ids) { return this._wrap(() => crmService.deleteLeads(ids)); },
 
     // Options
-    listOptions(category) { return this._wrap(() => Get(`/lead/optionsList?category=${encodeURIComponent(category)}`)); },
-    addOption(category, name, color = null) { return this._wrap(() => Post("/lead/optionsAdd", { category, name, color })); },
-    deleteOption(id) { return this._wrap(() => Post("/lead/optionsDelete", { id })); },
+    listOptions(category) { return this._wrap(() => crmService.listOptions(category)); },
+    addOption(category, name, color = null) { return this._wrap(() => crmService.addOption(category, name, color)); },
+    deleteOption(id) { return this._wrap(() => crmService.deleteOption(id)); },
 
     // Communication preferences
-    getLeadCommunication(leadId) { return this._wrap(() => Get(`/lead/commGet?leadId=${encodeURIComponent(leadId)}`)); },
-    saveLeadCommunication(payload) { return this._wrap(() => Post("/lead/commSave", payload)); },
+    getLeadCommunication(leadId) { return this._wrap(() => crmService.getLeadCommunication(leadId)); },
+    saveLeadCommunication(payload) { return this._wrap(() => crmService.saveLeadCommunication(payload)); },
 
     // Notes
-    getLeadNotes(leadId) { return this._wrap(() => Post("/lead/notesList", { leadId })); },
-    addLeadNote(payload) { return this._wrap(() => Post("/lead/notesAdd", payload)); },
-    deleteLeadNote(id) { return this._wrap(() => Post("/lead/notesDelete", { id })); },
+    getLeadNotes(leadId) { return this._wrap(() => crmService.getLeadNotes(leadId)); },
+    addLeadNote(payload) { return this._wrap(() => crmService.addLeadNote(payload)); },
+    deleteLeadNote(id) { return this._wrap(() => crmService.deleteLeadNote(id)); },
 
     // Treatment (used in details dialog)
-    getLeadTreatment(leadId) { return this._wrap(() => Post("/lead/treatmentGet", { leadId })); },
-    saveLeadTreatment(leadId, data) { return this._wrap(() => Post("/lead/treatmentSave", { leadId, data })); },
-    deleteLeadTreatment(leadId) { return this._wrap(() => Post("/lead/treatmentDelete", { leadId })); },
+    getLeadTreatment(leadId) { return this._wrap(() => crmService.getLeadTreatment(leadId)); },
+    saveLeadTreatment(leadId, data) { return this._wrap(() => crmService.saveLeadTreatment(leadId, data)); },
+    deleteLeadTreatment(leadId) { return this._wrap(() => crmService.deleteLeadTreatment(leadId)); },
 
     // Automation
-    listAutomation() { return this._wrap(() => Get('/lead/automationList')); },
-    saveAutomation(payload) { return this._wrap(() => Post('/lead/automationSave', payload)); },
+    listAutomation() { return this._wrap(() => crmService.listAutomation()); },
+    saveAutomation(payload) { return this._wrap(() => crmService.saveAutomation(payload)); },
 
     // Mail
-    sendLeadMail(payload) { return this._wrap(() => Post('/lead/mailSend', payload)); },
+    sendLeadMail(payload) { return this._wrap(() => crmService.sendLeadMail(payload)); },
   },
 });

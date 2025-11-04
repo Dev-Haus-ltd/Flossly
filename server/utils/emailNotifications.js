@@ -283,6 +283,36 @@ export const sendInvitationEmail = async (data) => {
   });
 };
 
+// CRM: bulk-send email to leads using a provided HTML body.
+// Performs light-weight placeholder replacement and wraps with the app template.
+// Placeholders supported:
+// - [Patient Name], [First Name], [Your Name]
+export const sendLeadBulkEmail = async ({ leads = [], subject, html, from, senderName }) => {
+  if (!Array.isArray(leads) || !leads.length) return { sent: 0 };
+  const fromAddress = from || process.env.MAIL_FROM || "helloflossly@gmail.com";
+
+  let sent = 0;
+  for (const lead of leads) {
+    if (!lead?.email) continue;
+    const content = (html || "")
+      .replaceAll("[Patient Name]", lead.name || "there")
+      .replaceAll("[First Name]", (lead.name || "").split(" ")[0] || "there")
+      .replaceAll("[Your Name]", senderName || "Team");
+
+    try {
+      const wrapped = template
+        .replaceAll("{subject}", subject || "")
+        .replace("{content}", content);
+      await transporter.sendMail({ to: lead.email, from: fromAddress, subject, html: wrapped });
+      sent++;
+    } catch (e) {
+      // swallow and continue with others
+    }
+  }
+
+  return { sent };
+};
+
 /** These notifications are pending */
 
 export const sendOnBoardingMail = async (data) => {

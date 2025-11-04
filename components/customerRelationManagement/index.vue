@@ -209,35 +209,12 @@ const headers = [
 ];
 const leadSources = ref([]);
 const treatmentSources = ref([]);
-const filteredLeads = computed(() => {
-  const q = (search.value || "").toLowerCase();
-  const f = activeFilters.value || {};
-  return leads.value.filter((l) => {
-    const matchesText = (l.name || "").toLowerCase().includes(q) || (l.email || "").toLowerCase().includes(q) || (l.telephone || "").includes(q);
-    if (!matchesText) return false;
-    if (f.inquiryDate) {
-      const d = new Date(l.inquiryDate);
-      const fd = new Date(f.inquiryDate);
-      if (d.toDateString() !== fd.toDateString()) return false;
-    }
-    if (f.leadSourceId) {
-      const srcId = (l.leadSource && l.leadSource.id) ? l.leadSource.id : null;
-      if (String(srcId) !== String(f.leadSourceId)) return false;
-    }
-    if (f.leadStatus) {
-      if (String((l.leadStatus || "")).toLowerCase() !== String(f.leadStatus).toLowerCase()) return false;
-    }
-    if (f.treatmentId) {
-      const trId = (l.treatment && l.treatment.id) ? l.treatment.id : null;
-      if (String(trId) !== String(f.treatmentId)) return false;
-    }
-    return true;
-  });
-});
+const filteredLeads = computed(() => leads.value)
 
 const activeFilters = ref({});
-const onLeadsFilterUpdate = (filters) => {
+const onLeadsFilterUpdate = async (filters) => {
   activeFilters.value = filters || {};
+  await fetchLeads(activeFilters.value)
 };
 
 const onSelect = (selection) => {
@@ -308,33 +285,42 @@ const handleSuccess = (newLead) => {
 };
 
 const route = useRoute();
+const fetchLeads = async (filters = {}) => {
+  isLoading.value = true
+  try {
+    const payload = { ...filters, search: search.value || '' }
+    const res = await crmStore.listLeads(payload)
+    if (res && res.code === 0) {
+      leads.value = (res.data || []).map((l) => ({
+        alert: l.alert || "",
+        name: l.name || "",
+        email: l.email || "",
+        telephone: l.telephone || "",
+        inquiryDate: l.inquiryDate || "",
+        dob: l.dob || null,
+        occupation: l.occupation || "",
+        location: l.location || "",
+        leadSource: l.leadSource?.name ? l.leadSource : { id: 99, name: l.leadSource || "Meta Leadgen" },
+        leadStatus: l.leadStatus || "New",
+        treatment: l.treatment || { id: null, name: "" },
+        assigned: l.assigned || [],
+        followUpDate: l.followUpDate || "",
+        comments: l.comments || "",
+        id: l.id,
+      }))
+    }
+  } finally {
+    isLoading.value = false
+  }
+}
+
 const initLeads = async () => {
   if (route.query.meta === "connected") {
     try {
-      await crmService.fetchLeadsNow();
+      await crmStore.fetchLeadsNow();
     } catch (e) {}
   }
-  // Show all leads from our database (which also stores Meta imports)
-  const res = await crmStore.listLeads();
-  if (res && res.code === 0) {
-    leads.value = (res.data || []).map((l) => ({
-      alert: l.alert || "",
-      name: l.name || "",
-      email: l.email || "",
-      telephone: l.telephone || "",
-      inquiryDate: l.inquiryDate || "",
-      dob: l.dob || null,
-      occupation: l.occupation || "",
-      location: l.location || "",
-      leadSource: l.leadSource?.name ? l.leadSource : { id: 99, name: l.leadSource || "Meta Leadgen" },
-      leadStatus: l.leadStatus || "New",
-      treatment: l.treatment || { id: null, name: "" },
-      assigned: l.assigned || [],
-      followUpDate: l.followUpDate || "",
-      comments: l.comments || "",
-      id: l.id,
-    }));
-  }
+  await fetchLeads()
 };
 
 const integrateMeta = async () => {
@@ -366,6 +352,10 @@ const fetchNow = async () => {
     isLoading.value = false;
   }
 };
+
+watch(search, async () => {
+  await fetchLeads(activeFilters.value)
+})
 
 const onDeleteSelected = async (ids) => {
   try {

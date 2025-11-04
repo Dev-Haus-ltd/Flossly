@@ -59,9 +59,28 @@ export default {
     });
   },
   // Leads (app-managed)
-  listLeads() {
+  listLeads(filters = {}) {
+    const params = new URLSearchParams();
+    Object.entries(filters || {}).forEach(([k, v]) => {
+      if (v === undefined || v === null || v === "") return;
+      // Normalize Date to YYYY-MM-DD for server parsing
+      if (k === 'inquiryDate') {
+        try {
+          const d = new Date(v);
+          if (!isNaN(d.getTime())) {
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            params.append(k, `${yyyy}-${mm}-${dd}`);
+            return;
+          }
+        } catch {}
+      }
+      params.append(k, v);
+    });
+    const q = params.toString();
     return new Promise((resolve, reject) => {
-      Get("/lead/list")
+      Get(`/lead/list${q ? `?${q}` : ''}`)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -162,6 +181,29 @@ export default {
   saveLeadCommunication(payload) {
     return new Promise((resolve, reject) => {
       Post("/lead/commSave", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  // Automation
+  listAutomation() {
+    return new Promise((resolve, reject) => {
+      Get('/lead/automationList')
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  saveAutomation(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/automationSave', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  // Mail
+  sendLeadMail(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/mailSend', payload)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });

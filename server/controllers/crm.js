@@ -2,8 +2,7 @@ import { Op } from 'sequelize'
 import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, User } from '../models'
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
 import { success, error } from '../utils/response'
-import { transporter } from '../utils/nodeMailer.js'
-import { template as EMAIL_TEMPLATE } from '../utils/emailTemplate.js'
+import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
  
 
 export const listLeads = async (event) => {
@@ -15,6 +14,54 @@ export const listLeads = async (event) => {
     const includeArchived = String(q.includeArchived || '').toLowerCase() === 'true'
     if (!includeArchived) where.softDeleted = archivedOnly ? true : false
     if (archivedOnly) where.softDeleted = true
+
+    // Server-side filtering moved from client
+    // Text search across name/email/telephone
+    const search = (q.search || q.q || '').trim()
+    if (search) {
+      where[Op.or] = [
+        { name: { [Op.iLike]: `%${search}%` } },
+        { email: { [Op.iLike]: `%${search}%` } },
+        { telephone: { [Op.iLike]: `%${search}%` } },
+      ]
+    }
+
+    // Optional equals filters
+    if (q.leadStatus) {
+      const key = String(q.leadStatus).toLowerCase()
+      const map = { new: 'New', converted: 'Converted', contacted: 'Contacted', lost: 'Lost' }
+      const value = map[key] || q.leadStatus
+      // Use exact match against our canonical stored value
+      where.leadStatus = value
+    }
+
+    // Map option ids to names for leadSource/treatment if provided
+    const optionIds = []
+    if (q.leadSourceId) optionIds.push(Number(q.leadSourceId))
+    if (q.treatmentId) optionIds.push(Number(q.treatmentId))
+    let optionMap = new Map()
+    if (optionIds.length) {
+      const opts = await CrmOption.findAll({ where: { id: { [Op.in]: optionIds }, organisationId: Number(logged.orgId) } })
+      optionMap = new Map(opts.map(o => [o.id, o]))
+    }
+    if (q.leadSourceId) {
+      const o = optionMap.get(Number(q.leadSourceId))
+      if (o?.name) where.leadSource = o.name
+    }
+    if (q.treatmentId) {
+      const o = optionMap.get(Number(q.treatmentId))
+      if (o?.name) where.treatment = o.name
+    }
+
+    // Filter by inquiryDate (same day)
+    if (q.inquiryDate) {
+      const day = new Date(q.inquiryDate)
+      if (!isNaN(day.getTime())) {
+        const start = new Date(day); start.setHours(0,0,0,0)
+        const end = new Date(day); end.setHours(23,59,59,999)
+        where.inquiryDate = { [Op.between]: [start, end] }
+      }
+    }
     const rows = await CrmLead.findAll({
       where,
       include: [
@@ -428,26 +475,8 @@ export const sendLeadMail = async (event) => {
     }
 
     const leads = await CrmLead.findAll({ where: { id: { [Op.in]: leadIds }, organisationId: Number(orgId), softDeleted: false } })
-    const from = process.env.MAIL_FROM || 'helloflossly@gmail.com'
-
-    for (const l of leads) {
-      if (!l?.email) continue
-      const content = html
-        .replaceAll('[Patient Name]', l.name || 'there')
-        .replaceAll('[First Name]', (l.name || '').split(' ')[0] || 'there')
-        .replaceAll('[Your Name]', fullName || 'Team')
-
-      try {
-        const wrapped = EMAIL_TEMPLATE
-          .replaceAll('{subject}', subject)
-          .replace('{content}', content)
-        await transporter.sendMail({ to: l.email, from, subject, html: wrapped })
-      } catch (e) {
-        // continue with others
-      }
-    }
-
-    return success({ sent: leads.filter(l => !!l.email).length })
+    const result = await sendLeadBulkEmail({ leads, subject, html, senderName: fullName })
+    return success({ sent: result.sent })
   } catch (e) {
     return error(500, e.message)
   }
