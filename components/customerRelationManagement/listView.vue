@@ -219,6 +219,7 @@
 
 <script setup>
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
+import { buildRecipientContext, renderWithContext } from '@/lib/templateTokens'
 const crmStore = useCrmStore();
 const { user } = useUser();
 const emit = defineEmits(['select','openLead','delete']);
@@ -350,8 +351,12 @@ async function openCompose(actionKey) {
   const emails = (selectedLeads.value || []).map(l => l?.email).filter(Boolean)
   compose.recipients = [...new Set(emails)]
   const def = defaultTemplates[actionKey] || defaultTemplates.mail
-  compose.subject = def.subject
-  compose.html = def.html
+  // Personalize subject/body for preview based on selection
+  const many = (selectedLeads.value || []).length !== 1
+  const lead = many ? null : (selectedLeads.value || [])[0]
+  const ctx = buildRecipientContext({ lead, user, many })
+  compose.subject = renderWithContext(def.subject, ctx)
+  compose.html = renderWithContext(def.html, ctx)
   showCompose.value = true
   await nextTick()
   if (typeof window === 'undefined') return
@@ -382,7 +387,12 @@ async function sendCompose() {
   try {
     composeLoading.value = true
     const leadIds = selectedLeads.value.map(l => l.id)
-    const res = await crmStore.sendLeadMail({ leadIds, subject: compose.subject, html: compose.html, key: `manual_${compose.key}` })
+    const many = (selectedLeads.value || []).length !== 1
+    const lead = many ? null : (selectedLeads.value || [])[0]
+    const ctx = buildRecipientContext({ lead, user, many })
+    const resolvedSubject = renderWithContext(compose.subject, ctx)
+    const resolvedHtml = renderWithContext(compose.html, ctx)
+    const res = await crmStore.sendLeadMail({ leadIds, subject: resolvedSubject, html: resolvedHtml, key: `manual_${compose.key}` })
     if (res && res.code === 0) {
       if (mainStore && mainStore.setSnackbar) mainStore.setSnackbar({ title: `Mail sent to ${res.data?.sent || compose.recipients.length} recipient(s)`, type: 'success' })
       showCompose.value = false

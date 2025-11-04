@@ -1,5 +1,6 @@
 import { transporter } from "./nodeMailer";
 import { template } from "./emailTemplate";
+import { buildLeadContext, renderTokens } from './tokenRenderer.js'
 const config = useRuntimeConfig();
 
 /** These notifications are configured */
@@ -294,16 +295,15 @@ export const sendLeadBulkEmail = async ({ leads = [], subject, html, from, sende
   let sent = 0;
   for (const lead of leads) {
     if (!lead?.email) continue;
-    const content = (html || "")
-      .replaceAll("[Patient Name]", lead.name || "there")
-      .replaceAll("[First Name]", (lead.name || "").split(" ")[0] || "there")
-      .replaceAll("[Your Name]", senderName || "Team");
+    const ctx = buildLeadContext({ lead, userName: senderName || 'Team' })
+    const renderedSubject = renderTokens(subject || '', ctx)
+    const content = renderTokens(html || '', ctx)
 
     try {
       const wrapped = template
-        .replaceAll("{subject}", subject || "")
+        .replaceAll("{subject}", renderedSubject || "")
         .replace("{content}", content);
-      await transporter.sendMail({ to: lead.email, from: fromAddress, subject, html: wrapped });
+      await transporter.sendMail({ to: lead.email, from: fromAddress, subject: renderedSubject, html: wrapped });
       sent++;
     } catch (e) {
       // swallow and continue with others

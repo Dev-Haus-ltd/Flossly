@@ -85,6 +85,7 @@ export const startTaskScheduler = () => {
 import { CrmLead, CrmAutomationTemplate } from "../models/index.js";
 import { transporter } from "./nodeMailer.js";
 import { template as EMAIL_TEMPLATE } from './emailTemplate.js'
+import { buildLeadContext, renderTokens } from './tokenRenderer.js'
 
 export const startLeadAutomationScheduler = () => {
   const minutes = Number(process.env.CRM_LEAD_AUTOMATION_MINUTES || 2);
@@ -152,15 +153,10 @@ export const startLeadAutomationScheduler = () => {
           const raw = lead.rawData || {}
           const fullName = lead.name || 'there'
           const firstName = (fullName.split(' ')[0]) || 'there'
-          const subject = tpl.name || 'Message from Flossly'
-          const html = (tpl.template || '')
-            // legacy placeholders
-            .replaceAll('{{name}}', fullName)
-            .replaceAll('{{email}}', lead.email || '')
-            // new bracket placeholders
-            .replaceAll('[Patient Name]', fullName)
-            .replaceAll('[First Name]', firstName)
-            .replaceAll('[Email]', lead.email || '')
+          const baseSubject = tpl.name || 'Message from Flossly'
+          const ctx = buildLeadContext({ lead, userName: 'Team' })
+          const subject = renderTokens(baseSubject, ctx)
+          const html = renderTokens(tpl.template || '', ctx)
           const wrap = (inner) => EMAIL_TEMPLATE.replaceAll('{subject}', subject).replace('{content}', inner)
           try {
             if (tpl.key === 'welcome_email') {
