@@ -1,6 +1,6 @@
 <template>
   <div>
-    <v-dialog :model-value="props.modelValue" max-width="1300px" persistent>
+    <v-dialog :model-value="props.modelValue" max-width="1300px" persistent :z-index="11000">
       <v-card class="d-flex flex-column rounded-xl" style="min-height: 75vh">
         <!-- Header -->
         <div
@@ -8,7 +8,7 @@
           style="background-color: rgb(var(--v-theme-surface))"
         >
           <h3 class="title ml-4">{{ selectedLead?.name + "'s profile" }}</h3>
-          <v-btn flat icon size="32" @click="$emit('close')">
+          <v-btn flat icon size="32" @click="onClose">
             <v-icon size="20">mdi-close</v-icon>
           </v-btn>
         </div>
@@ -318,10 +318,7 @@
 
             <v-tabs-window-item value="automation">
               <div class="pa-6">
-                <CustomerRelationManagementAutomation
-      :selectedType="selectedAutomationType"
-      @update:type="onAutomationTypeChange"
-    />
+                <CustomerRelationManagementAutomation />
               </div>
             </v-tabs-window-item>
           </v-tabs-window>
@@ -338,24 +335,25 @@ const props = defineProps({
   modelValue: Boolean,
   selectedLead: Object,
 });
-const selectedAutomationType = ref(null);
+const emit = defineEmits(['close','update:modelValue'])
+const onClose = () => { emit('update:modelValue', false); emit('close') }
 const tab = ref("lead-info");
 const formatDate = (date) => {
   return parsedDate(date);
 };
 const selectedTreatment = ref({})
 const commPrefs = ref({})
-import crmService from '@/services/crmService'
+const crmStore = useCrmStore();
 watch(
   () => props.selectedLead,
   async (lead) => {
     if (!lead?.id) return
     try {
-      const res = await crmService.getLeadTreatment(lead.id)
+      const res = await crmStore.getLeadTreatment(lead.id)
       if (res && res.code === 0) selectedTreatment.value = res.data || {}
     } catch (e) {}
     try {
-      const comm = await crmService.getLeadCommunication(lead.id)
+      const comm = await crmStore.getLeadCommunication(lead.id)
       if (comm && comm.code === 0) commPrefs.value = comm.data || {}
     } catch (e) {}
   },
@@ -364,7 +362,7 @@ watch(
 
 const onTreatmentSave = async (updatedTreatment) => {
   try {
-    const res = await crmService.saveLeadTreatment(props.selectedLead.id, updatedTreatment)
+    const res = await crmStore.saveLeadTreatment(props.selectedLead.id, updatedTreatment)
     if (res && res.code === 0) {
       selectedTreatment.value = res.data
     }
@@ -377,15 +375,12 @@ const onPreferencesUpdated = (newPreferences) => {
 const onCommunicationSave = (updatedNotes) => {
   console.log("Updated Communication Logs:", updatedNotes);
 };
-const onAutomationTypeChange = (newType) => {
-  console.log("Automation type selected:", newType);
-};
 
 const savingComment = ref(false)
 const saveComment = async () => {
   try {
     savingComment.value = true
-    await crmService.updateLead({ id: props.selectedLead.id, comments: props.selectedLead.comments })
+    await crmStore.updateLead({ id: props.selectedLead.id, comments: props.selectedLead.comments })
   } finally { savingComment.value = false }
 }
 
@@ -395,7 +390,7 @@ const savePreferences = async () => {
   try {
     savingPrefs.value = true
     const prefs = pendingPrefs.value || commPrefs.value || {}
-    const res = await crmService.saveLeadCommunication({ leadId: props.selectedLead.id, ...prefs })
+    const res = await crmStore.saveLeadCommunication({ leadId: props.selectedLead.id, ...prefs })
     if (res && res.code === 0) commPrefs.value = res.data
   } finally { savingPrefs.value = false }
 }
