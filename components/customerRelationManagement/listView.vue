@@ -285,7 +285,6 @@ const toggleAll = () => {
     isAllSelected.value = true;
   }
 
-  console.log(selectedLeads.value);
 };
 const closeTray = () => {
   isAllSelected.value = false;
@@ -306,7 +305,6 @@ const updateValueRow = async (row, key) => {
 const openLeadDialog = (lead) => {
   selectedLead.value = lead;
   showLeadDetailDialog.value = true;
-  console.log("Open lead dialog:", lead);
 };
 
 // Compose mail dialog using Editor.js (client-only)
@@ -345,42 +343,6 @@ const defaultTemplates = {
   mail: { subject: 'Message from our practice', html: `<p>Dear [Patient Name],</p><p>Write your message here.</p><p>Regards,<br/>[Your Name]</p>` },
 }
 
-function htmlToBlocks(html) {
-  const container = document.createElement('div')
-  container.innerHTML = html || ''
-  const blocks = []
-  Array.from(container.childNodes).forEach((node) => {
-    if (node.nodeType === 3) {
-      const text = node.textContent.trim()
-      if (text) blocks.push({ type: 'paragraph', data: { text } })
-    } else if (node.nodeName === 'P') {
-      blocks.push({ type: 'paragraph', data: { text: node.innerHTML } })
-    } else if (/^H[1-6]$/.test(node.nodeName)) {
-      const level = Number(node.nodeName.substring(1))
-      blocks.push({ type: 'header', data: { level, text: node.innerHTML } })
-    } else if (node.nodeName === 'UL' || node.nodeName === 'OL') {
-      const style = node.nodeName === 'UL' ? 'unordered' : 'ordered'
-      const items = Array.from(node.querySelectorAll('li')).map(li => li.innerHTML)
-      blocks.push({ type: 'list', data: { style, items } })
-    }
-  })
-  if (!blocks.length) blocks.push({ type: 'paragraph', data: { text: '' } })
-  return { blocks }
-}
-
-function blocksToHtml(data) {
-  const blocks = (data && data.blocks) || []
-  return blocks.map((b) => {
-    if (b.type === 'paragraph') return `<p>${b.data?.text || ''}</p>`
-    if (b.type === 'header') return `<h${b.data?.level || 2}>${b.data?.text || ''}</h${b.data?.level || 2}>`
-    if (b.type === 'list') {
-      const tag = b.data?.style === 'ordered' ? 'ol' : 'ul'
-      const items = (b.data?.items || []).map(i => `<li>${i}</li>`).join('')
-      return `<${tag}>${items}</${tag}>`
-    }
-    return ''
-  }).join('')
-}
 
 async function openCompose(actionKey) {
   compose.key = actionKey
@@ -600,3 +562,4 @@ const convertSelected = async () => {
 }
 .action-item:hover { background-color: #f5f5f5; }
 </style>
+import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'

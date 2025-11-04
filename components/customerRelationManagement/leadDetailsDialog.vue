@@ -1,6 +1,6 @@
 <template>
   <div>
-    <v-dialog :model-value="props.modelValue" max-width="1300px" persistent>
+    <v-dialog :model-value="props.modelValue" max-width="1300px" persistent :z-index="11000">
       <v-card class="d-flex flex-column rounded-xl" style="min-height: 75vh">
         <!-- Header -->
         <div
