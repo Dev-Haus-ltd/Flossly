@@ -13,17 +13,23 @@
               <label class="info-label">Contract Type</label>
               <p
                 class="editable"
+                contenteditable="true"
+                @blur="logValue($event, 'contractType')"
               >
-                {{ contractDetails?.contractType }}
+                {{ contractInfo?.contractType || "Add Contract Type" }}
               </p>
             </div>
 
             <!-- Start Date -->
             <div class="mb-4" style="width: 40%">
               <label class="info-label">Start Date</label>
-              <p class="editable" v-bind="props">
-                    {{ contractDetails?.contractStartDate }}
-                  </p>
+              <p
+                class="editable"
+                contenteditable="true"
+                @blur="logValue($event, 'contractStartDate')"
+              >
+                {{ contractInfo?.contractStartDate || "Add Start Date" }}
+              </p>
             </div>
 
             <!-- Hours Worked -->
@@ -31,8 +37,10 @@
               <label class="info-label">Hours Worked (weekly)</label>
               <p
                 class="editable"
+                contenteditable="true"
+                @blur="logValue($event, 'weeklyHours')"
               >
-                {{ contractDetails?.weeklyHours  }}
+                {{ contractInfo?.weeklyHours || "Add Weekly Hours" }}
               </p>
             </div>
 
@@ -41,8 +49,10 @@
               <label class="info-label">Salary (per hour)</label>
               <p
                 class="editable"
+                contenteditable="true"
+                @blur="logValue($event, 'salaryPerHour')"
               >
-                {{ contractDetails?.salaryPerHour }}
+                {{ contractInfo?.salaryPerHour || "Add Salary Per Hour" }}
               </p>
             </div>
 
@@ -51,8 +61,10 @@
               <label class="info-label">Probation Period End</label>
               <p
                 class="editable"
+                contenteditable="true"
+                @blur="logValue($event, 'probEndDate')"
               >
-                {{ contractDetails?.probEndDate  }}
+                {{ contractInfo?.probEndDate || "Add Probation End Date" }}
               </p>
             </div>
 
@@ -61,34 +73,67 @@
               <label class="info-label">Holiday Entitlement (days)</label>
               <p
                 class="editable"
+                contenteditable="true"
+                @blur="logValue($event, 'holidaysEntitled')"
               >
-                {{ contractDetails?.holidaysEntitled  }}
+                {{ contractInfo?.holidaysEntitled || "Add Holiday Entitlement" }}
               </p>
             </div>
           </div>
         </v-card>
       </v-col>
     </v-row>
+    <div class="d-flex justify-end pa-2">
+      <v-btn @click="updateProfile" color="primary" variant="flat">Update Details</v-btn>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { reactive } from "vue";
-
 const emit = defineEmits(["update"]);
-const { contractDetails } = defineProps({
+const userStore = useUserStore();
+const mainStore = useMainStore();
+const { user, contractDetails } = defineProps({
+  user: Object,
   contractDetails: Object
 })
 
-const menus = reactive({
-  startDate: false,
-  dob: false,
-});
+const contractInfo = ref({...contractDetails} || {})
 
 function logValue(e, key) {
-  contractDetails[key] = e.target.innerText.trim();
+  contractInfo.value[key] = e.target.innerText.trim();
+  console.log(contractInfo.value)
   emit("update", contractDetails);
 }
+
+const updateProfile = () => {
+  userStore
+    .updateContract({
+      userId: user.id,
+      organisationId: user.currentLoggedInOrgId,
+      details: contractInfo.value
+    })
+    .then((res) => {
+      if (res.code === 0) {
+        mainStore.setSnackbar({
+          title: res?.data?.message || "Contract details updated successfully",
+          type: "success",
+        })
+      } else {
+        mainStore.setSnackbar({
+          title: res?.data?.message || res?.message || "Failed to update contract details",
+          type: "error",
+        })
+      }
+    })
+    .catch((err) => {
+      mainStore.setSnackbar({
+        title: err?.message || "Something went wrong",
+        type: "error",
+      })
+    })
+}
+
 </script>
 
 <style scoped>
