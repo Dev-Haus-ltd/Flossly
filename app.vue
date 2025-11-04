@@ -4,7 +4,7 @@
     <CommonLoader />
     <Snackbar />
     <ClientOnly>
-    <div class="floating-buttons" v-if="loggedIn">
+    <div class="floating-buttons" v-if="showFloatingButtons">
       <FloatingButtonsQuickActions
         @create-task="handleCreateTask"
         @add-staff="handleAddStaff"
@@ -41,6 +41,10 @@ const drawerOpen = ref(false);
 const addStaffDrawer = ref(false);
 
 const route = useRoute();
+
+const showFloatingButtons = computed(() => {
+  return loggedIn.value && route.name !== "onboarding";
+});
 
 const handleCreateTask = () => {
   addStaffDrawer.value = false;
@@ -114,7 +118,7 @@ const openEmail = () => {
   bottom: 20px;
   right: 20px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 2px;
   z-index: 1000;
 }

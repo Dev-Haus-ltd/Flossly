@@ -19,7 +19,7 @@
               </div>
               <div class="text ml-2 ml-sm-3 ml-md-4">
                 <div class="step-title text-caption">Step 1</div>
-                <div class="step-subtitle text-caption text-sm-body-2 text-md-body-1 text-lg-body-1 font-weight-medium">Clinic Setup</div>
+                <div class="step-subtitle text-caption text-sm-body-2 text-md-body-1 text-lg-body-1" :class="{ 'font-weight-medium': activeStep === 0 }">Clinic Setup</div>
               </div>
             </div>
           </div>
@@ -35,7 +35,7 @@
               </div>
               <div class="text ml-2 ml-sm-3 ml-md-4">
                 <div class="step-title text-caption">Step 2</div>
-                <div class="step-subtitle text-caption text-sm-body-2 text-md-body-1 text-lg-body-1 font-weight-medium">Add Team Members</div>
+                <div class="step-subtitle text-caption text-sm-body-2 text-md-body-1 text-lg-body-1" :class="{ 'font-weight-medium': activeStep === 1 }">Add Team Members</div>
               </div>
             </div>
           </div>
@@ -51,7 +51,7 @@
               </div>
               <div class="text ml-2 ml-sm-3 ml-md-4">
                 <div class="step-title text-caption">Step 3</div>
-                <div class="step-subtitle text-caption text-sm-body-2 text-md-body-1 text-lg-body-1 font-weight-medium">Pricing</div>
+                <div class="step-subtitle text-caption text-sm-body-2 text-md-body-1 text-lg-body-1" :class="{ 'font-weight-medium': activeStep === 2 }">Pricing</div>
               </div>
             </div>
           </div>
@@ -67,7 +67,7 @@
               </div>
               <div class="text ml-2 ml-sm-3 ml-md-4">
                 <div class="step-title text-caption">Step 4</div>
-                <div class="step-subtitle text-caption text-sm-body-2 text-md-body-1 text-lg-body-1 font-weight-medium">Dashboard Tour</div>
+                <div class="step-subtitle text-caption text-sm-body-2 text-md-body-1 text-lg-body-1" :class="{ 'font-weight-medium': activeStep === 3 }">Dashboard Tour</div>
               </div>
             </div>
           </div>
@@ -102,7 +102,7 @@
               </div>
             </template>
             <template v-slot:title>
-              <span class="mobile-step-title">{{ step.title }}</span>
+              <span class="mobile-step-title" :class="{ 'font-weight-medium': activeStep === index }">{{ step.title }}</span>
             </template>
           </v-stepper-item>
 
@@ -398,7 +398,7 @@ const steps = [
 /* Step title styling */
 .mobile-stepper-header :deep(.v-stepper-item__title) {
   font-size: 11px !important;
-  font-weight: 500 !important;
+  font-weight: 400 !important;
   color: rgba(255, 255, 255, 0.8) !important;
   margin-top: 6px !important;
   text-align: center;
@@ -414,7 +414,7 @@ const steps = [
   }
 }
 
-/* Active step title - brighter */
+/* Active step title - brighter and bold */
 .mobile-stepper-header :deep(.v-stepper-item--selected .v-stepper-item__title) {
   color: #FFFFFF !important;
   font-weight: 500 !important;
