@@ -3,6 +3,8 @@
     :class="
       steps[step].key === 3
         ? 'form-container py-3 py-md-5 px-3 d-flex flex-column'
+        : step === 1
+        ? 'form-container py-3 py-md-5 px-3 d-flex flex-column align-start ml-0 ml-md-6 buttons-bottom'
         : 'form-container py-3 py-md-5 px-3 d-flex flex-column align-start ml-0 ml-md-6'
     "
   >
@@ -23,7 +25,6 @@
       <v-btn
         color="grey-darken-1"
         variant="tonal"
-        :disabled="step === 0"
         @click="handleBack"
         class="me-2 nav-button"
         height="48"
@@ -90,7 +91,7 @@ const mainStore = useMainStore();
 const router = useRouter();
 
 // Define emit to send current step to parent
-const emit = defineEmits(['update:currentStep']);
+const emit = defineEmits(['update:currentStep', 'go-to-initial-screen']);
 
 // Steps metadata
 const step = ref(0);
@@ -129,7 +130,7 @@ const currentComponent = computed(() => steps[step.value].component);
 const stepComponent = ref();
 const stepModels = ref([
   { name: "", logo: null, contact: "", address: "", type: "" }, // Clinic model
-  { users: [{ roleId: 1, email: "" }] }, // Team model
+  { users: [{ roleId: null, email: "" }] }, // Team model
   {}, // Pricing model
 ]);
 
@@ -226,6 +227,12 @@ const navigateToDashboard = () => {
 
 // Handle back navigation with awareness of Pricing payment modal
 const handleBack = () => {
+  // If on first step (step 0), go back to initial screen
+  if (step.value === 0) {
+    emit('go-to-initial-screen');
+    return;
+  }
+  
   // Pricing step is index 2 (0-based)
   if (step.value === 2) {
     const pricingRef = stepComponent.value;
@@ -273,6 +280,16 @@ const handleBack = () => {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 16px;
+}
+
+/* For Add Team Members step (step 1), move buttons to bottom */
+.form-container.buttons-bottom {
+  min-height: calc(100vh - 96px);
+}
+
+.form-container.buttons-bottom .button-container {
+  margin-top: auto;
+  padding-top: 24px;
 }
 
 /* Button font size */

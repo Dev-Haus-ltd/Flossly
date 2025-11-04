@@ -275,4 +275,18 @@ export default {
         });
     });
   },
+  getTeamTaskStatsByCategory(categoryId) {
+    return new Promise((resolve, reject) => {
+      const url = categoryId 
+        ? `/tasks/statsByCategory?categoryId=${encodeURIComponent(categoryId)}`
+        : "/tasks/statsByCategory";
+      Get(url)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
 };

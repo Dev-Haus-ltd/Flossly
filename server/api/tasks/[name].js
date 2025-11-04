@@ -27,6 +27,7 @@ import {
   archieveBulkTasks,
   completeBulkTasks,
   unAssignBulkTask,
+  getTeamTaskStatsByStatusAndCategory,
 } from "~/server/controllers/task";
 
 export default defineEventHandler(async (event) => {
@@ -88,6 +89,8 @@ export default defineEventHandler(async (event) => {
       return await completeBulkTasks(event);
     case "unassignBulk":
       return await unAssignBulkTask(event);
+    case "statsByCategory":
+      return await getTeamTaskStatsByStatusAndCategory(event);
     default:
       return { code: 0, error: "Not found" };
   }

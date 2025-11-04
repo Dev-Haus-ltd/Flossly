@@ -37,11 +37,11 @@ export const Task = sequelize.define(
       type: DataTypes.ENUM(
         "Daily",
         "Weekly",
-        "Fortnightly",
+        "Biweekly",
         "Monthly",
-        "Annualy",
-        "6 Monthly",
-        "Every 24 Months"
+        "Quarterly",
+        "Yearly",
+        "Ad Hoc"
       ),
       allowNull: true,
     },

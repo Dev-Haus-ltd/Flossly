@@ -19,6 +19,9 @@ export const paymentSuccessNotification = async (data) => {
           <br/>
           <p>Best regards,<br/>The Flossly Team</p>`;
   const subject = "Welcome to Flossly – Subscription Confirmed";
+  const html = template
+  .replaceAll("{subject}", subject)
+  .replace("{content}", content);
 
   await transporter.sendMail({
     from: "Flossly <helloflossly@gmail.com>",

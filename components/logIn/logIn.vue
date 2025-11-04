@@ -42,7 +42,7 @@
             }"
             alt=""
           />
-          <h2 class="text-center login-heading">Welcome Back!</h2>
+          <h2 class="text-center login-heading">Welcome!</h2>
           <h2 class="mb-6 text-center login-sub-heading" style="color: #8b8b8b">
             Let's get signed in securely.
           </h2>
@@ -76,10 +76,9 @@
               @click:append-inner="togglePasswordVisibility"
               flat
             />
-            <div v-if="loginError" class="error-message pa-3 mb-4" style="background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 8px;">
+            <div v-if="showResendButton" class="error-message pa-3 mb-4" style="background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 8px;">
               <p style="color: #856404; margin-bottom: 8px;">{{ loginError }}</p>
               <v-btn
-                v-if="showResendButton"
                 @click="resendVerificationEmail"
                 variant="outlined"
                 size="small"
@@ -112,10 +111,10 @@
             </v-btn>
             <div class="agreement-text mt-5">
               By signing up you agree to Flossly&nbsp;
-              <a href="/privacy-policy" target="_blank">Terms</a>,&nbsp;
+              <a href="/terms-of-use" target="_blank">Terms</a>,&nbsp;
               <a href="/privacy-policy" target="_blank">Privacy Policy</a
               >&nbsp;and&nbsp;
-              <a href="/privacy-policy" target="_blank">Security Policy</a>.
+              <a href="/security-policy" target="_blank">Security Policy</a>.
             </div>
             <div class="mt-5 text-body-2 text-center" style="height: 48px">
               Don't have an account?

@@ -105,10 +105,10 @@
 
           <div
             class="action-item d-flex flex-column align-center"
-            @click="handleComplete"
+            @click="handleStatusAction"
           >
             <v-icon size="24">mdi-check-circle-outline</v-icon>
-            <span class="action-label">Complete</span>
+            <span class="action-label">{{ getActionButtonLabel }}</span>
           </div>
 
           <v-divider vertical class="ml-4" />
@@ -176,6 +176,18 @@ const updateTasks = () => {
 bus.on("updateMyTasks", updateTasks);
 const availableHeaders = computed(() => {
   return mainStore.getTeamTaskAllHeaders;
+});
+
+const getActionButtonLabel = computed(() => {
+  if (!selectedRowItems.value.length) return "Complete";
+  
+  const uniqueStatuses = [...new Set(selectedRowItems.value.map(item => item.status?.key))];
+  
+  if (uniqueStatuses.length === 1 && uniqueStatuses[0] === "upcoming") {
+    return "Mark In Progress";
+  }
+  
+  return "Complete";
 });
 const getIcon = (categoryName) => {
   switch (categoryName) {
@@ -423,6 +435,66 @@ const handleComplete = async () => {
         err.message || "An unexpected error occurred. Please try again later.",
       type: "error",
     });
+  }
+};
+
+const handleStatusAction = async () => {
+  if (!selectedRowItems.value.length) {
+    mainStore.setSnackbar({
+      title: "No tasks selected.",
+      type: "warning",
+    });
+    return;
+  }
+
+  // Check if all selected tasks are upcoming
+  const uniqueStatuses = [...new Set(selectedRowItems.value.map(item => item.status?.key))];
+  const allUpcoming = uniqueStatuses.length === 1 && uniqueStatuses[0] === "upcoming";
+
+  if (allUpcoming) {
+    // Mark all upcoming tasks as in progress
+    try {
+      const progressStatus = taskStatuses.value.find(s => s.key === "progress");
+      if (!progressStatus) {
+        mainStore.setSnackbar({
+          title: "Progress status not found.",
+          type: "error",
+        });
+        return;
+      }
+
+      const updatePromises = selectedRowItems.value.map(item =>
+        taskStore.updateUserTask({
+          id: item.id,
+          taskId: item.taskId || item.taskDetails?.id,
+          statusId: progressStatus.id,
+        })
+      );
+
+      const results = await Promise.all(updatePromises);
+      const allSucceeded = results.every(res => res.code === 0);
+
+      if (allSucceeded) {
+        updateTasksList();
+        mainStore.setSnackbar({
+          title: "Tasks marked as in progress successfully.",
+          type: "success",
+        });
+      } else {
+        mainStore.setSnackbar({
+          title: "Some tasks failed to update. Please try again.",
+          type: "error",
+        });
+      }
+    } catch (err) {
+      mainStore.setSnackbar({
+        title: err.message || "An unexpected error occurred.",
+        type: "error",
+      });
+    }
+  } else {
+    // Default to complete action
+    handleComplete();
   }
 };
 </script>

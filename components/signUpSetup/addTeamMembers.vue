@@ -35,7 +35,7 @@
                 >
                   <span style="max-width: 130px" class="px-2">
                     {{
-                      rolesList.find((x) => x.id === user.roleId)?.title.slice(0,20) ||
+                      user.roleId && rolesList.find((x) => x.id === user.roleId)?.title.slice(0,20) ||
                       "Select Role"
                     }}</span
                   >
@@ -85,9 +85,9 @@ const valid = ref(false);
 const form = ref(null);
 const showform = ref(false);
 
-const model = defineModel({ users: [{ roleId: 1, email: "" }] });
+const model = defineModel({ users: [{ roleId: null, email: "" }] });
 const updateModel = () => {
-  model.value.users.push({ roleId: 1, email: "" });
+  model.value.users.push({ roleId: null, email: "" });
 };
 
 const removeUser = (index) => {

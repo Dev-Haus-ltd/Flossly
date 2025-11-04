@@ -23,7 +23,10 @@
         </div>
         
         <!-- Form Content -->
-        <sign-up-setup @update:current-step="currentStep = $event" />
+        <sign-up-setup 
+          @update:current-step="currentStep = $event"
+          @go-to-initial-screen="isInitScreen = true"
+        />
       </v-col>
     </v-row>
   </div>
@@ -52,6 +55,7 @@ const currentStep = ref(0);
   padding-left: 48px;
   padding-right: 48px;
   padding-top: 48px;
+  position: relative;
 }
 
 /* Mobile view adjustments */
