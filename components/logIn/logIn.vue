@@ -396,9 +396,10 @@ const resendVerificationEmail = async () => {
 
 .background-image {
   background-image: url("/assets/images/loginBanner.svg");
-  background-size: contain;
+  background-size: cover;
   width: 100%;
   height: 99vh;
+  border-radius: 12px;
 }
 .login-heading {
   font-family: "Garnett";
