@@ -11,10 +11,17 @@
           variant="flat"
           density="compact"
           class="tbl-top-btn ml-2"
-          style="width: 100px"
+          style="width: 110px"
         >
           <span>Filter</span>
           <v-icon class="ml-2" size="20">mdi-filter-outline</v-icon>
+          <v-badge
+            v-if="activeFiltersCount > 0"
+            :content="activeFiltersCount"
+            color="primary"
+            inline
+            class="ml-2"
+          />
         </v-btn>
       </template>
   
@@ -24,7 +31,7 @@
             <div style=" font-weight: 500; font-size: 14px">
               Filters by
             </div>
-  
+
             <v-btn
               variant="text"
               density="comfortable"
@@ -35,9 +42,53 @@
               Clear filters
             </v-btn>
           </div>
-  
+
           <v-divider style="background-color: #dbdbdb" class="my-3" />
-  
+
+          <!-- Active filter chips -->
+          <div v-if="activeFiltersCount > 0" class="mb-3 d-flex align-center flex-wrap" style="gap: 8px">
+            <v-chip
+              v-if="selectedInquiryDate"
+              size="small"
+              variant="tonal"
+              color="primary"
+              closable
+              @click:close="clearInquiryDate"
+            >
+              Inquiry: {{ formattedInquiryDate }}
+            </v-chip>
+            <v-chip
+              v-if="selectedLeadSource"
+              size="small"
+              variant="tonal"
+              color="primary"
+              closable
+              @click:close="clearLeadSource"
+            >
+              Source: {{ selectedLeadSourceName }}
+            </v-chip>
+            <v-chip
+              v-if="selectedLeadStatus"
+              size="small"
+              variant="tonal"
+              color="primary"
+              closable
+              @click:close="clearLeadStatus"
+            >
+              Status: {{ selectedLeadStatusName }}
+            </v-chip>
+            <v-chip
+              v-if="selectedTreatment"
+              size="small"
+              variant="tonal"
+              color="primary"
+              closable
+              @click:close="clearTreatment"
+            >
+              Treatment: {{ selectedTreatmentName }}
+            </v-chip>
+          </div>
+
           <!-- Inquiry Date -->
           <v-label class="my-1" style=" font-size: 14px">
             Inquiry Date
@@ -60,6 +111,8 @@
                 flat
                 readonly
                 hide-details
+                clearable
+                @click:clear="clearInquiryDate"
               >
                 <template #append-inner>
                   <v-icon class="cursor-pointer" @click.stop="inquiryDateMenu = true">
@@ -89,6 +142,8 @@
             density="compact"
             hide-details
             class="input-bordered"
+            clearable
+            @click:clear="clearLeadSource"
           />
   
           <!-- Lead Status -->
@@ -105,6 +160,8 @@
             density="compact"
             hide-details
             class="input-bordered"
+            clearable
+            @click:clear="clearLeadStatus"
           />
   
           <!-- Treatment -->
@@ -121,6 +178,8 @@
             density="compact"
             hide-details
             class="input-bordered"
+            clearable
+            @click:clear="clearTreatment"
           />
         </v-list>
       </v-card>
@@ -128,7 +187,7 @@
   </template>
   
   <script setup>
-  import { ref, watch } from "vue";
+  import { ref, watch, computed } from "vue";
   
   const { leadSources, treatmentSources } = defineProps({
     leadSources: Array,
@@ -156,15 +215,37 @@
   const selectedLeadSource = ref(null);
   const selectedLeadStatus = ref(null);
   const selectedTreatment = ref(null);
-  
+
+  // Keep in sync with components/dataTableColumns/leadStatus.vue
   const leadStatuses = ref([
-    { key: "new", name: "New", color: "#007BFF" },
-    { key: "contacted", name: "Contacted", color: "#28A745" },
-    { key: "qualified", name: "Qualified", color: "#FFC107" },
-    { key: "proposal", name: "Proposal Sent", color: "#17A2B8" },
-    { key: "won", name: "Won", color: "#20C997" },
-    { key: "lost", name: "Lost", color: "#DC3545" },
+    { key: "new", name: "New", color: "#00A856" },
+    { key: "converted", name: "Converted", color: "#0155B9" },
+    { key: "contacted", name: "Contacted", color: "#ffc107" },
+    { key: "lost", name: "Lost", color: "#dc3545" },
   ]);
+
+  // Derived names for chips
+  const selectedLeadSourceName = computed(() => {
+    const found = (leadSources || []).find?.(x => String(x.id) === String(selectedLeadSource.value))
+    return found?.name || ''
+  })
+  const selectedLeadStatusName = computed(() => {
+    const found = (leadStatuses.value || []).find(x => String(x.key) === String(selectedLeadStatus.value))
+    return found?.name || ''
+  })
+  const selectedTreatmentName = computed(() => {
+    const found = (treatmentSources || []).find?.(x => String(x.id) === String(selectedTreatment.value))
+    return found?.name || ''
+  })
+
+  const activeFiltersCount = computed(() => {
+    let c = 0
+    if (selectedInquiryDate.value) c++
+    if (selectedLeadSource.value) c++
+    if (selectedLeadStatus.value) c++
+    if (selectedTreatment.value) c++
+    return c
+  })
   
   watch(
     [selectedInquiryDate, selectedLeadSource, selectedLeadStatus, selectedTreatment],
@@ -177,7 +258,7 @@
       });
     }
   );
-  
+
   const clearFilters = () => {
     selectedInquiryDate.value = null;
     formattedInquiryDate.value = "";
@@ -185,6 +266,11 @@
     selectedLeadStatus.value = null;
     selectedTreatment.value = null;
   };
+
+  const clearInquiryDate = () => { selectedInquiryDate.value = null; formattedInquiryDate.value = "" }
+  const clearLeadSource = () => { selectedLeadSource.value = null }
+  const clearLeadStatus = () => { selectedLeadStatus.value = null }
+  const clearTreatment = () => { selectedTreatment.value = null }
   </script>
   
   <style scoped>
