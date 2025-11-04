@@ -30,6 +30,21 @@ export const useAuthStore = defineStore("authStore", {
           });
       });
     },
+    resendVerificationEmail(data) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        authService
+          .resendVerificationEmail(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
     verifyEmail(data) {
       return new Promise((resolve, reject) => {
         this.isLoading = true;

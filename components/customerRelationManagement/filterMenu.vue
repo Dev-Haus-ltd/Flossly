@@ -189,9 +189,7 @@
   
   <style scoped>
   .input-bordered :deep(.v-field) {
-    border: 1px solid #dfdfdf !important;
     border-radius: 8px !important;
-    background-color: white !important;
     min-height: 40px;
     font-size: 14px;
     
@@ -200,10 +198,8 @@
     height: 40px;
     border-radius: 6px;
     font-size: 14px;
-    background-color: #fafafa !important;
     text-transform: none;
     box-shadow: none;
-    color: #737373;
   }
   </style>
   

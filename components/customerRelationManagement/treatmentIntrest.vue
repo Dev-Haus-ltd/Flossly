@@ -13,7 +13,7 @@
           variant="solo"
           density="compact"
           class="mb-1 input-bordered"
-          bg-color="white"
+           
           flat
         />
       </v-col>
@@ -31,7 +31,7 @@
           variant="solo"
           density="compact"
           class="mb-1 input-bordered"
-          bg-color="white"
+           
           flat
         />
       </v-col>
@@ -48,7 +48,7 @@
           variant="solo"
           density="compact"
           class="mb-1 input-bordered"
-          bg-color="white"
+           
           flat
         />
       </v-col>
@@ -65,7 +65,7 @@
           variant="solo"
           density="compact"
           class="mb-1 input-bordered"
-          bg-color="white"
+           
           flat
         />
       </v-col>
@@ -125,7 +125,7 @@
               </td>
               <td>
                 <div class="h-100 d-flex align-center px-2">
-                  {{ selectedTreatment.primaryTreatment || "N/A" }}
+                  {{ nameFromId(treatmentsList, selectedTreatment.primaryTreatment) || "N/A" }}
                 </div>
               </td>
             </tr>
@@ -138,16 +138,7 @@
               </td>
               <td>
                 <div class="h-100 d-flex align-center px-2">
-                  <span
-                    v-if="Array.isArray(selectedTreatment.secondaryTreatments)"
-                  >
-                    {{
-                      selectedTreatment.secondaryTreatments.join(", ") || "N/A"
-                    }}
-                  </span>
-                  <span v-else>
-                    {{ selectedTreatment.secondaryTreatments || "N/A" }}
-                  </span>
+                  {{ namesFromIds(treatmentsList, selectedTreatment.secondaryTreatments) || "N/A" }}
                 </div>
               </td>
             </tr>
@@ -160,7 +151,7 @@
               </td>
               <td>
                 <div class="h-100 d-flex align-center px-2">
-                  {{ selectedTreatment.concerns || "N/A" }}
+                  {{ nameFromId(concernsList, selectedTreatment.concerns) || "N/A" }}
                 </div>
               </td>
             </tr>
@@ -173,7 +164,7 @@
               </td>
               <td>
                 <div class="h-100 d-flex align-center px-2">
-                  {{ selectedTreatment.treatmentAreas || "N/A" }}
+                  {{ nameFromId(areasList, selectedTreatment.treatmentAreas) || "N/A" }}
                 </div>
               </td>
             </tr>
@@ -224,24 +215,38 @@
 </template>
 
 <script setup>
-const { selectedTreatment } = defineProps({
+const props = defineProps({
   selectedTreatment: {
     type: Object,
     required: true,
   },
 });
+const selectedTreatment = toRef(props, 'selectedTreatment')
 
 const emit = defineEmits(["save"]);
 
 const localForm = ref({
-  primaryTreatment: selectedTreatment.primaryTreatment || null,
-  secondaryTreatments: selectedTreatment.secondaryTreatments || [],
-  concerns: selectedTreatment.concerns || null,
-  treatmentAreas: selectedTreatment.treatmentAreas || null,
-  previousExperience: selectedTreatment.previousExperience || "",
-  budget: selectedTreatment.budget || "",
-  specialOccasion: selectedTreatment.specialOccasion || "",
+  primaryTreatment: selectedTreatment.value?.primaryTreatment || null,
+  secondaryTreatments: selectedTreatment.value?.secondaryTreatments || [],
+  concerns: selectedTreatment.value?.concerns || null,
+  treatmentAreas: selectedTreatment.value?.treatmentAreas || null,
+  previousExperience: selectedTreatment.value?.previousExperience || "",
+  budget: selectedTreatment.value?.budget || "",
+  specialOccasion: selectedTreatment.value?.specialOccasion || "",
 });
+
+watch(selectedTreatment, (val) => {
+  if (!val) return
+  localForm.value = {
+    primaryTreatment: val.primaryTreatment || null,
+    secondaryTreatments: val.secondaryTreatments || [],
+    concerns: val.concerns || null,
+    treatmentAreas: val.treatmentAreas || null,
+    previousExperience: val.previousExperience || '',
+    budget: val.budget || '',
+    specialOccasion: val.specialOccasion || '',
+  }
+})
 
 // Dummy dropdown data
 const treatmentsList = [
@@ -263,6 +268,11 @@ const areasList = [
   { id: 3, name: "Full Mouth" },
 ];
 
+const nameFromId = (list, id) => (list.find((x) => x.id === id)?.name) || ''
+const namesFromIds = (list, ids) => Array.isArray(ids)
+  ? ids.map((id) => nameFromId(list, id)).filter(Boolean).join(', ')
+  : ''
+
 const onSave = () => {
   emit("save", localForm.value);
 };
@@ -279,7 +289,6 @@ const onSave = () => {
 .input-bordered :deep(.v-field) {
   border: 1px solid #dfdfdf !important;
   border-radius: 8px !important;
-  background-color: white !important;
   min-height: 40px;
   font-size: 14px;
   
@@ -293,7 +302,6 @@ const onSave = () => {
 }
 
 .table-key {
-  background-color: #dbdbdb;
   padding: 10px;
   flex: 1;
   border-right: 1px solid #dbdbdb;
@@ -302,7 +310,6 @@ const onSave = () => {
 }
 
 .table-value {
-  background-color: white;
   padding: 10px;
   flex: 1;
   border-right: 1px solid #dbdbdb;
@@ -331,10 +338,7 @@ const onSave = () => {
   width: 50%; /* key column wider */
 }
 .room-table td:last-child {
-  background-color: #fff;
   width: 50%; /* value column */
 }
-.left-col {
-  background-color: #f6f6f6;
-}
+
 </style>

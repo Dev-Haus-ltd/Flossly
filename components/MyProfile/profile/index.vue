@@ -6,7 +6,7 @@
         <v-card
           elevation="0"
           class="pa-7 flex-grow-1"
-          style="border: 1px solid #dbdbdb; border-radius: 12px"
+          style="border: 1px solid rgba(var(--v-theme-on-surface), 0.12); border-radius: 12px"
         >
           <!-- Top Section: Avatar + Name + Practice -->
           <div class="d-flex align-center mb-6">
@@ -96,19 +96,16 @@
                   <v-radio
                     label="Male"
                     value="Male"
-                    color="black"
                     class="gender-radio"
                   />
                   <v-radio
                     label="Female"
                     value="Female"
-                    color="black"
                     class="gender-radio ml-2"
                   />
                   <v-radio
                     label="Other"
                     value="Other"
-                    color="black"
                     class="gender-radio ml-2"
                   />
                 </v-radio-group>
@@ -123,7 +120,7 @@
         <v-card
           elevation="0"
           class="pa-7 flex-grow-1"
-          style="border: 1px solid #dbdbdb; border-radius: 12px"
+          style="border: 1px solid rgba(var(--v-theme-on-surface), 0.12); border-radius: 12px"
         >
           <!-- Info Section -->
           <div class="info-section">
@@ -231,7 +228,19 @@ const authStore = useAuthStore()
 // const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const logValue = (e, key) => {
-  user[key] = e.target.innerText.trim();
+  const trimmedValue = e.target.innerText.trim();
+  
+  // Validate fullName specifically
+  if (key === 'fullName' && trimmedValue.length === 0) {
+    e.target.innerText = user[key]; // Revert to original value
+    mainStore.setSnackbar({
+      title: "Full name cannot be empty or contain only spaces",
+      type: "error",
+    });
+    return;
+  }
+  
+  user[key] = trimmedValue;
   console.log(`${key}:`, user[key]);
 };
 
@@ -249,6 +258,15 @@ const getUserRole = () => {
   return user?.role.title;
 };
 const updateProfile = () => {
+  // Validate fullName before sending request
+  if (user.fullName && user.fullName.trim().length === 0) {
+    mainStore.setSnackbar({
+      title: "Full name cannot be empty or contain only spaces",
+      type: "error",
+    });
+    return;
+  }
+  
   authStore
     .updateProfile(user) 
     .then((res) => {

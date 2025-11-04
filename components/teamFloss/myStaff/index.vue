@@ -26,7 +26,6 @@
           variant="solo"
           density="compact"
           hide-details
-          bg-color="#FAFAFA"
           flat
           class="custom-search"
         />
@@ -186,15 +185,12 @@ const getUserDetails = (data) => {
 }
 
 .toggle-btn {
-  background-color: #f3f6fa !important;
   text-transform: none;
   font-size: 14px;
-  color: #333;
   transition: all 0.2s ease-in-out;
 }
 
 .v-btn--active.toggle-btn {
-  background-color: #ffffff !important;
   box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.12);
   transform: translateY(-1px); /* small lift effect */
 }

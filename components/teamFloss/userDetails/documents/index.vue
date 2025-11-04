@@ -29,7 +29,7 @@
           <div class="d-flex align-center">
             <h3 class="expan-title mr-3">Recruitment Folder</h3>
             <v-chip class="rounded-lg" size="large">
-              <span style="color: #b9308a">
+              <span>
                 {{ recruitmentDocs.length + " files" }}
               </span>
             </v-chip>
@@ -51,7 +51,6 @@
                   <th
                     :style="{
                       padding: '6px 12px',
-                      backgroundColor: '#F6F6F6',
                       fontSize: '14px',
                     }"
                   >
@@ -120,7 +119,7 @@
                 <v-btn
                   v-if="item.status === 'Pending'"
                   variant="text"
-                  color="#266DF0"
+                  color="primary"
                   prepend-icon="mdi-upload"
                   class="px-0"
                   @click="onUpload(item)"
@@ -140,7 +139,7 @@
             <h3 class="expan-title mr-3">Training Folder</h3>
 
             <v-chip class="rounded-lg" size="large">
-              <span style="color: #b9308a">
+              <span>
                 {{ trainingDocs.length + " files" }}
               </span>
             </v-chip>
@@ -162,7 +161,6 @@
                   <th
                     :style="{
                       padding: '6px 12px',
-                      backgroundColor: '#F6F6F6',
                       fontSize: '14px',
                     }"
                   >
@@ -230,7 +228,7 @@
                 <v-btn
                   v-if="item.status === 'Pending'"
                   variant="text"
-                  color="#266DF0"
+                  color="primary"
                   prepend-icon="mdi-upload"
                   @click="onUpload(item)"
                 >

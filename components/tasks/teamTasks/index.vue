@@ -3,7 +3,7 @@
     <div class="cust-border d-flex align-center">
       <p class="mr-1">My Team Tasks</p>
     </div>
-    <div style="background-color: white" class="pa-5 rounded-lg">
+    <div class="pa-5 rounded-lg">
       <div class="task-summary">
         <!-- Cards Grid -->
         <v-row>
@@ -39,7 +39,7 @@
           style="min-width: 40px; padding: 0 8px"
           @click="addNewCategoryDialog"
         >
-          <v-icon size="20" color="#737373">mdi-plus</v-icon>
+          <v-icon size="20">mdi-plus</v-icon>
         </v-tab>
       </v-tabs>
       <v-tabs-window v-model="currentTab">
@@ -81,7 +81,7 @@
               class="action-item d-flex flex-column align-center"
               @click="handleDelete"
             >
-              <v-icon color="gray" size="24">mdi-delete-outline</v-icon>
+              <v-icon size="24">mdi-delete-outline</v-icon>
               <span class="action-label">Delete</span>
             </div>
 
@@ -89,7 +89,7 @@
               class="action-item d-flex flex-column align-center"
               @click="handleArchive"
             >
-              <v-icon color="gray" size="24">mdi-archive-outline</v-icon>
+              <v-icon size="24">mdi-archive-outline</v-icon>
               <span class="action-label">Archive</span>
             </div>
 
@@ -97,7 +97,7 @@
               class="action-item d-flex flex-column align-center"
               @click="handleComplete"
             >
-              <v-icon color="gray" size="24">mdi-check-circle-outline</v-icon>
+              <v-icon size="24">mdi-check-circle-outline</v-icon>
               <span class="action-label">Complete</span>
             </div>
 
@@ -109,7 +109,7 @@
               class="action-item d-flex flex-column align-center"
               @click="hideTray()"
             >
-              <v-icon color="gray" size="24">mdi-close</v-icon>
+              <v-icon size="24">mdi-close</v-icon>
             </div>
           </v-card>
         </v-tabs-window-item>
@@ -246,7 +246,14 @@ const applyFilters = (filters) => {
     .teamTasksGroupedByStatus(filters)
     .then((res) => {
       if (res.code === 0) {
-        taskDetails.value = sortByCustomStatus(res.data);
+        const myId = user.value?.id;
+        const filteredData = res.data.map(group => ({
+          ...group,
+          tasks: group.tasks.filter(task =>
+            !task.assignedUsers?.some(u => u.id === myId)
+          )
+        }));
+        taskDetails.value = sortByCustomStatus(filteredData);
       } else {
         // set snack
       }
@@ -278,7 +285,14 @@ const getTeamTasks = (categoryId) => {
     .teamTasksGroupedByStatus({ categoryId })
     .then((res) => {
       if (res.code === 0) {
-        taskDetails.value = sortByCustomStatus(res.data);
+        const myId = user.value?.id;
+        const filteredData = res.data.map(group => ({
+          ...group,
+          tasks: group.tasks.filter(task =>
+            !task.assignedUsers?.some(u => u.id === myId)
+          )
+        }));
+        taskDetails.value = sortByCustomStatus(filteredData);
       } else {
         // set snack
       }

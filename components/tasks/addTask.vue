@@ -296,13 +296,19 @@ const users = ref([])
 const frequencies = ref([
   { id: 1, name: "Daily" },
   { id: 2, name: "Weekly" },
-  { id: 3, name: "Monthly" },
+  { id: 3, name: "Biweekly" },
+  { id: 4, name: "Monthly" },
+  { id: 5, name: "Quarterly" },
+  { id: 6, name: "Yearly" },
+  { id: 7, name: "Ad Hoc" },
 ]);
 const taskCategories = ref([]);
 
 watch(form.value, (newVal) => {
   if (newVal.roleId) {
-    userList.value = users.value.filter((x) => x.roleId === newVal.roleId);
+    userList.value = users.value.filter(
+      (x) => x.roleId === newVal.roleId && x.status === "Active"
+    );
   }
 });
 const getRoles = () => {

@@ -1,6 +1,7 @@
 <template>
   <v-navigation-drawer
-    :model-value="modelValue"
+    :model-value="props.modelValue"
+    @update:model-value="handleDrawerClose"
     location="right"
     temporary
     :width="600"
@@ -13,7 +14,7 @@
         icon
         variant="outlined"
         color="#8B8B8B"
-        @click="emit('close')"
+        @click="closeDrawer"
         class="mr-4"
         style="
           width: 20px;
@@ -50,46 +51,46 @@
                 class="mb-1 input-bordered"
                 flat
                 bg-color="white"
-                :rules="requiredRule"
               />
             </v-col>
 
             <!-- Name -->
             <v-col cols="6">
-              <label class="mb-1 fld-lbl">Name</label>
+              <label class="mb-1 fld-lbl">Name <span class="req">*</span></label>
               <v-text-field
                 v-model="form.name"
                 variant="solo"
                 density="compact"
                 class="mb-1 input-bordered"
                 flat
-                required
+                :rules="requiredRule"
               />
             </v-col>
 
             <!-- Email -->
             <v-col cols="6">
-              <label class="mb-1 fld-lbl">Email</label>
+              <label class="mb-1 fld-lbl">Email <span class="req">*</span></label>
               <v-text-field
                 v-model="form.email"
                 variant="solo"
                 density="compact"
                 class="mb-1 input-bordered"
                 flat
-                required
+                :rules="emailRules"
+                type="email"
               />
             </v-col>
 
             <!-- Telephone -->
             <v-col cols="6">
-              <label class="mb-1 fld-lbl">Telephone</label>
+              <label class="mb-1 fld-lbl">Telephone <span class="req">*</span></label>
               <v-text-field
                 v-model="form.telephone"
                 variant="solo"
                 density="compact"
                 class="mb-1 input-bordered"
                 flat
-                required
+                :rules="requiredRule"
               />
             </v-col>
 
@@ -137,6 +138,7 @@
                 :items="leadSources"
                 item-title="name"
                 item-value="id"
+                return-object
                 variant="solo"
                 density="compact"
                 class="mb-1 input-bordered"
@@ -165,6 +167,7 @@
                 :items="treatmentSources"
                 item-title="name"
                 item-value="id"
+                return-object
                 variant="solo"
                 density="compact"
                 class="mb-1 input-bordered"
@@ -177,9 +180,12 @@
               <label class="mb-1 fld-lbl">Assign To</label>
               <v-select
                 v-model="form.assigned"
-                :items="staffList"
-                item-title="name"
+                :items="staffList || []"
+                item-title="fullName"
                 item-value="id"
+                multiple
+                return-object
+                chips
                 variant="solo"
                 density="compact"
                 class="mb-1 input-bordered"
@@ -309,7 +315,7 @@
         color="white"
         class="text-primary"
         style="width: 48%; border-radius: 8px; border: 1px solid #dfdfdf"
-        @click="emit('close')"
+        @click="closeDrawer"
         flat
       >
         Back
@@ -319,6 +325,8 @@
         color="primary"
         class="text-white"
         style="width: 48%; border-radius: 8px"
+        :loading="saving"
+        :disabled="saving"
         @click="onSubmit()"
         flat
       >
@@ -329,17 +337,23 @@
 </template>
 
 <script setup>
-const { modelValue, leadSources, treatmentSources, staffList } = defineProps({
+const crmStore = useCrmStore();
+const props = defineProps({
   modelValue: Boolean,
   leadSources: Array,
   treatmentSources: Array,
   staffList: Array,
 });
 
-const emit = defineEmits(["close", "success"]);
+const emit = defineEmits(["close", "success", "update:modelValue"]);
 const formRef = ref(null);
+const saving = ref(false)
 
 const requiredRule = [(v) => !!v || "This field is required"];
+const emailRules = [
+  (v) => !!v || "Email is required",
+  (v) => /^(?:[a-zA-Z0-9_'^&+\-]+(?:\.[a-zA-Z0-9_'^&+\-]+)*|".+")@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/.test(v) || "Enter a valid email",
+];
 
 const form = ref({
   name: "",
@@ -350,7 +364,7 @@ const form = ref({
   leadStatus: null,
   contactMethod: null,
   treatment: null,
-  assigned: null,
+  assigned: [],
   followUpDate: null,
   dob: null,
   occupation: "",
@@ -384,19 +398,86 @@ const formattedDob = computed(() =>
 
 const onInquiryDateSelected = (val) => {
   form.value.inquiryDate = val;
+  inquiryMenu.value = false;
 };
 const onFollowUpDateSelected = (val) => {
   form.value.followUpDate = val;
+  followUpMenu.value = false;
 };
 const onDobSelected = (val) => {
   form.value.dob = val;
+  dobMenu.value = false;
 };
+
+const mainStore = useMainStore();
+
+// Reset form to initial state
+const resetForm = () => {
+  form.value = {
+    name: "",
+    email: "",
+    telephone: "",
+    inquiryDate: null,
+    leadSource: null,
+    leadStatus: null,
+    contactMethod: null,
+    treatment: null,
+    assigned: [],
+    followUpDate: null,
+    dob: null,
+    occupation: "",
+    location: "",
+    comments: "",
+  };
+  // Reset form validation state
+  if (formRef.value) {
+    formRef.value.resetValidation();
+  }
+  // Close date picker menus
+  inquiryMenu.value = false;
+  followUpMenu.value = false;
+  dobMenu.value = false;
+};
+
+// Handle drawer close - emit close event and reset form
+const closeDrawer = () => {
+  emit("close");
+  emit("update:modelValue", false);
+  resetForm();
+};
+
+// Handle model value change (when drawer is closed externally)
+const handleDrawerClose = (newValue) => {
+  if (!newValue) {
+    resetForm();
+  }
+  emit("update:modelValue", newValue);
+};
+
+// Watch for modelValue changes to reset form when drawer closes
+watch(() => props.modelValue, (newValue) => {
+  if (!newValue) {
+    resetForm();
+  }
+});
 
 const onSubmit = async () => {
   const validation = await formRef.value.validate();
-  if (validation.valid) {
-    emit("success", form.value);
-  }
+  if (!validation.valid) return;
+  try {
+    saving.value = true
+    const payload = { ...form.value };
+    const res = await crmStore.createLead(payload);
+    if (res.code === 0) {
+      mainStore.setSnackbar({ title: "Lead created", type: "success" });
+      emit("success", res.data);
+      closeDrawer(); // Close and reset after successful save
+    } else {
+      mainStore.setSnackbar({ title: res.message || "Failed to create lead", type: "error" });
+    }
+  } catch (e) {
+    mainStore.setSnackbar({ title: e.message || "Failed to create lead", type: "error" });
+  } finally { saving.value = false }
 };
 </script>
 
@@ -412,6 +493,7 @@ const onSubmit = async () => {
   font-size: 14px;
   color: #737373;
 }
+.req { color: rgb(var(--v-theme-error)); }
 .input-bordered :deep(.v-field) {
   border: 1px solid #dfdfdf !important;
   border-radius: 8px !important;
@@ -421,3 +503,4 @@ const onSubmit = async () => {
   
 }
 </style>
+

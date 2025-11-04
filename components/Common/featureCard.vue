@@ -1,8 +1,8 @@
 <template>
     <v-card
       class="feature-card d-flex align-center pa-4"
-      color="secondary"
       elevation="0"
+      bg-color="#171952"
     >
       <!-- Left image (static) -->
       <img
@@ -46,15 +46,22 @@
   
   <style scoped>
   .feature-card {
-    background-image: url('@/assets/images/dashboard/feature-card.svg');
-    background-size: cover;
-    background-repeat: no-repeat;
-    border-radius: 0.5rem; /* rounded-lg */
-    position: relative;
-    overflow: hidden;
-    width: 100%;
-    height: 100%;
     border-radius: 24px;
+    position: relative;
+    background: linear-gradient(90deg, #FFA977 0%, #FF85DA 32.21%, #7D77FF 63.94%, #68ECE6 100%);
+    padding: 4px;
+  }
+
+  .feature-card::before {
+    content: '';
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    right: 4px;
+    bottom: 4px;
+    background: linear-gradient(90deg, #263388 0%, #3247A4 50%, #AD7CF3 100%);
+    border-radius: 20px;
+    z-index: 1;
   }
   
   /* Left image */
@@ -63,6 +70,8 @@
     height: 68px;
     object-fit: cover;
     flex-shrink: 0;
+    z-index: 2;
+    position: relative;
   }
   
   /* Text styles */
@@ -70,7 +79,8 @@
     margin-left: 16px;
     color: #fff;
     flex: 1;
-    z-index: 1;
+    z-index: 2;
+    position: relative;
   }
   
   .heading {
@@ -104,7 +114,8 @@
   .close-icon {
     color: #fff;
     cursor: pointer;
-    z-index: 2;
+    z-index: 3;
+    position: relative;
   }
   </style>
   

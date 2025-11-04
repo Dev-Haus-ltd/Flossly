@@ -6,7 +6,7 @@
   >
     <div class="loader">
       <lottie-player
-        src="/Loader.json"
+        src="/Blue.json"
         background="transparent"
         speed="1"
         style="width: 200px; height: 200px"
@@ -22,6 +22,7 @@ const authStore = useAuthStore();
 const mainStore = useMainStore();
 const orgStore = useOrgStore();
 const taskStore = useTaskStore();
+const crmStore = useCrmStore();
 const docStore = useDocStore();
 const userStore = useUserStore();
 const rotaStore= useRotaStore();
@@ -31,6 +32,7 @@ const { isLoading: authLoading } = storeToRefs(authStore);
 const { isLoading: mainLoading } = storeToRefs(mainStore);
 const { isLoading: orgLoadong } = storeToRefs(orgStore);
 const { isLoading: taskLoading } = storeToRefs(taskStore);
+const { isLoading: crmLoading } = storeToRefs(crmStore);
 const { isLoading: docLoading } = storeToRefs(docStore);
 const { isLoading: userLoading } = storeToRefs(userStore);
 const { isLoading: rotaLoading } = storeToRefs(rotaStore);
@@ -46,6 +48,7 @@ const anyLoading = computed(
     mainLoading.value ||
     orgLoadong.value ||
     taskLoading.value ||
+    crmLoading.value ||
     docLoading.value ||
     userLoading.value ||
     rotaLoading.value ||
@@ -75,7 +78,8 @@ const anyLoading = computed(
   position: fixed !important; /* Override position for full-page */
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
+  z-index: 10000;
 }
 </style>

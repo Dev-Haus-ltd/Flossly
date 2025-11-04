@@ -58,4 +58,112 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  // Leads (app-managed)
+  listLeads() {
+    return new Promise((resolve, reject) => {
+      Get("/lead/list")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  createLead(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/create", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  updateLead(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/update", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteLeads(ids) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/delete", { ids })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getLeadTreatment(leadId) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/treatmentGet", { leadId })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  saveLeadTreatment(leadId, data) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/treatmentSave", { leadId, data })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteLeadTreatment(leadId) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/treatmentDelete", { leadId })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getLeadNotes(leadId) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/notesList", { leadId })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  addLeadNote(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/notesAdd", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteLeadNote(id) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/notesDelete", { id })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  // CRM options
+  listOptions(category) {
+    return new Promise((resolve, reject) => {
+      Get(`/lead/optionsList?category=${encodeURIComponent(category)}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  addOption(category, name, color = null) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/optionsAdd", { category, name, color })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteOption(id) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/optionsDelete", { id })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  // Communication preferences
+  getLeadCommunication(leadId) {
+    return new Promise((resolve, reject) => {
+      Get(`/lead/commGet?leadId=${encodeURIComponent(leadId)}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  saveLeadCommunication(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/commSave", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
 };

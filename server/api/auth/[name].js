@@ -18,7 +18,8 @@ import {
   removeUserDoc,
   switchOrgnanisation,
   createShortLivedToken,
-  exchangeShortLivedToken
+  exchangeShortLivedToken,
+  resendVerificationEmail
 } from "../../controllers/auth";
 import bcrypt from "bcrypt";
 export default defineEventHandler(async (event) => {
@@ -28,6 +29,8 @@ export default defineEventHandler(async (event) => {
       return await login(event);
     case "signUpRequest":
       return await signupRequest(event);
+    case "resendVerificationEmail":
+      return await resendVerificationEmail(event);
     case "verifyEmail":
       return await verifyEmail(event);
     case "createHash":

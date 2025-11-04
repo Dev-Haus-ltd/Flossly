@@ -21,7 +21,8 @@ const props = defineProps({
 })
 const getInitials = () => {
   const name = props?.user?.fullName || props.user.name || props.user.title; 
-  const splittedName = name.split(" ");
+  if (!name) return '?'
+  const splittedName = name?.split(" ");
   if (splittedName[1]) {
     return (
       splittedName[0].charAt(0).toUpperCase() +

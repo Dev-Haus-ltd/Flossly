@@ -3,7 +3,7 @@
       <v-card class="d-flex flex-column rounded-xl" style="min-height: 400px; overflow: hidden;" >
         <!-- Header -->
         <div class="pa-4 d-flex justify-space-between align-center bg-white">
-          <h3 class="dialog-title">Flossly Tool Box</h3>
+          <h3 class="dialog-title">Flossly Toolbox</h3>
           <v-btn flat icon size="32" @click="$emit('close')">
             <v-icon size="20">mdi-close</v-icon>
           </v-btn>
@@ -196,7 +196,7 @@ import teamChatImg from "@/assets/icons/dashBoard/toolbox/team.svg"
   
   .input-bordered :deep(.v-field) {
     border: 1px solid #ffffff !important;
-    border-radius: 8px !important;
+    border-radius: 12px !important;
     background-color: transparent !important;
     min-height: 40px;
     font-size: 14px;

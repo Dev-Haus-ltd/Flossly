@@ -214,6 +214,20 @@ const gotoHome = () => {
 };
 
 onMounted(fetchPrices);
+
+// Expose helpers for parent (onboarding) to manage back navigation
+const isPaymentOpen = computed(() => {
+  return Boolean(selectedPriceId.value) && !isPaymentCompleted.value;
+});
+
+const cancelPaymentFlow = () => {
+  // Reset the selection to go back to pricing cards
+  selectedPriceId.value = null;
+  // Also clear any previous error state
+  if (error.value) error.value = "";
+};
+
+defineExpose({ isPaymentOpen, cancelPaymentFlow });
 </script>
 
 <style scoped>

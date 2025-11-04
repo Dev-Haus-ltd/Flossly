@@ -1,12 +1,15 @@
 <template>
   <v-container fluid class="pa-4 bg-white">
-    <CommonFeatureCard
-      heading="Updated Features"
-      subheading="Flossly — finally, a platform built for dental practices, handling everything from rotas to compliance in one smart space."
-      @close="showCard = false"
-      v-if="showCard"
-      class="my-4"
-    />
+
+    <!-- Dashboard Content -->
+    <div>
+      <CommonFeatureCard
+        heading="Updated Features"
+        subheading="Flossly — finally, a platform built for dental practices, handling everything from rotas to compliance in one smart space."
+        @close="showCard = false"
+        v-if="showCard"
+        class="my-4"
+      />
     <v-row>
       <v-col
         v-for="(item, index) in flosslyItems"
@@ -29,7 +32,6 @@
       <v-col cols="12" sm="12" md="8" class="pr-md-0 d-flex flex-column">
         <v-card
           class="card flex-grow-1"
-          color="white"
           elevation="0"
           rounded="lg"
         >
@@ -81,20 +83,15 @@
 
         <!-- ✅ Quick Actions under Recent + CPD -->
         <v-card
+          v-if="recentFiles && recentFiles.length"
           class="mt-3 card flex-grow-1"
           color="white"
           elevation="0"
           rounded="lg"
         >
-          <h4 class="card-head mb-4">Recently Accessed Files</h4>
-          <div
-            :class="
-              recentFiles && recentFiles.length
-                ? ''
-                : 'd-flex align-center justify-center'
-            "
-          >
-            <v-row class="ma-5" v-if="recentFiles && recentFiles.length">
+          <h4 class="mb-4 card-head">Recently Accessed</h4>
+          <div>
+            <v-row class="ma-5">
               <v-col
                 v-for="(file, index) in recentFiles"
                 :key="index"
@@ -105,22 +102,17 @@
                 <DashBoardRecentlyAccessed :file="file" @open="openFile" />
               </v-col>
             </v-row>
-            <div v-else class="text-center pa-5">
-              <v-icon size="48" color="grey">mdi-file-clock-outline</v-icon>
-              <p class="mt-3 text-grey">No recently accessed files</p>
-            </div>
           </div>
         </v-card>
       </v-col>
       <v-col cols="12" sm="12" md="4" class="d-flex">
         <v-card
           class="card flex-grow-1"
-          color="white"
           elevation="0"
           rounded="lg"
           v-if="user?.roleId === 8 || user?.roleId === 1"
         >
-          <h4 class="card-head mb-4">Leads Conversion</h4>
+          <h4 class="card-head mb-4">Lead Conversion</h4>
           <div class="ma-5">
             <DashBoardRevenueCard title="This Week" subtitle="£ 29,985" />
 
@@ -153,14 +145,13 @@
               <span>{{ source.label }}</span>
               <div class="d-flex align-center" style="gap: 70px">
                 <span>{{ source.count }}</span>
-                <span class="text-grey-darken-1">{{ source.percent }}%</span>
+                <span>{{ source.percent }}%</span>
               </div>
             </div>
           </div>
         </v-card>
         <v-card
           class="card flex-grow-1"
-          color="white"
           elevation="0"
           rounded="lg"
           v-else
@@ -183,11 +174,11 @@
                   <v-icon
                     v-bind="tooltipProps"
                     class="mx-auto"
-                    :color="event.color"
-                    size="8"
-                  >
-                    mdi-circle
-                  </v-icon>
+                  :color="event.color"
+                  size="8"
+                >
+                  mdi-circle
+                </v-icon>
                 </template>
                 <span>{{ event.title }}</span>
               </v-tooltip>
@@ -203,7 +194,6 @@
       <v-col cols="12" sm="12" md="8" class="pr-md-0 pt-0">
         <v-card
           class="refer-card card pa-5"
-          color="white"
           elevation="0"
           rounded="lg"
         >
@@ -264,7 +254,7 @@
                   >
                   </lord-icon>
                   <span class="ml-3"
-                    >Refer, Share and Review to earn flossly loyalty
+                    >Refer, share, and review to earn flossly loyalty
                     points</span
                   >
                 </div>
@@ -277,7 +267,7 @@
                   >
                   </lord-icon>
                   <span class="ml-3"
-                    >Redeem your loyalty point for exclusive prizes</span
+                    >Redeem your loyalty points for exclusive prizes</span
                   >
                 </div>
 
@@ -326,15 +316,15 @@
             ></lord-icon>
 
             <p class="review-text">
-              <span class="highlight">Happy with Flossly</span>,
-              <span class="normal">give us a google review</span>
+              <span class="highlight">Happy with Flossly?</span>
+              <span class="normal">Give us a Google review.</span>
             </p>
           </div>
         </v-card>
       </v-col>
     </v-row>
     <DashBoardToolBoxDialog v-model="showToolboxDialog" @close="showToolboxDialog = false" />
-
+    </div>
   </v-container>
 </template>
 
@@ -344,6 +334,7 @@ import { useDisplay } from "vuetify";
 const { mdAndDown } = useDisplay();
 const showToolboxDialog = ref(false);
 const showCard = ref(true);
+const isLoading = ref(true);
 const taskStore = useTaskStore();
 const mainStore = useMainStore();
 const docStore = useDocStore();
@@ -352,10 +343,10 @@ const user = ref({});
 const value = ref(null);
 const inquirySources = ref([
   { label: "Meta Adverts", count: 16, percent: 35 },
-  { label: "Google Adverts", count: 13, percent: 28 },
+  { label: "Google Ads", count: 13, percent: 28 },
   { label: "Organic Search", count: 18, percent: 18 },
   { label: "Calls", count: 16, percent: 12 },
-  { label: "Walk In", count: 14, percent: 17 },
+  { label: "Walk-ins", count: 14, percent: 17 },
 ]);
 
 const performaces = ref([
@@ -425,7 +416,7 @@ const flosslyItems = ref([
     colors:"#FFA977"
   },
   {
-    title: "Tool Box",
+    title: "Toolbox",
     img: "https://cdn.lordicon.com/ajcbrren.json",
     isToolBox: true,
     colors:"rgba(255, 255, 255, 0.2);"
@@ -435,7 +426,7 @@ const tab = ref(1);
 const categoryList = ref([]);
 const stats = ref([]);
 const getRecentDocs = () => {
-  docStore
+  return docStore
     .recentDocs()
     .then((res) => {
       if (res.code === 0) {
@@ -449,7 +440,7 @@ const getRecentDocs = () => {
     });
 };
 const fetchListCategories = () => {
-  taskStore
+  return taskStore
     .listCategories()
     .then((res) => {
       if (res.code === 0) {
@@ -504,7 +495,7 @@ const fetchDummyStats = () => {
       image: "/images/completed-icon.svg",
     },
     {
-      status: "Up Coming Tasks",
+      status: "Upcoming Tasks",
       key: "upcoming",
       total: 8,
       link: "/tasks/teamtasks",
@@ -518,14 +509,24 @@ watch(tab, (newId) => {
     fetchDummyStats();
   }
 });
-onMounted(() => {
-  fetchListCategories();
-  getRecentDocs();
-  if (localStorage.getItem("user")) {
-    user.value = JSON.parse(localStorage.getItem("user"));
-  }
-  if (user.value.roleId === 8 || user.value.roleId === 1) {
-    getMyTasks();
+onMounted(async () => {
+  try {
+    // Load user data first
+    if (localStorage.getItem("user")) {
+      user.value = JSON.parse(localStorage.getItem("user"));
+    }
+    
+    // Fetch all data in parallel
+    await Promise.all([
+      fetchListCategories(),
+      getRecentDocs(),
+      user.value.roleId === 8 || user.value.roleId === 1 ? getMyTasks() : Promise.resolve()
+    ]);
+  } catch (error) {
+    console.error("Error loading dashboard data:", error);
+  } finally {
+    // Always hide loading state after data is loaded
+    isLoading.value = false;
   }
 });
 const getMyTasks = () => {
@@ -542,6 +543,34 @@ const handleClickProductCard = (uid) => {
 <style scoped>
 .font-weight-semi {
   font-weight: 600 !important;
+}
+
+/* Loading Overlay */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.loading-text {
+  font-size: 18px;
+  font-weight: 500;
+  color: #333;
+  margin: 0;
 }
 .card {
   border: 1px solid #dbdbdb;
@@ -560,6 +589,12 @@ const handleClickProductCard = (uid) => {
 }
 .custom-tabs .v-tab.v-tab--selected {
   font-weight: 500;
+}
+
+/* Style the Vuetify slider to be thicker and green */
+.custom-tabs :deep(.v-tabs-slider) {
+  height: 8px !important;
+  background-color: var(--v-theme-primary) !important;
 }
 
 .stat-status {
@@ -581,6 +616,8 @@ const handleClickProductCard = (uid) => {
 }
 .performance-grid {
   border: 1px solid #dbdbdb;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 .perform-col {
@@ -663,9 +700,25 @@ const handleClickProductCard = (uid) => {
   align-items: center;
   justify-content: center;
   position: relative;
-  border-radius: 6px;
+  border-radius: 12px;
+  overflow: hidden;
+}
 
-
+.left-side::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 12px;
+  padding: 4px;
+  background: linear-gradient(90deg, #FFA977 0%, #FF85DA 32.21%, #7D77FF 63.94%, #68ECE6 100%);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: xor;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  pointer-events: none;
 }
 
 /* Chip inside left side */
@@ -697,6 +750,7 @@ const handleClickProductCard = (uid) => {
 .custom-btn {
   color: #1e1e1e;
   font-weight: 400;
+  border-radius: 12px !important;
 }
 
 .custom-btn .v-icon {
