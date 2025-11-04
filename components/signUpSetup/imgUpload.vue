@@ -23,6 +23,13 @@
   
     <div v-if="modelValue" class="mt-2">
       <p>Selected: {{ modelValue.name }}</p>
+        <v-btn
+          icon="mdi-close"
+          size="x-small"
+          variant="tonal"
+          color="error"
+          @click="removeFile"
+        />
       <v-img :src="previewUrl" max-width="120" class="mt-2" v-if="previewUrl" />
     </div>
   </div>
@@ -59,19 +66,21 @@ const handleDrop = (e) => {
 
 const setFile = (file) => {
   modelValue.value = file
-
-  // Revoke previous preview URL if any
-  if (previousUrl) {
-    URL.revokeObjectURL(previousUrl)
-  }
-
+  if (previousUrl) URL.revokeObjectURL(previousUrl)
   if (file && file.type.startsWith('image/')) {
-    const objectUrl = URL.createObjectURL(file)
-    previewUrl.value = objectUrl
-    previousUrl = objectUrl
+    const url = URL.createObjectURL(file)
+    previewUrl.value = url
+    previousUrl = url
   } else {
     previewUrl.value = null
   }
+}
+
+const removeFile = () => {
+  modelValue.value = null
+  previewUrl.value && URL.revokeObjectURL(previewUrl.value)
+  previewUrl.value = null
+  previousUrl = null
 }
 
 // Clean up when component is destroyed
