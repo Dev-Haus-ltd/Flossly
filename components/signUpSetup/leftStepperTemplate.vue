@@ -102,7 +102,7 @@
               </div>
             </template>
             <template v-slot:title>
-              <span class="mobile-step-title">{{ step.title }}</span>
+              <span class="mobile-step-title" :class="{ 'font-weight-medium': activeStep === index }">{{ step.title }}</span>
             </template>
           </v-stepper-item>
 
@@ -398,7 +398,7 @@ const steps = [
 /* Step title styling */
 .mobile-stepper-header :deep(.v-stepper-item__title) {
   font-size: 11px !important;
-  font-weight: 500 !important;
+  font-weight: 400 !important;
   color: rgba(255, 255, 255, 0.8) !important;
   margin-top: 6px !important;
   text-align: center;
@@ -414,7 +414,7 @@ const steps = [
   }
 }
 
-/* Active step title - brighter */
+/* Active step title - brighter and bold */
 .mobile-stepper-header :deep(.v-stepper-item--selected .v-stepper-item__title) {
   color: #FFFFFF !important;
   font-weight: 500 !important;

@@ -126,49 +126,86 @@
         </template>
       </template>
     </v-data-table>
+    <!-- Selection action bar -->
     <v-card
       v-if="selectedLeads.length"
-      class="action-bar py-3 px-6 d-flex justify-space-between align-center rounded-lg"
+      class="action-bar py-3 px-6 d-flex  align-center rounded-lg "
+      style="gap: 80px;"
       :elevation="5"
       flat
     >
       <!-- Selected count -->
-      <div class="selected-count d-flex align-center mr-8">
+      <div class="selected-count d-flex align-center">
         <span class="selected-text">
           {{ selectedLeads.length }}
         </span>
         <p class="ml-3 mt-1">Items Selected</p>
       </div>
 
-      <!-- Actions tray -->
-      <div class="d-flex align-center" style="gap: 28px;">
-        <div
-          v-for="(action, i) in actions"
-          :key="i"
-          class="action-item d-flex flex-column align-center"
-          @click="onActionClick(action.key)"
-        >
-          <v-icon :color="action.color" size="24">{{ action.icon }}</v-icon>
-          <span class="action-label mt-1" :class="`text-${action.color}`">
-            {{ action.label }}
-          </span>
-        </div>
-      </div>
+      <!-- Actions + Close -->
+<div class="actions-container d-flex align-center">
+  <div
+    v-for="(action, i) in actions"
+    :key="i"
+    class="action-item d-flex flex-column align-center"
+    @click="onActionClick(action.key)"
+  >
+    <v-icon :color="action.color" size="24">{{ action.icon }}</v-icon>
+    <span class="action-label" :class="`text-${action.color}`">{{ action.label }}</span>
+  </div>
 
-      <v-divider vertical  />
+  <!-- Divider before close -->
+  <v-divider vertical class="mx-4" />
 
-      <!-- Close -->
-      <div class=" d-flex align-center" @click="closeTray">
-        <v-icon color="on-surface-variant" size="20" class="mr-1">mdi-close</v-icon>
-        <span class="action-label text-on-surface-variant">Close</span>
-      </div>
+  <!-- Close -->
+  <div class="action-item d-flex flex-column align-center" @click="closeTray">
+    <v-icon size="24">mdi-close</v-icon>
+    <span class="action-label text-on-surface-variant">Close</span>
+  </div>
+</div>
+
     </v-card>
 
     <CustomerRelationManagementLeadDetailsDialog
+      v-if="showLeadDetailDialog"
       v-model="showLeadDetailDialog"
       :selected-lead="selectedLead"
       @close="showLeadDetailDialog = false"
     />
+
+    <!-- Compose Mail Dialog (Editor.js) -->
+    <v-dialog v-model="showCompose" max-width="900px">
+      <v-card class="rounded-lg">
+        <div class="d-flex justify-space-between align-center px-4 py-3">
+          <div>
+            <h5 class="mb-1 modal-title">Compose mail</h5>
+            <div class="text-caption text-medium-emphasis">{{ compose.recipients.length }} recipient(s)</div>
+          </div>
+          <v-btn icon @click="showCompose = false" flat><v-icon>mdi-close</v-icon></v-btn>
+        </div>
+        <v-divider />
+
+        <div class="px-4 pt-4">
+          <div class="text-subtitle-2 text-grey-darken-1 mb-1">To</div>
+          <div class="d-flex align-center flex-wrap" style="gap: 6px">
+            <v-chip size="small" v-for="(e,i) in compose.recipients" :key="i" color="primary" variant="tonal">{{ e }}</v-chip>
+          </div>
+        </div>
+
+        <div class="px-4 pt-4">
+          <v-text-field v-model="compose.subject" single-line label="Subject" density="compact" variant="outlined" hide-details />
+        </div>
+
+        <div class="px-4 pt-2 pb-4">
+          <div class="text-subtitle-2 text-grey-darken-1 mb-2">Content</div>
+          <div ref="composeHolder" class="editor"></div>
+        </div>
+
+        <div class="px-4 pb-4 d-flex justify-end">
+          <v-btn :loading="composeLoading" flat color="primary" @click="sendCompose">Send</v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
   </v-card>
     <CommonConfirmDialog
       v-model="confirmDelete"
@@ -181,7 +218,8 @@
 </template>
 
 <script setup>
-import crmService from "@/services/crmService";
+import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
+const crmStore = useCrmStore();
 const { user } = useUser();
 const emit = defineEmits(['select','openLead','delete']);
 const props = defineProps({
@@ -216,6 +254,7 @@ const onActionClick = (key) => {
   if (key === 'delete') confirmDelete.value = true;
   else if (key === 'archive') doArchive();
   else if (key === 'convert') convertSelected();
+  else if (['mail','book','sendPrice','sendForm','shareLocation'].includes(key)) openCompose(key)
 };
 const formatDate = (d) => {
   if (!d) return "";
@@ -247,7 +286,6 @@ const toggleAll = () => {
     isAllSelected.value = true;
   }
 
-  console.log(selectedLeads.value);
 };
 const closeTray = () => {
   isAllSelected.value = false;
@@ -261,15 +299,96 @@ const updateValueRow = async (row, key) => {
     else if (key === 'leadStatus') payload.leadStatus = row?.leadStatus || null
     else if (key === 'alert') payload.alert = row?.alert || null
     else return
-    await crmService.updateLead(payload)
+    await crmStore.updateLead(payload)
   } catch (e) {}
 };
 
 const openLeadDialog = (lead) => {
   selectedLead.value = lead;
   showLeadDetailDialog.value = true;
-  console.log("Open lead dialog:", lead);
 };
+
+// Compose mail dialog using Editor.js (client-only)
+const showCompose = ref(false)
+const composeLoading = ref(false)
+const composeHolder = ref(null)
+let composeEditor = null
+let EditorCtor = null
+let Header = null
+let List = null
+const compose = reactive({ key: 'mail', subject: '', recipients: [], html: '' })
+
+const defaultTemplates = {
+  sendPrice: {
+    subject: 'Price List',
+    html: `<p>Dear [Patient Name],</p>
+<p>Thank you for contacting us. We appreciate your interest in our practice and are delighted that you're considering us for your dental care needs.</p>
+<p>As requested, please find our practice price list attached to this email. We believe in transparent pricing and strive to make quality dental care accessible to all our patients.</p>
+<p>If you have any questions about our services, pricing, or would like to schedule an appointment, please don't hesitate to reach out. Our friendly team is here to assist you and ensure you receive the best possible care.</p>
+<p>We look forward to welcoming you to our practice and helping you achieve a healthy, beautiful smile.</p>
+<p>Warm regards,<br/>[Your Name]</p>`
+  },
+  shareLocation: {
+    subject: 'Our Clinic Location',
+    html: `<p>Dear [Patient Name],</p>
+<p>Thank you for your interest in visiting our dental clinic. We're conveniently located and easy to find.</p>
+<p><strong>Our Address:</strong><br/>[Street Address]<br/>[City, State ZIP Code]</p>
+<p><strong>Office Hours:</strong><br/>[Days and Times]</p>
+<p>Parking is available [on-site/nearby/street parking details], and our clinic is easily accessible by [public transportation details if applicable].</p>
+<p>If you need directions or have any questions about finding us, please feel free to call us at [Phone Number]. We're happy to help guide you to our location.</p>
+<p>We look forward to seeing you soon!</p>
+<p>Best regards,<br/>[Your Name]</p>`
+  },
+  sendForm: { subject: 'Form Request', html: `<p>Dear [Patient Name],</p><p>Please complete the attached form at your convenience. This helps us prepare for your visit.</p><p>Thank you,<br/>[Your Name]</p>` },
+  book: { subject: 'Appointment Booking', html: `<p>Dear [Patient Name],</p><p>We'd love to arrange your appointment. Please reply with your preferred date/time, or book via our online portal.</p><p>Thank you,<br/>[Your Name]</p>` },
+  mail: { subject: 'Message from our practice', html: `<p>Dear [Patient Name],</p><p>Write your message here.</p><p>Regards,<br/>[Your Name]</p>` },
+}
+
+
+async function openCompose(actionKey) {
+  compose.key = actionKey
+  const emails = (selectedLeads.value || []).map(l => l?.email).filter(Boolean)
+  compose.recipients = [...new Set(emails)]
+  const def = defaultTemplates[actionKey] || defaultTemplates.mail
+  compose.subject = def.subject
+  compose.html = def.html
+  showCompose.value = true
+  await nextTick()
+  if (typeof window === 'undefined') return
+  if (!EditorCtor || !Header || !List) {
+    const [{ default: E }, { default: H }, { default: L }] = await Promise.all([
+      import('@editorjs/editorjs'),
+      import('@editorjs/header'),
+      import('@editorjs/list'),
+    ])
+    EditorCtor = E; Header = H; List = L
+  }
+  if (composeEditor) { composeEditor.destroy(); composeEditor = null }
+  composeEditor = new EditorCtor({
+    holder: composeHolder.value,
+    tools: { header: Header, list: List },
+    data: htmlToBlocks(compose.html),
+    async onChange(api) {
+      const saved = await api.saver.save()
+      compose.html = blocksToHtml(saved)
+    }
+  })
+}
+
+watch(() => showCompose.value, (v) => { if (!v && composeEditor) { composeEditor.destroy(); composeEditor = null } })
+
+const mainStore = useMainStore?.() || null
+async function sendCompose() {
+  try {
+    composeLoading.value = true
+    const leadIds = selectedLeads.value.map(l => l.id)
+    const res = await crmStore.sendLeadMail({ leadIds, subject: compose.subject, html: compose.html, key: `manual_${compose.key}` })
+    if (res && res.code === 0) {
+      if (mainStore && mainStore.setSnackbar) mainStore.setSnackbar({ title: `Mail sent to ${res.data?.sent || compose.recipients.length} recipient(s)`, type: 'success' })
+      showCompose.value = false
+    }
+  } finally { composeLoading.value = false }
+}
 const getLeadUsers = (lead) => {
   // if (props.users.length) {
   //   return props.users.filter((x) => x.roleId !== task.taskDetails.roleId);
@@ -279,7 +398,7 @@ const getLeadUsers = (lead) => {
 const unAssign = async (lead, user) => {
   try {
     const newAssigned = (lead.assigned || []).filter(u => u?.id !== user.id);
-    const res = await crmService.updateLead({ id: lead.id, assigned: newAssigned });
+    const res = await crmStore.updateLead({ id: lead.id, assigned: newAssigned });
     if (res?.code === 0) lead.assigned = newAssigned;
   } catch (e) { /* noop */ }
 };
@@ -289,7 +408,7 @@ const assignLead = async (lead, user) => {
     const already = (lead.assigned || []).some(u => u?.id === user.id);
     if (already) return;
     const newAssigned = [...(lead.assigned || []), { id: user.id, fullName: user.fullName, email: user.email }];
-    const res = await crmService.updateLead({ id: lead.id, assigned: newAssigned });
+    const res = await crmStore.updateLead({ id: lead.id, assigned: newAssigned });
     if (res?.code === 0) lead.assigned = newAssigned;
   } catch (e) { /* noop */ }
 };
@@ -298,7 +417,7 @@ const doDelete = async () => {
   try {
     deleting.value = true
     const ids = selectedLeads.value.map(l => l.id)
-    const res = await crmService.deleteLeads(ids)
+    const res = await crmStore.deleteLeads(ids)
     if (res?.code === 0) emit('delete', ids)
   } finally {
     deleting.value = false
@@ -312,7 +431,7 @@ const convertSelected = async () => {
     converting.value = true
     const updates = selectedLeads.value.map(l => {
       l.leadStatus = 'Converted'
-      return crmService.updateLead({ id: l.id, leadStatus: 'Converted' })
+      return crmStore.updateLead({ id: l.id, leadStatus: 'Converted' })
     })
     await Promise.all(updates)
     closeTray()
@@ -400,15 +519,47 @@ const convertSelected = async () => {
   color: rgb(var(--v-theme-on-primary));
   background: rgb(var(--v-theme-primary));
 }
+.action-bar { position: fixed; bottom: 30px; left: 60%; transform: translateX(-50%); z-index: 1000; }
+.actions-container {
+  display: flex;
+  flex-wrap: nowrap; 
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
 
 .action-item {
+  flex: 0 0 auto; /* ✅ prevents shrinking or stacking */
   cursor: pointer;
+  border-radius: 8px;
+  padding: 6px 10px;
+  transition: background-color 0.15s ease;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.action-item:hover {
+  background-color: rgba(var(--v-theme-primary), 0.08); /* theme-aware hover */
 }
 
 .action-label {
-  
   font-size: 13px;
+  margin-top: 4px;
+  white-space: nowrap;
+  text-align: center;
 }
 
+
+
 .with-border { border: 1px solid rgb(var(--v-theme-outline)); }
+
+.modal-title { font-weight: 600; font-size: 16px; }
+.editor {
+  min-height: 220px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fff;
+}
+.action-item:hover { background-color: #f5f5f5; }
 </style>

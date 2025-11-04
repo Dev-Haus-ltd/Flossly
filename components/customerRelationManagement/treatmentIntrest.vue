@@ -13,7 +13,7 @@
           variant="solo"
           density="compact"
           class="mb-1 input-bordered"
-          bg-color="white"
+           
           flat
         />
       </v-col>
@@ -31,7 +31,7 @@
           variant="solo"
           density="compact"
           class="mb-1 input-bordered"
-          bg-color="white"
+           
           flat
         />
       </v-col>
@@ -48,7 +48,7 @@
           variant="solo"
           density="compact"
           class="mb-1 input-bordered"
-          bg-color="white"
+           
           flat
         />
       </v-col>
@@ -65,7 +65,7 @@
           variant="solo"
           density="compact"
           class="mb-1 input-bordered"
-          bg-color="white"
+           
           flat
         />
       </v-col>
@@ -289,7 +289,6 @@ const onSave = () => {
 .input-bordered :deep(.v-field) {
   border: 1px solid #dfdfdf !important;
   border-radius: 8px !important;
-  background-color: white !important;
   min-height: 40px;
   font-size: 14px;
   
@@ -303,7 +302,6 @@ const onSave = () => {
 }
 
 .table-key {
-  background-color: #dbdbdb;
   padding: 10px;
   flex: 1;
   border-right: 1px solid #dbdbdb;
@@ -312,7 +310,6 @@ const onSave = () => {
 }
 
 .table-value {
-  background-color: white;
   padding: 10px;
   flex: 1;
   border-right: 1px solid #dbdbdb;
@@ -341,10 +338,7 @@ const onSave = () => {
   width: 50%; /* key column wider */
 }
 .room-table td:last-child {
-  background-color: #fff;
   width: 50%; /* value column */
 }
-.left-col {
-  background-color: #f6f6f6;
-}
+
 </style>

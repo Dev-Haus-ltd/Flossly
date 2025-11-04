@@ -82,16 +82,11 @@ const setFile = (file) => {
   }
 
   modelValue.value = file
-
-  // Revoke previous preview URL if any
-  if (previousUrl) {
-    URL.revokeObjectURL(previousUrl)
-  }
-
+  if (previousUrl) URL.revokeObjectURL(previousUrl)
   if (file && file.type.startsWith('image/')) {
-    const objectUrl = URL.createObjectURL(file)
-    previewUrl.value = objectUrl
-    previousUrl = objectUrl
+    const url = URL.createObjectURL(file)
+    previewUrl.value = url
+    previousUrl = url
   } else {
     previewUrl.value = null
   }

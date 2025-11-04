@@ -1,32 +1,34 @@
 <template>
   <div class="init-page bg-secondary" v-if="initialPage">
     <div class="water-mark"></div>
-    <div class="init-pg-content" :style="{ padding: smAndDown ? '0 20px' : '0' }">
-      <div class="text-center">
-        <img
-          src="@/assets/logos/loginLogos/logoWithTitle.svg"
-          class="mx-auto h-20 w-20 mb-5"
-          :style="{
-            width: smAndDown ? '70%' : mdAndUp && !lgAndUp ? '50%' : '33.33%',
-            maxWidth: smAndDown ? '280px' : mdAndUp && !lgAndUp ? '250px' : '220px'
-          }"
-          alt=""
-        />
+        <div class="init-pg-content" :style="{ padding: smAndDown ? '0 20px' : '0' }">
+          <div class="text-center">
+            <img
+              src="@/assets/logos/loginLogos/logoWithTitle_2.svg"
+              class="mx-auto h-20 w-20 mb-5"
+              :style="{
+                width: smAndDown ? '70%' : mdAndUp && !lgAndUp ? '50%' : '33.33%',
+                maxWidth: smAndDown ? '280px' : mdAndUp && !lgAndUp ? '250px' : '220px'
+              }"
+              alt=""
+            />
 
-        <v-btn
-          class="d-block mx-auto"
-          @click="initialPage = false"
-          color="secondary-dark"
-          flat
-          >Sign-in</v-btn
-        >
+            <v-btn
+              class="d-block mx-auto"
+              @click="initialPage = false"
+              color="primary"
+              rounded="lg"
+              size="x-large"
+              flat
+              >Sign-in</v-btn
+            >
         <h2 class="mt-5">
-          Threading clarity into your dental practice with smart workflows and
-          clean operations.
-        </h2>
+              Threading clarity into your dental practice with smart workflows and
+              clean operations.
+            </h2>
+          </div>
+        </div>
       </div>
-    </div>
-  </div>
   <div class="login-page" v-else>
     <v-row>
       <v-col cols="12" md="6" class="d-flex align-center justify-center px-12">
@@ -363,13 +365,12 @@ const resendVerificationEmail = async () => {
   padding-right: 0 !important;
 }
 .water-mark {
-  background-image: url("/assets/logos/loginLogos/watermark.svg");
+  background-image: url("/assets/logos/loginLogos/watermark_1.svg");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   height: 100vh;
   width: 100%;
-  opacity: 0.3;
 }
 .overlay-box {
   border: 1px solid #fff;
@@ -395,10 +396,9 @@ const resendVerificationEmail = async () => {
 
 .background-image {
   background-image: url("/assets/images/loginBanner.svg");
-  background-size: cover;
+  background-size: contain;
   width: 100%;
   height: 99vh;
-  border-radius: 12px;
 }
 .login-heading {
   font-family: "Garnett";

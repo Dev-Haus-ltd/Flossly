@@ -22,6 +22,7 @@ const authStore = useAuthStore();
 const mainStore = useMainStore();
 const orgStore = useOrgStore();
 const taskStore = useTaskStore();
+const crmStore = useCrmStore();
 const docStore = useDocStore();
 const userStore = useUserStore();
 const rotaStore= useRotaStore();
@@ -31,6 +32,7 @@ const { isLoading: authLoading } = storeToRefs(authStore);
 const { isLoading: mainLoading } = storeToRefs(mainStore);
 const { isLoading: orgLoadong } = storeToRefs(orgStore);
 const { isLoading: taskLoading } = storeToRefs(taskStore);
+const { isLoading: crmLoading } = storeToRefs(crmStore);
 const { isLoading: docLoading } = storeToRefs(docStore);
 const { isLoading: userLoading } = storeToRefs(userStore);
 const { isLoading: rotaLoading } = storeToRefs(rotaStore);
@@ -46,6 +48,7 @@ const anyLoading = computed(
     mainLoading.value ||
     orgLoadong.value ||
     taskLoading.value ||
+    crmLoading.value ||
     docLoading.value ||
     userLoading.value ||
     rotaLoading.value ||
