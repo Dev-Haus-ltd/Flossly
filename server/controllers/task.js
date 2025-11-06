@@ -175,6 +175,8 @@ export const assignBulkTasks = async (event) => {
       });
     }
     const taskIds = tasks.map((t) => t.id);
+    
+    // Check if tasks are already assigned to the target user
     const existingAssignments = await UserTask.findAll({
       where: {
         userId,
@@ -192,6 +194,21 @@ export const assignBulkTasks = async (event) => {
     if (newTasks.length === 0) {
       return success("All tasks already assigned to the user");
     }
+
+    // Remove existing assignments for the current user (Check Login Confirmation in today's meeting)
+    
+    if (loggedUser.userId !== userId) {
+      await UserTask.destroy({
+        where: {
+          userId: loggedUser.userId,
+          taskId: {
+            [Op.in]: taskIds,
+          },
+          organisationId,
+        },
+      });
+    }
+
     const userTasks = newTasks
       .map((t) => {
         return {
@@ -1589,7 +1606,7 @@ export const teamTasksCountByCategory = async (event) => {
 export const getUserTasksStatusWise = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);
-  const { categoryId } = JSON.parse(body);
+  const { categoryId, frequency, priority } = JSON.parse(body);
   try {
     const categories = await TaskCategory.findAll({
       where: {
@@ -1603,8 +1620,19 @@ export const getUserTasksStatusWise = async (event) => {
     if (!categoryIds.length) {
       return success([]);
     }
+    
+    const where = { 
+      userId: loggedUser.userId, 
+      organisationId: loggedUser.orgId 
+    };
+    
+    // Apply filters if provided
+    // Note: user filter is not applied for "My Tasks" as it's always filtered by logged-in user
+    if (frequency) where["frequency"] = frequency;
+    if (priority) where["priorityId"] = priority;
+    
     const userTasks = await UserTask.findAll({
-      where: { userId: loggedUser.userId, organisationId: loggedUser.orgId },
+      where,
       include: [
         {
           model: Task,

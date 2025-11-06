@@ -42,6 +42,8 @@ export default defineNuxtConfig({
     META_VERIFY_TOKEN: process.env.META_VERIFY_TOKEN,
     //file size
     MAX_FILE_SIZE_FOR_TASK_SHEET: process.env.MAX_FILE_SIZE_FOR_TASK_SHEET,
+    // Google Cloud Speech-to-Text credentials
+    GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS,
   },
   modules: [ 
     async (options, nuxt) => {
