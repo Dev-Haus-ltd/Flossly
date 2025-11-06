@@ -477,7 +477,7 @@ const fetchDummyStats = async () => {
     const selectedCategory = parentCategories[tab.value - 1];
     const categoryId = selectedCategory?.id || null;
     
-    const res = await taskStore.getTeamTaskStatsByCategory(categoryId);
+    const res = await taskStore.getTeamTaskStatsByStatusAndCategory(categoryId);
     if (res && res.code === 0) {
       const data = res.data || {};
       stats.value = [

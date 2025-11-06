@@ -150,8 +150,8 @@ onMounted(() => {
 const nextStep = async () => {
   const component = stepComponent.value;
   if (component?.validate) {
-    await component.validate();
-    if (!component.valid) return;
+    const isValid = await component.validate();
+    if (!isValid) return;
   }
   if (step.value === 0) {
     const data = stepModels.value[0];

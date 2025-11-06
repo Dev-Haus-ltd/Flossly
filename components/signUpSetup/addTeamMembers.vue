@@ -10,7 +10,10 @@
         single-line
         placeholder="example@email.com"
         @keydown.enter.prevent
+        @input="validateDuplicateEmail(index)"
+        @blur="validateDuplicateEmail(index)"
         :rules="[emailRule]"
+        :error-messages="duplicateEmailErrors[index] || undefined"
         class="mt-2 input-bordered"
         flat
       >
@@ -30,6 +33,7 @@
                   density="default"
                   size="small"
                   class="text-lowercase text-wrap"
+                  :class="{ 'role-error': roleErrors[index] }"
                   style="max-width: 140px; background-color: #F2F2F2;"
                   flat
                 >
@@ -79,25 +83,87 @@
 </template>
 
 <script setup>
-import { ref, defineExpose } from "vue";
+import { ref, defineExpose, watch } from "vue";
 
 const valid = ref(false);
 const form = ref(null);
 const showform = ref(false);
+const duplicateEmailErrors = ref({});
+const roleErrors = ref({});
 
 const model = defineModel({ users: [{ roleId: null, email: "" }] });
+
+// Validate duplicate emails for a specific index
+const validateDuplicateEmail = (index) => {
+  const userEmail = model.value.users[index]?.email?.trim().toLowerCase();
+  if (!userEmail) {
+    duplicateEmailErrors.value[index] = null;
+    return;
+  }
+
+  // Check if this email exists in other users
+  const duplicateIndex = model.value.users.findIndex(
+    (user, idx) => idx !== index && user.email?.trim().toLowerCase() === userEmail
+  );
+
+  if (duplicateIndex !== -1) {
+    duplicateEmailErrors.value[index] = "This email is already added";
+  } else {
+    duplicateEmailErrors.value[index] = null;
+  }
+};
+
+// Validate all duplicate emails
+const validateAllDuplicateEmails = () => {
+  model.value.users.forEach((_, index) => {
+    validateDuplicateEmail(index);
+  });
+};
+
+// Watch for email changes to validate duplicates in real-time
+watch(() => model.value.users.map(u => u.email), () => {
+  validateAllDuplicateEmails();
+}, { deep: true });
+
 const updateModel = () => {
   model.value.users.push({ roleId: null, email: "" });
+  // Clear errors for new user
+  const newIndex = model.value.users.length - 1;
+  duplicateEmailErrors.value[newIndex] = null;
+  roleErrors.value[newIndex] = false;
 };
 
 const removeUser = (index) => {
   if (model.value.users.length > 1) {
     model.value.users.splice(index, 1);
+    // Clear errors for removed user
+    delete duplicateEmailErrors.value[index];
+    delete roleErrors.value[index];
+    // Revalidate all emails after removal
+    validateAllDuplicateEmails();
   }
 };
+
 const required = (v) => !!v || "Required.";
 const emailRule = (v) =>
   !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || "Invalid email.";
+
+// Validate role selection
+const validateRoleSelection = () => {
+  let hasErrors = false;
+  roleErrors.value = {};
+
+  model.value.users.forEach((user, index) => {
+    if (user.email && user.email.trim() && !user.roleId) {
+      roleErrors.value[index] = true;
+      hasErrors = true;
+    } else {
+      roleErrors.value[index] = false;
+    }
+  });
+
+  return !hasErrors;
+};
 
 // Custom validation for team members - only validate non-empty emails
 const validateTeamMembers = () => {
@@ -129,18 +195,62 @@ onMounted(() => {
 });
 
 function selectRole(user, roleId) {
-  model.value.users.find((x) => x.email === user.email).roleId = roleId;
+  const userIndex = model.value.users.findIndex((x) => x.email === user.email);
+  if (userIndex !== -1) {
+    model.value.users[userIndex].roleId = roleId;
+    // Clear role error when role is selected
+    roleErrors.value[userIndex] = false;
+  }
 }
+
 defineExpose({
   validate: async () => {
     // First validate the form fields
-    const formValidation = await form.value.validate()
+    const formValidation = await form.value.validate();
+    
+    // Validate all duplicate emails
+    validateAllDuplicateEmails();
+    
+    // Check if there are any duplicate email errors
+    const hasDuplicateErrors = Object.values(duplicateEmailErrors.value).some(
+      error => error !== null
+    );
+    
+    // Validate role selection
+    const roleValidation = validateRoleSelection();
     
     // Then validate team members logic
-    const teamValidation = validateTeamMembers()
+    const teamValidation = validateTeamMembers();
     
-    // Return true only if both validations pass
-    return formValidation.valid && teamValidation
+    // Check if all validations pass
+    const isValid = formValidation.valid && teamValidation && roleValidation && !hasDuplicateErrors;
+    
+    // Update the valid ref
+    valid.value = isValid;
+    
+    // Show snackbar errors if validation fails
+    if (!isValid) {
+      if (hasDuplicateErrors) {
+        mainStore.setSnackbar({
+          type: "error",
+          title: "Duplicate emails detected. Please ensure each email is unique.",
+        });
+      } else if (!roleValidation) {
+        mainStore.setSnackbar({
+          type: "error",
+          title: "Please select a role for all team members.",
+        });
+      } else if (!teamValidation) {
+        mainStore.setSnackbar({
+          type: "error",
+          title: "Please enter valid email addresses for team members.",
+        });
+      }
+      return false;
+    }
+    
+    // Return true only if all validations pass
+    return true;
   },
   valid,
 });
@@ -191,6 +301,12 @@ defineExpose({
 
 .delete-btn:hover {
   background-color: rgba(244, 67, 54, 0.1) !important;
+}
+
+/* Role error styling */
+.role-error {
+  border: 1px solid #F96351 !important;
+  background-color: #FFF5F4 !important;
 }
 
 /* Ensure proper spacing between elements */

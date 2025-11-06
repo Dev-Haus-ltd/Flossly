@@ -6,7 +6,7 @@
     <div class="pa-5 rounded-lg">
       <div class="task-summary">
         <!-- Cards Grid -->
-        <v-row>
+        <v-row v-if="taskStats && taskStats.length > 0">
           <v-col cols="12"  md="3"
           lg="2" v-for="(item, i) in taskStats" :key="i">
             <CommonStatCard
@@ -197,12 +197,25 @@ const addNewCategoryDialog = () => {
 const getTeamStats = () => {
   taskStore.getTeamTaskStatsByCategory().then((res) => {
     if (res.code === 0) {
-      if (!currentTab.value) {
-        currentTab.value = res.data[0].categoryId;
+      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+        // Filter out categories with 0 tasks
+        const filteredData = res.data.filter(cat => cat.taskCount > 0);
+        
+        if (filteredData.length > 0) {
+          if (!currentTab.value) {
+            currentTab.value = filteredData[0].categoryId;
+          }
+          taskStats.value = filteredData;
+          getTeamTasks(currentTab.value);
+        } else {
+          taskStats.value = [];
+        }
+      } else {
+        taskStats.value = [];
       }
-      taskStats.value = res.data;
-      getTeamTasks(currentTab.value);
     }
+  }).catch((err) => {
+    taskStats.value = [];
   });
 };
 
@@ -247,12 +260,14 @@ const applyFilters = (filters) => {
     .then((res) => {
       if (res.code === 0) {
         const myId = user.value?.id;
-        const filteredData = res.data.map(group => ({
-          ...group,
-          tasks: group.tasks.filter(task =>
-            !task.assignedUsers?.some(u => u.id === myId)
-          )
-        }));
+        const filteredData = res.data
+          .map(group => ({
+            ...group,
+            tasks: group.tasks.filter(task =>
+              !task.assignedUsers?.some(u => u.id === myId)
+            )
+          }))
+          .filter(group => group.tasks && group.tasks.length > 0); // Filter out status groups with 0 tasks
         taskDetails.value = sortByCustomStatus(filteredData);
       } else {
         // set snack
@@ -286,20 +301,22 @@ const getTeamTasks = (categoryId) => {
     .then((res) => {
       if (res.code === 0) {
         const myId = user.value?.id;
-        const filteredData = res.data.map(group => ({
-          ...group,
-          tasks: group.tasks.filter(task =>
-            !task.assignedUsers?.some(u => u.id === myId)
-          )
-        }));
+        
+        const filteredData = res.data
+          .map(group => ({
+            ...group,
+            tasks: group.tasks.filter(task => {
+              const isAssignedToMe = task.assignedUsers?.some(u => u.id === myId);
+              return !isAssignedToMe;
+            })
+          }))
+          .filter(group => group.tasks && group.tasks.length > 0); // Filter out status groups with 0 tasks
+        
         taskDetails.value = sortByCustomStatus(filteredData);
-      } else {
-        // set snack
       }
     })
     .catch((err) => {
-      return err;
-      // set snack
+      // Silent error handling
     });
 };
 const selectedRowItems = ref([]);
@@ -314,8 +331,6 @@ const getAllUserTaskIds = (tasks) => {
   );
 };
 const handleDelete = async () => {
-  console.log("Delete API called for:", selectedRowItems.value);
-
   if (!selectedRowItems.value.length) {
     mainStore.setSnackbar({
       title: "No tasks selected to delete.",

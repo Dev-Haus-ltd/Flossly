@@ -25,17 +25,17 @@
             />
             <h2 class="init-title mt-5 text-h2 text-md-h2 text-sm-h2">Welcome to Flossly</h2>
             <p class="init-sub-title mt-10 text-h5 text-md-h5">Let's tidy up your dental ops.</p>
-            <div class="d-flex justify-center my-7 mb-5">
+            <div class="d-flex justify-center my-7 mb-5 button-container">
               <v-btn
                 @click="handleScreen()"
-                color="primary"
+                class="start-setup-btn"
                 rounded="lg"
                 size="x-large"
                 flat
                 >Start Setup</v-btn
               >
               <v-btn
-                class="ml-2"
+                class="watch-demo-btn"
                 @click="initialPage = false"
                 color="primary"
                 rounded="lg"
@@ -141,8 +141,23 @@ const handleScreen = () => {
 }
 
 .init-info {
-  font-weight: 600;
+  font-weight: 400;
   line-height: 100%;
   color: #ffffff;
+}
+
+.button-container {
+  gap: 15px;
+}
+
+.start-setup-btn,
+.watch-demo-btn {
+  font-size: 16px !important;
+  border-radius: 12px !important;
+}
+
+.start-setup-btn {
+  background-color: #7D77FF !important;
+  color: #ffffff !important;
 }
 </style>

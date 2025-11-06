@@ -121,6 +121,20 @@ export default {
         });
     });
   },
+  getTeamTaskStatsByStatusAndCategory(categoryId) {
+    return new Promise((resolve, reject) => {
+      const url = categoryId 
+        ? `/tasks/statsByCategory?categoryId=${encodeURIComponent(categoryId)}`
+        : "/tasks/statsByCategory";
+      Get(url)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
   tasksGroupedByStatus(data) {
     return new Promise((resolve, reject) => {
       Post("/tasks/filteredByStatus", data)
@@ -267,20 +281,6 @@ export default {
   archieveBulkTasks(data) {
     return new Promise((resolve, reject) => {
       Post("/tasks/archieveBulk", data)
-        .then((res) => {
-          resolve(res);
-        })
-        .catch((err) => {
-          reject(err);
-        });
-    });
-  },
-  getTeamTaskStatsByCategory(categoryId) {
-    return new Promise((resolve, reject) => {
-      const url = categoryId 
-        ? `/tasks/statsByCategory?categoryId=${encodeURIComponent(categoryId)}`
-        : "/tasks/statsByCategory";
-      Get(url)
         .then((res) => {
           resolve(res);
         })

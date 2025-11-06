@@ -55,7 +55,7 @@
 
       <!-- Section 3 -->
       <h3 class="terms-heading mt-6">3. Access Controls and Authentication</h3>
-      <p>We maintain strict access controls to ensure only authorized personnel can access your data:</p>
+      <p>We maintain strict access controls to ensure only authorised personnel can access your data:</p>
       <ul class="ml-6 list-disc">
         <li>Multi-factor authentication (MFA) for all user accounts</li>
         <li>Role-based access control (RBAC) with principle of least privilege</li>
@@ -93,7 +93,7 @@
       <h3 class="terms-heading mt-6">6. Data Protection and Privacy</h3>
       <p>We implement comprehensive data protection measures:</p>
       <ul class="ml-6 list-disc">
-        <li>Data minimization and purpose limitation</li>
+        <li>Data minimisation and purpose limitation</li>
         <li>Pseudonymization and anonymization where appropriate</li>
         <li>Data retention policies and secure deletion</li>
         <li>Cross-border data transfer safeguards</li>
@@ -155,7 +155,7 @@
       <ul class="ml-6 list-disc">
         <li>Regular data backups with tested restoration procedures</li>
         <li>Disaster recovery planning and testing</li>
-        <li>Redundant systems and failover capabilities</li>
+        <li>Redundant systems and fail-over capabilities</li>
         <li>Business continuity planning</li>
         <li>Service availability monitoring</li>
         <li>Recovery time and point objectives (RTO/RPO)</li>
@@ -165,9 +165,9 @@
       <h3 class="terms-heading mt-6">12. Security Monitoring and Logging</h3>
       <p>We maintain comprehensive security monitoring:</p>
       <ul class="ml-6 list-disc">
-        <li>Centralized logging and monitoring systems</li>
+        <li>Centralised logging and monitoring systems</li>
         <li>Real-time security event analysis</li>
-        <li>Anomaly detection and behavioral analysis</li>
+        <li>Anomaly detection and behavioural analysis</li>
         <li>Security information and event management (SIEM)</li>
         <li>Regular log review and analysis</li>
         <li>Threat intelligence integration</li>
@@ -197,7 +197,7 @@
       <p>
         Email: security@flossly.co.uk<br>
         Phone: [Security Hotline Number]<br>
-        Address: FlosslyOS Ltd., [Company Address]
+        Address: FlosslyOS Ltd, [Company Address]
       </p>
       <p>
         We take all security reports seriously and will investigate and respond promptly. 
@@ -212,7 +212,7 @@
       </p>
       <p>
         Email: security@flossly.co.uk<br>
-        Address: FlosslyOS Ltd., [Company Address]<br>
+        Address: FlosslyOS Ltd, [Company Address]<br>
         Phone: [Contact Number]
       </p>
     </v-card-text>
