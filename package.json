@@ -45,6 +45,7 @@
     "lottie-web": "^5.13.0",
     "node-ipinfo": "^3.5.1",
     "nodemailer": "^6.9.9",
+    "openai": "^6.8.1",
     "pg": "^8.11.3",
     "pinia": "^2.1.7",
     "rand-token": "^1.0.1",

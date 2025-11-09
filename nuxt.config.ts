@@ -44,6 +44,8 @@ export default defineNuxtConfig({
     MAX_FILE_SIZE_FOR_TASK_SHEET: process.env.MAX_FILE_SIZE_FOR_TASK_SHEET,
     // Google Cloud Speech-to-Text credentials
     GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+    // GitHub token for GPT-5 model (testing)
+    GITHUB_TOKEN: process.env.GITHUB_TOKEN,
   },
   modules: [ 
     async (options, nuxt) => {

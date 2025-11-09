@@ -143,3 +143,6 @@ config/google-cloud-key.json
 **/google-cloud-key.json
 **/*-service-account*.json
 **/*-credentials*.json
+
+
+.gemini

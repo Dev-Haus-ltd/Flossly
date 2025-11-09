@@ -121,7 +121,7 @@
         You can safely navigate to your flossly dashboard and start using the
         application
       </p>
-      <v-btn @click="gotoHome" flat color="primary"> Dashboard </v-btn>
+     
     </v-card>
     <v-overlay
       v-model="loading"
