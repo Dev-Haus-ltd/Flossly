@@ -43,7 +43,8 @@
         <v-tab
           class="tab-text d-flex align-center justify-center"
           style="min-width: 40px; padding: 0 8px"
-          @click="addNewCategoryDialog"
+          :value="null"
+          @click.stop.prevent="addNewCategoryDialog"
         >
           <v-icon size="20">mdi-plus</v-icon>
         </v-tab>
@@ -123,7 +124,8 @@
       </v-tabs-window>
       <CommonAddCategorySideBar
         v-model="addCategoryDialog"
-        @close="addCategoryDialog = false"
+        @close="handleCategoryDialogClose"
+        @success="handleCategorySuccess"
         :categories="categories"
       />
     </div>
@@ -211,6 +213,17 @@ const getUsers = () => {
 
 const addNewCategoryDialog = () => {
   addCategoryDialog.value = true;
+};
+
+const handleCategoryDialogClose = () => {
+  addCategoryDialog.value = false;
+};
+
+const handleCategorySuccess = () => {
+  // Refresh categories after successful addition
+  getCategories();
+  getMyStats();
+  addCategoryDialog.value = false;
 };
 
 const applyFilters = (filters) => {

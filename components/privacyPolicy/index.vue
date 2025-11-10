@@ -69,8 +69,8 @@
       <!-- Section 4 -->
       <h3 class="terms-heading mt-6">4. Data Security</h3>
       <p>
-        We implement appropriate technical and organizational measures to protect your personal 
-        information against unauthorized access, alteration, disclosure, or destruction. This includes:
+        We implement appropriate technical and organisational measures to protect your personal 
+        information against unauthorised access, alteration, disclosure, or destruction. This includes:
       </p>
       <ul class="ml-6 list-disc">
         <li>Encryption of data in transit and at rest</li>
@@ -139,7 +139,7 @@
       </p>
       <p>
         Email: privacy@flossly.co.uk<br>
-        Address: FlosslyOS Ltd., [Company Address]<br>
+        Address: FlosslyOS Ltd, [Company Address]<br>
         Phone: [Contact Number]
       </p>
     </v-card-text>

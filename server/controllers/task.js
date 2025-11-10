@@ -175,6 +175,8 @@ export const assignBulkTasks = async (event) => {
       });
     }
     const taskIds = tasks.map((t) => t.id);
+    
+    // Check if tasks are already assigned to the target user
     const existingAssignments = await UserTask.findAll({
       where: {
         userId,
@@ -192,6 +194,21 @@ export const assignBulkTasks = async (event) => {
     if (newTasks.length === 0) {
       return success("All tasks already assigned to the user");
     }
+
+    // Remove existing assignments for the current user (Check Login Confirmation in today's meeting)
+    
+    if (loggedUser.userId !== userId) {
+      await UserTask.destroy({
+        where: {
+          userId: loggedUser.userId,
+          taskId: {
+            [Op.in]: taskIds,
+          },
+          organisationId,
+        },
+      });
+    }
+
     const userTasks = newTasks
       .map((t) => {
         return {
@@ -891,6 +908,7 @@ export const teamTasksCounts = async (event) => {
         model: User,
         as: "user",
         attributes: ["id", "fullName", "photo", "email", "roleId"],
+        where: { status: "Active" },
         include: [
           {
             model: Role,
@@ -900,7 +918,7 @@ export const teamTasksCounts = async (event) => {
         ],
       },
     });
-    const users = orgUsers.map((el) => el.user);
+    const users = orgUsers.map((el) => el.user).filter(Boolean);
     const results = await Promise.all(
       users.map(async (user) => {
         const [pending, completed, upcoming] = await Promise.all([
@@ -1004,17 +1022,31 @@ export const groupTeamTasksByTaskId = async (event) => {
   const organisationId = event.context.user.orgId;
   const body = await readBody(event);
   const { categoryId, frequency, priority, user } = JSON.parse(body);
-  const categories = await TaskCategory.findAll({
-    where: {
-      [Op.or]: [{ id: categoryId }, { parentId: categoryId }],
-      isDeleted: false,
-    },
-    attributes: ["id"],
-  });
-
-  const categoryIds = categories.map((c) => c.id);
-  if (!categoryIds.length) {
-    return success([]);
+  
+  // If categoryId is provided, filter by category; otherwise get all categories
+  let categoryIds = [];
+  if (categoryId) {
+    const categories = await TaskCategory.findAll({
+      where: {
+        [Op.or]: [{ id: categoryId }, { parentId: categoryId }],
+        isDeleted: false,
+      },
+      attributes: ["id"],
+    });
+    categoryIds = categories.map((c) => c.id);
+    if (!categoryIds.length) {
+      return success([]);
+    }
+  } else {
+    // If no categoryId provided, get all non-deleted categories
+    const allCategories = await TaskCategory.findAll({
+      where: { isDeleted: false },
+      attributes: ["id"],
+    });
+    categoryIds = allCategories.map((c) => c.id);
+    if (!categoryIds.length) {
+      return success([]);
+    }
   }
 
   const where = { organisationId };
@@ -1037,8 +1069,7 @@ export const groupTeamTasksByTaskId = async (event) => {
             "defaultFrequency",
           ],
           as: "taskDetails",
-          where: { categoryId: { [Op.in]: categoryIds } },
-          required: true,
+          ...(categoryIds.length > 0 && { where: { categoryId: { [Op.in]: categoryIds } }, required: true }),
           include: [
             {
               model: TaskCategory,
@@ -1417,6 +1448,7 @@ export const myTasksCountByCategory = async (event) => {
       where: {
         userId: loggedUser.userId,
         organisationId: loggedUser.orgId,
+        isArchieved: false, // Exclude archived tasks
       },
       include: [
         {
@@ -1463,9 +1495,11 @@ export const myTasksCountByCategory = async (event) => {
       }
       parentCounts[currentCat.id].taskCount += 1;
     }
-    return success(Object.values(parentCounts));
+    
+    // Filter out categories with 0 tasks
+    const result = Object.values(parentCounts).filter(cat => cat.taskCount > 0);
+    return success(result);
   } catch (err) {
-    console.error(err);
     return error("Something went wrong while counting tasks.");
   }
 };
@@ -1473,6 +1507,7 @@ export const myTasksCountByCategory = async (event) => {
 export const teamTasksCountByCategory = async (event) => {
   try {
     const loggedUser = event.context.user;
+    
     const allCategories = await TaskCategory.findAll({
       where: { isDeleted: false },
       attributes: ["id", "name", "color", "parentId"],
@@ -1482,7 +1517,10 @@ export const teamTasksCountByCategory = async (event) => {
     const categoryMap = new Map();
     allCategories.forEach((cat) => categoryMap.set(cat.id, cat));
     const teamTasks = await UserTask.findAll({
-      where: { organisationId: loggedUser.orgId },
+      where: { 
+        organisationId: loggedUser.orgId,
+        isArchieved: false, // Exclude archived tasks
+      },
       include: [
         {
           model: Task,
@@ -1501,10 +1539,32 @@ export const teamTasksCountByCategory = async (event) => {
       nest: true,
     });
     const parentCounts = {};
+    
+    // Group tasks by taskId to handle multiple user assignments
+    // Only count tasks where logged-in user is NOT assigned
+    const taskMap = new Map();
+    for (const userTask of teamTasks) {
+      const taskId = userTask.taskId;
+      if (!taskMap.has(taskId)) {
+        taskMap.set(taskId, {
+          taskId,
+          category: userTask.taskDetails?.category,
+          assignedUserIds: new Set()
+        });
+      }
+      taskMap.get(taskId).assignedUserIds.add(userTask.userId);
+    }
+    
+    // Filter out tasks where logged-in user is assigned
+    const filteredTasks = Array.from(taskMap.values()).filter(task => 
+      !task.assignedUserIds.has(loggedUser.userId)
+    );
 
-    for (const task of teamTasks) {
-      const cat = task.taskDetails?.category;
-      if (!cat) continue;
+    for (const task of filteredTasks) {
+      const cat = task.category;
+      if (!cat) {
+        continue;
+      }
 
       // Start from current category
       let currentCat = categoryMap.get(cat.id);
@@ -1534,7 +1594,10 @@ export const teamTasksCountByCategory = async (event) => {
 
       parentCounts[currentCat.id].taskCount += 1;
     }
-    return success(Object.values(parentCounts));
+    
+    // Filter out categories with 0 tasks
+    const result = Object.values(parentCounts).filter(cat => cat.taskCount > 0);
+    return success(result);
   } catch (err) {
     return error(500, err.message);
   }
@@ -1543,7 +1606,7 @@ export const teamTasksCountByCategory = async (event) => {
 export const getUserTasksStatusWise = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);
-  const { categoryId } = JSON.parse(body);
+  const { categoryId, frequency, priority } = JSON.parse(body);
   try {
     const categories = await TaskCategory.findAll({
       where: {
@@ -1557,8 +1620,19 @@ export const getUserTasksStatusWise = async (event) => {
     if (!categoryIds.length) {
       return success([]);
     }
+    
+    const where = { 
+      userId: loggedUser.userId, 
+      organisationId: loggedUser.orgId 
+    };
+    
+    // Apply filters if provided
+    // Note: user filter is not applied for "My Tasks" as it's always filtered by logged-in user
+    if (frequency) where["frequency"] = frequency;
+    if (priority) where["priorityId"] = priority;
+    
     const userTasks = await UserTask.findAll({
-      where: { userId: loggedUser.userId, organisationId: loggedUser.orgId },
+      where,
       include: [
         {
           model: Task,
@@ -1630,9 +1704,6 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
   
     const query = getQuery(event) || {};
     let categoryId = query.categoryId ? Number(query.categoryId) : null;
-    
-    console.log("[getTeamTaskStatsByStatusAndCategory] Query params:", query);
-    console.log("[getTeamTaskStatsByStatusAndCategory] categoryId:", categoryId);
 
     if (!organisationId) {
       return error(400, "organisationId is required");
@@ -1659,9 +1730,7 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
         attributes: ["id"],
       });
       categoryIds = categories.map((c) => c.id);
-      console.log("[getTeamTaskStatsByStatusAndCategory] Found categories:", categoryIds);
       if (categoryIds.length === 0) {
-        console.log("[getTeamTaskStatsByStatusAndCategory] No categories found, returning zeros");
         return success({
           completed: 0,
           overdue: 0,
@@ -1669,8 +1738,6 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
           upcoming: 0,
         });
       }
-    } else {
-      console.log("[getTeamTaskStatsByStatusAndCategory] No categoryId provided, showing all tasks");
     }
 
     // Build base where clause
@@ -1770,7 +1837,6 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
       upcoming: upcoming || 0,
     });
   } catch (err) {
-    console.error("[getTeamTaskStatsByStatusAndCategory] Error:", err);
     return error(500, err.message);
   }
 };

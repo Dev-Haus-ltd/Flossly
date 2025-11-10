@@ -121,6 +121,20 @@ export default {
         });
     });
   },
+  getTeamTaskStatsByStatusAndCategory(categoryId) {
+    return new Promise((resolve, reject) => {
+      const url = categoryId 
+        ? `/tasks/statsByCategory?categoryId=${encodeURIComponent(categoryId)}`
+        : "/tasks/statsByCategory";
+      Get(url)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
   tasksGroupedByStatus(data) {
     return new Promise((resolve, reject) => {
       Post("/tasks/filteredByStatus", data)

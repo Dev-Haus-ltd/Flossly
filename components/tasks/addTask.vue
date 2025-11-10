@@ -12,7 +12,7 @@
         icon
         variant="outlined"
         color="#8B8B8B"
-        @click="emit('close')"
+        @click="handleCancel"
         class="mr-4"
         style="
           width: 20px;
@@ -233,7 +233,7 @@
         color="white"
         class="text-primary"
         style="width: 48%; border-radius: 8px; border: 1px solid #DFDFDF !important; min-height: 40px;"
-        @click="emit('close')"
+        @click="handleCancel"
         flat
       >
         Cancel
@@ -304,13 +304,35 @@ const frequencies = ref([
 ]);
 const taskCategories = ref([]);
 
-watch(form.value, (newVal) => {
-  if (newVal.roleId) {
-    userList.value = users.value.filter(
-      (x) => x.roleId === newVal.roleId && x.status === "Active"
-    );
+// Watch only roleId to filter userList, not the entire form
+watch(
+  () => form.value.roleId,
+  (newRoleId, oldRoleId) => {
+    if (newRoleId) {
+      const filteredUsers = users.value.filter(
+        (x) => x.roleId === newRoleId && x.status === "Active"
+      );
+      userList.value = filteredUsers;
+      
+      // If the currently selected userId is not in the filtered list, clear it
+      if (form.value.userId) {
+        const userStillValid = filteredUsers.some(
+          (u) => u.id === form.value.userId
+        );
+        if (!userStillValid) {
+          form.value.userId = null;
+        }
+      }
+    } else {
+      // If no role is selected, show all active users
+      userList.value = users.value.filter((x) => x.status === "Active");
+      // Clear userId if role is cleared
+      if (oldRoleId && form.value.userId) {
+        form.value.userId = null;
+      }
+    }
   }
-});
+);
 const getRoles = () => {
   mainStore
     .getRoles()
@@ -348,7 +370,13 @@ const getCategories = () => {
 };
 const getUsers = () => {
   userStore.getUserList({ roleId: null }).then((res) => {
-    if (res.code === 0) users.value = res.data;
+    if (res.code === 0) {
+      users.value = res.data;
+      // Initialize userList with all active users if no role is selected
+      if (!form.value.roleId) {
+        userList.value = res.data.filter((x) => x.status === "Active");
+      }
+    }
   });
 };
 
@@ -411,6 +439,7 @@ const onSubmit = async () => {
         if (res.code === 0) {
           emit("success");
           setSnack("success", "Task Added Successfully");
+          resetForm();
         } else {
           setSnack("error", res.message || res.data.message);
         }
@@ -448,6 +477,40 @@ const setSnack = (type, title) => {
     type,
     title,
   });
+};
+
+const resetForm = () => {
+  form.value = {
+    title: "",
+    description: "",
+    categoryId: null,
+    dueDate: "",
+    roleId: null,
+    userId: null,
+    defaultFrequency: "",
+    priorityId: null,
+    checklist: [
+      {
+        question: "",
+        category: "",
+        fieldOneTitle: "",
+        fieldTwoTitle: "",
+        showDate: false,
+        showTime: false,
+        showRadio: false,
+      },
+    ],
+  };
+  // Reset form validation
+  if (formRef.value) {
+    formRef.value.resetValidation();
+  }
+  menu.value = false;
+};
+
+const handleCancel = () => {
+  resetForm();
+  emit("close");
 };
 </script>
 <style scoped>

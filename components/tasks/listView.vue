@@ -291,8 +291,8 @@
                         :id="`resize-handle-${column.key}`"
                         @pointerdown="startResize($event, column)"
                       >
-                        <v-icon color="grey" style="cursor: grab"
-                          >mdi-drag</v-icon
+                        <v-icon color="grey" style="cursor: col-resize"
+                          >mdi-arrow-left-right</v-icon
                         >
                       </span>
                     </div>
@@ -468,7 +468,7 @@
                                 class="resize-handle"
                                 @pointerdown="startResize($event, column)"
                               >
-                                <v-icon size="12">mdi-drag</v-icon>
+                                <v-icon size="12" style="cursor: col-resize">mdi-arrow-left-right</v-icon>
                               </span>
                             </div>
                             <div v-else>
@@ -1167,6 +1167,11 @@ th {
   align-items: center;
   justify-content: space-between;
   position: relative;
+  cursor: grab;
+}
+
+.resizable-table .th-content:active {
+  cursor: grabbing;
 }
 
 .resize-handle {

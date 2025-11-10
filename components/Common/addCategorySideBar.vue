@@ -1,6 +1,7 @@
 <template>
   <v-navigation-drawer
     :model-value="modelValue"
+    @update:model-value="handleModelValueUpdate"
     location="right"
     temporary
     :width="600"
@@ -130,7 +131,7 @@ const mainStore = useMainStore();
 const taskStore = useTaskStore();
 const mainCategories = ref([]);
 const formRef = ref(null);
-const emit = defineEmits(["close", "success"]);
+const emit = defineEmits(["close", "success", "update:modelValue"]);
 const requiredRule = [(v) => !!v || "This field is required"];
 const form = ref({
   name: "",
@@ -144,6 +145,20 @@ watch(
   (newValue) => {
     if (newValue) {
       mainCategories.value = categories.filter((x) => !x.parentId);
+      // Reset form when opening
+      form.value = {
+        name: "",
+        description: "",
+        parentId: null,
+        color: "",
+      };
+      // Reset form validation
+      nextTick(() => {
+        if (formRef.value) {
+          formRef.value.reset();
+          formRef.value.resetValidation();
+        }
+      });
     }
   },
   { immediate: true }
@@ -161,8 +176,15 @@ const onSubmit = async () => {
             parentId: null,
             color: "",
           };
+          // Reset form validation
+          if (formRef.value) {
+            formRef.value.reset();
+            formRef.value.resetValidation();
+          }
           //set snack
           emit("close");
+          emit("update:modelValue", false);
+          emit("success");
         } else {
           mainStore.setSnackbar({
     type: 'Error',
@@ -175,14 +197,34 @@ const onSubmit = async () => {
       });
   }
 };
-const onClose = () => {
+const resetForm = () => {
   form.value = {
     name: "",
     description: "",
     parentId: null,
     color: "",
   };
-  emit("close");
+  // Reset form validation
+  if (formRef.value) {
+    formRef.value.reset();
+    formRef.value.resetValidation();
+  }
+};
+
+const handleModelValueUpdate = (value) => {
+  // When drawer is being closed (either via close button or outside click)
+  if (!value && modelValue) {
+    // Only reset if we're transitioning from open to closed
+    resetForm();
+    emit("close");
+  }
+  emit("update:modelValue", value);
+};
+
+const onClose = () => {
+  // Close the drawer by updating model value
+  // This will trigger handleModelValueUpdate which will reset the form
+  emit("update:modelValue", false);
 };
 const setSnack = (type, title) => {
   mainStore.setSnackbar({

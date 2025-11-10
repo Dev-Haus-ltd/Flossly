@@ -12,6 +12,11 @@ export default defineNuxtRouteMiddleware((to, from) => {
       (userRole() === 8 || userRole() === 1) &&
       to.path !== "/onboarding"
     ) {
+      // Force a full page refresh when redirecting to onboarding from login/signup
+      if (from.path === "/login" || from.path === "/signup") {
+        window.location.href = "/onboarding";
+        return;
+      }
       return navigateTo("/onboarding");
     }
   } else {

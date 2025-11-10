@@ -1,0 +1,506 @@
+import formidable from "formidable";
+import fs from "fs";
+import path from "path";
+import { success, error } from "../utils/response";
+import { createError } from "h3";
+import crypto from "crypto";
+import OpenAI from "openai";
+
+// Google Cloud Speech-to-Text client
+let speechClient = null;
+let SpeechClient = null;
+
+const initializeSpeechClient = async () => {
+  if (speechClient) return speechClient;
+  
+  try {
+    const config = useRuntimeConfig();
+    const credentialsPath = config.GOOGLE_APPLICATION_CREDENTIALS;
+    
+    if (!credentialsPath) {
+      throw new Error("GOOGLE_APPLICATION_CREDENTIALS not configured");
+    }
+
+    // Set the credentials path for Google Cloud
+    process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath;
+
+    // Dynamically import @google-cloud/speech
+    if (!SpeechClient) {
+      const speechModule = await import("@google-cloud/speech");
+      SpeechClient = speechModule.v1?.SpeechClient || speechModule.SpeechClient;
+    }
+    
+    speechClient = new SpeechClient();
+    
+    return speechClient;
+  } catch (err) {
+    console.error("Error initializing Google Speech client:", err);
+    throw new Error("Failed to initialize Google Speech-to-Text client");
+  }
+};
+
+export const transcribeAudio = async (event) => {
+  try {
+    // Parse form data
+    const form = formidable({
+      multiples: false,
+      keepExtensions: true,
+    });
+
+    const { files, fields } = await new Promise((resolve, reject) => {
+      form.parse(event.node.req, (err, fields, files) => {
+        if (err) reject(err);
+        resolve({ files, fields });
+      });
+    });
+
+    const audioFile = files.audio;
+    if (!audioFile) {
+      return error(400, "No audio file provided");
+    }
+
+    // Check if file is an array (formidable can return arrays)
+    const file = Array.isArray(audioFile) ? audioFile[0] : audioFile;
+
+    if (!file) {
+      return error(400, "Invalid audio file");
+    }
+
+    // Read audio file
+    const audioBytes = fs.readFileSync(file.filepath);
+    
+    // Detect audio format from mimetype or filename
+    const mimetype = file.mimetype || "";
+    const filename = file.originalFilename || "";
+    let encoding = "WEBM_OPUS"; // Default
+    let sampleRate = 48000; // Default
+    
+    // Detect encoding based on mimetype or file extension
+    if (mimetype.includes("webm") || filename.toLowerCase().endsWith(".webm")) {
+      encoding = "WEBM_OPUS";
+      sampleRate = 48000;
+    } else if (mimetype.includes("wav") || filename.toLowerCase().endsWith(".wav")) {
+      encoding = "LINEAR16";
+      sampleRate = 16000;
+    } else if (mimetype.includes("mp3") || filename.toLowerCase().endsWith(".mp3")) {
+      encoding = "MP3";
+      sampleRate = 44100;
+    } else if (mimetype.includes("flac") || filename.toLowerCase().endsWith(".flac")) {
+      encoding = "FLAC";
+      sampleRate = 44100;
+    }
+    
+    // Initialize Google Speech client
+    const client = await initializeSpeechClient();
+
+    // Configure recognition request
+    const request = {
+      audio: {
+        content: audioBytes.toString("base64"),
+      },
+      config: {
+        encoding: encoding,
+        sampleRateHertz: sampleRate,
+        languageCode: "en-US", // You can make this configurable
+        alternativeLanguageCodes: ["en-GB"], // Optional: support multiple languages
+        enableAutomaticPunctuation: true,
+        enableWordTimeOffsets: false, // Set to true if you need word-level timestamps
+        model: "default", // You can use "phone_call" or "video" for better accuracy
+      },
+    };
+
+    // Perform transcription
+    const [response] = await client.recognize(request);
+    
+    // Clean up uploaded file
+    try {
+      fs.unlinkSync(file.filepath);
+    } catch (unlinkErr) {
+      console.warn("Failed to delete temporary file:", unlinkErr);
+    }
+
+    // Extract transcription text
+    if (!response.results || response.results.length === 0) {
+      return error(400, "No transcription results found. Please ensure the audio contains speech.");
+    }
+
+    const transcription = response.results
+      .map((result) => result.alternatives[0].transcript)
+      .join(" ");
+
+    if (!transcription || transcription.trim().length === 0) {
+      return error(400, "Transcription is empty. Please ensure the audio contains clear speech.");
+    }
+
+    return success({
+      text: transcription.trim(),
+      confidence: response.results[0].alternatives[0].confidence || null,
+    });
+  } catch (err) {
+    console.error("Transcription error:", err);
+    
+    // Handle specific Google Cloud errors
+    if (err.message && err.message.includes("GOOGLE_APPLICATION_CREDENTIALS")) {
+      return error(500, "Google Cloud credentials not configured. Please check environment variables.");
+    }
+    
+    if (err.message && err.message.includes("Invalid audio")) {
+      return error(400, "Invalid audio format. Please ensure the audio file is valid.");
+    }
+
+    return error(500, err.message || "Failed to transcribe audio. Please try again.");
+  }
+};
+
+// Store active streaming sessions
+const streamingSessions = new Map();
+
+// Start streaming transcription session (GET request for SSE)
+export const streamTranscribeAudio = async (event) => {
+  try {
+    // Set headers for Server-Sent Events
+    setHeader(event, "Content-Type", "text/event-stream");
+    setHeader(event, "Cache-Control", "no-cache");
+    setHeader(event, "Connection", "keep-alive");
+    setHeader(event, "Access-Control-Allow-Origin", "*");
+
+    // Generate session ID
+    const sessionId = crypto.randomUUID();
+    
+    // Initialize Google Speech client
+    const client = await initializeSpeechClient();
+
+    // Configure streaming recognition
+    // Use string enum value for encoding when passing to streamingRecognize()
+    const config = {
+      encoding: "WEBM_OPUS", // String enum value
+      sampleRateHertz: 48000,
+      languageCode: "en-US",
+      alternativeLanguageCodes: ["en-GB"],
+      enableAutomaticPunctuation: true,
+      enableWordTimeOffsets: false,
+      model: "default",
+    };
+
+    // Start streaming recognition - pass config directly
+    const recognizeStream = client.streamingRecognize({
+      config: config,
+      interimResults: true,
+    });
+
+    // Store session
+    streamingSessions.set(sessionId, { 
+      recognizeStream,
+      configSent: true, // Config is sent via streamingRecognize()
+      ready: false,
+      errored: false,
+      error: null
+    });
+
+    // Set up error handler
+    recognizeStream.on("error", (err) => {
+      console.error(`[${sessionId}] Streaming recognition error:`, err);
+      const session = streamingSessions.get(sessionId);
+      if (session) {
+        session.errored = true;
+        session.error = err.message;
+      }
+      const errorData = JSON.stringify({
+        error: err.message || "Streaming recognition failed",
+      });
+      if (!event.node.res.writableEnded) {
+        event.node.res.write(`data: ${errorData}\n\n`);
+        event.node.res.end();
+      }
+      // Delete session after a delay
+      setTimeout(() => {
+        streamingSessions.delete(sessionId);
+      }, 1000);
+    });
+
+    console.log(`[${sessionId}] Streaming recognition started with config`);
+
+    // Wait a moment to ensure config is processed and stream is ready
+    await new Promise(resolve => setTimeout(resolve, 200));
+
+    // Verify stream is still writable before marking as ready
+    const session = streamingSessions.get(sessionId);
+    if (!session) {
+      // Session was deleted, send error
+      const errorData = JSON.stringify({
+        error: "Session initialization failed",
+      });
+      event.node.res.write(`data: ${errorData}\n\n`);
+      event.node.res.end();
+      return;
+    }
+
+    // Check if stream is still valid
+    if (!session.recognizeStream || session.recognizeStream.destroyed) {
+      const errorData = JSON.stringify({
+        error: "Stream initialization failed",
+      });
+      event.node.res.write(`data: ${errorData}\n\n`);
+      event.node.res.end();
+      streamingSessions.delete(sessionId);
+      return;
+    }
+
+    // Mark as ready to accept chunks
+    session.ready = true;
+
+    // Send session ID to client
+    event.node.res.write(`data: ${JSON.stringify({ sessionId })}\n\n`);
+
+    // Track processed results to prevent duplicates
+    const processedResults = new Set();
+    
+    // Handle transcription results
+    recognizeStream.on("data", (response) => {
+      if (response.results && response.results.length > 0) {
+        // Process all results, not just the first one
+        for (const result of response.results) {
+          if (result.alternatives && result.alternatives.length > 0) {
+            const transcript = result.alternatives[0].transcript;
+            // Check if result is final (isFinalTranscript or isFinal property)
+            const isFinal = result.isFinalTranscript !== undefined 
+              ? result.isFinalTranscript 
+              : (result.isFinal !== undefined ? result.isFinal : false);
+
+            // Create a unique key for this result to prevent duplicates
+            const resultKey = `${isFinal ? 'final' : 'interim'}:${transcript.trim()}`;
+            
+            // Skip if we've already sent this exact result
+            if (processedResults.has(resultKey)) {
+              console.log(`[${sessionId}] Skipping duplicate result:`, transcript);
+              continue;
+            }
+            
+            // Mark as processed
+            processedResults.add(resultKey);
+
+            // Send result via SSE
+            const data = JSON.stringify({
+              text: transcript,
+              isFinal: isFinal,
+              confidence: result.alternatives[0].confidence || null,
+            });
+
+            event.node.res.write(`data: ${data}\n\n`);
+          }
+        }
+      }
+    });
+
+    // Error handler already set up above, before writing config
+
+    recognizeStream.on("end", () => {
+      event.node.res.end();
+      streamingSessions.delete(sessionId);
+    });
+
+    // Handle request close
+    event.node.req.on("close", () => {
+      recognizeStream.destroy();
+      streamingSessions.delete(sessionId);
+      if (!event.node.res.writableEnded) {
+        event.node.res.end();
+      }
+    });
+  } catch (err) {
+    console.error("Streaming transcription error:", err);
+    const errorData = JSON.stringify({
+      error: err.message || "Failed to start streaming transcription",
+    });
+    if (!event.node.res.writableEnded) {
+      event.node.res.write(`data: ${errorData}\n\n`);
+      event.node.res.end();
+    }
+  }
+};
+
+// Send audio chunk to streaming session (POST request)
+export const streamTranscribeChunk = async (event) => {
+  try {
+    const body = await readBody(event);
+    const { sessionId, chunk } = body;
+
+    if (!sessionId || !chunk) {
+      return error(400, "Missing sessionId or chunk");
+    }
+
+    const session = streamingSessions.get(sessionId);
+    if (!session || !session.recognizeStream) {
+      return error(404, "Session not found");
+    }
+
+    // Check if session has errored
+    if (session.errored) {
+      return error(500, "Session error: " + (session.error || "Streaming failed"));
+    }
+
+    // Ensure config has been sent and stream is ready before sending audio
+    if (!session.configSent) {
+      return error(400, "Config not sent yet");
+    }
+
+    if (!session.ready) {
+      // Wait a bit for stream to be ready
+      let attempts = 0;
+      while (!session.ready && !session.errored && attempts < 20) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+        attempts++;
+      }
+      if (session.errored) {
+        return error(500, "Session error: " + (session.error || "Streaming failed"));
+      }
+      if (!session.ready) {
+        return error(400, "Stream not ready yet");
+      }
+    }
+
+    // Convert base64 chunk to buffer
+    const audioBuffer = Buffer.from(chunk, 'base64');
+
+    // Send raw audio buffer directly to Google Cloud
+    // Write the buffer directly, not wrapped in an object
+    if (session.recognizeStream.writable && !session.recognizeStream.destroyed && !session.errored) {
+      try {
+        console.log(`[${sessionId}] Sending audio chunk (${audioBuffer.length} bytes)`);
+        // Write raw buffer directly
+        const writeResult = session.recognizeStream.write(audioBuffer);
+        
+        if (!writeResult) {
+          // Stream is backpressured, wait a bit
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+      } catch (writeErr) {
+        console.error(`[${sessionId}] Error writing to stream:`, writeErr);
+        // Mark session as errored but don't delete immediately
+        session.errored = true;
+        session.error = writeErr.message;
+        // Delete session after a delay
+        setTimeout(() => {
+          streamingSessions.delete(sessionId);
+        }, 1000);
+        return error(500, "Failed to write audio chunk: " + writeErr.message);
+      }
+    } else {
+      // Stream is not writable
+      if (session.errored) {
+        return error(500, "Session error: " + (session.error || "Streaming failed"));
+      }
+      return error(400, "Stream is not writable or destroyed");
+    }
+
+    return success({ received: true });
+  } catch (err) {
+    console.error("Error sending chunk:", err);
+    return error(500, err.message || "Failed to send chunk");
+  }
+};
+
+// Initialize GitHub AI Inference client using OpenAI SDK
+let githubClient = null;
+
+const initializeGitHubClient = () => {
+  if (githubClient) return githubClient;
+  
+  try {
+    const config = useRuntimeConfig();
+    const token = config.GITHUB_TOKEN;
+    
+    if (!token) {
+      throw new Error("GITHUB_TOKEN not configured");
+    }
+
+    const endpoint = "https://models.github.ai/inference";
+    githubClient = new OpenAI({
+      baseURL: endpoint,
+      apiKey: token
+    });
+    
+    return githubClient;
+  } catch (err) {
+    console.error("Error initializing GitHub AI client:", err);
+    throw new Error("Failed to initialize GitHub AI client");
+  }
+};
+
+// Summarize transcription text
+export const summarizeTranscription = async (event) => {
+  try {
+    const body = await readBody(event);
+    const { text } = body;
+
+    if (!text || !text.trim()) {
+      return error(400, "No text provided for summarization");
+    }
+
+    // Initialize GitHub AI client
+    const client = initializeGitHubClient();
+    const model = "openai/gpt-4o";
+
+    // Create a prompt that focuses on removing useless text and keeping only relevant content
+    const prompt = `Please summarize the following transcription. Remove any useless text, filler words, repeated phrases, and irrelevant information. Keep only the meaningful and important content. Maintain proper grammar and clarity. If the transcription contains a conversation, preserve the key points and main ideas.
+
+Transcription:
+${text}
+
+Summary:`;
+
+    // Call GitHub AI Inference API using OpenAI SDK
+    const response = await client.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: "You are a helpful assistant that summarizes transcriptions by removing filler words, repetitions, and irrelevant content while preserving all meaningful information."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      model: model,
+      temperature: 0.3, // Lower temperature for more focused, consistent summaries
+      max_tokens: 2000, // Adjust based on your needs
+    });
+
+    const summarizedText = response.choices[0]?.message?.content?.trim();
+
+    if (!summarizedText) {
+      return error(500, "Failed to generate summary");
+    }
+
+    return success({
+      summary: summarizedText,
+      originalLength: text.length,
+      summaryLength: summarizedText.length,
+    });
+  } catch (err) {
+    console.error("Summarization error:", err);
+    
+    // Handle specific GitHub token errors
+    if (err.message && err.message.includes("GITHUB_TOKEN")) {
+      return error(500, "GitHub token not configured. Please check environment variables.");
+    }
+    
+    // Handle OpenAI API errors
+    if (err.status === 401 || err.statusCode === 401) {
+      return error(401, "Invalid GitHub token. Please check your configuration.");
+    }
+    
+    if (err.status === 429 || err.statusCode === 429) {
+      return error(429, "API rate limit exceeded. Please try again later.");
+    }
+
+    // Handle OpenAI error response structure
+    if (err.error) {
+      const errorMessage = err.error.message || err.message || "Failed to summarize transcription.";
+      return error(err.status || err.statusCode || 500, errorMessage);
+    }
+
+    return error(500, err.message || "Failed to summarize transcription. Please try again.");
+  }
+};
+

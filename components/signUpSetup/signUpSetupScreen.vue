@@ -41,6 +41,14 @@ const currentStep = ref(0);
 </script>
 
 <style scoped>
+.init-screen {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+}
+
 .parent {
   position: relative;
   height: 100vh;

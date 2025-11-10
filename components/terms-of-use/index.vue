@@ -83,7 +83,7 @@
         You grant FlosslyOS and its agents a perpetual, nonexclusive, worldwide,
         royalty-free, irrevocable licence to use, copy, distribute, modify,
         publicly display, create derivatives, and sub-licence Your Content as
-        required to enable Platform operation and fulfillment of related
+        required to enable Platform operation and fulfilment of related
         services.
       </p>
       <p>
@@ -128,7 +128,7 @@
       <p>
         Please refer to our Privacy Policy, which governs collection, use, and
         storage of personal data. Do not provide personal data unless you are
-        authorized or required, and ensure explicit consent and sharing of our
+        authorised or required, and ensure explicit consent and sharing of our
         Privacy Policy with all parties impacted.
       </p>
       <h3 class="terms-heading mt-6">8. Intellectual Property Rights</h3>
@@ -209,12 +209,12 @@
         username/account for the Platform. Your subscription agreement is
         subject to a minimum contract period of twelve (12) months from the
         initial activation date. During this initial 12-month term, the
-        agreement may not be terminated, downgraded, or upgraded except with at
+        agreement may not be terminated, upgraded or downgraded except with at
         least one (1) month's prior written notice (30 days). After the initial
         minimum term expires, the contract will continue on a rolling monthly
         basis unless cancelled by either party giving at least one (1) month's
         written notice. Upgrades or downgrades of the subscription plan are also
-        subject to one month's notice. We may deny or suspend access, or
+        subject to one (1) month's notice. We may deny or suspend access, or
         terminate or cancel these Terms, with or without cause and at any time
         and without prior notice in accordance with the other termination
         provisions detailed herein. Any termination or cancellation will not
@@ -229,7 +229,7 @@
         FlosslyOS will not be responsible for retaining or providing user data
         after termination, except as required by law; and shall have no
         liability for loss of data if the user has not downloaded their data
-        before access ends. In the event that FlosslyOS Ltd. is sold, merges, or
+        before access ends. In the event that FlosslyOS Ltd. is sold, merged, or
         otherwise transfers Platform ownership, users will be notified and
         required to download or migrate their own data prior to the changeover.
         Following the transfer, users must move any required data to the new
