@@ -208,7 +208,7 @@ const handleCategorySuccess = () => {
   addCategoryDialog.value = false;
 };
 const getTeamStats = () => {
-  taskStore.getTeamTaskStatsByCategory().then((res) => {
+  taskStore.getTeamTaskStatsByCategoryForDashboard().then((res) => {
     if (res.code === 0) {
       if (res.data && Array.isArray(res.data) && res.data.length > 0) {
         // Filter out categories with 0 tasks

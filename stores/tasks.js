@@ -192,11 +192,11 @@ export const useTaskStore = defineStore("taskStore", {
           });
       });
     },
-    getTeamTaskStatsByCategory() {
+    getTeamTaskStatsByCategoryForDashboard() {
       return new Promise((resolve, reject) => {
         this.isLoading = true;
         taskService
-          .getTeamTaskStatsByCategory()
+          .getTeamTaskStatsByCategoryForDashboard()
           .then((res) => {
             this.isLoading = false;
             resolve(res);

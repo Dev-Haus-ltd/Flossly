@@ -110,7 +110,7 @@ export default {
         });
     });
   },
-  getTeamTaskStatsByCategory() {
+  getTeamTaskStatsByCategoryForDashboard() {
     return new Promise((resolve, reject) => {
       Get("/tasks/teamTasksCountByCategory")
         .then((res) => {
