@@ -127,7 +127,7 @@
           color="primary"
           variant="flat"
           rounded="lg"
-          @click="drawerOpen = true"
+          @click="openAddTaskDialog"
           class="add-task-btn"
         >
           <template #prepend>
@@ -291,9 +291,6 @@
                         :id="`resize-handle-${column.key}`"
                         @pointerdown="startResize($event, column)"
                       >
-                        <v-icon color="grey" style="cursor: col-resize"
-                          >mdi-arrow-left-right</v-icon
-                        >
                       </span>
                     </div>
                   </th>
@@ -468,7 +465,6 @@
                                 class="resize-handle"
                                 @pointerdown="startResize($event, column)"
                               >
-                                <v-icon size="12" style="cursor: col-resize">mdi-arrow-left-right</v-icon>
                               </span>
                             </div>
                             <div v-else>
@@ -751,6 +747,10 @@ const openedPanels = ref([0]);
 const dialogOpen = ref(false);
 const taskPoolDialog = ref(false);
 const isAllSelected = ref(false);
+
+const openAddTaskDialog = () => {
+  drawerOpen.value = true;
+};
 const tasksForCalender = ref([]);
 const bulkTaskUploadDialog = ref(false);
 const rolesList = ref([]);

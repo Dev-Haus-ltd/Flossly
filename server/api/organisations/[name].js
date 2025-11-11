@@ -15,6 +15,9 @@ import {
   deleteAttribute,
   getSurgeries,
   updateImportantPeople,
+  getScripts,
+  saveScript,
+  seedScripts,
 } from "~/server/controllers/organisation";
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, "name");
@@ -51,6 +54,12 @@ export default defineEventHandler(async (event) => {
       return await getSurgeries(event);
     case "updatePeople":
       return await updateImportantPeople(event);
+    case "scripts":
+      return await getScripts(event);
+    case "saveScript":
+      return await saveScript(event);
+    case "seedScripts":
+      return await seedScripts(event);
     default:
       return { code: 0, error: "Not found" };
   }
