@@ -116,5 +116,19 @@ export default {
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
+  },
+  getScripts() {
+    return new Promise((resolve, reject) => {
+      Get("/organisations/scripts")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  saveScript(data) {
+    return new Promise((resolve, reject) => {
+      Post("/organisations/saveScript", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
   }
 };

@@ -46,8 +46,8 @@
     <!-- ░░░ Main Content ░░░ -->
     <v-row>
       <!-- LEFT: Add Notes Form -->
-      <v-col cols="12" md="5">
-        <div class="pa-4 notes-form">
+      <v-col cols="12" md="4">
+        <div class="pa-4 notes-form" ref="notesFormEl">
           <h5 class="notes-title mb-4">Add Notes</h5>
 
           <v-form ref="formRef" @submit.prevent="onAddNote">
@@ -181,47 +181,90 @@
         </div>
       </v-col>
 
-      <!-- RIGHT: Notes List -->
-      <v-col cols="12" md="7">
-        <v-row>
-          <v-col
-            cols="12"
-            md="4"
-            v-for="(note, i) in notes"
-            :key="note.id || note._id || i"
-          >
-            <v-card class="pa-3 note-card" :elevation="0">
-              <div class="d-flex justify-space-between align-center mb-2">
-                <span class="note-title">{{ note.title }}</span>
-                <v-icon
-                  size="18"
-                  color="#000000"
-                  class="cursor-pointer"
-                  @click="onDeleteNote(note, i)"
-                >
-                  mdi-delete
-                </v-icon>
+      <!-- RIGHT: container 1 -->
+      <v-col cols="12" md="4">
+        <div class="pa-4 voice-container">
+          <div class="d-flex align-center justify-space-between mb-6">
+            <div class="section-header">Voice Transcript</div>
+            <v-btn
+              v-if="isRecording"
+              color="error"
+              size="small"
+              flat
+              @click="stopRecording"
+            >
+              Stop
+            </v-btn>
+          </div>
+          <template v-if="!isSummarizing">
+            <div v-if="!isRecording && !transcribedText" class="voice-center">
+              <div class="mic-circle" @click="toggleRecording">
+                <v-icon size="36" color="#ffffff">mdi-microphone</v-icon>
               </div>
-
-              <div class="mb-1">
-                <span class="note-label">Date:</span>
-                <span class="note-value">{{ parsedDate(note.date) || "N/A" }}</span>
+            </div>
+            <div v-else class="editor-wrapper">
+              <div ref="editorEl" class="editor-holder" />
+            </div>
+          </template>
+          <template v-else>
+            <div class="editor-wrapper">
+              <div ref="editorEl" class="editor-holder" />
+              <div class="loader-overlay">
+                <v-progress-circular indeterminate color="primary" size="56" width="6" />
               </div>
+            </div>
+          </template>
+        </div>
+      </v-col>
 
-              <div class="mb-1">
-                <span class="note-label">Time:</span>
-                <span class="note-value">{{ note.time || "N/A" }}</span>
-              </div>
+      <!-- RIGHT: container 2 -->
+      <v-col cols="12" md="4">
+        <div class="pa-4 voice-container">
+          <div class="scripts-scroll" ref="scriptsScrollEl">
+            <ScriptsPool />
+          </div>
+        </div>
+      </v-col>
+    </v-row>
 
-              <div class="mb-1">
-                <span class="note-label">Channel:</span>
-                <span class="note-value">{{ note.channel || "N/A" }}</span>
-              </div>
+    <!-- Notes List -->
+    <v-row class="mt-4">
+      <v-col
+        cols="12"
+        md="4"
+        v-for="(note, i) in notes"
+        :key="note.id || note._id || i"
+      >
+        <v-card class="pa-3 note-card" :elevation="0">
+          <div class="d-flex justify-space-between align-center mb-2">
+            <span class="note-title">{{ note.title }}</span>
+            <v-icon
+              size="18"
+              color="#000000"
+              class="cursor-pointer"
+              @click="onDeleteNote(note, i)"
+            >
+              mdi-delete
+            </v-icon>
+          </div>
 
-              <div class="note-summary">{{ note.summary }}</div>
-            </v-card>
-          </v-col>
-        </v-row>
+          <div class="mb-1">
+            <span class="note-label">Date:</span>
+            <span class="note-value">{{ parsedDate(note.date) || "N/A" }}</span>
+          </div>
+
+          <div class="mb-1">
+            <span class="note-label">Time:</span>
+            <span class="note-value">{{ note.time || "N/A" }}</span>
+          </div>
+
+          <div class="mb-1">
+            <span class="note-label">Channel:</span>
+            <span class="note-value">{{ note.channel || "N/A" }}</span>
+          </div>
+
+          <div class="note-summary">{{ note.summary }}</div>
+        </v-card>
       </v-col>
     </v-row>
 
@@ -238,11 +281,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, onBeforeUnmount, watch, nextTick } from "vue";
 import { parsedDate } from "@/lib/dateFormatter";
+import { useTranscription } from "@/composables/useTranscription";
+import ScriptsPool from "./ScriptsPool.vue";
 const crmStore = useCrmStore();
 
-const emit = defineEmits(["save", "update:preferences"]);
+const emit = defineEmits(["save", "update:preferences", "open-transcription"]);
 
 const { leadId, initialNotes, initialPreferences } = defineProps({
   leadId: { type: [Number, String], required: true },
@@ -308,6 +353,7 @@ const onPrefChange = async () => {
 
 // Add note
 const onAddNote = async () => {
+  console.log('onAddNote called');
   if (!form.value.title || !form.value.date || !form.value.time || !form.value.channel || !form.value.summary)
     return;
 
@@ -320,6 +366,7 @@ const onAddNote = async () => {
       emit("save", notes.value);
       form.value = { title: "", date: "", time: "", channel: null, summary: "" };
       formattedNoteDate.value = "";
+      clearEditor();
     }
   } finally {
     saving.value = false;
@@ -351,6 +398,37 @@ const confirmDelete = async () => {
   }
 };
 
+// Transcription integration
+const editorEl = ref(null);
+const notesFormEl = ref(null);
+const scriptsScrollEl = ref(null);
+let notesFormResizeObserver = null;
+const {
+  isRecording,
+  isProcessing,
+  isSummarizing,
+  transcribedText,
+  summarizedText,
+  toggleRecording,
+  initEditor,
+  stopRecording,
+  clearEditor,
+} = useTranscription(editorEl);
+
+// Keep scripts container height capped to notes form height
+const syncScriptsMaxHeight = () => {
+  try {
+    const formEl = notesFormEl?.value;
+    const scriptsEl = scriptsScrollEl?.value;
+    if (!formEl || !scriptsEl) return;
+    const height = formEl.offsetHeight;
+    if (height && Number.isFinite(height)) {
+      scriptsEl.style.maxHeight = `${height}px`;
+      scriptsEl.style.overflow = "auto";
+    }
+  } catch {}
+};
+
 // Load notes and preferences
 onMounted(async () => {
   try {
@@ -370,6 +448,43 @@ onMounted(async () => {
       };
     }
   } catch {}
+
+  // Ensure editor is initialized when the holder becomes available
+  await initEditor();
+
+  // Wait for DOM, then sync heights and observe future changes
+  await nextTick();
+  syncScriptsMaxHeight();
+  if (window && "ResizeObserver" in window && notesFormEl?.value) {
+    notesFormResizeObserver = new ResizeObserver(() => {
+      syncScriptsMaxHeight();
+    });
+    notesFormResizeObserver.observe(notesFormEl.value);
+  } else {
+    // Fallback: resync on window resize
+    window.addEventListener("resize", syncScriptsMaxHeight);
+  }
+});
+
+// When AI summary becomes available, populate the notes form's summary
+watch(
+  () => summarizedText.value,
+  (val) => {
+    if (val && typeof val === "string") {
+      form.value.summary = val;
+      clearEditor();
+    }
+  },
+);
+
+onBeforeUnmount(() => {
+  if (notesFormResizeObserver) {
+    try {
+      notesFormResizeObserver.disconnect();
+    } catch {}
+    notesFormResizeObserver = null;
+  }
+  window.removeEventListener("resize", syncScriptsMaxHeight);
 });
 </script>
 
@@ -411,5 +526,69 @@ onMounted(async () => {
   border-radius: 8px !important;
   min-height: 40px;
   font-size: 14px;
+}
+.section-header {
+  font-weight: 600;
+  font-size: 14px;
+}
+.voice-container,
+.text-container {
+  border: 1px solid #dfdfdf;
+  border-radius: 8px;
+  height: 100%;
+  background-color: #ffffff;
+}
+.voice-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 220px;
+}
+.mic-circle {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: rgb(var(--v-theme-primary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 18px rgba(0,0,0,0.08);
+  cursor: pointer;
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.mic-circle:hover {
+  transform: scale(1.04);
+  box-shadow: 0 10px 22px rgba(0,0,0,0.12);
+}
+.mic-hint {
+  font-size: 12px;
+  color: #737373;
+}
+.text-placeholder {
+  font-size: 14px;
+  color: #4b4b4b;
+}
+.editor-holder {
+  min-height: 260px;
+}
+.editor-wrapper {
+  position: relative;
+}
+.loader-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.6);
+  border-radius: 8px;
+}
+.scripts-scroll {
+  
+  
+  min-height: 260px;
+  overflow: auto;
 }
 </style>

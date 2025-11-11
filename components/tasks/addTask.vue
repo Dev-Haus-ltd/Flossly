@@ -1,6 +1,7 @@
 <template>
   <v-navigation-drawer
     :model-value="modelValue"
+    @update:model-value="$emit('update:modelValue', $event)"
     location="right"
     temporary
     :width="600"
@@ -266,7 +267,7 @@ const userStore = useUserStore();
 
 const formRef = ref(null);
 const menu = ref(false);
-const emit = defineEmits(["close", "success"]);
+const emit = defineEmits(["close", "success", "update:modelValue"]);
 const requiredRule = [(v) => !!v || "This field is required"];
 const form = ref({
   title: "",
@@ -437,6 +438,7 @@ const onSubmit = async () => {
       .addNewTask(form.value)
       .then((res) => {
         if (res.code === 0) {
+          emit("update:modelValue", false);
           emit("success");
           setSnack("success", "Task Added Successfully");
           resetForm();
@@ -510,6 +512,7 @@ const resetForm = () => {
 
 const handleCancel = () => {
   resetForm();
+  emit("update:modelValue", false);
   emit("close");
 };
 </script>

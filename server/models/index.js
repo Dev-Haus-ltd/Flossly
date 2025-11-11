@@ -1,5 +1,6 @@
 ﻿import { DefaultPriority } from "./defaultPriorities";
 import { DefaultStatus } from "./defaultStatuses";
+import { DictionaryScript } from "./dictionaryScripts";
 import { OrganisationPriority } from "./organisations/organisationPriorities";
 import { Organisation } from "./organisations/organisations";
 import { OrganisationStatus } from "./organisations/organisationStatuses";
@@ -44,6 +45,7 @@ import { Course } from "./cpd/course";
 import { CourseQuestionaire } from "./cpd/courseQuestionaire";
 import { UserCourseHistory } from "./cpd/userCourseHistory";
 import { OrganisationPeople } from "./organisations/organisationPeople";
+import { OrganisationScript } from "./organisations/organisationScripts";
 import { MetaPage } from "./crm/metaPages";
 import { CrmLead } from "./crm/leads";
 import { MetaUserToken } from "./crm/metaUserTokens";
@@ -464,6 +466,20 @@ User.hasMany(UserCourseHistory, {
 User.hasMany(UserHrDocument, { foreignKey: "userId", as: "hrDocuments" });
 UserHrDocument.belongsTo(User, { foreignKey: "userId", as: "user" });
 
+// Organisation Scripts associations
+Organisation.hasMany(OrganisationScript, {
+  foreignKey: "organisationId",
+  as: "scripts",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+OrganisationScript.belongsTo(Organisation, {
+  foreignKey: "organisationId",
+  as: "organisation",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+
 
 export {
   User,
@@ -522,4 +538,6 @@ export {
   CrmAutomationTemplate,
   MetaUserToken,
   ChatbotConfig,
+  DictionaryScript,
+  OrganisationScript,
 };

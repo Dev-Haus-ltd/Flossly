@@ -116,7 +116,7 @@ export const useTranscription = (editorEl) => {
       };
 
       // Start recording with timeslice to get chunks periodically
-      mediaRecorder.value.start(1000); // Get chunks every 1 second
+      mediaRecorder.value.start(500); // Get chunks every 0.5 second
       isRecording.value = true;
       recordingTime.value = 0;
 
@@ -544,7 +544,7 @@ export const useTranscription = (editorEl) => {
             !summarizedText.value
           ) {
             // Wait a bit more to ensure all transcription results are fully processed
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+            await new Promise((resolve) => setTimeout(resolve, 100));
 
             // Double-check we still have text and haven't summarized yet
             if (
@@ -557,7 +557,7 @@ export const useTranscription = (editorEl) => {
             }
             shouldAutoSummarize.value = false;
           }
-        }, 2000);
+        }, 100);
       }, 500);
     }
   };
@@ -589,6 +589,7 @@ export const useTranscription = (editorEl) => {
 
   // Clear editor
   const clearEditor = async () => {
+    console.log('Before clearing:', transcribedText.value);
     transcribedText.value = '';
     originalTranscribedText.value = '';
     summarizedText.value = '';
@@ -601,6 +602,7 @@ export const useTranscription = (editorEl) => {
     lastWords.value = [];
     await nextTick();
     await initEditor();
+    console.log('After clearing:', transcribedText.value);
   };
 
   // Strip HTML tags from text

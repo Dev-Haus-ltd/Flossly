@@ -4,7 +4,7 @@
     <div v-if="isCheckingAuth" class="auth-loader-overlay">
       <div class="auth-loader-content">
         <lottie-player
-          src="/Blue.json"
+          src="/FlossslyLogoBlue.json"
           background="transparent"
           speed="1"
           style="width: 200px; height: 200px"

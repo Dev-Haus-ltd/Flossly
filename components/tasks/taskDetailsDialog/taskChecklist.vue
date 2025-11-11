@@ -66,7 +66,7 @@
       <!-- Date Picker -->
       <v-col cols="4" v-if="item.showDate">
         <v-text-field
-          v-model="item.dateValue"
+          :model-value="formattedDate"
           density="compact"
           label="Select Date"
           variant="solo"
@@ -80,6 +80,7 @@
         />
         <v-dialog v-model="showDatePickers[index]" width="auto">
           <v-date-picker
+            :model-value="datePickerValue"
             @update:modelValue="
               (val) => {
                 item.dateValue = format(new Date(val), 'dd/MM/yyyy');
@@ -173,7 +174,7 @@
 
 <script setup>
 import { TasksCreateChecklist } from "#components";
-import { format } from "date-fns";
+import { format, parseISO, isValid } from "date-fns";
 const { item, index } = defineProps(["item", "index"]);
 const taskStore = useTaskStore();
 const emit = defineEmits(["deleteItem"]);
@@ -184,12 +185,88 @@ const isEditing = ref(false);
 const initialItem = ref({...item})
 const isDirty = computed(() => JSON.stringify(item || {}) !== JSON.stringify(initialItem.value || {}))
 
+
+const formattedDate = computed(() => {
+  if (!item.dateValue) return '';
+  
+  // If it's already formatted (dd/MM/yyyy), return as is
+  if (typeof item.dateValue === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(item.dateValue)) {
+    return item.dateValue;
+  }
+  
+
+  try {
+    let date;
+    if (typeof item.dateValue === 'string') {
+      date = parseISO(item.dateValue);
+    } else if (item.dateValue instanceof Date) {
+      date = item.dateValue;
+    } else {
+      return '';
+    }
+    
+    
+    if (isValid(date) && date.getTime() > 0) {
+      return format(date, 'dd/MM/yyyy');
+    }
+    return '';
+  } catch (error) {
+    return '';
+  }
+});
+
+
+const datePickerValue = computed(() => {
+  if (!item.dateValue) return null;
+
+ 
+  if (typeof item.dateValue === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(item.dateValue)) {
+    const [day, month, year] = item.dateValue.split('/');
+    return `${year}-${month}-${day}`;
+  }
+  
+
+  try {
+    let date;
+    if (typeof item.dateValue === 'string') {
+      date = parseISO(item.dateValue);
+    } else if (item.dateValue instanceof Date) {
+      date = item.dateValue;
+    } else {
+      return null;
+    }
+    
+  
+    if (isValid(date) && date.getTime() > 0) {
+      return format(date, 'yyyy-MM-dd');
+    }
+    return null;
+  } catch (error) {
+    return null;
+  }
+});
+
 const updateChecklist = () => {
   if (isEditing.value) {
     isEditing.value = false;
   }
-  const data = item;
-  data.dateValue = new Date(data.dateValue);
+  const data = { ...item };
+  
+  
+  if (data.dateValue) {
+    if (typeof data.dateValue === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(data.dateValue)) {
+      
+      const [day, month, year] = data.dateValue.split('/');
+      data.dateValue = new Date(year, month - 1, day);
+    } else if (typeof data.dateValue === 'string') {
+     
+      data.dateValue = parseISO(data.dateValue);
+    } else if (!(data.dateValue instanceof Date)) {
+     
+      data.dateValue = new Date(data.dateValue);
+    }
+  }
+  
   if (item.id) {
     taskStore.updateChecklist(data).then((res) => {
       if (res.code === 0) {
