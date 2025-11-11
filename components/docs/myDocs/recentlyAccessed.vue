@@ -10,7 +10,7 @@
        <img
     :src="isExcel 
       ? 'https://cdn-icons-png.flaticon.com/512/732/732220.png' 
-      : '@/assets/images/flosslydocs/file.svg'"
+      : Image"
     :width="34"
     :height="45.8"
     class="mr-3"
@@ -47,7 +47,7 @@
 </template>
 
 <script setup>
-
+import Image from '@/assets/images/flosslydocs/file.svg'
 defineProps({
   file: {
     type: Object,
