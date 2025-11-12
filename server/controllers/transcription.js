@@ -2,7 +2,7 @@ import formidable from "formidable";
 import fs from "fs";
 import path from "path";
 import { success, error } from "../utils/response";
-import { createError } from "h3";
+import { createError, setCookie } from "h3";
 import crypto from "crypto";
 import OpenAI from "openai";
 
@@ -171,6 +171,16 @@ export const streamTranscribeAudio = async (event) => {
     // Generate session ID
     sessionId = crypto.randomUUID();
     
+    // Set a cookie with the sessionId for sticky session routing in nginx
+    // This ensures all requests for this session go to the same process
+    setCookie(event, 'transcription_session', sessionId, {
+      httpOnly: false, // Allow JavaScript to read it if needed
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 3600, // 1 hour
+      path: '/'
+    });
+    
     // Create a placeholder session entry immediately to prevent race conditions
     // This ensures chunks can be queued even if they arrive before full initialization
     streamingSessions.set(sessionId, {
@@ -178,8 +188,12 @@ export const streamTranscribeAudio = async (event) => {
       configSent: false,
       ready: false,
       errored: false,
-      error: null
+      error: null,
+      processId: process.pid,
+      createdAt: new Date().toISOString()
     });
+    
+    console.log(`[${sessionId}] Session created in process ${process.pid}. Total sessions: ${streamingSessions.size}`);
     
     // Send session ID immediately to client (before any async operations)
     // This ensures the client receives it even if there are delays in initialization
