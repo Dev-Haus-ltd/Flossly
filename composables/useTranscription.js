@@ -135,9 +135,32 @@ export const useTranscription = (editorEl) => {
       const APIURL = '/api';
       const chunkQueue = [];
       let sessionIdReceived = false;
+      let connectionError = null;
 
       // Create EventSource for receiving transcription results (GET request)
       eventSource.value = new EventSource(`${APIURL}/transcription/stream`);
+
+      // Set up connection error handler BEFORE onmessage
+      eventSource.value.onerror = (err) => {
+        console.error('EventSource error:', err);
+        console.error('EventSource readyState:', eventSource.value?.readyState);
+        
+        // Check if connection failed to open
+        if (eventSource.value?.readyState === EventSource.CONNECTING) {
+          connectionError = 'Failed to connect to transcription service';
+        } else if (eventSource.value?.readyState === EventSource.CLOSED) {
+          connectionError = 'Connection to transcription service closed';
+          if (eventSource.value) {
+            eventSource.value.close();
+            eventSource.value = null;
+          }
+        }
+      };
+
+      eventSource.value.onopen = () => {
+        console.log('EventSource connection opened');
+        connectionError = null;
+      };
 
       eventSource.value.onmessage = async (event) => {
         try {
@@ -147,6 +170,7 @@ export const useTranscription = (editorEl) => {
           if (data.sessionId && !currentStream.value?.sessionId) {
             currentStream.value = { sessionId: data.sessionId };
             sessionIdReceived = true;
+            connectionError = null; // Clear any connection errors
 
             // Process any queued chunks
             while (chunkQueue.length > 0) {
@@ -158,6 +182,7 @@ export const useTranscription = (editorEl) => {
 
           if (data.error) {
             error.value = data.error;
+            connectionError = data.error;
             return;
           }
 
@@ -421,21 +446,6 @@ export const useTranscription = (editorEl) => {
         }
       };
 
-      eventSource.value.onerror = (err) => {
-        console.error('EventSource error:', err);
-        console.error('EventSource readyState:', eventSource.value?.readyState);
-
-        // Only close if it's actually closed (readyState 2)
-        if (eventSource.value && eventSource.value.readyState === EventSource.CLOSED) {
-          eventSource.value.close();
-          eventSource.value = null;
-          error.value = 'Connection to transcription service closed';
-        }
-      };
-
-      eventSource.value.onopen = () => {
-        // Connection opened
-      };
 
       // Store sessionId reference and chunk queue
       currentStream.value = {
@@ -449,13 +459,30 @@ export const useTranscription = (editorEl) => {
       while (!sessionIdReceived && attempts < 50) {
         await new Promise((resolve) => setTimeout(resolve, 100));
         attempts++;
+        
+        // Check for connection errors
+        if (connectionError) {
+          throw new Error(connectionError);
+        }
+        
+        // Check if EventSource failed to connect
+        if (eventSource.value?.readyState === EventSource.CLOSED && attempts > 5) {
+          throw new Error('Failed to establish connection to transcription service');
+        }
+        
         if (currentStream.value?.sessionId) {
           sessionIdReceived = true;
         }
       }
 
       if (!sessionIdReceived) {
-        throw new Error('Failed to receive sessionId');
+        // Clean up EventSource if it exists
+        if (eventSource.value) {
+          eventSource.value.close();
+          eventSource.value = null;
+        }
+        const errorMsg = connectionError || 'Failed to receive sessionId. The connection may have timed out or failed.';
+        throw new Error(errorMsg);
       }
     } catch (err) {
       console.error('Error starting streaming transcription:', err);

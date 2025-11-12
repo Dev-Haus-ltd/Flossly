@@ -157,15 +157,35 @@ const streamingSessions = new Map();
 
 // Start streaming transcription session (GET request for SSE)
 export const streamTranscribeAudio = async (event) => {
+  let sessionId = null;
   try {
-    // Set headers for Server-Sent Events
+    // Set headers for Server-Sent Events with proper CORS
     setHeader(event, "Content-Type", "text/event-stream");
     setHeader(event, "Cache-Control", "no-cache");
     setHeader(event, "Connection", "keep-alive");
     setHeader(event, "Access-Control-Allow-Origin", "*");
+    setHeader(event, "Access-Control-Allow-Methods", "GET, OPTIONS");
+    setHeader(event, "Access-Control-Allow-Headers", "Cache-Control");
+    setHeader(event, "X-Accel-Buffering", "no"); // Disable nginx buffering
 
     // Generate session ID
-    const sessionId = crypto.randomUUID();
+    sessionId = crypto.randomUUID();
+    
+    // Create a placeholder session entry immediately to prevent race conditions
+    // This ensures chunks can be queued even if they arrive before full initialization
+    streamingSessions.set(sessionId, {
+      recognizeStream: null,
+      configSent: false,
+      ready: false,
+      errored: false,
+      error: null
+    });
+    
+    // Send session ID immediately to client (before any async operations)
+    // This ensures the client receives it even if there are delays in initialization
+    if (!event.node.res.writableEnded) {
+      event.node.res.write(`data: ${JSON.stringify({ sessionId })}\n\n`);
+    }
     
     // Initialize Google Speech client
     const client = await initializeSpeechClient();
@@ -188,14 +208,21 @@ export const streamTranscribeAudio = async (event) => {
       interimResults: true,
     });
 
-    // Store session
-    streamingSessions.set(sessionId, { 
-      recognizeStream,
-      configSent: true, // Config is sent via streamingRecognize()
-      ready: false,
-      errored: false,
-      error: null
-    });
+    // Update the existing session entry with the recognize stream
+    const session = streamingSessions.get(sessionId);
+    if (session) {
+      session.recognizeStream = recognizeStream;
+      session.configSent = true; // Config is sent via streamingRecognize()
+    } else {
+      // Fallback: create new session if it was somehow deleted
+      streamingSessions.set(sessionId, { 
+        recognizeStream,
+        configSent: true,
+        ready: false,
+        errored: false,
+        error: null
+      });
+    }
 
     // Set up error handler
     recognizeStream.on("error", (err) => {
@@ -224,8 +251,9 @@ export const streamTranscribeAudio = async (event) => {
     await new Promise(resolve => setTimeout(resolve, 200));
 
     // Verify stream is still writable before marking as ready
-    const session = streamingSessions.get(sessionId);
-    if (!session) {
+    // Reuse the session variable from above
+    const currentSession = streamingSessions.get(sessionId);
+    if (!currentSession) {
       // Session was deleted, send error
       const errorData = JSON.stringify({
         error: "Session initialization failed",
@@ -236,7 +264,7 @@ export const streamTranscribeAudio = async (event) => {
     }
 
     // Check if stream is still valid
-    if (!session.recognizeStream || session.recognizeStream.destroyed) {
+    if (!currentSession.recognizeStream || currentSession.recognizeStream.destroyed) {
       const errorData = JSON.stringify({
         error: "Stream initialization failed",
       });
@@ -247,10 +275,9 @@ export const streamTranscribeAudio = async (event) => {
     }
 
     // Mark as ready to accept chunks
-    session.ready = true;
+    currentSession.ready = true;
 
-    // Send session ID to client
-    event.node.res.write(`data: ${JSON.stringify({ sessionId })}\n\n`);
+    // Session ID already sent above, no need to send again
 
     // Track processed results to prevent duplicates
     const processedResults = new Set();
@@ -309,6 +336,12 @@ export const streamTranscribeAudio = async (event) => {
     });
   } catch (err) {
     console.error("Streaming transcription error:", err);
+    
+    // Clean up session if it was created
+    if (sessionId) {
+      streamingSessions.delete(sessionId);
+    }
+    
     const errorData = JSON.stringify({
       error: err.message || "Failed to start streaming transcription",
     });
