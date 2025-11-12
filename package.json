@@ -39,6 +39,7 @@
     "csv-parse": "^6.1.0",
     "date-fns": "^4.1.0",
     "html2pdf.js": "^0.12.1",
+    "ioredis": "^5.8.2",
     "iplocation": "^7.2.0",
     "jsonwebtoken": "^9.0.2",
     "jspdf": "^3.0.3",
