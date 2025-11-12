@@ -227,8 +227,10 @@ export const streamTranscribeAudio = async (event) => {
     if (session) {
       session.recognizeStream = recognizeStream;
       session.configSent = true; // Config is sent via streamingRecognize()
+      console.log(`[${sessionId}] Session updated with recognizeStream. Total active sessions: ${streamingSessions.size}`);
     } else {
       // Fallback: create new session if it was somehow deleted
+      console.warn(`[${sessionId}] Session was deleted before stream initialization, creating new one`);
       streamingSessions.set(sessionId, { 
         recognizeStream,
         configSent: true,
@@ -290,6 +292,7 @@ export const streamTranscribeAudio = async (event) => {
 
     // Mark as ready to accept chunks
     currentSession.ready = true;
+    console.log(`[${sessionId}] Stream is now ready to accept chunks. Total active sessions: ${streamingSessions.size}`);
 
     // Session ID already sent above, no need to send again
 
@@ -368,7 +371,11 @@ export const streamTranscribeAudio = async (event) => {
 
 // Send audio chunk to streaming session (POST request)
 export const streamTranscribeChunk = async (event) => {
+  let sessionId = null;
   try {
+    // Log which process is handling this request
+    const clientIP = event.node.req.headers['x-real-ip'] || event.node.req.socket.remoteAddress;
+    console.log(`[CHUNK] Request received in process ${process.pid} from IP: ${clientIP}`);
     // Parse request body
     let body;
     try {
@@ -439,7 +446,9 @@ export const streamTranscribeChunk = async (event) => {
 
     const session = streamingSessions.get(sessionId);
     if (!session) {
-      console.error(`[${sessionId}] Session not found in streamingSessions. Active sessions:`, Array.from(streamingSessions.keys()));
+      console.error(`[${sessionId}] Session not found in process ${process.pid}. Active sessions in this process:`, Array.from(streamingSessions.keys()));
+      console.error(`[${sessionId}] This means the chunk request hit a different process than where the session was created.`);
+      console.error(`[${sessionId}] Check if nginx sticky sessions (ip_hash) are configured correctly.`);
       throw createError({
         statusCode: 404,
         data: {
@@ -448,6 +457,13 @@ export const streamTranscribeChunk = async (event) => {
           message: "Session not found. Please restart the transcription.",
         },
       });
+    }
+    
+    // Log process ID mismatch for debugging
+    if (session.processId !== process.pid) {
+      console.warn(`[${sessionId}] WARNING: Session created in process ${session.processId}, but chunk received in process ${process.pid}. Sticky sessions may not be working!`);
+    } else {
+      console.log(`[${sessionId}] Chunk received in correct process ${process.pid} (session owner: ${session.processId})`);
     }
 
     if (!session.recognizeStream) {
