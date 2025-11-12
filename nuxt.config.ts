@@ -46,6 +46,8 @@ export default defineNuxtConfig({
     GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS,
     // GitHub token for GPT-5 model (testing)
     GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+    // Redis connection URL for centralized session management
+    REDIS_URL: process.env.REDIS_URL,
   },
   modules: [ 
     async (options, nuxt) => {

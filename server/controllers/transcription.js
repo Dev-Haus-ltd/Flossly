@@ -1,10 +1,16 @@
 import formidable from "formidable";
 import fs from "fs";
-import path from "path";
 import { success, error } from "../utils/response";
-import { createError, setCookie } from "h3";
+import { createError, setCookie, getCookie, readBody } from "h3";
 import crypto from "crypto";
 import OpenAI from "openai";
+import {
+  setSessionMetadata,
+  getSessionMetadata,
+  getSessionProcessId,
+  deleteSession,
+  updateSessionMetadata,
+} from "../utils/redis.js";
 
 // Google Cloud Speech-to-Text client
 let speechClient = null;
@@ -152,8 +158,10 @@ export const transcribeAudio = async (event) => {
   }
 };
 
-// Store active streaming sessions
-const streamingSessions = new Map();
+// Store active streaming sessions (local memory for streams only)
+// Note: Streams can't be serialized, so we keep them in local memory
+// Session metadata is stored in Redis for cross-process coordination
+const streamingSessions = new Map(); // Only stores recognizeStream objects
 
 // Start streaming transcription session (GET request for SSE)
 export const streamTranscribeAudio = async (event) => {
@@ -181,19 +189,29 @@ export const streamTranscribeAudio = async (event) => {
       path: '/'
     });
     
-    // Create a placeholder session entry immediately to prevent race conditions
-    // This ensures chunks can be queued even if they arrive before full initialization
-    streamingSessions.set(sessionId, {
-      recognizeStream: null,
+    // Store session metadata in Redis for cross-process coordination
+    const sessionMetadata = {
+      recognizeStream: null, // Will be stored locally, not in Redis
       configSent: false,
       ready: false,
       errored: false,
       error: null,
       processId: process.pid,
       createdAt: new Date().toISOString()
-    });
+    };
     
-    console.log(`[${sessionId}] Session created in process ${process.pid}. Total sessions: ${streamingSessions.size}`);
+    // Store metadata in Redis (stream will be added to local memory later)
+    try {
+      await setSessionMetadata(sessionId, sessionMetadata, 3600);
+      console.log(`[${sessionId}] ✅ Session metadata stored in Redis. Process: ${process.pid}`);
+    } catch (redisErr) {
+      console.warn(`[${sessionId}] ⚠️ Failed to store session in Redis, continuing with local only:`, redisErr.message);
+    }
+    
+    // Create local placeholder for the stream (will be populated later)
+    streamingSessions.set(sessionId, null);
+    
+    console.log(`[${sessionId}] Session created in process ${process.pid}. Total local sessions: ${streamingSessions.size}`);
     
     // Send session ID immediately to client (before any async operations)
     // This ensures the client receives it even if there are delays in initialization
@@ -222,32 +240,34 @@ export const streamTranscribeAudio = async (event) => {
       interimResults: true,
     });
 
-    // Update the existing session entry with the recognize stream
-    const session = streamingSessions.get(sessionId);
-    if (session) {
-      session.recognizeStream = recognizeStream;
-      session.configSent = true; // Config is sent via streamingRecognize()
-      console.log(`[${sessionId}] Session updated with recognizeStream. Total active sessions: ${streamingSessions.size}`);
-    } else {
-      // Fallback: create new session if it was somehow deleted
-      console.warn(`[${sessionId}] Session was deleted before stream initialization, creating new one`);
-      streamingSessions.set(sessionId, { 
-        recognizeStream,
+    // Store the stream in local memory (can't serialize to Redis)
+    streamingSessions.set(sessionId, recognizeStream);
+    
+    // Update session metadata in Redis
+    try {
+      await updateSessionMetadata(sessionId, {
         configSent: true,
-        ready: false,
-        errored: false,
-        error: null
-      });
+        processId: process.pid,
+      }, 3600);
+      console.log(`[${sessionId}] Session updated with recognizeStream. Total local sessions: ${streamingSessions.size}`);
+    } catch (redisErr) {
+      console.warn(`[${sessionId}] Failed to update session in Redis:`, redisErr.message);
     }
 
     // Set up error handler
-    recognizeStream.on("error", (err) => {
+    recognizeStream.on("error", async (err) => {
       console.error(`[${sessionId}] Streaming recognition error:`, err);
-      const session = streamingSessions.get(sessionId);
-      if (session) {
-        session.errored = true;
-        session.error = err.message;
+      
+      // Update Redis with error state
+      try {
+        await updateSessionMetadata(sessionId, {
+          errored: true,
+          error: err.message,
+        }, 3600);
+      } catch (redisErr) {
+        console.warn(`[${sessionId}] Failed to update error in Redis:`, redisErr.message);
       }
+      
       const errorData = JSON.stringify({
         error: err.message || "Streaming recognition failed",
       });
@@ -256,8 +276,13 @@ export const streamTranscribeAudio = async (event) => {
         event.node.res.end();
       }
       // Delete session after a delay
-      setTimeout(() => {
+      setTimeout(async () => {
         streamingSessions.delete(sessionId);
+        try {
+          await deleteSession(sessionId);
+        } catch (redisErr) {
+          console.warn(`[${sessionId}] Failed to delete session from Redis:`, redisErr.message);
+        }
       }, 1000);
     });
 
@@ -267,32 +292,47 @@ export const streamTranscribeAudio = async (event) => {
     await new Promise(resolve => setTimeout(resolve, 200));
 
     // Verify stream is still writable before marking as ready
-    // Reuse the session variable from above
-    const currentSession = streamingSessions.get(sessionId);
-    if (!currentSession) {
+    const currentStream = streamingSessions.get(sessionId);
+    if (!currentStream) {
       // Session was deleted, send error
       const errorData = JSON.stringify({
         error: "Session initialization failed",
       });
       event.node.res.write(`data: ${errorData}\n\n`);
       event.node.res.end();
+      try {
+        await deleteSession(sessionId);
+      } catch (redisErr) {
+        console.warn(`[${sessionId}] Failed to delete session from Redis:`, redisErr.message);
+      }
       return;
     }
 
     // Check if stream is still valid
-    if (!currentSession.recognizeStream || currentSession.recognizeStream.destroyed) {
+    if (currentStream.destroyed) {
       const errorData = JSON.stringify({
         error: "Stream initialization failed",
       });
       event.node.res.write(`data: ${errorData}\n\n`);
       event.node.res.end();
       streamingSessions.delete(sessionId);
+      try {
+        await deleteSession(sessionId);
+      } catch (redisErr) {
+        console.warn(`[${sessionId}] Failed to delete session from Redis:`, redisErr.message);
+      }
       return;
     }
 
-    // Mark as ready to accept chunks
-    currentSession.ready = true;
-    console.log(`[${sessionId}] Stream is now ready to accept chunks. Total active sessions: ${streamingSessions.size}`);
+    // Mark as ready to accept chunks in Redis
+    try {
+      await updateSessionMetadata(sessionId, {
+        ready: true,
+      }, 3600);
+      console.log(`[${sessionId}] Stream is now ready to accept chunks. Total local sessions: ${streamingSessions.size}`);
+    } catch (redisErr) {
+      console.warn(`[${sessionId}] Failed to update ready state in Redis:`, redisErr.message);
+    }
 
     // Session ID already sent above, no need to send again
 
@@ -338,15 +378,25 @@ export const streamTranscribeAudio = async (event) => {
 
     // Error handler already set up above, before writing config
 
-    recognizeStream.on("end", () => {
+    recognizeStream.on("end", async () => {
       event.node.res.end();
       streamingSessions.delete(sessionId);
+      try {
+        await deleteSession(sessionId);
+      } catch (redisErr) {
+        console.warn(`[${sessionId}] Failed to delete session from Redis:`, redisErr.message);
+      }
     });
 
     // Handle request close
-    event.node.req.on("close", () => {
+    event.node.req.on("close", async () => {
       recognizeStream.destroy();
       streamingSessions.delete(sessionId);
+      try {
+        await deleteSession(sessionId);
+      } catch (redisErr) {
+        console.warn(`[${sessionId}] Failed to delete session from Redis:`, redisErr.message);
+      }
       if (!event.node.res.writableEnded) {
         event.node.res.end();
       }
@@ -357,6 +407,11 @@ export const streamTranscribeAudio = async (event) => {
     // Clean up session if it was created
     if (sessionId) {
       streamingSessions.delete(sessionId);
+      try {
+        await deleteSession(sessionId);
+      } catch (redisErr) {
+        console.warn(`[${sessionId}] Failed to delete session from Redis:`, redisErr.message);
+      }
     }
     
     const errorData = JSON.stringify({
@@ -404,11 +459,12 @@ export const streamTranscribeChunk = async (event) => {
       });
     }
 
-    sessionId = body.sessionId;
+    // Try to get sessionId from request body first, then fallback to cookie
+    sessionId = body.sessionId || getCookie(event, 'transcription_session');
     const chunk = body.chunk;
 
     if (!sessionId) {
-      console.error("Missing sessionId in request body");
+      console.error("Missing sessionId in request body and cookie");
       throw createError({
         statusCode: 400,
         data: {
@@ -444,55 +500,74 @@ export const streamTranscribeChunk = async (event) => {
       });
     }
 
-    const session = streamingSessions.get(sessionId);
-    if (!session) {
-      console.error(`[${sessionId}] Session not found in process ${process.pid}. Active sessions in this process:`, Array.from(streamingSessions.keys()));
-      console.error(`[${sessionId}] This means the chunk request hit a different process than where the session was created.`);
-      console.error(`[${sessionId}] Check if nginx sticky sessions (ip_hash) are configured correctly.`);
-      throw createError({
-        statusCode: 404,
-        data: {
-          code: 1,
-          success: false,
-          message: "Session not found. Please restart the transcription.",
-        },
-      });
+    // Check Redis first to see if session exists and which process owns it
+    let sessionMetadata = null;
+    let sessionProcessId = null;
+    
+    try {
+      sessionMetadata = await getSessionMetadata(sessionId);
+      sessionProcessId = await getSessionProcessId(sessionId);
+      if (sessionMetadata) {
+        console.log(`[${sessionId}] ✅ Session found in Redis. Owner process: ${sessionProcessId}, Current process: ${process.pid}`);
+      } else {
+        console.log(`[${sessionId}] ⚠️ Session NOT found in Redis, checking local memory only`);
+      }
+    } catch (redisErr) {
+      console.warn(`[${sessionId}] ⚠️ Failed to check Redis, falling back to local only:`, redisErr.message);
     }
     
-    // Log process ID mismatch for debugging
-    if (session.processId !== process.pid) {
-      console.warn(`[${sessionId}] WARNING: Session created in process ${session.processId}, but chunk received in process ${process.pid}. Sticky sessions may not be working!`);
-    } else {
-      console.log(`[${sessionId}] Chunk received in correct process ${process.pid} (session owner: ${session.processId})`);
+    // Check if session exists in Redis
+    if (!sessionMetadata) {
+      // Check local memory as fallback
+      const localStream = streamingSessions.get(sessionId);
+      if (!localStream) {
+        console.error(`[${sessionId}] Session not found in Redis or local memory. Process ${process.pid}`);
+        throw createError({
+          statusCode: 404,
+          data: {
+            code: 1,
+            success: false,
+            message: "Session not found. Please restart the transcription.",
+          },
+        });
+      }
     }
-
-    if (!session.recognizeStream) {
-      console.error(`[${sessionId}] Session exists but recognizeStream is null`);
+    
+    // Check if session is in a different process
+    if (sessionProcessId && sessionProcessId !== process.pid) {
+      console.warn(`[${sessionId}] Session owned by process ${sessionProcessId}, but chunk received in process ${process.pid}. Sticky sessions may not be working correctly.`);
+      // With sticky sessions, this shouldn't happen, but we'll still try local memory
+    }
+    
+    // Get the stream from local memory (streams can't be in Redis)
+    const recognizeStream = streamingSessions.get(sessionId);
+    if (!recognizeStream) {
+      console.error(`[${sessionId}] Session exists in Redis but stream not found in local memory. Process ${process.pid}`);
       throw createError({
         statusCode: 404,
         data: {
           code: 1,
           success: false,
-          message: "Stream not initialized for this session",
+          message: "Stream not found in this process. Please ensure sticky sessions are configured correctly.",
         },
       });
     }
 
-    // Check if session has errored
-    if (session.errored) {
-      console.error(`[${sessionId}] Session has errored:`, session.error);
+    // Check if session has errored (from Redis metadata)
+    if (sessionMetadata?.errored) {
+      console.error(`[${sessionId}] Session has errored:`, sessionMetadata.error);
       throw createError({
         statusCode: 500,
         data: {
           code: 1,
           success: false,
-          message: "Session error: " + (session.error || "Streaming failed"),
+          message: "Session error: " + (sessionMetadata.error || "Streaming failed"),
         },
       });
     }
 
     // Ensure config has been sent and stream is ready before sending audio
-    if (!session.configSent) {
+    if (sessionMetadata && !sessionMetadata.configSent) {
       console.error(`[${sessionId}] Config not sent yet`);
       throw createError({
         statusCode: 400,
@@ -504,25 +579,39 @@ export const streamTranscribeChunk = async (event) => {
       });
     }
 
-    if (!session.ready) {
+    if (sessionMetadata && !sessionMetadata.ready) {
       // Wait a bit for stream to be ready
       let attempts = 0;
-      while (!session.ready && !session.errored && attempts < 20) {
+      while (attempts < 20) {
+        // Re-check Redis for ready state
+        try {
+          const updatedMetadata = await getSessionMetadata(sessionId);
+          if (updatedMetadata?.ready || updatedMetadata?.errored) {
+            if (updatedMetadata.errored) {
+              throw createError({
+                statusCode: 500,
+                data: {
+                  code: 1,
+                  success: false,
+                  message: "Session error: " + (updatedMetadata.error || "Streaming failed"),
+                },
+              });
+            }
+            if (updatedMetadata.ready) {
+              break;
+            }
+          }
+        } catch (redisErr) {
+          console.warn(`[${sessionId}] Failed to check Redis ready state:`, redisErr.message);
+        }
+        
         await new Promise(resolve => setTimeout(resolve, 50));
         attempts++;
       }
-      if (session.errored) {
-        console.error(`[${sessionId}] Session errored while waiting for ready state`);
-        throw createError({
-          statusCode: 500,
-          data: {
-            code: 1,
-            success: false,
-            message: "Session error: " + (session.error || "Streaming failed"),
-          },
-        });
-      }
-      if (!session.ready) {
+      
+      // Final check
+      const finalMetadata = await getSessionMetadata(sessionId).catch(() => null);
+      if (finalMetadata && !finalMetadata.ready) {
         console.error(`[${sessionId}] Stream not ready after waiting`);
         throw createError({
           statusCode: 400,
@@ -563,7 +652,7 @@ export const streamTranscribeChunk = async (event) => {
     }
 
     // Check stream state before writing
-    if (!session.recognizeStream) {
+    if (!recognizeStream) {
       console.error(`[${sessionId}] recognizeStream is null before write`);
       throw createError({
         statusCode: 500,
@@ -575,19 +664,19 @@ export const streamTranscribeChunk = async (event) => {
       });
     }
 
-    const stream = session.recognizeStream;
-    const isWritable = stream.writable !== false;
-    const isDestroyed = stream.destroyed === true;
+    const isWritable = recognizeStream.writable !== false;
+    const isDestroyed = recognizeStream.destroyed === true;
+    const isErrored = sessionMetadata?.errored || false;
 
-    if (!isWritable || isDestroyed || session.errored) {
-      console.error(`[${sessionId}] Stream state - writable: ${isWritable}, destroyed: ${isDestroyed}, errored: ${session.errored}`);
-      if (session.errored) {
+    if (!isWritable || isDestroyed || isErrored) {
+      console.error(`[${sessionId}] Stream state - writable: ${isWritable}, destroyed: ${isDestroyed}, errored: ${isErrored}`);
+      if (isErrored) {
         throw createError({
           statusCode: 500,
           data: {
             code: 1,
             success: false,
-            message: "Session error: " + (session.error || "Streaming failed"),
+            message: "Session error: " + (sessionMetadata?.error || "Streaming failed"),
           },
         });
       }
@@ -603,9 +692,9 @@ export const streamTranscribeChunk = async (event) => {
 
     // Send raw audio buffer directly to Google Cloud
     try {
-      console.log(`[${sessionId}] Sending audio chunk (${audioBuffer.length} bytes)`);
+      console.log(`[${sessionId}] Sending audio chunk (${audioBuffer.length} bytes) to process ${process.pid}`);
       // Write raw buffer directly
-      const writeResult = stream.write(audioBuffer);
+      const writeResult = recognizeStream.write(audioBuffer);
       
       if (!writeResult) {
         // Stream is backpressured, wait a bit
@@ -622,13 +711,27 @@ export const streamTranscribeChunk = async (event) => {
         code: writeErr.code,
         name: writeErr.name
       });
-      // Mark session as errored but don't delete immediately
-      session.errored = true;
-      session.error = writeErr.message || String(writeErr);
+      
+      // Mark session as errored in Redis
+      try {
+        await updateSessionMetadata(sessionId, {
+          errored: true,
+          error: writeErr.message || String(writeErr),
+        }, 3600);
+      } catch (redisErr) {
+        console.warn(`[${sessionId}] Failed to update error in Redis:`, redisErr.message);
+      }
+      
       // Delete session after a delay
-      setTimeout(() => {
+      setTimeout(async () => {
         streamingSessions.delete(sessionId);
+        try {
+          await deleteSession(sessionId);
+        } catch (redisErr) {
+          console.warn(`[${sessionId}] Failed to delete session from Redis:`, redisErr.message);
+        }
       }, 1000);
+      
       const errorMessage = writeErr.message || String(writeErr) || "Failed to write audio chunk";
       throw createError({
         statusCode: 500,
