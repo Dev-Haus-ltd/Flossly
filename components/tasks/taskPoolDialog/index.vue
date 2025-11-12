@@ -150,7 +150,7 @@
 <script setup>
 const taskStore = useTaskStore();
 const mainStore = useMainStore();
-const tab = ref(0);
+const tab = ref(null);
 const tasks = ref([]);
 const categoryList = ref([]);
 const subCategories = ref();
@@ -163,7 +163,18 @@ const props = defineProps({
   modelValue: Boolean,
 });
 
-const emit = defineEmits(["onUpdate"]);
+const emit = defineEmits(["onUpdate", "close"]);
+
+const resetState = () => {
+  tasks.value = [];
+  selectedTasks.value = [];
+  selectedSubCategory.value = null;
+  subCategories.value = [];
+  subCategoryView.value = true;
+  search.value = "";
+  searchSubCategory.value = "";
+};
+
 const fetchGeneralTasks = (category) => {
   selectedSubCategory.value = category;
   taskStore
@@ -171,7 +182,7 @@ const fetchGeneralTasks = (category) => {
     .then((res) => {
       if (res.code === 0) {
         subCategoryView.value = false;
-        tasks.value = res.data;
+        tasks.value = res.data.map(task => ({ ...task, checked: false }));
       } else {
         mainStore.setSnackbar({
           title: res.data.message || res.message,
@@ -186,21 +197,28 @@ const fetchGeneralTasks = (category) => {
       });
     });
 };
+
 const fetchListCategories = () => {
+  // Reset state but don't clear subCategories yet - let the tab watcher handle it
+  tasks.value = [];
+  selectedTasks.value = [];
+  selectedSubCategory.value = null;
+  search.value = "";
+  searchSubCategory.value = "";
+  subCategoryView.value = true;
+  
   taskStore
     .listCategoriesForPool()
     .then((res) => {
       if (res.code === 0) {
         categoryList.value = res.data;
-        const firstCat = categoryList.value[0];
-        const firstCatSubCat = categoryList.value.filter(
-          (x) => x.parentId === firstCat.id
-        );
-        if (firstCatSubCat.length) {
-          subCategories.value = firstCatSubCat;
-          subCategoryView.value = true;
-        } else {
-          fetchGeneralTasks(categoryList.value[0]);
+        if (categoryList.value.length > 0) {
+          const firstCat = categoryList.value.find((x) => !x.parentId);
+          if (firstCat) {
+            // Set tab to first category ID - this will trigger the watcher
+            tab.value = firstCat.id;
+            // The tab watcher will handle setting up subCategories and tasks
+          }
         }
       } else {
         mainStore.setSnackbar({
@@ -216,25 +234,38 @@ const fetchListCategories = () => {
       });
     });
 };
+
 watch(
   () => props.modelValue,
   async (newVal) => {
     if (newVal) {
       fetchListCategories();
+    } else {
+      // Reset state when dialog closes
+      resetState();
     }
   }
 );
+
 watch(tab, async (newId) => {
-  if (newId) {
+  if (newId && categoryList.value.length > 0) {
+    // Reset view-specific state when switching tabs (but keep categoryList)
+    tasks.value = [];
+    selectedTasks.value = [];
+    selectedSubCategory.value = null;
+    search.value = "";
+    searchSubCategory.value = "";
+    
+    const category = categoryList.value.find((x) => x.id === newId);
+    if (!category) return;
+    
     subCategories.value = categoryList.value.filter(
       (x) => x.parentId === newId
     );
     if (subCategories.value.length) {
       subCategoryView.value = true;
     } else {
-      subCategories.value = [];
-      subCategoryView.value = true;
-      const category = categoryList.value.find((x) => x.id === newId);
+      // No subcategories, fetch tasks directly
       fetchGeneralTasks(category);
     }
   }
@@ -260,6 +291,11 @@ const addTaskToBoard = async () => {
     });
 
     if (res.code === 0) {
+      // Reset selections after successful assignment
+      selectedTasks.value = [];
+      tasks.value.forEach(task => {
+        task.checked = false;
+      });
       emit("onUpdate");
       mainStore.setSnackbar({
         title: "Task assigned successfully",

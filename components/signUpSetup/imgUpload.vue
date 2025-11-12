@@ -47,9 +47,29 @@ const modelValue = defineModel() // v-model for parent binding
 
 const fileInput = ref(null)
 const previewUrl = ref(null)
+const config = useRuntimeConfig()
 
 // Store previous object URL to revoke it later
 let previousUrl = null
+
+// Get max file size from env variable (defaults to 5MB if not set)
+const maxFileSize = computed(() => {
+  const sizeFromEnv = config.public.MAX_FILE_SIZE_FOR_LOGO;
+  // If it's a string, parse it; if it's already a number, use it; otherwise default to 5MB
+  if (typeof sizeFromEnv === 'string') {
+    return parseInt(sizeFromEnv, 10) || 5 * 1024 * 1024;
+  }
+  return sizeFromEnv || 5 * 1024 * 1024;
+});
+
+// Format bytes to human readable format
+const formatFileSize = (bytes) => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+};
 
 const triggerFileInput = () => {
   fileInput.value?.click()
@@ -70,14 +90,18 @@ const handleDrop = (e) => {
 }
 
 const setFile = (file) => {
-  // Check file size (5MB limit)
-  const maxSize = 5 * 1024 * 1024; // 5MB in bytes
-  if (file && file.size > maxSize) {
+  // Check file size using env variable
+  if (file && file.size > maxFileSize.value) {
     const mainStore = useMainStore();
+    const maxSizeFormatted = formatFileSize(maxFileSize.value);
     mainStore.setSnackbar({
-      title: "Image file is too large. Please choose an image smaller than 5MB.",
-      type: "Error",
+      title: `Image file is too large. Please choose an image smaller than ${maxSizeFormatted}.`,
+      type: "error",
     });
+    // Clear the file input
+    if (fileInput.value) {
+      fileInput.value.value = '';
+    }
     return;
   }
 

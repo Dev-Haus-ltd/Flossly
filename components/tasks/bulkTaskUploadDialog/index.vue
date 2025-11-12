@@ -756,7 +756,7 @@ const clearParsedData = () => {
 const uploadTasks = async () => {
   if (hasValidationErrors.value) {
     mainStore.setSnackbar({
-      type: "Error",
+      type: "error",
       title: "Please fix all validation errors before uploading",
     });
     return;
@@ -778,22 +778,44 @@ const uploadTasks = async () => {
     const res = await taskStore.addBulkTasks({ tasks });
 
     if (res.code === 0) {
-      emit("onUpdate");
-      close();
-      mainStore.setSnackbar({
-        type: "Success",
-        title: res.message || "Bulk upload completed successfully",
-      });
+      // Check if there are any successful uploads
+      const results = res.data?.results || res.results || [];
+      const successCount = results.filter((r) => r.status === "success").length || 0;
+      const failCount = results.filter((r) => r.status === "failed").length || 0;
+      
+      // If all tasks failed or no tasks were uploaded, show error
+      if (successCount === 0 && failCount > 0) {
+        mainStore.setSnackbar({
+          type: "error",
+          title: res.data?.message || res.message || "Failed to upload tasks. Please check the errors and try again.",
+        });
+      } else if (failCount > 0) {
+        // Some tasks succeeded, some failed - show warning
+        mainStore.setSnackbar({
+          type: "warning",
+          title: res.data?.message || res.message || "Some tasks failed to upload",
+        });
+        emit("onUpdate");
+        close();
+      } else {
+        // All tasks succeeded
+        emit("onUpdate");
+        close();
+        mainStore.setSnackbar({
+          type: "success",
+          title: res.data?.message || res.message || "Bulk upload completed successfully",
+        });
+      }
     } else {
       mainStore.setSnackbar({
-        type: "Error",
-        title: res.message || "Failed to upload tasks",
+        type: "error",
+        title: res.data?.message || res.message || "Failed to upload tasks",
       });
     }
   } catch (err) {
     console.error("❌ Bulk upload error:", err);
     mainStore.setSnackbar({
-      type: "Error",
+      type: "error",
       title: err.message || "Failed to upload tasks",
     });
   } finally {

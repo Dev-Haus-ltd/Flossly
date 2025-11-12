@@ -329,7 +329,7 @@
 </template>
 
 <script setup>
-import { parsedDate } from "@/lib/dateFormatter";
+import { formatDateOnly } from "@/lib/dateFormatter";
 
 const props = defineProps({
   modelValue: Boolean,
@@ -339,7 +339,7 @@ const emit = defineEmits(['close','update:modelValue'])
 const onClose = () => { emit('update:modelValue', false); emit('close') }
 const tab = ref("lead-info");
 const formatDate = (date) => {
-  return parsedDate(date);
+  return formatDateOnly(date);
 };
 const selectedTreatment = ref({})
 const commPrefs = ref({})
