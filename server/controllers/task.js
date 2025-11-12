@@ -246,16 +246,14 @@ const getDueDate = (frequency) => {
       return addDays(new Date(), 1);
     case "Weekly":
       return addDays(new Date(), 7);
-    case "Biweekly":
+    case "Fortnightly":
       return addDays(new Date(), 14);
     case "Monthly":
       return addDays(new Date(), 30);
-    case "Quarterly":
-      return addDays(new Date(), 90);
+    case "6 Monthly":
+      return addDays(new Date(), 180); // 6 months = ~180 days
     case "Yearly":
       return addDays(new Date(), 365);
-    case "Ad Hoc":
-      return null; // Ad Hoc tasks don't have a recurring due date
     default:
       return null;
   }
@@ -595,6 +593,7 @@ export const createNewTask = async (event) => {
     priorityId,
     checklist,
     dueDate,
+    statusId,
   } = JSON.parse(body);
   if (!title || !categoryId) {
     throw createError({ message: "Required fields missing" });
@@ -629,9 +628,28 @@ export const createNewTask = async (event) => {
       where: { organisationId: loggedUser.orgId },
     });
 
-    // If no userId provided (auto-assigned to creator), use "upcoming" status, otherwise "progress"
-    const isAutoAssigned = !userId;
-    const defaultStatusKey = isAutoAssigned ? "upcoming" : "progress";
+    // Determine statusId: use provided statusId, or default to "upcoming"
+    let finalStatusId;
+    if (statusId) {
+      // Validate that the provided statusId exists for this organization
+      const providedStatus = orgStatuses.find((x) => x.id === statusId);
+      if (providedStatus) {
+        finalStatusId = statusId;
+      } else {
+        // If invalid statusId provided, default to "upcoming"
+        const upcomingStatus = orgStatuses.find((x) => x.key === "upcoming");
+        finalStatusId = upcomingStatus?.id;
+      }
+    } else {
+      // If no statusId provided, default to "upcoming"
+      const upcomingStatus = orgStatuses.find((x) => x.key === "upcoming");
+      finalStatusId = upcomingStatus?.id;
+    }
+
+    // Fallback: if "upcoming" status not found, use the first available status
+    if (!finalStatusId && orgStatuses.length > 0) {
+      finalStatusId = orgStatuses[0].id;
+    }
 
     const newUuserTask = {
       userId: assignToUserId,
@@ -642,7 +660,7 @@ export const createNewTask = async (event) => {
       documentLink: "",
       frequency: defaultFrequency || null,
       priorityId,
-      statusId: orgStatuses.find((x) => x.key === defaultStatusKey).id,
+      statusId: finalStatusId,
       asignedBy: loggedUser.userId,
     };
     const userTask = await UserTask.create(newUuserTask, { transaction });

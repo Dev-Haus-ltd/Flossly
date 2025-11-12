@@ -104,11 +104,10 @@ const filterMenu = ref(false);
 const frequencies = ref([
   { id: 1, name: "Daily" },
   { id: 2, name: "Weekly" },
-  { id: 3, name: "Biweekly" },
+  { id: 3, name: "Fortnightly" },
   { id: 4, name: "Monthly" },
-  { id: 5, name: "Quarterly" },
+  { id: 5, name: "6 Monthly" },
   { id: 6, name: "Yearly" },
-  { id: 7, name: "Ad Hoc" },
 ]);
 
 const selectedFrequency = ref(null);

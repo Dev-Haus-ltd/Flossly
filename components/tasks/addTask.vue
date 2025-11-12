@@ -161,6 +161,29 @@
               </v-select>
             </v-col>
             <v-col cols="12">
+              <label class="fld-lbl">Status</label>
+              <v-select
+                v-model="form.statusId"
+                :items="taskStatuses"
+                item-title="name"
+                item-value="id"
+                variant="solo"
+                density="compact"
+                class="input-bordered mb-0"
+                bg-color="white"
+                flat
+                clearable
+              >
+                <template #item="{ props, item }">
+                  <v-list-item
+                    v-bind="props"
+                    :style="{ borderLeft: `4px solid ${item.raw.color || '#ccc'}` }"
+                  >
+                  </v-list-item>
+                </template>
+              </v-select>
+            </v-col>
+            <v-col cols="12">
               <label class="fld-lbl">Description</label>
               <v-textarea
                 v-model="form.description"
@@ -278,6 +301,7 @@ const form = ref({
   userId: null,
   defaultFrequency: "",
   priorityId: null,
+  statusId: null,
   checklist: [
     {
       question: "",
@@ -291,17 +315,17 @@ const form = ref({
   ],
 });
 const taskPriorities = ref([]);
+const taskStatuses = ref([]);
 const rolesList = ref([]);
 const userList = ref([]);
 const users = ref([])
 const frequencies = ref([
   { id: 1, name: "Daily" },
   { id: 2, name: "Weekly" },
-  { id: 3, name: "Biweekly" },
+  { id: 3, name: "Fortnightly" },
   { id: 4, name: "Monthly" },
-  { id: 5, name: "Quarterly" },
+  { id: 5, name: "6 Monthly" },
   { id: 6, name: "Yearly" },
-  { id: 7, name: "Ad Hoc" },
 ]);
 const taskCategories = ref([]);
 
@@ -362,6 +386,21 @@ const getTaskPriorities = () => {
       // set snack
     });
 };
+const getTaskStatuses = () => {
+  orgStore
+    .getTaskStatuses()
+    .then((res) => {
+      if (res.code === 0) {
+        taskStatuses.value = res.data;
+      } else {
+        // set snack
+      }
+    })
+    .catch((err) => {
+      return err;
+      // set snack
+    });
+};
 const getCategories = () => {
   taskStore.listCategories().then((res) => {
     if (res.code === 0) {
@@ -401,6 +440,7 @@ watch(
       getRoles();
       getUsers();
       getTaskPriorities();
+      getTaskStatuses();
       getCategories();
     }
     // modelValue = newValue;
@@ -491,6 +531,7 @@ const resetForm = () => {
     userId: null,
     defaultFrequency: "",
     priorityId: null,
+    statusId: null,
     checklist: [
       {
         question: "",

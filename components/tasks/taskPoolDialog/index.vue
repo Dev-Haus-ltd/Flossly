@@ -240,6 +240,15 @@ watch(tab, async (newId) => {
   }
 });
 const addTaskToBoard = async () => {
+  // Validate that at least one task is selected
+  if (!selectedTasks.value || selectedTasks.value.length === 0) {
+    mainStore.setSnackbar({
+      title: "Please select at least one task to assign",
+      type: "error",
+    });
+    return;
+  }
+
   const userStr = localStorage.getItem("user");
   if (!userStr) return null;
 
@@ -283,15 +292,37 @@ const handleCheck = ( data ) => {
 };
 
 const selectAll = computed({
-  get: () => tasks.value.every((i) => i.checked),
+  get: () => tasks.value.length > 0 && tasks.value.every((i) => i.checked),
   set: (val) => {
-    tasks.value.forEach((i) => (i.checked = val));
+    tasks.value.forEach((i) => {
+      i.checked = val;
+      if (val) {
+        // Add to selectedTasks if not already present
+        if (!selectedTasks.value.some((t) => t.id === i.id)) {
+          selectedTasks.value.push(i);
+        }
+      } else {
+        // Remove from selectedTasks
+        selectedTasks.value = selectedTasks.value.filter((t) => t.id !== i.id);
+      }
+    });
   },
 });
 
 function toggleAll() {
-  const value = selectAll.value;
-  tasks.value.forEach((i) => (i.checked = value));
+  const value = !selectAll.value;
+  tasks.value.forEach((i) => {
+    i.checked = value;
+    if (value) {
+      // Add to selectedTasks if not already present
+      if (!selectedTasks.value.some((t) => t.id === i.id)) {
+        selectedTasks.value.push(i);
+      }
+    } else {
+      // Remove from selectedTasks
+      selectedTasks.value = selectedTasks.value.filter((t) => t.id !== i.id);
+    }
+  });
 }
 
 function goBack() {
