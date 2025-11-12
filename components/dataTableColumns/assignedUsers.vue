@@ -15,17 +15,13 @@
 
     <!-- Plus button trigger -->
     <div
-      class="plus-trigger"
+      class="plus-trigger d-flex align-center justify-center"
       @mouseenter="onTriggerEnter($event, 'plus')"
       @mouseleave="onTriggerLeave"
     >
-      <v-btn
-        icon
-        size="18"
-        style="background-color: black; color: white"
-      >
-        <v-icon size="16">mdi-plus</v-icon>
-      </v-btn>
+      <div class="circle-add">
+        <v-icon size="14" color="white">mdi-plus</v-icon>
+      </div>
     </div>
 
     <!-- Single shared menu, positioned using :activator -->
@@ -219,5 +215,16 @@ const selectUser = (user) => {
 .plus-trigger {
   display: inline-block;
   padding: 2px; /* Add small padding to increase hover area */
+}
+
+.circle-add {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: hsla(183, 24%, 17%, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 </style>

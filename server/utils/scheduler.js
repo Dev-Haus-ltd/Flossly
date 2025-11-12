@@ -4,11 +4,10 @@ import { OrganisationStatus, UserTask } from "../models/index.js";
 const frequencyMap = {
   Daily: "0 0 * * *", // every day at midnight
   Weekly: "0 0 * * 1", // every Monday
-  Biweekly: "0 0 */14 * *", // every 14 days
+  Fortnightly: "0 0 */14 * *", // every 14 days
   Monthly: "0 0 1 * *", // first day of month
-  Quarterly: "0 0 1 */3 *", // first day every 3 months
+  "6 Monthly": "0 0 1 */6 *", // first day every 6 months
   Yearly: "0 0 1 1 *", // Jan 1st every year
-  "Ad Hoc": null, // Ad Hoc tasks are not scheduled
 };
 
 function addDays(date, days) {
@@ -19,8 +18,7 @@ function addDays(date, days) {
 
 export const startTaskScheduler = () => {
   Object.keys(frequencyMap).forEach((frequency) => {
-    // Skip scheduling for Ad Hoc tasks
-    if (frequency === "Ad Hoc" || !frequencyMap[frequency]) return;
+    if (!frequencyMap[frequency]) return;
     
     cron.schedule(frequencyMap[frequency], async () => {
       console.log(`Running scheduler for ${frequency} tasks...`);
@@ -41,21 +39,18 @@ export const startTaskScheduler = () => {
             case "Weekly":
               nextDueDate = addDays(new Date(), 7);
               break;
-            case "Biweekly":
+            case "Fortnightly":
               nextDueDate = addDays(new Date(), 14);
               break;
             case "Monthly":
               nextDueDate = addDays(new Date(), 30);
               break;
-            case "Quarterly":
-              nextDueDate = addDays(new Date(), 90);
+            case "6 Monthly":
+              nextDueDate = addDays(new Date(), 180);
               break;
             case "Yearly":
               nextDueDate = addDays(new Date(), 365);
               break;
-            case "Ad Hoc":
-              // Ad Hoc tasks are not scheduled
-              continue;
           }
           const statuses = await OrganisationStatus.findAll({
             where: { organisationId: task.organisationId },

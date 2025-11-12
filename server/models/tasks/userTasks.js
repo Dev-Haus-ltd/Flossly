@@ -61,11 +61,10 @@ export const UserTask = sequelize.define(
       type: DataTypes.ENUM(
         "Daily",
         "Weekly",
-        "Biweekly",
+        "Fortnightly",
         "Monthly",
-        "Quarterly",
-        "Yearly",
-        "Ad Hoc"
+        "6 Monthly",
+        "Yearly"
       ),
       allowNull: true,
     },
