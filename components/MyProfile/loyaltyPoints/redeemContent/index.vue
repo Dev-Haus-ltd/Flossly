@@ -82,6 +82,14 @@ const redeem = () => {
     deliveryAddress: deliveryAddress.value,
     postalCode: postalCode.value,
   });
+  // Use global snackbar instead of alert
+  try {
+    const store = useMainStore && useMainStore();
+    if (store && store.setSnackbar) {
+      store.setSnackbar({ title: 'Redeem request submitted', type: 'success' });
+      return;
+    }
+  } catch (e) {}
   alert("Redeem request submitted ✅");
 };
 

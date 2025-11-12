@@ -1,0 +1,3 @@
+const statCards = reactive([
+  { icon: 'https://cdn.lordicon.com/akqsdstj.json', label: 'Accounts', subtitle: 'Total', value: '£0.00', note: '', select: accountsPeriod.value, selectItems: ['Today','Week','Month'] },
+  {

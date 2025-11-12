@@ -130,7 +130,14 @@ export const useMainStore = defineStore("mainStore", {
           imgPath: tasksIcon,
           value: "flosslyDiary",
           to:"/diary",
-          children: [],
+          children: [
+            {
+              title: "Calendar",
+              value: "diaryCalendar",
+              imgPath: tasksIcon,
+              to: "/diary/calendar",
+            },
+          ],
         },
         // {
         //   title: "Staff",

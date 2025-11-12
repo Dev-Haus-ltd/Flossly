@@ -50,6 +50,13 @@ import { MetaPage } from "./crm/metaPages";
 import { CrmLead } from "./crm/leads";
 import { MetaUserToken } from "./crm/metaUserTokens";
 import { ChatbotConfig } from "./crm/chatbotConfig";
+// Diary
+import { DiaryTreatment } from "./diary/treatments";
+import { DiaryPatient } from "./diary/patients";
+import { DiaryAppointment } from "./diary/appointments";
+import { DiaryNote } from "./diary/notes";
+// Organisation dictionary
+import { OrganisationTreatment } from "./organisations/organisationTreatments";
 import { CrmLeadTreatment } from "./crm/leadTreatments";
 import { CrmLeadNote } from "./crm/leadNotes";
 import { CrmOption } from "./crm/options";
@@ -193,6 +200,23 @@ RotaUser.hasMany(RotaShift, { foreignKey: "rotaUserId", as: "shifts" });
 RotaShift.belongsTo(Rota, { foreignKey: "rotaId", as: "rota" });
 RotaShift.belongsTo(RotaUser, { foreignKey: "rotaUserId", as: "rotaUser" });
 RotaShift.belongsTo(User, { foreignKey: "userId", as: "user" });
+
+// Diary associations
+DiaryPatient.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
+DiaryPatient.hasMany(DiaryAppointment, { foreignKey: 'patientId', as: 'appointments' })
+
+DiaryAppointment.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
+DiaryAppointment.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient' })
+DiaryAppointment.belongsTo(User, { foreignKey: 'dentistId', as: 'dentist' })
+DiaryAppointment.belongsTo(DiaryTreatment, { foreignKey: 'treatmentId', as: 'treatment' })
+
+// Diary notes associations
+DiaryNote.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
+DiaryNote.belongsTo(User, { foreignKey: 'dentistId', as: 'dentist' })
+User.hasMany(DiaryNote, { foreignKey: 'dentistId', as: 'diaryNotes' })
+
+// Org Treatment associations
+OrganisationTreatment.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
 
 // Orgnisation Contacts
 Organisation.hasMany(OrganisationContact, {
@@ -538,6 +562,12 @@ export {
   CrmAutomationTemplate,
   MetaUserToken,
   ChatbotConfig,
+  // Diary
+  DiaryTreatment,
+  DiaryPatient,
+  DiaryAppointment,
+  DiaryNote,
+  OrganisationTreatment,
   DictionaryScript,
   OrganisationScript,
 };
