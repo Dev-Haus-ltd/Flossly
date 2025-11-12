@@ -115,7 +115,7 @@ import AddPatient from '@/components/diary/addPatient.vue'
 import NotesModal from '@/components/diary/NotesModal.vue'
 import { useDiaryStore } from '@/stores/diary'
 import { useMainStore } from '@/stores/index'
-import { useOrganisationStore } from '@/stores/organisation'
+import { useOrgStore } from '@/stores/organisation'
 import listicon from "@/assets/icons/listView/listicon.svg";
 import calendericon from "@/assets/icons/listView/calendericon.svg";
 
@@ -129,7 +129,7 @@ watch(view, v => console.log('current view ->', v))
 const diaryStore = useDiaryStore()
 const dentists = ref([])
 const treatments = ref([])
-const organisationStore = useOrganisationStore()
+const organisationStore = useOrgStore()
 
 const dentistSelect = computed(() => dentists.value)
 

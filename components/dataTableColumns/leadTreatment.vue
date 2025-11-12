@@ -19,14 +19,7 @@
             :key="i"
             style="margin-bottom: 6px; min-height: 30px; cursor: pointer"
             class="rounded-sm"
-            @click="
-              () => {
-                selected.treatmentId = t.id;
-                selected.treatment = t;
-                selected.treatmentMenu = false;
-                emit('update');
-              }
-            "
+            @click="handleTreatmentSelect(t)"
           >
             <v-list-item-title>{{ t.name }}</v-list-item-title>
           </v-list-item>
@@ -40,14 +33,21 @@
 </template>
 
 <script setup>
-import { useOrganisationStore } from '@/stores/organisation'
+import { useOrgStore } from '@/stores/organisation'
 import { onMounted, ref } from 'vue'
 
-const organisationStore = useOrganisationStore()
+const organisationStore = useOrgStore()
 const { selected, column } = defineProps(["selected", "column"])
 const emit = defineEmits(["update"])
 
 const treatmentSources = ref([])
+
+const handleTreatmentSelect = (t) => {
+  selected.treatmentId = t.id;
+  selected.treatment = t;
+  selected.treatmentMenu = false;
+  emit('update');
+}
 
 onMounted(async () => {
   try {

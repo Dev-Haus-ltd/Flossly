@@ -125,8 +125,8 @@ const practitioner = ref('')
 const notes = ref('')
 const dateMenu = ref(false)
 
-import { useOrganisationStore } from '@/stores/organisation'
-const organisationStore = useOrganisationStore()
+import { useOrgStore } from '@/stores/organisation'
+const organisationStore = useOrgStore()
 const treatmentOptions = ref([])
 const exams = computed(() => treatmentOptions.value.map(t => t.name))
 const statuses = ['Pending','Confirmed','Arrived','Cancelled']

@@ -136,7 +136,7 @@
 import DiaryStatCard from '@/components/diary/DiaryStatCard.vue'
 import DiaryFilterMenu from '@/components/diary/filterMenu.vue'
 import { useDiaryStore } from '@/stores/diary'
-import { useOrganisationStore } from '@/stores/organisation'
+import { useOrgStore } from '@/stores/organisation'
 import AddPatient from '@/components/diary/addPatient.vue'
 
 const activeTab = ref('takings')
@@ -234,7 +234,7 @@ async function loadStaff() {
 
 const dentists = ref([])
 const treatments = ref([])
-const organisationStore = useOrganisationStore()
+const organisationStore = useOrgStore()
 
 onMounted(async () => {
   const [d1, t1] = await Promise.all([

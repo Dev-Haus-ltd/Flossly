@@ -1,6 +1,6 @@
 import organisationService from '../services/organisationService'
 
-export const useOrganisationStore = defineStore('organisationStore', {
+export const useOrgStore = defineStore('organisationStore', {
   state: () => ({ isLoading: false, _pending: 0 }),
   actions: {
     _start() { this._pending++; this.isLoading = true },

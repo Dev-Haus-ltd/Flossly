@@ -300,7 +300,11 @@ const apptStyleFor = (status) => {
   return { background: c.bg, borderColor: c.border, color: c.text }
 }
 
-function openPatient(appt){ if(appt.patientId) router.push(`/patients/${appt.patientId}`) }
+const openPatient = (appt) => {
+  if(appt.patientId) {
+    router.push(`/patients/${appt.patientId}`)
+  }
+  }
 
 const showNow = computed(() => isToday(String(props.date).slice(0,10)))
 function isToday(ds){ const today = new Date().toISOString().slice(0,10); return ds === today }
