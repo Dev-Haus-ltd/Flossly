@@ -365,12 +365,26 @@ export const streamTranscribeChunk = async (event) => {
       body = await readBody(event);
     } catch (bodyErr) {
       console.error("Error parsing request body:", bodyErr);
-      return error(400, "Failed to parse request body: " + bodyErr.message);
+      throw createError({
+        statusCode: 400,
+        data: {
+          code: 1,
+          success: false,
+          message: "Failed to parse request body: " + (bodyErr.message || String(bodyErr)),
+        },
+      });
     }
 
     if (!body || typeof body !== 'object') {
       console.error("Invalid body type:", typeof body);
-      return error(400, "Invalid request body");
+      throw createError({
+        statusCode: 400,
+        data: {
+          code: 1,
+          success: false,
+          message: "Invalid request body",
+        },
+      });
     }
 
     sessionId = body.sessionId;
@@ -378,41 +392,90 @@ export const streamTranscribeChunk = async (event) => {
 
     if (!sessionId) {
       console.error("Missing sessionId in request body");
-      return error(400, "Missing sessionId");
+      throw createError({
+        statusCode: 400,
+        data: {
+          code: 1,
+          success: false,
+          message: "Missing sessionId",
+        },
+      });
     }
 
     if (!chunk) {
       console.error(`[${sessionId}] Missing chunk in request body`);
-      return error(400, "Missing chunk");
+      throw createError({
+        statusCode: 400,
+        data: {
+          code: 1,
+          success: false,
+          message: "Missing chunk",
+        },
+      });
     }
 
     // Validate chunk is a string
     if (typeof chunk !== 'string') {
       console.error(`[${sessionId}] Invalid chunk type:`, typeof chunk);
-      return error(400, "Chunk must be a string");
+      throw createError({
+        statusCode: 400,
+        data: {
+          code: 1,
+          success: false,
+          message: "Chunk must be a string",
+        },
+      });
     }
 
     const session = streamingSessions.get(sessionId);
     if (!session) {
       console.error(`[${sessionId}] Session not found in streamingSessions. Active sessions:`, Array.from(streamingSessions.keys()));
-      return error(404, "Session not found. Please restart the transcription.");
+      throw createError({
+        statusCode: 404,
+        data: {
+          code: 1,
+          success: false,
+          message: "Session not found. Please restart the transcription.",
+        },
+      });
     }
 
     if (!session.recognizeStream) {
       console.error(`[${sessionId}] Session exists but recognizeStream is null`);
-      return error(404, "Stream not initialized for this session");
+      throw createError({
+        statusCode: 404,
+        data: {
+          code: 1,
+          success: false,
+          message: "Stream not initialized for this session",
+        },
+      });
     }
 
     // Check if session has errored
     if (session.errored) {
       console.error(`[${sessionId}] Session has errored:`, session.error);
-      return error(500, "Session error: " + (session.error || "Streaming failed"));
+      throw createError({
+        statusCode: 500,
+        data: {
+          code: 1,
+          success: false,
+          message: "Session error: " + (session.error || "Streaming failed"),
+        },
+      });
     }
 
     // Ensure config has been sent and stream is ready before sending audio
     if (!session.configSent) {
       console.error(`[${sessionId}] Config not sent yet`);
-      return error(400, "Config not sent yet");
+      throw createError({
+        statusCode: 400,
+        data: {
+          code: 1,
+          success: false,
+          message: "Config not sent yet",
+        },
+      });
     }
 
     if (!session.ready) {
@@ -424,11 +487,25 @@ export const streamTranscribeChunk = async (event) => {
       }
       if (session.errored) {
         console.error(`[${sessionId}] Session errored while waiting for ready state`);
-        return error(500, "Session error: " + (session.error || "Streaming failed"));
+        throw createError({
+          statusCode: 500,
+          data: {
+            code: 1,
+            success: false,
+            message: "Session error: " + (session.error || "Streaming failed"),
+          },
+        });
       }
       if (!session.ready) {
         console.error(`[${sessionId}] Stream not ready after waiting`);
-        return error(400, "Stream not ready yet");
+        throw createError({
+          statusCode: 400,
+          data: {
+            code: 1,
+            success: false,
+            message: "Stream not ready yet",
+          },
+        });
       }
     }
 
@@ -438,17 +515,38 @@ export const streamTranscribeChunk = async (event) => {
       audioBuffer = Buffer.from(chunk, 'base64');
       if (audioBuffer.length === 0) {
         console.error(`[${sessionId}] Decoded buffer is empty`);
-        return error(400, "Invalid chunk: decoded buffer is empty");
+        throw createError({
+          statusCode: 400,
+          data: {
+            code: 1,
+            success: false,
+            message: "Invalid chunk: decoded buffer is empty",
+          },
+        });
       }
     } catch (bufferErr) {
       console.error(`[${sessionId}] Error decoding base64 chunk:`, bufferErr);
-      return error(400, "Invalid chunk format: " + bufferErr.message);
+      throw createError({
+        statusCode: 400,
+        data: {
+          code: 1,
+          success: false,
+          message: "Invalid chunk format: " + (bufferErr.message || String(bufferErr)),
+        },
+      });
     }
 
     // Check stream state before writing
     if (!session.recognizeStream) {
       console.error(`[${sessionId}] recognizeStream is null before write`);
-      return error(500, "Stream is not available");
+      throw createError({
+        statusCode: 500,
+        data: {
+          code: 1,
+          success: false,
+          message: "Stream is not available",
+        },
+      });
     }
 
     const stream = session.recognizeStream;
@@ -458,9 +556,23 @@ export const streamTranscribeChunk = async (event) => {
     if (!isWritable || isDestroyed || session.errored) {
       console.error(`[${sessionId}] Stream state - writable: ${isWritable}, destroyed: ${isDestroyed}, errored: ${session.errored}`);
       if (session.errored) {
-        return error(500, "Session error: " + (session.error || "Streaming failed"));
+        throw createError({
+          statusCode: 500,
+          data: {
+            code: 1,
+            success: false,
+            message: "Session error: " + (session.error || "Streaming failed"),
+          },
+        });
       }
-      return error(400, "Stream is not writable or destroyed");
+      throw createError({
+        statusCode: 400,
+        data: {
+          code: 1,
+          success: false,
+          message: "Stream is not writable or destroyed",
+        },
+      });
     }
 
     // Send raw audio buffer directly to Google Cloud
@@ -473,33 +585,58 @@ export const streamTranscribeChunk = async (event) => {
         // Stream is backpressured, wait a bit
         await new Promise(resolve => setTimeout(resolve, 10));
       }
+      
+      console.log(`[${sessionId}] Audio chunk written successfully`);
+      return success({ received: true });
     } catch (writeErr) {
       console.error(`[${sessionId}] Error writing to stream:`, writeErr);
       console.error(`[${sessionId}] Stream error details:`, {
-        message: writeErr.message,
+        message: writeErr.message || String(writeErr),
         stack: writeErr.stack,
-        code: writeErr.code
+        code: writeErr.code,
+        name: writeErr.name
       });
       // Mark session as errored but don't delete immediately
       session.errored = true;
-      session.error = writeErr.message;
+      session.error = writeErr.message || String(writeErr);
       // Delete session after a delay
       setTimeout(() => {
         streamingSessions.delete(sessionId);
       }, 1000);
-      return error(500, "Failed to write audio chunk: " + writeErr.message);
+      const errorMessage = writeErr.message || String(writeErr) || "Failed to write audio chunk";
+      throw createError({
+        statusCode: 500,
+        data: {
+          code: 1,
+          success: false,
+          message: "Failed to write audio chunk: " + errorMessage,
+        },
+      });
     }
-
-    return success({ received: true });
   } catch (err) {
+    // Check if this is already a createError (from our error() function)
+    if (err.statusCode && err.data) {
+      // Re-throw createError as-is
+      throw err;
+    }
+    
     console.error(`[${sessionId || 'unknown'}] Error sending chunk:`, err);
     console.error(`[${sessionId || 'unknown'}] Error details:`, {
-      message: err.message,
+      message: err.message || String(err),
       stack: err.stack,
       name: err.name,
       code: err.code
     });
-    return error(500, err.message || "Failed to send chunk");
+    
+    const errorMessage = err.message || String(err) || "Failed to send chunk";
+    throw createError({
+      statusCode: 500,
+      data: {
+        code: 1,
+        success: false,
+        message: errorMessage,
+      },
+    });
   }
 };
 
