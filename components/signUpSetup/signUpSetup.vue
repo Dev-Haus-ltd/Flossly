@@ -89,6 +89,7 @@ const orgStore = useOrgStore();
 const authStore = useAuthStore();
 const mainStore = useMainStore(); 
 const router = useRouter();
+const { setUser } = useUser();
 
 // Define emit to send current step to parent
 const emit = defineEmits(['update:currentStep', 'go-to-initial-screen']);
@@ -221,8 +222,37 @@ const nextStep = async () => {
   }
 };
 
-const navigateToDashboard = () => {
-  router.push("/");
+const navigateToDashboard = async () => {
+  // Fetch fresh user data after onboarding completion
+  // This ensures we have the latest profileCompletion, organizations, and all related data
+  try {
+    const res = await authStore.profile();
+    if (res.code === 0) {
+      const user = res.data;
+      setUser(user);
+      localStorage.setItem("user", JSON.stringify(user));
+      mainStore.setSnackbar({
+        title: "Onboarding completed successfully!",
+        type: "success",
+      });
+      router.push("/");
+    } else {
+      mainStore.setSnackbar({
+        title: res.data?.message || res.message || "Failed to fetch user data",
+        type: "error",
+      });
+      // Still navigate to dashboard even if profile fetch fails
+      router.push("/");
+    }
+  } catch (err) {
+    const errorMessage = err?.data?.message || err?.message || "Failed to fetch user data";
+    mainStore.setSnackbar({
+      title: errorMessage,
+      type: "error",
+    });
+    // Still navigate to dashboard even if profile fetch fails
+    router.push("/");
+  }
 };
 
 // Handle back navigation with awareness of Pricing payment modal

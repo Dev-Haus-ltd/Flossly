@@ -62,9 +62,11 @@
                 density="compact"
                 class="mb-1 input-bordered"
                 bg-color="white"
-                :rules="requiredRule"
+                :rules="emailRules"
                 required
                 flat
+                type="email"
+                @blur="form.email = form.email?.trim()"
               />
             </v-col>
             <!-- Role -->
@@ -129,6 +131,10 @@ const mainStore = useMainStore();
 const emit = defineEmits(["close", "success", "update:modelValue"]);
 const formRef = ref(null);
 const requiredRule = [(v) => !!v || "This field is required"];
+const emailRules = [
+  (v) => !!v || "Email is required",
+  (v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || "Invalid email format",
+];
 const authStore = useAuthStore();
 const form = ref({
   fullName: "",
@@ -157,23 +163,48 @@ const handleClose = () => {
 const onSubmit = async () => {
   const formValidation = await formRef.value.validate();
   if (formValidation.valid) {
-    authStore.inviteMembers({users: [form.value]}).then((res) => {
+    // Trim email before sending
+    const trimmedForm = {
+      ...form.value,
+      email: form.value.email?.trim(),
+      fullName: form.value.fullName?.trim(),
+    };
+    
+    authStore.inviteMembers({users: [trimmedForm]}).then((res) => {
       if (res.code === 0) {
         setSnack("success", "User Invited Successfully");
         resetForm();
         emit("update:modelValue", false);
         emit("success");
       } else {
-        setSnack("error", "User is not Invited.");
+        // Extract error message from nested structure
+        const errorMessage = res?.data?.message || res?.message || "User is not Invited.";
+        setSnack("error", errorMessage);
       }
+    }).catch((err) => {
+      // Extract error message from nested structure - handle both error response formats
+      const errorMessage = err?.data?.message || err?.response?.data?.message || err?.message || "Failed to invite user. Please try again.";
+      setSnack("error", errorMessage);
     });
   }
 };
 
 const setSnack = (type, title) => {
+  // Ensure title is always a string, never an object
+  let message = "";
+  
+  if (typeof title === "string") {
+    message = title;
+  } else if (title && typeof title === "object") {
+    // Extract message from nested error structure
+    message = title?.data?.message || title?.message || "An error occurred";
+  } else {
+    message = String(title || "An error occurred");
+  }
+  
   mainStore.setSnackbar({
     type,
-    title,
+    title: message,
   });
 };
 </script>
