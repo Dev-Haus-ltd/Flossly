@@ -526,99 +526,60 @@ export const inviteMembers = async (event) => {
     if (!Array.isArray(users) || !users.length) {
       return error(400, "Invitee list is required");
     }
-
-    // Check for duplicate emails within the same invitation batch
-    const emailCounts = {};
-    const duplicateEmails = [];
-    users.forEach((user) => {
-      const email = user.email?.trim().toLowerCase();
-      if (email) {
-        emailCounts[email] = (emailCounts[email] || 0) + 1;
-        if (emailCounts[email] === 2) {
-          duplicateEmails.push(email);
-        }
-      }
-    });
-
-    if (duplicateEmails.length > 0) {
-      return error(400, `Duplicate emails found in invitation list: ${duplicateEmails.join(", ")}. Each email can only be invited once.`);
-    }
-
-    // Normalize emails for comparison
-    const normalizedEmails = users.map((u) => u.email?.trim().toLowerCase()).filter(Boolean);
-    
-    // Check if any users already exist in the database
     const existingUsers = await User.findAll({
-      where: { email: normalizedEmails },
-      attributes: ["id", "email", "status"],
+      where: { email: users.map((i) => i.email) },
+      attributes: ["id", "email"],
     });
-
     const currentOrganisation = await Organisation.findByPk(currentOrg);
     const currentUser = await User.findByPk(loggedUser.userId);
-
-    // Check which existing users are already in the current organization
-    const existingUserIds = existingUsers.map((u) => u.id);
-    const usersInCurrentOrg = existingUserIds.length > 0 
-      ? await UserOrganisation.findAll({
-          where: { 
-            userId: existingUserIds,
-            organisationId: currentOrg 
-          },
-        })
-      : [];
-
-    const usersAlreadyInOrg = usersInCurrentOrg.map((uo) => uo.userId);
-    const alreadyInOrgEmails = existingUsers
-      .filter((u) => usersAlreadyInOrg.includes(u.id))
-      .map((u) => u.email);
-
-    if (alreadyInOrgEmails.length > 0) {
-      return error(400, `The following users are already part of this organization: ${alreadyInOrgEmails.join(", ")}. Each email can only be invited once.`);
-    }
-
-    // Separate existing users into those in other orgs and those not in any org
-    const existingUsersOrgs = existingUserIds.length > 0
-      ? await UserOrganisation.findAll({
-          where: { userId: existingUserIds },
-        })
-      : [];
-
-    const existingUserEmails = existingUsers.map((u) => u.email.toLowerCase());
-    const newUserEmails = normalizedEmails.filter((email) => !existingUserEmails.includes(email));
-
-    // Users that exist but are not in current org (can be added to current org)
-    const existingUsersNotInCurrentOrg = existingUsers.filter(
-      (u) => !usersAlreadyInOrg.includes(u.id)
-    );
-
-    if (existingUsersNotInCurrentOrg.length > 0) {
-      const newUserIds = existingUsersNotInCurrentOrg.map((u) => u.id);
-      const newUserOrgAssociation = newUserIds.map((userId) => ({
-        userId,
-        organisationId: currentOrg,
-      }));
-      
-      await UserOrganisation.bulkCreate(newUserOrgAssociation, {
-        transaction,
-        ignoreDuplicates: true,
+    if (existingUsers.length) {
+      const existingUsersOrgs = await UserOrganisation.findAll({
+        where: { userId: existingUsers.map((u) => u.id) },
       });
 
-      const newUsersEmails = existingUsersNotInCurrentOrg.map((u) => u.email);
-      await sendOrgnisationAddedToRegisteredUsers({
-        users: newUsersEmails,
-        orgTitle: currentOrganisation.name,
-        manager: currentUser.fullName,
-      });
-    }
-
-    // Invite new users (those that don't exist in the database)
-    if (newUserEmails.length > 0) {
-      const newUsersToInvite = users.filter((u) =>
-        newUserEmails.includes(u.email?.trim().toLowerCase())
+      const newOrgUsers = existingUsersOrgs.filter(
+        (x) => x.organisationId !== currentOrg
       );
-      
+      if (newOrgUsers.length) {
+        const newUserIds = newOrgUsers.map((u) => u.userId);
+        const newUsersEmails = existingUsers
+          .filter((x) => newUserIds.includes(x.id))
+          .map((e) => e.email);
+        const newUserOrgAssociation = newOrgUsers.map((el) => {
+          return {
+            userId: el.userId,
+            organisationId: currentOrg,
+          };
+        });
+        await UserOrganisation.bulkCreate(newUserOrgAssociation, {
+          transaction,
+        });
+        await sendOrgnisationAddedToRegisteredUsers({
+          users: newUsersEmails,
+          orgTitle: currentOrganisation.name,
+          manager: currentUser.fullName,
+        });
+      } else {
+        const existingUsersEmails = existingUsers.map((u) => u.email);
+        const newUsers = users.filter(
+          (x) => !existingUsersEmails.includes(x.email)
+        );
+        if (newUsers.length) {
+          await inviteNewUsers(
+            users,
+            existingUsers,
+            transaction,
+            currentOrg,
+            currentOrganisation,
+            currentUser
+          );
+        } else {
+          return success("All user already part of organisation");
+        }
+      }
+    } else {
       await inviteNewUsers(
-        newUsersToInvite,
+        users,
         existingUsers,
         transaction,
         currentOrg,
@@ -626,7 +587,6 @@ export const inviteMembers = async (event) => {
         currentUser
       );
     }
-
     if (origin === "onboarding") {
       const user = await User.findByPk(loggedUser.userId);
       user.profileCompletion = 75;
@@ -648,15 +608,11 @@ const inviteNewUsers = async (
   currentOrganisation,
   currentUser
 ) => {
-  // Normalize emails for comparison
-  const existingEmails = existingUsers.map((u) => u.email?.toLowerCase().trim());
+  const existingEmails = existingUsers.map((u) => u.email);
   const newUsersData = users
-    .filter((i) => {
-      const email = i.email?.trim().toLowerCase();
-      return email && !existingEmails.includes(email);
-    })
+    .filter((i) => !existingEmails.includes(i.email))
     .map((i) => ({
-      email: i.email.trim(),
+      email: i.email,
       roleId: i.roleId,
       fullName: i.fullName || i.email.split("@")[0],
       profileCompletion: 1,
@@ -667,15 +623,11 @@ const inviteNewUsers = async (
   // Bulk create new users
   const newUsers = await User.bulkCreate(newUsersData, {
     transaction,
-    ignoreDuplicates: true,
   });
   const orgAssociations = newUsers.map((u) => {
     return { userId: u.id, organisationId: currentOrg };
   });
-  await UserOrganisation.bulkCreate(orgAssociations, { 
-    transaction,
-    ignoreDuplicates: true,
-  });
+  await UserOrganisation.bulkCreate(orgAssociations, { transaction });
   newUsers.forEach(async (el) => {
     await sendInvitationEmail({
       email: el.email,
