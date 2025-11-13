@@ -3,6 +3,7 @@ import {
   getChatbotConfig,
   createPatientViaChatbot,
   createAppointmentViaChatbot,
+  createLeadViaChatbot,
 } from "~/server/controllers/chatbot";
 
 export default defineEventHandler(async (event) => {
@@ -17,6 +18,8 @@ export default defineEventHandler(async (event) => {
       return await createPatientViaChatbot(event);
     case "createAppointment":
       return await createAppointmentViaChatbot(event);
+    case "createLead":
+      return await createLeadViaChatbot(event);
     default:
       return { code: 0, error: "Not found" };
   }

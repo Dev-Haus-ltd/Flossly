@@ -1,4 +1,5 @@
-import { ChatbotConfig, User, DiaryPatient, DiaryAppointment, OrganisationTreatment } from "../models";
+import { ChatbotConfig, User, DiaryPatient, DiaryAppointment, OrganisationTreatment, CrmLead, CrmLeadAssignee, CrmLeadCommunication } from "../models";
+import { CONTACT_METHODS } from "../models/crm/leadCommunications";
 import { readBody } from "h3";
 import { createError } from "h3";
 import { Op } from "sequelize";
@@ -432,6 +433,113 @@ export const createAppointmentViaChatbot = async (event) => {
       throw e;
     }
     console.error('[Chatbot API] Error creating appointment:', e);
+    console.error('[Chatbot API] Error details:', {
+      message: e?.message,
+      data: e?.data,
+      original: e?.original,
+      stack: e?.stack,
+    });
+    const msg = e?.message || e?.data?.message || e?.original?.detail || 'Internal server error';
+    return error(500, msg);
+  }
+};
+
+// Public API: Create lead via chatbot (no authentication required)
+export const createLeadViaChatbot = async (event) => {
+  try {
+    const body = await readBody(event);
+    const payload = typeof body === 'string' ? JSON.parse(body) : body;
+    
+    // Validate botId
+    const botValidation = await validateBotId(payload.botId);
+    if (!botValidation.valid) {
+      return error(400, botValidation.error);
+    }
+    
+    const organisationId = botValidation.organizationId;
+    
+    // Validate required fields
+    const required = ['name', 'email', 'telephone'];
+    for (const k of required) {
+      if (!payload?.[k]) {
+        return error(400, `${k} is required`);
+      }
+    }
+    
+    console.log('[Chatbot API] Creating lead with data:', {
+      organisationId: Number(organisationId),
+      name: payload.name,
+      email: payload.email,
+      telephone: payload.telephone,
+    });
+    
+    // Prepare lead data
+    const data = {
+      organisationId: Number(organisationId),
+      alert: payload.alert || null,
+      name: payload.name,
+      email: payload.email,
+      telephone: payload.telephone,
+      inquiryDate: payload.inquiryDate ? new Date(payload.inquiryDate) : new Date(),
+      dob: payload.dob ? new Date(payload.dob) : null,
+      occupation: payload.occupation || null,
+      location: payload.location || null,
+      leadSource: payload.leadSource?.name || payload.leadSource || 'Chatbot',
+      leadStatus: payload.leadStatus || 'New',
+      treatment: payload.treatment?.name || payload.treatment || null,
+      followUpDate: payload.followUpDate ? new Date(payload.followUpDate) : null,
+      comments: payload.comments || null,
+      rawData: payload.rawData || null,
+    };
+    
+    const created = await CrmLead.create(data);
+    
+    console.log('[Chatbot API] Lead created successfully:', {
+      id: created.id,
+      organisationId: created.organisationId,
+      name: created.name,
+      email: created.email,
+    });
+    
+    // Shape treatment in response
+    created.setDataValue('treatment', { id: null, name: created.treatment || '' });
+    
+    // Handle assignees if provided
+    const assignedUsers = Array.isArray(payload.assigned) ? payload.assigned : [];
+    if (assignedUsers.length) {
+      const rows = assignedUsers
+        .map((u) => (u && u.id ? { organisationId: Number(organisationId), leadId: created.id, userId: Number(u.id) } : null))
+        .filter(Boolean);
+      if (rows.length) {
+        await CrmLeadAssignee.bulkCreate(rows, { ignoreDuplicates: true });
+        // Shape response
+        const users = await User.findAll({ 
+          where: { id: rows.map((r) => r.userId) }, 
+          attributes: ['id', 'fullName', 'email'] 
+        });
+        created.setDataValue('assigned', users.map((u) => ({ id: u.id, fullName: u.fullName, email: u.email })));
+      }
+    } else {
+      created.setDataValue('assigned', []);
+    }
+    
+    // Handle contact method if provided
+    if (payload.contactMethod && CONTACT_METHODS.includes(payload.contactMethod)) {
+      await CrmLeadCommunication.create({
+        organisationId: Number(organisationId),
+        leadId: created.id,
+        preferredContactMethod: payload.contactMethod
+      });
+      created.setDataValue('preferredContact', payload.contactMethod);
+    }
+    
+    return success(created);
+  } catch (e) {
+    // If it's already an error response, re-throw it
+    if (e.statusCode) {
+      throw e;
+    }
+    console.error('[Chatbot API] Error creating lead:', e);
     console.error('[Chatbot API] Error details:', {
       message: e?.message,
       data: e?.data,
