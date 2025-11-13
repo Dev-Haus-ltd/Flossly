@@ -25,6 +25,8 @@ export const usersList = async (event) => {
   if (roleId) {
     where.roleId = roleId;
   }
+  // Only return Active users (exclude Invited, Disabled, Expired)
+  where.status = "Active";
   try {
     const userOrganisations = await UserOrganisation.findAll({
       where: { organisationId: currentOrg },
