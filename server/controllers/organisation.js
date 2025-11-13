@@ -63,7 +63,7 @@ export const updateOrganisationDetails = async (event) => {
       await user.save();
     }
     await organisation.save();
-    return success(organisation.toJSON);
+    return success(organisation.toJSON());
   } catch (err) {
     console.log(err.message);
     return error(500, err.message);

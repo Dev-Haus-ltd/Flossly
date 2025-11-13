@@ -1,2 +1,5 @@
-Update Flossly docs
-finalize flossly CRM and Diary
+Automation Emails Tasks and CRM
+Appointment Emails and automation Emails
+inline editable leads
+chatbot integration with appointment APIs
+
