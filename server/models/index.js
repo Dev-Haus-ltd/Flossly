@@ -196,6 +196,11 @@ Rota.hasMany(RotaShift, { foreignKey: "rotaId", as: "shifts" });
 RotaUser.belongsTo(Rota, { foreignKey: "rotaId", as: "rota" });
 RotaUser.belongsTo(User, { foreignKey: "userId", as: "user" });
 RotaUser.hasMany(RotaShift, { foreignKey: "rotaUserId", as: "shifts" });
+RotaUser.belongsTo(Role, {
+  foreignKey: "tempUserRoleId",
+  as: "role",
+});
+
 
 RotaShift.belongsTo(Rota, { foreignKey: "rotaId", as: "rota" });
 RotaShift.belongsTo(RotaUser, { foreignKey: "rotaUserId", as: "rotaUser" });

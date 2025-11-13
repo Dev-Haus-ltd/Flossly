@@ -88,7 +88,7 @@
           <CommonAvatar :user="user?.user" class="mr-2" size="45" />
           <div class="w-100">
             <div class="d-flex align-center w-100">
-              <h3 class="fst-col-title">{{ user?.user.fullName }}</h3>
+              <h3 class="fst-col-title">{{ user?.isTempUser ? user?.tempUserName : user?.user.fullName }}</h3>
               <v-btn
                 color="#000000"
                 size="small"
@@ -99,7 +99,7 @@
                 <v-icon>mdi-close</v-icon>
               </v-btn>
             </div>
-            <small class="fst-col--subtit">{{ user?.user.role.title }}</small>
+            <small class="fst-col--subtit">{{  user?.isTempUser ? user?.role.title : user?.user.role.title }}</small>
           </div>
         </div>
 

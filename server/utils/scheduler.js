@@ -290,3 +290,52 @@ export const startLeadAutomationScheduler = () => {
     }
   });
 };
+
+import { Op } from 'sequelize'
+
+export const startTaskOverDueScheduler = () => {
+  // Run every night at 12 AM (server time)
+  cron.schedule("0 0 * * *", async () => {
+    try {
+      const today = new Date();
+
+      // Find the "overdue" status
+      const overdueStatus = await OrganisationStatus.findOne({
+        where: { key: "overdue", status: "Active" },
+      });
+
+      if (!overdueStatus) {
+        console.error("❌ Overdue status not found in OrganisationStatuses table!");
+        return;
+      }
+
+      // Find all overdue tasks (dueDate < today) that are not already overdue
+      const overdueTasks = await UserTask.findAll({
+        where: {
+          dueDate: { [Op.lt]: today },
+          statusId: { [Op.ne]: overdueStatus.id },
+        },
+      });
+
+      if (overdueTasks.length === 0) {
+        console.log("⏰ No overdue tasks found today.");
+        return;
+      }
+
+      const taskIds = overdueTasks.map((t) => t.id);
+
+      // Update tasks to "Overdue" status
+      await UserTask.update(
+        { statusId: overdueStatus.id },
+        { where: { id: taskIds } }
+      );
+
+      console.log(`✅ ${taskIds.length} tasks marked as Overdue.`);
+
+    } catch (err) {
+      console.error("❌ Error in overdue scheduler:", err);
+    }
+  });
+};
+
+

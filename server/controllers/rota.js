@@ -401,12 +401,17 @@ export const getRotaUsers = async (event) => {
           model: User,
           as: "user",
           attributes: ["id", "fullName", "email", "roleId", "photo"],
+          required: false,
           include: [
             {
               model: Role,
               as: "role",
             },
           ],
+        },
+        {
+          model: Role,
+          as: "role",
         },
       ],
     });
