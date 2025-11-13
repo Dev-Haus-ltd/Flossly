@@ -1558,7 +1558,7 @@ export const teamTasksCountByCategory = async (event) => {
     });
     const parentCounts = {};
     
-    // Group tasks by taskId to handle multiple user assignments
+    // Group tasks by taskId to count unique Tasks (not UserTasks)
     // Only count tasks where logged-in user is NOT assigned
     const taskMap = new Map();
     for (const userTask of teamTasks) {
@@ -1610,6 +1610,7 @@ export const teamTasksCountByCategory = async (event) => {
         };
       }
 
+      // Count unique Tasks (not UserTasks) - if 3 users assigned, count as 1
       parentCounts[currentCat.id].taskCount += 1;
     }
     
@@ -1759,6 +1760,8 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
     }
 
     // Build base where clause
+    // Note: This counts unique Tasks (not UserTasks) in the organization
+    // If a task is assigned to 3 users, it counts as 1 unique Task
     const baseWhere = {
       organisationId,
       isArchieved: false,
@@ -1794,41 +1797,33 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
           ],
         };
 
-    // Get counts for each status
+    // Helper function to count unique Tasks by status
+    const countUniqueTasksByStatus = async (statusId) => {
+      if (!statusId) return 0;
+      
+      const userTasks = await UserTask.findAll({
+        where: {
+          ...baseWhere,
+          statusId,
+        },
+        include: [taskInclude],
+        attributes: ['taskId'],
+        raw: true,
+      });
+      
+      // Get unique taskIds
+      const uniqueTaskIds = new Set(userTasks.map(ut => ut.taskId));
+      return uniqueTaskIds.size;
+    };
+
+    // Get counts for each status (counting unique Tasks, not UserTasks)
     const [completed, progress, upcoming] = await Promise.all([
-      statusMap.completed
-        ? UserTask.count({
-            where: {
-              ...baseWhere,
-              statusId: statusMap.completed,
-            },
-            include: [taskInclude],
-            distinct: true,
-          })
-        : 0,
-      statusMap.progress
-        ? UserTask.count({
-            where: {
-              ...baseWhere,
-              statusId: statusMap.progress,
-            },
-            include: [taskInclude],
-            distinct: true,
-          })
-        : 0,
-      statusMap.upcoming
-        ? UserTask.count({
-            where: {
-              ...baseWhere,
-              statusId: statusMap.upcoming,
-            },
-            include: [taskInclude],
-            distinct: true,
-          })
-        : 0,
+      countUniqueTasksByStatus(statusMap.completed),
+      countUniqueTasksByStatus(statusMap.progress),
+      countUniqueTasksByStatus(statusMap.upcoming),
     ]);
 
-    // Calculate overdue tasks (tasks with dueDate < today and status not completed)
+    // Calculate overdue tasks (unique Tasks with dueDate < today and status not completed)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -1842,11 +1837,16 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
       overdueWhere.statusId = { [Op.ne]: statusMap.completed };
     }
 
-    const overdue = await UserTask.count({
+    const overdueUserTasks = await UserTask.findAll({
       where: overdueWhere,
       include: [taskInclude],
-      distinct: true,
+      attributes: ['taskId'],
+      raw: true,
     });
+    
+    // Get unique taskIds for overdue
+    const uniqueOverdueTaskIds = new Set(overdueUserTasks.map(ut => ut.taskId));
+    const overdue = uniqueOverdueTaskIds.size;
 
     return success({
       completed: completed || 0,
