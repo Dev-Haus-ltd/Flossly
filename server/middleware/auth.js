@@ -51,6 +51,8 @@ const isPublicPath = (path) => {
     "/api/misc/getRoles",
     "/api/meta/callback",
     "/api/meta/webhook",
+    "/api/chatbot/createPatient",
+    "/api/chatbot/createAppointment",
   ];
   
   // Exact match or starts with the path (to handle query params and trailing slashes)
