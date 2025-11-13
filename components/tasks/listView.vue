@@ -819,7 +819,7 @@ const calenderDate = (data) => {
 };
 const getTaskUsers = (task) => {
   if (users) {
-    return users.filter((x) => x.roleId !== task.taskDetails.roleId);
+    return users.filter((x) => x.roleId !== task.taskDetails.roleId && x.status === "Active");
   } else return [];
 };
 const updateTasks = () => {

@@ -403,7 +403,7 @@ const getLeadUsers = (lead) => {
   // if (props.users.length) {
   //   return props.users.filter((x) => x.roleId !== task.taskDetails.roleId);
   // } else return [];
-  return props.users;
+  return props.users.filter((x) => x.status === "Active");
 };
 const unAssign = async (lead, user) => {
   try {

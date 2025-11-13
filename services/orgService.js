@@ -21,8 +21,8 @@ export default {
           reject(err);
         });
     });
-  }, 
-   getTaskStatuses() {
+  },
+  getTaskStatuses() {
     return new Promise((resolve, reject) => {
       Get("/organisations/statuses")
         .then((res) => {
@@ -40,10 +40,10 @@ export default {
           resolve(res);
         })
         .catch((err) => {
-          reject(err); 
+          reject(err);
         });
     });
-  }, 
+  },
   addContacts(data) {
     return new Promise((resolve, reject) => {
       Post("/organisations/addContacts", data)
@@ -130,5 +130,12 @@ export default {
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
+  },
+  listTreatments() {
+    return new Promise((resolve, reject) => {
+      Post("/diary/treamtments")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
   }
-};
+}

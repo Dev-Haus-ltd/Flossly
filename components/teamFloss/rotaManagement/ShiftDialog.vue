@@ -382,12 +382,32 @@ const timeOptions = Array.from({ length: 48 }, (_, i) => {
 });
 
 const toMinutes = (time) => {
-  const [h, m] = time.split(":").map(Number);
-  return h * 60 + m;
+  // Handle string format "HH:mm"
+  if (typeof time === 'string') {
+    const [h, m] = time.split(":").map(Number);
+    return h * 60 + m;
+  }
+  // Handle Date object
+  if (time instanceof Date) {
+    return time.getHours() * 60 + time.getMinutes();
+  }
+  // If it's already a number or invalid, return 0
+  return 0;
 };
 const isEndTimeValid = (end) => {
   if (!form.value.startDate) return false;
-  let diff = toMinutes(end) - toMinutes(form.value.startDate);
+  // Ensure end is a string (from timeOptions)
+  if (typeof end !== 'string') return false;
+  
+  const startTime = form.value.startDate;
+  // Convert startDate to string if it's a Date object
+  const startTimeStr = startTime instanceof Date 
+    ? `${String(startTime.getHours()).padStart(2, '0')}:${String(startTime.getMinutes()).padStart(2, '0')}`
+    : startTime;
+  
+  if (typeof startTimeStr !== 'string') return false;
+  
+  let diff = toMinutes(end) - toMinutes(startTimeStr);
   if (diff < 0) diff += 24 * 60;
   return diff >= 240; // 4 hours = 240 mins
 };
@@ -463,8 +483,12 @@ const submitForm = async () => {
   const { valid } = await formRef.value.validate();
   if (!valid) return;
   try {
-    const breakTime =
-      (Number(breakHrs.value) || 0) * 60 + (Number(breakMins.value) || 0);
+    // Calculate break time - if both fields are empty or invalid, send null instead of 0
+    const hrs = breakHrs.value ? Number(breakHrs.value) : 0;
+    const mins = breakMins.value ? Number(breakMins.value) : 0;
+    // Only send null if both are 0 or empty, otherwise calculate total minutes
+    const breakTime = (hrs === 0 && mins === 0) ? null : (hrs * 60 + mins);
+    
     const startDateObj = buildDateTime(
       props.shiftData.day,
       form.value.startDate

@@ -29,6 +29,7 @@ export default defineNuxtConfig({
         "tertiary-light": "#8A82FF"
       },
       Stripe_PK: process.env.STRIPE_PK,
+      MAX_FILE_SIZE_FOR_LOGO: process.env.MAX_FILE_SIZE_FOR_LOGO || 5 * 1024 * 1024, // Default 5MB in bytes
     },
     API_AUTH: "BasicAuth",
     JWT_SECRET: process.env.JWT_SECRET,
@@ -42,6 +43,7 @@ export default defineNuxtConfig({
     META_VERIFY_TOKEN: process.env.META_VERIFY_TOKEN,
     //file size
     MAX_FILE_SIZE_FOR_TASK_SHEET: process.env.MAX_FILE_SIZE_FOR_TASK_SHEET,
+    MAX_FILE_SIZE_FOR_LOGO: process.env.MAX_FILE_SIZE_FOR_LOGO || 5 * 1024 * 1024, // Default 5MB in bytes
     // Google Cloud Speech-to-Text credentials
     GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS,
     // GitHub token for GPT-5 model (testing)

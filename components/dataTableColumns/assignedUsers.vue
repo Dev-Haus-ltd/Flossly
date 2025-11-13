@@ -183,7 +183,7 @@ const filteredSuggestions = computed(() => {
   const assignedIds = props.assignedUsers.map((u) => u?.id);
   return props.allUsers.filter((u) => {
     const matchText = `${u.fullName} ${u.role?.title || ""}`.toLowerCase();
-    return !assignedIds.includes(u.id) && matchText.includes(q);
+    return !assignedIds.includes(u.id) && matchText.includes(q) && u.status === "Active";
   });
 });
 

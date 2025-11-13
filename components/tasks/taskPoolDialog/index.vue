@@ -163,7 +163,19 @@ const props = defineProps({
   modelValue: Boolean,
 });
 
-const emit = defineEmits(["onUpdate"]);
+const emit = defineEmits(["onUpdate", "close"]);
+
+const resetState = () => {
+  tasks.value = [];
+  selectedTasks.value = [];
+  selectedSubCategory.value = null;
+  subCategories.value = [];
+  subCategoryView.value = true;
+  search.value = "";
+  searchSubCategory.value = "";
+  tab.value = 0
+};
+
 const fetchGeneralTasks = (category) => {
   selectedSubCategory.value = category;
   taskStore
@@ -171,7 +183,7 @@ const fetchGeneralTasks = (category) => {
     .then((res) => {
       if (res.code === 0) {
         subCategoryView.value = false;
-        tasks.value = res.data;
+        tasks.value = res.data.map(task => ({ ...task, checked: false }));
       } else {
         mainStore.setSnackbar({
           title: res.data.message || res.message,
@@ -186,7 +198,16 @@ const fetchGeneralTasks = (category) => {
       });
     });
 };
+
 const fetchListCategories = () => {
+  // Reset state but don't clear subCategories yet - let the tab watcher handle it
+  tasks.value = [];
+  selectedTasks.value = [];
+  selectedSubCategory.value = null;
+  search.value = "";
+  searchSubCategory.value = "";
+  subCategoryView.value = true;
+  
   taskStore
     .listCategoriesForPool()
     .then((res) => {
@@ -216,25 +237,38 @@ const fetchListCategories = () => {
       });
     });
 };
+
 watch(
   () => props.modelValue,
   async (newVal) => {
     if (newVal) {
       fetchListCategories();
+    } else {
+      // Reset state when dialog closes
+      resetState();
     }
   }
 );
+
 watch(tab, async (newId) => {
-  if (newId) {
+  if (newId && categoryList.value.length > 0) {
+    // Reset view-specific state when switching tabs (but keep categoryList)
+    tasks.value = [];
+    selectedTasks.value = [];
+    selectedSubCategory.value = null;
+    search.value = "";
+    searchSubCategory.value = "";
+    
+    const category = categoryList.value.find((x) => x.id === newId);
+    if (!category) return;
+    
     subCategories.value = categoryList.value.filter(
       (x) => x.parentId === newId
     );
     if (subCategories.value.length) {
       subCategoryView.value = true;
     } else {
-      subCategories.value = [];
-      subCategoryView.value = true;
-      const category = categoryList.value.find((x) => x.id === newId);
+      // No subcategories, fetch tasks directly
       fetchGeneralTasks(category);
     }
   }
@@ -260,6 +294,11 @@ const addTaskToBoard = async () => {
     });
 
     if (res.code === 0) {
+      // Reset selections after successful assignment
+      selectedTasks.value = [];
+      tasks.value.forEach(task => {
+        task.checked = false;
+      });
       emit("onUpdate");
       mainStore.setSnackbar({
         title: "Task assigned successfully",

@@ -46,7 +46,8 @@ const rolesList = ref([]);
 const route = useRoute();
 
 const showFloatingButtons = computed(() => {
-  return loggedIn.value && route.name !== "onboarding";
+  const excludedRoutes = ["onboarding", "login", "signup"];
+  return loggedIn.value && !excludedRoutes.includes(route.name);
 });
 
 const handleCreateTask = () => {
