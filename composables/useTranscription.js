@@ -76,6 +76,29 @@ export const useTranscription = (editorEl) => {
   // Recording functions
   const startRecording = async () => {
     try {
+      console.log('[Transcription] Starting new recording...');
+      
+      // Clear previous transcription text and reset editor for new recording
+      transcribedText.value = '';
+      originalTranscribedText.value = '';
+      summarizedText.value = '';
+      error.value = null;
+      
+      // Destroy and recreate editor to ensure clean state
+      await nextTick();
+      if (editor) {
+        console.log('[Transcription] Destroying old editor');
+        try {
+          editor.destroy();
+        } catch (destroyErr) {
+          console.warn('[Transcription] Error destroying editor:', destroyErr);
+        }
+        editor = null;
+      }
+      
+      // Reinitialize editor with empty state
+      await initEditor();
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStream.value = stream;
       audioChunks.value = [];
@@ -132,43 +155,74 @@ export const useTranscription = (editorEl) => {
     // Start streaming transcription connection
   const startStreamingTranscription = async (stream) => {
     try {
+      // Clean up any existing EventSource before creating a new one
+      if (eventSource.value) {
+        eventSource.value.close();
+        eventSource.value = null;
+      }
+
+      // Reset state for new stream
+      currentStream.value = null;
+      lastFinalText.value = '';
+      lastInterimText.value = '';
+      processedFinalTexts.value.clear();
+      lastWords.value = [];
+
       const APIURL = '/api';
       const chunkQueue = [];
       let sessionIdReceived = false;
       let connectionError = null;
 
       // Create EventSource for receiving transcription results (GET request)
-      eventSource.value = new EventSource(`${APIURL}/transcription/stream`);
+      const newEventSource = new EventSource(`${APIURL}/transcription/stream`);
+      eventSource.value = newEventSource;
 
       // Set up connection error handler BEFORE onmessage
-      eventSource.value.onerror = (err) => {
+      newEventSource.onerror = (err) => {
         console.error('EventSource error:', err);
-        console.error('EventSource readyState:', eventSource.value?.readyState);
+        console.error('EventSource readyState:', newEventSource?.readyState);
         
         // Check if connection failed to open
-        if (eventSource.value?.readyState === EventSource.CONNECTING) {
+        if (newEventSource?.readyState === EventSource.CONNECTING) {
           connectionError = 'Failed to connect to transcription service';
-        } else if (eventSource.value?.readyState === EventSource.CLOSED) {
+        } else if (newEventSource?.readyState === EventSource.CLOSED) {
           connectionError = 'Connection to transcription service closed';
-          if (eventSource.value) {
+          if (eventSource.value === newEventSource) {
             eventSource.value.close();
             eventSource.value = null;
           }
         }
       };
 
-      eventSource.value.onopen = () => {
+      newEventSource.onopen = () => {
         console.log('EventSource connection opened');
         connectionError = null;
       };
 
-      eventSource.value.onmessage = async (event) => {
+      newEventSource.onmessage = async (event) => {
+        // Only process messages from the current EventSource
+        if (eventSource.value !== newEventSource) {
+          console.log('Ignoring message from old EventSource');
+          return;
+        }
         try {
           const data = JSON.parse(event.data);
+          console.log('[Transcription] Received message:', { 
+            hasSessionId: !!data.sessionId, 
+            hasText: !!data.text, 
+            isFinal: data.isFinal,
+            textPreview: data.text?.substring(0, 50) 
+          });
 
           // First message contains sessionId
           if (data.sessionId && !currentStream.value?.sessionId) {
-            currentStream.value = { sessionId: data.sessionId };
+            console.log('[Transcription] Received sessionId:', data.sessionId);
+            // Preserve chunkQueue if it exists, otherwise create new object
+            if (currentStream.value) {
+              currentStream.value.sessionId = data.sessionId;
+            } else {
+              currentStream.value = { sessionId: data.sessionId, chunkQueue: chunkQueue };
+            }
             sessionIdReceived = true;
             connectionError = null; // Clear any connection errors
 
@@ -205,13 +259,21 @@ export const useTranscription = (editorEl) => {
               const trimmedText = data.text.trim();
 
               if (!trimmedText) {
+                console.log('[Transcription] Empty text, skipping');
                 return;
               }
 
               const normalizedNew = normalizeText(trimmedText);
+              console.log('[Transcription] Processing final text:', { 
+                trimmedText: trimmedText.substring(0, 50),
+                normalizedNew: normalizedNew.substring(0, 50),
+                alreadyProcessed: processedFinalTexts.value.has(normalizedNew),
+                currentTranscriptionLength: transcribedText.value?.length || 0
+              });
 
               // Check if we've already processed this exact text (normalized)
               if (processedFinalTexts.value.has(normalizedNew)) {
+                console.log('[Transcription] Duplicate detected, skipping');
                 return;
               }
 
@@ -419,11 +481,21 @@ export const useTranscription = (editorEl) => {
               // Update editor with final text (only show final results, not interim)
               // Only update if we haven't summarized yet (show original during transcription)
               if (!summarizedText.value) {
+                console.log('[Transcription] Updating editor with text length:', transcribedText.value?.length || 0);
                 await nextTick();
                 if (editor) {
                   // Update editor content without recreating it
-                  editor.render(htmlToBlocks(transcribedText.value || ''));
+                  try {
+                    const blocks = htmlToBlocks(transcribedText.value || '');
+                    console.log('[Transcription] Rendering blocks:', blocks.length);
+                    editor.render(blocks);
+                  } catch (renderErr) {
+                    console.error('[Transcription] Error rendering editor:', renderErr);
+                    // Fallback: reinitialize editor
+                    await initEditor();
+                  }
                 } else {
+                  console.log('[Transcription] Editor not initialized, initializing now');
                   await initEditor();
                 }
               }
@@ -466,7 +538,7 @@ export const useTranscription = (editorEl) => {
         }
         
         // Check if EventSource failed to connect
-        if (eventSource.value?.readyState === EventSource.CLOSED && attempts > 5) {
+        if (newEventSource?.readyState === EventSource.CLOSED && attempts > 5) {
           throw new Error('Failed to establish connection to transcription service');
         }
         
@@ -477,8 +549,8 @@ export const useTranscription = (editorEl) => {
 
       if (!sessionIdReceived) {
         // Clean up EventSource if it exists
-        if (eventSource.value) {
-          eventSource.value.close();
+        if (eventSource.value === newEventSource) {
+          newEventSource.close();
           eventSource.value = null;
         }
         const errorMsg = connectionError || 'Failed to receive sessionId. The connection may have timed out or failed.';
