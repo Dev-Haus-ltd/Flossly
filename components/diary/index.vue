@@ -245,7 +245,6 @@ onMounted(async () => {
   if (t1?.code === 0) treatments.value = t1.data || []
   loadAppointments(); loadAccounts(); loadStaff()
 })
-watch(accountsPeriod, loadAccounts)
 
 function onCardSelect(index, value) {
   const card = statCards[index]

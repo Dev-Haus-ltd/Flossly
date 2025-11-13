@@ -16,14 +16,13 @@
 
       <template v-if="selectItems && selectItems.length">
         <v-select
-          v-model="internalSelect"
+          v-model="selectModel"
           :items="selectItems"
           density="compact"
           hide-details
           class="compact-select"
           variant="outlined"
           style="max-width: 140px"
-          @update:model-value="$emit('update:select', internalSelect)"
         />
       </template>
     </div>
@@ -37,6 +36,8 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+
 const props = defineProps({
   uid: { type: [String, Number], required: true },
   icon: { type: String, default: '' },
@@ -49,9 +50,11 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:select']);
-const internalSelect = ref(props.select);
-watch(() => props.select, (v) => { internalSelect.value = v; });
-watch(internalSelect, (v) => emit('update:select', v));
+
+const selectModel = computed({
+  get: () => props.select,
+  set: (value) => emit('update:select', value),
+});
 </script>
 
 <style scoped lang="scss">

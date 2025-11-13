@@ -60,9 +60,6 @@
         class="mx-3"
         style="width: 202px"
       /> -->
-      <v-btn icon variant="text" @click="toggleTheme" :title="isDark ? 'Switch to light' : 'Switch to dark'">
-        <v-icon>{{ isDark ? 'mdi-weather-sunny' : 'mdi-weather-night' }}</v-icon>
-      </v-btn>
       <AppBarNottficationMenu />
       <appBarRightMenu :user="props.user" />
     </div>
@@ -72,8 +69,6 @@
 <script setup>
 const { user } = useUser();
 import logoIcon from "@/assets/logos/Logoicon2.svg";
-import { useTheme } from 'vuetify'
-import { useUIStore } from '@/stores/ui'
 const emit = defineEmits(["small-screen-drawer"]);
 
 const props = defineProps({
@@ -92,14 +87,6 @@ watch(
   }
 );
 
-// Theme toggle
-const ui = useUIStore()
-ui.initTheme()
-const theme = useTheme()
-const isDark = computed(() => theme.global.current.value.dark)
-const applyTheme = (name) => { theme.global.name.value = name === 'dark' ? 'dark' : 'light' }
-onMounted(() => applyTheme(ui.theme))
-const toggleTheme = () => { ui.toggleTheme(); applyTheme(ui.theme) }
 </script>
 
 <style scoped>
