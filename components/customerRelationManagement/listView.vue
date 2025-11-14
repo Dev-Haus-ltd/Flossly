@@ -70,10 +70,26 @@
         :key="col.key"
         v-slot:[`item.${col.key}`]="{ item }"
       >
-        <!-- Name column with expand icon -->
+        <!-- Name column with expand icon and inline edit -->
         <template v-if="col.key === 'name'">
           <div class="pa-1 d-flex justify-space-between align-center">
-            <p class="ml-2 mb-0">{{ item.name }}</p>
+            <input
+              v-if="editingCell.id === item.id && editingCell.field === 'name'"
+              v-model="editingCell.value"
+              @blur="saveEdit(item, 'name')"
+              @keyup.enter="saveEdit(item, 'name')"
+              @keyup.esc="cancelEdit"
+              class="inline-edit-input"
+              ref="editInput"
+              autofocus
+            />
+            <p 
+              v-else 
+              class="ml-2 mb-0 editable-field" 
+              @click="startEdit(item, 'name')"
+            >
+              {{ item.name || 'Click to edit' }}
+            </p>
             <img
               src="@/assets/dashboard/expandIcon.svg"
               alt="Expand"
@@ -82,6 +98,78 @@
             />
           </div>
         </template>
+
+        <!-- Email column with inline edit -->
+        <template v-else-if="col.key === 'email'">
+          <div class="pa-1">
+            <input
+              v-if="editingCell.id === item.id && editingCell.field === 'email'"
+              v-model="editingCell.value"
+              @blur="saveEdit(item, 'email')"
+              @keyup.enter="saveEdit(item, 'email')"
+              @keyup.esc="cancelEdit"
+              type="email"
+              class="inline-edit-input"
+              ref="editInput"
+              autofocus
+            />
+            <p 
+              v-else 
+              class="ml-2 mb-0 editable-field" 
+              @click="startEdit(item, 'email')"
+            >
+              {{ item.email || 'Click to edit' }}
+            </p>
+          </div>
+        </template>
+
+        <!-- Telephone column with inline edit -->
+        <template v-else-if="col.key === 'telephone'">
+          <div class="pa-1">
+            <input
+              v-if="editingCell.id === item.id && editingCell.field === 'telephone'"
+              v-model="editingCell.value"
+              @blur="saveEdit(item, 'telephone')"
+              @keyup.enter="saveEdit(item, 'telephone')"
+              @keyup.esc="cancelEdit"
+              type="tel"
+              class="inline-edit-input"
+              ref="editInput"
+              autofocus
+            />
+            <p 
+              v-else 
+              class="ml-2 mb-0 editable-field" 
+              @click="startEdit(item, 'telephone')"
+            >
+              {{ item.telephone || 'Click to edit' }}
+            </p>
+          </div>
+        </template>
+
+        <!-- Comment column with inline edit -->
+        <template v-else-if="col.key === 'comments'">
+          <div class="pa-1">
+            <textarea
+              v-if="editingCell.id === item.id && editingCell.field === 'comments'"
+              v-model="editingCell.value"
+              @blur="saveEdit(item, 'comments')"
+              @keyup.esc="cancelEdit"
+              class="inline-edit-textarea"
+              ref="editInput"
+              rows="2"
+              autofocus
+            />
+            <p 
+              v-else 
+              class="ml-2 mb-0 editable-field comment-text" 
+              @click="startEdit(item, 'comments')"
+            >
+              {{ item.comments || 'Click to edit' }}
+            </p>
+          </div>
+        </template>
+
         <template v-else-if="col.key === 'alert'">
           <DataTableColumnsAlerts :selected="item" @update="updateValueRow(item, 'alert')" />
         </template>
@@ -235,6 +323,15 @@ const selectedLeads = ref([]);
 const isAllSelected = ref(false);
 const showLeadDetailDialog = ref(false);
 const selectedLead = ref({});
+
+// Inline editing state
+const editingCell = reactive({
+  id: null,
+  field: null,
+  value: null,
+  originalValue: null
+});
+
 const actions = [
   { key: "call", label: "Call", icon: "mdi-phone-outline", color: "info" },
   { key: "mail", label: "Send Mail", icon: "mdi-email-outline", color: "tertiary" },
@@ -250,6 +347,49 @@ const actions = [
 const confirmDelete = ref(false);
 const deleting = ref(false);
 const converting = ref(false);
+
+// Inline editing functions
+const startEdit = (item, field) => {
+  editingCell.id = item.id;
+  editingCell.field = field;
+  editingCell.value = item[field] || '';
+  editingCell.originalValue = item[field] || '';
+};
+
+const cancelEdit = () => {
+  editingCell.id = null;
+  editingCell.field = null;
+  editingCell.value = null;
+  editingCell.originalValue = null;
+};
+
+const saveEdit = async (item, field) => {
+  // Check if value actually changed
+  if (editingCell.value === editingCell.originalValue) {
+    cancelEdit();
+    return;
+  }
+
+  try {
+    const payload = { 
+      id: item.id,
+      [field]: editingCell.value
+    };
+    
+    const res = await crmStore.updateLead(payload);
+    
+    if (res?.code === 0) {
+      // Update local item
+      item[field] = editingCell.value;
+    }
+  } catch (e) {
+    console.error('Failed to update:', e);
+    // Optionally show error notification
+  } finally {
+    cancelEdit();
+  }
+};
+
 const onActionClick = (key) => {
   if (!selectedLeads.value.length) return;
   if (key === 'delete') confirmDelete.value = true;
@@ -559,7 +699,47 @@ const convertSelected = async () => {
   text-align: center;
 }
 
+/* Inline editing styles */
+.editable-field {
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+  min-height: 24px;
+}
 
+.editable-field:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+.inline-edit-input,
+.inline-edit-textarea {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid rgb(var(--v-theme-primary));
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--v-theme-primary), 0.1);
+}
+
+.inline-edit-textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.inline-edit-input:focus,
+.inline-edit-textarea:focus {
+  box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.2);
+}
+
+.comment-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 80px;
+  overflow-y: auto;
+}
 
 .with-border { border: 1px solid rgb(var(--v-theme-outline)); }
 

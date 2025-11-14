@@ -90,20 +90,31 @@
 </template>
 
 <script setup>
+import { ref, watch } from 'vue';
+
 const emit = defineEmits(["update"]);
 const userStore = useUserStore();
 const mainStore = useMainStore();
+
 const { user, contractDetails } = defineProps({
   user: Object,
   contractDetails: Object
-})
+});
 
-const contractInfo = ref({...contractDetails} || {})
+const contractInfo = ref({...contractDetails} || {});
+
+// Watch for prop changes and update local copy
+watch(() => contractDetails, (newVal) => {
+  if (newVal) {
+    contractInfo.value = {...newVal};
+  }
+}, { deep: true });
 
 function logValue(e, key) {
   contractInfo.value[key] = e.target.innerText.trim();
-  console.log(contractInfo.value)
-  emit("update", contractDetails);
+  console.log(contractInfo.value);
+  // Emit the updated contractInfo, not the old contractDetails
+  emit("update", contractInfo.value);
 }
 
 const updateProfile = () => {
@@ -115,31 +126,31 @@ const updateProfile = () => {
     })
     .then((res) => {
       if (res.code === 0) {
+        // Update parent prop after successful API call
+        emit("update", contractInfo.value);
         mainStore.setSnackbar({
           title: res?.data?.message || "Contract details updated successfully",
           type: "success",
-        })
+        });
       } else {
         mainStore.setSnackbar({
           title: res?.data?.message || res?.message || "Failed to update contract details",
           type: "error",
-        })
+        });
       }
     })
     .catch((err) => {
       mainStore.setSnackbar({
         title: err?.message || "Something went wrong",
         type: "error",
-      })
-    })
-}
-
+      });
+    });
+};
 </script>
 
 <style scoped>
 .info-label {
   display: block;
-  
   font-weight: 600;
   font-size: 13px;
   color: #1e1e1e;
@@ -147,7 +158,6 @@ const updateProfile = () => {
 }
 
 .editable {
-  
   font-weight: 400;
   font-size: 14px;
   color: #101010;
@@ -157,6 +167,7 @@ const updateProfile = () => {
   border: 1px solid transparent;
   border-radius: 6px;
 }
+
 .editable:focus {
   border: 1px solid #dfdfdf;
   padding: 4px 6px;

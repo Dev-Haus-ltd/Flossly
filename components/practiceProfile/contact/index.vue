@@ -1,28 +1,17 @@
+<!-- Contact Library Component (Main Table) -->
 <template>
-  <div
-    style="border: 1px solid #dbdbdb; border-radius: 6px; overflow: auto"
-    class="my-5"
-  >
+  <div class="contact-library">
     <!-- Header -->
-    <div
-      style="border-bottom: 1px solid #dbdbdb"
-      class="d-flex align-center justify-space-between px-4 py-2"
-    >
-      <h3
-        style="
-          
-          font-weight: 600;
-          font-size: 14px;
-          color: #1e1e1e;
-          margin: 0;
-        "
-      >
-        Contact Library
-      </h3>
+    <div class="header-section">
+      <h3 class="header-title">Contact Library</h3>
 
-      <!-- Search -->
-      <div class="d-flex align-center">
-        <v-btn color="primary" class="mr-3" @click="showDialog = true">
+      <!-- Search & Actions -->
+      <div class="header-actions">
+        <v-btn 
+          color="primary" 
+          class="mr-3 d-none d-sm-flex"
+          @click="showDialog = true"
+        >
           Add Contacts
         </v-btn>
         <v-text-field
@@ -34,51 +23,57 @@
           class="input-bordered"
           flat
           append-inner-icon="mdi-magnify"
-          style="width: 220px"
+        />
+        <!-- Mobile Add Button -->
+        <v-btn 
+          icon="mdi-plus"
+          color="primary" 
+          class="d-sm-none ml-2"
+          @click="showDialog = true"
         />
       </div>
     </div>
 
-    <!-- Table -->
-    <v-table class="contact-table" density="comfortable">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Contact</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="(contact, index) in filteredContacts" :key="index">
-          <!-- Editable Name -->
-          <td>
-            <div class="px-3">
-              <p
-                class="editable"
-                contenteditable="true"
-                 @keydown.enter.prevent="updateField($event, index, 'name')"
-              >
-                {{ contact.name }}
-              </p>
-            </div>
-          </td>
+    <!-- Table Wrapper -->
+    <div class="table-wrapper">
+      <v-table class="contact-table" density="comfortable">
+        <thead>
+          <tr>
+            <th class="col-name">Name</th>
+            <th class="col-contact">Contact</th>
+            <th class="col-action text-center">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(contact, index) in filteredContacts" :key="index">
+            <!-- Name -->
+            <td class="col-name">
+              <div class="px-3">
+                <p
+                  class="editable"
+                  contenteditable="true"
+                  @keydown.enter.prevent="updateField($event, index, 'name')"
+                >
+                  {{ contact.name }}
+                </p>
+              </div>
+            </td>
 
-          <!-- Editable Contact -->
-          <td>
-            <div class="px-3">
-              <p
-                class="editable"
-                contenteditable="true"
-                @keydown.enter.prevent="updateField($event, index, 'contact')"
-              >
-                {{ contact.contact }}
-              </p>
-            </div>
-          </td>
+            <!-- Contact -->
+            <td class="col-contact">
+              <div class="px-3">
+                <p
+                  class="editable"
+                  contenteditable="true"
+                  @keydown.enter.prevent="updateField($event, index, 'contact')"
+                >
+                  {{ contact.contact }}
+                </p>
+              </div>
+            </td>
 
-          <!-- Action -->
-          <td>
-            <div class="px-4 text-center">
+            <!-- Action -->
+            <td class="col-action text-center">
               <img
                 src="@/assets/icons/practiceProfile/contact/delete.svg"
                 alt="Delete"
@@ -87,11 +82,11 @@
                 style="cursor: pointer"
                 @click="deleteRow(index)"
               />
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </v-table>
+            </td>
+          </tr>
+        </tbody>
+      </v-table>
+    </div>
 
     <!-- Add Contacts Dialog -->
     <PracticeProfileContactAddContactsDialog
@@ -102,6 +97,8 @@
 </template>
 
 <script setup>
+import { ref, computed, watch } from "vue";
+
 const props = defineProps({
   practiceDetails: {
     type: Object,
@@ -115,11 +112,9 @@ const mainStore = useMainStore();
 
 const search = ref("");
 const showDialog = ref(false);
-
-// ✅ local reactive copy
 const contacts = ref([]);
 
-// keep contacts in sync with props
+// Keep contacts in sync with props
 watch(
   () => props.practiceDetails.contacts,
   (newVal) => {
@@ -128,7 +123,7 @@ watch(
       return;
     }
 
-    // ✅ clone + sort alphabetically by name
+    // Clone and sort alphabetically by name
     contacts.value = [...newVal].sort((a, b) =>
       (a.name || "").localeCompare(b.name || "")
     );
@@ -136,7 +131,7 @@ watch(
   { immediate: true }
 );
 
-// ✅ search filtering
+// Search filtering
 const filteredContacts = computed(() => {
   const q = search.value.trim().toLowerCase();
   if (!q) return contacts.value;
@@ -157,10 +152,9 @@ const updateField = (e, index, field) => {
   handleAttributeUpdate(updatedContact);
 };
 
-// Delete row -> notify parent
+// Delete row
 const deleteRow = (index) => {
   contacts.value.splice(index, 1);
-  // You’d also want to call delete API here later
 };
 
 const handleAttributeUpdate = async (updated) => {
@@ -171,7 +165,6 @@ const handleAttributeUpdate = async (updated) => {
     });
 
     if (res.code === 0) {
-      // emit("updateDetails"); // refresh parent
       mainStore.setSnackbar({
         title: res.message || `Contact updated successfully`,
         type: "success",
@@ -191,13 +184,13 @@ const handleAttributeUpdate = async (updated) => {
   }
 };
 
-// Add contacts -> only notify parent after API success
+// Add contacts
 const handleAddContacts = async (newContacts) => {
   try {
     const res = await orgStore.addContacts({ contacts: newContacts });
 
     if (res.code === 0) {
-      emit("updateDetails"); // parent refreshes
+      emit("updateDetails");
       mainStore.setSnackbar({
         title: "Contacts added successfully",
         type: "success",
@@ -218,15 +211,83 @@ const handleAddContacts = async (newContacts) => {
 </script>
 
 <style scoped>
+.contact-library {
+  border: 1px solid #dbdbdb;
+  border-radius: 6px;
+  overflow: auto;
+  margin: 1.25rem 0;
+}
+
+.header-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: flex-start;
+  border-bottom: 1px solid #dbdbdb;
+  padding: 1rem;
+}
+
+.header-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1e1e1e;
+  margin: 0;
+  width: 100%;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.header-actions .v-text-field {
+  flex: 1;
+  max-width: 100%;
+}
+
+/* Desktop: Header in row */
+@media (min-width: 960px) {
+  .header-section {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+  }
+
+  .header-title {
+    flex-shrink: 0;
+    width: auto;
+  }
+
+  .header-actions {
+    flex: 1;
+    justify-content: flex-end;
+    width: auto;
+  }
+
+  .header-actions .v-text-field {
+    max-width: 220px;
+  }
+}
+
+/* Table */
+.table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 :deep(.v-table__wrapper table) {
   width: 100% !important;
-  table-layout: fixed;
+  table-layout: auto;
   border-collapse: collapse;
+  min-width: 500px;
 }
 
 .contact-table th,
 .contact-table td {
-  
   font-weight: 400;
   font-size: 13px;
   padding: 10px 12px;
@@ -234,7 +295,6 @@ const handleAddContacts = async (newContacts) => {
   vertical-align: middle;
   text-align: left;
   word-break: break-word;
-  width: 33.33%;
 }
 
 .contact-table th {
@@ -246,19 +306,56 @@ const handleAddContacts = async (newContacts) => {
 .contact-table td:first-child {
   border-left: none;
 }
+
 .contact-table th:last-child,
 .contact-table td:last-child {
   border-right: none;
 }
+
 .contact-table thead tr:first-child th {
   border-top: none;
 }
+
 .contact-table tbody tr:last-child td {
   border-bottom: none;
 }
 
+/* Column Widths */
+.col-name {
+  width: 40%;
+  min-width: 150px;
+}
+
+.col-contact {
+  width: 40%;
+  min-width: 150px;
+}
+
+.col-action {
+  width: 20%;
+  min-width: 80px;
+}
+
+/* Mobile: Adjust widths */
+@media (max-width: 600px) {
+  .col-name {
+    width: 40%;
+    min-width: 150px;
+  }
+
+  .col-contact {
+    width: 40%;
+    min-width: 150px;
+  }
+
+  .col-action {
+    width: 20%;
+    min-width: 80px;
+  }
+}
+
+/* Editable Field */
 .editable {
-  
   font-weight: 400;
   font-size: 14px;
   color: #101010;
@@ -268,10 +365,11 @@ const handleAddContacts = async (newContacts) => {
   border: 1px solid transparent;
   border-radius: 6px;
   padding: 2px 4px;
-  width: 50%;
   margin: 0;
   text-align: left;
+  transition: all 0.2s ease;
 }
+
 .editable:focus {
   border: 1px solid #dfdfdf;
   background-color: #fff;
@@ -283,6 +381,5 @@ const handleAddContacts = async (newContacts) => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  
 }
 </style>
