@@ -349,6 +349,8 @@ const form = ref({
   color: "",
   label: "",
   userId: null,
+  isLocumShift: false,
+  locumUserId: null
 });
 
 const surgries = ref([]);
@@ -429,8 +431,14 @@ const nurseOptions = computed(() => {
 
 const handleShiftData = () => {
   const data = props.shiftData;
+  if (data.user.isTempUser) {
+    form.value.locumUserId = data.user.id
+    form.value.isLocumShift = true
+    form.value.userId = null
+  } else {
+    form.value.userId = data.user.id;
+  }
   // const currentShift= props.shifts.find(s=> s.userId===data.user.id && format(s.startDate, "yyyy-MM-dd") === format(data.day, "yyyy-MM-dd"))
-  form.value.userId = data.user.id;
   selectedUserRole.value = data.user.role.id;
 };
 const close = () => {
@@ -467,6 +475,8 @@ const resetForm = () => {
     notes: "",
     color: "",
     label: "",
+    locumUserId: null,
+    isLocumShift: false,
     userId: null,
   };
   breakHrs.value = "";

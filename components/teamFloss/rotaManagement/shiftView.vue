@@ -85,7 +85,7 @@
         <div
           class="staff-col first-col-color d-flex align-center pa-4 pos-sticky-left"
         >
-          <CommonAvatar :user="user?.user" class="mr-2" size="45" />
+          <CommonAvatar :user="user.isTempUser ? { name: user.tempUserName } : user?.user" class="mr-2" size="45" />
           <div class="w-100">
             <div class="d-flex align-center w-100">
               <h3 class="fst-col-title">{{ user?.isTempUser ? user?.tempUserName : user?.user.fullName }}</h3>
@@ -111,7 +111,7 @@
           @click="addShift(user, day)"
         >
           <div
-            v-for="(shift, i) in getShifts(user.user.id, day.date)"
+            v-for="(shift, i) in getShifts(user, day.date)"
             :key="shift.id"
             class="w-100 mx-auto"
             :style="{ marginTop: i > 0 ? '10px' : '', maxWidth: '190px' }"
@@ -251,7 +251,7 @@
           class="total-col d-flex align-center justify-center pos-sticky-right"
         >
           <h3 class="total-hrs">
-            {{ getUserTotalHours(user.user.id, visibleDays) }} hrs
+            {{ getUserTotalHours(user, visibleDays) }} hrs
           </h3>
         </div>
       </div>
@@ -568,23 +568,35 @@ const gridStyle = computed(() => ({
 }));
 
 // Helpers
-const getShifts = (userId, date) =>
-  shifts.filter(
+const getShifts = (user, date) => {
+  if (user.isTempUser) {
+   return shifts.filter(
     (s) =>
-      s.userId === userId &&
+      s.locumUserId === user.id &&
       format(s.startDate, "yyyy-MM-dd") === format(date, "yyyy-MM-dd")
   );
+  } else {
+   return shifts.filter(
+    (s) =>
+      s.userId === user?.user.id &&
+      format(s.startDate, "yyyy-MM-dd") === format(date, "yyyy-MM-dd")
+  );
+  }
+
+}
+ 
 const getSurgeryShifts = (surgId, date) =>
   shifts.filter(
     (s) =>
       s.surgeryId === surgId &&
       format(s.startDate, "yyyy-MM-dd") === format(date, "yyyy-MM-dd")
   );
-const getUserTotalHours = (userId, days) =>
-  shifts
+const getUserTotalHours = (user, days) => {
+  if (user.isTempUser) {
+  return shifts
     .filter(
       (s) =>
-        s.userId === userId &&
+        s.locumUserId === user.id &&
         days.some(
           (d) =>
             format(new Date(s.startDate), "yyyy-MM-dd") ===
@@ -592,6 +604,20 @@ const getUserTotalHours = (userId, days) =>
         )
     )
     .reduce((acc, s) => acc + getShiftDuration(s), 0);
+ } else {
+  return shifts
+    .filter(
+      (s) =>
+        s.userId === user.user.userId &&
+        days.some(
+          (d) =>
+            format(new Date(s.startDate), "yyyy-MM-dd") ===
+            format(new Date(d.date), "yyyy-MM-dd")
+        )
+    )
+    .reduce((acc, s) => acc + getShiftDuration(s), 0);
+ }
+}
 const getSurgeryTotalHours = (surgId, days) =>
   shifts
     .filter(

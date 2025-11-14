@@ -188,7 +188,7 @@ export const addRotaUsers = async (event) => {
     if (!Array.isArray(users) || users.length === 0) {
       throw createError({ message: "users required" });
     }
-    await RotaUser.destroy({ where: { rotaId }, transaction });
+    await RotaUser.destroy({ where: { rotaId, isTempUser: false }, transaction });
     const addedUsers = await Promise.all(
       users.map((user) => {
         const { userId, isTempUser, tempUserName, tempUserRoleId } = user;
@@ -226,10 +226,12 @@ export const addRotaShift = async (event) => {
       startDate,
       endDate,
       breakTime,
+      isLocumShift,
+      locumUserId,
       notes,
     } = JSON.parse(body);
 
-    if (!rotaId || !userId || !label || !startDate || !endDate) {
+    if (!rotaId || (!userId && !locumUserId) || !label || !startDate || !endDate) {
       throw createError({ message: "Required fields missing" });
     }
 
@@ -290,6 +292,8 @@ export const addRotaShift = async (event) => {
       startDate,
       endDate,
       breakTime,
+      isLocumShift,
+      locumUserId,
       notes,
     });
     return success(shift);
