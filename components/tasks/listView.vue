@@ -229,8 +229,8 @@
                       fontSize: '14px',
                       position: 'relative',
                     }"
-                    @mouseover="showHandles(column.key)"
-                    @mouseleave="hideHandles(column.key)"
+                    @mouseover="showHandles(column.key, index)"
+                    @mouseleave="hideHandles(column.key, index)"
                   >
                     <div
                       v-if="!column.title && i === 0"
@@ -246,8 +246,8 @@
                     </div>
                     <div v-else class="d-flex align-center th-content">
                       <p
-                        v-if="!isEditing(column)"
-                        @click="enableEditing(column)"
+                        v-if="!isEditing(column, index)"
+                        @click="enableEditing(column, index)"
                         style="cursor: text;"
                       >
                         {{ column.title }}
@@ -264,7 +264,7 @@
                         density="compact"
                         hide-details
                         @focus="setFocus('header', column.key, true)"
-                        @blur="updateValueColumn(column)"
+                        @blur="updateValueColumn(column, index)"
                         class="small-input"
                       />
 
@@ -288,8 +288,8 @@
                      </div>
                       <span
                         class="resize-handle"
-                        :id="`resize-handle-${column.key}`"
-                        @pointerdown="startResize($event, column)"
+                        :id="`resize-handle-${column.key}-${index}`"
+                        @pointerdown="startResize($event, column, index)"
                       >
                       </span>
                     </div>
@@ -463,7 +463,8 @@
                               </v-icon>
                               <span
                                 class="resize-handle"
-                                @pointerdown="startResize($event, column)"
+                                :id="`resize-handle-${column.key}-${index}`"
+                                @pointerdown="startResize($event, column, index)"
                               >
                               </span>
                             </div>
@@ -716,14 +717,14 @@ const getRandomHexColor = (name) => {
   const index = firstChar.charCodeAt(0) - 65;
   return index >= 0 && index < 26 ? colors[index] : "#999999";
 };
-const showHandles = (key) => {
-  const handle = document.getElementById("resize-handle-" + key);
+const showHandles = (key, i) => {
+  const handle = document.getElementById(`resize-handle-${key}-${i}`);
   if (handle) {
     handle.style.display = "block";
   }
 };
-const hideHandles = (key) => {
-  const handle = document.getElementById("resize-handle-" + key);
+const hideHandles = (key, i) => {
+  const handle = document.getElementById(`resize-handle-${key}-${i}`);
   if (handle) {
     handle.style.display = "none";
   }
@@ -755,15 +756,15 @@ const tasksForCalender = ref([]);
 const bulkTaskUploadDialog = ref(false);
 const rolesList = ref([]);
 const isResizing = ref(false);
-const editingColumn = ref(null)
+const editingColumn = ref({})
 
-const enableEditing = (column) => {
-  editingColumn.value = column.key
+const enableEditing = (column, index) => {
+  editingColumn.value[`${index}-${column.key}`] = true;
   setFocus('header', column.key, true)
 }
 
-const isEditing = (column) => {
-  return editingColumn.value === column.key
+const isEditing = (column, index) => {
+  return editingColumn.value[`${index}-${column.key}`] === true
 }
 const getRoles = () => {
   mainStore
@@ -944,7 +945,7 @@ const updateUserPreferences = async () => {
 };
 
 const updateValueColumn = (column) => {
-  editingColumn.value = null
+  editingColumn.value = {}
   setFocus("header", column.key, false);
 };
 const updateSubtaskValueColumn = (column) => {
@@ -1029,7 +1030,7 @@ let startX = 0;
 let startWidth = 0;
 let currentCol = null;
 
-function startResize(e, col) {
+function startResize(e, col, i) {
   e.stopPropagation(); // ✅ Block draggable from detecting drag
   e.preventDefault();
 
@@ -1037,10 +1038,17 @@ function startResize(e, col) {
   currentCol = col;
   startX = e.clientX;
   startWidth = col.width;
+  const handleEl = document.getElementById(`resize-handle-${col.key}-${i}`) || e.target;
 
-  e.target.setPointerCapture(e.pointerId);
-  e.target.addEventListener("pointermove", resizeColumn);
-  e.target.addEventListener("pointerup", stopResize);
+  // use pointer capture on the actual handle if available
+  try {
+    handleEl.setPointerCapture && handleEl.setPointerCapture(e.pointerId);
+  } catch (err) {
+    // some elements might not support pointer capture; ignore
+  }
+
+  handleEl.addEventListener("pointermove", resizeColumn);
+  handleEl.addEventListener("pointerup", stopResize);
 }
 
 function resizeColumn(e) {
@@ -1051,11 +1059,35 @@ function resizeColumn(e) {
 
 function stopResize(e) {
   isResizing.value = false;
-  e.target.releasePointerCapture(e.pointerId);
-  e.target.removeEventListener("pointermove", resizeColumn);
-  e.target.removeEventListener("pointerup", stopResize);
-  currentCol = null;
+
+  let handleEl;
+
+  // When using pointer capture, e.target may not be the handle.
+  // So we look for the handle based on the column + panelIndex
+  // which we stored temporarily on the event during startResize.
+  if (e.currentTarget) {
+    handleEl = e.currentTarget;
+  } else {
+    // Safety fallback (rarely triggered)
+    handleEl = e.target;
+  }
+
+  // Remove listeners cleanly
+  handleEl.removeEventListener("pointermove", resizeColumn);
+  handleEl.removeEventListener("pointerup", stopResize);
+
+  // Release pointer capture if active
+  try {
+    if (e.pointerId) {
+      handleEl.releasePointerCapture &&
+        handleEl.releasePointerCapture(e.pointerId);
+    }
+  } catch (err) {
+    // ignore capture release errors
+  }
+  currentCol = null
 }
+
 
 const updateHeaderTitle = (key, value) => {
   const target = selectedHeaders.value.find((col) => col.key === key);
@@ -1175,12 +1207,12 @@ th {
 }
 
 .resize-handle {
-  width: 8px;
+  width: 10px;
   cursor: col-resize;
   height: 70%;
   display: none;
   position: absolute;
-  right: -5px;
+  right: -12px;
   z-index: 99999;
   top: 0px;
   user-select: none;

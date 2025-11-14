@@ -1,4 +1,5 @@
 <template>
+  <teleport to="body">
   <v-navigation-drawer
     :model-value="modelValue"
     location="right"
@@ -265,6 +266,7 @@
       </v-btn>
     </div>
   </v-navigation-drawer>
+  </teleport>
 </template>
 
 <script setup>

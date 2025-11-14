@@ -4,6 +4,7 @@
     :rail="rail"
     :temporary="smAndDown"
     :permanent="!smAndDown"
+    style="z-index: 1000 !important"
   >
     <LeftSideBarPracticeMenu :currentOrg="currentOrg" :rail="rail" />
     <v-card

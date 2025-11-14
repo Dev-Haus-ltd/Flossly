@@ -18,6 +18,7 @@ export const addRota = async (event) => {
     const conflictRota = await Rota.findOne({
       where: {
         organisationId: orgId,
+        isPublished: true,
         [Op.or]: [
           { startDate: { [Op.between]: [startDate, endDate] } },
           { endDate: { [Op.between]: [startDate, endDate] } },

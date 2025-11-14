@@ -1,5 +1,14 @@
+
 Automation Emails Tasks and CRM
 Appointment Emails and automation Emails
 inline editable leads
 chatbot integration with appointment APIs
+Locum staff and Locum Shifts
+
+Diary week view
+
+Green ticks on users completed tasks in team tasks. when marked completed, only that iuser's task should be completed. - Not needed.
+mandatory to be entitled with Parent category - Done
+bug fix in resize handles - Done
+Listing of main category tasks in task pool - Done
 

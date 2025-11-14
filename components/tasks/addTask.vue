@@ -1,4 +1,5 @@
 <template>
+  <teleport to="body">
   <v-navigation-drawer
     :model-value="modelValue"
     @update:model-value="$emit('update:modelValue', $event)"
@@ -39,7 +40,7 @@
         <v-form ref="formRef" @submit.prevent="onSubmit">
           <v-row dense>
             <v-col cols="6">
-              <label class="fld-lbl">Task Title</label>
+              <label class="fld-lbl">Task Title <span style="color: red">*</span></label>
               <v-text-field
                 v-model="form.title"
                 variant="solo"
@@ -52,7 +53,7 @@
               />
             </v-col>
             <v-col cols="6">
-              <label class="fld-lbl">Task Category</label>
+              <label class="fld-lbl">Task Category  <span style="color: red">*</span></label>
               <v-select
                 v-model="form.categoryId"
                 :items="taskCategories"
@@ -68,7 +69,7 @@
               />
             </v-col>
             <v-col cols="6">
-              <label class="fld-lbl">Due Date</label>
+              <label class="fld-lbl">Due Date  <span style="color: red">*</span></label>
               <v-menu
                 v-model="menu"
                 :close-on-content-click="false"
@@ -145,7 +146,7 @@
               />
             </v-col>
             <v-col cols="12">
-              <label class="fld-lbl">Priority</label>
+              <label class="fld-lbl">Priority  <span style="color: red">*</span></label>
               <v-select
                 v-model="form.priorityId"
                 :items="taskPriorities"
@@ -156,6 +157,7 @@
                 class="input-bordered mb-0"
                 item-color="color"
                 bg-color="white"
+                :rules="requiredRule"
                 flat
               >
               </v-select>
@@ -274,6 +276,7 @@
       </v-btn>
     </div>
   </v-navigation-drawer>
+</teleport>
 </template>
 
 <script setup>
@@ -483,7 +486,7 @@ const onSubmit = async () => {
           setSnack("success", "Task Added Successfully");
           resetForm();
         } else {
-          setSnack("error", res.message || res.data.message);
+          setSnack("error", res.data.message || res.message);
         }
       })
       .catch((err) => {

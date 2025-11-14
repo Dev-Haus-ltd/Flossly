@@ -57,6 +57,16 @@
                     @click="fetchGeneralTasks(card)"
                   />
                 </v-col>
+                <v-col v-if="hasTasks"   cols="12"
+                  sm="6" 
+                  md="3">
+                  <TasksTaskPoolDialogTaskCards 
+                    :title="'Other'"
+                    :description="'Tasks under main Category'"
+                    :count="hasTasks"
+                    @click="fetchGeneralTasks({id: tab})"
+                  />
+                </v-col>
               </v-row>
               <v-card
                 v-else
@@ -176,6 +186,18 @@ const resetState = () => {
   tab.value = 0
 };
 
+const hasTasks = computed(() => {
+  if (!categoryList.value.length) return false
+  const parent = categoryList.value.find((x) => x.id === tab.value)
+  if (!parent) return false
+  const parentCount = parseInt(parent.taskCount, 10)
+  if (parentCount) {
+    return parentCount
+  } else {
+    return false
+  }
+})
+
 const fetchGeneralTasks = (category) => {
   selectedSubCategory.value = category;
   taskStore
@@ -214,6 +236,7 @@ const fetchListCategories = () => {
       if (res.code === 0) {
         categoryList.value = res.data;
         const firstCat = categoryList.value[0];
+        tab.value = categoryList.value[0].id
         const firstCatSubCat = categoryList.value.filter(
           (x) => x.parentId === firstCat.id
         );
