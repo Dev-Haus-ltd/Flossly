@@ -59,7 +59,7 @@ export const startTaskScheduler = () => {
             userId: task.userId,
             taskId: task.taskId,
             organisationId: task.organisationId,
-            statusId: statuses.find((x) => x.key === "panding").id,
+            statusId: statuses.find((x) => x.key === "progress").id,
             title: task.title,
             documentLink: "",
             priorityId: task.priorityId,
