@@ -128,7 +128,7 @@ watch(
       (a.name || "").localeCompare(b.name || "")
     );
   },
-  { immediate: true }
+  { immediate: true, deep: true }
 );
 
 // Search filtering
@@ -153,9 +153,25 @@ const updateField = (e, index, field) => {
 };
 
 // Delete row
-const deleteRow = (index) => {
-  contacts.value.splice(index, 1);
+const deleteRow = async (index) => {
+  const c = contacts.value[index];
+  if (!c?.id) return;
+
+  try {
+    const res = await orgStore.deleteAttribute({ type: "contact", id: c.id });
+
+    if (res.code === 0) {
+      contacts.value.splice(index, 1);
+      emit("updateDetails"); // re-fetch parent details if needed
+      mainStore.setSnackbar({ title: "Deleted", type: "success" });
+    } else {
+      mainStore.setSnackbar({ title: res.message || "Delete failed", type: "error" });
+    }
+  } catch (err) {
+    mainStore.setSnackbar({ title: err.message, type: "error" });
+  }
 };
+
 
 const handleAttributeUpdate = async (updated) => {
   try {
@@ -165,6 +181,8 @@ const handleAttributeUpdate = async (updated) => {
     });
 
     if (res.code === 0) {
+      // Update parent after successful API call
+      emit("updateDetails");
       mainStore.setSnackbar({
         title: res.message || `Contact updated successfully`,
         type: "success",

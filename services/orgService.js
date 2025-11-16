@@ -137,5 +137,13 @@ export default {
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
-  }
+  },
+  deleteAttribute(data) {
+  return new Promise((resolve, reject) => {
+    Post("/organisations/deleteAttribute", data)
+      .then(resolve)
+      .catch(reject);
+  });
+}
+
 }

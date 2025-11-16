@@ -1,28 +1,17 @@
+<!-- Room Management Component (Main Table) -->
 <template>
-  <div
-    style="border: 1px solid #dbdbdb; border-radius: 6px; overflow: auto"
-    class="my-5"
-  >
+  <div class="room-library">
     <!-- Header -->
-    <div
-      style="border-bottom: 1px solid #dbdbdb"
-      class="d-flex align-center justify-space-between px-4 py-2"
-    >
-      <h3
-        style="
-          
-          font-weight: 600;
-          font-size: 14px;
-          color: #1e1e1e;
-          margin: 0;
-        "
-      >
-        Room Management
-      </h3>
+    <div class="header-section">
+      <h3 class="header-title">Room Management</h3>
 
-      <!-- Search -->
-      <div class="d-flex align-center">
-        <v-btn color="primary" class="mr-3" @click="showDialog = true">
+      <!-- Search & Actions -->
+      <div class="header-actions">
+        <v-btn 
+          color="primary" 
+          class="mr-3 d-none d-sm-flex"
+          @click="showDialog = true"
+        >
           Add Room
         </v-btn>
         <v-text-field
@@ -34,87 +23,93 @@
           class="input-bordered"
           flat
           append-inner-icon="mdi-magnify"
-          style="width: 220px"
+        />
+        <!-- Mobile Add Button -->
+        <v-btn 
+          icon="mdi-plus"
+          color="primary" 
+          class="d-sm-none ml-2"
+          @click="showDialog = true"
         />
       </div>
     </div>
 
-    <!-- Table -->
-    <v-table class="room-table" density="comfortable">
-      <thead>
-        <tr>
-          <th>Name</th>
+    <!-- Table Wrapper -->
+    <div class="table-wrapper">
+      <v-table class="room-table" density="comfortable">
+        <thead>
+          <tr>
+            <th class="col-name">Name</th>
+            <th class="col-details">Details</th>
+            <th class="col-description">Description</th>
+            <th class="col-color">Color</th>
+            <th class="col-action text-center">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(room, index) in filteredRooms" :key="index">
+            <!-- Editable Name -->
+            <td class="col-name">
+              <div class="px-3">
+                <p
+                  class="editable"
+                  contenteditable="true"
+                  @keydown.enter.prevent="updateField($event, index, 'name')"
+                >
+                  {{ room.name }}
+                </p>
+              </div>
+            </td>
 
-          <th>Details</th>
-          <th>Description</th>
-          <th>Color</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="(room, index) in filteredRooms" :key="index">
-          <!-- Editable Name -->
-          <td>
-            <div class="px-3">
-              <p
-                class="editable"
-                contenteditable="true"
-                @keydown.enter.prevent="updateField($event, index, 'name')"
-              >
-                {{ room.name }}
-              </p>
-            </div>
-          </td>
+            <!-- Editable Details -->
+            <td class="col-details">
+              <div class="px-3">
+                <p
+                  class="editable"
+                  contenteditable="true"
+                  @keydown.enter.prevent="updateField($event, index, 'details')"
+                >
+                  {{ room.details }}
+                </p>
+              </div>
+            </td>
 
-          <!-- Editable Description -->
-          <td>
-            <div class="px-3">
-              <p
-                class="editable-des"
-                contenteditable="true"
-                @keydown.enter.prevent="
-                  updateField($event, index, 'description')
-                "
-              >
-                {{ room.description }}
-              </p>
-            </div>
-          </td>
+            <!-- Editable Description -->
+            <td class="col-description">
+              <div class="px-3">
+                <p
+                  class="editable-des"
+                  contenteditable="true"
+                  @keydown.enter.prevent="updateField($event, index, 'description')"
+                >
+                  {{ room.description }}
+                </p>
+              </div>
+            </td>
 
-          <!-- Editable Details -->
-          <td>
-            <div class="px-3">
-              <p
-                class="editable"
-                contenteditable="true"
-                @keydown.enter.prevent="updateField($event, index, 'details')"
+            <!-- Color Picker -->
+            <td class="col-color cursor-pointer p-0">
+              <v-text-field
+                density="compact"
+                variant="solo"
+                hide-details
+                class="w-100"
+                flat
               >
-                {{ room.details }}
-              </p>
-            </div>
-          </td>
-          <td class="cursor-pointer p-0">
-            <v-text-field
-              density="compact"
-              variant="solo"
-              hide-details
-              class="w-100"
-              flat
-            >
-              <template #prepend-inner>
-                <CommonColorPickerInput
-                  :item="room"
-                  @update="
-                    (payload) => updateField(payload.color, index, 'color')
-                  "
-                  noBorder
-                />
-              </template>
-            </v-text-field>
-          </td>
-          <!-- Action -->
-          <td>
-            <div class="px-4">
+                <template #prepend-inner>
+                  <CommonColorPickerInput
+                    :item="room"
+                    @update="
+                      (payload) => updateField(payload.color, index, 'color')
+                    "
+                    noBorder
+                  />
+                </template>
+              </v-text-field>
+            </td>
+
+            <!-- Action -->
+            <td class="col-action text-center">
               <img
                 src="@/assets/icons/practiceProfile/contact/delete.svg"
                 alt="Delete"
@@ -123,11 +118,13 @@
                 style="cursor: pointer"
                 @click="deleteRow(index)"
               />
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </v-table>
+            </td>
+          </tr>
+        </tbody>
+      </v-table>
+    </div>
+
+    <!-- Add Room Dialog -->
     <PracticeProfileRoomManagementAddRoomDialog
       v-model="showDialog"
       @onUpdate="handleAddRoom"
@@ -136,7 +133,8 @@
 </template>
 
 <script setup>
-const colorMenuIndex = ref(null);
+import { ref, computed, watch } from "vue";
+
 const props = defineProps({
   practiceDetails: {
     type: Object,
@@ -148,10 +146,10 @@ const emit = defineEmits(["updateDetails"]);
 const orgStore = useOrgStore();
 const mainStore = useMainStore();
 const roomList = ref([]);
-
 const showDialog = ref(false);
-
 const search = ref("");
+
+// Watch for prop changes and update local copy
 watch(
   () => props.practiceDetails.surgeries,
   (newVal) => {
@@ -160,13 +158,14 @@ watch(
       return;
     }
 
-    // ✅ clone + sort alphabetically by name
+    // Clone and sort alphabetically by name
     roomList.value = [...newVal].sort((a, b) =>
       (a.name || "").localeCompare(b.name || "")
     );
   },
-  { immediate: true }
+  { immediate: true, deep: true }
 );
+
 // Computed: filtered list
 const filteredRooms = computed(() => {
   const q = search.value.trim().toLowerCase();
@@ -181,23 +180,22 @@ const filteredRooms = computed(() => {
 
 // Update editable field
 const updateField = (e, index, field) => {
-  console.log(e);
   const room = roomList.value[index];
   if (!room) return;
 
   let value;
 
   if (typeof e === "string") {
-    // v-color-picker gives us a hex string like "#FF0000"
+    // Color picker gives us a hex string
     value = e;
   } else {
-    // contenteditable gives us an event
+    // Contenteditable gives us an event
     value = e.target.innerText.trim();
   }
 
   const updatedRoom = { ...room, [field]: value };
 
-  // ✅ update local copy immediately
+  // Update local copy immediately
   roomList.value[index] = updatedRoom;
 
   // Call API
@@ -212,7 +210,8 @@ const handleAttributeUpdate = async (updated) => {
     });
 
     if (res.code === 0) {
-      // emit("updateDetails"); // refresh parent
+      // Update parent after successful API call
+      emit("updateDetails");
       mainStore.setSnackbar({
         title: res.message || `Room updated successfully`,
         type: "success",
@@ -230,19 +229,21 @@ const handleAttributeUpdate = async (updated) => {
     });
   }
 };
+
 const handleAddRoom = async (newRoom) => {
   try {
     const res = await orgStore.addRoom(newRoom);
 
     if (res.code === 0) {
-      emit("updateDetails"); // parent refreshes
+      // Update parent after successful API call
+      emit("updateDetails");
       mainStore.setSnackbar({
-        title: "Equipments added successfully",
+        title: "Room added successfully",
         type: "success",
       });
     } else {
       mainStore.setSnackbar({
-        title: res.message || "Failed to add Equipments",
+        title: res.message || "Failed to add room",
         type: "error",
       });
     }
@@ -253,22 +254,118 @@ const handleAddRoom = async (newRoom) => {
     });
   }
 };
+
 // Delete row
-const deleteRow = (index) => {
-  roomList.value.splice(index, 1);
+const deleteRow = async (index) => {
+  const room = roomList.value[index];
+  if (!room?.id) return;
+
+  try {
+    const res = await orgStore.deleteAttribute({
+      type: "surgery",
+      id: room.id,
+    });
+
+    if (res.code === 0) {
+      roomList.value.splice(index, 1);
+      emit("updateDetails");
+      mainStore.setSnackbar({
+        title: "Room deleted successfully",
+        type: "success",
+      });
+    } else {
+      mainStore.setSnackbar({
+        title: res.message || "Delete failed",
+        type: "error",
+      });
+    }
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: err.message || "An unexpected error occurred",
+      type: "error",
+    });
+  }
 };
 </script>
 
 <style scoped>
+.room-library {
+  border: 1px solid #dbdbdb;
+  border-radius: 6px;
+  overflow: auto;
+  margin: 1.25rem 0;
+}
+
+.header-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: flex-start;
+  border-bottom: 1px solid #dbdbdb;
+  padding: 1rem;
+}
+
+.header-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1e1e1e;
+  margin: 0;
+  width: 100%;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.header-actions .v-text-field {
+  flex: 1;
+  max-width: 100%;
+}
+
+/* Desktop: Header in row */
+@media (min-width: 960px) {
+  .header-section {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+  }
+
+  .header-title {
+    flex-shrink: 0;
+    width: auto;
+  }
+
+  .header-actions {
+    flex: 1;
+    justify-content: flex-end;
+    width: auto;
+  }
+
+  .header-actions .v-text-field {
+    max-width: 220px;
+  }
+}
+
+/* Table Wrapper */
+.table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 :deep(.v-table__wrapper table) {
   width: 100% !important;
-  table-layout: fixed;
+  table-layout: auto;
   border-collapse: collapse;
+  min-width: 700px;
 }
 
 .room-table th,
 .room-table td {
-  
   font-weight: 400;
   font-size: 13px;
   padding: 10px 12px;
@@ -276,7 +373,6 @@ const deleteRow = (index) => {
   vertical-align: middle;
   text-align: left;
   word-break: break-word;
-  width: 25%; /* 4 equal columns */
 }
 
 .room-table th {
@@ -284,25 +380,52 @@ const deleteRow = (index) => {
   font-weight: 500;
 }
 
-/* Remove outer borders */
 .room-table th:first-child,
 .room-table td:first-child {
   border-left: none;
 }
+
 .room-table th:last-child,
 .room-table td:last-child {
   border-right: none;
 }
+
 .room-table thead tr:first-child th {
   border-top: none;
 }
+
 .room-table tbody tr:last-child td {
   border-bottom: none;
 }
 
-/* Editable style */
+/* Column Widths */
+.col-name {
+  width: 18%;
+  min-width: 100px;
+}
+
+.col-details {
+  width: 22%;
+  min-width: 120px;
+}
+
+.col-description {
+  width: 28%;
+  min-width: 140px;
+}
+
+.col-color {
+  width: 14%;
+  min-width: 100px;
+}
+
+.col-action {
+  width: 18%;
+  min-width: 80px;
+}
+
+/* Editable Field */
 .editable {
-  
   font-weight: 400;
   font-size: 14px;
   color: #101010;
@@ -312,16 +435,17 @@ const deleteRow = (index) => {
   border: 1px solid transparent;
   border-radius: 6px;
   padding: 2px 4px;
-  width: 50%;
   margin: 0;
   text-align: left;
+  transition: all 0.2s ease;
 }
+
 .editable:focus {
   border: 1px solid #dfdfdf;
   background-color: #fff;
 }
+
 .editable-des {
-  
   font-weight: 400;
   font-size: 14px;
   color: #101010;
@@ -331,22 +455,23 @@ const deleteRow = (index) => {
   border: 1px solid transparent;
   border-radius: 6px;
   padding: 2px 4px;
-  width: 90%;
   margin: 0;
   text-align: left;
+  transition: all 0.2s ease;
+  word-wrap: break-word;
+  white-space: normal;
 }
+
 .editable-des:focus {
   border: 1px solid #dfdfdf;
   background-color: #fff;
 }
 
-/* Search field styling */
 .input-bordered :deep(.v-field) {
   border: 1px solid #dfdfdf !important;
   border-radius: 8px !important;
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  
 }
 </style>
