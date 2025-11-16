@@ -35,10 +35,10 @@ export const updateOrganisationDetails = async (event) => {
       return error(404, "Organisation not found");
     }
     // Update organisation fields
-    organisation.name = fields.name[0] || organisation.name;
-    organisation.address = fields.address[0] || organisation.address;
-    organisation.contact = fields.contact[0] || organisation.contact;
-    organisation.type = fields.type[0] || organisation.type;
+    organisation.name = fields.name ? fields.name[0] : organisation.name;
+    organisation.address = fields.address? fields.address[0] : organisation.address;
+    organisation.contact = fields.contact ? fields.contact[0] : organisation.contact;
+    organisation.type = fields.type ? fields.type[0] : organisation.type;
 
 
     organisation.managerId = fields.managerId ? fields.managerId[0] : organisation.managerId;

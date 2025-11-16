@@ -1,28 +1,17 @@
+<!-- Equipment Directory Component (Main Table) -->
 <template>
-  <div
-    style="border: 1px solid #dbdbdb; border-radius: 6px; overflow: auto"
-    class="my-5"
-  >
+  <div class="equipment-library">
     <!-- Header -->
-    <div
-      style="border-bottom: 1px solid #dbdbdb"
-      class="d-flex align-center justify-space-between px-4 py-2"
-    >
-      <h3
-        style="
-          
-          font-weight: 600;
-          font-size: 14px;
-          color: #1e1e1e;
-          margin: 0;
-        "
-      >
-        Equipment Directory
-      </h3>
+    <div class="header-section">
+      <h3 class="header-title">Equipment Directory</h3>
 
-      <!-- Search -->
-      <div class="d-flex align-center">
-        <v-btn color="primary" class="mr-3" @click="showDialog = true">
+      <!-- Search & Actions -->
+      <div class="header-actions">
+        <v-btn 
+          color="primary" 
+          class="mr-3 d-none d-sm-flex"
+          @click="showDialog = true"
+        >
           Add Equipments
         </v-btn>
         <v-text-field
@@ -34,65 +23,71 @@
           class="input-bordered"
           flat
           append-inner-icon="mdi-magnify"
-          style="width: 220px"
+        />
+        <!-- Mobile Add Button -->
+        <v-btn 
+          icon="mdi-plus"
+          color="primary" 
+          class="d-sm-none ml-2"
+          @click="showDialog = true"
         />
       </div>
     </div>
 
-    <!-- Table -->
-    <v-table class="equipment-table" density="comfortable">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Serial Number</th>
-          <th>Details</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="(item, index) in filteredEquipment" :key="index">
-          <!-- Editable Name -->
-          <td>
-            <div class="px-3">
-              <p
-                class="editable"
-                contenteditable="true"
-                @keydown.enter.prevent="updateField($event, index, 'name')"
-              >
-                {{ item.name }}
-              </p>
-            </div>
-          </td>
+    <!-- Table Wrapper -->
+    <div class="table-wrapper">
+      <v-table class="equipment-table" density="comfortable">
+        <thead>
+          <tr>
+            <th class="col-name">Name</th>
+            <th class="col-serial">Serial Number</th>
+            <th class="col-details">Details</th>
+            <th class="col-action text-center">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(item, index) in filteredEquipment" :key="index">
+            <!-- Editable Name -->
+            <td class="col-name">
+              <div class="px-3">
+                <p
+                  class="editable"
+                  contenteditable="true"
+                  @keydown.enter.prevent="updateField($event, index, 'name')"
+                >
+                  {{ item.name }}
+                </p>
+              </div>
+            </td>
 
-          <!-- Editable Serial -->
-          <td>
-            <div class="px-3">
-              <p
-                class="editable"
-                contenteditable="true"
-                @keydown.enter.prevent="updateField($event, index, 'serialNumber')"
-              >
-                {{ item.serialNumber }}
-              </p>
-            </div>
-          </td>
+            <!-- Editable Serial -->
+            <td class="col-serial">
+              <div class="px-3">
+                <p
+                  class="editable"
+                  contenteditable="true"
+                  @keydown.enter.prevent="updateField($event, index, 'serialNumber')"
+                >
+                  {{ item.serialNumber }}
+                </p>
+              </div>
+            </td>
 
-          <!-- Editable Details -->
-          <td>
-            <div class="px-3">
-              <p
-                class="editable"
-                contenteditable="true"
-                @keydown.enter.prevent="updateField($event, index, 'details')"
-              >
-                {{ item.details }}
-              </p>
-            </div>
-          </td>
+            <!-- Editable Details -->
+            <td class="col-details">
+              <div class="px-3">
+                <p
+                  class="editable"
+                  contenteditable="true"
+                  @keydown.enter.prevent="updateField($event, index, 'details')"
+                >
+                  {{ item.details }}
+                </p>
+              </div>
+            </td>
 
-          <!-- Action -->
-          <td>
-            <div class="px-4">
+            <!-- Action -->
+            <td class="col-action text-center">
               <img
                 src="@/assets/icons/practiceProfile/contact/delete.svg"
                 alt="Delete"
@@ -101,11 +96,13 @@
                 style="cursor: pointer"
                 @click="deleteRow(index)"
               />
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </v-table>
+            </td>
+          </tr>
+        </tbody>
+      </v-table>
+    </div>
+
+    <!-- Add Equipment Dialog -->
     <PracticeProfileEquipmentAddEquipmentsDialog
       v-model="showDialog"
       @onUpdate="handleAddEquipments"
@@ -114,6 +111,8 @@
 </template>
 
 <script setup>
+import { ref, computed, watch } from "vue";
+
 const props = defineProps({
   practiceDetails: {
     type: Object,
@@ -136,10 +135,12 @@ const filteredEquipment = computed(() => {
   return equipments.value.filter(
     (item) =>
       (item.name || "").toLowerCase().includes(q) ||
-      (item.serial || "").toLowerCase().includes(q) ||
+      (item.serialNumber || "").toLowerCase().includes(q) ||
       (item.details || "").toLowerCase().includes(q)
   );
 });
+
+// Watch for prop changes and update local copy
 watch(
   () => props.practiceDetails.equipments,
   (newVal) => {
@@ -148,13 +149,14 @@ watch(
       return;
     }
 
-    // ✅ clone + sort alphabetically by name
+    // Clone and sort alphabetically by name
     equipments.value = [...newVal].sort((a, b) =>
       (a.name || "").localeCompare(b.name || "")
     );
   },
-  { immediate: true }
+  { immediate: true, deep: true }
 );
+
 // Update editable field
 const updateField = (e, index, field) => {
   const equipment = equipments.value[index];
@@ -162,11 +164,12 @@ const updateField = (e, index, field) => {
 
   const updatedEquipment = { ...equipment, [field]: e.target.innerText.trim() };
 
-  // ✅ update local copy immediately
+  // Update local copy immediately
   equipments.value[index] = updatedEquipment;
 
   handleAttributeUpdate(updatedEquipment);
 };
+
 const handleAttributeUpdate = async (updated) => {
   try {
     const res = await orgStore.updateAttributes({
@@ -175,7 +178,8 @@ const handleAttributeUpdate = async (updated) => {
     });
 
     if (res.code === 0) {
-      // emit("updateDetails"); // refresh parent
+      // Update parent after successful API call
+      emit("updateDetails");
       mainStore.setSnackbar({
         title: res.message || `Equipment updated successfully`,
         type: "success",
@@ -194,9 +198,37 @@ const handleAttributeUpdate = async (updated) => {
     });
   }
 };
+
 // Delete row
-const deleteRow = (index) => {
-  equipments.value.splice(index, 1);
+const deleteRow = async (index) => {
+  const item = equipments.value[index];
+  if (!item?.id) return;
+
+  try {
+    const res = await orgStore.deleteAttribute({
+      type: "equipment",
+      id: item.id,
+    });
+
+    if (res.code === 0) {
+      equipments.value.splice(index, 1);
+      emit("updateDetails");
+      mainStore.setSnackbar({
+        title: "Deleted",
+        type: "success",
+      });
+    } else {
+      mainStore.setSnackbar({
+        title: res.message || "Delete failed",
+        type: "error",
+      });
+    }
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: err.message,
+      type: "error",
+    });
+  }
 };
 
 const handleAddEquipments = async (newEquipments) => {
@@ -204,7 +236,8 @@ const handleAddEquipments = async (newEquipments) => {
     const res = await orgStore.addEquipment({ equipments: newEquipments });
 
     if (res.code === 0) {
-      emit("updateDetails"); // parent refreshes
+      // Update parent after successful API call
+      emit("updateDetails");
       mainStore.setSnackbar({
         title: "Equipments added successfully",
         type: "success",
@@ -225,15 +258,83 @@ const handleAddEquipments = async (newEquipments) => {
 </script>
 
 <style scoped>
+.equipment-library {
+  border: 1px solid #dbdbdb;
+  border-radius: 6px;
+  overflow: auto;
+  margin: 1.25rem 0;
+}
+
+.header-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: flex-start;
+  border-bottom: 1px solid #dbdbdb;
+  padding: 1rem;
+}
+
+.header-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1e1e1e;
+  margin: 0;
+  width: 100%;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.header-actions .v-text-field {
+  flex: 1;
+  max-width: 100%;
+}
+
+/* Desktop: Header in row */
+@media (min-width: 960px) {
+  .header-section {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+  }
+
+  .header-title {
+    flex-shrink: 0;
+    width: auto;
+  }
+
+  .header-actions {
+    flex: 1;
+    justify-content: flex-end;
+    width: auto;
+  }
+
+  .header-actions .v-text-field {
+    max-width: 220px;
+  }
+}
+
+/* Table Wrapper */
+.table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 :deep(.v-table__wrapper table) {
   width: 100% !important;
-  table-layout: fixed;
+  table-layout: auto;
   border-collapse: collapse;
+  min-width: 600px;
 }
 
 .equipment-table th,
 .equipment-table td {
-  
   font-weight: 400;
   font-size: 13px;
   padding: 10px 12px;
@@ -241,7 +342,6 @@ const handleAddEquipments = async (newEquipments) => {
   vertical-align: middle;
   text-align: left;
   word-break: break-word;
-  width: 25%; /* 4 equal columns */
 }
 
 .equipment-table th {
@@ -249,25 +349,47 @@ const handleAddEquipments = async (newEquipments) => {
   font-weight: 500;
 }
 
-/* Remove outer borders */
 .equipment-table th:first-child,
 .equipment-table td:first-child {
   border-left: none;
 }
+
 .equipment-table th:last-child,
 .equipment-table td:last-child {
   border-right: none;
 }
+
 .equipment-table thead tr:first-child th {
   border-top: none;
 }
+
 .equipment-table tbody tr:last-child td {
   border-bottom: none;
 }
 
-/* Editable style */
+/* Column Widths */
+.col-name {
+  width: 25%;
+  min-width: 120px;
+}
+
+.col-serial {
+  width: 25%;
+  min-width: 140px;
+}
+
+.col-details {
+  width: 35%;
+  min-width: 150px;
+}
+
+.col-action {
+  width: 15%;
+  min-width: 80px;
+}
+
+/* Editable Field */
 .editable {
-  
   font-weight: 400;
   font-size: 14px;
   color: #101010;
@@ -277,22 +399,21 @@ const handleAddEquipments = async (newEquipments) => {
   border: 1px solid transparent;
   border-radius: 6px;
   padding: 2px 4px;
-  width: 50%;
   margin: 0;
   text-align: left;
+  transition: all 0.2s ease;
 }
+
 .editable:focus {
   border: 1px solid #dfdfdf;
   background-color: #fff;
 }
 
-/* Search field styling */
 .input-bordered :deep(.v-field) {
   border: 1px solid #dfdfdf !important;
   border-radius: 8px !important;
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  
 }
 </style>
