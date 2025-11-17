@@ -188,6 +188,7 @@
   
   <script setup>
   import { ref, watch, computed } from "vue";
+  import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
   
   const { leadSources, treatmentSources } = defineProps({
     leadSources: Array,
@@ -206,7 +207,7 @@
   // update formatted date
   const onDateSelected = (val) => {
     if (val) {
-      formattedInquiryDate.value = new Date(val).toLocaleDateString("en-GB"); // DD/MM/YYYY
+      formattedInquiryDate.value = formatDateDDMMYYYY(val);
       inquiryDateMenu.value = false;
     }
   };

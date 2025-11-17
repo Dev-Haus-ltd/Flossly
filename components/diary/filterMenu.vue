@@ -45,6 +45,8 @@
 </template>
 
 <script setup>
+import { formatDateDDMMYYYY } from '@/lib/dateFormatter'
+
 const props = defineProps({ dentists: { type: Array, default: () => [] }, treatments: { type: Array, default: () => [] }, initDate: { type: String, default: '' } })
 const emit = defineEmits(['update:filters'])
 
@@ -58,7 +60,7 @@ const treatmentId = ref(null)
 const statuses = ['Pending','Confirmed','Arrived','In Progress','In Surgery','Complete','Cancelled','Did not attend']
 const dentists = computed(() => props.dentists || [])
 const treatments = computed(() => props.treatments || [])
-const formattedDate = computed(() => date.value ? new Date(date.value).toLocaleDateString('en-GB') : '')
+const formattedDate = computed(() => date.value ? formatDateDDMMYYYY(date.value) : '')
 const dentistName = computed(() => (dentists.value.find(d => String(d.id)===String(dentistId.value))||{}).name || '')
 const treatmentName = computed(() => (treatments.value.find(t => String(t.id)===String(treatmentId.value))||{}).name || '')
 const activeCount = computed(() => [date.value, dentistId.value, status.value, treatmentId.value].filter(Boolean).length)

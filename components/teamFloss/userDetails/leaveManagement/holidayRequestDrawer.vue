@@ -269,6 +269,7 @@
 
 <script setup>
 import { format, differenceInCalendarDays, parseISO } from "date-fns";
+import { formatDateDDMMYYYY } from "~/lib/dateFormatter";
 const userStore = useUserStore();
 const mainStore = useMainStore();
 const { user, isManager } = useUser();
@@ -387,7 +388,7 @@ const leaveSummary = computed(() => {
 const formattedStartDate = computed({
   get() {
     if (!form.value.startDate) return "";
-    return form.value.startDate;
+    return formatDateDDMMYYYY(form.value.startDate);
   },
   set(val) {
     form.value.startDate = val;
@@ -396,7 +397,7 @@ const formattedStartDate = computed({
 const formattedEndDate = computed({
   get() {
     if (!form.value.endDate) return "";
-    return form.value.endDate;
+    return formatDateDDMMYYYY(form.value.endDate);
   },
   set(val) {
     form.value.endDate = val;

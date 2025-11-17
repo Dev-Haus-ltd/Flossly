@@ -178,7 +178,7 @@
               >
                 <template #activator="{ props }">
                   <p class="editable" v-bind="props">
-                    {{ user?.dob || "Select Date of Birth" }}
+                    {{ user?.dob ? formatDateDDMMYYYY(user.dob) : "Select Date of Birth" }}
                   </p>
                 </template>
                 <v-date-picker
@@ -218,6 +218,8 @@
 </template>
 
 <script setup>
+import { formatDateDDMMYYYY } from '@/lib/dateFormatter'
+
 const { user } = defineProps({
   user: Object,
 });

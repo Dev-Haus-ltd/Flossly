@@ -919,6 +919,8 @@ export const teamTasksCounts = async (event) => {
     const orgStatuses = await OrganisationStatus.findAll({
       where: { organisationId },
     });
+    
+    // Get all active users (invited members who have accepted)
     const orgUsers = await UserOrganisation.findAll({
       where: { organisationId: organisationId },
       attributes: ["id"],
@@ -936,7 +938,38 @@ export const teamTasksCounts = async (event) => {
         ],
       },
     });
-    const users = orgUsers.map((el) => el.user).filter(Boolean);
+    
+    // Get the current user separately to ensure they're always included
+    const currentUserOrg = await UserOrganisation.findOne({
+      where: { 
+        organisationId: organisationId,
+        userId: loggedUser.userId 
+      },
+      attributes: ["id"],
+      include: {
+        model: User,
+        as: "user",
+        attributes: ["id", "fullName", "photo", "email", "roleId"],
+        include: [
+          {
+            model: Role,
+            as: "role",
+            attributes: ["id", "title", "color"],
+          },
+        ],
+      },
+    });
+    
+    // Combine users: active users + current user (if not already included)
+    let users = orgUsers.map((el) => el.user).filter(Boolean);
+    
+    // Add current user if they're not already in the list
+    if (currentUserOrg && currentUserOrg.user) {
+      const currentUserInList = users.some(u => u.id === loggedUser.userId);
+      if (!currentUserInList) {
+        users.push(currentUserOrg.user);
+      }
+    }
     const results = await Promise.all(
       users.map(async (user) => {
         const [pending, completed, upcoming] = await Promise.all([

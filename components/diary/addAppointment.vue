@@ -48,7 +48,7 @@
               <label class="fld-lbl">Date</label>
               <v-menu v-model="dateMenu" :close-on-content-click="false" transition="scale-transition" offset-y>
                 <template #activator="{ props }">
-                  <v-text-field v-bind="props" v-model="date" variant="solo" density="compact" class="input-bordered mb-0" bg-color="white" hide-details flat readonly>
+                  <v-text-field v-bind="props" :model-value="date ? formatDateDDMMYYYY(date) : ''" variant="solo" density="compact" class="input-bordered mb-0" bg-color="white" hide-details flat readonly>
                     <template #append-inner>
                       <v-icon class="cursor-pointer" @click.stop="dateMenu = true">mdi-calendar</v-icon>
                     </template>
@@ -102,6 +102,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { formatDateDDMMYYYY } from '@/lib/dateFormatter'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },

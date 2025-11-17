@@ -279,6 +279,7 @@
 <script setup>
 import { TasksCreateChecklist } from "#components";
 import { format } from "date-fns";
+import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
 
 const { modelValue } = defineProps({
   modelValue: Boolean,
@@ -451,11 +452,7 @@ watch(
 const formattedDate = computed({
   get() {
     if (!form.value.dueDate) return "";
-    const date = new Date(form.value.dueDate);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+    return formatDateDDMMYYYY(form.value.dueDate);
   },
   set(val) {
     form.value.dueDate = val;
