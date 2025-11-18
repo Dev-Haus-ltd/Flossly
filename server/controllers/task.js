@@ -592,7 +592,6 @@ export const createNewTask = async (event) => {
     categoryId,
     defaultFrequency,
     userId,
-    priorityId,
     checklist,
     dueDate,
     statusId,
@@ -651,6 +650,11 @@ export const createNewTask = async (event) => {
     // Fallback: if "upcoming" status not found, use the first available status
     if (!finalStatusId && orgStatuses.length > 0) {
       finalStatusId = orgStatuses[0].id;
+    }
+    let { priorityId } = JSON.parse(await readBody(event))
+    if (!priorityId) {
+      const orgPriorities = await OrganisationPriority.findAll({ where: { organisationId: loggedUser.orgId }})
+      priorityId = orgPriorities.find((x) => x.key === 'medium')?.id
     }
 
     const newUuserTask = {
