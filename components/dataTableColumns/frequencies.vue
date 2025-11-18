@@ -15,7 +15,7 @@
           v-bind="props"
           style="width: 100%; cursor: pointer;"
         >
-          {{ selected?.frequency || 'N/A' }}
+          {{ selected?.frequency || 'One off' }}
         </p>
       </template>
 

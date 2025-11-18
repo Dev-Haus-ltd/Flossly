@@ -69,7 +69,7 @@
               />
             </v-col>
             <v-col cols="6">
-              <label class="fld-lbl">Due Date  <span style="color: red">*</span></label>
+              <label class="fld-lbl">Due Date </label>
               <v-menu
                 v-model="menu"
                 :close-on-content-click="false"
@@ -146,7 +146,7 @@
               />
             </v-col>
             <v-col cols="12">
-              <label class="fld-lbl">Priority  <span style="color: red">*</span></label>
+              <label class="fld-lbl">Priority  </label>
               <v-select
                 v-model="form.priorityId"
                 :items="taskPriorities"
@@ -157,7 +157,6 @@
                 class="input-bordered mb-0"
                 item-color="color"
                 bg-color="white"
-                :rules="requiredRule"
                 flat
               >
               </v-select>
@@ -323,6 +322,7 @@ const rolesList = ref([]);
 const userList = ref([]);
 const users = ref([])
 const frequencies = ref([
+  { id: 0, name: "One off"},
   { id: 1, name: "Daily" },
   { id: 2, name: "Weekly" },
   { id: 3, name: "Fortnightly" },
@@ -476,6 +476,9 @@ const onSubmit = async () => {
     );
     if (unfilledChecklist >= 0) {
       form.value.checklist.splice(unfilledChecklist, 1);
+    }
+    if (form.value.defaultFrequency === "One off") {
+      form.value.defaultFrequency = ""
     }
     taskStore
       .addNewTask(form.value)
