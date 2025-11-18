@@ -68,6 +68,7 @@
             :priorities="taskPriorities"
             :users="userList"
             :categories="categories"
+            :currentCategoryId="currentTab"
             @onFilter="applyFilters"
             @onUpdate="updateTasks"
             @updateSelectedRowItems="updateSelectedRowItems"

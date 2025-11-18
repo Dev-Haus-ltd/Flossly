@@ -589,6 +589,20 @@
                 </v-card>
               </td>
             </template>
+            <template #[`footer.prepend`]>
+              <v-btn
+                size="small"
+                color="primary"
+                variant="flat"
+                rounded="lg"
+                @click="openAddTaskDialogForStatus(group.status, currentCategoryId)"
+                class="add-status-task-btn"
+              >
+                <v-icon size="16" class="mr-1">mdi-plus-circle-outline</v-icon>
+                Add Task
+              </v-btn>
+              <v-spacer></v-spacer>
+            </template>
           </v-data-table>
         </v-expansion-panel-text>
       </v-expansion-panel>
@@ -605,6 +619,8 @@
 
     <TasksAddTask
       v-model="drawerOpen"
+      :preSelectedStatus="selectedStatusForNewTask"
+      :preSelectedCategory="selectedCategoryForNewTask"
       @close="drawerOpen = false"
       @success="updateTasks"
     />
@@ -648,6 +664,10 @@ const {
   users: Array,
   categories: Array,
   clearSelection: Boolean,
+    currentCategoryId: {  // ← ADD THIS NEW PROP
+    type: Number,
+    default: null,
+  },
 });
 watch(
   () => clearSelection,
@@ -749,8 +769,12 @@ const openedPanels = ref([0]);
 const dialogOpen = ref(false);
 const taskPoolDialog = ref(false);
 const isAllSelected = ref(false);
+const selectedStatusForNewTask = ref(null);
+const selectedCategoryForNewTask = ref(null);
 
 const openAddTaskDialog = () => {
+  selectedStatusForNewTask.value = null;
+  selectedCategoryForNewTask.value = null;
   drawerOpen.value = true;
 };
 const tasksForCalender = ref([]);
@@ -850,7 +874,18 @@ const getColor = (key) => {
   }
 };
 const formattedDate = (date) => {
-  return parsedDate(date);
+  if (!date) return '';
+  
+  try {
+    const dateObj = new Date(date);
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const year = dateObj.getFullYear();
+    
+    return `${day}/${month}/${year}`;
+  } catch (error) {
+    return '';
+  }
 };
 const setFocus = (id, key, state) => {
   focusedField.value[`${id}-${key}`] = state;
@@ -1134,6 +1169,13 @@ function onFiltersUpdated(newFilters) {
 
 const onSelectionChange = (newSelected) => {
   emit("updateSelectedRowItems", selectedTasks.value);
+};
+
+const openAddTaskDialogForStatus = (status, categoryId) => {
+  // Store both the selected status and the currently selected category
+  selectedStatusForNewTask.value = status;
+  selectedCategoryForNewTask.value = categoryId;
+  drawerOpen.value = true;
 };
 </script>
 

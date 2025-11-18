@@ -1,4 +1,4 @@
-// Watch roleId to filter users<!-- TasksAddTask.vue - Updated -->
+// TasksAddTask.vue - Updated to accept and use preSelectedCategory prop
 <template>
   <teleport to="body">
     <v-navigation-drawer
@@ -189,6 +189,7 @@
                 />
               </v-col>
 
+              <!-- Status Field - Pre-selected based on which section button was clicked -->
               <v-col cols="12">
                 <label class="fld-lbl">Status</label>
                 <v-select
@@ -317,8 +318,17 @@
 import { TasksCreateChecklist } from "#components";
 import { format } from "date-fns";
 
-const { modelValue } = defineProps({
+// Add preSelectedStatus and preSelectedCategory props
+const props = defineProps({
   modelValue: Boolean,
+  preSelectedStatus: {
+    type: String,
+    default: null,
+  },
+  preSelectedCategory: {
+    type: Number,
+    default: null,
+  },
 });
 
 const mainStore = useMainStore();
@@ -383,6 +393,31 @@ const filteredCategories = computed(() => {
   );
 });
 
+// Watch preSelectedStatus to update form.statusId when it changes
+watch(
+  () => props.preSelectedStatus,
+  (newStatus) => {
+    if (newStatus) {
+      const matchingStatus = taskStatuses.value.find(
+        (s) => s.key === newStatus || s.name?.toLowerCase() === newStatus?.toLowerCase()
+      );
+      if (matchingStatus) {
+        form.value.statusId = matchingStatus.id;
+      }
+    }
+  }
+);
+
+// Watch preSelectedCategory to update form.categoryId when it changes
+watch(
+  () => props.preSelectedCategory,
+  (newCategoryId) => {
+    if (newCategoryId) {
+      form.value.categoryId = newCategoryId;
+    }
+  }
+);
+
 // Watch only roleId to filter userList, not the entire form
 watch(
   () => form.value.roleId,
@@ -446,6 +481,15 @@ const getTaskStatuses = () => {
     .then((res) => {
       if (res.code === 0) {
         taskStatuses.value = res.data;
+        // After loading statuses, apply pre-selected status if provided
+        if (props.preSelectedStatus) {
+          const matchingStatus = res.data.find(
+            (s) => s.key === props.preSelectedStatus || s.name?.toLowerCase() === props.preSelectedStatus?.toLowerCase()
+          );
+          if (matchingStatus) {
+            form.value.statusId = matchingStatus.id;
+          }
+        }
       } else {
         // set snack
       }
@@ -460,6 +504,15 @@ const getCategories = () => {
   taskStore.listCategories().then((res) => {
     if (res.code === 0) {
       taskCategories.value = res.data;
+      // After loading categories, apply pre-selected category if provided
+      if (props.preSelectedCategory) {
+        const matchingCategory = res.data.find(
+          (c) => c.id === props.preSelectedCategory
+        );
+        if (matchingCategory) {
+          form.value.categoryId = props.preSelectedCategory;
+        }
+      }
     }
   });
 };
@@ -543,7 +596,7 @@ const removeChecklist = (index) => {
   form.value.checklist.splice(index, 1);
 };
 
-const modelValueRef = toRef(() => modelValue);
+const modelValueRef = toRef(() => props.modelValue);
 watch(
   modelValueRef,
   (newValue) => {
