@@ -113,8 +113,10 @@ export const addTaskCategory = async (event) => {
     });
     if (cat)
       throw createError({ message: `Category ${name} is already added` });
-    await TaskCategory.create({ name, description, parentId, color });
-    return success("Saved");
+
+    const newCategory = await TaskCategory.create({ name, description, parentId, color });
+
+    return success({ message: "Saved", category: newCategory });
   } catch (err) {
     return error(500, err.message);
   }
@@ -654,7 +656,7 @@ export const createNewTask = async (event) => {
     const newUuserTask = {
       userId: assignToUserId,
       organisationId: loggedUser.orgId,
-      dueDate,
+      dueDate: dueDate ? new Date(dueDate) : null,
       taskId: task.id,
       title,
       documentLink: "",
