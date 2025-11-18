@@ -340,6 +340,8 @@
 </template>
 
 <script setup>
+import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
+
 const crmStore = useCrmStore();
 const props = defineProps({
   modelValue: Boolean,
@@ -397,16 +399,16 @@ const maxDobDate = computed(() => {
 // formatted date helpers
 const formattedInquiryDate = computed(() =>
   form.value.inquiryDate
-    ? new Date(form.value.inquiryDate).toLocaleDateString()
+    ? formatDateDDMMYYYY(form.value.inquiryDate)
     : ""
 );
 const formattedFollowUpDate = computed(() =>
   form.value.followUpDate
-    ? new Date(form.value.followUpDate).toLocaleDateString()
+    ? formatDateDDMMYYYY(form.value.followUpDate)
     : ""
 );
 const formattedDob = computed(() =>
-  form.value.dob ? new Date(form.value.dob).toLocaleDateString() : ""
+  form.value.dob ? formatDateDDMMYYYY(form.value.dob) : ""
 );
 
 const onInquiryDateSelected = (val) => {

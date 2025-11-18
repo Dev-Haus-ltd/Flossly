@@ -101,6 +101,8 @@
 </template>
 
 <script setup>
+import { formatDateDDMMYYYY } from '@/lib/dateFormatter'
+
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
 })
@@ -137,7 +139,7 @@ const dentists = ['Sarah Johnson', 'John Doe', 'Raj Singh']
 const recallMethods = ['Email', 'SMS', 'Phone']
 const recallIntervals = ['6 months', '12 months']
 
-const dobFormatted = computed(() => form.dob ? new Date(form.dob).toLocaleDateString('en-GB') : '')
+const dobFormatted = computed(() => form.dob ? formatDateDDMMYYYY(form.dob) : '')
 
 const onSave = async () => {
   const ok = await formRef.value?.validate?.()

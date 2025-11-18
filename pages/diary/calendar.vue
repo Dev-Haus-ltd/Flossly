@@ -118,6 +118,7 @@ import { useMainStore } from '@/stores/index'
 import { useOrgStore } from '@/stores/organisation'
 import listicon from "@/assets/icons/listView/listicon.svg";
 import calendericon from "@/assets/icons/listView/calendericon.svg";
+import { formatDateDDMMYYYY } from '@/lib/dateFormatter'
 
 definePageMeta({ layout: 'home' })
 
@@ -142,8 +143,8 @@ function showError(message) { mainStore?.setSnackbar?.({ title: message || 'Some
 function showSuccess(message) { mainStore?.setSnackbar?.({ title: message || 'Done', type: 'success' }) }
 
 const dateStr = computed(() => date.value.toISOString().slice(0,10))
-const dateLabel = computed(() => date.value.toLocaleDateString(undefined, { day:'2-digit', month:'long', year:'numeric'}))
-const dayLabel = computed(() => date.value.toLocaleDateString(undefined, { weekday:'long', day:'2-digit', month:'long', year:'numeric'}))
+const dateLabel = computed(() => formatDateDDMMYYYY(date.value))
+const dayLabel = computed(() => formatDateDDMMYYYY(date.value))
 
 const prevDay = () => { const d = new Date(date.value); d.setDate(d.getDate()-1); date.value = d }
 const nextDay = () => { const d = new Date(date.value); d.setDate(d.getDate()+1); date.value = d }

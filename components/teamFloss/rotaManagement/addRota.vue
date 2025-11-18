@@ -157,7 +157,7 @@
                   <v-text-field
                     v-bind="props"
                     :model-value="
-                      form.startDate ? parsedDate(form.startDate) : ''
+                      form.startDate ? formatDateDDMMYYYY(form.startDate) : ''
                     "
                     readonly
                     variant="solo"
@@ -188,7 +188,7 @@
                 <template #activator="{ props }">
                   <v-text-field
                     v-bind="props"
-                    :model-value="form.endDate ? parsedDate(form.endDate) : ''"
+                    :model-value="form.endDate ? formatDateDDMMYYYY(form.endDate) : ''"
                     readonly
                     variant="solo"
                     flat
@@ -245,7 +245,7 @@
 </template>
 
 <script setup>
-import { parsedDate } from "~/lib/dateFormatter";
+import { formatDateDDMMYYYY } from "~/lib/dateFormatter";
 import { differenceInDays, addDays } from "date-fns";
 const mainStore = useMainStore();
 const rotaStore = useRotaStore();

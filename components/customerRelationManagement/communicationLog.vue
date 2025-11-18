@@ -282,7 +282,7 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from "vue";
-import { parsedDate } from "@/lib/dateFormatter";
+import { parsedDate, formatDateDDMMYYYY } from "@/lib/dateFormatter";
 import { useTranscription } from "@/composables/useTranscription";
 import ScriptsPool from "./ScriptsPool.vue";
 const crmStore = useCrmStore();
@@ -332,7 +332,7 @@ const onTimeSelected = (val) => {
 
 const onNoteDateSelected = (val) => {
   form.value.date = val;
-  formattedNoteDate.value = val ? new Date(val).toLocaleDateString() : "";
+  formattedNoteDate.value = val ? formatDateDDMMYYYY(val) : "";
   noteDateMenu.value = false;
 };
 

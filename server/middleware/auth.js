@@ -51,7 +51,6 @@ const isPublicPath = (path) => {
     "/api/misc/getRoles",
     "/api/meta/callback",
     "/api/meta/webhook",
-    "/api/chatbot/createPatient",
     "/api/chatbot/createAppointment",
     "/api/chatbot/createLead",
   ];

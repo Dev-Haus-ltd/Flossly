@@ -101,12 +101,20 @@ const validateDuplicateEmail = (index) => {
     return;
   }
 
-  // Check if this email exists in other users
-  const duplicateIndex = model.value.users.findIndex(
-    (user, idx) => idx !== index && user.email?.trim().toLowerCase() === userEmail
-  );
+  // Find all indices with the same email
+  const duplicateIndices = model.value.users
+    .map((user, idx) => ({
+      index: idx,
+      email: user.email?.trim().toLowerCase()
+    }))
+    .filter(item => item.email === userEmail)
+    .map(item => item.index);
 
-  if (duplicateIndex !== -1) {
+  // Find the first occurrence (lowest index)
+  const firstOccurrenceIndex = Math.min(...duplicateIndices);
+
+  // Only show error if this is NOT the first occurrence
+  if (duplicateIndices.length > 1 && index !== firstOccurrenceIndex) {
     duplicateEmailErrors.value[index] = "This email is already added";
   } else {
     duplicateEmailErrors.value[index] = null;
