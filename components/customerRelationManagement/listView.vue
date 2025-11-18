@@ -206,8 +206,47 @@
           />
         </template>
         <!-- Default renderer for other columns -->
-        <template v-else-if="col.key === 'inquiryDate' || col.key === 'followUpDate'">
+        <template v-else-if="col.key === 'inquiryDate'">
           <p class="ml-2 mb-0">{{ formatDate(item[col.key]) }}</p>
+        </template>
+        <template v-else-if="col.key === 'followUpDate'">
+          <div class="ml-2 mb-0">
+            <v-menu
+              v-model="followUpMenus[item.id]"
+              :close-on-content-click="false"
+              transition="scale-transition"
+              offset-y
+              max-width="320"
+              min-width="260"
+              
+            >
+              <template #activator="{ props: menuProps }">
+                <v-text-field
+                  v-bind="menuProps"
+                  :model-value="followUpDrafts[item.id] ?? formatDate(item.followUpDate)"
+                  density="compact"
+                  variant="plain"
+                  hide-details
+                  placeholder="Select date"
+                  readonly
+                  class="followup-input"
+                  @click="setupFollowUpDraft(item)"
+                  append-inner-icon="mdi-calendar"
+                />
+              </template>
+              <div class="pa-2">
+                <v-date-picker
+                  hide-header
+                  color="primary"
+                  :model-value="followUpDrafts[item.id] ?? formatDate(item.followUpDate)"
+                  @update:model-value="(value) => onFollowUpSelect(item, value)"
+                />
+                <div class="d-flex justify-end mt-2">
+                  <v-btn variant="text" size="small" @click="followUpMenus[item.id] = false">Cancel</v-btn>
+                </div>
+              </div>
+            </v-menu>
+          </div>
         </template>
         <template v-else>
           <p class="ml-2 mb-0">{{ item[col.key] }}</p>
@@ -323,6 +362,8 @@ const selectedLeads = ref([]);
 const isAllSelected = ref(false);
 const showLeadDetailDialog = ref(false);
 const selectedLead = ref({});
+const followUpMenus = reactive({});
+const followUpDrafts = reactive({});
 
 // Inline editing state
 const editingCell = reactive({
@@ -409,6 +450,26 @@ const formatDate = (d) => {
   const mm = String(dt.getMonth() + 1).padStart(2, '0');
   const dd = String(dt.getDate()).padStart(2, '0');
   return `${y}-${mm}-${dd}`;
+};
+const setupFollowUpDraft = (item) => {
+  if (followUpDrafts[item.id] === undefined) {
+    followUpDrafts[item.id] = formatDate(item.followUpDate) || '';
+  }
+};
+const onFollowUpSelect = async (item, value) => {
+  if (!value) return;
+  const normalized = typeof value === 'string' ? value.slice(0, 10) : formatDate(value);
+  followUpDrafts[item.id] = normalized;
+  try {
+    const res = await crmStore.updateLead({ id: item.id, followUpDate: normalized });
+    if (res?.code === 0) {
+      item.followUpDate = normalized;
+    }
+  } catch (e) {
+    console.error('Failed to update follow up date', e);
+  } finally {
+    followUpMenus[item.id] = false;
+  }
 };
 const onSelect = (selection) => {
   console.log(selection);

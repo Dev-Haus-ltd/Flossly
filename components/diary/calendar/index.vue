@@ -104,7 +104,8 @@
 </template>
 
 <script setup>
-const props = defineProps({
+  import { clinicMinutesFromTime } from '@/lib/dateFormatter'
+  const props = defineProps({
   date: { type: [String, Date], required: true },
   view: { type: String, default: 'day' },
   dentists: { type: Array, default: () => [] },
@@ -199,22 +200,14 @@ const onCellClickGuard = (dent, slot) => {
   onCellClick(dent, slot)
 }
 
-const toMinutes = (time) => {
-  // Handle both 'HH:MM' format and ISO timestamp
-  if (!time) return 0
-  
-  let timeStr = time
-  // If it's an ISO timestamp, extract the time part
-  if (typeof time === 'string' && time.includes('T')) {
-    const date = new Date(time)
-    const hours = date.getHours()
-    const minutes = date.getMinutes()
-    timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+  const appointmentStartMinutes = (appt) => {
+    const mins = clinicMinutesFromTime(appt?.start || appt?.startTime || appt?.time || appt?.startTime)
+    return typeof mins === 'number' ? mins : 0
   }
-  
-  const [hh, mm] = timeStr.split(':').map(n => parseInt(n, 10))
-  return hh * 60 + mm
-}
+  const toMinutes = (time) => {
+    const mins = clinicMinutesFromTime(time)
+    return typeof mins === 'number' ? mins : 0
+  }
 
 const isApptInCell = (appt, slot) => {
   const start = toMinutes(appt.start)
@@ -246,12 +239,15 @@ const getMicroSlots = (appt) => {
 }
 
 // Get appointments that start in this hour
-function getAppointmentsForHour(dentistId, hour) {
-  return (props.appointments[dentistId] || []).filter(appt => {
-    if (!appt?.start) return false
-    return startsInHour(appt, hour)
-  })
-}
+  function getAppointmentsForHour(dentistId, hour) {
+    return (props.appointments[dentistId] || [])
+      .filter(appt => {
+        if (!appt?.start && !appt?.startTime) return false
+        return startsInHour(appt, hour)
+      })
+      .slice()
+      .sort((a, b) => appointmentStartMinutes(a) - appointmentStartMinutes(b))
+  }
 
 // Calculate how many empty slots to show (max 4 per hour)
 function getRemainingSlots(dentistId, hour) {

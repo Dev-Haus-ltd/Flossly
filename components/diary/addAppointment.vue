@@ -32,9 +32,11 @@
                 variant="solo"
                 class="input-bordered mb-0"
                 bg-color="white"
-                hide-details
                 :placeholder="'Search'"
                 flat
+                :error="!!errors.patient"
+                :error-messages="errors.patient ? [errors.patient] : []"
+                hide-details="auto"
               >
                 <template #append>
                   <v-btn icon size="28" variant="text" @click="$emit('add-patient')">
@@ -48,7 +50,19 @@
               <label class="fld-lbl">Date</label>
               <v-menu v-model="dateMenu" :close-on-content-click="false" transition="scale-transition" offset-y>
                 <template #activator="{ props }">
-                  <v-text-field v-bind="props" v-model="date" variant="solo" density="compact" class="input-bordered mb-0" bg-color="white" hide-details flat readonly>
+                  <v-text-field
+                    v-bind="props"
+                    v-model="date"
+                    variant="solo"
+                    density="compact"
+                    class="input-bordered mb-0"
+                    bg-color="white"
+                    :error="!!errors.date"
+                    :error-messages="errors.date ? [errors.date] : []"
+                    hide-details="auto"
+                    flat
+                    readonly
+                  >
                     <template #append-inner>
                       <v-icon class="cursor-pointer" @click.stop="dateMenu = true">mdi-calendar</v-icon>
                     </template>
@@ -60,29 +74,85 @@
 
             <v-col cols="6">
               <label class="fld-lbl">Time</label>
-              <v-select v-model="time" :items="timeOptions" variant="solo" density="compact" class="input-bordered mb-0" bg-color="white" hide-details flat :placeholder="'Select time'" />
+              <v-select
+                v-model="time"
+                :items="timeOptions"
+                variant="solo"
+                density="compact"
+                class="input-bordered mb-0"
+                bg-color="white"
+                :error="!!errors.time"
+                :error-messages="errors.time ? [errors.time] : []"
+                hide-details="auto"
+                flat
+                :placeholder="'Select time'"
+              />
             </v-col>
 
             <v-col cols="12">
               <div class="d-flex" style="gap: 8px">
                 <div style="flex:1">
                   <label class="fld-lbl">Exam</label>
-                  <v-select v-model="exam" :items="exams" variant="solo" density="compact" class="input-bordered mb-0" bg-color="white" flat hide-details />
+                  <v-select
+                    v-model="exam"
+                    :items="exams"
+                    variant="solo"
+                    density="compact"
+                    class="input-bordered mb-0"
+                    bg-color="white"
+                    flat
+                    hide-details="auto"
+                    :error="!!errors.exam"
+                    :error-messages="errors.exam ? [errors.exam] : []"
+                  />
                 </div>
                 <div style="max-width: 160px; width:160px">
                   <label class="fld-lbl">Status</label>
-                  <v-select v-model="status" :items="statuses" variant="solo" density="compact" class="input-bordered mb-0" bg-color="white" flat hide-details />
+                  <v-select
+                    v-model="status"
+                    :items="statuses"
+                    variant="solo"
+                    density="compact"
+                    class="input-bordered mb-0"
+                    bg-color="white"
+                    flat
+                    hide-details="auto"
+                    :error="!!errors.status"
+                    :error-messages="errors.status ? [errors.status] : []"
+                  />
                 </div>
                 <div style="max-width: 120px; width:120px">
                   <label class="fld-lbl">Duration</label>
-                  <v-select v-model="duration" :items="durations" variant="solo" density="compact" class="input-bordered mb-0" bg-color="white" flat hide-details />
+                  <v-select
+                    v-model="duration"
+                    :items="durations"
+                    variant="solo"
+                    density="compact"
+                    class="input-bordered mb-0"
+                    bg-color="white"
+                    flat
+                    hide-details="auto"
+                    :error="!!errors.duration"
+                    :error-messages="errors.duration ? [errors.duration] : []"
+                  />
                 </div>
               </div>
             </v-col>
 
             <v-col cols="12">
               <label class="fld-lbl">Practitioner</label>
-              <v-select v-model="practitioner" :items="practitionerOptions" variant="solo" density="compact" class="input-bordered mb-0" bg-color="white" flat hide-details />
+              <v-select
+                v-model="practitioner"
+                :items="practitionerOptions"
+                variant="solo"
+                density="compact"
+                class="input-bordered mb-0"
+                bg-color="white"
+                flat
+                hide-details="auto"
+                :error="!!errors.practitioner"
+                :error-messages="errors.practitioner ? [errors.practitioner] : []"
+              />
             </v-col>
 
             <v-col cols="12">
@@ -101,7 +171,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, reactive } from 'vue'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -124,6 +194,15 @@ const duration = ref(15)
 const practitioner = ref('')
 const notes = ref('')
 const dateMenu = ref(false)
+const errors = reactive({
+  patient: '',
+  date: '',
+  time: '',
+  exam: '',
+  status: '',
+  duration: '',
+  practitioner: '',
+})
 
 import { useOrgStore } from '@/stores/organisation'
 const organisationStore = useOrgStore()
@@ -149,12 +228,26 @@ const timeOptions = computed(() => {
   }
   return options
 })
+const hasPatientSelection = computed(() => {
+  return Boolean(
+    selectedPatientId.value ||
+    props.preselectedPatientId ||
+    (props.preselectedPatient && String(props.preselectedPatient).trim())
+  )
+})
 
 watch(duration, () => {
   if (!time.value || !timeOptions.value.includes(time.value)) {
     time.value = timeOptions.value[0] || ''
   }
 })
+watch(hasPatientSelection, (val) => { if (val) errors.patient = '' })
+watch(date, (val) => { if (val) errors.date = '' })
+watch(time, (val) => { if (val) errors.time = '' })
+watch(exam, (val) => { if (val) errors.exam = '' })
+watch(status, (val) => { if (val) errors.status = '' })
+watch(duration, (val) => { if (val) errors.duration = '' })
+watch(practitioner, (val) => { if (val) errors.practitioner = '' })
 
 watch(() => props.modelValue, (open) => {
   if (open) {
@@ -173,7 +266,41 @@ watch(() => props.modelValue, (open) => {
   }
 })
 
+const validate = () => {
+  let valid = true
+  if (!hasPatientSelection.value) {
+    errors.patient = 'Patient is required'
+    valid = false
+  } else errors.patient = ''
+  if (!date.value) {
+    errors.date = 'Date is required'
+    valid = false
+  } else errors.date = ''
+  if (!time.value) {
+    errors.time = 'Time is required'
+    valid = false
+  } else errors.time = ''
+  if (!exam.value) {
+    errors.exam = 'Exam is required'
+    valid = false
+  } else errors.exam = ''
+  if (!status.value) {
+    errors.status = 'Status is required'
+    valid = false
+  } else errors.status = ''
+  if (!duration.value) {
+    errors.duration = 'Duration is required'
+    valid = false
+  } else errors.duration = ''
+  if (!practitioner.value) {
+    errors.practitioner = 'Practitioner is required'
+    valid = false
+  } else errors.practitioner = ''
+  return valid
+}
+
 const onSave = () => {
+  if (!validate()) return
   const selectedTreatment = treatmentOptions.value.find(t => t.name === exam.value)
   emit('save', {
     patientId: selectedPatientId.value || props.preselectedPatientId || null,

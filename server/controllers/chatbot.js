@@ -30,11 +30,38 @@ const validateBotId = async (botId) => {
 };
 
 // Helper functions for date/time parsing (from diary.js)
-const pad2 = (n) => String(n).padStart(2, '0');
+const resolveTimeMode = () => {
+  const publicMode = process.env.NUXT_PUBLIC_CLINIC_TIME_MODE;
+  const serverMode = process.env.CLINIC_TIME_MODE;
+  return String(publicMode || serverMode || 'agnostic').toLowerCase();
+};
+const TIME_MODE = resolveTimeMode();
+const USE_TZ_AGNOSTIC = TIME_MODE === 'agnostic';
+const parseDateParts = (dateStr) => {
+  if (typeof dateStr !== 'string') return null;
+  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
+};
+const buildUtcDate = ({ year, month, day }, hour = 0, minute = 0, second = 0, ms = 0) =>
+  new Date(Date.UTC(year, month - 1, day, hour, minute, second, ms));
 const parseLocalDateTime = (dateStr, timeStr) => {
   if (!dateStr || !timeStr) return null;
+  if (!USE_TZ_AGNOSTIC) {
+    const t = timeStr.length === 5 ? `${timeStr}:00` : timeStr;
+    return new Date(`${dateStr}T${t}`);
+  }
+  const dateParts = parseDateParts(dateStr);
+  if (!dateParts) return null;
   const t = timeStr.length === 5 ? `${timeStr}:00` : timeStr;
-  return new Date(`${dateStr}T${t}`);
+  const segments = t.split(':').map((n) => Number(n));
+  if (segments.length < 2 || segments.some((n) => Number.isNaN(n))) return null;
+  const [hour, minute, second = 0] = segments;
+  return buildUtcDate(dateParts, hour, minute, second);
+};
+const setClinicHours = (dateObj, hour, minute = 0, second = 0, ms = 0) => {
+  if (USE_TZ_AGNOSTIC) dateObj.setUTCHours(hour, minute, second, ms);
+  else dateObj.setHours(hour, minute, second, ms);
 };
 
 export const saveChatbotConfig = async (event) => {
@@ -299,10 +326,10 @@ export const createAppointmentViaChatbot = async (event) => {
     end.setMinutes(end.getMinutes() + Number(payload.duration || 10));
     
     // Working hours validation (09:00–17:00 local)
-    const workStart = new Date(start);
-    workStart.setHours(9, 0, 0, 0);
-    const workEnd = new Date(start);
-    workEnd.setHours(17, 0, 0, 0);
+      const workStart = new Date(start);
+      setClinicHours(workStart, 9, 0, 0, 0);
+      const workEnd = new Date(start);
+      setClinicHours(workEnd, 17, 0, 0, 0);
     if (start < workStart) {
       return error(400, 'Appointment must start at or after 09:00');
     }
