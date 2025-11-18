@@ -6,7 +6,9 @@
     <div class="pa-5 rounded-lg">
       <div class="task-summary">
         <!-- Cards Grid -->
-        <v-row v-if="taskStats && taskStats.length > 0">
+        <v-row v-if="taskStats && taskStats.length > 0"
+          style="flex-wrap: nowrap; overflow: auto;"
+          >
           <v-col cols="12"  md="3"
           lg="2" v-for="(item, i) in taskStats" :key="i">
             <CommonStatCard

@@ -6,7 +6,9 @@
     <div class="pa-5 rounded-lg">
       <div class="task-summary">
         <!-- Cards Grid -->
-        <v-row>
+        <v-row
+          style="flex-wrap: nowrap; overflow: auto;"
+        >
           <v-col
             cols="12"
             sm="6"
