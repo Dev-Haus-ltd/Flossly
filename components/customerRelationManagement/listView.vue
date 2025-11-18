@@ -277,8 +277,8 @@
     class="action-item d-flex flex-column align-center"
     @click="onActionClick(action.key)"
   >
-    <v-icon :color="action.color" size="24">{{ action.icon }}</v-icon>
-    <span class="action-label" :class="`text-${action.color}`">{{ action.label }}</span>
+    <img :src="action.icon" :alt="action.label" class="action-icon" />
+    <span class="action-label">{{ action.label }}</span>
   </div>
 
   <!-- Divider before close -->
@@ -347,9 +347,19 @@
 <script setup>
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 import { buildRecipientContext, renderWithContext } from '@/lib/templateTokens'
+import callIcon from '@/assets/crm/call.svg'
+import sendMailIcon from '@/assets/crm/sendMail.svg'
+import whatsappIcon from '@/assets/crm/whatsapp.svg'
+import bookIcon from '@/assets/crm/book.svg'
+import sendPriceIcon from '@/assets/crm/sendPrice.svg'
+import sendFormIcon from '@/assets/crm/sendForm.svg'
+import shareLocationIcon from '@/assets/crm/shareLocation.svg'
+import convertIcon from '@/assets/crm/convert.svg'
+import archiveIcon from '@/assets/crm/archive.svg'
+import deleteIcon from '@/assets/crm/delete.svg'
 const crmStore = useCrmStore();
 const { user } = useUser();
-const emit = defineEmits(['select','openLead','delete']);
+const emit = defineEmits(['select','openLead','delete','book']);
 const props = defineProps({
   leads: { type: Array, required: true },
   headers: { type: Array, required: true },
@@ -374,16 +384,16 @@ const editingCell = reactive({
 });
 
 const actions = [
-  { key: "call", label: "Call", icon: "mdi-phone-outline", color: "info" },
-  { key: "mail", label: "Send Mail", icon: "mdi-email-outline", color: "tertiary" },
-  { key: "whatsapp", label: "WhatsApp", icon: "mdi-whatsapp", color: "success" },
-  { key: "book", label: "Book", icon: "mdi-book-open-page-variant-outline", color: "primary" },
-  { key: "sendPrice", label: "Send Price", icon: "mdi-currency-usd", color: "warning" },
-  { key: "sendForm", label: "Send Form", icon: "mdi-form-select", color: "warning" },
-  { key: "shareLocation", label: "Share Location", icon: "mdi-map-marker-outline", color: "error" },
-  { key: "convert", label: "Convert", icon: "mdi-swap-horizontal", color: "on-surface" },
-  { key: "archive", label: "Archive", icon: "mdi-archive-outline", color: "on-surface" },
-  { key: "delete", label: "Delete", icon: "mdi-delete-outline", color: "on-surface" },
+  { key: "call", label: "Call", icon: callIcon },
+  { key: "mail", label: "Send Mail", icon: sendMailIcon },
+  { key: "whatsapp", label: "WhatsApp", icon: whatsappIcon },
+  { key: "book", label: "Book", icon: bookIcon },
+  { key: "sendPrice", label: "Send Price", icon: sendPriceIcon },
+  { key: "sendForm", label: "Send Form", icon: sendFormIcon },
+  { key: "shareLocation", label: "Share Location", icon: shareLocationIcon },
+  { key: "convert", label: "Convert", icon: convertIcon },
+  { key: "archive", label: "Archive", icon: archiveIcon },
+  { key: "delete", label: "Delete", icon: deleteIcon },
 ];
 const confirmDelete = ref(false);
 const deleting = ref(false);
@@ -433,10 +443,13 @@ const saveEdit = async (item, field) => {
 
 const onActionClick = (key) => {
   if (!selectedLeads.value.length) return;
-  if (key === 'delete') confirmDelete.value = true;
+  if (key === 'book') {
+    emit('book', [...selectedLeads.value])
+  }
+  else if (key === 'delete') confirmDelete.value = true;
   else if (key === 'archive') doArchive();
   else if (key === 'convert') convertSelected();
-  else if (['mail','book','sendPrice','sendForm','shareLocation'].includes(key)) openCompose(key)
+  else if (['mail','sendPrice','sendForm','shareLocation'].includes(key)) openCompose(key)
 };
 const formatDate = (d) => {
   if (!d) return "";
@@ -758,6 +771,11 @@ const convertSelected = async () => {
   margin-top: 4px;
   white-space: nowrap;
   text-align: center;
+}
+.action-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
 }
 
 /* Inline editing styles */

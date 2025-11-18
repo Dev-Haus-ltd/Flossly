@@ -15,7 +15,17 @@
               <v-row dense>
                 <v-col cols="12">
                   <label class="mb-1 fld-lbl">Title</label>
-                  <v-text-field v-model="form.title" variant="solo" density="compact" class="mb-1 input-bordered" flat required />
+                  <v-text-field
+                    v-model="form.title"
+                    variant="solo"
+                    density="compact"
+                    class="mb-1 input-bordered"
+                    flat
+                    :error="!!errors.title"
+                    :error-messages="errors.title ? [errors.title] : []"
+                    hide-details="auto"
+                    required
+                  />
                 </v-col>
                 <v-col cols="12" md="6">
                   <label class="mb-1 fld-lbl">Select Date</label>
@@ -23,18 +33,59 @@
                 </v-col>
                 <v-col cols="12" md="6">
                   <label class="mb-1 fld-lbl">Select time</label>
-                  <v-select v-model="form.time" :items="timeOptions" variant="solo" density="compact" class="mb-1 input-bordered" flat required />
+                  <v-select
+                    v-model="form.time"
+                    :items="timeOptions"
+                    variant="solo"
+                    density="compact"
+                    class="mb-1 input-bordered"
+                    flat
+                    :error="!!errors.time"
+                    :error-messages="errors.time ? [errors.time] : []"
+                    hide-details="auto"
+                    required
+                  />
                 </v-col>
                 <v-col cols="12">
                   <label class="mb-1 fld-lbl">Channel used</label>
-                  <v-select v-model="form.channel" :items="channelOptions" variant="solo" density="compact" class="mb-1 input-bordered" flat required />
+                  <v-select
+                    v-model="form.channel"
+                    :items="channelOptions"
+                    variant="solo"
+                    density="compact"
+                    class="mb-1 input-bordered"
+                    flat
+                    :error="!!errors.channel"
+                    :error-messages="errors.channel ? [errors.channel] : []"
+                    hide-details="auto"
+                    required
+                  />
                 </v-col>
                 <v-col cols="12">
                   <label class="mb-1 fld-lbl">Summary of conversation</label>
-                  <v-textarea v-model="form.summary" rows="4" variant="solo" density="compact" class="mb-1 input-bordered" flat required />
+                  <v-textarea
+                    v-model="form.summary"
+                    rows="4"
+                    variant="solo"
+                    density="compact"
+                    class="mb-1 input-bordered"
+                    flat
+                    :error="!!errors.summary"
+                    :error-messages="errors.summary ? [errors.summary] : []"
+                    hide-details="auto"
+                    required
+                  />
                 </v-col>
                 <v-col cols="12">
-                  <v-btn :loading="saving" color="primary" variant="flat" @click="onAddNote">Add notes</v-btn>
+                  <v-btn
+                    :loading="saving"
+                    :disabled="saving || !canSubmit"
+                    color="primary"
+                    variant="flat"
+                    @click="onAddNote"
+                  >
+                    Add notes
+                  </v-btn>
                 </v-col>
               </v-row>
             </v-form>
@@ -84,8 +135,9 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, reactive } from 'vue'
 import { useDiaryStore } from '@/stores/diary'
+import { useMainStore } from '@/stores/index'
 import diaryService from '@/services/diaryService'
 
 const props = defineProps({
@@ -96,6 +148,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:modelValue'])
 const diaryStore = useDiaryStore()
+const mainStore = typeof useMainStore === 'function' ? useMainStore() : null
 
 const notes = ref([])
 const saving = ref(false)
@@ -103,7 +156,17 @@ const deleting = ref(false)
 const showDelete = ref(false)
 const toDelete = ref({ index: -1, note: null })
 
-const form = ref({ title: '', date: '', time: '', channel: null, summary: '' })
+const form = ref({ title: '', date: '', time: '', channel: '', summary: '' })
+const errors = reactive({ title: '', time: '', channel: '', summary: '' })
+const canSubmit = computed(() => {
+  return Boolean(
+    (form.value.title || '').trim() &&
+    (form.value.date || '').trim() &&
+    (form.value.time || '').trim() &&
+    (form.value.channel || '').trim() &&
+    (form.value.summary || '').trim()
+  )
+})
 const WORK_START = 9
 const WORK_END = 17
 const SLOT_MINUTES = 15
@@ -118,30 +181,76 @@ const timeOptions = computed(() => {
 })
 const channelOptions = ['Phone','Email','WhatsApp','SMS','In-person']
 
-async function loadNotes() {
-  const loader = typeof diaryStore.listNotes === 'function' ? diaryStore.listNotes : (p) => diaryService.listNotes(p)
-  const res = await loader({ dentistId: props.dentistId, date: props.date })
-  if (res?.code === 0) notes.value = res.data || []
+const notify = (message, type = 'success') => {
+  if (mainStore?.setSnackbar) mainStore.setSnackbar({ title: message, type })
+}
+
+const resetForm = () => {
+  form.value = {
+    title: '',
+    date: props.date || '',
+    time: timeOptions.value[0] || '09:00',
+    channel: channelOptions[0] || '',
+    summary: '',
+  }
+  Object.keys(errors).forEach(key => { errors[key] = '' })
+}
+
+const validateForm = () => {
+  errors.title = form.value.title ? '' : 'Title is required'
+  errors.time = form.value.time ? '' : 'Time is required'
+  errors.channel = form.value.channel ? '' : 'Channel is required'
+  errors.summary = form.value.summary ? '' : 'Summary is required'
+  return !errors.title && !errors.time && !errors.channel && !errors.summary
 }
 
 watch(() => props.modelValue, (open) => {
   if (open) {
-    form.value = { title: '', date: props.date, time: timeOptions.value[0] || '09:00', channel: null, summary: '' }
+    resetForm()
     loadNotes()
+  } else {
+    showDelete.value = false
   }
 })
+watch([() => props.date, () => props.dentistId], () => {
+  if (!props.modelValue) return
+  form.value.date = props.date
+  loadNotes()
+})
+watch(() => form.value.title, (val) => { if (val) errors.title = '' })
+watch(() => form.value.time, (val) => { if (val) errors.time = '' })
+watch(() => form.value.channel, (val) => { if (val) errors.channel = '' })
+watch(() => form.value.summary, (val) => { if (val) errors.summary = '' })
+
+async function loadNotes() {
+  if (!props.dentistId || !props.date) {
+    notes.value = []
+    return
+  }
+  try {
+    const res = await (diaryStore?.listNotes ? diaryStore.listNotes({ dentistId: props.dentistId, date: props.date }) : diaryService.listNotes({ dentistId: props.dentistId, date: props.date }))
+    if (res?.code === 0) notes.value = res.data || []
+  } catch (err) {
+    const msg = err?.data?.message || err?.message || 'Failed to load notes'
+    notify(msg, 'error')
+  }
+}
 
 async function onAddNote() {
-  if (!form.value.title || !form.value.date || !form.value.time || !form.value.channel || !form.value.summary) return
+  if (!validateForm()) return
   try {
     saving.value = true
     const payload = { dentistId: Number(props.dentistId), ...form.value }
-    const creator = typeof diaryStore.createNote === 'function' ? diaryStore.createNote : (p) => diaryService.createNote(p)
-    const res = await creator(payload)
+    const res = await (diaryStore?.createNote ? diaryStore.createNote(payload) : diaryService.createNote(payload))
     if (res?.code === 0) {
-      notes.value.unshift(res.data)
-      form.value = { title: '', date: props.date, time: timeOptions.value[0] || '09:00', channel: null, summary: '' }
+      const created = res?.data ? { ...res.data } : { ...payload, id: Date.now() }
+      notes.value.unshift(created)
+      notify('Note added successfully', 'success')
+      resetForm()
     }
+  } catch (err) {
+    const msg = err?.data?.message || err?.message || 'Failed to add note'
+    notify(msg, 'error')
   } finally { saving.value = false }
 }
 
@@ -150,9 +259,15 @@ async function confirmDelete() {
   const { index, note } = toDelete.value
   try {
     deleting.value = true
-    const deleter = typeof diaryStore.deleteNote === 'function' ? diaryStore.deleteNote : (id) => diaryService.deleteNote(id)
-    if (note?.id) await deleter(note.id)
-    notes.value.splice(index, 1)
+    if (note?.id) {
+      const deleter = diaryStore?.deleteNote ? diaryStore.deleteNote : (id) => diaryService.deleteNote(id)
+      await deleter(note.id)
+    }
+    if (index > -1) notes.value.splice(index, 1)
+    notify('Note deleted', 'success')
+  } catch (err) {
+    const msg = err?.data?.message || err?.message || 'Failed to delete note'
+    notify(msg, 'error')
   } finally { deleting.value = false; showDelete.value = false }
 }
 </script>
