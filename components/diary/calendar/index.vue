@@ -133,22 +133,7 @@ const parseHM = (t) => {
   if (isNaN(h) || isNaN(m)) return null
   return h * 60 + m
 }
-const parseAnyTimeToMinutes = (s) => {
-  if (!s) return null
-  // support 'HH:MM', 'H:MM AM', 'HH:MM AM'
-  const str = String(s).trim().toUpperCase()
-  const ampm = /(AM|PM)$/.test(str)
-  const parts = str.replace(/(AM|PM)$/,'').trim().split(':')
-  if (parts.length < 2) return null
-  let hh = parseInt(parts[0],10); let mm = parseInt(parts[1],10)
-  if (isNaN(hh) || isNaN(mm)) return null
-  if (ampm) {
-    const isPM = /PM$/.test(str)
-    if (hh === 12) hh = isPM ? 12 : 0
-    else if (isPM) hh += 12
-  }
-  return hh*60 + mm
-}
+
 // Show only standard working hours (09:00–17:00)
 const startHourC = computed(() => defaultStart)
 const endHourC = computed(() => defaultEnd)
@@ -322,6 +307,7 @@ const nowTop = computed(() => {
   background-color: #fafafa;
   border-radius: 10px;
   border: 1px solid #e5e7eb;
+  height: 75vh;
 }
 
 /* ───────────────────────────────

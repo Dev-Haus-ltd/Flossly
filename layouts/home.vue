@@ -49,9 +49,18 @@ watch(
 const user = ref(null);
 const { setUser } = useUser();
 const mainStore = useMainStore();
+const userStore = useUserStore();
 const router = useRouter()
 const menuItems = ref([]);
-onMounted(() => {
+const preloadUsers = async () => {
+  try {
+    await userStore.getUserList({ roleId: null });
+  } catch (e) {
+    console.error('Failed to preload users', e);
+  }
+};
+onMounted(async () => {
+  await preloadUsers();
   if (localStorage.getItem("user")) {
     user.value = JSON.parse(localStorage.getItem("user"));
     setUser(user.value)

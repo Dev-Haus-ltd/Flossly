@@ -157,15 +157,17 @@
 </template>
 
 <script setup>
+import { storeToRefs } from 'pinia'
 import AddAppointment from '@/components/diary/addAppointment.vue'
 import { useDiaryStore } from '@/stores/diary'
 import { useMainStore } from '@/stores/index'
 const crmStore = useCrmStore();
 const userStore = useUserStore();
+const { users: storeUsers } = storeToRefs(userStore);
+const userList = computed(() => storeUsers.value || []);
 const authStore = useAuthStore();
 const diaryStore = useDiaryStore();
 const mainStore = useMainStore();
-const userList = ref([]);
 const addLeadDrawer = ref(false);
 const isLoading = ref(false);
 const showBookingDrawer = ref(false);
@@ -273,18 +275,12 @@ const onSelect = (selection) => {
   }
 };
 onMounted(() => {
-  getUsers();
   initLeads();
   checkConnection();
   initOptions();
   loadBookingDentists();
   loadBookingPatients();
 });
-const getUsers = () => {
-  userStore.getUserList({ roleId: null }).then((res) => {
-    if (res.code === 0) userList.value = res.data;
-  });
-};
 const initOptions = async () => {
   try {
     const [src, tr] = await Promise.all([
