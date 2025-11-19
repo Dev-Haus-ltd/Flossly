@@ -52,12 +52,7 @@
       <v-tabs-window v-model="currentTab">
         <v-tabs-window-item :value="currentTab">
           <TasksListView
-            v-if="
-              taskStatuses.length &&
-              taskPriorities.length &&
-              userList.length &&
-              categories.length
-            "
+           
             :clearSelection="isTrayHidden"
             :headers="headers"
             :availableHeaders="availableHeaders"
@@ -258,6 +253,8 @@ const getMyStats = () => {
       }
       taskStats.value = res.data;
       getMyTasks(currentTab.value);
+    } else {
+      getMyTasks(null); // Fetch all tasks
     }
   });
 };
@@ -350,7 +347,7 @@ const handleDelete = async () => {
     if (res.code === 0) {
       updateTasksList();
       mainStore.setSnackbar({
-        title: "Tasks unassigned successfully.",
+        title: selectedRowItems.value.length === 1 ? "Task deleted successfully." : "Tasks deleted successfully.",
         type: "success",
       });
     } else {
@@ -358,7 +355,7 @@ const handleDelete = async () => {
         title:
           res.data?.message ||
           res.message ||
-          "Unable to unassign tasks. Please try again.",
+          "Unable to delete tasks. Please try again.",
         type: "error",
       });
     }

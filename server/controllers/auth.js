@@ -281,6 +281,7 @@ export const updateProfile = async (event) => {
     nextOfKin,
     fullName,
     nextOfKinContact,
+    roleId,
   } = JSON.parse(body);
   try {
     const user = await User.findByPk(id);
@@ -302,6 +303,9 @@ export const updateProfile = async (event) => {
     user.gender = gender || user.gender;
     user.nextOfKin = nextOfKin || user.nextOfKin;
     user.nextOfKinContact = nextOfKinContact || user.nextOfKinContact;
+    if (roleId !== undefined) {
+      user.roleId = roleId;
+    }
     await user.save();
     return success("saved");
   } catch (err) {

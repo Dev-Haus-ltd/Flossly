@@ -785,6 +785,26 @@ onMounted(() => {
   user.value = JSON.parse(localStorage.getItem("user"));
 });
 watch(
+  () => headers,
+  (newVal) => {
+    if (newVal && newVal.length > 0) {
+      selectedHeaders.value = sortHeaders(newVal); // Updates whenever headers changes
+    }
+  },
+  { immediate: true, deep: true }
+);
+
+watch(
+  () => orgStatuses,
+  (newVal) => {
+    if (newVal && newVal.length > 0) {
+      statuses.value = newVal; // Updates whenever orgStatuses changes
+    }
+  },
+  { immediate: true, deep: true }
+);
+
+watch(
   () => taskDetails,
   (newVal) => {
     selectedItem.value = [];

@@ -425,6 +425,12 @@ export const viewTeamTasksTaskWise = async (event) => {
     userTasks.forEach((userTask) => {
       const task = userTask;
       const assignedUser = userTask.assignedUser;
+      const userId = assignedUser?.id;
+
+      // Skip if assignedUser is null
+      if (!assignedUser || !userId) {
+        return;
+      }
 
       if (!taskMap.has(task.taskDetails.id)) {
         taskMap.set(task.taskDetails.id, {
@@ -432,7 +438,12 @@ export const viewTeamTasksTaskWise = async (event) => {
           assignedUser: [assignedUser.get()],
         });
       } else {
-        taskMap.get(task.taskDetails.id).assignedUser.push(assignedUser.get());
+        // Check if user is already in the assignedUser array to avoid duplicates
+        const existingTask = taskMap.get(task.taskDetails.id);
+        const userExists = existingTask.assignedUser.some(u => u.id === userId);
+        if (!userExists) {
+          existingTask.assignedUser.push(assignedUser.get());
+        }
       }
     });
 
@@ -1188,14 +1199,18 @@ export const groupTeamTasksByTaskId = async (event) => {
           };
         }
 
-        grouped[taskId].assignedUsers.push({
-          id: taskEntry.assignedUser?.id,
-          fullName: taskEntry.assignedUser?.fullName,
-          email: taskEntry.assignedUser?.email,
-          photo: taskEntry.assignedUser?.photo,
-          status: taskEntry.status,
-          userTaskId: taskEntry.id,
-        });
+        // Check if user is already in the assignedUsers array to avoid duplicates
+        const userId = taskEntry.assignedUser?.id;
+        if (userId && !grouped[taskId].assignedUsers.some(u => u.id === userId)) {
+          grouped[taskId].assignedUsers.push({
+            id: taskEntry.assignedUser?.id,
+            fullName: taskEntry.assignedUser?.fullName,
+            email: taskEntry.assignedUser?.email,
+            photo: taskEntry.assignedUser?.photo,
+            status: taskEntry.status,
+            userTaskId: taskEntry.id,
+          });
+        }
       });
       el.tasks = Object.values(grouped);
     });

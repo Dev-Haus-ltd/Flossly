@@ -7,7 +7,9 @@ export const useStripe = () => {
   const loading = ref(false);
   const error = ref("");
   const elementsRef = ref(null);
+  const paymentElementRef = ref(null);
   const paymentElementMounted = ref(false);
+  const isPaymentElementComplete = ref(false);
   const subscription = ref(null);
   const currSubscription = ref(null)
   const isPaymentCompleted = ref(false)
@@ -86,70 +88,32 @@ export const useStripe = () => {
       }
     });
     const paymentEl = elementsRef.value.create("payment");
+    paymentElementRef.value = paymentEl;
     const mountNode = document.getElementById("payment-element");
     if (mountNode) {
       mountNode.innerHTML = "";
       paymentEl.mount(mountNode);
       
-      // Listen to Stripe Element changes to catch error messages
+      // Listen to Stripe Element changes to track completeness and errors
       paymentEl.on('change', (event) => {
-        if (event.error || event.empty) {
+        // Track if the payment element is complete and valid
+        // The element is complete when it's not empty, has no errors, and is marked as complete
+        const isComplete = !event.empty && !event.error && (event.complete === true);
+        isPaymentElementComplete.value = isComplete;
+        
+        // Clear any previous errors when fields are being filled and valid
+        if (isComplete) {
+          error.value = "";
+        }
+        
+        if (event.error) {
           console.log('Stripe Element change event:', event);
           console.log('Error message:', event.error?.message);
           console.log('Error type:', event.error?.type);
-          
-          // Wait a bit then inspect the DOM
-          setTimeout(() => {
-            const mountNode = document.getElementById("payment-element");
-            if (mountNode) {
-              // Check all elements for error messages
-              const allElements = mountNode.querySelectorAll('*');
-              allElements.forEach(el => {
-                const text = el.textContent?.trim();
-                if (text && (
-                  text.includes('incomplete') || 
-                  text.includes('invalid') ||
-                  text.includes('card')
-                )) {
-                  console.log('Found error text element:', {
-                    text: text,
-                    className: el.className,
-                    tagName: el.tagName,
-                    element: el,
-                    computedStyle: window.getComputedStyle(el)
-                  });
-                }
-              });
-            }
-          }, 100);
+          // Reset completeness when there's an error
+          isPaymentElementComplete.value = false;
         }
       });
-      
-      // Inspect Stripe Elements structure after mounting
-      setTimeout(() => {
-        const mountNode = document.getElementById("payment-element");
-        if (mountNode) {
-          const iframes = mountNode.querySelectorAll('iframe');
-          console.log('Stripe iframes found:', iframes.length);
-          
-          // Also check for any error messages in the DOM
-          const allElements = mountNode.querySelectorAll('*');
-          allElements.forEach(el => {
-            const classes = el.className || '';
-            if (typeof classes === 'string' && (
-              classes.toLowerCase().includes('error') || 
-              classes.toLowerCase().includes('invalid')
-            )) {
-              console.log('Potential error element:', {
-                className: classes,
-                tagName: el.tagName,
-                textContent: el.textContent?.trim(),
-                element: el
-              });
-            }
-          });
-        }
-      }, 1500);
     }
     paymentElementMounted.value = true;
     loading.value = false
@@ -161,6 +125,8 @@ export const useStripe = () => {
       const mountNode = document.getElementById("payment-element");
       if (mountNode) mountNode.innerHTML = "";
       paymentElementMounted.value = false;
+      paymentElementRef.value = null;
+      isPaymentElementComplete.value = false;
     }
     loading.value = true;
     error.value = "";
@@ -195,28 +161,49 @@ export const useStripe = () => {
   };
 
   const confirmPayment = async () => {
-    loading.value = true
-    const stripe = await stripePromise;
-    const result = await stripe.confirmPayment({
-      elements: elementsRef.value,
-      redirect: "if_required",
-    });
-
-    if (result.error) {
-      error.value = result.error.message || "Payment confirmation failed";
-      loading.value = false;
+    // Clear previous errors
+    error.value = "";
+    
+    // Check if payment element is mounted
+    if (!paymentElementRef.value || !elementsRef.value) {
+      error.value = "Payment form is not ready. Please wait a moment and try again.";
       return;
-    } else {
-      const res = await $fetch("/api/stripe/confirmPayment", {
-        method: "POST",
-        body: { subscriptionId: subscription.value.id },
+    }
+
+    loading.value = true;
+    const stripe = await stripePromise;
+    
+    try {
+      const result = await stripe.confirmPayment({
+        elements: elementsRef.value,
+        redirect: "if_required",
+        confirmParams: {
+          return_url: window.location.href,
+        },
       });
-      loading.value = false
-      if (res.code !== 0) {
-       error.value = res.data.message
+
+      if (result.error) {
+        // Stripe will return an error if the form is incomplete or invalid
+        // This handles cases where the change event didn't catch the incomplete state
+        error.value = result.error.message || "Payment confirmation failed";
+        loading.value = false;
+        return;
       } else {
-        isPaymentCompleted.value = true
+        const res = await $fetch("/api/stripe/confirmPayment", {
+          method: "POST",
+          body: { subscriptionId: subscription.value.id },
+        });
+        loading.value = false;
+        if (res.code !== 0) {
+          error.value = res.data.message || res.error || "Payment confirmation failed";
+        } else {
+          isPaymentCompleted.value = true;
+        }
       }
+    } catch (err) {
+      console.error("confirmPayment error:", err);
+      error.value = err.message || "An error occurred during payment confirmation";
+      loading.value = false;
     }
   };
   const getCurrentSubscription = async () => {
