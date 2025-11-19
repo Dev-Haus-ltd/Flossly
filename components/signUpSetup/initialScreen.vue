@@ -92,7 +92,7 @@ const handleScreen = () => {
 .watermark-image {
   width: 100%;
   height: 100vh;
-  max-width: 600px;
+  max-width: 1124px;
   object-fit: fill;
 }
 
@@ -110,10 +110,22 @@ const handleScreen = () => {
 }
 
 .init-pg-content {
-  max-width: 800px;
+  max-width: 1124px;
   width: 100%;
   margin-top: 5%;
 }
+
+/* 1300px–1500px range override */
+@media (max-width: 1600px) and (min-width: 1100px) {
+  .init-pg-content {
+    max-width: 800px;
+  }
+
+  .watermark-image {
+    max-width: 600px;
+  }
+}
+
 
 /* Hide watermark on screens smaller than 960px */
 @media (max-width: 980px) {
