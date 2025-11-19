@@ -3,18 +3,19 @@
       <!-- Feature Card -->
       <v-card
         class="feature-card d-flex align-center pa-4"
+        :class="{ 'card-expanded': isHovered }"
         elevation="0"
         bg-color="#171952"
         @mouseenter="isHovered = true"
         @mouseleave="isHovered = false"
       >
-        <!-- Left image and text content -->
-        <div class="center-row" :class="{ expanded: isHovered }">
+        <!-- Image and text content -->
+        <div class="content-wrapper">
           <img
-            src="https://img.youtube.com/vi/ivTYvriUWhY/maxresdefault.jpg"
+            src="@/assets/dashboard/demo-video-thumbnail.svg"
             alt="thumbnail"
             class="feature-img"
-            :class="{ 'img-expanded': isHovered }"
+            :class="{ 'img-hidden': isHovered }"
           />
     
           <!-- Text content -->
@@ -34,7 +35,13 @@
         </div>
 
         <!-- Close icon -->
-        <v-icon class="close-icon" @click="$emit('close')">mdi-close</v-icon>
+        <v-icon 
+          class="close-icon"
+          :class="{ 'close-icon-expanded': isHovered }"
+          @click="$emit('close')"
+        >
+          mdi-close
+        </v-icon>
       </v-card>
 
       <!-- Modal Dialog -->
@@ -62,7 +69,7 @@
               <iframe
                 width="100%"
                 height="500"
-                :src="`https://www.youtube.com/embed/ivTYvriUWhY?autoplay=1`"
+                :src="`https://www.youtube.com/embed/gEuICxXisnw?autoplay=1`"
                 frameborder="0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowfullscreen
@@ -78,10 +85,6 @@
   import { ref } from 'vue';
 
   defineProps({
-    heading: {
-      type: String,
-      required: true
-    },
     subheading: {
       type: String,
       required: true
@@ -134,7 +137,46 @@
     z-index: 1;
   }
 
-  .center-row {
+  .feature-card.card-expanded {
+    height: 225px;
+    background-image: url("@/assets/dashboard/demo-video-thumbnail-expanded.png");
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    border-image-source: linear-gradient(90deg, #FFA977 0%, #FF85DA 32.21%, #7D77FF 63.94%, #68ECE6 100%);
+    border-image-slice: 1;
+    padding: 0;
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 1200px) {
+    .feature-card.card-expanded {
+      height: 200px;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .feature-card.card-expanded {
+      height: 180px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .feature-card.card-expanded {
+      height: 150px;
+    }
+  }
+
+  .feature-card.card-expanded::before {
+    background: linear-gradient(180deg, #263388 0%, rgba(173, 124, 243, 0.08) 100%);
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 24px;
+  }
+
+  .content-wrapper {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -143,33 +185,13 @@
     position: relative;
     flex: 1;
     transition: all 0.4s ease;
-    padding: 12px;
-    height: 60px;
   }
 
-  .center-row.expanded {
-    background-image: url('https://img.youtube.com/vi/ivTYvriUWhY/maxresdefault.jpg');
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    border-radius: 20px;
-    padding: 0 20px;
-    height: 280px;
-    position: relative;
+  .feature-card.card-expanded .content-wrapper {
     flex-direction: column;
-    min-height: unset;
-  }
-
-  .center-row.expanded::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.4);
-    border-radius: 20px;
-    z-index: 1;
+    height: 225px;
+    padding: 0;
+    justify-content: center;
   }
   
   /* Left image */
@@ -181,9 +203,10 @@
     flex-shrink: 0;
     z-index: 2;
     position: relative;
+    transition: all 0.4s ease;
   }
 
-  .feature-img.img-expanded {
+  .feature-img.img-hidden {
     display: none;
   }
   
@@ -236,13 +259,13 @@
     flex-shrink: 0;
     transition: all 0.3s ease;
   }
-  .feature-card:hover .close-icon {
+
+  .close-icon.close-icon-expanded {
     position: absolute;
     top: 8px;
     right: 12px;
     z-index: 4;
-}
-
+  }
 
   .close-icon:hover {
     transform: scale(1.2);

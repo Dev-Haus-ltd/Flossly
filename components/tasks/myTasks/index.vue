@@ -6,7 +6,9 @@
     <div class="pa-5 rounded-lg">
       <div class="task-summary">
         <!-- Cards Grid -->
-        <v-row>
+        <v-row
+          style="flex-wrap: nowrap; overflow: auto;"
+        >
           <v-col
             cols="12"
             sm="6"
@@ -66,6 +68,7 @@
             :priorities="taskPriorities"
             :users="userList"
             :categories="categories"
+            :currentCategoryId="currentTab"
             @onFilter="applyFilters"
             @onUpdate="updateTasks"
             @updateSelectedRowItems="updateSelectedRowItems"

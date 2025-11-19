@@ -1,144 +1,141 @@
 <template>
   <div>
     <div
-      class="toolbar-wrapper my-2"
+      class="d-flex align-center my-2"
+      style="flex-wrap: nowrap; overflow-x: auto;"
     >
-      <div class="toolbar-wrapper my-2">
-        <div class="d-inline-flex align-center py-1">
-          <v-btn-toggle v-model="viewType" mandatory class="custom-toggle">
-            <v-btn value="list" class="toggle-btn">
-              <img
-                :src="listicon"
-                alt="list icon"
-                class="mr-1"
-                width="16"
-                height="16"
-              />
-              List
-            </v-btn>
-            <v-btn value="calender" class="toggle-btn">
-              <img
-                :src="calendericon"
-                alt="calendar icon"
-                class="mr-1"
-                width="16"
-                height="16"
-              />
-              Calender
-            </v-btn>
-          </v-btn-toggle>
-          <!-- Search Field -->
-          <div style="width: 150px">
-            <v-text-field
-              v-model="search"
-              placeholder="Search"
-              append-inner-icon="mdi-magnify"
-              variant="solo"
-              :elevation="0"
-              density="compact"
-              hide-details
-              bg-color="#FAFAFA"
-              flat
-              class="custom-search"
+      <div class="d-inline-flex align-center py-1" style="flex-wrap: nowrap;">
+        <v-btn-toggle v-model="viewType" mandatory class="custom-toggle">
+          <v-btn value="list" class="toggle-btn">
+            <img
+              :src="listicon"
+              alt="list icon"
+              class="mr-1"
+              width="16"
+              height="16"
             />
-          </div>
-
-          <!-- Filter Button + Menu -->
-          <TasksMenuItemsFilterMenu
-            :priorities="priorities"
-            :users="users"
-            @update:filters="onFiltersUpdated"
+            List
+          </v-btn>
+          <v-btn value="calender" class="toggle-btn">
+            <img
+              :src="calendericon"
+              alt="calendar icon"
+              class="mr-1"
+              width="16"
+              height="16"
+            />
+            Calender
+          </v-btn>
+        </v-btn-toggle>
+        <!-- Search Field -->
+        <div style="width: 150px">
+          <v-text-field
+            v-model="search"
+            placeholder="Search"
+            append-inner-icon="mdi-magnify"
+            variant="solo"
+            :elevation="0"
+            density="compact"
+            hide-details
+            bg-color="#FAFAFA"
+            flat
+            class="custom-search"
           />
-          <div class="">
-            <v-menu :close-on-content-click="false">
-              <template #activator="{ props }">
-                <v-btn
-                  v-bind="props"
-                  variant="flat"
-                  density="compact"
-                  class="tbl-top-btn"
-                  style="width: 200px"
+        </div>
+
+        <!-- Filter Button + Menu -->
+        <TasksMenuItemsFilterMenu
+          :priorities="priorities"
+          :users="users"
+          @update:filters="onFiltersUpdated"
+        />
+        <div class="">
+          <v-menu :close-on-content-click="false">
+            <template #activator="{ props }">
+              <v-btn
+                v-bind="props"
+                variant="flat"
+                density="compact"
+                class="tbl-top-btn"
+                style="width: 200px"
+              >
+                <span>Manage Columns</span>
+                <v-icon class="ml-2" size="20">mdi-table-column</v-icon>
+              </v-btn>
+            </template>
+
+            <v-card class="pa-2" max-width="500">
+              <p>Selected Columns</p>
+              <div class="d-flex flex-wrap">
+                <div
+                  v-for="(item, index) in selectedHeaders"
+                  :key="index"
+                  class="color-box ma-1 pa-2 d-flex align-center justify-space-between position-relative"
+                  :style="{ backgroundColor: getRandomHexColor(item.title) }"
                 >
-                  <span>Manage Columns</span>
-                  <v-icon class="ml-2" size="20">mdi-table-column</v-icon>
-                </v-btn>
-              </template>
-
-              <v-card class="pa-2" max-width="500">
-                <p>Selected Columns</p>
-                <div class="d-flex flex-wrap">
-                  <div
-                    v-for="(item, index) in selectedHeaders"
-                    :key="index"
-                    class="color-box ma-1 pa-2 d-flex align-center justify-space-between position-relative"
-                    :style="{ backgroundColor: getRandomHexColor(item.title) }"
+                  <span> {{ item.title }}</span>
+                  <v-icon
+                    color="white"
+                    class="tick-icon"
+                    @click="removeHeaderFromSeleted(item)"
+                    >mdi-close-circle</v-icon
                   >
-                    <span> {{ item.title }}</span>
-                    <v-icon
-                      color="white"
-                      class="tick-icon"
-                      @click="removeHeaderFromSeleted(item)"
-                      >mdi-close-circle</v-icon
-                    >
-                  </div>
                 </div>
+              </div>
 
-                <p>Available Columns</p>
-                <div class="d-flex flex-wrap">
-                  <div
-                    v-for="(item, index) in availableHeaders"
-                    :key="index"
-                    class="color-box ma-1 pa-2 d-flex align-center justify-center"
-                    :style="{ backgroundColor: getRandomHexColor(item.title) }"
-                    @click="addHeaderInSelected(item)"
-                  >
-                    {{ item.title }}
-                  </div>
+              <p>Available Columns</p>
+              <div class="d-flex flex-wrap">
+                <div
+                  v-for="(item, index) in availableHeaders"
+                  :key="index"
+                  class="color-box ma-1 pa-2 d-flex align-center justify-center"
+                  :style="{ backgroundColor: getRandomHexColor(item.title) }"
+                  @click="addHeaderInSelected(item)"
+                >
+                  {{ item.title }}
                 </div>
-              </v-card>
-            </v-menu>
-          </div>
+              </div>
+            </v-card>
+          </v-menu>
         </div>
       </div>
-      <div class="toolbar-wrapper my-4">
-        <div class="d-inline-flex align-center py-1">
-          <v-btn
-            color="tertiary"
-            variant="flat"
-            rounded="lg"
-            @click="taskPoolDialog = true"
-            class="add-task-btn"
-          >
-            <template #prepend>
-              <v-icon size="18">mdi-checkbox-marked-outline</v-icon>
-            </template>
-            Tasks Pool
-          </v-btn>
-          <v-btn
-            color="secondary"
-            variant="flat"
-            rounded="lg"
-            @click="bulkTaskUploadDialog = true"
-            class="add-task-btn mx-2"
-          >
-            <template #prepend>
-              <v-icon size="18">mdi-upload</v-icon>
-            </template>
-            Upload bulk tasks
-          </v-btn>
-          <v-btn
-            color="primary"
-            variant="flat"
-            rounded="lg"
-            @click="openAddTaskDialog"
-            class="add-task-btn"
-          >
-            <template #prepend>
-              <v-icon size="18">mdi-plus-circle-outline</v-icon>
-            </template>
-            Add task
-          </v-btn>
-        </div>
+      <div class="d-inline-flex" style="flex-wrap: nowrap;">
+        <v-btn
+          color="tertiary"
+          variant="flat"
+          rounded="lg"
+          @click="taskPoolDialog = true"
+          class="add-task-btn"
+        >
+          <template #prepend>
+            <v-icon size="18">mdi-checkbox-marked-outline</v-icon>
+          </template>
+          Tasks Pool
+        </v-btn>
+        <v-btn
+          color="secondary"
+          variant="flat"
+          rounded="lg"
+          @click="bulkTaskUploadDialog = true"
+          class="add-task-btn mx-2"
+        >
+          <template #prepend>
+            <v-icon size="18">mdi-upload</v-icon>
+          </template>
+          Upload bulk tasks
+        </v-btn>
+        <v-btn
+          color="primary"
+          variant="flat"
+          rounded="lg"
+          @click="openAddTaskDialog"
+          class="add-task-btn"
+        >
+          <template #prepend>
+            <v-icon size="18">mdi-plus-circle-outline</v-icon>
+          </template>
+          Add task
+        </v-btn>
       </div>
     </div>
 
@@ -592,6 +589,20 @@
                 </v-card>
               </td>
             </template>
+            <template #[`footer.prepend`]>
+              <v-btn
+                size="small"
+                color="primary"
+                variant="flat"
+                rounded="lg"
+                @click="openAddTaskDialogForStatus(group.status, currentCategoryId)"
+                class="add-status-task-btn"
+              >
+                <v-icon size="16" class="mr-1">mdi-plus-circle-outline</v-icon>
+                Add Task
+              </v-btn>
+              <v-spacer></v-spacer>
+            </template>
           </v-data-table>
         </v-expansion-panel-text>
       </v-expansion-panel>
@@ -608,6 +619,8 @@
 
     <TasksAddTask
       v-model="drawerOpen"
+      :preSelectedStatus="selectedStatusForNewTask"
+      :preSelectedCategory="selectedCategoryForNewTask"
       @close="drawerOpen = false"
       @success="updateTasks"
     />
@@ -651,6 +664,10 @@ const {
   users: Array,
   categories: Array,
   clearSelection: Boolean,
+    currentCategoryId: {  // ← ADD THIS NEW PROP
+    type: Number,
+    default: null,
+  },
 });
 watch(
   () => clearSelection,
@@ -752,8 +769,12 @@ const openedPanels = ref([0]);
 const dialogOpen = ref(false);
 const taskPoolDialog = ref(false);
 const isAllSelected = ref(false);
+const selectedStatusForNewTask = ref(null);
+const selectedCategoryForNewTask = ref(null);
 
 const openAddTaskDialog = () => {
+  selectedStatusForNewTask.value = null;
+  selectedCategoryForNewTask.value = null;
   drawerOpen.value = true;
 };
 const tasksForCalender = ref([]);
@@ -853,7 +874,18 @@ const getColor = (key) => {
   }
 };
 const formattedDate = (date) => {
-  return parsedDate(date);
+  if (!date) return '';
+  
+  try {
+    const dateObj = new Date(date);
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const year = dateObj.getFullYear();
+    
+    return `${day}/${month}/${year}`;
+  } catch (error) {
+    return '';
+  }
 };
 const setFocus = (id, key, state) => {
   focusedField.value[`${id}-${key}`] = state;
@@ -1138,6 +1170,13 @@ function onFiltersUpdated(newFilters) {
 const onSelectionChange = (newSelected) => {
   emit("updateSelectedRowItems", selectedTasks.value);
 };
+
+const openAddTaskDialogForStatus = (status, categoryId) => {
+  // Store both the selected status and the currently selected category
+  selectedStatusForNewTask.value = status;
+  selectedCategoryForNewTask.value = categoryId;
+  drawerOpen.value = true;
+};
 </script>
 
 <style scoped>
@@ -1287,57 +1326,5 @@ th {
   display: flex;
   align-items: center;
   gap: 12px; /* consistent spacing between all items */
-}
-/* Toolbar scroll wrapper for small screens */
-.toolbar-wrapper {
-  display: flex;
-  gap: 12px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding-bottom: 8px;
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch; /* smooth scrolling on iOS */
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.toolbar-wrapper::-webkit-scrollbar {
-  height: 6px;
-}
-
-.toolbar-wrapper::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.toolbar-wrapper::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 3px;
-}
-
-.toolbar-wrapper::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
-}
-
-/* Prevent items from shrinking */
-.toolbar-item {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-}
-
-/* On medium screens and up, use normal flex layout */
-@media (min-width: 1420px) {
-  .toolbar-wrapper {
-    overflow-x: visible;
-    overflow-y: visible;
-    flex-wrap: wrap;
-    padding-bottom: 0;
-  }
-  
-  .toolbar-item {
-    flex-shrink: 1;
-  }
 }
 </style>
