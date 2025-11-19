@@ -323,8 +323,10 @@ export const listDentistsForDate = async (event) => {
   try {
     const { orgId } = event.context.user
     // Return all dentists in organisation, no rota binding
+    // Only include Active users (exclude Invited, Disabled, Expired)
     const users = await User.findAll({
       attributes: ['id','fullName','email','photo','roleId'],
+      where: { status: 'Active' },
       include: [
         { model: Role, as: 'role', attributes: ['title'] },
         { model: UserOrganisation, as: 'userOrganisations', attributes: [], where: { organisationId: Number(orgId) } },

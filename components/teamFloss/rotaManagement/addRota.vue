@@ -282,10 +282,18 @@ const practices = computed(
     })) || []
 );
 const selectedOption = ref(null);
-const rotaOptions = [
+const existingRotas = ref([]);
+const allRotaOptions = [
   { value: "new", label: "Create a new rota", icon: "mdi-calendar-plus" },
   { value: "copy", label: "Copy an existing rota", icon: "mdi-content-copy" },
 ];
+const rotaOptions = computed(() => {
+  // Hide "copy" option if no rotas exist
+  if (existingRotas.value.length === 0) {
+    return allRotaOptions.filter(opt => opt.value !== "copy");
+  }
+  return allRotaOptions;
+});
 
 watch(
   () => [form.value.startDate, form.value.endDate],
@@ -306,6 +314,17 @@ watch(
     }
   }
 );
+
+watch(
+  () => existingRotas.value.length,
+  (count) => {
+    // Reset selection if "copy" is selected but no rotas exist
+    if (count === 0 && selectedOption.value === "copy") {
+      selectedOption.value = null;
+      isCreateRota.value = false;
+    }
+  }
+);
 const selectedOptionHandle = (value) => {
   selectedOption.value = value;
   isCreateRota.value = value === "new";
@@ -321,6 +340,20 @@ const selectPractice = (value) => {
   form.value.orgId = value;
   practiceError.value = "";
   getUsers(form.value.orgId);
+  checkExistingRotas();
+};
+
+const checkExistingRotas = async () => {
+  try {
+    const res = await rotaStore.getRotas();
+    if (res?.code === 0) {
+      existingRotas.value = res.data || [];
+    } else {
+      existingRotas.value = [];
+    }
+  } catch (err) {
+    existingRotas.value = [];
+  }
 };
 
 const submitForm = async () => {
@@ -361,6 +394,8 @@ const handleAddRotaUser = async (rotaId, users) => {
         title: "Rota added successfully",
       });
       resetForm();
+      // Refresh rotas list so "copy" option becomes available
+      await checkExistingRotas();
       emit('onAddRota')
     } else {
       mainStore.setSnackbar({
@@ -388,7 +423,12 @@ function resetForm() {
   };
   isCreateRota.value = false;
   selectedOption.value = null;
+  existingRotas.value = [];
 }
+
+onMounted(() => {
+  checkExistingRotas();
+});
 </script>
 <style scoped>
 .input-bordered :deep(.v-field) {
