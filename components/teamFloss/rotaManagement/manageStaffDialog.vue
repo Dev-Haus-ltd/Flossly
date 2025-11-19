@@ -13,7 +13,7 @@
           padding-bottom: 4px;
         "
       >
-        Manage Rota
+        Manage Rota Users
         <v-btn
           icon
           variant="text"

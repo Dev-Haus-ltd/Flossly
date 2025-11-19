@@ -60,16 +60,16 @@ export const useMainStore = defineStore("mainStore", {
           title: "Flossly docs",
           imgPath: flosslyDocs,
           value: "flosllyDocs",
-          to: "/documents",
-          children: [
-            {
-              title: "My Docs",
-              value: "mydocs",
-              imgPath: flosslyDocs,
-              to: "/documents/mydocs",
-            },
+          to: "/documents/mydocs",
+          // children: [
+          //   {
+          //     title: "My Docs",
+          //     value: "mydocs",
+          //     imgPath: flosslyDocs,
+          //     to: "/documents/mydocs",
+          //   },
         
-          ],
+          // ],
         },
         {
           title: "Team floss",
@@ -130,7 +130,14 @@ export const useMainStore = defineStore("mainStore", {
           imgPath: tasksIcon,
           value: "flosslyDiary",
           to:"/diary",
-          children: [],
+          children: [
+            {
+              title: "Calendar",
+              value: "diaryCalendar",
+              imgPath: tasksIcon,
+              to: "/diary/calendar",
+            },
+          ],
         },
         // {
         //   title: "Staff",
@@ -183,16 +190,16 @@ export const useMainStore = defineStore("mainStore", {
           title: "Flossly docs",
           imgPath: dashBoard,
           value: "flosllyDocs",
-          to: "/documents",
-          children: [
-            {
-              title: "My Docs",
-              value: "mydocs",
-              imgPath: flosslyDocs,
-              to: "/documents/mydocs",
-            },
+          to: "/documents/mydocs",
+          // children: [
+          //   {
+          //     title: "My Docs",
+          //     value: "mydocs",
+          //     imgPath: flosslyDocs,
+          //     to: "/documents/mydocs",
+          //   },
         
-          ],
+          // ],
         },
         {
           title: "Rota",

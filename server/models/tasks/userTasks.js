@@ -55,7 +55,7 @@ export const UserTask = sequelize.define(
         model: "OrganisationPriorities",
         key: "id",
       },
-      allowNull: false,
+      allowNull: true,
     },
     frequency: {
       type: DataTypes.ENUM(
@@ -64,8 +64,7 @@ export const UserTask = sequelize.define(
         "Fortnightly",
         "Monthly",
         "6 Monthly",
-        "Annualy",
-        "Every 24 Months"
+        "Yearly"
       ),
       allowNull: true,
     },

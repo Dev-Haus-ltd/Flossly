@@ -151,7 +151,8 @@ const getProfile = () => {
           user.profileCompletion === 1 &&
           (user.roleId === 1 || user.roleId === 8)
         ) {
-          router.push("/onboarding");
+          // Force a full page refresh when redirecting to onboarding
+          window.location.href = "/onboarding";
         } else {
           router.push("/");
         }

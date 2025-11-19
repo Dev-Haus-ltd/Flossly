@@ -120,7 +120,8 @@ export const confirmPayment = async (event) => {
     user.licenseType = "Monthly";
     user.licenseRenewalDate = renewalDate;
     await user.save();
-    await paymentSuccessNotification(user)
+    const loggedUserObj = await User.findByPk(loggedUser.userId)
+    await paymentSuccessNotification(loggedUserObj)
     return success("Subscription updated");
   } catch (err) {
     return error(500, err.message);

@@ -121,8 +121,9 @@ const handleShiftEdit = (shift) => {
 const addNewShift = (data) => {
   shiftData.value = {
     day: data.day.date,
-    user: data.user.user,
+    user: data.user.isTempUser ? data.user : data.user.user,
   };
+
   showShiftDialog.value = true;
 };
 const selectedView = ref(null);

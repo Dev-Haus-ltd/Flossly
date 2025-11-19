@@ -387,6 +387,21 @@ export const useTaskStore = defineStore("taskStore", {
             reject(err);
           });
       });
-    }
+    },
+    getTeamTaskStatsByStatusAndCategory(categoryId) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        taskService
+          .getTeamTaskStatsByStatusAndCategory(categoryId)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
   },
 });

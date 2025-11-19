@@ -7,8 +7,7 @@ const frequencyMap = {
   Fortnightly: "0 0 */14 * *", // every 14 days
   Monthly: "0 0 1 * *", // first day of month
   "6 Monthly": "0 0 1 */6 *", // first day every 6 months
-  Annualy: "0 0 1 1 *", // Jan 1st every year
-  "Every 24 Months": "0 0 1 1 */2", // Jan 1st every 2 years
+  Yearly: "0 0 1 1 *", // Jan 1st every year
 };
 
 function addDays(date, days) {
@@ -19,6 +18,8 @@ function addDays(date, days) {
 
 export const startTaskScheduler = () => {
   Object.keys(frequencyMap).forEach((frequency) => {
+    if (!frequencyMap[frequency]) return;
+    
     cron.schedule(frequencyMap[frequency], async () => {
       console.log(`Running scheduler for ${frequency} tasks...`);
       try {
@@ -47,11 +48,8 @@ export const startTaskScheduler = () => {
             case "6 Monthly":
               nextDueDate = addDays(new Date(), 180);
               break;
-            case "Annualy":
+            case "Yearly":
               nextDueDate = addDays(new Date(), 365);
-              break;
-            case "Every 24 Months":
-              nextDueDate = addDays(new Date(), 730);
               break;
           }
           const statuses = await OrganisationStatus.findAll({
@@ -61,7 +59,7 @@ export const startTaskScheduler = () => {
             userId: task.userId,
             taskId: task.taskId,
             organisationId: task.organisationId,
-            statusId: statuses.find((x) => x.key === "panding").id,
+            statusId: statuses.find((x) => x.key === "progress").id,
             title: task.title,
             documentLink: "",
             priorityId: task.priorityId,
@@ -82,6 +80,7 @@ export const startTaskScheduler = () => {
 import { CrmLead, CrmAutomationTemplate } from "../models/index.js";
 import { transporter } from "./nodeMailer.js";
 import { template as EMAIL_TEMPLATE } from './emailTemplate.js'
+import { buildLeadContext, renderTokens } from './tokenRenderer.js'
 
 export const startLeadAutomationScheduler = () => {
   const minutes = Number(process.env.CRM_LEAD_AUTOMATION_MINUTES || 2);
@@ -149,15 +148,10 @@ export const startLeadAutomationScheduler = () => {
           const raw = lead.rawData || {}
           const fullName = lead.name || 'there'
           const firstName = (fullName.split(' ')[0]) || 'there'
-          const subject = tpl.name || 'Message from Flossly'
-          const html = (tpl.template || '')
-            // legacy placeholders
-            .replaceAll('{{name}}', fullName)
-            .replaceAll('{{email}}', lead.email || '')
-            // new bracket placeholders
-            .replaceAll('[Patient Name]', fullName)
-            .replaceAll('[First Name]', firstName)
-            .replaceAll('[Email]', lead.email || '')
+          const baseSubject = tpl.name || 'Message from Flossly'
+          const ctx = buildLeadContext({ lead, userName: 'Team' })
+          const subject = renderTokens(baseSubject, ctx)
+          const html = renderTokens(tpl.template || '', ctx)
           const wrap = (inner) => EMAIL_TEMPLATE.replaceAll('{subject}', subject).replace('{content}', inner)
           try {
             if (tpl.key === 'welcome_email') {
@@ -296,3 +290,52 @@ export const startLeadAutomationScheduler = () => {
     }
   });
 };
+
+import { Op } from 'sequelize'
+
+export const startTaskOverDueScheduler = () => {
+  // Run every night at 12 AM (server time)
+  cron.schedule("0 0 * * *", async () => {
+    try {
+      const today = new Date();
+
+      // Find the "overdue" status
+      const overdueStatus = await OrganisationStatus.findOne({
+        where: { key: "overdue", status: "Active" },
+      });
+
+      if (!overdueStatus) {
+        console.error("❌ Overdue status not found in OrganisationStatuses table!");
+        return;
+      }
+
+      // Find all overdue tasks (dueDate < today) that are not already overdue
+      const overdueTasks = await UserTask.findAll({
+        where: {
+          dueDate: { [Op.lt]: today },
+          statusId: { [Op.ne]: overdueStatus.id },
+        },
+      });
+
+      if (overdueTasks.length === 0) {
+        console.log("⏰ No overdue tasks found today.");
+        return;
+      }
+
+      const taskIds = overdueTasks.map((t) => t.id);
+
+      // Update tasks to "Overdue" status
+      await UserTask.update(
+        { statusId: overdueStatus.id },
+        { where: { id: taskIds } }
+      );
+
+      console.log(`✅ ${taskIds.length} tasks marked as Overdue.`);
+
+    } catch (err) {
+      console.error("❌ Error in overdue scheduler:", err);
+    }
+  });
+};
+
+

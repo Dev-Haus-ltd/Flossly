@@ -137,3 +137,13 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Google Cloud credentials
+config/google-cloud-key.json
+**/google-cloud-key.json
+**/*-service-account*.json
+**/*-credentials*.json
+
+
+.gemini
+.nvmrc

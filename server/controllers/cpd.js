@@ -6,6 +6,7 @@ import {
   Organisation,
   UserOrganisation,
 } from "../models/index.js";
+import { format } from "date-fns";
 
 export const listCourses = async (event) => {
   try {
@@ -57,10 +58,10 @@ export const startQuiz = async (event) => {
         status: "In Progress",
       });
     } else if (userHistory.status === "Completed") {
+      const completedDate = new Date(userHistory.completedDate);
+      const formattedDate = format(completedDate, 'dd/MM/yyyy');
       throw createError({
-        message: `You have already completed this course on ${new Date(
-          userHistory.completedDate
-        ).toLocaleDateString()}`,
+        message: `You have already completed this course on ${formattedDate}`,
       });
     }
     const questionnaire = await CourseQuestionaire.findAll({

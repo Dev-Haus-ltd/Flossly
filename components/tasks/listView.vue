@@ -1,9 +1,10 @@
 <template>
   <div>
     <div
-      class="d-inline-flex flex-wrap d-md-flex justify-space-between align-center my-2"
+      class="d-flex align-center my-2"
+      style="flex-wrap: nowrap; overflow-x: auto;"
     >
-      <div class="d-inline-flex flex-wrap d-md-flex align-center py-1">
+      <div class="d-inline-flex align-center py-1" style="flex-wrap: nowrap;">
         <v-btn-toggle v-model="viewType" mandatory class="custom-toggle">
           <v-btn value="list" class="toggle-btn">
             <img
@@ -98,7 +99,7 @@
           </v-menu>
         </div>
       </div>
-      <div class="d-inline-flex flex-wrap d-md-flex">
+      <div class="d-inline-flex" style="flex-wrap: nowrap;">
         <v-btn
           color="tertiary"
           variant="flat"
@@ -127,7 +128,7 @@
           color="primary"
           variant="flat"
           rounded="lg"
-          @click="drawerOpen = true"
+          @click="openAddTaskDialog"
           class="add-task-btn"
         >
           <template #prepend>
@@ -229,8 +230,8 @@
                       fontSize: '14px',
                       position: 'relative',
                     }"
-                    @mouseover="showHandles(column.key)"
-                    @mouseleave="hideHandles(column.key)"
+                    @mouseover="showHandles(column.key, index)"
+                    @mouseleave="hideHandles(column.key, index)"
                   >
                     <div
                       v-if="!column.title && i === 0"
@@ -246,8 +247,8 @@
                     </div>
                     <div v-else class="d-flex align-center th-content">
                       <p
-                        v-if="!isEditing(column)"
-                        @click="enableEditing(column)"
+                        v-if="!isEditing(column, index)"
+                        @click="enableEditing(column, index)"
                         style="cursor: text;"
                       >
                         {{ column.title }}
@@ -264,7 +265,7 @@
                         density="compact"
                         hide-details
                         @focus="setFocus('header', column.key, true)"
-                        @blur="updateValueColumn(column)"
+                        @blur="updateValueColumn(column, index)"
                         class="small-input"
                       />
 
@@ -288,12 +289,9 @@
                      </div>
                       <span
                         class="resize-handle"
-                        :id="`resize-handle-${column.key}`"
-                        @pointerdown="startResize($event, column)"
+                        :id="`resize-handle-${column.key}-${index}`"
+                        @pointerdown="startResize($event, column, index)"
                       >
-                        <v-icon color="grey" style="cursor: grab"
-                          >mdi-drag</v-icon
-                        >
                       </span>
                     </div>
                   </th>
@@ -466,9 +464,9 @@
                               </v-icon>
                               <span
                                 class="resize-handle"
-                                @pointerdown="startResize($event, column)"
+                                :id="`resize-handle-${column.key}-${index}`"
+                                @pointerdown="startResize($event, column, index)"
                               >
-                                <v-icon size="12">mdi-drag</v-icon>
                               </span>
                             </div>
                             <div v-else>
@@ -591,6 +589,20 @@
                 </v-card>
               </td>
             </template>
+            <template #[`footer.prepend`]>
+              <v-btn
+                size="small"
+                color="primary"
+                variant="flat"
+                rounded="lg"
+                @click="openAddTaskDialogForStatus(group.status, currentCategoryId)"
+                class="add-status-task-btn"
+              >
+                <v-icon size="16" class="mr-1">mdi-plus-circle-outline</v-icon>
+                Add Task
+              </v-btn>
+              <v-spacer></v-spacer>
+            </template>
           </v-data-table>
         </v-expansion-panel-text>
       </v-expansion-panel>
@@ -607,6 +619,8 @@
 
     <TasksAddTask
       v-model="drawerOpen"
+      :preSelectedStatus="selectedStatusForNewTask"
+      :preSelectedCategory="selectedCategoryForNewTask"
       @close="drawerOpen = false"
       @success="updateTasks"
     />
@@ -650,6 +664,10 @@ const {
   users: Array,
   categories: Array,
   clearSelection: Boolean,
+    currentCategoryId: {  // ← ADD THIS NEW PROP
+    type: Number,
+    default: null,
+  },
 });
 watch(
   () => clearSelection,
@@ -720,14 +738,14 @@ const getRandomHexColor = (name) => {
   const index = firstChar.charCodeAt(0) - 65;
   return index >= 0 && index < 26 ? colors[index] : "#999999";
 };
-const showHandles = (key) => {
-  const handle = document.getElementById("resize-handle-" + key);
+const showHandles = (key, i) => {
+  const handle = document.getElementById(`resize-handle-${key}-${i}`);
   if (handle) {
     handle.style.display = "block";
   }
 };
-const hideHandles = (key) => {
-  const handle = document.getElementById("resize-handle-" + key);
+const hideHandles = (key, i) => {
+  const handle = document.getElementById(`resize-handle-${key}-${i}`);
   if (handle) {
     handle.style.display = "none";
   }
@@ -751,19 +769,27 @@ const openedPanels = ref([0]);
 const dialogOpen = ref(false);
 const taskPoolDialog = ref(false);
 const isAllSelected = ref(false);
+const selectedStatusForNewTask = ref(null);
+const selectedCategoryForNewTask = ref(null);
+
+const openAddTaskDialog = () => {
+  selectedStatusForNewTask.value = null;
+  selectedCategoryForNewTask.value = null;
+  drawerOpen.value = true;
+};
 const tasksForCalender = ref([]);
 const bulkTaskUploadDialog = ref(false);
 const rolesList = ref([]);
 const isResizing = ref(false);
-const editingColumn = ref(null)
+const editingColumn = ref({})
 
-const enableEditing = (column) => {
-  editingColumn.value = column.key
+const enableEditing = (column, index) => {
+  editingColumn.value[`${index}-${column.key}`] = true;
   setFocus('header', column.key, true)
 }
 
-const isEditing = (column) => {
-  return editingColumn.value === column.key
+const isEditing = (column, index) => {
+  return editingColumn.value[`${index}-${column.key}`] === true
 }
 const getRoles = () => {
   mainStore
@@ -819,7 +845,7 @@ const calenderDate = (data) => {
 };
 const getTaskUsers = (task) => {
   if (users) {
-    return users.filter((x) => x.roleId !== task.taskDetails.roleId);
+    return users.filter((x) => x.roleId !== task.taskDetails.roleId && x.status === "Active");
   } else return [];
 };
 const updateTasks = () => {
@@ -848,7 +874,18 @@ const getColor = (key) => {
   }
 };
 const formattedDate = (date) => {
-  return parsedDate(date);
+  if (!date) return '';
+  
+  try {
+    const dateObj = new Date(date);
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const year = dateObj.getFullYear();
+    
+    return `${day}/${month}/${year}`;
+  } catch (error) {
+    return '';
+  }
 };
 const setFocus = (id, key, state) => {
   focusedField.value[`${id}-${key}`] = state;
@@ -944,7 +981,7 @@ const updateUserPreferences = async () => {
 };
 
 const updateValueColumn = (column) => {
-  editingColumn.value = null
+  editingColumn.value = {}
   setFocus("header", column.key, false);
 };
 const updateSubtaskValueColumn = (column) => {
@@ -1029,7 +1066,7 @@ let startX = 0;
 let startWidth = 0;
 let currentCol = null;
 
-function startResize(e, col) {
+function startResize(e, col, i) {
   e.stopPropagation(); // ✅ Block draggable from detecting drag
   e.preventDefault();
 
@@ -1037,10 +1074,17 @@ function startResize(e, col) {
   currentCol = col;
   startX = e.clientX;
   startWidth = col.width;
+  const handleEl = document.getElementById(`resize-handle-${col.key}-${i}`) || e.target;
 
-  e.target.setPointerCapture(e.pointerId);
-  e.target.addEventListener("pointermove", resizeColumn);
-  e.target.addEventListener("pointerup", stopResize);
+  // use pointer capture on the actual handle if available
+  try {
+    handleEl.setPointerCapture && handleEl.setPointerCapture(e.pointerId);
+  } catch (err) {
+    // some elements might not support pointer capture; ignore
+  }
+
+  handleEl.addEventListener("pointermove", resizeColumn);
+  handleEl.addEventListener("pointerup", stopResize);
 }
 
 function resizeColumn(e) {
@@ -1051,11 +1095,35 @@ function resizeColumn(e) {
 
 function stopResize(e) {
   isResizing.value = false;
-  e.target.releasePointerCapture(e.pointerId);
-  e.target.removeEventListener("pointermove", resizeColumn);
-  e.target.removeEventListener("pointerup", stopResize);
-  currentCol = null;
+
+  let handleEl;
+
+  // When using pointer capture, e.target may not be the handle.
+  // So we look for the handle based on the column + panelIndex
+  // which we stored temporarily on the event during startResize.
+  if (e.currentTarget) {
+    handleEl = e.currentTarget;
+  } else {
+    // Safety fallback (rarely triggered)
+    handleEl = e.target;
+  }
+
+  // Remove listeners cleanly
+  handleEl.removeEventListener("pointermove", resizeColumn);
+  handleEl.removeEventListener("pointerup", stopResize);
+
+  // Release pointer capture if active
+  try {
+    if (e.pointerId) {
+      handleEl.releasePointerCapture &&
+        handleEl.releasePointerCapture(e.pointerId);
+    }
+  } catch (err) {
+    // ignore capture release errors
+  }
+  currentCol = null
 }
+
 
 const updateHeaderTitle = (key, value) => {
   const target = selectedHeaders.value.find((col) => col.key === key);
@@ -1101,6 +1169,13 @@ function onFiltersUpdated(newFilters) {
 
 const onSelectionChange = (newSelected) => {
   emit("updateSelectedRowItems", selectedTasks.value);
+};
+
+const openAddTaskDialogForStatus = (status, categoryId) => {
+  // Store both the selected status and the currently selected category
+  selectedStatusForNewTask.value = status;
+  selectedCategoryForNewTask.value = categoryId;
+  drawerOpen.value = true;
 };
 </script>
 
@@ -1167,15 +1242,20 @@ th {
   align-items: center;
   justify-content: space-between;
   position: relative;
+  cursor: grab;
+}
+
+.resizable-table .th-content:active {
+  cursor: grabbing;
 }
 
 .resize-handle {
-  width: 8px;
+  width: 10px;
   cursor: col-resize;
   height: 70%;
   display: none;
   position: absolute;
-  right: -5px;
+  right: -12px;
   z-index: 99999;
   top: 0px;
   user-select: none;

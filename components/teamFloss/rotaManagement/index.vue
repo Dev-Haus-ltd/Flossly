@@ -2,11 +2,7 @@
   <!-- <TeamFlossRotaManagement/> -->
   <div>
     <div class="cust-border d-flex align-center">
-      <p
-        class="mr-1"
-        @click="home()"
-         :style="breadcrumbStyle"
-      >
+      <p class="mr-1" @click="home()" :style="breadcrumbStyle">
         Rota management
       </p>
       <p v-if="selectedRota">
@@ -19,38 +15,17 @@
     <div class="pa-5 bg-white" v-if="activeComponent === 1">
       <v-row>
         <v-col v-for="(item, idx) in data" :key="idx" cols="12" md="3">
-          <CommonStatCard
-            :icon="item.icon"
-            :label="item.title"
-            :value="item.count"
-            :uid="idx"
-            hide-chip
-          />
+          <CommonStatCard :icon="item.icon" :label="item.title" :value="item.count" :uid="idx" hide-chip />
         </v-col>
       </v-row>
-      <TeamFlossRotaManagementRotaListing
-        v-if="activeComponent === 1"
-        @changeComponent="changecomponent"
-        @onChangeStatus="changeRotaStatus"
-        @getAllShifts="getAllShifts"
-        :rotaList="rotas"
-      />
+      <TeamFlossRotaManagementRotaListing v-if="activeComponent === 1" @changeComponent="changecomponent"
+        @onChangeStatus="changeRotaStatus" @getAllShifts="getAllShifts" :rotaList="rotas" />
     </div>
-    <TeamFlossRotaManagementAddRota
-      v-if="activeComponent === 2"
-      @onAddRota="onAddRotaHandle"
-    />
+    <TeamFlossRotaManagementAddRota v-if="activeComponent === 2" @onAddRota="onAddRotaHandle" />
 
-    <TeamFlossRotaManagementShifts
-      v-if="activeComponent === 3"
-      :shifts="shifts"
-      :users="rotaUsers"
-      :rota="selectedRota"
-      @onChangeStatus="changeRotaStatus"
-      @onUpdate="getAllShifts"
-      @onFilterUsers="filterUsers"
-      @onAddUser="getRotaUsers"
-    />
+    <TeamFlossRotaManagementShifts v-if="activeComponent === 3" :shifts="shifts" :users="rotaUsers" :rota="selectedRota"
+      @onChangeStatus="changeRotaStatus" @onUpdate="getAllShifts" @onFilterUsers="filterUsers"
+      @onAddUser="getRotaUsers" />
   </div>
 </template>
 <script setup>
@@ -67,8 +42,13 @@ const allShifts = ref([]);
 const activeComponent = ref(1);
 const selectedRota = ref(null);
 const { isManager } = useUser();
+const user = ref({})
 onMounted(() => {
+  if (localStorage.getItem('user')) {
+    user.value = JSON.parse(localStorage.getItem('user'))
+  }
   getRotas();
+
 });
 const totalCount = computed(() => rotas.value.length);
 const publishedCount = computed(
@@ -104,7 +84,7 @@ watch(activeComponent, (newVal) => {
 const getRotas = async () => {
   let res;
 
-  if (isManager.value) {
+  if (user.value.roleId === 1 || user.value.roleId === 8) {
     res = await rotaStore.getRotas();
   } else {
     res = await rotaStore.getUserRotas();
@@ -130,8 +110,7 @@ const changeRotaStatus = async (data) => {
         type: "success",
         title:
           res?.message ||
-          `Rota ${
-            data.type === "publish" ? "published" : "unpublished"
+          `Rota ${data.type === "publish" ? "published" : "unpublished"
           } successfully`,
       });
       activeComponent.value = 1;
@@ -221,6 +200,7 @@ const home = () => {
   padding: 17px;
   background-color: white;
 }
+
 .cust-border p {
   font-size: 12px;
   color: #c3c3c3;

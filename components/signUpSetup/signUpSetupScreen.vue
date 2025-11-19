@@ -23,7 +23,10 @@
         </div>
         
         <!-- Form Content -->
-        <sign-up-setup @update:current-step="currentStep = $event" />
+        <sign-up-setup 
+          @update:current-step="currentStep = $event"
+          @go-to-initial-screen="isInitScreen = true"
+        />
       </v-col>
     </v-row>
   </div>
@@ -38,6 +41,14 @@ const currentStep = ref(0);
 </script>
 
 <style scoped>
+.init-screen {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+}
+
 .parent {
   position: relative;
   height: 100vh;
@@ -52,6 +63,7 @@ const currentStep = ref(0);
   padding-left: 48px;
   padding-right: 48px;
   padding-top: 48px;
+  position: relative;
 }
 
 /* Mobile view adjustments */

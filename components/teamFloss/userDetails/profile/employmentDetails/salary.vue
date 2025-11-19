@@ -69,7 +69,7 @@
                 <v-text-field
                   v-bind="props"
                   :model-value="
-                    parsedDate(data.paymentStartDate) || 'Not specified'
+                    formatDateDDMMYYYY(data.paymentStartDate) || 'Not specified'
                   "
                   placeholder="Not specified"
                   class="no-pad-textfield"
@@ -97,7 +97,7 @@
 
 <script setup>
 import { ref } from "vue";
-import { parsedDate } from "~/lib/dateFormatter";
+import { formatDateDDMMYYYY } from "~/lib/dateFormatter";
 const menu = ref(false);
 
 const props = defineProps({

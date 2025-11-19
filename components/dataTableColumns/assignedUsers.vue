@@ -14,16 +14,14 @@
     </div>
 
     <!-- Plus button trigger -->
-    <div>
-      <v-btn
-        icon
-        size="18"
-        style="background-color: black; color: white"
-        @mouseenter="onTriggerEnter($event, 'plus')"
-        @mouseleave="onTriggerLeave"
-      >
-        <v-icon size="16">mdi-plus</v-icon>
-      </v-btn>
+    <div
+      class="plus-trigger d-flex align-center justify-center"
+      @mouseenter="onTriggerEnter($event, 'plus')"
+      @mouseleave="onTriggerLeave"
+    >
+      <div class="circle-add">
+        <v-icon size="14" color="white">mdi-plus</v-icon>
+      </div>
     </div>
 
     <!-- Single shared menu, positioned using :activator -->
@@ -33,7 +31,9 @@
       location="bottom"
       transition="scale-transition"
       :close-on-content-click="false"
+      :close-on-click="false"
       max-width="320"
+      offset="4"
     >
       <!-- menu content -->
       <v-card
@@ -42,7 +42,8 @@
         :elevation="0"
         flat
         @mouseenter="cancelClose"   
-        @mouseleave="onTriggerLeave" 
+        @mouseleave="onTriggerLeave"
+        style="pointer-events: auto;"
       >
         <template v-if="hoveredItem && hoveredItem !== 'plus'">
           <div class="d-flex flex-wrap mb-3">
@@ -125,8 +126,8 @@ const hoveredItem = ref(null); // either a user object or 'plus'
 // timers to prevent flicker and to close/reopen safely
 let openTimeout = null;
 let closeTimeout = null;
-const OPEN_REOPEN_DELAY = 0; // ms — when switching activator
-const CLOSE_DELAY = 0; // ms — delay before actually closing menu
+const OPEN_REOPEN_DELAY = 50; // ms — when switching activator
+const CLOSE_DELAY = 200; // ms — delay before actually closing menu (prevents flickering)
 
 const search = ref("");
 
@@ -134,6 +135,7 @@ const search = ref("");
 const onTriggerEnter = (event, item) => {
   // stop any scheduled close
   clearTimeout(closeTimeout);
+  clearTimeout(openTimeout);
 
   const el = event.currentTarget;
   hoveredItem.value = item;
@@ -141,15 +143,17 @@ const onTriggerEnter = (event, item) => {
   // if menu already open and activator is different -> force reopen to reposition
   if (menu.value && currentActivator.value !== el) {
     menu.value = false; // close first so Vuetify can rebind activator
-    clearTimeout(openTimeout);
     openTimeout = setTimeout(() => {
       currentActivator.value = el;
       menu.value = true;
     }, OPEN_REOPEN_DELAY);
-  } else {
-    // normal open
+  } else if (!menu.value) {
+    // normal open - only if menu is not already open
     currentActivator.value = el;
     menu.value = true;
+  } else {
+    // menu is already open with same activator, just update hovered item
+    currentActivator.value = el;
   }
 };
 
@@ -167,6 +171,11 @@ const onTriggerLeave = () => {
 // called when mouse enters the menu itself — cancel any scheduled close
 const cancelClose = () => {
   clearTimeout(closeTimeout);
+  clearTimeout(openTimeout);
+  // Keep menu open when hovering over it
+  if (!menu.value) {
+    menu.value = true;
+  }
 };
 
 const filteredSuggestions = computed(() => {
@@ -174,7 +183,7 @@ const filteredSuggestions = computed(() => {
   const assignedIds = props.assignedUsers.map((u) => u?.id);
   return props.allUsers.filter((u) => {
     const matchText = `${u.fullName} ${u.role?.title || ""}`.toLowerCase();
-    return !assignedIds.includes(u.id) && matchText.includes(q);
+    return !assignedIds.includes(u.id) && matchText.includes(q) && u.status === "Active";
   });
 });
 
@@ -201,5 +210,21 @@ const selectUser = (user) => {
 /* make trigger elements inline-block so event.currentTarget is that wrapper */
 .avatar-trigger {
   display: inline-block;
+}
+
+.plus-trigger {
+  display: inline-block;
+  padding: 2px; /* Add small padding to increase hover area */
+}
+
+.circle-add {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: hsla(183, 24%, 17%, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 </style>

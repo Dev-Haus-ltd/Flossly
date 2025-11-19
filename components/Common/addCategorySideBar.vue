@@ -1,6 +1,8 @@
+<!-- CommonAddCategorySideBar.vue -->
 <template>
   <v-navigation-drawer
     :model-value="modelValue"
+    @update:model-value="handleModelValueUpdate"
     location="right"
     temporary
     :width="600"
@@ -50,6 +52,7 @@
                 flat
               />
             </v-col>
+
             <v-col cols="12">
               <label class="mb-1 fld-lbl">Description</label>
               <v-text-field
@@ -61,6 +64,7 @@
                 flat
               />
             </v-col>
+
             <v-col cols="12">
               <label class="mb-1 fld-lbl">Parent Category</label>
               <v-select
@@ -73,12 +77,13 @@
                 class="mb-1 input-bordered"
                 bg-color="white"
                 flat
+                clearable
               />
             </v-col>
+
             <v-col cols="12">
-              <label class="mb-1 fld-lbl"> Color </label>
+              <label class="mb-1 fld-lbl">Color</label>
               <v-text-field
-              
                 density="compact"
                 variant="solo"
                 hide-details
@@ -94,6 +99,7 @@
         </v-form>
       </v-card>
     </div>
+
     <div
       class="d-flex justify-space-between align-center px-4 py-2"
       style="background-color: white; height: 64px"
@@ -126,28 +132,35 @@ const { modelValue, categories } = defineProps({
   modelValue: Boolean,
   categories: Array,
 });
+
 const mainStore = useMainStore();
 const taskStore = useTaskStore();
 const mainCategories = ref([]);
 const formRef = ref(null);
-const emit = defineEmits(["close", "success"]);
+
+const emit = defineEmits(["close", "success", "update:modelValue"]);
 const requiredRule = [(v) => !!v || "This field is required"];
+
 const form = ref({
   name: "",
   description: "",
   parentId: null,
   color: "",
 });
+
 const modelValueRef = toRef(() => modelValue);
+
 watch(
   modelValueRef,
   (newValue) => {
     if (newValue) {
-      mainCategories.value = categories.filter((x) => !x.parentId);
+      mainCategories.value = categories?.filter((x) => !x.parentId) || [];
+      resetForm();
     }
   },
   { immediate: true }
 );
+
 const onSubmit = async () => {
   const formValidation = await formRef.value.validate();
   if (formValidation.valid) {
@@ -155,72 +168,84 @@ const onSubmit = async () => {
       .addCategory(form.value)
       .then((res) => {
         if (res.code === 0) {
-          form.value = {
-            name: "",
-            description: "",
-            parentId: null,
-            color: "",
-          };
-          //set snack
+          // Extract the newly created category from API response
+          const newCategory = res.data.category;
+
+          // Emit the new category data to parent component
+          emit("success", newCategory);
+
+          // Reset form
+          resetForm();
+
+          // Close drawer
+          emit("update:modelValue", false);
           emit("close");
+
+          // Show success message
+          mainStore.setSnackbar({
+            type: "success",
+            title: "Category created successfully",
+          });
         } else {
           mainStore.setSnackbar({
-    type: 'Error',
-    title: res.data.message || res.data,
-  });
+            type: "error",
+            title: res.data?.message || res.message || "Failed to create category",
+          });
         }
       })
       .catch((err) => {
-        return err;
+        mainStore.setSnackbar({
+          type: "error",
+          title: err.message || "An error occurred while creating category",
+        });
       });
   }
 };
-const onClose = () => {
+
+const resetForm = () => {
   form.value = {
     name: "",
     description: "",
     parentId: null,
     color: "",
   };
-  emit("close");
+  if (formRef.value) {
+    formRef.value.reset();
+    formRef.value.resetValidation();
+  }
 };
-const setSnack = (type, title) => {
-  mainStore.setSnackbar({
-    type,
-    title,
-  });
+
+const handleModelValueUpdate = (value) => {
+  if (!value && modelValue) {
+    resetForm();
+    emit("close");
+  }
+  emit("update:modelValue", value);
+};
+
+const onClose = () => {
+  emit("update:modelValue", false);
 };
 </script>
+
 <style scoped>
 .title-text {
-  
   font-weight: 600;
   font-size: 16px;
 }
+
 .fld-lbl {
-  
   font-weight: 400;
   font-style: "Regular";
   font-size: 14px;
-
   color: #737373;
 }
+
 .input-bordered :deep(.v-field) {
   border: 1px solid #dfdfdf !important;
   border-radius: 8px !important;
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  
-}
-.checklist {
-  
-  font-weight: 600;
-  font-size: 16px;
-  background-color: #f6f7fb;
-}
-.add-qs-btn {
-  border: 1px solid #dfdfdf;
-  height: 52px;
 }
 </style>

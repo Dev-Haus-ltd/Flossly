@@ -1,5 +1,6 @@
 import { transporter } from "./nodeMailer";
 import { template } from "./emailTemplate";
+import { buildLeadContext, renderTokens } from './tokenRenderer.js'
 const config = useRuntimeConfig();
 
 /** These notifications are configured */
@@ -19,6 +20,9 @@ export const paymentSuccessNotification = async (data) => {
           <br/>
           <p>Best regards,<br/>The Flossly Team</p>`;
   const subject = "Welcome to Flossly – Subscription Confirmed";
+  const html = template
+  .replaceAll("{subject}", subject)
+  .replace("{content}", content);
 
   await transporter.sendMail({
     from: "Flossly <helloflossly@gmail.com>",
@@ -278,6 +282,35 @@ export const sendInvitationEmail = async (data) => {
     subject,
     html,
   });
+};
+
+// CRM: bulk-send email to leads using a provided HTML body.
+// Performs light-weight placeholder replacement and wraps with the app template.
+// Placeholders supported:
+// - [Patient Name], [First Name], [Your Name]
+export const sendLeadBulkEmail = async ({ leads = [], subject, html, from, senderName }) => {
+  if (!Array.isArray(leads) || !leads.length) return { sent: 0 };
+  const fromAddress = from || process.env.MAIL_FROM || "helloflossly@gmail.com";
+
+  let sent = 0;
+  for (const lead of leads) {
+    if (!lead?.email) continue;
+    const ctx = buildLeadContext({ lead, userName: senderName || 'Team' })
+    const renderedSubject = renderTokens(subject || '', ctx)
+    const content = renderTokens(html || '', ctx)
+
+    try {
+      const wrapped = template
+        .replaceAll("{subject}", renderedSubject || "")
+        .replace("{content}", content);
+      await transporter.sendMail({ to: lead.email, from: fromAddress, subject: renderedSubject, html: wrapped });
+      sent++;
+    } catch (e) {
+      // swallow and continue with others
+    }
+  }
+
+  return { sent };
 };
 
 /** These notifications are pending */

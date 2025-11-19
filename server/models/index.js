@@ -1,5 +1,6 @@
 ﻿import { DefaultPriority } from "./defaultPriorities";
 import { DefaultStatus } from "./defaultStatuses";
+import { DictionaryScript } from "./dictionaryScripts";
 import { OrganisationPriority } from "./organisations/organisationPriorities";
 import { Organisation } from "./organisations/organisations";
 import { OrganisationStatus } from "./organisations/organisationStatuses";
@@ -44,10 +45,18 @@ import { Course } from "./cpd/course";
 import { CourseQuestionaire } from "./cpd/courseQuestionaire";
 import { UserCourseHistory } from "./cpd/userCourseHistory";
 import { OrganisationPeople } from "./organisations/organisationPeople";
+import { OrganisationScript } from "./organisations/organisationScripts";
 import { MetaPage } from "./crm/metaPages";
 import { CrmLead } from "./crm/leads";
 import { MetaUserToken } from "./crm/metaUserTokens";
 import { ChatbotConfig } from "./crm/chatbotConfig";
+// Diary
+import { DiaryTreatment } from "./diary/treatments";
+import { DiaryPatient } from "./diary/patients";
+import { DiaryAppointment } from "./diary/appointments";
+import { DiaryNote } from "./diary/notes";
+// Organisation dictionary
+import { OrganisationTreatment } from "./organisations/organisationTreatments";
 import { CrmLeadTreatment } from "./crm/leadTreatments";
 import { CrmLeadNote } from "./crm/leadNotes";
 import { CrmOption } from "./crm/options";
@@ -187,10 +196,32 @@ Rota.hasMany(RotaShift, { foreignKey: "rotaId", as: "shifts" });
 RotaUser.belongsTo(Rota, { foreignKey: "rotaId", as: "rota" });
 RotaUser.belongsTo(User, { foreignKey: "userId", as: "user" });
 RotaUser.hasMany(RotaShift, { foreignKey: "rotaUserId", as: "shifts" });
+RotaUser.belongsTo(Role, {
+  foreignKey: "tempUserRoleId",
+  as: "role",
+});
+
 
 RotaShift.belongsTo(Rota, { foreignKey: "rotaId", as: "rota" });
 RotaShift.belongsTo(RotaUser, { foreignKey: "rotaUserId", as: "rotaUser" });
 RotaShift.belongsTo(User, { foreignKey: "userId", as: "user" });
+
+// Diary associations
+DiaryPatient.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
+DiaryPatient.hasMany(DiaryAppointment, { foreignKey: 'patientId', as: 'appointments' })
+
+DiaryAppointment.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
+DiaryAppointment.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient' })
+DiaryAppointment.belongsTo(User, { foreignKey: 'dentistId', as: 'dentist' })
+DiaryAppointment.belongsTo(DiaryTreatment, { foreignKey: 'treatmentId', as: 'treatment' })
+
+// Diary notes associations
+DiaryNote.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
+DiaryNote.belongsTo(User, { foreignKey: 'dentistId', as: 'dentist' })
+User.hasMany(DiaryNote, { foreignKey: 'dentistId', as: 'diaryNotes' })
+
+// Org Treatment associations
+OrganisationTreatment.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
 
 // Orgnisation Contacts
 Organisation.hasMany(OrganisationContact, {
@@ -464,6 +495,20 @@ User.hasMany(UserCourseHistory, {
 User.hasMany(UserHrDocument, { foreignKey: "userId", as: "hrDocuments" });
 UserHrDocument.belongsTo(User, { foreignKey: "userId", as: "user" });
 
+// Organisation Scripts associations
+Organisation.hasMany(OrganisationScript, {
+  foreignKey: "organisationId",
+  as: "scripts",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+OrganisationScript.belongsTo(Organisation, {
+  foreignKey: "organisationId",
+  as: "organisation",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+
 
 export {
   User,
@@ -522,4 +567,12 @@ export {
   CrmAutomationTemplate,
   MetaUserToken,
   ChatbotConfig,
+  // Diary
+  DiaryTreatment,
+  DiaryPatient,
+  DiaryAppointment,
+  DiaryNote,
+  OrganisationTreatment,
+  DictionaryScript,
+  OrganisationScript,
 };

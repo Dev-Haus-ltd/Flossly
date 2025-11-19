@@ -19,7 +19,7 @@
               </div>
               <div class="text ml-2 ml-sm-3 ml-md-4">
                 <div class="step-title text-caption">Step 1</div>
-                <div class="step-subtitle text-caption text-sm-body-2 text-md-body-1 text-lg-body-1" :class="{ 'font-weight-medium': activeStep === 0 }">Clinic Setup</div>
+                <div class="step-subtitle text-caption text-sm-body-2 text-md-body-1 text-lg-body-1" :class="{ 'font-weight-bold': activeStep === 0, 'font-weight-regular': activeStep !== 0 }">Clinic Setup</div>
               </div>
             </div>
           </div>
@@ -35,7 +35,7 @@
               </div>
               <div class="text ml-2 ml-sm-3 ml-md-4">
                 <div class="step-title text-caption">Step 2</div>
-                <div class="step-subtitle text-caption text-sm-body-2 text-md-body-1 text-lg-body-1" :class="{ 'font-weight-medium': activeStep === 1 }">Add Team Members</div>
+                <div class="step-subtitle text-caption text-sm-body-2 text-md-body-1 text-lg-body-1" :class="{ 'font-weight-bold': activeStep === 1, 'font-weight-regular': activeStep !== 1 }">Add Team Members</div>
               </div>
             </div>
           </div>
@@ -51,7 +51,7 @@
               </div>
               <div class="text ml-2 ml-sm-3 ml-md-4">
                 <div class="step-title text-caption">Step 3</div>
-                <div class="step-subtitle text-caption text-sm-body-2 text-md-body-1 text-lg-body-1" :class="{ 'font-weight-medium': activeStep === 2 }">Pricing</div>
+                <div class="step-subtitle text-caption text-sm-body-2 text-md-body-1 text-lg-body-1" :class="{ 'font-weight-bold': activeStep === 2, 'font-weight-regular': activeStep !== 2 }">Pricing</div>
               </div>
             </div>
           </div>
@@ -67,7 +67,7 @@
               </div>
               <div class="text ml-2 ml-sm-3 ml-md-4">
                 <div class="step-title text-caption">Step 4</div>
-                <div class="step-subtitle text-caption text-sm-body-2 text-md-body-1 text-lg-body-1" :class="{ 'font-weight-medium': activeStep === 3 }">Dashboard Tour</div>
+                <div class="step-subtitle text-caption text-sm-body-2 text-md-body-1 text-lg-body-1" :class="{ 'font-weight-bold': activeStep === 3, 'font-weight-regular': activeStep !== 3 }">Dashboard Tour</div>
               </div>
             </div>
           </div>

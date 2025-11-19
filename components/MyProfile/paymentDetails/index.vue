@@ -66,18 +66,29 @@
 </template>
 
 <script setup>
+import { ref, watch } from 'vue';
+
 const emit = defineEmits(["update"]);
 const authStore = useAuthStore();
-const mainStore =useMainStore();
+const mainStore = useMainStore();
+
 const { bankDetails } = defineProps({
   bankDetails: Object
-})
+});
 
-const bankInfo = ref({...bankDetails} || {})
+const bankInfo = ref({...bankDetails} || {});
+
+// Watch for prop changes and update local copy
+watch(() => bankDetails, (newVal) => {
+  if (newVal) {
+    bankInfo.value = {...newVal};
+  }
+}, { deep: true });
+
 function logValue(e, key) {
   bankInfo.value[key] = e.target.innerText.trim();
-  console.log(bankInfo.value)
-  emit("update", bankDetails);
+  // Emit the updated bankInfo, not the old bankDetails
+  emit("update", bankInfo.value);
 }
 
 const updateProfile = () => {
@@ -85,25 +96,26 @@ const updateProfile = () => {
     .updateAccountDetails(bankInfo.value)
     .then((res) => {
       if (res.code === 0) {
+        // Update parent prop after successful API call
+        emit("update", bankInfo.value);
         mainStore.setSnackbar({
           title: res?.data?.message || "Account details updated successfully",
           type: "success",
-        })
+        });
       } else {
         mainStore.setSnackbar({
           title: res?.data?.message || res?.message || "Failed to update account details",
           type: "error",
-        })
+        });
       }
     })
     .catch((err) => {
       mainStore.setSnackbar({
         title: err?.message || "Something went wrong",
         type: "error",
-      })
-    })
-}
-
+      });
+    });
+};
 </script>
 
 <style scoped>

@@ -39,9 +39,8 @@ export const Task = sequelize.define(
         "Weekly",
         "Fortnightly",
         "Monthly",
-        "Annualy",
         "6 Monthly",
-        "Every 24 Months"
+        "Yearly"
       ),
       allowNull: true,
     },

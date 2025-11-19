@@ -24,6 +24,7 @@
     <TeamFlossSideBarAddNewstaff
     v-if="loggedIn"
       v-model="addStaffDrawer"
+      :rolesList="rolesList"
       @close="addStaffDrawer = false"
       @success="updateTeams"
     />
@@ -39,11 +40,14 @@ const loggedIn = computed(() => isAuthenticated());
 const bus = useBus();
 const drawerOpen = ref(false);
 const addStaffDrawer = ref(false);
+const mainStore = useMainStore();
+const rolesList = ref([]);
 
 const route = useRoute();
 
 const showFloatingButtons = computed(() => {
-  return loggedIn.value && route.name !== "onboarding";
+  const excludedRoutes = ["onboarding", "login", "signup"];
+  return loggedIn.value && !excludedRoutes.includes(route.name);
 });
 
 const handleCreateTask = () => {
@@ -84,6 +88,31 @@ const openCall = () => {
 const openEmail = () => {
   console.log("Open email support dialog");
 };
+
+const getRoles = () => {
+  mainStore
+    .getRoles()
+    .then((res) => {
+      if (res.code === 0 && res.data) {
+        rolesList.value = res.data;
+      }
+    })
+    .catch((err) => {
+      return err;
+    });
+};
+
+onMounted(() => {
+  if (loggedIn.value) {
+    getRoles();
+  }
+});
+
+watch(loggedIn, (newVal) => {
+  if (newVal && rolesList.value.length === 0) {
+    getRoles();
+  }
+});
 </script>
 
 <style lang="scss">

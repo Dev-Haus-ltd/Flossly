@@ -248,6 +248,8 @@
                     class="mb-1 input-bordered"
                     flat
                     readonly
+                    :error="dobError"
+                    :error-messages="dobError ? 'Date of birth cannot be in the future' : ''"
                   >
                     <template #append-inner>
                       <v-icon
@@ -260,6 +262,7 @@
                 </template>
                 <v-date-picker
                   v-model="form.dob"
+                  :max="maxDobDate"
                   @update:modelValue="onDobSelected"
                 />
               </v-menu>
@@ -337,6 +340,8 @@
 </template>
 
 <script setup>
+import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
+
 const crmStore = useCrmStore();
 const props = defineProps({
   modelValue: Boolean,
@@ -380,20 +385,30 @@ const contactMethods = ["Email", "Phone", "SMS", "In-Person"];
 const inquiryMenu = ref(false);
 const followUpMenu = ref(false);
 const dobMenu = ref(false);
+const dobError = ref(false);
+
+// Maximum date for date of birth (today)
+const maxDobDate = computed(() => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+});
 
 // formatted date helpers
 const formattedInquiryDate = computed(() =>
   form.value.inquiryDate
-    ? new Date(form.value.inquiryDate).toLocaleDateString()
+    ? formatDateDDMMYYYY(form.value.inquiryDate)
     : ""
 );
 const formattedFollowUpDate = computed(() =>
   form.value.followUpDate
-    ? new Date(form.value.followUpDate).toLocaleDateString()
+    ? formatDateDDMMYYYY(form.value.followUpDate)
     : ""
 );
 const formattedDob = computed(() =>
-  form.value.dob ? new Date(form.value.dob).toLocaleDateString() : ""
+  form.value.dob ? formatDateDDMMYYYY(form.value.dob) : ""
 );
 
 const onInquiryDateSelected = (val) => {
@@ -405,7 +420,27 @@ const onFollowUpDateSelected = (val) => {
   followUpMenu.value = false;
 };
 const onDobSelected = (val) => {
-  form.value.dob = val;
+  if (val) {
+    const selectedDate = new Date(val);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    selectedDate.setHours(0, 0, 0, 0);
+    
+    if (selectedDate > today) {
+      dobError.value = true;
+      form.value.dob = null;
+      mainStore.setSnackbar({
+        title: "Date of birth cannot be in the future",
+        type: "error",
+      });
+    } else {
+      dobError.value = false;
+      form.value.dob = val;
+    }
+  } else {
+    dobError.value = false;
+    form.value.dob = null;
+  }
   dobMenu.value = false;
 };
 
@@ -433,6 +468,8 @@ const resetForm = () => {
   if (formRef.value) {
     formRef.value.resetValidation();
   }
+  // Reset date of birth error
+  dobError.value = false;
   // Close date picker menus
   inquiryMenu.value = false;
   followUpMenu.value = false;
@@ -462,8 +499,25 @@ watch(() => props.modelValue, (newValue) => {
 });
 
 const onSubmit = async () => {
+  // Validate date of birth before form submission
+  if (form.value.dob) {
+    const selectedDate = new Date(form.value.dob);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    selectedDate.setHours(0, 0, 0, 0);
+    
+    if (selectedDate > today) {
+      dobError.value = true;
+      mainStore.setSnackbar({
+        title: "Date of birth cannot be in the future",
+        type: "error",
+      });
+      return;
+    }
+  }
+  
   const validation = await formRef.value.validate();
-  if (!validation.valid) return;
+  if (!validation.valid || dobError.value) return;
   try {
     saving.value = true
     const payload = { ...form.value };

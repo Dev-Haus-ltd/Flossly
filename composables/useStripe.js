@@ -36,12 +36,120 @@ export const useStripe = () => {
 
   const mountPaymentElement = async (clientSecret) => {
     const stripe = await stripePromise;
-    elementsRef.value = stripe.elements({ clientSecret });
+    elementsRef.value = stripe.elements({ 
+      clientSecret,
+      appearance: {
+        theme: 'stripe',
+        variables: {
+          colorText: '#1e1e1e',
+          colorDanger: '#d32f2f',
+          fontFamily: '"Inter", sans-serif',
+          fontSizeBase: '14px',
+          spacingUnit: '4px',
+        },
+        rules: {
+          '.Input': {
+            fontSize: '14px',
+            fontFamily: '"Inter", sans-serif',
+          },
+          '.Input--invalid': {
+            color: '#F44336',
+            fontSize: '14px',
+            fontFamily: '"Inter", sans-serif',
+          },
+          '.Error': {
+            color: '#F44336',
+            fontSize: '14px',
+            fontFamily: '"Inter", sans-serif',
+            fontWeight: '400',
+            lineHeight: '1.4',
+          },
+          '.ErrorMessage': {
+            color: '#F44336',
+            fontSize: '14px',
+            fontFamily: '"Inter", sans-serif',
+            fontWeight: '400',
+            lineHeight: '1.4',
+          },
+          '.InputError': {
+            color: '#F44336',
+            fontSize: '14px',
+            fontFamily: '"Inter", sans-serif',
+            fontWeight: '400',
+            lineHeight: '1.4',
+          },
+          '.Label': {
+            fontSize: '14px',
+            fontFamily: '"Inter", sans-serif',
+          },
+        }
+      }
+    });
     const paymentEl = elementsRef.value.create("payment");
     const mountNode = document.getElementById("payment-element");
     if (mountNode) {
       mountNode.innerHTML = "";
       paymentEl.mount(mountNode);
+      
+      // Listen to Stripe Element changes to catch error messages
+      paymentEl.on('change', (event) => {
+        if (event.error || event.empty) {
+          console.log('Stripe Element change event:', event);
+          console.log('Error message:', event.error?.message);
+          console.log('Error type:', event.error?.type);
+          
+          // Wait a bit then inspect the DOM
+          setTimeout(() => {
+            const mountNode = document.getElementById("payment-element");
+            if (mountNode) {
+              // Check all elements for error messages
+              const allElements = mountNode.querySelectorAll('*');
+              allElements.forEach(el => {
+                const text = el.textContent?.trim();
+                if (text && (
+                  text.includes('incomplete') || 
+                  text.includes('invalid') ||
+                  text.includes('card')
+                )) {
+                  console.log('Found error text element:', {
+                    text: text,
+                    className: el.className,
+                    tagName: el.tagName,
+                    element: el,
+                    computedStyle: window.getComputedStyle(el)
+                  });
+                }
+              });
+            }
+          }, 100);
+        }
+      });
+      
+      // Inspect Stripe Elements structure after mounting
+      setTimeout(() => {
+        const mountNode = document.getElementById("payment-element");
+        if (mountNode) {
+          const iframes = mountNode.querySelectorAll('iframe');
+          console.log('Stripe iframes found:', iframes.length);
+          
+          // Also check for any error messages in the DOM
+          const allElements = mountNode.querySelectorAll('*');
+          allElements.forEach(el => {
+            const classes = el.className || '';
+            if (typeof classes === 'string' && (
+              classes.toLowerCase().includes('error') || 
+              classes.toLowerCase().includes('invalid')
+            )) {
+              console.log('Potential error element:', {
+                className: classes,
+                tagName: el.tagName,
+                textContent: el.textContent?.trim(),
+                element: el
+              });
+            }
+          });
+        }
+      }, 1500);
     }
     paymentElementMounted.value = true;
     loading.value = false

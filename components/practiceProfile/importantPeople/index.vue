@@ -97,9 +97,8 @@
             <div class="d-flex justify-end pr-5 pt-3">
               <v-btn
                 color="primary"
-                width="200"
+                rounded="lg" size="x-large"
                 flat
-                :loading="orgStore.isLoading"
                 @click="updateImportantPeopleDetails"
               >
                 Update Details
@@ -113,6 +112,9 @@
 </template>
 
 <script setup>
+import { ref, reactive, watch } from "vue";
+
+const emit = defineEmits(["updateDetails"]);
 
 const props = defineProps({
   practiceDetails: {
@@ -124,19 +126,36 @@ const props = defineProps({
 const mainStore = useMainStore();
 const orgStore = useOrgStore();
 
-
-const localImportantPeople = ref({ ...props.practiceDetails.importantPeople });
 const importantPeople = reactive({
-  id: localImportantPeople.value?.id,
+  id: props.practiceDetails.importantPeople?.id,
   organisationId: props.practiceDetails.id,
-  safeguardingLead: localImportantPeople.value?.safeguardingLead || "",
-  firstAider: localImportantPeople.value?.firstAider || "",
-  fireMarshal: localImportantPeople.value?.fireMarshal || "",
-  crossInfectionLead: localImportantPeople.value?.crossInfectionLead || "",
-  complaintsHandler: localImportantPeople.value?.complaintsHandler || "",
-  dpo: localImportantPeople.value?.dpo || "",
-  rpa: localImportantPeople.value?.rpa || "",
+  safeguardingLead: props.practiceDetails.importantPeople?.safeguardingLead || "",
+  firstAider: props.practiceDetails.importantPeople?.firstAider || "",
+  fireMarshal: props.practiceDetails.importantPeople?.fireMarshal || "",
+  crossInfectionLead: props.practiceDetails.importantPeople?.crossInfectionLead || "",
+  complaintsHandler: props.practiceDetails.importantPeople?.complaintsHandler || "",
+  dpo: props.practiceDetails.importantPeople?.dpo || "",
+  rpa: props.practiceDetails.importantPeople?.rpa || "",
 });
+
+// Watch for prop changes and update local copy
+watch(
+  () => props.practiceDetails.importantPeople,
+  (newVal) => {
+    if (newVal) {
+      importantPeople.id = newVal.id;
+      importantPeople.organisationId = props.practiceDetails.id;
+      importantPeople.safeguardingLead = newVal.safeguardingLead || "";
+      importantPeople.firstAider = newVal.firstAider || "";
+      importantPeople.fireMarshal = newVal.fireMarshal || "";
+      importantPeople.crossInfectionLead = newVal.crossInfectionLead || "";
+      importantPeople.complaintsHandler = newVal.complaintsHandler || "";
+      importantPeople.dpo = newVal.dpo || "";
+      importantPeople.rpa = newVal.rpa || "";
+    }
+  },
+  { deep: true }
+);
 
 const logValue = (e, key) => {
   importantPeople[key] = e.target.innerText.trim();
@@ -147,6 +166,8 @@ const updateImportantPeopleDetails = () => {
     .updateImportantPeople({ ...importantPeople })
     .then((res) => {
       if (res.code === 0) {
+        // Update parent after successful API call
+        emit("updateDetails");
         mainStore.setSnackbar({
           title: res?.data?.message || "Important People updated successfully",
           type: "success",
@@ -167,11 +188,9 @@ const updateImportantPeopleDetails = () => {
 };
 </script>
 
-
 <style scoped>
 .info-label {
   display: block;
-  
   font-weight: 600;
   font-size: 13px;
   color: #1e1e1e;
@@ -179,7 +198,6 @@ const updateImportantPeopleDetails = () => {
 }
 
 .editable {
-  
   font-weight: 400;
   font-size: 14px;
   color: #101010;
@@ -189,6 +207,7 @@ const updateImportantPeopleDetails = () => {
   border: 1px solid transparent;
   border-radius: 6px;
   width: 60%;
+  padding: 2px 4px;
 }
 
 .editable:focus {

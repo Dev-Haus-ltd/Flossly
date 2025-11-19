@@ -57,6 +57,16 @@
                     @click="fetchGeneralTasks(card)"
                   />
                 </v-col>
+                <v-col v-if="hasTasks"   cols="12"
+                  sm="6" 
+                  md="3">
+                  <TasksTaskPoolDialogTaskCards 
+                    :title="'Other'"
+                    :description="'Tasks under main Category'"
+                    :count="hasTasks"
+                    @click="fetchGeneralTasks({id: tab})"
+                  />
+                </v-col>
               </v-row>
               <v-card
                 v-else
@@ -163,7 +173,31 @@ const props = defineProps({
   modelValue: Boolean,
 });
 
-const emit = defineEmits(["onUpdate"]);
+const emit = defineEmits(["onUpdate", "close"]);
+
+const resetState = () => {
+  tasks.value = [];
+  selectedTasks.value = [];
+  selectedSubCategory.value = null;
+  subCategories.value = [];
+  subCategoryView.value = true;
+  search.value = "";
+  searchSubCategory.value = "";
+  tab.value = 0
+};
+
+const hasTasks = computed(() => {
+  if (!categoryList.value.length) return false
+  const parent = categoryList.value.find((x) => x.id === tab.value)
+  if (!parent) return false
+  const parentCount = parseInt(parent.taskCount, 10)
+  if (parentCount) {
+    return parentCount
+  } else {
+    return false
+  }
+})
+
 const fetchGeneralTasks = (category) => {
   selectedSubCategory.value = category;
   taskStore
@@ -171,7 +205,7 @@ const fetchGeneralTasks = (category) => {
     .then((res) => {
       if (res.code === 0) {
         subCategoryView.value = false;
-        tasks.value = res.data;
+        tasks.value = res.data.map(task => ({ ...task, checked: false }));
       } else {
         mainStore.setSnackbar({
           title: res.data.message || res.message,
@@ -186,13 +220,23 @@ const fetchGeneralTasks = (category) => {
       });
     });
 };
+
 const fetchListCategories = () => {
+  // Reset state but don't clear subCategories yet - let the tab watcher handle it
+  tasks.value = [];
+  selectedTasks.value = [];
+  selectedSubCategory.value = null;
+  search.value = "";
+  searchSubCategory.value = "";
+  subCategoryView.value = true;
+  
   taskStore
     .listCategoriesForPool()
     .then((res) => {
       if (res.code === 0) {
         categoryList.value = res.data;
         const firstCat = categoryList.value[0];
+        tab.value = categoryList.value[0].id
         const firstCatSubCat = categoryList.value.filter(
           (x) => x.parentId === firstCat.id
         );
@@ -216,30 +260,52 @@ const fetchListCategories = () => {
       });
     });
 };
+
 watch(
   () => props.modelValue,
   async (newVal) => {
     if (newVal) {
       fetchListCategories();
+    } else {
+      // Reset state when dialog closes
+      resetState();
     }
   }
 );
+
 watch(tab, async (newId) => {
-  if (newId) {
+  if (newId && categoryList.value.length > 0) {
+    // Reset view-specific state when switching tabs (but keep categoryList)
+    tasks.value = [];
+    selectedTasks.value = [];
+    selectedSubCategory.value = null;
+    search.value = "";
+    searchSubCategory.value = "";
+    
+    const category = categoryList.value.find((x) => x.id === newId);
+    if (!category) return;
+    
     subCategories.value = categoryList.value.filter(
       (x) => x.parentId === newId
     );
     if (subCategories.value.length) {
       subCategoryView.value = true;
     } else {
-      subCategories.value = [];
-      subCategoryView.value = true;
-      const category = categoryList.value.find((x) => x.id === newId);
+      // No subcategories, fetch tasks directly
       fetchGeneralTasks(category);
     }
   }
 });
 const addTaskToBoard = async () => {
+  // Validate that at least one task is selected
+  if (!selectedTasks.value || selectedTasks.value.length === 0) {
+    mainStore.setSnackbar({
+      title: "Please select at least one task to assign",
+      type: "error",
+    });
+    return;
+  }
+
   const userStr = localStorage.getItem("user");
   if (!userStr) return null;
 
@@ -251,6 +317,11 @@ const addTaskToBoard = async () => {
     });
 
     if (res.code === 0) {
+      // Reset selections after successful assignment
+      selectedTasks.value = [];
+      tasks.value.forEach(task => {
+        task.checked = false;
+      });
       emit("onUpdate");
       mainStore.setSnackbar({
         title: "Task assigned successfully",
@@ -283,15 +354,37 @@ const handleCheck = ( data ) => {
 };
 
 const selectAll = computed({
-  get: () => tasks.value.every((i) => i.checked),
+  get: () => tasks.value.length > 0 && tasks.value.every((i) => i.checked),
   set: (val) => {
-    tasks.value.forEach((i) => (i.checked = val));
+    tasks.value.forEach((i) => {
+      i.checked = val;
+      if (val) {
+        // Add to selectedTasks if not already present
+        if (!selectedTasks.value.some((t) => t.id === i.id)) {
+          selectedTasks.value.push(i);
+        }
+      } else {
+        // Remove from selectedTasks
+        selectedTasks.value = selectedTasks.value.filter((t) => t.id !== i.id);
+      }
+    });
   },
 });
 
 function toggleAll() {
-  const value = selectAll.value;
-  tasks.value.forEach((i) => (i.checked = value));
+  const value = !selectAll.value;
+  tasks.value.forEach((i) => {
+    i.checked = value;
+    if (value) {
+      // Add to selectedTasks if not already present
+      if (!selectedTasks.value.some((t) => t.id === i.id)) {
+        selectedTasks.value.push(i);
+      }
+    } else {
+      // Remove from selectedTasks
+      selectedTasks.value = selectedTasks.value.filter((t) => t.id !== i.id);
+    }
+  });
 }
 
 function goBack() {

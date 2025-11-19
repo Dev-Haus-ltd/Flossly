@@ -1,9 +1,41 @@
-import { ChatbotConfig, User } from "../models";
+import { ChatbotConfig, User, DiaryPatient, DiaryAppointment, OrganisationTreatment, CrmLead, CrmLeadAssignee, CrmLeadCommunication } from "../models";
+import { CONTACT_METHODS } from "../models/crm/leadCommunications";
 import { readBody } from "h3";
 import { createError } from "h3";
+import { Op } from "sequelize";
+import { success, error } from "../utils/response";
 
-const success = (data) => ({ code: 1, data });
-const error = (statusCode, message) => ({ code: 0, error: message, statusCode });
+// Keep the old success/error for existing functions
+const successOld = (data) => ({ code: 1, data });
+const errorOld = (statusCode, message) => ({ code: 0, error: message, statusCode });
+
+// Helper to validate botId and get organizationId
+const validateBotId = async (botId) => {
+  if (!botId) {
+    return { valid: false, error: "botId is required" };
+  }
+  
+  const chatbotConfig = await ChatbotConfig.findOne({
+    where: { botId }
+  });
+  
+  if (!chatbotConfig) {
+    return { valid: false, error: "Invalid botId" };
+  }
+  
+  return { 
+    valid: true, 
+    organizationId: chatbotConfig.organizationId 
+  };
+};
+
+// Helper functions for date/time parsing (from diary.js)
+const pad2 = (n) => String(n).padStart(2, '0');
+const parseLocalDateTime = (dateStr, timeStr) => {
+  if (!dateStr || !timeStr) return null;
+  const t = timeStr.length === 5 ? `${timeStr}:00` : timeStr;
+  return new Date(`${dateStr}T${t}`);
+};
 
 export const saveChatbotConfig = async (event) => {
   const loggedUser = event.context.user;
@@ -114,10 +146,10 @@ export const saveChatbotConfig = async (event) => {
       });
     }
 
-    return success(chatbotConfig);
+    return successOld(chatbotConfig);
   } catch (err) {
     console.log(err.message);
-    return error(500, err.message);
+    return errorOld(500, err.message);
   }
 };
 
@@ -137,12 +169,312 @@ export const getChatbotConfig = async (event) => {
     });
 
     if (!chatbotConfig) {
-      return success(null);
+      return successOld(null);
     }
 
-    return success(chatbotConfig);
+    return successOld(chatbotConfig);
   } catch (err) {
     console.log(err.message);
-    return error(500, err.message);
+    return errorOld(500, err.message);
+  }
+};
+
+// Public API: Create appointment via chatbot (no authentication required)
+export const createAppointmentViaChatbot = async (event) => {
+  try {
+    const body = await readBody(event);
+    const payload = typeof body === 'string' ? JSON.parse(body) : body;
+    
+    // Validate botId
+    const botValidation = await validateBotId(payload.botId);
+    if (!botValidation.valid) {
+      return error(400, botValidation.error);
+    }
+    
+    const organisationId = botValidation.organizationId;
+    
+    // Validate required fields
+    const required = ['dentistId', 'date', 'time', 'duration'];
+    for (const k of required) {
+      if (!payload?.[k]) {
+        return error(400, `${k} is required`);
+      }
+    }
+    
+    // Handle patient creation if patientName is provided but patientId is not
+    let patientId = payload.patientId || null;
+    if (!patientId && payload.patientName) {
+      const [firstName, ...rest] = String(payload.patientName).split(' ');
+      const lastName = rest.join(' ') || '-';
+      console.log('[Chatbot API] Creating patient from patientName:', {
+        patientName: payload.patientName,
+        firstName,
+        lastName,
+        organisationId: Number(organisationId)
+      });
+      const patient = await DiaryPatient.create({ 
+        organisationId: Number(organisationId), 
+        firstName, 
+        lastName 
+      });
+      console.log('[Chatbot API] Patient created:', {
+        id: patient.id,
+        firstName: patient.firstName,
+        lastName: patient.lastName
+      });
+      patientId = patient.id;
+    }
+    
+    // If patientId is provided but patient doesn't exist, return error
+    if (patientId) {
+      const existingPatient = await DiaryPatient.findOne({
+        where: { id: patientId, organisationId: Number(organisationId) }
+      });
+      if (!existingPatient) {
+        return error(404, 'Patient not found');
+      }
+    }
+    
+    // Normalize incoming date & time (local) and compute end
+    const start = parseLocalDateTime(payload.date, payload.time);
+    if (!start || isNaN(start.getTime())) {
+      return error(400, 'Invalid date/time');
+    }
+    const end = new Date(start);
+    end.setMinutes(end.getMinutes() + Number(payload.duration || 10));
+    
+    // Working hours validation (09:00–17:00 local)
+    const workStart = new Date(start);
+    workStart.setHours(9, 0, 0, 0);
+    const workEnd = new Date(start);
+    workEnd.setHours(17, 0, 0, 0);
+    if (start < workStart) {
+      return error(400, 'Appointment must start at or after 09:00');
+    }
+    if (end > workEnd) {
+      return error(400, 'Appointment must end by 17:00');
+    }
+    
+    // Overlap validation for dentist and patient
+    const overlapWindow = {
+      [Op.and]: [
+        { startTime: { [Op.lt]: end } },
+        { endTime: { [Op.gt]: start } }
+      ]
+    };
+    const orgClause = { organisationId: Number(organisationId) };
+    const notCancelled = { status: { [Op.ne]: 'Cancelled' } };
+    
+    const dentistOverlap = await DiaryAppointment.count({
+      where: {
+        ...orgClause,
+        ...overlapWindow,
+        ...notCancelled,
+        dentistId: Number(payload.dentistId)
+      }
+    });
+    if (dentistOverlap > 0) {
+      return error(409, 'Dentist already has an appointment at this time');
+    }
+    
+    if (patientId) {
+      const patientOverlap = await DiaryAppointment.count({
+        where: {
+          ...orgClause,
+          ...overlapWindow,
+          ...notCancelled,
+          patientId: Number(patientId)
+        }
+      });
+      if (patientOverlap > 0) {
+        return error(409, 'Patient already has an appointment at this time');
+      }
+    }
+    
+    // Handle treatment and amount
+    let amount = 0;
+    let treatmentId = null;
+    let treatmentName = payload.treatmentName || null;
+    const incomingOrgTreatmentId = payload.treatmentId ? Number(payload.treatmentId) : null;
+    
+    if (incomingOrgTreatmentId) {
+      const treatment = await OrganisationTreatment.findOne({
+        where: {
+          id: incomingOrgTreatmentId,
+          organisationId: Number(organisationId)
+        }
+      });
+      if (treatment) {
+        amount = Number(treatment.amount || 0);
+        if (!treatmentName) {
+          treatmentName = treatment.name;
+        }
+      }
+    }
+    
+    // If amount provided explicitly, prefer it
+    if (payload.amount !== undefined && payload.amount !== null && 
+        String(payload.amount).trim() !== '' && !isNaN(Number(payload.amount))) {
+      amount = Number(payload.amount);
+    }
+    
+    // Create appointment
+    console.log('[Chatbot API] Creating appointment with data:', {
+      organisationId: Number(organisationId),
+      patientId,
+      dentistId: Number(payload.dentistId),
+      treatmentId: treatmentId,
+      treatmentName,
+      status: payload.status || 'Pending',
+      startTime: start,
+      endTime: end,
+      notes: payload.notes || null,
+      amount: amount || 0,
+    });
+    
+    const created = await DiaryAppointment.create({
+      organisationId: Number(organisationId),
+      patientId,
+      dentistId: Number(payload.dentistId),
+      treatmentId: treatmentId,
+      treatmentName,
+      status: payload.status || 'Pending',
+      startTime: start,
+      endTime: end,
+      notes: payload.notes || null,
+      amount: amount || 0,
+    });
+    
+    console.log('[Chatbot API] Appointment created successfully:', {
+      id: created.id,
+      organisationId: created.organisationId,
+      dentistId: created.dentistId,
+      patientId: created.patientId,
+    });
+    
+    // Verify the appointment was actually saved
+    const verifyAppointment = await DiaryAppointment.findByPk(created.id);
+    if (!verifyAppointment) {
+      console.error('[Chatbot API] ERROR: Appointment was created but cannot be found in database!');
+      return error(500, 'Appointment creation failed - record not found after creation');
+    }
+    
+    return success({
+      id: created.id,
+      organisationId: created.organisationId,
+      patientId: created.patientId,
+      dentistId: created.dentistId,
+      treatmentId: created.treatmentId,
+      treatmentName: created.treatmentName,
+      status: created.status,
+      startTime: created.startTime,
+      endTime: created.endTime,
+      notes: created.notes,
+      amount: created.amount,
+    });
+  } catch (e) {
+    // If it's already an error response, re-throw it
+    if (e.statusCode) {
+      throw e;
+    }
+    console.error('[Chatbot API] Error creating appointment:', e);
+    console.error('[Chatbot API] Error details:', {
+      message: e?.message,
+      data: e?.data,
+      original: e?.original,
+      stack: e?.stack,
+    });
+    const msg = e?.message || e?.data?.message || e?.original?.detail || 'Internal server error';
+    return error(500, msg);
+  }
+};
+
+// Public API: Create lead via chatbot (no authentication required)
+export const createLeadViaChatbot = async (event) => {
+  try {
+    const body = await readBody(event);
+    const payload = typeof body === 'string' ? JSON.parse(body) : body;
+    
+    // Validate botId
+    const botValidation = await validateBotId(payload.botId);
+    if (!botValidation.valid) {
+      return error(400, botValidation.error);
+    }
+    
+    const organisationId = botValidation.organizationId;
+    
+    // Validate required fields
+    const required = ['name', 'email', 'telephone'];
+    for (const k of required) {
+      if (!payload?.[k]) {
+        return error(400, `${k} is required`);
+      }
+    }
+    
+    console.log('[Chatbot API] Creating lead with data:', {
+      organisationId: Number(organisationId),
+      name: payload.name,
+      email: payload.email,
+      telephone: payload.telephone,
+    });
+    
+    // Prepare lead data
+    const data = {
+      organisationId: Number(organisationId),
+      alert: payload.alert || null,
+      name: payload.name,
+      email: payload.email,
+      telephone: payload.telephone,
+      inquiryDate: payload.inquiryDate ? new Date(payload.inquiryDate) : new Date(),
+      dob: payload.dob ? new Date(payload.dob) : null,
+      occupation: payload.occupation || null,
+      location: payload.location || null,
+      leadSource: payload.leadSource?.name || payload.leadSource || 'Chatbot',
+      leadStatus: payload.leadStatus || 'New',
+      treatment: payload.treatment?.name || payload.treatment || null,
+      followUpDate: payload.followUpDate ? new Date(payload.followUpDate) : null,
+      comments: payload.comments || null,
+      rawData: payload.rawData || null,
+    };
+    
+    const created = await CrmLead.create(data);
+    
+    console.log('[Chatbot API] Lead created successfully:', {
+      id: created.id,
+      organisationId: created.organisationId,
+      name: created.name,
+      email: created.email,
+    });
+    
+    // Shape treatment in response
+    created.setDataValue('treatment', { id: null, name: created.treatment || '' });
+    
+   
+    
+    // Handle contact method if provided
+    if (payload.contactMethod && CONTACT_METHODS.includes(payload.contactMethod)) {
+      await CrmLeadCommunication.create({
+        organisationId: Number(organisationId),
+        leadId: created.id,
+        preferredContactMethod: payload.contactMethod
+      });
+      created.setDataValue('preferredContact', payload.contactMethod);
+    }
+    
+    return success(created);
+  } catch (e) {
+    // If it's already an error response, re-throw it
+    if (e.statusCode) {
+      throw e;
+    }
+    console.error('[Chatbot API] Error creating lead:', e);
+    console.error('[Chatbot API] Error details:', {
+      message: e?.message,
+      data: e?.data,
+      original: e?.original,
+      stack: e?.stack,
+    });
+    const msg = e?.message || e?.data?.message || e?.original?.detail || 'Internal server error';
+    return error(500, msg);
   }
 };

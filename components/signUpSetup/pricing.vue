@@ -121,7 +121,7 @@
         You can safely navigate to your flossly dashboard and start using the
         application
       </p>
-      <v-btn @click="gotoHome" flat color="primary"> Dashboard </v-btn>
+     
     </v-card>
     <v-overlay
       v-model="loading"
@@ -326,6 +326,45 @@ color: #878787;
   border: 1px solid #e0e0e0;
   padding: 12px;
   border-radius: 6px;
+}
+
+/* Style Stripe payment element error messages consistently */
+/* Target Stripe Elements error messages - these are the classes Stripe uses */
+#payment-element :deep(.p-Input--empty),
+#payment-element :deep(.p-ErrorMessage),
+#payment-element :deep(.p-InputError),
+#payment-element :deep(.FieldError),
+#payment-element :deep([class*="error"]),
+#payment-element :deep([class*="ErrorMessage"]),
+#payment-element :deep([class*="InputError"]),
+#payment-element :deep([class*="FieldError"]) {
+  font-family: inherit !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  color: #d32f2f !important;
+  line-height: 1.4 !important;
+}
+
+/* Target all error text elements within Stripe payment element */
+#payment-element :deep(.p-InputError::before),
+#payment-element :deep(.FieldError::before),
+#payment-element :deep([class*="error"]::before) {
+  display: none;
+}
+
+/* Ensure consistent styling for all field error messages - comprehensive selectors */
+#payment-element :deep(span[class*="error"]),
+#payment-element :deep(div[class*="error"]),
+#payment-element :deep(p[class*="error"]),
+#payment-element :deep(label[class*="error"]),
+#payment-element :deep(*[class*="ErrorMessage"]),
+#payment-element :deep(*[class*="InputError"]),
+#payment-element :deep(*[class*="FieldError"]) {
+  font-family: inherit !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  color: #d32f2f !important;
+  line-height: 1.4 !important;
 }
 .feature-item {
   line-height: 1.5;

@@ -1,3 +1,4 @@
+<!-- Add Group Dialog Component -->
 <template>
   <v-dialog v-model="isOpen" max-width="600px" class="rounded-lg">
     <v-card>
@@ -5,7 +6,6 @@
       <v-card-title
         class="d-flex align-center justify-space-between"
         style="
-          
           font-weight: 600;
           font-size: 16px;
           border-bottom: 1px solid #dbdbdb;
@@ -23,10 +23,10 @@
         </v-btn>
       </v-card-title>
 
-      <!-- Room Form -->
-      <v-card-text>
+      <!-- Group Form -->
+      <v-card-text class="group-form">
         <!-- Name -->
-        <div class="mb-4">
+        <div class="form-group">
           <label class="field-label">Name</label>
           <v-text-field
             v-model="group.name"
@@ -39,7 +39,7 @@
         </div>
 
         <!-- Description -->
-        <div class="mb-4">
+        <div class="form-group">
           <label class="field-label">Description</label>
           <v-text-field
             v-model="group.description"
@@ -50,8 +50,9 @@
             flat
           />
         </div>
-        <!-- Color -->
-        <div class="mb-4">
+
+        <!-- Users -->
+        <div class="form-group">
           <label class="field-label">Users</label>
           <v-select
             v-model="group.userIds"
@@ -69,15 +70,13 @@
       </v-card-text>
 
       <!-- Actions -->
-      <v-card-actions class="justify-end">
-        <v-btn
-          text
-          @click="close"
-          variant="text"
-        >
+      <v-card-actions class="justify-end pa-4">
+        <v-btn text @click="close" variant="text">
           Cancel
         </v-btn>
-        <v-btn color="primary" @click="save" variant="flat"> Save </v-btn>
+        <v-btn color="primary" @click="save" variant="flat">
+          Save
+        </v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -92,8 +91,9 @@ const props = defineProps({
 });
 
 const orgStore = useOrgStore();
-const mainStore = useMainStore()
+const mainStore = useMainStore();
 const emit = defineEmits(["update:modelValue", "onUpdate"]);
+
 const isOpen = ref(props.modelValue);
 const usersList = ref([]);
 const group = ref({
@@ -109,6 +109,7 @@ watch(
     usersList.value = props.users;
   }
 );
+
 watch(isOpen, (val) => emit("update:modelValue", val));
 
 const close = () => {
@@ -116,17 +117,24 @@ const close = () => {
 };
 
 const save = () => {
-  if (!group.value.name || !group.value.userIds) return;
+  if (!group.value.name || !group.value.userIds.length) return;
+
   orgStore.addGroup(group.value).then((res) => {
     if (res.code === 0) {
-        mainStore.setSnackbar({
+      mainStore.setSnackbar({
         title: "Group added successfully",
         type: "success",
       });
       emit("update:modelValue", false);
       emit("onUpdate");
+      // Reset form
+      group.value = {
+        name: "",
+        description: "",
+        userIds: [],
+      };
     } else {
-        mainStore.setSnackbar({
+      mainStore.setSnackbar({
         title: res.message || "Failed to add Group",
         type: "error",
       });
@@ -136,20 +144,41 @@ const save = () => {
 </script>
 
 <style scoped>
+.group-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #737373;
+}
+
 .input-bordered :deep(.v-field) {
   border: 1px solid #dfdfdf !important;
   border-radius: 8px !important;
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  
 }
-.field-label {
-  display: block;
-  
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 4px;
-  color: #737373;
+
+/* Responsive padding for small screens */
+@media (max-width: 600px) {
+  .group-form {
+    gap: 0.75rem;
+  }
+
+  .form-group {
+    gap: 0.4rem;
+  }
 }
 </style>

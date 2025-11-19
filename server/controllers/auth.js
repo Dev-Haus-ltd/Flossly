@@ -500,7 +500,7 @@ export const verifyEmail = async (event) => {
           priorityId: priorities.find((x) => x.key === "medium").id,
           title: task.title,
           documentLink: "",
-          frequency: task.defaultFrequency === "6 Monthly" ? "Monthly" : task.defaultFrequency,
+          frequency: task.defaultFrequency,
           comments: "",
         }));
         await UserTask.bulkCreate(userTasks);
@@ -672,7 +672,8 @@ export const acceptInvitation = async (event) => {
     user.isEmailVerified = true;
     user.status = "Active";
     await user.save();
-    await assignDefaultTasksToUser(user, userOrg.organisationId);
+    // Removed dummy tasks assignment for invited members
+    // await assignDefaultTasksToUser(user, userOrg.organisationId);
     await assignDefaultHRDocsToUser(user.id);
     await accountCreationNotification(user);
     await portalReadyTrainingInvite(user);
