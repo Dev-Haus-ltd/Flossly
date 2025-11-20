@@ -496,7 +496,11 @@ const manageStaffDialogOpen = ref(false);
 const employees = ref([]);
 const rolesList = ref([]);
 
-const slecteduserIds = computed(() => users.map((ru) => ru.userId));
+const slecteduserIds = computed(() => 
+  users
+    .filter((ru) => !ru.isTempUser && ru.userId) // Only include non-temp users with valid userId
+    .map((ru) => ru.userId)
+);
 onMounted(() => {
   getSurgeries();
   getAllUsers();
