@@ -15,7 +15,7 @@
         />
 
         <!-- Main Content -->
-        <div class="flex-grow-1" style="margin-left: 220px;height: 55vh"">
+        <div class="flex-grow-1" style="margin-left: 220px;height: 55vh">
           <v-row>
             <v-col cols="12" md="6">
               <v-card class="pa-6" elevation="0" style="border:1px solid #e5e7eb; border-radius:12px;">

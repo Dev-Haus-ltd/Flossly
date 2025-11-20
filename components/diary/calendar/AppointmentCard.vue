@@ -3,10 +3,10 @@
     class="appointment-card" 
     :style="{ 
       ...styleObj, 
-      gridColumn: `span ${microSlots}`,
+      gridRow: `span ${microSlots}`,
       borderLeftColor: statusColors[appt.status]?.chip || '#d948a8'
     }"
-    @click="$emit('open-patient', appt)"
+    @click="$emit('open-appointment', appt)"
   >
     <!-- Header -->
     <div class="card-header">
@@ -15,7 +15,7 @@
           {{ getInitials(appt.patient) }}
         </div>
         <div class="patient-details">
-          <div class="patient-name">{{ appt.patient }}</div>
+          <button class="patient-name" type="button" @click.stop="$emit('open-patient', appt)">{{ appt.patient }}</button>
           <div class="appointment-time">{{ displayStart }} - {{ displayEnd }}</div>
         </div>
       </div>
@@ -86,7 +86,7 @@ if (missingFields.length) {
   throw new Error(`AppointmentCard requires ${missingFields.join(', ')} but received: ${JSON.stringify(props.appt || {})}`)
 }
 
-const emit = defineEmits(['update-status', 'open-patient'])
+const emit = defineEmits(['update-status', 'open-patient', 'open-appointment'])
 
 const statusOptions = [
   'Pending',
@@ -127,7 +127,6 @@ const displayEnd = computed(() => clinicTimeToHM(props.appt.end || props.appt.en
   flex-direction: column;
   gap: 8px;
   min-height: 84px;
-  /* Removed grid-column span - now just a regular flex item */
 }
 
 .appointment-card:hover {
@@ -176,6 +175,11 @@ const displayEnd = computed(() => clinicTimeToHM(props.appt.end || props.appt.en
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
 }
 
 .appointment-time {
