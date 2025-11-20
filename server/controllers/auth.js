@@ -483,7 +483,7 @@ export const verifyEmail = async (event) => {
       const tasks = await Task.findAll({
         limit: 100,
         where: {
-          categoryId: 6,
+          categoryId: [3,4,5,10,11,12]
         },
       });
       const userOrg = await UserOrganisation.findAll({
@@ -677,7 +677,7 @@ export const acceptInvitation = async (event) => {
     user.status = "Active";
     await user.save();
     // Removed dummy tasks assignment for invited members
-    // await assignDefaultTasksToUser(user, userOrg.organisationId);
+    await assignDefaultTasksToUser(user, userOrg.organisationId);
     await assignDefaultHRDocsToUser(user.id);
     await accountCreationNotification(user);
     await portalReadyTrainingInvite(user);

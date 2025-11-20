@@ -48,9 +48,6 @@
       <v-tabs-window v-model="currentTab">
         <v-tabs-window-item :value="currentTab">
           <TasksListView
-            v-if="
-              taskStatuses.length && taskPriorities.length && userList.length
-            "
             :headers="headers"
             :availableHeaders="availableHeaders"
             :taskDetails="taskDetails"

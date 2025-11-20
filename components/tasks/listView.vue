@@ -611,7 +611,7 @@
     <TasksCalenderView v-else-if="viewType === 'calender' && taskDetails && taskDetails.length" :tasks="tasksForCalender" />
 
     <div v-else class="d-flex justify-center mt-5">
-      <p class="mt-7">You've currently no task assigned.</p>
+      <p class="mt-7">No current task found.</p>
     </div>
 
     <TasksTaskDetailsDialog
