@@ -140,7 +140,7 @@
     </div>
 
     <v-expansion-panels
-      v-if="viewType === 'list'"
+      v-if="viewType === 'list' && taskDetails && taskDetails.length"
       v-model="openedPanels"
       :elevation="0"
       flat
@@ -608,7 +608,11 @@
       </v-expansion-panel>
     </v-expansion-panels>
 
-    <TasksCalenderView v-else :tasks="tasksForCalender" />
+    <TasksCalenderView v-else-if="viewType === 'calender' && taskDetails && taskDetails.length" :tasks="tasksForCalender" />
+
+    <div v-else class="d-flex justify-center mt-5">
+      <p class="mt-7">You've currently no task assigned.</p>
+    </div>
 
     <TasksTaskDetailsDialog
       v-model="dialogOpen"
@@ -810,6 +814,26 @@ onMounted(() => {
   priorityStatuses.value = priorities;
   user.value = JSON.parse(localStorage.getItem("user"));
 });
+watch(
+  () => headers,
+  (newVal) => {
+    if (newVal && newVal.length > 0) {
+      selectedHeaders.value = sortHeaders(newVal); // Updates whenever headers changes
+    }
+  },
+  { immediate: true, deep: true }
+);
+
+watch(
+  () => orgStatuses,
+  (newVal) => {
+    if (newVal && newVal.length > 0) {
+      statuses.value = newVal; // Updates whenever orgStatuses changes
+    }
+  },
+  { immediate: true, deep: true }
+);
+
 watch(
   () => taskDetails,
   (newVal) => {

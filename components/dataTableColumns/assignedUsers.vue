@@ -180,10 +180,27 @@ const cancelClose = () => {
 
 const filteredSuggestions = computed(() => {
   const q = (search.value || "").toLowerCase();
-  const assignedIds = props.assignedUsers.map((u) => u?.id);
+  
+  // Create a Set of assigned user IDs to handle duplicates and improve performance
+  // Filter out null/undefined values and ensure we only use valid IDs
+  const assignedIds = new Set(
+    props.assignedUsers
+      .map((u) => u?.id)
+      .filter((id) => id != null && id !== undefined)
+  );
+  
   return props.allUsers.filter((u) => {
+    // Skip if user is already assigned
+    if (assignedIds.has(u.id)) {
+      return false;
+    }
+    
+    // Check if user matches search query
     const matchText = `${u.fullName} ${u.role?.title || ""}`.toLowerCase();
-    return !assignedIds.includes(u.id) && matchText.includes(q) && u.status === "Active";
+    const matchesSearch = matchText.includes(q);
+    
+    // Only show active users
+    return matchesSearch && u.status === "Active";
   });
 });
 

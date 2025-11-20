@@ -363,7 +363,7 @@ const handleDelete = async () => {
       updateTasksList();
 
       mainStore.setSnackbar({
-        title: "Tasks unassigned successfully.",
+        title: selectedRowItems.value.length === 1 ? "Task deleted successfully." : "Tasks deleted successfully.",
         type: "success",
       });
     } else {
@@ -371,7 +371,7 @@ const handleDelete = async () => {
         title:
           res.data?.message ||
           res.message ||
-          "Unable to unassign tasks. Please try again.",
+          "Unable to delete tasks. Please try again.",
         type: "error",
       });
     }

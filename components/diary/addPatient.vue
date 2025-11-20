@@ -77,7 +77,7 @@
             </v-col>
             <v-col cols="12" sm="6">
               <label class="fld-lbl">Dentist</label>
-              <v-select v-model="form.dentist" :items="dentists" variant="solo" density="compact" class="input-bordered mb-0" bg-color="white" flat hide-details="auto" />
+              <v-select v-model="form.dentistId" :items="dentists" item-title="name" item-value="id" variant="solo" density="compact" class="input-bordered mb-0" bg-color="white" flat hide-details="auto" clearable />
             </v-col>
 
             <v-col cols="12" sm="6">
@@ -102,15 +102,19 @@
 
 <script setup>
 import { formatDateDDMMYYYY } from '@/lib/dateFormatter'
+import { useDiaryStore } from '@/stores/diary'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
 })
 const emit = defineEmits(['update:modelValue', 'save'])
 
+const diaryStore = useDiaryStore()
 const formRef = ref()
 const dobMenu = ref(false)
 const requiredRule = [v => !!v || 'Required']
+const dentists = ref([])
+
 const form = reactive({
   title: 'Mr',
   sex: 'Male',
@@ -125,7 +129,7 @@ const form = reactive({
   email: '',
   receiveEmail: 'Yes',
   paymentPlan: 'Private',
-  dentist: 'Sarah Johnson',
+  dentistId: null,
   recallMethod: 'Email',
   recallInterval: '6 months',
 })
@@ -135,11 +139,28 @@ const sexes = ['Male', 'Female', 'Other']
 const marketingConsents = ['-', 'Yes', 'No']
 const yn = ['Yes', 'No']
 const paymentPlans = ['Private', 'NHS', 'Finance']
-const dentists = ['Sarah Johnson', 'John Doe', 'Raj Singh']
 const recallMethods = ['Email', 'SMS', 'Phone']
 const recallIntervals = ['6 months', '12 months']
 
 const dobFormatted = computed(() => form.dob ? formatDateDDMMYYYY(form.dob) : '')
+
+const loadDentists = async () => {
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const res = await diaryStore.listDentists(todayStr)
+  if (res?.code === 0) {
+    dentists.value = res.data || []
+  }
+}
+
+watch(() => props.modelValue, async (isOpen) => {
+  if (isOpen && dentists.value.length === 0) {
+    await loadDentists()
+  }
+})
+
+onMounted(async () => {
+  await loadDentists()
+})
 
 const onSave = async () => {
   const ok = await formRef.value?.validate?.()

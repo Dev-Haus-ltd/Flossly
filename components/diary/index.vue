@@ -8,7 +8,7 @@
     <!-- Stats -->
     <div class="stats-section">
       <v-row class="stat-row" align="stretch">
-        <v-col v-for="(card, i) in statCards" :key="i" style="flex: 1 1 0;">
+        <v-col v-for="(card, i) in statCards" :key="i" class="stat-col">
           <DiaryStatCard
             :uid="i"
             :icon="card.icon"
@@ -288,6 +288,17 @@ watch(search, debounce(() => loadAppointments(), 400))
 
 .stats-section {
   padding: 24px;
+}
+
+.stat-row {
+  display: flex;
+  align-items: stretch;
+}
+
+.stat-col {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
 }
 
 .content-section {
