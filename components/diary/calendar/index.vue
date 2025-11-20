@@ -39,6 +39,8 @@
             :class="{ 'slot-full': isHourFull(dent.id, t.hour) }"
             :style="{ gridRow: ri + 2, gridColumn: ci + 2 }"
             @click="onCellClickGuard(dent, t)"
+            @dragover.prevent="onSlotDragOver"
+            @drop="onAppointmentDrop($event, dent, t)"
             :title="isHourFull(dent.id, t.hour) ? 'No available 15-min slots in this hour' : ''"
           >
             <div class="slot-grid">
@@ -51,6 +53,9 @@
                   :status-colors="statusColors"
                   @update-status="$emit('update-status', { appt, status: $event, dentistId: dent.id })"
                   @open-patient="openPatient"
+                  draggable="true"
+                  @dragstart="onAppointmentDragStart($event, appt, dent.id)"
+                  @dragend="onAppointmentDragEnd"
                   @click.stop
                 />
               </template>
@@ -112,7 +117,7 @@
   selectedDentistIds: { type: Array, default: () => [] },
   appointments: { type: Object, default: () => ({}) },
 })
-const emit = defineEmits(['slot-click','update-status','open-notes','slot-full'])
+const emit = defineEmits(['slot-click','update-status','open-notes','slot-full','move-appointment'])
 import AppointmentCard from '@/components/diary/calendar/AppointmentCard.vue'
 const router = useRouter()
 function initials(name) {
@@ -125,6 +130,17 @@ const defaultStart = 9
 const defaultEnd = 17
 const intervalMins = 15
 const maxMicroSlots = 4 // Each 15-min slot can hold 4 appointments side-by-side
+const dragMimeType = 'application/x-flossly-appointment'
+
+const normalizeDateInput = (value) => {
+  if (!value) return null
+  const dt = new Date(value)
+  if (!Number.isNaN(dt.getTime())) {
+    return dt.toISOString().slice(0, 10)
+  }
+  return typeof value === 'string' ? value.slice(0, 10) : null
+}
+const activeCalendarDate = computed(() => normalizeDateInput(props.date))
 
 const allAppts = computed(() => Object.values(props.appointments || {}).flat())
 const parseHM = (t) => {
@@ -185,13 +201,20 @@ const onCellClickGuard = (dent, slot) => {
   onCellClick(dent, slot)
 }
 
-  const appointmentStartMinutes = (appt) => {
+const appointmentStartMinutes = (appt) => {
     const mins = clinicMinutesFromTime(appt?.start || appt?.startTime || appt?.time || appt?.startTime)
     return typeof mins === 'number' ? mins : 0
   }
   const toMinutes = (time) => {
     const mins = clinicMinutesFromTime(time)
     return typeof mins === 'number' ? mins : 0
+  }
+  const minutesToTimeString = (mins) => {
+    if (!Number.isFinite(mins)) return '00:00'
+    const normalized = Math.max(0, Math.round(mins))
+    const hours = Math.floor(normalized / 60)
+    const minutes = normalized % 60
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
   }
 
 const isApptInCell = (appt, slot) => {
@@ -286,6 +309,92 @@ const openPatient = (appt) => {
     router.push(`/patients/${appt.patientId}`)
   }
   }
+
+const buildDragPayload = (appt, dentistId) => ({
+  dentistId,
+  appointmentId: appt?.id ?? appt?.appointmentId ?? appt?.appointment_id ?? appt?.uuid ?? null,
+  start: appt?.start || appt?.startTime,
+  end: appt?.end || appt?.endTime,
+  date: appt?.date || activeCalendarDate.value
+})
+
+const onAppointmentDragStart = (event, appt, dentistId) => {
+  const payload = buildDragPayload(appt, dentistId)
+  if (event?.dataTransfer) {
+    const serialized = JSON.stringify(payload)
+    event.dataTransfer.setData(dragMimeType, serialized)
+    event.dataTransfer.setData('text/plain', serialized)
+    event.dataTransfer.effectAllowed = 'move'
+  }
+}
+
+const onAppointmentDragEnd = () => {}
+
+const readDragPayload = (event) => {
+  const raw = event?.dataTransfer?.getData(dragMimeType) || event?.dataTransfer?.getData('text/plain')
+  if (!raw) return null
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+const getDropStartMinutes = (event, slot) => {
+  const baseMinutes = slot.hour * 60 + slot.minute
+  const rect = event.currentTarget?.getBoundingClientRect?.()
+  if (!rect || !rect.height) return baseMinutes
+  const relativeY = Math.min(Math.max(event.clientY - rect.top, 0), rect.height)
+  const segmentHeight = rect.height / maxMicroSlots
+  const segmentIndex = Math.min(
+    maxMicroSlots - 1,
+    Math.floor(relativeY / Math.max(segmentHeight, 1))
+  )
+  return baseMinutes + segmentIndex * intervalMins
+}
+
+const getPayloadDuration = (payload) => {
+  const start = clinicMinutesFromTime(payload?.start)
+  const end = clinicMinutesFromTime(payload?.end)
+  if (typeof start !== 'number' || typeof end !== 'number') {
+    return intervalMins
+  }
+  return Math.max(intervalMins, end - start)
+}
+
+const onSlotDragOver = (event) => {
+  event.preventDefault()
+  if (event?.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+}
+
+const onAppointmentDrop = (event, dentist, slot) => {
+  event.preventDefault()
+  const payload = readDragPayload(event)
+  if (!payload) return
+  const duration = getPayloadDuration(payload)
+  const newStartMinutes = getDropStartMinutes(event, slot)
+  const newStart = minutesToTimeString(newStartMinutes)
+  const newEnd = minutesToTimeString(newStartMinutes + duration)
+  const targetDate = activeCalendarDate.value || payload.date
+  emit('move-appointment', {
+    appointmentId: payload.appointmentId,
+    from: {
+      dentistId: payload.dentistId,
+      date: payload.date,
+      start: payload.start,
+      end: payload.end
+    },
+    to: {
+      dentistId: dentist.id,
+      date: targetDate,
+      start: newStart,
+      end: newEnd
+    },
+    appointment: payload
+  })
+}
 
 const showNow = computed(() => isToday(String(props.date).slice(0,10)))
 function isToday(ds){ const today = new Date().toISOString().slice(0,10); return ds === today }
