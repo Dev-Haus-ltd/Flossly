@@ -206,8 +206,47 @@
           />
         </template>
         <!-- Default renderer for other columns -->
-        <template v-else-if="col.key === 'inquiryDate' || col.key === 'followUpDate'">
+        <template v-else-if="col.key === 'inquiryDate'">
           <p class="ml-2 mb-0">{{ formatDate(item[col.key]) }}</p>
+        </template>
+        <template v-else-if="col.key === 'followUpDate'">
+          <div class="ml-2 mb-0">
+            <v-menu
+              v-model="followUpMenus[item.id]"
+              :close-on-content-click="false"
+              transition="scale-transition"
+              offset-y
+              max-width="320"
+              min-width="260"
+              
+            >
+              <template #activator="{ props: menuProps }">
+                <v-text-field
+                  v-bind="menuProps"
+                  :model-value="followUpDrafts[item.id] ?? formatDate(item.followUpDate)"
+                  density="compact"
+                  variant="plain"
+                  hide-details
+                  placeholder="Select date"
+                  readonly
+                  class="followup-input"
+                  @click="setupFollowUpDraft(item)"
+                  append-inner-icon="mdi-calendar"
+                />
+              </template>
+              <div class="pa-2">
+                <v-date-picker
+                  hide-header
+                  color="primary"
+                  :model-value="followUpDrafts[item.id] ?? formatDate(item.followUpDate)"
+                  @update:model-value="(value) => onFollowUpSelect(item, value)"
+                />
+                <div class="d-flex justify-end mt-2">
+                  <v-btn variant="text" size="small" @click="followUpMenus[item.id] = false">Cancel</v-btn>
+                </div>
+              </div>
+            </v-menu>
+          </div>
         </template>
         <template v-else>
           <p class="ml-2 mb-0">{{ item[col.key] }}</p>
@@ -238,8 +277,8 @@
     class="action-item d-flex flex-column align-center"
     @click="onActionClick(action.key)"
   >
-    <v-icon :color="action.color" size="24">{{ action.icon }}</v-icon>
-    <span class="action-label" :class="`text-${action.color}`">{{ action.label }}</span>
+    <img :src="action.icon" :alt="action.label" class="action-icon" />
+    <span class="action-label">{{ action.label }}</span>
   </div>
 
   <!-- Divider before close -->
@@ -309,9 +348,19 @@
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 import { buildRecipientContext, renderWithContext } from '@/lib/templateTokens'
 import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
+import callIcon from '@/assets/crm/call.svg'
+import sendMailIcon from '@/assets/crm/sendMail.svg'
+import whatsappIcon from '@/assets/crm/whatsapp.svg'
+import bookIcon from '@/assets/crm/book.svg'
+import sendPriceIcon from '@/assets/crm/sendPrice.svg'
+import sendFormIcon from '@/assets/crm/sendForm.svg'
+import shareLocationIcon from '@/assets/crm/shareLocation.svg'
+import convertIcon from '@/assets/crm/convert.svg'
+import archiveIcon from '@/assets/crm/archive.svg'
+import deleteIcon from '@/assets/crm/delete.svg'
 const crmStore = useCrmStore();
 const { user } = useUser();
-const emit = defineEmits(['select','openLead','delete']);
+const emit = defineEmits(['select','openLead','delete','book']);
 const props = defineProps({
   leads: { type: Array, required: true },
   headers: { type: Array, required: true },
@@ -324,6 +373,8 @@ const selectedLeads = ref([]);
 const isAllSelected = ref(false);
 const showLeadDetailDialog = ref(false);
 const selectedLead = ref({});
+const followUpMenus = reactive({});
+const followUpDrafts = reactive({});
 
 // Inline editing state
 const editingCell = reactive({
@@ -334,16 +385,16 @@ const editingCell = reactive({
 });
 
 const actions = [
-  { key: "call", label: "Call", icon: "mdi-phone-outline", color: "info" },
-  { key: "mail", label: "Send Mail", icon: "mdi-email-outline", color: "tertiary" },
-  { key: "whatsapp", label: "WhatsApp", icon: "mdi-whatsapp", color: "success" },
-  { key: "book", label: "Book", icon: "mdi-book-open-page-variant-outline", color: "primary" },
-  { key: "sendPrice", label: "Send Price", icon: "mdi-currency-usd", color: "warning" },
-  { key: "sendForm", label: "Send Form", icon: "mdi-form-select", color: "warning" },
-  { key: "shareLocation", label: "Share Location", icon: "mdi-map-marker-outline", color: "error" },
-  { key: "convert", label: "Convert", icon: "mdi-swap-horizontal", color: "on-surface" },
-  { key: "archive", label: "Archive", icon: "mdi-archive-outline", color: "on-surface" },
-  { key: "delete", label: "Delete", icon: "mdi-delete-outline", color: "on-surface" },
+  { key: "call", label: "Call", icon: callIcon },
+  { key: "mail", label: "Send Mail", icon: sendMailIcon },
+  { key: "whatsapp", label: "WhatsApp", icon: whatsappIcon },
+  { key: "book", label: "Book", icon: bookIcon },
+  { key: "sendPrice", label: "Send Price", icon: sendPriceIcon },
+  { key: "sendForm", label: "Send Form", icon: sendFormIcon },
+  { key: "shareLocation", label: "Share Location", icon: shareLocationIcon },
+  { key: "convert", label: "Convert", icon: convertIcon },
+  { key: "archive", label: "Archive", icon: archiveIcon },
+  { key: "delete", label: "Delete", icon: deleteIcon },
 ];
 const confirmDelete = ref(false);
 const deleting = ref(false);
@@ -393,14 +444,37 @@ const saveEdit = async (item, field) => {
 
 const onActionClick = (key) => {
   if (!selectedLeads.value.length) return;
-  if (key === 'delete') confirmDelete.value = true;
+  if (key === 'book') {
+    emit('book', [...selectedLeads.value])
+  }
+  else if (key === 'delete') confirmDelete.value = true;
   else if (key === 'archive') doArchive();
   else if (key === 'convert') convertSelected();
-  else if (['mail','book','sendPrice','sendForm','shareLocation'].includes(key)) openCompose(key)
+  else if (['mail','sendPrice','sendForm','shareLocation'].includes(key)) openCompose(key)
 };
 
 const formatDate = (d) => {
   return formatDateDDMMYYYY(d);
+};
+const setupFollowUpDraft = (item) => {
+  if (followUpDrafts[item.id] === undefined) {
+    followUpDrafts[item.id] = formatDate(item.followUpDate) || '';
+  }
+};
+const onFollowUpSelect = async (item, value) => {
+  if (!value) return;
+  const normalized = typeof value === 'string' ? value.slice(0, 10) : formatDate(value);
+  followUpDrafts[item.id] = normalized;
+  try {
+    const res = await crmStore.updateLead({ id: item.id, followUpDate: normalized });
+    if (res?.code === 0) {
+      item.followUpDate = normalized;
+    }
+  } catch (e) {
+    console.error('Failed to update follow up date', e);
+  } finally {
+    followUpMenus[item.id] = false;
+  }
 };
 const onSelect = (selection) => {
   console.log(selection);
@@ -689,6 +763,11 @@ const convertSelected = async () => {
   margin-top: 4px;
   white-space: nowrap;
   text-align: center;
+}
+.action-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
 }
 
 /* Inline editing styles */

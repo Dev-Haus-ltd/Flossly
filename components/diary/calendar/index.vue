@@ -104,10 +104,9 @@
 </template>
 
 <script setup>
-import { formatDateDDMMYYYY } from '@/lib/dateFormatter'
 import AppointmentCard from '@/components/diary/calendar/AppointmentCard.vue'
-
-const props = defineProps({
+import { clinicMinutesFromTime, formatDateDDMMYYYY } from '@/lib/dateFormatter'
+  const props = defineProps({
   date: { type: [String, Date], required: true },
   view: { type: String, default: 'day' },
   dentists: { type: Array, default: () => [] },
@@ -134,22 +133,7 @@ const parseHM = (t) => {
   if (isNaN(h) || isNaN(m)) return null
   return h * 60 + m
 }
-const parseAnyTimeToMinutes = (s) => {
-  if (!s) return null
-  // support 'HH:MM', 'H:MM AM', 'HH:MM AM'
-  const str = String(s).trim().toUpperCase()
-  const ampm = /(AM|PM)$/.test(str)
-  const parts = str.replace(/(AM|PM)$/,'').trim().split(':')
-  if (parts.length < 2) return null
-  let hh = parseInt(parts[0],10); let mm = parseInt(parts[1],10)
-  if (isNaN(hh) || isNaN(mm)) return null
-  if (ampm) {
-    const isPM = /PM$/.test(str)
-    if (hh === 12) hh = isPM ? 12 : 0
-    else if (isPM) hh += 12
-  }
-  return hh*60 + mm
-}
+
 // Show only standard working hours (09:00–17:00)
 const startHourC = computed(() => defaultStart)
 const endHourC = computed(() => defaultEnd)
@@ -201,22 +185,14 @@ const onCellClickGuard = (dent, slot) => {
   onCellClick(dent, slot)
 }
 
-const toMinutes = (time) => {
-  // Handle both 'HH:MM' format and ISO timestamp
-  if (!time) return 0
-  
-  let timeStr = time
-  // If it's an ISO timestamp, extract the time part
-  if (typeof time === 'string' && time.includes('T')) {
-    const date = new Date(time)
-    const hours = date.getHours()
-    const minutes = date.getMinutes()
-    timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+  const appointmentStartMinutes = (appt) => {
+    const mins = clinicMinutesFromTime(appt?.start || appt?.startTime || appt?.time || appt?.startTime)
+    return typeof mins === 'number' ? mins : 0
   }
-  
-  const [hh, mm] = timeStr.split(':').map(n => parseInt(n, 10))
-  return hh * 60 + mm
-}
+  const toMinutes = (time) => {
+    const mins = clinicMinutesFromTime(time)
+    return typeof mins === 'number' ? mins : 0
+  }
 
 const isApptInCell = (appt, slot) => {
   const start = toMinutes(appt.start)
@@ -248,12 +224,15 @@ const getMicroSlots = (appt) => {
 }
 
 // Get appointments that start in this hour
-function getAppointmentsForHour(dentistId, hour) {
-  return (props.appointments[dentistId] || []).filter(appt => {
-    if (!appt?.start) return false
-    return startsInHour(appt, hour)
-  })
-}
+  function getAppointmentsForHour(dentistId, hour) {
+    return (props.appointments[dentistId] || [])
+      .filter(appt => {
+        if (!appt?.start && !appt?.startTime) return false
+        return startsInHour(appt, hour)
+      })
+      .slice()
+      .sort((a, b) => appointmentStartMinutes(a) - appointmentStartMinutes(b))
+  }
 
 // Calculate how many empty slots to show (max 4 per hour)
 function getRemainingSlots(dentistId, hour) {
@@ -328,6 +307,7 @@ const nowTop = computed(() => {
   background-color: #fafafa;
   border-radius: 10px;
   border: 1px solid #e5e7eb;
+  height: 75vh;
 }
 
 /* ───────────────────────────────

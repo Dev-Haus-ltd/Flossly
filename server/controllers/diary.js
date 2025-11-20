@@ -2,23 +2,69 @@ import { Op } from 'sequelize'
 import { DiaryTreatment, DiaryPatient, DiaryAppointment, DiaryNote, User, RotaShift, Rota, OrganisationTreatment, Role, UserOrganisation } from '../models'
 import { success, error } from '../utils/response'
 
-// ---- Helpers: local date/time parsing + formatting ----
 const pad2 = (n) => String(n).padStart(2, '0')
+const resolveTimeMode = () => {
+  const publicMode = process.env.NUXT_PUBLIC_CLINIC_TIME_MODE
+  const serverMode = process.env.CLINIC_TIME_MODE
+  return String(publicMode || serverMode || 'agnostic').toLowerCase()
+}
+const TIME_MODE = resolveTimeMode()
+const USE_TZ_AGNOSTIC = TIME_MODE === 'agnostic'
+const parseDateParts = (dateStr) => {
+  if (typeof dateStr !== 'string') return null
+  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return null
+  return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) }
+}
+const buildUtcDate = ({ year, month, day }, hour = 0, minute = 0, second = 0, ms = 0) => {
+  return new Date(Date.UTC(year, month - 1, day, hour, minute, second, ms))
+}
+const setClinicHours = (dateObj, hour, minute = 0, second = 0, ms = 0) => {
+  if (USE_TZ_AGNOSTIC) dateObj.setUTCHours(hour, minute, second, ms)
+  else dateObj.setHours(hour, minute, second, ms)
+}
 const toLocalHM = (d) => {
   const dt = (d instanceof Date) ? d : new Date(d)
-  return `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`
+  const hours = USE_TZ_AGNOSTIC ? dt.getUTCHours() : dt.getHours()
+  const minutes = USE_TZ_AGNOSTIC ? dt.getUTCMinutes() : dt.getMinutes()
+  return `${pad2(hours)}:${pad2(minutes)}`
 }
 const toLocalYMD = (d) => {
   const dt = (d instanceof Date) ? d : new Date(d)
-  return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`
+  const year = USE_TZ_AGNOSTIC ? dt.getUTCFullYear() : dt.getFullYear()
+  const month = USE_TZ_AGNOSTIC ? dt.getUTCMonth() + 1 : dt.getMonth() + 1
+  const day = USE_TZ_AGNOSTIC ? dt.getUTCDate() : dt.getDate()
+  return `${year}-${pad2(month)}-${pad2(day)}`
 }
 const parseLocalDateTime = (dateStr, timeStr) => {
-  // Ensures local-time parsing (no timezone) to keep UI/server consistent
-  // Accepts time in HH:mm or HH:mm:ss
   if (!dateStr || !timeStr) return null
+  if (!USE_TZ_AGNOSTIC) {
+    const t = timeStr.length === 5 ? `${timeStr}:00` : timeStr
+    return new Date(`${dateStr}T${t}`)
+  }
+  // Treat the provided clinic date/time as timezone-agnostic so it remains consistent across hosts
+  const dateParts = parseDateParts(dateStr)
+  if (!dateParts) return null
   const t = timeStr.length === 5 ? `${timeStr}:00` : timeStr
-  // Using the ISO-like local format (no Z) makes Node treat as local time
-  return new Date(`${dateStr}T${t}`)
+  const segments = t.split(':').map((n) => Number(n))
+  if (segments.length < 2 || segments.some((n) => Number.isNaN(n))) return null
+  const [hour, minute, second = 0] = segments
+  return buildUtcDate(dateParts, hour, minute, second)
+}
+const getUtcRangeForDate = (dateStr) => {
+  if (!USE_TZ_AGNOSTIC) {
+    const day = new Date(dateStr)
+    if (Number.isNaN(day.valueOf())) return null
+    const start = new Date(day); start.setHours(0,0,0,0)
+    const end = new Date(day); end.setHours(23,59,59,999)
+    return { start, end }
+  }
+  const parts = parseDateParts(dateStr)
+  if (!parts) return null
+  return {
+    start: buildUtcDate(parts, 0, 0, 0, 0),
+    end: buildUtcDate(parts, 23, 59, 59, 999),
+  }
 }
 
 // --- Treatments ---
@@ -132,9 +178,9 @@ export const listAppointments = async (event) => {
     const q = getQuery(event) || {}
     const dateStr = q.date
     if (!dateStr) return error(400, 'date is required')
-    const day = new Date(dateStr)
-    const start = new Date(day); start.setHours(0,0,0,0)
-    const end = new Date(day); end.setHours(23,59,59,999)
+    const range = getUtcRangeForDate(dateStr)
+    if (!range) return error(400, 'Invalid date format')
+    const { start, end } = range
     const where = { organisationId: Number(orgId), startTime: { [Op.between]: [start, end] } }
     if (q.dentistId) where.dentistId = Number(q.dentistId)
     if (q.status) where.status = q.status
@@ -192,8 +238,8 @@ export const createAppointment = async (event) => {
     const end = new Date(start); end.setMinutes(end.getMinutes() + Number(payload.duration || 10))
 
     // Working hours validation (09:00–17:00 local)
-    const workStart = new Date(start); workStart.setHours(9,0,0,0)
-    const workEnd = new Date(start); workEnd.setHours(17,0,0,0)
+        const workStart = new Date(start); setClinicHours(workStart, 9,0,0,0)
+        const workEnd = new Date(start); setClinicHours(workEnd, 17,0,0,0)
     if (start < workStart) return error(400, 'Appointment must start at or after 09:00')
     if (end > workEnd) return error(400, 'Appointment must end by 17:00')
 
@@ -293,8 +339,8 @@ export const updateAppointment = async (event) => {
     const end = row.endTime instanceof Date ? row.endTime : new Date(row.endTime)
     if (start && end && !isNaN(start.getTime()) && !isNaN(end.getTime())) {
       // Working hours (09:00–17:00)
-      const workStart = new Date(start); workStart.setHours(9,0,0,0)
-      const workEnd = new Date(start); workEnd.setHours(17,0,0,0)
+      const workStart = new Date(start); setClinicHours(workStart, 9,0,0,0)
+      const workEnd = new Date(start); setClinicHours(workEnd, 17,0,0,0)
       if (start < workStart) return error(400, 'Appointment must start at or after 09:00')
       if (end > workEnd) return error(400, 'Appointment must end by 17:00')
 
@@ -345,17 +391,45 @@ export const getStats = async (event) => {
     const { orgId } = event.context.user
     const q = getQuery(event) || {}
     const period = (q.period || 'day').toLowerCase()
-    const baseDate = q.date ? new Date(q.date) : new Date()
+    let baseDate
+    if (q.date) {
+      if (USE_TZ_AGNOSTIC) {
+        const parsed = parseDateParts(q.date)
+        if (!parsed) return error(400, 'Invalid date')
+        baseDate = buildUtcDate(parsed, 12, 0, 0, 0) // midday avoids DST jumps when shifting days
+      } else {
+        baseDate = new Date(q.date)
+      }
+    } else {
+      baseDate = new Date()
+    }
     let start = new Date(baseDate); let end = new Date(baseDate)
-    if (period === 'day') { start.setHours(0,0,0,0); end.setHours(23,59,59,999) }
-    else if (period === 'week') {
-      const day = baseDate.getDay();
-      const diff = (day + 6) % 7; // Monday-based
-      start = new Date(baseDate); start.setDate(baseDate.getDate() - diff); start.setHours(0,0,0,0)
-      end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23,59,59,999)
-    } else if (period === 'month') {
-      start = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1)
-      end = new Date(baseDate.getFullYear(), baseDate.getMonth()+1, 0, 23,59,59,999)
+    if (USE_TZ_AGNOSTIC) {
+      if (period === 'day') {
+        setClinicHours(start, 0,0,0,0); setClinicHours(end, 23,59,59,999)
+      }
+      else if (period === 'week') {
+        const day = baseDate.getUTCDay()
+        const diff = (day + 6) % 7 // Monday-based
+        start = new Date(baseDate); start.setUTCDate(baseDate.getUTCDate() - diff); setClinicHours(start, 0,0,0,0)
+        end = new Date(start); end.setUTCDate(start.getUTCDate() + 6); setClinicHours(end, 23,59,59,999)
+      } else if (period === 'month') {
+        start = new Date(Date.UTC(baseDate.getUTCFullYear(), baseDate.getUTCMonth(), 1, 0, 0, 0, 0))
+        end = new Date(Date.UTC(baseDate.getUTCFullYear(), baseDate.getUTCMonth()+1, 0, 23, 59, 59, 999))
+      }
+    } else {
+      if (period === 'day') {
+        start.setHours(0,0,0,0); end.setHours(23,59,59,999)
+      }
+      else if (period === 'week') {
+        const day = baseDate.getDay()
+        const diff = (day + 6) % 7 // Monday-based
+        start = new Date(baseDate); start.setDate(baseDate.getDate() - diff); start.setHours(0,0,0,0)
+        end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23,59,59,999)
+      } else if (period === 'month') {
+        start = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1)
+        end = new Date(baseDate.getFullYear(), baseDate.getMonth()+1, 0, 23, 59, 59, 999)
+      }
     }
     const rows = await DiaryAppointment.findAll({ where: { organisationId: Number(orgId), startTime: { [Op.between]: [start, end] } } })
     const accounts = rows.reduce((sum, r) => sum + Number(r.amount || 0), 0)

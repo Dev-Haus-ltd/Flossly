@@ -4,7 +4,8 @@ export const useUserStore = defineStore("userStore", {
   state: () => ({
     isLoading: false,
     users: [],
-    orgUsers: []
+    orgUsers: [],
+    usersQueryKey: null,
   }),
 
   getters: {},
@@ -25,14 +26,22 @@ export const useUserStore = defineStore("userStore", {
           });
       });
     },
-    getUserList(data) {
+    getUserList(data = {}) {
+      const payload = { ...(data || {}) };
+      const force = Boolean(payload.force);
+      if (force) delete payload.force;
+      const queryKey = JSON.stringify(payload);
+      if (!force && this.users.length && this.usersQueryKey === queryKey) {
+        return Promise.resolve({ code: 0, data: this.users });
+      }
       this.isLoading = true;
       return new Promise((resolve, reject) => {
         userService
-          .getUserList(data)
+          .getUserList(payload)
           .then((res) => {
             this.isLoading = false;
             this.users = res.data;
+            this.usersQueryKey = queryKey;
             resolve(res);
           })
           .catch((err) => {

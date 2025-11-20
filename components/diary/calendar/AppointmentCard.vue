@@ -16,7 +16,7 @@
         </div>
         <div class="patient-details">
           <div class="patient-name">{{ appt.patient }}</div>
-          <div class="appointment-time">{{ appt.start }} - {{ appt.end }}</div>
+          <div class="appointment-time">{{ displayStart }} - {{ displayEnd }}</div>
         </div>
       </div>
       
@@ -70,12 +70,21 @@
 </template>
 
 <script setup>
+import { clinicTimeToHM } from '@/lib/dateFormatter'
+
 const props = defineProps({
   appt: { type: Object, required: true },
   microSlots: { type: Number, default: 1 }, // Now represents vertical slots occupied
   styleObj: { type: Object, default: () => ({}) },
   statusColors: { type: Object, required: true }
 })
+
+const hasValue = (val) => !(val === null || val === undefined || (typeof val === 'string' && val.trim() === ''))
+const REQUIRED_APPT_FIELDS = ['patient','start','end','status','date']
+const missingFields = REQUIRED_APPT_FIELDS.filter((field) => !hasValue(props.appt?.[field]))
+if (missingFields.length) {
+  throw new Error(`AppointmentCard requires ${missingFields.join(', ')} but received: ${JSON.stringify(props.appt || {})}`)
+}
 
 const emit = defineEmits(['update-status', 'open-patient'])
 
@@ -101,23 +110,8 @@ function truncateNotes(notes) {
   return notes.length > 40 ? notes.substring(0, 40) + '...' : notes
 }
 
-function formatTime(time) {
-  if (!time) return ''
-  
-  // If it's an ISO timestamp, convert it
-  if (typeof time === 'string' && time.includes('T')) {
-    const date = new Date(time)
-    const hours = date.getHours()
-    const minutes = date.getMinutes()
-    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
-  }
-  
-  // Already in HH:MM format
-  return time
-}
-
-const displayStart = computed(() => formatTime(props.appt.start || props.appt.startTime))
-const displayEnd = computed(() => formatTime(props.appt.end || props.appt.endTime))
+const displayStart = computed(() => clinicTimeToHM(props.appt.start || props.appt.startTime))
+const displayEnd = computed(() => clinicTimeToHM(props.appt.end || props.appt.endTime))
 </script>
 
 <style scoped>
