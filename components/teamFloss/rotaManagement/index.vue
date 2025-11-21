@@ -83,16 +83,13 @@ watch(activeComponent, (newVal) => {
 });
 const getRotas = async () => {
   let res;
-
   if (user.value.roleId === 1 || user.value.roleId === 8) {
     res = await rotaStore.getRotas();
   } else {
     res = await rotaStore.getUserRotas();
   }
-
   if (res.code === 0) {
     rotas.value = res.data;
-    console.log(rotas.value);
   }
 };
 
@@ -180,9 +177,9 @@ const filterUsers = (payload) => {
 const changecomponent = (id) => {
   activeComponent.value = id;
 };
-const onAddRotaHandle = () => {
-  getRotas();
-  activeComponent.value = 1;
+const onAddRotaHandle = (rota) => {
+  getRotas()
+  getAllShifts(rota)
 };
 const breadcrumbStyle = computed(() => {
   return (selectedRota.value || activeComponent.value === 2)
