@@ -119,7 +119,6 @@ import { clinicMinutesFromTime, formatDateDDMMYYYY } from '@/lib/dateFormatter'
   appointments: { type: Object, default: () => ({}) },
 })
 const emit = defineEmits(['slot-click','update-status','open-notes','slot-full','move-appointment'])
-import AppointmentCard from '@/components/diary/calendar/AppointmentCard.vue'
 const router = useRouter()
 function initials(name) {
   if (!name) return '';
