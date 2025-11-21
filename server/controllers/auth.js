@@ -297,12 +297,12 @@ export const updateProfile = async (event) => {
       user.fullName = user.fullName;
     }
     
-    user.phone = phone || user.phone;
-    user.address = address || user.address;
-    user.dob = dob || user.dob;
-    user.gender = gender || user.gender;
-    user.nextOfKin = nextOfKin || user.nextOfKin;
-    user.nextOfKinContact = nextOfKinContact || user.nextOfKinContact;
+    user.phone = phone !== undefined ? phone : user.phone;
+    user.address = address !== undefined ? address : user.address;
+    user.dob = dob !== undefined ? dob : user.dob;
+    user.gender = gender !== undefined ? gender : user.gender;
+    user.nextOfKin = nextOfKin !== undefined ? nextOfKin : user.nextOfKin;
+    user.nextOfKinContact = nextOfKinContact !== undefined ? nextOfKinContact : user.nextOfKinContact;
     if (roleId !== undefined) {
       user.roleId = roleId;
     }

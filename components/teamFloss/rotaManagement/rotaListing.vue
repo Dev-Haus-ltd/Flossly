@@ -203,7 +203,7 @@
 
                   <template v-slot:[`item.employees`]="{ item }">
                     <div class="px-2">
-                      {{ item.employees ?? "No data" }}
+                      {{ item.userCount ?? 0 }}
                     </div>
                   </template>
                   <template v-slot:[`item.duration`]="{ item }">
@@ -368,7 +368,7 @@
 
                   <template v-slot:[`item.employees`]="{ item }">
                     <div class="px-2">
-                      {{ item.employees ?? "No data" }}
+                      {{ item.userCount ?? 0 }}
                     </div>
                   </template>
                   <template v-slot:[`item.duration`]="{ item }">
@@ -472,7 +472,7 @@ const matchesSearch = (item) => {
   const q = search.value.toLowerCase();
   return (
     (item.name && item.name.toLowerCase().includes(q)) ||
-    String(item.employees).includes(q) ||
+    String(item.userCount ?? 0).includes(q) ||
     (item.status && item.status.toLowerCase().includes(q))
   );
 };

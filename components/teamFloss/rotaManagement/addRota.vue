@@ -53,15 +53,11 @@
               <div
                 class="content-wrapper d-flex flex-column align-center justify-center"
               >
-                <div class="mb-2">
-                  <img
-                    v-if="practice.logo"
-                    :src="practice.logo"
-                    alt="logo"
-                    style="height: 40px; width: 40px; border-radius: 50%"
-                  />
-                  <CommonAvatar v-else :user="{ fullName: practice.label }" />
-                </div>
+                <CommonAvatar 
+                  :user="{ name: practice.label, logo: practice.logo }"
+                  size="40"
+                  class="mb-2"
+                />
                 <p class="practice-title"> 
                   {{ practice.label }}
                 </p>
@@ -273,13 +269,35 @@ const rules = {
     (Array.isArray(v) ? v.length > 0 : !!v) || "This field is required",
 };
 const employees = ref([]);
+
+// Helper function to get organization data consistently (same as sidebar)
+const getOrgData = (orgWrapper) => {
+  // Check if org has nested organisation object
+  if (orgWrapper?.organisation?.id && orgWrapper?.organisation?.name) {
+    return orgWrapper.organisation;
+  }
+  
+  // Check if org is the organisation object itself
+  if (orgWrapper?.id && orgWrapper?.name) {
+    return orgWrapper;
+  }
+  
+  return null;
+};
+
 const practices = computed(
   () =>
-    user?.userOrganisations?.map((uo) => ({
-      label: uo.organisation.name,
-      value: uo.organisation.id,
-      logo: uo.organisation.logo,
-    })) || []
+    user?.userOrganisations?.map((uo) => {
+      const orgData = getOrgData(uo);
+      const logo = orgData?.logo;
+      // Only set logo if it's a valid non-empty string
+      const validLogo = logo && typeof logo === 'string' && logo.trim() !== '' ? logo : null;
+      return {
+        label: orgData?.name || '',
+        value: orgData?.id || null,
+        logo: validLogo,
+      };
+    }).filter(p => p.value) || []
 );
 const selectedOption = ref(null);
 const existingRotas = ref([]);
@@ -426,8 +444,60 @@ function resetForm() {
   existingRotas.value = [];
 }
 
+// Auto-select practice on mount
 onMounted(() => {
   checkExistingRotas();
+  
+  // Auto-select practice based on rules
+  const practiceList = practices.value;
+  
+  if (practiceList.length === 0) {
+    return; // No practices available
+  }
+  
+  // If only one practice, select it automatically
+  if (practiceList.length === 1) {
+    const practiceId = practiceList[0].value;
+    if (practiceId) {
+      selectPractice(practiceId);
+    }
+    return;
+  }
+  
+  // If multiple practices, select the current one (from sidebar)
+  if (user?.currentLoggedInOrgId) {
+    const currentOrgId = user.currentLoggedInOrgId;
+    
+    // Try to find practice matching currentLoggedInOrgId
+    // First try by organisationId
+    const orgWrapper = user.userOrganisations?.find(
+      (org) => org.organisationId === currentOrgId
+    );
+    
+    if (orgWrapper) {
+      const orgData = getOrgData(orgWrapper);
+      if (orgData?.id) {
+        const practiceId = orgData.id;
+        selectPractice(practiceId);
+        return;
+      }
+    }
+    
+    // If not found, try by id
+    const matchingPractice = practiceList.find(
+      (p) => Number(p.value) === Number(currentOrgId)
+    );
+    
+    if (matchingPractice) {
+      selectPractice(matchingPractice.value);
+      return;
+    }
+  }
+  
+  // Fallback: select first practice if no current org found
+  if (practiceList.length > 0 && practiceList[0].value) {
+    selectPractice(practiceList[0].value);
+  }
 });
 </script>
 <style scoped>
