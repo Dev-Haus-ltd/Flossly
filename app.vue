@@ -1,7 +1,7 @@
 <template>
   <NuxtLayout>
     <NuxtPage class="bck-org" />
-    <CommonLoader />
+    <CommonLoader v-if="showLoader" />
     <Snackbar />
     <ClientOnly>
     <div class="floating-buttons" v-if="showFloatingButtons">
@@ -46,9 +46,14 @@ const rolesList = ref([]);
 const route = useRoute();
 
 const showFloatingButtons = computed(() => {
-  const excludedRoutes = ["onboarding", "login", "signup"];
+  const excludedRoutes = ["onboarding", "login", "signup", "offline"];
   return loggedIn.value && !excludedRoutes.includes(route.name);
 });
+const showLoader = computed(() => {
+  const excludedRoutes = ["offline"];
+  return !excludedRoutes.includes(route.name);
+});
+
 
 const handleCreateTask = () => {
   addStaffDrawer.value = false;

@@ -123,12 +123,22 @@ export default defineNuxtConfig({
 
       globPatterns: [
         "**/*.{ico,json,txt,webmanifest}",
+        "offline/*.svg",
         "pwa-*.png",
         "apple-touch-icon-*.png"
       ],
 
       // zero runtime caching, zero asset caching, zero API caching
-      runtimeCaching: [],
+      runtimeCaching: [
+        {
+          urlPattern: ({url}) => url.pathname.includes('/_nuxt/') && url.pathname.includes('offline'),
+          handler: 'CacheFirst',
+          options: {
+            cacheName: 'offline-page',
+            expiration: { maxEntries: 1 }
+          }
+        }
+      ],
 
       maximumFileSizeToCacheInBytes: 2 * 1024 * 1024
     },
