@@ -63,7 +63,7 @@ export default defineNuxtConfig({
     "@vite-pwa/nuxt",
     // "vue-social-sharing/nuxt"
   ],
-    pwa: {
+  pwa: {
     registerType: "autoUpdate",
     injectRegister: 'auto',
     manifest: {
@@ -71,7 +71,7 @@ export default defineNuxtConfig({
       short_name: "Flossly",
       description: "Flossly web application",
       theme_color: "#0061FB",
-      background_color: "#FFFFFF",
+      background_color: "#171952",
       display: "standalone",
       start_url: "/",
       scope: "/",
@@ -112,30 +112,25 @@ export default defineNuxtConfig({
       ],
     },
     devOptions: { 
-      enabled: true,
+      enabled: false,
       suppressWarnings: false,
-      navigateFallback: '/',
       type: 'module',
     },
     workbox: {
-      globPatterns: ['**/*.{js,css,html,ico,png,svg,json,vue,txt,woff2}'],
-      navigateFallback: '/',
-      runtimeCaching: [
-        {
-          urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-          handler: 'CacheFirst',
-          options: {
-            cacheName: 'google-fonts-cache',
-            expiration: {
-              maxEntries: 10,
-              maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-            },
-            cacheableResponse: {
-              statuses: [0, 200]
-            }
-          }
-        }
-      ]
+      clientsClaim: true,
+      skipWaiting: true,
+      cleanupOutdatedCaches: true,
+
+      globPatterns: [
+        "**/*.{ico,json,txt,webmanifest}",
+        "pwa-*.png",
+        "apple-touch-icon-*.png"
+      ],
+
+      // zero runtime caching, zero asset caching, zero API caching
+      runtimeCaching: [],
+
+      maximumFileSizeToCacheInBytes: 2 * 1024 * 1024
     },
   },
   css: ["vuetify/lib/styles/main.sass", "@/assets/css/fonts.css"],
