@@ -139,6 +139,7 @@ const dentistSelect = computed(() => dentists.value)
 
 // Simple appointment storage keyed by dentist id
 const appointmentsByDentist = reactive({})
+let appointmentsLoadSeq = 0
 
 // Use global snackbar via store
 const mainStore = useMainStore()
@@ -296,7 +297,7 @@ function buildWeekDates() {
 }
 
 function loadAppointments() {
-  for (const k of Object.keys(appointmentsByDentist)) delete appointmentsByDentist[k]
+  const seq = ++appointmentsLoadSeq
   const dates = view.value === 'week' ? buildWeekDates() : [dateStr.value]
   const promises = []
   const selected = filters.value.dentistId
@@ -312,10 +313,30 @@ function loadAppointments() {
     }
   }
   Promise.all(promises).then((results) => {
+    if (seq !== appointmentsLoadSeq) return
+    const nextMap = {}
     results.forEach(({ key, rows }) => {
-      if (!appointmentsByDentist[key]) appointmentsByDentist[key] = []
-      appointmentsByDentist[key].push(...rows.map((r) => ({ id: r.id, patientId: r.patientId, patient: r.patient, start: r.start, end: r.end, status: r.status, treatmentName: r.treatmentName, notes: r.notes, date: r.date })))
-      sortAppointmentsForDentist(key)
+      if (!nextMap[key]) nextMap[key] = []
+      nextMap[key].push(
+        ...rows.map((r) => ({
+          id: r.id,
+          patientId: r.patientId,
+          patient: r.patient,
+          start: r.start,
+          end: r.end,
+          status: r.status,
+          treatmentName: r.treatmentName,
+          notes: r.notes,
+          date: r.date,
+          dentistId: r.dentistId,
+        }))
+      )
+    })
+    // replace once new data ready to avoid flicker
+    Object.keys(appointmentsByDentist).forEach((k) => delete appointmentsByDentist[k])
+    Object.entries(nextMap).forEach(([k, list]) => {
+      appointmentsByDentist[k] = list
+      sortAppointmentsForDentist(k)
     })
   })
 }

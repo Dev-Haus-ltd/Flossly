@@ -470,9 +470,11 @@ const nowTop = computed(() => {
 .calendar-wrap {
   width: 100%;
   overflow-x: auto;
-  background-color: #fafafa;
-  border-radius: 10px;
+  background-color: #fff;
+  border-radius: 14px;
   border: 1px solid #e5e7eb;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+  padding: 10px;
   height: 75vh;
 }
 
@@ -483,7 +485,10 @@ const nowTop = computed(() => {
   display: grid;
   grid-template-columns: 90px repeat(var(--cols, 3), minmax(var(--dent-col-min, 420px), max-content));
   grid-auto-rows: auto; /* each 15-min slot row grows with tallest cell */
-  background-color: #e5e7eb;
+  background-color: #eef2f7;
+  border-radius: 12px;
+  overflow: auto;
+  border: 1px solid #e5e7eb;
 }
 
 /* Dentist header cells (row 1, columns 2..N) */
@@ -491,8 +496,8 @@ const nowTop = computed(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px;
-  background: #fff;
+  padding: 14px;
+  background: #f6f7fb;
   border-left: 1px solid #e5e7eb;
   border-bottom: 1px solid #e5e7eb;
   min-width: var(--dent-col-min, 420px);
@@ -502,19 +507,19 @@ const nowTop = computed(() => {
 .time-head {
   height: 64px;
   border-bottom: 1px solid #e5e7eb;
-  background: #fff;
+  background: #f6f7fb;
 }
 
 /* Time cells (column 1, rows >= 2) */
 .time-cell {
-  background: #fff;
+  background: linear-gradient(180deg, #f6f7fb 0%, #ffffff 70%);
   font-size: 13px;
-  font-weight: 500;
-  color: #374151;
+  font-weight: 600;
+  color: #213536;
   display: flex;
   align-items: flex-start;
   justify-content: flex-end;
-  padding: 12px 12px 0 0;
+  padding: 14px 14px 0 0;
   border-right: 1px solid #e5e7eb;
   border-bottom: 1px solid #e5e7eb;
   min-height: 120px; /* minimum row height for hour block */
@@ -527,7 +532,7 @@ const nowTop = computed(() => {
   border-bottom: 1px solid #e5e7eb;
   min-width: var(--dent-col-min, 420px);
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .slot-cell:hover {
@@ -550,6 +555,9 @@ const nowTop = computed(() => {
   grid-template-rows: repeat(4, minmax(84px, 1fr));
   gap: 8px;
   padding: 12px;
+  background: #f9fbff;
+  border-radius: 10px;
+  border: 1px solid #eef2f7;
 }
 
 .empty-slot {
@@ -584,8 +592,11 @@ const nowTop = computed(() => {
 .grid {
   display: grid;
   grid-template-columns: 80px repeat(var(--cols, 3), 1fr);
-  background-color: #e5e7eb;
+  background-color: #eef2f7;
   position: relative;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 .grid::after {
@@ -608,7 +619,7 @@ const nowTop = computed(() => {
    TIME COLUMN (week view)
 ─────────────────────────────── */
 .time-col {
-  background: #fff;
+  background: #f6f7fb;
   border-right: 1px solid #e5e7eb;
 }
 
@@ -627,6 +638,7 @@ const nowTop = computed(() => {
   justify-content: space-between;
   padding: 12px;
   border-bottom: 1px solid #e5e7eb;
+  background: #f6f7fb;
 }
 
 .avatar {
