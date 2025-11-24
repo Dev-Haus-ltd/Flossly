@@ -1,4 +1,4 @@
-import { ChatbotConfig, User, DiaryPatient, DiaryAppointment, OrganisationTreatment, CrmLead, CrmLeadAssignee, CrmLeadCommunication } from "../models";
+import { ChatbotConfig, User, DiaryPatient, DiaryAppointment, OrganisationTreatment, CrmLead, CrmLeadAssignee, CrmLeadCommunication, Role, UserOrganisation } from "../models";
 import { CONTACT_METHODS } from "../models/crm/leadCommunications";
 import { readBody } from "h3";
 import { createError } from "h3";
@@ -62,6 +62,21 @@ const parseLocalDateTime = (dateStr, timeStr) => {
 const setClinicHours = (dateObj, hour, minute = 0, second = 0, ms = 0) => {
   if (USE_TZ_AGNOSTIC) dateObj.setUTCHours(hour, minute, second, ms);
   else dateObj.setHours(hour, minute, second, ms);
+};
+const getUtcRangeForDate = (dateStr) => {
+  if (!USE_TZ_AGNOSTIC) {
+    const day = new Date(dateStr);
+    if (Number.isNaN(day.valueOf())) return null;
+    const start = new Date(day); start.setHours(0, 0, 0, 0);
+    const end = new Date(day); end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }
+  const parts = parseDateParts(dateStr);
+  if (!parts) return null;
+  return {
+    start: buildUtcDate(parts, 0, 0, 0, 0),
+    end: buildUtcDate(parts, 23, 59, 59, 999),
+  };
 };
 
 export const saveChatbotConfig = async (event) => {
@@ -221,12 +236,66 @@ export const createAppointmentViaChatbot = async (event) => {
     const organisationId = botValidation.organizationId;
     
     // Validate required fields
-    const required = ['dentistId', 'date', 'time', 'duration'];
+    const required = ['date', 'time', 'duration'];
     for (const k of required) {
       if (!payload?.[k]) {
         return error(400, `${k} is required`);
       }
     }
+    
+    // Auto-select dentist with lowest bookings for the given date
+    let selectedDentistId = null;
+    
+    // Get all active dentists for the organization
+    const users = await User.findAll({
+      attributes: ['id', 'fullName', 'email', 'photo', 'roleId'],
+      where: { status: 'Active' },
+      include: [
+        { model: Role, as: 'role', attributes: ['title'] },
+        { model: UserOrganisation, as: 'userOrganisations', attributes: [], where: { organisationId: Number(organisationId) } },
+      ],
+    });
+    
+    // Filter to only dentists
+    const dentists = users.filter(u => 
+      u.roleId === 5 || (u.role?.title || '').toLowerCase().includes('dentist')
+    );
+    
+    if (dentists.length === 0) {
+      return error(404, 'No active dentists found for this organization');
+    }
+    
+    // Get date range for counting appointments
+    const dateRange = getUtcRangeForDate(payload.date);
+    if (!dateRange) {
+      return error(400, 'Invalid date format');
+    }
+    
+    // Count appointments for each dentist on the given date
+    const dentistCounts = await Promise.all(
+      dentists.map(async (dentist) => {
+        const count = await DiaryAppointment.count({
+          where: {
+            organisationId: Number(organisationId),
+            dentistId: dentist.id,
+            startTime: { [Op.between]: [dateRange.start, dateRange.end] },
+            status: { [Op.ne]: 'Cancelled' }
+          }
+        });
+        return { dentist, count };
+      })
+    );
+    
+    // Select dentist with lowest appointment count
+    dentistCounts.sort((a, b) => a.count - b.count);
+    selectedDentistId = dentistCounts[0].dentist.id;
+    
+    console.log('[Chatbot API] Auto-selected dentist:', {
+      dentistId: selectedDentistId,
+      dentistName: dentistCounts[0].dentist.fullName,
+      appointmentCount: dentistCounts[0].count,
+      date: payload.date
+    });
     
     // Handle patient creation if patientName is provided but patientId is not
     let patientId = payload.patientId || null;
@@ -297,7 +366,7 @@ export const createAppointmentViaChatbot = async (event) => {
         ...orgClause,
         ...overlapWindow,
         ...notCancelled,
-        dentistId: Number(payload.dentistId)
+        dentistId: Number(selectedDentistId)
       }
     });
     if (dentistOverlap > 0) {
@@ -349,7 +418,7 @@ export const createAppointmentViaChatbot = async (event) => {
     console.log('[Chatbot API] Creating appointment with data:', {
       organisationId: Number(organisationId),
       patientId,
-      dentistId: Number(payload.dentistId),
+      dentistId: Number(selectedDentistId),
       treatmentId: treatmentId,
       treatmentName,
       status: payload.status || 'Pending',
@@ -362,7 +431,7 @@ export const createAppointmentViaChatbot = async (event) => {
     const created = await DiaryAppointment.create({
       organisationId: Number(organisationId),
       patientId,
-      dentistId: Number(payload.dentistId),
+      dentistId: Number(selectedDentistId),
       treatmentId: treatmentId,
       treatmentName,
       status: payload.status || 'Pending',

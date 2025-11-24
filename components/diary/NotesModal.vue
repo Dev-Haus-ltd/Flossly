@@ -2,7 +2,7 @@
   <v-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" max-width="960px">
     <v-card class="rounded-xl pa-4">
       <div class="d-flex justify-space-between align-center mb-2">
-        <div class="text-subtitle-1 font-weight-600">Notes for {{ dentistName }} — {{ date }}</div>
+        <div class="text-subtitle-1 font-weight-600">Notes for {{ dentistName }} — {{ formattedDate }}</div>
         <v-btn icon="mdi-close" variant="text" @click="$emit('update:modelValue', false)" />
       </div>
 
@@ -29,7 +29,7 @@
                 </v-col>
                 <v-col cols="12" md="6">
                   <label class="mb-1 fld-lbl">Select Date</label>
-                  <v-text-field v-model="form.date" variant="solo" density="compact" class="mb-1 input-bordered" flat readonly />
+                  <v-text-field :model-value="formattedFormDate" variant="solo" density="compact" class="mb-1 input-bordered" flat readonly />
                 </v-col>
                 <v-col cols="12" md="6">
                   <label class="mb-1 fld-lbl">Select time</label>
@@ -103,7 +103,7 @@
                 </div>
                 <div class="mb-2">
                   <span class="note-label">Date</span>
-                  <span class="note-value">{{ n.date }}</span>
+                  <span class="note-value">{{ formatNoteDate(n.date) }}</span>
                 </div>
                 <div class="mb-2">
                   <span class="note-label">Time</span>
@@ -139,6 +139,7 @@ import { ref, computed, watch, reactive } from 'vue'
 import { useDiaryStore } from '@/stores/diary'
 import { useMainStore } from '@/stores/index'
 import diaryService from '@/services/diaryService'
+import { formatDateDDMMYYYY } from '@/lib/dateFormatter'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -180,6 +181,19 @@ const timeOptions = computed(() => {
   return options
 })
 const channelOptions = ['Phone','Email','WhatsApp','SMS','In-person']
+
+// Format dates to DD/MM/YYYY
+const formattedDate = computed(() => {
+  return formatDateDDMMYYYY(props.date)
+})
+
+const formattedFormDate = computed(() => {
+  return formatDateDDMMYYYY(form.value.date)
+})
+
+const formatNoteDate = (dateStr) => {
+  return formatDateDDMMYYYY(dateStr)
+}
 
 const notify = (message, type = 'success') => {
   if (mainStore?.setSnackbar) mainStore.setSnackbar({ title: message, type })

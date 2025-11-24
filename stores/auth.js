@@ -301,5 +301,20 @@ export const useAuthStore = defineStore("authStore", {
           });
       });
     },
+    getLoginHistory(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService
+          .getLoginHistory(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
   },
 });

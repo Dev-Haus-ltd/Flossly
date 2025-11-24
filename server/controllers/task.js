@@ -944,6 +944,7 @@ export const teamTasksCounts = async (event) => {
         as: "user",
         attributes: ["id", "fullName", "photo", "email", "roleId"],
         where: { status: "Active" },
+        required: true, // INNER JOIN - only include users that exist and are Active
         include: [
           {
             model: Role,
@@ -954,6 +955,39 @@ export const teamTasksCounts = async (event) => {
       },
     });
     const users = orgUsers.map((el) => el.user).filter(Boolean);
+    
+    // Ensure current user is always included, even if not in the filtered list
+    const currentUserId = loggedUser.userId || loggedUser.id;
+    const currentUserIncluded = users.some(u => u.id === currentUserId);
+    
+    if (!currentUserIncluded && currentUserId) {
+      // Check if current user has a UserOrganisation record for this org
+      const userOrg = await UserOrganisation.findOne({
+        where: { 
+          userId: currentUserId,
+          organisationId: organisationId 
+        },
+      });
+      
+      if (userOrg) {
+        // Fetch current user separately if not included (might be inactive status)
+        const currentUser = await User.findOne({
+          where: { id: currentUserId },
+          attributes: ["id", "fullName", "photo", "email", "roleId"],
+          include: [
+            {
+              model: Role,
+              as: "role",
+              attributes: ["id", "title", "color"],
+            },
+          ],
+        });
+        
+        if (currentUser) {
+          users.push(currentUser);
+        }
+      }
+    }
     const results = await Promise.all(
       users.map(async (user) => {
         const [pending, completed, upcoming] = await Promise.all([

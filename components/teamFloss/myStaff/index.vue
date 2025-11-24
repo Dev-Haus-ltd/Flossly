@@ -51,11 +51,13 @@
     v-if="props.teams.length"
     :teams="filteredTeams"
     :selectedHeaders="selectedHeaders"
+    :availableHeaders="availableHeaders"
     :search="search"
     :roleList="rolesList"
     @add="handleAdd"
     @onUserSelect="getUserDetails"
     @onUpdate="updateTeams"
+    @onUpdateHeaders="onUpdateHeaders"
   />
 
   <TeamFlossSideBarAddNewstaff
@@ -184,7 +186,8 @@ const updateTeams = () => {
   emit("onUpdate");
   addStaffDrawer.value = false;
 };
-const selectedHeaders = ref([
+// Default headers
+const defaultHeaders = [
   { title: "Name", key: "fullName", width: 200, sortable: true },
   { title: "Role", key: "role.title", width: 200, sortable: true },
   {
@@ -218,7 +221,52 @@ const selectedHeaders = ref([
     sortable: true,
   },
   { title: "+", key: "actions", width: 60, sortable: false },
+];
+
+// Load saved headers from localStorage or use defaults
+const loadSavedHeaders = () => {
+  try {
+    const saved = localStorage.getItem('myStaffTableColumns');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Ensure actions column is always present
+      if (!parsed.find(h => h.key === 'actions')) {
+        parsed.push({ title: "+", key: "actions", width: 60, sortable: false });
+      }
+      return parsed;
+    }
+  } catch (e) {
+    console.error('Error loading saved headers:', e);
+  }
+  return defaultHeaders;
+};
+
+const selectedHeaders = ref(defaultHeaders);
+
+// Load saved headers on mount (client-side only)
+onMounted(() => {
+  selectedHeaders.value = loadSavedHeaders();
+});
+
+// Available columns that can be added
+const availableHeaders = ref([
+  { title: "Email", key: "email", width: 200, sortable: true },
+  { title: "Phone", key: "phone", width: 150, sortable: true },
+  { title: "Date of Birth", key: "dob", width: 150, sortable: true },
+  { title: "CPD Hours", key: "cpdHours", width: 150, sortable: true },
 ]);
+
+const onUpdateHeaders = (updatedHeaders) => {
+  selectedHeaders.value = updatedHeaders;
+  // Save to localStorage
+  if (process.client) {
+    try {
+      localStorage.setItem('myStaffTableColumns', JSON.stringify(updatedHeaders));
+    } catch (e) {
+      console.error('Error saving headers:', e);
+    }
+  }
+};
 const handleAdd = (item) => {
   console.log("Add clicked:", item);
 };

@@ -128,8 +128,12 @@
     </div>
   </v-sheet>
 
-  <!-- Add Patient Modal -->
-  <AddPatient v-model="showAddPatient" @save="onSavePatient" />
+  <!-- Add Patient Panel - Only render after page loads -->
+  <ClientOnly>
+    <template v-if="dentists && dentists.length > 0 && treatments && treatments.length > 0">
+      <AddPatient v-model="showAddPatient" @save="onSavePatient" />
+    </template>
+  </ClientOnly>
 </template>
 
 <script setup>

@@ -43,9 +43,7 @@
               slider-color="primary"
             >
               <v-tab
-                v-for="(category, index) in categoryList.filter(
-                  (x) => !x.parentId
-                )"
+                v-for="(category, index) in filteredCategories"
                 :key="category.id"
                 :value="index + 1"
                 class="tab-text"
@@ -424,6 +422,17 @@ const flosslyItems = ref([
 const tab = ref(1);
 const categoryList = ref([]);
 const stats = ref([]);
+
+// Filtered categories excluding Compliance
+const filteredCategories = computed(() => {
+  const filtered = categoryList.value.filter((x) => {
+    if (x.parentId) return false;
+    const name = (x.name || '').trim().toLowerCase();
+    return name !== 'compliance';
+  });
+
+  return filtered;
+});
 const getRecentDocs = () => {
   return docStore
     .recentDocs()
@@ -470,8 +479,8 @@ const openFile = async (file) => {
 };
 const fetchDummyStats = async () => {
   try {
-    // Filter to only parent categories (same as tabs)
-    const parentCategories = categoryList.value.filter((x) => !x.parentId);
+    // Filter to only parent categories (same as tabs), excluding Compliance
+    const parentCategories = filteredCategories.value;
     // Find the selected category based on tab index
     const selectedCategory = parentCategories[tab.value - 1];
     const categoryId = selectedCategory?.id || null;
