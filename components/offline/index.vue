@@ -1,4 +1,25 @@
-<!-- components/offline/index.vue -->
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(23, 25, 82, 0.4);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 15px rgba(23, 25, 82, 0);
+  }
+}
+
+@keyframes pulseNoGlow {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}<!-- components/offline/index.vue -->
 <template>
   <div 
     class="offline-container"
@@ -13,19 +34,35 @@
             rounded="lg"
           >
             <!-- Icon Container -->
-            <div class="icon-ellipse">
+            <div 
+              class="icon-ellipse" 
+              :class="[isRetrying || isChecking ? 'pulse-icon' : '', isOnline ? 'success-pulse' : '']"
+              :key="`icon-${isRetrying}-${isChecking}-${isOnline}`"
+            >
               <img 
                 :src="isOnline ? onlineIconPath : offlineIconPath"
                 :alt="isOnline ? 'Online' : 'Offline'"
                 class="icon-image"
+                :class="[isRetrying || isChecking ? 'icon-spin' : '', isOnline ? 'bounce-success' : '']"
+                :key="`image-${isRetrying}-${isChecking}-${isOnline}`"
               />
             </div>
 
             <!-- Heading -->
-            <h1 class="text-h5 font-weight-bold mb-4">Whoops</h1>
+            <h1 
+              class="text-h5 font-weight-bold mb-4" 
+              :class="[isRetrying || isChecking ? 'fade-text' : '', isOnline ? 'success-text' : '']"
+              :key="`heading-${isRetrying}-${isChecking}-${isOnline}`"
+            >
+              {{ isOnline ? 'Connected!' : 'Whoops' }}
+            </h1>
 
             <!-- Status Text -->
-            <p class="text-style mb-6 px-2">
+            <p 
+              class="text-style mb-6 px-2" 
+              :class="[isRetrying || isChecking ? 'fade-text' : '', isOnline ? 'success-text' : '']"
+              :key="`status-${isRetrying}-${isChecking}-${isOnline}`"
+            >
               {{ statusMessage }}
             </p>
 
@@ -62,6 +99,7 @@ const offlineIconPath = ref('/offline/offline.svg')
 // State
 const isOnline = ref(false)
 const isRetrying = ref(false)
+const isChecking = ref(true)
 let interval = null
 
 // Computed status message
@@ -99,14 +137,16 @@ const restore = async () => {
 }
 
 const check = async () => {
+  isChecking.value = true
   const ok = await ping()
   isOnline.value = ok
+  isChecking.value = false
   if (ok) {
     clearInterval(interval)
     // Add small delay before redirecting for better UX
     setTimeout(() => {
       restore()
-    }, 500)
+    }, 1000)
   }
 }
 
@@ -129,6 +169,27 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* Keyframe animations */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInOut {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
 .offline-container {
   min-height: 100vh;
   background-size: cover;
@@ -152,6 +213,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   padding: 16px;
+  transition: all 0.3s ease;
 }
 
 .icon-image {
@@ -160,14 +222,15 @@ onUnmounted(() => {
   object-fit: contain;
   filter: brightness(0) invert(1);
 }
+
 .text-style {
   font-family: "Inter", sans-serif;
   font-weight: 400;
   font-style: normal;
   font-size: 20px;
-  line-height: 140%; /* matches Figma */
-  letter-spacing: 0%; /* matches Figma */
-  text-align: center; /* matches Figma */
+  line-height: 140%;
+  letter-spacing: 0%;
+  text-align: center;
 }
 
 /* Responsive adjustments */
@@ -192,5 +255,94 @@ onUnmounted(() => {
 
 .w-100 {
   width: 100%;
+}
+</style>
+
+<style>
+/* Global styles - outside scoped to ensure animations work properly */
+
+/* Keyframe animations */
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(23, 25, 82, 0.4);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 15px rgba(23, 25, 82, 0);
+  }
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Global animation classes */
+.card-checking {
+  animation: slideUp 0.6s ease-out !important;
+}
+
+.pulse-icon {
+  animation: pulse 1.5s ease-in-out infinite !important;
+}
+
+.icon-spin {
+  animation: spin 1.2s linear infinite !important;
+}
+
+.fade-text {
+  animation: fadeInOut 1.2s ease-in-out infinite !important;
+}
+
+/* Success animations */
+@keyframes successGlow {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(23, 25, 82, 0.7);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 20px rgba(23, 25, 82, 0);
+  }
+}
+
+@keyframes bounceSuccess {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.1) rotate(360deg);
+  }
+}
+
+@keyframes slideInText {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.success-pulse {
+  animation: successGlow 2s ease-out !important;
+}
+
+.bounce-success {
+  animation: bounceSuccess 1.2s ease-out !important;
+}
+
+.success-text {
+  animation: slideInText 1s ease-out !important;
 }
 </style>
