@@ -45,7 +45,7 @@
           <v-select
             v-model="selectedRole"
             :items="roles"
-            item-title="name"
+            item-title="title"
             item-value="id"
             variant="solo"
             flat
@@ -134,7 +134,7 @@
     [selectedRole, selectedDOJ, selectedProfileCompletion, selectedRecruitmentDocs, selectedCPD],
     () => {
       emit("update:filters", {
-        role: selectedRole.value,
+        role: selectedRole.value ? Number(selectedRole.value) : null,
         doj: selectedDOJ.value,
         profileCompletion: selectedProfileCompletion.value,
         recruitmentDocs: selectedRecruitmentDocs.value,

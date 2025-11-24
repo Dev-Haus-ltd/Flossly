@@ -27,7 +27,7 @@ export const UserLeaveEntitlement = sequelize.define(
     allowedAnnualLeaves: {
       type: DataTypes.INTEGER,
       allowNull: true,
-      defaultValue: 12
+      defaultValue: 14
     },
     takenAnnualLeaves: {
       type: DataTypes.INTEGER,

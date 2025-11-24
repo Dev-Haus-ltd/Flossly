@@ -90,7 +90,7 @@
                 </template>
                 <template v-else>
                   <InfoRow label="Hygienist recall Interval" :value="editable.hygienistRecallInterval || '-'" />
-                  <InfoRow label="Next hygienist recall" :value="editable.nextHygienistRecall ? new Date(editable.nextHygienistRecall).toLocaleDateString('en-GB') : '-'" />
+                  <InfoRow label="Next hygienist recall" :value="editable.nextHygienistRecall ? formatDateDDMMYYYY(editable.nextHygienistRecall) : '-'" />
                   <InfoRow label="Recall method" :value="editable.recallMethod || '-'" />
                   <InfoRow label="Acquisition source" :value="editable.acquisitionSource || '-'" />
                 </template>
@@ -116,6 +116,7 @@ import workIcon from '@/assets/icons/myProfile/work.svg'
 import notificationIcon from '@/assets/icons/myProfile/notification.svg'
 import { useDiaryStore } from '@/stores/diary'
 import { useMainStore } from '@/stores/index'
+import { formatDateDDMMYYYY } from '@/lib/dateFormatter'
 
 const props = defineProps({ patient: { type: Object, default: null } })
 const section = ref('basic')
@@ -132,7 +133,7 @@ const editable = reactive({})
 watch(() => props.patient, (v) => { Object.assign(editable, v || {}) }, { immediate: true })
 
 const dobMenu = ref(false)
-const dobFormatted = computed(() => editable.dob ? new Date(editable.dob).toLocaleDateString('en-GB') : '')
+const dobFormatted = computed(() => editable.dob ? formatDateDDMMYYYY(editable.dob) : '')
 
 const EditRow = defineComponent({
   name: 'EditRow',

@@ -6,7 +6,9 @@
     <div class="pa-5 rounded-lg">
       <div class="task-summary">
         <!-- Cards Grid -->
-        <v-row>
+        <v-row
+          style="flex-wrap: nowrap; overflow: auto;"
+        >
           <v-col
             cols="12"
             sm="6"
@@ -52,12 +54,6 @@
       <v-tabs-window v-model="currentTab">
         <v-tabs-window-item :value="currentTab">
           <TasksListView
-            v-if="
-              taskStatuses.length &&
-              taskPriorities.length &&
-              userList.length &&
-              categories.length
-            "
             :clearSelection="isTrayHidden"
             :headers="headers"
             :availableHeaders="availableHeaders"
@@ -66,6 +62,7 @@
             :priorities="taskPriorities"
             :users="userList"
             :categories="categories"
+            :currentCategoryId="currentTab"
             @onFilter="applyFilters"
             @onUpdate="updateTasks"
             @updateSelectedRowItems="updateSelectedRowItems"
@@ -252,12 +249,14 @@ const getCategories = () => {
 
 const getMyStats = () => {
   taskStore.getMyTaskStatsByCategory().then((res) => {
-    if (res.code === 0) {
+    if (res.code === 0 && res.data && res.data.length) {
       if (!currentTab.value) {
         currentTab.value = res.data[0].categoryId;
       }
       taskStats.value = res.data;
       getMyTasks(currentTab.value);
+    } else {
+      getMyTasks(null); // Fetch all tasks
     }
   });
 };
@@ -350,7 +349,7 @@ const handleDelete = async () => {
     if (res.code === 0) {
       updateTasksList();
       mainStore.setSnackbar({
-        title: "Tasks unassigned successfully.",
+        title: selectedRowItems.value.length === 1 ? "Task deleted successfully." : "Tasks deleted successfully.",
         type: "success",
       });
     } else {
@@ -358,7 +357,7 @@ const handleDelete = async () => {
         title:
           res.data?.message ||
           res.message ||
-          "Unable to unassign tasks. Please try again.",
+          "Unable to delete tasks. Please try again.",
         type: "error",
       });
     }

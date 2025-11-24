@@ -32,6 +32,7 @@
                 selected.role.title = r.title;
                 selected.role.id = r.id;
                 selected.role.color = r.color;
+                selected.roleId = r.id;
                 emit('update');
                 selected.roleMenu = false; // Optional: close menu on select
               }

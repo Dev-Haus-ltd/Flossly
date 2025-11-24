@@ -56,7 +56,7 @@
   <script setup>
   import { ref, computed } from "vue";
   import { useDate } from "vuetify";
-  import { parsedDate } from "@/lib/dateFormatter"; // Assumed custom formatter
+  import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
   
   const props = defineProps({
     modelValue: String,
@@ -69,7 +69,7 @@
   
   const formattedDate = computed(() => {
     if (!selected.value) return "";
-    return parsedDate(selected.value); // Or use dateUtil.format(selected.value, 'fullDate')
+    return formatDateDDMMYYYY(selected.value);
   });
   
   function onDateSelected(newDate) {

@@ -1,9 +1,10 @@
 <template>
   <div>
     <div
-      class="d-inline-flex flex-wrap d-md-flex justify-space-between align-center my-2"
+      class="d-flex align-center my-2"
+      style="flex-wrap: nowrap; overflow-x: auto;"
     >
-      <div class="d-inline-flex flex-wrap d-md-flex align-center py-1">
+      <div class="d-inline-flex align-center py-1" style="flex-wrap: nowrap;">
         <v-btn-toggle v-model="viewType" mandatory class="custom-toggle">
           <v-btn value="list" class="toggle-btn">
             <img
@@ -98,7 +99,7 @@
           </v-menu>
         </div>
       </div>
-      <div class="d-inline-flex flex-wrap d-md-flex">
+      <div class="d-inline-flex" style="flex-wrap: nowrap;">
         <v-btn
           color="tertiary"
           variant="flat"
@@ -139,7 +140,7 @@
     </div>
 
     <v-expansion-panels
-      v-if="viewType === 'list'"
+      v-if="viewType === 'list' && taskDetails && taskDetails.length"
       v-model="openedPanels"
       :elevation="0"
       flat
@@ -588,12 +589,30 @@
                 </v-card>
               </td>
             </template>
+            <template #[`footer.prepend`]>
+              <v-btn
+                size="small"
+                color="primary"
+                variant="flat"
+                rounded="lg"
+                @click="openAddTaskDialogForStatus(group.status, currentCategoryId)"
+                class="add-status-task-btn"
+              >
+                <v-icon size="16" class="mr-1">mdi-plus-circle-outline</v-icon>
+                Add Task
+              </v-btn>
+              <v-spacer></v-spacer>
+            </template>
           </v-data-table>
         </v-expansion-panel-text>
       </v-expansion-panel>
     </v-expansion-panels>
 
-    <TasksCalenderView v-else :tasks="tasksForCalender" />
+    <TasksCalenderView v-else-if="viewType === 'calender' && taskDetails && taskDetails.length" :tasks="tasksForCalender" />
+
+    <div v-else class="d-flex justify-center mt-5">
+      <p class="mt-7">No current task found.</p>
+    </div>
 
     <TasksTaskDetailsDialog
       v-model="dialogOpen"
@@ -604,6 +623,8 @@
 
     <TasksAddTask
       v-model="drawerOpen"
+      :preSelectedStatus="selectedStatusForNewTask"
+      :preSelectedCategory="selectedCategoryForNewTask"
       @close="drawerOpen = false"
       @success="updateTasks"
     />
@@ -647,6 +668,10 @@ const {
   users: Array,
   categories: Array,
   clearSelection: Boolean,
+    currentCategoryId: {  // ← ADD THIS NEW PROP
+    type: Number,
+    default: null,
+  },
 });
 watch(
   () => clearSelection,
@@ -748,8 +773,12 @@ const openedPanels = ref([0]);
 const dialogOpen = ref(false);
 const taskPoolDialog = ref(false);
 const isAllSelected = ref(false);
+const selectedStatusForNewTask = ref(null);
+const selectedCategoryForNewTask = ref(null);
 
 const openAddTaskDialog = () => {
+  selectedStatusForNewTask.value = null;
+  selectedCategoryForNewTask.value = null;
   drawerOpen.value = true;
 };
 const tasksForCalender = ref([]);
@@ -785,6 +814,26 @@ onMounted(() => {
   priorityStatuses.value = priorities;
   user.value = JSON.parse(localStorage.getItem("user"));
 });
+watch(
+  () => headers,
+  (newVal) => {
+    if (newVal && newVal.length > 0) {
+      selectedHeaders.value = sortHeaders(newVal); // Updates whenever headers changes
+    }
+  },
+  { immediate: true, deep: true }
+);
+
+watch(
+  () => orgStatuses,
+  (newVal) => {
+    if (newVal && newVal.length > 0) {
+      statuses.value = newVal; // Updates whenever orgStatuses changes
+    }
+  },
+  { immediate: true, deep: true }
+);
+
 watch(
   () => taskDetails,
   (newVal) => {
@@ -849,7 +898,18 @@ const getColor = (key) => {
   }
 };
 const formattedDate = (date) => {
-  return parsedDate(date);
+  if (!date) return '';
+  
+  try {
+    const dateObj = new Date(date);
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const year = dateObj.getFullYear();
+    
+    return `${day}/${month}/${year}`;
+  } catch (error) {
+    return '';
+  }
 };
 const setFocus = (id, key, state) => {
   focusedField.value[`${id}-${key}`] = state;
@@ -1133,6 +1193,13 @@ function onFiltersUpdated(newFilters) {
 
 const onSelectionChange = (newSelected) => {
   emit("updateSelectedRowItems", selectedTasks.value);
+};
+
+const openAddTaskDialogForStatus = (status, categoryId) => {
+  // Store both the selected status and the currently selected category
+  selectedStatusForNewTask.value = status;
+  selectedCategoryForNewTask.value = categoryId;
+  drawerOpen.value = true;
 };
 </script>
 

@@ -4,8 +4,7 @@
     <!-- Dashboard Content -->
     <div>
       <CommonFeatureCard
-        heading="Updated Features"
-        subheading="Flossly — finally, a platform built for dental practices, handling everything from rotas to compliance in one smart space."
+        subheading="Watch the Flossly Demo Video"
         @close="showCard = false"
         v-if="showCard"
         class="my-4"

@@ -281,6 +281,7 @@ export const updateProfile = async (event) => {
     nextOfKin,
     fullName,
     nextOfKinContact,
+    roleId,
   } = JSON.parse(body);
   try {
     const user = await User.findByPk(id);
@@ -296,12 +297,15 @@ export const updateProfile = async (event) => {
       user.fullName = user.fullName;
     }
     
-    user.phone = phone || user.phone;
-    user.address = address || user.address;
-    user.dob = dob || user.dob;
-    user.gender = gender || user.gender;
-    user.nextOfKin = nextOfKin || user.nextOfKin;
-    user.nextOfKinContact = nextOfKinContact || user.nextOfKinContact;
+    user.phone = phone !== undefined ? phone : user.phone;
+    user.address = address !== undefined ? address : user.address;
+    user.dob = dob !== undefined ? dob : user.dob;
+    user.gender = gender !== undefined ? gender : user.gender;
+    user.nextOfKin = nextOfKin !== undefined ? nextOfKin : user.nextOfKin;
+    user.nextOfKinContact = nextOfKinContact !== undefined ? nextOfKinContact : user.nextOfKinContact;
+    if (roleId !== undefined) {
+      user.roleId = roleId;
+    }
     await user.save();
     return success("saved");
   } catch (err) {
@@ -479,7 +483,7 @@ export const verifyEmail = async (event) => {
       const tasks = await Task.findAll({
         limit: 100,
         where: {
-          categoryId: 6,
+          categoryId: [3,4,5,10,11,12]
         },
       });
       const userOrg = await UserOrganisation.findAll({
@@ -673,7 +677,7 @@ export const acceptInvitation = async (event) => {
     user.status = "Active";
     await user.save();
     // Removed dummy tasks assignment for invited members
-    // await assignDefaultTasksToUser(user, userOrg.organisationId);
+    await assignDefaultTasksToUser(user, userOrg.organisationId);
     await assignDefaultHRDocsToUser(user.id);
     await accountCreationNotification(user);
     await portalReadyTrainingInvite(user);

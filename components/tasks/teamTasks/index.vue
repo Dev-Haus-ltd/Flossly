@@ -6,7 +6,9 @@
     <div class="pa-5 rounded-lg">
       <div class="task-summary">
         <!-- Cards Grid -->
-        <v-row v-if="taskStats && taskStats.length > 0">
+        <v-row v-if="taskStats && taskStats.length > 0"
+          style="flex-wrap: nowrap; overflow: auto;"
+          >
           <v-col cols="12"  md="3"
           lg="2" v-for="(item, i) in taskStats" :key="i">
             <CommonStatCard
@@ -46,9 +48,6 @@
       <v-tabs-window v-model="currentTab">
         <v-tabs-window-item :value="currentTab">
           <TasksListView
-            v-if="
-              taskStatuses.length && taskPriorities.length && userList.length
-            "
             :headers="headers"
             :availableHeaders="availableHeaders"
             :taskDetails="taskDetails"
@@ -361,7 +360,7 @@ const handleDelete = async () => {
       updateTasksList();
 
       mainStore.setSnackbar({
-        title: "Tasks unassigned successfully.",
+        title: selectedRowItems.value.length === 1 ? "Task deleted successfully." : "Tasks deleted successfully.",
         type: "success",
       });
     } else {
@@ -369,7 +368,7 @@ const handleDelete = async () => {
         title:
           res.data?.message ||
           res.message ||
-          "Unable to unassign tasks. Please try again.",
+          "Unable to delete tasks. Please try again.",
         type: "error",
       });
     }

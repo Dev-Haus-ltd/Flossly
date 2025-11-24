@@ -93,7 +93,7 @@ const props = defineProps({
 const emit = defineEmits(["update:modelValue", "onAddUser"]);
 
 const isOpen = ref(props.modelValue);
-const localSelectedUsers = ref([...props.selectedUsers]);
+const localSelectedUsers = ref([]);
 const mainStore = useMainStore();
 const rotaStore = useRotaStore();
 const formRef = ref(null);
@@ -116,13 +116,34 @@ const rules = {
 // sync dialog state
 watch(
   () => props.modelValue,
-  (val) => (isOpen.value = val)
+  (val) => {
+    isOpen.value = val;
+    // Reset form and initialize selected users when dialog opens
+    if (val) {
+      // Filter out any invalid values (null, undefined) and ensure we have valid IDs
+      const validUsers = (props.selectedUsers || []).filter(
+        (id) => id != null && id !== undefined
+      );
+      localSelectedUsers.value = [...validUsers];
+      // Reset mode to employee when dialog opens
+      mode.value = "employee";
+      // Reset locum form
+      form.name = "";
+      form.roleId = null;
+    }
+  }
 );
 watch(isOpen, (val) => emit("update:modelValue", val));
 
 watch(
   () => props.selectedUsers,
-  (val) => (localSelectedUsers.value = [...val]),
+  (val) => {
+    // Only update if dialog is open and we have valid user IDs
+    if (isOpen.value && val) {
+      const validUsers = val.filter((id) => id != null && id !== undefined);
+      localSelectedUsers.value = [...validUsers];
+    }
+  },
   { deep: true }
 );
 
@@ -147,10 +168,16 @@ const save = async () => {
         users: rotaUsers,
       });
     } else {
-      // Locum flow
+      // Locum flow - preserve existing employees when adding locum
+      const existingEmployees = props.selectedUsers || [];
+      const employeeUsers = existingEmployees
+        .filter((id) => id != null && id !== undefined)
+        .map((userId) => ({ userId }));
+      
       const payload = {
         rotaId: props?.rota?.id,
         users: [
+          ...employeeUsers, // Preserve existing employees
           {
             isTempUser: true,
             tempUserName: form.name,

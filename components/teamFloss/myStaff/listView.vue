@@ -21,7 +21,7 @@
         <v-data-table
           :headers="selectedHeaders"
           class="full-width-table"
-          :items="org.orgUsers"
+          :items="getSortedUsers(org.orgUsers)"
           item-value="id"
           v-model="selectedStaff"
           :item-selectable="() => true"
@@ -52,7 +52,7 @@
             v-slot:headers="{
               columns,
               getSortIcon,
-              toggleSort,
+              toggleSort: originalToggleSort,
               allSelected,
               someSelected,
             }"
@@ -73,8 +73,10 @@
                     <v-icon
                       v-if="column.sortable"
                       size="12"
+                      color="black"
+                      style="cursor: pointer"
                       class="ml-2"
-                      @click="toggleSort(column)"
+                      @click.stop="handleSort(column, originalToggleSort)"
                     >
                       {{ getSortIcon(column) }}
                     </v-icon>
@@ -107,14 +109,14 @@
             :key="col.key"
             v-slot:[`item.${col.key}`]="{ item }"
           >
-            <template v-if="col.key === 'name'">
+            <template v-if="col.key === 'fullName'">
               <div class="pa-1 d-flex justify-space-between align-center">
                 <v-text-field
                   v-model="item.fullName"
-                  :variant="isFocused(item.id, 'name') ? 'outlined' : 'plain'"
-                  @focus="setFocus(item.id, 'name', true)"
-                  @blur="updateValueRow(item, 'name')"
-                  @keyup.enter="updateUser(item, 'name')"
+                  :variant="isFocused(item.id, 'fullName') ? 'outlined' : 'plain'"
+                  @focus="setFocus(item.id, 'fullName', true)"
+                  @blur="updateValueRow(item, 'fullName')"
+                  @keyup.enter="updateUser(item, 'fullName')"
                   density="compact"
                   hide-details
                   class="small-input"
@@ -130,17 +132,17 @@
               </div>
             </template>
 
-            <template v-else-if="col.key === 'role'">
+            <template v-else-if="col.key === 'role.title'">
               <!-- <p class="ml-2 mb-0" @click="()=>{console.log(item)}">{{ item.role.title.slice(0, 20) }}</p> -->
               <DataTableColumnsRoles
                 :selected="item"
                 :column="col"
                 :rolesList="roleList"
-                @update="updateValueRow(item, 'role')"
+                @update="updateUser(item, 'role')"
               />
             </template>
 
-            <template v-else-if="col.key === 'dateOfJoining'">
+            <template v-else-if="col.key === 'createdAt'">
               <p class="ml-2">{{ formattedDate(item.createdAt) }}</p>
             </template>
 
@@ -208,7 +210,11 @@ const focusedField = ref({});
 const openedPanels = ref([0]);
 const authStore = useAuthStore()
 const mainStore = useMainStore()
-const emit = defineEmits(["add", "details"]);
+const emit = defineEmits(["add", "details", "onUpdate"]);
+
+// Track sorting state
+const sortBy = ref([]);
+const sortDesc = ref([]);
 
 const formattedDate = (dateStr) => {
   return parsedDate(dateStr);
@@ -224,14 +230,21 @@ const updateValueRow = (row, key) => {
 };
 const updateUser = (user, key) => {
   setFocus(user.id, key, false);
+  // Ensure we have the id field and only send necessary fields
+  const updateData = {
+    id: user.id,
+    roleId: user.roleId,
+  };
   authStore
-    .updateProfile(user)
+    .updateProfile(updateData)
     .then((res) => {
       if (res.code === 0) {
         mainStore.setSnackbar({
           title: res?.data?.message || "Profile updated successfully",
           type: "success",
-        })
+        });
+        // Emit event to refresh the teams data
+        emit("onUpdate");
       } else {
         mainStore.setSnackbar({
           title: res?.data?.message || res?.message || "Failed to update profile",
@@ -264,6 +277,110 @@ const toggleAll = () => {
 };
 const onSelectionChange = (newSelected) => {
   console.log( selectedStaff.value);
+};
+
+// Handle sorting with custom logic
+const handleSort = (column, originalToggleSort) => {
+  // Call original toggle to update Vuetify's internal state
+  originalToggleSort(column);
+  
+  // Update our custom sort state
+  const index = sortBy.value.indexOf(column.key);
+  if (index === -1) {
+    // New sort column
+    sortBy.value = [column.key];
+    sortDesc.value = [false];
+  } else {
+    // Toggle existing sort
+    if (sortDesc.value[index]) {
+      // Remove sort
+      sortBy.value.splice(index, 1);
+      sortDesc.value.splice(index, 1);
+    } else {
+      // Toggle to descending
+      sortDesc.value[index] = true;
+    }
+  }
+};
+
+// Custom sort function for nested properties
+const getSortedUsers = (users) => {
+  if (!sortBy.value || sortBy.value.length === 0) return users;
+  
+  const sorted = [...users].sort((a, b) => {
+    for (let i = 0; i < sortBy.value.length; i++) {
+      const key = sortBy.value[i];
+      const desc = sortDesc.value[i];
+      
+      let aVal, bVal;
+      
+      // Handle nested properties like "role.title"
+      if (key.includes('.')) {
+        const keys = key.split('.');
+        aVal = keys.reduce((obj, k) => obj?.[k], a);
+        bVal = keys.reduce((obj, k) => obj?.[k], b);
+      } else {
+        aVal = a[key];
+        bVal = b[key];
+      }
+      
+      // Handle null/undefined values
+      if (aVal == null && bVal == null) continue;
+      if (aVal == null) return desc ? -1 : 1;
+      if (bVal == null) return desc ? 1 : -1;
+      
+      // Handle date sorting
+      if (key === 'createdAt') {
+        aVal = new Date(aVal).getTime();
+        bVal = new Date(bVal).getTime();
+      }
+      
+      // Handle string comparison
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        aVal = aVal.toLowerCase();
+        bVal = bVal.toLowerCase();
+      }
+      
+      if (aVal < bVal) return desc ? 1 : -1;
+      if (aVal > bVal) return desc ? -1 : 1;
+    }
+    return 0;
+  });
+  
+  return sorted;
+};
+
+// Column resizing functionality
+let currentCol = null;
+let startX = 0;
+let startWidth = 0;
+
+const startResize = (e, column) => {
+  e.preventDefault();
+  e.stopPropagation();
+  currentCol = column;
+  startX = e.clientX;
+  startWidth = column.width;
+  
+  document.addEventListener('pointermove', resizeColumn);
+  document.addEventListener('pointerup', stopResize);
+  e.target.setPointerCapture(e.pointerId);
+};
+
+const resizeColumn = (e) => {
+  if (!currentCol) return;
+  const diff = e.clientX - startX;
+  const newWidth = Math.max(50, startWidth + diff); // Minimum width of 50px
+  currentCol.width = newWidth;
+};
+
+const stopResize = (e) => {
+  currentCol = null;
+  document.removeEventListener('pointermove', resizeColumn);
+  document.removeEventListener('pointerup', stopResize);
+  if (e.target.releasePointerCapture) {
+    e.target.releasePointerCapture(e.pointerId);
+  }
 };
 </script>
 

@@ -116,7 +116,8 @@
 </template>
 
 <script setup>
-  import { clinicMinutesFromTime } from '@/lib/dateFormatter'
+import AppointmentCard from '@/components/diary/calendar/AppointmentCard.vue'
+import { clinicMinutesFromTime, formatDateDDMMYYYY } from '@/lib/dateFormatter'
   const props = defineProps({
   date: { type: [String, Date], required: true },
   view: { type: String, default: 'day' },
@@ -125,7 +126,6 @@
   appointments: { type: Object, default: () => ({}) },
 })
 const emit = defineEmits(['slot-click','update-status','open-notes','slot-full','move-appointment'])
-import AppointmentCard from '@/components/diary/calendar/AppointmentCard.vue'
 const router = useRouter()
 function initials(name) {
   if (!name) return '';
@@ -187,9 +187,9 @@ const weekDates = computed(() => {
   for (let i=0;i<7;i++){ const d=new Date(start); d.setDate(start.getDate()+i); arr.push(d.toISOString().slice(0,10)) }
   return arr
 })
+
 const weekLabels = computed(() => weekDates.value.map((d)=>{
-  const dt = new Date(d)
-  return dt.toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' })
+  return formatDateDDMMYYYY(d)
 }))
 
 const visibleDentists = computed(() => {

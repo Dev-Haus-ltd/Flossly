@@ -488,6 +488,7 @@
 <script setup>
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 import { buildRecipientContext, renderWithContext } from '@/lib/templateTokens'
+import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
 import callIcon from '@/assets/crm/call.svg'
 import sendMailIcon from '@/assets/crm/sendMail.svg'
 import whatsappIcon from '@/assets/crm/whatsapp.svg'
@@ -608,18 +609,9 @@ const onActionClick = (key) => {
   else if (key === 'convert') convertSelected();
   else if (['mail','sendPrice','sendForm','shareLocation'].includes(key)) openCompose(key)
 };
+
 const formatDate = (d) => {
-  if (!d) return "";
-  if (typeof d === 'string') {
-    const m = d.match(/^\d{4}-\d{2}-\d{2}/);
-    if (m) return m[0];
-  }
-  const dt = new Date(d);
-  if (isNaN(dt)) return "";
-  const y = dt.getFullYear();
-  const mm = String(dt.getMonth() + 1).padStart(2, '0');
-  const dd = String(dt.getDate()).padStart(2, '0');
-  return `${y}-${mm}-${dd}`;
+  return formatDateDDMMYYYY(d);
 };
 const setupFollowUpDraft = (item) => {
   if (followUpDrafts[item.id] === undefined) {

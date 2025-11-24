@@ -206,61 +206,6 @@ export const getChatbotConfig = async (event) => {
   }
 };
 
-// Public API: Create patient via chatbot (no authentication required)
-export const createPatientViaChatbot = async (event) => {
-  try {
-    const body = await readBody(event);
-    const payload = typeof body === 'string' ? JSON.parse(body) : body;
-    
-    // Validate botId
-    const botValidation = await validateBotId(payload.botId);
-    if (!botValidation.valid) {
-      return error(400, botValidation.error);
-    }
-    
-    const organisationId = botValidation.organizationId;
-    
-    // Validate required fields
-    const required = ['firstName', 'lastName'];
-    for (const k of required) {
-      if (!payload?.[k]) {
-        return error(400, `${k} is required`);
-      }
-    }
-    
-    // Create patient
-    const data = {
-      organisationId: Number(organisationId),
-      title: payload.title || null,
-      sex: payload.sex || null,
-      firstName: payload.firstName,
-      lastName: payload.lastName,
-      address1: payload.address1 || null,
-      postcode: payload.postcode || null,
-      dob: payload.dob || null,
-      mobile: payload.mobile || null,
-      email: payload.email || null,
-      marketingConsent: payload.marketingConsent || null,
-      receiveSms: payload.receiveSms === true || payload.receiveSms === 'Yes',
-      receiveEmail: payload.receiveEmail === true || payload.receiveEmail === 'Yes',
-      paymentPlan: payload.paymentPlan || null,
-      defaultDentistId: payload.dentistId || null,
-      recallMethod: payload.recallMethod || null,
-      recallInterval: payload.recallInterval || null,
-    };
-    
-    const created = await DiaryPatient.create(data);
-    return success(created);
-  } catch (e) {
-    // If it's already an error response, re-throw it
-    if (e.statusCode) {
-      throw e;
-    }
-    const msg = e?.message || e?.data?.message || e?.original?.detail || 'Internal server error';
-    return error(500, msg);
-  }
-};
-
 // Public API: Create appointment via chatbot (no authentication required)
 export const createAppointmentViaChatbot = async (event) => {
   try {
@@ -531,24 +476,7 @@ export const createLeadViaChatbot = async (event) => {
     // Shape treatment in response
     created.setDataValue('treatment', { id: null, name: created.treatment || '' });
     
-    // Handle assignees if provided
-    const assignedUsers = Array.isArray(payload.assigned) ? payload.assigned : [];
-    if (assignedUsers.length) {
-      const rows = assignedUsers
-        .map((u) => (u && u.id ? { organisationId: Number(organisationId), leadId: created.id, userId: Number(u.id) } : null))
-        .filter(Boolean);
-      if (rows.length) {
-        await CrmLeadAssignee.bulkCreate(rows, { ignoreDuplicates: true });
-        // Shape response
-        const users = await User.findAll({ 
-          where: { id: rows.map((r) => r.userId) }, 
-          attributes: ['id', 'fullName', 'email'] 
-        });
-        created.setDataValue('assigned', users.map((u) => ({ id: u.id, fullName: u.fullName, email: u.email })));
-      }
-    } else {
-      created.setDataValue('assigned', []);
-    }
+   
     
     // Handle contact method if provided
     if (payload.contactMethod && CONTACT_METHODS.includes(payload.contactMethod)) {

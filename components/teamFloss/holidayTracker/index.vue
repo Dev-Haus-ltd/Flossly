@@ -81,6 +81,8 @@
 </template>
 
 <script setup>
+import { formatDateDDMMYYYY } from "~/lib/dateFormatter";
+
 const { isManager } = useUser();
 const userStore = useUserStore();
 const mainStore = useMainStore();
@@ -103,7 +105,7 @@ const getTeamHolidays = () => {
   });
 };
 const getParsedDate = (date) => {
-  return new Date(date).toLocaleDateString();
+  return formatDateDDMMYYYY(date);
 };
 
 const updateStatus = (status, id) => {

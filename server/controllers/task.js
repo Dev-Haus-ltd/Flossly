@@ -113,8 +113,10 @@ export const addTaskCategory = async (event) => {
     });
     if (cat)
       throw createError({ message: `Category ${name} is already added` });
-    await TaskCategory.create({ name, description, parentId, color });
-    return success("Saved");
+
+    const newCategory = await TaskCategory.create({ name, description, parentId, color });
+
+    return success({ message: "Saved", category: newCategory });
   } catch (err) {
     return error(500, err.message);
   }
@@ -425,6 +427,12 @@ export const viewTeamTasksTaskWise = async (event) => {
     userTasks.forEach((userTask) => {
       const task = userTask;
       const assignedUser = userTask.assignedUser;
+      const userId = assignedUser?.id;
+
+      // Skip if assignedUser is null
+      if (!assignedUser || !userId) {
+        return;
+      }
 
       if (!taskMap.has(task.taskDetails.id)) {
         taskMap.set(task.taskDetails.id, {
@@ -432,7 +440,12 @@ export const viewTeamTasksTaskWise = async (event) => {
           assignedUser: [assignedUser.get()],
         });
       } else {
-        taskMap.get(task.taskDetails.id).assignedUser.push(assignedUser.get());
+        // Check if user is already in the assignedUser array to avoid duplicates
+        const existingTask = taskMap.get(task.taskDetails.id);
+        const userExists = existingTask.assignedUser.some(u => u.id === userId);
+        if (!userExists) {
+          existingTask.assignedUser.push(assignedUser.get());
+        }
       }
     });
 
@@ -590,7 +603,6 @@ export const createNewTask = async (event) => {
     categoryId,
     defaultFrequency,
     userId,
-    priorityId,
     checklist,
     dueDate,
     statusId,
@@ -650,11 +662,16 @@ export const createNewTask = async (event) => {
     if (!finalStatusId && orgStatuses.length > 0) {
       finalStatusId = orgStatuses[0].id;
     }
+    let { priorityId } = JSON.parse(await readBody(event))
+    if (!priorityId) {
+      const orgPriorities = await OrganisationPriority.findAll({ where: { organisationId: loggedUser.orgId }})
+      priorityId = orgPriorities.find((x) => x.key === 'medium')?.id
+    }
 
     const newUuserTask = {
       userId: assignToUserId,
       organisationId: loggedUser.orgId,
-      dueDate,
+      dueDate: dueDate ? new Date(dueDate) : null,
       taskId: task.id,
       title,
       documentLink: "",
@@ -1155,14 +1172,18 @@ export const groupTeamTasksByTaskId = async (event) => {
           };
         }
 
-        grouped[taskId].assignedUsers.push({
-          id: taskEntry.assignedUser?.id,
-          fullName: taskEntry.assignedUser?.fullName,
-          email: taskEntry.assignedUser?.email,
-          photo: taskEntry.assignedUser?.photo,
-          status: taskEntry.status,
-          userTaskId: taskEntry.id,
-        });
+        // Check if user is already in the assignedUsers array to avoid duplicates
+        const userId = taskEntry.assignedUser?.id;
+        if (userId && !grouped[taskId].assignedUsers.some(u => u.id === userId)) {
+          grouped[taskId].assignedUsers.push({
+            id: taskEntry.assignedUser?.id,
+            fullName: taskEntry.assignedUser?.fullName,
+            email: taskEntry.assignedUser?.email,
+            photo: taskEntry.assignedUser?.photo,
+            status: taskEntry.status,
+            userTaskId: taskEntry.id,
+          });
+        }
       });
       el.tasks = Object.values(grouped);
     });

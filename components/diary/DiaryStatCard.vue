@@ -63,6 +63,7 @@ const selectModel = computed({
   border-radius: 14px;
   padding: 14px;
   background: #ffffff;
+  height: 100%;
   min-height: 140px;
   display: flex;
   flex-direction: column;
@@ -74,6 +75,10 @@ const selectModel = computed({
 }
 .content {
   padding: 8px 6px 0 6px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
 }
 .subtitle {
   font-size: 13px;
