@@ -17,6 +17,7 @@ import { Verification } from "./auth/verifications";
 import { UserTaskAttachment } from "./tasks/userTaskAttachments";
 import { TaskChecklist } from "./tasks/taskChecklist";
 import { UserTaskChecklist } from "./tasks/userTaskChecklist";
+import { UserTaskComment } from "./tasks/userTaskComments";
 import { UserSubscription } from "./auth/userSubscriptions";
 import { LoginHistory } from "./auth/loginHistory";
 import { Rota } from "./rota/rota";
@@ -100,6 +101,20 @@ UserTask.belongsTo(OrganisationStatus, {
 UserTask.belongsTo(OrganisationPriority, {
   foreignKey: "priorityId",
   as: "priority",
+});
+
+UserTask.hasMany(UserTaskComment, {
+  foreignKey: "userTaskId",
+  as: "taskComments",
+  onDelete: "CASCADE",
+});
+UserTaskComment.belongsTo(UserTask, {
+  foreignKey: "userTaskId",
+  as: "userTask",
+});
+UserTaskComment.belongsTo(User, {
+  foreignKey: "userId",
+  as: "author",
 });
 
 UserTask.hasMany(UserTaskAttachment, {
@@ -522,6 +537,7 @@ export {
   UserTask,
   UserTaskChecklist,
   UserTaskAttachment,
+  UserTaskComment,
   UserLeaveEntitlement,
   UserLeaveHistory,
   UserHrDocument,

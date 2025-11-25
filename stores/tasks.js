@@ -1,4 +1,5 @@
 import taskService from "../services/taskService";
+import { useBus } from "../composables/useBus";
 
 export const useTaskStore = defineStore("taskStore", {
   state: () => ({
@@ -222,21 +223,95 @@ export const useTaskStore = defineStore("taskStore", {
           });
       });
     },
-    updateUserTask(data) {
-      return new Promise((resolve, reject) => {
-        this.isLoading = true;
-        taskService
-          .updateUserTask(data)
-          .then((res) => {
-            this.isLoading = false;
-            resolve(res);
-          })
-          .catch((err) => {
-            this.isLoading = false;
-            reject(err);
-          });
-      });
-    },
+  updateUserTask(data) {
+    const bus = useBus();
+    return new Promise((resolve, reject) => {
+      this.isLoading = true;
+      taskService
+        .updateUserTask(data)
+        .then((res) => {
+          this.isLoading = false;
+          if (res?.code === 0) {
+            const payload = {
+              userTaskId: data?.id || data?.userTaskId,
+              taskId: data?.taskId,
+              updatedAt: new Date().toISOString(),
+            };
+            bus.emit("task-updated", payload);
+            try {
+              localStorage.setItem("task-updated", JSON.stringify(payload));
+            } catch (err) {
+              // ignore storage failures (e.g., SSR)
+            }
+          }
+          resolve(res);
+        })
+        .catch((err) => {
+          this.isLoading = false;
+          reject(err);
+        });
+    });
+  },
+  addTaskComment(data) {
+    return new Promise((resolve, reject) => {
+      this.isLoading = true;
+      taskService
+        .addTaskComment(data)
+        .then((res) => {
+          this.isLoading = false;
+          resolve(res);
+        })
+        .catch((err) => {
+          this.isLoading = false;
+          reject(err);
+        });
+    });
+  },
+  listTaskComments(data) {
+    return new Promise((resolve, reject) => {
+      this.isLoading = true;
+      taskService
+        .listTaskComments(data)
+        .then((res) => {
+          this.isLoading = false;
+          resolve(res);
+        })
+        .catch((err) => {
+          this.isLoading = false;
+          reject(err);
+        });
+    });
+  },
+  updateTaskComment(data) {
+    return new Promise((resolve, reject) => {
+      this.isLoading = true;
+      taskService
+        .updateTaskComment(data)
+        .then((res) => {
+          this.isLoading = false;
+          resolve(res);
+        })
+        .catch((err) => {
+          this.isLoading = false;
+          reject(err);
+        });
+    });
+  },
+  deleteTaskComment(data) {
+    return new Promise((resolve, reject) => {
+      this.isLoading = true;
+      taskService
+        .deleteTaskComment(data)
+        .then((res) => {
+          this.isLoading = false;
+          resolve(res);
+        })
+        .catch((err) => {
+          this.isLoading = false;
+          reject(err);
+        });
+    });
+  },
     addChecklist(data) {
       return new Promise((resolve, reject) => {
         this.isLoading = true;

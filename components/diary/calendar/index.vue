@@ -474,8 +474,6 @@ const nowTop = computed(() => {
   border-radius: 14px;
   border: 1px solid #e5e7eb;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
-  padding: 10px;
-  height: 75vh;
 }
 
 /* ───────────────────────────────
@@ -489,6 +487,8 @@ const nowTop = computed(() => {
   border-radius: 12px;
   overflow: auto;
   border: 1px solid #e5e7eb;
+  height: 73vh;
+  overflow-x: auto;
 }
 
 /* Dentist header cells (row 1, columns 2..N) */
