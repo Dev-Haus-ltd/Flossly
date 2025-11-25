@@ -98,7 +98,7 @@
           :patient-options="patientOptions"
           :preselected-patient="preselectedPatientName"
           :preselected-patient-id="preselectedPatientId"
-          @add-patient="onAddPatientFromAppointment"x
+          @add-patient="onAddPatientFromAppointment"
           @save="onSaveAppointment"
         />
       </template>
@@ -445,7 +445,7 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .cust-border {
   border-bottom: 1px solid #dbdbdb;
   padding: 17px;
