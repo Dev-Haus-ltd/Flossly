@@ -621,27 +621,32 @@
       @save="updateTaskInfo"
     />
 
-    <TasksAddTask
-      v-model="drawerOpen"
-      :preSelectedStatus="selectedStatusForNewTask"
-      :preSelectedCategory="selectedCategoryForNewTask"
-      @close="drawerOpen = false"
-      @success="updateTasks"
-    />
-    <TasksTaskPoolDialog
-      :model-value="taskPoolDialog"
-      @close="taskPoolDialog = false"
-      @onUpdate="updateTasks"
-    />
-    <TasksBulkTaskUploadDialog
-      v-model="bulkTaskUploadDialog"
-      :categories="categories"
-      :priorities="priorities"
-      :roles="rolesList"
-      :users="users"
-      @close="bulkTaskUploadDialog = false"
-      @onUpdate="updateTasks"
-    />
+    <!-- Add Task Panel - Only render after page loads -->
+    <ClientOnly>
+      <template v-if="categories && categories.length > 0 && priorities && priorities.length > 0 && users && users.length > 0">
+        <TasksAddTask
+          v-model="drawerOpen"
+          :preSelectedStatus="selectedStatusForNewTask"
+          :preSelectedCategory="selectedCategoryForNewTask"
+          @close="drawerOpen = false"
+          @success="updateTasks"
+        />
+        <TasksTaskPoolDialog
+          :model-value="taskPoolDialog"
+          @close="taskPoolDialog = false"
+          @onUpdate="updateTasks"
+        />
+        <TasksBulkTaskUploadDialog
+          v-model="bulkTaskUploadDialog"
+          :categories="categories"
+          :priorities="priorities"
+          :roles="rolesList"
+          :users="users"
+          @close="bulkTaskUploadDialog = false"
+          @onUpdate="updateTasks"
+        />
+      </template>
+    </ClientOnly>
   </div>
 </template>
 

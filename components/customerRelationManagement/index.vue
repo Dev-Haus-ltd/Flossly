@@ -132,26 +132,31 @@
 
     
 
-      <!-- Sidebar drawer for add -->
-      <CustomerRelationManagementAddNewLead
-        v-model="addLeadDrawer"
-        :lead-sources="leadSources"
-        :treatment-sources="treatmentSources"
-        :staff-list="userList"
-        @close="addLeadDrawer = false"
-        @success="handleSuccess"
-      />
-      <AddAppointment
-        v-model="showBookingDrawer"
-        :initial-date="bookingInitialDate"
-        :initial-time="bookingInitialTime"
-        :initial-practitioner="bookingInitialPractitioner"
-        :practitioner-options="bookingPractitionerOptions"
-        :patient-options="bookingPatientOptions"
-        :preselected-patient="bookingLeadName"
-        :preselected-patient-id="bookingLeadPatientId"
-        @save="onSaveBookedAppointment"
-      />
+      <!-- Sidebar drawer for add - Only render after page loads -->
+      <ClientOnly>
+        <template v-if="!isLoading && leadSources.length > 0 && userList.length > 0">
+          <!-- Add New Lead Panel - Right Side -->
+          <CustomerRelationManagementAddNewLead
+            v-model="addLeadDrawer"
+            :lead-sources="leadSources"
+            :treatment-sources="treatmentSources"
+            :staff-list="userList"
+            @close="addLeadDrawer = false"
+            @success="handleSuccess"
+          />
+          <AddAppointment
+            v-model="showBookingDrawer"
+            :initial-date="bookingInitialDate"
+            :initial-time="bookingInitialTime"
+            :initial-practitioner="bookingInitialPractitioner"
+            :practitioner-options="bookingPractitionerOptions"
+            :patient-options="bookingPatientOptions"
+            :preselected-patient="bookingLeadName"
+            :preselected-patient-id="bookingLeadPatientId"
+            @save="onSaveBookedAppointment"
+          />
+        </template>
+      </ClientOnly>
     </div>
   </v-sheet>
 </template>

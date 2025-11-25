@@ -94,12 +94,18 @@
         </template>
       </v-calendar>
     </v-card>
-    <TeamFlossUserDetailsLeaveManagementHolidayRequestDrawer
-      v-model="addLeaveDrawer"
-      origin="holidays"
-      @close="addLeaveDrawer = false"
-      @success="handleSuccess"
-    />
+    
+    <!-- Add Leave Panel - Only render after page loads -->
+    <ClientOnly>
+      <template v-if="events !== undefined">
+        <TeamFlossUserDetailsLeaveManagementHolidayRequestDrawer
+          v-model="addLeaveDrawer"
+          origin="holidays"
+          @close="addLeaveDrawer = false"
+          @success="handleSuccess"
+        />
+      </template>
+    </ClientOnly>
   </div>
 </template>
 

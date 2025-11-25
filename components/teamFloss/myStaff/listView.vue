@@ -69,21 +69,70 @@
                   }"
                 >
                   <div v-if="i !== 0" class="d-flex align-center th-content">
-                    <p class="px-1 w-100">{{ column.title }}</p>
-                    <v-icon
-                      v-if="column.sortable"
-                      size="12"
-                      color="black"
-                      style="cursor: pointer"
-                      class="ml-2"
-                      @click.stop="handleSort(column, originalToggleSort)"
-                    >
-                      {{ getSortIcon(column) }}
-                    </v-icon>
-                    <span
-                      class="resize-handle"
-                      @mousedown="startResize($event, column)"
-                    ></span> 
+                    <!-- Special handling for actions column with + icon -->
+                    <template v-if="column.key === 'actions'">
+                      <v-menu :close-on-content-click="false" location="bottom">
+                        <template #activator="{ props }">
+                          <p v-bind="props" class="px-1 w-100" style="cursor: pointer; text-align: center;">
+                            {{ column.title }}
+                          </p>
+                        </template>
+                        <v-card class="pa-2" max-width="500">
+                          <p class="mb-2" style="font-weight: 500;">Selected Columns</p>
+                          <div class="d-flex flex-wrap">
+                            <div
+                              v-for="(item, index) in props.selectedHeaders.filter(h => h.key !== 'actions')"
+                              :key="index"
+                              class="color-box ma-1 pa-2 d-flex align-center justify-space-between position-relative"
+                              :style="{ backgroundColor: getRandomHexColor(item.title) }"
+                            >
+                              <span style="color: white; font-size: 12px;">{{ item.title }}</span>
+                              <v-icon
+                                color="white"
+                                size="16"
+                                class="ml-2"
+                                style="cursor: pointer;"
+                                @click="removeHeaderFromSelected(item)"
+                              >mdi-close-circle</v-icon>
+                            </div>
+                          </div>
+
+                          <p class="mb-2 mt-3" style="font-weight: 500;">Available Columns</p>
+                          <div class="d-flex flex-wrap">
+                            <div
+                              v-for="(item, index) in computedAvailableHeaders"
+                              :key="index"
+                              class="color-box ma-1 pa-2 d-flex align-center justify-center"
+                              :style="{ backgroundColor: getRandomHexColor(item.title) }"
+                              style="cursor: pointer;"
+                              @click="addHeaderInSelected(item)"
+                            >
+                              <span style="color: white; font-size: 12px;">{{ item.title }}</span>
+                            </div>
+                            <p v-if="computedAvailableHeaders.length === 0" class="text-grey text-caption pa-2">
+                              No available columns to add
+                            </p>
+                          </div>
+                        </v-card>
+                      </v-menu>
+                    </template>
+                    <template v-else>
+                      <p class="px-1 w-100">{{ column.title }}</p>
+                      <v-icon
+                        v-if="column.sortable"
+                        size="12"
+                        color="black"
+                        style="cursor: pointer"
+                        class="ml-2"
+                        @click.stop="handleSort(column, originalToggleSort)"
+                      >
+                        {{ getSortIcon(column) }}
+                      </v-icon>
+                      <span
+                        class="resize-handle"
+                        @mousedown="startResize($event, column)"
+                      ></span>
+                    </template>
                   </div>
                   <div
                       v-if=" i === 0"
@@ -152,9 +201,12 @@
 
             <template v-else-if="col.key === 'status'">
               <div class="text-center">
-                <v-chip label color="primary">{{
-                  item.status ? item.status : "Active"
-                }}</v-chip>
+                <v-chip 
+                  label 
+                  :style="getStatusChipStyle(item.status || 'Active')"
+                >
+                  {{ item.status ? item.status : "Active" }}
+                </v-chip>
               </div>
             </template>
 
@@ -167,6 +219,7 @@
                     text-decoration: underline;
                     cursor: pointer;
                   "
+                  @click="openLoginHistoryModal(item)"
                 >
                   View History
                 </p>
@@ -176,21 +229,34 @@
               <p class="ml-2">{{ item.recruitmentDocs }}%</p>
             </template>
 
-            <template v-else-if="col.key === 'actions'">
-              <v-icon
-                size="20"
-                color="primary"
-                class="cursor-pointer ml-2"
-                @click="$emit('add', item)"
-              >
-                mdi-plus
-              </v-icon>
+            <!-- New columns: email, phone, dob, cpdHours -->
+            <template v-else-if="col.key === 'email'">
+              <p class="ml-2">{{ item.email || '-' }}</p>
+            </template>
+
+            <template v-else-if="col.key === 'phone'">
+              <p class="ml-2">{{ item.phone || item.mobile || '-' }}</p>
+            </template>
+
+            <template v-else-if="col.key === 'dob'">
+              <p class="ml-2">{{ item.dob ? formattedDate(item.dob) : '-' }}</p>
+            </template>
+
+            <template v-else-if="col.key === 'cpdHours'">
+              <p class="ml-2">{{ item.cpdHours !== null && item.cpdHours !== undefined ? item.cpdHours : '-' }}</p>
             </template>
           </template>
         </v-data-table>
       </v-expansion-panel-text>
     </v-expansion-panel>
   </v-expansion-panels>
+
+  <!-- Login History Modal -->
+  <TeamFlossMyStaffLoginHistoryModal
+    v-model="showLoginHistoryModal"
+    :user="selectedUserForHistory"
+    :user-name="selectedUserForHistory?.fullName || ''"
+  />
 </template>
 
 <script setup>
@@ -200,7 +266,8 @@ const props = defineProps({
   teams: { type: Array, required: true },
   selectedHeaders: { type: Array, required: true },
   search: { type: String, default: "" },
-  roleList: { type: Array, default: []}
+  roleList: { type: Array, default: []},
+  availableHeaders: { type: Array, default: () => [] }
 });
 const selectedStaff=ref([]);
 const isAllSelected=ref(false);
@@ -210,7 +277,16 @@ const focusedField = ref({});
 const openedPanels = ref([0]);
 const authStore = useAuthStore()
 const mainStore = useMainStore()
-const emit = defineEmits(["add", "details", "onUpdate"]);
+const emit = defineEmits(["add", "details", "onUpdate", "onUpdateHeaders"]);
+
+// Login History Modal state
+const showLoginHistoryModal = ref(false);
+const selectedUserForHistory = ref(null);
+
+const openLoginHistoryModal = (user) => {
+  selectedUserForHistory.value = user;
+  showLoginHistoryModal.value = true;
+};
 
 // Track sorting state
 const sortBy = ref([]);
@@ -219,6 +295,33 @@ const sortDesc = ref([]);
 const formattedDate = (dateStr) => {
   return parsedDate(dateStr);
 };
+
+// Get status chip styling based on status
+const getStatusChipStyle = (status) => {
+  const statusLower = (status || 'Active').toLowerCase();
+  let color, bgColor;
+  
+  if (statusLower === 'active') {
+    color = 'hsla(124, 57%, 46%, 1)';
+    bgColor = 'hsla(124, 57%, 46%, 0.1)';
+  } else if (statusLower === 'invited') {
+    color = 'hsla(29, 100%, 50%, 1)';
+    bgColor = 'hsla(29, 100%, 50%, 0.1)';
+  } else if (statusLower === 'inactive') {
+    color = 'hsla(357, 100%, 57%, 1)';
+    bgColor = 'hsla(357, 100%, 57%, 0.1)';
+  } else {
+    // Default to Active colors
+    color = 'hsla(124, 57%, 46%, 1)';
+    bgColor = 'hsla(124, 57%, 46%, 0.1)';
+  }
+  
+  return {
+    color: color,
+    backgroundColor: bgColor,
+  };
+};
+
 const isFocused = (id, key) => {
   return focusedField.value[`${id}-${key}`] === true;
 };
@@ -382,6 +485,50 @@ const stopResize = (e) => {
     e.target.releasePointerCapture(e.pointerId);
   }
 };
+
+// Column management functions
+const getRandomHexColor = (name) => {
+  if (!name) return "#999999";
+  const firstChar = name.trim().charAt(0).toUpperCase();
+  const colors = [
+    "#FF6B6B", "#FF8E72", "#FFD93D", "#6BCB77", "#4D96FF", "#8358E8",
+    "#FF6EC7", "#00B8A9", "#F15BB5", "#FF7F11", "#FF9F1C", "#2EC4B6",
+    "#6A4C93", "#8338EC", "#3A86FF", "#FF006E", "#FB5607", "#FFBE0B",
+    "#06D6A0", "#118AB2", "#073B4C", "#EF476F", "#06AED5", "#4CC9F0",
+    "#8AC926", "#FF595E"
+  ];
+  const index = firstChar.charCodeAt(0) - 65;
+  return index >= 0 && index < 26 ? colors[index] : "#999999";
+};
+
+const addHeaderInSelected = (column) => {
+  const currentHeaders = [...props.selectedHeaders];
+  if (!currentHeaders.find((x) => x.key === column.key)) {
+    // Insert before the actions column
+    const actionsIndex = currentHeaders.findIndex(h => h.key === 'actions');
+    if (actionsIndex !== -1) {
+      currentHeaders.splice(actionsIndex, 0, column);
+    } else {
+      currentHeaders.push(column);
+    }
+    emit('onUpdateHeaders', currentHeaders);
+  }
+};
+
+const removeHeaderFromSelected = (column) => {
+  const currentHeaders = [...props.selectedHeaders];
+  const index = currentHeaders.findIndex((h) => h.key === column.key);
+  if (index !== -1) {
+    currentHeaders.splice(index, 1);
+    emit('onUpdateHeaders', currentHeaders);
+  }
+};
+
+// Compute available headers (exclude already selected ones and actions)
+const computedAvailableHeaders = computed(() => {
+  const selectedKeys = props.selectedHeaders.map(h => h.key);
+  return props.availableHeaders.filter(h => !selectedKeys.includes(h.key) && h.key !== 'actions');
+});
 </script>
 
 <style scoped>
@@ -445,5 +592,16 @@ const stopResize = (e) => {
   border: solid white;
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
+}
+
+.color-box {
+  border-radius: 6px;
+  min-width: 80px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.color-box:hover {
+  opacity: 0.8;
 }
 </style>

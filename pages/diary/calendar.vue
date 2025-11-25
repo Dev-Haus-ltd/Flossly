@@ -11,28 +11,28 @@
         <v-btn icon variant="text" @click="nextDay"><v-icon>mdi-chevron-right</v-icon></v-btn>
         <div class="text-subtitle-1 font-weight-600 ml-2">{{ dayLabel }}</div>
       
-        <v-btn-toggle v-model="view" mandatory class="custom-toggle ml-6" >
-  <v-btn value="day" class="toggle-btn">
-    <img
+        <v-btn-toggle v-model="view" mandatory class="custom-toggle ml-6">
+          <v-btn value="day" class="toggle-btn">
+            <img
               :src="listicon"
               alt="list icon"
               class="mr-1"
               width="16"
               height="16"
-            /> Day
-  </v-btn>
-  <v-btn value="week" class="toggle-btn">
-     <img
+            />
+            Day
+          </v-btn>
+          <v-btn value="week" class="toggle-btn">
+            <img
               :src="calendericon"
               alt="calendar icon"
               class="mr-1"
               width="16"
               height="16"
             />
-          
-    Week
-  </v-btn>
-</v-btn-toggle>
+            Week
+          </v-btn>
+        </v-btn-toggle>
 
         <div class="ml-4" style="width: 180px">
           <v-text-field v-model="search" placeholder="Search" append-inner-icon="mdi-magnify" variant="solo" density="compact" hide-details flat />
@@ -84,20 +84,31 @@
       />
     </div>
 
-    <!-- Modals -->
-    <AddAppointment
-      v-model="showAppointment"
-      :initial-date="dateLabel"
-      :initial-time="modalTime"
-      :initial-practitioner="modalDentist?.name || ''"
-      :practitioner-options="dentists.map(d=>d.name)"
-      :patient-options="patientOptions"
-      :preselected-patient="preselectedPatientName"
-      :preselected-patient-id="preselectedPatientId"
-      @add-patient="onAddPatientFromAppointment"
-      @save="onSaveAppointment"
-    />
-    <AddPatient v-model="showAddPatient" @save="onPatientSaved" />
+    <!-- Modals - Only render after page loads -->
+    <ClientOnly>
+      <template v-if="dentists && dentists.length > 0">
+        <AddAppointment
+          v-model="showAppointment"
+          :initial-date="dateLabel"
+          :initial-time="modalTime"
+          :initial-practitioner="modalDentist?.name || ''"
+          :practitioner-options="dentists.map(d=>d.name)"
+          :patient-options="patientOptions"
+          :preselected-patient="preselectedPatientName"
+          :preselected-patient-id="preselectedPatientId"
+          @add-patient="onAddPatientFromAppointment"
+          @save="onSaveAppointment"
+        />
+      </template>
+    </ClientOnly>
+    
+    <!-- Add Patient Panel - Only render after page loads -->
+    <ClientOnly>
+      <template v-if="dentists && dentists.length > 0">
+        <AddPatient v-model="showAddPatient" @save="onPatientSaved" />
+      </template>
+    </ClientOnly>
+    
     <NotesModal
       v-model="showNotes"
       :date="dateStr"
@@ -307,24 +318,54 @@ onMounted(() => {
 }
 .custom-toggle {
   background-color: #f3f6fa;
-  display: flex;
   height: 40px;
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
 }
-.toggle-btn {
+
+.custom-toggle :deep(.v-btn) {
   background-color: #f3f6fa !important;
   text-transform: none;
   font-size: 14px;
   color: #333;
   transition: all 0.2s ease-in-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  min-height: 34px;
+  margin: 0;
 }
 
-.v-btn--active.toggle-btn {
+.custom-toggle :deep(.v-btn:first-child) {
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+}
+
+.custom-toggle :deep(.v-btn:last-child) {
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
+.custom-toggle :deep(.v-btn .v-btn__content) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.custom-toggle :deep(.v-btn img) {
+  display: block;
+  flex-shrink: 0;
+}
+
+.custom-toggle :deep(.v-btn--active) {
   background-color: #ffffff !important;
-  --v-theme-overlay-multiplier: 0 !important; /* reset overlay */
-  --v-theme-primary: #ffffff !important; /* force white */
-  box-shadow: 0px 6px 12px rgba(0, 0, 0, 0.15);
-  transform: translateY(-2px);
+  --v-theme-overlay-multiplier: 0 !important;
+  --v-theme-primary: #ffffff !important;
+  box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.08);
+
   border-radius: 6px;
-  box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.08); /* subtle shadow under */
 }
 </style>
