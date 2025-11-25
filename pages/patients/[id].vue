@@ -15,6 +15,7 @@
 <script setup>
 import PatientsIndex from '@/components/patients/index.vue'
 import { useDiaryStore } from '@/stores/diary'
+import { watch } from 'vue'
 
 definePageMeta({ layout: 'home' })
 
@@ -28,10 +29,18 @@ const patientName = computed(() => {
   return [p.firstName, p.lastName].filter(Boolean).join(' ')
 })
 
-onMounted(async () => {
-  const id = route.params.id
+const loadPatient = async (id) => {
+  if (!id) return
   const res = await store.getPatient(id)
   if (res?.code === 0) patient.value = res.data
+}
+
+onMounted(async () => {
+  loadPatient(route.params.id)
+})
+
+watch(() => route.params.id, (id) => {
+  loadPatient(id)
 })
 </script>
 

@@ -55,13 +55,49 @@
             :items="takings"
             :search="search"
             item-key="id"
-            class="custom-table"
+            class="full-width-table"
             :items-per-page="10"
           >
+            <template v-slot:headers="{ columns }">
+              <tr>
+                <template v-for="(column, i) in columns" :key="column.key">
+                  <th
+                    :style="{
+                      width: column.width + 'px',
+                      padding: '0px 7px',
+                      fontSize: '14px',
+                      backgroundColor: '#F6F6F6',
+                    }"
+                  >
+                    <div v-if="i !== 0" class="d-flex align-center th-content">
+                      <p class="px-1 w-100 mb-0">{{ column.title }}</p>
+                      <span
+                        class="resize-handle"
+                        @mousedown="startResize($event, column)"
+                      ></span>
+                    </div>
+                    <div v-else class="d-flex justify-center">
+                      <input
+                        type="checkbox"
+                        class="cust-checkbox ma-0"
+                        :checked="allSelectedState('takings')"
+                        :indeterminate.prop="someSelectedState('takings')"
+                        @change="toggleAllRows('takings')"
+                      />
+                    </div>
+                  </th>
+                </template>
+              </tr>
+            </template>
             <template v-slot:item="{ item }">
               <tr class="table-row">
-                <td>
-                  <v-checkbox hide-details density="compact" class="row-checkbox"></v-checkbox>
+                <td class="text-center">
+                  <input
+                    type="checkbox"
+                    class="cust-checkbox"
+                    :checked="isRowSelected('takings', item)"
+                    @change="toggleRow('takings', item)"
+                  />
                 </td>
                 <td class="text-left">{{ item.name }}</td>
                 <td class="text-left">{{ item.amount }}</td>
@@ -81,13 +117,49 @@
             :items="patients"
             :search="search"
             item-key="id"
-            class="custom-table"
+            class="full-width-table"
             :items-per-page="10"
           >
+            <template v-slot:headers="{ columns }">
+              <tr>
+                <template v-for="(column, i) in columns" :key="column.key">
+                  <th
+                    :style="{
+                      width: column.width + 'px',
+                      padding: '0px 7px',
+                      fontSize: '14px',
+                      backgroundColor: '#F6F6F6',
+                    }"
+                  >
+                    <div v-if="i !== 0" class="d-flex align-center th-content">
+                      <p class="px-1 w-100 mb-0">{{ column.title }}</p>
+                      <span
+                        class="resize-handle"
+                        @mousedown="startResize($event, column)"
+                      ></span>
+                    </div>
+                    <div v-else class="d-flex justify-center">
+                      <input
+                        type="checkbox"
+                        class="cust-checkbox ma-0"
+                        :checked="allSelectedState('patients')"
+                        :indeterminate.prop="someSelectedState('patients')"
+                        @change="toggleAllRows('patients')"
+                      />
+                    </div>
+                  </th>
+                </template>
+              </tr>
+            </template>
             <template v-slot:item="{ item }">
               <tr class="table-row">
-                <td>
-                  <v-checkbox hide-details density="compact" class="row-checkbox"></v-checkbox>
+                <td class="text-center">
+                  <input
+                    type="checkbox"
+                    class="cust-checkbox"
+                    :checked="isRowSelected('patients', item)"
+                    @change="toggleRow('patients', item)"
+                  />
                 </td>
                 <td class="text-left">{{ item.name }}</td>
                 <td class="text-left">{{ item.treatment }}</td>
@@ -108,13 +180,49 @@
             :items="staff"
             :search="search"
             item-key="id"
-            class="custom-table"
+            class="full-width-table"
             :items-per-page="10"
           >
+            <template v-slot:headers="{ columns }">
+              <tr>
+                <template v-for="(column, i) in columns" :key="column.key">
+                  <th
+                    :style="{
+                      width: column.width + 'px',
+                      padding: '0px 7px',
+                      fontSize: '14px',
+                      backgroundColor: '#F6F6F6',
+                    }"
+                  >
+                    <div v-if="i !== 0" class="d-flex align-center th-content">
+                      <p class="px-1 w-100 mb-0">{{ column.title }}</p>
+                      <span
+                        class="resize-handle"
+                        @mousedown="startResize($event, column)"
+                      ></span>
+                    </div>
+                    <div v-else class="d-flex justify-center">
+                      <input
+                        type="checkbox"
+                        class="cust-checkbox ma-0"
+                        :checked="allSelectedState('staff')"
+                        :indeterminate.prop="someSelectedState('staff')"
+                        @change="toggleAllRows('staff')"
+                      />
+                    </div>
+                  </th>
+                </template>
+              </tr>
+            </template>
             <template v-slot:item="{ item }">
               <tr class="table-row">
-                <td>
-                  <v-checkbox hide-details density="compact" class="row-checkbox"></v-checkbox>
+                <td class="text-center">
+                  <input
+                    type="checkbox"
+                    class="cust-checkbox"
+                    :checked="isRowSelected('staff', item)"
+                    @change="toggleRow('staff', item)"
+                  />
                 </td>
                 <td class="text-left">{{ item.name }}</td>
                 <td class="text-left">{{ item.role }}</td>
@@ -158,30 +266,30 @@ const statCards = reactive([
 ])
 
 const takingsHeaders = [
-  { title: '', key: 'checkbox', sortable: false, width: '48px' },
-  { title: 'Patient Name', key: 'name', align: 'start' },
-  { title: 'Amount', key: 'amount', align: 'start' },
-  { title: 'Practitioner', key: 'practitioner', align: 'start' },
-  { title: 'Payment Method', key: 'payment', align: 'start' },
+  { title: '', key: 'checkbox', sortable: false, width: 48 },
+  { title: 'Patient Name', key: 'name', align: 'start', width: 180 },
+  { title: 'Amount', key: 'amount', align: 'start', width: 120 },
+  { title: 'Practitioner', key: 'practitioner', align: 'start', width: 180 },
+  { title: 'Payment Method', key: 'payment', align: 'start', width: 180 },
 ]
 const takings = ref([])
 
 const patientsHeaders = [
-  { title: '', key: 'checkbox', sortable: false, width: '48px' },
-  { title: 'Patient Name', key: 'name', align: 'start' },
-  { title: 'Treatment', key: 'treatment', align: 'start' },
-  { title: 'Time', key: 'time', align: 'start' },
-  { title: 'Practitioner', key: 'practitioner', align: 'start' },
-  { title: 'Alert', key: 'alert', align: 'start' },
+  { title: '', key: 'checkbox', sortable: false, width: 48 },
+  { title: 'Patient Name', key: 'name', align: 'start', width: 180 },
+  { title: 'Treatment', key: 'treatment', align: 'start', width: 180 },
+  { title: 'Time', key: 'time', align: 'start', width: 120 },
+  { title: 'Practitioner', key: 'practitioner', align: 'start', width: 180 },
+  { title: 'Alert', key: 'alert', align: 'start', width: 140 },
 ]
 const patients = ref([])
 
 const staffHeaders = [
-  { title: '', key: 'checkbox', sortable: false, width: '48px' },
-  { title: 'Name of Staff', key: 'name', align: 'start' },
-  { title: 'Role', key: 'role', align: 'start' },
-  { title: 'Shift Start time', key: 'start', align: 'start' },
-  { title: 'Shift End time', key: 'end', align: 'start' },
+  { title: '', key: 'checkbox', sortable: false, width: 48 },
+  { title: 'Name of Staff', key: 'name', align: 'start', width: 180 },
+  { title: 'Role', key: 'role', align: 'start', width: 160 },
+  { title: 'Shift Start time', key: 'start', align: 'start', width: 150 },
+  { title: 'Shift End time', key: 'end', align: 'start', width: 150 },
 ]
 const staff = ref([])
 
@@ -190,6 +298,55 @@ const todayStr = computed(() => new Date().toISOString().slice(0,10))
 function currency(n) { return `£${Number(n || 0).toFixed(2)}` }
 
 const filters = ref({})
+const selectedTakings = ref([])
+const selectedPatients = ref([])
+const selectedStaff = ref([])
+
+const tableRefs = {
+  takings,
+  patients,
+  staff,
+}
+const selectedRefs = {
+  takings: selectedTakings,
+  patients: selectedPatients,
+  staff: selectedStaff,
+}
+
+const isRowSelected = (type, row) =>
+  selectedRefs[type]?.value?.some((r) => r.id === row.id)
+
+const toggleRow = (type, row) => {
+  const target = selectedRefs[type]
+  if (!target) return
+  const exists = target.value.some((r) => r.id === row.id)
+  target.value = exists
+    ? target.value.filter((r) => r.id !== row.id)
+    : [...target.value, row]
+}
+
+const allSelectedState = (type) => {
+  const total = tableRefs[type]?.value?.length || 0
+  const selected = selectedRefs[type]?.value?.length || 0
+  return total > 0 && selected === total
+}
+
+const someSelectedState = (type) => {
+  const total = tableRefs[type]?.value?.length || 0
+  const selected = selectedRefs[type]?.value?.length || 0
+  return selected > 0 && selected < total
+}
+
+const toggleAllRows = (type) => {
+  const all = tableRefs[type]?.value || []
+  const target = selectedRefs[type]
+  if (!target) return
+  if (allSelectedState(type)) {
+    target.value = []
+  } else {
+    target.value = [...all]
+  }
+}
 async function loadAppointments() {
   const payload = { date: (filters.value.date || todayStr.value), dentistId: filters.value.dentistId || null, status: filters.value.status || null, treatmentId: filters.value.treatmentId || null, search: search.value || '' }
   const res = await diaryStore.listAppointments(payload)
@@ -220,6 +377,8 @@ async function loadAppointments() {
     patients.value = []
     takings.value = []
   }
+  selectedPatients.value = []
+  selectedTakings.value = []
 }
 
 async function loadAccounts() {
@@ -234,6 +393,7 @@ async function loadStaff() {
   if (res?.code === 0) {
     staff.value = (res.data || []).map((d, i) => ({ id: d.id || i + 1, name: d.name, role: d.role || 'Dentist', start: d.start || '-', end: d.end || '-' }))
   } else { staff.value = [] }
+  selectedStaff.value = []
 }
 
 const dentists = ref([])
@@ -267,6 +427,22 @@ const onSavePatient = async (p) => {
 }
 
 const onFilters = (f) => { filters.value = f || {}; loadAppointments() }
+
+const startResize = (event, column) => {
+  if (typeof window === 'undefined') return
+  const startX = event.clientX || 0
+  const startWidth = Number(column.width) || 140
+  const onMouseMove = (e) => {
+    const delta = (e.clientX || 0) - startX
+    column.width = Math.max(80, startWidth + delta)
+  }
+  const onMouseUp = () => {
+    window.removeEventListener('mousemove', onMouseMove)
+    window.removeEventListener('mouseup', onMouseUp)
+  }
+  window.addEventListener('mousemove', onMouseMove)
+  window.addEventListener('mouseup', onMouseUp)
+}
 
 watch(search, debounce(() => loadAppointments(), 400))
 </script>
@@ -341,6 +517,7 @@ watch(search, debounce(() => loadAppointments(), 400))
   border-radius: 12px;
   border: 1px solid #e5e7eb;
   overflow: hidden;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.04);
 }
 
 .table-header {
@@ -357,25 +534,6 @@ watch(search, debounce(() => loadAppointments(), 400))
 }
 
 .custom-table {
-  background: white;
-}
-
-.custom-table :deep(.v-data-table__thead) {
-  background: #fafafa;
-}
-
-.custom-table :deep(.v-data-table__thead th) {
-  font-size: 12px;
-  font-weight: 600;
-  color: #6b7280 !important;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 16px 16px;
-  border-bottom: 1px solid #e5e7eb !important;
-  background: #fafafa;
-}
-
-.custom-table :deep(.v-data-table__tbody) {
   background: white;
 }
 
@@ -398,9 +556,6 @@ watch(search, debounce(() => loadAppointments(), 400))
   border-bottom: 1px solid #f3f4f6;
 }
 
-.row-checkbox :deep(.v-selection-control) {
-  min-height: 24px;
-}
 .cust-border {
   border-bottom: 1px solid #dbdbdb;
   padding: 17px;
@@ -408,12 +563,55 @@ watch(search, debounce(() => loadAppointments(), 400))
     font-size: 12px;
   }
 }
-.custom-table :deep(.v-data-table-footer) {
-  border-top: 1px solid #e5e7eb;
-  padding: 12px 16px;
+.full-width-table {
+  border-top: 1px solid rgb(var(--v-theme-outline));
+  border-radius: unset;
+}
+:deep(.v-table__wrapper table) {
+  width: 100% !important;
+  table-layout: fixed;
+}
+:deep() .v-table .v-table__wrapper > table > thead > tr > th:not(:last-child) {
+  border-right: 1px solid rgb(var(--v-theme-outline));
+}
+:deep() .v-table .v-table__wrapper > table > tbody > tr > td:not(:last-child) {
+  border-right: 1px solid rgb(var(--v-theme-outline));
+}
+:deep(.v-data-table .v-table__wrapper tbody tr:hover) {
+  background-color: #f5f5f5;
+  transition: background-color 0.2s ease;
 }
 
-.custom-table :deep(table) {
-  border-collapse: collapse;
+.resize-handle {
+  display: inline-block;
+  width: 5px;
+  cursor: col-resize;
+}
+.cust-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  border: 1px solid #cfcfcf;
+  border-radius: 4px;
+  display: inline-block;
+  position: relative;
+  margin-top: 5px;
+}
+.cust-checkbox:checked {
+  background: #0061FB;
+  border-color: #0061FB;
+}
+.cust-checkbox:checked::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  width: 4px;
+  height: 10px;
+  border: solid rgb(var(--v-theme-on-primary));
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 </style>

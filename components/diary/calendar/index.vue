@@ -36,35 +36,42 @@
             v-for="(dent, ci) in visibleDentists"
             :key="dent.id + '-' + t.key"
             class="slot-cell"
-            :class="{ 'slot-full': isHourFull(dent.id, t.hour) }"
+            :class="{ 'slot-full': isHourFull(dent.id, t.hour), 'slot-hover': isHoverSlot(dent.id, t.hour) }"
             :style="{ gridRow: ri + 2, gridColumn: ci + 2 }"
             @click="onCellClickGuard(dent, t)"
             @dragover.prevent="onSlotDragOver"
+            @dragenter.prevent="onSlotDragEnter(dent, t)"
+            @dragleave="onSlotDragLeave(dent, t)"
             @drop="onAppointmentDrop($event, dent, t)"
             :title="isHourFull(dent.id, t.hour) ? 'No available 15-min slots in this hour' : ''"
+            :data-dentist-id="dent.id"
+            :data-hour="t.hour"
           >
             <div class="slot-grid">
-              <!-- Render appointments that START in this hour -->
-              <template v-for="(appt, i) in getAppointmentsForHour(dent.id, t.hour)" :key="i">
+              <!-- Render 4 micro-slots per hour; show empties between appointments -->
+              <template v-for="(segment, si) in getHourSegments(dent.id, t.hour)" :key="si">
                 <AppointmentCard
-                  :appt="appt"
-                  :micro-slots="getMicroSlots(appt)"
-                  :style-obj="apptStyleFor(appt.status)"
+                  v-if="segment && segment !== 'skip'"
+                  :appt="segment.appt"
+                  :micro-slots="segment.span"
+                  :style-obj="apptCardStyle(segment.appt, segment.span)"
                   :status-colors="statusColors"
-                  @update-status="$emit('update-status', { appt, status: $event, dentistId: dent.id })"
+                  @update-status="$emit('update-status', { appt: segment.appt, status: $event, dentistId: dent.id })"
                   @open-patient="openPatient"
+                  @open-appointment="$emit('open-appointment', { appt: segment.appt, dentist: dent })"
                   draggable="true"
-                  @dragstart="onAppointmentDragStart($event, appt, dent.id)"
+                  @dragstart="onAppointmentDragStart($event, segment.appt, dent.id)"
                   @dragend="onAppointmentDragEnd"
                   @click.stop
+                  class="micro-slot"
+                  :class="{ 'slot-hover': isHoverSegment(dent.id, t.hour, si) }"
                 />
+                <div
+                  v-else-if="segment !== 'skip'"
+                  class="empty-slot micro-slot"
+                  :class="{ 'slot-hover': isHoverSegment(dent.id, t.hour, si) }"
+                ></div>
               </template>
-              <!-- Calculate remaining empty slots -->
-              <div 
-                v-for="n in getRemainingSlots(dent.id, t.hour)" 
-                :key="'empty-' + n" 
-                class="empty-slot"
-              ></div>
             </div>
           </div>
         </template>
@@ -131,6 +138,7 @@ const defaultEnd = 17
 const intervalMins = 15
 const maxMicroSlots = 4 // Each 15-min slot can hold 4 appointments side-by-side
 const dragMimeType = 'application/x-flossly-appointment'
+const hoverSlot = ref({ dentistId: null, hour: null, segment: null })
 
 const normalizeDateInput = (value) => {
   if (!value) return null
@@ -275,6 +283,31 @@ function isHourFull(dentistId, hour) {
   return getRemainingSlots(dentistId, hour) <= 0
 }
 
+const getHourSegments = (dentistId, hour) => {
+  const slots = Array.from({ length: maxMicroSlots }, () => null)
+  const appts = getAppointmentsForHour(dentistId, hour)
+  appts.forEach((appt) => {
+    const start = appointmentStartMinutes(appt)
+    const offset = start - hour * 60
+    const idx = Math.floor(offset / intervalMins)
+    if (idx < 0 || idx >= maxMicroSlots) return
+    if (slots[idx]) return // already filled by earlier sorted appt
+    const span = Math.min(maxMicroSlots - idx, getMicroSlots(appt))
+    slots[idx] = { appt, span }
+    // mark following covered slots so we don't render empties there
+    for (let i = 1; i < span; i++) {
+      const cover = idx + i
+      if (cover < maxMicroSlots) slots[cover] = 'skip'
+    }
+  })
+  return slots
+}
+
+const apptCardStyle = (appt, span) => ({
+  ...apptStyleFor(appt.status),
+  gridRow: `span ${Math.max(1, span || 1)}`
+})
+
 const appointmentStyle = (appt) => {
   const start = toMinutes(appt.start)
   const end = toMinutes(appt.end)
@@ -328,7 +361,9 @@ const onAppointmentDragStart = (event, appt, dentistId) => {
   }
 }
 
-const onAppointmentDragEnd = () => {}
+const onAppointmentDragEnd = () => {
+  hoverSlot.value = { dentistId: null, hour: null, segment: null }
+}
 
 const readDragPayload = (event) => {
   const raw = event?.dataTransfer?.getData(dragMimeType) || event?.dataTransfer?.getData('text/plain')
@@ -367,10 +402,32 @@ const onSlotDragOver = (event) => {
   if (event?.dataTransfer) {
     event.dataTransfer.dropEffect = 'move'
   }
+  const slot = event?.currentTarget?.dataset
+  if (slot?.dentistId && slot?.hour) {
+    const hour = Number(slot.hour)
+    const dentistId = Number(slot.dentistId)
+    const newStartMinutes = getDropStartMinutes(event, { hour, minute: 0 })
+    const segmentIndex = Math.max(0, Math.min(maxMicroSlots - 1, Math.floor((newStartMinutes - hour * 60) / intervalMins)))
+    hoverSlot.value = { dentistId, hour, segment: segmentIndex }
+  }
 }
+
+const onSlotDragEnter = (dentist, slot) => {
+  hoverSlot.value = { dentistId: dentist.id, hour: slot.hour, segment: null }
+}
+
+const onSlotDragLeave = (dentist, slot) => {
+  if (hoverSlot.value.dentistId === dentist.id && hoverSlot.value.hour === slot.hour) {
+    hoverSlot.value = { dentistId: null, hour: null, segment: null }
+  }
+}
+
+const isHoverSlot = (dentistId, hour) => hoverSlot.value.dentistId === dentistId && hoverSlot.value.hour === hour
+const isHoverSegment = (dentistId, hour, segmentIndex) => isHoverSlot(dentistId, hour) && hoverSlot.value.segment === segmentIndex
 
 const onAppointmentDrop = (event, dentist, slot) => {
   event.preventDefault()
+  hoverSlot.value = { dentistId: null, hour: null, segment: null }
   const payload = readDragPayload(event)
   if (!payload) return
   const duration = getPayloadDuration(payload)
@@ -413,9 +470,11 @@ const nowTop = computed(() => {
 .calendar-wrap {
   width: 100%;
   overflow-x: auto;
-  background-color: #fafafa;
-  border-radius: 10px;
+  background-color: #fff;
+  border-radius: 14px;
   border: 1px solid #e5e7eb;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+  padding: 10px;
   height: 75vh;
 }
 
@@ -426,7 +485,10 @@ const nowTop = computed(() => {
   display: grid;
   grid-template-columns: 90px repeat(var(--cols, 3), minmax(var(--dent-col-min, 420px), max-content));
   grid-auto-rows: auto; /* each 15-min slot row grows with tallest cell */
-  background-color: #e5e7eb;
+  background-color: #eef2f7;
+  border-radius: 12px;
+  overflow: auto;
+  border: 1px solid #e5e7eb;
 }
 
 /* Dentist header cells (row 1, columns 2..N) */
@@ -434,8 +496,8 @@ const nowTop = computed(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px;
-  background: #fff;
+  padding: 14px;
+  background: #f6f7fb;
   border-left: 1px solid #e5e7eb;
   border-bottom: 1px solid #e5e7eb;
   min-width: var(--dent-col-min, 420px);
@@ -445,19 +507,19 @@ const nowTop = computed(() => {
 .time-head {
   height: 64px;
   border-bottom: 1px solid #e5e7eb;
-  background: #fff;
+  background: #f6f7fb;
 }
 
 /* Time cells (column 1, rows >= 2) */
 .time-cell {
-  background: #fff;
+  background: linear-gradient(180deg, #f6f7fb 0%, #ffffff 70%);
   font-size: 13px;
-  font-weight: 500;
-  color: #374151;
+  font-weight: 600;
+  color: #213536;
   display: flex;
   align-items: flex-start;
   justify-content: flex-end;
-  padding: 12px 12px 0 0;
+  padding: 14px 14px 0 0;
   border-right: 1px solid #e5e7eb;
   border-bottom: 1px solid #e5e7eb;
   min-height: 120px; /* minimum row height for hour block */
@@ -470,7 +532,7 @@ const nowTop = computed(() => {
   border-bottom: 1px solid #e5e7eb;
   min-width: var(--dent-col-min, 420px);
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .slot-cell:hover {
@@ -483,12 +545,19 @@ const nowTop = computed(() => {
   opacity: 0.7;
 }
 
+.slot-cell.slot-hover {
+  background: #eef2ff;
+  box-shadow: inset 0 0 0 2px #c7d2fe;
+}
+
 .slot-grid {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: repeat(4, minmax(84px, 1fr));
   gap: 8px;
   padding: 12px;
-  min-height: 380px; /* 4 slots * 90px + gaps */
+  background: #f9fbff;
+  border-radius: 10px;
+  border: 1px solid #eef2f7;
 }
 
 .empty-slot {
@@ -511,14 +580,23 @@ const nowTop = computed(() => {
   cursor: pointer;
 }
 
+.micro-slot.slot-hover {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  box-shadow: inset 0 0 0 2px #c7d2fe;
+}
+
 /* ───────────────────────────────
    GRID LAYOUT (week view)
 ─────────────────────────────── */
 .grid {
   display: grid;
   grid-template-columns: 80px repeat(var(--cols, 3), 1fr);
-  background-color: #e5e7eb;
+  background-color: #eef2f7;
   position: relative;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 .grid::after {
@@ -541,7 +619,7 @@ const nowTop = computed(() => {
    TIME COLUMN (week view)
 ─────────────────────────────── */
 .time-col {
-  background: #fff;
+  background: #f6f7fb;
   border-right: 1px solid #e5e7eb;
 }
 
@@ -560,6 +638,7 @@ const nowTop = computed(() => {
   justify-content: space-between;
   padding: 12px;
   border-bottom: 1px solid #e5e7eb;
+  background: #f6f7fb;
 }
 
 .avatar {

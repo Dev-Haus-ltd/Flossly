@@ -171,6 +171,7 @@ const props = defineProps({
   patientOptions: { type: Array, default: () => [] },
   preselectedPatientId: { type: [Number, String], default: null },
   preselectedPatient: { type: String, default: '' },
+  editAppointment: { type: Object, default: () => null },
 })
 const emit = defineEmits(['update:modelValue','save','add-patient'])
 
@@ -200,7 +201,13 @@ const exams = computed(() => treatmentOptions.value.map(t => t.name))
 const statuses = ['Pending','Confirmed','Arrived','Cancelled']
 const durations = [15,30,45,60]
 
-const headerText = computed(() => `${date.value || ''} ${time.value || ''}`.trim() + (duration.value ? ` for ${duration.value} minutes` : ''))
+const headerText = computed(() => {
+  const base = `${date.value || ''} ${time.value || ''}`.trim()
+  const dur = duration.value ? ` for ${duration.value} minutes` : ''
+  const label = props.editAppointment?.id ? 'Update Appointment' : 'New Appointment'
+  return `${label} - ${base}${dur ? ` (${dur.trim()})` : ''}`.trim()
+})
+const isEditing = computed(() => !!props.editAppointment?.id)
 
 const WORK_START = 9
 const WORK_END = 17
@@ -240,10 +247,26 @@ watch(practitioner, (val) => { if (val) errors.practitioner = '' })
 
 watch(() => props.modelValue, (open) => {
   if (open) {
-    date.value = props.initialDate
-    time.value = props.initialTime
-    practitioner.value = props.initialPractitioner
-    if (props.preselectedPatientId) selectedPatientId.value = props.preselectedPatientId
+    if (isEditing.value && props.editAppointment) {
+      const appt = props.editAppointment
+      date.value = appt.date || props.initialDate
+      time.value = appt.start || appt.time || props.initialTime
+      duration.value = appt.duration || duration.value
+      status.value = appt.status || status.value
+      exam.value = appt.treatmentName || appt.exam || exam.value
+      practitioner.value = appt.practitioner || appt.practitionerName || props.initialPractitioner
+      selectedPatientId.value = appt.patientId || props.preselectedPatientId || null
+      notes.value = appt.notes || ''
+    } else {
+      date.value = props.initialDate
+      time.value = props.initialTime
+      practitioner.value = props.initialPractitioner
+      notes.value = ''
+      status.value = 'Pending'
+      duration.value = 15
+      exam.value = 'Exam'
+      if (props.preselectedPatientId) selectedPatientId.value = props.preselectedPatientId
+    }
     if (!time.value || !timeOptions.value.includes(time.value)) {
       time.value = timeOptions.value[0] || ''
     }
@@ -292,6 +315,7 @@ const onSave = () => {
   if (!validate()) return
   const selectedTreatment = treatmentOptions.value.find(t => t.name === exam.value)
   emit('save', {
+    id: props.editAppointment?.id || null,
     patientId: selectedPatientId.value || props.preselectedPatientId || null,
     patient: '',
     date: date.value,
@@ -314,4 +338,3 @@ const onSave = () => {
 .fld-lbl { font-weight: 400; font-size: 14px; color: #737373; }
 .input-bordered :deep(.v-field) { border: 1px solid #dfdfdf !important; border-radius: 8px !important; background-color: white !important; min-height: 40px; font-size: 14px; }
 </style>
-

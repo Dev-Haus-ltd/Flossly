@@ -209,9 +209,10 @@ watch(bookingPractitionerOptions, (opts) => {
 
 
 const leadStats = computed(() => {
-  const total = leads.value.length;
+  const activeLeads = leads.value.filter((l) => !l.softDeleted);
+  const total = activeLeads.length;
   const byStatus = (s) =>
-    leads.value.filter((l) => (l.leadStatus || "").toLowerCase() === s).length;
+    activeLeads.filter((l) => (l.leadStatus || "").toLowerCase() === s).length;
   return [
     {
       icon: "https://cdn.lordicon.com/asyunleq.json",
@@ -454,6 +455,7 @@ const handleSuccess = (newLead) => {
     assigned: newLead.assigned || [],
     followUpDate: newLead.followUpDate || '',
     comments: newLead.comments || '',
+    softDeleted: false,
   };
   leads.value.unshift(mapped);
 };
@@ -462,7 +464,7 @@ const route = useRoute();
 const fetchLeads = async (filters = {}) => {
   isLoading.value = true
   try {
-    const payload = { ...filters, search: search.value || '' }
+    const payload = { ...filters, search: search.value || '', includeArchived: true }
     const res = await crmStore.listLeads(payload)
     if (res && res.code === 0) {
       leads.value = (res.data || []).map((l) => ({
@@ -481,6 +483,7 @@ const fetchLeads = async (filters = {}) => {
         followUpDate: l.followUpDate || "",
         comments: l.comments || "",
         id: l.id,
+        softDeleted: !!l.softDeleted,
       }))
     }
   } finally {
