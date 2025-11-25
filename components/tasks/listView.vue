@@ -252,12 +252,12 @@
                 <div class="pa-1 d-flex justify-space-between align-center">
                   <v-text-field
                     v-model="item.title"
-                    :variant="isFocused(item.id, 'name') ? 'outlined' : 'plain'"
-                    @focus="setFocus(item.id, 'name', true)"
-                    @blur="updateValueRow(item, 'name')"
+                    :variant="isFocused(item.id, 'title') ? 'outlined' : 'plain'"
+                    @focus="setFocus(item.id, 'title', true)"
+                    @blur="updateValueRow(item, 'title')"
                     density="compact"
                     hide-details
-                    @keyup.enter="updateTitle(item, 'name')"
+                    @keyup.enter="updateTitle(item, 'title')"
                     class="small-input"
                   />
                   <img
@@ -335,9 +335,10 @@
                 <div class="d-flex align-center pa-1">
                   <v-text-field
                     :model-value="getNestedValue(item, col.key)"
-                    :variant="
-                      isFocused(item.id, col.key) ? 'outlined' : 'plain'
-                    "
+                    @update:modelValue="(val) => {
+                      setNestedValue(item, col.key, val);
+                    }"
+                    :variant="isFocused(item.id, col.key) ? 'outlined' : 'plain'"
                     @focus="setFocus(item.id, col.key, true)"
                     @blur="updateValueRow(item, col.key)"
                     density="compact"
@@ -635,7 +636,30 @@ onMounted(() => {
   statuses.value = orgStatuses;
   priorityStatuses.value = priorities;
   user.value = JSON.parse(localStorage.getItem("user"));
+<<<<<<< Updated upstream
 });
+=======
+    // Add keyboard shortcut listener
+  window.addEventListener('keydown', handleKeyboardShortcut);
+
+});
+
+// Add cleanup on unmount
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeyboardShortcut);
+});
+
+// Add this new function to handle keyboard shortcuts
+const handleKeyboardShortcut = (event) => {
+  
+  // Option 1: Ctrl/Cmd + Shift + +
+  if (event.shiftKey && event.key === '+') {
+    event.preventDefault();
+    openAddTaskDialog();
+  }
+};
+
+>>>>>>> Stashed changes
 watch(
   () => taskDetails,
   (newVal) => {
@@ -788,21 +812,22 @@ const updateValueColumn = (column) => {
 const updateSubtaskValueColumn = (column) => {
   setFocus("subheader", column.key, false);
 };
+<<<<<<< Updated upstream
 const updateValueRow = (row, key) => {
-  setFocus(row.id, key, false);
-  if (key === "name" || key === "comments" || key === "documentLink") return;
+=======
+
+const updateTaskInfo = (task) => {
   taskStore
-    .updateUserTask(row)
+    .updateUserTask(task)
     .then((res) => {
-      if (res.code !== 0) {
+      if (res.code === 0) {
+        dialogOpen.value = false;
+        emit("onUpdate");
+      } else {
         mainStore.setSnackbar({
           title: "Error while updating the task",
           type: "error",
         });
-      } else {
-        if (key === "status") {
-          emit("onUpdate");
-        }
       }
     })
     .catch((err) => {
@@ -812,6 +837,48 @@ const updateValueRow = (row, key) => {
       });
     });
 };
+const updateValueRow = async (row, key) => {
+>>>>>>> Stashed changes
+  setFocus(row.id, key, false);
+
+  if (key === "name") return;
+
+  // New nested-value handling
+  const currentValue = getNestedValue(row, key);
+
+  if (key.includes('.')) {
+    const nestedValue = getNestedValue(row, key);
+    console.log(`Sending update for ${key}:`, nestedValue);
+  }
+
+  try {
+    const res = await taskStore.updateUserTask(row);
+
+    if (res.code !== 0) {
+      mainStore.setSnackbar({
+        title: "Error while updating the task",
+        type: "error",
+      });
+      return;
+    }
+
+    if (key === "status") {
+      emit("onUpdate");
+    }
+
+    mainStore.setSnackbar({
+      title: "Task updated successfully",
+      type: "success",
+    });
+
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: "Error while updating the task",
+      type: "error",
+    });
+  }
+};
+
 const updateTitle = (row, key) => {
   setFocus(row.id, key, false);
   taskStore
@@ -840,7 +907,29 @@ function getNestedValue(obj, path) {
     .split(".")
     .reduce((o, key) => (o && o[key] !== undefined ? o[key] : ""), obj);
 }
+<<<<<<< Updated upstream
 let currentCol = null;
+=======
+function setNestedValue(obj, path, value) {
+  const keys = path.split(".");
+  let current = obj;
+  
+  // Navigate through all keys except the last one
+  for (let i = 0; i < keys.length - 1; i++) {
+    const key = keys[i];
+    
+    // Create intermediate objects if they don't exist
+    if (!(key in current) || typeof current[key] !== 'object') {
+      current[key] = {};
+    }
+    current = current[key];
+  }
+  
+  // Set the final value
+  const lastKey = keys[keys.length - 1];
+  current[lastKey] = value;
+}
+>>>>>>> Stashed changes
 let startX = 0;
 let startWidth = 0;
 function startResize(e, col) {

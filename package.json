@@ -39,6 +39,10 @@
     "lottie-web": "^5.13.0",
     "node-ipinfo": "^3.5.1",
     "nodemailer": "^6.9.9",
+<<<<<<< Updated upstream
+=======
+    "openai": "^6.9.1",
+>>>>>>> Stashed changes
     "pg": "^8.11.3",
     "pinia": "^2.1.7",
     "rand-token": "^1.0.1",

@@ -3,6 +3,8 @@ import formidable from "formidable";
 import fs from "fs";
 import path from "path";
 import { parse } from "csv-parse";
+import { readBody, createError } from "h3";
+import { success, error } from "../utils/response";
 import DB from "../utils/db";
 import {
   DefaultPriority,
@@ -19,6 +21,7 @@ import {
   TaskChecklist,
   UserTaskChecklist,
 } from "../models";
+import { sendTaskAssignmentEmail, taskCompletedNotification } from "../utils/emailNotifications";
 export const listMyTasks = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);
@@ -264,6 +267,7 @@ export const updateTask = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
+    const parsedBody = JSON.parse(body);
     const {
       frequency,
       priorityId,
@@ -275,7 +279,10 @@ export const updateTask = async (event) => {
       comments,
       assignedUsers,
       documentLink,
-    } = JSON.parse(body);
+      isArchieved,
+      taskDetails,
+    } = parsedBody;
+    console.log("task testing", parsedBody?.taskDetails);
 
     // Validate existence
     if (id && taskId) {
@@ -300,13 +307,70 @@ export const updateTask = async (event) => {
       if (priorityId && !orgPriorities.find((x) => x.id === priorityId)) {
         throw createError({ message: "PriorityId not found for this org" });
       }
+      
+      // Update UserTask fields
       if (frequency !== undefined) userTask.frequency = frequency;
       if (priorityId !== undefined) userTask.priorityId = priorityId;
       if (statusId !== undefined) userTask.statusId = statusId;
-      if (title) userTask.title = title;
-      if (comments) userTask.comments = comments;
-      if (documentLink) userTask.documentLink = documentLink;
+      if (title !== undefined) userTask.title = title;
+      if (comments !== undefined) userTask.comments = comments;
+      if (documentLink !== undefined) userTask.documentLink = documentLink;
+      if (dueDate !== undefined) userTask.dueDate = dueDate ? new Date(dueDate) : null;
+      if (isArchieved !== undefined) userTask.isArchieved = isArchieved;
       await userTask.save();
+<<<<<<< Updated upstream
+=======
+      
+      // Update Task details if provided
+      if (taskDetails && taskId) {
+        const task = await Task.findByPk(taskId);
+        if (task) {
+          if (taskDetails.title !== undefined) task.title = taskDetails.title;
+          if (taskDetails.description !== undefined) task.description = taskDetails.description;
+          if (taskDetails.categoryId !== undefined) task.categoryId = taskDetails.categoryId;
+          if (taskDetails.roleId !== undefined) task.roleId = taskDetails.roleId;
+          if (taskDetails.defaultFrequency !== undefined) task.defaultFrequency = taskDetails.defaultFrequency;
+          await task.save();
+        }
+      }
+      if (
+        statusId &&
+        orgStatuses.find((x) => x.id === statusId)?.key === "completed"
+      ) {
+        const user = await User.findOne({ where: { id: loggedUser.userId } });
+        await taskCompletedNotification({
+          fullName: user.fullName,
+          task: userTask.title,
+        });
+        if (
+          priorityId &&
+          orgPriorities.find((x) => x.id === priorityId)?.key === "critical"
+        ) {
+          await UserPointsHistory.create({
+            userId: loggedUser.userId,
+            rewardPointId: 4,
+            points: 10,
+            description: userTask.title,
+          });
+          const userPoints = await UserPoint.findOne({
+            where: { userId: loggedUser.userId },
+          });
+          if (!userPoints) {
+            await UserPoint.create({
+              userId: loggedUser.userId,
+              balance: 10,
+              totalPointsRewarded: 10,
+              redeemed: 0,
+            });
+          }
+          if (userPoints) {
+            userPoints.balance += 10;
+            userPoints.totalPointsRewarded += 10;
+            await userPoints.save();
+          }
+        }
+      }
+>>>>>>> Stashed changes
     } else if (!id && taskId) {
       if (assignedUsers && assignedUsers.length) {
         assignedUsers.forEach(async (el) => {
@@ -1252,6 +1316,7 @@ export const getUserTasksStatusWise = async (event) => {
           model: OrganisationStatus,
           as: "status",
         },
+        
       ],
     });
     const response = [];
