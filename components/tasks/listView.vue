@@ -809,7 +809,26 @@ onMounted(() => {
   statuses.value = orgStatuses;
   priorityStatuses.value = priorities;
   user.value = JSON.parse(localStorage.getItem("user"));
+    // Add keyboard shortcut listener
+  window.addEventListener('keydown', handleKeyboardShortcut);
+
 });
+
+// Add cleanup on unmount
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeyboardShortcut);
+});
+
+// Add this new function to handle keyboard shortcuts
+const handleKeyboardShortcut = (event) => {
+  
+  // Option 1: Ctrl/Cmd + Shift + +
+  if (event.shiftKey && event.key === '+') {
+    event.preventDefault();
+    openAddTaskDialog();
+  }
+};
+
 watch(
   () => taskDetails,
   (newVal) => {
