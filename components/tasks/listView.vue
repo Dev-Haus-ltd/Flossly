@@ -86,7 +86,7 @@
               <p>Available Columns</p>
               <div class="d-flex flex-wrap">
                 <div
-                  v-for="(item, index) in availableHeaders"
+                  v-for="(item, index) in filteredAvailableHeaders"
                   :key="index"
                   class="color-box ma-1 pa-2 d-flex align-center justify-center"
                   :style="{ backgroundColor: getRandomHexColor(item.title) }"
@@ -795,6 +795,20 @@ const enableEditing = (column, index) => {
 const isEditing = (column, index) => {
   return editingColumn.value[`${index}-${column.key}`] === true
 }
+
+// Computed property to filter available headers (exclude already selected ones)
+const filteredAvailableHeaders = computed(() => {
+  if (!availableHeaders || !selectedHeaders.value) {
+    return [];
+  }
+
+  // Get the keys of all selected headers
+  const selectedKeys = new Set(selectedHeaders.value.map(h => h.key));
+
+  // Filter out headers that are already selected
+  return availableHeaders.filter(header => !selectedKeys.has(header.key));
+});
+
 const getRoles = () => {
   mainStore
     .getRoles()
