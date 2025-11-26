@@ -307,12 +307,13 @@
                 <div class="pa-1 d-flex justify-space-between align-center">
                   <v-text-field
                     v-model="item.title"
-                    :variant="isFocused(item.id, 'name') ? 'outlined' : 'plain'"
-                    @focus="setFocus(item.id, 'name', true)"
-                    @blur="updateValueRow(item, 'name')"
+                    :variant="isFocused(item.id, 'title') ? 'outlined' : 'plain'"
+                    @focus="() => { setFocus(item.id, 'title', true); storeOriginalValue(item.id, 'title', item); }"
+                    @blur="updateValueRow(item, 'title')"
                     density="compact"
                     hide-details
-                    @keyup.enter="updateTitle(item, 'name')"
+                    @keyup.enter="(e) => handleEnterKey(e, item, 'title')"
+                    @keyup.escape="(e) => handleEscapeKey(e, item, 'title')"
                     class="small-input"
                   />
                   <img
@@ -390,13 +391,15 @@
                 <div class="d-flex align-center pa-1">
                   <v-text-field
                     :model-value="getNestedValue(item, col.key)"
-                    :variant="
-                      isFocused(item.id, col.key) ? 'outlined' : 'plain'
-                    "
-                    @focus="setFocus(item.id, col.key, true)"
+                    @update:modelValue="(val) => {
+                      setNestedValue(item, col.key, val);
+                    }"
+                    :variant="isFocused(item.id, col.key) ? 'outlined' : 'plain'"
+                    @focus="() => { setFocus(item.id, col.key, true); storeOriginalValue(item.id, col.key, item); }"
                     @blur="updateValueRow(item, col.key)"
                     density="compact"
-                    @keyup.enter="updateTitle(item, col.key)"
+                    @keyup.enter="(e) => handleEnterKey(e, item, col.key)"
+                    @keyup.escape="(e) => handleEscapeKey(e, item, col.key)"
                     hide-details
                     class="small-input"
                   />
@@ -753,6 +756,7 @@ const hideHandles = (key, i) => {
 const search = ref("");
 const expanded = ref([]);
 const focusedField = ref({});
+const originalFieldValues = ref({}); // Store original values for Escape key functionality
 const statuses = ref([]);
 const priorityStatuses = ref([]);
 const viewType = ref("list");
@@ -1028,59 +1032,121 @@ const updateTaskInfo = (task) => {
       });
     });
 };
-const updateValueRow = (row, key) => {
+const storeOriginalValue = (id, key, row) => {
+  // Create a unique identifier for this field
+  const fieldId = `${id}-${key}`;
+
+  // Store the original value (handle both simple and nested values)
+  if (key.includes('.')) {
+    originalFieldValues.value[fieldId] = getNestedValue(row, key);
+  } else {
+    originalFieldValues.value[fieldId] = row[key];
+  }
+};
+
+const handleEscapeKey = (event, row, key) => {
+  const fieldId = `${row.id}-${key}`;
+
+  // Retrieve the original value
+  const originalValue = originalFieldValues.value[fieldId];
+
+  if (originalValue !== undefined) {
+    // Revert to the original value
+    if (key.includes('.')) {
+      setNestedValue(row, key, originalValue);
+    } else {
+      row[key] = originalValue;
+    }
+
+    // Clean up the stored original value
+    delete originalFieldValues.value[fieldId];
+  }
+
+  // Remove focus without triggering save
   setFocus(row.id, key, false);
-  if (key === "name" || key === "comments" || key === "documentLink") return;
-  taskStore
-    .updateUserTask(row)
-    .then((res) => {
-      if (res.code !== 0) {
-        mainStore.setSnackbar({
-          title: "Error while updating the task",
-          type: "error",
-        });
-      } else {
-        if (key === "status") {
-          emit("onUpdate");
-        }
-      }
-    })
-    .catch((err) => {
+  event.target.blur();
+};
+
+const handleEnterKey = (event, row, key) => {
+  // Clean up the stored original value since we're saving
+  const fieldId = `${row.id}-${key}`;
+  delete originalFieldValues.value[fieldId];
+
+  // Blur the input field to trigger the blur event
+  // This prevents duplicate API calls by ensuring only blur fires
+  event.target.blur();
+};
+
+const updateValueRow = async (row, key) => {
+  // Clean up the stored original value after successful save
+  const fieldId = `${row.id}-${key}`;
+  delete originalFieldValues.value[fieldId];
+
+  setFocus(row.id, key, false);
+
+  if (key === "name") return;
+
+  // New nested-value handling
+  const currentValue = getNestedValue(row, key);
+
+  if (key.includes('.')) {
+    const nestedValue = getNestedValue(row, key);
+    console.log(`Sending update for ${key}:`, nestedValue);
+  }
+
+  try {
+    const res = await taskStore.updateUserTask(row);
+
+    if (res.code !== 0) {
       mainStore.setSnackbar({
         title: "Error while updating the task",
         type: "error",
       });
+      return;
+    }
+
+    if (key === "status") {
+      emit("onUpdate");
+    }
+
+    mainStore.setSnackbar({
+      title: "Task updated successfully",
+      type: "success",
     });
-};
-const updateTitle = (row, key) => {
-  setFocus(row.id, key, false);
-  taskStore
-    .updateUserTask(row)
-    .then((res) => {
-      if (res.code !== 0) {
-        mainStore.setSnackbar({
-          title: "Error while updating the task",
-          type: "error",
-        });
-      } else {
-        if (key === "status") {
-          emit("onUpdate");
-        }
-      }
-    })
-    .catch((err) => {
-      mainStore.setSnackbar({
-        title: "Error while updating the task",
-        type: "error",
-      });
+
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: "Error while updating the task",
+      type: "error",
     });
+  }
 };
+
+
 function getNestedValue(obj, path) {
   return path
     .split(".")
     .reduce((o, key) => (o && o[key] !== undefined ? o[key] : ""), obj);
 }
-
+function setNestedValue(obj, path, value) {
+  const keys = path.split(".");
+  let current = obj;
+  
+  // Navigate through all keys except the last one
+  for (let i = 0; i < keys.length - 1; i++) {
+    const key = keys[i];
+    
+    // Create intermediate objects if they don't exist
+    if (!(key in current) || typeof current[key] !== 'object') {
+      current[key] = {};
+    }
+    current = current[key];
+  }
+  
+  // Set the final value
+  const lastKey = keys[keys.length - 1];
+  current[lastKey] = value;
+}
 let startX = 0;
 let startWidth = 0;
 let currentCol = null;
