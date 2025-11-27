@@ -263,7 +263,6 @@
                     variant="solo"
                     placeholder="Type here"
                     density="compact"
-                    :rules="requiredRule"
                     elevation="0"
                     class="mt-1"
                     flat
@@ -332,9 +331,28 @@
                       <!-- Center File Icon or Preview -->
                       <div
                         class="d-flex align-center justify-center"
-                        style="margin-top: 30px"
+                        style="margin-top: 30px; min-height: 100px;"
                       >
-                        <v-icon size="60">mdi-file</v-icon>
+                        <!-- Image Preview for image files -->
+                        <div v-if="isImageFile(file)" class="image-preview-wrapper">
+                          <img
+                            v-if="!imageLoadErrors[file.id]"
+                            :src="getImageUrl(file.link)"
+                            :alt="file.title"
+                            class="file-preview-image"
+                            @error="handleImageError($event, file)"
+                            @click="openImageInNewTab(file)"
+                          />
+                          <v-icon
+                            v-else
+                            size="60"
+                            class="fallback-icon"
+                          >
+                            mdi-file
+                          </v-icon>
+                        </div>
+                        <!-- File Icon for non-image files -->
+                        <v-icon v-else size="60">mdi-file</v-icon>
                       </div>
 
                       <!-- Divider -->
@@ -394,6 +412,7 @@ const taskStore = useTaskStore();
 const store= useMainStore();
 const tab = ref("overview");
 const taskDetails = ref("");
+const imageLoadErrors = ref({});
 
 const fetchTaskDetails = async () => {
   let userTaskId;
@@ -404,6 +423,8 @@ const fetchTaskDetails = async () => {
     props.selectedItem.assignedUser = users[0];
     userTaskId = users[0].userTaskId;
   }
+  // Reset image load errors when fetching new task details
+  imageLoadErrors.value = {};
   try {
     const res = await taskStore.getTaskDetails({
       userTaskId,
@@ -444,6 +465,79 @@ const formatFileSize = (size) => {
 const formatDate = (date) => {
   return parsedDate(date);
 };
+
+const config = useRuntimeConfig();
+
+// Check if file is an image
+const isImageFile = (file) => {
+  if (!file || !file.type) return false;
+  return file.type.startsWith('image/');
+};
+
+// Get full image URL
+const getImageUrl = (link) => {
+  if (!link) return '';
+  // If link already starts with http, return as is
+  if (link.startsWith('http://') || link.startsWith('https://')) {
+    return link;
+  }
+  // Otherwise, prepend BASE_URL
+  const baseUrl = config.public.BASE_URL || '';
+  return `${baseUrl}${link}`;
+};
+
+// Handle image load errors
+const handleImageError = (event, file) => {
+  // Mark this file as having a load error
+  if (file && file.id) {
+    imageLoadErrors.value[file.id] = true;
+  }
+};
+
+// Open image in new tab
+const openImageInNewTab = (file) => {
+  if (file && file.link) {
+    const fullUrl = getImageUrl(file.link);
+    window.open(fullUrl, '_blank');
+  }
+};
+
+// Delete file function
+const deleteFile = async (file) => {
+  if (!file || !file.id) {
+    store.setSnackbar({
+      title: "Invalid file",
+      type: "error",
+    });
+    return;
+  }
+
+  try {
+    const res = await taskStore.deleteAttachment({
+      id: file.id,
+    });
+
+    if (res.code === 0) {
+      // Refresh task details to update the attachments list
+      await fetchTaskDetails();
+      store.setSnackbar({
+        title: res.data || "File removed from task",
+        type: "success",
+      });
+    } else {
+      store.setSnackbar({
+        title: res.data?.message || res.message || "Failed to delete file",
+        type: "error",
+      });
+    }
+  } catch (err) {
+    store.setSnackbar({
+      title: err.message || "An unexpected error occurred",
+      type: "error",
+    });
+  }
+};
+
 const uploadFile = async (file) => {
   try {
     const formData = new FormData();
@@ -535,5 +629,36 @@ const uploadFile = async (file) => {
   
   font-weight: bold;
   font-size: 14px;
+}
+
+.image-preview-wrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-preview-image {
+  max-width: 100%;
+  max-height: 120px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.file-preview-image:hover {
+  transform: scale(1.05);
+  opacity: 0.9;
+}
+
+.fallback-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 </style>

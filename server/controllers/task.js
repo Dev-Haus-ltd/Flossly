@@ -317,6 +317,7 @@ export const updateTask = async (event) => {
       assignedUsers,
       documentLink,
       isArchieved,
+      description,
       taskDetails,
     } = parsedBody;
 
@@ -551,6 +552,27 @@ export const archieveBulkTasks = async (event) => {
   }
 };
 
+export const unarchiveBulkTasks = async (event) => {
+  try {
+    const loggedUser = event.context.user;
+    const organisationId = loggedUser.orgId;
+    const body = await readBody(event);
+    const { userTasksIds } = JSON.parse(body);
+    await UserTask.update(
+      { isArchieved: false },
+      {
+        where: {
+          id: userTasksIds,
+          organisationId,
+        },
+      }
+    );
+    return success("All tasks unarchived successfully.");
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
 export const unAssignBulkTask = async (event) => {
   try {
     const loggedUser = event.context.user;
@@ -615,6 +637,38 @@ export const addAttachments = async (event) => {
   }
 };
 
+export const deleteAttachment = async (event) => {
+  const body = await readBody(event);
+  const { id } = JSON.parse(body);
+  if (!id) {
+    throw createError({ message: "Attachment id required" });
+  }
+  try {
+    const attachment = await UserTaskAttachment.findByPk(id);
+    if (!attachment) {
+      throw createError({ message: "Attachment not found" });
+    }
+    
+    // Delete the physical file from the filesystem
+    const filePath = path.join(process.cwd(), "public", attachment.link);
+    if (fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (unlinkErr) {
+        console.warn("Failed to delete file from filesystem:", unlinkErr);
+        // Continue with database deletion even if file deletion fails
+      }
+    }
+    
+    // Delete the database record
+    await attachment.destroy();
+    return success("File removed from task");
+  } catch (err) {
+    console.log(err);
+    return error(500, err.message);
+  }
+};
+
 export const createNewTask = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);
@@ -629,13 +683,13 @@ export const createNewTask = async (event) => {
     dueDate,
     statusId,
   } = JSON.parse(body);
-  if (!title || !categoryId) {
-    throw createError({ message: "Required fields missing" });
+  if (!title || !title.trim() || !categoryId) {
+    throw createError({ message: "Task title cannot be empty or only spaces" });
   }
   const transaction = await DB.transaction();
   try {
     const newTask = {
-      title,
+      title: title.trim(),
       description,
       roleId,
       categoryId,
@@ -1188,8 +1242,20 @@ export const groupTeamTasksByTaskId = async (event) => {
       ],
     });
 
-    const response = [];
+    // Separate archived and non-archived tasks
+    const archivedTasks = [];
+    const nonArchivedTasks = [];
+    
     for (const ut of userTasks) {
+      if (ut.isArchieved) {
+        archivedTasks.push(ut);
+      } else {
+        nonArchivedTasks.push(ut);
+      }
+    }
+
+    const response = [];
+    for (const ut of nonArchivedTasks) {
       const status = ut.status?.key || "unknown";
       if (!response[status]) {
         response[status] = [];
@@ -1209,6 +1275,7 @@ export const groupTeamTasksByTaskId = async (event) => {
         if (!grouped[taskId]) {
           grouped[taskId] = {
             taskId,
+            id: taskEntry.id,
             title: taskEntry.title,
             description: taskEntry.taskDetails?.description,
             frequency: taskEntry.frequency,
@@ -1224,6 +1291,7 @@ export const groupTeamTasksByTaskId = async (event) => {
             updatedAt: taskEntry.updatedAt,
             taskDetails: taskEntry.taskDetails,
             attachments: taskEntry.attachments,
+            isArchieved: taskEntry.isArchieved,
             assignedUsers: [],
           };
         }
@@ -1243,6 +1311,56 @@ export const groupTeamTasksByTaskId = async (event) => {
       });
       el.tasks = Object.values(grouped);
     });
+
+    // Process archived tasks separately
+    if (archivedTasks.length > 0) {
+      const archivedGrouped = {};
+      
+      archivedTasks.forEach((taskEntry) => {
+        const taskId = taskEntry.taskId;
+        if (!archivedGrouped[taskId]) {
+          archivedGrouped[taskId] = {
+            taskId,
+            id: taskEntry.id,
+            title: taskEntry.title,
+            description: taskEntry.taskDetails?.description,
+            frequency: taskEntry.frequency,
+            categoryId: taskEntry.taskDetails?.categoryId,
+            category: taskEntry.taskDetails.category,
+            priorityId: taskEntry.priorityId,
+            status: taskEntry.status,
+            statusId: taskEntry.statusId,
+            priority: taskEntry.priority,
+            comments: taskEntry.comments,
+            dueDate: taskEntry.dueDate,
+            createdAt: taskEntry.createdAt,
+            updatedAt: taskEntry.updatedAt,
+            taskDetails: taskEntry.taskDetails,
+            attachments: taskEntry.attachments,
+            isArchieved: taskEntry.isArchieved,
+            assignedUsers: [],
+          };
+        }
+
+        // Check if user is already in the assignedUsers array to avoid duplicates
+        const userId = taskEntry.assignedUser?.id;
+        if (userId && !archivedGrouped[taskId].assignedUsers.some(u => u.id === userId)) {
+          archivedGrouped[taskId].assignedUsers.push({
+            id: taskEntry.assignedUser?.id,
+            fullName: taskEntry.assignedUser?.fullName,
+            email: taskEntry.assignedUser?.email,
+            photo: taskEntry.assignedUser?.photo,
+            status: taskEntry.status,
+            userTaskId: taskEntry.id,
+          });
+        }
+      });
+      
+      data.push({
+        status: "archived",
+        tasks: Object.values(archivedGrouped),
+      });
+    }
 
     return success(data);
   } catch (err) {
@@ -1757,24 +1875,49 @@ export const getUserTasksStatusWise = async (event) => {
         },
       ],
     });
-    const response = [];
+    
+    // Separate archived and non-archived tasks
+    const archivedTasks = [];
+    const nonArchivedTasks = [];
+    
     for (const ut of userTasks) {
+      if (ut.isArchieved) {
+        archivedTasks.push(ut);
+      } else {
+        nonArchivedTasks.push(ut);
+      }
+    }
+    
+    // Group non-archived tasks by status
+    const response = [];
+    for (const ut of nonArchivedTasks) {
       const status = ut.status?.key || "unknown";
       if (!response[status]) {
         response[status] = [];
       }
       response[status].push(ut);
     }
+    
     const data = Object.entries(response).map(([status, tasks]) => ({
       status,
       tasks,
     }));
+    
+    // Add archived tasks as a separate group if there are any
+    if (archivedTasks.length > 0) {
+      data.push({
+        status: "archived",
+        tasks: archivedTasks,
+      });
+    }
+    
     return success(data);
   } catch (err) {
     return error(500, err.message);
   }
 };
 
+// Custom View Functions
 export const getGeneralTasksByCategory = async (event) => {
   const body = await readBody(event);
   const { categoryId } = JSON.parse(body);

@@ -159,6 +159,9 @@
                 <v-icon v-if="group.status === 'todo'" class="mr-2"
                   >mdi-calendar-clock</v-icon
                 >
+                <v-icon v-else-if="group.status === 'archived'" class="mr-2">
+                  mdi-archive-outline
+                </v-icon>
                 <v-icon v-else class="mr-2">
                   mdi-calendar-check-outline
                 </v-icon>
@@ -594,6 +597,7 @@
             </template>
             <template #[`footer.prepend`]>
               <v-btn
+                v-if="group.status !== 'archived'"
                 size="small"
                 color="primary"
                 variant="flat"
@@ -926,6 +930,9 @@ const isFocused = (id, key) => {
 };
 
 const getStatuses = (key) => {
+  if (key === "archived") {
+    return "Archived";
+  }
   if (statuses.value.find((x) => x.key === key)) {
     return statuses.value.find((x) => x.key === key).name;
   } else {
@@ -933,6 +940,9 @@ const getStatuses = (key) => {
   }
 };
 const getColor = (key) => {
+  if (key === "archived") {
+    return "#9E9E9E"; // Gray color for archived
+  }
   if (statuses.value.find((x) => x.key === key)) {
     return statuses.value.find((x) => x.key === key).color;
   } else {
@@ -1055,8 +1065,23 @@ const updateSubtaskValueColumn = (column) => {
 };
 
 const updateTaskInfo = (task) => {
+  // Format the task data for the backend
+  const updateData = {
+    id: task.id,
+    taskId: task.taskId || task.taskDetails?.id,
+    title: task.title,
+    comments: task.comments,
+    statusId: task.statusId,
+    priorityId: task.priorityId,
+    frequency: task.frequency,
+    dueDate: task.dueDate,
+    documentLink: task.documentLink,
+    // Include description from taskDetails if it exists
+    description: task.taskDetails?.description,
+  };
+  
   taskStore
-    .updateUserTask(task)
+    .updateUserTask(updateData)
     .then((res) => {
       if (res.code === 0) {
         dialogOpen.value = false;
@@ -1127,7 +1152,22 @@ const updateValueRow = async (row, key) => {
 
   setFocus(row.id, key, false);
 
-  if (key === "name") return;
+  if (key === "name" && row.title) {
+    if (!row.title.trim()) {
+      mainStore.setSnackbar({
+        title: "Task title cannot be only spaces",
+        type: "error",
+      });
+      return;
+    }
+    if (row.title.length > 150) {
+      mainStore.setSnackbar({
+        title: "Task title must be 150 characters or less",
+        type: "error",
+      });
+      return;
+    }
+  }
 
   // New nested-value handling
   const currentValue = getNestedValue(row, key);
@@ -1142,7 +1182,7 @@ const updateValueRow = async (row, key) => {
 
     if (res.code !== 0) {
       mainStore.setSnackbar({
-        title: "Error while updating the task",
+        title: err.message || "Error while updating the task",
         type: "error",
       });
       return;

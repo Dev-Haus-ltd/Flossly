@@ -86,6 +86,7 @@
             </div>
 
             <div
+              v-if="!hasArchivedTasks"
               class="action-item d-flex flex-column align-center"
               @click="handleArchive"
             >
@@ -94,11 +95,29 @@
             </div>
 
             <div
+              v-if="hasArchivedTasks"
+              class="action-item d-flex flex-column align-center"
+              @click="handleUnarchive"
+            >
+              <v-icon size="24">mdi-archive-arrow-up-outline</v-icon>
+              <span class="action-label">Unarchive</span>
+            </div>
+
+            <div
+              v-if="!hasArchivedTasks"
               class="action-item d-flex flex-column align-center"
               @click="handleComplete"
             >
               <v-icon size="24">mdi-check-circle-outline</v-icon>
               <span class="action-label">Complete</span>
+            </div>
+
+            <div
+              class="action-item d-flex flex-column align-center"
+              @click="handleExportCSV"
+            >
+              <v-icon size="24">mdi-file-export-outline</v-icon>
+              <span class="action-label">Exporttell</span>
             </div>
 
             <!-- Divider before close -->
@@ -126,6 +145,7 @@
 
 <script setup>
 import { useDisplay } from "vuetify";
+import { nextTick } from "vue";
 
 const bus = useBus();
 const { xs } = useDisplay();
@@ -302,6 +322,10 @@ function sortByCustomStatus(arr) {
   );
 
   return [...arr].sort((a, b) => {
+    // Archived tasks always go last
+    if (a.status?.toLowerCase() === "archived") return 1;
+    if (b.status?.toLowerCase() === "archived") return -1;
+    
     const aPriority = priority[a.status?.toLowerCase()] ?? Infinity;
     const bPriority = priority[b.status?.toLowerCase()] ?? Infinity;
     return aPriority - bPriority;
@@ -381,6 +405,15 @@ const handleDelete = async () => {
   }
 };
 
+const hasArchivedTasks = computed(() => {
+  if (!selectedRowItems.value || selectedRowItems.value.length === 0) {
+    return false;
+  }
+  return selectedRowItems.value.some(item => 
+    item.isArchieved === true || item.status?.key === 'archived'
+  );
+});
+
 const handleArchive = async () => {
   if (!selectedRowItems.value.length) {
     mainStore.setSnackbar({
@@ -419,6 +452,132 @@ const handleArchive = async () => {
       type: "error",
     });
   }
+};
+
+const handleUnarchive = async () => {
+  if (!selectedRowItems.value.length) {
+    mainStore.setSnackbar({
+      title: "No tasks selected to unarchive.",
+      type: "warning",
+    });
+    return;
+  }
+
+  const ids = getAllUserTaskIds(selectedRowItems.value);
+
+  try {
+    const res = await taskStore.unarchiveBulkTasks({
+      userTasksIds: ids,
+    });
+
+    if (res.code === 0) {
+      // Clear selection immediately - this will update hasArchivedTasks computed
+      selectedRowItems.value = [];
+      isTrayHidden.value = true;
+      
+      // Wait for next tick to ensure reactivity updates
+      await nextTick();
+      
+      // Refresh tasks list
+      updateTasksList();
+      
+      mainStore.setSnackbar({
+        title: "Tasks unarchived successfully.",
+        type: "success",
+      });
+    } else {
+      mainStore.setSnackbar({
+        title:
+          res.data?.message ||
+          res.message ||
+          "Unable to unarchive tasks. Please try again.",
+        type: "error",
+      });
+    }
+  } catch (err) {
+    mainStore.setSnackbar({
+      title:
+        err.message || "An unexpected error occurred. Please try again later.",
+      type: "error",
+    });
+  }
+};
+
+const handleExportCSV = () => {
+  if (!selectedRowItems.value.length) {
+    mainStore.setSnackbar({
+      title: "No tasks selected to export.",
+      type: "warning",
+    });
+    return;
+  }
+
+  // Define CSV headers
+  const headers = [
+    "Title",
+    "Description",
+    "Category",
+    "Priority",
+    "Status",
+    "Frequency",
+    "Due Date",
+    "Assigned Users",
+    "Comments",
+    "Created At",
+    "Updated At",
+  ];
+
+  // Convert tasks to CSV rows
+  const rows = selectedRowItems.value.map((task) => {
+    const escapeCSV = (value) => {
+      if (value === null || value === undefined) return "";
+      const stringValue = String(value);
+      // If value contains comma, newline, or quote, wrap in quotes and escape quotes
+      if (stringValue.includes(",") || stringValue.includes("\n") || stringValue.includes('"')) {
+        return `"${stringValue.replace(/"/g, '""')}"`;
+      }
+      return stringValue;
+    };
+
+    // Get assigned users (for team tasks, there might be multiple)
+    const assignedUsers = task.assignedUsers
+      ? task.assignedUsers.map((u) => u.fullName).join("; ")
+      : task.assignedUser?.fullName || "";
+
+    return [
+      escapeCSV(task.title || ""),
+      escapeCSV(task.taskDetails?.description || ""),
+      escapeCSV(task.taskDetails?.category?.name || ""),
+      escapeCSV(task.priority?.name || ""),
+      escapeCSV(task.status?.name || ""),
+      escapeCSV(task.frequency || ""),
+      escapeCSV(task.dueDate ? new Date(task.dueDate).toLocaleDateString() : ""),
+      escapeCSV(assignedUsers),
+      escapeCSV(task.comments || ""),
+      escapeCSV(task.createdAt ? new Date(task.createdAt).toLocaleDateString() : ""),
+      escapeCSV(task.updatedAt ? new Date(task.updatedAt).toLocaleDateString() : ""),
+    ].join(",");
+  });
+
+  // Combine headers and rows
+  const csvContent = [headers.join(","), ...rows].join("\n");
+
+  // Create blob and download
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.setAttribute("href", url);
+  link.setAttribute("download", `tasks_export_${new Date().toISOString().split("T")[0]}.csv`);
+  link.style.visibility = "hidden";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+
+  mainStore.setSnackbar({
+    title: `${selectedRowItems.value.length} task(s) exported successfully`,
+    type: "success",
+  });
 };
 
 const handleComplete = async () => {

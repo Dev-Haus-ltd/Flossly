@@ -7,6 +7,7 @@ import {
   createNewTask,
   uploadBulkTasks,
   createUserTaskChecklist,
+  deleteAttachment,
   deleteTaskChecklist,
   deleteUserTaskChecklist,
   getUserTaskDetails,
@@ -25,6 +26,7 @@ import {
   groupTeamTasksByTaskId,
   teamTasksCountByCategory,
   archieveBulkTasks,
+  unarchiveBulkTasks,
   completeBulkTasks,
   unAssignBulkTask,
   getTeamTaskStatsByStatusAndCategory,
@@ -53,6 +55,8 @@ export default defineEventHandler(async (event) => {
       return await updateTask(event);
     case "addAttachments":
       return await addAttachments(event);
+    case "deleteAttachment":
+      return await deleteAttachment(event);
     case "addNewTask":
       return await createNewTask(event); 
     case "addBulkTasks":
@@ -85,6 +89,8 @@ export default defineEventHandler(async (event) => {
       return await getGeneralTasksByCategory(event);
     case "archieveBulk":
       return await archieveBulkTasks(event);
+    case "unarchiveBulk":
+      return await unarchiveBulkTasks(event);
     case "completeBulk":
       return await completeBulkTasks(event);
     case "unassignBulk":
