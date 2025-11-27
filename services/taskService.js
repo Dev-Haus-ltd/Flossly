@@ -223,6 +223,17 @@ export default {
         });
     });
   },
+  deleteAttachment(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/deleteAttachment", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
   assignTask(data) {
     return new Promise((resolve, reject) => {
       Post("/tasks/assign", data)
@@ -281,6 +292,17 @@ export default {
   archieveBulkTasks(data) {
     return new Promise((resolve, reject) => {
       Post("/tasks/archieveBulk", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  unarchiveBulkTasks(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/unarchiveBulk", data)
         .then((res) => {
           resolve(res);
         })

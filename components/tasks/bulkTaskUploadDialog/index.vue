@@ -140,6 +140,7 @@
                       density="compact"
                       variant="outlined"
                       hide-details
+                      :maxlength="150"
                       @input="validateTask(index)"
                     ></v-text-field>
                     <v-tooltip v-show="task.errors?.title" location="top">
@@ -625,6 +626,9 @@ const validateTaskRow = (task, index) => {
   // Required text fields
   if (!task.title?.trim()) {
     task.errors.title = "Title is required";
+    task.hasErrors = true;
+  } else if (task.title.length > 150) {
+    task.errors.title = "Title must be 150 characters or less";
     task.hasErrors = true;
   }
 

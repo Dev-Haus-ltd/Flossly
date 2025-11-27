@@ -48,7 +48,8 @@
                   density="compact"
                   class="input-bordered mb-0"
                   bg-color="white"
-                  :rules="requiredRule"
+                  :rules="titleRules"
+                  :maxlength="titleMaxLength"
                   required
                   flat
                 />
@@ -342,6 +343,12 @@ const categoryAutocomplete = ref(null);
 const menu = ref(false);
 const emit = defineEmits(["close", "success", "update:modelValue"]);
 const requiredRule = [(v) => !!v || "This field is required"];
+const titleMaxLength = 150;
+const titleRules = [
+  (v) => !!v || "This field is required",
+  (v) => (v && v.trim().length > 0) || "Task title cannot be only spaces",
+  (v) => (v && v.length <= titleMaxLength) || `Title must be ${titleMaxLength} characters or less`,
+];
 
 const form = ref({
   title: "",
