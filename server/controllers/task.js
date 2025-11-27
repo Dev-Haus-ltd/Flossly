@@ -3,6 +3,8 @@ import formidable from "formidable";
 import fs from "fs";
 import path from "path";
 import { parse } from "csv-parse";
+import { readBody, createError } from "h3";
+import { success, error } from "../utils/response";
 import DB from "../utils/db";
 import {
   DefaultPriority,
@@ -21,6 +23,7 @@ import {
   UserPointsHistory,
   UserPoint,
 } from "../models";
+import { sendTaskAssignmentEmail, taskCompletedNotification } from "../utils/emailNotifications";
 export const listMyTasks = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);
@@ -301,6 +304,7 @@ export const updateTask = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
+    const parsedBody = JSON.parse(body);
     const {
       frequency,
       priorityId,
@@ -312,7 +316,9 @@ export const updateTask = async (event) => {
       comments,
       assignedUsers,
       documentLink,
-    } = JSON.parse(body);
+      isArchieved,
+      taskDetails,
+    } = parsedBody;
 
     // Validate existence
     if (id && taskId) {
@@ -337,13 +343,30 @@ export const updateTask = async (event) => {
       if (priorityId && !orgPriorities.find((x) => x.id === priorityId)) {
         throw createError({ message: "PriorityId not found for this org" });
       }
+      
+      // Update UserTask fields
       if (frequency !== undefined) userTask.frequency = frequency;
       if (priorityId !== undefined) userTask.priorityId = priorityId;
       if (statusId !== undefined) userTask.statusId = statusId;
-      if (title) userTask.title = title;
-      if (comments) userTask.comments = comments;
-      if (documentLink) userTask.documentLink = documentLink;
+      if (title !== undefined) userTask.title = title;
+      if (comments !== undefined) userTask.comments = comments;
+      if (documentLink !== undefined) userTask.documentLink = documentLink;
+      if (dueDate !== undefined) userTask.dueDate = dueDate ? new Date(dueDate) : null;
+      if (isArchieved !== undefined) userTask.isArchieved = isArchieved;
       await userTask.save();
+      
+      // Update Task details if provided
+      if (taskDetails && taskId) {
+        const task = await Task.findByPk(taskId);
+        if (task) {
+          if (taskDetails.title !== undefined) task.title = taskDetails.title;
+          if (taskDetails.description !== undefined) task.description = taskDetails.description;
+          if (taskDetails.categoryId !== undefined) task.categoryId = taskDetails.categoryId;
+          if (taskDetails.roleId !== undefined) task.roleId = taskDetails.roleId;
+          if (taskDetails.defaultFrequency !== undefined) task.defaultFrequency = taskDetails.defaultFrequency;
+          await task.save();
+        }
+      }
       if (
         statusId &&
         orgStatuses.find((x) => x.id === statusId)?.key === "completed"
@@ -393,7 +416,6 @@ export const updateTask = async (event) => {
     } else {
       throw createError({ message: "Task not found" });
     }
-    // add reward points if status === completed and prioirty === high / critical
     return success("UserTask updated");
   } catch (err) {
     return error(500, err.message);
@@ -1727,6 +1749,11 @@ export const getUserTasksStatusWise = async (event) => {
         {
           model: OrganisationStatus,
           as: "status",
+        },
+        {
+          model: UserTaskAttachment,
+          as: "attachments",
+          required: false,
         },
       ],
     });

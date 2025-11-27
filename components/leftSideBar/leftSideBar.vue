@@ -1,6 +1,6 @@
 <template>
   <v-navigation-drawer
-    v-model="model"
+    v-model="drawerModel"
     :rail="rail"
     :temporary="smAndDown"
     :permanent="!smAndDown"
@@ -28,6 +28,7 @@
                   isExact(item.to) && 'active-item',
                   isExact(item.to) && 'right-border',
                 ]"
+                @click="handleItemClick"
               >
                 <template #prepend>
                   <img :src="item.imgPath" class="list-icon" alt="icon" />
@@ -47,6 +48,7 @@
               isExact(item.to) && 'active-item',
               isExact(item.to) && 'right-border',
             ]"
+            @click="handleItemClick"
           >
             <template #prepend>
               <img :src="item.imgPath" class="list-icon" alt="icon" />
@@ -102,6 +104,7 @@
                         :to="child.to"
                         :active="isExact(child.to)"
                         :class="['custom-list-item']"
+                        @click="handleItemClick"
                       >
                         <template #prepend>
                           <img
@@ -121,6 +124,7 @@
                     :to="child.to"
                     :active="isExact(child.to)"
                     :class="['custom-list-item not-intended']"
+                    @click="handleItemClick"
                   >
                     <template #title>
                       <span>{{ child.title }}</span>
@@ -174,13 +178,24 @@ const router = useRouter();
 const route = useRoute();
 
 const emit = defineEmits(["update:drawer", "update:rail"]);
-const model = computed({
-  get: () => drawer,
-  set: (val) => emit("update:drawer", val),
+
+// Create a computed property for drawer model
+const drawerModel = computed({
+  get() {
+    return drawer.value;
+  },
+  set(newVal) {
+    emit("update:drawer", newVal);
+  }
 });
-watch(rail, (newVal) => {
-  emit("update:rail", newVal);
-});
+
+// Close drawer on mobile when leaf item is clicked
+const handleItemClick = () => {
+  if (smAndDown.value) {
+    emit("update:drawer", false);
+  }
+};
+
 // Helper function to get organization data consistently
 const getOrgData = (orgWrapper) => {
   // Check if org has nested organisation object
@@ -276,9 +291,6 @@ const syncOpenGroups = () => {
   });
 };
 
-const navigate = (to) => {
-  if (to) router.push(to);
-};
 const handleParentClick = (e, item) => {
   // Navigate to the parent's route if it exists
   if (item.to) router.push(item.to);
@@ -296,6 +308,11 @@ const handleParentClick = (e, item) => {
     });
 
     openGroups[item.value] = !currentState;
+  }
+
+  // Close drawer on mobile when parent is clicked
+  if (smAndDown.value) {
+    emit("update:drawer", false);
   }
 };
 
@@ -467,5 +484,8 @@ watch(() => user.value, (newUser) => {
 /* Smooth transition for the entire sidebar */
 :deep(.v-navigation-drawer) {
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.v-navigation-drawer__scrim {
+  display: none !important;
 }
 </style>

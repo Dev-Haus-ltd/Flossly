@@ -116,9 +116,10 @@
     justify-content: space-between;
     gap: 16px;
     padding-right: 16px;
-    transition: all 0.4s ease;
+    transition: all 0.5s ease;
     cursor: pointer;
     min-height: 68px;
+    overflow: hidden;
   }
 
   .feature-card:hover {
@@ -146,6 +147,17 @@
     border-image-source: linear-gradient(90deg, #FFA977 0%, #FF85DA 32.21%, #7D77FF 63.94%, #68ECE6 100%);
     border-image-slice: 1;
     padding: 0;
+    animation: slideExpand 0.6s ease forwards;
+  }
+  @keyframes slideExpand {
+    from {
+      height: 68px;
+      background-position: 0% 0%;
+    }
+    to {
+      height: 225px;
+      background-position: center;
+    }
   }
 
   /* Responsive adjustments */

@@ -4,7 +4,6 @@
     contained
     class="justify-center align-center full-page"
   >
-    <div class="loader">
       <lottie-player
         src="/FlossslyLogoBlue.json"
         background="transparent"
@@ -13,7 +12,6 @@
         loop
         autoplay
       />
-    </div>
   </v-overlay>
 </template>
 
@@ -70,16 +68,13 @@ const anyLoading = computed(
   justify-content: center;
   z-index: 9999;
 }
-.loader {
-  width: 100px;
-}
 
 .full-page {
-  position: fixed !important; /* Override position for full-page */
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  position: fixed !important;
+  inset: 0;
   z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 </style>

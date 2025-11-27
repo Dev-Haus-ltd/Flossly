@@ -244,9 +244,17 @@
                   <h4 class="mb-2 cust-lbl">
                    Task Description
                   </h4>
-                  <p class="value-text">
-                    {{ taskDetails.taskDetails.description }}
-                  </p>
+                  <v-textarea
+                    v-model="taskDetails.taskDetails.description"
+                    variant="solo"
+                    placeholder="Enter task description"
+                    density="compact"
+                    elevation="0"
+                    class="mt-1"
+                    flat
+                    rows="3"
+                    auto-grow
+                  />
                 </v-card>
                 <div class="mt-3">
                   <label class="cust-lbl">Comments</label>
