@@ -357,11 +357,26 @@ export const useTaskStore = defineStore("taskStore", {
           });
       });
     },
-    addAttachments(data) {
+    addAttachments(data, options = {}) {
       return new Promise((resolve, reject) => {
         this.isLoading = true;
         taskService
-          .addAttachments(data)
+          .addAttachments(data, options)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+          reject(err);
+        });
+      });
+    },
+    deleteAttachment(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        taskService
+          .deleteAttachment(data)
           .then((res) => {
             this.isLoading = false;
             resolve(res);

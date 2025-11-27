@@ -23,6 +23,34 @@ import {
   UserPoint,
 } from "../models";
 import { addTaskClient, broadcastTaskEvent } from "../utils/taskStream";
+
+// Auto-archive helper: mark completed tasks as archived after a grace period
+const autoArchiveCompletedTasks = async (organisationId, days = 5) => {
+  if (!organisationId) return;
+  try {
+    const completedStatus = await OrganisationStatus.findOne({
+      where: { organisationId, key: "completed" },
+    });
+    if (!completedStatus) return;
+
+    const thresholdDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    await UserTask.update(
+      { isArchieved: true },
+      {
+        where: {
+          organisationId,
+          statusId: completedStatus.id,
+          isArchieved: false,
+          updatedAt: { [Op.lt]: thresholdDate },
+        },
+      }
+    );
+  } catch (err) {
+    // fail silently so listings still return
+    console.error("autoArchiveCompletedTasks failed", err.message);
+  }
+};
+
 export const listMyTasks = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);
@@ -36,6 +64,8 @@ export const listMyTasks = async (event) => {
     offset = 0,
   } = JSON.parse(body);
   try {
+    await autoArchiveCompletedTasks(Number(loggedUser.orgId));
+
     const where = {
       userId: Number(loggedUser.userId),
       organisationId: Number(loggedUser.orgId),
@@ -372,6 +402,7 @@ export const updateTask = async (event) => {
         const user = await User.findOne({ where: { id: loggedUser.userId } });
         await taskCompletedNotification({
           fullName: user.fullName,
+          email: user.email,
           task: userTask.title,
         });
         if (
@@ -754,6 +785,46 @@ export const addAttachments = async (event) => {
     return success("Attachments added");
   } catch (err) {
     console.log(err);
+    return error(500, err.message);
+  }
+};
+
+export const deleteAttachment = async (event) => {
+  const loggedUser = event.context.user;
+  try {
+    const body = await readBody(event);
+    const { attachmentId } = JSON.parse(body);
+    if (!attachmentId) {
+      throw createError({ message: "attachmentId is required" });
+    }
+
+    const attachment = await UserTaskAttachment.findByPk(attachmentId);
+    if (!attachment) {
+      throw createError({ message: "Attachment not found" });
+    }
+
+    const userTask = await UserTask.findOne({
+      where: { id: attachment.userTaskId, organisationId: loggedUser.orgId },
+    });
+    if (!userTask) {
+      throw createError({
+        statusCode: 403,
+        message: "Not authorized to delete this attachment",
+      });
+    }
+
+    const filePath = path.join(
+      process.cwd(),
+      "public",
+      attachment.link?.replace(/^\//, "") || ""
+    );
+    if (fs.existsSync(filePath)) {
+      fs.unlink(filePath, () => {});
+    }
+
+    await attachment.destroy();
+    return success("Attachment deleted successfully");
+  } catch (err) {
     return error(500, err.message);
   }
 };
@@ -1824,6 +1895,8 @@ export const getUserTasksStatusWise = async (event) => {
   const body = await readBody(event);
   const { categoryId, frequency, priority } = JSON.parse(body);
   try {
+    await autoArchiveCompletedTasks(Number(loggedUser.orgId));
+
     const categories = await TaskCategory.findAll({
       where: {
         [Op.or]: [{ id: categoryId }, { parentId: categoryId }],
@@ -1917,6 +1990,7 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = Number(loggedUser.orgId);
     
+    await autoArchiveCompletedTasks(organisationId);
   
     const query = getQuery(event) || {};
     let categoryId = query.categoryId ? Number(query.categoryId) : null;

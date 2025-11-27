@@ -33,6 +33,7 @@ import {
   listUserTaskComments,
   updateUserTaskComment,
   deleteUserTaskComment,
+  deleteAttachment,
 } from "~/server/controllers/task";
 
 export default defineEventHandler(async (event) => {
@@ -68,6 +69,8 @@ export default defineEventHandler(async (event) => {
       return await streamTaskEvents(event);
     case "addAttachments":
       return await addAttachments(event);
+    case "deleteAttachment":
+      return await deleteAttachment(event);
     case "addNewTask":
       return await createNewTask(event); 
     case "addBulkTasks":

@@ -329,12 +329,10 @@
             </div>
             <v-textarea
               v-model="newComment"
-              variant="solo"
               placeholder="Add a comment"
               density="compact"
               elevation="0"
               class="mt-3 sticky-composer"
-              flat
               rows="2"
             />
             <div class="d-flex justify-end mt-2">
@@ -363,6 +361,15 @@
             <v-tabs-window-item value="files">
               <div class="pa-4">
                 <CommonDirectFileUpload @upload="uploadFile"  />
+                <v-progress-linear
+                  v-if="isUploading"
+                  class="mt-3"
+                  :model-value="uploadProgress"
+                  height="6"
+                  color="primary"
+                  rounded
+                  striped
+                />
                 <v-row class="mt-5" dense>
                   <v-col
                     cols="3"
@@ -425,7 +432,7 @@
                           {{ file.title }}
                         </div>
                         <div class="text-caption text-grey">
-                          {{ formatFileSize(file.size) }} •
+                          {{ formatFileSize(file.size) }} |
                           {{ formatDate(file.createdAt) }}
                         </div>
                       </div>
@@ -490,6 +497,17 @@ const commentsLimit = ref(10);
 const commentsEnd = ref(false);
 const isLoadingComments = ref(false);
 const commentListRef = ref(null);
+const uploadProgress = ref(0);
+const isUploading = ref(false);
+const MAX_FILE_SIZE_MB = 20;
+const allowedExtensions = ["pdf", "doc", "docx", "png", "jpg", "jpeg"];
+const allowedMimeTypes = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "image/png",
+  "image/jpeg",
+];
 
 const taskDescription = computed({
   get: () => taskDetails.value?.taskDetails?.description || "",
@@ -698,13 +716,59 @@ const formatFileSize = (size) => {
 const formatDate = (date) => {
   return parsedDate(date);
 };
-const uploadFile = async (file) => {
+
+const isAllowedFile = (file) => {
+  const ext = (file.name || "").split(".").pop()?.toLowerCase();
+  return (
+    (ext && allowedExtensions.includes(ext)) ||
+    (file.type && allowedMimeTypes.includes(file.type))
+  );
+};
+
+const isWithinSize = (file) => {
+  return file.size <= MAX_FILE_SIZE_MB * 1024 * 1024;
+};
+
+const uploadFile = async (files) => {
   try {
+    const fileArray = Array.isArray(files) ? files : [files].filter(Boolean);
+    if (!fileArray.length) return;
+
+    const disallowed = fileArray.filter((file) => !isAllowedFile(file));
+    if (disallowed.length) {
+      store.setSnackbar({
+        title: `File type not allowed: ${disallowed.map((f) => f.name).join(", ")}`,
+        type: "error",
+      });
+    }
+    const tooLarge = fileArray.filter((file) => !isWithinSize(file));
+    if (tooLarge.length) {
+      store.setSnackbar({
+        title: `File size exceeds ${MAX_FILE_SIZE_MB}MB: ${tooLarge
+          .map((f) => f.name)
+          .join(", ")}`,
+        type: "error",
+      });
+    }
+
+    const validFiles = fileArray.filter(
+      (file) => isAllowedFile(file) && isWithinSize(file)
+    );
+    if (!validFiles.length) return;
+
     const formData = new FormData();
     formData.append("userTaskId", props.selectedItem.id);
-    formData.append("files", file);
+    validFiles.forEach((file) => formData.append("files", file));
 
-    const res = await taskStore.addAttachments(formData);
+    uploadProgress.value = 0;
+    isUploading.value = true;
+
+    const res = await taskStore.addAttachments(formData, {
+      onProgress: (percent) => {
+        uploadProgress.value = percent;
+      },
+    });
+    uploadProgress.value = 100;
 
     if (res.code === 0) {
       fetchTaskDetails();
@@ -715,6 +779,35 @@ const uploadFile = async (file) => {
     } else {
       store.setSnackbar({
         title: res.data?.message || res.message || "Upload failed",
+        type: "error",
+      });
+    }
+  } catch (err) {
+    store.setSnackbar({
+      title: err.message || "An unexpected error occurred",
+      type: "error",
+    });
+  } finally {
+    setTimeout(() => {
+      isUploading.value = false;
+      uploadProgress.value = 0;
+    }, 400);
+  }
+};
+
+const deleteFile = async (file) => {
+  if (!file?.id) return;
+  try {
+    const res = await taskStore.deleteAttachment({ attachmentId: file.id });
+    if (res.code === 0) {
+      await fetchTaskDetails();
+      store.setSnackbar({
+        title: "File deleted successfully",
+        type: "success",
+      });
+    } else {
+      store.setSnackbar({
+        title: res.data?.message || res.message || "Delete failed",
         type: "error",
       });
     }
@@ -794,7 +887,7 @@ const uploadFile = async (file) => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: 320px;
+  max-height: 250px;
   overflow-y: auto;
   padding-right: 4px;
   margin-bottom: 12px;
