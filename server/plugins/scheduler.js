@@ -2,7 +2,7 @@ import { startTaskScheduler, startLeadAutomationScheduler, startTaskOverDueSched
 
 export default defineNitroPlugin(async (nitroApp) => {
   try {
-    startTaskScheduler();
+    // startTaskScheduler();
     startLeadAutomationScheduler();
     startTaskOverDueScheduler();
     console.log("Scheduler Started");

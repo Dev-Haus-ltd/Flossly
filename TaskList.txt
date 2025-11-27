@@ -1,30 +1,12 @@
 
-Automation Emails Tasks and CRM
-Appointment Emails and automation Emails
-Time zone issue in appointments API
-Banner update
-Add category option in categories under add task
-only task title and category is required in add task
-custom column (5 for now)
-add task button under each table. (status and category to be picked from current selection)
-Due date DD/MM/YYYY
-Task pool - separate for practice and system.
-Diary week view
-remove subcategories of compliance
-add scroll if more than screen width cateogries
-Emails to completed by haseeb
-appointment time and date to be added in leads table. for converted leads.
-production server.
-
 email: hamza@dev-haus.co.uk
 Password: #Hamza98765##
 
-Green ticks on users completed tasks in team tasks. when marked completed, only that iuser's task should be completed. - Not needed.
-mandatory to be entitled with Parent category - Done
-bug fix in resize handles - Done
-Listing of main category tasks in task pool - Done
-Locum staff and Locum Shifts - Done
+Tasks for local users role based
+If user create task. don't add to task pool (private tasks).
+Categories to be used within the practice.
+show 4 categories cards on any condition.
+show all status tables even no data
 
-inline editable leads - Done
-chatbot integration with appointment APIs - Done
-
+neal aacount delete
+neal account dentozen issue
