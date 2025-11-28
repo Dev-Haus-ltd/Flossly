@@ -25,7 +25,6 @@ import {
   getUserTasksStatusWise,
   groupTeamTasksByTaskId,
   teamTasksCountByCategory,
-  streamTaskEvents,
   archieveBulkTasks,
   unarchiveBulkTasks,
   completeBulkTasks,
@@ -66,8 +65,6 @@ export default defineEventHandler(async (event) => {
       return await updateUserTaskComment(event);
     case "deleteComment":
       return await deleteUserTaskComment(event);
-    case "stream":
-      return await streamTaskEvents(event);
     case "addAttachments":
       return await addAttachments(event);
     case "deleteAttachment":
