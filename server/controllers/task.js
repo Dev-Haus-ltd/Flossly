@@ -20,6 +20,7 @@ import {
   UserTaskAttachment,
   TaskChecklist,
   UserTaskChecklist,
+  UserTaskComment,
   UserPointsHistory,
   UserPoint,
 } from "../models";
@@ -338,11 +339,11 @@ export const updateTask = async (event) => {
       const orgStatuses = await OrganisationStatus.findAll({
         where: { organisationId },
       });
-      if (statusId && !orgStatuses.find((x) => x.id === statusId)) {
-        throw createError({ message: "StatusId not found for this org" });
-      }
-      if (priorityId && !orgPriorities.find((x) => x.id === priorityId)) {
-        throw createError({ message: "PriorityId not found for this org" });
+        if (statusId && !orgStatuses.find((x) => x.id === statusId)) {
+          throw createError({ message: "StatusId not found for this org" });
+        }
+        if (priorityId && !orgPriorities.find((x) => x.id === priorityId)) {
+          throw createError({ message: "PriorityId not found for this org" });
       }
       
       // Update UserTask fields
@@ -495,6 +496,12 @@ export const unAssignTask = async (event) => {
     if (!userTask) {
       throw createError({ message: "UserTask not found" });
     }
+    const isOwner = userTask.userId === loggedUser.userId;
+    const isAssigner = userTask.assignedBy === loggedUser.userId;
+    const isOrgAdmin = loggedUser.roleId === 1; // adjust if your admin role differs
+    if (!isOwner && !isAssigner && !isOrgAdmin) {
+      throw createError({ statusCode: 403, message: "Not authorized to delete this task" });
+    }
     await userTask.destroy();
     return success("UserTask successfully deleted (unassigned).");
   } catch (err) {
@@ -579,6 +586,27 @@ export const unAssignBulkTask = async (event) => {
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
     const { userTasksIds } = JSON.parse(body);
+    const tasks = await UserTask.findAll({
+      where: {
+        id: userTasksIds,
+        organisationId,
+      },
+    });
+    if (!tasks.length) {
+      throw createError({ message: "No matching UserTasks found" });
+    }
+    const unauthorized = tasks.filter(
+      (ut) =>
+        ut.userId !== loggedUser.userId &&
+        ut.assignedBy !== loggedUser.userId &&
+        loggedUser.roleId !== 1 // admin is authorized for now
+    );
+    if (unauthorized.length) {
+      throw createError({
+        statusCode: 403,
+        message: "Not authorized to delete one or more selected tasks",
+      });
+    }
     await UserTask.destroy({
       where: {
         id: userTasksIds,
@@ -586,6 +614,108 @@ export const unAssignBulkTask = async (event) => {
       },
     });
     return success("UserTask successfully deleted (unassigned).");
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const addUserTaskComment = async (event) => {
+  try {
+    const loggedUser = event.context.user;
+    const organisationId = loggedUser.orgId;
+    const body = await readBody(event);
+    const { userTaskId, comment } = JSON.parse(body);
+    if (!userTaskId || !comment) {
+      throw createError({ message: "userTaskId and comment are required" });
+    }
+    const userTask = await UserTask.findOne({
+      where: { id: userTaskId, organisationId },
+    });
+    if (!userTask) {
+      throw createError({ message: "UserTask not found" });
+    }
+    const newComment = await UserTaskComment.create({
+      userTaskId,
+      userId: loggedUser.userId,
+      organisationId,
+      comment,
+    });
+    return success(newComment);
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const listUserTaskComments = async (event) => {
+  try {
+    const loggedUser = event.context.user;
+    const organisationId = loggedUser.orgId;
+    const body = await readBody(event);
+    const { userTaskId } = JSON.parse(body);
+    if (!userTaskId) {
+      throw createError({ message: "userTaskId is required" });
+    }
+    const comments = await UserTaskComment.findAll({
+      where: { userTaskId, organisationId },
+      include: [
+        {
+          model: User,
+          as: "author",
+          attributes: ["id", "fullName", "photo", "email"],
+        },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
+    return success(comments);
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const updateUserTaskComment = async (event) => {
+  try {
+    const loggedUser = event.context.user;
+    const organisationId = loggedUser.orgId;
+    const body = await readBody(event);
+    const { commentId, comment } = JSON.parse(body);
+    if (!commentId || !comment) {
+      throw createError({ message: "commentId and comment are required" });
+    }
+    const existing = await UserTaskComment.findOne({
+      where: { id: commentId, organisationId },
+    });
+    if (!existing) throw createError({ message: "Comment not found" });
+    const isAuthor = existing.userId === loggedUser.userId;
+    const isOrgAdmin = loggedUser.roleId === 1; // adjust admin role if needed
+    if (!isAuthor && !isOrgAdmin) {
+      throw createError({ statusCode: 403, message: "Not authorized to edit this comment" });
+    }
+    existing.comment = comment;
+    await existing.save();
+    return success(existing);
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const deleteUserTaskComment = async (event) => {
+  try {
+    const loggedUser = event.context.user;
+    const organisationId = loggedUser.orgId;
+    const body = await readBody(event);
+    const { commentId } = JSON.parse(body);
+    if (!commentId) throw createError({ message: "commentId is required" });
+    const existing = await UserTaskComment.findOne({
+      where: { id: commentId, organisationId },
+    });
+    if (!existing) throw createError({ message: "Comment not found" });
+    const isAuthor = existing.userId === loggedUser.userId;
+    const isOrgAdmin = loggedUser.roleId === 1;
+    if (!isAuthor && !isOrgAdmin) {
+      throw createError({ statusCode: 403, message: "Not authorized to delete this comment" });
+    }
+    await existing.destroy();
+    return success("Comment deleted");
   } catch (err) {
     return error(500, err.message);
   }
@@ -1418,6 +1548,18 @@ export const getUserTaskDetails = async (event) => {
         {
           model: UserTaskAttachment,
           as: "attachments",
+        },
+        {
+          model: UserTaskComment,
+          as: "taskComments",
+          include: [
+            {
+              model: User,
+              as: "author",
+              attributes: ["id", "fullName", "photo", "email"],
+            },
+          ],
+          order: [["createdAt", "ASC"]],
         },
       ],
     });

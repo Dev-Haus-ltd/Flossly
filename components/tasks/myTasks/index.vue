@@ -185,7 +185,7 @@ onMounted(() => {
   getUsers();
 });
 
-watch(currentTab.value, (newVal) => {
+watch(currentTab, (newVal) => {
   getMyTasks(newVal);
 });
 
