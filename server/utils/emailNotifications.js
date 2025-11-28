@@ -140,6 +140,47 @@ export const sendTaskAssignmentEmail = async (data) => {
   });
 };
 
+export const sendTaskDueReminderEmail = async (data) => {
+  const content = `<p>Dear ${data.name},</p>
+          <br/>
+          <p>This is a reminder that your task is due tomorrow:</p>
+          <p><strong>Task:</strong> ${data.taskTitle}</p>
+          ${data.dueDate ? `<p><strong>Due date:</strong> ${data.dueDate}</p>` : ""}
+          <br/>
+          <p>Please log in to review and complete it.</p>
+          <br/>
+          <p>Best regards,<br/>Flossly Team</p>`;
+  const subject = "Task due tomorrow";
+  const html = template
+    .replaceAll("{subject}", subject)
+    .replace("{content}", content);
+  await transporter.sendMail({
+    from: "Flossly <helloflossly@gmail.com>",
+    to: [data.email],
+    subject,
+    html,
+  });
+};
+
+export const sendTaskCommentNotificationEmail = async (data) => {
+  const content = `<p>Dear ${data.name},</p>
+          <br/>
+          <p>A new comment was added to the task:</p>
+          <p><strong>Task:</strong> ${data.taskTitle}</p>
+          <p><strong>Comment:</strong> ${data.comment}</p>
+          <br/>
+          <p>Best regards,<br/>Flossly Team</p>`;
+  const subject = "New comment on your task";
+  const html = template
+    .replaceAll("{subject}", subject)
+    .replace("{content}", content);
+  await transporter.sendMail({
+    from: "Flossly <helloflossly@gmail.com>",
+    to: [data.email],
+    subject,
+    html,
+  });
+};
 export const sendTaskUnassignmentEmail = async (data) => {
   const content = `<p>Dear ${data.name},</p>
           <br/>

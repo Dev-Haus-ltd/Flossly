@@ -23,7 +23,16 @@ import {
   UserPoint,
 } from "../models";
 import { addTaskClient } from "../utils/taskStream";
-import { sendTaskAssignmentEmail, sendTaskUnassignmentEmail } from "../utils/emailNotifications";
+import { sendTaskAssignmentEmail, sendTaskUnassignmentEmail, sendTaskDueReminderEmail, sendTaskCommentNotificationEmail } from "../utils/emailNotifications";
+
+
+const PRIVILEGED_ROLE_IDS = [1, 8];
+const isManagerOrOwner = (roleId) => PRIVILEGED_ROLE_IDS.includes(Number(roleId));
+const ensureManagerOrOwner = (loggedUser) => {
+  if (!isManagerOrOwner(loggedUser?.roleId)) {
+    throw createError({ statusCode: 403, message: "Not authorized" });
+  }
+};
 
 const autoArchiveCompletedTasks = async (organisationId, days = 5) => {
   if (!organisationId) return;
@@ -132,6 +141,8 @@ export const listMyTasks = async (event) => {
 };
 
 export const addTaskCategory = async (event) => {
+  const loggedUser = event.context.user;
+  ensureManagerOrOwner(loggedUser);
   const body = await readBody(event);
   const { name, description, parentId, color } = JSON.parse(body);
   if (!name) return error(400, "Name required");
@@ -186,6 +197,7 @@ export const bulkUploadTasks = async (event) => {
 export const assignBulkTasks = async (event) => {
   const body = await readBody(event);
   const loggedUser = event.context.user;
+  ensureManagerOrOwner(loggedUser);
   const organisationId = loggedUser.orgId;
   const { userId, tasks } = JSON.parse(body);
 
@@ -477,6 +489,7 @@ export const streamTaskEvents = async (event) => {
 export const viewTeamTasksTaskWise = async (event) => {
   try {
     const loggedUser = event.context.user;
+    ensureManagerOrOwner(loggedUser);
     const organisationId = loggedUser.orgId;
     const userTasks = await UserTask.findAll({
       where: { organisationId },
@@ -549,8 +562,8 @@ export const unAssignTask = async (event) => {
     }
     const isOwner = userTask.userId === loggedUser.userId;
     const isAssigner = userTask.assignedBy === loggedUser.userId;
-    const isOrgAdmin = loggedUser.roleId === 1; // adjust if your admin role differs
-    if (!isOwner && !isAssigner && !isOrgAdmin) {
+    const isPrivileged = isManagerOrOwner(loggedUser.roleId);
+    if (!isOwner && !isAssigner && !isPrivileged) {
       throw createError({ statusCode: 403, message: "Not authorized to delete this task" });
     }
     const removedByUser = await User.findByPk(loggedUser.userId);
@@ -643,7 +656,7 @@ export const unAssignBulkTask = async (event) => {
       (ut) =>
         ut.userId !== loggedUser.userId &&
         ut.assignedBy !== loggedUser.userId &&
-        loggedUser.roleId !== 1 // admin is authorized for now
+        !isManagerOrOwner(loggedUser.roleId) // privileged roles are authorized
     );
     if (unauthorized.length) {
       throw createError({
@@ -692,6 +705,18 @@ export const addUserTaskComment = async (event) => {
     }
     const userTask = await UserTask.findOne({
       where: { id: userTaskId, organisationId },
+      include: [
+        {
+          model: User,
+          as: "assignedUser",
+          attributes: ["id", "fullName", "email"],
+        },
+        {
+          model: Task,
+          as: "taskDetails",
+          attributes: ["title"],
+        },
+      ],
     });
     if (!userTask) {
       throw createError({ message: "UserTask not found" });
@@ -702,6 +727,17 @@ export const addUserTaskComment = async (event) => {
       organisationId,
       comment,
     });
+
+    // Notify assignee via email
+    if (userTask.assignedUser?.email) {
+      await sendTaskCommentNotificationEmail({
+        email: userTask.assignedUser.email,
+        name: userTask.assignedUser.fullName,
+        taskTitle: userTask.taskDetails?.title || userTask.title || "Task",
+        comment,
+      });
+    }
+
     return success(newComment);
   } catch (err) {
     return error(500, err.message);
@@ -1251,6 +1287,7 @@ export const uploadBulkTasks = async (event) => {
 
 export const teamTasksCounts = async (event) => {
   const loggedUser = event.context.user;
+  ensureManagerOrOwner(loggedUser);
   const organisationId = Number(loggedUser.orgId);
   try {
     if (!organisationId) {
@@ -1378,6 +1415,7 @@ export const deleteUserTaskChecklist = async (event) => {
 
 export const groupTeamTasksByTaskId = async (event) => {
   const organisationId = event.context.user.orgId;
+  ensureManagerOrOwner(event.context.user);
   const body = await readBody(event);
   const { categoryId, frequency, priority, user } = JSON.parse(body);
   
@@ -1881,6 +1919,7 @@ export const myTasksCountByCategory = async (event) => {
 export const teamTasksCountByCategory = async (event) => {
   try {
     const loggedUser = event.context.user;
+    ensureManagerOrOwner(loggedUser);
     
     const allCategories = await TaskCategory.findAll({
       where: { isDeleted: false },
@@ -2075,6 +2114,7 @@ export const getGeneralTasksByCategory = async (event) => {
 export const getTeamTaskStatsByStatusAndCategory = async (event) => {
   try {
     const loggedUser = event.context.user;
+    ensureManagerOrOwner(loggedUser);
     const organisationId = Number(loggedUser.orgId);
     
     await autoArchiveCompletedTasks(organisationId);
