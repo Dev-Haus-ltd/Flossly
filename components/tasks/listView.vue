@@ -940,7 +940,6 @@ const assignTask = async (task, user) => {
 
     if (res.code === 0) {
       emit("onUpdate");
-
       mainStore.setSnackbar({
         title: "Task assigned successfully",
         type: "success",

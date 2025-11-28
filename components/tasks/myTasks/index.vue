@@ -67,6 +67,16 @@
             @onUpdate="updateTasks"
             @updateSelectedRowItems="updateSelectedRowItems"
           />
+          <RecommendPracticeDialog v-model="recommendDialog" />
+          <CommonConfirmDialog
+            v-model="showDeleteConfirm"
+            title="Delete tasks?"
+            message="Are you sure you want to delete the selected tasks?"
+            confirm-text="Delete"
+            :loading="deleteLoading"
+            @confirm="confirmDelete"
+            @cancel="cancelDelete"
+          />
         </v-tabs-window-item>
          <v-card
     v-if="selectedRowItems.length"
@@ -170,6 +180,9 @@ const user = ref(null);
 const userList = ref([]);
 const addCategoryDialog = ref(false);
 const isTrayHidden = ref(false);
+const recommendDialog = ref(false);
+const showDeleteConfirm = ref(false);
+const deleteLoading = ref(false);
 
 onMounted(() => {
   user.value = JSON.parse(localStorage.getItem("user"));
@@ -372,6 +385,11 @@ const handleDelete = async () => {
     });
     return;
   }
+  showDeleteConfirm.value = true;
+};
+
+const confirmDelete = async () => {
+  deleteLoading.value = true;
   const ids = selectedRowItems.value.map((item) => item.id);
   try {
     const res = await taskStore.unAssignBulkTasks({
@@ -380,6 +398,9 @@ const handleDelete = async () => {
 
     if (res.code === 0) {
       updateTasksList();
+      hideTray();
+      recommendDialog.value = true;
+
       mainStore.setSnackbar({
         title: selectedRowItems.value.length === 1 ? "Task deleted successfully." : "Tasks deleted successfully.",
         type: "success",
@@ -399,7 +420,14 @@ const handleDelete = async () => {
         err.message || "An unexpected error occurred. Please try again later.",
       type: "error",
     });
+  } finally {
+    deleteLoading.value = false;
+    showDeleteConfirm.value = false;
   }
+};
+
+const cancelDelete = () => {
+  showDeleteConfirm.value = false;
 };
 
 const handleArchive = async () => {

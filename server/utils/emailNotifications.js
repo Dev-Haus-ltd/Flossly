@@ -140,6 +140,28 @@ export const sendTaskAssignmentEmail = async (data) => {
   });
 };
 
+export const sendTaskUnassignmentEmail = async (data) => {
+  const content = `<p>Dear ${data.name},</p>
+          <br/>
+          <p>The following task has been reassigned and is no longer assigned to you:</p>
+          <p><strong>Task:</strong> ${data.taskTitle}</p>
+          <p><strong>Updated by:</strong> ${data.removedBy || "Your team"}</p>
+          <br/>
+          <p>If you have any questions, please reach out to your manager.</p>
+          <br/>
+          <p>Best regards,<br/>Flossly Team</p>`;
+  const subject = "Task Reassigned";
+  const html = template
+    .replaceAll("{subject}", subject)
+    .replace("{content}", content);
+  await transporter.sendMail({
+    from: "Flossly <helloflossly@gmail.com>",
+    to: [data.email],
+    subject,
+    html,
+  });
+};
+
 export const newRotaAvailableNotification = async (data) => {
   const subject = `New Rota Available - ${data.name}`;
   const content = ` <p>Dear ${data.fullName},</p>
