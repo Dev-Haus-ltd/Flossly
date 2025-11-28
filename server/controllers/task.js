@@ -22,7 +22,7 @@ import {
   UserPointsHistory,
   UserPoint,
 } from "../models";
-import { addTaskClient, broadcastTaskEvent } from "../utils/taskStream";
+import { addTaskClient } from "../utils/taskStream";
 export const listMyTasks = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);
@@ -348,12 +348,12 @@ export const updateTask = async (event) => {
         if (comments) userTask.comments = comments;
         if (documentLink) userTask.documentLink = documentLink;
         await userTask.save();
-        // Broadcast to other clients (cross-device sync)
-        broadcastTaskEvent("task-updated", {
-          userTaskId: id,
-          taskId,
-          updatedAt: new Date().toISOString(),
-        });
+        // Cross-device sync temporarily disabled
+        // broadcastTaskEvent("task-updated", {
+        //   userTaskId: id,
+        //   taskId,
+        //   updatedAt: new Date().toISOString(),
+        // });
         const newDescription =
           description ?? taskDetails?.description ?? null;
         if (newDescription !== null) {

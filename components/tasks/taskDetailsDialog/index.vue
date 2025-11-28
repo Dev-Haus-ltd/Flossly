@@ -466,7 +466,6 @@
 import { parsedDate } from "@/lib/dateFormatter";
 import Avatar from "~/components/Common/avatar.vue";
 import { useBus } from "@/composables/useBus";
-import { startTaskEvents } from "@/composables/useTaskEvents";
 
 const modelValue = ref(false);
 const props = defineProps({
@@ -553,29 +552,12 @@ const handleExternalUpdate = (payload = {}) => {
   }
 };
 
-const handleStorageUpdate = (event) => {
-  if (event.key !== "task-updated") return;
-  try {
-    const payload = JSON.parse(event.newValue);
-    handleExternalUpdate(payload);
-  } catch (err) {
-    // ignore malformed payload
-  }
-};
-
 onMounted(() => {
-  startTaskEvents();
   bus.on("task-updated", handleExternalUpdate);
-  if (typeof window !== "undefined") {
-    window.addEventListener("storage", handleStorageUpdate);
-  }
 });
 
 onBeforeUnmount(() => {
   bus.off("task-updated", handleExternalUpdate);
-  if (typeof window !== "undefined") {
-    window.removeEventListener("storage", handleStorageUpdate);
-  }
 });
 
 const touchDirty = () => {
