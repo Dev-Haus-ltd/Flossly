@@ -22,10 +22,9 @@ import {
   UserPointsHistory,
   UserPoint,
 } from "../models";
-import { addTaskClient, broadcastTaskEvent } from "../utils/taskStream";
+import { addTaskClient } from "../utils/taskStream";
 import { sendTaskAssignmentEmail, sendTaskUnassignmentEmail } from "../utils/emailNotifications";
 
-// Auto-archive helper: mark completed tasks as archived after a grace period
 const autoArchiveCompletedTasks = async (organisationId, days = 5) => {
   if (!organisationId) return;
   try {
@@ -387,12 +386,12 @@ export const updateTask = async (event) => {
         if (comments) userTask.comments = comments;
         if (documentLink) userTask.documentLink = documentLink;
         await userTask.save();
-        // Broadcast to other clients (cross-device sync)
-        broadcastTaskEvent("task-updated", {
-          userTaskId: id,
-          taskId,
-          updatedAt: new Date().toISOString(),
-        });
+        // Cross-device sync temporarily disabled
+        // broadcastTaskEvent("task-updated", {
+        //   userTaskId: id,
+        //   taskId,
+        //   updatedAt: new Date().toISOString(),
+        // });
         const newDescription =
           description ?? taskDetails?.description ?? null;
         if (newDescription !== null) {
