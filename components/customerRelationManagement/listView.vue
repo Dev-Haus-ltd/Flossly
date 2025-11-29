@@ -1,297 +1,431 @@
 <template>
-  <v-card class="rounded-lg with-border">
-    <h3 class="head py-6 px-4">My Leads</h3>
-    <v-data-table
-      v-model="selectedLeads"
-      :headers="headers"
-      :items="leads"
-      item-value="id"
-      show-select
-      hover
-      class="full-width-table"
-      :item-selectable="() => true"
-      @update:model-value="onSelect"
-      return-object
+  <div class="lead-panels">
+    <v-expansion-panels
+      v-model="openedPanels"
+      :elevation="0"
+      flat
+      multiple
+      class="table-panels"
     >
-      <template
-        v-slot:[`item.data-table-select`]="{
-          internalItem,
-          isSelected,
-          toggleSelect,
-        }"
-      >
-        <input
-          type="checkbox"
-          :checked="isSelected(internalItem)"
-          @change="() => toggleSelect(internalItem)"
-          class="cust-checkbox"
-        />
-      </template>
+      <v-expansion-panel rounded="lg" class="border-sm pb-1">
+        <v-expansion-panel-title>
+          <div class="d-flex align-center justify-space-between w-100">
+            <div class="d-flex align-center">
+              <h3 class="head mb-0">My Leads</h3>
+              <v-chip class="ml-2 rounded-lg" size="x-small" color="#213536">
+                {{ activeLeads.length }}
+              </v-chip>
+            </div>
+          </div>
+        </v-expansion-panel-title>
 
-      <!-- Editable / resizable headers -->
-      <template v-slot:headers="{ columns, allSelected, someSelected }">
-        <tr>
-          <template v-for="(column, i) in columns" :key="column.key">
-            <th
-              :style="{
-                width: column.width + 'px',
-                padding: '0px 7px',
-                fontSize: '14px',
+        <v-expansion-panel-text class="pt-0">
+          <v-data-table
+            v-model="selectedLeads"
+            :headers="headers"
+            :items="activeLeads"
+            item-value="id"
+            show-select
+            hover
+            class="full-width-table"
+            :item-selectable="() => true"
+            @update:model-value="onSelect"
+            return-object
+          >
+            <template
+              v-slot:[`item.data-table-select`]="{
+                internalItem,
+                isSelected,
+                toggleSelect,
               }"
             >
-              <div v-if="i !== 0" class="d-flex align-center th-content">
-                <p class="px-1 w-100">{{ column.title }}</p>
+              <input
+                type="checkbox"
+                :checked="isSelected(internalItem)"
+                @change="() => toggleSelect(internalItem)"
+                class="cust-checkbox"
+              />
+            </template>
 
-                <span
-                  class="resize-handle"
-                  @mousedown="startResize($event, column)"
-                ></span>
-              </div>
+            <!-- Editable / resizable headers -->
+            <template v-slot:headers="{ columns, allSelected, someSelected }">
+              <tr>
+                <template v-for="(column, i) in columns" :key="column.key">
+                  <th
+                    :style="{
+                      width: column.width + 'px',
+                      padding: '0px 7px',
+                      fontSize: '14px',
+                      backgroundColor: '#F6F6F6',
+                    }"
+                  >
+                    <div v-if="i !== 0" class="d-flex align-center th-content">
+                      <p class="px-1 w-100 mb-0">{{ column.title }}</p>
 
-              <div v-else>
-                <div class="d-flex justify-center">
+                      <span
+                        class="resize-handle"
+                        @mousedown="startResize($event, column)"
+                      ></span>
+                    </div>
+
+                    <div v-else>
+                      <div class="d-flex justify-center">
+                        <input
+                          type="checkbox"
+                          class="cust-checkbox ma-0"
+                          :checked="allSelected"
+                          :indeterminate.prop="someSelected && !allSelected"
+                          @change="toggleAll"
+                        />
+                      </div>
+                    </div>
+                  </th>
+                </template>
+              </tr>
+            </template>
+
+            <!-- Dynamic cell templates -->
+            <template
+              v-for="col in headers"
+              :key="col.key"
+              v-slot:[`item.${col.key}`]="{ item }"
+            >
+              <!-- Name column with expand icon and inline edit -->
+              <template v-if="col.key === 'name'">
+                <div class="pa-1 d-flex justify-space-between align-center">
                   <input
-                    type="checkbox"
-                    class="cust-checkbox ma-0"
-                    :checked="allSelected"
-                    :indeterminate.prop="someSelected && !allSelected"
-                    @change="toggleAll"
+                    v-if="editingCell.id === item.id && editingCell.field === 'name'"
+                    v-model="editingCell.value"
+                    @blur="saveEdit(item, 'name')"
+                    @keyup.enter="saveEdit(item, 'name')"
+                    @keyup.esc="cancelEdit"
+                    class="inline-edit-input"
+                    ref="editInput"
+                    autofocus
+                  />
+                  <p 
+                    v-else 
+                    class="ml-2 mb-0 editable-field" 
+                    @click="startEdit(item, 'name')"
+                  >
+                    {{ item.name || 'Click to edit' }}
+                  </p>
+                  <img
+                    src="@/assets/dashboard/expandIcon.svg"
+                    alt="Expand"
+                    class="ml-2 cursor-pointer"
+                    @click="openLeadDialog(item)"
                   />
                 </div>
-              </div>
-            </th>
-          </template>
-        </tr>
-      </template>
+              </template>
 
-      <!-- Dynamic cell templates -->
-      <template
-        v-for="col in headers"
-        :key="col.key"
-        v-slot:[`item.${col.key}`]="{ item }"
-      >
-        <!-- Name column with expand icon and inline edit -->
-        <template v-if="col.key === 'name'">
-          <div class="pa-1 d-flex justify-space-between align-center">
-            <input
-              v-if="editingCell.id === item.id && editingCell.field === 'name'"
-              v-model="editingCell.value"
-              @blur="saveEdit(item, 'name')"
-              @keyup.enter="saveEdit(item, 'name')"
-              @keyup.esc="cancelEdit"
-              class="inline-edit-input"
-              ref="editInput"
-              autofocus
-            />
-            <p 
-              v-else 
-              class="ml-2 mb-0 editable-field" 
-              @click="startEdit(item, 'name')"
-            >
-              {{ item.name || 'Click to edit' }}
-            </p>
-            <img
-              src="@/assets/dashboard/expandIcon.svg"
-              alt="Expand"
-              class="ml-2 cursor-pointer"
-              @click="openLeadDialog(item)"
-            />
-          </div>
-        </template>
+              <!-- Email column with inline edit -->
+              <template v-else-if="col.key === 'email'">
+                <div class="pa-1">
+                  <input
+                    v-if="editingCell.id === item.id && editingCell.field === 'email'"
+                    v-model="editingCell.value"
+                    @blur="saveEdit(item, 'email')"
+                    @keyup.enter="saveEdit(item, 'email')"
+                    @keyup.esc="cancelEdit"
+                    type="email"
+                    class="inline-edit-input"
+                    ref="editInput"
+                    autofocus
+                  />
+                  <p 
+                    v-else 
+                    class="ml-2 mb-0 editable-field" 
+                    @click="startEdit(item, 'email')"
+                  >
+                    {{ item.email || 'Click to edit' }}
+                  </p>
+                </div>
+              </template>
 
-        <!-- Email column with inline edit -->
-        <template v-else-if="col.key === 'email'">
-          <div class="pa-1">
-            <input
-              v-if="editingCell.id === item.id && editingCell.field === 'email'"
-              v-model="editingCell.value"
-              @blur="saveEdit(item, 'email')"
-              @keyup.enter="saveEdit(item, 'email')"
-              @keyup.esc="cancelEdit"
-              type="email"
-              class="inline-edit-input"
-              ref="editInput"
-              autofocus
-            />
-            <p 
-              v-else 
-              class="ml-2 mb-0 editable-field" 
-              @click="startEdit(item, 'email')"
-            >
-              {{ item.email || 'Click to edit' }}
-            </p>
-          </div>
-        </template>
+              <!-- Telephone column with inline edit -->
+              <template v-else-if="col.key === 'telephone'">
+                <div class="pa-1">
+                  <input
+                    v-if="editingCell.id === item.id && editingCell.field === 'telephone'"
+                    v-model="editingCell.value"
+                    @blur="saveEdit(item, 'telephone')"
+                    @keyup.enter="saveEdit(item, 'telephone')"
+                    @keyup.esc="cancelEdit"
+                    type="tel"
+                    class="inline-edit-input"
+                    ref="editInput"
+                    autofocus
+                  />
+                  <p 
+                    v-else 
+                    class="ml-2 mb-0 editable-field" 
+                    @click="startEdit(item, 'telephone')"
+                  >
+                    {{ item.telephone || 'Click to edit' }}
+                  </p>
+                </div>
+              </template>
 
-        <!-- Telephone column with inline edit -->
-        <template v-else-if="col.key === 'telephone'">
-          <div class="pa-1">
-            <input
-              v-if="editingCell.id === item.id && editingCell.field === 'telephone'"
-              v-model="editingCell.value"
-              @blur="saveEdit(item, 'telephone')"
-              @keyup.enter="saveEdit(item, 'telephone')"
-              @keyup.esc="cancelEdit"
-              type="tel"
-              class="inline-edit-input"
-              ref="editInput"
-              autofocus
-            />
-            <p 
-              v-else 
-              class="ml-2 mb-0 editable-field" 
-              @click="startEdit(item, 'telephone')"
-            >
-              {{ item.telephone || 'Click to edit' }}
-            </p>
-          </div>
-        </template>
+              <!-- Comment column with inline edit -->
+              <template v-else-if="col.key === 'comments'">
+                <div class="pa-1">
+                  <textarea
+                    v-if="editingCell.id === item.id && editingCell.field === 'comments'"
+                    v-model="editingCell.value"
+                    @blur="saveEdit(item, 'comments')"
+                    @keyup.esc="cancelEdit"
+                    class="inline-edit-textarea"
+                    ref="editInput"
+                    rows="2"
+                    autofocus
+                  />
+                  <p 
+                    v-else 
+                    class="ml-2 mb-0 editable-field comment-text" 
+                    @click="startEdit(item, 'comments')"
+                  >
+                    {{ item.comments || 'Click to edit' }}
+                  </p>
+                </div>
+              </template>
 
-        <!-- Comment column with inline edit -->
-        <template v-else-if="col.key === 'comments'">
-          <div class="pa-1">
-            <textarea
-              v-if="editingCell.id === item.id && editingCell.field === 'comments'"
-              v-model="editingCell.value"
-              @blur="saveEdit(item, 'comments')"
-              @keyup.esc="cancelEdit"
-              class="inline-edit-textarea"
-              ref="editInput"
-              rows="2"
-              autofocus
-            />
-            <p 
-              v-else 
-              class="ml-2 mb-0 editable-field comment-text" 
-              @click="startEdit(item, 'comments')"
-            >
-              {{ item.comments || 'Click to edit' }}
-            </p>
-          </div>
-        </template>
-
-        <template v-else-if="col.key === 'alert'">
-          <DataTableColumnsAlerts :selected="item" @update="updateValueRow(item, 'alert')" />
-        </template>
-        <template v-else-if="col.key === 'leadStatus'">
-          <DataTableColumnsLeadStatus
-            :selected="item"
-            :column="col"
-            @update="updateValueRow(item, 'leadStatus')"
-          />
-        </template>
-        <template v-else-if="col.key === 'leadSource'">
-          <DataTableColumnsLeadSource
-            :leadSources="leadSources"
-            :selected="item"
-            :column="col"
-            @update="updateValueRow(item, 'leadSource')"
-          />
-        </template>
-        <template v-else-if="col.key === 'treatment'">
-          <DataTableColumnsLeadTreatment
-            :treatmentSources="treatmentSources"
-            :selected="item"
-            :column="col"
-            @update="updateValueRow(item, 'treatment')"
-          />
-        </template>
-        <template v-else-if="col.key === 'assigned'">
-          <DataTableColumnsAssignedUsers
-            :assigned-users="item.assigned || [user]"
-            :all-users="getLeadUsers(item)"
-            :current-user="user"
-            @assign="assignLead(item, $event)"
-            @unassign="unAssign(item, $event)"
-          />
-        </template>
-        <!-- Default renderer for other columns -->
-        <template v-else-if="col.key === 'inquiryDate'">
-          <p class="ml-2 mb-0">{{ formatDate(item[col.key]) }}</p>
-        </template>
-        <template v-else-if="col.key === 'followUpDate'">
-          <div class="ml-2 mb-0">
-            <v-menu
-              v-model="followUpMenus[item.id]"
-              :close-on-content-click="false"
-              transition="scale-transition"
-              offset-y
-              max-width="320"
-              min-width="260"
-              
-            >
-              <template #activator="{ props: menuProps }">
-                <v-text-field
-                  v-bind="menuProps"
-                  :model-value="followUpDrafts[item.id] ?? formatDate(item.followUpDate)"
-                  density="compact"
-                  variant="plain"
-                  hide-details
-                  placeholder="Select date"
-                  readonly
-                  class="followup-input"
-                  @click="setupFollowUpDraft(item)"
-                  append-inner-icon="mdi-calendar"
+              <template v-else-if="col.key === 'alert'">
+                <DataTableColumnsAlerts :selected="item" @update="updateValueRow(item, 'alert')" />
+              </template>
+              <template v-else-if="col.key === 'leadStatus'">
+                <DataTableColumnsLeadStatus
+                  :selected="item"
+                  :column="col"
+                  @update="updateValueRow(item, 'leadStatus')"
                 />
               </template>
-              <div class="pa-2">
-                <v-date-picker
-                  hide-header
-                  color="primary"
-                  :model-value="followUpDrafts[item.id] ?? formatDate(item.followUpDate)"
-                  @update:model-value="(value) => onFollowUpSelect(item, value)"
+              <template v-else-if="col.key === 'leadSource'">
+                <DataTableColumnsLeadSource
+                  :leadSources="leadSources"
+                  :selected="item"
+                  :column="col"
+                  @update="updateValueRow(item, 'leadSource')"
                 />
-                <div class="d-flex justify-end mt-2">
-                  <v-btn variant="text" size="small" @click="followUpMenus[item.id] = false">Cancel</v-btn>
+              </template>
+              <template v-else-if="col.key === 'treatment'">
+                <DataTableColumnsLeadTreatment
+                  :treatmentSources="treatmentSources"
+                  :selected="item"
+                  :column="col"
+                  @update="updateValueRow(item, 'treatment')"
+                />
+              </template>
+              <template v-else-if="col.key === 'assigned'">
+                <DataTableColumnsAssignedUsers
+                  :assigned-users="item.assigned || [user]"
+                  :all-users="getLeadUsers(item)"
+                  :current-user="user"
+                  @assign="assignLead(item, $event)"
+                  @unassign="unAssign(item, $event)"
+                />
+              </template>
+              <!-- Default renderer for other columns -->
+              <template v-else-if="col.key === 'inquiryDate'">
+                <p class="ml-2 mb-0">{{ formatDate(item[col.key]) }}</p>
+              </template>
+              <template v-else-if="col.key === 'followUpDate'">
+                <div class="ml-2 mb-0">
+                  <v-menu
+                    v-model="followUpMenus[item.id]"
+                    :close-on-content-click="false"
+                    transition="scale-transition"
+                    offset-y
+                    max-width="320"
+                    min-width="260"
+                    
+                  >
+                    <template #activator="{ props: menuProps }">
+                      <v-text-field
+                        v-bind="menuProps"
+                        :model-value="followUpDrafts[item.id] ?? formatDate(item.followUpDate)"
+                        density="compact"
+                        variant="plain"
+                        hide-details
+                        placeholder="Select date"
+                        readonly
+                        class="followup-input"
+                        @click="setupFollowUpDraft(item)"
+                        append-inner-icon="mdi-calendar"
+                      />
+                    </template>
+                    <div class="pa-2">
+                      <v-date-picker
+                        hide-header
+                        color="primary"
+                        :model-value="followUpDrafts[item.id] ?? formatDate(item.followUpDate)"
+                        @update:model-value="(value) => onFollowUpSelect(item, value)"
+                      />
+                      <div class="d-flex justify-end mt-2">
+                        <v-btn variant="text" size="small" @click="followUpMenus[item.id] = false">Cancel</v-btn>
+                      </div>
+                    </div>
+                  </v-menu>
                 </div>
-              </div>
-            </v-menu>
-          </div>
-        </template>
-        <template v-else>
-          <p class="ml-2 mb-0">{{ item[col.key] }}</p>
-        </template>
-      </template>
-    </v-data-table>
-    <!-- Selection action bar -->
-    <v-card
-      v-if="selectedLeads.length"
-      class="action-bar py-3 px-6 d-flex  align-center rounded-lg "
-      style="gap: 80px;"
-      :elevation="5"
-      flat
-    >
-      <!-- Selected count -->
-      <div class="selected-count d-flex align-center">
-        <span class="selected-text">
-          {{ selectedLeads.length }}
-        </span>
-        <p class="ml-3 mt-1">Items Selected</p>
+              </template>
+              <template v-else>
+                <p class="ml-2 mb-0">{{ item[col.key] }}</p>
+              </template>
+            </template>
+          </v-data-table>
+          <v-card
+            v-if="selectedLeads.length"
+            class="action-bar py-3 px-6 d-flex  align-center rounded-lg "
+            style="gap: 80px;"
+            :elevation="5"
+            flat
+          >
+            <div class="selected-count d-flex align-center">
+              <span class="selected-text">
+                {{ selectedLeads.length }}
+              </span>
+              <p class="ml-3 mt-1">Items Selected</p>
+            </div>
+
+    <div class="actions-container d-flex align-center">
+      <div
+        v-for="(action, i) in actions"
+        :key="i"
+        class="action-item d-flex flex-column align-center"
+        @click="onActionClick(action.key)"
+      >
+        <img :src="action.icon" :alt="action.label" class="action-icon" />
+        <span class="action-label">{{ action.label }}</span>
       </div>
 
-      <!-- Actions + Close -->
-<div class="actions-container d-flex align-center">
-  <div
-    v-for="(action, i) in actions"
-    :key="i"
-    class="action-item d-flex flex-column align-center"
-    @click="onActionClick(action.key)"
-  >
-    <img :src="action.icon" :alt="action.label" class="action-icon" />
-    <span class="action-label">{{ action.label }}</span>
-  </div>
+      <v-divider vertical class="mx-4" />
 
-  <!-- Divider before close -->
-  <v-divider vertical class="mx-4" />
+      <div class="action-item d-flex flex-column align-center" @click="closeTray">
+        <v-icon size="24">mdi-close</v-icon>
+        <span class="action-label text-on-surface-variant">Close</span>
+      </div>
+    </div>
 
-  <!-- Close -->
-  <div class="action-item d-flex flex-column align-center" @click="closeTray">
-    <v-icon size="24">mdi-close</v-icon>
-    <span class="action-label text-on-surface-variant">Close</span>
-  </div>
-</div>
+          </v-card>
+        </v-expansion-panel-text>
+      </v-expansion-panel>
 
-    </v-card>
+      <v-expansion-panel
+        v-if="canViewArchive"
+        rounded="lg"
+        class="border-sm pb-1"
+      >
+        <v-expansion-panel-title>
+          <div class="d-flex align-center justify-space-between w-100">
+            <div class="d-flex align-center">
+              <h3 class="head mb-0">Archived Leads</h3>
+              <v-chip class="ml-2 rounded-lg" size="x-small" color="#213536">
+                {{ archivedLeads.length }}
+              </v-chip>
+            </div>
+            <span class="text-caption text-medium-emphasis">Visible to Owner & Manager</span>
+          </div>
+        </v-expansion-panel-title>
+        <v-expansion-panel-text class="pt-0">
+          <v-alert
+            v-if="!archivedLeads.length"
+            type="info"
+            variant="tonal"
+            class="mb-2"
+          >
+            No archived records yet.
+          </v-alert>
+          <v-data-table
+            v-else
+            v-model="selectedArchivedLeads"
+            :headers="headers"
+            :items="archivedLeads"
+            item-value="id"
+            hover
+            class="full-width-table"
+            show-select
+            :item-selectable="() => false"
+            @update:model-value="onArchivedSelectionChange"
+            return-object
+          >
+            <template
+              v-slot:[`item.data-table-select`]="{
+                internalItem,
+                isSelected,
+                toggleSelect,
+              }"
+            >
+              <div class="text-center">
+                <input
+                  type="checkbox"
+                  :checked="isSelected(internalItem)"
+                  disabled
+                  @change="() => toggleSelect(internalItem)"
+                  class="cust-checkbox"
+                />
+              </div>
+            </template>
+            <template v-slot:headers="{ columns, allSelected, someSelected }">
+              <tr>
+                <template v-for="(column, i) in columns" :key="column.key">
+                  <th
+                    :style="{
+                      width: column.width + 'px',
+                      padding: '0px 7px',
+                      fontSize: '14px',
+                      backgroundColor: '#F6F6F6',
+                    }"
+                  >
+                    <div v-if="i !== 0" class="d-flex align-center th-content">
+                      <p class="px-1 w-100 mb-0">{{ column.title }}</p>
+                      <span
+                        class="resize-handle"
+                        @mousedown="startResize($event, column)"
+                      ></span>
+                    </div>
+                    <div v-else class="d-flex justify-center">
+                      <input
+                        type="checkbox"
+                        class="cust-checkbox ma-0"
+                        :checked="allSelected"
+                        :indeterminate.prop="someSelected && !allSelected"
+                        disabled
+                        @change="toggleAllArchived"
+                      />
+                    </div>
+                  </th>
+                </template>
+              </tr>
+            </template>
+            <template
+              v-for="col in headers"
+              :key="col.key"
+              v-slot:[`item.${col.key}`]="{ item }"
+            >
+              <template v-if="col.key === 'name'">
+                <div class="pa-1 d-flex justify-space-between align-center">
+                  <p class="ml-2 mb-0 font-weight-medium">{{ item.name }}</p>
+                </div>
+              </template>
+              <template v-else-if="col.key === 'inquiryDate' || col.key === 'followUpDate'">
+                <p class="ml-2 mb-0">{{ formatDate(item[col.key]) }}</p>
+              </template>
+              <template v-else-if="col.key === 'comments'">
+                <p class="ml-2 mb-0 comment-text">{{ item.comments }}</p>
+              </template>
+              <template v-else-if="col.key === 'leadStatus'">
+                <v-chip label size="small" color="primary" variant="tonal" class="ml-2">
+                  {{ item.leadStatus || 'Archived' }}
+                </v-chip>
+              </template>
+              <template v-else>
+                <p class="ml-2 mb-0">{{ item[col.key]?.name || item[col.key] }}</p>
+              </template>
+            </template>
+          </v-data-table>
+        </v-expansion-panel-text>
+      </v-expansion-panel>
+    </v-expansion-panels>
 
     <CustomerRelationManagementLeadDetailsDialog
       v-if="showLeadDetailDialog"
@@ -300,7 +434,6 @@
       @close="showLeadDetailDialog = false"
     />
 
-    <!-- Compose Mail Dialog (Editor.js) -->
     <v-dialog v-model="showCompose" max-width="900px">
       <v-card class="rounded-lg">
         <div class="d-flex justify-space-between align-center px-4 py-3">
@@ -333,7 +466,14 @@
         </div>
       </v-card>
     </v-dialog>
-  </v-card>
+    <CommonConfirmDialog
+      v-model="confirmArchive"
+      title="Archive leads?"
+      :loading="archiving"
+      :message="`Archive ${selectedLeads.length} lead(s)? They will move to the Archived table.`"
+      @confirm="doArchive"
+      @cancel="confirmArchive = false"
+    />
     <CommonConfirmDialog
       v-model="confirmDelete"
       title="Delete leads?"
@@ -342,6 +482,7 @@
       @confirm="doDelete"
       @cancel="confirmDelete = false"
     />
+  </div>
 </template>
 
 <script setup>
@@ -369,12 +510,26 @@ const props = defineProps({
   treatmentSources: { type: Array, required: true },
   users: { type: Array, required: true },
 });
+const openedPanels = ref([0]);
 const selectedLeads = ref([]);
 const isAllSelected = ref(false);
+const selectedArchivedLeads = ref([]);
+const isAllArchived = ref(false);
 const showLeadDetailDialog = ref(false);
 const selectedLead = ref({});
 const followUpMenus = reactive({});
 const followUpDrafts = reactive({});
+const isArchivedLead = (lead) => {
+  const status = (lead?.leadStatus || '').toLowerCase();
+  return !!lead?.softDeleted || status === 'archived';
+};
+const activeLeads = computed(() =>
+  (props.leads || []).filter((l) => !isArchivedLead(l))
+);
+const archivedLeads = computed(() =>
+  (props.leads || []).filter((l) => isArchivedLead(l))
+);
+const canViewArchive = computed(() => [1, 8].includes(user.value?.roleId));
 
 // Inline editing state
 const editingCell = reactive({
@@ -398,6 +553,8 @@ const actions = [
 ];
 const confirmDelete = ref(false);
 const deleting = ref(false);
+const confirmArchive = ref(false);
+const archiving = ref(false);
 const converting = ref(false);
 
 // Inline editing functions
@@ -448,7 +605,7 @@ const onActionClick = (key) => {
     emit('book', [...selectedLeads.value])
   }
   else if (key === 'delete') confirmDelete.value = true;
-  else if (key === 'archive') doArchive();
+  else if (key === 'archive') confirmArchive.value = true;
   else if (key === 'convert') convertSelected();
   else if (['mail','sendPrice','sendForm','shareLocation'].includes(key)) openCompose(key)
 };
@@ -486,7 +643,7 @@ const toggleAll = () => {
   } else {
     const selected = [];
 
-    props.leads.forEach((l) => {
+    activeLeads.value.forEach((l) => {
       selected.push(l);
     });
     selectedLeads.value = selected;
@@ -494,9 +651,36 @@ const toggleAll = () => {
   }
 
 };
+const toggleAllArchived = () => {
+  isAllArchived.value = false;
+  selectedArchivedLeads.value = [];
+};
+const onArchivedSelectionChange = () => {
+  if (selectedArchivedLeads.value.length) {
+    selectedArchivedLeads.value = [];
+  }
+};
 const closeTray = () => {
   isAllSelected.value = false;
   selectedLeads.value = [];
+  isAllArchived.value = false;
+  selectedArchivedLeads.value = [];
+  confirmArchive.value = false;
+};
+const startResize = (event, column) => {
+  if (typeof window === 'undefined') return;
+  const startX = event.clientX || 0;
+  const startWidth = Number(column.width) || 140;
+  const onMouseMove = (e) => {
+    const delta = (e.clientX || 0) - startX;
+    column.width = Math.max(80, startWidth + delta);
+  };
+  const onMouseUp = () => {
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', onMouseUp);
+  };
+  window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('mouseup', onMouseUp);
 };
 const updateValueRow = async (row, key) => {
   try {
@@ -642,6 +826,31 @@ const doDelete = async () => {
   }
 }
 
+const doArchive = async () => {
+  if (!selectedLeads.value.length) {
+    confirmArchive.value = false;
+    return;
+  }
+  try {
+    archiving.value = true;
+    for (const lead of selectedLeads.value) {
+      const res = await crmStore.updateLead({ id: lead.id, leadStatus: 'Archived', softDeleted: true });
+      if (res?.code === 0) {
+        lead.leadStatus = 'Archived';
+        lead.softDeleted = true;
+      }
+    }
+    if (mainStore?.setSnackbar) mainStore.setSnackbar({ title: 'Lead(s) archived', type: 'success' });
+  } catch (e) {
+    console.error('Failed to archive leads', e);
+    if (mainStore?.setSnackbar) mainStore.setSnackbar({ title: 'Unable to archive leads', type: 'error' });
+  } finally {
+    archiving.value = false;
+    confirmArchive.value = false;
+    closeTray();
+  }
+};
+
 const convertSelected = async () => {
   try {
     converting.value = true
@@ -663,6 +872,18 @@ const convertSelected = async () => {
   font-weight: 600;
   font-style: "SemiBold";
   font-size: 14px;
+}
+.lead-panels {
+  border: 1px solid rgb(var(--v-theme-outline));
+  border-radius: 14px;
+  background: #fff;
+  padding: 4px 0;
+}
+.table-panels :deep(.v-expansion-panel-title) {
+  border-bottom: 1px solid #e5e7eb;
+}
+.table-panels :deep(.v-expansion-panel-text) {
+  padding-top: 4px !important;
 }
 
 :deep(.v-table__wrapper table) {

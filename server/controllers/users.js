@@ -340,14 +340,21 @@ export const applyLeave = async (event) => {
       documentPath = `/leave-documents/${fileName}`;
     }
 
-    const entitlement = await UserLeaveEntitlement.findOne({
+    let entitlement = await UserLeaveEntitlement.findOne({
       where: { userId, organisationId },
     });
 
-    if (!entitlement)
-      throw createError({
-        message: "Leave Entitlement is not available for this user",
-      });
+    if (!entitlement) {
+      entitlement = await UserLeaveEntitlement.create({
+        userId,
+        organisationId,
+        allowedAnnualLeaves: 14,
+        allowedCasualLeaves: 10,
+        allowedCompationateLeaves: 5,
+        allowedSickLeaves: 5,
+        allowedOtherLeaves: 5,
+      }, { transaction });
+    }
 
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -428,7 +435,7 @@ export const updateLeaveStatus = async (event) => {
       startDate: new Date(leave.startDate),
       endDate: new Date(leave.endDate),
       fullName: user.fullName,
-      email: user.email
+      email: user.email,
     };
     if (status === "Approved") {
       await leaveRequestApprovedNotification(data);

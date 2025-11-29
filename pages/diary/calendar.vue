@@ -81,6 +81,8 @@
         @slot-full="onSlotFull"
         @open-notes="onOpenNotes"
         @update-status="onUpdateStatus"
+        @move-appointment="onMoveAppointment"
+        @open-appointment="onOpenExistingAppointment"
       />
     </div>
 
@@ -127,6 +129,7 @@ import NotesModal from '@/components/diary/NotesModal.vue'
 import { useDiaryStore } from '@/stores/diary'
 import { useMainStore } from '@/stores/index'
 import { useOrgStore } from '@/stores/organisation'
+import { clinicBuildDateTime, clinicMinutesFromTime } from '@/lib/dateFormatter'
 import listicon from "@/assets/icons/listView/listicon.svg";
 import calendericon from "@/assets/icons/listView/calendericon.svg";
 import { formatDateDDMMYYYY } from '@/lib/dateFormatter'
@@ -147,6 +150,7 @@ const dentistSelect = computed(() => dentists.value)
 
 // Simple appointment storage keyed by dentist id
 const appointmentsByDentist = reactive({})
+let appointmentsLoadSeq = 0
 
 // Use global snackbar via store
 const mainStore = useMainStore()
@@ -174,6 +178,7 @@ function onFilters(f){
 const showAppointment = ref(false)
 const modalTime = ref('09:00')
 const modalDentist = ref(null)
+const editingAppointment = ref(null)
 const showNotes = ref(false)
 const notesDentist = ref(null)
 const preselectedPatientName = ref('')
@@ -197,6 +202,27 @@ function onOpenNotes(dentist) {
   showNotes.value = true
 }
 
+function onOpenExistingAppointment({ appt, dentist }) {
+  editingAppointment.value = {
+    id: appt.id,
+    patientId: appt.patientId,
+    patient: appt.patient,
+    date: appt.date || dateStr.value,
+    start: appt.start,
+    end: appt.end,
+    duration: Math.max(15, (clinicMinutesFromTime(appt.end) || 0) - (clinicMinutesFromTime(appt.start) || 0)),
+    status: appt.status,
+    treatmentName: appt.treatmentName,
+    notes: appt.notes || '',
+    practitioner: dentist?.name || '',
+  }
+  modalDentist.value = dentist || null
+  modalTime.value = appt.start || modalTime.value
+  preselectedPatientId.value = appt.patientId || null
+  preselectedPatientName.value = appt.patient || ''
+  showAppointment.value = true
+}
+
 // Add patient button in header
 const showAddPatient = ref(false)
 function onPatientSaved(p) {
@@ -217,26 +243,49 @@ function onAddPatientFromAppointment() {
 }
 
 function onSaveAppointment(appt) {
-  const id = modalDentist.value?.id
-  if (!id) return
-  const payload = {
-    dentistId: id,
-    patientId: appt.patientId || preselectedPatientId.value || null,
-    patientName: appt.patient || preselectedPatientName.value,
-    date: dateStr.value,
-    time: appt.time || modalTime.value,
-    duration: appt.duration || 10,
-    treatmentId: appt.treatmentId || null,
-    treatmentName: appt.treatmentName || null,
-    status: appt.status || 'Pending',
-    notes: appt.notes || '',
-  }
-  diaryStore.createAppointment(payload)
-    .then(() => { showSuccess('Appointment created'); loadAppointments() })
-    .catch((e) => {
-      const msg = e?.message || e?.data?.message || 'Failed to create appointment'
-      showError(msg)
+  if (appt.id) {
+    const startTime = clinicBuildDateTime(appt.date || dateStr.value, appt.time || modalTime.value)
+    const endMinutes = (clinicMinutesFromTime(appt.time || modalTime.value) || 0) + Number(appt.duration || 15)
+    const endStr = `${String(Math.floor(endMinutes / 60)).padStart(2,'0')}:${String(endMinutes % 60).padStart(2,'0')}`
+    const endTime = clinicBuildDateTime(appt.date || dateStr.value, endStr)
+    const dentistId = modalDentist.value?.id || editingAppointment.value?.dentistId || appt.dentistId
+    diaryStore.updateAppointment({
+      id: appt.id,
+      dentistId,
+      startTime,
+      endTime,
+      status: appt.status,
+      notes: appt.notes,
+      treatmentName: appt.treatmentName || appt.exam,
+      patientId: appt.patientId || preselectedPatientId.value || null,
     })
+      .then(() => { showSuccess('Appointment updated'); editingAppointment.value = null; loadAppointments() })
+      .catch((e) => {
+        const msg = e?.message || e?.data?.message || 'Failed to update appointment'
+        showError(msg)
+      })
+  } else {
+    const dentistId = modalDentist.value?.id
+    if (!dentistId) return
+    const payload = {
+      dentistId,
+      patientId: appt.patientId || preselectedPatientId.value || null,
+      patientName: appt.patient || preselectedPatientName.value,
+      date: dateStr.value,
+      time: appt.time || modalTime.value,
+      duration: appt.duration || 10,
+      treatmentId: appt.treatmentId || null,
+      treatmentName: appt.treatmentName || null,
+      status: appt.status || 'Pending',
+      notes: appt.notes || '',
+    }
+    diaryStore.createAppointment(payload)
+      .then(() => { showSuccess('Appointment created'); loadAppointments() })
+      .catch((e) => {
+        const msg = e?.message || e?.data?.message || 'Failed to create appointment'
+        showError(msg)
+      })
+  }
 }
 
 function loadDentists() {
@@ -259,7 +308,7 @@ function buildWeekDates() {
 }
 
 function loadAppointments() {
-  for (const k of Object.keys(appointmentsByDentist)) delete appointmentsByDentist[k]
+  const seq = ++appointmentsLoadSeq
   const dates = view.value === 'week' ? buildWeekDates() : [dateStr.value]
   const promises = []
   const selected = filters.value.dentistId
@@ -275,11 +324,40 @@ function loadAppointments() {
     }
   }
   Promise.all(promises).then((results) => {
+    if (seq !== appointmentsLoadSeq) return
+    const nextMap = {}
     results.forEach(({ key, rows }) => {
-      if (!appointmentsByDentist[key]) appointmentsByDentist[key] = []
-      appointmentsByDentist[key].push(...rows.map((r) => ({ id: r.id, patientId: r.patientId, patient: r.patient, start: r.start, end: r.end, status: r.status, treatmentName: r.treatmentName, notes: r.notes, date: r.date })))
+      if (!nextMap[key]) nextMap[key] = []
+      nextMap[key].push(
+        ...rows.map((r) => ({
+          id: r.id,
+          patientId: r.patientId,
+          patient: r.patient,
+          start: r.start,
+          end: r.end,
+          status: r.status,
+          treatmentName: r.treatmentName,
+          notes: r.notes,
+          date: r.date,
+          dentistId: r.dentistId,
+        }))
+      )
+    })
+    // replace once new data ready to avoid flicker
+    Object.keys(appointmentsByDentist).forEach((k) => delete appointmentsByDentist[k])
+    Object.entries(nextMap).forEach(([k, list]) => {
+      appointmentsByDentist[k] = list
+      sortAppointmentsForDentist(k)
     })
   })
+}
+
+function sortAppointmentsForDentist(dentistId) {
+  const list = appointmentsByDentist[dentistId]
+  if (!list) return
+  appointmentsByDentist[dentistId] = list
+    .slice()
+    .sort((a, b) => (clinicMinutesFromTime(a.start || a.startTime) || 0) - (clinicMinutesFromTime(b.start || b.startTime) || 0))
 }
 
 function onUpdateStatus({ appt, status, dentistId }) {
@@ -287,6 +365,65 @@ function onUpdateStatus({ appt, status, dentistId }) {
     .then(() => { showSuccess('Appointment updated'); loadAppointments() })
     .catch((e) => {
       const msg = e?.message || e?.data?.message || 'Failed to update appointment'
+      showError(msg)
+    })
+}
+
+function applyLocalMove({ appointmentId, from, to, appointment }) {
+  const id = appointmentId || appointment?.id
+  if (!id) return
+  const fromDentistId = from?.dentistId
+  const toDentistId = to?.dentistId
+  const fromList = (fromDentistId && appointmentsByDentist[fromDentistId]) ? appointmentsByDentist[fromDentistId] : []
+  const idx = fromList.findIndex((a) => String(a.id) === String(id))
+  const base = idx >= 0 ? fromList[idx] : { ...appointment, id }
+  // Remove from original list (immutably for reactivity)
+  if (fromDentistId && appointmentsByDentist[fromDentistId]) {
+    appointmentsByDentist[fromDentistId] = appointmentsByDentist[fromDentistId].filter((a) => String(a.id) !== String(id))
+  }
+  const next = {
+    ...base,
+    start: to?.start || base.start,
+    end: to?.end || base.end,
+    date: to?.date || base.date,
+    dentistId: to?.dentistId || base.dentistId,
+  }
+  const toList = (toDentistId && appointmentsByDentist[toDentistId]) ? appointmentsByDentist[toDentistId] : []
+  appointmentsByDentist[toDentistId] = [...toList.filter((a) => String(a.id) !== String(id)), next]
+  sortAppointmentsForDentist(toDentistId)
+}
+
+function onMoveAppointment(move) {
+  const id = move?.appointmentId || move?.appointment?.id
+  if (!id) {
+    showError('Unable to move appointment: missing id')
+    return
+  }
+  const target = move?.to || {}
+  if (!target?.dentistId || !target?.start || !target?.end) {
+    showError('Unable to move appointment: target slot missing data')
+    return
+  }
+  const targetDate = target.date || dateStr.value
+  const startTime = clinicBuildDateTime(targetDate, target.start)
+  const endTime = clinicBuildDateTime(targetDate, target.end)
+  if (!startTime || !endTime) {
+    showError('Unable to move appointment: invalid target time')
+    return
+  }
+  diaryStore.updateAppointment({
+    id,
+    dentistId: target.dentistId,
+    startTime,
+    endTime,
+  })
+    .then(() => {
+      applyLocalMove(move)
+      sortAppointmentsForDentist(target.dentistId)
+      showSuccess('Appointment moved')
+    })
+    .catch((e) => {
+      const msg = e?.message || e?.data?.message || 'Failed to move appointment'
       showError(msg)
     })
 }
@@ -308,7 +445,7 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .cust-border {
   border-bottom: 1px solid #dbdbdb;
   padding: 17px;

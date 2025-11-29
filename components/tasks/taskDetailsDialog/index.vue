@@ -70,24 +70,29 @@
           style="overflow-y: auto;"
         >
           <v-tabs v-model="tab" class="custom-tabs px-4" slider-color="primary">
-            <v-tab value="overview" class="tab-text">
-              <img
-                src="@/assets/icons/overview.svg"
-                alt="Overview"
-                width="18"
-                height="18"
-                class="mr-2"
-              />
-              Overview
-            </v-tab>
+          <v-tab value="overview" class="tab-text">
+            <img
+              src="@/assets/icons/overview.svg"
+              alt="Overview"
+              width="18"
+              height="18"
+              class="mr-2"
+            />
+            Overview
+          </v-tab>
 
-            <v-tab value="checklist" class="tab-text">
-              <img
-                src="@/assets/icons/checklist.svg"
-                alt="Checklist"
-                width="18"
-                height="18"
-                class="mr-2"
+          <v-tab value="comments" class="tab-text">
+            <v-icon size="18" class="mr-2">mdi-comment-text</v-icon>
+            Comments
+          </v-tab>
+
+          <v-tab value="checklist" class="tab-text">
+            <img
+              src="@/assets/icons/checklist.svg"
+              alt="Checklist"
+              width="18"
+              height="18"
+              class="mr-2"
               />
               Checklist
             </v-tab>
@@ -105,11 +110,11 @@
           </v-tabs>
 
           <v-tabs-window v-model="tab">
-            <v-tabs-window-item value="overview">
-              <div
-                class="px-9 py-4 mt-6"
-                v-if="taskDetails && taskDetails.status && taskDetails.priority"
-              >
+        <v-tabs-window-item value="overview">
+          <div
+            class="px-9 py-4 mt-6"
+            v-if="taskDetails && taskDetails.status && taskDetails.priority"
+          >
                 <v-row>
                   <!-- Created Time -->
                   <v-col cols="12" md="6">
@@ -245,30 +250,103 @@
                    Task Description
                   </h4>
                   <v-textarea
-                    v-model="taskDetails.taskDetails.description"
-                    variant="solo"
-                    placeholder="Enter task description"
-                    density="compact"
-                    elevation="0"
-                    class="mt-1"
-                    flat
-                    rows="3"
-                  />
-                </v-card>
-                <div class="mt-3">
-                  <label class="cust-lbl">Comments</label>
-                  <v-textarea
-                  v-model="taskDetails.comments"
+                    v-model="taskDescription"
                     variant="solo"
                     placeholder="Type here"
                     density="compact"
                     elevation="0"
                     class="mt-1"
                     flat
+                    rows="2"
+                    @update:model-value="touchDirty"
                   />
+                </v-card>
+          </div>
+        </v-tabs-window-item>
+
+        <v-tabs-window-item value="comments">
+          <div class="px-9 py-4 mt-4 comments-wrap">
+            <div
+              class="comment-list"
+              ref="commentListRef"
+              @scroll.passive="onCommentsScroll"
+            >
+              <div
+                v-for="comment in comments"
+                :key="comment.id"
+                class="comment-item"
+              >
+                <div class="comment-header">
+                  <div class="comment-author">
+                    <Avatar :user="{ fullName: comment.author?.fullName }" />
+                    <div class="author-meta">
+                      <div class="name">{{ comment.author?.fullName || 'Unknown' }}</div>
+                      <div class="timestamp">{{ formatDate(comment.createdAt) }}</div>
+                    </div>
+                  </div>
+                  <div class="comment-actions">
+                    <v-btn
+                      icon
+                      size="24"
+                      variant="text"
+                      class="comment-action-btn"
+                      @click="startEditComment(comment)"
+                    >
+                      <v-icon size="18">mdi-pencil</v-icon>
+                    </v-btn>
+                    <v-btn
+                      icon
+                      size="24"
+                      variant="text"
+                      class="comment-action-btn"
+                      @click="deleteComment(comment)"
+                    >
+                      <v-icon size="18" color="error">mdi-delete</v-icon>
+                    </v-btn>
+                  </div>
+                </div>
+                <div class="comment-body" v-if="editingCommentId !== comment.id">
+                  {{ comment.comment }}
+                </div>
+                <div v-else class="mt-2">
+                  <v-textarea
+                    v-model="editCommentText"
+                    variant="outlined"
+                    density="compact"
+                    auto-grow
+                    rows="2"
+                  />
+                  <div class="d-flex justify-end mt-2" style="gap: 8px;">
+                    <v-btn size="small" variant="text" @click="cancelEdit">Cancel</v-btn>
+                    <v-btn size="small" color="primary" flat @click="saveEditComment(comment)">Save</v-btn>
+                  </div>
                 </div>
               </div>
-            </v-tabs-window-item>
+              <div v-if="!comments.length" class="text-caption text-grey mt-1">
+                No comments yet. Be the first to add one.
+              </div>
+            </div>
+            <v-textarea
+              v-model="newComment"
+              placeholder="Add a comment"
+              density="compact"
+              elevation="0"
+              class="mt-3 sticky-composer"
+              rows="2"
+            />
+            <div class="d-flex justify-end mt-2">
+              <v-btn
+                color="primary"
+                size="small"
+                flat
+                rounded="lg"
+                @click="addComment"
+              >
+                Add Comment
+              </v-btn>
+            </div>
+          </div>
+        </v-tabs-window-item>
 
             <v-tabs-window-item value="checklist"> 
            
@@ -282,6 +360,15 @@
             <v-tabs-window-item value="files">
               <div class="pa-4">
                 <CommonDirectFileUpload @upload="uploadFile"  />
+                <v-progress-linear
+                  v-if="isUploading"
+                  class="mt-3"
+                  :model-value="uploadProgress"
+                  height="6"
+                  color="primary"
+                  rounded
+                  striped
+                />
                 <v-row class="mt-5" dense>
                   <v-col
                     cols="3"
@@ -363,7 +450,7 @@
                           {{ file.title }}
                         </div>
                         <div class="text-caption text-grey">
-                          {{ formatFileSize(file.size) }} •
+                          {{ formatFileSize(file.size) }} |
                           {{ formatDate(file.createdAt) }}
                         </div>
                       </div>
@@ -390,6 +477,7 @@
             :elevation="0"
             rounded="lg"
             class="px-7"
+            :disabled="submitDisabled"
           >
             Submit Information
           </v-btn>
@@ -402,18 +490,55 @@
 <script setup>
 import { parsedDate, formatDateDDMMYYYY } from "@/lib/dateFormatter";
 import Avatar from "~/components/Common/avatar.vue";
+import { useBus } from "@/composables/useBus";
+
 const modelValue = ref(false);
 const props = defineProps({
   selectedItem: Object,
   modelValue: Boolean,
 });
 const taskStore = useTaskStore();
-const store= useMainStore();
+const store = useMainStore();
+const bus = useBus();
 const tab = ref("overview");
-const taskDetails = ref("");
+const taskDetails = ref({});
+const isDirty = ref(false);
+const currentUserTaskId = ref(null);
+const comments = ref([]);
+const newComment = ref("");
+const editingCommentId = ref(null);
+const editCommentText = ref("");
+const submitDisabled = computed(() => !isDirty.value);
+const commentsPage = ref(0);
+const commentsLimit = ref(10);
+const commentsEnd = ref(false);
+const isLoadingComments = ref(false);
+const commentListRef = ref(null);
 const imageLoadErrors = ref({});
+const uploadProgress = ref(0);
+const isUploading = ref(false);
+const MAX_FILE_SIZE_MB = 20;
+const allowedExtensions = ["pdf", "doc", "docx", "png", "jpg", "jpeg"];
+const allowedMimeTypes = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "image/png",
+  "image/jpeg",
+];
+
+const taskDescription = computed({
+  get: () => taskDetails.value?.taskDetails?.description || "",
+  set: (val) => {
+    if (!taskDetails.value) taskDetails.value = {};
+    if (!taskDetails.value.taskDetails) taskDetails.value.taskDetails = {};
+    taskDetails.value.taskDetails.description = val;
+    isDirty.value = true;
+  },
+});
 
 const fetchTaskDetails = async () => {
+  if (isDirty.value) return; // don't overwrite local edits while typing
   let userTaskId;
   if (props.selectedItem.id) {
     userTaskId = props.selectedItem.id;
@@ -428,9 +553,12 @@ const fetchTaskDetails = async () => {
     const res = await taskStore.getTaskDetails({
       userTaskId,
     });
-    if (res.code === 0) { 
+    if (res.code === 0) {
       taskDetails.value = res.data;
-      console.log(taskDetails.value)
+      currentUserTaskId.value = userTaskId;
+      await fetchComments(userTaskId);
+      isDirty.value = false;
+      console.log(taskDetails.value);
     } else {
       console.error("Failed to fetch task details:", res.message);
     }
@@ -438,6 +566,7 @@ const fetchTaskDetails = async () => {
     console.error("Error fetching task details:", err);
   }
 };
+
 watch(
   () => props.modelValue,
   async (newValue) => {
@@ -445,11 +574,137 @@ watch(
     if (newValue) {
       await fetchTaskDetails();
     } else {
-      taskDetails.value = ""; // Optional: reset on close
+      taskDetails.value = {}; // Optional: reset on close
+      isDirty.value = false;
     }
   },
   { immediate: true }
 );
+
+const handleExternalUpdate = (payload = {}) => {
+  if (!modelValue.value) return;
+  const matches =
+    payload.userTaskId === currentUserTaskId.value ||
+    payload.taskId === taskDetails.value?.taskDetails?.id;
+  if (matches && !isDirty.value) {
+    fetchTaskDetails();
+  }
+};
+
+onMounted(() => {
+  bus.on("task-updated", handleExternalUpdate);
+});
+
+onBeforeUnmount(() => {
+  bus.off("task-updated", handleExternalUpdate);
+});
+
+const touchDirty = () => {
+  isDirty.value = true;
+};
+
+const fetchComments = async (userTaskId, reset = false) => {
+  if (!userTaskId) return;
+  if (isLoadingComments.value) return;
+  if (reset) {
+    commentsPage.value = 0;
+    commentsEnd.value = false;
+    comments.value = [];
+  }
+  try {
+    isLoadingComments.value = true;
+    const res = await taskStore.listTaskComments({
+      userTaskId,
+      limit: commentsLimit.value,
+      offset: commentsPage.value * commentsLimit.value,
+    });
+    if (res.code === 0) {
+      const payload = res.data || [];
+      if (payload.length < commentsLimit.value) {
+        commentsEnd.value = true;
+      }
+      const ordered = [...payload].reverse(); // backend returns newest first
+      if (commentsPage.value === 0 || reset) {
+        comments.value = ordered;
+        nextTick(() => scrollCommentsToBottom());
+      } else {
+        comments.value = ordered.concat(comments.value);
+      }
+      commentsPage.value += 1;
+    }
+  } catch (err) {
+    console.error("Failed to fetch comments", err);
+  } finally {
+    isLoadingComments.value = false;
+  }
+};
+
+const addComment = async () => {
+  if (!newComment.value.trim()) return;
+  try {
+    const res = await taskStore.addTaskComment({
+      userTaskId: currentUserTaskId.value,
+      comment: newComment.value.trim(),
+    });
+    if (res.code === 0) {
+      newComment.value = "";
+      await fetchComments(currentUserTaskId.value, true);
+    }
+  } catch (err) {
+    console.error("Failed to add comment", err);
+  }
+};
+
+const startEditComment = (comment) => {
+  editingCommentId.value = comment.id;
+  editCommentText.value = comment.comment;
+};
+
+const cancelEdit = () => {
+  editingCommentId.value = null;
+  editCommentText.value = "";
+};
+
+const saveEditComment = async (comment) => {
+  if (!editCommentText.value.trim()) return;
+  try {
+    const res = await taskStore.updateTaskComment({
+      commentId: comment.id,
+      comment: editCommentText.value.trim(),
+    });
+    if (res.code === 0) {
+      cancelEdit();
+      await fetchComments(currentUserTaskId.value, true);
+    }
+  } catch (err) {
+    console.error("Failed to update comment", err);
+  }
+};
+
+const deleteComment = async (comment) => {
+  try {
+    const res = await taskStore.deleteTaskComment({ commentId: comment.id });
+    if (res.code === 0) {
+      await fetchComments(currentUserTaskId.value, true);
+    }
+  } catch (err) {
+    console.error("Failed to delete comment", err);
+  }
+};
+
+const onCommentsScroll = () => {
+  const el = commentListRef.value;
+  if (!el || isLoadingComments.value || commentsEnd.value) return;
+  if (el.scrollTop === 0) {
+    fetchComments(currentUserTaskId.value);
+  }
+};
+
+const scrollCommentsToBottom = () => {
+  const el = commentListRef.value;
+  if (!el) return;
+  el.scrollTop = el.scrollHeight;
+};
 
 const formatFileSize = (size) => {
   if (!size) return "0 B";
@@ -537,16 +792,61 @@ const deleteFile = async (file) => {
   }
 };
 
-const uploadFile = async (file) => {
+const isAllowedFile = (file) => {
+  const ext = (file.name || "").split(".").pop()?.toLowerCase();
+  return (
+    (ext && allowedExtensions.includes(ext)) ||
+    (file.type && allowedMimeTypes.includes(file.type))
+  );
+};
+
+const isWithinSize = (file) => {
+  return file.size <= MAX_FILE_SIZE_MB * 1024 * 1024;
+};
+
+const uploadFile = async (files) => {
   try {
+    const fileArray = Array.isArray(files) ? files : [files].filter(Boolean);
+    if (!fileArray.length) return;
+
+    const disallowed = fileArray.filter((file) => !isAllowedFile(file));
+    if (disallowed.length) {
+      store.setSnackbar({
+        title: `File type not allowed: ${disallowed.map((f) => f.name).join(", ")}`,
+        type: "error",
+      });
+    }
+    const tooLarge = fileArray.filter((file) => !isWithinSize(file));
+    if (tooLarge.length) {
+      store.setSnackbar({
+        title: `File size exceeds ${MAX_FILE_SIZE_MB}MB: ${tooLarge
+          .map((f) => f.name)
+          .join(", ")}`,
+        type: "error",
+      });
+    }
+
+    const validFiles = fileArray.filter(
+      (file) => isAllowedFile(file) && isWithinSize(file)
+    );
+    if (!validFiles.length) return;
+
     const formData = new FormData();
     formData.append("userTaskId", props.selectedItem.id);
-    formData.append("files", file);
+    validFiles.forEach((file) => formData.append("files", file));
 
-    const res = await taskStore.addAttachments(formData);
+    uploadProgress.value = 0;
+    isUploading.value = true;
+
+    const res = await taskStore.addAttachments(formData, {
+      onProgress: (percent) => {
+        uploadProgress.value = percent;
+      },
+    });
+    uploadProgress.value = 100;
 
     if (res.code === 0) {
-      fetchTaskDetails()
+      fetchTaskDetails();
       store.setSnackbar({
         title: "File upload successful",
         type: "success",
@@ -562,6 +862,11 @@ const uploadFile = async (file) => {
       title: err.message || "An unexpected error occurred",
       type: "error",
     });
+  } finally {
+    setTimeout(() => {
+      isUploading.value = false;
+      uploadProgress.value = 0;
+    }, 400);
   }
 };
 
@@ -659,5 +964,67 @@ const uploadFile = async (file) => {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+}
+.comment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 250px;
+  overflow-y: auto;
+  padding-right: 4px;
+  margin-bottom: 12px;
+}
+.comment-item {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fafbff;
+  position: relative;
+}
+.comment-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.comment-author {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.comment-actions {
+  opacity: 0;
+  display: flex;
+  gap: 4px;
+  transition: opacity 0.15s ease;
+}
+.comment-item:hover .comment-actions {
+  opacity: 1;
+}
+.author-meta .name {
+  font-weight: 600;
+  font-size: 13px;
+  color: #111827;
+}
+.author-meta .timestamp {
+  font-size: 12px;
+  color: #6b7280;
+}
+.comment-body {
+  font-size: 13px;
+  color: #1f2937;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+.comments-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.sticky-composer {
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  z-index: 1;
 }
 </style>

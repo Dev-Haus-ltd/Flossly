@@ -30,6 +30,10 @@ import {
   completeBulkTasks,
   unAssignBulkTask,
   getTeamTaskStatsByStatusAndCategory,
+  addUserTaskComment,
+  listUserTaskComments,
+  updateUserTaskComment,
+  deleteUserTaskComment,
 } from "~/server/controllers/task";
 
 export default defineEventHandler(async (event) => {
@@ -53,6 +57,14 @@ export default defineEventHandler(async (event) => {
       return await viewTeamTasksTaskWise(event);
     case "updateUserTask":
       return await updateTask(event);
+    case "addComment":
+      return await addUserTaskComment(event);
+    case "comments":
+      return await listUserTaskComments(event);
+    case "updateComment":
+      return await updateUserTaskComment(event);
+    case "deleteComment":
+      return await deleteUserTaskComment(event);
     case "addAttachments":
       return await addAttachments(event);
     case "deleteAttachment":

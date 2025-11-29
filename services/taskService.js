@@ -212,9 +212,37 @@ export default {
         });
     });
   },
-  addAttachments(data) {
+  addTaskComment(data) {
     return new Promise((resolve, reject) => {
-      PostFormData("/tasks/addAttachments", data)
+      Post("/tasks/addComment", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  listTaskComments(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/comments", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  updateTaskComment(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/updateComment", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteTaskComment(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/deleteComment", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  addAttachments(data, options = {}) {
+    return new Promise((resolve, reject) => {
+      PostFormData("/tasks/addAttachments", data, options.onProgress)
         .then((res) => {
           resolve(res);
         })

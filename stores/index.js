@@ -238,6 +238,12 @@ export const useMainStore = defineStore("mainStore", {
           width: 200,
         },
         {
+          key: "status",
+          title: "Status",
+          sortable: true,
+          width: 200,
+        },
+        {
           key: "frequency",
           title: "Frequency",
           sortable: true,

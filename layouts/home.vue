@@ -9,7 +9,7 @@
     />
     <!-- side bar -->
     <leftSideBar
-         v-if="!(smAndDown && rail)"
+      v-if="!(smAndDown && rail)"
       :rail="rail"
       :drawer="drawer"
       :menuItems="menuItems"
@@ -29,7 +29,7 @@ const { smAndDown } = useDisplay();
 const drawer = ref(true);
 const rail = ref(false);
 const onDrawerChange = () => {
-  rail.value = !rail.value ;
+  drawer.value = !drawer.value ;
 };
 const updateDrawer = (val) => {
   drawer.value = val;
@@ -41,11 +41,15 @@ watch(
   () => smAndDown.value,
   (isSmall) => {
     if (isSmall) {
-      // rail.value = false   
+      // On mobile, close drawer by default
+      drawer.value = false;
+    } else {
+      // On desktop, open drawer by default
+      drawer.value = true;
     }
   },
   { immediate: true } 
-)
+);
 const user = ref(null);
 const { setUser } = useUser();
 const mainStore = useMainStore();

@@ -86,7 +86,7 @@
               <p>Available Columns</p>
               <div class="d-flex flex-wrap">
                 <div
-                  v-for="(item, index) in availableHeaders"
+                  v-for="(item, index) in filteredAvailableHeaders"
                   :key="index"
                   class="color-box ma-1 pa-2 d-flex align-center justify-center"
                   :style="{ backgroundColor: getRandomHexColor(item.title) }"
@@ -310,13 +310,13 @@
                 <div class="pa-1 d-flex justify-space-between align-center">
                   <v-text-field
                     v-model="item.title"
-                    :variant="isFocused(item.id, 'name') ? 'outlined' : 'plain'"
-                    @focus="setFocus(item.id, 'name', true)"
-                    @blur="updateValueRow(item, 'name')"
+                    :variant="isFocused(item.id, 'title') ? 'outlined' : 'plain'"
+                    @focus="() => { setFocus(item.id, 'title', true); storeOriginalValue(item.id, 'title', item); }"
+                    @blur="updateValueRow(item, 'title')"
                     density="compact"
                     hide-details
-                    @keyup.enter="updateTitle(item, 'name')"
-                    :maxlength="150"
+                    @keyup.enter="(e) => handleEnterKey(e, item, 'title')"
+                    @keyup.escape="(e) => handleEscapeKey(e, item, 'title')"
                     class="small-input"
                   />
                   <img
@@ -330,14 +330,14 @@
               </template>
 
               <!-- Inside v-slot:[`item.${col.key}`] -->
-              <!-- <template v-else-if="col.key === 'status.name'">
+              <template v-else-if="col.key === 'status'">
                 <DataTableColumnsStatus
                   :statuses="statuses"
                   :selected="item"
                   :column="col"
                   @update="updateValueRow(item, 'status')"
                 />
-              </template> -->
+              </template> 
               <template v-else-if="col.key === 'priority.name'">
                 <DataTableColumnsPriorities
                   :priorities="priorities"
@@ -394,13 +394,15 @@
                 <div class="d-flex align-center pa-1">
                   <v-text-field
                     :model-value="getNestedValue(item, col.key)"
-                    :variant="
-                      isFocused(item.id, col.key) ? 'outlined' : 'plain'
-                    "
-                    @focus="setFocus(item.id, col.key, true)"
+                    @update:modelValue="(val) => {
+                      setNestedValue(item, col.key, val);
+                    }"
+                    :variant="isFocused(item.id, col.key) ? 'outlined' : 'plain'"
+                    @focus="() => { setFocus(item.id, col.key, true); storeOriginalValue(item.id, col.key, item); }"
                     @blur="updateValueRow(item, col.key)"
                     density="compact"
-                    @keyup.enter="updateTitle(item, col.key)"
+                    @keyup.enter="(e) => handleEnterKey(e, item, col.key)"
+                    @keyup.escape="(e) => handleEscapeKey(e, item, col.key)"
                     hide-details
                     class="small-input"
                   />
@@ -494,74 +496,18 @@
                     >
                       <!-- Inside v-slot:[`item.${col.key}`] -->
                       <template v-if="col.key === 'status'">
-                        <v-menu
-                          v-model="item.statusMenu"
-                          :close-on-content-click="false"
-                          offset-y
-                        >
-                          <template #activator="{ props }">
-                            <v-text-field
-                              v-bind="props"
-                              v-model="item.status"
-                              density="compact"
-                              readonly
-                              hide-details
-                              @focus="setFocus(item.id, col.key, true)"
-                              @blur="updateValueRow(item, col.key)"
-                              :variant="
-                                isFocused(item.id, col.key)
-                                  ? 'outlined'
-                                  : 'plain'
-                              "
-                            />
-                          </template>
-
-                          <v-card>
-                            <v-list>
-                              <template v-if="!item.statusMenu">
-                                <v-list-item
-                                  v-for="(s, i) in statuses"
-                                  :key="i"
-                                  @click="
-                                    () => {
-                                      item.status = s;
-                                      item.statusId = s.id;
-                                      item.statusMenu = false;
-                                      updateValueRow(item, col.key);
-                                    }
-                                  "
-                                >
-                                  <v-list-item-title>{{
-                                    s.name
-                                  }}</v-list-item-title>
-                                </v-list-item>
-                              </template>
-                              <template v-else>
-                                <v-list-item
-                                  v-for="(editStatus, i) in statuses"
-                                  :key="i"
-                                >
-                                  <v-text-field
-                                    v-model="editStatus.name"
-                                    density="compact"
-                                    variant="outlined"
-                                    hide-details
-                                  />
-                                </v-list-item>
-                              </template>
-
-                              <v-divider></v-divider>
-
-                              <v-list-item @click="toggleStatusEdit">
-                                <v-list-item-title class="text-primary">
-                                  {{
-                                    toggleStatusEdit ? "Done Editing" : "Edit"
-                                  }}
-                                </v-list-item-title>
-                              </v-list-item>
-                            </v-list>
-                          </v-card>
-                        </v-menu>
+                        <v-select
+                          :model-value="getStatusId(item)"
+                          :items="statuses"
+                          item-title="name"
+                          item-value="id"
+                          density="compact"
+                          hide-details
+                          variant="outlined"
+                          class="small-input"
+                          bg-color="white"
+                          @update:modelValue="onStatusChange(item, $event)"
+                        />
                       </template>
 
                       <!-- Delete icon for 'actions' column -->
@@ -700,6 +646,7 @@ const updateHeaderOrder = (newOrder) => {
 const emit = defineEmits(["onFilter", "onUpdate", "updateSelectedRowItems"]);
 const fixedColumnOrder = [
   "title",
+  "status",
   "priority.name",
   "taskDetails.category.name",
   "frequency",
@@ -767,6 +714,7 @@ const hideHandles = (key, i) => {
 const search = ref("");
 const expanded = ref([]);
 const focusedField = ref({});
+const originalFieldValues = ref({}); // Store original values for Escape key functionality
 const statuses = ref([]);
 const priorityStatuses = ref([]);
 const viewType = ref("list");
@@ -805,6 +753,20 @@ const enableEditing = (column, index) => {
 const isEditing = (column, index) => {
   return editingColumn.value[`${index}-${column.key}`] === true
 }
+
+// Computed property to filter available headers (exclude already selected ones)
+const filteredAvailableHeaders = computed(() => {
+  if (!availableHeaders || !selectedHeaders.value) {
+    return [];
+  }
+
+  // Get the keys of all selected headers
+  const selectedKeys = new Set(selectedHeaders.value.map(h => h.key));
+
+  // Filter out headers that are already selected
+  return availableHeaders.filter(header => !selectedKeys.has(header.key));
+});
+
 const getRoles = () => {
   mainStore
     .getRoles()
@@ -823,12 +785,31 @@ onMounted(() => {
   statuses.value = orgStatuses;
   priorityStatuses.value = priorities;
   user.value = JSON.parse(localStorage.getItem("user"));
+    // Add keyboard shortcut listener
+  window.addEventListener('keydown', handleKeyboardShortcut);
+
 });
+
+// Add cleanup on unmount
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeyboardShortcut);
+});
+
+// Add this new function to handle keyboard shortcuts
+const handleKeyboardShortcut = (event) => {
+  
+  // Option 1: Ctrl/Cmd + Shift + +
+  if (event.shiftKey && event.key === '+') {
+    event.preventDefault();
+    openAddTaskDialog();
+  }
+};
+
 watch(
   () => headers,
   (newVal) => {
     if (newVal && newVal.length > 0) {
-      selectedHeaders.value = sortHeaders(newVal); // Updates whenever headers changes
+      selectedHeaders.value = sortHeaders(newVal)
     }
   },
   { immediate: true, deep: true }
@@ -986,7 +967,6 @@ const assignTask = async (task, user) => {
 
     if (res.code === 0) {
       emit("onUpdate");
-
       mainStore.setSnackbar({
         title: "Task assigned successfully",
         type: "success",
@@ -1064,12 +1044,61 @@ const updateTaskInfo = (task) => {
       });
     });
 };
-const updateValueRow = (row, key) => {
+const storeOriginalValue = (id, key, row) => {
+  // Create a unique identifier for this field
+  const fieldId = `${id}-${key}`;
+
+  // Store the original value (handle both simple and nested values)
+  if (key.includes('.')) {
+    originalFieldValues.value[fieldId] = getNestedValue(row, key);
+  } else {
+    originalFieldValues.value[fieldId] = row[key];
+  }
+};
+
+const handleEscapeKey = (event, row, key) => {
+  const fieldId = `${row.id}-${key}`;
+
+  // Retrieve the original value
+  const originalValue = originalFieldValues.value[fieldId];
+
+  if (originalValue !== undefined) {
+    // Revert to the original value
+    if (key.includes('.')) {
+      setNestedValue(row, key, originalValue);
+    } else {
+      row[key] = originalValue;
+    }
+
+    // Clean up the stored original value
+    delete originalFieldValues.value[fieldId];
+  }
+
+  // Remove focus without triggering save
   setFocus(row.id, key, false);
-  
+  event.target.blur();
+};
+
+const handleEnterKey = (event, row, key) => {
+  // Clean up the stored original value since we're saving
+  const fieldId = `${row.id}-${key}`;
+  delete originalFieldValues.value[fieldId];
+
+  // Blur the input field to trigger the blur event
+  // This prevents duplicate API calls by ensuring only blur fires
+  event.target.blur();
+};
+
+const updateValueRow = async (row, key) => {
+  // Clean up the stored original value after successful save
+  const fieldId = `${row.id}-${key}`;
+  delete originalFieldValues.value[fieldId];
+
+  setFocus(row.id, key, false);
+
   // Validate title before saving
-  if (key === "name" && row.title !== undefined) {
-    if (!row.title || !row.title.trim()) {
+  if (key === "name" && row.title) {
+    if (!row.title.trim()) {
       mainStore.setSnackbar({
         title: "Task title cannot be empty or only spaces",
         type: "error",
@@ -1092,52 +1121,48 @@ const updateValueRow = (row, key) => {
       return;
     }
   }
-  
-  // For title field, we need to save it
-  if (key === "name") {
-    taskStore
-      .updateUserTask(row)
-      .then((res) => {
-        if (res.code !== 0) {
-          mainStore.setSnackbar({
-            title: res.data?.message || res.message || "Error while updating the task",
-            type: "error",
-          });
-          emit("onUpdate");
-        }
-      })
-      .catch((err) => {
-        mainStore.setSnackbar({
-          title: err.message || "Error while updating the task",
-          type: "error",
-        });
-        emit("onUpdate");
-      });
-    return;
-  }
-  
+
+  // Skip saving for comments and documentLink
   if (key === "comments" || key === "documentLink") return;
-  taskStore
-    .updateUserTask(row)
-    .then((res) => {
-      if (res.code !== 0) {
-        mainStore.setSnackbar({
-          title: res.data?.message || res.message || "Error while updating the task",
-          type: "error",
-        });
-      } else {
-        if (key === "status") {
-          emit("onUpdate");
-        }
-      }
-    })
-    .catch((err) => {
+
+  // New nested-value handling
+  const currentValue = getNestedValue(row, key);
+
+  if (key.includes('.')) {
+    const nestedValue = getNestedValue(row, key);
+    console.log(`Sending update for ${key}:`, nestedValue);
+  }
+
+  try {
+    const res = await taskStore.updateUserTask(row);
+
+    if (res.code !== 0) {
       mainStore.setSnackbar({
-        title: err.message || "Error while updating the task",
+        title: res.data?.message || res.message || "Error while updating the task",
         type: "error",
       });
+      emit("onUpdate");
+      return;
+    }
+
+    if (key === "status") {
+      emit("onUpdate");
+    }
+
+    mainStore.setSnackbar({
+      title: "Task updated successfully",
+      type: "success",
     });
+
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: err.message || "Error while updating the task",
+      type: "error",
+    });
+    emit("onUpdate");
+  }
 };
+
 const updateTitle = (row, key) => {
   setFocus(row.id, key, false);
   
@@ -1188,16 +1213,35 @@ const updateTitle = (row, key) => {
         title: err.message || "Error while updating the task",
         type: "error",
       });
-      // Revert changes on error
       emit("onUpdate");
     });
 };
+
+
 function getNestedValue(obj, path) {
   return path
     .split(".")
     .reduce((o, key) => (o && o[key] !== undefined ? o[key] : ""), obj);
 }
-
+function setNestedValue(obj, path, value) {
+  const keys = path.split(".");
+  let current = obj;
+  
+  // Navigate through all keys except the last one
+  for (let i = 0; i < keys.length - 1; i++) {
+    const key = keys[i];
+    
+    // Create intermediate objects if they don't exist
+    if (!(key in current) || typeof current[key] !== 'object') {
+      current[key] = {};
+    }
+    current = current[key];
+  }
+  
+  // Set the final value
+  const lastKey = keys[keys.length - 1];
+  current[lastKey] = value;
+}
 let startX = 0;
 let startWidth = 0;
 let currentCol = null;

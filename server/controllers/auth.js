@@ -483,7 +483,8 @@ export const verifyEmail = async (event) => {
       const tasks = await Task.findAll({
         limit: 100,
         where: {
-          categoryId: [3,4,5,10,11,12]
+          categoryId: [3,4,5,10,11,12],
+          isSystemTask: true
         },
       });
       const userOrg = await UserOrganisation.findAll({
@@ -715,8 +716,8 @@ const assignDefaultTasksToUser = async (user, organisationId) => {
   const userId = user.id;
   try {
     const tasks = await Task.findAll({
-      where: { roleId },
-      limit: 5,
+      where: { roleId, isSystemTask: true },
+      limit: 15,
     });
     if (!tasks.length) return;
     const [defaultStatus, defaultPriority] = await Promise.all([

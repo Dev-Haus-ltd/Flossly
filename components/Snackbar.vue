@@ -63,7 +63,6 @@
   watch(
   () => mainStore.getToast,
   (toast) => {
-    console.log('SNACKBAR TRIGGERED:', toast);
     if (toast !== null) {
       visible.value = true;
       title.value = toast.title;       // <- Corrected

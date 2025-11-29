@@ -385,7 +385,7 @@ const submitForm = async () => {
   try {
     const res = await rotaStore.addRota(form.value);
     if (res.code === 0) {
-      handleAddRotaUser(res.data.id, form.value.employees);
+      handleAddRotaUser(res.data, form.value.employees);
     } else{
       mainStore.setSnackbar({
         type: "error",
@@ -400,12 +400,12 @@ const submitForm = async () => {
   }
 };
 
-const handleAddRotaUser = async (rotaId, users) => {
+const handleAddRotaUser = async (rota, users) => {
   try {
     const rotaUsers = users.map((el) => {
       return { userId: el };
     });
-    const res = await rotaStore.addRotaUsers({ rotaId, users: rotaUsers });
+    const res = await rotaStore.addRotaUsers({ rotaId: rota.id, users: rotaUsers });
     if (res.code === 0) {
       mainStore.setSnackbar({
         type: "success",
@@ -414,17 +414,17 @@ const handleAddRotaUser = async (rotaId, users) => {
       resetForm();
       // Refresh rotas list so "copy" option becomes available
       await checkExistingRotas();
-      emit('onAddRota')
+      emit('onAddRota', rota)
     } else {
       mainStore.setSnackbar({
         type: "error",
-        title: res.message || res?.data?.message  || "Something went wrong",
+        title: res?.data?.message || res.message || "Something went wrong",
       });
     }
   } catch (err) {
     mainStore.setSnackbar({
       type: "error",
-      title: err.message || "An error occurred",
+      title: err?.data?.message || err.message || "Something went wrong",
     });
   }
 };
