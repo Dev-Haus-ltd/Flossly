@@ -44,6 +44,11 @@ export const Task = sequelize.define(
       ),
       allowNull: true,
     },
+    isSystemTask: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      allowNull: true
+    }
   },
   {
     modelName: "Tasks",
