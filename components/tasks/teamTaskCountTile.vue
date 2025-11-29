@@ -37,8 +37,8 @@
       </div>
       <div class="divider"></div>
       <div class="stat-item text-center">
-        <div class="stat-count">{{ userStat.taskStats.upcoming }}</div>
-        <div class="stat-label">Upcoming</div>
+        <div class="stat-count">{{ userStat.taskStats.todo }}</div>
+        <div class="stat-label">To Do</div>
       </div>
     </div>
   </v-card>

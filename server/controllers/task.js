@@ -1367,7 +1367,7 @@ export const teamTasksCounts = async (event) => {
     const users = orgUsers.map((el) => el.user).filter(Boolean);
 
     // Ensure current user is always included, even if not in the filtered list
-    const currentUserId = loggedUser.userId || loggedUser.id;
+    const currentUserId = loggedUser.userId;
     const currentUserIncluded = users.some((u) => u.id === currentUserId);
 
     if (!currentUserIncluded && currentUserId) {
@@ -1400,7 +1400,7 @@ export const teamTasksCounts = async (event) => {
     }
     const results = await Promise.all(
       users.map(async (user) => {
-        const [pending, completed, upcoming] = await Promise.all([
+        const [pending, completed, todo] = await Promise.all([
           UserTask.count({
             where: {
               userId: user.id,
@@ -1419,7 +1419,7 @@ export const teamTasksCounts = async (event) => {
             where: {
               userId: user.id,
               organisationId,
-              statusId: orgStatuses.find((x) => x.key === "upcoming").id,
+              statusId: orgStatuses.find((x) => x.key === "todo").id,
             },
           }),
         ]);
@@ -1428,13 +1428,14 @@ export const teamTasksCounts = async (event) => {
           taskStats: {
             pending,
             completed,
-            upcoming,
+            todo,
           },
         };
       })
     );
     return success(results);
   } catch (err) {
+    console.log(err)
     return error(500, err.message);
   }
 };

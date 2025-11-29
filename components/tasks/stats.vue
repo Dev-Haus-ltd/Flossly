@@ -101,7 +101,7 @@ const taskStatsConfig = computed(() => [
     icon: "https://cdn.lordicon.com/wwcdwkaf.json",
     label: 'Total Tasks',
     value: myTaskCounts.value.pending
-      ? myTaskCounts.value.pending + myTaskCounts.value.completed + myTaskCounts.value.upcoming
+      ? myTaskCounts.value.pending + myTaskCounts.value.completed + myTaskCounts.value.todo
       : 0
   },
   {
@@ -117,7 +117,7 @@ const taskStatsConfig = computed(() => [
   {
     icon: "https://cdn.lordicon.com/ibjcmcbv.json",
     label: 'Upcoming Tasks',
-    value: myTaskCounts.value.upcoming
+    value: myTaskCounts.value.todo
   }
 ])
 </script>
