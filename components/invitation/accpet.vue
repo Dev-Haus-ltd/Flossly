@@ -3,7 +3,7 @@
     <v-row>
       <v-col cols="12" md="6" class="d-flex align-center justify-center px-12">
         <div style="width: 100%; max-width: 500px">
-          <h2 class="text-center login-heading">Welcome Back!</h2>
+          <h2 class="text-center login-heading">Welcome to Flossly</h2>
           <h2 class="mb-6 text-center login-sub-heading" style="color: #8b8b8b">
             Let's create your credentials.
           </h2>
@@ -31,6 +31,20 @@
               density="comfortable"
               :append-inner-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'"
               @click:append-inner="togglePasswordVisibility"
+              flat
+            />
+            <label class="lbl">Confirm Password</label>
+            <v-text-field
+              v-model="credentials.confirmPassword"
+              :type="showConfirmPassword ? 'text' : 'password'"
+              :rules="confirmPasswordRules"
+              required
+              variant="solo"
+              single-line
+              class="input-bordered"
+              density="comfortable"
+              :append-inner-icon="showConfirmPassword ? 'mdi-eye' : 'mdi-eye-off'"
+              @click:append-inner="toggleConfirmPasswordVisibility"
               flat
             />
             <p v-if="loginError" style="color: red" class="pb-2">
@@ -94,6 +108,7 @@ const credentials = ref({
   inviteToken: null,
 });
 const showPassword = ref(false);
+const showConfirmPassword = ref(false);
 const form = ref(null);
 const router = useRouter();
 const authStore = useAuthStore();
@@ -110,8 +125,16 @@ const passwordRules = [
   (v) => !!v || "Password is required",
   (v) => v.length >= 6 || "Password must be at least 6 characters",
 ];
+const confirmPasswordRules = [
+  (v) => !!v || "Confirm password is required",
+  (v) => v.length >= 6 || "Password must be at least 6 characters",
+  (v) => v === credentials.value.password || "Passwords do not match",
+];
 const togglePasswordVisibility = () => {
   showPassword.value = !showPassword.value;
+};
+const toggleConfirmPasswordVisibility = () => {
+  showConfirmPassword.value = !showConfirmPassword.value;
 };
 
 onMounted(() => {

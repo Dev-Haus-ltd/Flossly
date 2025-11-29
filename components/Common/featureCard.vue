@@ -6,35 +6,35 @@
         :class="{ 'card-expanded': isHovered }"
         elevation="0"
         bg-color="#171952"
-        @mouseenter="isHovered = true"
-        @mouseleave="isHovered = false"
       >
-        <!-- Image and text content -->
-        <div class="content-wrapper">
-          <img
-            src="@/assets/dashboard/demo-video-thumbnail.svg"
-            alt="thumbnail"
-            class="feature-img"
-            :class="{ 'img-hidden': isHovered }"
-          />
-    
-          <!-- Text content -->
-          <div class="sub-heading" :class="{ 'text-expanded': isHovered }">
-            {{ subheading }}
-          </div>
-
-          <!-- Play button on hover -->
-          <div v-if="isHovered" class="play-button-container">
-            <img 
-              src="@/assets/dashboard/play-button.svg"
-              alt="play"
-              class="play-button"
-              @click="openModal"
+        <div 
+          class="hover-zone"
+          @mouseenter="isHovered = true"
+          @mouseleave="isHovered = false"
+        >
+          <div class="content-wrapper">
+            <img
+              src="@/assets/dashboard/demo-video-thumbnail.svg"
+              alt="thumbnail"
+              class="feature-img"
+              :class="{ 'img-hidden': isHovered }"
             />
+
+            <div class="sub-heading" :class="{ 'text-expanded': isHovered }">
+              {{ subheading }}
+            </div>
+
+            <div v-if="isHovered" class="play-button-container">
+              <img 
+                src="@/assets/dashboard/play-button.svg"
+                alt="play"
+                class="play-button"
+                @click="openModal"
+              />
+            </div>
           </div>
         </div>
 
-        <!-- Close icon -->
         <v-icon 
           class="close-icon"
           :class="{ 'close-icon-expanded': isHovered }"
@@ -42,6 +42,8 @@
         >
           mdi-close
         </v-icon>
+
+        <div v-if="isHovered" class="expanded-inner-layer"></div>
       </v-card>
 
       <!-- Modal Dialog -->
@@ -140,23 +142,16 @@
 
   .feature-card.card-expanded {
     height: 225px;
-    background-image: url("@/assets/dashboard/demo-video-thumbnail-expanded.png");
-    background-size: 100% 100%;
-    background-position: center;
-    background-repeat: no-repeat;
-    border-image-source: linear-gradient(90deg, #FFA977 0%, #FF85DA 32.21%, #7D77FF 63.94%, #68ECE6 100%);
-    border-image-slice: 1;
-    padding: 0;
+    padding: 4px;
     animation: slideExpand 0.6s ease forwards;
   }
+
   @keyframes slideExpand {
     from {
       height: 68px;
-      background-position: 0% 0%;
     }
     to {
       height: 225px;
-      background-position: center;
     }
   }
 
@@ -179,6 +174,26 @@
     }
   }
 
+  /* Inner expanded layer - respects border padding */
+  .expanded-inner-layer {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    right: 4px;
+    bottom: 4px;
+        background-image: 
+        url("@/assets/dashboard/demo-video-thumbnail-expanded.png"),
+        linear-gradient(180deg, #263388 0%, rgba(173, 124, 243, 0.08) 100%);
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-color: #030826;
+    border-radius: 20px;
+    z-index: 2;
+    pointer-events: none;
+    border-image-slice: 1%;
+  }
+
   .feature-card.card-expanded::before {
     background: linear-gradient(180deg, #263388 0%, rgba(173, 124, 243, 0.08) 100%);
     top: 0;
@@ -186,6 +201,7 @@
     right: 0;
     bottom: 0;
     border-radius: 24px;
+    z-index: 1;
   }
 
   .content-wrapper {
@@ -193,7 +209,7 @@
     align-items: center;
     justify-content: center;
     gap: 12px;
-    z-index: 2;
+    z-index: 3;
     position: relative;
     flex: 1;
     transition: all 0.4s ease;
@@ -229,7 +245,7 @@
     color: #ffffff;
     transition: all 0.4s ease;
     position: relative;
-    z-index: 2;
+    z-index: 3;
   }
 
   .sub-heading.text-expanded {
@@ -244,7 +260,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 3;
+    z-index: 4;
     position: relative;
     margin-top: 12px;
   }
@@ -266,7 +282,7 @@
   .close-icon {
     color: #fff;
     cursor: pointer;
-    z-index: 3;
+    z-index: 5;
     position: relative;
     flex-shrink: 0;
     transition: all 0.3s ease;
@@ -276,7 +292,7 @@
     position: absolute;
     top: 8px;
     right: 12px;
-    z-index: 4;
+    z-index: 6;
   }
 
   .close-icon:hover {
@@ -335,4 +351,12 @@
     border-radius: 12px;
     display: block;
   }
+  .hover-zone {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
   </style>
