@@ -1068,24 +1068,55 @@ const updateValueRow = (row, key) => {
   setFocus(row.id, key, false);
   
   // Validate title before saving
-  if (key === "name" && row.title) {
-    if (!row.title.trim()) {
+  if (key === "name" && row.title !== undefined) {
+    if (!row.title || !row.title.trim()) {
       mainStore.setSnackbar({
-        title: "Task title cannot be only spaces",
+        title: "Task title cannot be empty or only spaces",
         type: "error",
       });
+      // Revert to previous value or default
+      emit("onUpdate");
       return;
     }
+    
+    // Trim the title to remove leading/trailing spaces
+    row.title = row.title.trim();
+    
     if (row.title.length > 150) {
       mainStore.setSnackbar({
         title: "Task title must be 150 characters or less",
         type: "error",
       });
+      // Revert to previous value or default
+      emit("onUpdate");
       return;
     }
   }
   
-  if (key === "name" || key === "comments" || key === "documentLink") return;
+  // For title field, we need to save it
+  if (key === "name") {
+    taskStore
+      .updateUserTask(row)
+      .then((res) => {
+        if (res.code !== 0) {
+          mainStore.setSnackbar({
+            title: res.data?.message || res.message || "Error while updating the task",
+            type: "error",
+          });
+          emit("onUpdate");
+        }
+      })
+      .catch((err) => {
+        mainStore.setSnackbar({
+          title: err.message || "Error while updating the task",
+          type: "error",
+        });
+        emit("onUpdate");
+      });
+    return;
+  }
+  
+  if (key === "comments" || key === "documentLink") return;
   taskStore
     .updateUserTask(row)
     .then((res) => {
@@ -1111,19 +1142,27 @@ const updateTitle = (row, key) => {
   setFocus(row.id, key, false);
   
   // Validate title before saving
-  if (key === 'name' && row.title) {
-    if (!row.title.trim()) {
+  if (key === 'name' && row.title !== undefined) {
+    if (!row.title || !row.title.trim()) {
       mainStore.setSnackbar({
-        title: "Task title cannot be only spaces",
+        title: "Task title cannot be empty or only spaces",
         type: "error",
       });
+      // Revert to previous value
+      emit("onUpdate");
       return;
     }
+    
+    // Trim the title to remove leading/trailing spaces
+    row.title = row.title.trim();
+    
     if (row.title.length > 150) {
       mainStore.setSnackbar({
         title: "Task title must be 150 characters or less",
         type: "error",
       });
+      // Revert to previous value
+      emit("onUpdate");
       return;
     }
   }
@@ -1136,6 +1175,8 @@ const updateTitle = (row, key) => {
           title: res.data?.message || res.message || "Error while updating the task",
           type: "error",
         });
+        // Revert changes on error
+        emit("onUpdate");
       } else {
         if (key === "status") {
           emit("onUpdate");
@@ -1147,6 +1188,8 @@ const updateTitle = (row, key) => {
         title: err.message || "Error while updating the task",
         type: "error",
       });
+      // Revert changes on error
+      emit("onUpdate");
     });
 };
 function getNestedValue(obj, path) {
