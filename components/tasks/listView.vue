@@ -330,14 +330,14 @@
               </template>
 
               <!-- Inside v-slot:[`item.${col.key}`] -->
-              <!-- <template v-else-if="col.key === 'status.name'">
+              <template v-else-if="col.key === 'status'">
                 <DataTableColumnsStatus
                   :statuses="statuses"
                   :selected="item"
                   :column="col"
                   @update="updateValueRow(item, 'status')"
                 />
-              </template> -->
+              </template> 
               <template v-else-if="col.key === 'priority.name'">
                 <DataTableColumnsPriorities
                   :priorities="priorities"
@@ -496,74 +496,18 @@
                     >
                       <!-- Inside v-slot:[`item.${col.key}`] -->
                       <template v-if="col.key === 'status'">
-                        <v-menu
-                          v-model="item.statusMenu"
-                          :close-on-content-click="false"
-                          offset-y
-                        >
-                          <template #activator="{ props }">
-                            <v-text-field
-                              v-bind="props"
-                              v-model="item.status"
-                              density="compact"
-                              readonly
-                              hide-details
-                              @focus="setFocus(item.id, col.key, true)"
-                              @blur="updateValueRow(item, col.key)"
-                              :variant="
-                                isFocused(item.id, col.key)
-                                  ? 'outlined'
-                                  : 'plain'
-                              "
-                            />
-                          </template>
-
-                          <v-card>
-                            <v-list>
-                              <template v-if="!item.statusMenu">
-                                <v-list-item
-                                  v-for="(s, i) in statuses"
-                                  :key="i"
-                                  @click="
-                                    () => {
-                                      item.status = s;
-                                      item.statusId = s.id;
-                                      item.statusMenu = false;
-                                      updateValueRow(item, col.key);
-                                    }
-                                  "
-                                >
-                                  <v-list-item-title>{{
-                                    s.name
-                                  }}</v-list-item-title>
-                                </v-list-item>
-                              </template>
-                              <template v-else>
-                                <v-list-item
-                                  v-for="(editStatus, i) in statuses"
-                                  :key="i"
-                                >
-                                  <v-text-field
-                                    v-model="editStatus.name"
-                                    density="compact"
-                                    variant="outlined"
-                                    hide-details
-                                  />
-                                </v-list-item>
-                              </template>
-
-                              <v-divider></v-divider>
-
-                              <v-list-item @click="toggleStatusEdit">
-                                <v-list-item-title class="text-primary">
-                                  {{
-                                    toggleStatusEdit ? "Done Editing" : "Edit"
-                                  }}
-                                </v-list-item-title>
-                              </v-list-item>
-                            </v-list>
-                          </v-card>
-                        </v-menu>
+                        <v-select
+                          :model-value="getStatusId(item)"
+                          :items="statuses"
+                          item-title="name"
+                          item-value="id"
+                          density="compact"
+                          hide-details
+                          variant="outlined"
+                          class="small-input"
+                          bg-color="white"
+                          @update:modelValue="onStatusChange(item, $event)"
+                        />
                       </template>
 
                       <!-- Delete icon for 'actions' column -->
@@ -702,6 +646,7 @@ const updateHeaderOrder = (newOrder) => {
 const emit = defineEmits(["onFilter", "onUpdate", "updateSelectedRowItems"]);
 const fixedColumnOrder = [
   "title",
+  "status",
   "priority.name",
   "taskDetails.category.name",
   "frequency",
@@ -864,7 +809,7 @@ watch(
   () => headers,
   (newVal) => {
     if (newVal && newVal.length > 0) {
-      selectedHeaders.value = sortHeaders(newVal); // Updates whenever headers changes
+      selectedHeaders.value = sortHeaders(newVal)
     }
   },
   { immediate: true, deep: true }
@@ -1022,7 +967,6 @@ const assignTask = async (task, user) => {
 
     if (res.code === 0) {
       emit("onUpdate");
-
       mainStore.setSnackbar({
         title: "Task assigned successfully",
         type: "success",

@@ -24,7 +24,43 @@ import {
   UserPointsHistory,
   UserPoint,
 } from "../models";
-import { sendTaskAssignmentEmail, taskCompletedNotification } from "../utils/emailNotifications";
+import { taskCompletedNotification, sendTaskUnassignmentEmail, sendTaskDueReminderEmail, sendTaskCommentNotificationEmail } from "../utils/emailNotifications";
+
+
+const PRIVILEGED_ROLE_IDS = [1, 8];
+const isManagerOrOwner = (roleId) => PRIVILEGED_ROLE_IDS.includes(Number(roleId));
+const ensureManagerOrOwner = (loggedUser) => {
+  if (!isManagerOrOwner(loggedUser?.roleId)) {
+    throw createError({ statusCode: 403, message: "Not authorized" });
+  }
+};
+
+const autoArchiveCompletedTasks = async (organisationId, days = 5) => {
+  if (!organisationId) return;
+  try {
+    const completedStatus = await OrganisationStatus.findOne({
+      where: { organisationId, key: "completed" },
+    });
+    if (!completedStatus) return;
+
+    const thresholdDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    await UserTask.update(
+      { isArchieved: true },
+      {
+        where: {
+          organisationId,
+          statusId: completedStatus.id,
+          isArchieved: false,
+          updatedAt: { [Op.lt]: thresholdDate },
+        },
+      }
+    );
+  } catch (err) {
+    // fail silently so listings still return
+    console.error("autoArchiveCompletedTasks failed", err.message);
+  }
+};
+
 export const listMyTasks = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);
@@ -38,6 +74,8 @@ export const listMyTasks = async (event) => {
     offset = 0,
   } = JSON.parse(body);
   try {
+    await autoArchiveCompletedTasks(Number(loggedUser.orgId));
+
     const where = {
       userId: Number(loggedUser.userId),
       organisationId: Number(loggedUser.orgId),
@@ -104,6 +142,8 @@ export const listMyTasks = async (event) => {
 };
 
 export const addTaskCategory = async (event) => {
+  const loggedUser = event.context.user;
+  ensureManagerOrOwner(loggedUser);
   const body = await readBody(event);
   const { name, description, parentId, color } = JSON.parse(body);
   if (!name) return error(400, "Name required");
@@ -158,6 +198,7 @@ export const bulkUploadTasks = async (event) => {
 export const assignBulkTasks = async (event) => {
   const body = await readBody(event);
   const loggedUser = event.context.user;
+  ensureManagerOrOwner(loggedUser);
   const organisationId = loggedUser.orgId;
   const { userId, tasks } = JSON.parse(body);
 
@@ -168,6 +209,13 @@ export const assignBulkTasks = async (event) => {
     );
   }
   try {
+    const assigneeLink = await UserOrganisation.findOne({
+      where: { userId, organisationId },
+    });
+    if (!assigneeLink) {
+      return error(403, "Cannot assign users outside your organisation");
+    }
+
     const orgPriorities = await OrganisationPriority.findAll({
       where: { organisationId },
     });
@@ -228,6 +276,7 @@ export const assignBulkTasks = async (event) => {
           frequency: t.defaultFrequency,
           dueDate: getDueDate(t.defaultFrequency),
           comments: "",
+          assignedBy: loggedUser.userId,
         };
       })
       .filter(Boolean);
@@ -376,6 +425,7 @@ export const updateTask = async (event) => {
         const user = await User.findOne({ where: { id: loggedUser.userId } });
         await taskCompletedNotification({
           fullName: user.fullName,
+          email: user.email,
           task: userTask.title,
         });
         if (
@@ -426,6 +476,7 @@ export const updateTask = async (event) => {
 export const viewTeamTasksTaskWise = async (event) => {
   try {
     const loggedUser = event.context.user;
+    ensureManagerOrOwner(loggedUser);
     const organisationId = loggedUser.orgId;
     const userTasks = await UserTask.findAll({
       where: { organisationId },
@@ -498,11 +549,25 @@ export const unAssignTask = async (event) => {
     }
     const isOwner = userTask.userId === loggedUser.userId;
     const isAssigner = userTask.assignedBy === loggedUser.userId;
-    const isOrgAdmin = loggedUser.roleId === 1; // adjust if your admin role differs
-    if (!isOwner && !isAssigner && !isOrgAdmin) {
+    const isPrivileged = isManagerOrOwner(loggedUser.roleId);
+    if (!isOwner && !isAssigner && !isPrivileged) {
       throw createError({ statusCode: 403, message: "Not authorized to delete this task" });
     }
+    const removedByUser = await User.findByPk(loggedUser.userId);
+    const removedUser = await User.findByPk(userTask.userId);
+    const taskTitle = userTask.title || (await Task.findByPk(userTask.taskId))?.title;
+
     await userTask.destroy();
+
+    if (removedUser?.email) {
+      await sendTaskUnassignmentEmail({
+        email: removedUser.email,
+        name: removedUser.fullName,
+        taskTitle: taskTitle || "Task",
+        removedBy: removedByUser?.fullName || "Team",
+      });
+    }
+
     return success("UserTask successfully deleted (unassigned).");
   } catch (err) {
     return error(500, err.message);
@@ -599,7 +664,7 @@ export const unAssignBulkTask = async (event) => {
       (ut) =>
         ut.userId !== loggedUser.userId &&
         ut.assignedBy !== loggedUser.userId &&
-        loggedUser.roleId !== 1 // admin is authorized for now
+        !isManagerOrOwner(loggedUser.roleId) // privileged roles are authorized
     );
     if (unauthorized.length) {
       throw createError({
@@ -607,12 +672,30 @@ export const unAssignBulkTask = async (event) => {
         message: "Not authorized to delete one or more selected tasks",
       });
     }
+    const tasksWithUsers = await UserTask.findAll({
+      where: { id: userTasksIds, organisationId },
+      include: [{ model: User, as: "assignedUser", attributes: ["id", "fullName", "email"] }],
+    });
+
     await UserTask.destroy({
       where: {
         id: userTasksIds,
         organisationId,
       },
     });
+
+    const remover = await User.findByPk(loggedUser.userId);
+    for (const task of tasksWithUsers) {
+      if (task.assignedUser?.email) {
+        await sendTaskUnassignmentEmail({
+          email: task.assignedUser.email,
+          name: task.assignedUser.fullName,
+          taskTitle: task.title || (await Task.findByPk(task.taskId))?.title || "Task",
+          removedBy: remover?.fullName || "Team",
+        });
+      }
+    }
+
     return success("UserTask successfully deleted (unassigned).");
   } catch (err) {
     return error(500, err.message);
@@ -630,6 +713,18 @@ export const addUserTaskComment = async (event) => {
     }
     const userTask = await UserTask.findOne({
       where: { id: userTaskId, organisationId },
+      include: [
+        {
+          model: User,
+          as: "assignedUser",
+          attributes: ["id", "fullName", "email"],
+        },
+        {
+          model: Task,
+          as: "taskDetails",
+          attributes: ["title"],
+        },
+      ],
     });
     if (!userTask) {
       throw createError({ message: "UserTask not found" });
@@ -640,6 +735,17 @@ export const addUserTaskComment = async (event) => {
       organisationId,
       comment,
     });
+
+    // Notify assignee via email
+    if (userTask.assignedUser?.email) {
+      await sendTaskCommentNotificationEmail({
+        email: userTask.assignedUser.email,
+        name: userTask.assignedUser.fullName,
+        taskTitle: userTask.taskDetails?.title || userTask.title || "Task",
+        comment,
+      });
+    }
+
     return success(newComment);
   } catch (err) {
     return error(500, err.message);
@@ -809,13 +915,34 @@ export const createNewTask = async (event) => {
     categoryId,
     defaultFrequency,
     userId,
+    userIds,
     checklist,
     dueDate,
     statusId,
+    priorityId: incomingPriorityId,
   } = JSON.parse(body);
   if (!title || !title.trim() || !categoryId) {
     throw createError({ message: "Task title cannot be empty or only spaces" });
   }
+  const requestedUserIds = Array.isArray(userIds) ? userIds.filter(Boolean) : [];
+  if (userId) {
+    requestedUserIds.push(userId);
+  }
+  const assignUserIds = [...new Set(requestedUserIds)];
+  if (!assignUserIds.length) {
+    assignUserIds.push(loggedUser.userId);
+  }
+
+  // Enforce same-organisation assignees
+  const assigneeLinks = await UserOrganisation.findAll({
+    where: { organisationId: loggedUser.orgId, userId: assignUserIds },
+  });
+  const allowedIds = new Set(assigneeLinks.map((link) => link.userId));
+  const invalidAssignees = assignUserIds.filter((id) => !allowedIds.has(id));
+  if (invalidAssignees.length) {
+    return error(403, "Cannot assign users outside your organisation");
+  }
+
   const transaction = await DB.transaction();
   try {
     const newTask = {
@@ -840,8 +967,6 @@ export const createNewTask = async (event) => {
       }));
       await TaskChecklist.bulkCreate(checklistData, { transaction });
     }
-    // Always assign task - if userId not provided, assign to creator
-    const assignToUserId = userId || loggedUser.userId;
     const orgStatuses = await OrganisationStatus.findAll({
       where: { organisationId: loggedUser.orgId },
     });
@@ -868,14 +993,14 @@ export const createNewTask = async (event) => {
     if (!finalStatusId && orgStatuses.length > 0) {
       finalStatusId = orgStatuses[0].id;
     }
-    let { priorityId } = JSON.parse(await readBody(event))
+    let priorityId = incomingPriorityId;
     if (!priorityId) {
       const orgPriorities = await OrganisationPriority.findAll({ where: { organisationId: loggedUser.orgId }})
       priorityId = orgPriorities.find((x) => x.key === 'medium')?.id
     }
 
-    const newUuserTask = {
-      userId: assignToUserId,
+    const userTasksData = assignUserIds.map((assigneeId) => ({
+      userId: assigneeId,
       organisationId: loggedUser.orgId,
       dueDate: dueDate ? new Date(dueDate) : null,
       taskId: task.id,
@@ -884,35 +1009,49 @@ export const createNewTask = async (event) => {
       frequency: defaultFrequency || null,
       priorityId,
       statusId: finalStatusId,
-      asignedBy: loggedUser.userId,
-    };
-    const userTask = await UserTask.create(newUuserTask, { transaction });
-    
-    // Only send email if task was explicitly assigned to someone else (not auto-assigned to creator)
-    if (userId && userId !== loggedUser.userId) {
-      const user = await User.findByPk(userId);
-      if (user?.email) {
-        await sendTaskAssignmentEmail({
-          email: user.email,
-          name: user.fullName,
-          taskTitle: title,
-        });
+      assignedBy: loggedUser.userId,
+    }));
+
+    const userTasks = await UserTask.bulkCreate(userTasksData, {
+      transaction,
+      returning: true,
+    });
+
+    // Notify all explicit assignees (exclude auto-assigned creator)
+    const assigneeIdsForEmail = assignUserIds.filter((id) => id !== loggedUser.userId);
+    if (assigneeIdsForEmail.length) {
+      const assignees = await User.findAll({ where: { id: assigneeIdsForEmail } });
+      for (const assignee of assignees) {
+        if (assignee?.email) {
+          await sendTaskAssignmentEmail({
+            email: assignee.email,
+            name: assignee.fullName,
+            taskTitle: title,
+          });
+        }
       }
     }
-    
+
     if (checklist?.length) {
-      const checklistData = checklist.map((item) => ({
-        userTaskId: userTask.id,
-        question: item.question,
-        category: item.category,
-        showRadio: item.showRadio, // defaulting these
-        showDate: item.showDate,
-        showTime: item.showTime,
-        fieldOneTitle: item.fieldOneTitle,
-        fieldTwoTitle: item.fieldTwoTitle,
-        radioValue: "N/A",
-      }));
-      await UserTaskChecklist.bulkCreate(checklistData, { transaction });
+      const checklistData = [];
+      userTasks.forEach((userTask) => {
+        checklistData.push(
+          ...checklist.map((item) => ({
+            userTaskId: userTask.id,
+            question: item.question,
+            category: item.category,
+            showRadio: item.showRadio, // defaulting these
+            showDate: item.showDate,
+            showTime: item.showTime,
+            fieldOneTitle: item.fieldOneTitle,
+            fieldTwoTitle: item.fieldTwoTitle,
+            radioValue: "N/A",
+          }))
+        );
+      });
+      if (checklistData.length) {
+        await UserTaskChecklist.bulkCreate(checklistData, { transaction });
+      }
     }
     await transaction.commit();
     return success("Task Added");
@@ -1029,6 +1168,20 @@ export const uploadBulkTasks = async (event) => {
     const tasksWithUsers = validTasks.filter(t => t.userId);
 
     if (tasksWithUsers.length > 0) {
+      // Enforce same-organisation assignees
+      const targetUserIds = [...new Set(tasksWithUsers.map((t) => t.userId).filter(Boolean))];
+      const userOrgLinks = await UserOrganisation.findAll({
+        where: { organisationId: loggedUser.orgId, userId: targetUserIds },
+      });
+      const allowedIds = new Set(userOrgLinks.map((link) => link.userId));
+      const invalidAssignees = targetUserIds.filter((id) => !allowedIds.has(id));
+      if (invalidAssignees.length) {
+        throw createError({
+          statusCode: 403,
+          message: "Cannot assign users outside your organisation",
+        });
+      }
+
       // Get organization statuses once
       const orgStatuses = await OrganisationStatus.findAll({
         where: { organisationId: loggedUser.orgId },
@@ -1048,7 +1201,7 @@ export const uploadBulkTasks = async (event) => {
           frequency: t.defaultFrequency,
           priorityId: t.priorityId,
           statusId: progressStatusId,
-          asignedBy: loggedUser.userId,
+          assignedBy: loggedUser.userId,
         };
       });
 
@@ -1134,6 +1287,7 @@ export const uploadBulkTasks = async (event) => {
 
 export const teamTasksCounts = async (event) => {
   const loggedUser = event.context.user;
+  ensureManagerOrOwner(loggedUser);
   const organisationId = Number(loggedUser.orgId);
   try {
     if (!organisationId) {
@@ -1295,6 +1449,7 @@ export const deleteUserTaskChecklist = async (event) => {
 
 export const groupTeamTasksByTaskId = async (event) => {
   const organisationId = event.context.user.orgId;
+  ensureManagerOrOwner(event.context.user);
   const body = await readBody(event);
   const { categoryId, frequency, priority, user } = JSON.parse(body);
   
@@ -1862,6 +2017,7 @@ export const myTasksCountByCategory = async (event) => {
 export const teamTasksCountByCategory = async (event) => {
   try {
     const loggedUser = event.context.user;
+    ensureManagerOrOwner(loggedUser);
     
     const allCategories = await TaskCategory.findAll({
       where: { isDeleted: false },
@@ -1963,6 +2119,8 @@ export const getUserTasksStatusWise = async (event) => {
   const body = await readBody(event);
   const { categoryId, frequency, priority } = JSON.parse(body);
   try {
+    await autoArchiveCompletedTasks(Number(loggedUser.orgId));
+
     const categories = await TaskCategory.findAll({
       where: {
         [Op.or]: [{ id: categoryId }, { parentId: categoryId }],
@@ -2084,8 +2242,10 @@ export const getGeneralTasksByCategory = async (event) => {
 export const getTeamTaskStatsByStatusAndCategory = async (event) => {
   try {
     const loggedUser = event.context.user;
+    ensureManagerOrOwner(loggedUser);
     const organisationId = Number(loggedUser.orgId);
     
+    await autoArchiveCompletedTasks(organisationId);
   
     const query = getQuery(event) || {};
     let categoryId = query.categoryId ? Number(query.categoryId) : null;

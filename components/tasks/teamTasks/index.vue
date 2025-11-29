@@ -77,13 +77,24 @@
               <p class="ml-3 mt-1">Items Selected</p>
             </div>
 
-            <div
-              class="action-item d-flex flex-column align-center"
-              @click="handleDelete"
-            >
-              <v-icon size="24">mdi-delete-outline</v-icon>
-              <span class="action-label">Delete</span>
-            </div>
+            <div class="actions-container d-flex align-center" :style="{ gap: xs ? '4px' : '8px' }">
+              <!-- Quick Status Actions -->
+              <div
+                v-for="action in quickStatusActions"
+                :key="action.key"
+                class="action-item d-flex flex-column align-center"
+                :class="{
+                  disabled: !selectedRowItems.length || !findStatusByKey(action.key),
+                }"
+                @click="handleQuickStatus(action.key)"
+              >
+                <v-icon :color="action.color" size="20">
+                  {{ action.icon }}
+                </v-icon>
+                <span class="action-label" :style="{ color: action.color }">
+                  {{ action.label }}
+                </span>
+              </div>
 
             <div
               v-if="!hasArchivedTasks"
@@ -120,17 +131,37 @@
               <span class="action-label">Exporttell</span>
             </div>
 
+            <div
+                class="action-item d-flex flex-column align-center"
+                @click="handleDelete"
+              >
+                <v-icon size="20" color="#6d6d6d">mdi-delete-outline</v-icon>
+                <span class="action-label">Delete</span>
+              </div>
+
             <!-- Divider before close -->
             <v-divider vertical class="ml-4" />
 
-            <!-- Close Icon -->
-            <div
-              class="action-item d-flex flex-column align-center"
-              @click="hideTray()"
-            >
-              <v-icon size="24">mdi-close</v-icon>
+              <!-- Close Button -->
+              <div
+                class="action-item d-flex flex-column align-center"
+                @click="hideTray()"
+              >
+                <v-icon size="20" color="#6d6d6d">mdi-close</v-icon>
+                <span class="action-label">Close</span>
+              </div>
             </div>
           </v-card>
+          <RecommendPracticeDialog v-model="recommendDialog" />
+          <CommonConfirmDialog
+            v-model="showDeleteConfirm"
+            title="Delete tasks?"
+            message="Are you sure you want to delete the selected tasks?"
+            confirm-text="Delete"
+            :loading="deleteLoading"
+            @confirm="confirmDelete"
+            @cancel="cancelDelete"
+          />
         </v-tabs-window-item>
       </v-tabs-window>
       <CommonAddCategorySideBar
@@ -167,6 +198,9 @@ const taskStats = ref([]);
 const user = ref(null);
 const userList = ref([]);
 const isTrayHidden = ref(false);
+const recommendDialog = ref(false);
+const showDeleteConfirm = ref(false);
+const deleteLoading = ref(false);
 onMounted(() => {
   user.value = JSON.parse(localStorage.getItem("user"));
   if (user && user.preferences) {
@@ -201,6 +235,8 @@ const getIcon = (categoryName) => {
 const availableHeaders = computed(() => {
   return mainStore.getTeamTaskAllHeaders;
 });
+const selectedStatusId = ref(null);
+const statusUpdateLoading = ref(false);
 const getCategories = () => {
   taskStore.listCategories().then((res) => {
     if (res.code === 0) {
@@ -211,9 +247,117 @@ const getCategories = () => {
 const hideTray = () => {
   selectedRowItems.value = [];
   isTrayHidden.value = true;
+  selectedStatusId.value = null;
 };
 const addNewCategoryDialog = () => {
   addCategoryDialog.value = true;
+};
+const quickStatusActions = computed(() => [
+  { key: "todo", label: "To Do", icon: "mdi-calendar-check", color: "#e15b64" },
+  { key: "progress", label: "In Progress", icon: "mdi-timer-sand", color: "#f6a609" },
+  { key: "upcoming", label: "Upcoming", icon: "mdi-calendar-clock", color: "#5d87ff" },
+]);
+const findStatusByKey = (key) => taskStatuses.value.find((s) => s.key === key);
+
+const handleStatusUpdate = async (statusId) => {
+  if (!statusId) return;
+  if (!selectedRowItems.value.length) {
+    mainStore.setSnackbar({
+      title: "Select at least one task first.",
+      type: "warning",
+    });
+    selectedStatusId.value = null;
+    return;
+  }
+
+  const status = taskStatuses.value.find((s) => s.id === statusId);
+  if (!status) {
+    mainStore.setSnackbar({
+      title: "Selected status not found.",
+      type: "error",
+    });
+    return;
+  }
+
+  statusUpdateLoading.value = true;
+  try {
+    const updates = selectedRowItems.value.flatMap((item) => {
+      const baseTaskId = item.taskId || item.id || item.taskDetails?.id;
+      if (Array.isArray(item.assignedUsers) && item.assignedUsers.length) {
+        return item.assignedUsers
+          .filter((au) => au.userTaskId)
+          .map((au) => ({
+            id: au.userTaskId,
+            taskId: baseTaskId,
+            statusId,
+          }));
+      }
+      if (item.userTaskId || item.id) {
+        return [
+          {
+            id: item.userTaskId || item.id,
+            taskId: baseTaskId,
+            statusId,
+          },
+        ];
+      }
+      return [];
+    });
+
+    if (!updates.length) {
+      mainStore.setSnackbar({
+        title: "Unable to update status for selected tasks.",
+        type: "error",
+      });
+      return;
+    }
+
+    const results = await Promise.all(
+      updates.map((payload) => taskStore.updateUserTask(payload))
+    );
+
+    const allSucceeded = results.every((res) => res.code === 0);
+    if (allSucceeded) {
+      updateTasksList();
+      hideTray();
+      mainStore.setSnackbar({
+        title: "Task status updated successfully.",
+        type: "success",
+      });
+    } else {
+      mainStore.setSnackbar({
+        title: "Some tasks failed to update. Please try again.",
+        type: "error",
+      });
+    }
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: err.message || "Status update failed",
+      type: "error",
+    });
+  } finally {
+    statusUpdateLoading.value = false;
+  }
+};
+
+const handleQuickStatus = (statusKey) => {
+  if (!selectedRowItems.value.length) {
+    mainStore.setSnackbar({
+      title: "Select at least one task first.",
+      type: "warning",
+    });
+    return;
+  }
+  const status = findStatusByKey(statusKey);
+  if (!status) {
+    mainStore.setSnackbar({
+      title: "Status not available for this organisation.",
+      type: "error",
+    });
+    return;
+  }
+  selectedStatusId.value = status.id;
+  handleStatusUpdate(status.id);
 };
 
 const handleCategoryDialogClose = () => {
@@ -361,6 +505,20 @@ const updateSelectedRowItems = (items) => {
   isTrayHidden.value = false;
   selectedRowItems.value = items;
 };
+watch(
+  selectedRowItems,
+  (items) => {
+    if (!items.length) {
+      selectedStatusId.value = null;
+      return;
+    }
+    const uniqueStatusIds = [
+      ...new Set(items.map((item) => item.statusId || item.status?.id)),
+    ];
+    selectedStatusId.value = uniqueStatusIds.length === 1 ? uniqueStatusIds[0] : null;
+  },
+  { deep: true }
+);
 const getAllUserTaskIds = (tasks) => {
   return tasks.flatMap((task) =>
     task.assignedUsers.map((user) => user.userTaskId)
@@ -374,6 +532,11 @@ const handleDelete = async () => {
     });
     return;
   }
+  showDeleteConfirm.value = true;
+};
+
+const confirmDelete = async () => {
+  deleteLoading.value = true;
   const ids = getAllUserTaskIds(selectedRowItems.value);
   try {
     const res = await taskStore.unAssignBulkTasks({
@@ -382,6 +545,8 @@ const handleDelete = async () => {
 
     if (res.code === 0) {
       updateTasksList();
+      hideTray();
+      recommendDialog.value = true;
 
       mainStore.setSnackbar({
         title: selectedRowItems.value.length === 1 ? "Task deleted successfully." : "Tasks deleted successfully.",
@@ -445,12 +610,9 @@ const handleArchive = async () => {
         type: "error",
       });
     }
-  } catch (err) {
-    mainStore.setSnackbar({
-      title:
-        err.message || "An unexpected error occurred. Please try again later.",
-      type: "error",
-    });
+  } finally {
+    deleteLoading.value = false;
+    showDeleteConfirm.value = false;
   }
 };
 
@@ -578,6 +740,9 @@ const handleExportCSV = () => {
     title: `${selectedRowItems.value.length} task(s) exported successfully`,
     type: "success",
   });
+}
+const cancelDelete = () => {
+  showDeleteConfirm.value = false;
 };
 
 const handleComplete = async () => {

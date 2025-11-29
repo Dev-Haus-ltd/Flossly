@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import { OrganisationStatus, UserTask } from "../models/index.js";
+import { OrganisationStatus, UserTask, User, Task } from "../models/index.js";
 
 const frequencyMap = {
   Daily: "0 0 * * *", // every day at midnight
@@ -292,6 +292,7 @@ export const startLeadAutomationScheduler = () => {
 };
 
 import { Op } from 'sequelize'
+import { sendTaskDueReminderEmail } from './emailNotifications.js'
 
 export const startTaskOverDueScheduler = () => {
   // Run every night at 12 AM (server time)
@@ -339,3 +340,51 @@ export const startTaskOverDueScheduler = () => {
 };
 
 
+export const startTaskDueReminderScheduler = () => {
+  // Run every night at 12 AM server time (same as overdue scheduler window)
+  cron.schedule("0 0 * * *", async () => {
+    try {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const startOfTomorrow = new Date(tomorrow);
+      startOfTomorrow.setHours(0, 0, 0, 0);
+      const endOfTomorrow = new Date(tomorrow);
+      endOfTomorrow.setHours(23, 59, 59, 999);
+
+      const dueTomorrowTasks = await UserTask.findAll({
+        where: {
+          dueDate: { [Op.between]: [startOfTomorrow, endOfTomorrow] },
+        },
+        include: [
+          {
+            model: User,
+            as: "assignedUser",
+            attributes: ["id", "fullName", "email"],
+          },
+          {
+            model: Task,
+            as: "taskDetails",
+            attributes: ["title"],
+          },
+        ],
+      });
+
+      for (const ut of dueTomorrowTasks) {
+        const assignee = ut.assignedUser;
+        if (assignee?.email) {
+          const formattedDue = ut.dueDate
+            ? new Date(ut.dueDate).toLocaleDateString("en-GB")
+            : "";
+          await sendTaskDueReminderEmail({
+            email: assignee.email,
+            name: assignee.fullName,
+            taskTitle: ut.taskDetails?.title || ut.title || "Task",
+            dueDate: formattedDue,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Error in due reminder scheduler:", err);
+    }
+  });
+};

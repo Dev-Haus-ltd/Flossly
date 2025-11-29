@@ -142,9 +142,9 @@
               </v-col>
 
               <v-col cols="6">
-                <label class="fld-lbl">Assign to Team Member</label>
+                <label class="fld-lbl">Assign to Team Members</label>
                 <v-select
-                  v-model="form.userId"
+                  v-model="form.userIds"
                   :items="userList"
                   item-title="fullName"
                   item-value="id"
@@ -154,6 +154,10 @@
                   bg-color="white"
                   flat
                   clearable
+                  multiple
+                  chips
+                  closable-chips
+                  hide-selected
                 />
               </v-col>
 
@@ -356,7 +360,7 @@ const form = ref({
   categoryId: null,
   dueDate: "",
   roleId: null,
-  userId: null,
+  userIds: [],
   defaultFrequency: "",
   priorityId: null,
   statusId: null,
@@ -430,29 +434,21 @@ watch(
 // Watch only roleId to filter userList, not the entire form
 watch(
   () => form.value.roleId,
-  (newRoleId, oldRoleId) => {
+  (newRoleId) => {
+    const activeUsers = users.value.filter((x) => x.status === "Active");
     if (newRoleId) {
-      const filteredUsers = users.value.filter(
-        (x) => x.roleId === newRoleId && x.status === "Active"
-      );
+      const filteredUsers = activeUsers.filter((x) => x.roleId === newRoleId);
       userList.value = filteredUsers;
-
-      // If the currently selected userId is not in the filtered list, clear it
-      if (form.value.userId) {
-        const userStillValid = filteredUsers.some(
-          (u) => u.id === form.value.userId
-        );
-        if (!userStillValid) {
-          form.value.userId = null;
-        }
-      }
+      form.value.userIds = form.value.userIds.filter((id) =>
+        filteredUsers.some((u) => u.id === id)
+      );
     } else {
       // If no role is selected, show all active users
-      userList.value = users.value.filter((x) => x.status === "Active");
-      // Clear userId if role is cleared
-      if (oldRoleId && form.value.userId) {
-        form.value.userId = null;
-      }
+      userList.value = activeUsers;
+      // Keep only active users when the role filter is cleared
+      form.value.userIds = form.value.userIds.filter((id) =>
+        activeUsers.some((u) => u.id === id)
+      );
     }
   }
 );
@@ -532,7 +528,11 @@ const getUsers = () => {
       users.value = res.data;
       // Initialize userList with all active users if no role is selected
       if (!form.value.roleId) {
-        userList.value = res.data.filter((x) => x.status === "Active");
+        const activeUsers = res.data.filter((x) => x.status === "Active");
+        userList.value = activeUsers;
+        form.value.userIds = form.value.userIds.filter((id) =>
+          activeUsers.some((u) => u.id === id)
+        );
       }
     }
   });
@@ -639,15 +639,19 @@ const onDateSelected = (val) => {
 const onSubmit = async () => {
   const formValidation = await formRef.value.validate();
   if (formValidation.valid) {
-    const unfilledChecklist = form.value.checklist.findIndex((x) => !x.question);
-    if (unfilledChecklist >= 0) {
-      form.value.checklist.splice(unfilledChecklist, 1);
-    }
-    if (form.value.defaultFrequency === "One off") {
-      form.value.defaultFrequency = ""
-    }
+    const filteredChecklist = form.value.checklist.filter((x) => x.question);
+    const uniqueUserIds = [...new Set((form.value.userIds || []).filter(Boolean))];
+    const payload = {
+      ...form.value,
+      userIds: uniqueUserIds,
+      userId: uniqueUserIds.length === 1 ? uniqueUserIds[0] : null, // backward compatibility
+      checklist: filteredChecklist,
+      defaultFrequency:
+        form.value.defaultFrequency === "One off" ? "" : form.value.defaultFrequency,
+    };
+
     taskStore
-      .addNewTask(form.value)
+      .addNewTask(payload)
       .then((res) => {
         if (res.code === 0) {
           emit("update:modelValue", false);
@@ -680,7 +684,7 @@ const resetForm = () => {
     categoryId: null,
     dueDate: "",
     roleId: null,
-    userId: null,
+    userIds: [],
     defaultFrequency: "",
     priorityId: null,
     statusId: null,

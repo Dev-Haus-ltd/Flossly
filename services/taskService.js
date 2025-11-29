@@ -240,9 +240,9 @@ export default {
         .catch((err) => reject(err));
     });
   },
-  addAttachments(data) {
+  addAttachments(data, options = {}) {
     return new Promise((resolve, reject) => {
-      PostFormData("/tasks/addAttachments", data)
+      PostFormData("/tasks/addAttachments", data, options.onProgress)
         .then((res) => {
           resolve(res);
         })
