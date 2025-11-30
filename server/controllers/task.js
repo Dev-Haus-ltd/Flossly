@@ -281,7 +281,7 @@ export const assignBulkTasks = async (event) => {
           userId,
           organisationId,
           taskId: t.id,
-          statusId: orgStatuses.find((x) => x.key === "upcoming").id,
+          statusId: orgStatuses.find((x) => x.key === "todo").id,
           priorityId: orgPriorities.find((x) => x.key === "low").id,
           title: t.title,
           documentLink: "",
@@ -1582,35 +1582,49 @@ export const groupTeamTasksByTaskId = async (event) => {
     });
 
     // Separate archived and non-archived tasks
+    // Separate archived and non-archived tasks
     const archivedTasks = [];
     const nonArchivedTasks = [];
 
     for (const ut of userTasks) {
-      if (ut.isArchieved) {
-        archivedTasks.push(ut);
-      } else {
-        nonArchivedTasks.push(ut);
-      }
+      if (ut.isArchieved) archivedTasks.push(ut);
+      else nonArchivedTasks.push(ut);
     }
 
-    const response = [];
+    // Fetch ALL statuses for organisation
+    const orgStatuses = await OrganisationStatus.findAll({
+      where: { organisationId },
+      attributes: ["id", "key", "name", "color"],
+    });
+
+    // Prepare response object with ALL statuses (empty initially)
+    const response = {};
+
+    orgStatuses.forEach((st) => {
+      response[st.key] = {
+        status: st.key,
+        tasks: [],
+      };
+    });
+
+    // Fill non-archived tasks into respective statuses
     for (const ut of nonArchivedTasks) {
-      const status = ut.status?.key || "unknown";
-      if (!response[status]) {
-        response[status] = [];
-      }
-      response[status].push(ut);
-    }
-    const data = Object.entries(response).map(([status, tasks]) => ({
-      status,
-      tasks,
-    }));
+      const statusKey = ut.status?.key || "unknown";
 
-    data.forEach((el) => {
+      if (!response[statusKey]) {
+        response[statusKey] = { status: statusKey, tasks: [] };
+      }
+
+      response[statusKey].tasks.push(ut);
+    }
+
+    // Convert grouped tasks: group tasks by taskId inside each status
+    Object.values(response).forEach((group) => {
       const grouped = {};
 
-      el.tasks.forEach((taskEntry) => {
+      group.tasks.forEach((taskEntry) => {
         const taskId = taskEntry.taskId;
+
         if (!grouped[taskId]) {
           grouped[taskId] = {
             taskId,
@@ -1619,7 +1633,7 @@ export const groupTeamTasksByTaskId = async (event) => {
             description: taskEntry.taskDetails?.description,
             frequency: taskEntry.frequency,
             categoryId: taskEntry.taskDetails?.categoryId,
-            category: taskEntry.taskDetails.category,
+            category: taskEntry.taskDetails?.category,
             priorityId: taskEntry.priorityId,
             status: taskEntry.status,
             statusId: taskEntry.statusId,
@@ -1635,79 +1649,73 @@ export const groupTeamTasksByTaskId = async (event) => {
           };
         }
 
-        // Check if user is already in the assignedUsers array to avoid duplicates
         const userId = taskEntry.assignedUser?.id;
-        if (
-          userId &&
-          !grouped[taskId].assignedUsers.some((u) => u.id === userId)
-        ) {
+        if (userId && !grouped[taskId].assignedUsers.some((u) => u.id === userId)) {
           grouped[taskId].assignedUsers.push({
-            id: taskEntry.assignedUser?.id,
-            fullName: taskEntry.assignedUser?.fullName,
-            email: taskEntry.assignedUser?.email,
-            photo: taskEntry.assignedUser?.photo,
+            id: taskEntry.assignedUser.id,
+            fullName: taskEntry.assignedUser.fullName,
+            email: taskEntry.assignedUser.email,
+            photo: taskEntry.assignedUser.photo,
             status: taskEntry.status,
             userTaskId: taskEntry.id,
           });
         }
       });
-      el.tasks = Object.values(grouped);
+
+      group.tasks = Object.values(grouped);
     });
 
-    // Process archived tasks separately
-    if (archivedTasks.length > 0) {
-      const archivedGrouped = {};
+    // Add archived tasks as separate group ALWAYS
+    const archivedGrouped = {};
 
-      archivedTasks.forEach((taskEntry) => {
-        const taskId = taskEntry.taskId;
-        if (!archivedGrouped[taskId]) {
-          archivedGrouped[taskId] = {
-            taskId,
-            id: taskEntry.id,
-            title: taskEntry.title,
-            description: taskEntry.taskDetails?.description,
-            frequency: taskEntry.frequency,
-            categoryId: taskEntry.taskDetails?.categoryId,
-            category: taskEntry.taskDetails.category,
-            priorityId: taskEntry.priorityId,
-            status: taskEntry.status,
-            statusId: taskEntry.statusId,
-            priority: taskEntry.priority,
-            comments: taskEntry.comments,
-            dueDate: taskEntry.dueDate,
-            createdAt: taskEntry.createdAt,
-            updatedAt: taskEntry.updatedAt,
-            taskDetails: taskEntry.taskDetails,
-            attachments: taskEntry.attachments,
-            isArchieved: taskEntry.isArchieved,
-            assignedUsers: [],
-          };
-        }
+    archivedTasks.forEach((taskEntry) => {
+      const taskId = taskEntry.taskId;
 
-        // Check if user is already in the assignedUsers array to avoid duplicates
-        const userId = taskEntry.assignedUser?.id;
-        if (
-          userId &&
-          !archivedGrouped[taskId].assignedUsers.some((u) => u.id === userId)
-        ) {
-          archivedGrouped[taskId].assignedUsers.push({
-            id: taskEntry.assignedUser?.id,
-            fullName: taskEntry.assignedUser?.fullName,
-            email: taskEntry.assignedUser?.email,
-            photo: taskEntry.assignedUser?.photo,
-            status: taskEntry.status,
-            userTaskId: taskEntry.id,
-          });
-        }
-      });
+      if (!archivedGrouped[taskId]) {
+        archivedGrouped[taskId] = {
+          taskId,
+          id: taskEntry.id,
+          title: taskEntry.title,
+          description: taskEntry.taskDetails?.description,
+          frequency: taskEntry.frequency,
+          categoryId: taskEntry.taskDetails?.categoryId,
+          category: taskEntry.taskDetails?.category,
+          priorityId: taskEntry.priorityId,
+          status: taskEntry.status,
+          statusId: taskEntry.statusId,
+          priority: taskEntry.priority,
+          comments: taskEntry.comments,
+          dueDate: taskEntry.dueDate,
+          createdAt: taskEntry.createdAt,
+          updatedAt: taskEntry.updatedAt,
+          taskDetails: taskEntry.taskDetails,
+          attachments: taskEntry.attachments,
+          isArchieved: taskEntry.isArchieved,
+          assignedUsers: [],
+        };
+      }
 
-      data.push({
-        status: "archived",
-        tasks: Object.values(archivedGrouped),
-      });
-    }
+      const userId = taskEntry.assignedUser?.id;
+      if (userId && !archivedGrouped[taskId].assignedUsers.some((u) => u.id === userId)) {
+        archivedGrouped[taskId].assignedUsers.push({
+          id: taskEntry.assignedUser.id,
+          fullName: taskEntry.assignedUser.fullName,
+          email: taskEntry.assignedUser.email,
+          photo: taskEntry.assignedUser.photo,
+          status: taskEntry.status,
+          userTaskId: taskEntry.id,
+        });
+      }
+    });
 
-    return success(data);
+    // Always include archived section
+    response["archived"] = {
+      status: "archived",
+      tasks: Object.values(archivedGrouped),
+    };
+
+    return success(Object.values(response));
+
   } catch (err) {
     return error(500, err.message);
   }

@@ -2,8 +2,6 @@
 email: hamza@dev-haus.co.uk
 Password: #Hamza98765##
 
-Tasks for local users role based - done
-If user create task. don't add to task pool (private tasks). - done
-Categories to be used within the practice. - done
-show 4 categories cards on any condition. - done
-show all status tables even no data - done
+Staff and Users Onboarding and task assignment related issues.
+Remove data users orgs etc from DB
+option to edit category

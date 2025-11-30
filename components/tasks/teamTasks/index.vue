@@ -374,9 +374,7 @@ const getTeamStats = () => {
   taskStore.getTeamTaskStatsByCategory().then((res) => {
     if (res.code === 0) {
       if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-        // Filter out categories with 0 tasks
-        const filteredData = res.data.filter(cat => cat.taskCount > 0);
-        
+        const filteredData = res.data
         if (filteredData.length > 0) {
           if (!currentTab.value) {
             currentTab.value = filteredData[0].categoryId;
@@ -490,8 +488,6 @@ const getTeamTasks = (categoryId) => {
               return !isAssignedToMe;
             })
           }))
-          .filter(group => group.tasks && group.tasks.length > 0); // Filter out status groups with 0 tasks
-        
         taskDetails.value = sortByCustomStatus(filteredData);
       }
     })
