@@ -82,6 +82,14 @@ const redeem = () => {
     deliveryAddress: deliveryAddress.value,
     postalCode: postalCode.value,
   });
+  // Use global snackbar instead of alert
+  try {
+    const store = useMainStore && useMainStore();
+    if (store && store.setSnackbar) {
+      store.setSnackbar({ title: 'Redeem request submitted', type: 'success' });
+      return;
+    }
+  } catch (e) {}
   alert("Redeem request submitted ✅");
 };
 
@@ -127,7 +135,7 @@ const handleRedeem = (id) => {
 
 <style scoped>
 .head {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-style: SemiBold;
   font-size: 16px;
@@ -140,14 +148,14 @@ const handleRedeem = (id) => {
 }
 
 .card-title {
-  font-family: Poppins;
+  
   font-weight: 600;
   font-size: 16px;
   color: #1e1e1e;
 }
 
 .card-detail {
-  font-family: Poppins;
+  
   font-size: 14px;
   color: #737373;
 }
@@ -158,11 +166,11 @@ const handleRedeem = (id) => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 
 .field-label {
-  font-family: "Poppins", sans-serif;
+  
   font-size: 13px;
   font-weight: 500;
   color: #1e1e1e;

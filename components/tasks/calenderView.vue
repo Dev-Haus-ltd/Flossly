@@ -1,71 +1,87 @@
 <template>
-  <v-card
-    :elevation="0"
-    class="rounded-lg border-sm"
-  >
+  <v-card :elevation="0" class="rounded-lg border-sm">
+    <v-sheet height="64">
+      <v-toolbar class="px-7" flat style="background-color: #fff">
+        <v-btn
+          class="mr-4"
+          color="grey-darken-2"
+          variant="outlined"
+          @click="setToday"
+        >
+          Today
+        </v-btn>
+        <v-btn
+          color="grey-darken-2"
+          size="small"
+          variant="text"
+          icon
+          @click="prev"
+        >
+          <v-icon size="small"> mdi-chevron-left </v-icon>
+        </v-btn>
+        <v-btn
+          color="grey-darken-2"
+          size="small"
+          variant="text"
+          icon
+          @click="next"
+        >
+          <v-icon size="small"> mdi-chevron-right </v-icon>
+        </v-btn>
+        <v-toolbar-title v-if="calender" :class="xs ? 'text-caption' : 'text-body-1'">
+          {{ calender.title }}
+        </v-toolbar-title>
+      </v-toolbar>
+    </v-sheet>
     <v-calendar
-      v-model="calender"
+      ref="calender"
+      v-model="focus"
+      :event-color="getEventColor"
+      event-overlap-mode="column"
+      :event-overlap-threshold="1"
+      :event-more="false"
       :events="tasks"
-      hide-week-number
-      color="primary"
       type="month"
       class="team-holidays-calender"
     >
-      <template v-slot:day-body="{ events }">
-      <div class="day-cell">
-        <!-- Show max 3 events -->
-        <div class="tooltip-wrapper" v-for="(event, index) in limitedEvents(events)"
-        :key="index">
-          <div
-            @click="openTaskDetails(event)"
-            class="d-flex align-center px-1 mb-1"
-            :style="{
-              border: '1px solid',
-              borderLeft: '4px solid',
-              borderRadius: '4px',
-              width: '95%',
-              margin: 'auto',
-              cursor: 'pointer',
-              borderColor: event.color,
-            }"
-            v-bind="tooltipProps"
-          >
-            <p style="font-size: 10px">{{ event.title }}</p>
-          </div>
-          <div class="tooltip-content">
-            <v-card class="rounded-lg pa-4" width="200">
-              <div class="d-flex flex-column">
-                <h4>{{ "Task: " + event.title }}</h4>
-                <p>Assigned To:</p>
-                <CommonAvatar
-                  v-for="(user, index) in event.assignedUsers"
-                  :user="user"
-                  :key="index"
-                  :size="24"
-                />
-                <p :style="{ color: event.status.color }">
-                  {{ "Status: " + event.status.name }}
-                </p>
-                <p :style="{ color: event.priority.color }">
-                  {{ "Priority: " + event.priority.name }}
-                </p>
-              </div>
-            </v-card>
-          </div>
-        </div>
+      <template v-slot:event="{ event }">
+        <v-menu open-on-hover location="right">
+          <template v-slot:activator="{ props }">
+            <div
+              v-bind="props"
+              @click="openTaskDetails(event)"
+              class="d-flex align-center px-1 mb-1"
+              :style="{
+                border: '1px solid',
+                borderLeft: '4px solid',
+                borderRadius: '4px',
+                width: '95%',
+                margin: 'auto',
+                cursor: 'pointer',
+                borderColor: event.color,
+              }"
+            >
+              <p style="font-size: 10px; overflow: hidden">{{ event.title }}</p>
+            </div>
+          </template>
 
-        <!-- "+X others" -->
-        <div
-          v-if="extraEventsCount(events) > 0"
-          class="more-chip"
-          @click="openEventList(events)"
-        >
-         <span class="more-tasks-label"> +{{ extraEventsCount(events) }} others</span>
-        </div>
-      </div>
-    </template>
-      <template v-slot:day-title="{ title }">
-        <span style="font-size: 12px">{{ title }}</span>
+          <v-card class="rounded-lg pa-4" width="200">
+            <h4>{{ "Task: " + event.title }}</h4>
+            <p>Assigned To:</p>
+            <CommonAvatar
+              v-for="(user, index) in event.assignedUsers"
+              :user="user"
+              :key="index"
+              :size="24"
+            />
+            <p :style="{ color: event.status.color }">
+              {{ "Status: " + event.status.name }}
+            </p>
+            <p :style="{ color: event.priority.color }">
+              {{ "Priority: " + event.priority.name }}
+            </p>
+          </v-card>
+        </v-menu>
       </template>
     </v-calendar>
     <TasksTaskDetailsDialog
@@ -77,28 +93,48 @@
 </template>
 
 <script setup>
+import { useDisplay } from 'vuetify'
+
+const { xs } = useDisplay()
 const emit = defineEmits(["onOpen"]);
 const detailsDialog = ref(false);
 const selectedItem = ref(null);
-const calender = ref(null)
+const calender = ref(null);
+const focus = ref("");
 const { tasks } = defineProps({
   tasks: Array,
 });
+const showingAllTasks = ref(false);
 
 const openTaskDetails = (task) => {
   detailsDialog.value = true;
   selectedItem.value = task;
 };
-
-const limitedEvents = (events) => {
-  console.log(events)
-  return events?.slice(0, 3) || []
+function setToday() {
+  focus.value = "";
 }
+const prev = () => {
+  calender.value.prev();
+};
+const next = () => {
+  calender.value.next();
+};
+const toggleAllTasks = () => {
+  showingAllTasks.value = !showingAllTasks.value;
+};
+const limitedEvents = (events) => {
+  if (showingAllTasks.value) return events;
+  else return events?.slice(0, 3) || [];
+};
 
 const extraEventsCount = (events) => {
-  const total = events?.length || 0
-  return total > 3 ? total - 3 : 0
-}
+  const total = events?.length || 0;
+  return total > 3 ? total - 3 : 0;
+};
+
+const getEventColor = (event) => {
+  return "#ffffff";
+};
 </script>
 <style lang="scss" scoped>
 .tooltip-wrapper {

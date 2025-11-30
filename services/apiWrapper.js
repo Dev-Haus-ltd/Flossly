@@ -10,10 +10,16 @@ export const Get = async (url) => {
 export const Post = async (url, body) => {
   const args = {
     method: "POST",
-    body: JSON.stringify(body),
+        body: JSON.stringify(body),
   };
   const response = await fetch(APIURL + url, args);
-  return response.json();
+  const data = await response.json();
+  
+  if (!response.ok) {
+    throw data;
+  }
+  
+  return data;
 };
 // 
 export const Delete = async (url, itemId) => {
@@ -24,12 +30,39 @@ export const Delete = async (url, itemId) => {
   const response = await fetch(APIURL + url, args);
   return response.json();
 };
-// post form data using fetch
-export const PostFormData = async (url, body) => {
-  const args = {
-    method: "POST",
-    body: body,
-  };
-  const response = await fetch(APIURL + url, args);
-  return response.json();
+// post form data with optional upload progress support
+export const PostFormData = (url, body, onProgress) => {
+  // If no progress callback provided, fall back to fetch
+  if (!onProgress) {
+    return fetch(APIURL + url, {
+      method: "POST",
+      body,
+    }).then((response) => response.json());
+  }
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", APIURL + url);
+
+    if (xhr.upload && typeof onProgress === "function") {
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percent = Math.round((event.loaded / event.total) * 100);
+          onProgress(percent);
+        }
+      };
+    }
+
+    xhr.onload = () => {
+      try {
+        const data = JSON.parse(xhr.responseText || "{}");
+        resolve(data);
+      } catch (err) {
+        resolve({ error: true, message: "Invalid server response" });
+      }
+    };
+
+    xhr.onerror = () => reject(new Error("Network error while uploading"));
+    xhr.send(body);
+  });
 };

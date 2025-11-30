@@ -2,7 +2,7 @@
   <v-dialog :model-value="props.modelValue" max-width="1500px" persistent>
     <v-card class="d-flex flex-column rounded-xl" style="min-height: 75vh">
       <!-- Header -->
-      <div class="pa-4 d-flex justify-space-between align-center bg-white">
+      <div class="pa-4 d-flex justify-space-between align-center">
         <h3 class="title m-0">Task pool</h3>
         <div class="d-flex align-center">
           <v-btn flat icon size="32" class="ml-2" @click="$emit('close')">
@@ -14,7 +14,7 @@
       <!-- Content -->
       <div
         class="flex-grow-1 px-4 py-2"
-        style="overflow-y: auto; background-color: #f9f9f9"
+        style="overflow-y: auto;"
       >
         <v-tabs v-model="tab" class="custom-tabs px-4" slider-color="primary">
           <v-tab
@@ -29,83 +29,117 @@
 
         <v-tabs-window v-model="tab">
           <v-tabs-window-item :value="tab">
-            <v-row v-if="subCategoryView" class="ma-5" align="stretch">
-              <v-col
-                v-for="(card, index) in subCategories"
-                :key="index"
-                cols="12"
-                sm="6"
-                md="3"
+            <div>
+              <v-text-field
+              v-if="subCategoryView"
+              v-model="searchSubCategory"
+              placeholder="Search"
+              append-inner-icon="mdi-magnify"
+              variant="solo"
+              density="compact"
+              hide-details
+              flat
+              class="input-bordered mt-5 mr-8 ml-auto"
+              width="300"
+            />
+              <v-row v-if="subCategoryView" class="mx-5 mt-2" align="stretch">
+                <v-col
+                  v-for="(card, index) in subCategories?.filter((x) => x?.name?.toLowerCase().includes(searchSubCategory))"
+                  :key="index"
+                  cols="12"
+                  sm="6" 
+                  md="3"
+                >
+                  <TasksTaskPoolDialogTaskCards 
+                    :title="card.name"
+                    :description="card.description"
+                    :count="card.taskCount"
+                    @click="fetchGeneralTasks(card)"
+                  />
+                </v-col>
+                <v-col v-if="hasTasks"   cols="12"
+                  sm="6" 
+                  md="3">
+                  <TasksTaskPoolDialogTaskCards 
+                    :title="'Other'"
+                    :description="'Tasks under main Category'"
+                    :count="hasTasks"
+                    @click="fetchGeneralTasks({id: tab})"
+                  />
+                </v-col>
+              </v-row>
+              <v-card
+                v-else
+                class="rounded-xl ma-5"
+                border
+                style="border-color: rgba(var(--v-theme-on-surface), 0.12)"
+                :elevation="0"
               >
-                <TasksTaskPoolDialogTaskCards
-                  :title="card.name"
-                  :description="card.description"
-                  :count="card.taskCount"
-                  @click="fetchGeneralTasks(card)"
-                />
-              </v-col>
-            </v-row>
-            <v-card
-              v-else
-              class="rounded-xl ma-5"
-              border
-              style="border-color: #dbdbdb"
-              :elevation="0"
-            >
-              <v-card-title
-                class="px-2 py-4"
-                v-if="subCategories.length"
-                style="
-                  border-bottom: 1px solid #dbdbdb;
-                  background-color: #f1f1f1;
-                "
-              >
-                <div class="d-flex align-center">
-                  <v-icon
-                    @click="subCategoryView = true"
-                    size="24"
-                    color="gray"
-                    class="mr-3"
-                    >mdi-arrow-left</v-icon
-                  >
-                  <p style="font-size: 16px">{{ selectedSubCategory.name }}</p>
-                </div>
-              </v-card-title>
-              <v-list v-if="tasks.length" class="pa-0">
-                <div class="checklist-row has-border" style="background-color: #f6f6f6;">
-                  <div class="table-cell checkbox-cell">
-                    <v-checkbox
-                      v-model="selectAll"
-                      hide-details
-                      density="compact"
-                      class="ma-0 pa-0"
-                      @change="toggleAll"
-                    />
+                <v-card-title
+                  class="px-2 py-4"
+                  v-if="subCategories.length"
+                  style="
+                    border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+                  "
+                >
+             
+                  <div class="d-flex align-center">
+                    <v-icon
+                      @click="subCategoryView = true"
+                      size="24"
+                      class="mr-3"
+                      >mdi-arrow-left</v-icon
+                    >
+                    <p style="font-size: 16px">{{ selectedSubCategory.name }}</p>
                   </div>
-                  <div class="table-cell title-cell font-weight-bold">
-                    Tasks
+                </v-card-title>
+                <v-text-field
+              v-model="search"
+              placeholder="Search"
+              append-inner-icon="mdi-magnify"
+              variant="solo"
+              density="compact"
+              hide-details
+              flat
+              class="input-bordered ma-2 ml-auto"
+              width="300"
+            />
+                <v-list v-if="tasks.length" class="pa-0">
+                  <div class="checklist-row has-border">
+                    <div class="table-cell checkbox-cell">
+                      <v-checkbox
+                        v-model="selectAll"
+                        hide-details
+                        density="compact"
+                        class="ma-0 pa-0"
+                        @change="toggleAll"
+                        color="primary"
+                      />
+                    </div>
+                    <div class="table-cell title-cell font-weight-bold">
+                      Tasks
+                    </div>
                   </div>
-                </div>
-                <TasksTaskPoolDialogTaskRow
-                  v-for="item in tasks"
-                  :key="item.id"
-                  :id="item.id"
-                  :title="item.title"
-                  v-model:checked="item.checked"
-                  @checked="handleCheck"
-                />
-              </v-list>
-              <h3 v-else>No Tasks Found.</h3>
-            </v-card>
+                  <TasksTaskPoolDialogTaskRow
+                    v-for="item in tasks.filter((x) => x?.title?.toLowerCase().includes(search))"
+                    :key="item.id"
+                    :id="item.id"
+                    :title="item.title"
+                    v-model:checked="item.checked"
+                 @checked="(data) => handleCheck( data)"
+                  />
+                </v-list>
+                <h3 v-else class="ma-6">No Tasks Found.</h3>
+              </v-card>
+            </div>
           </v-tabs-window-item>
         </v-tabs-window>
       </div>
 
       <!-- Footer -->
       <div
-        class="d-flex justify-end pa-6 bg-white"
-        style="border-top: 1px solid #eee"
-      
+        class="d-flex justify-end pa-6"
+        style="border-top: 1px solid rgba(var(--v-theme-on-surface), 0.12)"
       >
         <v-btn
           color="primary"
@@ -133,11 +167,37 @@ const subCategories = ref();
 const subCategoryView = ref(true);
 const selectedTasks = ref([]);
 const selectedSubCategory = ref(null);
+const search = ref("");
+const searchSubCategory = ref("")
 const props = defineProps({
   modelValue: Boolean,
 });
 
-const emit = defineEmits(["onUpdate"]);
+const emit = defineEmits(["onUpdate", "close"]);
+
+const resetState = () => {
+  tasks.value = [];
+  selectedTasks.value = [];
+  selectedSubCategory.value = null;
+  subCategories.value = [];
+  subCategoryView.value = true;
+  search.value = "";
+  searchSubCategory.value = "";
+  tab.value = 0
+};
+
+const hasTasks = computed(() => {
+  if (!categoryList.value.length) return false
+  const parent = categoryList.value.find((x) => x.id === tab.value)
+  if (!parent) return false
+  const parentCount = parseInt(parent.taskCount, 10)
+  if (parentCount) {
+    return parentCount
+  } else {
+    return false
+  }
+})
+
 const fetchGeneralTasks = (category) => {
   selectedSubCategory.value = category;
   taskStore
@@ -145,7 +205,7 @@ const fetchGeneralTasks = (category) => {
     .then((res) => {
       if (res.code === 0) {
         subCategoryView.value = false;
-        tasks.value = res.data;
+        tasks.value = res.data.map(task => ({ ...task, checked: false }));
       } else {
         mainStore.setSnackbar({
           title: res.data.message || res.message,
@@ -160,13 +220,23 @@ const fetchGeneralTasks = (category) => {
       });
     });
 };
+
 const fetchListCategories = () => {
+  // Reset state but don't clear subCategories yet - let the tab watcher handle it
+  tasks.value = [];
+  selectedTasks.value = [];
+  selectedSubCategory.value = null;
+  search.value = "";
+  searchSubCategory.value = "";
+  subCategoryView.value = true;
+  
   taskStore
     .listCategoriesForPool()
     .then((res) => {
       if (res.code === 0) {
         categoryList.value = res.data;
         const firstCat = categoryList.value[0];
+        tab.value = categoryList.value[0].id
         const firstCatSubCat = categoryList.value.filter(
           (x) => x.parentId === firstCat.id
         );
@@ -190,30 +260,52 @@ const fetchListCategories = () => {
       });
     });
 };
+
 watch(
   () => props.modelValue,
   async (newVal) => {
     if (newVal) {
       fetchListCategories();
+    } else {
+      // Reset state when dialog closes
+      resetState();
     }
   }
 );
+
 watch(tab, async (newId) => {
-  if (newId) {
+  if (newId && categoryList.value.length > 0) {
+    // Reset view-specific state when switching tabs (but keep categoryList)
+    tasks.value = [];
+    selectedTasks.value = [];
+    selectedSubCategory.value = null;
+    search.value = "";
+    searchSubCategory.value = "";
+    
+    const category = categoryList.value.find((x) => x.id === newId);
+    if (!category) return;
+    
     subCategories.value = categoryList.value.filter(
       (x) => x.parentId === newId
     );
     if (subCategories.value.length) {
       subCategoryView.value = true;
     } else {
-      subCategories.value = [];
-      subCategoryView.value = true;
-      const category = categoryList.value.filter((x) => x.id === newId);
+      // No subcategories, fetch tasks directly
       fetchGeneralTasks(category);
     }
   }
 });
 const addTaskToBoard = async () => {
+  // Validate that at least one task is selected
+  if (!selectedTasks.value || selectedTasks.value.length === 0) {
+    mainStore.setSnackbar({
+      title: "Please select at least one task to assign",
+      type: "error",
+    });
+    return;
+  }
+
   const userStr = localStorage.getItem("user");
   if (!userStr) return null;
 
@@ -225,6 +317,11 @@ const addTaskToBoard = async () => {
     });
 
     if (res.code === 0) {
+      // Reset selections after successful assignment
+      selectedTasks.value = [];
+      tasks.value.forEach(task => {
+        task.checked = false;
+      });
       emit("onUpdate");
       mainStore.setSnackbar({
         title: "Task assigned successfully",
@@ -244,28 +341,50 @@ const addTaskToBoard = async () => {
   }
 };
 
-const handleCheck = ({ id, checked }) => {
-  const task = tasks.value.find((task) => task.id === id);
+const handleCheck = ( data ) => {
+  const task = tasks.value.find((task) => task.id === data.id);
   if (!task) return;
-  if (checked) {
-    if (!selectedTasks.value.some((t) => t.id === id)) {
+  if (data.checked) {
+    if (!selectedTasks.value.some((t) => t.id === data.id)) {
       selectedTasks.value.push(task);
     }
   } else {
-    selectedTasks.value = selectedTasks.value.filter((t) => t.id !== id);
+    selectedTasks.value = selectedTasks.value.filter((t) => t.id !== data.id);
   }
 };
 
 const selectAll = computed({
-  get: () => tasks.value.every((i) => i.checked),
+  get: () => tasks.value.length > 0 && tasks.value.every((i) => i.checked),
   set: (val) => {
-    tasks.value.forEach((i) => (i.checked = val));
+    tasks.value.forEach((i) => {
+      i.checked = val;
+      if (val) {
+        // Add to selectedTasks if not already present
+        if (!selectedTasks.value.some((t) => t.id === i.id)) {
+          selectedTasks.value.push(i);
+        }
+      } else {
+        // Remove from selectedTasks
+        selectedTasks.value = selectedTasks.value.filter((t) => t.id !== i.id);
+      }
+    });
   },
 });
 
 function toggleAll() {
-  const value = selectAll.value;
-  tasks.value.forEach((i) => (i.checked = value));
+  const value = !selectAll.value;
+  tasks.value.forEach((i) => {
+    i.checked = value;
+    if (value) {
+      // Add to selectedTasks if not already present
+      if (!selectedTasks.value.some((t) => t.id === i.id)) {
+        selectedTasks.value.push(i);
+      }
+    } else {
+      // Remove from selectedTasks
+      selectedTasks.value = selectedTasks.value.filter((t) => t.id !== i.id);
+    }
+  });
 }
 
 function goBack() {
@@ -275,7 +394,7 @@ function goBack() {
 
 <style scoped>
 .title {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 16px;
 }
@@ -330,5 +449,13 @@ function goBack() {
 
 .title-cell {
   flex: 1;
+}
+.input-bordered :deep(.v-field) {
+  border: 1px solid #dfdfdf !important;
+  border-radius: 8px !important;
+  background-color: white !important;
+  min-height: 40px;
+  font-size: 14px;
+  
 }
 </style>

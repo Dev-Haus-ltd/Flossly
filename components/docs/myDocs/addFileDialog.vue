@@ -5,7 +5,7 @@
       <v-card-title
         class="d-flex align-center justify-space-between"
         style="
-          font-family: Poppins;
+          
           font-weight: 600;
           font-size: 16px;
           border-bottom: 1px solid #dbdbdb;
@@ -41,7 +41,7 @@
           "
           flat
         />
-        <CommonFileUpload
+        <CommonFileUpload 
           v-if="selectedFolder?.id || folder?.id"
           ref="fileUploader"
           @onFiles="getFiles"
@@ -94,6 +94,7 @@ const props = defineProps({
   modelValue: Boolean,
   folder: Object,
   foldersList: Array,
+  isSystemDocs:Boolean
 });
 const selectedFolder = ref(null);
 const uploadedFiles = ref([]);
@@ -110,8 +111,8 @@ const saveFile = () => {
   uploadedFiles.value.forEach((file) => {
     form.append("file", file);
   });
-  docStore
-    .addDocs(form)
+  const uploadFn = props.isSystemDocs ? docStore.addSystemDocs : docStore.addDocs;
+  uploadFn(form)
     .then((res) => {
       if (res.code === 0) {
         close();
@@ -143,7 +144,6 @@ const saveFile = () => {
       });
     });
 };
-
 const emit = defineEmits(["update:modelValue", "onUpdate"]);
 
 const isOpen = ref(props.modelValue);
@@ -172,6 +172,6 @@ function handleSelect(folder) {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 </style>

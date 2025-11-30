@@ -1,12 +1,14 @@
 <template>
   <v-container fluid class="pa-4 bg-white">
-    <CommonFeatureCard
-      heading="Updated Features"
-      subheading="Flossly — finally, a platform built for dental practices, handling everything from rotas to compliance in one smart space."
-      @close="showCard = false"
-      v-if="showCard"
-      class="my-4"
-    />
+
+    <!-- Dashboard Content -->
+    <div>
+      <CommonFeatureCard
+        subheading="Watch the Flossly Demo Video"
+        @close="showCard = false"
+        v-if="showCard"
+        class="my-4"
+      />
     <v-row>
       <v-col
         v-for="(item, index) in flosslyItems"
@@ -17,17 +19,18 @@
           :title="item.title"
           :img="item.img"
           :colors="item.colors"
-          :isLocked="item.isLocked"
+          :isToolBox="item.isToolBox"
           :route="item.route"
+          :uid="index"
+          @handleClick="handleClickProductCard"
         />
       </v-col>
     </v-row>
 
     <v-row class="d-flex align-stretch">
-      <v-col cols="8" class="pr-0 d-flex flex-column">
+      <v-col cols="12" sm="12" md="8" class="pr-md-0 d-flex flex-column">
         <v-card
           class="card flex-grow-1"
-          color="white"
           elevation="0"
           rounded="lg"
         >
@@ -40,9 +43,9 @@
               slider-color="primary"
             >
               <v-tab
-                v-for="category in categoryList.filter((x) => !x.parentId)"
+                v-for="(category, index) in filteredCategories"
                 :key="category.id"
-                :value="category.id"
+                :value="index + 1"
                 class="tab-text"
               >
                 {{ category.name }}
@@ -51,18 +54,15 @@
 
             <!-- Tab content -->
             <v-tabs-window v-model="tab">
-              <v-tabs-window-item
-                v-for="category in categoryList"
-                :key="category.id"
-                :value="category.id"
-              >
+              <v-tabs-window-item :value="tab">
                 <v-row class="my-2 mx-1">
                   <v-col
                     v-for="stat in stats"
                     :key="stat.status"
-                    cols="3"
-                    md="3"
-                    xl="3"
+                    cols="12"
+                    sm="6"
+                    md="4"
+                    lg="3"
                   >
                     <DashBoardStatCard
                       :image="stat.image"
@@ -80,35 +80,36 @@
 
         <!-- ✅ Quick Actions under Recent + CPD -->
         <v-card
+          v-if="recentFiles && recentFiles.length"
           class="mt-3 card flex-grow-1"
           color="white"
           elevation="0"
           rounded="lg"
         >
-          <h4 class="card-head mb-4">Recently Accessed Files</h4>
-
-          <v-row class="ma-5">
-            <v-col
-              v-for="(file, index) in recentFiles"
-              :key="index"
-              cols="12"
-              md="4"
-              xl="3"
-            >
-              <DashBoardRecentlyAccessed :file="file" @open="openFile" />
-            </v-col>
-          </v-row>
+          <h4 class="mb-4 card-head">Recently Accessed</h4>
+          <div>
+            <v-row class="ma-5">
+              <v-col
+                v-for="(file, index) in recentFiles"
+                :key="index"
+                cols="12"
+                md="4"
+                xl="3"
+              >
+                <DashBoardRecentlyAccessed :file="file" @open="openFile" />
+              </v-col>
+            </v-row>
+          </div>
         </v-card>
       </v-col>
-      <v-col cols="4" class="d-flex">
+      <v-col cols="12" sm="12" md="4" class="d-flex">
         <v-card
           class="card flex-grow-1"
-          color="white"
           elevation="0"
           rounded="lg"
           v-if="user?.roleId === 8 || user?.roleId === 1"
         >
-          <h4 class="card-head mb-4">Leads Conversion</h4>
+          <h4 class="card-head mb-4">Lead Conversion</h4>
           <div class="ma-5">
             <DashBoardRevenueCard title="This Week" subtitle="£ 29,985" />
 
@@ -141,14 +142,13 @@
               <span>{{ source.label }}</span>
               <div class="d-flex align-center" style="gap: 70px">
                 <span>{{ source.count }}</span>
-                <span class="text-grey-darken-1">{{ source.percent }}%</span>
+                <span>{{ source.percent }}%</span>
               </div>
             </div>
           </div>
         </v-card>
         <v-card
           class="card flex-grow-1"
-          color="white"
           elevation="0"
           rounded="lg"
           v-else
@@ -163,6 +163,7 @@
             hide-header
             color="primary"
             type="month"
+            class="user-dashboard-calender"
           >
             <template v-slot:day-event="{ event }">
               <v-tooltip>
@@ -170,32 +171,31 @@
                   <v-icon
                     v-bind="tooltipProps"
                     class="mx-auto"
-                    :color="event.color"
-                    size="8"
-                  >
-                    mdi-circle
-                  </v-icon>
+                  :color="event.color"
+                  size="8"
+                >
+                  mdi-circle
+                </v-icon>
                 </template>
                 <span>{{ event.title }}</span>
               </v-tooltip>
             </template>
             <template v-slot:day-title="{ title }">
-              <span style="font-size: 10px;">{{ title }}</span>
+              <span style="font-size: 10px">{{ title }}</span>
             </template>
           </v-calendar>
         </v-card>
       </v-col>
     </v-row>
     <v-row class="d-flex align-stretch">
-      <v-col cols="8" class="pr-0 pt-0">
+      <v-col cols="12" sm="12" md="8" class="pr-md-0 pt-0">
         <v-card
           class="refer-card card pa-5"
-          color="white"
           elevation="0"
           rounded="lg"
         >
           <v-row no-gutters>
-            <v-col cols="5" class="left-side">
+            <v-col cols="12" xs="12" sm="5" class="left-side">
               <v-chip
                 class="bonus-chip"
                 variant="flat"
@@ -211,18 +211,25 @@
                   src="https://cdn.lordicon.com/pbkbjgyv.json"
                   colors="primary:#e8b730,secondary:#ffc738,tertiary:#2ca58d"
                   trigger="hover"
-                  style="width: 150px; height: 150px"
+                  :style="{
+                    width: mdAndDown ? '100px' : '150px',
+                    height: mdAndDown ? '100px' : '150px',
+                  }"
                 ></lord-icon>
               </div>
             </v-col>
 
             <v-col
-              cols="7"
+              cols="12"
+              xs="12"
+              sm="7"
               class="right-side d-flex flex-column justify-center"
             >
               <div class="ml-5">
                 <!-- Heading -->
-                <h3 class="refer-heading mb-4">Refer & Earn with Flossly</h3>
+                <h3 class="refer-heading mb-4 mt-2 mt-sm-0">
+                  Refer & Earn with Flossly
+                </h3>
 
                 <!-- Points -->
                 <div class="refer-point d-flex align-center mb-3">
@@ -244,7 +251,7 @@
                   >
                   </lord-icon>
                   <span class="ml-3"
-                    >Refer, Share and Review to earn flossly loyalty
+                    >Refer, share, and review to earn flossly loyalty
                     points</span
                   >
                 </div>
@@ -257,7 +264,7 @@
                   >
                   </lord-icon>
                   <span class="ml-3"
-                    >Redeem your loyalty point for exclusive prizes</span
+                    >Redeem your loyalty points for exclusive prizes</span
                   >
                 </div>
 
@@ -267,6 +274,7 @@
                   variant="flat"
                   append-icon="mdi-open-in-new"
                   color="primary"
+                  height="46"
                 >
                   Refer a business
                 </v-btn>
@@ -275,7 +283,7 @@
           </v-row>
         </v-card>
       </v-col>
-      <v-col cols="4" class="pt-0">
+      <v-col cols="12" sm="12" md="4" class="pt-0">
         <v-card
           class="review-card card pa-5"
           color="white"
@@ -298,34 +306,44 @@
             <lord-icon
               src="https://cdn.lordicon.com/wstfgfud.json"
               trigger="hover"
-              style="width: 150px; height: 150px"
+              :style="{
+                width: mdAndDown ? '100px' : '150px',
+                height: mdAndDown ? '100px' : '150px',
+              }"
             ></lord-icon>
 
             <p class="review-text">
-              <span class="highlight">Happy with Flossly</span>,
-              <span class="normal">give us a google review</span>
+              <span class="highlight">Happy with Flossly? </span>
+              <span class="normal">Give us a Google review.</span>
             </p>
           </div>
         </v-card>
       </v-col>
     </v-row>
+    <DashBoardToolBoxDialog v-model="showToolboxDialog" @close="showToolboxDialog = false" />
+    </div>
   </v-container>
 </template>
 
 <script setup>
+import { useDisplay } from "vuetify";
+
+const { mdAndDown } = useDisplay();
+const showToolboxDialog = ref(false);
 const showCard = ref(true);
+const isLoading = ref(true);
 const taskStore = useTaskStore();
 const mainStore = useMainStore();
 const docStore = useDocStore();
 const recentFiles = ref([]);
 const user = ref({});
-const value = ref(null)
+const value = ref(null);
 const inquirySources = ref([
   { label: "Meta Adverts", count: 16, percent: 35 },
-  { label: "Google Adverts", count: 13, percent: 28 },
+  { label: "Google Ads", count: 13, percent: 28 },
   { label: "Organic Search", count: 18, percent: 18 },
   { label: "Calls", count: 16, percent: 12 },
-  { label: "Walk In", count: 14, percent: 17 },
+  { label: "Walk-ins", count: 14, percent: 17 },
 ]);
 
 const performaces = ref([
@@ -368,55 +386,55 @@ const performaces = ref([
 const flosslyItems = ref([
   {
     title: "Flossly Tasks",
-    img: "https://cdn.lordicon.com/qtdtmioh.json",
-    isLocked: false,
+    img: "https://cdn.lordicon.com/wwcdwkaf.json",
+    isToolBox: false,
     route: "/tasks",
+    colors:"#008AFE"
   },
   {
     title: "Flossly Team",
-    img: "https://cdn.lordicon.com/umvndfds.json",
-    colors:
-      "primary:#121331,secondary:#f9c9c0,tertiary:#b26836,quaternary:#ffc738,quinary:#646e78,senary:#ebe6ef,septenary:#f24c00,octonary:#f28ba8,nonary:#92140c,denary:#60e5a3,undenary:#3a3347",
-    isLocked: false,
+    img: "https://cdn.lordicon.com/kphwxuxr.json",
+    isToolBox: false,
     route: "/teams",
-  },
-  {
-    title: "Flossly CPD",
-    img: "https://cdn.lordicon.com/kfjxtwnh.json",
-    colors:
-      "primary:#121331,secondary:#3a3347,tertiary:#ebe6ef,quaternary:#60e5a3",
-    isLocked: true,
+    colors:"#7D77FF"
   },
   {
     title: "Flossly CRM",
-    img: "https://cdn.lordicon.com/nhekwutf.json",
-    isLocked: true,
-  },
-  {
-    title: "Flossly Social",
-    img: "https://cdn.lordicon.com/qbkxnzyi.json",
-    colors:
-      "primary:#121331,secondary:#ffc738,tertiary:#2ca58d,quaternary:#ebe6ef,quinary:#f9c9c0,senary:#60e5a3,septenary:#f24c00,octonary:#3a3347",
-    isLocked: true,
+    img: "https://cdn.lordicon.com/gcmzyunj.json",
+    isToolBox: false,
+    route: "/crm",
+    colors:"#FF85DA"
   },
   {
     title: "Flossly Diary",
-    img: "https://cdn.lordicon.com/mjpqfjjs.json",
-    colors:
-      "primary:#121331,secondary:#60e5a3,tertiary:#3a3347,quaternary:#ebe6ef,quinary:#60e5a3",
-    isLocked: true,
+    img: "https://cdn.lordicon.com/uoljexdg.json",
+    route: "/diary",
+    isToolBox: false,
+    colors:"#FFA977"
   },
   {
-    title: "Flossly Reports",
-    img: "https://cdn.lordicon.com/hbeigkvk.json",
-    isLocked: true,
+    title: "Toolbox",
+    img: "https://cdn.lordicon.com/ajcbrren.json",
+    isToolBox: true,
+    colors:"rgba(255, 255, 255, 0.2);"
   },
 ]);
-const tab = ref(null);
+const tab = ref(1);
 const categoryList = ref([]);
 const stats = ref([]);
+
+// Filtered categories excluding Compliance
+const filteredCategories = computed(() => {
+  const filtered = categoryList.value.filter((x) => {
+    if (x.parentId) return false;
+    const name = (x.name || '').trim().toLowerCase();
+    return name !== 'compliance';
+  });
+
+  return filtered;
+});
 const getRecentDocs = () => {
-  docStore
+  return docStore
     .recentDocs()
     .then((res) => {
       if (res.code === 0) {
@@ -429,29 +447,27 @@ const getRecentDocs = () => {
       //snack
     });
 };
-const fetchListCategories = () => {
-  taskStore
-    .listCategories()
-    .then((res) => {
-      if (res.code === 0) {
-        categoryList.value = res.data;
-        if (categoryList.value.length > 0) {
-          tab.value = categoryList.value[0].id;
-          fetchDummyStats();
-        }
-      } else {
-        mainStore.setSnackbar({
-          title: res.data.message || res.message,
-          type: "Error",
-        });
+const fetchListCategories = async () => {
+  try {
+    const res = await taskStore.listCategories();
+    if (res.code === 0) {
+      categoryList.value = res.data;
+      if (categoryList.value.length > 0) {
+        tab.value = 1; // Set to first tab index
+        await fetchDummyStats();
       }
-    })
-    .catch((err) => {
+    } else {
       mainStore.setSnackbar({
-        title: err.message,
+        title: res.data.message || res.message,
         type: "Error",
       });
+    }
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: err.message,
+      type: "Error",
     });
+  }
 };
 const openFile = async (file) => {
   await docStore.viewDoc({ id: file.id });
@@ -461,74 +477,192 @@ const openFile = async (file) => {
     showPdf.value = true;
   }
 };
-const fetchDummyStats = () => {
-  stats.value = [
-    {
-      status: "Completed",
-      key: "complted",
-      total: 12,
-      link: "/tasks/teamtasks",
-      image: "/images/open-icon.svg",
-    },
-    {
-      status: "Overdue Tasks",
-      key: "overdue",
-      total: 5,
-      link: "/tasks/teamtasks",
-      image: "/images/inprogress-icon.svg",
-    },
-    {
-      status: "In Progress Tasks",
-      key: "progress",
-      total: 8,
-      link: "/tasks/teamtasks",
-      image: "/images/completed-icon.svg",
-    },
-    {
-      status: "Up Coming Tasks",
-      key: "upcoming",
-      total: 8,
-      link: "/tasks/teamtasks",
-      image: "/images/completed-icon.svg",
-    },
-  ];
+const fetchDummyStats = async () => {
+  try {
+    // Filter to only parent categories (same as tabs), excluding Compliance
+    const parentCategories = filteredCategories.value;
+    // Find the selected category based on tab index
+    const selectedCategory = parentCategories[tab.value - 1];
+    const categoryId = selectedCategory?.id || null;
+    
+    const res = await taskStore.getTeamTaskStatsByStatusAndCategory(categoryId);
+    if (res && res.code === 0) {
+      const data = res.data || {};
+      stats.value = [
+        {
+          status: "Completed",
+          key: "completed",
+          total: data.completed || 0,
+          link: "/tasks/teamtasks",
+          image: "/images/open-icon.svg",
+        },
+        {
+          status: "Overdue Tasks",
+          key: "overdue",
+          total: data.overdue || 0,
+          link: "/tasks/teamtasks",
+          image: "/images/inprogress-icon.svg",
+        },
+        {
+          status: "In Progress Tasks",
+          key: "progress",
+          total: data.progress || 0,
+          link: "/tasks/teamtasks",
+          image: "/images/completed-icon.svg",
+        },
+        {
+          status: "Upcoming Tasks",
+          key: "upcoming",
+          total: data.upcoming || 0,
+          link: "/tasks/teamtasks",
+          image: "/images/completed-icon.svg",
+        },
+      ];
+    } else {
+      // Fallback to zeros if API fails
+      stats.value = [
+        {
+          status: "Completed",
+          key: "completed",
+          total: 0,
+          link: "/tasks/teamtasks",
+          image: "/images/open-icon.svg",
+        },
+        {
+          status: "Overdue Tasks",
+          key: "overdue",
+          total: 0,
+          link: "/tasks/teamtasks",
+          image: "/images/inprogress-icon.svg",
+        },
+        {
+          status: "In Progress Tasks",
+          key: "progress",
+          total: 0,
+          link: "/tasks/teamtasks",
+          image: "/images/completed-icon.svg",
+        },
+        {
+          status: "Upcoming Tasks",
+          key: "upcoming",
+          total: 0,
+          link: "/tasks/teamtasks",
+          image: "/images/completed-icon.svg",
+        },
+      ];
+    }
+  } catch (err) {
+    console.error("Error fetching task stats:", err);
+    // Fallback to zeros on error
+    stats.value = [
+      {
+        status: "Completed",
+        key: "completed",
+        total: 0,
+        link: "/tasks/teamtasks",
+        image: "/images/open-icon.svg",
+      },
+      {
+        status: "Overdue Tasks",
+        key: "overdue",
+        total: 0,
+        link: "/tasks/teamtasks",
+        image: "/images/inprogress-icon.svg",
+      },
+      {
+        status: "In Progress Tasks",
+        key: "progress",
+        total: 0,
+        link: "/tasks/teamtasks",
+        image: "/images/completed-icon.svg",
+      },
+      {
+        status: "Upcoming Tasks",
+        key: "upcoming",
+        total: 0,
+        link: "/tasks/teamtasks",
+        image: "/images/completed-icon.svg",
+      },
+    ];
+  }
 };
 
-watch(tab, (newId) => {
-  if (newId) {
-    fetchDummyStats();
+watch(tab, async (newId) => {
+  if (newId && categoryList.value.length > 0) {
+    await fetchDummyStats();
   }
 });
-onMounted(() => {
-  fetchListCategories();
-  getRecentDocs();
-  if (localStorage.getItem("user")) {
-    user.value = JSON.parse(localStorage.getItem("user"));
-  }
-  if (user.value.roleId === 8 || user.value.roleId === 1) {
-    getMyTasks() 
+onMounted(async () => {
+  try {
+    // Load user data first
+    if (localStorage.getItem("user")) {
+      user.value = JSON.parse(localStorage.getItem("user"));
+    }
+    
+    // Fetch all data in parallel
+    await Promise.all([
+      fetchListCategories(),
+      getRecentDocs(),
+      user.value.roleId === 8 || user.value.roleId === 1 ? getMyTasks() : Promise.resolve()
+    ]);
+  } catch (error) {
+    console.error("Error loading dashboard data:", error);
+  } finally {
+    // Always hide loading state after data is loaded
+    isLoading.value = false;
   }
 });
 const getMyTasks = () => {
-
+  return;
+};
+const handleClickProductCard = (uid) => {
+  console.log(uid);
+  if(uid === 4){
+    showToolboxDialog.value = true;
+  }
 };
 </script>
 
 <style scoped>
-
-
 .font-weight-semi {
   font-weight: 600 !important;
 }
+
+/* Loading Overlay */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.loading-text {
+  font-size: 18px;
+  font-weight: 500;
+  color: #333;
+  margin: 0;
+}
 .card {
-  border: 1px solid #60e5a3;
+  border: 1px solid #dbdbdb;
 }
 .card-head {
-  font-family: "Poppins";
   font-weight: 600;
   font-size: 16px;
   padding: 24px;
-  background-color: #eff5f5;
+  border-bottom: 1px solid #dbdbdb;
 }
 .custom-tabs {
   border-bottom: 1px solid #dbdbdb;
@@ -538,6 +672,12 @@ const getMyTasks = () => {
 }
 .custom-tabs .v-tab.v-tab--selected {
   font-weight: 500;
+}
+
+/* Style the Vuetify slider to be thicker and green */
+.custom-tabs :deep(.v-tabs-slider) {
+  height: 8px !important;
+  background-color: var(--v-theme-primary) !important;
 }
 
 .stat-status {
@@ -559,6 +699,8 @@ const getMyTasks = () => {
 }
 .performance-grid {
   border: 1px solid #dbdbdb;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 .perform-col {
@@ -576,8 +718,8 @@ const getMyTasks = () => {
   border-bottom: none;
 }
 .flossly-col {
-  flex: 0 0 calc(100% / 7);
-  max-width: calc(100% / 7);
+  flex: 0 0 calc(100% / 5);
+  max-width: calc(100% / 5);
 }
 .review-card {
   position: relative;
@@ -616,7 +758,7 @@ const getMyTasks = () => {
 .review-text {
   font-size: 24px;
   color: #1e1e1e;
-  font-family: "Poppins", sans-serif;
+  
 }
 
 .review-text .highlight {
@@ -641,7 +783,25 @@ const getMyTasks = () => {
   align-items: center;
   justify-content: center;
   position: relative;
-  border-radius: 6px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.left-side::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 12px;
+  padding: 4px;
+  background: linear-gradient(90deg, #FFA977 0%, #FF85DA 32.21%, #7D77FF 63.94%, #68ECE6 100%);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: xor;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  pointer-events: none;
 }
 
 /* Chip inside left side */
@@ -673,6 +833,7 @@ const getMyTasks = () => {
 .custom-btn {
   color: #1e1e1e;
   font-weight: 400;
+  border-radius: 12px !important;
 }
 
 .custom-btn .v-icon {
@@ -680,14 +841,14 @@ const getMyTasks = () => {
 }
 /* Right side */
 .refer-heading {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 600; /* SemiBold */
   font-size: 24px;
   color: #1e1e1e;
 }
 
 .refer-point {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 400; /* Regular */
   font-size: 14px;
   color: #1e1e1e;

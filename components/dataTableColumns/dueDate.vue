@@ -56,7 +56,7 @@
   <script setup>
   import { ref, computed } from "vue";
   import { useDate } from "vuetify";
-  import { parsedDate } from "@/lib/dateFormatter"; // Assumed custom formatter
+  import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
   
   const props = defineProps({
     modelValue: String,
@@ -69,7 +69,7 @@
   
   const formattedDate = computed(() => {
     if (!selected.value) return "";
-    return parsedDate(selected.value); // Or use dateUtil.format(selected.value, 'fullDate')
+    return formatDateDDMMYYYY(selected.value);
   });
   
   function onDateSelected(newDate) {
@@ -88,7 +88,7 @@
     border: 1px solid #dfdfdf;
     background-color: #ffffff;
     color: #1e1e1e;
-    font-family: "Poppins", sans-serif;
+    
     font-weight: 400;
     font-size: 14px;
   }
@@ -98,7 +98,7 @@
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
   </style>
   

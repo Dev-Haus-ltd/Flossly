@@ -33,6 +33,17 @@ export default {
         });
     });
   },
+    addBulkTasks(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/addBulkTasks", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
   getMyTeamTasks() {
     return new Promise((resolve, reject) => {
       Get("/tasks/teamTasks")
@@ -102,6 +113,20 @@ export default {
   getTeamTaskStatsByCategory() {
     return new Promise((resolve, reject) => {
       Get("/tasks/teamTasksCountByCategory")
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  getTeamTaskStatsByStatusAndCategory(categoryId) {
+    return new Promise((resolve, reject) => {
+      const url = categoryId 
+        ? `/tasks/statsByCategory?categoryId=${encodeURIComponent(categoryId)}`
+        : "/tasks/statsByCategory";
+      Get(url)
         .then((res) => {
           resolve(res);
         })
@@ -187,9 +212,48 @@ export default {
         });
     });
   },
-  addAttachments(data) {
+  addTaskComment(data) {
     return new Promise((resolve, reject) => {
-      PostFormData("/tasks/addAttachments", data)
+      Post("/tasks/addComment", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  listTaskComments(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/comments", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  updateTaskComment(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/updateComment", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteTaskComment(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/deleteComment", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  addAttachments(data, options = {}) {
+    return new Promise((resolve, reject) => {
+      PostFormData("/tasks/addAttachments", data, options.onProgress)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  deleteAttachment(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/deleteAttachment", data)
         .then((res) => {
           resolve(res);
         })
@@ -256,6 +320,17 @@ export default {
   archieveBulkTasks(data) {
     return new Promise((resolve, reject) => {
       Post("/tasks/archieveBulk", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  unarchiveBulkTasks(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/unarchiveBulk", data)
         .then((res) => {
           resolve(res);
         })

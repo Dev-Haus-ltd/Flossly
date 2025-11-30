@@ -33,6 +33,14 @@ export const TaskCategory = sequelize.define(
     color: {
       type: DataTypes.STRING(50),
       allowNull: true
+    },
+    organisationId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'Organisations',
+        key: 'id'
+      }
     }
   },
   {

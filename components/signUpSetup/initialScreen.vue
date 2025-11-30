@@ -1,39 +1,65 @@
 <template>
-  <div class="init-page">
-    <div class="water-mark"></div>
-    <div class="init-pg-content">
-      <div class="text-center">
+  <div class="init-page bg-secondary">
+    <div class="init-page-container">
+      <!-- Left Column - Watermark -->
+      <div class="watermark-column">
         <img
-          src="/assets/logos/signupSetupScreen/init-logo.svg"
-          class="mx-auto h-20 w-20"
-          alt=""
+          src="/assets/logos/loginLogos/watermark.svg"
+          alt="Flossly Watermark"
+          class="watermark-image"
         />
-        <h2 class="init-title mt-2">Welcome to Flossly</h2>
-        <p class="init-sub-title mt-2">Let's tidy up your dental ops.</p>
-        <div class="d-flex justify-center my-7">
-          <v-btn
-            class="button rounded-lg"
-            @click="handleScreen()"
-            color="secondary-dark"
-            >Get Started</v-btn
-          >
-          <v-btn
-            class="ml-2 button rounded-lg"
-            @click="initialPage = false"
-            color="primary"
-            >Watch Demo</v-btn
-          >
-        </div>
+      </div>
 
-        <h2 class="mt-5 init-info">
-          This setup takes 4-5 mins and gives your clinic a clean start.
-        </h2>
+      <!-- Right Column - Content -->
+      <div class="content-column">
+        <div class="init-pg-content" :style="{ padding: smAndDown ? '0 20px' : '0' }">
+          <div class="text-center">
+            <img
+              src="@/assets/logos/loginLogos/logoWithTitle.svg"
+              class="mx-auto h-20 w-20"
+              :style="{
+                width: smAndDown ? '70%' : mdAndUp && !lgAndUp ? '50%' : '33.33%',
+                maxWidth: smAndDown ? '280px' : mdAndUp && !lgAndUp ? '250px' : '220px'
+              }"
+              alt=""
+            />
+            <h2 class="init-title mt-5 text-h2 text-md-h2 text-sm-h2">Welcome to Flossly</h2>
+            <p class="init-sub-title mt-10 text-h5 text-md-h5">Let's tidy up your dental ops.</p>
+            <div class="d-flex justify-center my-7 mb-5 button-container">
+              <v-btn
+                @click="handleScreen()"
+                class="start-setup-btn"
+                rounded="lg"
+                size="x-large"
+                flat
+                >Start Setup</v-btn
+              >
+              <v-btn
+                class="watch-demo-btn"
+                @click="initialPage = false"
+                color="primary"
+                rounded="lg"
+                size="x-large"
+                flat
+                >Watch Demo</v-btn
+              >
+            </div>
+
+            <h2 class="init-info text-h4 text-md-h4 text-sm-h6">
+              This setup takes 4-5 mins and gives your
+              <br />
+              clinic a clean start.
+            </h2>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
+import { useDisplay } from "vuetify";
+const { smAndDown, mdAndUp, lgAndUp } = useDisplay();
 const emit = defineEmits(["handle-init-screen"]);
 const handleScreen = () => {
   emit("handle-init-screen");
@@ -42,54 +68,108 @@ const handleScreen = () => {
 
 <style scoped>
 .init-page {
-  position: relative;
   background-color: #162627;
+  min-height: 100vh;
+  overflow: hidden;
 }
-.init-pg-content {
-  margin: 0;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  -ms-transform: translate(-50%, -50%);
-  transform: translate(-50%, -50%);
-  max-width: 800px;
-}
-.water-mark {
-  background-image: url("/assets/logos/signupSetupScreen/init-wat-mark.svg");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  height: 100vh;
+
+.init-page-container {
+  position: relative;
+  display: flex;
+  min-height: 100vh;
   width: 100%;
-  opacity: 0.3;
 }
+
+/* Left Column - Watermark */
+.watermark-column {
+  position: relative;
+  flex: 0 0 35%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.watermark-image {
+  width: 100%;
+  height: 100vh;
+  max-width: 1124px;
+  object-fit: fill;
+}
+
+/* Right Column - Content */
+.content-column {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  position: absolute;
+  top:0;
+  left: 20%;
+  z-index: 2;
+  width: 75%;
+  height: 100%;
+}
+
+.init-pg-content {
+  max-width: 1124px;
+  width: 100%;
+  margin-top: 5%;
+}
+
+/* 1300px–1500px range override */
+@media (max-width: 1600px) and (min-width: 1100px) {
+  .init-pg-content {
+    max-width: 800px;
+  }
+
+  .watermark-image {
+    max-width: 600px;
+  }
+}
+
+
+/* Hide watermark on screens smaller than 960px */
+@media (max-width: 980px) {
+  .watermark-column {
+    display: none;
+  }
+
+  .content-column {
+    justify-content: center;
+    left: 0;
+    width: 100%;
+  }
+}
+
 .init-title {
-  font-family: "Poppins";
   font-weight: 600;
-  font-size: 60px;
   line-height: 100%;
-  letter-spacing: 0%;
   color: #ffffff;
 }
 
 .init-sub-title {
-  font-family: "Poppins";
-  font-weight: 600;
-  font-size: 24px;
+  font-weight: 400 !important;
   line-height: 100%;
-  letter-spacing: 0%;
   color: #ffffff;
 }
+
 .init-info {
-  font-family: "Poppins";
-  font-weight: 600;
-  font-size: 40px;
+  font-weight: 400;
   line-height: 100%;
-  letter-spacing: 0%;
   color: #ffffff;
 }
-.button {
-  height: 52px;
-  width: 152px;
+
+.button-container {
+  gap: 15px;
+}
+
+.start-setup-btn,
+.watch-demo-btn {
+  font-size: 16px !important;
+  border-radius: 12px !important;
+}
+
+.start-setup-btn {
+  background-color: #7D77FF !important;
+  color: #ffffff !important;
 }
 </style>

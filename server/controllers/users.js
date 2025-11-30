@@ -25,6 +25,8 @@ export const usersList = async (event) => {
   if (roleId) {
     where.roleId = roleId;
   }
+  // Only return Active users (exclude Invited, Disabled, Expired)
+  where.status = "Active";
   try {
     const userOrganisations = await UserOrganisation.findAll({
       where: { organisationId: currentOrg },
@@ -338,14 +340,21 @@ export const applyLeave = async (event) => {
       documentPath = `/leave-documents/${fileName}`;
     }
 
-    const entitlement = await UserLeaveEntitlement.findOne({
+    let entitlement = await UserLeaveEntitlement.findOne({
       where: { userId, organisationId },
     });
 
-    if (!entitlement)
-      throw createError({
-        message: "Leave Entitlement is not available for this user",
-      });
+    if (!entitlement) {
+      entitlement = await UserLeaveEntitlement.create({
+        userId,
+        organisationId,
+        allowedAnnualLeaves: 14,
+        allowedCasualLeaves: 10,
+        allowedCompationateLeaves: 5,
+        allowedSickLeaves: 5,
+        allowedOtherLeaves: 5,
+      }, { transaction });
+    }
 
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -400,7 +409,7 @@ export const applyLeave = async (event) => {
         totalHours: totalHours === "Full Day" ? 8 : 4,
         isPaid: isPaid === "true", // because form data sends strings
         document: documentPath,
-        status: userId === actor.userId ? "Pending" : "Approved",
+        status: userId == actor.userId ? "Pending" : "Approved",
       },
       { transaction }
     );
@@ -409,6 +418,32 @@ export const applyLeave = async (event) => {
     return success(leave);
   } catch (err) {
     await transaction.rollback();
+    return error(500, err.message);
+  }
+};
+
+export const updateLeaveStatus = async (event) => {
+  const body = await readBody(event);
+  try {
+    const { id, status } = JSON.parse(body);
+    const leave = await UserLeaveHistory.findOne({ where: { id } });
+    if (!leave) throw createError({ message: "No Leave found" });
+    leave.status = status;
+    await leave.save();
+    const user = await User.findOne({ where: { id: leave.userId } });
+    const data = {
+      startDate: new Date(leave.startDate),
+      endDate: new Date(leave.endDate),
+      fullName: user.fullName,
+      email: user.email,
+    };
+    if (status === "Approved") {
+      await leaveRequestApprovedNotification(data);
+    } else {
+      await leaveRequestDeniedNotification(data);
+    }
+    return success("Updated");
+  } catch (err) {
     return error(500, err.message);
   }
 };
@@ -436,6 +471,7 @@ export const allusersLeavesHistory = async (event) => {
     const formatted = leaves.map((leave) => ({
       title: leave.leaveType,
       start: leave.startDate,
+      id: leave.id,
       end: leave.endDate,
       status: leave.status,
       reason: leave.reason,

@@ -1,0 +1,211 @@
+import { Get, Post } from "./apiWrapper";
+
+export default {
+  startMetaAuth() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/authStart")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  connectionStatus() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/connection")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  fetchLeads() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/leads")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  fetchLeadsNow() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/fetchLeads")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  subscribePages() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/subscribe")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getAdAccounts() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/adaccounts")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getCampaigns(accountId) {
+    return new Promise((resolve, reject) => {
+      Get(`/meta/campaigns?account_id=${encodeURIComponent(accountId)}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getAds({ accountId, campaignId }) {
+    const q = campaignId ? `campaign_id=${encodeURIComponent(campaignId)}` : `account_id=${encodeURIComponent(accountId)}`
+    return new Promise((resolve, reject) => {
+      Get(`/meta/ads?${q}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  // Leads (app-managed)
+  listLeads(filters = {}) {
+    const params = new URLSearchParams();
+    Object.entries(filters || {}).forEach(([k, v]) => {
+      if (v === undefined || v === null || v === "") return;
+      // Normalize Date to YYYY-MM-DD for server parsing
+      if (k === 'inquiryDate') {
+        try {
+          const d = new Date(v);
+          if (!isNaN(d.getTime())) {
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            params.append(k, `${yyyy}-${mm}-${dd}`);
+            return;
+          }
+        } catch {}
+      }
+      params.append(k, v);
+    });
+    const q = params.toString();
+    return new Promise((resolve, reject) => {
+      Get(`/lead/list${q ? `?${q}` : ''}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  createLead(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/create", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  updateLead(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/update", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteLeads(ids) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/delete", { ids })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getLeadTreatment(leadId) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/treatmentGet", { leadId })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  saveLeadTreatment(leadId, data) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/treatmentSave", { leadId, data })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteLeadTreatment(leadId) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/treatmentDelete", { leadId })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getLeadNotes(leadId) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/notesList", { leadId })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  addLeadNote(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/notesAdd", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteLeadNote(id) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/notesDelete", { id })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  // CRM options
+  listOptions(category) {
+    return new Promise((resolve, reject) => {
+      Get(`/lead/optionsList?category=${encodeURIComponent(category)}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  addOption(category, name, color = null) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/optionsAdd", { category, name, color })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteOption(id) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/optionsDelete", { id })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  // Communication preferences
+  getLeadCommunication(leadId) {
+    return new Promise((resolve, reject) => {
+      Get(`/lead/commGet?leadId=${encodeURIComponent(leadId)}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  saveLeadCommunication(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/commSave", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  // Automation
+  listAutomation() {
+    return new Promise((resolve, reject) => {
+      Get('/lead/automationList')
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  saveAutomation(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/automationSave', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  // Mail
+  sendLeadMail(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/mailSend', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+};

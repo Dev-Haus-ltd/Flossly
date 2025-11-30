@@ -1,25 +1,11 @@
 <template>
-  <div class="bg-white">
-    <v-container>
+  <div class="bg-white parent">
+   
       <v-row>
         <!-- Left banner -->
-        <v-col
+        <v-col 
           cols="12"
-          md="5"
-          class="d-flex align-center justify-center px-4 py-9"
-        >
-          <div class="background-image rounded-xl pa-10 relative">
-            <img src="@/assets/logos/loginLogos/white-logo.svg" alt="Logo" />
-            <h1 class="mt-5 login-banner-heading">
-              Reset your password to get back on track.
-            </h1>
-          </div>
-        </v-col>
-
-        <!-- Right side form -->
-        <v-col
-          cols="12"
-          md="7" 
+          md="6" 
           class="d-flex align-center justify-center px-12"
         >
           <div style="width: 100%; max-width: 500px">
@@ -37,23 +23,26 @@
 
             <!-- Step 1: Email -->
             <v-form v-if="step === 1" ref="form" @submit.prevent="submitEmail">
-              <v-label>Email</v-label>
+              <v-label class="lbl">Email</v-label>
               <v-text-field
                 v-model="email"
                 label="Email"
                 type="email"
                 :rules="emailRules"
                 density="comfortable"
-                variant="outlined"
+                variant="solo"
                 single-line
                 required
-                class="mb-4"
+                class="mb-2 input-bordered"
+                flat
               />
               <v-btn
                 type="submit"
                 color="primary"
                 block
                 class="mt-2 rounded-lg"
+                height="48"
+                flat
               >
                 Send Reset Code
               </v-btn>
@@ -61,7 +50,7 @@
 
             <!-- Step 2: Reset -->
             <v-form v-else ref="form" @submit.prevent="submitReset">
-              <v-label>New Password</v-label>
+              <v-label class="lbl">New Password</v-label>
               <v-text-field
                 v-model="newPassword"
                 label="New Password"
@@ -70,9 +59,11 @@
                 @click:append-inner="showPassword = !showPassword"
                 :rules="passwordRules"
                 required
-                variant="outlined"
+                variant="solo"
+                class="input-bordered"
                 single-line
                 density="comfortable"
+                flat
               />
 
               <v-label>Enter OTP</v-label>
@@ -87,28 +78,70 @@
                 type="submit"
                 color="primary"
                 block
-                class="mt-2 rounded-lg"
+                variant="flat"
+                class="mt-5 rounded-lg"
+                height="48"
                 :disabled="otp.length < 6"
               >
                 Reset Password
               </v-btn>
             </v-form>
 
-            <div class="mt-4 text-body-2 text-center">
+            <div class="mt-5 text-body-2 text-center" style="height: 48px">
               <v-btn variant="text" color="primary" @click="goToLogin">
                 Back to Login
               </v-btn>
             </div>
           </div>
         </v-col>
+          <!-- Right side form -->
+          <v-col v-if="mdAndUp" cols="12" md="6" class="d-flex align-center justify-center pa-0">
+        <div class="px-4 w-100">
+          <div
+            class="background-image relative d-flex align-center justify-center"
+          >
+            <!-- Centered content box -->
+            <div class="overlay-box pa-8">
+              <!-- Logo -->
+              <img
+                src="@/assets/logos/loginLogos/white-logo.svg"
+                alt="My Logo"
+                class="mb-6"
+                style="max-width: 180px"
+              />
+
+              <!-- Heading -->
+              <h1
+                style="
+                  font-family: 'Garnett';
+                  font-weight: 600;
+                  font-size: 40px;
+                  color: #fff;
+                  margin-bottom: 16px;
+                  text-align: left;
+                "
+              >
+                A  Reset your password to get back on track.
+              </h1>
+
+             
+            </div>
+          </div>
+        </div>
+      </v-col>
+
+      
+      
       </v-row>
-    </v-container>
+   
   </div>
 </template>
 
 <script setup>
 import { useRouter } from "vue-router";
+import { useDisplay } from 'vuetify';
 
+const { mdAndUp } = useDisplay();
 const authStore = useAuthStore();
 const store = useMainStore(); // ✅ main snackbar store
 const router = useRouter();
@@ -151,8 +184,10 @@ const submitEmail = async () => {
       });
     }
   } catch (err) {
+    console.log('Forgot password error:', err); // Debug log
+    const errorMessage = err.data?.message || err.message || 'An error occurred';
     store.setSnackbar({
-      title: err.message,
+      title: errorMessage,
       type: "error",
     });
   }
@@ -190,8 +225,10 @@ const submitReset = async () => {
       });
     }
   } catch (err) {
+    console.log('Forgot password error:', err); // Debug log
+    const errorMessage = err.data?.message || err.message || 'An error occurred';
     store.setSnackbar({
-      title: err.message,
+      title: errorMessage,
       type: "error",
     });
   }
@@ -210,24 +247,58 @@ const goToLogin = () => {
 </script>
 
 <style scoped>
+.parent{
+  height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
 .background-image {
   background-image: url("/assets/images/loginBanner.svg");
   background-size: cover;
-  width: 90%;
-  height: 90vh;
+  width: 100%;
+  height: 99vh;
+  border-radius: 12px;
 }
 .login-banner-heading {
   color: #fff;
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 30px;
 }
 .login-heading {
+  font-family: "Garnett";
+
   font-weight: 600;
   font-size: 32px;
 }
 .login-sub-heading {
   font-weight: 400;
   font-size: 16px;
+}
+.overlay-box {
+  border: 1px solid #fff;
+  background-color: rgba(255, 255, 255, 0.1); /* translucent white */
+  backdrop-filter: blur(10px); /* blur effect */
+  -webkit-backdrop-filter: blur(10px); /* Safari support */
+  max-width: 530px;
+  width: 100%;
+  text-align: left;
+  border-radius: 15px;
+}
+.input-bordered :deep(.v-field) {
+  border: 1px solid #dfdfdf !important;
+  border-radius: 8px !important;
+  background-color: white !important;
+  min-height: 40px;
+  font-size: 14px;
+  
+}
+.lbl {
+  font-family: "Inter";
+  font-weight: 400;
+  font-style: "Regular";
+  font-size: 16px;
+  color: #1e1e1e;
 }
 </style>

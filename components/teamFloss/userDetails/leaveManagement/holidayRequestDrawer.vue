@@ -1,275 +1,279 @@
 <template>
-  <v-navigation-drawer
-    :model-value="modelValue"
-    location="right"
-    temporary
-    :width="600"
-  >
-    <!-- Header -->
-    <v-toolbar flat color="white">
-      <v-toolbar-title class="title-text">
-        Add Holiday Request
-      </v-toolbar-title>
-      <v-spacer />
-      <v-btn
-        icon
-        variant="outlined"
-        color="#8B8B8B"
-        @click="onClose"
-        class="mr-4"
+  <teleport to="body">
+    <v-navigation-drawer
+      :model-value="modelValue"
+      location="right"
+      temporary
+      :width="600"
+    >
+      <!-- Header -->
+      <v-toolbar flat color="white">
+        <v-toolbar-title class="title-text">
+          Add Holiday Request
+        </v-toolbar-title>
+        <v-spacer />
+        <v-btn
+          icon
+          variant="outlined"
+          color="#8B8B8B"
+          @click="onClose"
+          class="mr-4"
+          style="
+            width: 20px;
+            height: 20px;
+            min-width: 20px;
+            border-radius: 50%;
+            padding: 0;
+          "
+        >
+          <v-icon size="14">mdi-close</v-icon>
+        </v-btn>
+      </v-toolbar>
+
+      <!-- Body -->
+      <div
+        class="pa-4"
         style="
-          width: 20px;
-          height: 20px;
-          min-width: 20px;
-          border-radius: 50%;
-          padding: 0;
+          background-color: #f5f5f5;
+          height: calc(100% - 64px - 64px);
+          overflow-y: auto;
         "
       >
-        <v-icon size="14">mdi-close</v-icon>
-      </v-btn>
-    </v-toolbar>
-
-    <!-- Body -->
-    <div
-      class="pa-4"
-      style="
-        background-color: #f5f5f5;
-        height: calc(100% - 64px - 64px);
-        overflow-y: auto;
-      "
-    >
-      <v-card class="pa-4" color="white" elevation="0">
-        <v-form ref="formRef" @submit.prevent="onSubmit">
-          <v-row>
-            <!-- Select Employee -->
-            <v-col cols="6">
-              <label class="fld-lbl">Select Employee</label>
-              <v-select
-                v-model="form.userId"
-                :items="allUsers"
-                item-title="fullName"
-                item-value="id"
-                variant="solo"
-                density="compact"
-                class="mb-1 input-bordered"
-                :rules="requiredRule"
-                required
-                flat
-              />
-            </v-col>
-
-            <!-- Leave Type -->
-            <v-col cols="6">
-              <label class="fld-lbl">Leave Type</label>
-              <v-select
-                v-model="form.leaveType"
-                :items="leaveTypes"
-                variant="solo"
-                density="compact"
-                class="mb-1 input-bordered"
-                :rules="requiredRule"
-                required
-                flat
-              />
-            </v-col>
-
-            <!-- Start Date -->
-            <v-col cols="6">
-              <label class="fld-lbl">Start Date</label>
-              <v-menu
-                v-model="startMenu"
-                :close-on-content-click="false"
-                transition="scale-transition"
-                offset-y
-                min-width="auto"
-              >
-                <template #activator="{ props }">
-                  <v-text-field
-                    v-model="formattedStartDate"
-                    v-bind="props"
-                    variant="solo"
-                    density="compact"
-                    class="mb-1 input-bordered"
-                    flat
-                    readonly
-                    :rules="startDateRule"
-                    required
-                  >
-                    <template #append-inner>
-                      <v-icon
-                        class="cursor-pointer"
-                        @click.stop="startMenu = true"
-                        >mdi-calendar</v-icon
-                      >
-                    </template>
-                  </v-text-field>
-                </template>
-
-                <v-date-picker
-                  v-model="form.startDate"
-                  :min="new Date().toISOString().split('T')[0]"
-                  @update:modelValue="onStartDateSelected"
+        <v-card class="pa-4" color="white" elevation="0">
+          <v-form ref="formRef" @submit.prevent="onSubmit">
+            <v-row>
+              <!-- Select Employee -->
+              <v-col cols="6" v-if="isManager">
+                <label class="fld-lbl">Select Employee</label>
+                <v-select
+                  v-model="form.userId"
+                  :items="allUsers"
+                  item-title="fullName"
+                  item-value="id"
+                  variant="solo"
+                  density="compact"
+                  class="mb-1 input-bordered"
+                  :rules="requiredRule"
+                  required
+                  flat
                 />
-              </v-menu>
-            </v-col>
+              </v-col>
 
-            <!-- End Date -->
-            <v-col cols="6">
-              <label class="fld-lbl">End Date</label>
-              <v-menu
-                v-model="endMenu"
-                :close-on-content-click="false"
-                transition="scale-transition"
-                offset-y
-                min-width="auto"
-              >
-                <template #activator="{ props }">
-                  <v-text-field
-                    v-model="formattedEndDate"
-                    v-bind="props"
-                    variant="solo"
-                    density="compact"
-                    class="mb-1 input-bordered"
-                    flat
-                    readonly
-                    :rules="endDateRule"
-                    required
-                  >
-                    <template #append-inner>
-                      <v-icon
-                        class="cursor-pointer"
-                        @click.stop="endMenu = true"
-                        >mdi-calendar</v-icon
-                      >
-                    </template>
-                  </v-text-field>
-                </template>
-
-                <v-date-picker
-                  v-model="form.endDate"
-                  :min="new Date().toISOString().split('T')[0]"
-                  @update:modelValue="onEndDateSelected"
+              <!-- Leave Type -->
+              <v-col cols="6">
+                <label class="fld-lbl">Leave Type</label>
+                <v-select
+                  v-model="form.leaveType"
+                  :items="leaveTypes"
+                  variant="solo"
+                  density="compact"
+                  class="mb-1 input-bordered"
+                  :rules="requiredRule"
+                  required
+                  flat
                 />
-              </v-menu>
-            </v-col>
+              </v-col>
 
-            <!-- Leave Hours -->
-            <v-col v-if="props.origin !== 'holidays'" cols="6">
-              <label class="fld-lbl">Leave Hours</label>
-              <v-select
-                v-model="form.totalHours"
-                :items="leaveHoursOptions"
-                variant="solo"
-                density="compact"
-                class="mb-1 input-bordered"
-                flat
-              />
-            </v-col>
-
-            <!-- Pay -->
-            <v-col v-if="props.origin !== 'holidays'" cols="6">
-              <label class="fld-lbl">Is this leave paid?</label>
-              <v-switch v-model="form.isPaid" inset color="primary" />
-            </v-col>
-            <v-col cols="12" v-if="leaveSummary">
-              <p class="text-body-2 text-secondary font-weight-medium ml-1">
-                {{ leaveSummary }}
-              </p>
-            </v-col>
-            <!-- Comment -->
-            <v-col cols="12">
-              <label class="fld-lbl">Comment</label>
-              <v-textarea
-                v-model="form.reason"
-                variant="solo"
-                density="compact"
-                class="mb-1 input-bordered"
-                flat
-              />
-            </v-col>
-
-            <!-- Supporting Documents -->
-            <v-col v-if="props.origin !== 'holidays'" cols="12">
-              <div v-if="!uploadedFile.length" class="mb-2">
-                <div>
-                  <p class="text-body-2 text-grey-darken-1">
-                    Supporting Document
-                  </p>
-                  <h4 class="text-subtitle-1 font-weight-medium">
-                    Upload any relevant supporting document for your request.
-                  </h4>
-                </div>
-                <v-btn
-                  color="secondary"
-                  variant="flat"
-                  prepend-icon="mdi-upload"
-                  @click="$refs.fileInput.click()"
-                  class="mt-2"
+              <!-- Start Date -->
+              <v-col cols="6">
+                <label class="fld-lbl">Start Date</label>
+                <v-menu
+                  v-model="startMenu"
+                  :close-on-content-click="false"
+                  transition="scale-transition"
+                  offset-y
+                  min-width="auto"
                 >
-                  Upload File
-                </v-btn>
-                <input
-                  ref="fileInput"
-                  type="file"
-                  class="d-none"
-                  @change="handleFileUpload"
+                  <template #activator="{ props }">
+                    <v-text-field
+                      v-model="formattedStartDate"
+                      v-bind="props"
+                      variant="solo"
+                      density="compact"
+                      class="mb-1 input-bordered"
+                      flat
+                      readonly
+                      :rules="startDateRule"
+                      required
+                    >
+                      <template #append-inner>
+                        <v-icon
+                          class="cursor-pointer"
+                          @click.stop="startMenu = true"
+                          >mdi-calendar</v-icon
+                        >
+                      </template>
+                    </v-text-field>
+                  </template>
+
+                  <v-date-picker
+                    v-model="form.startDate"
+                    @update:modelValue="onStartDateSelected"
+                  />
+                </v-menu>
+              </v-col>
+
+              <!-- End Date -->
+              <v-col cols="6">
+                <label class="fld-lbl">End Date</label>
+                <v-menu
+                  v-model="endMenu"
+                  :close-on-content-click="false"
+                  transition="scale-transition"
+                  offset-y
+                  min-width="auto"
+                >
+                  <template #activator="{ props }">
+                    <v-text-field
+                      v-model="formattedEndDate"
+                      v-bind="props"
+                      variant="solo"
+                      density="compact"
+                      class="mb-1 input-bordered"
+                      flat
+                      readonly
+                      :rules="endDateRule"
+                      required
+                    >
+                      <template #append-inner>
+                        <v-icon
+                          class="cursor-pointer"
+                          @click.stop="endMenu = true"
+                          >mdi-calendar</v-icon
+                        >
+                      </template>
+                    </v-text-field>
+                  </template>
+
+                  <v-date-picker
+                    v-model="form.endDate"
+                    :min="new Date(form.startDate).toISOString().split('T')[0]"
+                    @update:modelValue="onEndDateSelected"
+                  />
+                </v-menu>
+              </v-col>
+
+              <!-- Leave Hours -->
+              <v-col cols="6">
+                <label class="fld-lbl">Leave Hours</label>
+                <v-select
+                  v-model="form.totalHours"
+                  :items="leaveHoursOptions"
+                  variant="solo"
+                  density="compact"
+                  class="mb-1 input-bordered"
+                  flat
                 />
-              </div>
+              </v-col>
 
-              <div v-if="uploadedFile.length" class="pa-5">
-                <v-row>
-                  <v-col
-                    v-for="(file, index) in uploadedFile"
-                    :key="index"
-                    cols="12"
-                    sm="6"
-                    md="6"
+              <!-- Pay -->
+              <v-col cols="6">
+                <label class="fld-lbl">Is this leave paid?</label>
+                <v-switch v-model="form.isPaid" inset color="primary" />
+              </v-col>
+              <v-col cols="12" v-if="leaveSummary">
+                <p class="text-body-2 text-secondary font-weight-medium ml-1">
+                  {{ leaveSummary }}
+                </p>
+              </v-col>
+              <!-- Comment -->
+              <v-col cols="12">
+                <label class="fld-lbl">Comment</label>
+                <v-textarea
+                  v-model="form.reason"
+                  variant="solo"
+                  density="compact"
+                  class="mb-1 input-bordered"
+                  flat
+                />
+              </v-col>
+
+              <!-- Supporting Documents -->
+              <v-col cols="12">
+                <div v-if="!uploadedFile.length" class="mb-2">
+                  <div>
+                    <p class="text-body-2 text-grey-darken-1">
+                      Supporting Document
+                    </p>
+                    <h4 class="text-subtitle-1 font-weight-medium">
+                      Upload any relevant supporting document for your request.
+                    </h4>
+                  </div>
+                  <v-btn
+                    color="secondary"
+                    variant="flat"
+                    prepend-icon="mdi-upload"
+                    @click="$refs.fileInput.click()"
+                    class="mt-2"
                   >
-                    <DocsMyDocsRecentlyAccessed
-                      class="mb-2"
-                      :file="file"
-                      :folder="selectedFolder"
-                    />
-                  </v-col>
-                </v-row>
-              </div>
-            </v-col>
-          </v-row>
-        </v-form>
-      </v-card>
-    </div>
+                    Upload File
+                  </v-btn>
+                  <input
+                    ref="fileInput"
+                    type="file"
+                    class="d-none"
+                    @change="handleFileUpload"
+                  />
+                </div>
 
-    <!-- Footer -->
-    <div
-      class="d-flex justify-space-between align-center px-4 py-2"
-      style="background-color: white; height: 64px"
-    >
-      <v-btn
-        color="white"
-        class="text-primary"
-        style="width: 48%; border-radius: 8px; border: 1px solid #dfdfdf"
-        @click="onClose"
-        flat
-      >
-        Back
-      </v-btn>
+                <div v-if="uploadedFile.length" class="pa-5">
+                  <v-row>
+                    <v-col
+                      v-for="(file, index) in uploadedFile"
+                      :key="index"
+                      cols="12"
+                      sm="6"
+                      md="6"
+                    >
+                      <DocsMyDocsRecentlyAccessed
+                        class="mb-2"
+                        :file="file"
+                        :folder="selectedFolder"
+                      />
+                    </v-col>
+                  </v-row>
+                </div>
+              </v-col>
+            </v-row>
+          </v-form>
+        </v-card>
+      </div>
 
-      <v-btn
-        color="primary"
-        class="text-white"
-        style="width: 48%; border-radius: 8px"
-        @click="onSubmit"
-        flat
+      <!-- Footer -->
+      <div
+        class="d-flex justify-space-between align-center px-4 py-2"
+        style="background-color: white; height: 64px"
       >
-        Save
-      </v-btn>
-    </div>
-  </v-navigation-drawer>
+        <v-btn
+          color="white"
+          class="text-primary"
+          style="width: 48%; border-radius: 8px; border: 1px solid #dfdfdf"
+          @click="onClose"
+          flat
+        >
+          Back
+        </v-btn>
+
+        <v-btn
+          color="primary"
+          class="text-white"
+          style="width: 48%; border-radius: 8px"
+          @click="onSubmit"
+          flat
+        >
+          Save
+        </v-btn>
+      </div>
+    </v-navigation-drawer>
+  </teleport>
 </template>
 
 <script setup>
 import { format, differenceInCalendarDays, parseISO } from "date-fns";
+import { formatDateDDMMYYYY } from "~/lib/dateFormatter";
 const userStore = useUserStore();
+const mainStore = useMainStore();
+const { user, isManager } = useUser();
 
 const props = defineProps({
   modelValue: Boolean,
@@ -295,23 +299,18 @@ watch(
   modelValueRef,
   (newValue) => {
     if (newValue) {
-      setUsers();
+      if (isManager.value) {
+        setUsers();
+      } else {
+        form.value.userId = user.value.id;
+      }
     }
   },
   { immediate: true }
 );
 
 const setUsers = () => {
-  if (props.user) {
-    allUsers.value = userStore.orgUsers.find(
-      (x) => x.organisation.id === props.user.organisationId
-    ).orgUsers;
-  } else {
-    const localUser = JSON.parse(localStorage.getItem("user"));
-    allUsers.value = userStore.orgUsers.find(
-      (x) => x.organisation.id === localUser.currentLoggedInOrgId
-    ).orgUsers;
-  }
+ allUsers.value = userStore.users
 };
 // file uploads
 const uploadedFile = ref([]);
@@ -321,8 +320,22 @@ const handleFileUpload = (event) => {
   const files = event.target.files;
   uploadedFile.value = files;
 };
-const leaveTypes = ref(["Sick", "Casual", "Annual", "Compationate", "Other"]);
-const leaveHoursOptions = ref(["Half Day", "Full Day"]);
+const leaveHoursOptions = ref(["8 hrs", "4 hrs"]);
+const leaveTypes = ref([
+  "Annual",
+  "Casual",
+  "Sick",
+  "Compationate",
+  "Maternity",
+  "Paternity",
+  "Adoption",
+  "Shared Parental",
+  "Public Holiday",
+  "Sabbatical",
+  "Study",
+  "Volunteer",
+  "Others",
+]);
 const requiredRule = [(v) => !!v || "This field is required"];
 const startDateRule = [
   (v) => !!v || "Start date is required",
@@ -336,10 +349,7 @@ const startDateRule = [
 
 const endDateRule = [
   (v) => !!v || "This field is required",
-  (v) =>
-    !form.value.startDate ||
-    !v ||
-    v >= form.value.startDate ||
+  (v) => v < form.value.startDate ||
     "End date must be after start date",
 ];
 const leaveSummary = computed(() => {
@@ -350,8 +360,8 @@ const leaveSummary = computed(() => {
   const days = differenceInCalendarDays(end, start) + 1;
 
   let hoursPerDay = 0;
-  if (form.value.totalHours === "Full Day") hoursPerDay = 8;
-  if (form.value.totalHours === "Half Day") hoursPerDay = 4;
+  if (form.value.totalHours === "8 hrs") hoursPerDay = 8;
+  if (form.value.totalHours === "4 hrs") hoursPerDay = 4;
 
   const totalHours = hoursPerDay ? days * hoursPerDay : 0;
 
@@ -367,7 +377,7 @@ const leaveSummary = computed(() => {
 const formattedStartDate = computed({
   get() {
     if (!form.value.startDate) return "";
-    return form.value.startDate;
+    return formatDateDDMMYYYY(form.value.startDate);
   },
   set(val) {
     form.value.startDate = val;
@@ -376,7 +386,7 @@ const formattedStartDate = computed({
 const formattedEndDate = computed({
   get() {
     if (!form.value.endDate) return "";
-    return form.value.endDate;
+    return formatDateDDMMYYYY(form.value.endDate);
   },
   set(val) {
     form.value.endDate = val;
@@ -415,12 +425,30 @@ const onSubmit = async () => {
       const localUser = JSON.parse(localStorage.getItem("user"));
       formData.append("organisationId", localUser.currentLoggedInOrgId);
     }
-    userStore.applyLeave(formData).then((res) => {
+    try {
+      const res = await userStore.applyLeave(formData);
+
       if (res.code === 0) {
         emit("success");
         resetForm();
+        mainStore.setSnackbar({
+          title:
+            res?.message || res?.data?.message || "Leave applied successfully",
+          type: "success",
+        });
+      } else {
+        mainStore.setSnackbar({
+          title: res?.message || res?.data?.message || "Leave apply failed",
+          type: "error",
+        });
       }
-    });
+    } catch (err) {
+      mainStore.setSnackbar({
+        title:
+          err.message || "An unexpected error occurred while applying leave",
+        type: "error",
+      });
+    }
   }
 };
 const resetForm = () => {
@@ -444,12 +472,10 @@ const onClose = () => {
 
 <style scoped>
 .title-text {
-  font-family: "Poppins";
   font-weight: 600;
   font-size: 16px;
 }
 .fld-lbl {
-  font-family: "Poppins";
   font-weight: 400;
   font-size: 14px;
   color: #737373;

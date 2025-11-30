@@ -103,7 +103,7 @@ function onAdd() {
   padding: 6px 8px;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
   cursor: pointer;
   color: #101010;
 }
@@ -147,7 +147,7 @@ function onAdd() {
 
 .link-btn {
   text-transform: none;
-  font-family: Poppins;
+  
   font-size: 14px;
   font-weight: 500;
   padding-left: 4px;
@@ -167,6 +167,6 @@ function onAdd() {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 </style>

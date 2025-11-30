@@ -34,7 +34,7 @@ defineEmits(["select"]);
   min-width: 200px;
 }
 .cust-label {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 13px;
   color: #737373;

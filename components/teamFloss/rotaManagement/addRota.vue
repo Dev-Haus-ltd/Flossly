@@ -53,16 +53,12 @@
               <div
                 class="content-wrapper d-flex flex-column align-center justify-center"
               >
-                <div class="mb-2">
-                  <img
-                    v-if="practice.logo"
-                    :src="practice.logo"
-                    alt="logo"
-                    style="height: 40px; width: 40px; border-radius: 50%"
-                  />
-                  <CommonAvatar v-else :user="{ fullName: practice.label }" />
-                </div>
-                <p class="practice-title">
+                <CommonAvatar 
+                  :user="{ name: practice.label, logo: practice.logo }"
+                  size="40"
+                  class="mb-2"
+                />
+                <p class="practice-title"> 
                   {{ practice.label }}
                 </p>
               </div>
@@ -157,7 +153,7 @@
                   <v-text-field
                     v-bind="props"
                     :model-value="
-                      form.startDate ? parsedDate(form.startDate) : ''
+                      form.startDate ? formatDateDDMMYYYY(form.startDate) : ''
                     "
                     readonly
                     variant="solo"
@@ -188,7 +184,7 @@
                 <template #activator="{ props }">
                   <v-text-field
                     v-bind="props"
-                    :model-value="form.endDate ? parsedDate(form.endDate) : ''"
+                    :model-value="form.endDate ? formatDateDDMMYYYY(form.endDate) : ''"
                     readonly
                     variant="solo"
                     flat
@@ -245,7 +241,7 @@
 </template>
 
 <script setup>
-import { parsedDate } from "~/lib/dateFormatter";
+import { formatDateDDMMYYYY } from "~/lib/dateFormatter";
 import { differenceInDays, addDays } from "date-fns";
 const mainStore = useMainStore();
 const rotaStore = useRotaStore();
@@ -268,24 +264,54 @@ const practiceError = ref("");
 const rotaForm = ref(null);
 const menuStartDateCreaterota = ref(false);
 const menuEndDateCreaterota = ref(false);
-const rules = {
+const rules = { 
   required: (v) =>
     (Array.isArray(v) ? v.length > 0 : !!v) || "This field is required",
 };
 const employees = ref([]);
+
+// Helper function to get organization data consistently (same as sidebar)
+const getOrgData = (orgWrapper) => {
+  // Check if org has nested organisation object
+  if (orgWrapper?.organisation?.id && orgWrapper?.organisation?.name) {
+    return orgWrapper.organisation;
+  }
+  
+  // Check if org is the organisation object itself
+  if (orgWrapper?.id && orgWrapper?.name) {
+    return orgWrapper;
+  }
+  
+  return null;
+};
+
 const practices = computed(
   () =>
-    user?.userOrganisations?.map((uo) => ({
-      label: uo.organisation.name,
-      value: uo.organisation.id,
-      logo: uo.organisation.logo,
-    })) || []
+    user?.userOrganisations?.map((uo) => {
+      const orgData = getOrgData(uo);
+      const logo = orgData?.logo;
+      // Only set logo if it's a valid non-empty string
+      const validLogo = logo && typeof logo === 'string' && logo.trim() !== '' ? logo : null;
+      return {
+        label: orgData?.name || '',
+        value: orgData?.id || null,
+        logo: validLogo,
+      };
+    }).filter(p => p.value) || []
 );
 const selectedOption = ref(null);
-const rotaOptions = [
+const existingRotas = ref([]);
+const allRotaOptions = [
   { value: "new", label: "Create a new rota", icon: "mdi-calendar-plus" },
   { value: "copy", label: "Copy an existing rota", icon: "mdi-content-copy" },
 ];
+const rotaOptions = computed(() => {
+  // Hide "copy" option if no rotas exist
+  if (existingRotas.value.length === 0) {
+    return allRotaOptions.filter(opt => opt.value !== "copy");
+  }
+  return allRotaOptions;
+});
 
 watch(
   () => [form.value.startDate, form.value.endDate],
@@ -306,6 +332,17 @@ watch(
     }
   }
 );
+
+watch(
+  () => existingRotas.value.length,
+  (count) => {
+    // Reset selection if "copy" is selected but no rotas exist
+    if (count === 0 && selectedOption.value === "copy") {
+      selectedOption.value = null;
+      isCreateRota.value = false;
+    }
+  }
+);
 const selectedOptionHandle = (value) => {
   selectedOption.value = value;
   isCreateRota.value = value === "new";
@@ -321,6 +358,20 @@ const selectPractice = (value) => {
   form.value.orgId = value;
   practiceError.value = "";
   getUsers(form.value.orgId);
+  checkExistingRotas();
+};
+
+const checkExistingRotas = async () => {
+  try {
+    const res = await rotaStore.getRotas();
+    if (res?.code === 0) {
+      existingRotas.value = res.data || [];
+    } else {
+      existingRotas.value = [];
+    }
+  } catch (err) {
+    existingRotas.value = [];
+  }
 };
 
 const submitForm = async () => {
@@ -334,7 +385,7 @@ const submitForm = async () => {
   try {
     const res = await rotaStore.addRota(form.value);
     if (res.code === 0) {
-      handleAddRotaUser(res.data.id, form.value.employees);
+      handleAddRotaUser(res.data, form.value.employees);
     } else{
       mainStore.setSnackbar({
         type: "error",
@@ -349,29 +400,31 @@ const submitForm = async () => {
   }
 };
 
-const handleAddRotaUser = async (rotaId, users) => {
+const handleAddRotaUser = async (rota, users) => {
   try {
     const rotaUsers = users.map((el) => {
       return { userId: el };
     });
-    const res = await rotaStore.addRotaUsers({ rotaId, users: rotaUsers });
+    const res = await rotaStore.addRotaUsers({ rotaId: rota.id, users: rotaUsers });
     if (res.code === 0) {
       mainStore.setSnackbar({
         type: "success",
         title: "Rota added successfully",
       });
       resetForm();
-      emit('onAddRota')
+      // Refresh rotas list so "copy" option becomes available
+      await checkExistingRotas();
+      emit('onAddRota', rota)
     } else {
       mainStore.setSnackbar({
         type: "error",
-        title: res.message || res?.data?.message  || "Something went wrong",
+        title: res?.data?.message || res.message || "Something went wrong",
       });
     }
   } catch (err) {
     mainStore.setSnackbar({
       type: "error",
-      title: err.message || "An error occurred",
+      title: err?.data?.message || err.message || "Something went wrong",
     });
   }
 };
@@ -388,7 +441,64 @@ function resetForm() {
   };
   isCreateRota.value = false;
   selectedOption.value = null;
+  existingRotas.value = [];
 }
+
+// Auto-select practice on mount
+onMounted(() => {
+  checkExistingRotas();
+  
+  // Auto-select practice based on rules
+  const practiceList = practices.value;
+  
+  if (practiceList.length === 0) {
+    return; // No practices available
+  }
+  
+  // If only one practice, select it automatically
+  if (practiceList.length === 1) {
+    const practiceId = practiceList[0].value;
+    if (practiceId) {
+      selectPractice(practiceId);
+    }
+    return;
+  }
+  
+  // If multiple practices, select the current one (from sidebar)
+  if (user?.currentLoggedInOrgId) {
+    const currentOrgId = user.currentLoggedInOrgId;
+    
+    // Try to find practice matching currentLoggedInOrgId
+    // First try by organisationId
+    const orgWrapper = user.userOrganisations?.find(
+      (org) => org.organisationId === currentOrgId
+    );
+    
+    if (orgWrapper) {
+      const orgData = getOrgData(orgWrapper);
+      if (orgData?.id) {
+        const practiceId = orgData.id;
+        selectPractice(practiceId);
+        return;
+      }
+    }
+    
+    // If not found, try by id
+    const matchingPractice = practiceList.find(
+      (p) => Number(p.value) === Number(currentOrgId)
+    );
+    
+    if (matchingPractice) {
+      selectPractice(matchingPractice.value);
+      return;
+    }
+  }
+  
+  // Fallback: select first practice if no current org found
+  if (practiceList.length > 0 && practiceList[0].value) {
+    selectPractice(practiceList[0].value);
+  }
+});
 </script>
 <style scoped>
 .input-bordered :deep(.v-field) {
@@ -397,11 +507,11 @@ function resetForm() {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 /* create rota screen */
 .rota-title {
-  font-family: Poppins, sans-serif;
+  
   font-weight: 600;
   font-style: SemiBold;
   font-size: 14px;
@@ -409,7 +519,7 @@ function resetForm() {
 }
 
 .rota-subtitle {
-  font-family: Poppins, sans-serif;
+  
   font-weight: 400;
   font-style: normal;
   font-size: 14px;
@@ -469,7 +579,7 @@ function resetForm() {
 }
 
 .option-title {
-  font-family: Poppins, sans-serif;
+  
   font-weight: 500;
   font-size: 14px;
   line-height: 130%;
@@ -489,7 +599,7 @@ function resetForm() {
 .field-label {
   display: block;
   margin-bottom: 4px;
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 14px;
   color: #737373;
@@ -503,14 +613,14 @@ function resetForm() {
 /* calender view */
 
 .filter-label {
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 14px;
   color: #737373;
 }
 
 .chip-content {
-  font-family: "Poppins";
+  
   font-weight: 500;
   font-style: Medium;
   font-size: 14px;

@@ -1,6 +1,7 @@
 <template>
   <v-navigation-drawer
     :model-value="modelValue"
+    @update:model-value="$emit('update:modelValue', $event)"
     location="right"
     temporary
     :width="600"
@@ -13,7 +14,7 @@
         icon
         variant="outlined"
         color="#8B8B8B"
-        @click="emit('close')"
+        @click="handleClose"
         class="mr-4"
         style="
           width: 20px;
@@ -97,7 +98,7 @@
         color="white"
         class="text-primary"
         style="width: 48%; border-radius: 8px; border: 1px solid #dfdfdf"
-        @click="emit('close')"
+        @click="handleClose"
         flat
       >
         Back
@@ -125,7 +126,7 @@ const { modelValue, rolesList } = defineProps({
 
 const mainStore = useMainStore();
 
-const emit = defineEmits(["close", "success"]);
+const emit = defineEmits(["close", "success", "update:modelValue"]);
 const formRef = ref(null);
 const requiredRule = [(v) => !!v || "This field is required"];
 const authStore = useAuthStore();
@@ -135,8 +136,23 @@ const form = ref({
   roleId: null,
 });
 
+const resetForm = () => {
+  form.value = {
+    fullName: "",
+    email: "",
+    roleId: null,
+  };
+  if (formRef.value) {
+    formRef.value.reset();
+    formRef.value.resetValidation();
+  }
+};
 
-
+const handleClose = () => {
+  resetForm();
+  emit("update:modelValue", false);
+  emit("close");
+};
 
 const onSubmit = async () => {
   const formValidation = await formRef.value.validate();
@@ -144,6 +160,8 @@ const onSubmit = async () => {
     authStore.inviteMembers({users: [form.value]}).then((res) => {
       if (res.code === 0) {
         setSnack("success", "User Invited Successfully");
+        resetForm();
+        emit("update:modelValue", false);
         emit("success");
       } else {
         setSnack("error", "User is not Invited.");
@@ -162,12 +180,12 @@ const setSnack = (type, title) => {
 
 <style scoped>
 .title-text {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 16px;
 }
 .fld-lbl {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 14px;
   color: #737373;
@@ -178,6 +196,6 @@ const setSnack = (type, title) => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 </style>

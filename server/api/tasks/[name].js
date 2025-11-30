@@ -5,7 +5,9 @@ import {
   assignBulkTasks,
   bulkUploadTasks,
   createNewTask,
+  uploadBulkTasks,
   createUserTaskChecklist,
+  deleteAttachment,
   deleteTaskChecklist,
   deleteUserTaskChecklist,
   getUserTaskDetails,
@@ -24,8 +26,14 @@ import {
   groupTeamTasksByTaskId,
   teamTasksCountByCategory,
   archieveBulkTasks,
+  unarchiveBulkTasks,
   completeBulkTasks,
   unAssignBulkTask,
+  getTeamTaskStatsByStatusAndCategory,
+  addUserTaskComment,
+  listUserTaskComments,
+  updateUserTaskComment,
+  deleteUserTaskComment,
 } from "~/server/controllers/task";
 
 export default defineEventHandler(async (event) => {
@@ -49,10 +57,22 @@ export default defineEventHandler(async (event) => {
       return await viewTeamTasksTaskWise(event);
     case "updateUserTask":
       return await updateTask(event);
+    case "addComment":
+      return await addUserTaskComment(event);
+    case "comments":
+      return await listUserTaskComments(event);
+    case "updateComment":
+      return await updateUserTaskComment(event);
+    case "deleteComment":
+      return await deleteUserTaskComment(event);
     case "addAttachments":
       return await addAttachments(event);
+    case "deleteAttachment":
+      return await deleteAttachment(event);
     case "addNewTask":
-      return await createNewTask(event);
+      return await createNewTask(event); 
+    case "addBulkTasks":
+      return await uploadBulkTasks(event);
     case "teamTaskCounts":
       return await teamTasksCounts(event);
     case "createChecklist":
@@ -81,10 +101,14 @@ export default defineEventHandler(async (event) => {
       return await getGeneralTasksByCategory(event);
     case "archieveBulk":
       return await archieveBulkTasks(event);
+    case "unarchiveBulk":
+      return await unarchiveBulkTasks(event);
     case "completeBulk":
       return await completeBulkTasks(event);
     case "unassignBulk":
       return await unAssignBulkTask(event);
+    case "statsByCategory":
+      return await getTeamTaskStatsByStatusAndCategory(event);
     default:
       return { code: 0, error: "Not found" };
   }

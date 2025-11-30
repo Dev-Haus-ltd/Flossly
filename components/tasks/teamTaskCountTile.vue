@@ -37,8 +37,8 @@
       </div>
       <div class="divider"></div>
       <div class="stat-item text-center">
-        <div class="stat-count">{{ userStat.taskStats.upcoming }}</div>
-        <div class="stat-label">Upcoming</div>
+        <div class="stat-count">{{ userStat.taskStats.todo }}</div>
+        <div class="stat-label">To Do</div>
       </div>
     </div>
   </v-card>
@@ -63,7 +63,7 @@ const { userStat } = defineProps(["userStat"]);
 }
 
 .user-name {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 600;
   font-size: 14px;
   color: #1e1e1e;
@@ -76,14 +76,14 @@ const { userStat } = defineProps(["userStat"]);
   }
 
   .stat-count {
-    font-family: "Poppins", sans-serif;
+    
     font-weight: 600;
     font-size: 14px;
     color: #1e1e1e;
   }
 
   .stat-label {
-    font-family: "Poppins", sans-serif;
+    
     font-weight: 400;
     font-size: 10px;
     color: #737373;

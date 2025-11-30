@@ -5,7 +5,7 @@
       <v-card-title
         class="d-flex align-center justify-space-between"
         style="
-          font-family: Poppins;
+          
           font-weight: 600;
           font-size: 16px;
           border-bottom: 1px solid #dbdbdb;
@@ -30,7 +30,7 @@
           <!-- Add shift from library -->
           <h3
             style="
-              font-family: Poppins;
+              
               font-weight: 600;
               font-size: 14px;
               color: #1e1e1e;
@@ -63,7 +63,7 @@
           <h3
             class="mb-5"
             style="
-              font-family: Poppins;
+              
               font-weight: 600;
               font-size: 14px;
               color: #1e1e1e;
@@ -349,6 +349,8 @@ const form = ref({
   color: "",
   label: "",
   userId: null,
+  isLocumShift: false,
+  locumUserId: null
 });
 
 const surgries = ref([]);
@@ -382,12 +384,32 @@ const timeOptions = Array.from({ length: 48 }, (_, i) => {
 });
 
 const toMinutes = (time) => {
-  const [h, m] = time.split(":").map(Number);
-  return h * 60 + m;
+  // Handle string format "HH:mm"
+  if (typeof time === 'string') {
+    const [h, m] = time.split(":").map(Number);
+    return h * 60 + m;
+  }
+  // Handle Date object
+  if (time instanceof Date) {
+    return time.getHours() * 60 + time.getMinutes();
+  }
+  // If it's already a number or invalid, return 0
+  return 0;
 };
 const isEndTimeValid = (end) => {
   if (!form.value.startDate) return false;
-  let diff = toMinutes(end) - toMinutes(form.value.startDate);
+  // Ensure end is a string (from timeOptions)
+  if (typeof end !== 'string') return false;
+  
+  const startTime = form.value.startDate;
+  // Convert startDate to string if it's a Date object
+  const startTimeStr = startTime instanceof Date 
+    ? `${String(startTime.getHours()).padStart(2, '0')}:${String(startTime.getMinutes()).padStart(2, '0')}`
+    : startTime;
+  
+  if (typeof startTimeStr !== 'string') return false;
+  
+  let diff = toMinutes(end) - toMinutes(startTimeStr);
   if (diff < 0) diff += 24 * 60;
   return diff >= 240; // 4 hours = 240 mins
 };
@@ -409,8 +431,14 @@ const nurseOptions = computed(() => {
 
 const handleShiftData = () => {
   const data = props.shiftData;
+  if (data.user.isTempUser) {
+    form.value.locumUserId = data.user.id
+    form.value.isLocumShift = true
+    form.value.userId = null
+  } else {
+    form.value.userId = data.user.id;
+  }
   // const currentShift= props.shifts.find(s=> s.userId===data.user.id && format(s.startDate, "yyyy-MM-dd") === format(data.day, "yyyy-MM-dd"))
-  form.value.userId = data.user.id;
   selectedUserRole.value = data.user.role.id;
 };
 const close = () => {
@@ -447,6 +475,8 @@ const resetForm = () => {
     notes: "",
     color: "",
     label: "",
+    locumUserId: null,
+    isLocumShift: false,
     userId: null,
   };
   breakHrs.value = "";
@@ -463,8 +493,12 @@ const submitForm = async () => {
   const { valid } = await formRef.value.validate();
   if (!valid) return;
   try {
-    const breakTime =
-      (Number(breakHrs.value) || 0) * 60 + (Number(breakMins.value) || 0);
+    // Calculate break time - if both fields are empty or invalid, send null instead of 0
+    const hrs = breakHrs.value ? Number(breakHrs.value) : 0;
+    const mins = breakMins.value ? Number(breakMins.value) : 0;
+    // Only send null if both are 0 or empty, otherwise calculate total minutes
+    const breakTime = (hrs === 0 && mins === 0) ? null : (hrs * 60 + mins);
+    
     const startDateObj = buildDateTime(
       props.shiftData.day,
       form.value.startDate
@@ -552,10 +586,10 @@ watch(
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 .field-label {
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 14px;
   color: #737373;
@@ -563,7 +597,7 @@ watch(
 .error-text {
   color: #b00020;
   font-size: 12px;
-  font-family: "Poppins", sans-serif;
+  
   margin-top: 4px;
   display: block;
 }

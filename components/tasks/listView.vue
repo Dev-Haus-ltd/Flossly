@@ -1,14 +1,29 @@
 <template>
   <div>
-    <div class="d-flex justify-space-between align-center my-2">
-      <div class="d-flex align-center py-1">
+    <div
+      class="d-flex align-center my-2"
+      style="flex-wrap: nowrap; overflow-x: auto;"
+    >
+      <div class="d-inline-flex align-center py-1" style="flex-wrap: nowrap;">
         <v-btn-toggle v-model="viewType" mandatory class="custom-toggle">
           <v-btn value="list" class="toggle-btn">
-            <v-icon size="16" class="mr-1">mdi-format-align-right</v-icon>
+            <img
+              :src="listicon"
+              alt="list icon"
+              class="mr-1"
+              width="16"
+              height="16"
+            />
             List
           </v-btn>
           <v-btn value="calender" class="toggle-btn">
-            <v-icon size="16" class="mr-1">mdi-calendar</v-icon>
+            <img
+              :src="calendericon"
+              alt="calendar icon"
+              class="mr-1"
+              width="16"
+              height="16"
+            />
             Calender
           </v-btn>
         </v-btn-toggle>
@@ -19,6 +34,7 @@
             placeholder="Search"
             append-inner-icon="mdi-magnify"
             variant="solo"
+            :elevation="0"
             density="compact"
             hide-details
             bg-color="#FAFAFA"
@@ -40,7 +56,7 @@
                 v-bind="props"
                 variant="flat"
                 density="compact"
-                class="tbl-top-btn ml-2"
+                class="tbl-top-btn"
                 style="width: 200px"
               >
                 <span>Manage Columns</span>
@@ -55,7 +71,7 @@
                   v-for="(item, index) in selectedHeaders"
                   :key="index"
                   class="color-box ma-1 pa-2 d-flex align-center justify-space-between position-relative"
-                  :style="{ backgroundColor: getRandomHexColor() }"
+                  :style="{ backgroundColor: getRandomHexColor(item.title) }"
                 >
                   <span> {{ item.title }}</span>
                   <v-icon
@@ -70,10 +86,10 @@
               <p>Available Columns</p>
               <div class="d-flex flex-wrap">
                 <div
-                  v-for="(item, index) in availableHeaders"
+                  v-for="(item, index) in filteredAvailableHeaders"
                   :key="index"
                   class="color-box ma-1 pa-2 d-flex align-center justify-center"
-                  :style="{ backgroundColor: getRandomHexColor() }"
+                  :style="{ backgroundColor: getRandomHexColor(item.title) }"
                   @click="addHeaderInSelected(item)"
                 >
                   {{ item.title }}
@@ -83,13 +99,13 @@
           </v-menu>
         </div>
       </div>
-      <div>
+      <div class="d-inline-flex" style="flex-wrap: nowrap;">
         <v-btn
-          color="secondary"
+          color="tertiary"
           variant="flat"
           rounded="lg"
           @click="taskPoolDialog = true"
-          class="add-task-btn mr-2"
+          class="add-task-btn"
         >
           <template #prepend>
             <v-icon size="18">mdi-checkbox-marked-outline</v-icon>
@@ -97,10 +113,22 @@
           Tasks Pool
         </v-btn>
         <v-btn
+          color="secondary"
+          variant="flat"
+          rounded="lg"
+          @click="bulkTaskUploadDialog = true"
+          class="add-task-btn mx-2"
+        >
+          <template #prepend>
+            <v-icon size="18">mdi-upload</v-icon>
+          </template>
+          Upload bulk tasks
+        </v-btn>
+        <v-btn
           color="primary"
           variant="flat"
           rounded="lg"
-          @click="drawerOpen = true"
+          @click="openAddTaskDialog"
           class="add-task-btn"
         >
           <template #prepend>
@@ -112,7 +140,7 @@
     </div>
 
     <v-expansion-panels
-      v-if="viewType === 'list'"
+      v-if="viewType === 'list' && taskDetails && taskDetails.length"
       v-model="openedPanels"
       :elevation="0"
       flat
@@ -131,6 +159,9 @@
                 <v-icon v-if="group.status === 'todo'" class="mr-2"
                   >mdi-calendar-clock</v-icon
                 >
+                <v-icon v-else-if="group.status === 'archived'" class="mr-2">
+                  mdi-archive-outline
+                </v-icon>
                 <v-icon v-else class="mr-2">
                   mdi-calendar-check-outline
                 </v-icon>
@@ -158,7 +189,6 @@
             @update:modelValue="onSelectionChange"
             return-object
             show-select
-            :show-expand="true"
             hover
           >
             <template
@@ -185,19 +215,50 @@
                 someSelected,
               }"
             >
-              <tr>
-                <template v-for="(column, i) in columns" :key="column.key">
+              <draggable
+                tag="tr"
+                :model-value="columns"
+                item-key="key"
+                direction="horizontal"
+                :disabled="isResizing"
+                handle=".th-content"
+                @update:model-value="updateHeaderOrder"
+              >
+                <template #item="{ element: column, index: i }">
                   <th
                     :style="{
-                      width: column.width + 'px',
+                      minWidth: column.width + 'px',
                       padding: '0px 7px',
                       backgroundColor: '#F6F6F6',
                       fontSize: '14px',
+                      position: 'relative',
                     }"
+                    @mouseover="showHandles(column.key, index)"
+                    @mouseleave="hideHandles(column.key, index)"
                   >
-                    <div v-if="i !== 0" class="d-flex align-center th-content">
+                    <div
+                      v-if="!column.title && i === 0"
+                      class="d-flex align-center justify-center"
+                    >
+                      <input
+                        type="checkbox"
+                        class="cust-checkbox ma-0"
+                        :checked="allSelected"
+                        :indeterminate.prop="someSelected && !allSelected"
+                        @change="toggleAll(group)"
+                      />
+                    </div>
+                    <div v-else class="d-flex align-center th-content">
+                      <p
+                        v-if="!isEditing(column, index)"
+                        @click="enableEditing(column, index)"
+                        style="cursor: text;"
+                      >
+                        {{ column.title }}
+                      </p>
                       <v-text-field
-                        :model-value="column.title"
+                        v-else
+                        v-model="column.title"
                         @update:model-value="
                           (val) => updateHeaderTitle(column.key, val)
                         "
@@ -207,16 +268,19 @@
                         density="compact"
                         hide-details
                         @focus="setFocus('header', column.key, true)"
-                        @blur="updateValueColumn(column)"
+                        @blur="updateValueColumn(column, index)"
                         class="small-input"
                       />
+
+                     <div class="d-flex justify-end">
                       <v-icon
                         size="14"
                         color="black"
                         style="cursor: pointer"
-                        @click="removeHeaderFromSeleted(column)"
-                        >mdi-minus</v-icon
+                        @click.stop="removeHeaderFromSeleted(column)"
                       >
+                        mdi-minus
+                      </v-icon>
                       <v-icon
                         v-if="column.sortable"
                         size="12"
@@ -225,23 +289,17 @@
                       >
                         {{ getSortIcon(column) }}
                       </v-icon>
+                     </div>
                       <span
                         class="resize-handle"
-                        @mousedown="startResize($event, column)"
-                      ></span>
-                    </div>
-                    <div v-else class="d-flex align-center justify-center">
-                      <input
-                        type="checkbox"
-                        class="cust-checkbox ma-0"
-                        :checked="allSelected"
-                        :indeterminate.prop="someSelected && !allSelected"
-                        @change="toggleAll"
-                      />
+                        :id="`resize-handle-${column.key}-${index}`"
+                        @pointerdown="startResize($event, column, index)"
+                      >
+                      </span>
                     </div>
                   </th>
                 </template>
-              </tr>
+              </draggable>
             </template>
             <template
               v-for="col in selectedHeaders"
@@ -253,11 +311,12 @@
                   <v-text-field
                     v-model="item.title"
                     :variant="isFocused(item.id, 'title') ? 'outlined' : 'plain'"
-                    @focus="setFocus(item.id, 'title', true)"
+                    @focus="() => { setFocus(item.id, 'title', true); storeOriginalValue(item.id, 'title', item); }"
                     @blur="updateValueRow(item, 'title')"
                     density="compact"
                     hide-details
-                    @keyup.enter="updateTitle(item, 'title')"
+                    @keyup.enter="(e) => handleEnterKey(e, item, 'title')"
+                    @keyup.escape="(e) => handleEscapeKey(e, item, 'title')"
                     class="small-input"
                   />
                   <img
@@ -271,14 +330,14 @@
               </template>
 
               <!-- Inside v-slot:[`item.${col.key}`] -->
-              <!-- <template v-else-if="col.key === 'status.name'">
+              <template v-else-if="col.key === 'status'">
                 <DataTableColumnsStatus
                   :statuses="statuses"
                   :selected="item"
                   :column="col"
                   @update="updateValueRow(item, 'status')"
                 />
-              </template> -->
+              </template> 
               <template v-else-if="col.key === 'priority.name'">
                 <DataTableColumnsPriorities
                   :priorities="priorities"
@@ -339,10 +398,11 @@
                       setNestedValue(item, col.key, val);
                     }"
                     :variant="isFocused(item.id, col.key) ? 'outlined' : 'plain'"
-                    @focus="setFocus(item.id, col.key, true)"
+                    @focus="() => { setFocus(item.id, col.key, true); storeOriginalValue(item.id, col.key, item); }"
                     @blur="updateValueRow(item, col.key)"
                     density="compact"
-                    @keyup.enter="updateTitle(item, col.key)"
+                    @keyup.enter="(e) => handleEnterKey(e, item, col.key)"
+                    @keyup.escape="(e) => handleEscapeKey(e, item, col.key)"
                     hide-details
                     class="small-input"
                   />
@@ -410,8 +470,10 @@
                               </v-icon>
                               <span
                                 class="resize-handle"
-                                @mousedown="startResize($event, column)"
-                              ></span>
+                                :id="`resize-handle-${column.key}-${index}`"
+                                @pointerdown="startResize($event, column, index)"
+                              >
+                              </span>
                             </div>
                             <div v-else>
                               <v-checkbox
@@ -434,74 +496,18 @@
                     >
                       <!-- Inside v-slot:[`item.${col.key}`] -->
                       <template v-if="col.key === 'status'">
-                        <v-menu
-                          v-model="item.statusMenu"
-                          :close-on-content-click="false"
-                          offset-y
-                        >
-                          <template #activator="{ props }">
-                            <v-text-field
-                              v-bind="props"
-                              v-model="item.status"
-                              density="compact"
-                              readonly
-                              hide-details
-                              @focus="setFocus(item.id, col.key, true)"
-                              @blur="updateValueRow(item, col.key)"
-                              :variant="
-                                isFocused(item.id, col.key)
-                                  ? 'outlined'
-                                  : 'plain'
-                              "
-                            />
-                          </template>
-
-                          <v-card>
-                            <v-list>
-                              <template v-if="!item.statusMenu">
-                                <v-list-item
-                                  v-for="(s, i) in statuses"
-                                  :key="i"
-                                  @click="
-                                    () => {
-                                      item.status = s;
-                                      item.statusId = s.id;
-                                      item.statusMenu = false;
-                                      updateValueRow(item, col.key);
-                                    }
-                                  "
-                                >
-                                  <v-list-item-title>{{
-                                    s.name
-                                  }}</v-list-item-title>
-                                </v-list-item>
-                              </template>
-                              <template v-else>
-                                <v-list-item
-                                  v-for="(editStatus, i) in statuses"
-                                  :key="i"
-                                >
-                                  <v-text-field
-                                    v-model="editStatus.name"
-                                    density="compact"
-                                    variant="outlined"
-                                    hide-details
-                                  />
-                                </v-list-item>
-                              </template>
-
-                              <v-divider></v-divider>
-
-                              <v-list-item @click="toggleStatusEdit">
-                                <v-list-item-title class="text-primary">
-                                  {{
-                                    toggleStatusEdit ? "Done Editing" : "Edit"
-                                  }}
-                                </v-list-item-title>
-                              </v-list-item>
-                            </v-list>
-                          </v-card>
-                        </v-menu>
+                        <v-select
+                          :model-value="getStatusId(item)"
+                          :items="statuses"
+                          item-title="name"
+                          item-value="id"
+                          density="compact"
+                          hide-details
+                          variant="outlined"
+                          class="small-input"
+                          bg-color="white"
+                          @update:modelValue="onStatusChange(item, $event)"
+                        />
                       </template>
 
                       <!-- Delete icon for 'actions' column -->
@@ -533,35 +539,73 @@
                 </v-card>
               </td>
             </template>
+            <template #[`footer.prepend`]>
+              <v-btn
+                v-if="group.status !== 'archived'"
+                size="small"
+                color="primary"
+                variant="flat"
+                rounded="lg"
+                @click="openAddTaskDialogForStatus(group.status, currentCategoryId)"
+                class="add-status-task-btn"
+              >
+                <v-icon size="16" class="mr-1">mdi-plus-circle-outline</v-icon>
+                Add Task
+              </v-btn>
+              <v-spacer></v-spacer>
+            </template>
           </v-data-table>
         </v-expansion-panel-text>
       </v-expansion-panel>
     </v-expansion-panels>
 
-    <TasksCalenderView v-else :tasks="tasksForCalender" />
+    <TasksCalenderView v-else-if="viewType === 'calender' && taskDetails && taskDetails.length" :tasks="tasksForCalender" />
+
+    <div v-else class="d-flex justify-center mt-5">
+      <p class="mt-7">No current task found.</p>
+    </div>
 
     <TasksTaskDetailsDialog
       v-model="dialogOpen"
       :selectedItem="selectedItem"
       @close="dialogOpen = false"
+      @save="updateTaskInfo"
     />
 
-    <TasksAddTask
-      v-model="drawerOpen"
-      @close="drawerOpen = false"
-      @success="updateTasks"
-    />
-    <TasksTaskPoolDialog
-      :model-value="taskPoolDialog"
-      @close="taskPoolDialog = false"
-      @onUpdate="updateTasks"
-    />
+    <!-- Add Task Panel - Only render after page loads -->
+    <ClientOnly>
+      <template v-if="categories && categories.length > 0 && priorities && priorities.length > 0 && users && users.length > 0">
+        <TasksAddTask
+          v-model="drawerOpen"
+          :preSelectedStatus="selectedStatusForNewTask"
+          :preSelectedCategory="selectedCategoryForNewTask"
+          @close="drawerOpen = false"
+          @success="updateTasks"
+        />
+        <TasksTaskPoolDialog
+          :model-value="taskPoolDialog"
+          @close="taskPoolDialog = false"
+          @onUpdate="updateTasks"
+        />
+        <TasksBulkTaskUploadDialog
+          v-model="bulkTaskUploadDialog"
+          :categories="categories"
+          :priorities="priorities"
+          :roles="rolesList"
+          :users="users"
+          @close="bulkTaskUploadDialog = false"
+          @onUpdate="updateTasks"
+        />
+      </template>
+    </ClientOnly>
   </div>
 </template>
 
 <script setup>
-import { getRandomHexColor } from "~/lib/misc";
 import { parsedDate } from "@/lib/dateFormatter";
+import draggable from "vuedraggable";
+import listicon from "@/assets/icons/listView/listicon.svg";
+import calendericon from "@/assets/icons/listView/calendericon.svg";
 const {
   headers,
   availableHeaders,
@@ -580,6 +624,10 @@ const {
   users: Array,
   categories: Array,
   clearSelection: Boolean,
+    currentCategoryId: {  // ← ADD THIS NEW PROP
+    type: Number,
+    default: null,
+  },
 });
 watch(
   () => clearSelection,
@@ -590,19 +638,25 @@ watch(
     }
   }
 );
+const updateHeaderOrder = (newOrder) => {
+  const selectable = newOrder.findIndex((x) => !x.title);
+  newOrder.splice(selectable, 1);
+  selectedHeaders.value = newOrder;
+};
 const emit = defineEmits(["onFilter", "onUpdate", "updateSelectedRowItems"]);
 const fixedColumnOrder = [
   "title",
-  "frequency",
+  "status",
   "priority.name",
+  "taskDetails.category.name",
+  "frequency",
   "assignedUser.fullName",
+  "createdAt",
   "dueDate",
   "comments",
   "documentLink",
   "assignedBy",
   "attachments",
-  "createdAt",
-  "taskDetails.category.name",
   "taskDetails.description",
   "updatedAt",
 ];
@@ -611,9 +665,56 @@ const sortHeaders = (headers) => {
     .map((key) => headers.find((h) => h.key === key))
     .filter(Boolean);
 };
+const getRandomHexColor = (name) => {
+  if (!name) return "#999999";
+  const firstChar = name.trim().charAt(0).toUpperCase();
+  const colors = [
+    "#FF6B6B",
+    "#FF8E72",
+    "#FFD93D",
+    "#6BCB77",
+    "#4D96FF",
+    "#8358E8",
+    "#FF6EC7",
+    "#00B8A9",
+    "#F15BB5",
+    "#FF7F11",
+    "#FF9F1C",
+    "#2EC4B6",
+    "#6A4C93",
+    "#8338EC",
+    "#3A86FF",
+    "#FF006E",
+    "#FB5607",
+    "#FFBE0B",
+    "#06D6A0",
+    "#118AB2",
+    "#073B4C",
+    "#EF476F",
+    "#06AED5",
+    "#4CC9F0",
+    "#8AC926",
+    "#FF595E",
+  ];
+  const index = firstChar.charCodeAt(0) - 65;
+  return index >= 0 && index < 26 ? colors[index] : "#999999";
+};
+const showHandles = (key, i) => {
+  const handle = document.getElementById(`resize-handle-${key}-${i}`);
+  if (handle) {
+    handle.style.display = "block";
+  }
+};
+const hideHandles = (key, i) => {
+  const handle = document.getElementById(`resize-handle-${key}-${i}`);
+  if (handle) {
+    handle.style.display = "none";
+  }
+};
 const search = ref("");
 const expanded = ref([]);
 const focusedField = ref({});
+const originalFieldValues = ref({}); // Store original values for Escape key functionality
 const statuses = ref([]);
 const priorityStatuses = ref([]);
 const viewType = ref("list");
@@ -630,15 +731,60 @@ const openedPanels = ref([0]);
 const dialogOpen = ref(false);
 const taskPoolDialog = ref(false);
 const isAllSelected = ref(false);
+const selectedStatusForNewTask = ref(null);
+const selectedCategoryForNewTask = ref(null);
+
+const openAddTaskDialog = () => {
+  selectedStatusForNewTask.value = null;
+  selectedCategoryForNewTask.value = null;
+  drawerOpen.value = true;
+};
 const tasksForCalender = ref([]);
+const bulkTaskUploadDialog = ref(false);
+const rolesList = ref([]);
+const isResizing = ref(false);
+const editingColumn = ref({})
+
+const enableEditing = (column, index) => {
+  editingColumn.value[`${index}-${column.key}`] = true;
+  setFocus('header', column.key, true)
+}
+
+const isEditing = (column, index) => {
+  return editingColumn.value[`${index}-${column.key}`] === true
+}
+
+// Computed property to filter available headers (exclude already selected ones)
+const filteredAvailableHeaders = computed(() => {
+  if (!availableHeaders || !selectedHeaders.value) {
+    return [];
+  }
+
+  // Get the keys of all selected headers
+  const selectedKeys = new Set(selectedHeaders.value.map(h => h.key));
+
+  // Filter out headers that are already selected
+  return availableHeaders.filter(header => !selectedKeys.has(header.key));
+});
+
+const getRoles = () => {
+  mainStore
+    .getRoles()
+    .then((res) => {
+      if (res.code === 0 && res.data) {
+        rolesList.value = res.data;
+      }
+    })
+    .catch((err) => {
+      return err;
+    });
+};
 onMounted(() => {
+  getRoles();
   selectedHeaders.value = sortHeaders(headers);
   statuses.value = orgStatuses;
   priorityStatuses.value = priorities;
   user.value = JSON.parse(localStorage.getItem("user"));
-<<<<<<< Updated upstream
-});
-=======
     // Add keyboard shortcut listener
   window.addEventListener('keydown', handleKeyboardShortcut);
 
@@ -659,7 +805,26 @@ const handleKeyboardShortcut = (event) => {
   }
 };
 
->>>>>>> Stashed changes
+watch(
+  () => headers,
+  (newVal) => {
+    if (newVal && newVal.length > 0) {
+      selectedHeaders.value = sortHeaders(newVal)
+    }
+  },
+  { immediate: true, deep: true }
+);
+
+watch(
+  () => orgStatuses,
+  (newVal) => {
+    if (newVal && newVal.length > 0) {
+      statuses.value = newVal; // Updates whenever orgStatuses changes
+    }
+  },
+  { immediate: true, deep: true }
+);
+
 watch(
   () => taskDetails,
   (newVal) => {
@@ -668,8 +833,9 @@ watch(
       group.tasks.map((task) => ({
         id: task.id,
         title: task.title,
-        start: new Date(task.dueDate || task.createdAt),
-        end: new Date(task.dueDate || task.createdAt),
+        name: task.title,
+        start: calenderDate(task.dueDate || task.createdAt),
+        end: calenderDate(task.dueDate || task.createdAt),
         color: task.status?.color || task.priority?.color || "#2196F3",
         status: task.status,
         priority: task.priority,
@@ -680,9 +846,21 @@ watch(
     );
   }
 );
+const calenderDate = (data) => {
+  const date = new Date(data);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+
+  const formatted = `${year}-${month}-${day} ${hours}:${minutes}`;
+
+  return formatted;
+};
 const getTaskUsers = (task) => {
   if (users) {
-    return users.filter((x) => x.roleId !== task.taskDetails.roleId);
+    return users.filter((x) => x.roleId !== task.taskDetails.roleId && x.status === "Active");
   } else return [];
 };
 const updateTasks = () => {
@@ -697,6 +875,9 @@ const isFocused = (id, key) => {
 };
 
 const getStatuses = (key) => {
+  if (key === "archived") {
+    return "Archived";
+  }
   if (statuses.value.find((x) => x.key === key)) {
     return statuses.value.find((x) => x.key === key).name;
   } else {
@@ -704,14 +885,28 @@ const getStatuses = (key) => {
   }
 };
 const getColor = (key) => {
+  if (key === "archived") {
+    return "#9E9E9E"; // Gray color for archived
+  }
   if (statuses.value.find((x) => x.key === key)) {
     return statuses.value.find((x) => x.key === key).color;
   } else {
-    return "#e9e9e9";
+    return "#EF3131";
   }
 };
 const formattedDate = (date) => {
-  return parsedDate(date);
+  if (!date) return '';
+  
+  try {
+    const dateObj = new Date(date);
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const year = dateObj.getFullYear();
+    
+    return `${day}/${month}/${year}`;
+  } catch (error) {
+    return '';
+  }
 };
 const setFocus = (id, key, state) => {
   focusedField.value[`${id}-${key}`] = state;
@@ -772,7 +967,6 @@ const assignTask = async (task, user) => {
 
     if (res.code === 0) {
       emit("onUpdate");
-
       mainStore.setSnackbar({
         title: "Task assigned successfully",
         type: "success",
@@ -807,18 +1001,31 @@ const updateUserPreferences = async () => {
 };
 
 const updateValueColumn = (column) => {
+  editingColumn.value = {}
   setFocus("header", column.key, false);
 };
 const updateSubtaskValueColumn = (column) => {
   setFocus("subheader", column.key, false);
 };
-<<<<<<< Updated upstream
-const updateValueRow = (row, key) => {
-=======
 
 const updateTaskInfo = (task) => {
+  // Format the task data for the backend
+  const updateData = {
+    id: task.id,
+    taskId: task.taskId || task.taskDetails?.id,
+    title: task.title,
+    comments: task.comments,
+    statusId: task.statusId,
+    priorityId: task.priorityId,
+    frequency: task.frequency,
+    dueDate: task.dueDate,
+    documentLink: task.documentLink,
+    // Include description from taskDetails if it exists
+    description: task.taskDetails?.description,
+  };
+  
   taskStore
-    .updateUserTask(task)
+    .updateUserTask(updateData)
     .then((res) => {
       if (res.code === 0) {
         dialogOpen.value = false;
@@ -881,27 +1088,80 @@ const updateValueRow = async (row, key) => {
 
 const updateTitle = (row, key) => {
   setFocus(row.id, key, false);
-  taskStore
-    .updateUserTask(row)
-    .then((res) => {
-      if (res.code !== 0) {
-        mainStore.setSnackbar({
-          title: "Error while updating the task",
-          type: "error",
-        });
-      } else {
-        if (key === "status") {
-          emit("onUpdate");
-        }
-      }
-    })
-    .catch((err) => {
+  event.target.blur();
+};
+
+const handleEnterKey = (event, row, key) => {
+  // Clean up the stored original value since we're saving
+  const fieldId = `${row.id}-${key}`;
+  delete originalFieldValues.value[fieldId];
+
+  // Blur the input field to trigger the blur event
+  // This prevents duplicate API calls by ensuring only blur fires
+  event.target.blur();
+};
+
+const updateValueRow = async (row, key) => {
+  // Clean up the stored original value after successful save
+  const fieldId = `${row.id}-${key}`;
+  delete originalFieldValues.value[fieldId];
+
+  setFocus(row.id, key, false);
+
+  if (key === "name" && row.title) {
+    if (!row.title.trim()) {
       mainStore.setSnackbar({
-        title: "Error while updating the task",
+        title: "Task title cannot be only spaces",
         type: "error",
       });
+      return;
+    }
+    if (row.title.length > 150) {
+      mainStore.setSnackbar({
+        title: "Task title must be 150 characters or less",
+        type: "error",
+      });
+      return;
+    }
+  }
+
+  // New nested-value handling
+  const currentValue = getNestedValue(row, key);
+
+  if (key.includes('.')) {
+    const nestedValue = getNestedValue(row, key);
+    console.log(`Sending update for ${key}:`, nestedValue);
+  }
+
+  try {
+    const res = await taskStore.updateUserTask(row);
+
+    if (res.code !== 0) {
+      mainStore.setSnackbar({
+        title: err.message || "Error while updating the task",
+        type: "error",
+      });
+      return;
+    }
+
+    if (key === "status") {
+      emit("onUpdate");
+    }
+
+    mainStore.setSnackbar({
+      title: "Task updated successfully",
+      type: "success",
     });
+
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: "Error while updating the task",
+      type: "error",
+    });
+  }
 };
+
+
 function getNestedValue(obj, path) {
   return path
     .split(".")
@@ -932,25 +1192,67 @@ function setNestedValue(obj, path, value) {
 >>>>>>> Stashed changes
 let startX = 0;
 let startWidth = 0;
-function startResize(e, col) {
+let currentCol = null;
+
+function startResize(e, col, i) {
+  e.stopPropagation(); // ✅ Block draggable from detecting drag
+  e.preventDefault();
+
+  isResizing.value = true;
   currentCol = col;
   startX = e.clientX;
   startWidth = col.width;
-  document.addEventListener("mousemove", resizeColumn);
-  document.addEventListener("mouseup", stopResize);
+  const handleEl = document.getElementById(`resize-handle-${col.key}-${i}`) || e.target;
+
+  // use pointer capture on the actual handle if available
+  try {
+    handleEl.setPointerCapture && handleEl.setPointerCapture(e.pointerId);
+  } catch (err) {
+    // some elements might not support pointer capture; ignore
+  }
+
+  handleEl.addEventListener("pointermove", resizeColumn);
+  handleEl.addEventListener("pointerup", stopResize);
 }
 
 function resizeColumn(e) {
-  if (!currentCol) return;
+  if (!isResizing.value || !currentCol) return;
   const diff = e.clientX - startX;
-  currentCol.width = Math.max(150, startWidth + diff);
+  currentCol.width = Math.max(120, startWidth + diff);
 }
 
-function stopResize() {
-  document.removeEventListener("mousemove", resizeColumn);
-  document.removeEventListener("mouseup", stopResize);
-  currentCol = null;
+function stopResize(e) {
+  isResizing.value = false;
+
+  let handleEl;
+
+  // When using pointer capture, e.target may not be the handle.
+  // So we look for the handle based on the column + panelIndex
+  // which we stored temporarily on the event during startResize.
+  if (e.currentTarget) {
+    handleEl = e.currentTarget;
+  } else {
+    // Safety fallback (rarely triggered)
+    handleEl = e.target;
+  }
+
+  // Remove listeners cleanly
+  handleEl.removeEventListener("pointermove", resizeColumn);
+  handleEl.removeEventListener("pointerup", stopResize);
+
+  // Release pointer capture if active
+  try {
+    if (e.pointerId) {
+      handleEl.releasePointerCapture &&
+        handleEl.releasePointerCapture(e.pointerId);
+    }
+  } catch (err) {
+    // ignore capture release errors
+  }
+  currentCol = null
 }
+
+
 const updateHeaderTitle = (key, value) => {
   const target = selectedHeaders.value.find((col) => col.key === key);
   if (target) {
@@ -964,22 +1266,25 @@ const updateSubtaskHeaderTitle = (key, value) => {
   }
 };
 
-const toggleAll = () => {
+const toggleAll = (group) => {
   if (isAllSelected.value) {
     isAllSelected.value = false;
     selectedTasks.value = [];
   } else {
     const selected = [];
     taskDetails.forEach((el) => {
-      el.tasks.forEach((t) => {
-        selected.push(t);
-      });
+      if (el.status === group.status) {
+        el.tasks.forEach((t) => {
+          selected.push(t);
+        });
+      }
     });
     selectedTasks.value = selected;
     isAllSelected.value = true;
   }
 
   emit("updateSelectedRowItems", selectedTasks.value);
+  console.log(selectedTasks.value);
 };
 const getDetails = (item) => {
   selectedItem.value = item;
@@ -993,13 +1298,23 @@ function onFiltersUpdated(newFilters) {
 const onSelectionChange = (newSelected) => {
   emit("updateSelectedRowItems", selectedTasks.value);
 };
+
+const openAddTaskDialogForStatus = (status, categoryId) => {
+  // Store both the selected status and the currently selected category
+  selectedStatusForNewTask.value = status;
+  selectedCategoryForNewTask.value = categoryId;
+  drawerOpen.value = true;
+};
 </script>
 
 <style scoped>
 .v-data-table tbody tr {
   height: 30px !important;
 }
-
+th {
+  position: relative;
+  user-select: none;
+}
 /* Make all cells match that height */
 .v-data-table td {
   height: 30px !important;
@@ -1018,7 +1333,8 @@ const onSelectionChange = (newSelected) => {
   border-right: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 .custom-toggle {
-  /* background-color: transparent; */
+  background-color: #f3f6fa;
+  display: flex;
   height: 40px;
 }
 
@@ -1032,15 +1348,19 @@ const onSelectionChange = (newSelected) => {
 
 .v-btn--active.toggle-btn {
   background-color: #ffffff !important;
-  box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.12);
-  transform: translateY(-1px); /* small lift effect */
+  --v-theme-overlay-multiplier: 0 !important; /* reset overlay */
+  --v-theme-primary: #ffffff !important; /* force white */
+  box-shadow: 0px 6px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+  border-radius: 6px;
+  box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.08); /* subtle shadow under */
 }
 .custom-search,
 .tbl-top-btn {
   height: 40px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 14px;
-  background-color: #fafafa !important;
+  background-color: #ffffff !important;
   text-transform: none;
   box-shadow: none;
   color: #737373;
@@ -1050,15 +1370,23 @@ const onSelectionChange = (newSelected) => {
   align-items: center;
   justify-content: space-between;
   position: relative;
+  cursor: grab;
+}
+
+.resizable-table .th-content:active {
+  cursor: grabbing;
 }
 
 .resize-handle {
-  width: 5px;
+  width: 10px;
   cursor: col-resize;
-  height: 100%;
+  height: 70%;
+  display: none;
   position: absolute;
-  right: -16px;
-  top: 0;
+  right: -12px;
+  z-index: 99999;
+  top: 0px;
+  user-select: none;
 }
 .table-border {
   border: 1px solid #dbdbdb;
@@ -1080,10 +1408,8 @@ const onSelectionChange = (newSelected) => {
 }
 ::v-deep(.small-input input) {
   font-size: 14px !important;
-  font-family: "Poppins";
 }
 .add-task-btn {
-  font-family: "Poppins";
   font-weight: 400;
   font-size: 16px;
   text-align: center;
@@ -1110,8 +1436,8 @@ const onSelectionChange = (newSelected) => {
   margin-top: 5px;
 }
 .cust-checkbox:checked {
-  background: rgb(23, 23, 23);
-  border-color: black;
+  background: #0061fb;
+  border-color: #0061fb;
 }
 .cust-checkbox:checked::after {
   content: "";
@@ -1123,5 +1449,10 @@ const onSelectionChange = (newSelected) => {
   border: solid white;
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
+}
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px; /* consistent spacing between all items */
 }
 </style>

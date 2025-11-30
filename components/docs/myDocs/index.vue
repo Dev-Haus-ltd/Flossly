@@ -1,12 +1,14 @@
 <template>
   <div class="parent">
     <div class="cust-border d-flex align-center">
-      <p class="mr-1">My docs</p>
       <p
-        v-if="selectedFolder?.name"
+        class="mr-1"
         @click="goBack"
-        style="color: blue !important; cursor: pointer"
+        :style="selectedFolder?.name ? 'color: blue; cursor: pointer;' : ''"
       >
+        My docs
+      </p>
+      <p v-if="selectedFolder?.name">
         {{ " / " + selectedFolder.name }}
       </p>
     </div>
@@ -16,7 +18,7 @@
         <!-- Heading -->
         <div
           style="
-            font-family: Poppins;
+            
             font-weight: 600;
             font-size: 14px;
             font-style: SemiBold;
@@ -51,12 +53,11 @@
       <div class="my-5 px-5">
         <DocsMyDocsAllFiles
           :files="files"
-         
           @view-file="openFile"
           @edit-file="handleEdit"
           @download-file="handleDownload"
-            @addFileHandle="showAddFileDialog = true"
-        /> 
+          @addFileHandle="showAddFileDialog = true"
+        />
       </div>
     </div>
     <div v-else>
@@ -64,7 +65,6 @@
         <DocsMyDocsAllFiles
           :files="files.filter((x) => x.folderId === selectedFolder.id)"
           :folder="selectedFolder"
-        
           @view-file="openFile"
           @edit-file="handleEdit"
           @download-file="handleDownload"
@@ -74,7 +74,7 @@
     </div>
     <DocsMyDocsAddFolderDialog
       v-model="showAddFolderDialog"
-      @onUpdate="getFolders" 
+      @onUpdate="getFolders"
     />
     <DocsMyDocsAddFileDialog
       v-model="showAddFileDialog"
@@ -191,7 +191,7 @@ const goBack = () => {
   }
 }
 .head {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-style: "Regular";
   font-size: 14px;

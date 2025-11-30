@@ -9,7 +9,7 @@
         <v-text-field
           v-bind="activatorProps"
         
-          :model-value="modelValue ? parsedDate(modelValue) : ''"
+          :model-value="modelValue ? formatDateDDMMYYYY(modelValue) : ''"
           readonly
           variant="solo"
           flat
@@ -46,7 +46,7 @@
   </template>
 <script setup>
 import { ref, watch } from 'vue'
-import { parsedDate } from '~/lib/dateFormatter'
+import { formatDateDDMMYYYY } from '~/lib/dateFormatter'
 
 const props = defineProps({
   modelValue: {
@@ -100,6 +100,6 @@ const saveDateTime = () => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 </style>

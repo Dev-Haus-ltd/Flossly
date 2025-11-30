@@ -1,5 +1,6 @@
 ﻿import { DefaultPriority } from "./defaultPriorities";
 import { DefaultStatus } from "./defaultStatuses";
+import { DictionaryScript } from "./dictionaryScripts";
 import { OrganisationPriority } from "./organisations/organisationPriorities";
 import { Organisation } from "./organisations/organisations";
 import { OrganisationStatus } from "./organisations/organisationStatuses";
@@ -16,6 +17,7 @@ import { Verification } from "./auth/verifications";
 import { UserTaskAttachment } from "./tasks/userTaskAttachments";
 import { TaskChecklist } from "./tasks/taskChecklist";
 import { UserTaskChecklist } from "./tasks/userTaskChecklist";
+import { UserTaskComment } from "./tasks/userTaskComments";
 import { UserSubscription } from "./auth/userSubscriptions";
 import { LoginHistory } from "./auth/loginHistory";
 import { Rota } from "./rota/rota";
@@ -43,15 +45,25 @@ import { UserHrDocument } from "./auth/userHrDocuments";
 import { Course } from "./cpd/course";
 import { CourseQuestionaire } from "./cpd/courseQuestionaire";
 import { UserCourseHistory } from "./cpd/userCourseHistory";
-
-// CRM
-import { CrmContact } from "./crm/contact";
-import { CrmLead } from "./crm/lead";
-import { CrmPipeline } from "./crm/pipeline";
-import { CrmPipelineStage } from "./crm/pipelineStage";
-import { CrmActivity } from "./crm/activity";
-import { CrmConversation } from "./crm/conversation";
-import { CrmMessage } from "./crm/message";
+import { OrganisationPeople } from "./organisations/organisationPeople";
+import { OrganisationScript } from "./organisations/organisationScripts";
+import { MetaPage } from "./crm/metaPages";
+import { CrmLead } from "./crm/leads";
+import { MetaUserToken } from "./crm/metaUserTokens";
+import { ChatbotConfig } from "./crm/chatbotConfig";
+// Diary
+import { DiaryTreatment } from "./diary/treatments";
+import { DiaryPatient } from "./diary/patients";
+import { DiaryAppointment } from "./diary/appointments";
+import { DiaryNote } from "./diary/notes";
+// Organisation dictionary
+import { OrganisationTreatment } from "./organisations/organisationTreatments";
+import { CrmLeadTreatment } from "./crm/leadTreatments";
+import { CrmLeadNote } from "./crm/leadNotes";
+import { CrmOption } from "./crm/options";
+import { CrmLeadCommunication } from "./crm/leadCommunications";
+import { CrmLeadAssignee } from "./crm/leadAssignees";
+import { CrmAutomationTemplate } from "./crm/automationTemplates";
 
 /* Relations and Associations */
 
@@ -89,6 +101,20 @@ UserTask.belongsTo(OrganisationStatus, {
 UserTask.belongsTo(OrganisationPriority, {
   foreignKey: "priorityId",
   as: "priority",
+});
+
+UserTask.hasMany(UserTaskComment, {
+  foreignKey: "userTaskId",
+  as: "taskComments",
+  onDelete: "CASCADE",
+});
+UserTaskComment.belongsTo(UserTask, {
+  foreignKey: "userTaskId",
+  as: "userTask",
+});
+UserTaskComment.belongsTo(User, {
+  foreignKey: "userId",
+  as: "author",
 });
 
 UserTask.hasMany(UserTaskAttachment, {
@@ -185,10 +211,32 @@ Rota.hasMany(RotaShift, { foreignKey: "rotaId", as: "shifts" });
 RotaUser.belongsTo(Rota, { foreignKey: "rotaId", as: "rota" });
 RotaUser.belongsTo(User, { foreignKey: "userId", as: "user" });
 RotaUser.hasMany(RotaShift, { foreignKey: "rotaUserId", as: "shifts" });
+RotaUser.belongsTo(Role, {
+  foreignKey: "tempUserRoleId",
+  as: "role",
+});
+
 
 RotaShift.belongsTo(Rota, { foreignKey: "rotaId", as: "rota" });
 RotaShift.belongsTo(RotaUser, { foreignKey: "rotaUserId", as: "rotaUser" });
 RotaShift.belongsTo(User, { foreignKey: "userId", as: "user" });
+
+// Diary associations
+DiaryPatient.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
+DiaryPatient.hasMany(DiaryAppointment, { foreignKey: 'patientId', as: 'appointments' })
+
+DiaryAppointment.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
+DiaryAppointment.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient' })
+DiaryAppointment.belongsTo(User, { foreignKey: 'dentistId', as: 'dentist' })
+DiaryAppointment.belongsTo(DiaryTreatment, { foreignKey: 'treatmentId', as: 'treatment' })
+
+// Diary notes associations
+DiaryNote.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
+DiaryNote.belongsTo(User, { foreignKey: 'dentistId', as: 'dentist' })
+User.hasMany(DiaryNote, { foreignKey: 'dentistId', as: 'diaryNotes' })
+
+// Org Treatment associations
+OrganisationTreatment.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
 
 // Orgnisation Contacts
 Organisation.hasMany(OrganisationContact, {
@@ -318,18 +366,8 @@ UserPoint.belongsTo(User, {
   foreignKey: "userId",
   as: "user",
 });
-User.hasMany(UserPoint, {
+User.hasOne(UserPoint, {
   foreignKey: "userId",
-  as: "userPoints",
-});
-
-// 2. UserPoints ↔ RewardPoints
-UserPoint.belongsTo(RewardPoint, {
-  foreignKey: "rewardPointId",
-  as: "rewardPoint",
-});
-RewardPoint.hasMany(UserPoint, {
-  foreignKey: "rewardPointId",
   as: "userPoints",
 });
 
@@ -405,6 +443,55 @@ TaskCategory.hasMany(SystemDocument, {
   as: "documents",
 });
 
+//Important people
+
+Organisation.hasOne(OrganisationPeople, {
+  foreignKey: "organisationId",
+  as: "importantPeople",
+});
+OrganisationPeople.belongsTo(Organisation, {
+  foreignKey: "organisationId",
+  as: "organisation",
+});
+
+// CRM (Meta Integration) - basic associations
+MetaPage.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
+MetaPage.belongsTo(User, { foreignKey: 'userId', as: 'user' })
+Organisation.hasMany(MetaPage, { foreignKey: 'organisationId', as: 'metaPages' })
+
+CrmLead.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
+Organisation.hasMany(CrmLead, { foreignKey: 'organisationId', as: 'crmLeads' })
+MetaUserToken.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
+MetaUserToken.belongsTo(User, { foreignKey: 'userId', as: 'user' })
+Organisation.hasMany(MetaUserToken, { foreignKey: 'organisationId', as: 'metaUserTokens' })
+
+// CRM Lead Treatment association
+CrmLead.hasOne(CrmLeadTreatment, { foreignKey: 'leadId', as: 'treatmentInfo' })
+CrmLeadTreatment.belongsTo(CrmLead, { foreignKey: 'leadId', as: 'lead' })
+
+// CRM Lead Notes association
+CrmLead.hasMany(CrmLeadNote, { foreignKey: 'leadId', as: 'notes' })
+CrmLeadNote.belongsTo(CrmLead, { foreignKey: 'leadId', as: 'lead' })
+
+// CRM Lead Communication association
+CrmLead.hasOne(CrmLeadCommunication, { foreignKey: 'leadId', as: 'communication' })
+CrmLeadCommunication.belongsTo(CrmLead, { foreignKey: 'leadId', as: 'lead' })
+
+// CRM Lead Assignees association
+CrmLead.hasMany(CrmLeadAssignee, { foreignKey: 'leadId', as: 'assignees' })
+CrmLeadAssignee.belongsTo(CrmLead, { foreignKey: 'leadId', as: 'lead' })
+CrmLeadAssignee.belongsTo(User, { foreignKey: 'userId', as: 'user' })
+
+// CRM Automation templates
+Organisation.hasMany(CrmAutomationTemplate, { foreignKey: 'organisationId', as: 'crmAutomationTemplates' })
+CrmAutomationTemplate.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation' })
+
+// Chatbot Configuration associations
+ChatbotConfig.belongsTo(Organisation, { foreignKey: 'organizationId', as: 'organisation' })
+ChatbotConfig.belongsTo(User, { foreignKey: 'userId', as: 'user' })
+Organisation.hasOne(ChatbotConfig, { foreignKey: 'organizationId', as: 'chatbotConfig' })
+User.hasMany(ChatbotConfig, { foreignKey: 'userId', as: 'chatbotConfigs' })
+
 // CPD Associations
 Course.hasMany(CourseQuestionaire, { foreignKey: "courseId", as: "questions" });
 CourseQuestionaire.belongsTo(Course, { foreignKey: "courseId", as: "course" });
@@ -423,24 +510,19 @@ User.hasMany(UserCourseHistory, {
 User.hasMany(UserHrDocument, { foreignKey: "userId", as: "hrDocuments" });
 UserHrDocument.belongsTo(User, { foreignKey: "userId", as: "user" });
 
-// CRM Associations
-CrmPipeline.hasMany(CrmPipelineStage, { foreignKey: "pipelineId", as: "stages" });
-CrmPipelineStage.belongsTo(CrmPipeline, { foreignKey: "pipelineId", as: "pipeline" });
-
-CrmContact.hasMany(CrmLead, { foreignKey: "contactId", as: "leads" });
-CrmLead.belongsTo(CrmContact, { foreignKey: "contactId", as: "contact" });
-
-CrmPipeline.hasMany(CrmLead, { foreignKey: "pipelineId", as: "leads" });
-CrmLead.belongsTo(CrmPipeline, { foreignKey: "pipelineId", as: "pipeline" });
-
-CrmPipelineStage.hasMany(CrmLead, { foreignKey: "stageId", as: "leads" });
-CrmLead.belongsTo(CrmPipelineStage, { foreignKey: "stageId", as: "stage" });
-
-CrmConversation.hasMany(CrmMessage, { foreignKey: "conversationId", as: "messages" });
-CrmMessage.belongsTo(CrmConversation, { foreignKey: "conversationId", as: "conversation" });
-
-CrmConversation.belongsTo(CrmContact, { foreignKey: "contactId", as: "contact" });
-CrmContact.hasMany(CrmConversation, { foreignKey: "contactId", as: "conversations" });
+// Organisation Scripts associations
+Organisation.hasMany(OrganisationScript, {
+  foreignKey: "organisationId",
+  as: "scripts",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+OrganisationScript.belongsTo(Organisation, {
+  foreignKey: "organisationId",
+  as: "organisation",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
 
 
 export {
@@ -455,6 +537,7 @@ export {
   UserTask,
   UserTaskChecklist,
   UserTaskAttachment,
+  UserTaskComment,
   UserLeaveEntitlement,
   UserLeaveHistory,
   UserHrDocument,
@@ -464,6 +547,7 @@ export {
   OrganisationPriority,
   OrganisationStatus,
   OrganisationContact,
+  OrganisationPeople,
   OrganisationEquipment,
   OrganisationGroup,
   OrganisationGroupUser,
@@ -488,11 +572,23 @@ export {
   Course,
   CourseQuestionaire,
   UserCourseHistory,
-  CrmContact,
+  // CRM
+  MetaPage,
   CrmLead,
-  CrmPipeline,
-  CrmPipelineStage,
-  CrmActivity,
-  CrmConversation,
-  CrmMessage,
+  CrmLeadTreatment,
+  CrmLeadNote,
+  CrmOption,
+  CrmLeadCommunication,
+  CrmLeadAssignee,
+  CrmAutomationTemplate,
+  MetaUserToken,
+  ChatbotConfig,
+  // Diary
+  DiaryTreatment,
+  DiaryPatient,
+  DiaryAppointment,
+  DiaryNote,
+  OrganisationTreatment,
+  DictionaryScript,
+  OrganisationScript,
 };

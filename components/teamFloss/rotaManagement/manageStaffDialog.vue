@@ -5,7 +5,7 @@
       <v-card-title
         class="d-flex align-center justify-space-between"
         style="
-          font-family: Poppins;
+          
           font-weight: 600;
           font-size: 16px;
           border-bottom: 1px solid #dbdbdb;
@@ -13,7 +13,7 @@
           padding-bottom: 4px;
         "
       >
-        Add/Remove employees from rota
+        Manage Rota Users
         <v-btn
           icon
           variant="text"
@@ -25,13 +25,46 @@
         </v-btn>
       </v-card-title>
 
-      <!-- Form -->
+      <!-- Radio Switch -->
       <v-card-text>
-        <v-form ref="formRef" v-model="isValid">
+        <v-radio-group v-model="mode" inline>
+          <v-radio label="Add/Remove employees from rota" value="employee" />
+          <v-radio label="Add locum staff" value="locum" />
+        </v-radio-group>
+
+        <!-- Employee form -->
+        <v-form v-if="mode === 'employee'" ref="formRef" v-model="isValid">
           <TeamFlossRotaManagementEmployeeSelect
             v-model="localSelectedUsers"
             :employees="employees"
             :rules="[rules.required]"
+          />
+        </v-form>
+
+        <!-- Locum form -->
+        <v-form v-else ref="formRef" v-model="isValid">
+          <label class="fld-lbl">Name</label>
+          <v-text-field
+            v-model="form.name"
+            variant="solo"
+            density="compact"
+            :rules="[rules.required]"
+            class="input-bordered"
+            flat
+          />
+
+          <label class="fld-lbl">Role</label>
+          <v-select
+            v-model="form.roleId"
+            :items="rolesList"
+            item-title="title"
+            item-value="id"
+            variant="solo"
+            density="compact"
+            class="input-bordered"
+            :rules="[rules.required]"
+            bg-color="white"
+            flat
           />
         </v-form>
       </v-card-text>
@@ -54,16 +87,26 @@ const props = defineProps({
   employees: { type: Array, required: true },
   selectedUsers: { type: Array, default: () => [] },
   rota: { type: Object },
+  rolesList: { type: Array, required: true },
 });
 
 const emit = defineEmits(["update:modelValue", "onAddUser"]);
 
 const isOpen = ref(props.modelValue);
-const localSelectedUsers = ref([...props.selectedUsers]);
+const localSelectedUsers = ref([]);
 const mainStore = useMainStore();
 const rotaStore = useRotaStore();
 const formRef = ref(null);
 const isValid = ref(false);
+
+// which form is active
+const mode = ref("employee");
+
+// form data for locum
+const form = reactive({
+  name: "",
+  roleId: null,
+});
 
 const rules = {
   required: (v) =>
@@ -73,14 +116,34 @@ const rules = {
 // sync dialog state
 watch(
   () => props.modelValue,
-  (val) => (isOpen.value = val)
+  (val) => {
+    isOpen.value = val;
+    // Reset form and initialize selected users when dialog opens
+    if (val) {
+      // Filter out any invalid values (null, undefined) and ensure we have valid IDs
+      const validUsers = (props.selectedUsers || []).filter(
+        (id) => id != null && id !== undefined
+      );
+      localSelectedUsers.value = [...validUsers];
+      // Reset mode to employee when dialog opens
+      mode.value = "employee";
+      // Reset locum form
+      form.name = "";
+      form.roleId = null;
+    }
+  }
 );
 watch(isOpen, (val) => emit("update:modelValue", val));
 
-// sync selected users
 watch(
   () => props.selectedUsers,
-  (val) => (localSelectedUsers.value = [...val]),
+  (val) => {
+    // Only update if dialog is open and we have valid user IDs
+    if (isOpen.value && val) {
+      const validUsers = val.filter((id) => id != null && id !== undefined);
+      localSelectedUsers.value = [...validUsers];
+    }
+  },
   { deep: true }
 );
 
@@ -93,24 +156,54 @@ const save = async () => {
   if (!valid) return;
 
   try {
-    const rotaUsers = localSelectedUsers.value.map((el) => {
-      return { userId: el };
-    });
-    const res = await rotaStore.addRotaUsers({
-      rotaId: props.rota.id,
-      users: rotaUsers,
-    });
+    let res;
+
+    if (mode.value === "employee") {
+      // Employee flow
+      const rotaUsers = localSelectedUsers.value.map((el) => {
+        return { userId: el };
+      });
+      res = await rotaStore.addRotaUsers({
+        rotaId: props.rota.id,
+        users: rotaUsers,
+      });
+    } else {
+      // Locum flow - preserve existing employees when adding locum
+      const existingEmployees = props.selectedUsers || [];
+      const employeeUsers = existingEmployees
+        .filter((id) => id != null && id !== undefined)
+        .map((userId) => ({ userId }));
+      
+      const payload = {
+        rotaId: props?.rota?.id,
+        users: [
+          ...employeeUsers, // Preserve existing employees
+          {
+            isTempUser: true,
+            tempUserName: form.name,
+            tempUserRoleId: form.roleId,
+          },
+        ],
+      };
+      res = await rotaStore.addRotaUsers(payload);
+    }
+
     if (res.code === 0) {
       mainStore.setSnackbar({
         type: "success",
-        title: res?.message || "Rota added successfully",
+        title:
+          res?.message ||
+          res?.data?.message ||
+          (mode.value === "employee"
+            ? "Users updated successfully"
+            : "Locum staff added successfully"),
       });
       emit("onAddUser");
       close();
     } else {
       mainStore.setSnackbar({
         type: "error",
-        title: res.message || "Something went wrong",
+        title: res.message || res?.data?.message || "Something went wrong",
       });
     }
   } catch (err) {
@@ -121,3 +214,21 @@ const save = async () => {
   }
 };
 </script>
+
+<style scoped>
+.input-bordered :deep(.v-field) {
+  border: 1px solid #dfdfdf !important;
+  border-radius: 8px !important;
+  background-color: white !important;
+  min-height: 40px;
+  font-size: 14px;
+  
+}
+.fld-lbl {
+  
+  font-weight: 400;
+  font-size: 14px;
+  margin-left: 5px;
+  color: #737373;
+}
+</style>

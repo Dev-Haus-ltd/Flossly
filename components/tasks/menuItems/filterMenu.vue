@@ -10,7 +10,7 @@
         v-bind="props"
         variant="flat"
         density="compact"
-        class="tbl-top-btn ml-2"
+        class="tbl-top-btn ml-md-2"
         style="width: 100px"
       >
         <span>Filter</span>
@@ -22,7 +22,7 @@
       <v-list class="pa-0">
         <div class="pa-0 d-flex align-center justify-space-between">
           <div
-    style="font-family: Poppins; font-weight: 500; font-size: 14px"
+    style=" font-weight: 500; font-size: 14px"
   >
     Filters by
   </div>
@@ -31,7 +31,7 @@
     variant="text"
     density="comfortable"
     color="primary"
-    style="text-transform: none; font-family: Poppins; font-weight: 500; font-size: 13px"
+    style="text-transform: none;  font-weight: 500; font-size: 13px"
     @click="clearFilters"
   >
     Clear filters
@@ -41,7 +41,7 @@
         <v-divider style="background-color: #dbdbdb" class="my-3" />
 
         <!-- Frequency -->
-        <v-label class="my-1" style="font-family: Poppins; font-size: 14px">
+        <v-label class="my-1" style=" font-size: 14px">
           Frequency
         </v-label>
         <v-select
@@ -57,7 +57,7 @@
         />
 
         <!-- Priority -->
-        <v-label class="my-1" style="font-family: Poppins; font-size: 14px">
+        <v-label class="my-1" style=" font-size: 14px">
           Priority
         </v-label>
         <v-select
@@ -73,7 +73,7 @@
         />
 
         <!-- Person -->
-        <v-label class="my-1" style="font-family: Poppins; font-size: 14px">
+        <v-label class="my-1" style=" font-size: 14px">
           Person
         </v-label>
         <v-select
@@ -104,7 +104,10 @@ const filterMenu = ref(false);
 const frequencies = ref([
   { id: 1, name: "Daily" },
   { id: 2, name: "Weekly" },
-  { id: 3, name: "Monthly" },
+  { id: 3, name: "Fortnightly" },
+  { id: 4, name: "Monthly" },
+  { id: 5, name: "6 Monthly" },
+  { id: 6, name: "Yearly" },
 ]);
 
 const selectedFrequency = ref(null);
@@ -133,7 +136,7 @@ const clearFilters =()=>{
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 .tbl-top-btn {
   height: 40px;

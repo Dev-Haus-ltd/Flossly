@@ -20,8 +20,52 @@ import {
   UserTaskAttachment,
   TaskChecklist,
   UserTaskChecklist,
+  UserTaskComment,
+  UserPointsHistory,
+  UserPoint,
 } from "../models";
-import { sendTaskAssignmentEmail, taskCompletedNotification } from "../utils/emailNotifications";
+import {
+  taskCompletedNotification,
+  sendTaskUnassignmentEmail,
+  sendTaskDueReminderEmail,
+  sendTaskCommentNotificationEmail,
+} from "../utils/emailNotifications";
+
+const PRIVILEGED_ROLE_IDS = [1, 8];
+const isManagerOrOwner = (roleId) =>
+  PRIVILEGED_ROLE_IDS.includes(Number(roleId));
+const ensureManagerOrOwner = (loggedUser) => {
+  if (!isManagerOrOwner(loggedUser?.roleId)) {
+    throw createError({ statusCode: 403, message: "Not authorized" });
+  }
+};
+
+const autoArchiveCompletedTasks = async (organisationId, days = 5) => {
+  if (!organisationId) return;
+  try {
+    const completedStatus = await OrganisationStatus.findOne({
+      where: { organisationId, key: "completed" },
+    });
+    if (!completedStatus) return;
+
+    const thresholdDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    await UserTask.update(
+      { isArchieved: true },
+      {
+        where: {
+          organisationId,
+          statusId: completedStatus.id,
+          isArchieved: false,
+          updatedAt: { [Op.lt]: thresholdDate },
+        },
+      }
+    );
+  } catch (err) {
+    // fail silently so listings still return
+    console.error("autoArchiveCompletedTasks failed", err.message);
+  }
+};
+
 export const listMyTasks = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);
@@ -35,6 +79,8 @@ export const listMyTasks = async (event) => {
     offset = 0,
   } = JSON.parse(body);
   try {
+    await autoArchiveCompletedTasks(Number(loggedUser.orgId));
+
     const where = {
       userId: Number(loggedUser.userId),
       organisationId: Number(loggedUser.orgId),
@@ -60,6 +106,7 @@ export const listMyTasks = async (event) => {
           {
             model: TaskCategory,
             as: "category",
+            where: { isDeleted: false },
             attributes: ["id", "name"],
           },
         ],
@@ -100,12 +147,32 @@ export const listMyTasks = async (event) => {
 };
 
 export const addTaskCategory = async (event) => {
+  const loggedUser = event.context.user;
+  ensureManagerOrOwner(loggedUser);
   const body = await readBody(event);
   const { name, description, parentId, color } = JSON.parse(body);
   if (!name) return error(400, "Name required");
   try {
-    await TaskCategory.create({ name, description, parentId, color });
-    return success("Saved");
+    const cat = await TaskCategory.findOne({
+      where: {
+        name: {
+          [Op.iLike]: name, // case-insensitive match
+        },
+        organisationId: loggedUser.orgId,
+      },
+    });
+    if (cat)
+      throw createError({ message: `Category ${name} is already added` });
+
+    const newCategory = await TaskCategory.create({
+      name,
+      description,
+      parentId,
+      color,
+      organisationId: loggedUser.orgId,
+    });
+
+    return success({ message: "Saved", category: newCategory });
   } catch (err) {
     return error(500, err.message);
   }
@@ -143,6 +210,7 @@ export const bulkUploadTasks = async (event) => {
 export const assignBulkTasks = async (event) => {
   const body = await readBody(event);
   const loggedUser = event.context.user;
+  ensureManagerOrOwner(loggedUser);
   const organisationId = loggedUser.orgId;
   const { userId, tasks } = JSON.parse(body);
 
@@ -153,6 +221,13 @@ export const assignBulkTasks = async (event) => {
     );
   }
   try {
+    const assigneeLink = await UserOrganisation.findOne({
+      where: { userId, organisationId },
+    });
+    if (!assigneeLink) {
+      return error(403, "Cannot assign users outside your organisation");
+    }
+
     const orgPriorities = await OrganisationPriority.findAll({
       where: { organisationId },
     });
@@ -166,6 +241,8 @@ export const assignBulkTasks = async (event) => {
       });
     }
     const taskIds = tasks.map((t) => t.id);
+
+    // Check if tasks are already assigned to the target user
     const existingAssignments = await UserTask.findAll({
       where: {
         userId,
@@ -183,6 +260,21 @@ export const assignBulkTasks = async (event) => {
     if (newTasks.length === 0) {
       return success("All tasks already assigned to the user");
     }
+
+    // Remove existing assignments for the current user (Check Login Confirmation in today's meeting)
+
+    if (loggedUser.userId !== userId) {
+      await UserTask.destroy({
+        where: {
+          userId: loggedUser.userId,
+          taskId: {
+            [Op.in]: taskIds,
+          },
+          organisationId,
+        },
+      });
+    }
+
     const userTasks = newTasks
       .map((t) => {
         return {
@@ -196,10 +288,17 @@ export const assignBulkTasks = async (event) => {
           frequency: t.defaultFrequency,
           dueDate: getDueDate(t.defaultFrequency),
           comments: "",
+          assignedBy: loggedUser.userId,
         };
       })
       .filter(Boolean);
     await UserTask.bulkCreate(userTasks);
+    const user = await User.findOne({ where: { id: userId } });
+    await sendTaskAssignmentEmail({
+      email: user.email,
+      name: user.fullName,
+      taskTitle: userTasks.length === 1 ? userTasks[0].title : "Bulk Tasks",
+    });
     return success(userTasks);
     //TODO: Send new task assigned email
   } catch (err) {
@@ -218,10 +317,10 @@ const getDueDate = (frequency) => {
       return addDays(new Date(), 14);
     case "Monthly":
       return addDays(new Date(), 30);
-    case "Annualy":
+    case "6 Monthly":
+      return addDays(new Date(), 180); // 6 months = ~180 days
+    case "Yearly":
       return addDays(new Date(), 365);
-    case "Every 24 Months":
-      return addDays(new Date(), 730);
     default:
       return null;
   }
@@ -280,9 +379,9 @@ export const updateTask = async (event) => {
       assignedUsers,
       documentLink,
       isArchieved,
+      description,
       taskDetails,
     } = parsedBody;
-    console.log("task testing", parsedBody?.taskDetails);
 
     // Validate existence
     if (id && taskId) {
@@ -318,6 +417,58 @@ export const updateTask = async (event) => {
       if (dueDate !== undefined) userTask.dueDate = dueDate ? new Date(dueDate) : null;
       if (isArchieved !== undefined) userTask.isArchieved = isArchieved;
       await userTask.save();
+
+      // Update Task details if provided
+      if (taskDetails && taskId) {
+        const task = await Task.findByPk(taskId);
+        if (task) {
+          if (taskDetails.description !== undefined)
+            task.description = taskDetails.description;
+          if (taskDetails.roleId !== undefined)
+            task.roleId = taskDetails.roleId;
+          if (taskDetails.defaultFrequency !== undefined)
+            task.defaultFrequency = taskDetails.defaultFrequency;
+          await task.save();
+        }
+      }
+      if (
+        statusId &&
+        orgStatuses.find((x) => x.id === statusId)?.key === "completed"
+      ) {
+        const user = await User.findOne({ where: { id: loggedUser.userId } });
+        await taskCompletedNotification({
+          fullName: user.fullName,
+          email: user.email,
+          task: userTask.title,
+        });
+        if (
+          priorityId &&
+          orgPriorities.find((x) => x.id === priorityId)?.key === "critical"
+        ) {
+          await UserPointsHistory.create({
+            userId: loggedUser.userId,
+            rewardPointId: 4,
+            points: 10,
+            description: userTask.title,
+          });
+          const userPoints = await UserPoint.findOne({
+            where: { userId: loggedUser.userId },
+          });
+          if (!userPoints) {
+            await UserPoint.create({
+              userId: loggedUser.userId,
+              balance: 10,
+              totalPointsRewarded: 10,
+              redeemed: 0,
+            });
+          }
+          if (userPoints) {
+            userPoints.balance += 10;
+            userPoints.totalPointsRewarded += 10;
+            await userPoints.save();
+          }
+        }
+      }
     } else if (!id && taskId) {
       if (assignedUsers && assignedUsers.length) {
         assignedUsers.forEach(async (el) => {
@@ -338,6 +489,7 @@ export const updateTask = async (event) => {
 export const viewTeamTasksTaskWise = async (event) => {
   try {
     const loggedUser = event.context.user;
+    ensureManagerOrOwner(loggedUser);
     const organisationId = loggedUser.orgId;
     const userTasks = await UserTask.findAll({
       where: { organisationId },
@@ -363,6 +515,12 @@ export const viewTeamTasksTaskWise = async (event) => {
     userTasks.forEach((userTask) => {
       const task = userTask;
       const assignedUser = userTask.assignedUser;
+      const userId = assignedUser?.id;
+
+      // Skip if assignedUser is null
+      if (!assignedUser || !userId) {
+        return;
+      }
 
       if (!taskMap.has(task.taskDetails.id)) {
         taskMap.set(task.taskDetails.id, {
@@ -370,7 +528,14 @@ export const viewTeamTasksTaskWise = async (event) => {
           assignedUser: [assignedUser.get()],
         });
       } else {
-        taskMap.get(task.taskDetails.id).assignedUser.push(assignedUser.get());
+        // Check if user is already in the assignedUser array to avoid duplicates
+        const existingTask = taskMap.get(task.taskDetails.id);
+        const userExists = existingTask.assignedUser.some(
+          (u) => u.id === userId
+        );
+        if (!userExists) {
+          existingTask.assignedUser.push(assignedUser.get());
+        }
       }
     });
 
@@ -397,7 +562,31 @@ export const unAssignTask = async (event) => {
     if (!userTask) {
       throw createError({ message: "UserTask not found" });
     }
+    const isOwner = userTask.userId === loggedUser.userId;
+    const isAssigner = userTask.assignedBy === loggedUser.userId;
+    const isPrivileged = isManagerOrOwner(loggedUser.roleId);
+    if (!isOwner && !isAssigner && !isPrivileged) {
+      throw createError({
+        statusCode: 403,
+        message: "Not authorized to delete this task",
+      });
+    }
+    const removedByUser = await User.findByPk(loggedUser.userId);
+    const removedUser = await User.findByPk(userTask.userId);
+    const taskTitle =
+      userTask.title || (await Task.findByPk(userTask.taskId))?.title;
+
     await userTask.destroy();
+
+    if (removedUser?.email) {
+      await sendTaskUnassignmentEmail({
+        email: removedUser.email,
+        name: removedUser.fullName,
+        taskTitle: taskTitle || "Task",
+        removedBy: removedByUser?.fullName || "Team",
+      });
+    }
+
     return success("UserTask successfully deleted (unassigned).");
   } catch (err) {
     return error(500, err.message);
@@ -421,6 +610,13 @@ export const completeBulkTasks = async (event) => {
         },
       }
     );
+    const user = await User.findOne({ where: { id: loggedUser.userId } });
+    await taskCompletedNotification({
+      fullName: user.fullName,
+      email: user.email,
+      task: "Multiple",
+    });
+    // add reward points
     return success("All tasks compeleted successfully.");
   } catch (err) {
     return error(500, err.message);
@@ -447,19 +643,217 @@ export const archieveBulkTasks = async (event) => {
   }
 };
 
+export const unarchiveBulkTasks = async (event) => {
+  try {
+    const loggedUser = event.context.user;
+    const organisationId = loggedUser.orgId;
+    const body = await readBody(event);
+    const { userTasksIds } = JSON.parse(body);
+    await UserTask.update(
+      { isArchieved: false },
+      {
+        where: {
+          id: userTasksIds,
+          organisationId,
+        },
+      }
+    );
+    return success("All tasks unarchived successfully.");
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
 export const unAssignBulkTask = async (event) => {
   try {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
     const { userTasksIds } = JSON.parse(body);
+    const tasks = await UserTask.findAll({
+      where: {
+        id: userTasksIds,
+        organisationId,
+      },
+    });
+    if (!tasks.length) {
+      throw createError({ message: "No matching UserTasks found" });
+    }
+    const unauthorized = tasks.filter(
+      (ut) =>
+        ut.userId !== loggedUser.userId &&
+        ut.assignedBy !== loggedUser.userId &&
+        !isManagerOrOwner(loggedUser.roleId) // privileged roles are authorized
+    );
+    if (unauthorized.length) {
+      throw createError({
+        statusCode: 403,
+        message: "Not authorized to delete one or more selected tasks",
+      });
+    }
+    const tasksWithUsers = await UserTask.findAll({
+      where: { id: userTasksIds, organisationId },
+      include: [
+        {
+          model: User,
+          as: "assignedUser",
+          attributes: ["id", "fullName", "email"],
+        },
+      ],
+    });
+
     await UserTask.destroy({
       where: {
         id: userTasksIds,
         organisationId,
       },
     });
+
+    const remover = await User.findByPk(loggedUser.userId);
+    for (const task of tasksWithUsers) {
+      if (task.assignedUser?.email) {
+        await sendTaskUnassignmentEmail({
+          email: task.assignedUser.email,
+          name: task.assignedUser.fullName,
+          taskTitle:
+            task.title || (await Task.findByPk(task.taskId))?.title || "Task",
+          removedBy: remover?.fullName || "Team",
+        });
+      }
+    }
+
     return success("UserTask successfully deleted (unassigned).");
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const addUserTaskComment = async (event) => {
+  try {
+    const loggedUser = event.context.user;
+    const organisationId = loggedUser.orgId;
+    const body = await readBody(event);
+    const { userTaskId, comment } = JSON.parse(body);
+    if (!userTaskId || !comment) {
+      throw createError({ message: "userTaskId and comment are required" });
+    }
+    const userTask = await UserTask.findOne({
+      where: { id: userTaskId, organisationId },
+      include: [
+        {
+          model: User,
+          as: "assignedUser",
+          attributes: ["id", "fullName", "email"],
+        },
+        {
+          model: Task,
+          as: "taskDetails",
+          attributes: ["title"],
+        },
+      ],
+    });
+    if (!userTask) {
+      throw createError({ message: "UserTask not found" });
+    }
+    const newComment = await UserTaskComment.create({
+      userTaskId,
+      userId: loggedUser.userId,
+      organisationId,
+      comment,
+    });
+
+    // Notify assignee via email
+    if (userTask.assignedUser?.email) {
+      await sendTaskCommentNotificationEmail({
+        email: userTask.assignedUser.email,
+        name: userTask.assignedUser.fullName,
+        taskTitle: userTask.taskDetails?.title || userTask.title || "Task",
+        comment,
+      });
+    }
+
+    return success(newComment);
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const listUserTaskComments = async (event) => {
+  try {
+    const loggedUser = event.context.user;
+    const organisationId = loggedUser.orgId;
+    const body = await readBody(event);
+    const { userTaskId } = JSON.parse(body);
+    if (!userTaskId) {
+      throw createError({ message: "userTaskId is required" });
+    }
+    const comments = await UserTaskComment.findAll({
+      where: { userTaskId, organisationId },
+      include: [
+        {
+          model: User,
+          as: "author",
+          attributes: ["id", "fullName", "photo", "email"],
+        },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
+    return success(comments);
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const updateUserTaskComment = async (event) => {
+  try {
+    const loggedUser = event.context.user;
+    const organisationId = loggedUser.orgId;
+    const body = await readBody(event);
+    const { commentId, comment } = JSON.parse(body);
+    if (!commentId || !comment) {
+      throw createError({ message: "commentId and comment are required" });
+    }
+    const existing = await UserTaskComment.findOne({
+      where: { id: commentId, organisationId },
+    });
+    if (!existing) throw createError({ message: "Comment not found" });
+    const isAuthor = existing.userId === loggedUser.userId;
+    const isOrgAdmin = loggedUser.roleId === 1; // adjust admin role if needed
+    if (!isAuthor && !isOrgAdmin) {
+      throw createError({
+        statusCode: 403,
+        message: "Not authorized to edit this comment",
+      });
+    }
+    existing.comment = comment;
+    await existing.save();
+    return success(existing);
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const deleteUserTaskComment = async (event) => {
+  try {
+    const loggedUser = event.context.user;
+    const organisationId = loggedUser.orgId;
+    const body = await readBody(event);
+    const { commentId } = JSON.parse(body);
+    if (!commentId) throw createError({ message: "commentId is required" });
+    const existing = await UserTaskComment.findOne({
+      where: { id: commentId, organisationId },
+    });
+    if (!existing) throw createError({ message: "Comment not found" });
+    const isAuthor = existing.userId === loggedUser.userId;
+    const isOrgAdmin = loggedUser.roleId === 1;
+    if (!isAuthor && !isOrgAdmin) {
+      throw createError({
+        statusCode: 403,
+        message: "Not authorized to delete this comment",
+      });
+    }
+    await existing.destroy();
+    return success("Comment deleted");
   } catch (err) {
     return error(500, err.message);
   }
@@ -511,6 +905,38 @@ export const addAttachments = async (event) => {
   }
 };
 
+export const deleteAttachment = async (event) => {
+  const body = await readBody(event);
+  const { id } = JSON.parse(body);
+  if (!id) {
+    throw createError({ message: "Attachment id required" });
+  }
+  try {
+    const attachment = await UserTaskAttachment.findByPk(id);
+    if (!attachment) {
+      throw createError({ message: "Attachment not found" });
+    }
+
+    // Delete the physical file from the filesystem
+    const filePath = path.join(process.cwd(), "public", attachment.link);
+    if (fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (unlinkErr) {
+        console.warn("Failed to delete file from filesystem:", unlinkErr);
+        // Continue with database deletion even if file deletion fails
+      }
+    }
+
+    // Delete the database record
+    await attachment.destroy();
+    return success("File removed from task");
+  } catch (err) {
+    console.log(err);
+    return error(500, err.message);
+  }
+};
+
 export const createNewTask = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);
@@ -521,20 +947,44 @@ export const createNewTask = async (event) => {
     categoryId,
     defaultFrequency,
     userId,
-    priorityId,
+    userIds,
     checklist,
     dueDate,
+    statusId,
+    priorityId: incomingPriorityId,
   } = JSON.parse(body);
-  if (!title || !categoryId) {
-    throw createError({ message: "Required fields missing" });
+  if (!title || !title.trim() || !categoryId) {
+    throw createError({ message: "Task title cannot be empty or only spaces" });
   }
+  const requestedUserIds = Array.isArray(userIds)
+    ? userIds.filter(Boolean)
+    : [];
+  if (userId) {
+    requestedUserIds.push(userId);
+  }
+  const assignUserIds = [...new Set(requestedUserIds)];
+  if (!assignUserIds.length) {
+    assignUserIds.push(loggedUser.userId);
+  }
+
+  // Enforce same-organisation assignees
+  const assigneeLinks = await UserOrganisation.findAll({
+    where: { organisationId: loggedUser.orgId, userId: assignUserIds },
+  });
+  const allowedIds = new Set(assigneeLinks.map((link) => link.userId));
+  const invalidAssignees = assignUserIds.filter((id) => !allowedIds.has(id));
+  if (invalidAssignees.length) {
+    return error(403, "Cannot assign users outside your organisation");
+  }
+
   const transaction = await DB.transaction();
   try {
     const newTask = {
-      title,
+      title: title.trim(),
       description,
       roleId,
       categoryId,
+      isSystemTask: false,
       defaultFrequency: defaultFrequency || null,
     };
     const task = await Task.create(newTask, { transaction });
@@ -552,44 +1002,95 @@ export const createNewTask = async (event) => {
       }));
       await TaskChecklist.bulkCreate(checklistData, { transaction });
     }
-    if (userId) {
-      const orgStatuses = await OrganisationStatus.findAll({
+    const orgStatuses = await OrganisationStatus.findAll({
+      where: { organisationId: loggedUser.orgId },
+    });
+
+    // Determine statusId: use provided statusId, or default to "upcoming"
+    let finalStatusId;
+    if (statusId) {
+      // Validate that the provided statusId exists for this organization
+      const providedStatus = orgStatuses.find((x) => x.id === statusId);
+      if (providedStatus) {
+        finalStatusId = statusId;
+      } else {
+        // If invalid statusId provided, default to "upcoming"
+        const upcomingStatus = orgStatuses.find((x) => x.key === "upcoming");
+        finalStatusId = upcomingStatus?.id;
+      }
+    } else {
+      // If no statusId provided, default to "upcoming"
+      const upcomingStatus = orgStatuses.find((x) => x.key === "upcoming");
+      finalStatusId = upcomingStatus?.id;
+    }
+
+    // Fallback: if "upcoming" status not found, use the first available status
+    if (!finalStatusId && orgStatuses.length > 0) {
+      finalStatusId = orgStatuses[0].id;
+    }
+    let priorityId = incomingPriorityId;
+    if (!priorityId) {
+      const orgPriorities = await OrganisationPriority.findAll({
         where: { organisationId: loggedUser.orgId },
       });
+      priorityId = orgPriorities.find((x) => x.key === "medium")?.id;
+    }
 
-      const newUuserTask = {
-        userId,
-        organisationId: loggedUser.orgId,
-        dueDate,
-        taskId: task.id,
-        title,
-        documentLink: "",
-        frequency: defaultFrequency || null,
-        priorityId,
-        statusId: orgStatuses.find((x) => x.key === "progress").id,
-        asignedBy: loggedUser.userId,
-      };
-      const userTask = await UserTask.create(newUuserTask, { transaction });
-      const user = await User.findByPk(userId);
-      if (user?.email) {
-        await sendTaskAssignmentEmail({
-          email: user.email,
-          name: user.fullName,
-          taskTitle: title,
-        });
+    const userTasksData = assignUserIds.map((assigneeId) => ({
+      userId: assigneeId,
+      organisationId: loggedUser.orgId,
+      dueDate: dueDate ? new Date(dueDate) : null,
+      taskId: task.id,
+      title,
+      documentLink: "",
+      frequency: defaultFrequency || null,
+      priorityId,
+      statusId: finalStatusId,
+      assignedBy: loggedUser.userId,
+    }));
+
+    const userTasks = await UserTask.bulkCreate(userTasksData, {
+      transaction,
+      returning: true,
+    });
+
+    // Notify all explicit assignees (exclude auto-assigned creator)
+    const assigneeIdsForEmail = assignUserIds.filter(
+      (id) => id !== loggedUser.userId
+    );
+    if (assigneeIdsForEmail.length) {
+      const assignees = await User.findAll({
+        where: { id: assigneeIdsForEmail },
+      });
+      for (const assignee of assignees) {
+        if (assignee?.email) {
+          await sendTaskAssignmentEmail({
+            email: assignee.email,
+            name: assignee.fullName,
+            taskTitle: title,
+          });
+        }
       }
-      if (checklist?.length) {
-        const checklistData = checklist.map((item) => ({
-          userTaskId: userTask.id,
-          question: item.question,
-          category: item.category,
-          showRadio: item.showRadio, // defaulting these
-          showDate: item.showDate,
-          showTime: item.showTime,
-          fieldOneTitle: item.fieldOneTitle,
-          fieldTwoTitle: item.fieldTwoTitle,
-          radioValue: "N/A",
-        }));
+    }
+
+    if (checklist?.length) {
+      const checklistData = [];
+      userTasks.forEach((userTask) => {
+        checklistData.push(
+          ...checklist.map((item) => ({
+            userTaskId: userTask.id,
+            question: item.question,
+            category: item.category,
+            showRadio: item.showRadio, // defaulting these
+            showDate: item.showDate,
+            showTime: item.showTime,
+            fieldOneTitle: item.fieldOneTitle,
+            fieldTwoTitle: item.fieldTwoTitle,
+            radioValue: "N/A",
+          }))
+        );
+      });
+      if (checklistData.length) {
         await UserTaskChecklist.bulkCreate(checklistData, { transaction });
       }
     }
@@ -601,9 +1102,241 @@ export const createNewTask = async (event) => {
     return error(500, err);
   }
 };
+export const uploadBulkTasks = async (event) => {
+  const loggedUser = event.context.user;
+  const body = await readBody(event);
+  const { tasks } = JSON.parse(body);
+
+  if (!Array.isArray(tasks) || !tasks.length) {
+    throw createError({ message: "No tasks provided" });
+  }
+
+  const results = [];
+
+  // Pre-validate tasks and separate valid from invalid
+  const validTasks = [];
+  const invalidTasks = [];
+
+  tasks.forEach((t, index) => {
+    const {
+      title,
+      description,
+      roleId,
+      categoryId,
+      defaultFrequency,
+      userId,
+      priorityId,
+      checklist,
+      dueDate,
+    } = t;
+
+    if (!title || !categoryId) {
+      invalidTasks.push({
+        index,
+        title,
+        status: "failed",
+        message: "Required fields missing",
+      });
+    } else {
+      validTasks.push({
+        index,
+        data: t,
+        title,
+        description,
+        roleId,
+        categoryId,
+        defaultFrequency: defaultFrequency || null,
+        userId,
+        priorityId,
+        checklist,
+        dueDate,
+      });
+    }
+  });
+
+  // Add invalid tasks to results
+  results.push(...invalidTasks);
+
+  if (validTasks.length === 0) {
+    return {
+      code: 0,
+      message: `0 tasks added successfully, ${invalidTasks.length} failed`,
+      results,
+    };
+  }
+
+  const transaction = await DB.transaction();
+  try {
+    // --- 1️⃣ Bulk Create Tasks ---
+    const taskData = validTasks.map((t) => ({
+      title: t.title,
+      description: t.description,
+      roleId: t.roleId,
+      categoryId: t.categoryId,
+      isSystemTask: true,
+      defaultFrequency: t.defaultFrequency,
+    }));
+
+    const createdTasks = await Task.bulkCreate(taskData, {
+      transaction,
+      returning: true,
+    });
+
+    // --- 2️⃣ Bulk Create Task Checklists ---
+    const allTaskChecklistData = [];
+    validTasks.forEach((t, taskIndex) => {
+      if (t.checklist?.length) {
+        const taskId = createdTasks[taskIndex].id;
+        const checklistData = t.checklist.map((item) => ({
+          taskId,
+          question: item.question,
+          category: item.category,
+          showRadio: item.showRadio,
+          showDate: item.showDate,
+          showTime: item.showTime,
+          fieldOneTitle: item.fieldOneTitle,
+          fieldTwoTitle: item.fieldTwoTitle,
+          radioValue: "N/A",
+        }));
+        allTaskChecklistData.push(...checklistData);
+      }
+    });
+
+    if (allTaskChecklistData.length > 0) {
+      await TaskChecklist.bulkCreate(allTaskChecklistData, { transaction });
+    }
+
+    // --- 3️⃣ Handle User Assignments ---
+    const tasksWithUsers = validTasks.filter((t) => t.userId);
+
+    if (tasksWithUsers.length > 0) {
+      // Enforce same-organisation assignees
+      const targetUserIds = [
+        ...new Set(tasksWithUsers.map((t) => t.userId).filter(Boolean)),
+      ];
+      const userOrgLinks = await UserOrganisation.findAll({
+        where: { organisationId: loggedUser.orgId, userId: targetUserIds },
+      });
+      const allowedIds = new Set(userOrgLinks.map((link) => link.userId));
+      const invalidAssignees = targetUserIds.filter(
+        (id) => !allowedIds.has(id)
+      );
+      if (invalidAssignees.length) {
+        throw createError({
+          statusCode: 403,
+          message: "Cannot assign users outside your organisation",
+        });
+      }
+
+      // Get organization statuses once
+      const orgStatuses = await OrganisationStatus.findAll({
+        where: { organisationId: loggedUser.orgId },
+      });
+      const progressStatusId = orgStatuses.find(
+        (x) => x.key === "progress"
+      )?.id;
+
+      // Bulk create UserTasks
+      const userTaskData = tasksWithUsers.map((t, userTaskIndex) => {
+        const taskIndex = validTasks.findIndex((vt) => vt.index === t.index);
+        return {
+          userId: t.userId,
+          organisationId: loggedUser.orgId,
+          dueDate: t.dueDate,
+          taskId: createdTasks[taskIndex].id,
+          title: t.title,
+          documentLink: "",
+          frequency: t.defaultFrequency,
+          priorityId: t.priorityId,
+          statusId: progressStatusId,
+          assignedBy: loggedUser.userId,
+        };
+      });
+
+      const createdUserTasks = await UserTask.bulkCreate(userTaskData, {
+        transaction,
+        returning: true,
+      });
+
+      // --- 4️⃣ Bulk Create UserTask Checklists ---
+      const allUserTaskChecklistData = [];
+      tasksWithUsers.forEach((t, userTaskIndex) => {
+        if (t.checklist?.length) {
+          const userTaskId = createdUserTasks[userTaskIndex].id;
+          const checklistData = t.checklist.map((item) => ({
+            userTaskId,
+            question: item.question,
+            category: item.category,
+            showRadio: item.showRadio,
+            showDate: item.showDate,
+            showTime: item.showTime,
+            fieldOneTitle: item.fieldOneTitle,
+            fieldTwoTitle: item.fieldTwoTitle,
+            radioValue: "N/A",
+          }));
+          allUserTaskChecklistData.push(...checklistData);
+        }
+      });
+
+      if (allUserTaskChecklistData.length > 0) {
+        await UserTaskChecklist.bulkCreate(allUserTaskChecklistData, {
+          transaction,
+        });
+      }
+
+      // --- 5️⃣ Send notification emails (individual operations) ---
+      const userIds = [...new Set(tasksWithUsers.map((t) => t.userId))];
+      const users = await User.findAll({
+        where: { id: userIds },
+      });
+      const userMap = new Map(users.map((u) => [u.id, u]));
+
+      for (const t of tasksWithUsers) {
+        const user = userMap.get(t.userId);
+        if (user?.email) {
+          await sendTaskAssignmentEmail({
+            email: user.email,
+            name: user.fullName,
+            taskTitle: t.title,
+          });
+        }
+      }
+    }
+
+    await transaction.commit();
+
+    // Add success results for all valid tasks
+    validTasks.forEach((t) => {
+      results.push({ index: t.index, title: t.title, status: "success" });
+    });
+  } catch (err) {
+    console.error(`❌ Error in bulk task creation:`, err);
+    await transaction.rollback();
+
+    // Mark all valid tasks as failed
+    validTasks.forEach((t) => {
+      results.push({
+        index: t.index,
+        title: t.title,
+        status: "failed",
+        message: err.message,
+      });
+    });
+  }
+
+  const successCount = results.filter((r) => r.status === "success").length;
+  const failCount = results.length - successCount;
+
+  return {
+    code: 0,
+    message: `${successCount} tasks added successfully, ${failCount} failed`,
+    results,
+  };
+};
 
 export const teamTasksCounts = async (event) => {
   const loggedUser = event.context.user;
+  ensureManagerOrOwner(loggedUser);
   const organisationId = Number(loggedUser.orgId);
   try {
     if (!organisationId) {
@@ -619,6 +1352,8 @@ export const teamTasksCounts = async (event) => {
         model: User,
         as: "user",
         attributes: ["id", "fullName", "photo", "email", "roleId"],
+        where: { status: "Active" },
+        required: true, // INNER JOIN - only include users that exist and are Active
         include: [
           {
             model: Role,
@@ -628,10 +1363,43 @@ export const teamTasksCounts = async (event) => {
         ],
       },
     });
-    const users = orgUsers.map((el) => el.user);
+    const users = orgUsers.map((el) => el.user).filter(Boolean);
+
+    // Ensure current user is always included, even if not in the filtered list
+    const currentUserId = loggedUser.userId;
+    const currentUserIncluded = users.some((u) => u.id === currentUserId);
+
+    if (!currentUserIncluded && currentUserId) {
+      // Check if current user has a UserOrganisation record for this org
+      const userOrg = await UserOrganisation.findOne({
+        where: {
+          userId: currentUserId,
+          organisationId: organisationId,
+        },
+      });
+
+      if (userOrg) {
+        // Fetch current user separately if not included (might be inactive status)
+        const currentUser = await User.findOne({
+          where: { id: currentUserId },
+          attributes: ["id", "fullName", "photo", "email", "roleId"],
+          include: [
+            {
+              model: Role,
+              as: "role",
+              attributes: ["id", "title", "color"],
+            },
+          ],
+        });
+
+        if (currentUser) {
+          users.push(currentUser);
+        }
+      }
+    }
     const results = await Promise.all(
       users.map(async (user) => {
-        const [pending, completed, upcoming] = await Promise.all([
+        const [pending, completed, todo] = await Promise.all([
           UserTask.count({
             where: {
               userId: user.id,
@@ -650,7 +1418,7 @@ export const teamTasksCounts = async (event) => {
             where: {
               userId: user.id,
               organisationId,
-              statusId: orgStatuses.find((x) => x.key === "upcoming").id,
+              statusId: orgStatuses.find((x) => x.key === "todo").id,
             },
           }),
         ]);
@@ -659,13 +1427,14 @@ export const teamTasksCounts = async (event) => {
           taskStats: {
             pending,
             completed,
-            upcoming,
+            todo,
           },
         };
       })
     );
     return success(results);
   } catch (err) {
+    console.log(err)
     return error(500, err.message);
   }
 };
@@ -730,18 +1499,34 @@ export const deleteUserTaskChecklist = async (event) => {
 
 export const groupTeamTasksByTaskId = async (event) => {
   const organisationId = event.context.user.orgId;
+  ensureManagerOrOwner(event.context.user);
   const body = await readBody(event);
   const { categoryId, frequency, priority, user } = JSON.parse(body);
-  const categories = await TaskCategory.findAll({
-    where: {
-      [Op.or]: [{ id: categoryId }, { parentId: categoryId }],
-    },
-    attributes: ["id"],
-  });
 
-  const categoryIds = categories.map((c) => c.id);
-  if (!categoryIds.length) {
-    return success([]);
+  // If categoryId is provided, filter by category; otherwise get all categories
+  let categoryIds = [];
+  if (categoryId) {
+    const categories = await TaskCategory.findAll({
+      where: {
+        [Op.or]: [{ id: categoryId }, { parentId: categoryId }],
+        isDeleted: false,
+      },
+      attributes: ["id"],
+    });
+    categoryIds = categories.map((c) => c.id);
+    if (!categoryIds.length) {
+      return success([]);
+    }
+  } else {
+    // If no categoryId provided, get all non-deleted categories
+    const allCategories = await TaskCategory.findAll({
+      where: { isDeleted: false },
+      attributes: ["id"],
+    });
+    categoryIds = allCategories.map((c) => c.id);
+    if (!categoryIds.length) {
+      return success([]);
+    }
   }
 
   const where = { organisationId };
@@ -764,12 +1549,15 @@ export const groupTeamTasksByTaskId = async (event) => {
             "defaultFrequency",
           ],
           as: "taskDetails",
-          where: { categoryId: { [Op.in]: categoryIds } },
-          required: true,
+          ...(categoryIds.length > 0 && {
+            where: { categoryId: { [Op.in]: categoryIds } },
+            required: true,
+          }),
           include: [
             {
               model: TaskCategory,
               as: "category",
+              where: { isDeleted: false },
               attributes: ["id", "name"],
             },
           ],
@@ -792,8 +1580,20 @@ export const groupTeamTasksByTaskId = async (event) => {
       ],
     });
 
-    const response = [];
+    // Separate archived and non-archived tasks
+    const archivedTasks = [];
+    const nonArchivedTasks = [];
+
     for (const ut of userTasks) {
+      if (ut.isArchieved) {
+        archivedTasks.push(ut);
+      } else {
+        nonArchivedTasks.push(ut);
+      }
+    }
+
+    const response = [];
+    for (const ut of nonArchivedTasks) {
       const status = ut.status?.key || "unknown";
       if (!response[status]) {
         response[status] = [];
@@ -813,6 +1613,7 @@ export const groupTeamTasksByTaskId = async (event) => {
         if (!grouped[taskId]) {
           grouped[taskId] = {
             taskId,
+            id: taskEntry.id,
             title: taskEntry.title,
             description: taskEntry.taskDetails?.description,
             frequency: taskEntry.frequency,
@@ -828,21 +1629,82 @@ export const groupTeamTasksByTaskId = async (event) => {
             updatedAt: taskEntry.updatedAt,
             taskDetails: taskEntry.taskDetails,
             attachments: taskEntry.attachments,
+            isArchieved: taskEntry.isArchieved,
             assignedUsers: [],
           };
         }
 
-        grouped[taskId].assignedUsers.push({
-          id: taskEntry.assignedUser?.id,
-          fullName: taskEntry.assignedUser?.fullName,
-          email: taskEntry.assignedUser?.email,
-          photo: taskEntry.assignedUser?.photo,
-          status: taskEntry.status,
-          userTaskId: taskEntry.id,
-        });
+        // Check if user is already in the assignedUsers array to avoid duplicates
+        const userId = taskEntry.assignedUser?.id;
+        if (
+          userId &&
+          !grouped[taskId].assignedUsers.some((u) => u.id === userId)
+        ) {
+          grouped[taskId].assignedUsers.push({
+            id: taskEntry.assignedUser?.id,
+            fullName: taskEntry.assignedUser?.fullName,
+            email: taskEntry.assignedUser?.email,
+            photo: taskEntry.assignedUser?.photo,
+            status: taskEntry.status,
+            userTaskId: taskEntry.id,
+          });
+        }
       });
       el.tasks = Object.values(grouped);
     });
+
+    // Process archived tasks separately
+    if (archivedTasks.length > 0) {
+      const archivedGrouped = {};
+
+      archivedTasks.forEach((taskEntry) => {
+        const taskId = taskEntry.taskId;
+        if (!archivedGrouped[taskId]) {
+          archivedGrouped[taskId] = {
+            taskId,
+            id: taskEntry.id,
+            title: taskEntry.title,
+            description: taskEntry.taskDetails?.description,
+            frequency: taskEntry.frequency,
+            categoryId: taskEntry.taskDetails?.categoryId,
+            category: taskEntry.taskDetails.category,
+            priorityId: taskEntry.priorityId,
+            status: taskEntry.status,
+            statusId: taskEntry.statusId,
+            priority: taskEntry.priority,
+            comments: taskEntry.comments,
+            dueDate: taskEntry.dueDate,
+            createdAt: taskEntry.createdAt,
+            updatedAt: taskEntry.updatedAt,
+            taskDetails: taskEntry.taskDetails,
+            attachments: taskEntry.attachments,
+            isArchieved: taskEntry.isArchieved,
+            assignedUsers: [],
+          };
+        }
+
+        // Check if user is already in the assignedUsers array to avoid duplicates
+        const userId = taskEntry.assignedUser?.id;
+        if (
+          userId &&
+          !archivedGrouped[taskId].assignedUsers.some((u) => u.id === userId)
+        ) {
+          archivedGrouped[taskId].assignedUsers.push({
+            id: taskEntry.assignedUser?.id,
+            fullName: taskEntry.assignedUser?.fullName,
+            email: taskEntry.assignedUser?.email,
+            photo: taskEntry.assignedUser?.photo,
+            status: taskEntry.status,
+            userTaskId: taskEntry.id,
+          });
+        }
+      });
+
+      data.push({
+        status: "archived",
+        tasks: Object.values(archivedGrouped),
+      });
+    }
 
     return success(data);
   } catch (err) {
@@ -878,6 +1740,7 @@ export const getUserTaskDetails = async (event) => {
             {
               model: TaskCategory,
               as: "category",
+              where: { isDeleted: false },
               attributes: ["id", "name"],
             },
           ],
@@ -900,6 +1763,18 @@ export const getUserTaskDetails = async (event) => {
           model: UserTaskAttachment,
           as: "attachments",
         },
+        {
+          model: UserTaskComment,
+          as: "taskComments",
+          include: [
+            {
+              model: User,
+              as: "author",
+              attributes: ["id", "fullName", "photo", "email"],
+            },
+          ],
+          order: [["createdAt", "ASC"]],
+        },
       ],
     });
 
@@ -914,7 +1789,6 @@ export const addTaskChecklist = async (event) => {
   const body = await readBody(event);
   const {
     taskId,
-    organisationId,
     question,
     category,
     fieldOneTitle,
@@ -924,7 +1798,7 @@ export const addTaskChecklist = async (event) => {
     showDate = false,
     radioValue = "N/A",
   } = body;
-  if (!taskId || !organisationId || !question) {
+  if (!taskId || !question) {
     throw createError({
       message: "taskId, organisationId, and question are required",
     });
@@ -948,7 +1822,6 @@ export const addTaskChecklist = async (event) => {
     const userTasks = await UserTask.findAll({
       where: {
         taskId,
-        organisationId,
       },
     });
     const userChecklistPayload = userTasks.map((task) => ({
@@ -1095,41 +1968,83 @@ export const deleteTaskChecklist = async (event) => {
 };
 
 export const getCategories = async (event) => {
+  const loggedUser = event.context.user
   try {
-    const categories = await TaskCategory.findAll();
+    const categories = await TaskCategory.findAll({
+      where: {
+        isDeleted: false,
+        [Op.or]: [
+          { organisationId: null },
+          { organisationId: loggedUser.orgId },
+        ],
+      },
+    });
     return success(categories);
   } catch (err) {
     return error(500, err.message);
   }
 };
 
+
 export const getCategoriesforPool = async (event) => {
   try {
     const categories = await TaskCategory.findAll({
+      where: { 
+        isDeleted: false,
+        organisationId: { [Op.is]: null }
+      },
       attributes: {
         include: [[fn("COUNT", col("tasks.id")), "taskCount"]],
       },
       include: [
         {
           model: Task,
-          attributes: [],
           as: "tasks",
+          attributes: [],
+          required: false, // important: allows categories with 0 tasks
+          where: {
+            isSystemTask: true
+          },
         },
       ],
       group: ["TaskCategories.id"],
       order: [["id", "ASC"]],
     });
+
     return success(categories);
   } catch (err) {
     return error(500, err.message);
   }
 };
 
+
+
 export const myTasksCountByCategory = async (event) => {
   try {
     const loggedUser = event.context.user;
-    const results = await UserTask.findAll({
-      where: { userId: loggedUser.userId, organisationId: loggedUser.orgId },
+
+    const defaultCategoryNames = [
+      "Staff Management",
+      "Marketing",
+      "Finance",
+      "HR",
+    ];
+
+    const allCategories = await TaskCategory.findAll({
+      where: { isDeleted: false },
+      attributes: ["id", "name", "color", "parentId"],
+      raw: true,
+    });
+
+    const categoryMap = new Map();
+    allCategories.forEach((cat) => categoryMap.set(cat.id, cat));
+
+    const userTasks = await UserTask.findAll({
+      where: {
+        userId: loggedUser.userId,
+        organisationId: loggedUser.orgId,
+        isArchieved: false,
+      },
       include: [
         {
           model: Task,
@@ -1138,51 +2053,109 @@ export const myTasksCountByCategory = async (event) => {
             {
               model: TaskCategory,
               as: "category",
-              attributes: ["id", "name", "color", "parentId"],
-              include: [
-                {
-                  model: TaskCategory,
-                  as: "parent",
-                  attributes: ["id", "name", "color"],
-                },
-              ],
+              where: { isDeleted: false },
+              attributes: ["id", "parentId"],
             },
           ],
         },
       ],
+      raw: true,
+      nest: true,
     });
 
-    const countsMap = new Map();
+    const parentCounts = {};
 
-    results.forEach((userTask) => {
-      const category = userTask.taskDetails?.category;
-      if (!category) return;
+    // Count tasks by parent category
+    for (const task of userTasks) {
+      const cat = task.taskDetails?.category;
+      if (!cat) continue;
 
-      const target = category.parent || category;
+      let currentCat = categoryMap.get(cat.id);
+      if (!currentCat) continue;
 
-      if (!countsMap.has(target.id)) {
-        countsMap.set(target.id, {
-          categoryId: target.id,
-          categoryName: target.name,
-          color: target.color,
-          taskCount: 1,
-        });
-      } else {
-        countsMap.get(target.id).taskCount += 1;
+      while (currentCat.parentId) {
+        const parent = categoryMap.get(currentCat.parentId);
+        if (!parent) {
+          currentCat = null;
+          break;
+        }
+        currentCat = parent;
       }
-    });
-    return success(Array.from(countsMap.values()));
+
+      if (!currentCat) continue;
+
+      if (!parentCounts[currentCat.id]) {
+        parentCounts[currentCat.id] = {
+          categoryId: currentCat.id,
+          categoryName: currentCat.name,
+          color: currentCat.color,
+          taskCount: 0,
+        };
+      }
+
+      parentCounts[currentCat.id].taskCount += 1;
+    }
+
+    let result = Object.values(parentCounts);
+
+    // Ensure default categories exist in result with taskCount 0
+    for (const defaultName of defaultCategoryNames) {
+      const exists = result.some((c) => c.categoryName === defaultName);
+
+      if (!exists) {
+        const cat = allCategories.find((c) => c.name === defaultName);
+
+        // Only add if it exists in DB
+        if (cat) {
+          result.push({
+            categoryId: cat.id,
+            categoryName: cat.name,
+            color: cat.color,
+            taskCount: 0,
+          });
+        }
+      }
+    }
+
+    return success(result);
   } catch (err) {
-    console.log(err);
-    return error(500, err.message);
+    return error("Something went wrong while counting tasks.");
   }
 };
 
 export const teamTasksCountByCategory = async (event) => {
   try {
     const loggedUser = event.context.user;
-    const results = await UserTask.findAll({
-      where: { organisationId: loggedUser.orgId },
+    ensureManagerOrOwner(loggedUser);
+
+    // 🔹 Default top-level categories (always included)
+    const DEFAULT_PARENT_CATEGORIES = [
+      "Staff Management",
+      "Marketing",
+      "Finance",
+      "HR",
+    ];
+
+    // Fetch categories
+    const allCategories = await TaskCategory.findAll({
+      where: { isDeleted: false },
+      attributes: ["id", "name", "color", "parentId"],
+      raw: true,
+    });
+
+    const categoryMap = new Map();
+    allCategories.forEach((cat) => categoryMap.set(cat.id, cat));
+
+    // Map names to IDs for defaults
+    const defaultCategoryIds = allCategories
+      .filter((c) => DEFAULT_PARENT_CATEGORIES.includes(c.name))
+      .map((c) => c.id);
+
+    const teamTasks = await UserTask.findAll({
+      where: {
+        organisationId: loggedUser.orgId,
+        isArchieved: false,
+      },
       include: [
         {
           model: Task,
@@ -1191,99 +2164,191 @@ export const teamTasksCountByCategory = async (event) => {
             {
               model: TaskCategory,
               as: "category",
-              attributes: ["id", "name", "color", "parentId"],
-              include: [
-                {
-                  model: TaskCategory,
-                  as: "parent",
-                  attributes: ["id", "name", "color"],
-                },
-              ],
+              where: { isDeleted: false },
+              attributes: ["id", "parentId"],
             },
           ],
         },
       ],
+      raw: true,
+      nest: true,
     });
 
-    const countsMap = new Map();
+    const parentCounts = {};
 
-    results.forEach((userTask) => {
-      const category = userTask.taskDetails?.category;
-      if (!category) return;
-
-      const target = category.parent || category;
-
-      if (!countsMap.has(target.id)) {
-        countsMap.set(target.id, {
-          categoryId: target.id,
-          categoryName: target.name,
-          color: target.color,
-          taskCount: 1,
-        });
-      } else {
-        countsMap.get(target.id).taskCount += 1;
+    // Prepare initial object with defaults all set to 0
+    for (const cat of allCategories) {
+      if (DEFAULT_PARENT_CATEGORIES.includes(cat.name)) {
+        parentCounts[cat.id] = {
+          categoryId: cat.id,
+          categoryName: cat.name,
+          color: cat.color,
+          taskCount: 0, // default 0
+        };
       }
-    });
-    return success(Array.from(countsMap.values()));
+    }
+
+    // Group tasks by taskId (avoid double counting)
+    const taskMap = new Map();
+    for (const userTask of teamTasks) {
+      const taskId = userTask.taskId;
+      if (!taskMap.has(taskId)) {
+        taskMap.set(taskId, {
+          taskId,
+          category: userTask.taskDetails?.category,
+          assignedUserIds: new Set(),
+        });
+      }
+      taskMap.get(taskId).assignedUserIds.add(userTask.userId);
+    }
+
+    // Exclude tasks assigned to logged-in user
+    const filteredTasks = Array.from(taskMap.values()).filter(
+      (task) => !task.assignedUserIds.has(loggedUser.userId)
+    );
+
+    // Count tasks by top-level categories
+    for (const task of filteredTasks) {
+      const cat = task.category;
+      if (!cat) continue;
+
+      // Climb to top-level parent
+      let currentCat = categoryMap.get(cat.id);
+      if (!currentCat) continue;
+
+      while (currentCat.parentId) {
+        const parent = categoryMap.get(currentCat.parentId);
+        if (!parent) {
+          currentCat = null;
+          break;
+        }
+        currentCat = parent;
+      }
+
+      if (!currentCat) continue;
+
+      // Only count if this top-level category is in defaults
+      if (!parentCounts[currentCat.id]) continue;
+
+      parentCounts[currentCat.id].taskCount += 1;
+    }
+
+    // Return ALL default categories (even if 0)
+    const result = Object.values(parentCounts);
+
+    return success(result);
   } catch (err) {
     return error(500, err.message);
   }
 };
+
+
 export const getUserTasksStatusWise = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);
-  const { categoryId } = JSON.parse(body);
+  const { categoryId, frequency, priority } = JSON.parse(body);
+
   try {
+    await autoArchiveCompletedTasks(Number(loggedUser.orgId));
+
+    // Fetch all statuses to ensure we always return them
+    const allStatuses = await OrganisationStatus.findAll({
+      attributes: ["key"],
+      raw: true,
+    });
+
+    // Prepare a map for final structured response
+    const response = {};
+    allStatuses.forEach((s) => {
+      response[s.key] = [];
+    });
+
+    // ARCHIVED will be treated separately
+    response["archived"] = [];
+
+    // --- Fetch child categories ---
     const categories = await TaskCategory.findAll({
       where: {
         [Op.or]: [{ id: categoryId }, { parentId: categoryId }],
+        isDeleted: false,
       },
       attributes: ["id"],
     });
 
     const categoryIds = categories.map((c) => c.id);
     if (!categoryIds.length) {
-      return success([]);
+      // return all statuses with empty tasks
+      return success(
+        Object.entries(response).map(([status, tasks]) => ({
+          status,
+          tasks,
+        }))
+      );
     }
+
+    // --- Build base filter ---
+    const where = {
+      userId: loggedUser.userId,
+      organisationId: loggedUser.orgId,
+    };
+
+    if (frequency) where["frequency"] = frequency;
+    if (priority) where["priorityId"] = priority;
+
+    // --- Fetch tasks ---
     const userTasks = await UserTask.findAll({
-      where: { userId: loggedUser.userId, organisationId: loggedUser.orgId },
+      where,
       include: [
         {
           model: Task,
           as: "taskDetails",
           where: { categoryId: { [Op.in]: categoryIds } },
           required: true,
-          include: [{ model: TaskCategory, as: "category" }],
+          include: [
+            {
+              model: TaskCategory,
+              as: "category",
+              where: { isDeleted: false },
+            },
+          ],
         },
-        {
-          model: OrganisationPriority,
-          as: "priority",
-        },
-        {
-          model: OrganisationStatus,
-          as: "status",
-        },
-        
+        { model: OrganisationPriority, as: "priority" },
+        { model: OrganisationStatus, as: "status" },
+        { model: UserTaskAttachment, as: "attachments", required: false },
       ],
     });
-    const response = [];
+
+    // --- Categorize tasks ---
     for (const ut of userTasks) {
-      const status = ut.status?.key || "unknown";
-      if (!response[status]) {
-        response[status] = [];
+      // Archived tasks
+      if (ut.isArchieved) {
+        response["archived"].push(ut);
+        continue;
       }
-      response[status].push(ut);
+
+      const statusKey = ut.status?.key || "unknown";
+
+      // Ensure unknown status also appears
+      if (!response[statusKey]) {
+        response[statusKey] = [];
+      }
+
+      response[statusKey].push(ut);
     }
-    const data = Object.entries(response).map(([status, tasks]) => ({
+
+    // Convert map to array of { status, tasks }
+    const finalResponse = Object.entries(response).map(([status, tasks]) => ({
       status,
       tasks,
     }));
-    return success(data);
+
+    return success(finalResponse);
   } catch (err) {
     return error(500, err.message);
   }
 };
 
+// Custom View Functions
 export const getGeneralTasksByCategory = async (event) => {
   const body = await readBody(event);
   const { categoryId } = JSON.parse(body);
@@ -1292,7 +2357,7 @@ export const getGeneralTasksByCategory = async (event) => {
   }
   try {
     const tasks = await Task.findAll({
-      where: { categoryId },
+      where: { categoryId, isSystemTask: true },
       include: {
         model: Role,
         as: "role",
@@ -1300,6 +2365,154 @@ export const getGeneralTasksByCategory = async (event) => {
       },
     });
     return success(tasks);
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const getTeamTaskStatsByStatusAndCategory = async (event) => {
+  try {
+    const loggedUser = event.context.user;
+    ensureManagerOrOwner(loggedUser);
+    const organisationId = Number(loggedUser.orgId);
+
+    await autoArchiveCompletedTasks(organisationId);
+
+    const query = getQuery(event) || {};
+    let categoryId = query.categoryId ? Number(query.categoryId) : null;
+
+    if (!organisationId) {
+      return error(400, "organisationId is required");
+    }
+
+    // Get organization statuses
+    const orgStatuses = await OrganisationStatus.findAll({
+      where: { organisationId },
+    });
+
+    const statusMap = {};
+    orgStatuses.forEach((s) => {
+      statusMap[s.key] = s.id;
+    });
+
+    // Build category filter - get all category IDs including children
+    let categoryIds = [];
+    if (categoryId) {
+      const categories = await TaskCategory.findAll({
+        where: {
+          [Op.or]: [{ id: categoryId }, { parentId: categoryId }],
+          isDeleted: false,
+        },
+        attributes: ["id"],
+      });
+      categoryIds = categories.map((c) => c.id);
+      if (categoryIds.length === 0) {
+        return success({
+          completed: 0,
+          overdue: 0,
+          progress: 0,
+          upcoming: 0,
+        });
+      }
+    }
+
+    // Build base where clause
+    const baseWhere = {
+      organisationId,
+      isArchieved: false,
+    };
+
+    // Build task include with category filter if needed
+    const taskInclude =
+      categoryIds.length > 0
+        ? {
+            model: Task,
+            as: "taskDetails",
+            where: { categoryId: { [Op.in]: categoryIds } },
+            required: true,
+            include: [
+              {
+                model: TaskCategory,
+                as: "category",
+                where: { isDeleted: false },
+                required: true,
+              },
+            ],
+          }
+        : {
+            model: Task,
+            as: "taskDetails",
+            required: true,
+            include: [
+              {
+                model: TaskCategory,
+                as: "category",
+                where: { isDeleted: false },
+                required: true,
+              },
+            ],
+          };
+
+    // Get counts for each status
+    const [completed, progress, upcoming] = await Promise.all([
+      statusMap.completed
+        ? UserTask.count({
+            where: {
+              ...baseWhere,
+              statusId: statusMap.completed,
+            },
+            include: [taskInclude],
+            distinct: true,
+          })
+        : 0,
+      statusMap.progress
+        ? UserTask.count({
+            where: {
+              ...baseWhere,
+              statusId: statusMap.progress,
+            },
+            include: [taskInclude],
+            distinct: true,
+          })
+        : 0,
+      statusMap.upcoming
+        ? UserTask.count({
+            where: {
+              ...baseWhere,
+              statusId: statusMap.upcoming,
+            },
+            include: [taskInclude],
+            distinct: true,
+          })
+        : 0,
+    ]);
+
+    // Calculate overdue tasks (tasks with dueDate < today and status not completed)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const overdueWhere = {
+      ...baseWhere,
+      dueDate: { [Op.lt]: today },
+    };
+
+    // Only add statusId condition if completed status exists
+    if (statusMap.completed) {
+      overdueWhere.statusId = { [Op.ne]: statusMap.completed };
+    }
+
+    const overdue = await UserTask.count({
+      where: overdueWhere,
+      include: [taskInclude],
+      distinct: true,
+    });
+
+    return success({
+      completed: completed || 0,
+      overdue: overdue || 0,
+      progress: progress || 0,
+      upcoming: upcoming || 0,
+    });
   } catch (err) {
     return error(500, err.message);
   }

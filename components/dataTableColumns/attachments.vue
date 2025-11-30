@@ -35,7 +35,7 @@ const { attachments } = defineProps(["attachments"]);
 <style scoped>
 .text-caption {
   font-size: 13px;
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 400;
   color: #1e1e1e;
 }

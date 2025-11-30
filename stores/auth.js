@@ -30,6 +30,21 @@ export const useAuthStore = defineStore("authStore", {
           });
       });
     },
+    resendVerificationEmail(data) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        authService
+          .resendVerificationEmail(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
     verifyEmail(data) {
       return new Promise((resolve, reject) => {
         this.isLoading = true;
@@ -200,7 +215,7 @@ export const useAuthStore = defineStore("authStore", {
       return new Promise((resolve, reject) => {
         this.isLoading = true;
         authService 
-          .updatePassword(data)
+          .updatePassword(data) 
           .then((res) =>  {
             this.isLoading = false;
             resolve(res);
@@ -208,6 +223,96 @@ export const useAuthStore = defineStore("authStore", {
           .catch((err) => {
             this.isLoading = false; 
             reject(err); 
+          });
+      });
+    },
+    getUserHrDocuments(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService 
+          .getUserHrDocuments(data) 
+          .then((res) =>  {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false; 
+            reject(err); 
+          });
+      });
+    },
+    addUserHrDoc(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService 
+          .addUserHrDoc(data) 
+          .then((res) =>  {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false; 
+            reject(err); 
+          });
+      });
+    },
+    removeUserDoc(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService 
+          .removeUserDoc(data) 
+          .then((res) =>  {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false; 
+            reject(err); 
+          });
+      });
+    },
+    switchOrgnanisation(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService 
+          .switchOrgnanisation(data) 
+          .then((res) =>  {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false; 
+            reject(err); 
+          });
+      });
+    },
+    createShortToken() {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService 
+          .createShortToken() 
+          .then((res) =>  {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false; 
+            reject(err); 
+          });
+      });
+    },
+    getLoginHistory(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService
+          .getLoginHistory(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
           });
       });
     },

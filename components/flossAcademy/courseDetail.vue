@@ -1,33 +1,18 @@
 <template>
   <div class="mt-6">
-    <v-row align="stretch" class="video-row">
+    <v-row align="start" class="video-row">
       <!-- Left Side: Video -->
-      <v-col cols="9" class="d-flex">
-        <video controls :src="course?.link" autoplay  class="course-video flex-grow-1">
+      <v-col cols="9">
+        <video
+          controls
+          :src="course?.link"
+          autoplay
+          height="400"
+          class="course-video flex-grow-1 mb-3"
+        >
           Your browser does not support the video tag.
         </video>
-      </v-col>
-
-      <!-- Right Side: Course Content Card -->
-      <v-col cols="3" class="d-flex">
-        <v-card class="course-card flex-grow-1" :elevation="0">
-          <!-- Header -->
-          <v-card-title class="course-card-header">
-            Course Content
-          </v-card-title>
-
-          <v-card-text class="course-card-body">
-            <p class="placeholder-text">Course content details go here...</p>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
-
-    <!-- Below rows -->
-    <v-row class="mt-4" align="stretch">
-      <!-- Overview Card -->
-      <v-col cols="9">
-        <v-card class="course-card" :elevation="0">
+        <v-card class="course-card mb-3" :elevation="0">
           <v-card-title class="course-card-header"> Overview </v-card-title>
 
           <v-card-text class="pa-4">
@@ -37,17 +22,16 @@
 
             <!-- Objectives -->
             <h4 class="section-title">Objectives:</h4>
-           <div v-html="course?.objectives" class="pa-5" style="line-height: 30px;" ></div>
+            <div
+              v-html="course?.objectives"
+              class="pa-5"
+              style="line-height: 30px"
+            ></div>
           </v-card-text>
         </v-card>
-      </v-col>
-    </v-row>
-
-    <v-row class="mt-4" align="stretch" v-if="!quizStarted">
-      <!-- Quiz Card -->
-      <v-col cols="9">
         <v-card
-          class="course-card d-flex flex-column justify-center align-center text-center"
+         v-if="!quizStarted && !notification.message"
+          class="course-card d-flex flex-column justify-center align-center text-center mb-3"
           :elevation="0"
         >
           <v-card-title class="course-card-header w-100"> Quiz </v-card-title>
@@ -59,8 +43,10 @@
                 class="quiz-btn"
                 @click="toggleStartQuizButton = true"
               >
-              <v-icon start color="#737373" class="mr-1 mb-1">mdi-lightbulb-on-outline</v-icon>
-              Complete the course to Start Quiz
+                <v-icon start color="#737373" class="mr-1 mb-1"
+                  >mdi-lightbulb-on-outline</v-icon
+                >
+                Complete the course to Start Quiz
               </v-btn>
             </template>
 
@@ -77,12 +63,7 @@
             </template>
           </v-card-text>
         </v-card>
-      </v-col>
-    </v-row>
-    <v-row class="mt-4" align="stretch" v-if="quizStarted">
-      <!-- Quiz Card -->
-      <v-col cols="9">
-        <v-card class="course-card" :elevation="0">
+        <v-card  v-if="quizStarted && !notification.message" class="course-card mb-3" :elevation="0">
           <!-- Quiz Header -->
           <v-card-title class="course-card-header w-100"> Quiz </v-card-title>
 
@@ -124,7 +105,6 @@
                     :value="question.optionD"
                     class="option-item"
                   />
-
                 </v-radio-group>
               </div>
             </div>
@@ -142,6 +122,48 @@
             </div>
           </v-card-text>
         </v-card>
+        <v-card
+        v-if="notification.message"
+          class="course-card d-flex mb-3 flex-column justify-center align-center text-center"
+          :elevation="0"
+        >
+          <v-card-title class="course-card-header w-100"> Quiz </v-card-title>
+
+          <v-card-text class="w-70 mt-4 quiz-text">
+            <v-alert
+              v-if="notification.message"
+              :type="notification.type"
+              variant="tonal"
+              border-color="primary"
+              density="compact"
+              width="600"
+              :icon="false"
+              height="200"
+            >
+              <v-alert-title style="font-size: 16px; flex-direction: column;">
+               <v-icon size="40">mdi-check-circle-outline</v-icon>
+               <p class="mb-7"> {{ notification.message }}</p>
+               <v-btn @click="initialState" class="px-7" variant="outlined" color="#000">Close</v-btn>
+              </v-alert-title>
+            </v-alert>
+          </v-card-text>
+        </v-card>
+      </v-col>
+
+      <!-- Right Side: Course Content Card -->
+      <v-col cols="3" class="d-flex">
+        <v-card class="course-card flex-grow-1" :elevation="0">
+          <!-- Header -->
+          <v-card-title class="course-card-header">
+            Course Content
+          </v-card-title>
+
+          <v-card-text class="course-card-body">
+            <p class="placeholder-text pa-3">Title: {{ course?.title }}</p>
+            <p class="placeholder-text pa-3">Mode: {{ course?.mode }}</p>
+            <p class="placeholder-text pa-5" v-html="course?.objectives"></p>
+          </v-card-text>
+        </v-card>
       </v-col>
     </v-row>
   </div>
@@ -157,38 +179,87 @@ const props = defineProps({
   },
 });
 
-const cpdStore = useCpdStore()
+const cpdStore = useCpdStore();
 const toggleStartQuizButton = ref(false);
 const quizStarted = ref(false);
-const quizResult = ref(null)
+const quizResult = ref(null);
 
 // Dummy API response
 const questions = ref([]);
 
 // Store selected answers keyed by question id
 const answers = ref({});
+const store = useMainStore();
+const notification = ref({
+  message: "",
+  type: "", // 'success' | 'error' | 'info' | 'warning'
+});
 
-function submitQuiz() {
-  cpdStore.submitQuiz({courseId: props.course.id, answers: answers.value}).then((res) => {
+const submitQuiz = async () => {
+  try {
+    const res = await cpdStore.submitQuiz({
+      courseId: props.course.id,
+      answers: answers.value,
+    });
     if (res.code === 0) {
-      quizResult.value = res.data
+      quizResult.value = res.data;
+
+      notification.value = {
+        message:
+          res.data?.message || res?.message || "Quiz submitted successfully",
+        type: "success",
+      };
+    } else {
+      store.setSnackbar({
+        title: res.data?.message || res?.message || "Failed to submit quiz",
+        type: "Error",
+      });
     }
-  })
-}
-const startQuiz = () => {
-  quizStarted.value = true;
-  cpdStore.startQuiz({ courseId: props.course.id }).then((res) => {
+  } catch (err) {
+    store.setSnackbar({
+      title: err.message || "Something went wrong while submitting the quiz",
+      type: "Error",
+    });
+  }
+};
+
+const startQuiz = async () => {
+  try {
+    const res = await cpdStore.startQuiz({ courseId: props.course.id });
+
     if (res.code === 0) {
-      questions.value = res.data
+      questions.value = res.data;
+      store.setSnackbar({
+        title: res.data?.message || res?.message || "Quiz started successfully",
+        type: "Success",
+      });
+      quizStarted.value = true;
+    } else {
+      notification.value = {
+        message: res.data?.message || res?.message || "Failed to start quiz",
+        type: "error",
+      };
     }
-  })
+  } catch (err) {
+    store.setSnackbar({
+      title: err.message || "Something went wrong while starting the quiz",
+      type: "Error",
+    });
+  }
+};
+const initialState = () => {
+  notification.value = {
+    message: "",
+    type: "",
+  };
+  quizStarted.value = false;
+  toggleStartQuizButton.value = false;
 };
 </script>
 
 <style scoped>
 .course-video {
   width: 100%;
-  height: 100%; /* match column height */
   object-fit: cover;
   border: 1px solid #dbdbdb;
 }
@@ -203,7 +274,7 @@ const startQuiz = () => {
 .course-card-header {
   background: #eff5f5;
   border-bottom: 1px solid #dbdbdb;
-  font-family: Poppins;
+  
   font-weight: 600;
   font-size: 16px;
   height: 62px;
@@ -212,25 +283,26 @@ const startQuiz = () => {
 }
 
 .course-card-body {
-  padding: 16px;
   background: #ffffff;
+  padding: 0px 0px 40px 0px;
 }
 
 .placeholder-text {
-  color: #737373;
+  color: #1e1e1e;
   font-size: 14px;
-  font-family: Poppins;
+  
+  border-bottom: 1px solid #dbdbdb;
 }
- 
+
 .section-title {
-  font-family: Poppins;
+  
   font-weight: 600;
   font-size: 16px;
   margin-bottom: 6px;
 }
 
 .section-text {
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 14px;
   margin-bottom: 12px;
@@ -251,14 +323,14 @@ const startQuiz = () => {
 
 .quiz-btn {
   color: #737373;
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 14px;
 }
 
 .quiz-start-btn {
   color: #1e1e1e;
-  font-family: Poppins;
+  
   font-weight: 500;
   font-size: 14px;
 }
@@ -272,7 +344,7 @@ const startQuiz = () => {
 .question-header {
   background: #213536;
   color: #ffffff;
-  font-family: Poppins;
+  
   font-weight: 600;
   font-size: 14px;
   padding: 8px;
@@ -286,7 +358,7 @@ const startQuiz = () => {
 }
 
 .question-text {
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 14px;
   color: #000000;
@@ -299,14 +371,14 @@ const startQuiz = () => {
 }
 
 .option-item {
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 14px;
   color: #000000;
 }
 
 .submit-btn {
-  font-family: Poppins;
+  
   font-weight: 500;
   font-size: 14px;
   color: #1e1e1e;

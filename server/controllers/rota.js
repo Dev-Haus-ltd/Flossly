@@ -5,7 +5,8 @@ import DB from "../utils/db";
 export const addRota = async (event) => {
   try {
     const body = await readBody(event);
-    const { name, startDate, endDate, duration, notes, orgId } = JSON.parse(body);
+    const { name, startDate, endDate, duration, notes, orgId } =
+      JSON.parse(body);
 
     if (!orgId || !name || !startDate || !endDate) {
       return error("Required fields missing");
@@ -17,6 +18,7 @@ export const addRota = async (event) => {
     const conflictRota = await Rota.findOne({
       where: {
         organisationId: orgId,
+        isPublished: true,
         [Op.or]: [
           { startDate: { [Op.between]: [startDate, endDate] } },
           { endDate: { [Op.between]: [startDate, endDate] } },
@@ -31,7 +33,10 @@ export const addRota = async (event) => {
     });
 
     if (conflictRota) {
-      throw createError({ message: "A rota already exists for this organisation in the given date range"});
+      throw createError({
+        message:
+          "A rota already exists for this organisation in the given date range",
+      });
     }
     const rota = await Rota.create({
       organisationId: orgId,
@@ -54,9 +59,7 @@ export const getRotas = async (event) => {
     const rotas = await Rota.findAll({
       where: { organisationId: orgId },
       attributes: {
-        include: [
-          [fn("COUNT", col("users.id")), "userCount"],
-        ],
+        include: [[fn("COUNT", col("users.id")), "userCount"]],
       },
       include: [
         {
@@ -76,33 +79,32 @@ export const getRotas = async (event) => {
 };
 
 export const getUserRotas = async (event) => {
-  const body = await readBody(event)
-  const { userId } = JSON.parse(body)
+  const { userId } = event.context.user;
   try {
-    if (!userId) throw createError({ message: "UserID required"})
+    if (!userId) throw createError({ message: "UserID required" });
     const rotas = await Rota.findAll({
       include: [
         {
           model: RotaUser,
-          as: 'users',
+          as: "users",
           required: true,
           where: { userId },
           include: [
             {
               model: User,
-              as: 'user',
-              attributes: ['id', 'fullName', 'email', "photo"]
-            }
-          ]
+              as: "user",
+              attributes: ["id", "fullName", "email", "photo"],
+            },
+          ],
         },
       ],
-      order: [['startDate', 'ASC']]
-    })
-    return success(rotas)
+      order: [["startDate", "ASC"]],
+    });
+    return success(rotas);
   } catch (err) {
-    return error(500, err.message)
+    return error(500, err.message);
   }
-}
+};
 
 export const updateRota = async (event) => {
   try {
@@ -130,6 +132,18 @@ export const publishRota = async (event) => {
       isPublished: true,
       publishedDate: new Date(),
     });
+    const users = await RotaUser.findAll({ where: { rotaId: id } });
+    await Promise.all(
+      users.map(async (el) => {
+        const user = await User.findOne({ where: { id: el.userId } });
+        await newRotaAvailableNotification({
+          startDate: new Date(rota.startDate),
+          fullName: user.fullName,
+          email: user.email,
+          name: rota.name
+        });
+      })
+    );
     return success(rota);
   } catch (err) {
     return error(500, err.message);
@@ -174,7 +188,7 @@ export const addRotaUsers = async (event) => {
     if (!Array.isArray(users) || users.length === 0) {
       throw createError({ message: "users required" });
     }
-    await RotaUser.destroy({ where: { rotaId }, transaction });
+    await RotaUser.destroy({ where: { rotaId, isTempUser: false }, transaction });
     const addedUsers = await Promise.all(
       users.map((user) => {
         const { userId, isTempUser, tempUserName, tempUserRoleId } = user;
@@ -212,10 +226,12 @@ export const addRotaShift = async (event) => {
       startDate,
       endDate,
       breakTime,
+      isLocumShift,
+      locumUserId,
       notes,
     } = JSON.parse(body);
 
-    if (!rotaId || !userId || !label || !startDate || !endDate) {
+    if (!rotaId || (!userId && !locumUserId) || !label || !startDate || !endDate) {
       throw createError({ message: "Required fields missing" });
     }
 
@@ -260,7 +276,8 @@ export const addRotaShift = async (event) => {
       if (conflictShift) {
         throw createError({
           statusCode: 400,
-          message: "Shift conflict: another shift already exists in this time range",
+          message:
+            "Shift conflict: another shift already exists in this time range",
         });
       }
     }
@@ -275,6 +292,8 @@ export const addRotaShift = async (event) => {
       startDate,
       endDate,
       breakTime,
+      isLocumShift,
+      locumUserId,
       notes,
     });
     return success(shift);
@@ -288,14 +307,16 @@ export const deleteRotaShift = async (event) => {
     const body = await readBody(event);
     const { rotaId, shiftId } = JSON.parse(body);
 
-    if (!rotaId || !shiftId) throw createError({ message: "rotaId and shiftId are required" });
+    if (!rotaId || !shiftId)
+      throw createError({ message: "rotaId and shiftId are required" });
 
     // Find the shift belonging to the rota
     const shift = await RotaShift.findOne({
-      where: { id: shiftId, rotaId, isDeleted: false }
+      where: { id: shiftId, rotaId, isDeleted: false },
     });
 
-    if (!shift) throw createError({ message: "Shift not found in the specified rota" });
+    if (!shift)
+      throw createError({ message: "Shift not found in the specified rota" });
 
     // Soft delete
     shift.isDeleted = true;
@@ -311,7 +332,7 @@ export const deleteRotaShift = async (event) => {
 export const updateShift = async (event) => {
   try {
     const body = await readBody(event);
-    const {id}= JSON.parse(body)
+    const { id } = JSON.parse(body);
     const shift = await RotaShift.findByPk(id);
     if (!shift) throw createError({ message: "shift not found" });
     await shift.update(JSON.parse(body));
@@ -385,12 +406,17 @@ export const getRotaUsers = async (event) => {
           model: User,
           as: "user",
           attributes: ["id", "fullName", "email", "roleId", "photo"],
+          required: false,
           include: [
             {
               model: Role,
               as: "role",
             },
           ],
+        },
+        {
+          model: Role,
+          as: "role",
         },
       ],
     });

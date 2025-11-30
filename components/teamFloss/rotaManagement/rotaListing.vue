@@ -71,10 +71,12 @@
 
             <!-- Create new rota -->
             <v-btn
+              v-if="isManager"
               color="primary"
               class="rounded-lg"
               @click="emit('changeComponent', 2)"
               flat
+              height="40"
             >
               Create New Rota
             </v-btn>
@@ -113,6 +115,23 @@
                   @update:modelValue="onSelectionChangePublished"
                   return-object
                 >
+                <template
+              v-slot:[`item.data-table-select`]="{
+                internalItem,
+                isSelected,
+                toggleSelect,
+              }"
+            >
+            <div class="text-center">
+
+              <input
+                type="checkbox"
+                :checked="isSelected(internalItem)"
+                @change="() => toggleSelect(internalItem)"
+                class="cust-checkbox"
+              />
+            </div>
+            </template>
                   <!-- Header slot -->
                   <template
                     v-slot:headers="{
@@ -151,19 +170,21 @@
                             </v-icon>
                           </div>
 
-                          <div v-else>
-                            <v-checkbox
-                              :model-value="allSelected"
-                              :indeterminate="someSelected && !allSelected"
-                              @update:model-value="
-                                (val) => toggleAll('published', val)
-                              "
-                              density="compact"
-                              hide-details
-                              variant="outlined"
-                              class="custom-checkbox"
-                            />
-                          </div>
+                         
+                            <div
+                         v-else
+                      class="d-flex align-center justify-center"
+                    >
+                      <input
+                        type="checkbox"
+                        class="cust-checkbox"
+                        style="margin-left: 2px;"
+                        :checked="allSelected"
+                        :indeterminate.prop="someSelected && !allSelected"
+                        @change="toggleAll('published')"
+                      />
+                    </div>
+                      
                         </th>
                       </template>
                     </tr>
@@ -182,7 +203,7 @@
 
                   <template v-slot:[`item.employees`]="{ item }">
                     <div class="px-2">
-                      {{ item.employees ?? "No data" }}
+                      {{ item.userCount ?? 0 }}
                     </div>
                   </template>
                   <template v-slot:[`item.duration`]="{ item }">
@@ -211,12 +232,14 @@
                         @click.stop="onView(item)"
                       />
                       <img
+                        v-if="isManager"
                         src="@/assets/icons/teamfloss/userDetails/edit.svg"
                         alt="Edit"
                         class="action-icon ml-3"
                         @click.stop="onEdit(item)"
                       />
                       <img
+                        v-if="isManager"
                         src="@/assets/icons/teamfloss/userDetails/unpublish.svg"
                         alt="Edit"
                         class="action-icon ml-3"
@@ -259,6 +282,23 @@
                   @update:modelValue="onSelectionChangeUnPublished"
                   return-object
                 >
+                <template
+              v-slot:[`item.data-table-select`]="{
+                internalItem,
+                isSelected,
+                toggleSelect,
+              }"
+            >
+            <div class="text-center">
+
+              <input
+                type="checkbox"
+                :checked="isSelected(internalItem)"
+                @change="() => toggleSelect(internalItem)"
+                class="cust-checkbox"
+              />
+            </div>
+            </template>
                   <!-- Header slot -->
                   <template
                     v-slot:headers="{
@@ -297,19 +337,19 @@
                             </v-icon>
                           </div>
 
-                          <div v-else>
-                            <v-checkbox
-                              :model-value="allSelected"
-                              :indeterminate="someSelected && !allSelected"
-                              @update:model-value="
-                                (val) => toggleAll('unpublished', val)
-                              "
-                              density="compact"
-                              hide-details
-                              variant="outlined"
-                              class="custom-checkbox"
-                            />
-                          </div>
+                          <div
+                         v-else
+                      class="d-flex align-center justify-center"
+                    >
+                      <input
+                        type="checkbox"
+                        class="cust-checkbox"
+                        style="margin-left: 2px;"
+                        :checked="allSelected"
+                        :indeterminate.prop="someSelected && !allSelected"
+                        @change="toggleAll('unpublished')"
+                      />
+                    </div>
                         </th>
                       </template>
                     </tr>
@@ -328,7 +368,7 @@
 
                   <template v-slot:[`item.employees`]="{ item }">
                     <div class="px-2">
-                      {{ item.employees ?? "No data" }}
+                      {{ item.userCount ?? 0 }}
                     </div>
                   </template>
                   <template v-slot:[`item.duration`]="{ item }">
@@ -357,12 +397,14 @@
                         @click.stop="onView(item)"
                       />
                       <img
+                        v-if="isManager"
                         src="@/assets/icons/teamfloss/userDetails/edit.svg"
                         alt="Edit"
                         class="action-icon ml-3"
                         @click.stop="onEdit(item)"
                       />
                       <img
+                        v-if="isManager"
                         src="@/assets/icons/teamfloss/userDetails/publish.svg"
                         alt="Publish"
                         class="action-icon ml-3"
@@ -394,6 +436,7 @@
   </div>
 </template>
 <script setup>
+const { isManager } = useUser();
 import { parsedDate } from "~/lib/dateFormatter";
 const { rotaList } = defineProps({
   rotaList: Array,
@@ -412,6 +455,9 @@ const unpublished = computed(() => rotaList.filter((r) => !r.isPublished));
 // Selection models
 const selectedPublished = ref([]);
 const selectedUnpublished = ref([]);
+const isAllPublishedSelected=ref(false);
+const isAllUnPublishedSelected=ref(false);
+
 const headers = [
   { title: "Rota Name", key: "name", sortable: true },
   { title: "Start Date", key: "startDate", sortable: true },
@@ -426,7 +472,7 @@ const matchesSearch = (item) => {
   const q = search.value.toLowerCase();
   return (
     (item.name && item.name.toLowerCase().includes(q)) ||
-    String(item.employees).includes(q) ||
+    String(item.userCount ?? 0).includes(q) ||
     (item.status && item.status.toLowerCase().includes(q))
   );
 };
@@ -450,18 +496,46 @@ const filteredUnpublished = computed(() =>
   unpublished.value.filter((it) => matchesSearch(it) && inDateRange(it))
 );
 
-function toggleAll(which, val) {
+const toggleAll = (which) => {
   if (which === "published") {
-    if (val) selectedPublished.value = filteredPublished.value.slice();
-    else selectedPublished.value = [];
-    console.log("Select All (published):", val);
-  } else {
-    if (val) selectedUnpublished.value = filteredUnpublished.value.slice();
-    else selectedUnpublished.value = [];
-    console.log("Select All (unpublished):", val);
-  }
-}
 
+    if (isAllPublishedSelected.value) {
+      isAllPublishedSelected.value = false;
+      selectedPublished.value = [];
+    } else {
+      const selected = [];
+      filteredPublished.value.forEach((r) => {
+        
+          selected.push(r);
+      
+      });
+      selectedPublished.value = selected;
+      isAllPublishedSelected.value = true;
+    }
+     console.log(selectedPublished.value)
+  } else if(which === "unpublished"){
+    if (isAllUnPublishedSelected.value) {
+      isAllUnPublishedSelected.value = false;
+      selectedUnpublished.value = [];
+    } else {
+      const selected = [];
+      filteredUnpublished.value.forEach((r) => {
+        
+          selected.push(r);
+      
+      });
+      selectedUnpublished.value = selected;
+      isAllUnPublishedSelected.value = true;
+    }
+     console.log(selectedUnpublished.value)
+  }
+};
+const onSelectionChangePublished=(newSelected) => {
+  console.log( selectedPublished.value);
+};
+const onSelectionChangeUnPublished=(newSelected) => {
+  console.log( selectedUnpublished.value);
+};
 function applyDate() {
   dateRangeModel.value = tempRange.value ? [...tempRange.value] : [];
   menuDate.value = false;
@@ -509,6 +583,7 @@ function getRotaStatusColor(status) {
       return "#6D6D6D"; // gray fallback
   }
 }
+
 </script>
 <style scoped>
 .custom-tabs {
@@ -538,7 +613,7 @@ function getRotaStatusColor(status) {
 }
 
 .tab-content-title {
-  font-family: "Poppins", sans-serif;
+  
   font-size: 16px;
   font-weight: 600;
   margin-bottom: 8px;
@@ -590,9 +665,33 @@ function getRotaStatusColor(status) {
   margin-right: 10px;
   cursor: pointer;
 }
-
-.custom-checkbox .v-input--selection-controls__ripple {
-  display: none;
+.cust-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  /* remove default styling in some browsers if you want a fully custom look */
+  -webkit-appearance: none;
+  appearance: none;
+  border: 1px solid #cfcfcf;
+  border-radius: 4px;
+  display: inline-block;
+  position: relative;
+  margin-top: 5px;
+}
+.cust-checkbox:checked {
+  background: #0061FB;
+  border-color: #0061FB;
+}
+.cust-checkbox:checked::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  width: 4px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 
 .input-bordered :deep(.v-field) {
@@ -601,6 +700,6 @@ function getRotaStatusColor(status) {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 </style>

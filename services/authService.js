@@ -11,6 +11,17 @@ export default {
         });
     });
   },
+  resendVerificationEmail(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/resendVerificationEmail", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
   getRoles() {
     return new Promise((resolve, reject) => {
       Get("/misc/getRoles")
@@ -191,6 +202,72 @@ export default {
   updatePassword(data) {
     return new Promise((resolve, reject) => {
       Post("/auth/updatePassword", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => { 
+          reject(err);
+        });
+    });
+  },
+  getUserHrDocuments(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/hrDocs", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  addUserHrDoc(data) {
+    return new Promise((resolve, reject) => {
+      PostFormData("/auth/addHrDoc", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  removeUserDoc(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/removeHrDoc", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  switchOrgnanisation(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/switchOrg", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  createShortToken() {
+    return new Promise((resolve, reject) => {
+      Get("/auth/createShortToken")
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  getLoginHistory(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/loginHistory", data)
         .then((res) => {
           resolve(res);
         })

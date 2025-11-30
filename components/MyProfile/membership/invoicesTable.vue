@@ -11,7 +11,7 @@
       <!-- Title -->
       <h3
         style="
-          font-family: Poppins;
+          
           font-weight: 600;
           font-style: SemiBold;
           font-size: 14px;
@@ -118,7 +118,7 @@ const formatDate = (date) => parsedDate(date);
 
 .invoice-table th,
 .invoice-table td {
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 13px;
   padding: 8px 12px;
@@ -155,7 +155,7 @@ const formatDate = (date) => parsedDate(date);
 
 /* Link button style */
 .text-link {
-  font-family: Poppins;
+  
   font-size: 13px;
   font-weight: 500;
   color: #1976d2 !important;
@@ -169,6 +169,6 @@ const formatDate = (date) => parsedDate(date);
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 </style>

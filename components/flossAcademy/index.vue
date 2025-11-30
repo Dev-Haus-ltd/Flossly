@@ -1,24 +1,35 @@
 <template>
   <div class="parent">
     <div class="cust-border d-flex align-center">
-      <p class="mr-1">Team CPD</p>
+      <p class="mr-1"
+      :style="step === 2 ? 'color: blue; cursor: pointer;' : ''"
+      @click="step = 1"
+      
+      >Floss academy</p>
       <p
-        v-if="step===2"
-        @click="step=1"
-        style="color: blue !important; cursor: pointer"
+        v-if="step === 2"
+     
       >
-        {{ "/Course Details"  }}
+        {{ "/Course Details" }}
       </p>
     </div>
     <div class="mt-5 px-5" v-if="step === 1">
       <v-row>
         <v-col v-for="(item, i) in cards" :key="i" cols="3">
-          <FlossAcademyStatCard
+          <!-- <FlossAcademyStatCard
             :title="item.title"
             :points="item.points"
             :icon="item.icon"
             :total-hours="item.totalHours"
-          />
+          /> -->
+          <CommonStatCard
+              :icon="item.icon"
+              :label="item.title"
+              :value="item.totalHours"
+              :uid="i"
+  
+              hide-chip
+            />
         </v-col>
       </v-row>
     </div>
@@ -53,7 +64,7 @@
             >
               <FlossAcademyCourseCard
                 :course="card"
-                @showCourse="showCourse"
+                @handleCourseClick="showCourse"
               />
             </v-col>
 
@@ -65,65 +76,103 @@
         </v-tabs-window-item>
       </v-tabs-window>
     </div>
-    <div class="px-5" v-if="step===2">
-      <FlossAcademyCourseDetail
+    <div class="px-5" v-if="step === 2">
+      <FlossAcademyCourseDetail :course="selectedCourse" />
+    </div>
+    <FlossAcademyAssignedToDialog
+      v-model="assignToDialogOpen"
+      :employees="employees"
+      :selectedUsers="[]"
       :course="selectedCourse"
     />
-
-    </div>
   </div>
 </template>
 <script setup>
+const user = useUser();
 const step = ref(1);
-const cpdStore = useCpdStore()
-const courses = ref([])
-const categories = ref([])
-const selectedCourse = ref(null)
-const cards = [
+const cpdStore = useCpdStore();
+const userStore = useUserStore();
+const courses = ref([]);
+const categories = ref([]);
+const selectedCourse = ref(null);
+const assignToDialogOpen = ref(false);
+const employees = ref([]);
+const currentLoggedInOrgId = computed(
+  () => user.value?.currentLoggedInOrgId || null
+);
+const completedHours = computed(() => {
+  return Number(cpdStore.courseHistory?.summary?.totalCredits || 0);
+});
+
+const totalCpdHours = computed(() => user.value?.requiredCpdHours || 50);
+
+const cards = computed(() => [
   {
     title: "Required CPD Hours",
     points: 200,
-    icon: "https://cdn.lordicon.com/odxsdugo.json",
-    totalHours: 12,
+    icon: "https://cdn.lordicon.com/caohjrll.json",
+    totalHours: totalCpdHours.value,
   },
   {
     title: "Completed CPD Hours",
     points: 150,
-    icon: "https://cdn.lordicon.com/itlfjzxp.json",
-    totalHours: 8,
+    icon: "https://cdn.lordicon.com/rjonjcrj.json",
+    totalHours: completedHours.value,
   },
   {
     title: "Remaining CPD Hours",
     points: 100,
-    icon: "https://cdn.lordicon.com/amdfceua.json",
-    totalHours: 5,
+    icon: "https://cdn.lordicon.com/ofrdcast.json",
+    totalHours: totalCpdHours.value - completedHours.value,
   },
-];
-const tab = ref(0); // "All" by default (id = 0)
+]);
 
+const tab = ref("All"); // "All" by default (id = 0)
 
 // Filtering logic
 function filteredCards(category) {
   if (!category) return courses.value;
-  return courses.value[category]
+  return courses.value[category];
 }
-const showCourse = (course) => {
-  selectedCourse.value = course
-  step.value = 2;
+const showCourse = (payload) => {
+  selectedCourse.value = payload.course;
+  if (payload.type === "learnMore") {
+    step.value = 2;
+  } else if (payload.type === "assign") {
+    assignToDialogOpen.value = true;
+  }
 };
 
+const getAllUsers = () => {
+  userStore
+    .getUserList({ roleId: null, orgId: currentLoggedInOrgId.value })
+    .then((res) => {
+      if (res.code === 0) {
+        employees.value = res.data;
+      }
+    });
+};
 onMounted(() => {
-  getCourses()
-})
+  getCourses();
+
+  getAllUsers();
+  getUserCourseHistory();
+});
 
 const getCourses = () => {
   cpdStore.getCourses().then((res) => {
     if (res.code === 0) {
-      courses.value = res.data
-      categories.value = Object.keys(res.data)
+      courses.value = res.data;
+      categories.value = Object.keys(res.data);
     }
-  })
-}
+  });
+};
+const getUserCourseHistory = () => {
+  cpdStore.getUserCourseHistory().then((res) => {
+    if (res.code === 0) {
+    }
+  });
+};
 </script>
 <style scoped lang="scss">
 .parent {
@@ -138,12 +187,12 @@ const getCourses = () => {
   }
 }
 :deep(.v-breadcrumbs) {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 400;
   font-size: 14px;
 }
 .tab-text {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-style: "Regular";
   font-size: 14px;

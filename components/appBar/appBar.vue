@@ -1,24 +1,38 @@
 <template>
-  <v-app-bar dark elevation="0" height="70" class="pr-5 cust-border">
+  <v-app-bar elevation="0" height="70" class="pr-5 cust-border bg-secondary">
     <v-btn icon class="d-md-none" @click="handleDrawer">
       <v-icon>mdi-menu</v-icon>
     </v-btn>
     <template v-slot:prepend>
-      <div
+      <div 
         :class="
           !rail
             ? 'logo-parent pl-5 bg-secondary'
-            : 'logo-parent-sm pl-2 bg-secondary'
+            : 'logo-parent-sm pl-3 bg-secondary'
         "
       >
-        <img
-          :src="!rail ? headerLogo : logoIcon"
-          alt="My Logo"
-          max-height="40"
-          :width="!rail ? '107px' : '25px'"
-          height="100%"
-          contain
-        />
+        <div class="logo-wrapper">
+          <!-- Expanded state: logo + title -->
+          <template v-if="!rail">
+            <img
+              :src="logoIcon"
+              alt="My Logo"
+              width="35"
+              height="100%"
+            />
+            <span class="text-h6 text-sm-h5 text-md-h5 font-weight-bold text-white ml-4 text-no-wrap">Flossly Dashboard</span>
+          </template>
+
+          <!-- Collapsed state: only icon -->
+          <template v-else>
+            <img
+              :src="logoIcon"
+              alt="My Logo"
+              width="30"
+              height="100%"
+            />
+          </template>
+        </div>
       </div>
     </template>
     <!-- Middle: Spacer to push icons right -->
@@ -30,8 +44,11 @@
 
     <!-- Right: Icon -->
     <div class="d-flex align-center">
-      <CommonRewardChip text="+20" tooltip="Reward points" />
-      <v-text-field
+      <CommonRewardChip
+        :text="user?.userPoints?.balance"
+        tooltip="Reward points"
+      />
+      <!-- <v-text-field
         placeholder="Search..."
         append-inner-icon="mdi-magnify"
         variant="solo"
@@ -42,7 +59,7 @@
         rounded="xl"
         class="mx-3"
         style="width: 202px"
-      />
+      /> -->
       <AppBarNottficationMenu />
       <appBarRightMenu :user="props.user" />
     </div>
@@ -50,7 +67,7 @@
 </template>
 
 <script setup>
-import headerLogo from "@/assets/logos/headerLogo.svg";
+const { user } = useUser();
 import logoIcon from "@/assets/logos/Logoicon2.svg";
 const emit = defineEmits(["small-screen-drawer"]);
 
@@ -60,7 +77,7 @@ const props = defineProps({
   rail: Boolean,
 });
 const handleDrawer = () => {
-  emit("small-screen-drawer");
+  emit("small-screen-drawer",!props.rail);
 };
 console.log(props.drawer);
 watch(
@@ -69,6 +86,7 @@ watch(
     console.log("Drawer changed:", newVal);
   }
 );
+
 </script>
 
 <style scoped>
@@ -76,16 +94,20 @@ watch(
   width: 255px;
   /* background-color: black; */
   height: 100%;
+  margin-left: 20px; /* spacing from logo */
 }
 .logo-parent-sm {
   width: 56px;
   /* background-color: black; */
   height: 100%;
 }
-.cust-border {
-  border-bottom: 1px solid #dbdbdb;
-}
+.cust-border { border-bottom: 1px solid rgba(0,0,0,0.08); }
 ::v-deep(.v-toolbar__prepend) {
   margin-inline: 0 !important;
+}
+.logo-wrapper {
+  display: flex;
+  align-items: center; /* align title vertically with logo */
+  height: 100%;
 }
 </style>

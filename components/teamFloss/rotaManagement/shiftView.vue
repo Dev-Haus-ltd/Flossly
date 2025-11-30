@@ -5,6 +5,7 @@
     style="overflow-x: auto"
   >
     <!-- Header controls -->
+
     <div
       class="d-flex align-center head pa-4 pos-sticky-left"
       style="position: sticky; left: 0px"
@@ -84,10 +85,21 @@
         <div
           class="staff-col first-col-color d-flex align-center pa-4 pos-sticky-left"
         >
-          <CommonAvatar :user="user?.user" class="mr-2" size="45" />
-          <div>
-            <h3 class="fst-col-title">{{ user?.user.fullName }}</h3>
-            <small class="fst-col--subtit">{{ user?.user.role.title }}</small>
+          <CommonAvatar :user="user.isTempUser ? { name: user.tempUserName } : user?.user" class="mr-2" size="45" />
+          <div class="w-100">
+            <div class="d-flex align-center w-100">
+              <h3 class="fst-col-title">{{ user?.isTempUser ? user?.tempUserName : user?.user.fullName }}</h3>
+              <v-btn
+                color="#000000"
+                size="small"
+                variant="text"
+                class="ml-auto"
+                @click="removeStaff(user)"
+              >
+                <v-icon>mdi-close</v-icon>
+              </v-btn>
+            </div>
+            <small class="fst-col--subtit">{{  user?.isTempUser ? user?.role.title : user?.user.role.title }}</small>
           </div>
         </div>
 
@@ -99,7 +111,7 @@
           @click="addShift(user, day)"
         >
           <div
-            v-for="(shift, i) in getShifts(user.user.id, day.date)"
+            v-for="(shift, i) in getShifts(user, day.date)"
             :key="shift.id"
             class="w-100 mx-auto"
             :style="{ marginTop: i > 0 ? '10px' : '', maxWidth: '190px' }"
@@ -123,7 +135,7 @@
                     </span>
 
                     <!-- Existing three-dot menu -->
-                    <v-menu>
+                    <v-menu v-if="isManager">
                       <template #activator="{ props }">
                         <v-btn
                           v-bind="props"
@@ -239,7 +251,7 @@
           class="total-col d-flex align-center justify-center pos-sticky-right"
         >
           <h3 class="total-hrs">
-            {{ getUserTotalHours(user.user.id, visibleDays) }} hrs
+            {{ getUserTotalHours(user, visibleDays) }} hrs
           </h3>
         </div>
       </div>
@@ -414,7 +426,7 @@
         </div>
       </div>
     </div>
-    <div class="rota-grid row" :style="gridStyle">
+    <div v-if="isManager" class="rota-grid row" :style="gridStyle">
       <div
         class="staff-col first-col-color d-flex align-center justify-center pa-4 pos-sticky-left"
       >
@@ -456,6 +468,7 @@
     <TeamFlossRotaManagementManageStaffDialog
       v-model="manageStaffDialogOpen"
       :employees="employees"
+      :rolesList="rolesList"
       :selectedUsers="slecteduserIds"
       :rota="rota"
       @onAddUser="emit('onAddUser')"
@@ -465,7 +478,7 @@
 
 <script setup>
 import { differenceInCalendarDays, addDays, parseISO, format } from "date-fns";
-
+const { isManager } = useUser();
 const { shifts, rota, users, selectedView } = defineProps({
   shifts: Array,
   rota: Object,
@@ -481,13 +494,30 @@ const userStore = useUserStore();
 const surgries = ref([]);
 const manageStaffDialogOpen = ref(false);
 const employees = ref([]);
+const rolesList = ref([]);
 
-const slecteduserIds = computed(() => users.map((ru) => ru.userId));
+const slecteduserIds = computed(() => 
+  users
+    .filter((ru) => !ru.isTempUser && ru.userId) // Only include non-temp users with valid userId
+    .map((ru) => ru.userId)
+);
 onMounted(() => {
   getSurgeries();
   getAllUsers();
+  getRoles();
 });
-
+const getRoles = () => {
+  mainStore
+    .getRoles()
+    .then((res) => {
+      if (res.code === 0 && res.data) {
+        rolesList.value = res.data;
+      }
+    })
+    .catch((err) => {
+      return err;
+    });
+};
 const getAllUsers = () => {
   userStore
     .getUserList({ roleId: null, orgId: rota.organisationId })
@@ -542,23 +572,35 @@ const gridStyle = computed(() => ({
 }));
 
 // Helpers
-const getShifts = (userId, date) =>
-  shifts.filter(
+const getShifts = (user, date) => {
+  if (user.isTempUser) {
+   return shifts.filter(
     (s) =>
-      s.userId === userId &&
+      s.locumUserId === user.id &&
       format(s.startDate, "yyyy-MM-dd") === format(date, "yyyy-MM-dd")
   );
+  } else {
+   return shifts.filter(
+    (s) =>
+      s.userId === user?.user.id &&
+      format(s.startDate, "yyyy-MM-dd") === format(date, "yyyy-MM-dd")
+  );
+  }
+
+}
+ 
 const getSurgeryShifts = (surgId, date) =>
   shifts.filter(
     (s) =>
       s.surgeryId === surgId &&
       format(s.startDate, "yyyy-MM-dd") === format(date, "yyyy-MM-dd")
   );
-const getUserTotalHours = (userId, days) =>
-  shifts
+const getUserTotalHours = (user, days) => {
+  if (user.isTempUser) {
+  return shifts
     .filter(
       (s) =>
-        s.userId === userId &&
+        s.locumUserId === user.id &&
         days.some(
           (d) =>
             format(new Date(s.startDate), "yyyy-MM-dd") ===
@@ -566,6 +608,20 @@ const getUserTotalHours = (userId, days) =>
         )
     )
     .reduce((acc, s) => acc + getShiftDuration(s), 0);
+ } else {
+  return shifts
+    .filter(
+      (s) =>
+        s.userId === user.user.userId &&
+        days.some(
+          (d) =>
+            format(new Date(s.startDate), "yyyy-MM-dd") ===
+            format(new Date(d.date), "yyyy-MM-dd")
+        )
+    )
+    .reduce((acc, s) => acc + getShiftDuration(s), 0);
+ }
+}
 const getSurgeryTotalHours = (surgId, days) =>
   shifts
     .filter(
@@ -590,6 +646,10 @@ const getDayTotalHours = (date) =>
     .reduce((acc, s) => acc + getShiftDuration(s), 0);
 
 const addShift = (user, day) => {
+  if (!isManager.value) {
+    return;
+  }
+
   emit("handleShiftEdit", {});
   emit("onAddShift", { user, day });
 };
@@ -657,6 +717,33 @@ const getNurseName = (nurseId) => {
   const nurseName = users.find((n) => n.userId === nurseId)?.user?.fullName;
   return nurseName;
 };
+const removeStaff = async (user) => {
+  try {
+    const res = await rotaStore.removeRotaUser({
+      rotaId: rota.id,
+      id: user.id,
+    });
+    if (res.code === 0) {
+      mainStore.setSnackbar({
+        type: "success",
+        title:
+          res?.message || res?.data?.message || "User removed successfully",
+      });
+      emit("onAddUser");
+      close();
+    } else {
+      mainStore.setSnackbar({
+        type: "error",
+        title: res.message || "Something went wrong",
+      });
+    }
+  } catch (err) {
+    mainStore.setSnackbar({
+      type: "error",
+      title: err.message || "An error occurred",
+    });
+  }
+};
 </script>
 
 <style scoped>
@@ -667,34 +754,34 @@ const getNurseName = (nurseId) => {
   border-bottom: 1px solid #dbdbdb;
 }
 .date-text {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-style: "SemiBold";
   font-size: 14px;
 }
 .fst-col-title {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-style: "SemiBold";
   font-size: 14px;
   color: #1e1e1e;
 }
 .fst-col--subtit {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-style: Regular;
   font-size: 14px;
   color: #1e1e1e;
 }
 .head-date {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-style: "Regular";
   font-size: 14px;
   color: #737373;
 }
 .day-total-row-item {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-style: "Regular";
   font-size: 14px;
@@ -723,7 +810,7 @@ const getNurseName = (nurseId) => {
   height: 100%;
 }
 .total-hrs {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-style: "Regular";
   font-size: 14px;
@@ -772,7 +859,7 @@ const getNurseName = (nurseId) => {
 }
 
 .chip-text {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-style: "Regular";
   font-size: 14px;
@@ -803,7 +890,7 @@ const getNurseName = (nurseId) => {
   color: #ff010b;
 }
 .menu-item-title {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-style: "Regular";
   font-size: 14px;
@@ -817,7 +904,7 @@ const getNurseName = (nurseId) => {
   width: 100%;
 }
 .hover-menu-item {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-style: "Regular";
   font-size: 14px;
@@ -825,11 +912,19 @@ const getNurseName = (nurseId) => {
   color: #1e1e1e;
 }
 .add-staff-btn {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 400;
   font-style: normal;
   font-size: 14px;
   border: 1px solid #3adf8d;
   height: 50px;
+}
+.add-locum-staff-btn {
+  
+  font-weight: 400;
+  font-style: normal;
+  font-size: 14px;
+  border: 1px solid #3adf8d;
+  height: 40px;
 }
 </style>

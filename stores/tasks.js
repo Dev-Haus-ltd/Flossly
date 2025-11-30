@@ -47,7 +47,22 @@ export const useTaskStore = defineStore("taskStore", {
         this.isLoading = true;
         taskService
           .addNewTask(data)
-          .then((res) => {
+          .then((res) => { 
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    addBulkTasks(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        taskService
+          .addBulkTasks(data)
+          .then((res) => { 
             this.isLoading = false;
             resolve(res);
           })
@@ -207,21 +222,81 @@ export const useTaskStore = defineStore("taskStore", {
           });
       });
     },
-    updateUserTask(data) {
-      return new Promise((resolve, reject) => {
-        this.isLoading = true;
-        taskService
-          .updateUserTask(data)
-          .then((res) => {
-            this.isLoading = false;
-            resolve(res);
-          })
-          .catch((err) => {
-            this.isLoading = false;
-            reject(err);
-          });
-      });
-    },
+  updateUserTask(data) {
+    return new Promise((resolve, reject) => {
+      this.isLoading = true;
+      taskService
+        .updateUserTask(data)
+        .then((res) => {
+          this.isLoading = false;
+          resolve(res);
+        })
+        .catch((err) => {
+          this.isLoading = false;
+          reject(err);
+        });
+    });
+  },
+  addTaskComment(data) {
+    return new Promise((resolve, reject) => {
+      this.isLoading = true;
+      taskService
+        .addTaskComment(data)
+        .then((res) => {
+          this.isLoading = false;
+          resolve(res);
+        })
+        .catch((err) => {
+          this.isLoading = false;
+          reject(err);
+        });
+    });
+  },
+  listTaskComments(data) {
+    return new Promise((resolve, reject) => {
+      this.isLoading = true;
+      taskService
+        .listTaskComments(data)
+        .then((res) => {
+          this.isLoading = false;
+          resolve(res);
+        })
+        .catch((err) => {
+          this.isLoading = false;
+          reject(err);
+        });
+    });
+  },
+  updateTaskComment(data) {
+    return new Promise((resolve, reject) => {
+      this.isLoading = true;
+      taskService
+        .updateTaskComment(data)
+        .then((res) => {
+          this.isLoading = false;
+          resolve(res);
+        })
+        .catch((err) => {
+          this.isLoading = false;
+          reject(err);
+        });
+    });
+  },
+  deleteTaskComment(data) {
+    return new Promise((resolve, reject) => {
+      this.isLoading = true;
+      taskService
+        .deleteTaskComment(data)
+        .then((res) => {
+          this.isLoading = false;
+          resolve(res);
+        })
+        .catch((err) => {
+          this.isLoading = false;
+          reject(err);
+        });
+    });
+  },
     addChecklist(data) {
       return new Promise((resolve, reject) => {
         this.isLoading = true;
@@ -267,11 +342,41 @@ export const useTaskStore = defineStore("taskStore", {
           });
       });
     },
-    addAttachments(data) {
+    addAttachments(data, options = {}) {
       return new Promise((resolve, reject) => {
         this.isLoading = true;
         taskService
-          .addAttachments(data)
+          .addAttachments(data, options)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+          reject(err);
+        });
+      });
+    },
+    deleteAttachment(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        taskService
+          .deleteAttachment(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    deleteAttachment(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        taskService
+          .deleteAttachment(data)
           .then((res) => {
             this.isLoading = false;
             resolve(res);
@@ -343,6 +448,21 @@ export const useTaskStore = defineStore("taskStore", {
           });
       });
     },
+    unarchiveBulkTasks(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        taskService
+          .unarchiveBulkTasks(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
     unAssignTask(data) {
       return new Promise((resolve, reject) => {
         this.isLoading = true;
@@ -372,6 +492,21 @@ export const useTaskStore = defineStore("taskStore", {
             reject(err);
           });
       });
-    }
+    },
+    getTeamTaskStatsByStatusAndCategory(categoryId) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        taskService
+          .getTeamTaskStatsByStatusAndCategory(categoryId)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
   },
 });

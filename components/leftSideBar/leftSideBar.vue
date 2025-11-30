@@ -1,14 +1,15 @@
 <template>
   <v-navigation-drawer
-    v-model="model"
+    v-model="drawerModel"
     :rail="rail"
     :temporary="smAndDown"
     :permanent="!smAndDown"
+    style="z-index: 1000 !important"
   >
     <LeftSideBarPracticeMenu :currentOrg="currentOrg" :rail="rail" />
     <v-card
       class="d-flex flex-column py-1"
-      style="height: 87vh; overflow: auto"
+      style="height: 87vh; overflow: auto;"
     >
       <v-list density="compact" nav :class="[rail ? 'pr-0 rail-closed' : '']">
         <template v-for="item in menuItems" :key="item.value">
@@ -27,6 +28,7 @@
                   isExact(item.to) && 'active-item',
                   isExact(item.to) && 'right-border',
                 ]"
+                @click="handleItemClick"
               >
                 <template #prepend>
                   <img :src="item.imgPath" class="list-icon" alt="icon" />
@@ -46,6 +48,7 @@
               isExact(item.to) && 'active-item',
               isExact(item.to) && 'right-border',
             ]"
+            @click="handleItemClick"
           >
             <template #prepend>
               <img :src="item.imgPath" class="list-icon" alt="icon" />
@@ -57,15 +60,15 @@
 
           <!-- Parent with children -->
           <div v-else class="group-with-line" :class="{ 'no-line': rail }">
-            <v-list-group v-model="openGroups[item.value]" :value="item.value">
+            <v-list-group v-model="openGroups[item.value]">
               <template #activator="{ props }">
                 <v-tooltip v-if="rail" location="right">
                   <template #activator="{ props: tooltipProps }">
                     <v-list-item
                       v-bind="{ ...props, ...tooltipProps }"
-                      :to="item.to"
+                    
                       :active="isParentActive(item)"
-                      @click="navigate(item.to)"
+                      @click="(e) => handleParentClick(e, item)"
                       :class="[
                         'custom-list-item',
                         isParentActive(item) && 'active-item',
@@ -81,9 +84,8 @@
                   v-else
                   v-bind="props"
                   :title="item.title"
-                  :to="item.to"
                   :active="isParentActive(item)"
-                  @click="navigate(item.to)"
+                  @click="(e) => handleParentClick(e, item)"
                   :class="['custom-list-item']"
                 >
                   <template #prepend>
@@ -102,6 +104,7 @@
                         :to="child.to"
                         :active="isExact(child.to)"
                         :class="['custom-list-item']"
+                        @click="handleItemClick"
                       >
                         <template #prepend>
                           <img
@@ -121,6 +124,7 @@
                     :to="child.to"
                     :active="isExact(child.to)"
                     :class="['custom-list-item not-intended']"
+                    @click="handleItemClick"
                   >
                     <template #title>
                       <span>{{ child.title }}</span>
@@ -135,21 +139,25 @@
 
       <v-spacer />
 
-      <v-btn
+      <div 
+        :class="['sidebar-toggle-wrapper', rail ? 'collapsed-state' : 'expanded-state']" 
         v-if="!smAndDown"
-        variant="text"
-        @click.stop="emit('update:rail', !rail)"
-        class="d-flex align-center"
-        style="color: #737373"
       >
-        <template v-if="!rail">
-          Close
-          <v-icon class="ml-2">mdi-chevron-left</v-icon>
-        </template>
-        <template v-else>
-          <v-icon>mdi-chevron-right</v-icon>
-        </template>
-      </v-btn>
+        <v-btn
+          :class="['sidebar-toggle-btn', rail ? 'collapsed' : 'expanded']"
+          variant="text"
+          icon
+          size="small"
+          @click.stop="emit('update:rail', !rail)"
+        >
+          <v-icon 
+            :class="['toggle-icon', rail ? 'icon-right' : 'icon-left']"
+            size="18"
+          >
+            {{ rail ? 'mdi-chevron-right' : 'mdi-chevron-left' }}
+          </v-icon>
+        </v-btn>
+      </div>
     </v-card>
   </v-navigation-drawer>
 </template>
@@ -170,21 +178,87 @@ const router = useRouter();
 const route = useRoute();
 
 const emit = defineEmits(["update:drawer", "update:rail"]);
-const model = computed({
-  get: () => drawer,
-  set: (val) => emit("update:drawer", val),
+
+// Create a computed property for drawer model
+const drawerModel = computed({
+  get() {
+    return drawer.value;
+  },
+  set(newVal) {
+    emit("update:drawer", newVal);
+  }
 });
-watch(rail, (newVal) => {
-  emit("update:rail", newVal);
-});
+
+// Close drawer on mobile when leaf item is clicked
+const handleItemClick = () => {
+  if (smAndDown.value) {
+    emit("update:drawer", false);
+  }
+};
+
+// Helper function to get organization data consistently
+const getOrgData = (orgWrapper) => {
+  // Check if org has nested organisation object
+  if (orgWrapper?.organisation?.id && orgWrapper?.organisation?.name) {
+    return orgWrapper.organisation;
+  }
+  
+  // Check if org is the organisation object itself
+  if (orgWrapper?.id && orgWrapper?.name) {
+    return orgWrapper;
+  }
+  
+  return null;
+};
+
 onMounted(() => {
   const storedUser = JSON.parse(localStorage.getItem("user"));
   user.value = storedUser;
+  console.log('Left Sidebar - Stored User:', storedUser);
+  console.log('Left Sidebar - User Organisations:', storedUser?.userOrganisations);
+  console.log('Left Sidebar - Current Logged In Org ID:', storedUser?.currentLoggedInOrgId);
+  
   if (storedUser?.userOrganisations?.length) {
-    currentOrg.value =
-      storedUser.userOrganisations.find(
+    // Log each organization structure for debugging
+    storedUser.userOrganisations.forEach((org, index) => {
+      console.log(`Left Sidebar - Org ${index}:`, org);
+      console.log(`Left Sidebar - Org ${index} organisation:`, org?.organisation);
+      console.log(`Left Sidebar - Org ${index} orgData:`, getOrgData(org));
+    });
+    
+    // Try to find the current organization
+    let foundOrg = null;
+    
+    // First try to find by organisationId
+    if (storedUser.currentLoggedInOrgId) {
+      const orgWrapper = storedUser.userOrganisations.find(
         (org) => org.organisationId === storedUser.currentLoggedInOrgId
-      )?.organisation || {};
+      );
+      if (orgWrapper) {
+        foundOrg = getOrgData(orgWrapper);
+      }
+    }
+    
+    // If not found, try to find by id
+    if (!foundOrg && storedUser.currentLoggedInOrgId) {
+      const orgWrapper = storedUser.userOrganisations.find(
+        (org) => getOrgData(org)?.id === storedUser.currentLoggedInOrgId
+      );
+      if (orgWrapper) {
+        foundOrg = getOrgData(orgWrapper);
+      }
+    }
+    
+    // If still not found, use the first available organization
+    if (!foundOrg) {
+      const firstOrg = storedUser.userOrganisations[0];
+      foundOrg = getOrgData(firstOrg);
+    }
+    
+    currentOrg.value = foundOrg || {};
+    console.log('Left Sidebar - Current Org:', currentOrg.value);
+  } else {
+    console.log('Left Sidebar - No user organisations found');
   }
 });
 const norm = (p) => (p || "").replace(/\/+$/, "") || "/";
@@ -216,19 +290,86 @@ const syncOpenGroups = () => {
     }
   });
 };
-watch(() => route.fullPath, syncOpenGroups, { immediate: true });
 
-const navigate = (to) => {
-  if (to) router.push(to);
+const handleParentClick = (e, item) => {
+  // Navigate to the parent's route if it exists
+  if (item.to) router.push(item.to);
+
+  // If the parent has children
+  if (item.children?.length && item.value) {
+    // Store the current state of this group before closing others
+    const currentState = openGroups[item.value];
+
+    // Close all other open groups first
+    Object.keys(openGroups).forEach((key) => {
+      if (key !== item.value) {
+        openGroups[key] = false;
+      }
+    });
+
+    openGroups[item.value] = !currentState;
+  }
+
+  // Close drawer on mobile when parent is clicked
+  if (smAndDown.value) {
+    emit("update:drawer", false);
+  }
 };
 
+// keep this watcher AFTER handleParentClick
+watch(
+  () => route.fullPath,
+  () => {
+    // only auto-sync if user hasn’t manually opened something
+    const activeKey = Object.keys(openGroups).find((k) => openGroups[k]);
+    if (!activeKey) {
+      syncOpenGroups();
+    }
+  },
+  { immediate: true }
+);
 const user = ref(null);
 const currentOrg = ref({});
+
+// Watch for changes in user data and update currentOrg accordingly
+watch(() => user.value, (newUser) => {
+  if (newUser?.userOrganisations?.length) {
+    // Try to find the current organization
+    let foundOrg = null;
+    
+    // First try to find by organisationId
+    if (newUser.currentLoggedInOrgId) {
+      const orgWrapper = newUser.userOrganisations.find(
+        (org) => org.organisationId === newUser.currentLoggedInOrgId
+      );
+      if (orgWrapper) {
+        foundOrg = getOrgData(orgWrapper);
+      }
+    }
+    
+    // If not found, try to find by id
+    if (!foundOrg && newUser.currentLoggedInOrgId) {
+      const orgWrapper = newUser.userOrganisations.find(
+        (org) => getOrgData(org)?.id === newUser.currentLoggedInOrgId
+      );
+      if (orgWrapper) {
+        foundOrg = getOrgData(orgWrapper);
+      }
+    }
+    
+    // If still not found, use the first available organization
+    if (!foundOrg) {
+      const firstOrg = newUser.userOrganisations[0];
+      foundOrg = getOrgData(firstOrg);
+    }
+    
+    currentOrg.value = foundOrg || {};
+  }
+}, { deep: true });
 </script>
 
 <style scoped lang="scss">
 .custom-list-item {
-  font-family: "Poppins";
   font-size: 13px;
   font-weight: 400;
   color: #737373;
@@ -242,8 +383,7 @@ const currentOrg = ref({});
   position: relative;
   border-radius: 6px;
   .v-list-group--open {
-    background-color: #f6f6f6;
-    border-right: 5px solid #60e5a3;
+    border-right: 5px solid #0061fb;
     border-radius: 6px;
     .active-item {
       background-color: transparent;
@@ -266,18 +406,18 @@ const currentOrg = ref({});
   left: 17px;
   width: 2px;
   height: calc(100% + 1px);
-  background-color: #dbdbdb;
+  background-color: #737373;
   z-index: 0;
 }
 .active-item {
   font-weight: 600 !important;
-  background-color: #f6f6f6;
+  border-radius: 8px;
 }
 .right-border {
-  border-right: 5px solid #60e5a3;
+  border-right: 5px solid #0061fb;
 }
 :deep(.v-list-item--active) {
-  color: #1e1e1e !important;
+  color: #0061fb !important;
   font-weight: 600 !important;
 }
 .list-icon {
@@ -285,10 +425,67 @@ const currentOrg = ref({});
   height: 20px;
   object-fit: contain;
   margin-right: 8px;
-  color: #737373;
+  filter: grayscale(100%) brightness(0) invert(40%) sepia(5%) saturate(200%) hue-rotate(180deg);
+  transition: filter 0.2s ease;
   margin-bottom: 4px;
+}
+.active-item .list-icon,
+.v-list-item--active .list-icon {
+  filter: invert(33%) sepia(98%) saturate(7455%) hue-rotate(213deg) brightness(97%) contrast(101%);
 }
 .rail-closed .v-list-group__items .v-list-item {
   padding-inline-start: 8px !important; /* match parent padding */
+}
+
+/* Sidebar Toggle Button Styles - Minimal Design */
+.sidebar-toggle-wrapper {
+  padding: 12px 8px;
+  margin-top: auto;
+  display: flex;
+  position: sticky;
+  bottom: 0;
+  background: inherit;
+  z-index: 1;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.sidebar-toggle-wrapper.expanded-state {
+  justify-content: flex-end;
+}
+
+.sidebar-toggle-wrapper.collapsed-state {
+  justify-content: center;
+  padding: 12px 4px;
+}
+
+.sidebar-toggle-btn {
+  color: #737373 !important;
+  transition: all 0.2s ease;
+  min-width: 28px !important;
+  width: 28px !important;
+  height: 28px !important;
+  opacity: 0.6;
+}
+
+.sidebar-toggle-btn:hover {
+  opacity: 1;
+  color: #0061fb !important;
+  background-color: rgba(0, 97, 251, 0.08) !important;
+}
+
+.sidebar-toggle-btn:active {
+  opacity: 0.8;
+}
+
+.toggle-icon {
+  transition: transform 0.2s ease;
+}
+
+/* Smooth transition for the entire sidebar */
+:deep(.v-navigation-drawer) {
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.v-navigation-drawer__scrim {
+  display: none !important;
 }
 </style>

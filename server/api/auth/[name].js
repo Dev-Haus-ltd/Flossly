@@ -15,7 +15,11 @@ import {
   updateBankDetails,
   getUserHrDocuments,
   addUserHrDoc,
-  removeUserDoc
+  removeUserDoc,
+  switchOrgnanisation,
+  createShortLivedToken,
+  exchangeShortLivedToken,
+  resendVerificationEmail
 } from "../../controllers/auth";
 import bcrypt from "bcrypt";
 export default defineEventHandler(async (event) => {
@@ -25,6 +29,8 @@ export default defineEventHandler(async (event) => {
       return await login(event);
     case "signUpRequest":
       return await signupRequest(event);
+    case "resendVerificationEmail":
+      return await resendVerificationEmail(event);
     case "verifyEmail":
       return await verifyEmail(event);
     case "createHash":
@@ -57,6 +63,12 @@ export default defineEventHandler(async (event) => {
       return await addUserHrDoc(event)
     case "removeHrDoc":
       return await removeUserDoc(event)
+      case "switchOrg":
+        return await switchOrgnanisation(event)
+    case "createShortToken":
+      return await createShortLivedToken(event);
+    case "exchangeShortToken":
+      return await exchangeShortLivedToken(event);
     default:
       return { code: 0, error: "Not found" };
   }

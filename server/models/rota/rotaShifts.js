@@ -49,6 +49,18 @@ export const RotaShift = sequelize.define(
         key: "id",
       },
     },
+    isLocumShift: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    locumUserId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'RotaUsers',
+        key: 'id'
+      }
+    },
     label: { type: DataTypes.STRING, allowNull: false },
     color: { type: DataTypes.STRING, allowNull: true },
     startDate: { type: DataTypes.DATE, allowNull: false },

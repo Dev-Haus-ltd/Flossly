@@ -22,6 +22,28 @@ export default {
         });
     });
   },
+  getUserCourseHistory() {
+    return new Promise((resolve, reject) => {
+      Get("/cpd/getUserCourseHistory")
+        .then((res) => { 
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  assignCourseToUser(data) {
+    return new Promise((resolve, reject) => {
+      Post("/cpd/assignCourseToUser", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
   startQuiz(data) {
     return new Promise((resolve, reject) => {
       Post("/cpd/startQuiz", data)

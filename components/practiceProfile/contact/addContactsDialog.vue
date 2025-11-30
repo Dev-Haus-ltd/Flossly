@@ -1,3 +1,4 @@
+<!-- Add Contacts Dialog Component -->
 <template>
   <v-dialog v-model="isOpen" max-width="700px" class="rounded-lg">
     <v-card>
@@ -5,7 +6,6 @@
       <v-card-title
         class="d-flex align-center justify-space-between"
         style="
-          font-family: Poppins;
           font-weight: 600;
           font-size: 16px;
           border-bottom: 1px solid #dbdbdb;
@@ -28,11 +28,10 @@
         <div
           v-for="(contact, index) in contacts"
           :key="index"
-          class="d-flex mb-4 align-center rounded-lg border-sm"
-          style="gap: 10px; padding: 10px; background-color: #f7f8f9;"
+          class="contact-row"
         >
           <!-- Name -->
-          <div style="width: 30%;">
+          <div class="contact-field">
             <label class="field-label">Name</label>
             <v-text-field
               v-model="contact.name"
@@ -45,7 +44,7 @@
           </div>
 
           <!-- Contact (phone / number) -->
-          <div style="width: 30%;">
+          <div class="contact-field">
             <label class="field-label">Contact</label>
             <v-text-field
               v-model="contact.contact"
@@ -58,7 +57,7 @@
           </div>
 
           <!-- Email -->
-          <div style="width: 30%;">
+          <div class="contact-field">
             <label class="field-label">Email</label>
             <v-text-field
               v-model="contact.email"
@@ -71,17 +70,22 @@
           </div>
 
           <!-- Remove Button -->
-          <div style="width: 10%; text-align: center;">
-              <v-icon size="18" @click="removeContact(index)">mdi-close</v-icon>
+          <div class="contact-remove">
+            <v-icon size="18" @click="removeContact(index)">mdi-close</v-icon>
           </div>
         </div>
+
+        <!-- Error Message -->
+        <p v-if="invalidContact" class="error-message">
+          Each contact must have a name, phone and email
+        </p>
 
         <!-- Add contact button -->
         <v-btn
           variant="outlined"
           size="small"
           color="primary"
-          class="mt-2"
+          class="mt-4"
           @click="addContact"
         >
           <v-icon left>mdi-plus</v-icon>
@@ -119,12 +123,14 @@ const props = defineProps({
 const emit = defineEmits(["update:modelValue", "onUpdate"]);
 
 const isOpen = ref(props.modelValue);
-const contacts = ref([{ name: "", contact: "" }]); // start with one row
+const contacts = ref([{ name: "", contact: "", email: "" }]);
+const invalidContact = ref(false);
 
 watch(
   () => props.modelValue,
   (val) => (isOpen.value = val)
 );
+
 watch(isOpen, (val) => emit("update:modelValue", val));
 
 const close = () => {
@@ -140,27 +146,85 @@ const removeContact = (index) => {
 };
 
 const save = () => {
+  if (contacts.value.find((x) => !x.email || !x.contact)) {
+    invalidContact.value = true;
+    return;
+  }
+
   emit("update:modelValue", false);
   emit("onUpdate", contacts.value);
-  contacts.value = [{ name: "", contact: "" }];
+  contacts.value = [{ name: "", contact: "", email: "" }];
 };
 </script>
 
 <style scoped>
+/* Contact Row - Responsive Layout */
+.contact-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  padding: 10px;
+  background-color: #f7f8f9;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  align-items: flex-end;
+}
+
+/* Desktop: 4-column layout (Name, Contact, Email, Remove) */
+@media (min-width: 960px) {
+  .contact-row {
+    grid-template-columns: 1fr 1fr 1fr auto;
+  }
+}
+
+/* Tablet: 2x2 grid */
+@media (max-width: 959px) and (min-width: 600px) {
+  .contact-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Mobile: Single column */
+@media (max-width: 599px) {
+  .contact-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.contact-field {
+  width: 100%;
+}
+
+.contact-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  cursor: pointer;
+}
+
+/* Field Label */
+.field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 4px;
+  color: #737373;
+}
+
+/* Error Message */
+.error-message {
+  color: #d32f2f;
+  font-size: 12px;
+  margin: 10px 0;
+}
+
+/* Input Styling */
 .input-bordered :deep(.v-field) {
   border: 1px solid #dfdfdf !important;
   border-radius: 8px !important;
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
-}
-.field-label {
-  display: block;
-  font-family: Poppins, sans-serif;
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 4px;
-  color: #737373;
 }
 </style>

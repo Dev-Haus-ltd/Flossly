@@ -1,0 +1,37 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="1920" height="1080" fill="#171952"/>
+<g opacity="0.5">
+<mask id="mask0_7101_556" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="1920" height="1080">
+<rect width="1920" height="1080" fill="#C8886C" fill-opacity="0.08"/>
+</mask>
+<g mask="url(#mask0_7101_556)">
+<line x1="452.305" y1="-8.18823" x2="452.305" y2="1182.86" stroke="white"/>
+<line x1="948.578" y1="-8.18823" x2="948.578" y2="1182.86" stroke="white"/>
+<line x1="1444.84" y1="-8.18823" x2="1444.84" y2="1182.86" stroke="white"/>
+<line x1="204.18" y1="-8.18823" x2="204.18" y2="1182.86" stroke="white"/>
+<line x1="700.438" y1="-8.18823" x2="700.437" y2="1182.86" stroke="white"/>
+<line x1="1196.72" y1="-8.18823" x2="1196.72" y2="1182.86" stroke="white"/>
+<line x1="1692.98" y1="-8.18823" x2="1692.98" y2="1182.86" stroke="white"/>
+<line x1="2155.94" y1="238.81" x2="-372.198" y2="238.81" stroke="white"/>
+<line x1="2155.94" y1="486.247" x2="-372.198" y2="486.246" stroke="white"/>
+<line x1="2155.94" y1="733.683" x2="-372.198" y2="733.683" stroke="white"/>
+<line x1="2155.94" y1="981.12" x2="-372.198" y2="981.12" stroke="white"/>
+<line x1="2155.94" y1="115.092" x2="-372.198" y2="115.091" stroke="white"/>
+<line x1="2155.94" y1="362.528" x2="-372.198" y2="362.528" stroke="white"/>
+<line x1="2155.94" y1="609.965" x2="-372.198" y2="609.965" stroke="white"/>
+<line x1="2155.94" y1="857.402" x2="-372.198" y2="857.401" stroke="white"/>
+</g>
+</g>
+<rect width="1920" height="1080" fill="url(#paint0_radial_7101_556)"/>
+<rect width="1920" height="1080" fill="url(#paint1_radial_7101_556)"/>
+<defs>
+<radialGradient id="paint0_radial_7101_556" cx="0" cy="0" r="1" gradientTransform="matrix(1176.61 723.214 -1285.71 520.974 0 0)" gradientUnits="userSpaceOnUse">
+<stop stop-color="#7FAFFD" stop-opacity="0.2"/>
+<stop offset="1" stop-color="#314FCE" stop-opacity="0"/>
+</radialGradient>
+<radialGradient id="paint1_radial_7101_556" cx="0" cy="0" r="1" gradientTransform="matrix(-1411.53 -488.741 868.872 -624.988 1920 1080)" gradientUnits="userSpaceOnUse">
+<stop stop-color="#C285FF" stop-opacity="0.4"/>
+<stop offset="1" stop-color="#314FCE" stop-opacity="0"/>
+</radialGradient>
+</defs>
+</svg>

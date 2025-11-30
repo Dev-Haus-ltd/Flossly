@@ -12,12 +12,12 @@
       <!-- Text -->
       <div class="ml-4 mt-2">
         <div class="rewards-title">My Rewards Points</div>
-        <div class="rewards-points">{{ userBalance }}</div>
+        <div class="rewards-points">{{ user?.userPoints?.balance }}</div>
       </div>
     </div>
     <h5 class="sub-head mt-5">Points History</h5>
     <div class="mt-5">
-      <MyProfileRewardPointsRewardItem
+      <MyProfileRewardPointsRewardItem 
         :tasks="history"
       />
     </div>
@@ -25,11 +25,11 @@
 </template>
 
 <script setup>
+
+const {user}=useUser();
 const pointStore = usePointStore()
 const history = ref([])
-const user = ref({})
 onMounted(() => {
-  user.value = JSON.parse(localStorage.getItem('user'))
   getRewardHistory()
 })
 const getRewardHistory = () => {
@@ -39,9 +39,7 @@ const getRewardHistory = () => {
     }
   })
 }
-const userBalance = computed(() => {
-  return user?.userPoints?.[0]?.balance ?? 0;
-});
+
 </script>
 
 <style scoped>
@@ -52,20 +50,20 @@ const userBalance = computed(() => {
 }
 
 .rewards-title {
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 16px;
   color: #ffffff;
 }
 
 .rewards-points {
-  font-family: Poppins;
+  
   font-weight: 600;
   font-size: 32px;
   color: #ffffff;
 }
 .sub-head {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 16px;
   color: #1e1e1e;

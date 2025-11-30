@@ -4,15 +4,20 @@ import {
   OrganisationEquipment,
   OrganisationGroup,
   OrganisationGroupUser,
+  OrganisationPeople,
   OrganisationPriority,
   OrganisationStatus,
   OrganisationSurgery,
+  OrganisationScript,
+  DictionaryScript,
   User,
 } from "../models";
 import formidable from "formidable";
 import fs from "fs/promises";
 import path from "path";
 import DB from "../utils/db";
+import { success, error } from "../utils/response";
+import { readBody, createError } from "h3";
 
 export const updateOrganisationDetails = async (event) => {
   const loggedUser = event.context.user;
@@ -30,10 +35,10 @@ export const updateOrganisationDetails = async (event) => {
       return error(404, "Organisation not found");
     }
     // Update organisation fields
-    organisation.name = fields.name[0] || organisation.name;
-    organisation.address = fields.address[0] || organisation.address;
-    organisation.contact = fields.contact[0] || organisation.contact;
-    organisation.type = fields.type[0] || organisation.type;
+    organisation.name = fields.name ? fields.name[0] : organisation.name;
+    organisation.address = fields.address? fields.address[0] : organisation.address;
+    organisation.contact = fields.contact ? fields.contact[0] : organisation.contact;
+    organisation.type = fields.type ? fields.type[0] : organisation.type;
 
 
     organisation.managerId = fields.managerId ? fields.managerId[0] : organisation.managerId;
@@ -58,7 +63,7 @@ export const updateOrganisationDetails = async (event) => {
       await user.save();
     }
     await organisation.save();
-    return success(organisation.toJSON);
+    return success(organisation.toJSON());
   } catch (err) {
     console.log(err.message);
     return error(500, err.message);
@@ -210,6 +215,10 @@ export const getdetails = async (event) => {
           as: "surgeries",
         },
         {
+          model: OrganisationPeople,
+          as: "importantPeople"
+        },
+        {
           model: OrganisationGroup,
           as: "groups",
           include: [
@@ -231,6 +240,53 @@ export const getdetails = async (event) => {
     return success(organisation);
   } catch (err) {
     return error(500, err.message);
+  }
+};
+
+export const updateImportantPeople = async (event) => {
+  try {
+    const body = await readBody(event)
+    const {
+      id,
+      organisationId,
+      safeguardingLead,
+      firstAider,
+      fireMarshal,
+      crossInfectionLead,
+      complaintsHandler,
+      dpo,
+      rpa
+    } = JSON.parse(body);
+
+    let people = await OrganisationPeople.findOne({ where: { organisationId, id } });
+
+    if (people) {
+      await people.update({
+        safeguardingLead,
+        firstAider,
+        fireMarshal,
+        crossInfectionLead,
+        complaintsHandler,
+        dpo,
+        rpa
+      });
+    } else {
+      people = await OrganisationPeople.create({
+        organisationId,
+        safeguardingLead,
+        firstAider,
+        fireMarshal,
+        crossInfectionLead,
+        complaintsHandler,
+        dpo,
+        rpa
+      });
+    }
+
+
+    return success(people);
+  } catch (err) {
+    return error(500, err.message)
   }
 };
 
@@ -451,3 +507,128 @@ export const getSurgeries = async (event) => {
     return error(500, err.message)
   }
 }
+
+export const getScripts = async (event) => {
+  const loggedUser = event.context.user;
+  const organisationId = loggedUser.orgId;
+  try {
+    // Get all default scripts from dictionary
+    const defaultScripts = await DictionaryScript.findAll({
+      order: [["sortOrder", "ASC"]],
+    });
+
+    if (!defaultScripts || defaultScripts.length === 0) {
+      // Return empty array if no default scripts found
+      return success([]);
+    }
+
+    // Get user-edited scripts for this organisation
+    const orgScripts = await OrganisationScript.findAll({
+      where: { organisationId },
+    }).catch(() => {
+      // If OrganisationScripts table doesn't exist or query fails, just use empty array
+      return [];
+    });
+
+    // Create a map of user-edited scripts by scriptKey
+    const orgScriptsMap = {};
+    if (orgScripts && Array.isArray(orgScripts)) {
+      orgScripts.forEach((script) => {
+        orgScriptsMap[script.scriptKey] = script;
+      });
+    }
+
+    // Merge: use org script if exists, otherwise use default
+    const scripts = defaultScripts.map((defaultScript) => {
+      const orgScript = orgScriptsMap[defaultScript.key];
+      if (orgScript) {
+        // User has edited this script, use their version
+        return {
+          id: orgScript.id,
+          key: defaultScript.key,
+          title: orgScript.title,
+          content: orgScript.content,
+          isCustom: true,
+        };
+      } else {
+        // Use default script
+        return {
+          id: defaultScript.id,
+          key: defaultScript.key,
+          title: defaultScript.title,
+          content: defaultScript.content,
+          isCustom: false,
+        };
+      }
+    });
+
+    return success(scripts);
+  } catch (err) {
+    console.error('Error in getScripts:', err);
+    return error(500, err.message);
+  }
+};
+
+export const saveScript = async (event) => {
+  const loggedUser = event.context.user;
+  const organisationId = loggedUser.orgId;
+  const body = await readBody(event);
+  const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+  const { scriptKey, title, content } = parsed;
+
+  if (!scriptKey || !title || !content) {
+    return error(400, "scriptKey, title, and content are required");
+  }
+
+  try {
+    // Check if default script exists
+    const defaultScript = await DictionaryScript.findOne({
+      where: { key: scriptKey },
+    });
+
+    if (!defaultScript) {
+      return error(404, "Script not found in dictionary");
+    }
+
+    // Find or create organisation script
+    const [orgScript, created] = await OrganisationScript.findOrCreate({
+      where: {
+        organisationId,
+        scriptKey,
+      },
+      defaults: {
+        organisationId,
+        scriptKey,
+        title,
+        content,
+      },
+    });
+
+    if (!created) {
+      // Update existing script
+      orgScript.title = title;
+      orgScript.content = content;
+      await orgScript.save();
+    }
+
+    return success({
+      id: orgScript.id,
+      key: scriptKey,
+      title: orgScript.title,
+      content: orgScript.content,
+      isCustom: true,
+    });
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const seedScripts = async (event) => {
+  try {
+    const { seedDefaultScripts } = await import("../utils/seedScripts");
+    const result = await seedDefaultScripts();
+    return success(result);
+  } catch (err) {
+    return error(500, err.message);
+  }
+};

@@ -1,0 +1,19 @@
+*** Begin Patch
+*** Update File: stores/index.js
+@@
+         {
+           title: \"Flossy Diary\",
+           imgPath: tasksIcon,
+           value: \"flosslyDiary\",
+           to:\"/diary\",
+-          children: [],
++          children: [
++            {
++              title: \"Calendar\",
++              value: \"diaryCalendar\",
++              imgPath: tasksIcon,
++              to: \"/diary/calendar\",
++            },
++          ],
+         },
+*** End Patch

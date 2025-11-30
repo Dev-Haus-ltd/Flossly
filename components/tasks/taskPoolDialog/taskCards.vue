@@ -33,7 +33,7 @@
   <style scoped>
   
   .title{
-    font-family: "Poppins";
+    
 font-weight: 600;
 font-style: 'SemiBold';
 font-size: 14px;
@@ -41,7 +41,7 @@ font-size: 14px;
 
   }
   .sub-title{
-    font-family: "Poppins";
+    
 font-weight: 400;
 font-size: 10px;
 color: #737373;
@@ -49,7 +49,7 @@ color: #737373;
 
   }
   .description{
-    font-family: "Poppins";
+    
 font-weight: 400;
 font-style: "Regular";
 font-size: 11px;

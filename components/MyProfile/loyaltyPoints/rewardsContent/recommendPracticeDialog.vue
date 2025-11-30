@@ -5,7 +5,7 @@
       <v-card-title
         class="d-flex align-center justify-space-between"
         style="
-          font-family: Poppins;
+          
           font-weight: 600;
           font-size: 16px;
           border-bottom: 1px solid #dbdbdb;
@@ -114,6 +114,7 @@
 
 <script setup>
 import { ref, watch } from "vue";
+const { user } = useUser();
 
 const props = defineProps({
   modelValue: Boolean,
@@ -154,7 +155,20 @@ const submit = () => {
   pointStore
     .referPractice(organisation.value)
     .then((res) => {
+    
       if (res.code === 0) {
+        if (user.value.id) {
+        // Add 50 points
+        user.value.userPoints.balance =
+          (user.value.userPoints?.balance ?? 0) + 2000;
+
+        // Optionally also update `totalPointsRewarded`
+        user.value.userPoints.totalPointsRewarded =
+          (user.value.userPoints?.totalPointsRewarded ?? 0) + 2000;
+
+        // Save updated object back to localStorage
+        localStorage.setItem("user", JSON.stringify(user));
+      }
         mainStore.setSnackbar({
           title: res?.data?.message || "Practice referred successfully",
           type: "success",
@@ -187,10 +201,10 @@ const submit = () => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 .field-label {
-  font-family: "Poppins", sans-serif;
+  
   font-size: 13px;
   font-weight: 500;
   color: #1e1e1e;

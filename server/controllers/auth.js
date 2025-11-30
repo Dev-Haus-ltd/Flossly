@@ -15,6 +15,7 @@ import {
   UserPoint,
   UserContract,
   UserHrDocument,
+  UserPointsHistory,
 } from "../models";
 import { generateOTP, generateVerificationLink } from "../utils/misc";
 import bcrypt from "bcrypt";
@@ -27,6 +28,10 @@ import {
 } from "../utils/emailNotifications";
 import requestIp from "request-ip";
 import { HrDocument } from "../models/hrDocuments";
+import path from "path";
+import fs from "fs";
+import { createError } from "h3";
+
 const config = useRuntimeConfig();
 export const login = async (event) => {
   let browserAgent = getHeader(event, "User-Agent");
@@ -48,7 +53,7 @@ export const login = async (event) => {
   });
   if (userPreference && userPreference.licenseRenewalDate) {
     const renewalDate = new Date(userPreference.licenseRenewalDate);
-    if (renewalDate < new Date()) {
+    if (renewalDate < new Date() && userPreference.licenseType === "Trial") {
       return error(401, "License Expired");
     }
   }
@@ -67,33 +72,120 @@ export const login = async (event) => {
   return success(token);
 };
 
+export const createShortLivedToken = async (event) => {
+  const loggedUser = event.context.user;
+  try {
+    if (!loggedUser || !loggedUser.userId || !loggedUser.orgId || !loggedUser.roleId) {
+      return error(401, "Unauthenticated");
+    }
+    const shortToken = jwt.sign(
+      {
+        userId: loggedUser.userId,
+        orgId: loggedUser.orgId,
+        roleId: loggedUser.roleId,
+        purpose: "third_party_redirect",
+      },
+      config.JWT_SECRET,
+      { expiresIn: "60s" }
+    );
+    return success(shortToken);
+  } catch (err) {
+    return error(500, err.message || err);
+  }
+};
+
+export const exchangeShortLivedToken = async (event) => {
+  const body = await readBody(event);
+  const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+  const { shortToken } = parsed;
+  try {
+    if (!shortToken) return error(400, "shortToken required");
+    const payload = jwt.verify(shortToken, config.JWT_SECRET);
+    if (!payload || payload.purpose !== "third_party_redirect") {
+      return error(400, "Invalid token purpose");
+    }
+    const token = jwt.sign(
+      { userId: payload.userId, orgId: payload.orgId, roleId: payload.roleId },
+      config.JWT_SECRET
+    );
+    // setCookie(event, "accessToken", token, { maxAge: 31536000 });
+    return success(token);
+  } catch (err) {
+    return error(400, err.message || "Invalid/Expired token");
+  }
+};
+
+export const resendVerificationEmail = async (event) => {
+  const body = await readBody(event);
+  const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+  const { email } = parsed;
+  
+  if (!email) return error(400, "Email required");
+  
+  try {
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      return error(404, "User not found");
+    }
+    
+    if (user.isEmailVerified) {
+      return error(400, "Email already verified");
+    }
+    
+    // Delete old verification links
+    await EmailVerification.destroy({ where: { userId: user.id } });
+    
+    // Create new verification link
+    const link = generateVerificationLink();
+    await EmailVerification.create({ email, link, userId: user.id });
+    await sendEmailVerificationEmail({ email, fullName: user.fullName, link });
+    
+    return success("Verification email sent");
+  } catch (err) {
+    return error(500, err.message || "Failed to send verification email");
+  }
+};
+
 export const signupRequest = async (event) => {
-  const body = JSON.parse(await readBody(event));
-  const { fullName, email, password, organisationName, roleId } = body;
-  if (!fullName || !email || !password || !organisationName) {
+  const body = await readBody(event);
+  const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+  const { fullName, email, password, organisationName, roleId } = parsed;
+  
+  // Trim and validate fullName
+  const trimmedFullName = fullName ? fullName.trim() : '';
+  if (!trimmedFullName || !email || !password || !organisationName) {
     return error(400, "Missing required fields");
   }
+  
+  // Additional validation for fullName
+  if (trimmedFullName.length === 0) {
+    return error(400, "Full name cannot be empty or contain only spaces");
+  }
+
+  // Check if organization already exists
+  let org = await Organisation.findOne({ where: { name: organisationName } });
+  if (org) {
+    return error(402, "Organization already exists. Please choose a different organization name or contact support if you believe this is an error.");
+  }
+
+  // Check if user already exists
+  let user = await User.findOne({ where: { email } });
+  if (user) {
+    return error(409, "Email already exists. Please use a different email address or try logging in instead.");
+  }
+
   const transaction = await DB.transaction();
   try {
-    // find or create organisation
-    let org = await Organisation.findOne({ where: { name: organisationName } });
-    if (!org) {
-      org = await Organisation.create(
-        { name: organisationName },
-        { transaction }
-      );
-    } else {
-      return error(402, "orgAlreadyExist");
-    }
-
-    // check duplicate user
-    let user = await User.findOne({ where: { email } });
-    if (user) error(409, "email already exist");
+    // create organisation
+    org = await Organisation.create(
+      { name: organisationName },
+      { transaction }
+    );
 
     // hash password
     const hashed = await bcrypt.hash(password, 10);
     user = await User.create(
-      { fullName, email, password: hashed, profileCompletion: 0, roleId },
+      { fullName: trimmedFullName, email, password: hashed, profileCompletion: 0, roleId },
       { transaction }
     );
     org.managerId = user.id;
@@ -119,7 +211,7 @@ export const signupRequest = async (event) => {
       { email, link, userId: user.id },
       { transaction }
     );
-    await sendEmailVerificationEmail({ email, fullName, link });
+    await sendEmailVerificationEmail({ email, fullName: trimmedFullName, link });
     await transaction.commit();
     return success("Email sent");
   } catch (err) {
@@ -180,16 +272,40 @@ export const profile = async (event) => {
 
 export const updateProfile = async (event) => {
   const body = await readBody(event);
-  const { id, phone, address, dob, gender, nextOfKin, nextOfKinContact } =
-    JSON.parse(body);
+  const {
+    id,
+    phone,
+    address,
+    dob,
+    gender,
+    nextOfKin,
+    fullName,
+    nextOfKinContact,
+    roleId,
+  } = JSON.parse(body);
   try {
     const user = await User.findByPk(id);
-    user.phone = phone || user.phone;
-    user.address = address || user.address;
-    user.dob = dob || user.dob;
-    user.gender = gender || user.gender;
-    user.nextOfKin = nextOfKin || user.nextOfKin;
-    user.nextOfKinContact = nextOfKinContact || user.nextOfKinContact;
+    
+    // Validate fullName if provided
+    if (fullName !== undefined) {
+      const trimmedFullName = fullName ? fullName.trim() : '';
+      if (trimmedFullName.length === 0) {
+        return error(400, "Full name cannot be empty or contain only spaces");
+      }
+      user.fullName = trimmedFullName;
+    } else {
+      user.fullName = user.fullName;
+    }
+    
+    user.phone = phone !== undefined ? phone : user.phone;
+    user.address = address !== undefined ? address : user.address;
+    user.dob = dob !== undefined ? dob : user.dob;
+    user.gender = gender !== undefined ? gender : user.gender;
+    user.nextOfKin = nextOfKin !== undefined ? nextOfKin : user.nextOfKin;
+    user.nextOfKinContact = nextOfKinContact !== undefined ? nextOfKinContact : user.nextOfKinContact;
+    if (roleId !== undefined) {
+      user.roleId = roleId;
+    }
     await user.save();
     return success("saved");
   } catch (err) {
@@ -251,17 +367,33 @@ export const updateBankDetails = async (event) => {
 
 export const forgetPasswordRequest = async (event) => {
   const body = await readBody(event);
-  const { email } = JSON.parse(body);
+  const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+  const { email } = parsed;
+  
+  if (!email) return error(403, "Email required");
+  
   try {
-    if (!email) return error(403, "Email required");
     const user = await User.findOne({ where: { email } });
-    if (!user) error(403, "User not found");
+    if (!user) {
+      throw createError({
+        statusCode: 403,
+        statusMessage: "User not found",
+        data: {
+          code: 1,
+          success: false,
+          message: "User not found"
+        }
+      });
+    }
     const otp = generateOTP();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
     await Verification.upsert({ email, otp, expiresAt });
     await sendOtpForPasswordReset({ email, otp, name: user.fullName });
     return success("OTP sent");
   } catch (err) {
+    if (err.statusCode) {
+      throw err; // Re-throw if it's already a proper error
+    }
     return error(500, err);
   }
 };
@@ -307,7 +439,8 @@ export const updatePassword = async (event) => {
 };
 
 export const switchOrgnanisation = async (event) => {
-  const { orgId } = await readBody(event);
+  const body = await readBody(event);
+  const { orgId } = JSON.parse(body);
   const user = event.context.user;
   try {
     const record = await UserOrganisation.findOne({
@@ -318,6 +451,8 @@ export const switchOrgnanisation = async (event) => {
       { userId: user.userId, roleId: user.roleId, orgId },
       config.JWT_SECRET
     );
+
+    setCookie(event, "accessToken", newToken, { maxAge: 31536000 });
     return success(newToken);
   } catch (err) {
     return error(500, err);
@@ -332,10 +467,26 @@ export const verifyEmail = async (event) => {
       where: { id: verification.userId, email: verification.email },
     });
     if (user) {
+      // If already verified (either user or verification record), return success
+      if (verification.verified || user.isEmailVerified) {
+        return success("Email already verified");
+      }
+      
+      // Verify the email
       user.isEmailVerified = true;
       await user.save();
-      await EmailVerification.destroy({ where: { link } });
-      const tasks = await Task.findAll({ limit: 100 });
+      
+      // Mark verification as verified instead of deleting
+      verification.verified = true;
+      await verification.save();
+      
+      const tasks = await Task.findAll({
+        limit: 100,
+        where: {
+          categoryId: [3,4,5,10,11,12],
+          isSystemTask: true
+        },
+      });
       const userOrg = await UserOrganisation.findAll({
         where: { userId: user.id },
       });
@@ -359,6 +510,7 @@ export const verifyEmail = async (event) => {
         }));
         await UserTask.bulkCreate(userTasks);
         await assignDefaultHRDocsToUser(user.id);
+        await portalReadyTrainingInvite(user);
       }
       return success("Email Verified");
     } else {
@@ -495,8 +647,15 @@ export const acceptInvitation = async (event) => {
   const body = await readBody(event);
   const { inviteToken, password, fullName } = JSON.parse(body);
   try {
-    if (!inviteToken || !password || !fullName) {
+    // Trim and validate fullName
+    const trimmedFullName = fullName ? fullName.trim() : '';
+    if (!inviteToken || !password || !trimmedFullName) {
       return error(400, "Missing required fields");
+    }
+    
+    // Additional validation for fullName
+    if (trimmedFullName.length === 0) {
+      return error(400, "Full name cannot be empty or contain only spaces");
     }
     const user = await User.findOne({ where: { inviteToken } });
     if (!user) {
@@ -513,14 +672,16 @@ export const acceptInvitation = async (event) => {
     });
     const hashedPassword = await bcrypt.hash(password, 10);
     user.password = hashedPassword;
-    user.fullName = fullName;
+    user.fullName = trimmedFullName;
     user.profileCompletion = 1;
     user.isEmailVerified = true;
     user.status = "Active";
     await user.save();
+    // Removed dummy tasks assignment for invited members
     await assignDefaultTasksToUser(user, userOrg.organisationId);
     await assignDefaultHRDocsToUser(user.id);
-    await sendOnBoardingMail(user);
+    await accountCreationNotification(user);
+    await portalReadyTrainingInvite(user);
     const token = jwt.sign(
       { userId: user.id, orgId: userOrg.organisationId, roleId: user.roleId },
       config.JWT_SECRET
@@ -555,8 +716,8 @@ const assignDefaultTasksToUser = async (user, organisationId) => {
   const userId = user.id;
   try {
     const tasks = await Task.findAll({
-      where: { roleId },
-      limit: 5,
+      where: { roleId, isSystemTask: true },
+      limit: 15,
     });
     if (!tasks.length) return;
     const [defaultStatus, defaultPriority] = await Promise.all([
@@ -663,6 +824,29 @@ export const addUserHrDoc = async (event) => {
     userDoc.uploadedDate = new Date();
     userDoc.status = "Completed";
     await userDoc.save();
+    await UserPointsHistory.create({
+      userId,
+      rewardPointId: 7,
+      points: 50,
+      description: name,
+    });
+    const userPoints = await UserPoint.findOne({
+      where: { userId },
+    });
+    if (!userPoints) {
+      await UserPoint.create({
+        userId,
+        balance: 50,
+        totalPointsRewarded: 50,
+        redeemed: 0,
+      });
+    }
+    if (userPoints) {
+      userPoints.balance += 50;
+      userPoints.totalPointsRewarded += 50;
+      await userPoints.save();
+    }
+    // Notification
     return success("Added");
   } catch (err) {
     return error(500, err.message);
@@ -671,7 +855,7 @@ export const addUserHrDoc = async (event) => {
 
 export const removeUserDoc = async (event) => {
   const body = await readBody(event);
-  const { id } = body;
+  const { id } = JSON.parse(body);
   try {
     const userDoc = await UserHrDocument.findByPk(id);
     if (!userDoc) throw createError({ message: "Document not found for user" });

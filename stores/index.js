@@ -12,6 +12,7 @@ export const useMainStore = defineStore("mainStore", {
     locale: "en",
     roles: [],
     isLoading: false,
+    loginSkipSplash: false,
     snackbar: {
       title: "",
       subtitle: "",
@@ -59,16 +60,16 @@ export const useMainStore = defineStore("mainStore", {
           title: "Flossly docs",
           imgPath: flosslyDocs,
           value: "flosllyDocs",
-          to: "/documents",
-          children: [
-            {
-              title: "My Docs",
-              value: "mydocs",
-              imgPath: flosslyDocs,
-              to: "/documents/mydocs",
-            },
+          to: "/documents/mydocs",
+          // children: [
+          //   {
+          //     title: "My Docs",
+          //     value: "mydocs",
+          //     imgPath: flosslyDocs,
+          //     to: "/documents/mydocs",
+          //   },
         
-          ],
+          // ],
         },
         {
           title: "Team floss",
@@ -88,35 +89,35 @@ export const useMainStore = defineStore("mainStore", {
               imgPath: teamIcon,
               to: "/teams/holiday",
             },
-            {
-              title: "Payroll",
-              value: "payroll",
-              imgPath: teamIcon,
-              to: "/teams/payroll",
-            },
-            {
-              title: "Invoice",
-              value: "invoice",
-              imgPath: teamIcon,
-              to: "/teams/invoice",
-            }, 
+            // {
+            //   title: "Payroll",
+            //   value: "payroll",
+            //   imgPath: teamIcon,
+            //   to: "/teams/payroll",
+            // },
+            // {
+            //   title: "Invoice",
+            //   value: "invoice",
+            //   imgPath: teamIcon,
+            //   to: "/teams/invoice",
+            // }, 
         
           ],
         },
-        {
-          title: "Floss Academy",
-          imgPath: academyIcon,
-          value: "flossAcademy",
-          to:"/academy",
-          children: [
-            {
-              title: "My Courses",
-              value: "myCourses",
-              imgPath: academyIcon,
-              to: "/academy/mycourses",
-            },
-          ],
-        },
+        // {
+        //   title: "Floss Academy",
+        //   imgPath: academyIcon,
+        //   value: "flossAcademy",
+        //   to:"/academy",
+        //   children: [
+        //     {
+        //       title: "My Courses",
+        //       value: "myCourses",
+        //       imgPath: academyIcon,
+        //       to: "/academy/mycourses",
+        //     },
+        //   ],
+        // },
         {
           title: "CRM",
           imgPath: crmIcon,
@@ -129,7 +130,14 @@ export const useMainStore = defineStore("mainStore", {
           imgPath: tasksIcon,
           value: "flosslyDiary",
           to:"/diary",
-          children: [],
+          children: [
+            {
+              title: "Calendar",
+              value: "diaryCalendar",
+              imgPath: tasksIcon,
+              to: "/diary/calendar",
+            },
+          ],
         },
         // {
         //   title: "Staff",
@@ -167,6 +175,12 @@ export const useMainStore = defineStore("mainStore", {
     getuserOptions() {
       return [
         {
+          title: "DashBoard",
+          imgPath: dashBoard,
+          value: "dashBoard",
+          to: "/",
+        },
+        {
           title: "My Tasks",
           value: "myTasks",
           imgPath: tasksIcon,
@@ -176,17 +190,43 @@ export const useMainStore = defineStore("mainStore", {
           title: "Flossly docs",
           imgPath: dashBoard,
           value: "flosllyDocs",
-          to: "/documents",
-          children: [
-            {
-              title: "My Docs",
-              value: "mydocs",
-              imgPath: flosslyDocs,
-              to: "/documents/mydocs",
-            },
+          to: "/documents/mydocs",
+          // children: [
+          //   {
+          //     title: "My Docs",
+          //     value: "mydocs",
+          //     imgPath: flosslyDocs,
+          //     to: "/documents/mydocs",
+          //   },
         
-          ],
+          // ],
         },
+        {
+          title: "Rota",
+          value: "rotaManagement",
+          imgPath: teamIcon,
+          to: "/teams/rota",
+        },
+        {
+          title: "Holiday Tracker",
+          value: "holidayTracker",
+          imgPath: teamIcon,
+          to: "/teams/holiday",
+        },
+        // {
+        //   title: "Floss Academy",
+        //   imgPath: academyIcon,
+        //   value: "flossAcademy",
+        //   to:"/academy",
+        //   children: [
+        //     {
+        //       title: "My Courses",
+        //       value: "myCourses",
+        //       imgPath: academyIcon,
+        //       to: "/academy/mycourses",
+        //     },
+        //   ],
+        // },
       ];
     },
     getTeamTaskTableHeaders() {
@@ -194,6 +234,12 @@ export const useMainStore = defineStore("mainStore", {
         {
           key: "title",
           title: "Task",
+          sortable: true,
+          width: 200,
+        },
+        {
+          key: "status",
+          title: "Status",
           sortable: true,
           width: 200,
         },
@@ -315,6 +361,9 @@ export const useMainStore = defineStore("mainStore", {
   },
 
   actions: {
+    setLoginSkipSplash(value) {
+      this.loginSkipSplash = !!value;
+    },
     getRoles() {
       return new Promise((resolve, reject) => {
         this.isLoading = true;

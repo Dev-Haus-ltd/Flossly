@@ -4,7 +4,7 @@
     <CommonLoader />
     <Snackbar />
     <ClientOnly>
-    <div class="floating-buttons" v-if="loggedIn">
+    <div class="floating-buttons" v-if="showFloatingButtons">
       <FloatingButtonsQuickActions
         @create-task="handleCreateTask"
         @add-staff="handleAddStaff"
@@ -24,6 +24,7 @@
     <TeamFlossSideBarAddNewstaff
     v-if="loggedIn"
       v-model="addStaffDrawer"
+      :rolesList="rolesList"
       @close="addStaffDrawer = false"
       @success="updateTeams"
     />
@@ -39,8 +40,15 @@ const loggedIn = computed(() => isAuthenticated());
 const bus = useBus();
 const drawerOpen = ref(false);
 const addStaffDrawer = ref(false);
+const mainStore = useMainStore();
+const rolesList = ref([]);
 
 const route = useRoute();
+
+const showFloatingButtons = computed(() => {
+  const excludedRoutes = ["onboarding", "login", "signup"];
+  return loggedIn.value && !excludedRoutes.includes(route.name);
+});
 
 const handleCreateTask = () => {
   addStaffDrawer.value = false;
@@ -70,7 +78,7 @@ const updateTeams = () => {
   }
 };
 const openChat = () => {
-  console.log("Open live chat modal here");
+  console.log("Open live chat modal");
 };
 
 const openCall = () => {
@@ -80,140 +88,50 @@ const openCall = () => {
 const openEmail = () => {
   console.log("Open email support dialog");
 };
+
+const getRoles = () => {
+  mainStore
+    .getRoles()
+    .then((res) => {
+      if (res.code === 0 && res.data) {
+        rolesList.value = res.data;
+      }
+    })
+    .catch((err) => {
+      return err;
+    });
+};
+
+onMounted(() => {
+  if (loggedIn.value) {
+    getRoles();
+  }
+});
+
+watch(loggedIn, (newVal) => {
+  if (newVal && rolesList.value.length === 0) {
+    getRoles();
+  }
+});
 </script>
 
 <style lang="scss">
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-Thin.ttf") format("truetype");
-  font-weight: 100;
-  font-style: normal;
-}
 
 @font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-ThinItalic.ttf") format("truetype");
-  font-weight: 100;
-  font-style: italic;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-ExtraLight.ttf") format("truetype");
-  font-weight: 200;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-ExtraLightItalic.ttf") format("truetype");
-  font-weight: 200;
-  font-style: italic;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-Light.ttf") format("truetype");
-  font-weight: 300;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-LightItalic.ttf") format("truetype");
-  font-weight: 300;
-  font-style: italic;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-Regular.ttf") format("truetype");
+  font-family: "Garnett";
+  src: url("@/assets/fonts/Garnett/Garnett-Regular.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
 }
 
 @font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-Italic.ttf") format("truetype");
+  font-family: "Inter";
+  src: url("@/assets/fonts/Inter/Inter_18pt-Regular.ttf") format("truetype");
   font-weight: 400;
-  font-style: italic;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-Medium.ttf") format("truetype");
-  font-weight: 500;
   font-style: normal;
 }
 
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-MediumItalic.ttf") format("truetype");
-  font-weight: 500;
-  font-style: italic;
-}
 
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-SemiBold.ttf") format("truetype");
-  font-weight: 600;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-SemiBoldItalic.ttf") format("truetype");
-  font-weight: 600;
-  font-style: italic;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-Bold.ttf") format("truetype");
-  font-weight: 700;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-BoldItalic.ttf") format("truetype");
-  font-weight: 700;
-  font-style: italic;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-ExtraBold.ttf") format("truetype");
-  font-weight: 800;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-ExtraBoldItalic.ttf") format("truetype");
-  font-weight: 800;
-  font-style: italic;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-Black.ttf") format("truetype");
-  font-weight: 900;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-BlackItalic.ttf") format("truetype");
-  font-weight: 900;
-  font-style: italic;
-}
-@font-face {
-  font-family: "Poppins";
-  src: url("@/assets/fonts/Poppins-Thin.ttf") format("truetype");
-  font-weight: 100;
-  font-style: normal;
-}
 @import "@/node_modules/@syncfusion/ej2-base/styles/material.css";
 @import "@/node_modules/@syncfusion/ej2-buttons/styles/material.css";
 @import "@/node_modules/@syncfusion/ej2-inputs/styles/material.css";
@@ -223,12 +141,13 @@ const openEmail = () => {
 @import "@/node_modules/@syncfusion/ej2-splitbuttons/styles/material.css";
 @import "@/node_modules/@syncfusion/ej2-dropdowns/styles/material.css";
 @import "@/node_modules/@syncfusion/ej2-vue-documenteditor/styles/material.css";
+
 .floating-buttons {
   position: fixed;
   bottom: 20px;
   right: 20px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 2px;
   z-index: 1000;
 }
@@ -237,7 +156,7 @@ const openEmail = () => {
   text-transform: none;
 }
 .bck-org {
-  background-color: #f5f7f8;
+  background-color: white;
 }
 .cust-field .v-field {
   border-radius: 10px !important;
@@ -270,13 +189,23 @@ const openEmail = () => {
       border-bottom: 1px solid lightgray;
     }
   }
+  .v-calendar-weekly__day {
+    min-height: 100px !important;
+    .v-event, .v-event-timed {
+      margin: auto !important;
+      margin-bottom: 0px !important;
+      height: auto !important;
+    }
+
+} 
+}
+.user-dashboard-calender {
   .v-calendar-month__days {
   .v-calendar-month__day {
-    // min-height: 100px !important;
+    min-height: 70px !important;
 }
 } 
 }
-
 
 @media (min-width: 1400px) and (max-width: 1610px) {
   .v-container {
