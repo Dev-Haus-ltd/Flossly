@@ -318,59 +318,6 @@ export const updateTask = async (event) => {
       if (dueDate !== undefined) userTask.dueDate = dueDate ? new Date(dueDate) : null;
       if (isArchieved !== undefined) userTask.isArchieved = isArchieved;
       await userTask.save();
-<<<<<<< Updated upstream
-=======
-      
-      // Update Task details if provided
-      if (taskDetails && taskId) {
-        const task = await Task.findByPk(taskId);
-        if (task) {
-          if (taskDetails.title !== undefined) task.title = taskDetails.title;
-          if (taskDetails.description !== undefined) task.description = taskDetails.description;
-          if (taskDetails.categoryId !== undefined) task.categoryId = taskDetails.categoryId;
-          if (taskDetails.roleId !== undefined) task.roleId = taskDetails.roleId;
-          if (taskDetails.defaultFrequency !== undefined) task.defaultFrequency = taskDetails.defaultFrequency;
-          await task.save();
-        }
-      }
-      if (
-        statusId &&
-        orgStatuses.find((x) => x.id === statusId)?.key === "completed"
-      ) {
-        const user = await User.findOne({ where: { id: loggedUser.userId } });
-        await taskCompletedNotification({
-          fullName: user.fullName,
-          task: userTask.title,
-        });
-        if (
-          priorityId &&
-          orgPriorities.find((x) => x.id === priorityId)?.key === "critical"
-        ) {
-          await UserPointsHistory.create({
-            userId: loggedUser.userId,
-            rewardPointId: 4,
-            points: 10,
-            description: userTask.title,
-          });
-          const userPoints = await UserPoint.findOne({
-            where: { userId: loggedUser.userId },
-          });
-          if (!userPoints) {
-            await UserPoint.create({
-              userId: loggedUser.userId,
-              balance: 10,
-              totalPointsRewarded: 10,
-              redeemed: 0,
-            });
-          }
-          if (userPoints) {
-            userPoints.balance += 10;
-            userPoints.totalPointsRewarded += 10;
-            await userPoints.save();
-          }
-        }
-      }
->>>>>>> Stashed changes
     } else if (!id && taskId) {
       if (assignedUsers && assignedUsers.length) {
         assignedUsers.forEach(async (el) => {
