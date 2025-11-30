@@ -684,7 +684,6 @@ const handleExportCSV = () => {
     "Frequency",
     "Due Date",
     "Assigned Users",
-    "Comments",
     "Created At",
     "Updated At",
   ];
@@ -715,7 +714,6 @@ const handleExportCSV = () => {
       escapeCSV(task.frequency || ""),
       escapeCSV(task.dueDate ? new Date(task.dueDate).toLocaleDateString() : ""),
       escapeCSV(assignedUsers),
-      escapeCSV(task.comments || ""),
       escapeCSV(task.createdAt ? new Date(task.createdAt).toLocaleDateString() : ""),
       escapeCSV(task.updatedAt ? new Date(task.updatedAt).toLocaleDateString() : ""),
     ].join(",");

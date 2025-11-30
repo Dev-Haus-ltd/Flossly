@@ -267,12 +267,6 @@ export const useMainStore = defineStore("mainStore", {
           sortable: true,
           width: 200,
         },
-        {
-          key: "comments",
-          title: "Comments",
-          sortable: true,
-          width: 200,
-        },
       ];
     },
     getTeamTaskAllHeaders() {
@@ -305,12 +299,6 @@ export const useMainStore = defineStore("mainStore", {
         {
           key: "documentLink",
           title: "Template Link",
-          sortable: true,
-          width: 200,
-        },
-        {
-          key: "comments",
-          title: "Comments",
           sortable: true,
           width: 200,
         },
