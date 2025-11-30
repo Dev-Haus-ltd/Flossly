@@ -50,6 +50,10 @@ export const useUserStore = defineStore("userStore", {
           });
       });
     },
+    resetUsers() {
+      this.users = [];
+      this.usersQueryKey = null;
+    },
     getUserOrgWise() {
       this.isLoading = true;
       return new Promise((resolve, reject) => {

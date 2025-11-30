@@ -1,5 +1,6 @@
 <script setup>
 const { setUser } = useUser();
+const userStore = useUserStore()
 definePageMeta({
   layout: "default",
 });
@@ -7,6 +8,10 @@ const token = useCookie("accessToken");
 const router = useRouter();
 
 token.value = null;
+onMounted(() => {
+
+userStore.resetUsers()
+})
 let savedRoute = "/login";
 if (import.meta.client) {
   savedRoute = localStorage.getItem("route");
