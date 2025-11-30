@@ -222,7 +222,7 @@
                   </v-col>
                   <v-col cols="12" md="6">
                     <span class="value-text">{{
-                      taskDetails.dueDate ? taskDetails.dueDate : "No due date"
+                      taskDetails.dueDate ? formatDateDDMMYYYY(taskDetails.dueDate) : "No due date"
                     }}</span>
                   </v-col>
 
@@ -488,7 +488,7 @@
 </template>
 
 <script setup>
-import { parsedDate } from "@/lib/dateFormatter";
+import { parsedDate, formatDateDDMMYYYY } from "@/lib/dateFormatter";
 import Avatar from "~/components/Common/avatar.vue";
 import { useBus } from "@/composables/useBus";
 

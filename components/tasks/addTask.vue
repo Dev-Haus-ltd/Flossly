@@ -350,8 +350,8 @@ const requiredRule = [(v) => !!v || "This field is required"];
 const titleMaxLength = 150;
 const titleRules = [
   (v) => !!v || "This field is required",
-  (v) => (v && v.trim().length > 0) || "Task title cannot be only spaces",
-  (v) => (v && v.length <= titleMaxLength) || `Title must be ${titleMaxLength} characters or less`,
+  (v) => (v && v.trim().length > 0) || "Task title cannot be empty or only spaces",
+  (v) => (v && v.trim().length <= titleMaxLength) || `Title must be ${titleMaxLength} characters or less`,
 ];
 
 const form = ref({
@@ -639,6 +639,11 @@ const onDateSelected = (val) => {
 const onSubmit = async () => {
   const formValidation = await formRef.value.validate();
   if (formValidation.valid) {
+    // Trim the title to remove leading/trailing spaces
+    if (form.value.title) {
+      form.value.title = form.value.title.trim();
+    }
+    
     const filteredChecklist = form.value.checklist.filter((x) => x.question);
     const uniqueUserIds = [...new Set((form.value.userIds || []).filter(Boolean))];
     const payload = {
