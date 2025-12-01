@@ -2255,7 +2255,7 @@ export const teamTasksCountByCategory = async (event) => {
 export const getUserTasksStatusWise = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);
-  const { categoryId, frequency, priority } = JSON.parse(body);
+  const { categoryId, frequency, priority, limit } = JSON.parse(body);
 
   try {
     await autoArchiveCompletedTasks(Number(loggedUser.orgId));
@@ -2307,6 +2307,7 @@ export const getUserTasksStatusWise = async (event) => {
     // --- Fetch tasks ---
     const userTasks = await UserTask.findAll({
       where,
+      ...(limit && Number(limit) > 0 ? { limit: Number(limit) } : {}),
       include: [
         {
           model: Task,
