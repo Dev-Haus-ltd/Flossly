@@ -574,29 +574,30 @@
 
     <!-- Add Task Panel - Only render after page loads -->
     <ClientOnly>
-      <template v-if="categories && categories.length > 0 && priorities && priorities.length > 0 && users && users.length > 0">
-        <TasksAddTask
-          v-model="drawerOpen"
-          :preSelectedStatus="selectedStatusForNewTask"
-          :preSelectedCategory="selectedCategoryForNewTask"
-          @close="drawerOpen = false"
-          @success="updateTasks"
-        />
-        <TasksTaskPoolDialog
-          :model-value="taskPoolDialog"
-          @close="taskPoolDialog = false"
-          @onUpdate="updateTasks"
-        />
-        <TasksBulkTaskUploadDialog
-          v-model="bulkTaskUploadDialog"
-          :categories="categories"
-          :priorities="priorities"
-          :roles="rolesList"
-          :users="users"
-          @close="bulkTaskUploadDialog = false"
-          @onUpdate="updateTasks"
-        />
-      </template>
+      <TasksAddTask
+        v-model="drawerOpen"
+        :preSelectedStatus="selectedStatusForNewTask"
+        :preSelectedCategory="selectedCategoryForNewTask"
+        :categories="categories || []"
+        :priorities="priorities || []"
+        :users="users || []"
+        @close="drawerOpen = false"
+        @success="updateTasks"
+      />
+      <TasksTaskPoolDialog
+        :model-value="taskPoolDialog"
+        @close="taskPoolDialog = false"
+        @onUpdate="updateTasks"
+      />
+      <TasksBulkTaskUploadDialog
+        v-model="bulkTaskUploadDialog"
+        :categories="categories || []"
+        :priorities="priorities || []"
+        :roles="rolesList || []"
+        :users="users || []"
+        @close="bulkTaskUploadDialog = false"
+        @onUpdate="updateTasks"
+      />
     </ClientOnly>
   </div>
 </template>
@@ -841,6 +842,8 @@ watch(
   () => taskDetails,
   (newVal) => {
     selectedItem.value = [];
+    selectedTasks.value = []; // Clear selections when task details change
+    emit("updateSelectedRowItems", []); // Notify parent to clear selection UI
     tasksForCalender.value = newVal.flatMap((group) =>
       group.tasks.map((task) => ({
         id: task.id,
@@ -878,6 +881,8 @@ const getTaskUsers = (task) => {
 const updateTasks = () => {
   drawerOpen.value = false;
   taskPoolDialog.value = false;
+  selectedTasks.value = []; // Clear selections when tasks are updated
+  emit("updateSelectedRowItems", []); // Notify parent to clear selection UI
   emit("onUpdate");
 };
 // sub tasks
@@ -1411,7 +1416,8 @@ function onFiltersUpdated(newFilters) {
 }
 
 const onSelectionChange = (newSelected) => {
-  emit("updateSelectedRowItems", selectedTasks.value);
+  selectedTasks.value = newSelected;
+  emit("updateSelectedRowItems", newSelected);
 };
 
 const openAddTaskDialogForStatus = (status, categoryId) => {
