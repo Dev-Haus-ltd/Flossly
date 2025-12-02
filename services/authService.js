@@ -276,4 +276,48 @@ export default {
         });
     });
   },
+  acceptOrganisationInvitation(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/acceptOrganisationInvitation", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  declineOrganisationInvitation(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/declineOrganisationInvitation", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  verifyInvitationToken(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/verifyInvitationToken", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  resendOrganisationInvitation(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/resendOrganisationInvitation", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
 };

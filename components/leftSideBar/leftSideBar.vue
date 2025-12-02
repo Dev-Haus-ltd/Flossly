@@ -229,9 +229,15 @@ onMounted(() => {
     // Try to find the current organization
     let foundOrg = null;
     
+    // Filter to only active organizations
+    const activeOrgs = storedUser.userOrganisations.filter(org => {
+      const isActive = org.isActive !== undefined ? org.isActive : true; // Default to true for backward compatibility
+      return isActive;
+    });
+    
     // First try to find by organisationId
     if (storedUser.currentLoggedInOrgId) {
-      const orgWrapper = storedUser.userOrganisations.find(
+      const orgWrapper = activeOrgs.find(
         (org) => org.organisationId === storedUser.currentLoggedInOrgId
       );
       if (orgWrapper) {
@@ -241,7 +247,7 @@ onMounted(() => {
     
     // If not found, try to find by id
     if (!foundOrg && storedUser.currentLoggedInOrgId) {
-      const orgWrapper = storedUser.userOrganisations.find(
+      const orgWrapper = activeOrgs.find(
         (org) => getOrgData(org)?.id === storedUser.currentLoggedInOrgId
       );
       if (orgWrapper) {
@@ -249,9 +255,9 @@ onMounted(() => {
       }
     }
     
-    // If still not found, use the first available organization
-    if (!foundOrg) {
-      const firstOrg = storedUser.userOrganisations[0];
+    // If still not found, use the first available active organization
+    if (!foundOrg && activeOrgs.length > 0) {
+      const firstOrg = activeOrgs[0];
       foundOrg = getOrgData(firstOrg);
     }
     
@@ -334,12 +340,18 @@ const currentOrg = ref({});
 // Watch for changes in user data and update currentOrg accordingly
 watch(() => user.value, (newUser) => {
   if (newUser?.userOrganisations?.length) {
+    // Filter to only active organizations
+    const activeOrgs = newUser.userOrganisations.filter(org => {
+      const isActive = org.isActive !== undefined ? org.isActive : true; // Default to true for backward compatibility
+      return isActive;
+    });
+    
     // Try to find the current organization
     let foundOrg = null;
     
     // First try to find by organisationId
     if (newUser.currentLoggedInOrgId) {
-      const orgWrapper = newUser.userOrganisations.find(
+      const orgWrapper = activeOrgs.find(
         (org) => org.organisationId === newUser.currentLoggedInOrgId
       );
       if (orgWrapper) {
@@ -349,7 +361,7 @@ watch(() => user.value, (newUser) => {
     
     // If not found, try to find by id
     if (!foundOrg && newUser.currentLoggedInOrgId) {
-      const orgWrapper = newUser.userOrganisations.find(
+      const orgWrapper = activeOrgs.find(
         (org) => getOrgData(org)?.id === newUser.currentLoggedInOrgId
       );
       if (orgWrapper) {
@@ -357,9 +369,9 @@ watch(() => user.value, (newUser) => {
       }
     }
     
-    // If still not found, use the first available organization
-    if (!foundOrg) {
-      const firstOrg = newUser.userOrganisations[0];
+    // If still not found, use the first available active organization
+    if (!foundOrg && activeOrgs.length > 0) {
+      const firstOrg = activeOrgs[0];
       foundOrg = getOrgData(firstOrg);
     }
     

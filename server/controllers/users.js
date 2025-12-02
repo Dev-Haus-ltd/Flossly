@@ -9,7 +9,7 @@ import {
   UserOrganisation,
   UserPreference,
 } from "../models";
-
+import { Op } from "sequelize";
 import DB from "../utils/db";
 import fs from "fs";
 import path from "path";
@@ -25,8 +25,8 @@ export const usersList = async (event) => {
   if (roleId) {
     where.roleId = roleId;
   }
-  // Only return Active users (exclude Invited, Disabled, Expired)
-  where.status = "Active";
+  // Include both Active and Invited users (exclude Disabled, Expired)
+  where.status = { [Op.in]: ["Active", "Invited"] };
   try {
     const userOrganisations = await UserOrganisation.findAll({
       where: { organisationId: currentOrg },
@@ -57,7 +57,18 @@ export const usersList = async (event) => {
         },
       ],
     });
-    const users = userOrganisations.map((uo) => uo.user);
+    // Map users and add computed status based on isActive
+    const users = userOrganisations.map((uo) => {
+      const user = uo.user.toJSON();
+      // If user is not active in this organization and their account status is Active,
+      // show status as "Invited" (they're an existing user with pending invitation)
+      if (!uo.isActive && user.status === "Active") {
+        user.status = "Invited";
+      }
+      // If user status is already "Invited" (new user), keep it as "Invited"
+      // regardless of isActive (they haven't set up their account yet)
+      return user;
+    });
     return success(users);
   } catch (err) {
     return error(500, err);
@@ -68,7 +79,10 @@ export const userAcrossOrgs = async (event) => {
   const loggedUser = event.context.user;
   try {
     const userOrganisations = await UserOrganisation.findAll({
-      where: { userId: loggedUser.userId },
+      where: { 
+        userId: loggedUser.userId,
+        isActive: true, // Only show active organizations
+      },
       include: [
         {
           model: Organisation,
@@ -112,20 +126,52 @@ export const userAcrossOrgs = async (event) => {
       ],
     });
     const formattedData = userOrganisations.map((orgItem) => {
-      const { userOrganisations, ...orgData } = orgItem.organisation.get({
-        plain: true,
-      });
+      try {
+        // Check if organisation exists
+        if (!orgItem.organisation) {
+          return null;
+        }
+
+        // Convert to plain object using toJSON for safer access
+        const orgItemPlain = orgItem.toJSON ? orgItem.toJSON() : orgItem;
+        const orgData = orgItemPlain.organisation;
+        
+        if (!orgData) {
+          return null;
+        }
+
+        const { userOrganisations: orgUserOrgs, ...orgInfo } = orgData;
 
       return {
-        organisation: orgData,
-        orgUsers: userOrganisations.map((uo) => ({
-          ...uo.user, // user details
-        })),
+        organisation: orgInfo,
+        orgUsers: (orgUserOrgs || []).map((uo) => {
+          if (!uo || !uo.user) {
+            return null;
+          }
+          const user = uo.user;
+          // Get isActive from the nested UserOrganisation instance (uo)
+          // uo might be a Sequelize instance or plain object
+          const isActive = uo.isActive !== undefined ? uo.isActive : 
+                          (uo.get ? uo.get('isActive') : true);
+          // If user is not active in this organization and their account status is Active,
+          // show status as "Invited" (they're an existing user with pending invitation)
+          if (!isActive && user.status === "Active") {
+            user.status = "Invited";
+          }
+          // If user status is already "Invited" (new user), keep it as "Invited"
+          return user;
+        }).filter(Boolean), // Remove any null entries
       };
-    });
+      } catch (err) {
+        console.error('Error processing organisation item:', err);
+        return null;
+      }
+    }).filter(Boolean); // Remove any null entries
+    
     return success(formattedData);
   } catch (err) {
-    return error(500, err);
+    console.error('Error in userAcrossOrgs:', err);
+    return error(500, err.message || err);
   }
 };
 export const updateUserPreferences = async (event) => {

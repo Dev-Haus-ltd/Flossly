@@ -87,7 +87,8 @@ import Pricing from "./pricing.vue";
 
 const orgStore = useOrgStore();
 const authStore = useAuthStore();
-const mainStore = useMainStore(); 
+const mainStore = useMainStore();
+const userStore = useUserStore();
 const router = useRouter();
 
 // Define emit to send current step to parent
@@ -204,6 +205,8 @@ const nextStep = async () => {
       .inviteMembers(data)
       .then((res) => {
         if (res.code === 0) {
+          // Reset the user cache to ensure new invited users will be fetched when they become active
+          userStore.resetUsers();
           step.value++;
         } else {
           mainStore.setSnackbar({
