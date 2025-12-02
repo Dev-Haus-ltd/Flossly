@@ -30,7 +30,7 @@
         <!-- Search Field -->
         <div style="width: 150px">
           <v-text-field
-            v-model="search"
+            v-model="searchInput"
             placeholder="Search"
             append-inner-icon="mdi-magnify"
             variant="solo"
@@ -653,7 +653,6 @@ const fixedColumnOrder = [
   "assignedUser.fullName",
   "createdAt",
   "dueDate",
-  "comments",
   "documentLink",
   "assignedBy",
   "attachments",
@@ -711,7 +710,20 @@ const hideHandles = (key, i) => {
     handle.style.display = "none";
   }
 };
+// Debounced search: keeps table responsive with larger datasets
+const searchInput = ref("");
 const search = ref("");
+let searchTimeout = null;
+
+watch(
+  searchInput,
+  (val) => {
+    if (searchTimeout) clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      search.value = val;
+    }, 250);
+  }
+);
 const expanded = ref([]);
 const focusedField = ref({});
 const originalFieldValues = ref({}); // Store original values for Escape key functionality
@@ -1014,7 +1026,6 @@ const updateTaskInfo = (task) => {
     id: task.id,
     taskId: task.taskId || task.taskDetails?.id,
     title: task.title,
-    comments: task.comments,
     statusId: task.statusId,
     priorityId: task.priorityId,
     frequency: task.frequency,

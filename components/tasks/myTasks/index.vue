@@ -302,6 +302,8 @@ const handleCategorySuccess = () => {
 
 const applyFilters = (filters) => {
   filters.categoryId = currentTab.value;
+  // Hard cap to avoid over-fetching – keeps UI snappy for large orgs
+  filters.limit = 100;
   taskStore
     .tasksGroupedByStatus(filters)
     .then((res) => {
@@ -391,7 +393,7 @@ function sortByCustomStatus(arr) {
 }
 const getMyTasks = (categoryId) => {
   taskStore
-    .tasksGroupedByStatus({ categoryId })
+    .tasksGroupedByStatus({ categoryId, limit: 100 })
     .then((res) => {
       if (res.code === 0) {
         taskDetails.value = sortByCustomStatus(res.data);
@@ -589,7 +591,6 @@ const handleExportCSV = () => {
     "Frequency",
     "Due Date",
     "Assigned Users",
-    "Comments",
     "Created At",
     "Updated At",
   ];
@@ -620,7 +621,6 @@ const handleExportCSV = () => {
       escapeCSV(task.frequency || ""),
       escapeCSV(task.dueDate ? new Date(task.dueDate).toLocaleDateString() : ""),
       escapeCSV(assignedUsers),
-      escapeCSV(task.comments || ""),
       escapeCSV(task.createdAt ? new Date(task.createdAt).toLocaleDateString() : ""),
       escapeCSV(task.updatedAt ? new Date(task.updatedAt).toLocaleDateString() : ""),
     ].join(",");
