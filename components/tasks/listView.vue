@@ -574,7 +574,7 @@
 
     <!-- Add Task Panel - Only render after page loads -->
     <ClientOnly>
-      <template v-if="categories && categories.length > 0 && priorities && priorities.length > 0 && users && users.length > 0">
+      <template v-if="categories && categories.length > 0 && priorities && priorities.length > 0">
         <TasksAddTask
           v-model="drawerOpen"
           :preSelectedStatus="selectedStatusForNewTask"
