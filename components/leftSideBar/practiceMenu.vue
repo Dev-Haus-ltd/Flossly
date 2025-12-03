@@ -94,11 +94,12 @@ const validOrganizations = computed(() => {
     console.log(`Org ${index} has name:`, org?.organisation?.name);
   });
   
-  // Filter organizations that have valid data
+  // Filter organizations that have valid data and are active
   const valid = user.value.userOrganisations.filter(org => {
     const orgData = getOrgData(org);
-    const isValid = orgData !== null;
-    console.log('Filtering org:', org, 'orgData:', orgData, 'isValid:', isValid);
+    const isActive = org.isActive !== undefined ? org.isActive : true; // Default to true for backward compatibility
+    const isValid = orgData !== null && isActive;
+    console.log('Filtering org:', org, 'orgData:', orgData, 'isActive:', isActive, 'isValid:', isValid);
     return isValid;
   });
   

@@ -220,7 +220,8 @@ const defaultHeaders = [
     width: 210,
     sortable: true,
   },
-  { title: "+", key: "actions", width: 60, sortable: false },
+  { title: "Resend", key: "resend", width: 100, sortable: false },
+  { title: "+", key: "action", width: 100, sortable: false },
 ];
 
 // Load saved headers from localStorage or use defaults
@@ -229,9 +230,13 @@ const loadSavedHeaders = () => {
     const saved = localStorage.getItem('myStaffTableColumns');
     if (saved) {
       const parsed = JSON.parse(saved);
-      // Ensure actions column is always present
-      if (!parsed.find(h => h.key === 'actions')) {
-        parsed.push({ title: "+", key: "actions", width: 60, sortable: false });
+      // Ensure resend column is always present
+      if (!parsed.find(h => h.key === 'resend')) {
+        parsed.push({ title: "Resend", key: "resend", width: 100, sortable: false });
+      }
+      // Ensure + column is always present
+      if (!parsed.find(h => h.key === 'action')) {
+        parsed.push({ title: "+", key: "action", width: 100, sortable: false });
       }
       return parsed;
     }
@@ -257,6 +262,14 @@ const availableHeaders = ref([
 ]);
 
 const onUpdateHeaders = (updatedHeaders) => {
+  // Ensure resend column is always present
+  if (!updatedHeaders.find(h => h.key === 'resend')) {
+    updatedHeaders.push({ title: "Resend", key: "resend", width: 100, sortable: false });
+  }
+  // Ensure + column is always present
+  if (!updatedHeaders.find(h => h.key === 'action')) {
+    updatedHeaders.push({ title: "+", key: "action", width: 100, sortable: false });
+  }
   selectedHeaders.value = updatedHeaders;
   // Save to localStorage
   if (process.client) {

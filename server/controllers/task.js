@@ -1347,7 +1347,10 @@ export const teamTasksCounts = async (event) => {
       where: { organisationId },
     });
     const orgUsers = await UserOrganisation.findAll({
-      where: { organisationId: organisationId },
+      where: { 
+        organisationId: organisationId,
+        isActive: true, // Only show active organization members
+      },
       attributes: ["id"],
       include: {
         model: User,
@@ -1376,6 +1379,7 @@ export const teamTasksCounts = async (event) => {
         where: {
           userId: currentUserId,
           organisationId: organisationId,
+          isActive: true, // Only check active organization membership
         },
       });
 
