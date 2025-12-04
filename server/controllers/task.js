@@ -3,7 +3,7 @@ import formidable from "formidable";
 import fs from "fs";
 import path from "path";
 import { parse } from "csv-parse";
-import { readBody, createError } from "h3";
+import { readBody, createError, getQuery } from "h3";
 import { success, error } from "../utils/response";
 import DB from "../utils/db";
 import {
@@ -40,6 +40,19 @@ const ensureManagerOrOwner = (loggedUser) => {
   }
 };
 
+const parseJsonBody = async (event) => {
+  const body = await readBody(event);
+  if (!body) return {};
+  if (typeof body === "string") {
+    try {
+      return JSON.parse(body);
+    } catch (err) {
+      return {};
+    }
+  }
+  return body;
+};
+
 const autoArchiveCompletedTasks = async (organisationId, days = 5) => {
   if (!organisationId) return;
   try {
@@ -68,7 +81,7 @@ const autoArchiveCompletedTasks = async (organisationId, days = 5) => {
 
 export const listMyTasks = async (event) => {
   const loggedUser = event.context.user;
-  const body = await readBody(event);
+  const body = await parseJsonBody(event);
   const {
     statusId,
     priorityId,
@@ -77,7 +90,7 @@ export const listMyTasks = async (event) => {
     search,
     limit = 20,
     offset = 0,
-  } = JSON.parse(body);
+  } = body;
   try {
     await autoArchiveCompletedTasks(Number(loggedUser.orgId));
 
@@ -1499,10 +1512,24 @@ export const deleteUserTaskChecklist = async (event) => {
 };
 
 export const groupTeamTasksByTaskId = async (event) => {
-  const organisationId = event.context.user.orgId;
-  ensureManagerOrOwner(event.context.user);
-  const body = await readBody(event);
-  const { categoryId, frequency, priority, user } = JSON.parse(body);
+  const loggedUser = event.context.user;
+  const organisationId = loggedUser.orgId;
+  ensureManagerOrOwner(loggedUser);
+  const body = await parseJsonBody(event);
+  const {
+    categoryId,
+    frequency,
+    priority,
+    user,
+    page = 1,
+    pageSize = 10,
+    excludeSelf = true,
+    search,
+  } = body;
+
+  const currentPage = Math.max(Number(page) || 1, 1);
+  const perPage = Math.min(Math.max(Number(pageSize) || 10, 1), 100);
+  const offset = (currentPage - 1) * perPage;
 
   // If categoryId is provided, filter by category; otherwise get all categories
   let categoryIds = [];
@@ -1516,209 +1543,224 @@ export const groupTeamTasksByTaskId = async (event) => {
     });
     categoryIds = categories.map((c) => c.id);
     if (!categoryIds.length) {
-      return success([]);
+      return success({ page: currentPage, pageSize: perPage, total: 0, statuses: [] });
     }
   } else {
-    // If no categoryId provided, get all non-deleted categories
     const allCategories = await TaskCategory.findAll({
       where: { isDeleted: false },
       attributes: ["id"],
     });
     categoryIds = allCategories.map((c) => c.id);
     if (!categoryIds.length) {
-      return success([]);
+      return success({ page: currentPage, pageSize: perPage, total: 0, statuses: [] });
     }
   }
 
-  const where = { organisationId };
-  if (frequency) where["frequency"] = frequency;
-  if (priority) where["priorityId"] = priority;
-  if (user) where["userId"] = user;
+  const orgStatuses = await OrganisationStatus.findAll({
+    where: { organisationId },
+    attributes: ["id", "key", "name", "color"],
+    order: [["id", "ASC"]],
+  });
 
-  try {
-    const userTasks = await UserTask.findAll({
-      where,
-      include: [
-        {
-          model: Task,
-          attributes: [
-            "id",
-            "title",
-            "description",
-            "categoryId",
-            "roleId",
-            "defaultFrequency",
-          ],
-          as: "taskDetails",
-          ...(categoryIds.length > 0 && {
-            where: { categoryId: { [Op.in]: categoryIds } },
-            required: true,
-          }),
-          include: [
-            {
-              model: TaskCategory,
-              as: "category",
-              where: { isDeleted: false },
-              attributes: ["id", "name"],
-            },
-          ],
-        },
-        {
-          model: OrganisationPriority,
-          as: "priority",
-          attributes: ["id", "key", "name", "color"],
-        },
-        {
-          model: User,
-          attributes: ["id", "fullName", "email", "photo"],
-          as: "assignedUser",
-        },
-        {
-          model: OrganisationStatus,
-          attributes: ["id", "key", "name", "color"],
-          as: "status",
-        },
-      ],
-    });
+  const statusGroups = [];
+  const shouldExcludeSelf = !user && excludeSelf !== false;
 
-    // Separate archived and non-archived tasks
-    // Separate archived and non-archived tasks
-    const archivedTasks = [];
-    const nonArchivedTasks = [];
-
-    for (const ut of userTasks) {
-      if (ut.isArchieved) archivedTasks.push(ut);
-      else nonArchivedTasks.push(ut);
+  const buildAssignmentWhere = (archived = false, statusId = null) => {
+    const where = { organisationId, isArchieved: archived };
+    if (!archived && statusId) where.statusId = statusId;
+    if (frequency) where["frequency"] = frequency;
+    if (priority) where["priorityId"] = priority;
+    if (user) where["userId"] = user;
+    if (shouldExcludeSelf) {
+      if (where.userId) {
+        where[Op.and] = [{ userId: where.userId }, { userId: { [Op.ne]: loggedUser.userId } }];
+        delete where.userId;
+      } else {
+        where.userId = { [Op.ne]: loggedUser.userId };
+      }
     }
+    return where;
+  };
 
-    // Fetch ALL statuses for organisation
-    const orgStatuses = await OrganisationStatus.findAll({
-      where: { organisationId },
-      attributes: ["id", "key", "name", "color"],
-    });
+  const taskWhere = categoryIds.length
+    ? { categoryId: { [Op.in]: categoryIds } }
+    : {};
+  if (search) {
+    taskWhere[Op.or] = [
+      { title: { [Op.iLike]: `%${search}%` } },
+      { description: { [Op.iLike]: `%${search}%` } },
+    ];
+  }
 
-    // Prepare response object with ALL statuses (empty initially)
-    const response = {};
+  const taskCategoryInclude = {
+    model: TaskCategory,
+    as: "category",
+    where: { isDeleted: false },
+    attributes: ["id", "name"],
+  };
 
-    orgStatuses.forEach((st) => {
-      response[st.key] = {
-        status: st.key,
-        tasks: [],
+  const buildTasksResponse = (tasks) =>
+    tasks.map((task) => {
+      const assignments = task.userTasks || [];
+      const firstAssignment = assignments[0];
+
+      return {
+        taskId: task.id,
+        id: firstAssignment?.id || task.id,
+        title: firstAssignment?.title || task.title,
+        description: task.description,
+        frequency: firstAssignment?.frequency ?? task.defaultFrequency,
+        categoryId: task.categoryId,
+        category: task.category,
+        priorityId: firstAssignment?.priorityId,
+        statusId: firstAssignment?.statusId,
+        priority: firstAssignment?.priority,
+        status: firstAssignment?.status,
+        comments: firstAssignment?.comments,
+        dueDate: firstAssignment?.dueDate,
+        createdAt: firstAssignment?.createdAt || task.createdAt,
+        updatedAt: firstAssignment?.updatedAt || task.updatedAt,
+        taskDetails: task,
+        isArchieved: firstAssignment?.isArchieved || false,
+        assignedUsers: assignments
+          .map((assignment) => ({
+            id: assignment.assignedUser?.id,
+            fullName: assignment.assignedUser?.fullName,
+            email: assignment.assignedUser?.email,
+            photo: assignment.assignedUser?.photo,
+            status: assignment.status,
+            userTaskId: assignment.id,
+          }))
+          .filter((u) => u.id),
       };
     });
 
-    // Fill non-archived tasks into respective statuses
-    for (const ut of nonArchivedTasks) {
-      const statusKey = ut.status?.key || "unknown";
-
-      if (!response[statusKey]) {
-        response[statusKey] = { status: statusKey, tasks: [] };
-      }
-
-      response[statusKey].tasks.push(ut);
-    }
-
-    // Convert grouped tasks: group tasks by taskId inside each status
-    Object.values(response).forEach((group) => {
-      const grouped = {};
-
-      group.tasks.forEach((taskEntry) => {
-        const taskId = taskEntry.taskId;
-
-        if (!grouped[taskId]) {
-          grouped[taskId] = {
-            taskId,
-            id: taskEntry.id,
-            title: taskEntry.title,
-            description: taskEntry.taskDetails?.description,
-            frequency: taskEntry.frequency,
-            categoryId: taskEntry.taskDetails?.categoryId,
-            category: taskEntry.taskDetails?.category,
-            priorityId: taskEntry.priorityId,
-            status: taskEntry.status,
-            statusId: taskEntry.statusId,
-            priority: taskEntry.priority,
-            comments: taskEntry.comments,
-            dueDate: taskEntry.dueDate,
-            createdAt: taskEntry.createdAt,
-            updatedAt: taskEntry.updatedAt,
-            taskDetails: taskEntry.taskDetails,
-            attachments: taskEntry.attachments,
-            isArchieved: taskEntry.isArchieved,
-            assignedUsers: [],
-          };
-        }
-
-        const userId = taskEntry.assignedUser?.id;
-        if (userId && !grouped[taskId].assignedUsers.some((u) => u.id === userId)) {
-          grouped[taskId].assignedUsers.push({
-            id: taskEntry.assignedUser.id,
-            fullName: taskEntry.assignedUser.fullName,
-            email: taskEntry.assignedUser.email,
-            photo: taskEntry.assignedUser.photo,
-            status: taskEntry.status,
-            userTaskId: taskEntry.id,
-          });
-        }
-      });
-
-      group.tasks = Object.values(grouped);
+  for (const status of orgStatuses) {
+    const { rows, count } = await Task.findAndCountAll({
+      where: taskWhere,
+      include: [
+        taskCategoryInclude,
+        {
+          model: UserTask,
+          as: "userTasks",
+          where: buildAssignmentWhere(false, status.id),
+          required: true,
+          attributes: [
+            "id",
+            "userId",
+            "organisationId",
+            "taskId",
+            "priorityId",
+            "statusId",
+            "frequency",
+            "dueDate",
+            "title",
+            "comments",
+            "documentLink",
+            "isArchieved",
+            "createdAt",
+            "updatedAt",
+          ],
+          include: [
+            {
+              model: OrganisationPriority,
+              as: "priority",
+              attributes: ["id", "key", "name", "color"],
+            },
+            {
+              model: OrganisationStatus,
+              as: "status",
+              attributes: ["id", "key", "name", "color"],
+            },
+            {
+              model: User,
+              as: "assignedUser",
+              attributes: ["id", "fullName", "email", "photo"],
+            },
+          ],
+        },
+      ],
+      distinct: true,
+      limit: perPage,
+      offset,
+      order: [["createdAt", "DESC"]],
     });
 
-    // Add archived tasks as separate group ALWAYS
-    const archivedGrouped = {};
-
-    archivedTasks.forEach((taskEntry) => {
-      const taskId = taskEntry.taskId;
-
-      if (!archivedGrouped[taskId]) {
-        archivedGrouped[taskId] = {
-          taskId,
-          id: taskEntry.id,
-          title: taskEntry.title,
-          description: taskEntry.taskDetails?.description,
-          frequency: taskEntry.frequency,
-          categoryId: taskEntry.taskDetails?.categoryId,
-          category: taskEntry.taskDetails?.category,
-          priorityId: taskEntry.priorityId,
-          status: taskEntry.status,
-          statusId: taskEntry.statusId,
-          priority: taskEntry.priority,
-          comments: taskEntry.comments,
-          dueDate: taskEntry.dueDate,
-          createdAt: taskEntry.createdAt,
-          updatedAt: taskEntry.updatedAt,
-          taskDetails: taskEntry.taskDetails,
-          attachments: taskEntry.attachments,
-          isArchieved: taskEntry.isArchieved,
-          assignedUsers: [],
-        };
-      }
-
-      const userId = taskEntry.assignedUser?.id;
-      if (userId && !archivedGrouped[taskId].assignedUsers.some((u) => u.id === userId)) {
-        archivedGrouped[taskId].assignedUsers.push({
-          id: taskEntry.assignedUser.id,
-          fullName: taskEntry.assignedUser.fullName,
-          email: taskEntry.assignedUser.email,
-          photo: taskEntry.assignedUser.photo,
-          status: taskEntry.status,
-          userTaskId: taskEntry.id,
-        });
-      }
+    statusGroups.push({
+      status: status.key,
+      total: count,
+      page: currentPage,
+      pageSize: perPage,
+      tasks: buildTasksResponse(rows),
     });
-
-    // Always include archived section
-    response["archived"] = {
-      status: "archived",
-      tasks: Object.values(archivedGrouped),
-    };
-
-    return success(Object.values(response));
-
-  } catch (err) {
-    return error(500, err.message);
   }
+
+  const { rows: archivedRows, count: archivedCount } = await Task.findAndCountAll({
+    where: taskWhere,
+    include: [
+      taskCategoryInclude,
+      {
+        model: UserTask,
+        as: "userTasks",
+        where: buildAssignmentWhere(true),
+        required: true,
+        attributes: [
+          "id",
+          "userId",
+          "organisationId",
+          "taskId",
+          "priorityId",
+          "statusId",
+          "frequency",
+          "dueDate",
+          "title",
+          "comments",
+          "documentLink",
+          "isArchieved",
+          "createdAt",
+          "updatedAt",
+        ],
+        include: [
+          {
+            model: OrganisationPriority,
+            as: "priority",
+            attributes: ["id", "key", "name", "color"],
+          },
+          {
+            model: OrganisationStatus,
+            as: "status",
+            attributes: ["id", "key", "name", "color"],
+          },
+          {
+            model: User,
+            as: "assignedUser",
+            attributes: ["id", "fullName", "email", "photo"],
+          },
+        ],
+      },
+    ],
+    distinct: true,
+    limit: perPage,
+    offset,
+    order: [["updatedAt", "DESC"]],
+  });
+
+  statusGroups.push({
+    status: "archived",
+    total: archivedCount,
+    page: currentPage,
+    pageSize: perPage,
+    tasks: buildTasksResponse(archivedRows),
+  });
+
+  const total = statusGroups.reduce((sum, s) => sum + Number(s.total || 0), 0);
+
+  return success({
+    page: currentPage,
+    pageSize: perPage,
+    total,
+    statuses: statusGroups,
+  });
 };
 
 export const getUserTaskDetails = async (event) => {
@@ -2254,28 +2296,23 @@ export const teamTasksCountByCategory = async (event) => {
 
 export const getUserTasksStatusWise = async (event) => {
   const loggedUser = event.context.user;
-  const body = await readBody(event);
-  const { categoryId, frequency, priority, limit } = JSON.parse(body);
+  const body = await parseJsonBody(event);
+  const {
+    categoryId,
+    frequency,
+    priority,
+    search,
+    status,
+    dueDateFilter,
+    page = 1,
+    pageSize = 10,
+  } = body;
 
   try {
-    await autoArchiveCompletedTasks(Number(loggedUser.orgId));
+    const currentPage = Math.max(Number(page) || 1, 1);
+    const perPage = Math.min(Math.max(Number(pageSize) || 10, 1), 100);
+    const offset = (currentPage - 1) * perPage;
 
-    // Fetch all statuses to ensure we always return them
-    const allStatuses = await OrganisationStatus.findAll({
-      attributes: ["key"],
-      raw: true,
-    });
-
-    // Prepare a map for final structured response
-    const response = {};
-    allStatuses.forEach((s) => {
-      response[s.key] = [];
-    });
-
-    // ARCHIVED will be treated separately
-    response["archived"] = [];
-
-    // --- Fetch child categories ---
     const categories = await TaskCategory.findAll({
       where: {
         [Op.or]: [{ id: categoryId }, { parentId: categoryId }],
@@ -2286,73 +2323,134 @@ export const getUserTasksStatusWise = async (event) => {
 
     const categoryIds = categories.map((c) => c.id);
     if (!categoryIds.length) {
-      // return all statuses with empty tasks
-      return success(
-        Object.entries(response).map(([status, tasks]) => ({
-          status,
-          tasks,
-        }))
-      );
+      return success({ page: currentPage, pageSize: perPage, total: 0, statuses: [] });
     }
 
-    // --- Build base filter ---
-    const where = {
+    const orgStatuses = await OrganisationStatus.findAll({
+      where: { organisationId: loggedUser.orgId },
+      attributes: ["id", "key", "name", "color"],
+      order: [["id", "ASC"]],
+    });
+    const normalizedStatusFilter = Array.isArray(status)
+      ? status.map((s) => String(s).toLowerCase())
+      : status
+      ? [String(status).toLowerCase()]
+      : null;
+
+    const filteredOrgStatuses = normalizedStatusFilter
+      ? orgStatuses.filter((s) => normalizedStatusFilter.includes((s.key || "").toLowerCase()))
+      : orgStatuses;
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const endOfToday = new Date(startOfToday);
+    endOfToday.setHours(23, 59, 59, 999);
+    const endOfWeek = new Date(startOfToday);
+    endOfWeek.setDate(endOfWeek.getDate() + 7);
+
+    const dueDateWhere = {};
+    if (dueDateFilter === "overdue") {
+      dueDateWhere.dueDate = { [Op.lt]: startOfToday };
+    } else if (dueDateFilter === "today") {
+      dueDateWhere.dueDate = { [Op.between]: [startOfToday, endOfToday] };
+    } else if (dueDateFilter === "week") {
+      dueDateWhere.dueDate = { [Op.between]: [startOfToday, endOfWeek] };
+    }
+
+    const baseWhere = {
       userId: loggedUser.userId,
       organisationId: loggedUser.orgId,
     };
-
-    if (frequency) where["frequency"] = frequency;
-    if (priority) where["priorityId"] = priority;
-
-    // --- Fetch tasks ---
-    const userTasks = await UserTask.findAll({
-      where,
-      ...(limit && Number(limit) > 0 ? { limit: Number(limit) } : {}),
-      include: [
-        {
-          model: Task,
-          as: "taskDetails",
-          where: { categoryId: { [Op.in]: categoryIds } },
-          required: true,
-          include: [
-            {
-              model: TaskCategory,
-              as: "category",
-              where: { isDeleted: false },
-            },
-          ],
-        },
-        { model: OrganisationPriority, as: "priority" },
-        { model: OrganisationStatus, as: "status" },
-        { model: UserTaskAttachment, as: "attachments", required: false },
-      ],
-    });
-
-    // --- Categorize tasks ---
-    for (const ut of userTasks) {
-      // Archived tasks
-      if (ut.isArchieved) {
-        response["archived"].push(ut);
-        continue;
-      }
-
-      const statusKey = ut.status?.key || "unknown";
-
-      // Ensure unknown status also appears
-      if (!response[statusKey]) {
-        response[statusKey] = [];
-      }
-
-      response[statusKey].push(ut);
+    if (frequency) baseWhere["frequency"] = frequency;
+    if (priority) baseWhere["priorityId"] = priority;
+    if (search) {
+      baseWhere[Op.or] = [
+        { title: { [Op.iLike]: `%${search}%` } },
+        { comments: { [Op.iLike]: `%${search}%` } },
+      ];
     }
 
-    // Convert map to array of { status, tasks }
-    const finalResponse = Object.entries(response).map(([status, tasks]) => ({
-      status,
-      tasks,
-    }));
+    const taskInclude = {
+      model: Task,
+      as: "taskDetails",
+      where: { categoryId: { [Op.in]: categoryIds } },
+      required: true,
+      include: [
+        {
+          model: TaskCategory,
+          as: "category",
+          where: { isDeleted: false },
+        },
+      ],
+    };
 
-    return success(finalResponse);
+    const commonInclude = [
+      taskInclude,
+      {
+        model: OrganisationPriority,
+        as: "priority",
+        attributes: ["id", "key", "name", "color"],
+      },
+      {
+        model: OrganisationStatus,
+        as: "status",
+        attributes: ["id", "key", "name", "color"],
+      },
+      {
+        model: UserTaskAttachment,
+        as: "attachments",
+        attributes: ["id", "title", "link", "type"],
+      },
+    ];
+
+    const statuses = [];
+
+    for (const status of filteredOrgStatuses) {
+      const where = { ...baseWhere, isArchieved: false, statusId: status.id, ...dueDateWhere };
+      const { rows, count } = await UserTask.findAndCountAll({
+        where,
+        include: commonInclude,
+        order: [["createdAt", "DESC"]],
+        limit: perPage,
+        offset,
+        distinct: true,
+      });
+
+      statuses.push({
+        status: status.key,
+        total: count,
+        page: currentPage,
+        pageSize: perPage,
+        tasks: rows,
+      });
+    }
+
+    const { rows: archivedRows, count: archivedCount } =
+      await UserTask.findAndCountAll({
+        where: { ...baseWhere, isArchieved: true, ...dueDateWhere },
+        include: commonInclude,
+        order: [["updatedAt", "DESC"]],
+        limit: perPage,
+        offset,
+        distinct: true,
+      });
+
+    statuses.push({
+      status: "archived",
+      total: archivedCount,
+      page: currentPage,
+      pageSize: perPage,
+      tasks: archivedRows,
+    });
+
+    const total = statuses.reduce((sum, s) => sum + Number(s.total || 0), 0);
+
+    return success({
+      page: currentPage,
+      pageSize: perPage,
+      total,
+      statuses,
+    });
   } catch (err) {
     return error(500, err.message);
   }
