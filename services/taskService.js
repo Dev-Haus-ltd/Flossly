@@ -339,4 +339,15 @@ export default {
         });
     });
   },
+  createCustomColumn(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/createCustomColumn", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
 };

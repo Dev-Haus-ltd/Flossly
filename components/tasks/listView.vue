@@ -83,7 +83,18 @@
                 </div>
               </div>
 
-              <p>Available Columns</p>
+              <div class="d-flex align-center justify-space-between">
+                <p class="mb-0">Available Columns</p>
+                <v-btn
+                  color="primary"
+                  variant="text"
+                  size="small"
+                  @click="openCreateColumnDialog"
+                >
+                  <v-icon size="18" class="mr-1">mdi-plus</v-icon>
+                  Add Custom Column
+                </v-btn>
+              </div>
               <div class="d-flex flex-wrap">
                 <div
                   v-for="(item, index) in filteredAvailableHeaders"
@@ -99,6 +110,68 @@
           </v-menu>
         </div>
       </div>
+
+      <!-- Create Custom Column Dialog -->
+      <v-dialog v-model="createColumnDialog" max-width="500">
+        <v-card>
+          <v-card-title class="d-flex align-center justify-space-between">
+            <span>Create Custom Column</span>
+            <v-icon @click="createColumnDialog = false">mdi-close</v-icon>
+          </v-card-title>
+          <v-card-text>
+            <v-text-field
+              v-model="newColumn.displayName"
+              label="Column Name"
+              placeholder="Enter column name"
+              variant="outlined"
+              density="compact"
+              :error-messages="columnNameError"
+              @input="columnNameError = ''"
+              class="mb-3"
+            />
+            <v-select
+              v-model="newColumn.dataType"
+              label="Data Type"
+              :items="dataTypeOptions"
+              item-title="label"
+              item-value="value"
+              variant="outlined"
+              density="compact"
+              class="mb-3"
+            />
+            <v-textarea
+              v-if="newColumn.dataType === 'dropdown'"
+              v-model="newColumn.dropdownOptionsText"
+              label="Dropdown Options"
+              placeholder="Enter options separated by commas (e.g., Option 1, Option 2, Option 3)"
+              variant="outlined"
+              density="compact"
+              rows="3"
+              :error-messages="dropdownOptionsError"
+              @input="dropdownOptionsError = ''"
+              hint="Enter comma-separated values"
+              persistent-hint
+            />
+          </v-card-text>
+          <v-card-actions class="justify-end">
+            <v-btn
+              variant="text"
+              @click="createColumnDialog = false"
+            >
+              Cancel
+            </v-btn>
+            <v-btn
+              color="primary"
+              variant="flat"
+              @click="createCustomColumn"
+              :loading="isCreatingColumn"
+            >
+              Create
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
       <div class="d-inline-flex" style="flex-wrap: nowrap;">
         <v-btn
           color="tertiary"
@@ -389,6 +462,90 @@
                   @unassign="unAssign(item, $event)"
                 />
               </template>
+              <!-- Custom column template -->
+              <template v-else-if="col.isCustom">
+                <!-- Text field -->
+                <div v-if="col.dataType === 'text'" class="d-flex align-center pa-1">
+                  <v-text-field
+                    :model-value="getCustomFieldValue(item, col.columnDefinitionId)"
+                    @update:modelValue="(val) => {
+                      setCustomFieldValue(item, col.columnDefinitionId, val);
+                    }"
+                    :variant="isFocused(item.id, col.key) ? 'outlined' : 'plain'"
+                    @focus="() => { setFocus(item.id, col.key, true); storeOriginalCustomValue(item.id, col.columnDefinitionId, item); }"
+                    @blur="updateCustomFieldRow(item, col.columnDefinitionId, col.key)"
+                    density="compact"
+                    @keyup.enter="(e) => handleEnterKey(e, item, col.key)"
+                    @keyup.escape="(e) => handleEscapeKeyCustom(e, item, col.columnDefinitionId, col.key)"
+                    hide-details
+                    class="small-input"
+                  />
+                </div>
+                <!-- Number field -->
+                <div v-else-if="col.dataType === 'number'" class="d-flex align-center pa-1">
+                  <v-text-field
+                    :model-value="getCustomFieldValue(item, col.columnDefinitionId)"
+                    @update:modelValue="(val) => {
+                      setCustomFieldValue(item, col.columnDefinitionId, val);
+                    }"
+                    type="number"
+                    :variant="isFocused(item.id, col.key) ? 'outlined' : 'plain'"
+                    @focus="() => { setFocus(item.id, col.key, true); storeOriginalCustomValue(item.id, col.columnDefinitionId, item); }"
+                    @blur="updateCustomFieldRow(item, col.columnDefinitionId, col.key)"
+                    density="compact"
+                    @keyup.enter="(e) => handleEnterKey(e, item, col.key)"
+                    @keyup.escape="(e) => handleEscapeKeyCustom(e, item, col.columnDefinitionId, col.key)"
+                    hide-details
+                    class="small-input"
+                  />
+                </div>
+                <!-- Date field -->
+                <div v-else-if="col.dataType === 'date'" class="d-flex align-center pa-1">
+                  <DataTableColumnsDueDate
+                    :model-value="getCustomFieldValue(item, col.columnDefinitionId)"
+                    @update:modelValue="(val) => {
+                      setCustomFieldValue(item, col.columnDefinitionId, val);
+                      updateCustomFieldRow(item, col.columnDefinitionId, col.key);
+                    }"
+                  />
+                </div>
+                <!-- Boolean field -->
+                <div v-else-if="col.dataType === 'boolean'" class="d-flex align-center pa-1">
+                  <v-select
+                    :model-value="getCustomFieldValue(item, col.columnDefinitionId)"
+                    @update:modelValue="(val) => {
+                      setCustomFieldValue(item, col.columnDefinitionId, val);
+                      updateCustomFieldRow(item, col.columnDefinitionId, col.key);
+                    }"
+                    :items="[{ title: 'True', value: 'true' }, { title: 'False', value: 'false' }]"
+                    item-title="title"
+                    item-value="value"
+                    :variant="isFocused(item.id, col.key) ? 'outlined' : 'plain'"
+                    @focus="() => { setFocus(item.id, col.key, true); storeOriginalCustomValue(item.id, col.columnDefinitionId, item); }"
+                    @blur="setFocus(item.id, col.key, false)"
+                    density="compact"
+                    hide-details
+                    class="small-input"
+                  />
+                </div>
+                <!-- Dropdown field -->
+                <div v-else-if="col.dataType === 'dropdown'" class="d-flex align-center pa-1">
+                  <v-select
+                    :model-value="getCustomFieldValue(item, col.columnDefinitionId)"
+                    @update:modelValue="(val) => {
+                      setCustomFieldValue(item, col.columnDefinitionId, val);
+                      updateCustomFieldRow(item, col.columnDefinitionId, col.key);
+                    }"
+                    :items="col.dropdownOptions || []"
+                    :variant="isFocused(item.id, col.key) ? 'outlined' : 'plain'"
+                    @focus="() => { setFocus(item.id, col.key, true); storeOriginalCustomValue(item.id, col.columnDefinitionId, item); }"
+                    @blur="setFocus(item.id, col.key, false)"
+                    density="compact"
+                    hide-details
+                    class="small-input"
+                  />
+                </div>
+              </template>
               <!-- Generic editable field for all other columns -->
               <template v-else>
                 <div class="d-flex align-center pa-1">
@@ -521,6 +678,91 @@
                         </v-icon>
                       </template>
 
+                      <!-- Custom column template for subtasks -->
+                      <template v-else-if="col.isCustom">
+                        <!-- Text field -->
+                        <div v-if="col.dataType === 'text'" class="d-flex align-center pa-1">
+                          <v-text-field
+                            :model-value="getCustomFieldValue(item, col.columnDefinitionId)"
+                            @update:modelValue="(val) => {
+                              setCustomFieldValue(item, col.columnDefinitionId, val);
+                            }"
+                            :variant="isFocused(item.id, col.key) ? 'outlined' : 'plain'"
+                            @focus="() => { setFocus(item.id, col.key, true); storeOriginalCustomValue(item.id, col.columnDefinitionId, item); }"
+                            @blur="updateCustomFieldRow(item, col.columnDefinitionId, col.key)"
+                            density="compact"
+                            @keyup.enter="(e) => handleEnterKey(e, item, col.key)"
+                            @keyup.escape="(e) => handleEscapeKeyCustom(e, item, col.columnDefinitionId, col.key)"
+                            hide-details
+                            class="small-input"
+                          />
+                        </div>
+                        <!-- Number field -->
+                        <div v-else-if="col.dataType === 'number'" class="d-flex align-center pa-1">
+                          <v-text-field
+                            :model-value="getCustomFieldValue(item, col.columnDefinitionId)"
+                            @update:modelValue="(val) => {
+                              setCustomFieldValue(item, col.columnDefinitionId, val);
+                            }"
+                            type="number"
+                            :variant="isFocused(item.id, col.key) ? 'outlined' : 'plain'"
+                            @focus="() => { setFocus(item.id, col.key, true); storeOriginalCustomValue(item.id, col.columnDefinitionId, item); }"
+                            @blur="updateCustomFieldRow(item, col.columnDefinitionId, col.key)"
+                            density="compact"
+                            @keyup.enter="(e) => handleEnterKey(e, item, col.key)"
+                            @keyup.escape="(e) => handleEscapeKeyCustom(e, item, col.columnDefinitionId, col.key)"
+                            hide-details
+                            class="small-input"
+                          />
+                        </div>
+                        <!-- Date field -->
+                        <div v-else-if="col.dataType === 'date'" class="d-flex align-center pa-1">
+                          <DataTableColumnsDueDate
+                            :model-value="getCustomFieldValue(item, col.columnDefinitionId)"
+                            @update:modelValue="(val) => {
+                              setCustomFieldValue(item, col.columnDefinitionId, val);
+                              updateCustomFieldRow(item, col.columnDefinitionId, col.key);
+                            }"
+                          />
+                        </div>
+                        <!-- Boolean field -->
+                        <div v-else-if="col.dataType === 'boolean'" class="d-flex align-center pa-1">
+                          <v-select
+                            :model-value="getCustomFieldValue(item, col.columnDefinitionId)"
+                            @update:modelValue="(val) => {
+                              setCustomFieldValue(item, col.columnDefinitionId, val);
+                              updateCustomFieldRow(item, col.columnDefinitionId, col.key);
+                            }"
+                            :items="[{ title: 'True', value: 'true' }, { title: 'False', value: 'false' }]"
+                            item-title="title"
+                            item-value="value"
+                            :variant="isFocused(item.id, col.key) ? 'outlined' : 'plain'"
+                            @focus="() => { setFocus(item.id, col.key, true); storeOriginalCustomValue(item.id, col.columnDefinitionId, item); }"
+                            @blur="setFocus(item.id, col.key, false)"
+                            density="compact"
+                            hide-details
+                            class="small-input"
+                          />
+                        </div>
+                        <!-- Dropdown field -->
+                        <div v-else-if="col.dataType === 'dropdown'" class="d-flex align-center pa-1">
+                          <v-select
+                            :model-value="getCustomFieldValue(item, col.columnDefinitionId)"
+                            @update:modelValue="(val) => {
+                              setCustomFieldValue(item, col.columnDefinitionId, val);
+                              updateCustomFieldRow(item, col.columnDefinitionId, col.key);
+                            }"
+                            :items="col.dropdownOptions || []"
+                            :variant="isFocused(item.id, col.key) ? 'outlined' : 'plain'"
+                            @focus="() => { setFocus(item.id, col.key, true); storeOriginalCustomValue(item.id, col.columnDefinitionId, item); }"
+                            @blur="setFocus(item.id, col.key, false)"
+                            density="compact"
+                            hide-details
+                            class="small-input"
+                          />
+                        </div>
+                      </template>
+
                       <!-- Generic editable field for all other columns -->
                       <template v-else>
                         <v-text-field
@@ -615,10 +857,12 @@ const {
   users,
   categories,
   clearSelection,
+  customColumnHeaders,
 } = defineProps({
   headers: Array,
   taskDetails: Array,
   availableHeaders: Array,
+  customColumnHeaders: Array,
   orgStatuses: Array,
   priorities: Array,
   users: Array,
@@ -660,9 +904,105 @@ const fixedColumnOrder = [
   "updatedAt",
 ];
 const sortHeaders = (headers) => {
-  return fixedColumnOrder
-    .map((key) => headers.find((h) => h.key === key))
+  // Separate custom columns from regular columns
+  const customCols = headers.filter((h) => h.isCustom);
+  const regularCols = headers.filter((h) => !h.isCustom);
+
+  // Sort regular columns by fixedColumnOrder
+  const sortedRegular = fixedColumnOrder
+    .map((key) => regularCols.find((h) => h.key === key))
     .filter(Boolean);
+
+  // Sort custom columns by their sortOrder property
+  const sortedCustom = customCols.sort((a, b) => a.sortOrder - b.sortOrder);
+
+  // Insert custom columns after "attachments" and before "taskDetails.description"
+  const attachmentsIndex = sortedRegular.findIndex(
+    (h) => h.key === "attachments"
+  );
+  if (attachmentsIndex !== -1) {
+    sortedRegular.splice(attachmentsIndex + 1, 0, ...sortedCustom);
+  } else {
+    // Fallback: append custom columns at the end
+    sortedRegular.push(...sortedCustom);
+  }
+
+  return sortedRegular;
+};
+const getCustomFieldValue = (task, columnDefinitionId) => {
+  if (!task.customFields || !Array.isArray(task.customFields)) {
+    return "";
+  }
+
+  const field = task.customFields.find(
+    (f) => f.columnDefinitionId === columnDefinitionId
+  );
+
+  return field?.value || "";
+};
+const setCustomFieldValue = (task, columnDefinitionId, value) => {
+  if (!task.customFields) {
+    task.customFields = [];
+  }
+
+  const field = task.customFields.find(
+    (f) => f.columnDefinitionId === columnDefinitionId
+  );
+
+  if (field) {
+    field.value = value;
+  } else {
+    // Create new custom field entry
+    task.customFields.push({
+      columnDefinitionId,
+      value,
+    });
+  }
+};
+const storeOriginalCustomValue = (id, columnDefinitionId, row) => {
+  const fieldId = `${id}-custom-${columnDefinitionId}`;
+  originalFieldValues.value[fieldId] = getCustomFieldValue(row, columnDefinitionId);
+};
+const handleEscapeKeyCustom = (event, row, columnDefinitionId, key) => {
+  const fieldId = `${row.id}-custom-${columnDefinitionId}`;
+  const originalValue = originalFieldValues.value[fieldId];
+
+  if (originalValue !== undefined) {
+    setCustomFieldValue(row, columnDefinitionId, originalValue);
+    delete originalFieldValues.value[fieldId];
+  }
+
+  setFocus(row.id, key, false);
+  event.target.blur();
+};
+const updateCustomFieldRow = async (row, columnDefinitionId, key) => {
+  const fieldId = `${row.id}-custom-${columnDefinitionId}`;
+  delete originalFieldValues.value[fieldId];
+
+  setFocus(row.id, key, false);
+
+  try {
+    const res = await taskStore.updateUserTask(row);
+
+    if (res.code !== 0) {
+      mainStore.setSnackbar({
+        title: "Error while updating the task",
+        type: "error",
+      });
+      return;
+    }
+
+    mainStore.setSnackbar({
+      title: "Task updated successfully",
+      type: "success",
+    });
+
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: "Error while updating the task",
+      type: "error",
+    });
+  }
 };
 const getRandomHexColor = (name) => {
   if (!name) return "#999999";
@@ -745,11 +1085,96 @@ const taskPoolDialog = ref(false);
 const isAllSelected = ref(false);
 const selectedStatusForNewTask = ref(null);
 const selectedCategoryForNewTask = ref(null);
+const createColumnDialog = ref(false);
+const isCreatingColumn = ref(false);
+const columnNameError = ref("");
+const dropdownOptionsError = ref("");
+const newColumn = ref({
+  displayName: "",
+  dataType: "text",
+  dropdownOptionsText: "",
+});
+const dataTypeOptions = [
+  { label: "Text", value: "text" },
+  { label: "Number", value: "number" },
+  { label: "Date", value: "date" },
+  { label: "Boolean", value: "boolean" },
+  { label: "Dropdown", value: "dropdown" },
+];
 
 const openAddTaskDialog = () => {
   selectedStatusForNewTask.value = null;
   selectedCategoryForNewTask.value = null;
   drawerOpen.value = true;
+};
+const openCreateColumnDialog = () => {
+  newColumn.value = {
+    displayName: "",
+    dataType: "text",
+    dropdownOptionsText: "",
+  };
+  columnNameError.value = "";
+  dropdownOptionsError.value = "";
+  createColumnDialog.value = true;
+};
+const createCustomColumn = async () => {
+  // Validate input
+  if (!newColumn.value.displayName || newColumn.value.displayName.trim() === "") {
+    columnNameError.value = "Column name is required";
+    return;
+  }
+
+  // Validate dropdown options if data type is dropdown
+  if (newColumn.value.dataType === "dropdown") {
+    if (!newColumn.value.dropdownOptionsText || newColumn.value.dropdownOptionsText.trim() === "") {
+      dropdownOptionsError.value = "Dropdown options are required";
+      return;
+    }
+  }
+
+  isCreatingColumn.value = true;
+
+  try {
+    // Parse dropdown options if data type is dropdown
+    let dropdownOptions = null;
+    if (newColumn.value.dataType === "dropdown" && newColumn.value.dropdownOptionsText) {
+      dropdownOptions = newColumn.value.dropdownOptionsText
+        .split(",")
+        .map((opt) => opt.trim())
+        .filter((opt) => opt !== "");
+    }
+
+    const res = await taskStore.createCustomColumn({
+      displayName: newColumn.value.displayName.trim(),
+      dataType: newColumn.value.dataType,
+      dropdownOptions,
+    });
+
+    if (res.code === 0) {
+      mainStore.setSnackbar({
+        title: "Custom column created successfully",
+        type: "success",
+      });
+      createColumnDialog.value = false;
+      newColumn.value = {
+        displayName: "",
+        dataType: "text",
+        dropdownOptionsText: "",
+      };
+    } else {
+      mainStore.setSnackbar({
+        title: res.message || "Error creating custom column",
+        type: "error",
+      });
+    }
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: "Error creating custom column",
+      type: "error",
+    });
+  } finally {
+    isCreatingColumn.value = false;
+  }
 };
 const tasksForCalender = ref([]);
 const bulkTaskUploadDialog = ref(false);
@@ -772,11 +1197,17 @@ const filteredAvailableHeaders = computed(() => {
     return [];
   }
 
+  // Merge static headers with custom column headers
+  const allHeaders = [
+    ...availableHeaders,
+    ...(customColumnHeaders || [])
+  ];
+
   // Get the keys of all selected headers
   const selectedKeys = new Set(selectedHeaders.value.map(h => h.key));
 
   // Filter out headers that are already selected
-  return availableHeaders.filter(header => !selectedKeys.has(header.key));
+  return allHeaders.filter(header => !selectedKeys.has(header.key));
 });
 
 const getRoles = () => {
@@ -1101,78 +1532,13 @@ const handleEnterKey = (event, row, key) => {
 };
 
 const updateValueRow = async (row, key) => {
+  // Clean up the stored original value after successful save
   const fieldId = `${row.id}-${key}`;
-  // Get original value BEFORE deleting (needed for validation revert)
-  const originalValue = originalFieldValues.value[fieldId];
+  delete originalFieldValues.value[fieldId];
 
   setFocus(row.id, key, false);
 
-  // Validate title before saving (handle both 'name' and 'title' keys)
-  if ((key === "name" || key === "title") && row.title !== undefined && row.title !== null) {
-    
-    // Check if title is empty or only whitespace
-    if (!row.title || typeof row.title !== 'string' || !row.title.trim()) {
-      // Revert to original value
-      if (originalValue !== undefined && originalValue !== null) {
-        row.title = originalValue;
-      } else {
-        emit("onUpdate");
-      }
-      // Don't delete originalValue - keep it for next attempt
-      mainStore.setSnackbar({
-        title: "Task title cannot be empty or only spaces",
-        type: "error",
-      });
-      return;
-    }
-    
-    // Trim the title to remove leading/trailing spaces
-    const trimmedTitle = row.title.trim();
-    
-    // Check if trimmed title is empty after trimming
-    if (!trimmedTitle) {
-      // Revert to original value
-      if (originalValue !== undefined && originalValue !== null) {
-        row.title = originalValue;
-      } else {
-        emit("onUpdate");
-      }
-      // Don't delete originalValue - keep it for next attempt
-      mainStore.setSnackbar({
-        title: "Task title cannot be empty or only spaces",
-        type: "error",
-      });
-      return;
-    }
-    
-    // Check length after trimming
-    if (trimmedTitle.length > 150) {
-      // Revert to original value
-      if (originalValue !== undefined && originalValue !== null) {
-        row.title = originalValue;
-      } else {
-        emit("onUpdate");
-      }
-      // Don't delete originalValue - keep it for next attempt
-      mainStore.setSnackbar({
-        title: "Task title must be 150 characters or less",
-        type: "error",
-      });
-      return;
-    }
-    
-    // Apply trimmed title
-    row.title = trimmedTitle;
-    
-    // Clean up the stored original value after validation passes
-    delete originalFieldValues.value[fieldId];
-  } else {
-    // For non-title fields, clean up original value
-    delete originalFieldValues.value[fieldId];
-  }
-
-  // Skip saving for comments and documentLink
-  if (key === "comments" || key === "documentLink") return;
+  if (key === "name") return;
 
   // New nested-value handling
   const currentValue = getNestedValue(row, key);
@@ -1187,10 +1553,9 @@ const updateValueRow = async (row, key) => {
 
     if (res.code !== 0) {
       mainStore.setSnackbar({
-        title: res.data?.message || res.message || "Error while updating the task",
+        title: "Error while updating the task",
         type: "error",
       });
-      emit("onUpdate");
       return;
     }
 
@@ -1205,79 +1570,10 @@ const updateValueRow = async (row, key) => {
 
   } catch (err) {
     mainStore.setSnackbar({
-      title: err.message || "Error while updating the task",
+      title: "Error while updating the task",
       type: "error",
     });
-    emit("onUpdate");
   }
-};
-
-const updateTitle = (row, key) => {
-  setFocus(row.id, key, false);
-  
-  // Validate title before saving (handle both 'name' and 'title' keys)
-  if ((key === 'name' || key === 'title') && row.title !== undefined && row.title !== null) {
-    // Check if title is empty or only whitespace
-    if (!row.title || typeof row.title !== 'string' || !row.title.trim()) {
-      // Revert to previous value
-      emit("onUpdate");
-      mainStore.setSnackbar({
-        title: "Task title cannot be empty or only spaces",
-        type: "error",
-      });
-      return;
-    }
-    
-    // Trim the title to remove leading/trailing spaces
-    const trimmedTitle = row.title.trim();
-    
-    // Check if trimmed title is empty after trimming
-    if (!trimmedTitle) {
-      emit("onUpdate");
-      mainStore.setSnackbar({
-        title: "Task title cannot be empty or only spaces",
-        type: "error",
-      });
-      return;
-    }
-    
-    // Check length after trimming
-    if (trimmedTitle.length > 150) {
-      emit("onUpdate");
-      mainStore.setSnackbar({
-        title: "Task title must be 150 characters or less",
-        type: "error",
-      });
-      return;
-    }
-    
-    // Apply trimmed title
-    row.title = trimmedTitle;
-  }
-  
-  taskStore
-    .updateUserTask(row)
-    .then((res) => {
-      if (res.code !== 0) {
-        mainStore.setSnackbar({
-          title: res.data?.message || res.message || "Error while updating the task",
-          type: "error",
-        });
-        // Revert changes on error
-        emit("onUpdate");
-      } else {
-        if (key === "status") {
-          emit("onUpdate");
-        }
-      }
-    })
-    .catch((err) => {
-      mainStore.setSnackbar({
-        title: err.message || "Error while updating the task",
-        type: "error",
-      });
-      emit("onUpdate");
-    });
 };
 
 

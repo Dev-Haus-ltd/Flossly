@@ -23,6 +23,8 @@ import {
   UserTaskComment,
   UserPointsHistory,
   UserPoint,
+  TaskCustomColumnDefinition,
+  UserTaskCustomField,
 } from "../models";
 import {
   taskCompletedNotification,
@@ -126,6 +128,19 @@ export const listMyTasks = async (event) => {
         as: "status",
         attributes: ["id", "key", "name", "color"],
       },
+      // {
+      //   //i am confused about this model addition in this api
+      //   model: UserTaskCustomField,
+      //   as: "customFields",
+      //   include: [
+      //     {
+      //       model: TaskCustomColumnDefinition,
+      //       as: "columnDefinition",
+      //       where: { isActive: true },
+      //       required: false,
+      //     },
+      //   ],
+      // },
     ];
     const tasks = await UserTask.findAndCountAll({
       where,
@@ -381,6 +396,7 @@ export const updateTask = async (event) => {
       isArchieved,
       description,
       taskDetails,
+      customFields,
     } = parsedBody;
 
     // Validate existence
@@ -430,6 +446,47 @@ export const updateTask = async (event) => {
           if (taskDetails.defaultFrequency !== undefined)
             task.defaultFrequency = taskDetails.defaultFrequency;
           await task.save();
+        }
+      }
+
+      // Update custom fields if provided
+      if (customFields && Array.isArray(customFields)) {
+        for (const customField of customFields) {
+          const { columnDefinitionId, value } = customField;
+
+          if (columnDefinitionId !== undefined) {
+            // Verify the column definition belongs to this organization
+            const columnDef = await TaskCustomColumnDefinition.findOne({
+              where: {
+                id: columnDefinitionId,
+                organisationId,
+                isActive: true,
+              },
+            });
+
+            if (!columnDef) {
+              continue; // Skip invalid column definitions
+            }
+
+            // Find or create the custom field record
+            const [userTaskCustomField, created] = await UserTaskCustomField.findOrCreate({
+              where: {
+                userTaskId: id,
+                columnDefinitionId,
+              },
+              defaults: {
+                userTaskId: id,
+                columnDefinitionId,
+                value: value || "",
+              },
+            });
+
+            // Update the value if it already existed
+            if (!created) {
+              userTaskCustomField.value = value || "";
+              await userTaskCustomField.save();
+            }
+          }
         }
       }
       if (
@@ -1788,6 +1845,19 @@ export const getUserTaskDetails = async (event) => {
           ],
           order: [["createdAt", "ASC"]],
         },
+        // {
+        //   // confuse about this one also
+        //   model: UserTaskCustomField,
+        //   as: "customFields",
+        //   include: [
+        //     {
+        //       model: TaskCustomColumnDefinition,
+        //       as: "columnDefinition",
+        //       where: { isActive: true },
+        //       required: false,
+        //     },
+        //   ],
+        // },
       ],
     });
 
@@ -2329,6 +2399,22 @@ export const getUserTasksStatusWise = async (event) => {
         { model: OrganisationPriority, as: "priority" },
         { model: OrganisationStatus, as: "status" },
         { model: UserTaskAttachment, as: "attachments", required: false },
+        {
+          model: UserTaskCustomField,
+          as: "customFields",
+          required: false,
+          include: [
+            {
+              model: TaskCustomColumnDefinition,
+              as: "columnDefinition",
+              where: {
+                organisationId: loggedUser.orgId,
+                isActive: true,
+              },
+              required: false,
+            },
+          ],
+        },
       ],
     });
 
@@ -2543,3 +2629,154 @@ function parseCSV(filePath) {
       .on("error", (err) => reject(err));
   });
 }
+
+// ============================================
+// Custom Column Management Controllers
+// ============================================
+
+export const createCustomColumn = async (event) => {
+  try {
+    const loggedUser = event.context.user;
+    const organisationId = Number(loggedUser.orgId);
+    const body = await readBody(event);
+    const { displayName, dataType, validationRules, defaultValue, dropdownOptions } = JSON.parse(body);
+
+    if (!displayName || !dataType) {
+      throw createError({ statusCode: 400, message: "displayName and dataType are required" });
+    }
+
+    // Validate dataType
+    const validDataTypes = ["text", "number", "date", "boolean", "dropdown"];
+    if (!validDataTypes.includes(dataType)) {
+      throw createError({ statusCode: 400, message: "Invalid dataType" });
+    }
+
+    // Get existing column count for auto-naming
+    const existingCount = await TaskCustomColumnDefinition.count({
+      where: { organisationId, isActive: true },
+    });
+
+    // Generate column name
+    const columnName = `additional_column_${existingCount + 1}`;
+
+    // Get max sort order
+    const maxSortOrder = await TaskCustomColumnDefinition.max("sortOrder", {
+      where: { organisationId, isActive: true },
+    });
+    const sortOrder = (maxSortOrder || 0) + 1;
+
+    const newColumn = await TaskCustomColumnDefinition.create({
+      organisationId,
+      columnName,
+      displayName: displayName || `Additional Column ${existingCount + 1}`,
+      dataType,
+      sortOrder,
+      isActive: true,
+      validationRules: validationRules || null,
+      defaultValue: defaultValue || null,
+      dropdownOptions: dropdownOptions || null,
+      createdBy: loggedUser.userId,
+    });
+
+    return success(newColumn);
+  } catch (err) {
+    console.error(err);
+    return error(500, err.message);
+  }
+};
+
+export const listCustomColumns = async (event) => {
+  try {
+    const loggedUser = event.context.user;
+    const organisationId = Number(loggedUser.orgId);
+
+    const columns = await TaskCustomColumnDefinition.findAll({
+      where: { organisationId, isActive: true },
+      order: [["sortOrder", "ASC"]],
+      include: [
+        {
+          model: User,
+          as: "creator",
+          attributes: ["id", "fullName", "email"],
+        },
+      ],
+    });
+
+    return success(columns);
+  } catch (err) {
+    console.error(err);
+    return error(500, err.message);
+  }
+};
+
+export const updateCustomColumn = async (event) => {
+  try {
+    const loggedUser = event.context.user;
+    const organisationId = Number(loggedUser.orgId);
+    const body = await readBody(event);
+    const { columnId, displayName, dataType, validationRules, defaultValue, dropdownOptions, sortOrder } = JSON.parse(body);
+
+    if (!columnId) {
+      throw createError({ statusCode: 400, message: "columnId is required" });
+    }
+
+    const column = await TaskCustomColumnDefinition.findOne({
+      where: { id: columnId, organisationId },
+    });
+
+    if (!column) {
+      throw createError({ statusCode: 404, message: "Custom column not found" });
+    }
+
+    // Update fields
+    if (displayName !== undefined) column.displayName = displayName;
+    if (dataType !== undefined) {
+      const validDataTypes = ["text", "number", "date", "boolean", "dropdown"];
+      if (!validDataTypes.includes(dataType)) {
+        throw createError({ statusCode: 400, message: "Invalid dataType" });
+      }
+      column.dataType = dataType;
+    }
+    if (validationRules !== undefined) column.validationRules = validationRules;
+    if (defaultValue !== undefined) column.defaultValue = defaultValue;
+    if (dropdownOptions !== undefined) column.dropdownOptions = dropdownOptions;
+    if (sortOrder !== undefined) column.sortOrder = sortOrder;
+
+    await column.save();
+
+    return success(column);
+  } catch (err) {
+    console.error(err);
+    return error(500, err.message);
+  }
+};
+
+export const deleteCustomColumn = async (event) => {
+  try {
+    const loggedUser = event.context.user;
+    const organisationId = Number(loggedUser.orgId);
+    const body = await readBody(event);
+    const { columnId } = JSON.parse(body);
+
+    if (!columnId) {
+      throw createError({ statusCode: 400, message: "columnId is required" });
+    }
+
+    const column = await TaskCustomColumnDefinition.findOne({
+      where: { id: columnId, organisationId },
+    });
+
+    if (!column) {
+      throw createError({ statusCode: 404, message: "Custom column not found" });
+    }
+
+    // Soft delete
+    column.isActive = false;
+    await column.save();
+
+    return success("Custom column deleted successfully");
+  } catch (err) {
+    console.error(err);
+    return error(500, err.message);
+  }
+};

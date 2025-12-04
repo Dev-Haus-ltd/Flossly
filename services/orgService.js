@@ -144,6 +144,13 @@ export default {
       .then(resolve)
       .catch(reject);
   });
-}
+},
+  listCustomColumns() {
+    return new Promise((resolve, reject) => {
+      Get("/tasks/listCustomColumns")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  }
 
 }

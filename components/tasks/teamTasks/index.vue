@@ -50,6 +50,7 @@
           <TasksListView
             :headers="headers"
             :availableHeaders="availableHeaders"
+            :customColumnHeaders="customColumnHeaders"
             :taskDetails="taskDetails"
             :orgStatuses="taskStatuses"
             :priorities="taskPriorities"
@@ -213,6 +214,7 @@ onMounted(() => {
   getTaskPriorities();
   getTaskStatuses();
   getUsers();
+  mainStore.getCustomColumns();
 });
 const updateTasks = () => {
   getTeamStats();
@@ -232,6 +234,28 @@ const getIcon = (categoryName) => {
       return "https://cdn.lordicon.com/qlpudrww.json"; // fallback
   }
 };
+
+// Transform custom columns from store into header format
+const customColumnHeaders = computed(() => {
+  if (!mainStore.customColumns || !Array.isArray(mainStore.customColumns)) {
+    return [];
+  }
+
+  return mainStore.customColumns
+    .filter((col) => col.isActive)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((col) => ({
+      key: `custom_${col.columnName}`,
+      title: col.displayName,
+      sortable: true,
+      width: 200,
+      isCustom: true,
+      columnDefinitionId: col.id,
+      dataType: col.dataType,
+      sortOrder: col.sortOrder,
+    }));
+});
+
 const availableHeaders = computed(() => {
   return mainStore.getTeamTaskAllHeaders;
 });
