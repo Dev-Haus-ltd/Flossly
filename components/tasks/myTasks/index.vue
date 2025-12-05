@@ -37,7 +37,6 @@
           :value="cat.categoryId"
           :key="index"
           class="tab-text"
-          @click="updateTasksList"
           >{{ cat.categoryName }}</v-tab
         >
 
@@ -62,10 +61,17 @@
             :priorities="taskPriorities"
             :users="userList"
             :categories="categories"
+            :page="page"
+            :page-size="pageSize"
+            :status-totals="statusTotals"
             :currentCategoryId="currentTab"
+            :activeFilters="filterState"
             @onFilter="applyFilters"
+            @onSearch="handleSearch"
             @onUpdate="updateTasks"
             @updateSelectedRowItems="updateSelectedRowItems"
+            @onPageChange="handlePageChange"
+            @onPageSizeChange="handlePageSizeChange"
           />
           <RecommendPracticeDialog v-model="recommendDialog" />
           <CommonConfirmDialog
@@ -210,6 +216,11 @@ const isTrayHidden = ref(false);
 const recommendDialog = ref(false);
 const showDeleteConfirm = ref(false);
 const deleteLoading = ref(false);
+const filterState = ref({});
+const page = ref(1);
+const pageSize = ref(10);
+const statusTotals = ref({});
+const totalCount = ref(0);
 
 onMounted(() => {
   user.value = JSON.parse(localStorage.getItem("user"));
@@ -285,6 +296,49 @@ const getUsers = () => {
   });
 };
 
+const setTaskResponse = (payload) => {
+  const groups = payload?.statuses || payload || [];
+  taskDetails.value = sortByCustomStatus(groups);
+
+  const totals = {};
+  groups.forEach((group) => {
+    totals[group.status] = group.total ?? group.tasks?.length ?? 0;
+  });
+  statusTotals.value = totals;
+
+  totalCount.value =
+    typeof payload?.total === "number"
+      ? payload.total
+      : Object.values(totals).reduce((sum, val) => sum + (Number(val) || 0), 0);
+
+  if (payload?.page) page.value = payload.page;
+  if (payload?.pageSize) pageSize.value = payload.pageSize;
+};
+
+const loadTasks = (filters = {}, resetPage = false) => {
+  if (resetPage) {
+    page.value = 1;
+  }
+
+  filterState.value = { ...filterState.value, ...filters };
+
+  const request = {
+    ...filterState.value,
+    categoryId: currentTab.value,
+    page: page.value,
+    pageSize: pageSize.value,
+  };
+
+  taskStore
+    .tasksGroupedByStatusWithCache(request)
+    .then((res) => {
+      if (res.code === 0) {
+        setTaskResponse(res.data);
+      }
+    })
+    .catch(() => {});
+};
+
 const addNewCategoryDialog = () => {
   addCategoryDialog.value = true;
 };
@@ -301,22 +355,21 @@ const handleCategorySuccess = () => {
 };
 
 const applyFilters = (filters) => {
-  filters.categoryId = currentTab.value;
-  // Hard cap to avoid over-fetching – keeps UI snappy for large orgs
-  filters.limit = 100;
-  taskStore
-    .tasksGroupedByStatus(filters)
-    .then((res) => {
-      if (res.code === 0) {
-        taskDetails.value = sortByCustomStatus(res.data);
-      } else {
-        // set snack
-      }
-    })
-    .catch((err) => {
-      return err;
-      // set snack
-    });
+  loadTasks(filters, true);
+};
+
+const handleSearch = (query) => {
+  loadTasks({ search: query }, true);
+};
+
+const handlePageChange = (val) => {
+  page.value = val;
+  loadTasks({}, false);
+};
+
+const handlePageSizeChange = (val) => {
+  pageSize.value = val;
+  loadTasks({}, true);
 };
 const getCategories = () => {
   taskStore.listCategories().then((res) => {
@@ -392,19 +445,10 @@ function sortByCustomStatus(arr) {
   });
 }
 const getMyTasks = (categoryId) => {
-  taskStore
-    .tasksGroupedByStatus({ categoryId, limit: 100 })
-    .then((res) => {
-      if (res.code === 0) {
-        taskDetails.value = sortByCustomStatus(res.data);
-      } else {
-        // set snack
-      }
-    })
-    .catch((err) => {
-      return err;
-      // set snack
-    });
+  if (categoryId !== undefined && categoryId !== null) {
+    currentTab.value = categoryId;
+  }
+  loadTasks({}, true);
 };
 const selectedRowItems = ref([]);
 const hideTray = () => {

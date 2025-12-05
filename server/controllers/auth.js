@@ -275,7 +275,7 @@ export const profile = async (event) => {
     });
     return success(userObj);
   } catch (err) {
-    return error(500, err);
+    return error(500, err.message);
   }
 };
 

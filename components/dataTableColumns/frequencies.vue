@@ -36,7 +36,7 @@
             class="frequency-item"
             @click="
               () => {
-                selected.frequency = s.name;
+                selected.frequency = s.name === 'One off' ? null : s.name;
                 emit('update');
                 selected.frequencyMenu = false;
               }
@@ -54,6 +54,7 @@
 const { selected, column } = defineProps(["selected", "column"]);
 const emit = defineEmits(["update"]);
 const frequencyStatuses = ref([
+{ key: null, name: "One off", color: "#6c757d" },
   { key: "daily", name: "Daily", color: "#B9308A" },
   { key: "weekly", name: "Weekly", color: "#892E88" },
   { key: "fortnightly", name: "Fortnightly", color: "#5D2684" },

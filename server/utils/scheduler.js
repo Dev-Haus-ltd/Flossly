@@ -83,7 +83,7 @@ import { template as EMAIL_TEMPLATE } from './emailTemplate.js'
 import { buildLeadContext, renderTokens } from './tokenRenderer.js'
 
 export const startLeadAutomationScheduler = () => {
-  const minutes = Number(process.env.CRM_LEAD_AUTOMATION_MINUTES || 2);
+  const minutes = Number(process.env.CRM_LEAD_AUTOMATION_MINUTES || 10);
   const pattern = minutes > 0 ? `*/${minutes} * * * *` : null;
   if (!pattern) return;
   cron.schedule(pattern, async () => {

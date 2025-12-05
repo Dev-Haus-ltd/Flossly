@@ -64,6 +64,8 @@ import { CrmOption } from "./crm/options";
 import { CrmLeadCommunication } from "./crm/leadCommunications";
 import { CrmLeadAssignee } from "./crm/leadAssignees";
 import { CrmAutomationTemplate } from "./crm/automationTemplates";
+import { TaskCustomColumnDefinition } from "./tasks/taskCustomColumnDefinitions";
+import { UserTaskCustomField } from "./tasks/userTaskCustomFields";
 
 /*
   Cascade Policy chosen:
@@ -288,6 +290,17 @@ User.hasMany(UserHrDocument, { foreignKey: "userId", as: "hrDocuments", onDelete
 Organisation.hasMany(OrganisationScript, { foreignKey: "organisationId", as: "scripts" });
 OrganisationScript.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", onDelete: 'CASCADE', hooks: true });
 
+// TaskCustomColumnDefinition -> Organisation / User (ORG_DELETE)
+Organisation.hasMany(TaskCustomColumnDefinition, { foreignKey: "organisationId", as: "taskCustomColumns" });
+TaskCustomColumnDefinition.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", onDelete: "CASCADE", hooks: true });
+TaskCustomColumnDefinition.belongsTo(User, { foreignKey: "createdBy", as: "creator", onDelete: "SET NULL" });
+
+// UserTaskCustomField -> UserTask / TaskCustomColumnDefinition (cascade on delete of UserTask)
+UserTask.hasMany(UserTaskCustomField, { foreignKey: "userTaskId", as: "customFields" });
+UserTaskCustomField.belongsTo(UserTask, { foreignKey: "userTaskId", as: "userTask", onDelete: "CASCADE", hooks: true });
+TaskCustomColumnDefinition.hasMany(UserTaskCustomField, { foreignKey: "columnDefinitionId", as: "customFieldValues" });
+UserTaskCustomField.belongsTo(TaskCustomColumnDefinition, { foreignKey: "columnDefinitionId", as: "columnDefinition", onDelete: "CASCADE", hooks: true });
+
 // Export models
 export {
   User,
@@ -355,4 +368,6 @@ export {
   OrganisationTreatment,
   DictionaryScript,
   OrganisationScript,
+  UserTaskCustomField,
+  TaskCustomColumnDefinition
 };
