@@ -56,9 +56,14 @@
             :categories="categories"
             :users="userList"
             :clearSelection="isTrayHidden"
+            :page="page"
+            :page-size="pageSize"
+            :status-totals="statusTotals"
             @onFilter="applyFilters"
             @onUpdate="updateTasks"
             @updateSelectedRowItems="updateSelectedRowItems"
+            @onPageChange="handlePageChange"
+            @onPageSizeChange="handlePageSizeChange"
           />
           <v-card
             v-if="selectedRowItems.length"
@@ -201,6 +206,11 @@ const isTrayHidden = ref(false);
 const recommendDialog = ref(false);
 const showDeleteConfirm = ref(false);
 const deleteLoading = ref(false);
+const activeFilters = ref({});
+const page = ref(1);
+const pageSize = ref(10);
+const statusTotals = ref({});
+const totalCount = ref(0);
 onMounted(() => {
   user.value = JSON.parse(localStorage.getItem("user"));
   if (user && user.preferences) {
@@ -424,33 +434,75 @@ const getTaskPriorities = () => {
       // set snack
     });
 };
-const updateTasksList = () => {
-  getTeamTasks(currentTab.value);
+
+const setTaskResponse = (payload) => {
+  const groups = payload?.statuses || payload || [];
+  const myId = user.value?.id;
+
+  const mapped = groups.map((group) => ({
+    ...group,
+    tasks:
+      group.tasks?.filter(
+        (task) => !task.assignedUsers?.some((u) => u.id === myId)
+      ) || [],
+  }));
+
+  taskDetails.value = sortByCustomStatus(mapped);
+
+  const totals = {};
+  mapped.forEach((group) => {
+    totals[group.status] = group.total ?? group.tasks?.length ?? 0;
+  });
+  statusTotals.value = totals;
+
+  totalCount.value =
+    typeof payload?.total === "number"
+      ? payload.total
+      : Object.values(totals).reduce((sum, val) => sum + (Number(val) || 0), 0);
+
+  if (payload?.page) page.value = payload.page;
+  if (payload?.pageSize) pageSize.value = payload.pageSize;
 };
-const applyFilters = (filters) => {
-  filters.categoryId = currentTab.value;
+
+const loadTasks = (filters = {}, resetPage = false) => {
+  if (resetPage) {
+    page.value = 1;
+  }
+
+  const request = {
+    ...activeFilters.value,
+    ...filters,
+    categoryId: currentTab.value,
+    page: page.value,
+    pageSize: pageSize.value,
+  };
+
+  activeFilters.value = request;
+
   taskStore
-    .teamTasksGroupedByStatus(filters)
+    .teamTasksGroupedByStatus(request)
     .then((res) => {
       if (res.code === 0) {
-        const myId = user.value?.id;
-        const filteredData = res.data
-          .map(group => ({
-            ...group,
-            tasks: group.tasks.filter(task =>
-              !task.assignedUsers?.some(u => u.id === myId)
-            )
-          }))
-          .filter(group => group.tasks && group.tasks.length > 0); // Filter out status groups with 0 tasks
-        taskDetails.value = sortByCustomStatus(filteredData);
-      } else {
-        // set snack
+        setTaskResponse(res.data);
       }
     })
-    .catch((err) => {
-      return err;
-      // set snack
-    });
+    .catch(() => {});
+};
+
+const handlePageChange = (val) => {
+  page.value = val;
+  loadTasks(activeFilters.value, false);
+};
+
+const handlePageSizeChange = (val) => {
+  pageSize.value = val;
+  loadTasks(activeFilters.value, true);
+};
+const updateTasksList = () => {
+  loadTasks({}, true);
+};
+const applyFilters = (filters) => {
+  loadTasks(filters, true);
 };
 const getUsers = () => {
   userStore.getUserList({ roleId: null }).then((res) => {
@@ -474,26 +526,10 @@ function sortByCustomStatus(arr) {
   });
 }
 const getTeamTasks = (categoryId) => {
-  taskStore
-    .teamTasksGroupedByStatus({ categoryId })
-    .then((res) => {
-      if (res.code === 0) {
-        const myId = user.value?.id;
-        
-        const filteredData = res.data
-          .map(group => ({
-            ...group,
-            tasks: group.tasks.filter(task => {
-              const isAssignedToMe = task.assignedUsers?.some(u => u.id === myId);
-              return !isAssignedToMe;
-            })
-          }))
-        taskDetails.value = sortByCustomStatus(filteredData);
-      }
-    })
-    .catch((err) => {
-      // Silent error handling
-    });
+  if (categoryId !== undefined && categoryId !== null) {
+    currentTab.value = categoryId;
+  }
+  loadTasks({}, true);
 };
 const selectedRowItems = ref([]);
 

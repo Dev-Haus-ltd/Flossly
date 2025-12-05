@@ -33,6 +33,8 @@
             v-model="searchInput"
             placeholder="Search"
             append-inner-icon="mdi-magnify"
+            clearable
+            @click:clear="clearSearch"
             variant="solo"
             :elevation="0"
             density="compact"
@@ -47,6 +49,8 @@
         <TasksMenuItemsFilterMenu
           :priorities="priorities"
           :users="users"
+          :statuses="statuses"
+          :clear-trigger="clearFiltersTrigger"
           @update:filters="onFiltersUpdated"
         />
         <div class="">
@@ -139,6 +143,33 @@
       </div>
     </div>
 
+    <div
+      v-if="activeFilterChips.length"
+      class="d-flex align-center flex-wrap mt-2"
+      style="gap: 8px;"
+    >
+      <v-chip
+        v-for="chip in activeFilterChips"
+        :key="chip.key"
+        size="small"
+        color="primary"
+        variant="elevated"
+        closable
+        @click:close="removeFilter(chip.key)"
+      >
+        {{ chip.label }}
+      </v-chip>
+      <v-chip
+        color="secondary"
+        size="small"
+        variant="text"
+        class="ml-1"
+        @click="clearAllFilters"
+      >
+        Clear filters
+      </v-chip>
+    </div>
+
     <v-expansion-panels
       v-if="viewType === 'list' && taskDetails && taskDetails.length"
       v-model="openedPanels"
@@ -169,24 +200,29 @@
                 {{ getStatuses(group.status) }}
               </v-chip>
               <v-chip class="ml-2" :color="getColor(group.status)" label>
-                {{ group.tasks.length }}
+                {{ group.total ?? getStatusTotal(group.status) ?? group.tasks.length }}
               </v-chip>
             </div>
           </template>
         </v-expansion-panel-title>
         <v-expansion-panel-text>
-          <v-data-table
+          <v-data-table-server
             v-if="group.tasks.length"
             :items="group.tasks"
             v-model="selectedTasks"
             v-model:search="search"
             :headers="selectedHeaders"
             :expanded="expanded"
+            :items-per-page="pageSize"
+            :items-length="group.total ?? getStatusTotal(group.status)"
+            :page="page"
             item-value="id"
             class="resizable-table"
             density="compact"
             :item-selectable="() => true"
             @update:modelValue="onSelectionChange"
+            @update:page="onPageChange"
+            @update:items-per-page="onPageSizeChange"
             return-object
             show-select
             hover
@@ -554,7 +590,7 @@
               </v-btn>
               <v-spacer></v-spacer>
             </template>
-          </v-data-table>
+          </v-data-table-server>
         </v-expansion-panel-text>
       </v-expansion-panel>
     </v-expansion-panels>
@@ -615,6 +651,11 @@ const {
   users,
   categories,
   clearSelection,
+  page,
+  pageSize,
+  statusTotals,
+  currentCategoryId,
+  activeFilters,
 } = defineProps({
   headers: Array,
   taskDetails: Array,
@@ -624,9 +665,25 @@ const {
   users: Array,
   categories: Array,
   clearSelection: Boolean,
-    currentCategoryId: {  // ← ADD THIS NEW PROP
+  page: {
+    type: Number,
+    default: 1,
+  },
+  pageSize: {
+    type: Number,
+    default: 10,
+  },
+  statusTotals: {
+    type: Object,
+    default: () => ({}),
+  },
+  currentCategoryId: {
     type: Number,
     default: null,
+  },
+  activeFilters: {
+    type: Object,
+    default: () => ({}),
   },
 });
 watch(
@@ -643,7 +700,14 @@ const updateHeaderOrder = (newOrder) => {
   newOrder.splice(selectable, 1);
   selectedHeaders.value = newOrder;
 };
-const emit = defineEmits(["onFilter", "onUpdate", "updateSelectedRowItems"]);
+const emit = defineEmits([
+  "onFilter",
+  "onUpdate",
+  "updateSelectedRowItems",
+  "onPageChange",
+  "onPageSizeChange",
+  "onSearch",
+]);
 const fixedColumnOrder = [
   "title",
   "status",
@@ -720,7 +784,14 @@ watch(
   (val) => {
     if (searchTimeout) clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
-      search.value = val;
+      const trimmed = (val || "").trim();
+      if (!trimmed) {
+        search.value = "";
+        emit("onSearch", "");
+        return;
+      }
+      search.value = trimmed;
+      emit("onSearch", trimmed);
     }, 250);
   }
 );
@@ -745,6 +816,7 @@ const taskPoolDialog = ref(false);
 const isAllSelected = ref(false);
 const selectedStatusForNewTask = ref(null);
 const selectedCategoryForNewTask = ref(null);
+const clearFiltersTrigger = ref(0);
 
 const openAddTaskDialog = () => {
   selectedStatusForNewTask.value = null;
@@ -778,6 +850,87 @@ const filteredAvailableHeaders = computed(() => {
   // Filter out headers that are already selected
   return availableHeaders.filter(header => !selectedKeys.has(header.key));
 });
+
+const dueDateLabels = {
+  overdue: "Due: Overdue",
+  today: "Due: Today",
+  week: "Due: This week",
+};
+
+const activeFilterChips = computed(() => {
+  const chips = [];
+  const filters = activeFilters || {};
+
+  if (filters.search) {
+    chips.push({ key: "search", label: `Search: ${filters.search}` });
+  }
+  if (filters.priority) {
+    const match = priorities?.find?.((p) => p.id === filters.priority);
+    chips.push({
+      key: "priority",
+      label: `Priority: ${match?.name || filters.priority}`,
+    });
+  }
+  if (filters.user) {
+    const match = users?.find?.((u) => u.id === filters.user);
+    chips.push({
+      key: "user",
+      label: `Assignee: ${match?.fullName || filters.user}`,
+    });
+  }
+  if (filters.frequency) {
+    chips.push({ key: "frequency", label: `Frequency: ${filters.frequency}` });
+  }
+  if (filters.status) {
+    const match = statuses.value?.find?.(
+      (s) => s.key?.toLowerCase?.() === String(filters.status).toLowerCase()
+    );
+    chips.push({
+      key: "status",
+      label: `Status: ${match?.name || filters.status}`,
+    });
+  }
+  if (filters.dueDateFilter) {
+    chips.push({
+      key: "dueDateFilter",
+      label: dueDateLabels[filters.dueDateFilter] || `Due: ${filters.dueDateFilter}`,
+    });
+  }
+
+  return chips;
+});
+
+const getStatusTotal = (statusKey) => {
+  const normalize = (key) =>
+    typeof key === "string" ? key.toLowerCase().replace(/\s+/g, "") : key;
+
+  const normKey = normalize(statusKey);
+  if (statusTotals && typeof statusTotals === "object") {
+    const totalRaw =
+      statusTotals[statusKey] ??
+      statusTotals[normKey] ??
+      statusTotals[normKey?.toUpperCase?.()];
+    const totalNum = Number(totalRaw);
+    if (!Number.isNaN(totalNum)) {
+      return totalNum;
+    }
+  }
+  // Fallback to group-level total, then loaded items length
+  const matchingGroup = taskDetails?.find?.(
+    (t) => normalize(t.status) === normKey
+  );
+  const groupTotal = Number(matchingGroup?.total);
+  if (!Number.isNaN(groupTotal)) return groupTotal;
+  return matchingGroup?.tasks?.length || 0;
+};
+
+const onPageChange = (val) => {
+  emit("onPageChange", val);
+};
+
+const onPageSizeChange = (val) => {
+  emit("onPageSizeChange", val);
+};
 
 const getRoles = () => {
   mainStore
@@ -1409,6 +1562,34 @@ const getDetails = (item) => {
 function onFiltersUpdated(newFilters) {
   emit("onFilter", newFilters);
 }
+
+const clearSearch = () => {
+  searchInput.value = "";
+  search.value = "";
+  emit("onSearch", "");
+};
+
+const clearAllFilters = () => {
+  clearSearch();
+  emit("onFilter", {
+    frequency: null,
+    priority: null,
+    user: null,
+    status: null,
+    dueDateFilter: null,
+    search: "",
+  });
+  clearFiltersTrigger.value += 1;
+};
+
+const removeFilter = (key) => {
+  if (key === "search") {
+    clearSearch();
+    emit("onFilter", { search: "" });
+    return;
+  }
+  emit("onFilter", { [key]: null });
+};
 
 const onSelectionChange = (newSelected) => {
   emit("updateSelectedRowItems", selectedTasks.value);

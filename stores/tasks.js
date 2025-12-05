@@ -1,5 +1,19 @@
 import taskService from "../services/taskService";
 
+const makeTasksCacheKey = (payload = {}) => {
+  const sorted = (obj) => {
+    if (obj === null || typeof obj !== "object") return obj;
+    if (Array.isArray(obj)) return obj.map((item) => sorted(item));
+    return Object.keys(obj)
+      .sort()
+      .reduce((acc, key) => {
+        acc[key] = sorted(obj[key]);
+        return acc;
+      }, {});
+  };
+  return JSON.stringify(sorted(payload));
+};
+
 export const useTaskStore = defineStore("taskStore", {
   state: () => ({
     myTasks: [],
@@ -7,11 +21,15 @@ export const useTaskStore = defineStore("taskStore", {
     myTeamTasks: [],
     myTeamTaskStats: [],
     isLoading: false,
+    tasksCache: new Map(),
   }),
 
   getters: {},
 
   actions: {
+    clearTasksCache() {
+      this.tasksCache.clear();
+    },
     getMyTasks(data) {
       return new Promise((resolve, reject) => {
         this.isLoading = true;
@@ -49,6 +67,7 @@ export const useTaskStore = defineStore("taskStore", {
           .addNewTask(data)
           .then((res) => { 
             this.isLoading = false;
+            if (res?.code === 0) this.clearTasksCache();
             resolve(res);
           })
           .catch((err) => {
@@ -64,6 +83,7 @@ export const useTaskStore = defineStore("taskStore", {
           .addBulkTasks(data)
           .then((res) => { 
             this.isLoading = false;
+            if (res?.code === 0) this.clearTasksCache();
             resolve(res);
           })
           .catch((err) => {
@@ -177,6 +197,33 @@ export const useTaskStore = defineStore("taskStore", {
           });
       });
     },
+    tasksGroupedByStatusWithCache(data) {
+      const key = makeTasksCacheKey(data);
+
+      if (this.tasksCache.has(key)) {
+        return Promise.resolve({
+          code: 0,
+          data: this.tasksCache.get(key),
+        });
+      }
+
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        taskService
+          .tasksGroupedByStatus(data)
+          .then((res) => {
+            this.isLoading = false;
+            if (res?.code === 0 && res?.data) {
+              this.tasksCache.set(key, res.data);
+            }
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
     teamTasksGroupedByStatus(data) {
       return new Promise((resolve, reject) => {
         this.isLoading = true;
@@ -214,6 +261,7 @@ export const useTaskStore = defineStore("taskStore", {
           .updateChecklist(data)
           .then((res) => {
             this.isLoading = false;
+            if (res?.code === 0) this.clearTasksCache();
             resolve(res);
           })
           .catch((err) => {
@@ -229,6 +277,7 @@ export const useTaskStore = defineStore("taskStore", {
         .updateUserTask(data)
         .then((res) => {
           this.isLoading = false;
+          if (res?.code === 0) this.clearTasksCache();
           resolve(res);
         })
         .catch((err) => {
@@ -304,6 +353,7 @@ export const useTaskStore = defineStore("taskStore", {
           .addChecklist(data)
           .then((res) => {
             this.isLoading = false;
+            if (res?.code === 0) this.clearTasksCache();
             resolve(res);
           })
           .catch((err) => {
@@ -319,6 +369,7 @@ export const useTaskStore = defineStore("taskStore", {
           .deleteChecklist(data)
           .then((res) => {
             this.isLoading = false;
+            if (res?.code === 0) this.clearTasksCache();
             resolve(res);
           })
           .catch((err) => {
@@ -349,6 +400,7 @@ export const useTaskStore = defineStore("taskStore", {
           .addAttachments(data, options)
           .then((res) => {
             this.isLoading = false;
+            if (res?.code === 0) this.clearTasksCache();
             resolve(res);
           })
           .catch((err) => {
@@ -364,6 +416,7 @@ export const useTaskStore = defineStore("taskStore", {
           .deleteAttachment(data)
           .then((res) => {
             this.isLoading = false;
+            if (res?.code === 0) this.clearTasksCache();
             resolve(res);
           })
           .catch((err) => {
@@ -379,6 +432,7 @@ export const useTaskStore = defineStore("taskStore", {
           .deleteAttachment(data)
           .then((res) => {
             this.isLoading = false;
+            if (res?.code === 0) this.clearTasksCache();
             resolve(res);
           })
           .catch((err) => {
@@ -394,6 +448,7 @@ export const useTaskStore = defineStore("taskStore", {
           .assignTask(data)
           .then((res) => {
             this.isLoading = false;
+            if (res?.code === 0) this.clearTasksCache();
             resolve(res);
           })
           .catch((err) => {
@@ -409,6 +464,7 @@ export const useTaskStore = defineStore("taskStore", {
           .unAssignBulkTask(data)
           .then((res) => {
             this.isLoading = false;
+            if (res?.code === 0) this.clearTasksCache();
             resolve(res);
           })
           .catch((err) => {
@@ -424,6 +480,7 @@ export const useTaskStore = defineStore("taskStore", {
           .completeBulkTasks(data)
           .then((res) => {
             this.isLoading = false;
+            if (res?.code === 0) this.clearTasksCache();
             resolve(res);
           })
           .catch((err) => {
@@ -440,6 +497,7 @@ export const useTaskStore = defineStore("taskStore", {
           .archieveBulkTasks(data)
           .then((res) => {
             this.isLoading = false;
+            if (res?.code === 0) this.clearTasksCache();
             resolve(res);
           })
           .catch((err) => {
@@ -455,6 +513,7 @@ export const useTaskStore = defineStore("taskStore", {
           .unarchiveBulkTasks(data)
           .then((res) => {
             this.isLoading = false;
+            if (res?.code === 0) this.clearTasksCache();
             resolve(res);
           })
           .catch((err) => {
@@ -470,6 +529,7 @@ export const useTaskStore = defineStore("taskStore", {
           .unAssignTask(data)
           .then((res) => {
             this.isLoading = false;
+            if (res?.code === 0) this.clearTasksCache();
             resolve(res);
           })
           .catch((err) => {
