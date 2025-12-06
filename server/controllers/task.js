@@ -128,19 +128,6 @@ export const listMyTasks = async (event) => {
         as: "status",
         attributes: ["id", "key", "name", "color"],
       },
-      // {
-      //   //i am confused about this model addition in this api
-      //   model: UserTaskCustomField,
-      //   as: "customFields",
-      //   include: [
-      //     {
-      //       model: TaskCustomColumnDefinition,
-      //       as: "columnDefinition",
-      //       where: { isActive: true },
-      //       required: false,
-      //     },
-      //   ],
-      // },
     ];
     const tasks = await UserTask.findAndCountAll({
       where,
@@ -1845,19 +1832,6 @@ export const getUserTaskDetails = async (event) => {
           ],
           order: [["createdAt", "ASC"]],
         },
-        // {
-        //   // confuse about this one also
-        //   model: UserTaskCustomField,
-        //   as: "customFields",
-        //   include: [
-        //     {
-        //       model: TaskCustomColumnDefinition,
-        //       as: "columnDefinition",
-        //       where: { isActive: true },
-        //       required: false,
-        //     },
-        //   ],
-        // },
       ],
     });
 
