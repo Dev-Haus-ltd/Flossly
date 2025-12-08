@@ -163,19 +163,39 @@ export const addTaskCategory = async (event) => {
   const loggedUser = event.context.user;
   ensureManagerOrOwner(loggedUser);
   const body = await readBody(event);
-  const { name, description, parentId, color } = JSON.parse(body);
+  const { id, name, description, parentId, color } = JSON.parse(body);
   if (!name) return error(400, "Name required");
+
   try {
-    const cat = await TaskCategory.findOne({
+    // Prevent duplicate names (case-insensitive) inside the same org, excluding self on update
+    const existingName = await TaskCategory.findOne({
       where: {
-        name: {
-          [Op.iLike]: name, // case-insensitive match
-        },
+        name: { [Op.iLike]: name },
         organisationId: loggedUser.orgId,
+        ...(id ? { id: { [Op.ne]: id } } : {}),
       },
     });
-    if (cat)
+    if (existingName) {
       throw createError({ message: `Category ${name} is already added` });
+    }
+
+    // Update when id is provided, otherwise create
+    if (id) {
+      const category = await TaskCategory.findOne({
+        where: { id, organisationId: loggedUser.orgId },
+      });
+      if (!category) {
+        throw createError({ message: "Category not found" });
+      }
+
+      category.name = name;
+      category.description = description;
+      category.parentId = parentId;
+      category.color = color;
+      await category.save();
+
+      return success({ message: "Updated", category });
+    }
 
     const newCategory = await TaskCategory.create({
       name,

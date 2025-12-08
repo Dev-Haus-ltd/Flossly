@@ -401,6 +401,50 @@
                   @update:modelValue="updateValueRow(item, 'dueDate')"
                 />
               </template>
+              <template v-else-if="col.key === 'documentLink'">
+                <div class="d-flex align-center pa-1">
+                  <template
+                    v-if="
+                      templateLinkDetails(item.documentLink).type === 'link' &&
+                      !isEditingLink(item.id, col.key)
+                    "
+                  >
+                    <a
+                      :href="templateLinkDetails(item.documentLink).value"
+                      target="_blank"
+                      rel="noopener"
+                      class="template-link-anchor"
+                    >
+                      {{ item.documentLink }}
+                    </a>
+                    <v-btn
+                      icon
+                      size="x-small"
+                      variant="text"
+                      class="ml-1"
+                      @click.stop="startEditingLink(item, col.key)"
+                    >
+                      <v-icon size="14">mdi-pencil</v-icon>
+                    </v-btn>
+                  </template>
+                  <template v-else>
+                    <v-text-field
+                      :model-value="item.documentLink"
+                      @update:modelValue="(val) => {
+                        item.documentLink = val;
+                      }"
+                      :variant="isFocused(item.id, col.key) ? 'outlined' : 'plain'"
+                      @focus="() => { setFocus(item.id, col.key, true); storeOriginalValue(item.id, col.key, item); }"
+                      @blur="updateValueRow(item, 'documentLink')"
+                      density="compact"
+                      @keyup.enter="(e) => handleEnterKey(e, item, col.key)"
+                      @keyup.escape="(e) => handleEscapeKey(e, item, col.key)"
+                      hide-details
+                      class="small-input"
+                    />
+                  </template>
+                </div>
+              </template>
               <template v-else-if="col.key === 'updatedAt'">
                 <p class="text-center">{{ formattedDate(item.updatedAt) }}</p>
               </template>
@@ -639,6 +683,7 @@
 
 <script setup>
 import { parsedDate } from "@/lib/dateFormatter";
+import { describeTextContent } from "@/lib/misc";
 import draggable from "vuedraggable";
 import listicon from "@/assets/icons/listView/listicon.svg";
 import calendericon from "@/assets/icons/listView/calendericon.svg";
@@ -828,6 +873,7 @@ const bulkTaskUploadDialog = ref(false);
 const rolesList = ref([]);
 const isResizing = ref(false);
 const editingColumn = ref({})
+const editingLinkField = ref({});
 
 const enableEditing = (column, index) => {
   editingColumn.value[`${index}-${column.key}`] = true;
@@ -1028,6 +1074,19 @@ const getTaskUsers = (task) => {
     return users.filter((x) => x.roleId !== task.taskDetails.roleId && x.status === "Active");
   } else return [];
 };
+const isEditingLink = (id, key) =>
+  editingLinkField.value[`${id}-${key}`] === true;
+
+const startEditingLink = (item, key) => {
+  editingLinkField.value[`${item.id}-${key}`] = true;
+  setFocus(item.id, key, true);
+  storeOriginalValue(item.id, key, item);
+};
+
+const stopEditingLink = (id, key) => {
+  delete editingLinkField.value[`${id}-${key}`];
+  setFocus(id, key, false);
+};
 const updateTasks = () => {
   drawerOpen.value = false;
   taskPoolDialog.value = false;
@@ -1073,6 +1132,7 @@ const formattedDate = (date) => {
     return '';
   }
 };
+const templateLinkDetails = (value) => describeTextContent(value || "");
 const setFocus = (id, key, state) => {
   focusedField.value[`${id}-${key}`] = state;
 };
@@ -1324,8 +1384,18 @@ const updateValueRow = async (row, key) => {
     delete originalFieldValues.value[fieldId];
   }
 
-  // Skip saving for comments and documentLink
-  if (key === "comments" || key === "documentLink") return;
+  // Skip saving for comments only
+  if (key === "comments") return;
+
+  if (key === "documentLink") {
+    const meta = templateLinkDetails(row.documentLink);
+    if (meta.type === "empty") {
+      row.documentLink = "";
+    } else {
+      row.documentLink = meta.value;
+    }
+    stopEditingLink(row.id, key);
+  }
 
   // New nested-value handling
   const currentValue = getNestedValue(row, key);
@@ -1716,6 +1786,12 @@ th {
   background-color: #fff;
   margin-top: 16px;
   gap: 16px;
+}
+.template-link-anchor {
+  font-size: 13px;
+  color: #0061fb;
+  text-decoration: underline;
+  white-space: nowrap;
 }
 .cust-checkbox {
   width: 18px;

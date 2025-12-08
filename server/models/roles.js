@@ -14,7 +14,7 @@ export const Role = sequelize.define(
       allowNull: false
     },
     roleType: {
-      type: DataTypes.ENUM('Clinical', 'Clinical Support', 'Operational & Admin', 'Business & Marketing', 'Back Office / External'),
+      type: DataTypes.ENUM('Clinical', 'Clinical Support', 'Operational & Admin', 'Business & Marketing', 'Back Office / External','Consultant / Ambassador'),
       allowNull: false
     },
     description: {
