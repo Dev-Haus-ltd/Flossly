@@ -8,7 +8,9 @@
     :width="600"
   >
     <v-toolbar flat color="white">
-      <v-toolbar-title class="title-text"> Add New Category </v-toolbar-title>
+      <v-toolbar-title class="title-text">
+        {{ drawerTitle }}
+      </v-toolbar-title>
       <v-spacer />
       <v-btn
         icon
@@ -121,16 +123,20 @@
         @click="onSubmit()"
         flat
       >
-        Save
+        {{ isEditMode ? "Update" : "Save" }}
       </v-btn>
     </div>
   </v-navigation-drawer>
 </template>
 
 <script setup>
-const { modelValue, categories } = defineProps({
+const props = defineProps({
   modelValue: Boolean,
   categories: Array,
+  editCategory: {
+    type: Object,
+    default: null,
+  },
 });
 
 const mainStore = useMainStore();
@@ -148,24 +154,60 @@ const form = ref({
   color: "",
 });
 
-const modelValueRef = toRef(() => modelValue);
+const modelValueRef = toRef(props, "modelValue");
+const editCategoryRef = toRef(props, "editCategory");
+const isEditMode = computed(() => !!editCategoryRef.value);
+const drawerTitle = computed(() =>
+  isEditMode.value ? "Edit Category" : "Add New Category"
+);
+
+const populateForm = (category = null) => {
+  const source = category || editCategoryRef.value;
+  form.value = {
+    id: source?.id || null,
+    name: source?.name || "",
+    description: source?.description || "",
+    parentId: source?.parentId || null,
+    color: source?.color || "",
+  };
+  if (formRef.value) {
+    formRef.value.resetValidation();
+  }
+};
 
 watch(
   modelValueRef,
   (newValue) => {
     if (newValue) {
-      mainCategories.value = categories?.filter((x) => !x.parentId) || [];
+        const list = props.categories || [];
+        const currentId = editCategoryRef.value?.id;
+        mainCategories.value = list.filter((x) => !x.parentId && x.id !== currentId);
       resetForm();
     }
   },
   { immediate: true }
 );
 
+watch(
+  editCategoryRef,
+  (updated) => {
+    if (modelValueRef.value && updated) {
+      populateForm(updated);
+    }
+  },
+  { deep: true }
+);
+
 const onSubmit = async () => {
   const formValidation = await formRef.value.validate();
   if (formValidation.valid) {
+    const payload = { ...form.value };
+    if (isEditMode.value && editCategoryRef.value?.id) {
+      payload.id = editCategoryRef.value.id;
+    }
+
     taskStore
-      .addCategory(form.value)
+      .addCategory(payload)
       .then((res) => {
         if (res.code === 0) {
           // Extract the newly created category from API response
@@ -184,7 +226,9 @@ const onSubmit = async () => {
           // Show success message
           mainStore.setSnackbar({
             type: "success",
-            title: "Category created successfully",
+            title: isEditMode.value
+              ? "Category updated successfully"
+              : "Category created successfully",
           });
         } else {
           mainStore.setSnackbar({
@@ -203,20 +247,11 @@ const onSubmit = async () => {
 };
 
 const resetForm = () => {
-  form.value = {
-    name: "",
-    description: "",
-    parentId: null,
-    color: "",
-  };
-  if (formRef.value) {
-    formRef.value.reset();
-    formRef.value.resetValidation();
-  }
+  populateForm();
 };
 
 const handleModelValueUpdate = (value) => {
-  if (!value && modelValue) {
+  if (!value && props.modelValue) {
     resetForm();
     emit("close");
   }

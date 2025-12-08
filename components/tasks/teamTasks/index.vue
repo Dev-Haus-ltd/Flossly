@@ -6,11 +6,17 @@
     <div class="pa-5 rounded-lg">
       <div class="task-summary">
         <!-- Cards Grid -->
-        <v-row v-if="taskStats && taskStats.length > 0"
+        <v-row
+          v-if="visibleTaskStats && visibleTaskStats.length > 0"
           style="flex-wrap: nowrap; overflow: auto;"
+        >
+          <v-col
+            cols="12"
+            md="3"
+            lg="2"
+            v-for="(item, i) in visibleTaskStats"
+            :key="i"
           >
-          <v-col cols="12"  md="3"
-          lg="2" v-for="(item, i) in taskStats" :key="i">
             <CommonStatCard
               :icon="getIcon(item.categoryName)"
               :label="item.categoryName"
@@ -27,12 +33,41 @@
         slider-color="primary"
       >
         <v-tab
-          v-for="(cat, index) in taskStats"
+          v-for="(cat, index) in visibleTaskStats"
           :value="cat.categoryId"
           :key="index"
           class="tab-text"
           @click="updateTasksList"
-          >{{ cat.categoryName }}</v-tab
+          >
+          <div class="d-flex align-center justify-center" style="gap: 6px">
+            <span>{{ cat.categoryName }}</span>
+            <v-menu v-if="shouldShowCategoryMenu(cat)" offset-y>
+              <template #activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  icon
+                  variant="text"
+                  size="x-small"
+                  class="ml-1"
+                  @click.stop
+                >
+                  <v-icon size="16">mdi-dots-horizontal</v-icon>
+                </v-btn>
+              </template>
+              <v-list density="compact">
+                <v-list-item @click.stop="hideCategory(cat)">
+                  <v-list-item-title>Hide</v-list-item-title>
+                </v-list-item>
+                <v-list-item
+                  v-if="canEditCategory(cat)"
+                  @click.stop="startEditCategory(cat)"
+                >
+                  <v-list-item-title>Edit</v-list-item-title>
+                </v-list-item>
+              </v-list>
+            </v-menu>
+          </div>
+        </v-tab
         >
 
         <!-- Plus Button Tab -->
@@ -174,6 +209,7 @@
         @close="handleCategoryDialogClose"
         @success="handleCategorySuccess"
         :categories="categories"
+        :edit-category="categoryToEdit"
       />
     </div>
   </div>
@@ -211,15 +247,122 @@ const page = ref(1);
 const pageSize = ref(10);
 const statusTotals = ref({});
 const totalCount = ref(0);
-onMounted(() => {
+const hiddenCategoryIds = ref([]);
+const categoryToEdit = ref(null);
+const hiddenCategoryStorageKey = "teamTasksHiddenCategoryIds";
+const defaultCategoryNames = [
+  "Staff Management",
+  "Marketing",
+  "Finance",
+  "HR",
+];
+const visibleTaskStats = computed(() =>
+  (taskStats.value || []).filter(
+    (cat) => !hiddenCategoryIds.value.includes(cat.categoryId)
+  )
+);
+
+const loadHiddenCategories = () => {
+  try {
+    const stored = JSON.parse(
+      localStorage.getItem(hiddenCategoryStorageKey) || "[]"
+    );
+    hiddenCategoryIds.value = Array.isArray(stored) ? stored : [];
+  } catch (err) {
+    hiddenCategoryIds.value = [];
+  }
+};
+
+const persistHiddenCategories = () => {
+  localStorage.setItem(
+    hiddenCategoryStorageKey,
+    JSON.stringify(hiddenCategoryIds.value)
+  );
+};
+
+const isMandatoryCategory = (cat) => !!(cat?.isDefault);
+
+const isDefaultNamedCategory = (cat) =>
+  defaultCategoryNames.includes((cat?.categoryName || cat?.name || "").trim());
+
+const shouldShowCategoryMenu = (cat) =>
+  !isMandatoryCategory(cat) && !isDefaultNamedCategory(cat);
+
+const canEditCategory = (cat) => {
+  if (!cat || !shouldShowCategoryMenu(cat)) return false;
+  const count = Number(
+    cat.taskCount ?? cat.total ?? cat.count ?? cat.taskTotal ?? 0
+  );
+  if (Number.isNaN(count)) return false;
+  return count <= 0;
+};
+
+const ensureCurrentTabVisible = () => {
+  if (!visibleTaskStats.value.length) {
+    currentTab.value = null;
+    return;
+  }
+  const hasCurrent = visibleTaskStats.value.some(
+    (cat) => cat.categoryId === currentTab.value
+  );
+  if (!hasCurrent) {
+    currentTab.value = visibleTaskStats.value[0].categoryId;
+  }
+};
+
+const mergeCategoriesWithStats = (stats = []) => {
+  const map = new Map();
+
+  (categories.value || []).forEach((cat) => {
+    const id = cat.id ?? cat.categoryId;
+    if (id === undefined || id === null) return;
+    map.set(String(id), {
+      categoryId: id,
+      categoryName: cat.name || cat.categoryName,
+      taskCount: 0,
+      isMandatory: cat.isMandatory ?? cat.isDefault ?? false,
+      color: cat.color,
+      parentId: cat.parentId ?? null,
+      description: cat.description ?? "",
+    });
+  });
+
+  (stats || []).forEach((stat) => {
+    const id = stat.categoryId ?? stat.id;
+    if (id === undefined || id === null) return;
+    const key = String(id);
+    const existing = map.get(key) || {};
+    map.set(key, {
+      ...existing,
+      ...stat,
+      categoryId: id,
+      categoryName: stat.categoryName || existing.categoryName,
+      isMandatory: stat.isMandatory ?? existing.isMandatory ?? false,
+    });
+  });
+
+  return Array.from(map.values());
+};
+
+const setTaskStats = (stats = []) => {
+  taskStats.value = mergeCategoriesWithStats(stats);
+  ensureCurrentTabVisible();
+};
+
+const resetCategoryEditing = () => {
+  categoryToEdit.value = null;
+};
+
+onMounted(async () => {
+  loadHiddenCategories();
   user.value = JSON.parse(localStorage.getItem("user"));
   if (user && user.preferences) {
     headers.value = user.preferences.taskTableColumns;
   } else {
     headers.value = mainStore.getTeamTaskTableHeaders;
   }
-  getCategories();
-  getTeamStats();
+  await getCategories();
+  await getTeamStats();
   getTaskPriorities();
   getTaskStatuses();
   getUsers();
@@ -247,12 +390,16 @@ const availableHeaders = computed(() => {
 });
 const selectedStatusId = ref(null);
 const statusUpdateLoading = ref(false);
-const getCategories = () => {
-  taskStore.listCategories().then((res) => {
+const getCategories = async () => {
+  try {
+    const res = await taskStore.listCategories();
     if (res.code === 0) {
-      categories.value = res.data;
+      categories.value = res.data || [];
     }
-  });
+    return res;
+  } catch (err) {
+    return err;
+  }
 };
 const hideTray = () => {
   selectedRowItems.value = [];
@@ -260,6 +407,7 @@ const hideTray = () => {
   selectedStatusId.value = null;
 };
 const addNewCategoryDialog = () => {
+  resetCategoryEditing();
   addCategoryDialog.value = true;
 };
 const quickStatusActions = computed(() => [
@@ -371,36 +519,60 @@ const handleQuickStatus = (statusKey) => {
 };
 
 const handleCategoryDialogClose = () => {
+  resetCategoryEditing();
   addCategoryDialog.value = false;
 };
 
 const handleCategorySuccess = () => {
   // Refresh categories after successful addition
+  resetCategoryEditing();
   getCategories();
   getTeamStats();
   addCategoryDialog.value = false;
 };
-const getTeamStats = () => {
-  taskStore.getTeamTaskStatsByCategory().then((res) => {
+const getTeamStats = async () => {
+  try {
+    const res = await taskStore.getTeamTaskStatsByCategory();
     if (res.code === 0) {
-      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-        const filteredData = res.data
-        if (filteredData.length > 0) {
-          if (!currentTab.value) {
-            currentTab.value = filteredData[0].categoryId;
-          }
-          taskStats.value = filteredData;
-          getTeamTasks(currentTab.value);
-        } else {
-          taskStats.value = [];
-        }
-      } else {
-        taskStats.value = [];
+      setTaskStats(res.data || []);
+      if (!currentTab.value && visibleTaskStats.value.length) {
+        currentTab.value = visibleTaskStats.value[0].categoryId;
       }
+      getTeamTasks(currentTab.value ?? null);
+    } else {
+      setTaskStats([]);
+      getTeamTasks(null);
     }
-  }).catch((err) => {
-    taskStats.value = [];
-  });
+  } catch (err) {
+    setTaskStats([]);
+    getTeamTasks(null);
+  }
+};
+
+const hideCategory = (cat) => {
+  const id = cat?.categoryId ?? cat?.id;
+  if (!id) return;
+  if (!hiddenCategoryIds.value.includes(id)) {
+    hiddenCategoryIds.value = [...hiddenCategoryIds.value, id];
+    persistHiddenCategories();
+    ensureCurrentTabVisible();
+    mainStore.setSnackbar({
+      title: `${cat.categoryName || "Category"} hidden`,
+      type: "info",
+    });
+  }
+};
+
+const startEditCategory = (cat) => {
+  categoryToEdit.value = {
+    id: cat?.categoryId ?? cat?.id,
+    name: cat?.categoryName || cat?.name || "",
+    description: cat?.description || "",
+    parentId: cat?.parentId ?? null,
+    color: cat?.color || "",
+    isMandatory: cat?.isMandatory ?? false,
+  };
+  addCategoryDialog.value = true;
 };
 
 const getTaskStatuses = () => {
