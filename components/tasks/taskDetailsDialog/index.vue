@@ -387,12 +387,13 @@
                     >
                       <!-- Top Right Icons -->
                       <div
-                        class="d-flex flex-column align-center"
+                        class="d-flex flex-row align-center"
                         style="
                           position: absolute;
                           top: 8px;
                           right: 8px;
                           z-index: 1;
+                          gap: 4px;
                         "
                       >
                         <v-btn
@@ -773,7 +774,10 @@ const deleteFile = async (file) => {
 
     if (res.code === 0) {
       // Refresh task details to update the attachments list
+      const wasDirty = isDirty.value;
       await fetchTaskDetails();
+      // Restore dirty state or set to true if file was deleted
+      isDirty.value = wasDirty || true;
       store.setSnackbar({
         title: res.data || "File removed from task",
         type: "success",
@@ -846,7 +850,11 @@ const uploadFile = async (files) => {
     uploadProgress.value = 100;
 
     if (res.code === 0) {
-      fetchTaskDetails();
+      // Store the current dirty state before refreshing
+      const wasDirty = isDirty.value;
+      await fetchTaskDetails();
+      // Restore dirty state or set to true if file was uploaded
+      isDirty.value = wasDirty || true;
       store.setSnackbar({
         title: "File upload successful",
         type: "success",

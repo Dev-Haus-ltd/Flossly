@@ -209,16 +209,43 @@ const nextStep = async () => {
           userStore.resetUsers();
           step.value++;
         } else {
+          // Extract error message from response
+          const errorMessage = res?.data?.message || res?.message || "Failed to invite team members.";
           mainStore.setSnackbar({
-            title: res.data.message || res.message,
-            type: "Error",
+            title: errorMessage,
+            type: "error",
           });
         }
       })
       .catch((err) => {
+        // Extract error message from the nested error response structure
+        // Error structure: { data: { message: { data: { message: "..." } } } }
+        let errorMessage = "Failed to invite team members.";
+        
+        // Try to extract from nested structure: err.data.message.data.message
+        if (err?.data?.message?.data?.message && typeof err.data.message.data.message === 'string' && err.data.message.data.message.trim() !== '') {
+          errorMessage = err.data.message.data.message;
+        }
+        // Fallback: err.data.message (if it's a string)
+        else if (err?.data?.message && typeof err.data.message === 'string' && err.data.message.trim() !== '') {
+          errorMessage = err.data.message;
+        }
+        // Fallback: err.data.message.message
+        else if (err?.data?.message?.message && typeof err.data.message.message === 'string' && err.data.message.message.trim() !== '') {
+          errorMessage = err.data.message.message;
+        }
+        // Fallback: err.message
+        else if (err?.message && typeof err.message === 'string' && err.message.trim() !== '') {
+          errorMessage = err.message;
+        }
+        // Additional fallback: check if message is directly in data
+        else if (err?.data?.data?.message && typeof err.data.data.message === 'string' && err.data.data.message.trim() !== '') {
+          errorMessage = err.data.data.message;
+        }
+        
         mainStore.setSnackbar({
-          title: err.message,
-          type: "Error",
+          title: errorMessage,
+          type: "error",
         });
       });
   }

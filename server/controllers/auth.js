@@ -27,6 +27,10 @@ import {
   sendInvitationEmail,
   sendOnBoardingMail,
   sendOrgnisationAddedToRegisteredUsers,
+  sendEmailVerificationEmail,
+  portalReadyTrainingInvite,
+  accountCreationNotification,
+  sendOtpForPasswordReset,
 } from "../utils/emailNotifications";
 import requestIp from "request-ip";
 import { HrDocument } from "../models/hrDocuments";
@@ -513,18 +517,27 @@ export const verifyEmail = async (event) => {
         const statuses = await OrganisationStatus.findAll({
           where: { organisationId: userOrg[0].organisationId },
         });
-        const userTasks = tasks.map((task) => ({
-          userId: user.id,
-          taskId: task.id,
-          organisationId: userOrg[0].organisationId,
-          statusId: statuses.find((x) => x.key === "upcoming").id,
-          priorityId: priorities.find((x) => x.key === "medium").id,
-          title: task.title,
-          documentLink: "",
-          frequency: task.defaultFrequency,
-          comments: "",
-        }));
-        await UserTask.bulkCreate(userTasks);
+        
+        // Find default status and priority, with fallbacks
+        const defaultStatus = statuses.find((x) => x.key === "upcoming") || statuses[0];
+        const defaultPriority = priorities.find((x) => x.key === "medium") || priorities[0];
+        
+        // Only proceed if we have valid status and priority
+        if (defaultStatus && defaultPriority) {
+          const userTasks = tasks.map((task) => ({
+            userId: user.id,
+            taskId: task.id,
+            organisationId: userOrg[0].organisationId,
+            statusId: defaultStatus.id,
+            priorityId: defaultPriority.id,
+            title: task.title,
+            documentLink: "",
+            frequency: task.defaultFrequency,
+            comments: "",
+          }));
+          await UserTask.bulkCreate(userTasks);
+        }
+        
         await assignDefaultHRDocsToUser(user.id);
         await portalReadyTrainingInvite(user);
       }
@@ -547,12 +560,24 @@ export const inviteMembers = async (event) => {
     if (!Array.isArray(users) || !users.length) {
       return error(400, "Invitee list is required");
     }
+    
+    // Check for self-invitation
+    const currentUser = await User.findByPk(loggedUser.userId);
+    const currentUserEmail = currentUser?.email?.toLowerCase();
+    if (currentUserEmail) {
+      const selfInviteAttempt = users.some(
+        (user) => user.email?.toLowerCase() === currentUserEmail
+      );
+      if (selfInviteAttempt) {
+        return error(400, "You cannot invite yourself");
+      }
+    }
+    
     const existingUsers = await User.findAll({
       where: { email: users.map((i) => i.email) },
       attributes: ["id", "email"],
     });
     const currentOrganisation = await Organisation.findByPk(currentOrg);
-    const currentUser = await User.findByPk(loggedUser.userId);
     if (existingUsers.length) {
       // Check which existing users already have a UserOrganisation record for this org
       const existingUsersOrgsForCurrentOrg = await UserOrganisation.findAll({

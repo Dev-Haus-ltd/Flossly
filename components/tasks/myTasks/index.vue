@@ -140,14 +140,6 @@
             <span class="action-label">Unarchive</span>
           </div>
 
-          <div
-            v-if="!hasArchivedTasks"
-            class="action-item d-flex flex-column align-center"
-            @click="handleStatusAction"
-          >
-            <v-icon size="24">mdi-check-circle-outline</v-icon>
-            <span class="action-label">{{ getActionButtonLabel }}</span>
-          </div>
 
           <div
             class="action-item d-flex flex-column align-center"
@@ -248,17 +240,6 @@ const availableHeaders = computed(() => {
   return mainStore.getTeamTaskAllHeaders;
 });
 
-const getActionButtonLabel = computed(() => {
-  if (!selectedRowItems.value.length) return "Complete";
-  
-  const uniqueStatuses = [...new Set(selectedRowItems.value.map(item => item.status?.key))];
-  
-  if (uniqueStatuses.length === 1 && uniqueStatuses[0] === "upcoming") {
-    return "Mark In Progress";
-  }
-  
-  return "Complete";
-});
 
 const hasArchivedTasks = computed(() => {
   if (!selectedRowItems.value || selectedRowItems.value.length === 0) {

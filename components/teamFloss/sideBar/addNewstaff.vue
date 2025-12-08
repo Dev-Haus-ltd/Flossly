@@ -62,7 +62,10 @@
                 density="compact"
                 class="mb-1 input-bordered"
                 bg-color="white"
-                :rules="requiredRule"
+                :rules="[...requiredRule, selfInviteRule]"
+                :error-messages="selfInviteError"
+                @input="validateSelfInvitation"
+                @blur="validateSelfInvitation"
                 required
                 flat
               />
@@ -131,6 +134,31 @@ const emit = defineEmits(["close", "success", "update:modelValue"]);
 const formRef = ref(null);
 const requiredRule = [(v) => !!v || "This field is required"];
 const authStore = useAuthStore();
+const selfInviteError = ref("");
+
+// Get current user's email from auth store
+const currentUserEmail = authStore.getLoggedUser?.email?.toLowerCase();
+
+// Self-invitation validation rule
+const selfInviteRule = (v) => {
+  if (!v || !currentUserEmail) return true;
+  return v.toLowerCase() !== currentUserEmail || "You cannot invite yourself";
+};
+
+// Validate self-invitation
+const validateSelfInvitation = () => {
+  if (!form.value.email || !currentUserEmail) {
+    selfInviteError.value = "";
+    return;
+  }
+  
+  if (form.value.email.toLowerCase() === currentUserEmail) {
+    selfInviteError.value = "You cannot invite yourself";
+  } else {
+    selfInviteError.value = "";
+  }
+};
+
 const form = ref({
   fullName: "",
   email: "",
@@ -143,6 +171,7 @@ const resetForm = () => {
     email: "",
     roleId: null,
   };
+  selfInviteError.value = "";
   if (formRef.value) {
     formRef.value.reset();
     formRef.value.resetValidation();
@@ -156,8 +185,11 @@ const handleClose = () => {
 };
 
 const onSubmit = async () => {
+  // Validate self-invitation before form validation
+  validateSelfInvitation();
+  
   const formValidation = await formRef.value.validate();
-  if (formValidation.valid) {
+  if (formValidation.valid && !selfInviteError.value) {
     authStore.inviteMembers({users: [form.value]}).then((res) => {
       if (res.code === 0) {
         // Reset the user cache to ensure new invited users will be fetched when they become active
@@ -176,7 +208,7 @@ const onSubmit = async () => {
       let errorMessage = "Failed to invite user.";
       
       // Try to extract from nested structure: err.data.message.data.message
-      if (err?.data?.message?.data?.message && typeof err.data.message.data.message === 'string') {
+      if (err?.data?.message?.data?.message && typeof err.data.message.data.message === 'string' && err.data.message.data.message.trim() !== '') {
         errorMessage = err.data.message.data.message;
       }
       // Fallback: err.data.message (if it's a string)
@@ -184,16 +216,23 @@ const onSubmit = async () => {
         errorMessage = err.data.message;
       }
       // Fallback: err.data.message.message
-      else if (err?.data?.message?.message && typeof err.data.message.message === 'string') {
+      else if (err?.data?.message?.message && typeof err.data.message.message === 'string' && err.data.message.message.trim() !== '') {
         errorMessage = err.data.message.message;
       }
       // Fallback: err.message
       else if (err?.message && typeof err.message === 'string' && err.message.trim() !== '') {
         errorMessage = err.message;
       }
+      // Additional fallback: check if message is directly in data
+      else if (err?.data?.data?.message && typeof err.data.data.message === 'string' && err.data.data.message.trim() !== '') {
+        errorMessage = err.data.data.message;
+      }
       
       setSnack("error", errorMessage);
     });
+  } else if (selfInviteError.value) {
+    // Show specific error for self-invitation
+    setSnack("error", selfInviteError.value);
   }
 };
 
