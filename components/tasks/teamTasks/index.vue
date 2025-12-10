@@ -42,7 +42,7 @@
         >
           <div class="d-flex align-center justify-center tab-inner">
             <span class="tab-label">{{ cat.categoryName }}</span>
-            <v-menu v-if="shouldShowCategoryMenu(cat)" offset-y>
+            <v-menu offset-y>
               <template #activator="{ props }">
                 <v-btn
                   v-bind="props"
@@ -56,7 +56,10 @@
                 </v-btn>
               </template>
               <v-list density="compact">
-                <v-list-item @click.stop="hideCategory(cat)">
+                <v-list-item
+                  v-if="canHideCategory(cat)"
+                  @click.stop="hideCategory(cat)"
+                >
                   <v-list-item-title>Hide</v-list-item-title>
                 </v-list-item>
                 <v-list-item
@@ -258,9 +261,9 @@ const defaultCategoryNames = [
   "HR",
 ];
 const visibleTaskStats = computed(() =>
-  (taskStats.value || []).filter(
-    (cat) => !hiddenCategoryIds.value.includes(cat.categoryId)
-  )
+  (taskStats.value || [])
+    .filter((cat) => !hiddenCategoryIds.value.includes(cat.categoryId))
+    .filter((cat) => !cat?.parentId)
 );
 
 const loadHiddenCategories = () => {
@@ -282,20 +285,26 @@ const persistHiddenCategories = () => {
 };
 
 const isMandatoryCategory = (cat) => !!(cat?.isDefault);
+const getCategoryTaskCount = (cat) => {
+  const count = Number(
+    cat?.taskCount ?? cat?.total ?? cat?.count ?? cat?.taskTotal ?? 0
+  );
+  return Number.isNaN(count) ? 0 : count;
+};
 
 const isDefaultNamedCategory = (cat) =>
   defaultCategoryNames.includes((cat?.categoryName || cat?.name || "").trim());
 
-const shouldShowCategoryMenu = (cat) =>
-  !isMandatoryCategory(cat) && !isDefaultNamedCategory(cat);
+const canEditCategory = () => true;
 
-const canEditCategory = (cat) => {
-  if (!cat || !shouldShowCategoryMenu(cat)) return false;
-  const count = Number(
-    cat.taskCount ?? cat.total ?? cat.count ?? cat.taskTotal ?? 0
+const canHideCategory = (cat) => {
+  if (!cat) return false;
+  const name = (cat.categoryName || cat.name || "").trim().toLowerCase();
+  const isAllowedDefault = defaultCategoryNames.some(
+    (n) => n.toLowerCase() === name
   );
-  if (Number.isNaN(count)) return false;
-  return count <= 0;
+  if (!isAllowedDefault) return false;
+  return getCategoryTaskCount(cat) === 0;
 };
 
 const ensureCurrentTabVisible = () => {
