@@ -23,6 +23,18 @@ export const updateOrganisationDetails = async (event) => {
   const loggedUser = event.context.user;
   const orgId = loggedUser.orgId;
   const form = formidable({ multiples: false, keepExtensions: true });
+
+  // Helper: pick first value, treat empty strings as undefined
+  const firstNonEmpty = (fields, key) => {
+    if (!fields || !(key in fields)) return undefined;
+    const raw = Array.isArray(fields[key]) ? fields[key][0] : fields[key];
+    if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      return trimmed === '' ? undefined : trimmed;
+    }
+    return raw === '' ? undefined : raw;
+  };
+
   try {
     const { fields, files } = await new Promise((resolve, reject) => {
       form.parse(event.node.req, (err, fields, files) => {
@@ -30,45 +42,101 @@ export const updateOrganisationDetails = async (event) => {
         else resolve({ fields, files });
       });
     });
+
     const organisation = await Organisation.findByPk(orgId);
     if (!organisation) {
       return error(404, "Organisation not found");
     }
-    // Update organisation fields
-    organisation.name = fields.name ? fields.name[0] : organisation.name;
-    organisation.address = fields.address? fields.address[0] : organisation.address;
-    organisation.contact = fields.contact ? fields.contact[0] : organisation.contact;
-    organisation.type = fields.type ? fields.type[0] : organisation.type;
 
+    // STRING fields (only update when non-empty was provided)
+    const name = firstNonEmpty(fields, 'name');
+    const address = firstNonEmpty(fields, 'address');
+    const contact = firstNonEmpty(fields, 'contact');
+    const typeVal = firstNonEmpty(fields, 'type');
 
-    organisation.managerId = fields.managerId ? fields.managerId[0] : organisation.managerId;
-    organisation.teamCount = fields.teamCount ? fields.teamCount[0] : organisation.teamCount;
-    organisation.surgeryCount = fields.surgeryCount ? fields.surgeryCount[0] : organisation.surgeryCount;
-    organisation.cqcInspectionDate = fields.cqcInspectionDate ? fields.cqcInspectionDate[0] : organisation.cqcInspectionDate;
+    if (name !== undefined) organisation.name = name;
+    if (address !== undefined) organisation.address = address;
+    if (contact !== undefined) organisation.contact = contact;
+
+    // Validate enum against model allowed values (Sequelize stores them on rawAttributes)
+    if (typeVal !== undefined) {
+      const enumValues =
+        Organisation.rawAttributes &&
+        Organisation.rawAttributes.type &&
+        Organisation.rawAttributes.type.values;
+      if (Array.isArray(enumValues) && !enumValues.includes(typeVal)) {
+        return error(
+          400,
+          `Invalid organisation type. Allowed values: ${enumValues.join(', ')}`
+        );
+      }
+      organisation.type = typeVal;
+    }
+
+    // Numeric fields
+    const managerId = firstNonEmpty(fields, 'managerId');
+    const teamCount = firstNonEmpty(fields, 'teamCount');
+    const surgeryCount = firstNonEmpty(fields, 'surgeryCount');
+    const cqcInspectionDate = firstNonEmpty(fields, 'cqcInspectionDate');
+
+    if (managerId !== undefined) organisation.managerId = parseInt(managerId, 10) || organisation.managerId;
+    if (teamCount !== undefined) organisation.teamCount = Number.isNaN(Number(teamCount)) ? organisation.teamCount : parseInt(teamCount, 10);
+    if (surgeryCount !== undefined) organisation.surgeryCount = Number.isNaN(Number(surgeryCount)) ? organisation.surgeryCount : parseInt(surgeryCount, 10);
+    if (cqcInspectionDate !== undefined) {
+      const d = new Date(cqcInspectionDate);
+      organisation.cqcInspectionDate = isNaN(d.getTime()) ? organisation.cqcInspectionDate : d;
+    }
 
     // Handle logo upload (if provided)
-    if (files.logo) {
-      const logoFile = files.logo[0] || files.logo;
+    if (files && files.logo) {
+      const logoFile = Array.isArray(files.logo) ? files.logo[0] : files.logo;
       const uploadDir = path.resolve("public/uploads/logos");
       await fs.mkdir(uploadDir, { recursive: true });
-      const fileExt = path.extname(logoFile.originalFilename);
+      const fileExt = path.extname(logoFile.originalFilename || logoFile.newFilename || "");
       const filename = `org-${orgId}-${Date.now()}${fileExt}`;
       const filepath = path.join(uploadDir, filename);
-      await fs.copyFile(logoFile.filepath, filepath);
+      // formidable on some setups gives .filepath or .path
+      const sourcePath = logoFile.filepath || logoFile.path;
+      await fs.copyFile(sourcePath, filepath);
       organisation.logo = `/uploads/logos/${filename}`;
     }
-    if (fields.origin && fields.origin[0] === "onboarding") {
+
+    if (firstNonEmpty(fields, 'origin') === "onboarding") {
       const user = await User.findByPk(loggedUser.userId);
-      user.profileCompletion = 50;
-      await user.save();
+      if (user) {
+        user.profileCompletion = 50;
+        await user.save();
+      }
     }
+
     await organisation.save();
     return success(organisation.toJSON());
+
   } catch (err) {
-    console.log(err.message);
-    return error(500, err.message);
+    // Log full error server-side
+    console.error('updateOrganisationDetails error:', err);
+
+    // Friendly errors for common DB enum error
+    if (err.name === 'SequelizeDatabaseError' && /invalid input value for enum/i.test(err.message)) {
+      // Try to get allowed enum values to show a helpful message
+      const enumValues =
+        Organisation.rawAttributes &&
+        Organisation.rawAttributes.type &&
+        Organisation.rawAttributes.type.values;
+      const allowed = Array.isArray(enumValues) ? enumValues.join(', ') : 'valid enum values';
+      return error(400, `Invalid organisation type provided. Allowed values: ${allowed}`);
+    }
+
+    // Sequelize validation errors
+    if (err.name === 'SequelizeValidationError' && err.errors && err.errors.length) {
+      return error(400, err.errors.map(e => e.message).join('; '));
+    }
+
+    // Generic safe fallback
+    return error(500, 'Unable to update organisation at this time');
   }
 };
+
 
 export const getPriorities = async (event) => {
   const loggedUser = event.context.user;

@@ -369,94 +369,48 @@
                   rounded
                   striped
                 />
-                <v-row class="mt-5" dense>
-                  <v-col
-                    cols="3"
+                <div class="mt-5 attachments-grid">
+                  <div
                     v-for="file in taskDetails.attachments"
                     :key="file.id"
+                    class="attachment-item"
                   >
                     <v-card
-                      class="d-flex flex-column justify-space-between pa-3"
-                      style="
-                        border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
-                        border-radius: 8px;
-                        position: relative;
-                        min-height: 150px;
-                      "
+                      class="d-flex flex-column justify-space-between pa-3 card-equal"
                       elevation="0"
                     >
                       <!-- Top Right Icons -->
-                      <div
-                        class="d-flex flex-column align-center"
-                        style="
-                          position: absolute;
-                          top: 8px;
-                          right: 8px;
-                          z-index: 1;
-                        "
-                      >
-                        <v-btn
-                          icon
-                          size="x-small"
-                          variant="text"
-                          :href="file.link"
-                          target="_blank"
-                        >
+                      <div class="top-icons">
+                        <v-btn icon size="x-small" variant="text" :href="file.link" target="_blank">
                           <v-icon size="16">mdi-download</v-icon>
                         </v-btn>
-                        <v-btn
-                          icon
-                          size="x-small"
-                          variant="text"
-                          @click="deleteFile(file)"
-                        >
+                        <v-btn icon size="x-small" variant="text" @click="deleteFile(file)">
                           <v-icon size="16" color="error">mdi-delete</v-icon>
                         </v-btn>
                       </div>
 
                       <!-- Center File Icon or Preview -->
-                      <div
-                        class="d-flex align-center justify-center"
-                        style="margin-top: 30px; min-height: 100px;"
-                      >
-                        <!-- Image Preview for image files -->
-                        <div v-if="isImageFile(file)" class="image-preview-wrapper">
-                          <img
-                            v-if="!imageLoadErrors[file.id]"
-                            :src="getImageUrl(file.link)"
-                            :alt="file.title"
-                            class="file-preview-image"
-                            @error="handleImageError($event, file)"
-                            @click="openImageInNewTab(file)"
-                          />
-                          <v-icon
-                            v-else
-                            size="60"
-                            class="fallback-icon"
-                          >
-                            mdi-file
-                          </v-icon>
-                        </div>
-                        <!-- File Icon for non-image files -->
-                        <v-icon v-else size="60">mdi-file</v-icon>
+                      <div class="image-preview-wrapper">
+                        <img
+                          v-if="isImageFile(file) && !imageLoadErrors[file.id]"
+                          :src="getImageUrl(file.link)"
+                          :alt="file.title"
+                          class="file-preview-image"
+                          @error="handleImageError($event, file)"
+                          @click="openImageInNewTab(file)"
+                        />
+                        <v-icon v-else size="60" class="fallback-icon">mdi-file</v-icon>
                       </div>
 
-                      <!-- Divider -->
                       <v-divider class="mt-4 mb-1"></v-divider>
 
-                      <!-- Footer: Name and Meta -->
                       <div class="text-center">
-                        <div class="text-body-2 font-weight-medium">
-                          {{ file.title }}
-                        </div>
-                        <div class="text-caption text-grey">
-                          {{ formatFileSize(file.size) }} |
-                          {{ formatDate(file.createdAt) }}
-                        </div>
+                        <div class="text-body-2 font-weight-medium">{{ file.title }}</div>
+                        <div class="text-caption text-grey">{{ formatFileSize(file.size) }} | {{ formatDate(file.createdAt) }}</div>
                       </div>
                     </v-card>
-                  </v-col>
-                </v-row>
+                  </div>
+                </div>
               </div>
             </v-tabs-window-item>
           </v-tabs-window>
@@ -1096,21 +1050,45 @@ const uploadFile = async (files) => {
   font-weight: bold;
   font-size: 14px;
 }
+.attachments-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); /* each card min 220px; grows to fill row */
+  gap: 18px; /* uniform horizontal + vertical gap */
+  align-items: start; /* don't stretch grid items vertically */
+}
+.attachment-item {
+  display: flex;
+}
+.card-equal {
+  width: 100%;
+  min-height: 260px; /* ensures uniform height for all cards */
+  box-sizing: border-box;
+}
+.top-icons {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+}
+
+/* ensure card uses relative positioning for absolute top-icons */
+.card-equal { position: relative; }
 
 .image-preview-wrapper {
-  position: relative;
-  width: 100%;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
 }
 
 .file-preview-image {
-  max-width: 100%;
-  max-height: 120px;
-  width: auto;
-  height: auto;
-  object-fit: contain;
+  width: 100%;
+  height: 140px;         /* consistent preview height */
+  object-fit: cover;     /* fill box, crop if needed */
   border-radius: 4px;
   cursor: pointer;
   transition: transform 0.2s;

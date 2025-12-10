@@ -38,7 +38,7 @@
       <!-- menu content -->
       <v-card
         width="320"
-        class="pa-3 rounded-lg"
+        class="pa-3 rounded-lg menu-card"
         :elevation="0"
         flat
         @mouseenter="cancelClose"   
@@ -212,6 +212,10 @@ const selectUser = (user) => {
 </script>
 
 <style scoped>
+
+.menu-card {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
 .suggested-list {
   max-height: 200px;
   overflow-y: auto;

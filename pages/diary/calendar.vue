@@ -456,9 +456,13 @@ onMounted(() => {
 .custom-toggle {
   background-color: #f3f6fa;
   height: 40px;
+  min-height: 40px; // Add this
   border-radius: 8px;
   padding: 3px;
   gap: 2px;
+  display: flex; // Add this
+  align-items: center; // Add this
+  justify-content: flex-start; // Add this
 }
 
 .custom-toggle :deep(.v-btn) {
