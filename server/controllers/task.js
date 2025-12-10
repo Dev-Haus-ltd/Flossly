@@ -446,7 +446,7 @@ export const updateTask = async (event) => {
             const columnDef = await TaskCustomColumnDefinition.findOne({
               where: {
                 id: columnDefinitionId,
-                organisationId,
+                createdBy: loggedUser.userId,
                 isActive: true,
               },
             });
@@ -1549,88 +1549,84 @@ export const deleteUserTaskChecklist = async (event) => {
 export const groupTeamTasksByTaskId = async (event) => {
   const organisationId = event.context.user.orgId;
   ensureManagerOrOwner(event.context.user);
+
   const body = await readBody(event);
   const { categoryId, frequency, priority, user } = JSON.parse(body);
 
-  // If categoryId is provided, filter by category; otherwise get all categories
-  let categoryIds = [];
-  if (categoryId) {
-    const categories = await TaskCategory.findAll({
-      where: {
-        [Op.or]: [{ id: categoryId }, { parentId: categoryId }],
-        isDeleted: false,
-      },
-      attributes: ["id"],
-    });
-    categoryIds = categories.map((c) => c.id);
-    if (!categoryIds.length) {
-      return success([]);
-    }
-  } else {
-    // If no categoryId provided, get all non-deleted categories
-    const allCategories = await TaskCategory.findAll({
-      where: { isDeleted: false },
-      attributes: ["id"],
-    });
-    categoryIds = allCategories.map((c) => c.id);
-    if (!categoryIds.length) {
-      return success([]);
-    }
-  }
-
-  const where = { organisationId };
-  if (frequency) where["frequency"] = frequency;
-  if (priority) where["priorityId"] = priority;
-  if (user) where["userId"] = user;
-
   try {
+    let categoryIds = [];
+
+    if (categoryId) {
+      const categories = await TaskCategory.findAll({
+        where: {
+          [Op.or]: [{ id: categoryId }, { parentId: categoryId }],
+          isDeleted: false,
+        },
+        attributes: ["id"],
+      });
+
+      categoryIds = categories.map((c) => c.id);
+      if (!categoryIds.length) return success([]);
+    } else {
+      const allCategories = await TaskCategory.findAll({
+        where: { isDeleted: false },
+        attributes: ["id"],
+      });
+
+      categoryIds = allCategories.map((c) => c.id);
+      if (!categoryIds.length) return success([]);
+    }
+
+    const where = { organisationId };
+    if (frequency) where["frequency"] = frequency;
+    if (priority) where["priorityId"] = priority;
+    if (user) where["userId"] = user;
+
+    // ✅ RAW USER TASKS — NO FABRICATION
     const userTasks = await UserTask.findAll({
       where,
       include: [
         {
           model: Task,
-          attributes: [
-            "id",
-            "title",
-            "description",
-            "categoryId",
-            "roleId",
-            "defaultFrequency",
-          ],
           as: "taskDetails",
-          ...(categoryIds.length > 0 && {
-            where: { categoryId: { [Op.in]: categoryIds } },
-            required: true,
-          }),
+          where: { categoryId: { [Op.in]: categoryIds } },
+          required: true,
           include: [
             {
               model: TaskCategory,
               as: "category",
               where: { isDeleted: false },
-              attributes: ["id", "name"],
             },
           ],
         },
-        {
-          model: OrganisationPriority,
-          as: "priority",
-          attributes: ["id", "key", "name", "color"],
-        },
+        { model: OrganisationPriority, as: "priority" },
+        { model: OrganisationStatus, as: "status" },
+        { model: UserTaskAttachment, as: "attachments", required: false },
+        // {
+        //   model: UserTaskCustomField,
+        //   as: "customFields",
+        //   required: false,
+        //   include: [
+        //     {
+        //       model: TaskCustomColumnDefinition,
+        //       as: "columnDefinition",
+        //       where: {
+        //         createdBy: loggedUser.id,
+        //         isActive: true,
+        //       },
+        //       required: false,
+        //     },
+        //   ],
+        // },
         {
           model: User,
-          attributes: ["id", "fullName", "email", "photo"],
           as: "assignedUser",
-        },
-        {
-          model: OrganisationStatus,
-          attributes: ["id", "key", "name", "color"],
-          as: "status",
+          attributes: ["id", "fullName", "email", "photo"],
         },
       ],
     });
 
-    // Separate archived and non-archived tasks
-    // Separate archived and non-archived tasks
+    // ✅ SPLIT ARCHIVED / NON-ARCHIVED
     const archivedTasks = [];
     const nonArchivedTasks = [];
 
@@ -1639,23 +1635,18 @@ export const groupTeamTasksByTaskId = async (event) => {
       else nonArchivedTasks.push(ut);
     }
 
-    // Fetch ALL statuses for organisation
+    // ✅ PREPARE STATUS BUCKETS
     const orgStatuses = await OrganisationStatus.findAll({
       where: { organisationId },
-      attributes: ["id", "key", "name", "color"],
+      attributes: ["key"],
     });
 
-    // Prepare response object with ALL statuses (empty initially)
     const response = {};
-
     orgStatuses.forEach((st) => {
-      response[st.key] = {
-        status: st.key,
-        tasks: [],
-      };
+      response[st.key] = { status: st.key, tasks: [] };
     });
 
-    // Fill non-archived tasks into respective statuses
+    // ✅ FILL NON-ARCHIVED TASKS
     for (const ut of nonArchivedTasks) {
       const statusKey = ut.status?.key || "unknown";
 
@@ -1666,46 +1657,26 @@ export const groupTeamTasksByTaskId = async (event) => {
       response[statusKey].tasks.push(ut);
     }
 
-    // Convert grouped tasks: group tasks by taskId inside each status
+    // ✅ GROUP RAW TASKS BY taskId AND MERGE assignedUsers
     Object.values(response).forEach((group) => {
       const grouped = {};
 
-      group.tasks.forEach((taskEntry) => {
-        const taskId = taskEntry.taskId;
+      group.tasks.forEach((ut) => {
+        const taskId = ut.taskId;
 
         if (!grouped[taskId]) {
-          grouped[taskId] = {
-            taskId,
-            id: taskEntry.id,
-            title: taskEntry.title,
-            description: taskEntry.taskDetails?.description,
-            frequency: taskEntry.frequency,
-            categoryId: taskEntry.taskDetails?.categoryId,
-            category: taskEntry.taskDetails?.category,
-            priorityId: taskEntry.priorityId,
-            status: taskEntry.status,
-            statusId: taskEntry.statusId,
-            priority: taskEntry.priority,
-            comments: taskEntry.comments,
-            dueDate: taskEntry.dueDate,
-            createdAt: taskEntry.createdAt,
-            updatedAt: taskEntry.updatedAt,
-            taskDetails: taskEntry.taskDetails,
-            attachments: taskEntry.attachments,
-            isArchieved: taskEntry.isArchieved,
-            assignedUsers: [],
-          };
+          grouped[taskId] = ut.toJSON();
+          grouped[taskId].assignedUsers = [];
         }
 
-        const userId = taskEntry.assignedUser?.id;
-        if (userId && !grouped[taskId].assignedUsers.some((u) => u.id === userId)) {
+        if (ut.assignedUser) {
           grouped[taskId].assignedUsers.push({
-            id: taskEntry.assignedUser.id,
-            fullName: taskEntry.assignedUser.fullName,
-            email: taskEntry.assignedUser.email,
-            photo: taskEntry.assignedUser.photo,
-            status: taskEntry.status,
-            userTaskId: taskEntry.id,
+            id: ut.assignedUser.id,
+            fullName: ut.assignedUser.fullName,
+            email: ut.assignedUser.email,
+            photo: ut.assignedUser.photo,
+            status: ut.status,
+            userTaskId: ut.id,
           });
         }
       });
@@ -1713,61 +1684,40 @@ export const groupTeamTasksByTaskId = async (event) => {
       group.tasks = Object.values(grouped);
     });
 
-    // Add archived tasks as separate group ALWAYS
+    // ✅ GROUP ARCHIVED SAME WAY
     const archivedGrouped = {};
 
-    archivedTasks.forEach((taskEntry) => {
-      const taskId = taskEntry.taskId;
+    archivedTasks.forEach((ut) => {
+      const taskId = ut.taskId;
 
       if (!archivedGrouped[taskId]) {
-        archivedGrouped[taskId] = {
-          taskId,
-          id: taskEntry.id,
-          title: taskEntry.title,
-          description: taskEntry.taskDetails?.description,
-          frequency: taskEntry.frequency,
-          categoryId: taskEntry.taskDetails?.categoryId,
-          category: taskEntry.taskDetails?.category,
-          priorityId: taskEntry.priorityId,
-          status: taskEntry.status,
-          statusId: taskEntry.statusId,
-          priority: taskEntry.priority,
-          comments: taskEntry.comments,
-          dueDate: taskEntry.dueDate,
-          createdAt: taskEntry.createdAt,
-          updatedAt: taskEntry.updatedAt,
-          taskDetails: taskEntry.taskDetails,
-          attachments: taskEntry.attachments,
-          isArchieved: taskEntry.isArchieved,
-          assignedUsers: [],
-        };
+        archivedGrouped[taskId] = ut.toJSON();
+        archivedGrouped[taskId].assignedUsers = [];
       }
 
-      const userId = taskEntry.assignedUser?.id;
-      if (userId && !archivedGrouped[taskId].assignedUsers.some((u) => u.id === userId)) {
+      if (ut.assignedUser) {
         archivedGrouped[taskId].assignedUsers.push({
-          id: taskEntry.assignedUser.id,
-          fullName: taskEntry.assignedUser.fullName,
-          email: taskEntry.assignedUser.email,
-          photo: taskEntry.assignedUser.photo,
-          status: taskEntry.status,
-          userTaskId: taskEntry.id,
+          id: ut.assignedUser.id,
+          fullName: ut.assignedUser.fullName,
+          email: ut.assignedUser.email,
+          photo: ut.assignedUser.photo,
+          status: ut.status,
+          userTaskId: ut.id,
         });
       }
     });
 
-    // Always include archived section
     response["archived"] = {
       status: "archived",
       tasks: Object.values(archivedGrouped),
     };
 
     return success(Object.values(response));
-
   } catch (err) {
     return error(500, err.message);
   }
 };
+
 
 export const getUserTaskDetails = async (event) => {
   const body = await readBody(event);
@@ -2373,22 +2323,22 @@ export const getUserTasksStatusWise = async (event) => {
         { model: OrganisationPriority, as: "priority" },
         { model: OrganisationStatus, as: "status" },
         { model: UserTaskAttachment, as: "attachments", required: false },
-        {
-          model: UserTaskCustomField,
-          as: "customFields",
-          required: false,
-          include: [
-            {
-              model: TaskCustomColumnDefinition,
-              as: "columnDefinition",
-              where: {
-                organisationId: loggedUser.orgId,
-                isActive: true,
-              },
-              required: false,
-            },
-          ],
-        },
+        // {
+        //   model: UserTaskCustomField,
+        //   as: "customFields",
+        //   required: false,
+        //   include: [
+        //     {
+        //       model: TaskCustomColumnDefinition,
+        //       as: "columnDefinition",
+        //       where: {
+        //         createdBy: loggedUser.id,
+        //         isActive: true,
+        //       },
+        //       required: false,
+        //     },
+        //   ],
+        // },
       ],
     });
 
@@ -2611,7 +2561,6 @@ function parseCSV(filePath) {
 export const createCustomColumn = async (event) => {
   try {
     const loggedUser = event.context.user;
-    const organisationId = Number(loggedUser.orgId);
     const body = await readBody(event);
     const { displayName, dataType, validationRules, defaultValue, dropdownOptions } = JSON.parse(body);
 
@@ -2627,7 +2576,7 @@ export const createCustomColumn = async (event) => {
 
     // Get existing column count for auto-naming
     const existingCount = await TaskCustomColumnDefinition.count({
-      where: { organisationId, isActive: true },
+      where: { createdBy: loggedUser.userId, isActive: true },
     });
 
     // Generate column name
@@ -2635,12 +2584,11 @@ export const createCustomColumn = async (event) => {
 
     // Get max sort order
     const maxSortOrder = await TaskCustomColumnDefinition.max("sortOrder", {
-      where: { organisationId, isActive: true },
+      where: { createdBy: loggedUser.userId, isActive: true },
     });
     const sortOrder = (maxSortOrder || 0) + 1;
 
     const newColumn = await TaskCustomColumnDefinition.create({
-      organisationId,
       columnName,
       displayName: displayName || `Additional Column ${existingCount + 1}`,
       dataType,
@@ -2662,10 +2610,9 @@ export const createCustomColumn = async (event) => {
 export const listCustomColumns = async (event) => {
   try {
     const loggedUser = event.context.user;
-    const organisationId = Number(loggedUser.orgId);
 
     const columns = await TaskCustomColumnDefinition.findAll({
-      where: { organisationId, isActive: true },
+      where: { createdBy: loggedUser.userId, isActive: true },
       order: [["sortOrder", "ASC"]],
       include: [
         {
@@ -2686,7 +2633,6 @@ export const listCustomColumns = async (event) => {
 export const updateCustomColumn = async (event) => {
   try {
     const loggedUser = event.context.user;
-    const organisationId = Number(loggedUser.orgId);
     const body = await readBody(event);
     const { columnId, displayName, dataType, validationRules, defaultValue, dropdownOptions, sortOrder } = JSON.parse(body);
 
@@ -2695,7 +2641,7 @@ export const updateCustomColumn = async (event) => {
     }
 
     const column = await TaskCustomColumnDefinition.findOne({
-      where: { id: columnId, organisationId },
+      where: { id: columnId, createdBy: loggedUser.userId, },
     });
 
     if (!column) {
@@ -2728,7 +2674,6 @@ export const updateCustomColumn = async (event) => {
 export const deleteCustomColumn = async (event) => {
   try {
     const loggedUser = event.context.user;
-    const organisationId = Number(loggedUser.orgId);
     const body = await readBody(event);
     const { columnId } = JSON.parse(body);
 
@@ -2737,7 +2682,7 @@ export const deleteCustomColumn = async (event) => {
     }
 
     const column = await TaskCustomColumnDefinition.findOne({
-      where: { id: columnId, organisationId },
+      where: { id: columnId, createdBy: loggedUser.userId, },
     });
 
     if (!column) {

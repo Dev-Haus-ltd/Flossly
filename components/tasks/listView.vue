@@ -1462,8 +1462,10 @@ const updateTaskInfo = (task) => {
     frequency: task.frequency,
     dueDate: task.dueDate,
     documentLink: task.documentLink,
-    // Include description from taskDetails if it exists
-    description: task.taskDetails?.description,
+    // Include description in taskDetails object as expected by backend
+    taskDetails: {
+      description: task.taskDetails?.description,
+    },
   };
   
   taskStore

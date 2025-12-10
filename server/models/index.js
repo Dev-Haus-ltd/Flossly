@@ -119,10 +119,20 @@ TaskChecklist.belongsTo(Task, { foreignKey: "taskId", as: "task", onDelete: "CAS
 UserTask.hasMany(UserTaskChecklist, { foreignKey: "userTaskId", as: "userTaskChecklist" });
 UserTaskChecklist.belongsTo(UserTask, { foreignKey: "userTaskId", as: "userTask", onDelete: "CASCADE", hooks: true });
 
-// TaskCustomColumnDefinition -> Organisation / User (ORG_DELETE)
-Organisation.hasMany(TaskCustomColumnDefinition, { foreignKey: "organisationId", as: "taskCustomColumns" });
-TaskCustomColumnDefinition.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", onDelete: "CASCADE", hooks: true });
-TaskCustomColumnDefinition.belongsTo(User, { foreignKey: "createdBy", as: "creator", onDelete: "SET NULL" });
+// TaskCustomColumnDefinition -> User (ORG_DELETE)
+User.hasMany(TaskCustomColumnDefinition, {
+  foreignKey: "createdBy",
+  as: "taskCustomColumns",
+  onDelete: "CASCADE",
+  hooks: true,
+});
+
+TaskCustomColumnDefinition.belongsTo(User, {
+  foreignKey: "createdBy",
+  as: "creator",
+  onDelete: "CASCADE",
+  hooks: true,
+});
 
 // UserTaskCustomField -> UserTask / TaskCustomColumnDefinition (cascade on delete of UserTask)
 UserTask.hasMany(UserTaskCustomField, { foreignKey: "userTaskId", as: "customFields" });
