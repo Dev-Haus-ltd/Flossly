@@ -34,6 +34,7 @@ import {
   listUserTaskComments,
   updateUserTaskComment,
   deleteUserTaskComment,
+  generateCalendarRecurringTasks,
 } from "~/server/controllers/task";
 
 export default defineEventHandler(async (event) => {
@@ -109,6 +110,8 @@ export default defineEventHandler(async (event) => {
       return await unAssignBulkTask(event);
     case "statsByCategory":
       return await getTeamTaskStatsByStatusAndCategory(event);
+    case "calendarRecurring":
+      return await generateCalendarRecurringTasks(event);
     default:
       return { code: 0, error: "Not found" };
   }

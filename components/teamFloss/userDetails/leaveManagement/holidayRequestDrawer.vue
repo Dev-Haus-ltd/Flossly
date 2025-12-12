@@ -5,6 +5,7 @@
       location="right"
       temporary
       :width="600"
+      @update:model-value="onUpdateModelValue"
     >
       <!-- Header -->
       <v-toolbar flat color="white">
@@ -280,7 +281,7 @@ const props = defineProps({
   user: Object,
   origin: String,
 });
-const emit = defineEmits(["close", "success"]);
+const emit = defineEmits(["close", "success", "update:modelValue"]);
 const formRef = ref(null);
 const startMenu = ref(false);
 const endMenu = ref(false);
@@ -429,6 +430,7 @@ const onSubmit = async () => {
       const res = await userStore.applyLeave(formData);
 
       if (res.code === 0) {
+        emit("update:modelValue", false);
         emit("success");
         resetForm();
         mainStore.setSnackbar({
@@ -463,7 +465,18 @@ const resetForm = () => {
   };
   uploadedFile.value = [];
 };
+const onUpdateModelValue = (value) => {
+  // This handles clicking outside the drawer or ESC key
+  if (!value) {
+    emit("update:modelValue", false);
+    emit("close");
+    resetForm();
+    formRef.value?.reset();
+  }
+};
+
 const onClose = () => {
+  emit("update:modelValue", false);
   emit("close");
   resetForm();
   formRef.value?.reset();

@@ -235,6 +235,21 @@ export const signupRequest = async (event) => {
 export const profile = async (event) => {
   const loggedUser = event.context.user;
   try {
+    if (!loggedUser || !loggedUser.userId || !loggedUser.orgId) {
+      return error(401, "Unauthenticated");
+    }
+
+    // Ensure user is still active in this organisation
+    const membership = await UserOrganisation.findOne({
+      where: { userId: loggedUser.userId, organisationId: loggedUser.orgId, isActive: true },
+    });
+    if (!membership) {
+      return error(403, "Your organisation membership is inactive");
+    }
+    if (membership.isAccountDeactivated) {
+      return error(403, "Your account is deactivated for this organisation");
+    }
+
     const user = await User.findByPk(loggedUser.userId, {
       attributes: { exclude: ["password"] },
       include: [
@@ -249,7 +264,9 @@ export const profile = async (event) => {
         {
           model: UserOrganisation,
           as: "userOrganisations",
-          where: { isActive: true }, // Only show active organizations
+          // Keep only active orgs in the included association, but don't filter out the user row
+          where: { isActive: true },
+          required: false,
           include: [
             {
               model: Organisation,
@@ -1101,7 +1118,7 @@ export const resendOrganisationInvitation = async (event) => {
       },
     });
     
-    const isFirstOrganization = userOtherOrgs.length === 0;
+    const isFirstOrganization = userOtherOrgs.length === 0; // determines template selection for resend
     
     // No need to delete and recreate - just generate new token and resend email
     // The UserOrganisation record already exists with isActive: false
@@ -1109,7 +1126,7 @@ export const resendOrganisationInvitation = async (event) => {
     
     try {
       
-      if (isFirstOrganization) {
+      if (isFirstOrganization && loggedUser.orgId === orgId) {
         // User doesn't belong to any organization - use new user invitation email
         // Generate new inviteToken for the user (UUID format to match model)
         const inviteToken = uuidv4();
@@ -1137,7 +1154,7 @@ export const resendOrganisationInvitation = async (event) => {
             invitedBy: loggedUser.userId,
           },
           config.JWT_SECRET,
-          { expiresIn: '7d' } // 30 days to respond (increased from 7d)
+          { expiresIn: '7d' }
         );
         
         // Send invitation email using the existing user email template

@@ -100,7 +100,7 @@
                           <p class="mb-2 mt-3" style="font-weight: 500;">Available Columns</p>
                           <div class="d-flex flex-wrap">
                             <div
-                              v-for="(item, index) in computedAvailableHeaders"
+                              v-for="(item, index) in props.availableHeaders"
                               :key="index"
                               class="color-box ma-1 pa-2 d-flex align-center justify-center"
                               :style="{ backgroundColor: getRandomHexColor(item.title) }"
@@ -109,7 +109,7 @@
                             >
                               <span style="color: white; font-size: 12px;">{{ item.title }}</span>
                             </div>
-                            <p v-if="computedAvailableHeaders.length === 0" class="text-grey text-caption pa-2">
+                            <p v-if="props.availableHeaders.length === 0" class="text-grey text-caption pa-2">
                               No available columns to add
                             </p>
                           </div>
@@ -203,9 +203,9 @@
               <div class="text-center">
                 <v-chip 
                   label 
-                  :style="getStatusChipStyle(item.status || 'Active')"
+                  :style="getStatusChipStyle(getDisplayStatus(item))"
                 >
-                  {{ item.status ? item.status : "Active" }}
+                  {{ getDisplayStatus(item) }}
                 </v-chip>
               </div>
             </template>
@@ -246,6 +246,20 @@
               <p class="ml-2">{{ item.cpdHours !== null && item.cpdHours !== undefined ? item.cpdHours : '-' }}</p>
             </template>
 
+            <template v-else-if="col.key === 'accountStatus'">
+              <div class="text-center">
+                <template v-if="(item.status || '').toLowerCase() !== 'invited'">
+                  <v-chip 
+                    label 
+                    :style="getAccountStatusChipStyle(item)"
+                  >
+                    {{ getAccountStatusText(item) }}
+                  </v-chip>
+                </template>
+                <!-- For invited users, show nothing in Account Status -->
+              </div>
+            </template>
+
             <template v-else-if="col.key === 'resend'">
               <div class="d-flex justify-center align-center pa-2" style="min-width: 100px;">
                 <v-btn
@@ -269,6 +283,61 @@
               <div class="d-flex justify-center align-center pa-2" style="min-width: 100px;">
                 <!-- This column is for the + menu in the header, no content needed in cells -->
                 <span style="color: #ccc; font-size: 12px;">-</span>
+              </div>
+            </template>
+
+            <template v-else-if="col.key === 'userActions'">
+              <div class="d-flex justify-center align-center pa-2 gap-2" style="min-width: 120px;">
+                <!-- Show Activate or Deactivate based on current status -->
+                <template v-if="(item.status || '').toLowerCase() !== 'invited'">
+                  <v-tooltip :text="isUserActive(item) ? 'Deactivate User' : 'Activate User'" location="top">
+                    <template #activator="{ props }">
+                      <v-btn
+                        v-bind="props"
+                        size="small"
+                        variant="text"
+                        icon
+                        @click="isUserActive(item) ? $emit('deactivateUser', { org, user: item }) : $emit('activateUser', { org, user: item })"
+                        class="action-btn"
+                      >
+                        <img 
+                          v-if="isUserActive(item)"
+                          src="@/assets/icons/teamfloss/userDetails/unpublish.svg" 
+                          alt="Deactivate" 
+                          width="16"
+                          height="16"
+                        />
+                        <img 
+                          v-else
+                          src="@/assets/icons/teamfloss/userDetails/publish.svg" 
+                          alt="Activate" 
+                          width="16"
+                          height="16"
+                        />
+                      </v-btn>
+                    </template>
+                  </v-tooltip>
+                </template>
+                
+                <v-tooltip text="Delete User" location="top">
+                  <template #activator="{ props }">
+                    <v-btn
+                      v-bind="props"
+                      size="small"
+                      variant="text"
+                      icon
+                      @click="$emit('deleteUser', { org, user: item })"
+                      class="action-btn delete-btn"
+                    >
+                      <img 
+                        src="@/assets/icons/teamfloss/shifts/delete.svg" 
+                        alt="Delete" 
+                        width="16"
+                        height="16"
+                      />
+                    </v-btn>
+                  </template>
+                </v-tooltip>
               </div>
             </template>
           </template>
@@ -303,7 +372,7 @@ const focusedField = ref({});
 const openedPanels = ref([0]);
 const authStore = useAuthStore()
 const mainStore = useMainStore()
-const emit = defineEmits(["add", "details", "onUpdate", "onUpdateHeaders"]);
+const emit = defineEmits(["add", "details", "onUpdate", "onUpdateHeaders", "deactivateUser", "activateUser", "deleteUser"]);
 
 // Resend invitation state
 const resendingInvitation = ref(null);
@@ -359,6 +428,13 @@ const resendInvitation = async (user, org) => {
 const sortBy = ref([]);
 const sortDesc = ref([]);
 
+const getDisplayStatus = (user) => {
+  // If membership in this org is pending, treat as Invited regardless of global user.status
+  if (user?.isActive === false) return 'Invited';
+  const s = (user?.status || 'Active').toLowerCase();
+  return s === 'invited' ? 'Invited' : 'Active';
+};
+
 const formattedDate = (dateStr) => {
   return parsedDate(dateStr);
 };
@@ -374,9 +450,12 @@ const getStatusChipStyle = (status) => {
   } else if (statusLower === 'invited') {
     color = 'hsla(29, 100%, 50%, 1)';
     bgColor = 'hsla(29, 100%, 50%, 0.1)';
-  } else if (statusLower === 'inactive') {
+  } else if (statusLower === 'deactivated' || statusLower === 'disabled') {
     color = 'hsla(357, 100%, 57%, 1)';
     bgColor = 'hsla(357, 100%, 57%, 0.1)';
+  } else if (statusLower === 'expired') {
+    color = '#6b7280';
+    bgColor = 'rgba(107, 114, 128, 0.1)';
   } else {
     // Default to Active colors
     color = 'hsla(124, 57%, 46%, 1)';
@@ -414,7 +493,8 @@ const updateUser = (user, key) => {
           type: "success",
         });
         // Emit event to refresh the teams data
-        emit("onUpdate");
+        // Force refresh to avoid cached results
+        emit("onUpdate", { force: true });
       } else {
         mainStore.setSnackbar({
           title: res?.data?.message || res?.message || "Failed to update profile",
@@ -593,11 +673,37 @@ const removeHeaderFromSelected = (column) => {
   }
 };
 
-// Compute available headers (exclude already selected ones, resend, and action)
-const computedAvailableHeaders = computed(() => {
-  const selectedKeys = props.selectedHeaders.map(h => h.key);
-  return props.availableHeaders.filter(h => !selectedKeys.includes(h.key) && h.key !== 'resend' && h.key !== 'action');
-});
+// Available headers are now computed in the parent component
+
+// Helper functions for account status
+const isUserActive = (user) => {
+  // Account active is based on account-level deactivation flag (isAccountDeactivated)
+  return user.isAccountDeactivated !== true;
+};
+
+// Only show Active or Deactivated in Account Status to avoid duplicating onboarding Status
+const getAccountStatusText = (user) => {
+  return isUserActive(user) ? "Active" : "Deactivated";
+};
+
+// Match styling to the Status chip visuals
+const getAccountStatusChipStyle = (user) => {
+  const statusLower = getAccountStatusText(user).toLowerCase();
+  let color, bgColor;
+  if (statusLower === 'active') {
+    color = 'hsla(124, 57%, 46%, 1)';
+    bgColor = 'hsla(124, 57%, 46%, 0.1)';
+  } else {
+    // deactivated
+    color = 'hsla(357, 100%, 57%, 1)';
+    bgColor = 'hsla(357, 100%, 57%, 0.1)';
+  }
+  return {
+    color,
+    backgroundColor: bgColor,
+  };
+};
+
 </script>
 
 <style scoped>
@@ -672,5 +778,21 @@ const computedAvailableHeaders = computed(() => {
 
 .color-box:hover {
   opacity: 0.8;
+}
+
+.action-btn {
+  min-width: 32px !important;
+  height: 32px !important;
+  padding: 4px !important;
+  border-radius: 6px !important;
+  transition: background-color 0.2s ease !important;
+}
+
+.action-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+.action-btn.delete-btn:hover {
+  background-color: rgba(244, 67, 54, 0.1) !important;
 }
 </style>

@@ -58,6 +58,9 @@
     @onUserSelect="getUserDetails"
     @onUpdate="updateTeams"
     @onUpdateHeaders="onUpdateHeaders"
+    @deactivateUser="handleDeactivateUser"
+    @activateUser="handleActivateUser"
+    @deleteUser="handleDeleteUser"
   />
 
   <TeamFlossSideBarAddNewstaff
@@ -66,15 +69,67 @@
     @close="addStaffDrawer = false"
     @success="updateTeams"
   />
+
+  <!-- Deactivate User Confirmation Dialog -->
+  <CommonActionConfirmDialog
+    v-model="deactivateDialog"
+    title="Deactivate User"
+    :message="`Are you sure you want to deactivate ${selectedUser?.fullName}? They will no longer be able to access this organization.`"
+    confirm-button-text="Deactivate"
+    confirm-button-color="warning"
+    icon="mdi-account-off"
+    icon-color="orange"
+    :user-info="selectedUser"
+    warning-text="This user will be deactivated from this organization but their data will be preserved. This action can be reversed."
+    :loading="actionLoading"
+    @confirm="confirmDeactivateUser"
+  />
+
+  <!-- Activate User Confirmation Dialog -->
+  <CommonActionConfirmDialog
+    v-model="activateDialog"
+    title="Activate User"
+    :message="`Are you sure you want to activate ${selectedUser?.fullName}? They will regain access to this organization.`"
+    confirm-button-text="Activate"
+    confirm-button-color="success"
+    icon="mdi-account-check"
+    icon-color="green"
+    :user-info="selectedUser"
+    warning-text="This user will be reactivated and will regain full access to this organization."
+    :loading="actionLoading"
+    @confirm="confirmActivateUser"
+  />
+
+  <!-- Delete User Confirmation Dialog -->
+  <CommonActionConfirmDialog
+    v-model="deleteDialog"
+    title="Delete User"
+    :message="`Are you sure you want to delete ${selectedUser?.fullName}? This action cannot be undone.`"
+    confirm-button-text="Delete"
+    confirm-button-color="error"
+    icon="mdi-delete"
+    icon-color="red"
+    :user-info="selectedUser"
+    warning-text="This will permanently delete the user and all their associated data if they don't belong to other organizations. This action cannot be undone."
+    :loading="actionLoading"
+    @confirm="confirmDeleteUser"
+  />
 </div>
 </template>
 
 <script setup>
+import userService from "@/services/userService";
+import { useMainStore } from "@/stores/index";
+
 const emit = defineEmits(["getDetails", "onUpdate"]);
 const props = defineProps({
   teams: Array,
   rolesList: Array
 });
+
+// Store and service instances
+const mainStore = useMainStore();
+const $userService = userService;
 const addStaffDrawer = ref(false);
 
 const search = ref("");
@@ -220,6 +275,13 @@ const defaultHeaders = [
     width: 210,
     sortable: true,
   },
+  {
+    title: "Account Status",
+    key: "accountStatus",
+    width: 150,
+    sortable: true,
+  },
+  { title: "Action", key: "userActions", width: 120, sortable: false },
   { title: "Resend", key: "resend", width: 100, sortable: false },
   { title: "+", key: "action", width: 100, sortable: false },
 ];
@@ -231,10 +293,25 @@ const loadSavedHeaders = () => {
     if (saved) {
       const parsed = JSON.parse(saved);
       // Ensure resend column is always present
+      // Ensure resend column is always present
       if (!parsed.find(h => h.key === 'resend')) {
         parsed.push({ title: "Resend", key: "resend", width: 100, sortable: false });
       }
-      // Ensure + column is always present
+      
+      // Ensure Action column is always present (before + column)
+      if (!parsed.find(h => h.key === 'userActions')) {
+        // Find the index of the + column
+        const actionIndex = parsed.findIndex(h => h.key === 'action');
+        if (actionIndex !== -1) {
+          // Insert Action column before the + column
+          parsed.splice(actionIndex, 0, { title: "Action", key: "userActions", width: 120, sortable: false });
+        } else {
+          // If + column doesn't exist, just add it
+          parsed.push({ title: "Action", key: "userActions", width: 120, sortable: false });
+        }
+      }
+      
+      // Ensure + column is always present (at the end)
       if (!parsed.find(h => h.key === 'action')) {
         parsed.push({ title: "+", key: "action", width: 100, sortable: false });
       }
@@ -253,20 +330,54 @@ onMounted(() => {
   selectedHeaders.value = loadSavedHeaders();
 });
 
-// Available columns that can be added
-const availableHeaders = ref([
+// All possible headers (both default and optional)
+const allPossibleHeaders = [
+  { title: "Name", key: "fullName", width: 200, sortable: true },
+  { title: "Role", key: "role.title", width: 200, sortable: true },
+  { title: "Date of Joining", key: "createdAt", width: 150, sortable: true },
+  { title: "Profile Completion %", key: "profileCompletion", width: 180, sortable: true },
+  { title: "Recruitment Docs %", key: "recruitmentDocs", width: 170, sortable: true },
+  { title: "Status", key: "status", width: 210, sortable: true },
+  { title: "Login History", key: "loginHistory", width: 210, sortable: true },
+  { title: "Account Status", key: "accountStatus", width: 150, sortable: true },
   { title: "Email", key: "email", width: 200, sortable: true },
   { title: "Phone", key: "phone", width: 150, sortable: true },
   { title: "Date of Birth", key: "dob", width: 150, sortable: true },
   { title: "CPD Hours", key: "cpdHours", width: 150, sortable: true },
-]);
+];
+
+// Available columns that can be added (computed dynamically)
+const availableHeaders = computed(() => {
+  const selectedKeys = selectedHeaders.value.map(h => h.key);
+  // Return all headers except the ones currently selected, resend, action, and userActions columns
+  return allPossibleHeaders.filter(h => 
+    !selectedKeys.includes(h.key) && 
+    h.key !== 'resend' && 
+    h.key !== 'action' &&
+    h.key !== 'userActions'
+  );
+});
 
 const onUpdateHeaders = (updatedHeaders) => {
   // Ensure resend column is always present
   if (!updatedHeaders.find(h => h.key === 'resend')) {
     updatedHeaders.push({ title: "Resend", key: "resend", width: 100, sortable: false });
   }
-  // Ensure + column is always present
+  
+  // Ensure Action column is always present (before + column)
+  if (!updatedHeaders.find(h => h.key === 'userActions')) {
+    // Find the index of the + column
+    const actionIndex = updatedHeaders.findIndex(h => h.key === 'action');
+    if (actionIndex !== -1) {
+      // Insert Action column before the + column
+      updatedHeaders.splice(actionIndex, 0, { title: "Action", key: "userActions", width: 120, sortable: false });
+    } else {
+      // If + column doesn't exist, just add it
+      updatedHeaders.push({ title: "Action", key: "userActions", width: 120, sortable: false });
+    }
+  }
+  
+  // Ensure + column is always present (at the end)
   if (!updatedHeaders.find(h => h.key === 'action')) {
     updatedHeaders.push({ title: "+", key: "action", width: 100, sortable: false });
   }
@@ -282,6 +393,168 @@ const onUpdateHeaders = (updatedHeaders) => {
 };
 const handleAdd = (item) => {
   console.log("Add clicked:", item);
+};
+
+// Dialog states for confirmations
+const deactivateDialog = ref(false);
+const activateDialog = ref(false);
+const deleteDialog = ref(false);
+const selectedUser = ref(null);
+const actionLoading = ref(false);
+
+const selectedOrgId = ref(null);
+
+const handleDeactivateUser = (payload) => {
+  const { org, user } = payload || {};
+  console.log("Deactivate user clicked:", user);
+  selectedUser.value = user;
+  selectedOrgId.value = org?.organisation?.id || null;
+  deactivateDialog.value = true;
+};
+
+const handleActivateUser = (payload) => {
+  const { org, user } = payload || {};
+  console.log("Activate user clicked:", user);
+  selectedUser.value = user;
+  selectedOrgId.value = org?.organisation?.id || null;
+  activateDialog.value = true;
+};
+
+const handleDeleteUser = (payload) => {
+  const { org, user } = payload || {};
+  console.log("Delete user clicked:", user);
+  selectedUser.value = user;
+  selectedOrgId.value = org?.organisation?.id || null;
+  deleteDialog.value = true;
+};
+
+const confirmDeactivateUser = async () => {
+  if (!selectedUser.value || !props.teams.length) return;
+  
+  // Use selected organisation ID from the clicked row, fallback to the first team's organisation
+  const organisationId = selectedOrgId.value || props.teams[0]?.organisation?.id;
+  if (!organisationId) {
+    mainStore.setSnackbar({
+      title: "Organisation not found",
+      type: "error",
+    });
+    return;
+  }
+  
+  actionLoading.value = true;
+  try {
+    const response = await $userService.deactivateUser({
+      userId: selectedUser.value.id,
+      organisationId: organisationId
+    });
+    
+    if (response.code === 0) {
+      mainStore.setSnackbar({
+        title: "User deactivated successfully",
+        type: "success",
+      });
+      
+      // Emit update to refresh the team list
+      emit("onUpdate");
+      deactivateDialog.value = false;
+    } else {
+      throw new Error(response.message || "Failed to deactivate user");
+    }
+  } catch (error) {
+    console.error("Error deactivating user:", error);
+    mainStore.setSnackbar({
+      title: error.message || "Error deactivating user",
+      type: "error",
+    });
+  } finally {
+    actionLoading.value = false;
+  }
+};
+
+const confirmActivateUser = async () => {
+  if (!selectedUser.value || !props.teams.length) return;
+  
+  // Use selected organisation ID from the clicked row, fallback to the first team's organisation
+  const organisationId = selectedOrgId.value || props.teams[0]?.organisation?.id;
+  if (!organisationId) {
+    mainStore.setSnackbar({
+      title: "Organisation not found",
+      type: "error",
+    });
+    return;
+  }
+  
+  actionLoading.value = true;
+  try {
+    const response = await $userService.activateUser({
+      userId: selectedUser.value.id,
+      organisationId: organisationId
+    });
+    
+    if (response.code === 0) {
+      mainStore.setSnackbar({
+        title: "User activated successfully",
+        type: "success",
+      });
+      
+      // Emit update to refresh the team list
+      emit("onUpdate");
+      activateDialog.value = false;
+    } else {
+      throw new Error(response.message || "Failed to activate user");
+    }
+  } catch (error) {
+    console.error("Error activating user:", error);
+    mainStore.setSnackbar({
+      title: error.message || "Error activating user",
+      type: "error",
+    });
+  } finally {
+    actionLoading.value = false;
+  }
+};
+
+const confirmDeleteUser = async () => {
+  if (!selectedUser.value || !props.teams.length) return;
+  
+  // Use selected organisation ID from the clicked row, fallback to the first team's organisation
+  const organisationId = selectedOrgId.value || props.teams[0]?.organisation?.id;
+  if (!organisationId) {
+    mainStore.setSnackbar({
+      title: "Organisation not found",
+      type: "error",
+    });
+    return;
+  }
+  
+  actionLoading.value = true;
+  try {
+    const response = await $userService.deleteUser({
+      userId: selectedUser.value.id,
+      organisationId: organisationId
+    });
+    
+    if (response.code === 0) {
+      mainStore.setSnackbar({
+        title: response.data || "User deleted successfully",
+        type: "success",
+      });
+      
+      // Emit update to refresh the team list
+      emit("onUpdate");
+      deleteDialog.value = false;
+    } else {
+      throw new Error(response.message || "Failed to delete user");
+    }
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    mainStore.setSnackbar({
+      title: error.message || "Error deleting user",
+      type: "error",
+    });
+  } finally {
+    actionLoading.value = false;
+  }
 };
 
 const getUserDetails = (data) => {

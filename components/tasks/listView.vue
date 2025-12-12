@@ -595,7 +595,11 @@
       </v-expansion-panel>
     </v-expansion-panels>
 
-    <TasksCalenderView v-else-if="viewType === 'calender' && taskDetails && taskDetails.length" :tasks="tasksForCalender" />
+    <TasksCalenderView 
+      v-else-if="viewType === 'calender' && taskDetails && taskDetails.length" 
+      :tasks="tasksForCalender" 
+      @onTaskCompleted="updateTasks"
+    />
 
     <div v-else class="d-flex justify-center mt-5">
       <p class="mt-7">No current task found.</p>
@@ -999,6 +1003,7 @@ watch(
     tasksForCalender.value = newVal.flatMap((group) =>
       group.tasks.map((task) => ({
         id: task.id,
+        taskId: task.taskId || task.originalTaskId || task.taskDetails?.id,
         title: task.title,
         name: task.title,
         start: calenderDate(task.dueDate || task.createdAt),
@@ -1006,6 +1011,9 @@ watch(
         color: task.status?.color || task.priority?.color || "#2196F3",
         status: task.status,
         priority: task.priority,
+        frequency: task.frequency,
+        isVirtualInstance: task.isVirtualInstance || false,
+        originalTaskId: task.originalTaskId,
         userId: task.userId,
         assignedUsers: task.assignedUsers ? task.assignedUsers : [user.value],
         category: task.taskDetails?.category,

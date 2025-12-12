@@ -575,8 +575,17 @@ watch(
     if (newValue) {
       await fetchTaskDetails();
     } else {
-      taskDetails.value = {}; // Optional: reset on close
+      // Reset all state when modal is closed
+      taskDetails.value = {};
+      comments.value = [];
+      newComment.value = "";
+      editingCommentId.value = null;
+      editCommentText.value = "";
+      commentsPage.value = 0;
+      commentsEnd.value = false;
+      currentUserTaskId.value = null;
       isDirty.value = false;
+      tab.value = "overview"; // Reset to overview tab
     }
   },
   { immediate: true }
@@ -607,11 +616,14 @@ const touchDirty = () => {
 const fetchComments = async (userTaskId, reset = false) => {
   if (!userTaskId) return;
   if (isLoadingComments.value) return;
-  if (reset) {
+  
+  // Always reset when fetching for a new task or when explicitly requested
+  if (reset || currentUserTaskId.value !== userTaskId) {
     commentsPage.value = 0;
     commentsEnd.value = false;
     comments.value = [];
   }
+  
   try {
     isLoadingComments.value = true;
     const res = await taskStore.listTaskComments({
@@ -625,7 +637,7 @@ const fetchComments = async (userTaskId, reset = false) => {
         commentsEnd.value = true;
       }
       const ordered = [...payload].reverse(); // backend returns newest first
-      if (commentsPage.value === 0 || reset) {
+      if (commentsPage.value === 0 || reset || currentUserTaskId.value !== userTaskId) {
         comments.value = ordered;
         nextTick(() => scrollCommentsToBottom());
       } else {

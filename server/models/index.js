@@ -226,6 +226,10 @@ User.hasOne(UserAccount, { foreignKey: "userId", as: "account", onDelete: "CASCA
 UserLeaveHistory.belongsTo(User, { foreignKey: "userId", as: "user", onDelete: "CASCADE", hooks: true });
 User.hasMany(UserLeaveHistory, { foreignKey: "userId", as: "leaveHistory", onDelete: "CASCADE", hooks: true });
 
+// Association for the approver (the user who approved the leave)
+UserLeaveHistory.belongsTo(User, { foreignKey: "approvedBy", as: "approver", onDelete: "SET NULL" });
+User.hasMany(UserLeaveHistory, { foreignKey: "approvedBy", as: "approvedLeaves", onDelete: "SET NULL" });
+
 UserLeaveEntitlement.belongsTo(User, { foreignKey: "userId", as: "user", onDelete: "CASCADE", hooks: true });
 User.hasOne(UserLeaveEntitlement, { foreignKey: "userId", as: "leaveEntitlement", onDelete: "CASCADE", hooks: true });
 
