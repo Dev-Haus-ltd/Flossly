@@ -93,6 +93,19 @@
   </v-btn>
 
   <v-btn
+    color="secondary"
+    variant="flat"
+    rounded="lg"
+    class="add-task-btn"
+    @click="bulkLeadUploadDialog = true"
+  >
+    <template #prepend>
+      <v-icon size="18">mdi-upload</v-icon>
+    </template>
+    Upload bulk leads
+  </v-btn>
+
+  <v-btn
     color="primary"
     variant="flat"
     rounded="lg"
@@ -144,6 +157,14 @@
             @close="addLeadDrawer = false"
             @success="handleSuccess"
           />
+          <CustomerRelationManagementBulkLeadUploadDialog
+            v-model="bulkLeadUploadDialog"
+            :lead-sources="leadSources"
+            :treatment-sources="treatmentSources"
+            :users="userList"
+            @close="bulkLeadUploadDialog = false"
+            @onUpdate="handleBulkUploadComplete"
+          />
           <AddAppointment
             v-model="showBookingDrawer"
             :initial-date="bookingInitialDate"
@@ -174,6 +195,7 @@ const authStore = useAuthStore();
 const diaryStore = useDiaryStore();
 const mainStore = useMainStore();
 const addLeadDrawer = ref(false);
+const bulkLeadUploadDialog = ref(false);
 const isLoading = ref(false);
 const showBookingDrawer = ref(false);
 const bookingLead = ref(null);
@@ -458,6 +480,10 @@ const handleSuccess = (newLead) => {
     softDeleted: false,
   };
   leads.value.unshift(mapped);
+};
+const handleBulkUploadComplete = async () => {
+  bulkLeadUploadDialog.value = false;
+  await fetchLeads(activeFilters.value);
 };
 
 const route = useRoute();

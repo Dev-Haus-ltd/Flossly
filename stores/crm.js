@@ -29,6 +29,7 @@ export const useCrmStore = defineStore("crmStore", {
     createLead(payload) { return this._wrap(() => crmService.createLead(payload)); },
     updateLead(payload) { return this._wrap(() => crmService.updateLead(payload)); },
     deleteLeads(ids) { return this._wrap(() => crmService.deleteLeads(ids)); },
+    bulkUploadLeads(payload) { return this._wrap(() => crmService.bulkUploadLeads(payload)); },
 
     // Options
     listOptions(category) { return this._wrap(() => crmService.listOptions(category)); },
