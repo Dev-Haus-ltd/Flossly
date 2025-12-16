@@ -89,11 +89,11 @@
                 <th>Name</th>
                 <th>Email</th>
                 <th>Telephone</th>
+                <th>Inquiry Date</th>
                 <th>Lead Source</th>
                 <th>Lead Status</th>
                 <th>Treatment</th>
                 <th>Assigned To</th>
-                <th>Inquiry Date</th>
                 <th>Follow-up Date</th>
                 <th>Comments</th>
                 <th>Status</th>
@@ -106,7 +106,6 @@
                 :class="{ 'row-error': lead.hasErrors }"
               >
                 <td>{{ index + 1 }}</td>
-
                 <td :class="{ 'cell-error': lead.errors?.name }">
                   <div class="relative">
                     <v-text-field
@@ -157,6 +156,25 @@
                         <div v-bind="tooltipProps" class="absolute inset-0"></div>
                       </template>
                       <span>{{ lead.errors.telephone }}</span>
+                    </v-tooltip>
+                  </div>
+                </td>
+
+                <td :class="{ 'cell-error': lead.errors?.inquiryDate }">
+                  <div class="relative">
+                    <v-text-field
+                      v-model="lead.inquiryDate"
+                      type="date"
+                      density="compact"
+                      variant="outlined"
+                      hide-details
+                      @change="validateLead(index)"
+                    />
+                    <v-tooltip v-show="lead.errors?.inquiryDate" location="top">
+                      <template #activator="{ props: tooltipProps }">
+                        <div v-bind="tooltipProps" class="absolute inset-0"></div>
+                      </template>
+                      <span>{{ lead.errors.inquiryDate }}</span>
                     </v-tooltip>
                   </div>
                 </td>
@@ -251,25 +269,6 @@
                   </div>
                 </td>
 
-                <td :class="{ 'cell-error': lead.errors?.inquiryDate }">
-                  <div class="relative">
-                    <v-text-field
-                      v-model="lead.inquiryDate"
-                      type="date"
-                      density="compact"
-                      variant="outlined"
-                      hide-details
-                      @change="validateLead(index)"
-                    />
-                    <v-tooltip v-show="lead.errors?.inquiryDate" location="top">
-                      <template #activator="{ props: tooltipProps }">
-                        <div v-bind="tooltipProps" class="absolute inset-0"></div>
-                      </template>
-                      <span>{{ lead.errors.inquiryDate }}</span>
-                    </v-tooltip>
-                  </div>
-                </td>
-
                 <td :class="{ 'cell-error': lead.errors?.followUpDate }">
                   <div class="relative">
                     <v-text-field
@@ -356,6 +355,13 @@
 <script setup>
 import { ref, watch, computed } from "vue";
 import * as XLSX from "xlsx";
+import {
+  extractExtension,
+  formatFileSize as formatFileSizeUtil,
+  getFileIcon as getFileIconUtil,
+  parseCSV as parseCSVUtil,
+  validateFileBasics,
+} from "~/lib/fileImportUtils";
 
 const props = defineProps({
   modelValue: Boolean,
@@ -388,7 +394,6 @@ const leadStatusOptions = [
   { key: "lost", label: "Lost" },
   { key: "archived", label: "Archived" },
 ];
-
 const statusLookup = computed(() => {
   const map = new Map();
   leadStatusOptions.forEach((s) => map.set(s.label.toLowerCase(), s.label));
@@ -438,51 +443,28 @@ const processUploadedFile = () => {
   }
 };
 
-const getFileIcon = (filename) => {
-  const ext = filename.split(".").pop().toLowerCase();
-  switch (ext) {
-    case "csv":
-      return "mdi-file-delimited";
-    case "xlsx":
-    case "xls":
-      return "mdi-file-excel";
-    default:
-      return "mdi-file-document";
-  }
-};
-
-const formatFileSize = (bytes) => {
-  if (bytes === 0) return "0 Bytes";
-  const k = 1024;
-  const sizes = ["Bytes", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
-};
+const getFileIcon = (filename) => getFileIconUtil(filename);
+const formatFileSize = (bytes) => formatFileSizeUtil(bytes);
 
 const processFile = async (file) => {
   excelError.value = null;
   isProcessing.value = true;
 
-  if (file.size > MAX_FILE_SIZE) {
-    excelError.value = `File size exceeds ${MAX_FILE_SIZE / (1024 * 1024)}MB limit`;
+  const validationError = validateFileBasics(file, MAX_FILE_SIZE);
+  if (validationError) {
+    excelError.value = validationError;
     isProcessing.value = false;
     return;
   }
 
-  const fileExtension = file.name.split(".").pop().toLowerCase();
-  if (!["xlsx", "xls", "csv"].includes(fileExtension)) {
-    excelError.value =
-      "Invalid file format. Only .xlsx, .xls, and .csv are supported.";
-    isProcessing.value = false;
-    return;
-  }
+  const fileExtension = extractExtension(file.name);
 
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
       let json;
       if (fileExtension === "csv") {
-        json = parseCSV(e.target.result);
+        json = parseCSVUtil(e.target.result);
       } else {
         const data = new Uint8Array(e.target.result);
         const workbook = XLSX.read(data, { type: "array" });
@@ -533,22 +515,6 @@ const processFile = async (file) => {
   } else {
     reader.readAsArrayBuffer(file);
   }
-};
-
-const parseCSV = (text) => {
-  const lines = text.split("\n").filter((line) => line.trim());
-  if (lines.length < 2) return [];
-  const headers = lines[0].split(",").map((h) => h.trim().replace(/"/g, ""));
-  const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(",").map((v) => v.trim().replace(/"/g, ""));
-    const row = {};
-    headers.forEach((header, index) => {
-      row[header] = values[index] || "";
-    });
-    rows.push(row);
-  }
-  return rows;
 };
 
 const normalizeRow = (row) => {
@@ -653,7 +619,7 @@ const validateLead = (index, existingLead) => {
     lead.errors.email = "Email is required";
     lead.hasErrors = true;
   } else {
-    const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       lead.errors.email = "Invalid email format";
       lead.hasErrors = true;
@@ -865,5 +831,14 @@ const downloadSample = () => {
 .file-preview-card:hover {
   background-color: #f5f5f5;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.alert-select :deep(.v-field__input) {
+  padding-left: 10px;
+}
+.emoji-small {
+  font-size: 16px;
+  width: 18px;
+  display: inline-flex;
+  justify-content: center;
 }
 </style>

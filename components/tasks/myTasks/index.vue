@@ -359,7 +359,18 @@ const mergeCategoriesWithStats = (stats = []) => {
 };
 
 const setTaskStats = (stats = []) => {
-  taskStats.value = mergeCategoriesWithStats(stats);
+  const merged = mergeCategoriesWithStats(stats);
+  const filtered = merged.filter((cat) => {
+    const count = Number(
+      cat.taskCount ?? cat.total ?? cat.count ?? cat.taskTotal ?? 0
+    );
+    return (
+      isMandatoryCategory(cat) ||
+      isDefaultNamedCategory(cat) ||
+      count > 0
+    );
+  });
+  taskStats.value = filtered;
   ensureCurrentTabVisible();
 };
 
