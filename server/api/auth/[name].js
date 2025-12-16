@@ -1,7 +1,9 @@
 import {
   acceptInvitation,
+  acceptOrganisationInvitation,
   bankDetails,
   contractDetails,
+  declineOrganisationInvitation,
   forgetPasswordRequest,
   inviteMembers,
   login,
@@ -10,6 +12,7 @@ import {
   signupRequest,
   userLoginHistory,
   verifyEmail,
+  verifyInvitationToken,
   updateProfile,
   updatePassword,
   updateBankDetails,
@@ -19,7 +22,8 @@ import {
   switchOrgnanisation,
   createShortLivedToken,
   exchangeShortLivedToken,
-  resendVerificationEmail
+  resendVerificationEmail,
+  resendOrganisationInvitation
 } from "../../controllers/auth";
 import bcrypt from "bcrypt";
 export default defineEventHandler(async (event) => {
@@ -49,6 +53,14 @@ export default defineEventHandler(async (event) => {
       return await inviteMembers(event);
     case "acceptInvitation":
       return await acceptInvitation(event);
+    case "verifyInvitationToken":
+      return await verifyInvitationToken(event);
+    case "acceptOrganisationInvitation":
+      return await acceptOrganisationInvitation(event);
+    case "declineOrganisationInvitation":
+      return await declineOrganisationInvitation(event);
+    case "resendOrganisationInvitation":
+      return await resendOrganisationInvitation(event);
     case "loginHistory":
       return await userLoginHistory(event);
     case "bankDetails":

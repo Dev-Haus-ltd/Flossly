@@ -1,38 +1,38 @@
 import { DataTypes } from "sequelize";
 import sequelize from "../../utils/db";
 
-export const UserOrganisation = sequelize.define(
-  "UserOrganisations",
+export const UserTaskCustomField = sequelize.define(
+  "UserTaskCustomFields",
   {
     id: {
       type: DataTypes.INTEGER,
       primaryKey: true,
       autoIncrement: true,
     },
-    userId: {
+    userTaskId: {
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
-        model: "Users",
+        model: "UserTasks",
         key: "id",
       },
     },
-    organisationId: {
+    columnDefinitionId: {
       type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: "TaskCustomColumnDefinitions",
+        key: "id",
+      },
+    },
+    value: {
+      type: DataTypes.TEXT,
       allowNull: true,
-      references: {
-        model: "Organisations",
-        key: "id",
-      },
-    },
-    isActive: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: true, // Existing records will be active
-      allowNull: false,
     },
   },
   {
-    modelName: "UserOrganisations",
+    modelName: "UserTaskCustomFields",
     timestamps: true,
   }
 );
+

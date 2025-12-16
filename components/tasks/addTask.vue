@@ -523,7 +523,8 @@ const getCategories = () => {
 };
 
 const getUsers = () => {
-  userStore.getUserList({ roleId: null }).then((res) => {
+  // Force refresh the user list to get the latest active users
+  userStore.getUserList({ roleId: null, force: true }).then((res) => {
     if (res.code === 0) {
       users.value = res.data;
       // Initialize userList with all active users if no role is selected

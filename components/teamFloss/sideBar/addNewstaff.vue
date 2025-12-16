@@ -125,6 +125,7 @@ const { modelValue, rolesList } = defineProps({
 });
 
 const mainStore = useMainStore();
+const userStore = useUserStore();
 
 const emit = defineEmits(["close", "success", "update:modelValue"]);
 const formRef = ref(null);
@@ -159,13 +160,39 @@ const onSubmit = async () => {
   if (formValidation.valid) {
     authStore.inviteMembers({users: [form.value]}).then((res) => {
       if (res.code === 0) {
+        // Reset the user cache to ensure new invited users will be fetched when they become active
+        userStore.resetUsers();
         setSnack("success", "User Invited Successfully");
         resetForm();
         emit("update:modelValue", false);
         emit("success");
       } else {
-        setSnack("error", "User is not Invited.");
+        const errorMessage = res?.data?.message || res?.message || "User is not Invited.";
+        setSnack("error", errorMessage);
       }
+    }).catch((err) => {
+      // Extract error message from the nested error response structure
+      // Error structure: { data: { message: { data: { message: "..." } } } }
+      let errorMessage = "Failed to invite user.";
+      
+      // Try to extract from nested structure: err.data.message.data.message
+      if (err?.data?.message?.data?.message && typeof err.data.message.data.message === 'string') {
+        errorMessage = err.data.message.data.message;
+      }
+      // Fallback: err.data.message (if it's a string)
+      else if (err?.data?.message && typeof err.data.message === 'string' && err.data.message.trim() !== '') {
+        errorMessage = err.data.message;
+      }
+      // Fallback: err.data.message.message
+      else if (err?.data?.message?.message && typeof err.data.message.message === 'string') {
+        errorMessage = err.data.message.message;
+      }
+      // Fallback: err.message
+      else if (err?.message && typeof err.message === 'string' && err.message.trim() !== '') {
+        errorMessage = err.message;
+      }
+      
+      setSnack("error", errorMessage);
     });
   }
 };

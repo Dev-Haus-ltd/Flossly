@@ -21,6 +21,8 @@ import { generateOTP, generateVerificationLink } from "../utils/misc";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import DB from "../utils/db";
+import { QueryTypes, DataTypes } from "sequelize";
+import { v4 as uuidv4 } from "uuid";
 import {
   sendInvitationEmail,
   sendOnBoardingMail,
@@ -30,7 +32,8 @@ import requestIp from "request-ip";
 import { HrDocument } from "../models/hrDocuments";
 import path from "path";
 import fs from "fs";
-import { createError } from "h3";
+import { createError, setCookie } from "h3";
+import { success, error } from "../utils/response";
 
 const config = useRuntimeConfig();
 export const login = async (event) => {
@@ -47,7 +50,12 @@ export const login = async (event) => {
   if (!user.isEmailVerified) {
     return error(401, "Email not verified");
   }
-  const orgs = await UserOrganisation.findAll({ where: { userId: user.id } });
+  const orgs = await UserOrganisation.findAll({ 
+    where: { 
+      userId: user.id,
+      isActive: true, // Only load active organizations
+    } 
+  });
   const userPreference = await UserPreference.findOne({
     where: { userId: user.id },
   });
@@ -60,7 +68,7 @@ export const login = async (event) => {
   const orgIds = orgs.map((o) => o.organisationId).sort();
   const orgId = orgIds[0]; // default to first
   const token = jwt.sign(
-    { userId: user.id, orgId, roleId: user.roleId },
+    { userId: user.id, orgId, roleId: user.roleId, purpose: 'login' },
     config.JWT_SECRET
   );
   await UserPreference.update(
@@ -105,7 +113,7 @@ export const exchangeShortLivedToken = async (event) => {
       return error(400, "Invalid token purpose");
     }
     const token = jwt.sign(
-      { userId: payload.userId, orgId: payload.orgId, roleId: payload.roleId },
+      { userId: payload.userId, orgId: payload.orgId, roleId: payload.roleId, purpose: 'login' },
       config.JWT_SECRET
     );
     // setCookie(event, "accessToken", token, { maxAge: 31536000 });
@@ -237,6 +245,7 @@ export const profile = async (event) => {
         {
           model: UserOrganisation,
           as: "userOrganisations",
+          where: { isActive: true }, // Only show active organizations
           include: [
             {
               model: Organisation,
@@ -266,7 +275,7 @@ export const profile = async (event) => {
     });
     return success(userObj);
   } catch (err) {
-    return error(500, err);
+    return error(500, err.message);
   }
 };
 
@@ -444,11 +453,15 @@ export const switchOrgnanisation = async (event) => {
   const user = event.context.user;
   try {
     const record = await UserOrganisation.findOne({
-      where: { userId: user.userId, organisationId: orgId },
+      where: { 
+        userId: user.userId, 
+        organisationId: orgId,
+        isActive: true, // Only allow switching to active organizations
+      },
     });
-    if (!record) return error(403, "Not part of selected organisation");
+    if (!record) return error(403, "Not part of selected organisation or invitation not accepted");
     const newToken = jwt.sign(
-      { userId: user.userId, roleId: user.roleId, orgId },
+      { userId: user.userId, roleId: user.roleId, orgId, purpose: 'login' },
       config.JWT_SECRET
     );
 
@@ -488,7 +501,10 @@ export const verifyEmail = async (event) => {
         },
       });
       const userOrg = await UserOrganisation.findAll({
-        where: { userId: user.id },
+        where: { 
+          userId: user.id,
+          isActive: true, // Only use active organizations
+        },
       });
       if (userOrg && userOrg.length) {
         const priorities = await OrganisationPriority.findAll({
@@ -538,32 +554,85 @@ export const inviteMembers = async (event) => {
     const currentOrganisation = await Organisation.findByPk(currentOrg);
     const currentUser = await User.findByPk(loggedUser.userId);
     if (existingUsers.length) {
-      const existingUsersOrgs = await UserOrganisation.findAll({
-        where: { userId: existingUsers.map((u) => u.id) },
+      // Check which existing users already have a UserOrganisation record for this org
+      const existingUsersOrgsForCurrentOrg = await UserOrganisation.findAll({
+        where: { 
+          userId: existingUsers.map((u) => u.id),
+          organisationId: currentOrg
+        },
       });
-
-      const newOrgUsers = existingUsersOrgs.filter(
-        (x) => x.organisationId !== currentOrg
+      
+      // Separate users into: already active, already invited (pending), and new to this org
+      const alreadyActiveUserIds = existingUsersOrgsForCurrentOrg
+        .filter((uo) => uo.isActive === true)
+        .map((uo) => uo.userId);
+      
+      const alreadyInvitedUserIds = existingUsersOrgsForCurrentOrg
+        .filter((uo) => uo.isActive === false)
+        .map((uo) => uo.userId);
+      
+      // Check for errors first - if any users are already active or already invited, return error
+      if (alreadyActiveUserIds.length > 0 || alreadyInvitedUserIds.length > 0) {
+        let errorMessage = "";
+        if (alreadyActiveUserIds.length > 0 && alreadyInvitedUserIds.length > 0) {
+          errorMessage = "User already active or invited. Use Resend button in the table";
+        } else if (alreadyActiveUserIds.length > 0) {
+          errorMessage = "User already active member";
+        } else if (alreadyInvitedUserIds.length > 0) {
+          errorMessage = "User already Invited. Use Resend button in the table";
+        }
+        
+        return error(400, errorMessage);
+      }
+      
+      // Filter out users who are already active members or already have pending invitations
+      const usersToInvite = existingUsers.filter(
+        (u) => !alreadyActiveUserIds.includes(u.id) && !alreadyInvitedUserIds.includes(u.id)
       );
-      if (newOrgUsers.length) {
-        const newUserIds = newOrgUsers.map((u) => u.userId);
-        const newUsersEmails = existingUsers
-          .filter((x) => newUserIds.includes(x.id))
-          .map((e) => e.email);
-        const newUserOrgAssociation = newOrgUsers.map((el) => {
+      
+      if (usersToInvite.length) {
+        const newUserIds = usersToInvite.map((u) => u.id);
+        const newUserOrgAssociation = newUserIds.map((userId) => {
           return {
-            userId: el.userId,
+            userId: userId,
             organisationId: currentOrg,
+            isActive: false, // Set to false for pending invitations
           };
         });
         await UserOrganisation.bulkCreate(newUserOrgAssociation, {
           transaction,
         });
+        
+        // Generate invitation tokens for existing users
+        const invitationData = [];
+        for (const userId of newUserIds) {
+          const user = usersToInvite.find((u) => u.id === userId);
+          if (!user) continue;
+          
+          const invitationToken = jwt.sign(
+            {
+              userId: userId,
+              orgId: currentOrg,
+              purpose: 'org_invitation',
+              invitedBy: loggedUser.userId,
+            },
+            config.JWT_SECRET,
+            { expiresIn: '7d' } // 7 days to respond
+          );
+          
+          invitationData.push({
+            email: user.email,
+            token: invitationToken,
+          });
+        }
+        
         await sendOrgnisationAddedToRegisteredUsers({
-          users: newUsersEmails,
+          users: invitationData,
           orgTitle: currentOrganisation.name,
           manager: currentUser.fullName,
         });
+        
+        // Don't return here - let transaction commit below
       } else {
         const existingUsersEmails = existingUsers.map((u) => u.email);
         const newUsers = users.filter(
@@ -579,7 +648,7 @@ export const inviteMembers = async (event) => {
             currentUser
           );
         } else {
-          return success("All user already part of organisation");
+          return error(400, "All users already part of organisation");
         }
       }
     } else {
@@ -630,7 +699,11 @@ const inviteNewUsers = async (
     transaction,
   });
   const orgAssociations = newUsers.map((u) => {
-    return { userId: u.id, organisationId: currentOrg };
+    return { 
+      userId: u.id, 
+      organisationId: currentOrg,
+      isActive: false, // Set to false for pending invitations
+    };
   });
   await UserOrganisation.bulkCreate(orgAssociations, { transaction });
   newUsers.forEach(async (el) => {
@@ -677,13 +750,18 @@ export const acceptInvitation = async (event) => {
     user.isEmailVerified = true;
     user.status = "Active";
     await user.save();
+    
+    // Activate organization membership
+    userOrg.isActive = true;
+    await userOrg.save();
+    
     // Removed dummy tasks assignment for invited members
     await assignDefaultTasksToUser(user, userOrg.organisationId);
     await assignDefaultHRDocsToUser(user.id);
     await accountCreationNotification(user);
     await portalReadyTrainingInvite(user);
     const token = jwt.sign(
-      { userId: user.id, orgId: userOrg.organisationId, roleId: user.roleId },
+      { userId: user.id, orgId: userOrg.organisationId, roleId: user.roleId, purpose: 'login' },
       config.JWT_SECRET
     );
     const manager = await UserPreference.findOne({
@@ -708,6 +786,358 @@ export const acceptInvitation = async (event) => {
     return success("User updated");
   } catch (err) {
     return error(500, err.message);
+  }
+};
+
+export const verifyInvitationToken = async (event) => {
+  const body = await readBody(event);
+  const { token } = JSON.parse(body);
+  
+  try {
+    if (!token) return error(400, "Token required");
+    
+    // Verify and decode the token
+    const decoded = jwt.verify(token, config.JWT_SECRET);
+    
+    if (decoded.purpose !== 'org_invitation') {
+      return error(400, "Invalid token purpose");
+    }
+    
+    const { userId, orgId, invitedBy } = decoded;
+    
+    // Get organization details
+    const organisation = await Organisation.findByPk(orgId);
+    if (!organisation) {
+      return error(404, "Organization not found");
+    }
+    
+    // Get inviter details
+    const inviter = await User.findByPk(invitedBy, {
+      attributes: ['fullName'],
+    });
+    
+    // Check invitation status
+    const userOrg = await UserOrganisation.findOne({
+      where: {
+        userId,
+        organisationId: orgId,
+      },
+    });
+    
+    if (!userOrg) {
+      return error(404, "Invitation not found");
+    }
+    
+    return success({
+      orgId,
+      orgName: organisation.name,
+      inviterName: inviter?.fullName || 'Unknown',
+      status: userOrg.isActive ? 'accepted' : 'pending',
+      userId,
+    });
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      return error(400, "Invitation link has expired");
+    }
+    if (err.name === 'JsonWebTokenError') {
+      return error(400, "Invalid invitation token");
+    }
+    return error(500, err.message);
+  }
+};
+
+export const acceptOrganisationInvitation = async (event) => {
+  try {
+    const body = await readBody(event);
+    const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+    const { token } = parsed;
+    
+    if (!token) return error(400, "Token required");
+    
+    // Verify and decode the token
+    const decoded = jwt.verify(token, config.JWT_SECRET);
+    
+    if (decoded.purpose !== 'org_invitation') {
+      return error(400, "Invalid token purpose");
+    }
+    
+    const { userId, orgId } = decoded;
+    
+    // Check if user is logged in and matches token
+    const loggedUser = event.context.user;
+    if (loggedUser && loggedUser.userId !== userId) {
+      return error(403, "Token does not match logged in user");
+    }
+    
+    const userOrg = await UserOrganisation.findOne({
+      where: {
+        userId,
+        organisationId: orgId,
+        isActive: false, // Only accept pending invitations
+      },
+    });
+    
+    if (!userOrg) {
+      return error(404, "Invitation not found or already accepted");
+    }
+    
+    // Activate the organization membership
+    userOrg.isActive = true;
+    await userOrg.save();
+    
+    // If user is not logged in, generate auth token and return user data for auto-login
+    if (!loggedUser) {
+      const user = await User.findByPk(userId, {
+        attributes: { exclude: ["password"] },
+      });
+      
+      if (!user) {
+        return error(404, "User not found");
+      }
+      
+      // Check if user's email is verified (required for login)
+      if (!user.isEmailVerified) {
+        return error(401, "Please verify your email before accepting the invitation");
+      }
+      
+      // Generate authentication token with the accepted organization
+      const authToken = jwt.sign(
+        { userId: user.id, orgId: orgId, roleId: user.roleId, purpose: 'login' },
+        config.JWT_SECRET
+      );
+      
+      // Update last login info
+      await UserPreference.update(
+        { lastLoginDate: new Date(), lastLoginOrganisationId: orgId },
+        { where: { userId: user.id } }
+      );
+      
+      // Set authentication cookie
+      setCookie(event, "accessToken", authToken, { maxAge: 31536000 });
+      
+      // Return token and user data for frontend to complete login
+      return success({
+        message: "Invitation accepted successfully",
+        token: authToken,
+        userId: user.id,
+        orgId: orgId,
+        autoLogin: true,
+      });
+    }
+    
+    // User is already logged in, just return success
+            return success("Invitation accepted successfully");
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      return error(400, "Invitation link has expired");
+    }
+    if (err.name === 'JsonWebTokenError') {
+      return error(400, "Invalid invitation token");
+    }
+    return error(500, err.message);
+  }
+};
+
+export const declineOrganisationInvitation = async (event) => {
+  try {
+    const body = await readBody(event);
+    const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+    const { token } = parsed;
+    
+    if (!token) return error(400, "Token required");
+    
+    // Verify and decode the token
+    const decoded = jwt.verify(token, config.JWT_SECRET);
+    
+    if (decoded.purpose !== 'org_invitation') {
+      return error(400, "Invalid token purpose");
+    }
+    
+    const { userId, orgId } = decoded;
+    
+    // Check if user is logged in and matches token (optional check - token is already verified)
+    const loggedUser = event.context.user;
+    if (loggedUser && loggedUser.userId !== userId) {
+      return error(403, "Token does not match logged in user");
+    }
+    
+    // Use raw SQL query to delete - bypasses Sequelize hooks that cause hanging
+    // This permanently removes the UserOrganisation record, so the user will no longer
+    // appear in the organization's user list for the person who invited them
+    const result = await DB.query(
+      `DELETE FROM "dev"."UserOrganisations" 
+       WHERE "userId" = :userId 
+       AND "organisationId" = :orgId 
+       AND "isActive" = false`,
+      {
+        replacements: { userId, orgId },
+      }
+    );
+    
+    // Check if any rows were deleted
+    // result[1] contains the number of affected rows for DELETE queries
+    const deletedCount = result?.[1] || 0;
+    
+    if (deletedCount === 0) {
+      return error(404, "Invitation not found or already processed");
+    }
+    
+    // Record deleted successfully - user will no longer appear in organization's user list
+    return success("Invitation declined successfully");
+  } catch (err) {
+    console.error('Error in declineOrganisationInvitation:', err);
+    if (err.name === 'TokenExpiredError') {
+      return error(400, "Invitation link has expired");
+    }
+    if (err.name === 'JsonWebTokenError') {
+      return error(400, "Invalid invitation token");
+    }
+    // Handle createError objects that might already have statusCode
+    if (err.statusCode) {
+      throw err; // Re-throw if it's already a proper error
+    }
+    const errorMessage = err.message || err.toString() || "Failed to decline invitation";
+    return error(500, errorMessage);
+  }
+};
+
+export const resendOrganisationInvitation = async (event) => {
+  try {
+    const body = await readBody(event);
+    const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+    const { userId, orgId } = parsed;
+    
+    if (!userId || !orgId) {
+      return error(400, "User ID and Organization ID are required");
+    }
+    
+    const loggedUser = event.context.user;
+    if (!loggedUser) {
+      return error(401, "Authentication required");
+    }
+    
+    // Verify the user has permission to resend invitations for this organization
+    const userOrg = await UserOrganisation.findOne({
+      where: {
+        userId: loggedUser.userId,
+        organisationId: orgId,
+        isActive: true, // Only active members can resend invitations
+      },
+    });
+    
+    if (!userOrg) {
+      return error(403, "You don't have permission to resend invitations for this organization");
+    }
+    
+    // Check if the target user has a pending invitation
+    const targetUserOrg = await UserOrganisation.findOne({
+      where: {
+        userId,
+        organisationId: orgId,
+        isActive: false, // Only resend if invitation is pending
+      },
+    });
+    
+    if (!targetUserOrg) {
+      return error(404, "No pending invitation found for this user");
+    }
+    
+    // Get user details
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return error(404, "User not found");
+    }
+    
+    // Check if pending invitation exists
+    const existingUserOrg = await UserOrganisation.findOne({
+      where: {
+        userId,
+        organisationId: orgId,
+        isActive: false,
+      },
+    });
+    
+    if (!existingUserOrg) {
+      return error(404, "No pending invitation found for this user");
+    }
+    
+    // Get organization and current user details
+    const organisation = await Organisation.findByPk(orgId);
+    if (!organisation) {
+      return error(404, "Organization not found");
+    }
+    const currentUser = await User.findByPk(loggedUser.userId);
+    
+    // Check if user belongs to any other active organization
+    const userOtherOrgs = await UserOrganisation.findAll({
+      where: {
+        userId: userId,
+        isActive: true, // Check for active organizations
+      },
+    });
+    
+    const isFirstOrganization = userOtherOrgs.length === 0;
+    
+    // No need to delete and recreate - just generate new token and resend email
+    // The UserOrganisation record already exists with isActive: false
+    const transaction = await DB.transaction();
+    
+    try {
+      
+      if (isFirstOrganization) {
+        // User doesn't belong to any organization - use new user invitation email
+        // Generate new inviteToken for the user (UUID format to match model)
+        const inviteToken = uuidv4();
+        user.inviteToken = inviteToken;
+        await user.save({ transaction });
+        
+        // Build invitation link for new users (sendInvitationEmail will prepend the base URL)
+        const invitationLink = inviteToken;
+        
+        // Send new user invitation email
+        await sendInvitationEmail({
+          email: user.email,
+          orgTitle: organisation.name,
+          link: invitationLink,
+          manager: currentUser.fullName,
+        });
+      } else {
+        // User belongs to other organizations - use existing user invitation email
+        // Generate invitation token for existing user
+        const invitationToken = jwt.sign(
+          {
+            userId: userId,
+            orgId: orgId,
+            purpose: 'org_invitation',
+            invitedBy: loggedUser.userId,
+          },
+          config.JWT_SECRET,
+          { expiresIn: '7d' } // 30 days to respond (increased from 7d)
+        );
+        
+        // Send invitation email using the existing user email template
+        await sendOrgnisationAddedToRegisteredUsers({
+          users: [{
+            email: user.email,
+            token: invitationToken,
+          }],
+          orgTitle: organisation.name,
+          manager: currentUser.fullName,
+        });
+      }
+      
+      await transaction.commit();
+      return success("Invitation resent successfully");
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+  } catch (err) {
+    console.error('Error in resendOrganisationInvitation:', err);
+    console.error('Error stack:', err.stack);
+    console.error('Error details:', JSON.stringify(err, null, 2));
+    const errorMessage = err.message || err.toString() || "Failed to resend invitation";
+    return error(500, errorMessage);
   }
 };
 

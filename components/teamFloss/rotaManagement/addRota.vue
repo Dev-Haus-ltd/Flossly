@@ -287,7 +287,9 @@ const getOrgData = (orgWrapper) => {
 
 const practices = computed(
   () =>
-    user?.userOrganisations?.map((uo) => {
+    user?.userOrganisations
+      ?.filter((uo) => uo.isActive !== false) // Only show active organizations
+      ?.map((uo) => {
       const orgData = getOrgData(uo);
       const logo = orgData?.logo;
       // Only set logo if it's a valid non-empty string
@@ -468,10 +470,10 @@ onMounted(() => {
   if (user?.currentLoggedInOrgId) {
     const currentOrgId = user.currentLoggedInOrgId;
     
-    // Try to find practice matching currentLoggedInOrgId
+    // Try to find practice matching currentLoggedInOrgId (only active organizations)
     // First try by organisationId
     const orgWrapper = user.userOrganisations?.find(
-      (org) => org.organisationId === currentOrgId
+      (org) => org.organisationId === currentOrgId && org.isActive !== false
     );
     
     if (orgWrapper) {

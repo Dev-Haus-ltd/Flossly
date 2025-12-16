@@ -20,7 +20,7 @@ export const UserDocument = sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
-        model: "UserOrganisations",
+        model: "Organisations",
         key: "id",
       },
     },

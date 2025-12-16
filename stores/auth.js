@@ -316,5 +316,65 @@ export const useAuthStore = defineStore("authStore", {
           });
       });
     },
+    acceptOrganisationInvitation(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService
+          .acceptOrganisationInvitation(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    declineOrganisationInvitation(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService
+          .declineOrganisationInvitation(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    verifyInvitationToken(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService
+          .verifyInvitationToken(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    resendOrganisationInvitation(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService
+          .resendOrganisationInvitation(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
   },
 });

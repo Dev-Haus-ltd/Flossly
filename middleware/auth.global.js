@@ -20,7 +20,9 @@ export default defineNuxtRouteMiddleware((to, from) => {
       return navigateTo("/onboarding");
     }
   } else {
-    if (isAuthenticated() && !currentPath(to.path)) {
+    // Allow logged-in users to access invitation pages to accept/decline invitations
+    const isInvitationPath = to.path.includes('/invitation');
+    if (isAuthenticated() && !currentPath(to.path) && !isInvitationPath) {
       if (to.path !== "/logout") {
         return navigateTo("/");
       }

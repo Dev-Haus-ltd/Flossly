@@ -113,6 +113,7 @@ const form = ref(null);
 const router = useRouter();
 const authStore = useAuthStore();
 const store = useMainStore();
+const userStore = useUserStore();
 const loginError = ref(null);
 const route = useRoute();
 const nameRules = [
@@ -149,6 +150,8 @@ const acceptInvite = async () => {
       .accpetInvite(credentials.value)
       .then((res) => {
         if (res.code === 0) {
+          // Reset the user cache to ensure the new active user appears in task assignment
+          userStore.resetUsers();
           getProfile();
         } else {
           loginError.value = res.data.message;

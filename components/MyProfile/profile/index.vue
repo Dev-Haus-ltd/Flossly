@@ -251,9 +251,10 @@ const getAccountType = () => {
 };
 
 const getPracticeName = () => {
-  return user?.userOrganisations?.find(
-    (x) => x.organisationId === user.currentLoggedInOrgId
-  ).organisation.name;
+  const org = user?.userOrganisations?.find(
+    (x) => x.organisationId === user.currentLoggedInOrgId && (x.isActive !== false) // Only active organizations
+  );
+  return org?.organisation?.name;
 };
 
 const getUserRole = () => {

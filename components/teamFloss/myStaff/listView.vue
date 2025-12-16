@@ -70,7 +70,7 @@
                 >
                   <div v-if="i !== 0" class="d-flex align-center th-content">
                     <!-- Special handling for actions column with + icon -->
-                    <template v-if="column.key === 'actions'">
+                    <template v-if="column.key === 'action'">
                       <v-menu :close-on-content-click="false" location="bottom">
                         <template #activator="{ props }">
                           <p v-bind="props" class="px-1 w-100" style="cursor: pointer; text-align: center;">
@@ -81,7 +81,7 @@
                           <p class="mb-2" style="font-weight: 500;">Selected Columns</p>
                           <div class="d-flex flex-wrap">
                             <div
-                              v-for="(item, index) in props.selectedHeaders.filter(h => h.key !== 'actions')"
+                              v-for="(item, index) in props.selectedHeaders.filter(h => h.key !== 'action' && h.key !== 'resend')"
                               :key="index"
                               class="color-box ma-1 pa-2 d-flex align-center justify-space-between position-relative"
                               :style="{ backgroundColor: getRandomHexColor(item.title) }"
@@ -245,6 +245,32 @@
             <template v-else-if="col.key === 'cpdHours'">
               <p class="ml-2">{{ item.cpdHours !== null && item.cpdHours !== undefined ? item.cpdHours : '-' }}</p>
             </template>
+
+            <template v-else-if="col.key === 'resend'">
+              <div class="d-flex justify-center align-center pa-2" style="min-width: 100px;">
+                <v-btn
+                  v-if="item.status === 'Invited'"
+                  size="small"
+                  variant="flat"
+                  color="primary"
+                  @click="resendInvitation(item, org)"
+                  :loading="resendingInvitation === item.id"
+                  title="Resend Invitation"
+                  class="resend-btn"
+                  style="min-width: auto;"
+                >
+                  <span style="font-size: 12px;">Resend</span>
+                </v-btn>
+                <span v-else style="color: #ccc; font-size: 12px;">-</span>
+              </div>
+            </template>
+
+            <template v-else-if="col.key === 'action'">
+              <div class="d-flex justify-center align-center pa-2" style="min-width: 100px;">
+                <!-- This column is for the + menu in the header, no content needed in cells -->
+                <span style="color: #ccc; font-size: 12px;">-</span>
+              </div>
+            </template>
           </template>
         </v-data-table>
       </v-expansion-panel-text>
@@ -279,6 +305,9 @@ const authStore = useAuthStore()
 const mainStore = useMainStore()
 const emit = defineEmits(["add", "details", "onUpdate", "onUpdateHeaders"]);
 
+// Resend invitation state
+const resendingInvitation = ref(null);
+
 // Login History Modal state
 const showLoginHistoryModal = ref(false);
 const selectedUserForHistory = ref(null);
@@ -286,6 +315,44 @@ const selectedUserForHistory = ref(null);
 const openLoginHistoryModal = (user) => {
   selectedUserForHistory.value = user;
   showLoginHistoryModal.value = true;
+};
+
+const resendInvitation = async (user, org) => {
+  if (!user || !org || !org.organisation) {
+    mainStore.setSnackbar({
+      title: "Invalid user or organization",
+      type: "error",
+    });
+    return;
+  }
+
+  resendingInvitation.value = user.id;
+  
+  try {
+    const res = await authStore.resendOrganisationInvitation({
+      userId: user.id,
+      orgId: org.organisation.id,
+    });
+
+    if (res.code === 0) {
+      mainStore.setSnackbar({
+        title: res?.data?.message || "Invitation resent successfully",
+        type: "success",
+      });
+    } else {
+      mainStore.setSnackbar({
+        title: res?.data?.message || res?.message || "Failed to resend invitation",
+        type: "error",
+      });
+    }
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: err?.message || "Something went wrong",
+      type: "error",
+    });
+  } finally {
+    resendingInvitation.value = null;
+  }
 };
 
 // Track sorting state
@@ -504,18 +571,20 @@ const getRandomHexColor = (name) => {
 const addHeaderInSelected = (column) => {
   const currentHeaders = [...props.selectedHeaders];
   if (!currentHeaders.find((x) => x.key === column.key)) {
-    // Insert before the actions column
-    const actionsIndex = currentHeaders.findIndex(h => h.key === 'actions');
-    if (actionsIndex !== -1) {
-      currentHeaders.splice(actionsIndex, 0, column);
-    } else {
-      currentHeaders.push(column);
-    }
+    // Insert before the resend and action columns
+    const resendIndex = currentHeaders.findIndex(h => h.key === 'resend');
+    const actionIndex = currentHeaders.findIndex(h => h.key === 'action');
+    const insertIndex = resendIndex !== -1 ? resendIndex : (actionIndex !== -1 ? actionIndex : currentHeaders.length);
+    currentHeaders.splice(insertIndex, 0, column);
     emit('onUpdateHeaders', currentHeaders);
   }
 };
 
 const removeHeaderFromSelected = (column) => {
+  // Prevent removing the resend and action columns
+  if (column.key === 'resend' || column.key === 'action') {
+    return;
+  }
   const currentHeaders = [...props.selectedHeaders];
   const index = currentHeaders.findIndex((h) => h.key === column.key);
   if (index !== -1) {
@@ -524,10 +593,10 @@ const removeHeaderFromSelected = (column) => {
   }
 };
 
-// Compute available headers (exclude already selected ones and actions)
+// Compute available headers (exclude already selected ones, resend, and action)
 const computedAvailableHeaders = computed(() => {
   const selectedKeys = props.selectedHeaders.map(h => h.key);
-  return props.availableHeaders.filter(h => !selectedKeys.includes(h.key) && h.key !== 'actions');
+  return props.availableHeaders.filter(h => !selectedKeys.includes(h.key) && h.key !== 'resend' && h.key !== 'action');
 });
 </script>
 

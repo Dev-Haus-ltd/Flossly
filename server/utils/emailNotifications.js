@@ -302,23 +302,40 @@ export const sendEmailVerificationEmail = async (data) => {
 
 export const sendOrgnisationAddedToRegisteredUsers = async (data) => {
   const subject = `Invitation To ${data.orgTitle}`;
+  const baseUrl = config.public.BASE_URL.endsWith('/') 
+    ? config.public.BASE_URL.slice(0, -1) 
+    : config.public.BASE_URL;
+  
+  // Send individual emails with personalized invitation links
+  const emailPromises = data.users.map((userData) => {
+    const invitationLink = `${baseUrl}/invitation/respond/${userData.token}`;
   const content = `
- <p>Dear Flossly Users</p>
+ <p>Dear Flossly User</p>
       <br />
-      <p>You have been invited to ${data.orgTitle} by ${data.manager}. </p>
+      <p>You have been invited to join <strong>${data.orgTitle}</strong> by ${data.manager}.</p>
       <br/>
-      <p> Please login to continue using Flossly with more and more people! </p>
+      <p>Click the link below to accept or decline this invitation:</p>
+      <br/>
+      <p style="text-align:center;margin-top:25px;">
+        <a href="${invitationLink}" target="blank" style="background-color: #0061fb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Respond to Invitation</a>
+      </p>
+      <br/>
+      <p>This invitation link will expire in 7 days.</p>
           <br/><br/>
           <p>Best regards,<br/>The Flossly Team</p>`;
   const html = template
     .replaceAll("{subject}", subject)
     .replace("{content}", content);
-  await transporter.sendMail({
+    
+    return transporter.sendMail({
     from: "Flossly <helloflossly@gmail.com>",
-    bcc: data.users,
+      to: userData.email,
     subject,
     html,
   });
+  });
+  
+  await Promise.all(emailPromises);
 };
 
 export const sendInvitationEmail = async (data) => {

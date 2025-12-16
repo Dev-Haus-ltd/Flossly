@@ -33,6 +33,8 @@
             v-model="searchInput"
             placeholder="Search"
             append-inner-icon="mdi-magnify"
+            clearable
+            @click:clear="clearSearch"
             variant="solo"
             :elevation="0"
             density="compact"
@@ -47,6 +49,8 @@
         <TasksMenuItemsFilterMenu
           :priorities="priorities"
           :users="users"
+          :statuses="statuses"
+          :clear-trigger="clearFiltersTrigger"
           @update:filters="onFiltersUpdated"
         />
         <div class="">
@@ -139,6 +143,33 @@
       </div>
     </div>
 
+    <div
+      v-if="activeFilterChips.length"
+      class="d-flex align-center flex-wrap mt-2"
+      style="gap: 8px;"
+    >
+      <v-chip
+        v-for="chip in activeFilterChips"
+        :key="chip.key"
+        size="small"
+        color="primary"
+        variant="elevated"
+        closable
+        @click:close="removeFilter(chip.key)"
+      >
+        {{ chip.label }}
+      </v-chip>
+      <v-chip
+        color="secondary"
+        size="small"
+        variant="text"
+        class="ml-1"
+        @click="clearAllFilters"
+      >
+        Clear filters
+      </v-chip>
+    </div>
+
     <v-expansion-panels
       v-if="viewType === 'list' && taskDetails && taskDetails.length"
       v-model="openedPanels"
@@ -169,24 +200,29 @@
                 {{ getStatuses(group.status) }}
               </v-chip>
               <v-chip class="ml-2" :color="getColor(group.status)" label>
-                {{ group.tasks.length }}
+                {{ group.total ?? getStatusTotal(group.status) ?? group.tasks.length }}
               </v-chip>
             </div>
           </template>
         </v-expansion-panel-title>
         <v-expansion-panel-text>
-          <v-data-table
+          <v-data-table-server
             v-if="group.tasks.length"
             :items="group.tasks"
             v-model="selectedTasks"
             v-model:search="search"
             :headers="selectedHeaders"
             :expanded="expanded"
+            :items-per-page="pageSize"
+            :items-length="group.total ?? getStatusTotal(group.status)"
+            :page="page"
             item-value="id"
             class="resizable-table"
             density="compact"
             :item-selectable="() => true"
             @update:modelValue="onSelectionChange"
+            @update:page="onPageChange"
+            @update:items-per-page="onPageSizeChange"
             return-object
             show-select
             hover
@@ -364,6 +400,50 @@
                   v-model="item.dueDate"
                   @update:modelValue="updateValueRow(item, 'dueDate')"
                 />
+              </template>
+              <template v-else-if="col.key === 'documentLink'">
+                <div class="d-flex align-center pa-1">
+                  <template
+                    v-if="
+                      templateLinkDetails(item.documentLink).type === 'link' &&
+                      !isEditingLink(item.id, col.key)
+                    "
+                  >
+                    <a
+                      :href="templateLinkDetails(item.documentLink).value"
+                      target="_blank"
+                      rel="noopener"
+                      class="template-link-anchor"
+                    >
+                      {{ item.documentLink }}
+                    </a>
+                    <v-btn
+                      icon
+                      size="x-small"
+                      variant="text"
+                      class="ml-1"
+                      @click.stop="startEditingLink(item, col.key)"
+                    >
+                      <v-icon size="14">mdi-pencil</v-icon>
+                    </v-btn>
+                  </template>
+                  <template v-else>
+                    <v-text-field
+                      :model-value="item.documentLink"
+                      @update:modelValue="(val) => {
+                        item.documentLink = val;
+                      }"
+                      :variant="isFocused(item.id, col.key) ? 'outlined' : 'plain'"
+                      @focus="() => { setFocus(item.id, col.key, true); storeOriginalValue(item.id, col.key, item); }"
+                      @blur="updateValueRow(item, 'documentLink')"
+                      density="compact"
+                      @keyup.enter="(e) => handleEnterKey(e, item, col.key)"
+                      @keyup.escape="(e) => handleEscapeKey(e, item, col.key)"
+                      hide-details
+                      class="small-input"
+                    />
+                  </template>
+                </div>
               </template>
               <template v-else-if="col.key === 'updatedAt'">
                 <p class="text-center">{{ formattedDate(item.updatedAt) }}</p>
@@ -554,7 +634,7 @@
               </v-btn>
               <v-spacer></v-spacer>
             </template>
-          </v-data-table>
+          </v-data-table-server>
         </v-expansion-panel-text>
       </v-expansion-panel>
     </v-expansion-panels>
@@ -574,7 +654,7 @@
 
     <!-- Add Task Panel - Only render after page loads -->
     <ClientOnly>
-      <template v-if="categories && categories.length > 0 && priorities && priorities.length > 0 && users && users.length > 0">
+      <template v-if="categories && categories.length > 0 && priorities && priorities.length > 0">
         <TasksAddTask
           v-model="drawerOpen"
           :preSelectedStatus="selectedStatusForNewTask"
@@ -603,6 +683,7 @@
 
 <script setup>
 import { parsedDate } from "@/lib/dateFormatter";
+import { describeTextContent } from "@/lib/misc";
 import draggable from "vuedraggable";
 import listicon from "@/assets/icons/listView/listicon.svg";
 import calendericon from "@/assets/icons/listView/calendericon.svg";
@@ -615,6 +696,11 @@ const {
   users,
   categories,
   clearSelection,
+  page,
+  pageSize,
+  statusTotals,
+  currentCategoryId,
+  activeFilters,
 } = defineProps({
   headers: Array,
   taskDetails: Array,
@@ -624,9 +710,25 @@ const {
   users: Array,
   categories: Array,
   clearSelection: Boolean,
-    currentCategoryId: {  // ← ADD THIS NEW PROP
+  page: {
+    type: Number,
+    default: 1,
+  },
+  pageSize: {
+    type: Number,
+    default: 10,
+  },
+  statusTotals: {
+    type: Object,
+    default: () => ({}),
+  },
+  currentCategoryId: {
     type: Number,
     default: null,
+  },
+  activeFilters: {
+    type: Object,
+    default: () => ({}),
   },
 });
 watch(
@@ -643,7 +745,14 @@ const updateHeaderOrder = (newOrder) => {
   newOrder.splice(selectable, 1);
   selectedHeaders.value = newOrder;
 };
-const emit = defineEmits(["onFilter", "onUpdate", "updateSelectedRowItems"]);
+const emit = defineEmits([
+  "onFilter",
+  "onUpdate",
+  "updateSelectedRowItems",
+  "onPageChange",
+  "onPageSizeChange",
+  "onSearch",
+]);
 const fixedColumnOrder = [
   "title",
   "status",
@@ -720,7 +829,14 @@ watch(
   (val) => {
     if (searchTimeout) clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
-      search.value = val;
+      const trimmed = (val || "").trim();
+      if (!trimmed) {
+        search.value = "";
+        emit("onSearch", "");
+        return;
+      }
+      search.value = trimmed;
+      emit("onSearch", trimmed);
     }, 250);
   }
 );
@@ -745,6 +861,7 @@ const taskPoolDialog = ref(false);
 const isAllSelected = ref(false);
 const selectedStatusForNewTask = ref(null);
 const selectedCategoryForNewTask = ref(null);
+const clearFiltersTrigger = ref(0);
 
 const openAddTaskDialog = () => {
   selectedStatusForNewTask.value = null;
@@ -756,6 +873,7 @@ const bulkTaskUploadDialog = ref(false);
 const rolesList = ref([]);
 const isResizing = ref(false);
 const editingColumn = ref({})
+const editingLinkField = ref({});
 
 const enableEditing = (column, index) => {
   editingColumn.value[`${index}-${column.key}`] = true;
@@ -778,6 +896,87 @@ const filteredAvailableHeaders = computed(() => {
   // Filter out headers that are already selected
   return availableHeaders.filter(header => !selectedKeys.has(header.key));
 });
+
+const dueDateLabels = {
+  overdue: "Due: Overdue",
+  today: "Due: Today",
+  week: "Due: This week",
+};
+
+const activeFilterChips = computed(() => {
+  const chips = [];
+  const filters = activeFilters || {};
+
+  if (filters.search) {
+    chips.push({ key: "search", label: `Search: ${filters.search}` });
+  }
+  if (filters.priority) {
+    const match = priorities?.find?.((p) => p.id === filters.priority);
+    chips.push({
+      key: "priority",
+      label: `Priority: ${match?.name || filters.priority}`,
+    });
+  }
+  if (filters.user) {
+    const match = users?.find?.((u) => u.id === filters.user);
+    chips.push({
+      key: "user",
+      label: `Assignee: ${match?.fullName || filters.user}`,
+    });
+  }
+  if (filters.frequency) {
+    chips.push({ key: "frequency", label: `Frequency: ${filters.frequency}` });
+  }
+  if (filters.status) {
+    const match = statuses.value?.find?.(
+      (s) => s.key?.toLowerCase?.() === String(filters.status).toLowerCase()
+    );
+    chips.push({
+      key: "status",
+      label: `Status: ${match?.name || filters.status}`,
+    });
+  }
+  if (filters.dueDateFilter) {
+    chips.push({
+      key: "dueDateFilter",
+      label: dueDateLabels[filters.dueDateFilter] || `Due: ${filters.dueDateFilter}`,
+    });
+  }
+
+  return chips;
+});
+
+const getStatusTotal = (statusKey) => {
+  const normalize = (key) =>
+    typeof key === "string" ? key.toLowerCase().replace(/\s+/g, "") : key;
+
+  const normKey = normalize(statusKey);
+  if (statusTotals && typeof statusTotals === "object") {
+    const totalRaw =
+      statusTotals[statusKey] ??
+      statusTotals[normKey] ??
+      statusTotals[normKey?.toUpperCase?.()];
+    const totalNum = Number(totalRaw);
+    if (!Number.isNaN(totalNum)) {
+      return totalNum;
+    }
+  }
+  // Fallback to group-level total, then loaded items length
+  const matchingGroup = taskDetails?.find?.(
+    (t) => normalize(t.status) === normKey
+  );
+  const groupTotal = Number(matchingGroup?.total);
+  if (!Number.isNaN(groupTotal)) return groupTotal;
+  return matchingGroup?.tasks?.length || 0;
+};
+
+const onPageChange = (val) => {
+  emit("onPageChange", val);
+};
+
+const onPageSizeChange = (val) => {
+  emit("onPageSizeChange", val);
+};
 
 const getRoles = () => {
   mainStore
@@ -875,6 +1074,19 @@ const getTaskUsers = (task) => {
     return users.filter((x) => x.roleId !== task.taskDetails.roleId && x.status === "Active");
   } else return [];
 };
+const isEditingLink = (id, key) =>
+  editingLinkField.value[`${id}-${key}`] === true;
+
+const startEditingLink = (item, key) => {
+  editingLinkField.value[`${item.id}-${key}`] = true;
+  setFocus(item.id, key, true);
+  storeOriginalValue(item.id, key, item);
+};
+
+const stopEditingLink = (id, key) => {
+  delete editingLinkField.value[`${id}-${key}`];
+  setFocus(id, key, false);
+};
 const updateTasks = () => {
   drawerOpen.value = false;
   taskPoolDialog.value = false;
@@ -920,6 +1132,7 @@ const formattedDate = (date) => {
     return '';
   }
 };
+const templateLinkDetails = (value) => describeTextContent(value || "");
 const setFocus = (id, key, state) => {
   focusedField.value[`${id}-${key}`] = state;
 };
@@ -1171,8 +1384,18 @@ const updateValueRow = async (row, key) => {
     delete originalFieldValues.value[fieldId];
   }
 
-  // Skip saving for comments and documentLink
-  if (key === "comments" || key === "documentLink") return;
+  // Skip saving for comments only
+  if (key === "comments") return;
+
+  if (key === "documentLink") {
+    const meta = templateLinkDetails(row.documentLink);
+    if (meta.type === "empty") {
+      row.documentLink = "";
+    } else {
+      row.documentLink = meta.value;
+    }
+    stopEditingLink(row.id, key);
+  }
 
   // New nested-value handling
   const currentValue = getNestedValue(row, key);
@@ -1410,6 +1633,34 @@ function onFiltersUpdated(newFilters) {
   emit("onFilter", newFilters);
 }
 
+const clearSearch = () => {
+  searchInput.value = "";
+  search.value = "";
+  emit("onSearch", "");
+};
+
+const clearAllFilters = () => {
+  clearSearch();
+  emit("onFilter", {
+    frequency: null,
+    priority: null,
+    user: null,
+    status: null,
+    dueDateFilter: null,
+    search: "",
+  });
+  clearFiltersTrigger.value += 1;
+};
+
+const removeFilter = (key) => {
+  if (key === "search") {
+    clearSearch();
+    emit("onFilter", { search: "" });
+    return;
+  }
+  emit("onFilter", { [key]: null });
+};
+
 const onSelectionChange = (newSelected) => {
   emit("updateSelectedRowItems", selectedTasks.value);
 };
@@ -1535,6 +1786,12 @@ th {
   background-color: #fff;
   margin-top: 16px;
   gap: 16px;
+}
+.template-link-anchor {
+  font-size: 13px;
+  color: #0061fb;
+  text-decoration: underline;
+  white-space: nowrap;
 }
 .cust-checkbox {
   width: 18px;

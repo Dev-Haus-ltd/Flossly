@@ -14,7 +14,7 @@
             sm="6"
             md="3"
             lg="2"
-            v-for="(item, i) in taskStats"
+            v-for="(item, i) in visibleTaskStats"
             :key="i"
           >
             <CommonStatCard
@@ -33,12 +33,40 @@
         slider-color="primary"
       >
         <v-tab
-          v-for="(cat, index) in taskStats"
+          v-for="(cat, index) in visibleTaskStats"
           :value="cat.categoryId"
-          :key="index"
-          class="tab-text"
-          @click="updateTasksList"
-          >{{ cat.categoryName }}</v-tab
+            :key="index"
+            class="tab-text"
+            >
+          <div class="d-flex align-center justify-center" style="gap: 6px">
+            <span>{{ cat.categoryName }}</span>
+            <v-menu v-if="shouldShowCategoryMenu(cat)" offset-y>
+              <template #activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  icon
+                  variant="text"
+                  size="x-small"
+                  class="ml-1"
+                  @click.stop
+                >
+                  <v-icon size="16">mdi-dots-horizontal</v-icon>
+                </v-btn>
+              </template>
+              <v-list density="compact">
+                <v-list-item @click.stop="hideCategory(cat)">
+                  <v-list-item-title>Hide</v-list-item-title>
+                </v-list-item>
+                <v-list-item
+                  v-if="canEditCategory(cat)"
+                  @click.stop="startEditCategory(cat)"
+                >
+                  <v-list-item-title>Edit</v-list-item-title>
+                </v-list-item>
+              </v-list>
+            </v-menu>
+          </div>
+        </v-tab
         >
 
         <!-- Plus Button Tab -->
@@ -62,10 +90,17 @@
             :priorities="taskPriorities"
             :users="userList"
             :categories="categories"
+            :page="page"
+            :page-size="pageSize"
+            :status-totals="statusTotals"
             :currentCategoryId="currentTab"
+            :activeFilters="filterState"
             @onFilter="applyFilters"
+            @onSearch="handleSearch"
             @onUpdate="updateTasks"
             @updateSelectedRowItems="updateSelectedRowItems"
+            @onPageChange="handlePageChange"
+            @onPageSizeChange="handlePageSizeChange"
           />
           <RecommendPracticeDialog v-model="recommendDialog" />
           <CommonConfirmDialog
@@ -180,6 +215,7 @@
         @close="handleCategoryDialogClose"
         @success="handleCategorySuccess"
         :categories="categories"
+        :edit-category="categoryToEdit"
       />
     </div>
   </div>
@@ -210,16 +246,123 @@ const isTrayHidden = ref(false);
 const recommendDialog = ref(false);
 const showDeleteConfirm = ref(false);
 const deleteLoading = ref(false);
+const filterState = ref({});
+const page = ref(1);
+const pageSize = ref(10);
+const statusTotals = ref({});
+const totalCount = ref(0);
+const hiddenCategoryIds = ref([]);
+const categoryToEdit = ref(null);
+const hiddenCategoryStorageKey = "tasksHiddenCategoryIds";
+const visibleTaskStats = computed(() =>
+  (taskStats.value || []).filter(
+    (cat) => !hiddenCategoryIds.value.includes(cat.categoryId)
+  )
+);
+const loadHiddenCategories = () => {
+  try {
+    const stored = JSON.parse(
+      localStorage.getItem(hiddenCategoryStorageKey) || "[]"
+    );
+    hiddenCategoryIds.value = Array.isArray(stored) ? stored : [];
+  } catch (err) {
+    hiddenCategoryIds.value = [];
+  }
+};
 
-onMounted(() => {
+const persistHiddenCategories = () => {
+  localStorage.setItem(
+    hiddenCategoryStorageKey,
+    JSON.stringify(hiddenCategoryIds.value)
+  );
+};
+
+const defaultCategoryNames = [
+  "Staff Management",
+  "Marketing",
+  "Finance",
+  "HR",
+];
+
+const isMandatoryCategory = (cat) => !!(cat?.isDefault);
+
+const isDefaultNamedCategory = (cat) =>
+  defaultCategoryNames.includes((cat?.categoryName || cat?.name || "").trim());
+
+const shouldShowCategoryMenu = (cat) =>
+  !isMandatoryCategory(cat) && !isDefaultNamedCategory(cat);
+
+const canEditCategory = (cat) => {
+  if (!cat || !shouldShowCategoryMenu(cat)) return false;
+  const count = Number(
+    cat.taskCount ?? cat.total ?? cat.count ?? cat.taskTotal ?? 0
+  );
+  if (Number.isNaN(count)) return false;
+  return count <= 0;
+};
+
+const ensureCurrentTabVisible = () => {
+  if (!visibleTaskStats.value.length) {
+    currentTab.value = null;
+    return;
+  }
+  const hasCurrent = visibleTaskStats.value.some(
+    (cat) => cat.categoryId === currentTab.value
+  );
+  if (!hasCurrent) {
+    currentTab.value = visibleTaskStats.value[0].categoryId;
+  }
+};
+
+const mergeCategoriesWithStats = (stats = []) => {
+  const map = new Map();
+
+  (categories.value || []).forEach((cat) => {
+    const id = cat.id ?? cat.categoryId;
+    if (id === undefined || id === null) return;
+    map.set(String(id), {
+      categoryId: id,
+      categoryName: cat.name || cat.categoryName,
+      taskCount: 0,
+      isMandatory: cat.isMandatory ?? cat.isDefault ?? false,
+      color: cat.color,
+      parentId: cat.parentId ?? null,
+      description: cat.description ?? "",
+    });
+  });
+
+  (stats || []).forEach((stat) => {
+    const id = stat.categoryId ?? stat.id;
+    if (id === undefined || id === null) return;
+    const key = String(id);
+    const existing = map.get(key) || {};
+    map.set(key, {
+      ...existing,
+      ...stat,
+      categoryId: id,
+      categoryName: stat.categoryName || existing.categoryName,
+      isMandatory: stat.isMandatory ?? existing.isMandatory ?? false,
+    });
+  });
+
+  return Array.from(map.values());
+};
+
+const setTaskStats = (stats = []) => {
+  taskStats.value = mergeCategoriesWithStats(stats);
+  ensureCurrentTabVisible();
+};
+
+onMounted(async () => {
+  loadHiddenCategories();
   user.value = JSON.parse(localStorage.getItem("user"));
   if (user && user.preferences) {
     headers.value = user.preferences.taskTableColumns;
   } else {
     headers.value = mainStore.getTeamTaskTableHeaders;
   }
-  getCategories();
-  getMyStats();
+  await getCategories();
+  await getMyStats();
   getTaskPriorities();
   getTaskStatuses();
   getUsers();
@@ -285,59 +428,149 @@ const getUsers = () => {
   });
 };
 
+const setTaskResponse = (payload) => {
+  const groups = payload?.statuses || payload || [];
+  taskDetails.value = sortByCustomStatus(groups);
+
+  const totals = {};
+  groups.forEach((group) => {
+    totals[group.status] = group.total ?? group.tasks?.length ?? 0;
+  });
+  statusTotals.value = totals;
+
+  totalCount.value =
+    typeof payload?.total === "number"
+      ? payload.total
+      : Object.values(totals).reduce((sum, val) => sum + (Number(val) || 0), 0);
+
+  if (payload?.page) page.value = payload.page;
+  if (payload?.pageSize) pageSize.value = payload.pageSize;
+};
+
+const loadTasks = (filters = {}, resetPage = false) => {
+  if (resetPage) {
+    page.value = 1;
+  }
+
+  filterState.value = { ...filterState.value, ...filters };
+
+  const request = {
+    ...filterState.value,
+    categoryId: currentTab.value,
+    page: page.value,
+    pageSize: pageSize.value,
+  };
+
+  taskStore
+    .tasksGroupedByStatusWithCache(request)
+    .then((res) => {
+      if (res.code === 0) {
+        setTaskResponse(res.data);
+      }
+    })
+    .catch(() => {});
+};
+
 const addNewCategoryDialog = () => {
+  resetCategoryEditing();
   addCategoryDialog.value = true;
 };
 
 const handleCategoryDialogClose = () => {
+  resetCategoryEditing();
   addCategoryDialog.value = false;
 };
 
 const handleCategorySuccess = () => {
-  // Refresh categories after successful addition
+  // Refresh categories after successful addition or edit
+  resetCategoryEditing();
   getCategories();
   getMyStats();
   addCategoryDialog.value = false;
 };
 
 const applyFilters = (filters) => {
-  filters.categoryId = currentTab.value;
-  // Hard cap to avoid over-fetching – keeps UI snappy for large orgs
-  filters.limit = 100;
-  taskStore
-    .tasksGroupedByStatus(filters)
-    .then((res) => {
-      if (res.code === 0) {
-        taskDetails.value = sortByCustomStatus(res.data);
-      } else {
-        // set snack
-      }
-    })
-    .catch((err) => {
-      return err;
-      // set snack
-    });
-};
-const getCategories = () => {
-  taskStore.listCategories().then((res) => {
-    if (res.code === 0) {
-      categories.value = res.data;
-    }
-  });
+  loadTasks(filters, true);
 };
 
-const getMyStats = () => {
-  taskStore.getMyTaskStatsByCategory().then((res) => {
-    if (res.code === 0 && res.data && res.data.length) {
-      if (!currentTab.value) {
-        currentTab.value = res.data[0].categoryId;
-      }
-      taskStats.value = res.data;
-      getMyTasks(currentTab.value);
-    } else {
-      getMyTasks(null); // Fetch all tasks
+const handleSearch = (query) => {
+  loadTasks({ search: query }, true);
+};
+
+const handlePageChange = (val) => {
+  page.value = val;
+  loadTasks({}, false);
+};
+
+const handlePageSizeChange = (val) => {
+  pageSize.value = val;
+  loadTasks({}, true);
+};
+const getCategories = async () => {
+  try {
+    const res = await taskStore.listCategories();
+    if (res.code === 0) {
+      categories.value = res.data || [];
     }
-  });
+    return res;
+  } catch (err) {
+    return err;
+  }
+};
+
+const ensureCategoriesLoaded = async () => {
+  if (categories.value && categories.value.length) return;
+  await getCategories();
+};
+
+const getMyStats = async () => {
+  await ensureCategoriesLoaded();
+  try {
+    const res = await taskStore.getMyTaskStatsByCategory();
+    if (res.code === 0) {
+      setTaskStats(res.data || []);
+      if (!currentTab.value && visibleTaskStats.value.length) {
+        currentTab.value = visibleTaskStats.value[0].categoryId;
+      }
+      getMyTasks(currentTab.value ?? null);
+    } else {
+      setTaskStats([]);
+      getMyTasks(null);
+    }
+  } catch (err) {
+    setTaskStats([]);
+    getMyTasks(null);
+  }
+};
+
+const hideCategory = (cat) => {
+  const id = cat?.categoryId ?? cat?.id;
+  if (!id) return;
+  if (!hiddenCategoryIds.value.includes(id)) {
+    hiddenCategoryIds.value = [...hiddenCategoryIds.value, id];
+    persistHiddenCategories();
+    ensureCurrentTabVisible();
+    mainStore.setSnackbar({
+      title: `${cat.categoryName || "Category"} hidden`,
+      type: "info",
+    });
+  }
+};
+
+const startEditCategory = (cat) => {
+  categoryToEdit.value = {
+    id: cat?.categoryId ?? cat?.id,
+    name: cat?.categoryName || cat?.name || "",
+    description: cat?.description || "",
+    parentId: cat?.parentId ?? null,
+    color: cat?.color || "",
+    isMandatory: cat?.isMandatory ?? false,
+  };
+  addCategoryDialog.value = true;
+};
+
+const resetCategoryEditing = () => {
+  categoryToEdit.value = null;
 };
 
 const getTaskStatuses = () => {
@@ -392,19 +625,10 @@ function sortByCustomStatus(arr) {
   });
 }
 const getMyTasks = (categoryId) => {
-  taskStore
-    .tasksGroupedByStatus({ categoryId, limit: 100 })
-    .then((res) => {
-      if (res.code === 0) {
-        taskDetails.value = sortByCustomStatus(res.data);
-      } else {
-        // set snack
-      }
-    })
-    .catch((err) => {
-      return err;
-      // set snack
-    });
+  if (categoryId !== undefined && categoryId !== null) {
+    currentTab.value = categoryId;
+  }
+  loadTasks({}, true);
 };
 const selectedRowItems = ref([]);
 const hideTray = () => {
