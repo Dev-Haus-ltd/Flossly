@@ -136,7 +136,6 @@
           </section>
 
           <section v-else>
-            <div class="section-title">Smile Concern Survey</div>
 
             <v-card class="content-card soft-border mb-5" :elevation="0">
               <div class="pill-heading">About your Smile: Introduction</div>
@@ -450,16 +449,15 @@
 <script setup>
 import { reactive, ref, watch } from 'vue'
 import CommonSideBar from '@/components/Common/sideBar.vue'
-import profileIcon from '@/assets/icons/myProfile/profile.svg'
-import workIcon from '@/assets/icons/myProfile/work.svg'
+
 
 const props = defineProps({ patient: { type: Object, default: null } })
 const emit = defineEmits(['save'])
 
 const selectedSection = ref('uniqueComfort')
 const journeyItems = [
-  { key: 'uniqueComfort', label: 'Unique Patient Comfort', icon: profileIcon },
-  { key: 'smileSurvey', label: 'Smile Concern Survey', icon: workIcon },
+  { key: 'uniqueComfort', label: 'Unique Patient Comfort' },
+  { key: 'smileSurvey', label: 'Smile Concern Survey'},
 ]
 
 const defaultComfort = () => ({
@@ -595,12 +593,8 @@ const handleSave = () => {
 .sidebar-enhanced :deep(.v-list-item--active) {
   background-color: #eef2ff !important;
   color: #1e1e1e !important;
-  border: 1px solid #c7d2fe;
 }
-.sidebar-enhanced :deep(.v-list-item--active .cust-label) {
-  color: #1e1e1e;
-  font-weight: 600;
-}
+
 .journey-content {
   flex: 1;
   padding-left: 24px;
@@ -616,6 +610,8 @@ const handleSave = () => {
   border-radius: 12px;
   padding: 20px;
   background: #fff;
+  height: 50vh;
+  overflow: auto;
 }
 .field-label {
   font-weight: 600;
