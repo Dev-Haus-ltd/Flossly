@@ -3,7 +3,7 @@
     <div class="cust-border d-flex align-center">
       <span class="ml-2 text-subtitle-1">{{ patientName }}</span>
     </div>
-    <div class="pa-6">
+    <div class="pa-4">
       <v-tabs v-model="activeTab" bg-color="transparent" color="primary" class="custom-tabs">
         <v-tab value="details">Details</v-tab>
         <v-tab value="journey">Patient Journey</v-tab>
