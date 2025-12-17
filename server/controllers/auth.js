@@ -60,6 +60,18 @@ export const login = async (event) => {
       isActive: true, // Only load active organizations
     } 
   });
+  
+  // Check if user is disabled or expired
+  if (user.status === "Disabled" || user.status === "Expired") {
+    return error(403, "Your account is deactivated");
+  }
+  
+  if (orgs.length === 0) {
+    return error(403, "You are not part of any active organizations");
+  }
+  
+  const activeOrgs = orgs;
+  
   const userPreference = await UserPreference.findOne({
     where: { userId: user.id },
   });
@@ -69,8 +81,21 @@ export const login = async (event) => {
       return error(401, "License Expired");
     }
   }
-  const orgIds = orgs.map((o) => o.organisationId).sort();
-  const orgId = orgIds[0]; // default to first
+  
+  // Prefer last logged in organization if it's not deactivated
+  let orgId;
+  if (userPreference && userPreference.lastLoginOrganisationId) {
+    const lastOrg = activeOrgs.find((o) => o.organisationId === userPreference.lastLoginOrganisationId);
+    if (lastOrg) {
+      orgId = lastOrg.organisationId;
+    }
+  }
+  
+  // If no last org or last org is deactivated, use first available
+  if (!orgId) {
+    const orgIds = activeOrgs.map((o) => o.organisationId).sort();
+    orgId = orgIds[0];
+  }
   const token = jwt.sign(
     { userId: user.id, orgId, roleId: user.roleId, purpose: 'login' },
     config.JWT_SECRET
@@ -246,9 +271,6 @@ export const profile = async (event) => {
     if (!membership) {
       return error(403, "Your organisation membership is inactive");
     }
-    if (membership.isAccountDeactivated) {
-      return error(403, "Your account is deactivated for this organisation");
-    }
 
     const user = await User.findByPk(loggedUser.userId, {
       attributes: { exclude: ["password"] },
@@ -265,7 +287,9 @@ export const profile = async (event) => {
           model: UserOrganisation,
           as: "userOrganisations",
           // Keep only active orgs in the included association, but don't filter out the user row
-          where: { isActive: true },
+          where: { 
+            isActive: true,
+          },
           required: false,
           include: [
             {
@@ -280,6 +304,12 @@ export const profile = async (event) => {
         },
       ],
     });
+    
+    // Check if user is disabled or expired
+    if (user.status === "Disabled" || user.status === "Expired") {
+      return error(403, "Your account is deactivated");
+    }
+    
     const userObj = user.toJSON();
     userObj.currentLoggedInOrgId = loggedUser.orgId;
     if (userObj.preferences && userObj.preferences.taskTableColumns) {
@@ -481,6 +511,12 @@ export const switchOrgnanisation = async (event) => {
       },
     });
     if (!record) return error(403, "Not part of selected organisation or invitation not accepted");
+    
+    // Check if user is disabled or expired
+    const userRecord = await User.findByPk(user.userId);
+    if (userRecord && (userRecord.status === "Disabled" || userRecord.status === "Expired")) {
+      return error(403, "Your account is deactivated");
+    }
     const newToken = jwt.sign(
       { userId: user.userId, roleId: user.roleId, orgId, purpose: 'login' },
       config.JWT_SECRET

@@ -30,12 +30,6 @@ export const UserOrganisation = sequelize.define(
       defaultValue: true, // Existing records will be active
       allowNull: false,
     },
-    isAccountDeactivated: {
-      // Separate flag to indicate account-level deactivation for this org
-      type: DataTypes.BOOLEAN,
-      defaultValue: false,
-      allowNull: false,
-    },
   },
   {
     modelName: "UserOrganisations",

@@ -62,7 +62,12 @@ export const usersList = async (event) => {
       const user = uo.user.toJSON();
       // Expose organisation membership state to the UI separately from onboarding status
       user.isActive = Boolean(uo.isActive);
-      user.isAccountDeactivated = Boolean(uo.isAccountDeactivated);
+      // Account deactivation: user is deactivated if:
+      // 1. Globally disabled/expired (status), OR
+      // 2. Not active in this organization (isActive = false) AND status is Active (org-specific deactivation)
+      const isGloballyDeactivated = user.status === "Disabled" || user.status === "Expired";
+      const isOrgDeactivated = !uo.isActive && user.status === "Active";
+      user.isAccountDeactivated = isGloballyDeactivated || isOrgDeactivated;
       return user;
     });
     return success(users);
@@ -147,8 +152,12 @@ export const userAcrossOrgs = async (event) => {
           const user = uo.user;
           const isActive = uo.isActive !== undefined ? uo.isActive : 
                           (uo.get ? uo.get('isActive') : true);
-          const isAccountDeactivated = uo.isAccountDeactivated !== undefined ? uo.isAccountDeactivated :
-                          (uo.get ? uo.get('isAccountDeactivated') : false);
+          // Account deactivation: user is deactivated if:
+          // 1. Globally disabled/expired (status), OR
+          // 2. Not active in this organization (isActive = false) AND status is Active (org-specific deactivation)
+          const isGloballyDeactivated = user.status === "Disabled" || user.status === "Expired";
+          const isOrgDeactivated = !isActive && user.status === "Active";
+          const isAccountDeactivated = isGloballyDeactivated || isOrgDeactivated;
           // Expose organisation membership state to the UI separately from onboarding status
           user.isActive = Boolean(isActive);
           user.isAccountDeactivated = Boolean(isAccountDeactivated);
@@ -613,8 +622,9 @@ export const deactivateUser = async (event) => {
       });
     }
 
-    // Deactivate account at organisation level (keep isActive semantics intact for invite/resend)
-    userOrg.isAccountDeactivated = true;
+    // Deactivate user in this specific organization by setting isActive to false
+    // This allows organization-specific deactivation without affecting other orgs
+    userOrg.isActive = false;
     await userOrg.save({ transaction });
 
     await transaction.commit();
@@ -651,9 +661,17 @@ export const activateUser = async (event) => {
       });
     }
 
-    // Activate account at organisation level (do not change isActive used for invite/resend)
-    userOrg.isAccountDeactivated = false;
+    // Activate user in this specific organization by setting isActive to true
+    // This allows organization-specific activation
+    userOrg.isActive = true;
     await userOrg.save({ transaction });
+    
+    // Also ensure the user's global status is Active (if it was Disabled/Expired, activate globally)
+    const user = await User.findByPk(userId, { transaction });
+    if (user && (user.status === "Disabled" || user.status === "Expired")) {
+      user.status = "Active";
+      await user.save({ transaction });
+    }
 
     await transaction.commit();
     return success("User activated successfully");

@@ -246,24 +246,10 @@
               <p class="ml-2">{{ item.cpdHours !== null && item.cpdHours !== undefined ? item.cpdHours : '-' }}</p>
             </template>
 
-            <template v-else-if="col.key === 'accountStatus'">
-              <div class="text-center">
-                <template v-if="(item.status || '').toLowerCase() !== 'invited'">
-                  <v-chip 
-                    label 
-                    :style="getAccountStatusChipStyle(item)"
-                  >
-                    {{ getAccountStatusText(item) }}
-                  </v-chip>
-                </template>
-                <!-- For invited users, show nothing in Account Status -->
-              </div>
-            </template>
-
             <template v-else-if="col.key === 'resend'">
               <div class="d-flex justify-center align-center pa-2" style="min-width: 100px;">
                 <v-btn
-                  v-if="item.status === 'Invited'"
+                  v-if="item.isActive === false || item.status === 'Invited'"
                   size="small"
                   variant="flat"
                   color="primary"
@@ -429,10 +415,27 @@ const sortBy = ref([]);
 const sortDesc = ref([]);
 
 const getDisplayStatus = (user) => {
-  // If membership in this org is pending, treat as Invited regardless of global user.status
-  if (user?.isActive === false) return 'Invited';
-  const s = (user?.status || 'Active').toLowerCase();
-  return s === 'invited' ? 'Invited' : 'Active';
+  // Check global status first (takes precedence)
+  const status = (user?.status || 'Active').toLowerCase();
+  
+  // If globally disabled or expired, show that status regardless of isActive
+  if (status === 'disabled' || status === 'expired') {
+    return status.charAt(0).toUpperCase() + status.slice(1);
+  }
+  
+  // Check organization-specific status (isActive)
+  // If isActive is false, user is either Invited (pending) or Deactivated in this org
+  if (user?.isActive === false) {
+    // If status is "Active" but isActive is false, it means org-specific deactivation
+    if (status === 'active') {
+      return 'Deactivated';
+    }
+    // Otherwise, it's a pending invitation (status is "Invited")
+    return 'Invited';
+  }
+  
+  // User is active in this org (isActive === true) and status is Active
+  return 'Active';
 };
 
 const formattedDate = (dateStr) => {
@@ -450,7 +453,7 @@ const getStatusChipStyle = (status) => {
   } else if (statusLower === 'invited') {
     color = 'hsla(29, 100%, 50%, 1)';
     bgColor = 'hsla(29, 100%, 50%, 0.1)';
-  } else if (statusLower === 'deactivated' || statusLower === 'disabled') {
+  } else if (statusLower === 'disabled') {
     color = 'hsla(357, 100%, 57%, 1)';
     bgColor = 'hsla(357, 100%, 57%, 0.1)';
   } else if (statusLower === 'expired') {
@@ -675,33 +678,14 @@ const removeHeaderFromSelected = (column) => {
 
 // Available headers are now computed in the parent component
 
-// Helper functions for account status
+// Helper function to check if user is active in this organization (for activate/deactivate actions)
 const isUserActive = (user) => {
-  // Account active is based on account-level deactivation flag (isAccountDeactivated)
-  return user.isAccountDeactivated !== true;
-};
-
-// Only show Active or Deactivated in Account Status to avoid duplicating onboarding Status
-const getAccountStatusText = (user) => {
-  return isUserActive(user) ? "Active" : "Deactivated";
-};
-
-// Match styling to the Status chip visuals
-const getAccountStatusChipStyle = (user) => {
-  const statusLower = getAccountStatusText(user).toLowerCase();
-  let color, bgColor;
-  if (statusLower === 'active') {
-    color = 'hsla(124, 57%, 46%, 1)';
-    bgColor = 'hsla(124, 57%, 46%, 0.1)';
-  } else {
-    // deactivated
-    color = 'hsla(357, 100%, 57%, 1)';
-    bgColor = 'hsla(357, 100%, 57%, 0.1)';
-  }
-  return {
-    color,
-    backgroundColor: bgColor,
-  };
+  // User is active if:
+  // 1. isActive is true (active in this org) AND
+  // 2. global status is not Disabled or Expired
+  return user.isActive === true && 
+         user.status !== "Disabled" && 
+         user.status !== "Expired";
 };
 
 </script>
