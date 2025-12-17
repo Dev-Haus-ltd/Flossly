@@ -1,0 +1,5 @@
+taskTitle,itemTitle,showRadio,defaultComment
+Fire Safety Check,Check fire alarm,TRUE,
+Fire Safety Check,Check extinguishers,TRUE,Last serviced this month
+Surgery Prep,Sterilize tools,TRUE,
+Surgery Prep,Prep chair,TRUE,
