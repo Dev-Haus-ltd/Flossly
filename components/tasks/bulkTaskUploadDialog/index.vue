@@ -514,13 +514,10 @@ const processFile = async (file) => {
 
       // Validate required columns
       const requiredColumns = [
-        "frequency",
-        "description",
         "title",
         "category",
         "priority",
         "role",
-        "user",
       ];
       const hasRequiredColumns = requiredColumns.every((col) =>
         Object.keys(json[0] || {}).includes(col)
@@ -632,15 +629,7 @@ const validateTaskRow = (task, index) => {
     task.hasErrors = true;
   }
 
-  if (!task.description?.trim()) {
-    task.errors.description = "Description is required";
-    task.hasErrors = true;
-  }
-
-  if (!task.defaultFrequency?.trim()) {
-    task.errors.frequency = "Frequency is required";
-    task.hasErrors = true;
-  }
+  // Frequency is optional - no validation needed
 
   // --- Category Validation ---
   if (!task.categoryId) {
@@ -694,35 +683,35 @@ const validateTaskRow = (task, index) => {
     delete task.errors.role;
   }
 
-  // --- User Validation ---
-  if (!task.userId) {
-    if (!task.originalUser?.trim()) {
-      task.errors.user = "User is missing. Please select from dropdown.";
-    } else {
-      const matched = props.users?.find(
-        u => u.fullName?.trim()?.toLowerCase() === task.originalUser.trim().toLowerCase()
-      );
-      if (!matched) {
-        task.errors.user = `User "${task.originalUser}" is invalid. Please select from dropdown.`;
-      }
+  // --- User Validation (optional) ---
+  // User is now optional, but if provided, validate it exists
+  if (task.originalUser?.trim() && !task.userId) {
+    const matched = props.users?.find(
+      u => u.fullName?.trim()?.toLowerCase() === task.originalUser.trim().toLowerCase()
+    );
+    if (!matched) {
+      task.errors.user = `User "${task.originalUser}" is invalid. Please select from dropdown.`;
+      task.hasErrors = true;
     }
-    if (task.errors.user) task.hasErrors = true;
-  } else {
+  } else if (task.userId) {
     delete task.errors.user;
   }
 
   // --- Duplicate Detection ---
+  // Only check duplicates if both title and userId are provided
   const titleKey = task.title?.trim()?.toLowerCase();
   const userKey = task.userId;
-  const duplicates = parsedTasks.value.filter(
-    (t, i) => i !== index &&
-      t.title?.trim()?.toLowerCase() === titleKey &&
-      t.userId === userKey
-  );
+  if (titleKey && userKey) {
+    const duplicates = parsedTasks.value.filter(
+      (t, i) => i !== index &&
+        t.title?.trim()?.toLowerCase() === titleKey &&
+        t.userId === userKey
+    );
 
-  if (duplicates.length > 0 && titleKey && userKey) {
-    task.errors.title = "Duplicate task: Same title and user combination already exists";
-    task.hasErrors = true;
+    if (duplicates.length > 0) {
+      task.errors.title = "Duplicate task: Same title and user combination already exists";
+      task.hasErrors = true;
+    }
   }
 };
 

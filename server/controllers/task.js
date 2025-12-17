@@ -316,14 +316,44 @@ export const assignBulkTasks = async (event) => {
         };
       })
       .filter(Boolean);
-    await UserTask.bulkCreate(userTasks);
+    const createdUserTasks = await UserTask.bulkCreate(userTasks, { returning: true });
+
+    // Clone TaskChecklist templates into each newly created UserTask
+    const newTaskIds = [...new Set(newTasks.map((t) => t.id))];
+    const templates = await TaskChecklist.findAll({
+      where: { taskId: { [Op.in]: newTaskIds } },
+    });
+    if (templates?.length) {
+      const checklistToCreate = [];
+      for (const ut of createdUserTasks) {
+        const tpls = templates.filter((tpl) => tpl.taskId === ut.taskId);
+        if (!tpls.length) continue;
+        tpls.forEach((tpl) => {
+          checklistToCreate.push({
+            userTaskId: ut.id,
+            question: tpl.question,
+            category: tpl.category,
+            showRadio: tpl.showRadio,
+            showDate: tpl.showDate,
+            showTime: tpl.showTime,
+            fieldOneTitle: tpl.fieldOneTitle,
+            fieldTwoTitle: tpl.fieldTwoTitle,
+            radioValue: 'N/A',
+          });
+        });
+      }
+      if (checklistToCreate.length) {
+        await UserTaskChecklist.bulkCreate(checklistToCreate);
+      }
+    }
+
     const user = await User.findOne({ where: { id: userId } });
     await sendTaskAssignmentEmail({
       email: user.email,
       name: user.fullName,
-      taskTitle: userTasks.length === 1 ? userTasks[0].title : "Bulk Tasks",
+      taskTitle: createdUserTasks.length === 1 ? createdUserTasks[0].title : "Bulk Tasks",
     });
-    return success(userTasks);
+    return success(createdUserTasks);
     //TODO: Send new task assigned email
   } catch (err) {
     console.log(err);
@@ -2857,6 +2887,87 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
     });
   } catch (err) {
     return error(500, err.message);
+  }
+};
+
+export const bulkAddChecklistsByTitle = async (event) => {
+  const loggedUser = event.context.user;
+  ensureManagerOrOwner(loggedUser);
+  const body = await readBody(event);
+  let rows = body?.rows;
+  if (!rows) {
+    try { const parsed = JSON.parse(typeof body === 'string' ? body : '{}'); rows = parsed.rows; } catch (_) {}
+  }
+  if (!Array.isArray(rows) || !rows.length) {
+    return error(400, 'rows array is required');
+  }
+  const results = [];
+  const transaction = await DB.transaction();
+  try {
+    for (const row of rows) {
+      const taskTitle = (row?.taskTitle || '').trim();
+      const items = Array.isArray(row?.items) ? row.items : [];
+      if (!taskTitle || !items.length) {
+        results.push({ taskTitle, status: 'failed', message: 'Missing taskTitle or items' });
+        continue;
+      }
+      const task = await Task.findOne({ where: { title: { [Op.iLike]: taskTitle } } });
+      if (!task) {
+        results.push({ taskTitle, status: 'failed', message: 'Task not found' });
+        continue;
+      }
+      // Upsert TaskChecklist by (taskId, question)
+      for (const it of items) {
+        const question = (it?.question || '').trim();
+        if (!question) continue;
+        const existing = await TaskChecklist.findOne({ where: { taskId: task.id, question } });
+        if (!existing) {
+          await TaskChecklist.create({
+            taskId: task.id,
+            question,
+            category: it.category,
+            showRadio: Boolean(it.showRadio),
+            showDate: Boolean(it.showDate),
+            showTime: Boolean(it.showTime),
+            fieldOneTitle: it.fieldOneTitle || 'Comments',
+            fieldTwoTitle: it.fieldTwoTitle || '',
+            radioValue: 'N/A',
+          }, { transaction });
+        }
+      }
+      // Clone to existing UserTasks if not present
+      const userTasks = await UserTask.findAll({ where: { taskId: task.id } });
+      if (userTasks?.length) {
+        for (const ut of userTasks) {
+          for (const it of items) {
+            const question = (it?.question || '').trim();
+            if (!question) continue;
+            const existsUT = await UserTaskChecklist.findOne({ where: { userTaskId: ut.id, question } });
+            if (!existsUT) {
+              await UserTaskChecklist.create({
+                userTaskId: ut.id,
+                question,
+                category: it.category,
+                showRadio: Boolean(it.showRadio),
+                showDate: Boolean(it.showDate),
+                showTime: Boolean(it.showTime),
+                fieldOneTitle: it.fieldOneTitle || 'Comments',
+                fieldTwoTitle: it.fieldTwoTitle || '',
+                radioValue: 'N/A',
+              }, { transaction });
+            }
+          }
+        }
+      }
+      results.push({ taskTitle, status: 'success', created: items.length });
+    }
+    await transaction.commit();
+    const successCount = results.filter(r => r.status === 'success').length;
+    const failCount = results.length - successCount;
+    return success({ message: `${successCount} updated, ${failCount} failed`, results });
+  } catch (err) {
+    await transaction.rollback();
+    return error(500, err.message || 'Failed to add checklists');
   }
 };
 
