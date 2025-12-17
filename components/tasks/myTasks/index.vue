@@ -35,26 +35,30 @@
         <v-tab
           v-for="(cat, index) in visibleTaskStats"
           :value="cat.categoryId"
-            :key="index"
-            class="tab-text"
-            >
-          <div class="d-flex align-center justify-center" style="gap: 6px">
-            <span>{{ cat.categoryName }}</span>
-            <v-menu v-if="shouldShowCategoryMenu(cat)" offset-y>
+          :key="index"
+          class="tab-text category-tab"
+          :style="getTabStyle(cat)"
+        >
+          <div class="d-flex align-center justify-center tab-inner">
+            <span class="tab-label">{{ cat.categoryName }}</span>
+            <v-menu offset-y>
               <template #activator="{ props }">
                 <v-btn
                   v-bind="props"
                   icon
                   variant="text"
                   size="x-small"
-                  class="ml-1"
+                  class="ml-1 category-menu-btn"
                   @click.stop
                 >
                   <v-icon size="16">mdi-dots-horizontal</v-icon>
                 </v-btn>
               </template>
               <v-list density="compact">
-                <v-list-item @click.stop="hideCategory(cat)">
+                <v-list-item
+                  v-if="canHideCategory(cat)"
+                  @click.stop="hideCategory(cat)"
+                >
                   <v-list-item-title>Hide</v-list-item-title>
                 </v-list-item>
                 <v-list-item
@@ -66,8 +70,7 @@
               </v-list>
             </v-menu>
           </div>
-        </v-tab
-        >
+        </v-tab>
 
         <!-- Plus Button Tab -->
         <v-tab
@@ -224,6 +227,7 @@
 <script setup>
 import { useDisplay } from "vuetify";
 import { nextTick } from "vue";
+import { getContrastingTextColor } from "~/lib/misc";
 const bus = useBus();
 // Stores
 const { xs } = useDisplay();
@@ -255,9 +259,9 @@ const hiddenCategoryIds = ref([]);
 const categoryToEdit = ref(null);
 const hiddenCategoryStorageKey = "tasksHiddenCategoryIds";
 const visibleTaskStats = computed(() =>
-  (taskStats.value || []).filter(
-    (cat) => !hiddenCategoryIds.value.includes(cat.categoryId)
-  )
+  (taskStats.value || [])
+    .filter((cat) => !hiddenCategoryIds.value.includes(cat.categoryId))
+    .filter((cat) => !cat?.parentId)
 );
 const loadHiddenCategories = () => {
   try {
@@ -285,20 +289,26 @@ const defaultCategoryNames = [
 ];
 
 const isMandatoryCategory = (cat) => !!(cat?.isDefault);
+const getCategoryTaskCount = (cat) => {
+  const count = Number(
+    cat?.taskCount ?? cat?.total ?? cat?.count ?? cat?.taskTotal ?? 0
+  );
+  return Number.isNaN(count) ? 0 : count;
+};
 
 const isDefaultNamedCategory = (cat) =>
   defaultCategoryNames.includes((cat?.categoryName || cat?.name || "").trim());
 
-const shouldShowCategoryMenu = (cat) =>
-  !isMandatoryCategory(cat) && !isDefaultNamedCategory(cat);
+const canEditCategory = () => true;
 
-const canEditCategory = (cat) => {
-  if (!cat || !shouldShowCategoryMenu(cat)) return false;
-  const count = Number(
-    cat.taskCount ?? cat.total ?? cat.count ?? cat.taskTotal ?? 0
+const canHideCategory = (cat) => {
+  if (!cat) return false;
+  const name = (cat.categoryName || cat.name || "").trim().toLowerCase();
+  const isAllowedDefault = defaultCategoryNames.some(
+    (n) => n.toLowerCase() === name
   );
-  if (Number.isNaN(count)) return false;
-  return count <= 0;
+  if (!isAllowedDefault) return false;
+  return getCategoryTaskCount(cat) === 0;
 };
 
 const ensureCurrentTabVisible = () => {
@@ -349,7 +359,18 @@ const mergeCategoriesWithStats = (stats = []) => {
 };
 
 const setTaskStats = (stats = []) => {
-  taskStats.value = mergeCategoriesWithStats(stats);
+  const merged = mergeCategoriesWithStats(stats);
+  const filtered = merged.filter((cat) => {
+    const count = Number(
+      cat.taskCount ?? cat.total ?? cat.count ?? cat.taskTotal ?? 0
+    );
+    return (
+      isMandatoryCategory(cat) ||
+      isDefaultNamedCategory(cat) ||
+      count > 0
+    );
+  });
+  taskStats.value = filtered;
   ensureCurrentTabVisible();
 };
 
@@ -408,6 +429,16 @@ const quickStatusActions = computed(() => [
   { key: "completed", label: "Completed", icon: "mdi-checkbox-marked-circle-outline", color: "#36a863" },
   { key: "overdue", label: "Overdue Task", icon: "mdi-calendar-remove", color: "#d442a6" },
 ]);
+
+const getTabStyle = (cat) => {
+  const bgColor = cat?.color;
+  if (!bgColor) return {};
+  const textColor = getContrastingTextColor(bgColor);
+  return {
+    backgroundColor: bgColor,
+    "--tab-text-color": textColor,
+  };
+};
 const getIcon = (categoryName) => {
   switch (categoryName) {
     case "Marketing":
@@ -1067,14 +1098,14 @@ const handleQuickStatus = (statusKey) => {
   font-size: 14px;
   font-weight: 400;
   text-transform: none;
-  color: #1e1e1e !important;
+  color: var(--tab-text-color, #1e1e1e) !important;
   min-height: 40px;
   min-width: max-content;
 }
 
 .custom-tabs .v-tab.v-tab--selected {
   font-weight: 500;
-  color: #1e1e1e !important;
+  color: var(--tab-text-color, #1e1e1e) !important;
 }
 .custom-tabs .v-tabs-slider {
   height: 4px;
@@ -1116,5 +1147,31 @@ const handleQuickStatus = (statusKey) => {
 .cust-border p {
   font-size: 12px;
   color: #c3c3c3;
+}
+.category-tab {
+  border-radius: 10px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.tab-inner {
+  gap: 6px;
+  min-width: 0;
+}
+.tab-label {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+}
+.category-menu-btn {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.category-tab:hover .category-menu-btn,
+.category-menu-btn:focus-visible {
+  opacity: 1;
+}
+.category-tab .v-icon {
+  color: var(--tab-text-color, #1e1e1e) !important;
 }
 </style>

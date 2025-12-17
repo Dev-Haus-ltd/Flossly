@@ -6,14 +6,17 @@
     <div class="pa-6">
       <v-tabs v-model="activeTab" bg-color="transparent" color="primary" class="custom-tabs">
         <v-tab value="details">Details</v-tab>
+        <v-tab value="journey">Patient Journey</v-tab>
       </v-tabs>
-      <PatientsIndex :patient="patient" />
+      <PatientsIndex v-if="activeTab === 'details'" :patient="patient" />
+      <PatientJourney v-else-if="activeTab === 'journey'" :patient="patient" @save="handleJourneySave" />
     </div>
   </v-sheet>
 </template>
 
 <script setup>
 import PatientsIndex from '@/components/patients/index.vue'
+import PatientJourney from '@/components/patients/patientJourney.vue'
 import { useDiaryStore } from '@/stores/diary'
 import { watch } from 'vue'
 
@@ -42,6 +45,11 @@ onMounted(async () => {
 watch(() => route.params.id, (id) => {
   loadPatient(id)
 })
+
+const handleJourneySave = async (payload) => {
+  // Wire up to backend when endpoint is ready.
+  console.log('Patient journey payload', payload)
+}
 </script>
 
 <style scoped>

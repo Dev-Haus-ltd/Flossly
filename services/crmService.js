@@ -106,6 +106,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  bulkUploadLeads(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/bulkUpload", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   getLeadTreatment(leadId) {
     return new Promise((resolve, reject) => {
       Post("/lead/treatmentGet", { leadId })

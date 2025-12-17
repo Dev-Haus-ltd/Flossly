@@ -1,8 +1,16 @@
 import { Op } from 'sequelize'
-import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, User } from '../models'
+import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, User, UserOrganisation } from '../models'
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
 import { success, error } from '../utils/response'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
+import DB from '../utils/db'
+
+const parseDateValue = (value) => {
+  if (!value) return null;
+  const d = new Date(value);
+  if (!isNaN(d.getTime())) return d;
+  return null;
+};
  
 
 export const listLeads = async (event) => {
@@ -191,6 +199,162 @@ export const deleteLeads = async (event) => {
     if (!ids.length) return error(400, 'ids required')
     await CrmLead.destroy({ where: { id: { [Op.in]: ids }, organisationId: Number(logged.orgId) } })
     return success('deleted')
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const bulkUploadLeads = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const leads = payload?.leads || []
+    if (!orgId) return error(401, 'Unauthenticated')
+    if (!Array.isArray(leads) || !leads.length) return error(400, 'leads required')
+
+    const organisationId = Number(orgId)
+    const statusMap = new Map([
+      ['new', 'New'],
+      ['converted', 'Converted'],
+      ['contacted', 'Contacted'],
+      ['lost', 'Lost'],
+      ['archived', 'Archived'],
+    ])
+
+    const candidateUserIds = [...new Set(leads.map((l) => Number(l.assignedUserId)).filter(Boolean))]
+    let allowedUserIds = new Set()
+    if (candidateUserIds.length) {
+      const rows = await UserOrganisation.findAll({
+        where: { organisationId, userId: { [Op.in]: candidateUserIds } },
+      })
+      allowedUserIds = new Set(rows.map((r) => r.userId))
+    }
+
+    const results = []
+    const validLeads = []
+    const seenEmails = new Set()
+
+    leads.forEach((raw, index) => {
+      const errors = []
+      const name = (raw?.name || '').trim()
+      const email = (raw?.email || '').trim()
+      const telephone = (raw?.telephone || '').trim()
+      const leadSource = raw?.leadSource?.trim?.() || 'Manual'
+      const treatment = raw?.treatment?.trim?.() || null
+      const rawStatus = raw?.leadStatus?.trim?.() || 'New'
+      const status = statusMap.get(rawStatus.toLowerCase())
+      const assignedUserId = raw?.assignedUserId ? Number(raw.assignedUserId) : null
+      const inquiryDate = parseDateValue(raw?.inquiryDate)
+      const followUpDate = parseDateValue(raw?.followUpDate)
+      const comments = raw?.comments || null
+
+      if (!name) errors.push('Name is required')
+      if (!email) errors.push('Email is required')
+      else {
+        const emailKey = email.toLowerCase()
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        if (!emailRegex.test(email)) errors.push('Invalid email format')
+        if (seenEmails.has(emailKey)) errors.push('Duplicate email in upload')
+        else seenEmails.add(emailKey)
+      }
+      if (!telephone) errors.push('Telephone is required')
+      if (!status) errors.push('Invalid lead status')
+      if (assignedUserId && !allowedUserIds.has(assignedUserId)) {
+        errors.push('Assigned user is not part of this organisation')
+      }
+      if (raw?.inquiryDate && !inquiryDate) errors.push('Invalid inquiry date')
+      if (raw?.followUpDate && !followUpDate) errors.push('Invalid follow-up date')
+
+      if (errors.length) {
+        results.push({
+          index,
+          name,
+          email,
+          status: 'failed',
+          message: errors.join('; '),
+        })
+        return
+      }
+
+      validLeads.push({
+        index,
+        payload: {
+          organisationId,
+          name,
+          email,
+          telephone,
+          leadSource,
+          leadStatus: status || 'New',
+          treatment,
+          inquiryDate: inquiryDate || new Date(),
+          followUpDate: followUpDate || null,
+          comments,
+        },
+        assignedUserId,
+      })
+    })
+
+    if (!validLeads.length) {
+      return success({
+        message: `0 leads added successfully, ${results.length} failed`,
+        results,
+      })
+    }
+
+    const transaction = await DB.transaction()
+    try {
+      const created = await CrmLead.bulkCreate(
+        validLeads.map((l) => l.payload),
+        { transaction, returning: true }
+      )
+
+      const assignees = []
+      created.forEach((lead, idx) => {
+        const link = validLeads[idx]
+        if (link.assignedUserId) {
+          assignees.push({
+            organisationId,
+            leadId: lead.id,
+            userId: link.assignedUserId,
+          })
+        }
+      })
+      if (assignees.length) {
+        await CrmLeadAssignee.bulkCreate(assignees, {
+          transaction,
+          ignoreDuplicates: true,
+        })
+      }
+
+      await transaction.commit()
+      created.forEach((lead, idx) => {
+        results.push({
+          index: validLeads[idx].index,
+          name: lead.name,
+          email: lead.email,
+          status: 'success',
+          id: lead.id,
+        })
+      })
+    } catch (err) {
+      await transaction.rollback()
+      validLeads.forEach((lead) => {
+        results.push({
+          index: lead.index,
+          name: lead.payload.name,
+          status: 'failed',
+          message: err.message,
+        })
+      })
+    }
+
+    const successCount = results.filter((r) => r.status === 'success').length
+    const failCount = results.length - successCount
+    return success({
+      message: `${successCount} leads added successfully, ${failCount} failed`,
+      results,
+    })
   } catch (e) {
     return error(500, e.message)
   }
