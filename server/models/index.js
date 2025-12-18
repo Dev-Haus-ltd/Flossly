@@ -66,6 +66,8 @@ import { CrmLeadAssignee } from "./crm/leadAssignees";
 import { CrmAutomationTemplate } from "./crm/automationTemplates";
 import { TaskCustomColumnDefinition } from "./tasks/taskCustomColumnDefinitions";
 import { UserTaskCustomField } from "./tasks/userTaskCustomFields";
+import { PatientAutomationDictionary } from "./patientJourney/patientAutomationDictionary";
+import { PatientAutomationTemplate } from "./patientJourney/patientAutomationTemplates";
 
 /*
   Cascade Policy chosen:
@@ -269,6 +271,9 @@ CrmLeadAssignee.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'C
 Organisation.hasMany(CrmAutomationTemplate, { foreignKey: 'organisationId', as: 'crmAutomationTemplates' });
 CrmAutomationTemplate.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 
+Organisation.hasMany(PatientAutomationTemplate, { foreignKey: 'organisationId', as: 'patientAutomationTemplates' });
+PatientAutomationTemplate.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+
 ChatbotConfig.belongsTo(Organisation, { foreignKey: 'organizationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 ChatbotConfig.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', hooks: true });
 Organisation.hasOne(ChatbotConfig, { foreignKey: 'organizationId', as: 'chatbotConfig', onDelete: 'CASCADE', hooks: true });
@@ -369,5 +374,7 @@ export {
   DictionaryScript,
   OrganisationScript,
   UserTaskCustomField,
-  TaskCustomColumnDefinition
+  TaskCustomColumnDefinition,
+  PatientAutomationDictionary,
+  PatientAutomationTemplate
 };
