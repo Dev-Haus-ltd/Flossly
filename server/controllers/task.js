@@ -1016,22 +1016,50 @@ export const deleteUserTaskComment = async (event) => {
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
     const { commentId } = JSON.parse(body);
-    if (!commentId) throw createError({ message: "commentId is required" });
-    const existing = await UserTaskComment.findOne({
-      where: { id: commentId, organisationId },
-    });
-    if (!existing) throw createError({ message: "Comment not found" });
-    const isAuthor = existing.userId === loggedUser.userId;
-    const isOrgAdmin = loggedUser.roleId === 1;
-    if (!isAuthor && !isOrgAdmin) {
-      throw createError({
-        statusCode: 403,
-        message: "Not authorized to delete this comment",
-      });
+    
+    if (!commentId) {
+      throw createError({ message: "commentId is required" });
     }
-    await existing.destroy();
+
+    // Build authorization where clause: author OR org admin
+    const isOrgAdmin = loggedUser.roleId === 1;
+    const whereClause = {
+      id: commentId,
+      organisationId,
+    };
+    
+    // If not admin, only allow deleting own comments
+    if (!isOrgAdmin) {
+      whereClause.userId = loggedUser.userId;
+    }
+
+    // Single efficient query: find and delete in one operation
+    const deletedCount = await UserTaskComment.destroy({
+      where: whereClause,
+    });
+
+    if (deletedCount === 0) {
+      // Check if comment exists but user doesn't have permission
+      const exists = await UserTaskComment.findOne({
+        where: { id: commentId, organisationId },
+        attributes: ["id"],
+      });
+      
+      if (exists) {
+        throw createError({
+          statusCode: 403,
+          message: "Not authorized to delete this comment",
+        });
+      }
+      
+      throw createError({ message: "Comment not found" });
+    }
+
     return success("Comment deleted");
   } catch (err) {
+    if (err.statusCode) {
+      return error(err.statusCode, err.message);
+    }
     return error(500, err.message);
   }
 };
@@ -1083,33 +1111,65 @@ export const addAttachments = async (event) => {
 };
 
 export const deleteAttachment = async (event) => {
-  const body = await readBody(event);
-  const { id } = JSON.parse(body);
-  if (!id) {
-    throw createError({ message: "Attachment id required" });
-  }
   try {
-    const attachment = await UserTaskAttachment.findByPk(id);
+    const loggedUser = event.context.user;
+    const organisationId = loggedUser.orgId;
+    const body = await readBody(event);
+    const { id } = JSON.parse(body);
+    
+    if (!id) {
+      throw createError({ message: "Attachment id required" });
+    }
+
+    // Find attachment with UserTask to get file path and verify organization access
+    // Using include with required: true ensures we only get attachments from valid UserTasks
+    const attachment = await UserTaskAttachment.findOne({
+      where: { id },
+      include: [
+        {
+          model: UserTask,
+          as: "userTask",
+          where: { organisationId },
+          attributes: ["id", "organisationId"],
+          required: true,
+        },
+      ],
+      attributes: ["id", "link"], // Only fetch what we need
+    });
+
     if (!attachment) {
+      // Check if attachment exists but belongs to different organization
+      const exists = await UserTaskAttachment.findOne({
+        where: { id },
+        attributes: ["id"],
+      });
+      
+      if (exists) {
+        throw createError({
+          statusCode: 403,
+          message: "Not authorized to delete this attachment",
+        });
+      }
+      
       throw createError({ message: "Attachment not found" });
     }
 
-    // Delete the physical file from the filesystem
+    // Delete the physical file from the filesystem (async, non-blocking)
     const filePath = path.join(process.cwd(), "public", attachment.link);
-    if (fs.existsSync(filePath)) {
-      try {
-        fs.unlinkSync(filePath);
-      } catch (unlinkErr) {
-        console.warn("Failed to delete file from filesystem:", unlinkErr);
-        // Continue with database deletion even if file deletion fails
-      }
-    }
+    // Use unlink with error handling - don't block on file deletion
+    fs.promises.unlink(filePath).catch((unlinkErr) => {
+      // Log but don't fail if file doesn't exist or can't be deleted
+      console.warn("Failed to delete file from filesystem:", unlinkErr.message);
+    });
 
-    // Delete the database record
+    // Delete the database record (don't wait for file deletion)
     await attachment.destroy();
     return success("File removed from task");
   } catch (err) {
-    console.log(err);
+    if (err.statusCode) {
+      return error(err.statusCode, err.message);
+    }
+    console.error("deleteAttachment error:", err);
     return error(500, err.message);
   }
 };

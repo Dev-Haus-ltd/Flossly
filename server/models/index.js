@@ -56,6 +56,8 @@ import { DiaryTreatment } from "./diary/treatments";
 import { DiaryPatient } from "./diary/patients";
 import { DiaryAppointment } from "./diary/appointments";
 import { DiaryNote } from "./diary/notes";
+import { DiaryPatientComfort } from "./diary/patientComfort";
+import { DiaryPatientSurvey } from "./diary/patientSurvey";
 // Organisation dictionary
 import { OrganisationTreatment } from "./organisations/organisationTreatments";
 import { CrmLeadTreatment } from "./crm/leadTreatments";
@@ -175,6 +177,14 @@ DiaryAppointment.belongsTo(DiaryTreatment, { foreignKey: 'treatmentId', as: 'tre
 DiaryNote.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 DiaryNote.belongsTo(User, { foreignKey: 'dentistId', as: 'dentist', onDelete: 'CASCADE', hooks: true });
 User.hasMany(DiaryNote, { foreignKey: 'dentistId', as: 'diaryNotes', onDelete: 'CASCADE', hooks: true });
+
+DiaryPatient.hasOne(DiaryPatientComfort, { foreignKey: 'patientId', as: 'comfort', onDelete: 'CASCADE', hooks: true });
+DiaryPatientComfort.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
+DiaryPatientComfort.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+
+DiaryPatient.hasOne(DiaryPatientSurvey, { foreignKey: 'patientId', as: 'survey', onDelete: 'CASCADE', hooks: true });
+DiaryPatientSurvey.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
+DiaryPatientSurvey.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 
 // OrganisationTreatment
 OrganisationTreatment.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
@@ -369,6 +379,8 @@ export {
   DiaryPatient,
   DiaryAppointment,
   DiaryNote,
+  DiaryPatientComfort,
+  DiaryPatientSurvey,
   OrganisationTreatment,
   DictionaryScript,
   OrganisationScript,
