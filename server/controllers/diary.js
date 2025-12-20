@@ -211,11 +211,16 @@ export const listAppointments = async (event) => {
     const { orgId } = event.context.user
     const q = getQuery(event) || {}
     const dateStr = q.date
-    if (!dateStr) return error(400, 'date is required')
-    const range = getUtcRangeForDate(dateStr)
-    if (!range) return error(400, 'Invalid date format')
-    const { start, end } = range
-    const where = { organisationId: Number(orgId), startTime: { [Op.between]: [start, end] } }
+    const patientId = q.patientId ? Number(q.patientId) : null
+    if (!dateStr && !patientId) return error(400, 'date or patientId is required')
+    const where = { organisationId: Number(orgId) }
+    if (dateStr) {
+      const range = getUtcRangeForDate(dateStr)
+      if (!range) return error(400, 'Invalid date format')
+      const { start, end } = range
+      where.startTime = { [Op.between]: [start, end] }
+    }
+    if (patientId) where.patientId = patientId
     if (q.dentistId) where.dentistId = Number(q.dentistId)
     if (q.status) where.status = q.status
     if (q.treatmentId) where.treatmentId = Number(q.treatmentId)

@@ -40,13 +40,14 @@ export default {
         .catch(reject);
     });
   },
-  listAppointments({ date, dentistId, status, treatmentId, search } = {}) {
+  listAppointments({ date, dentistId, status, treatmentId, search, patientId } = {}) {
     const params = new URLSearchParams();
     if (date) params.append("date", date);
     if (dentistId) params.append("dentistId", dentistId);
     if (status) params.append("status", status);
     if (treatmentId) params.append("treatmentId", treatmentId);
     if (search) params.append("search", search);
+    if (patientId) params.append("patientId", patientId);
 
     return new Promise((resolve, reject) => {
       Get(`/diary/appointments?${params.toString()}`)
