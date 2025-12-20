@@ -1,9 +1,9 @@
 <template>
   <v-navigation-drawer :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" location="right" temporary :width="700">
     <v-toolbar flat color="white">
-      <v-toolbar-title class="title-text"> Add New Patient </v-toolbar-title>
+      <v-toolbar-title class="title-text">{{ drawerTitle }}</v-toolbar-title>
       <v-spacer />
-      <v-btn icon variant="outlined" color="#8B8B8B" @click="$emit('update:modelValue', false)" class="mr-4" style="width:20px;height:20px;min-width:20px;border-radius:50%;padding:0;">
+      <v-btn icon variant="outlined" color="#8B8B8B" @click="handleCancel" class="mr-4" style="width:20px;height:20px;min-width:20px;border-radius:50%;padding:0;">
         <v-icon size="14">mdi-close</v-icon>
       </v-btn>
     </v-toolbar>
@@ -14,20 +14,20 @@
           <v-row dense>
             <v-col cols="12" sm="6">
               <label class="fld-lbl">Title <span class="req">*</span></label>
-              <v-select v-model="form.title" :items="titles" variant="solo" density="compact" class="input-bordered mb-0" bg-color="white" flat hide-details />
+              <v-select v-model="form.title" :items="titles" variant="solo" density="compact" class="input-bordered mb-0" bg-color="white" flat hide-details :rules="requiredRule" />
             </v-col>
             <v-col cols="12" sm="6">
               <label class="fld-lbl">Biological Sex <span class="req">*</span></label>
-              <v-select v-model="form.sex" :items="sexes" variant="solo" density="compact" class="input-bordered mb-0" bg-color="white" flat hide-details />
+              <v-select v-model="form.sex" :items="sexes" variant="solo" density="compact" class="input-bordered mb-0" bg-color="white" flat hide-details :rules="requiredRule" />
             </v-col>
 
             <v-col cols="12" sm="6">
-              <label class="fld-lbl">Full Name <span class="req">*</span></label>
-              <v-text-field v-model="form.firstName" variant="solo" density="compact" class="input-bordered mb-0" bg-color="white" flat hide-details="auto" />
+              <label class="fld-lbl">First Name <span class="req">*</span></label>
+              <v-text-field v-model="form.firstName" variant="solo" density="compact" class="input-bordered mb-0" bg-color="white" flat hide-details="auto" :rules="requiredRule" />
             </v-col>
             <v-col cols="12" sm="6">
               <label class="fld-lbl">Last Name <span class="req">*</span></label>
-              <v-text-field v-model="form.lastName" variant="solo" density="compact" class="input-bordered mb-0" bg-color="white" flat hide-details="auto" />
+              <v-text-field v-model="form.lastName" variant="solo" density="compact" class="input-bordered mb-0" bg-color="white" flat hide-details="auto" :rules="requiredRule" />
             </v-col>
 
             <v-col cols="12" sm="6">
@@ -40,7 +40,7 @@
             </v-col>
 
             <v-col cols="12" sm="6">
-              <v-label class="mb-1">Date of Birth *</v-label>
+              <label class="fld-lbl">Date of Birth <span class="req">*</span></label>
               <v-menu v-model="dobMenu" :close-on-content-click="false" transition="scale-transition" offset-y min-width="auto">
                 <template #activator="{ props }">
                   <v-text-field v-model="dobFormatted" v-bind="props" variant="solo" density="compact" class="input-bordered" bg-color="white" flat readonly :rules="requiredRule" />
@@ -93,8 +93,27 @@
       </v-card>
     </div>
 
-    <div class="px-4 pb-4">
-      <v-btn block color="primary" class="ml-2" @click="onSave">Save Patient</v-btn>
+    <div class="d-flex justify-space-between align-center px-4 py-2" style="background-color: white; padding: 12px 16px;">
+      <v-btn
+        color="white"
+        class="text-primary"
+        style="width: 48%; border-radius: 8px; border: 1px solid #DFDFDF !important; min-height: 40px;"
+        @click="handleCancel"
+        flat
+      >
+        Cancel
+      </v-btn>
+      <v-btn
+        color="primary"
+        class="text-white"
+        style="width: 48%; border-radius: 8px; border: 1px solid #DFDFDF !important; min-height: 40px;"
+        @click="onSave"
+        :loading="isSaving"
+        :disabled="isSaving"
+        flat
+      >
+        Save
+      </v-btn>
     </div>
   </v-navigation-drawer>
   
@@ -106,13 +125,15 @@ import { useDiaryStore } from '@/stores/diary'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
+  patient: { type: Object, default: null },
 })
-const emit = defineEmits(['update:modelValue', 'save'])
+const emit = defineEmits(['update:modelValue', 'save', 'cancel'])
 
 const diaryStore = useDiaryStore()
 const formRef = ref()
 const dobMenu = ref(false)
 const requiredRule = [v => !!v || 'Required']
+const isSaving = ref(false)
 const dentists = ref([])
 
 const form = reactive({
@@ -143,6 +164,7 @@ const recallMethods = ['Email', 'SMS', 'Phone']
 const recallIntervals = ['6 months', '12 months']
 
 const dobFormatted = computed(() => form.dob ? formatDateDDMMYYYY(form.dob) : '')
+const drawerTitle = computed(() => (props.patient?.id ? 'Edit Patient' : 'Add New Patient'))
 
 const loadDentists = async () => {
   const todayStr = new Date().toISOString().slice(0, 10)
@@ -156,18 +178,87 @@ watch(() => props.modelValue, async (isOpen) => {
   if (isOpen && dentists.value.length === 0) {
     await loadDentists()
   }
+  if (isOpen) {
+    if (props.patient) hydrateForm(props.patient)
+    else resetForm()
+  }
+  if (!isOpen) {
+    isSaving.value = false
+  }
 })
 
 onMounted(async () => {
   await loadDentists()
 })
 
-const onSave = async () => {
-  const ok = await formRef.value?.validate?.()
-  if (ok === false) return
-  if (!form.firstName || !form.lastName || !form.dob) return
-  emit('save', { ...form })
+const hydrateForm = (patient) => {
+  if (!patient) return
+  Object.assign(form, {
+    title: patient.title || 'Mr',
+    sex: patient.sex || 'Male',
+    firstName: patient.firstName || '',
+    lastName: patient.lastName || '',
+    address1: patient.address1 || '',
+    postcode: patient.postcode || '',
+    dob: patient.dob || null,
+    marketingConsent: patient.marketingConsent || '-',
+    mobile: patient.mobile || '',
+    receiveSms: patient.receiveSms ? 'Yes' : 'No',
+    email: patient.email || '',
+    receiveEmail: patient.receiveEmail ? 'Yes' : 'No',
+    paymentPlan: patient.paymentPlan || 'Private',
+    dentistId: patient.defaultDentistId || patient.dentistId || null,
+    recallMethod: patient.recallMethod || 'Email',
+    recallInterval: patient.recallInterval || '6 months',
+  })
+}
+
+const resetForm = () => {
+  Object.assign(form, {
+    title: 'Mr',
+    sex: 'Male',
+    firstName: '',
+    lastName: '',
+    address1: '',
+    postcode: '',
+    dob: null,
+    marketingConsent: '-',
+    mobile: '',
+    receiveSms: 'Yes',
+    email: '',
+    receiveEmail: 'Yes',
+    paymentPlan: 'Private',
+    dentistId: null,
+    recallMethod: 'Email',
+    recallInterval: '6 months',
+  })
+  formRef.value?.resetValidation?.()
+}
+
+const handleCancel = () => {
+  resetForm()
   emit('update:modelValue', false)
+  emit('cancel')
+}
+
+const onSave = async () => {
+  isSaving.value = true
+  const ok = await formRef.value?.validate?.()
+  if (ok === false) {
+    isSaving.value = false
+    return
+  }
+  if (!form.firstName || !form.lastName || !form.dob) {
+    isSaving.value = false
+    return
+  }
+  const payload = { ...form }
+  payload.receiveSms = payload.receiveSms === true || payload.receiveSms === 'Yes'
+  payload.receiveEmail = payload.receiveEmail === true || payload.receiveEmail === 'Yes'
+  if (props.patient?.id) payload.id = props.patient.id
+  emit('save', payload)
+  emit('update:modelValue', false)
+  resetForm()
 }
 </script>
 

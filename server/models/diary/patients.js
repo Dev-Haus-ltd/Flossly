@@ -47,6 +47,7 @@ export const DiaryPatient = sequelize.define(
     defaultDentistId: { type: DataTypes.INTEGER, allowNull: true },
     recallMethod: { type: DataTypes.STRING(20), allowNull: true },
     recallInterval: { type: DataTypes.STRING(20), allowNull: true },
+    rawData: { type: DataTypes.JSONB, allowNull: true },
   },
   { tableName: 'DiaryPatients', timestamps: true }
 )

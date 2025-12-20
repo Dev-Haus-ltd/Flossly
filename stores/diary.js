@@ -38,6 +38,36 @@ export const useDiaryStore = defineStore("diaryStore", {
           });
       });
     },
+    listPatientsPaged(params = {}) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        diaryService
+          .listPatientsPaged(params)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    getPatientStats() {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        diaryService
+          .getPatientStats()
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
 
     createPatient(payload) {
       this.isLoading = true;

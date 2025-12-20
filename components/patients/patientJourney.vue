@@ -9,7 +9,14 @@
           </div>
         </div>
         <div class="d-flex align-center">
-          <v-btn color="primary" variant="flat" @click="handleSave">Save</v-btn>
+          <v-btn
+            v-if="selectedSection !== 'automations'"
+            color="primary"
+            variant="flat"
+            @click="handleSave"
+          >
+            Save
+          </v-btn>
         </div>
       </v-card-title>
       <v-divider />
@@ -442,26 +449,31 @@
           </section>
           <section v-else>
             <v-card class="content-card" :elevation="0">
-              <template v-if="!activeAutomation">
-                <div class="d-flex justify-end mb-3">
-                  <v-btn size="small" variant="text" color="primary" prepend-icon="mdi-refresh" @click="fetchAutomationGroups">
-                    Refresh
-                  </v-btn>
-                </div>
-                <v-row dense>
-                  <v-col v-for="card in automationGroups" :key="card.key" cols="12" sm="6" md="3">
-                    <AutomationCard
-                      :title="card.title"
-                      :description="card.description"
-                      :count="card.itemCount || card.templates?.length || 0"
-                      :enabled="card.enabled"
-                      :selected="activeAutomation?.key === card.key"
-                      @select="selectAutomation(card)"
-                      @toggle="(val) => { card.enabled = val; toggleAutomationGroup(card) }"
-                    />
-                  </v-col>
-                </v-row>
-              </template>
+                <template v-if="!activeAutomation">
+                  <v-row v-if="automationGroupsLoading" dense>
+                    <v-col v-for="n in 4" :key="`automation-skeleton-${n}`" cols="12" sm="6" md="3">
+                      <v-skeleton-loader type="card" height="160" />
+                    </v-col>
+                  </v-row>
+                  <v-row v-else-if="automationGroups.length" dense>
+                    <v-col v-for="card in automationGroups" :key="card.key" cols="12" sm="6" md="3">
+                      <AutomationCard
+                        :title="card.title"
+                        :description="card.description"
+                        :count="card.itemCount || card.templates?.length || 0"
+                        :enabled="card.enabled"
+                        :selected="activeAutomation?.key === card.key"
+                        @select="selectAutomation(card)"
+                        @toggle="(val) => { card.enabled = val; toggleAutomationGroup(card) }"
+                      />
+                    </v-col>
+                  </v-row>
+                  <div v-else class="text-center py-10">
+                    <v-icon size="56" color="grey-lighten-1">mdi-email-off-outline</v-icon>
+                    <div class="text-body-1 mt-2">No automations found</div>
+                    <div class="text-caption text-medium-emphasis">Try again or check your connection.</div>
+                  </div>
+                </template>
               <template v-else>
                 <div class="d-flex align-center justify-space-between mb-4 flex-wrap gap-3">
                   <div class="d-flex align-center gap-2">
@@ -537,17 +549,24 @@
                   </div>
                 </div>
 
-                <v-card class="with-border rounded-lg elevation-0">
-                  <v-divider />
-                  <v-data-table
-                    :items="filteredAutomationRows"
-                    :headers="automationHeaders"
-                    item-value="key"
-                    class="automation-data-table full-width-table"
-                    density="comfortable"
-                    hover
-                    :items-per-page="15"
-                  >
+                  <v-card class="with-border rounded-lg elevation-0">
+                    <v-divider />
+                    <v-data-table
+                      :items="filteredAutomationRows"
+                      :headers="automationHeaders"
+                      item-value="key"
+                      class="automation-data-table full-width-table"
+                      density="comfortable"
+                      hover
+                      :items-per-page="15"
+                      :loading="automationLoading"
+                    >
+                      <template #loading>
+                        <div class="text-center py-10">
+                          <v-progress-circular indeterminate color="primary" size="40" class="mb-3" />
+                          <div class="text-body-2 text-medium-emphasis">Loading automations...</div>
+                        </div>
+                      </template>
                     <template #item.type="{ item }">
                       <v-chip size="small" variant="tonal" color="primary" class="font-weight-medium">
                         <v-icon size="14" class="mr-1">mdi-email-outline</v-icon>
@@ -802,6 +821,7 @@ const followUpOptions = ['Phone call', 'Email', 'Text message', 'Via patient por
 
 // Automations
 const automationGroups = ref([])
+const automationGroupsLoading = ref(false)
 const activeAutomation = ref(null)
 const automationRows = ref([])
 const automationLoading = ref(false)
@@ -830,12 +850,15 @@ const activeFilters = computed(() => {
 })
 
 const fetchAutomationGroups = async () => {
+  automationGroupsLoading.value = true
   try {
     const res = await patientJourneyService.listAutomationGroups()
     const data = res?.data || []
     automationGroups.value = data
   } catch (e) {
     console.error('automation groups error', e)
+  } finally {
+    automationGroupsLoading.value = false
   }
 }
 

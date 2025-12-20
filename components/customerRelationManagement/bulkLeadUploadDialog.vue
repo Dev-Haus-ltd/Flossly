@@ -399,6 +399,8 @@ const statusLookup = computed(() => {
   leadStatusOptions.forEach((s) => map.set(s.label.toLowerCase(), s.label));
   return map;
 });
+const normalizeHeaderKey = (value) =>
+  String(value || "").trim().toLowerCase();
 
 watch(
   () => props.modelValue,
@@ -485,15 +487,20 @@ const processFile = async (file) => {
 
       const requiredColumns = ["name", "email", "telephone"];
       const normalizedKeys = Object.keys(json[0] || {}).map((k) =>
-        k.trim().toLowerCase()
+        normalizeHeaderKey(k)
       );
-      const hasRequiredColumns = requiredColumns.every((col) =>
-        normalizedKeys.includes(col)
+      const hasName = normalizedKeys.some((k) =>
+        ["name", "full name", "lead name"].includes(k)
       );
+      const hasEmail = normalizedKeys.includes("email");
+      const hasPhone = normalizedKeys.some((k) =>
+        ["telephone", "phone", "mobile", "whatsapp number", "whatsapp"].includes(k)
+      );
+      const hasRequiredColumns = hasName && hasEmail && hasPhone;
 
       if (!hasRequiredColumns) {
         excelError.value =
-          "Invalid file structure – missing required columns: " +
+          "Invalid file structure - missing required columns: " +
           requiredColumns.join(", ");
         isProcessing.value = false;
         return;
@@ -505,7 +512,7 @@ const processFile = async (file) => {
       isProcessing.value = false;
     } catch (err) {
       console.error("Error reading file:", err);
-      excelError.value = "Error reading file – please check the format.";
+      excelError.value = "Error reading file - please check the format.";
       isProcessing.value = false;
     }
   };
@@ -520,7 +527,7 @@ const processFile = async (file) => {
 const normalizeRow = (row) => {
   const normalized = {};
   Object.entries(row || {}).forEach(([key, value]) => {
-    normalized[key.trim().toLowerCase()] = value ?? "";
+    normalized[normalizeHeaderKey(key)] = value ?? "";
   });
 
   const cleanQuoted = (val) =>
@@ -528,14 +535,30 @@ const normalizeRow = (row) => {
       ? val.trim().replace(/^['"]+|['"]+$/g, "")
       : val || "";
 
-  const leadSourceName = normalized["leadsource"] || normalized["lead source"] || normalized["source"] || "";
+  const leadSourceName =
+    normalized["leadsource"] ||
+    normalized["lead source"] ||
+    normalized["source"] ||
+    "";
   const treatmentName = normalized["treatment"] || "";
-  const assignedUser = normalized["assigned"] || normalized["user"] || "";
+  const assignedUser =
+    normalized["assigned"] || normalized["user"] || normalized["owner"] || "";
   const cleanedEmail = cleanQuoted(normalized["email"]);
-  const cleanedTelephone = cleanQuoted(normalized["telephone"] || normalized["phone"]);
+  const cleanedTelephone = cleanQuoted(
+    normalized["telephone"] ||
+      normalized["phone"] ||
+      normalized["mobile"] ||
+      normalized["whatsapp number"] ||
+      normalized["whatsapp"] ||
+      normalized["secondary"]
+  );
 
   return {
-    name: normalized["name"] || "",
+    name:
+      normalized["name"] ||
+      normalized["full name"] ||
+      normalized["lead name"] ||
+      "",
     email: cleanedEmail,
     telephone: cleanedTelephone,
     leadSourceId:

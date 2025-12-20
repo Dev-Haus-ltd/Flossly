@@ -137,6 +137,12 @@ export const useMainStore = defineStore("mainStore", {
               imgPath: tasksIcon,
               to: "/diary/calendar",
             },
+            {
+              title: "Patients",
+              value: "diaryPatients",
+              imgPath: tasksIcon,
+              to: "/diary/patients",
+            },
           ],
         },
         // {

@@ -1,9 +1,10 @@
-import { startTaskScheduler, startLeadAutomationScheduler, startTaskOverDueScheduler, startTaskDueReminderScheduler } from "../utils/scheduler";
+import { startTaskScheduler, startLeadAutomationScheduler, startPatientJourneyAutomationScheduler, startTaskOverDueScheduler, startTaskDueReminderScheduler } from "../utils/scheduler";
 
 export default defineNitroPlugin(async (nitroApp) => {
   try {
     // startTaskScheduler();
     startLeadAutomationScheduler();
+    startPatientJourneyAutomationScheduler();
     startTaskOverDueScheduler();
     startTaskDueReminderScheduler();
     console.log("Scheduler Started");

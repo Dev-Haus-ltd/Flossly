@@ -117,6 +117,70 @@ export const listPatients = async (event) => {
   }
 }
 
+export const listPatientsPaged = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const q = getQuery(event) || {}
+    const page = Math.max(1, Number(q.page || 1))
+    const itemsPerPage = Math.max(1, Math.min(100, Number(q.itemsPerPage || q.perPage || 10)))
+    const search = (q.search || q.q || '').trim()
+    const where = { organisationId: Number(orgId) }
+    if (q.sex) where.sex = q.sex
+    if (q.paymentPlan) where.paymentPlan = q.paymentPlan
+    if (q.marketingConsent) where.marketingConsent = q.marketingConsent
+    if (q.dentistId) where.defaultDentistId = Number(q.dentistId)
+    if (search) {
+      where[Op.or] = [
+        { firstName: { [Op.iLike]: `%${search}%` } },
+        { lastName: { [Op.iLike]: `%${search}%` } },
+        { email: { [Op.iLike]: `%${search}%` } },
+        { mobile: { [Op.iLike]: `%${search}%` } },
+      ]
+    }
+    const order = []
+    if (q.sortBy) {
+      const dir = String(q.sortDesc).toLowerCase() === 'true' ? 'DESC' : 'ASC'
+      order.push([q.sortBy, dir])
+    } else {
+      order.push(['createdAt', 'DESC'])
+    }
+    const result = await DiaryPatient.findAndCountAll({
+      where,
+      order,
+      limit: itemsPerPage,
+      offset: (page - 1) * itemsPerPage,
+    })
+    return success({ rows: result.rows || [], total: result.count || 0 })
+  } catch (e) {
+    const msg = e?.message || e?.data?.message || e?.original?.detail || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const getPatientStats = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const where = { organisationId: Number(orgId) }
+    const total = await DiaryPatient.count({ where })
+    const startOfMonth = new Date()
+    startOfMonth.setDate(1)
+    startOfMonth.setHours(0, 0, 0, 0)
+    const newThisMonth = await DiaryPatient.count({
+      where: { ...where, createdAt: { [Op.gte]: startOfMonth } },
+    })
+    const withEmail = await DiaryPatient.count({
+      where: { ...where, email: { [Op.ne]: null } },
+    })
+    const withMobile = await DiaryPatient.count({
+      where: { ...where, mobile: { [Op.ne]: null } },
+    })
+    return success({ total, newThisMonth, withEmail, withMobile })
+  } catch (e) {
+    const msg = e?.message || e?.data?.message || e?.original?.detail || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
 export const createPatient = async (event) => {
   try {
     const { orgId } = event.context.user
@@ -421,8 +485,13 @@ export const listDentistsForDate = async (event) => {
         { model: UserOrganisation, as: 'userOrganisations', attributes: [], where: { organisationId: Number(orgId) } },
       ],
     })
+    const dentistRoleIds = new Set([1, 2, 5])
     const out = users
-      .filter(u => u.roleId === 5 || (u.role?.title || '').toLowerCase().includes('dentist'))
+      .filter((u) => {
+        const roleId = Number(u.roleId)
+        const title = (u.role?.title || '').toLowerCase()
+        return dentistRoleIds.has(roleId) || title.includes('dentist')
+      })
       .map(u => ({ id: u.id, name: u.fullName, role: u.role?.title || 'Dentist', start: null, end: null }))
     return success(out)
   } catch (e) { const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'; return error(500, msg) }

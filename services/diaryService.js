@@ -16,6 +16,30 @@ export default {
         .catch(reject);
     });
   },
+  listPatientsPaged({ page = 1, itemsPerPage = 10, search = "", sortBy, sortDesc, sex, paymentPlan, marketingConsent, dentistId } = {}) {
+    const params = new URLSearchParams();
+    params.append("page", page);
+    params.append("itemsPerPage", itemsPerPage);
+    if (search) params.append("search", search);
+    if (sortBy) params.append("sortBy", sortBy);
+    if (sortDesc !== undefined) params.append("sortDesc", sortDesc);
+    if (sex) params.append("sex", sex);
+    if (paymentPlan) params.append("paymentPlan", paymentPlan);
+    if (marketingConsent) params.append("marketingConsent", marketingConsent);
+    if (dentistId) params.append("dentistId", dentistId);
+    return new Promise((resolve, reject) => {
+      Get(`/diary/patientsPaged?${params.toString()}`)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+  getPatientStats() {
+    return new Promise((resolve, reject) => {
+      Get("/diary/patientStats")
+        .then(resolve)
+        .catch(reject);
+    });
+  },
 
   createPatient(payload) {
     return new Promise((resolve, reject) => {
