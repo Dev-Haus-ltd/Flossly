@@ -88,8 +88,6 @@ export default defineEventHandler(async (event) => {
 
 const createHash = async (event) => {
   const body = await readBody(event);
-  console.log(body);
-  // const { password }  = JSON.parse(body)
   const hashPassword = await bcrypt.hash(body.password, 10);
 
   return hashPassword;

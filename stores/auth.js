@@ -127,7 +127,6 @@ export const useAuthStore = defineStore("authStore", {
                   title: message || 'Your account is deactivated for this organisation',
                   type: 'error',
                 });
-                // Clear token and redirect to login
                 const token = useCookie('accessToken');
                 if (token) token.value = null;
                 if (process.client) {

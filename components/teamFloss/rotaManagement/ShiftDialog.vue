@@ -449,7 +449,13 @@ const prefillForm = (id) => {
   const template = props.shifts.find((s) => s.id === id);
 
   if (template) {
-    form.value = { ...template, shiftLibrary: id };
+    form.value = {
+      ...template,
+      shiftLibrary: id,
+      
+      startDate: toLocalTimeString(template.startDate),
+      endDate: toLocalTimeString(template.endDate),
+    };
   }
 };
 const getSurgeries = () => {
@@ -553,10 +559,33 @@ const submitForm = async () => {
     });
   }
 };
+// Convert UTC ISO datetime to local HH:mm string
+const toLocalTimeString = (val) => {
+  if (!val) return null;
+
+  const d = new Date(val);
+  if (isNaN(d)) return null;
+
+  // Convert to local HH:mm
+  return d.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+};
+
 const safeFormat = (val) => {
   if (!val) return null;
+
   const d = new Date(val);
-  return isNaN(d) ? val : format(d, "HH:mm"); // if it's not a valid date, keep it as-is
+  if (isNaN(d)) return val;
+
+  // Use toLocaleTimeString to properly convert UTC → local HH:mm
+  return d.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 };
 watch(
   () => props.currentShift,

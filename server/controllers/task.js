@@ -74,8 +74,6 @@ const autoArchiveCompletedTasks = async (organisationId, days = 5) => {
       }
     );
   } catch (err) {
-    // fail silently so listings still return
-    console.error("autoArchiveCompletedTasks failed", err.message);
   }
 };
 
@@ -147,23 +145,12 @@ export const listMyTasks = async (event) => {
       offset: Number(offset),
       order: [["createdAt", "DESC"]],
     });
-     let allTasks = tasks.rows.map((el) => {
+    const data = tasks.rows.map((el) => {
       return { ...el, start: el.dueDate || el.createdAt };
     });
-
-    // Generate virtual recurring instances for calendar view
-    const virtualInstances = [];
-    allTasks.forEach(task => {
-      const instances = generateVirtualRecurringInstances(task);
-      virtualInstances.push(...instances);
-    });
-
-    // Combine real tasks with virtual instances
-    allTasks = [...allTasks, ...virtualInstances];
-
     return success({
-      total: tasks.count + virtualInstances.length,
-      data: allTasks,
+      total: tasks.count,
+      data,
     });
   } catch (err) {
     return error(500, err.message);
@@ -226,7 +213,6 @@ export const bulkUploadTasks = async (event) => {
     await Task.bulkCreate(tasksToInsert);
     return success("Tasks uploaded successfully");
   } catch (err) {
-    console.log(err.message);
     return error(500, err.message);
   }
 };
@@ -266,7 +252,6 @@ export const assignBulkTasks = async (event) => {
     }
     const taskIds = tasks.map((t) => t.id);
 
-    // Check if tasks are already assigned to the target user
     const existingAssignments = await UserTask.findAll({
       where: {
         userId,
@@ -284,8 +269,6 @@ export const assignBulkTasks = async (event) => {
     if (newTasks.length === 0) {
       return success("All tasks already assigned to the user");
     }
-
-    // Remove existing assignments for the current user (Check Login Confirmation in today's meeting)
 
     if (loggedUser.userId !== userId) {
       await UserTask.destroy({
@@ -318,7 +301,6 @@ export const assignBulkTasks = async (event) => {
       .filter(Boolean);
     const createdUserTasks = await UserTask.bulkCreate(userTasks, { returning: true });
 
-    // Clone TaskChecklist templates into each newly created UserTask
     const newTaskIds = [...new Set(newTasks.map((t) => t.id))];
     const templates = await TaskChecklist.findAll({
       where: { taskId: { [Op.in]: newTaskIds } },
@@ -354,9 +336,7 @@ export const assignBulkTasks = async (event) => {
       taskTitle: createdUserTasks.length === 1 ? createdUserTasks[0].title : "Bulk Tasks",
     });
     return success(createdUserTasks);
-    //TODO: Send new task assigned email
   } catch (err) {
-    console.log(err);
     return error(500, err.message);
   }
 };
@@ -367,20 +347,17 @@ const addDays = (date, days) => {
   return result;
 };
 
-// Generate next recurring task instance
 const generateNextRecurringTask = async (completedTask, orgStatuses, orgPriorities) => {
   try {
     const currentDueDate = completedTask.dueDate || new Date();
     const nextDueDate = getDueDate(completedTask.frequency, currentDueDate);
     
-    if (!nextDueDate) return; // No valid next date
+    if (!nextDueDate) return;
 
-    // Find appropriate status for new recurring task (default to "upcoming" or "todo")
     const upcomingStatus = orgStatuses.find(s => s.key === "upcoming") || 
                           orgStatuses.find(s => s.key === "todo") ||
-                          orgStatuses[0]; // fallback to first status
+                          orgStatuses[0];
 
-    // Create the new recurring task instance
     await UserTask.create({
       userId: completedTask.userId,
       taskId: completedTask.taskId,
@@ -391,15 +368,13 @@ const generateNextRecurringTask = async (completedTask, orgStatuses, orgPrioriti
       priorityId: completedTask.priorityId,
       frequency: completedTask.frequency,
       dueDate: nextDueDate,
-      comments: "", // Start fresh for new instance
+      comments: "",
       assignedBy: completedTask.assignedBy,
     });
   } catch (err) {
-    console.error("Error generating next recurring task:", err.message);
   }
 };
 
-// Enhanced getDueDate function to handle both new tasks and recurring tasks
 const getDueDate = (frequency, fromDate = new Date()) => {
   if (!frequency || frequency === "One off") return null;
   
@@ -415,7 +390,7 @@ const getDueDate = (frequency, fromDate = new Date()) => {
     case "Monthly":
       return addDays(baseDate, 30);
     case "6 Monthly":
-      return addDays(baseDate, 180); // 6 months = ~180 days
+      return addDays(baseDate, 180);
     case "Yearly":
       return addDays(baseDate, 365);
     default:
@@ -423,42 +398,7 @@ const getDueDate = (frequency, fromDate = new Date()) => {
   }
 };
 
-// Generate virtual future instances for recurring tasks (for calendar display)
-const generateVirtualRecurringInstances = (task, endDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)) => {
-  const instances = [];
-  
-  // Only generate if task has a frequency and isn't "One off"
-  if (!task.frequency || task.frequency === "One off") {
-    return instances;
-  }
-  
-  const startDate = task.dueDate || task.createdAt || new Date();
-  let currentDate = getDueDate(task.frequency, startDate);
-  let instanceCount = 0;
-  const maxInstances = 50; // Safety limit
-  
-  while (currentDate && currentDate <= endDate && instanceCount < maxInstances) {
-    // Create a virtual instance
-    const virtualInstance = {
-      ...task,
-      id: `virtual_${task.id}_${currentDate.getTime()}`, // Virtual ID
-      originalTaskId: task.id,
-      dueDate: new Date(currentDate),
-      start: new Date(currentDate),
-      isVirtualInstance: true,
-      createdAt: new Date(currentDate),
-      updatedAt: new Date(currentDate),
-    };
-    
-    instances.push(virtualInstance);
-    
-    // Calculate next occurrence
-    currentDate = getDueDate(task.frequency, currentDate);
-    instanceCount++;
-  }
-  
-  return instances;
-};
+
 export const assignTaskAndPrioritiesToOrg = async (event) => {
   const loggedUser = event.context.user;
   try {
@@ -472,7 +412,7 @@ export const assignTaskAndPrioritiesToOrg = async (event) => {
       status: "Active",
     }));
     await OrganisationPriority.bulkCreate(priorityData);
-    // Seed default statuses
+  
     const defaultStatuses = await DefaultStatus.findAll();
     const statusData = defaultStatuses.map((s) => ({
       key: s.key,
@@ -511,7 +451,6 @@ export const updateTask = async (event) => {
       taskDetails,
     } = parsedBody;
 
-    // Validate existence
     if (id && taskId) {
       const userTask = await UserTask.findOne({
         where: {
@@ -535,7 +474,6 @@ export const updateTask = async (event) => {
         throw createError({ message: "PriorityId not found for this org" });
       }
 
-      // Update UserTask fields
       if (frequency !== undefined) userTask.frequency = frequency;
       if (priorityId !== undefined) userTask.priorityId = priorityId;
       if (statusId !== undefined) userTask.statusId = statusId;
@@ -547,7 +485,6 @@ export const updateTask = async (event) => {
       if (isArchieved !== undefined) userTask.isArchieved = isArchieved;
       await userTask.save();
 
-      // Update Task details if provided
       if (taskDetails && taskId) {
         const task = await Task.findByPk(taskId);
         if (task) {
@@ -571,7 +508,6 @@ export const updateTask = async (event) => {
           task: userTask.title,
         });
 
-        // Handle recurring task generation
         if (userTask.frequency && userTask.frequency !== "One off") {
           await generateNextRecurringTask(userTask, orgStatuses, orgPriorities);
         }
@@ -652,7 +588,7 @@ export const viewTeamTasksTaskWise = async (event) => {
       const assignedUser = userTask.assignedUser;
       const userId = assignedUser?.id;
 
-      // Skip if assignedUser is null
+  
       if (!assignedUser || !userId) {
         return;
       }
@@ -663,7 +599,6 @@ export const viewTeamTasksTaskWise = async (event) => {
           assignedUser: [assignedUser.get()],
         });
       } else {
-        // Check if user is already in the assignedUser array to avoid duplicates
         const existingTask = taskMap.get(task.taskDetails.id);
         const userExists = existingTask.assignedUser.some(
           (u) => u.id === userId
@@ -741,7 +676,6 @@ export const completeBulkTasks = async (event) => {
       where: { organisationId },
     });
     
-    // Get all tasks to be completed (to handle recurring tasks)
     const tasksToComplete = await UserTask.findAll({
       where: {
         id: userTasksIds,
@@ -749,7 +683,6 @@ export const completeBulkTasks = async (event) => {
       },
     });
     
-    // Update all tasks to completed status
     await UserTask.update(
       { statusId: statuses.find((x) => x.key === "completed").id },
       {
@@ -760,7 +693,6 @@ export const completeBulkTasks = async (event) => {
       }
     );
     
-    // Generate next instances for recurring tasks
     for (const task of tasksToComplete) {
       if (task.frequency && task.frequency !== "One off") {
         await generateNextRecurringTask(task, statuses, priorities);
@@ -773,7 +705,6 @@ export const completeBulkTasks = async (event) => {
       email: user.email,
       task: "Multiple",
     });
-    // add reward points
     return success("All tasks completed successfully.");
   } catch (err) {
     return error(500, err.message);
@@ -919,7 +850,6 @@ export const addUserTaskComment = async (event) => {
       comment,
     });
 
-    // Notify assignee via email
     if (userTask.assignedUser?.email) {
       await sendTaskCommentNotificationEmail({
         email: userTask.assignedUser.email,
@@ -1057,7 +987,6 @@ export const addAttachments = async (event) => {
     );
     return success("Attachments added");
   } catch (err) {
-    console.log(err);
     return error(500, err.message);
   }
 };
@@ -1074,22 +1003,17 @@ export const deleteAttachment = async (event) => {
       throw createError({ message: "Attachment not found" });
     }
 
-    // Delete the physical file from the filesystem
     const filePath = path.join(process.cwd(), "public", attachment.link);
     if (fs.existsSync(filePath)) {
       try {
         fs.unlinkSync(filePath);
       } catch (unlinkErr) {
-        console.warn("Failed to delete file from filesystem:", unlinkErr);
-        // Continue with database deletion even if file deletion fails
       }
     }
 
-    // Delete the database record
     await attachment.destroy();
     return success("File removed from task");
   } catch (err) {
-    console.log(err);
     return error(500, err.message);
   }
 };
@@ -1124,7 +1048,6 @@ export const createNewTask = async (event) => {
     assignUserIds.push(loggedUser.userId);
   }
 
-  // Enforce same-organisation assignees
   const assigneeLinks = await UserOrganisation.findAll({
     where: { organisationId: loggedUser.orgId, userId: assignUserIds },
   });
@@ -1150,7 +1073,7 @@ export const createNewTask = async (event) => {
         taskId: task.id,
         question: item.question,
         category: item.category,
-        showRadio: item.showRadio, // defaulting these
+        showRadio: item.showRadio,
         showDate: item.showDate,
         showTime: item.showTime,
         fieldOneTitle: item.fieldOneTitle,
@@ -1163,25 +1086,20 @@ export const createNewTask = async (event) => {
       where: { organisationId: loggedUser.orgId },
     });
 
-    // Determine statusId: use provided statusId, or default to "upcoming"
     let finalStatusId;
     if (statusId) {
-      // Validate that the provided statusId exists for this organization
       const providedStatus = orgStatuses.find((x) => x.id === statusId);
       if (providedStatus) {
         finalStatusId = statusId;
       } else {
-        // If invalid statusId provided, default to "upcoming"
         const upcomingStatus = orgStatuses.find((x) => x.key === "upcoming");
         finalStatusId = upcomingStatus?.id;
       }
     } else {
-      // If no statusId provided, default to "upcoming"
       const upcomingStatus = orgStatuses.find((x) => x.key === "upcoming");
       finalStatusId = upcomingStatus?.id;
     }
 
-    // Fallback: if "upcoming" status not found, use the first available status
     if (!finalStatusId && orgStatuses.length > 0) {
       finalStatusId = orgStatuses[0].id;
     }
@@ -1211,7 +1129,6 @@ export const createNewTask = async (event) => {
       returning: true,
     });
 
-    // Notify all explicit assignees (exclude auto-assigned creator)
     const assigneeIdsForEmail = assignUserIds.filter(
       (id) => id !== loggedUser.userId
     );
@@ -1238,7 +1155,7 @@ export const createNewTask = async (event) => {
             userTaskId: userTask.id,
             question: item.question,
             category: item.category,
-            showRadio: item.showRadio, // defaulting these
+            showRadio: item.showRadio,
             showDate: item.showDate,
             showTime: item.showTime,
             fieldOneTitle: item.fieldOneTitle,
@@ -1254,7 +1171,6 @@ export const createNewTask = async (event) => {
     await transaction.commit();
     return success("Task Added");
   } catch (err) {
-    console.log(err);
     await transaction.rollback();
     return error(500, err);
   }
@@ -1270,7 +1186,6 @@ export const uploadBulkTasks = async (event) => {
 
   const results = [];
 
-  // Pre-validate tasks and separate valid from invalid
   const validTasks = [];
   const invalidTasks = [];
 
@@ -1311,7 +1226,6 @@ export const uploadBulkTasks = async (event) => {
     }
   });
 
-  // Add invalid tasks to results
   results.push(...invalidTasks);
 
   if (validTasks.length === 0) {
@@ -1324,7 +1238,6 @@ export const uploadBulkTasks = async (event) => {
 
   const transaction = await DB.transaction();
   try {
-    // --- 1️⃣ Bulk Create Tasks ---
     const taskData = validTasks.map((t) => ({
       title: t.title,
       description: t.description,
@@ -1339,7 +1252,6 @@ export const uploadBulkTasks = async (event) => {
       returning: true,
     });
 
-    // --- 2️⃣ Bulk Create Task Checklists ---
     const allTaskChecklistData = [];
     validTasks.forEach((t, taskIndex) => {
       if (t.checklist?.length) {
@@ -1363,11 +1275,9 @@ export const uploadBulkTasks = async (event) => {
       await TaskChecklist.bulkCreate(allTaskChecklistData, { transaction });
     }
 
-    // --- 3️⃣ Handle User Assignments ---
     const tasksWithUsers = validTasks.filter((t) => t.userId);
 
     if (tasksWithUsers.length > 0) {
-      // Enforce same-organisation assignees
       const targetUserIds = [
         ...new Set(tasksWithUsers.map((t) => t.userId).filter(Boolean)),
       ];
@@ -1385,7 +1295,6 @@ export const uploadBulkTasks = async (event) => {
         });
       }
 
-      // Get organization statuses once
       const orgStatuses = await OrganisationStatus.findAll({
         where: { organisationId: loggedUser.orgId },
       });
@@ -1393,7 +1302,6 @@ export const uploadBulkTasks = async (event) => {
         (x) => x.key === "progress"
       )?.id;
 
-      // Bulk create UserTasks
       const userTaskData = tasksWithUsers.map((t, userTaskIndex) => {
         const taskIndex = validTasks.findIndex((vt) => vt.index === t.index);
         return {
@@ -1415,7 +1323,6 @@ export const uploadBulkTasks = async (event) => {
         returning: true,
       });
 
-      // --- 4️⃣ Bulk Create UserTask Checklists ---
       const allUserTaskChecklistData = [];
       tasksWithUsers.forEach((t, userTaskIndex) => {
         if (t.checklist?.length) {
@@ -1441,7 +1348,6 @@ export const uploadBulkTasks = async (event) => {
         });
       }
 
-      // --- 5️⃣ Send notification emails (individual operations) ---
       const userIds = [...new Set(tasksWithUsers.map((t) => t.userId))];
       const users = await User.findAll({
         where: { id: userIds },
@@ -1462,15 +1368,12 @@ export const uploadBulkTasks = async (event) => {
 
     await transaction.commit();
 
-    // Add success results for all valid tasks
     validTasks.forEach((t) => {
       results.push({ index: t.index, title: t.title, status: "success" });
     });
   } catch (err) {
-    console.error(`❌ Error in bulk task creation:`, err);
     await transaction.rollback();
 
-    // Mark all valid tasks as failed
     validTasks.forEach((t) => {
       results.push({
         index: t.index,
@@ -1525,22 +1428,19 @@ export const teamTasksCounts = async (event) => {
     });
     const users = orgUsers.map((el) => el.user).filter(Boolean);
 
-    // Ensure current user is always included, even if not in the filtered list
     const currentUserId = loggedUser.userId;
     const currentUserIncluded = users.some((u) => u.id === currentUserId);
 
     if (!currentUserIncluded && currentUserId) {
-      // Check if current user has a UserOrganisation record for this org
       const userOrg = await UserOrganisation.findOne({
         where: {
           userId: currentUserId,
           organisationId: organisationId,
-          isActive: true, // Only check active organization membership
+          isActive: true,
         },
       });
 
       if (userOrg) {
-        // Fetch current user separately if not included (might be inactive status)
         const currentUser = await User.findOne({
           where: { id: currentUserId },
           attributes: ["id", "fullName", "photo", "email", "roleId"],
@@ -1595,12 +1495,10 @@ export const teamTasksCounts = async (event) => {
     );
     return success(results);
   } catch (err) {
-    console.log(err)
     return error(500, err.message);
   }
 };
 
-// Generate virtual future instances of recurring tasks for calendar display
 export const generateCalendarRecurringTasks = async (event) => {
   const loggedUser = event.context.user;
   const body = await parseJsonBody(event);
@@ -1614,7 +1512,6 @@ export const generateCalendarRecurringTasks = async (event) => {
   try {
     const organisationId = loggedUser.orgId;
     
-    // Get active recurring tasks
     const whereClause = {
       organisationId,
       frequency: { [Op.ne]: null },
@@ -1670,10 +1567,9 @@ export const generateCalendarRecurringTasks = async (event) => {
       ],
     });
 
-    // Generate virtual instances for the date range
     const virtualTasks = [];
     const start = new Date(startDate || Date.now());
-    const end = new Date(endDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)); // 90 days ahead
+    const end = new Date(endDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000));
 
     recurringTasks.forEach(task => {
       const instances = generateVirtualInstances(task, start, end);
@@ -1686,18 +1582,16 @@ export const generateCalendarRecurringTasks = async (event) => {
   }
 };
 
-// Helper function to generate virtual recurring task instances
 const generateVirtualInstances = (task, startDate, endDate) => {
   const instances = [];
   const baseDate = task.dueDate || task.createdAt;
   let currentDate = new Date(baseDate);
 
-  // Start from the base date and generate instances until endDate
   while (currentDate <= endDate) {
     if (currentDate >= startDate) {
       instances.push({
         ...task.toJSON(),
-        id: `${task.id}_${currentDate.getTime()}`, // Virtual ID
+        id: `${task.id}_${currentDate.getTime()}`,
         originalId: task.id,
         dueDate: new Date(currentDate),
         isVirtualInstance: true,
@@ -1705,12 +1599,10 @@ const generateVirtualInstances = (task, startDate, endDate) => {
       });
     }
 
-    // Calculate next occurrence
     const nextDate = getDueDate(task.frequency, currentDate);
-    if (!nextDate || nextDate <= currentDate) break; // Prevent infinite loops
+    if (!nextDate || nextDate <= currentDate) break;
     currentDate = nextDate;
 
-    // Safety limit: don't generate more than 100 instances
     if (instances.length >= 100) break;
   }
 
@@ -1795,7 +1687,6 @@ export const groupTeamTasksByTaskId = async (event) => {
   const perPage = Math.min(Math.max(Number(pageSize) || 10, 1), 100);
   const offset = (currentPage - 1) * perPage;
 
-  // If categoryId is provided, filter by category; otherwise get all categories
   let categoryIds = [];
   if (categoryId) {
     const categories = await TaskCategory.findAll({
@@ -2096,7 +1987,6 @@ export const getUserTaskDetails = async (event) => {
     if (!task) throw createError({ message: "task not found" });
     else return success(task);
   } catch (err) {
-    console.log(err.message);
     return error(500, err);
   }
 };
@@ -2380,7 +2270,6 @@ export const myTasksCountByCategory = async (event) => {
 
     const parentCounts = {};
 
-    // Count tasks by parent category
     for (const task of userTasks) {
       const cat = task.taskDetails?.category;
       if (!cat) continue;
@@ -2413,14 +2302,12 @@ export const myTasksCountByCategory = async (event) => {
 
     let result = Object.values(parentCounts);
 
-    // Ensure default categories exist in result with taskCount 0
     for (const defaultName of defaultCategoryNames) {
       const exists = result.some((c) => c.categoryName === defaultName);
 
       if (!exists) {
         const cat = allCategories.find((c) => c.name === defaultName);
 
-        // Only add if it exists in DB
         if (cat) {
           result.push({
             categoryId: cat.id,
@@ -2443,7 +2330,6 @@ export const teamTasksCountByCategory = async (event) => {
     const loggedUser = event.context.user;
     ensureManagerOrOwner(loggedUser);
 
-    // 🔹 Default top-level categories (always included)
     const DEFAULT_PARENT_CATEGORIES = [
       "Staff Management",
       "Marketing",
@@ -2451,7 +2337,6 @@ export const teamTasksCountByCategory = async (event) => {
       "HR",
     ];
 
-    // Fetch categories
     const allCategories = await TaskCategory.findAll({
       where: { isDeleted: false },
       attributes: ["id", "name", "color", "parentId"],
@@ -2461,7 +2346,6 @@ export const teamTasksCountByCategory = async (event) => {
     const categoryMap = new Map();
     allCategories.forEach((cat) => categoryMap.set(cat.id, cat));
 
-    // Map names to IDs for defaults
     const defaultCategoryIds = allCategories
       .filter((c) => DEFAULT_PARENT_CATEGORIES.includes(c.name))
       .map((c) => c.id);
@@ -2491,19 +2375,17 @@ export const teamTasksCountByCategory = async (event) => {
 
     const parentCounts = {};
 
-    // Prepare initial object with defaults all set to 0
     for (const cat of allCategories) {
       if (DEFAULT_PARENT_CATEGORIES.includes(cat.name)) {
         parentCounts[cat.id] = {
           categoryId: cat.id,
           categoryName: cat.name,
           color: cat.color,
-          taskCount: 0, // default 0
+          taskCount: 0,
         };
       }
     }
 
-    // Group tasks by taskId (avoid double counting)
     const taskMap = new Map();
     for (const userTask of teamTasks) {
       const taskId = userTask.taskId;
@@ -2517,17 +2399,14 @@ export const teamTasksCountByCategory = async (event) => {
       taskMap.get(taskId).assignedUserIds.add(userTask.userId);
     }
 
-    // Exclude tasks assigned to logged-in user
     const filteredTasks = Array.from(taskMap.values()).filter(
       (task) => !task.assignedUserIds.has(loggedUser.userId)
     );
 
-    // Count tasks by top-level categories
     for (const task of filteredTasks) {
       const cat = task.category;
       if (!cat) continue;
 
-      // Climb to top-level parent
       let currentCat = categoryMap.get(cat.id);
       if (!currentCat) continue;
 
@@ -2542,13 +2421,11 @@ export const teamTasksCountByCategory = async (event) => {
 
       if (!currentCat) continue;
 
-      // Only count if this top-level category is in defaults
       if (!parentCounts[currentCat.id]) continue;
 
       parentCounts[currentCat.id].taskCount += 1;
     }
 
-    // Return ALL default categories (even if 0)
     const result = Object.values(parentCounts);
 
     return success(result);
@@ -2720,7 +2597,6 @@ export const getUserTasksStatusWise = async (event) => {
   }
 };
 
-// Custom View Functions
 export const getGeneralTasksByCategory = async (event) => {
   const body = await readBody(event);
   const { categoryId } = JSON.parse(body);
@@ -2757,7 +2633,6 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
       return error(400, "organisationId is required");
     }
 
-    // Get organization statuses
     const orgStatuses = await OrganisationStatus.findAll({
       where: { organisationId },
     });
@@ -2767,7 +2642,6 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
       statusMap[s.key] = s.id;
     });
 
-    // Build category filter - get all category IDs including children
     let categoryIds = [];
     if (categoryId) {
       const categories = await TaskCategory.findAll({
@@ -2788,13 +2662,11 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
       }
     }
 
-    // Build base where clause
     const baseWhere = {
       organisationId,
       isArchieved: false,
     };
 
-    // Build task include with category filter if needed
     const taskInclude =
       categoryIds.length > 0
         ? {
@@ -2825,7 +2697,6 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
             ],
           };
 
-    // Get counts for each status
     const [completed, progress, upcoming] = await Promise.all([
       statusMap.completed
         ? UserTask.count({
@@ -2859,7 +2730,6 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
         : 0,
     ]);
 
-    // Calculate overdue tasks (tasks with dueDate < today and status not completed)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -2868,7 +2738,6 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
       dueDate: { [Op.lt]: today },
     };
 
-    // Only add statusId condition if completed status exists
     if (statusMap.completed) {
       overdueWhere.statusId = { [Op.ne]: statusMap.completed };
     }
@@ -2916,7 +2785,6 @@ export const bulkAddChecklistsByTitle = async (event) => {
         results.push({ taskTitle, status: 'failed', message: 'Task not found' });
         continue;
       }
-      // Upsert TaskChecklist by (taskId, question)
       for (const it of items) {
         const question = (it?.question || '').trim();
         if (!question) continue;
@@ -2935,7 +2803,6 @@ export const bulkAddChecklistsByTitle = async (event) => {
           }, { transaction });
         }
       }
-      // Clone to existing UserTasks if not present
       const userTasks = await UserTask.findAll({ where: { taskId: task.id } });
       if (userTasks?.length) {
         for (const ut of userTasks) {
@@ -2971,7 +2838,6 @@ export const bulkAddChecklistsByTitle = async (event) => {
   }
 };
 
-// CSV parser helper
 function parseCSV(filePath) {
   return new Promise((resolve, reject) => {
     const results = [];

@@ -443,22 +443,7 @@ export const useTaskStore = defineStore("taskStore", {
           });
       });
     },
-    deleteAttachment(data) {
-      return new Promise((resolve, reject) => {
-        this.isLoading = true;
-        taskService
-          .deleteAttachment(data)
-          .then((res) => {
-            this.isLoading = false;
-            if (res?.code === 0) this.clearTasksCache();
-            resolve(res);
-          })
-          .catch((err) => {
-            this.isLoading = false;
-            reject(err);
-          });
-      });
-    },
+    
     assignTask(data) {
       return new Promise((resolve, reject) => {
         this.isLoading = true;

@@ -167,13 +167,11 @@ const completeTask = async (task) => {
   completingTask.value = task.id;
   
   try {
-    // Find the completed status ID
     const completedStatusId = await getCompletedStatusId();
     if (!completedStatusId) {
       throw new Error("Completed status not found");
     }
 
-    // Update the task status to completed
     const response = await taskStore.updateUserTask({
       id: task.id,
       taskId: task.taskId || task.originalTaskId || task.id,
@@ -186,7 +184,6 @@ const completeTask = async (task) => {
         type: "success",
       });
       
-      // Emit event to refresh the calendar
       emit("onTaskCompleted");
     } else {
       throw new Error(response.message || "Failed to complete task");
@@ -211,7 +208,6 @@ const getCompletedStatusId = async () => {
     }
     return null;
   } catch (error) {
-    console.error("Error fetching task statuses:", error);
     return null;
   }
 };
