@@ -60,13 +60,14 @@ export const usersList = async (event) => {
     // Map users and add computed status based on isActive
     const users = userOrganisations.map((uo) => {
       const user = uo.user.toJSON();
-      // If user is not active in this organization and their account status is Active,
-      // show status as "Invited" (they're an existing user with pending invitation)
-      if (!uo.isActive && user.status === "Active") {
-        user.status = "Invited";
-      }
-      // If user status is already "Invited" (new user), keep it as "Invited"
-      // regardless of isActive (they haven't set up their account yet)
+      // Expose organisation membership state to the UI separately from onboarding status
+      user.isActive = Boolean(uo.isActive);
+      // Account deactivation: user is deactivated if:
+      // 1. Globally disabled/expired (status), OR
+      // 2. Not active in this organization (isActive = false) AND status is Active (org-specific deactivation)
+      const isGloballyDeactivated = user.status === "Disabled" || user.status === "Expired";
+      const isOrgDeactivated = !uo.isActive && user.status === "Active";
+      user.isAccountDeactivated = isGloballyDeactivated || isOrgDeactivated;
       return user;
     });
     return success(users);
@@ -149,16 +150,17 @@ export const userAcrossOrgs = async (event) => {
             return null;
           }
           const user = uo.user;
-          // Get isActive from the nested UserOrganisation instance (uo)
-          // uo might be a Sequelize instance or plain object
           const isActive = uo.isActive !== undefined ? uo.isActive : 
                           (uo.get ? uo.get('isActive') : true);
-          // If user is not active in this organization and their account status is Active,
-          // show status as "Invited" (they're an existing user with pending invitation)
-          if (!isActive && user.status === "Active") {
-            user.status = "Invited";
-          }
-          // If user status is already "Invited" (new user), keep it as "Invited"
+          // Account deactivation: user is deactivated if:
+          // 1. Globally disabled/expired (status), OR
+          // 2. Not active in this organization (isActive = false) AND status is Active (org-specific deactivation)
+          const isGloballyDeactivated = user.status === "Disabled" || user.status === "Expired";
+          const isOrgDeactivated = !isActive && user.status === "Active";
+          const isAccountDeactivated = isGloballyDeactivated || isOrgDeactivated;
+          // Expose organisation membership state to the UI separately from onboarding status
+          user.isActive = Boolean(isActive);
+          user.isAccountDeactivated = Boolean(isAccountDeactivated);
           return user;
         }).filter(Boolean), // Remove any null entries
       };
@@ -590,6 +592,143 @@ export const updateAllowedLeaves = async (event) => {
     }
     return success("Updated");
   } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const deactivateUser = async (event) => {
+  const body = await readBody(event);
+  const { userId, organisationId } = JSON.parse(body);
+  const transaction = await DB.transaction();
+  
+  try {
+    if (!userId || !organisationId) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: "userId and organisationId are required",
+      });
+    }
+
+    // Find the user organization relationship
+    const userOrg = await UserOrganisation.findOne({
+      where: { userId, organisationId },
+      transaction,
+    });
+
+    if (!userOrg) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: "User not found in this organization",
+      });
+    }
+
+    // Deactivate user in this specific organization by setting isActive to false
+    // This allows organization-specific deactivation without affecting other orgs
+    userOrg.isActive = false;
+    await userOrg.save({ transaction });
+
+    await transaction.commit();
+    return success("User deactivated successfully");
+  } catch (err) {
+    await transaction.rollback();
+    return error(500, err.message);
+  }
+};
+
+export const activateUser = async (event) => {
+  const body = await readBody(event);
+  const { userId, organisationId } = JSON.parse(body);
+  const transaction = await DB.transaction();
+  
+  try {
+    if (!userId || !organisationId) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: "userId and organisationId are required",
+      });
+    }
+
+    // Find the user organization relationship
+    const userOrg = await UserOrganisation.findOne({
+      where: { userId, organisationId },
+      transaction,
+    });
+
+    if (!userOrg) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: "User not found in this organization",
+      });
+    }
+
+    // Activate user in this specific organization by setting isActive to true
+    // This allows organization-specific activation
+    userOrg.isActive = true;
+    await userOrg.save({ transaction });
+    
+    // Also ensure the user's global status is Active (if it was Disabled/Expired, activate globally)
+    const user = await User.findByPk(userId, { transaction });
+    if (user && (user.status === "Disabled" || user.status === "Expired")) {
+      user.status = "Active";
+      await user.save({ transaction });
+    }
+
+    await transaction.commit();
+    return success("User activated successfully");
+  } catch (err) {
+    await transaction.rollback();
+    return error(500, err.message);
+  }
+};
+
+export const deleteUser = async (event) => {
+  const body = await readBody(event);
+  const { userId, organisationId } = JSON.parse(body);
+  const transaction = await DB.transaction();
+  
+  try {
+    if (!userId || !organisationId) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: "userId and organisationId are required",
+      });
+    }
+
+    // Check how many active organizations this user belongs to
+    const activeOrgCount = await UserOrganisation.count({
+      where: { 
+        userId, 
+        isActive: true 
+      },
+      transaction,
+    });
+
+    if (activeOrgCount > 1) {
+      // User is in multiple organizations - just remove from current org
+      await UserOrganisation.destroy({
+        where: { userId, organisationId },
+        transaction,
+      });
+      await transaction.commit();
+      return success("User removed from organization successfully");
+    } else {
+      // User is only in this organization - delete the entire user record
+      // This will cascade delete all related records automatically
+      const user = await User.findByPk(userId, { transaction });
+      
+      if (!user) {
+        throw createError({
+          statusCode: 404,
+          statusMessage: "User not found",
+        });
+      }
+
+      await user.destroy({ transaction });
+      await transaction.commit();
+      return success("User deleted successfully");
+    }
+  } catch (err) {
+    await transaction.rollback();
     return error(500, err.message);
   }
 };

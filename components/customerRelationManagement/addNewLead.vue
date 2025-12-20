@@ -341,6 +341,8 @@
 
 <script setup>
 import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
+import { useCrmStore } from '@/stores/crm';
+import { useMainStore } from '@/stores/index';
 
 const crmStore = useCrmStore();
 const props = defineProps({

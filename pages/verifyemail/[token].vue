@@ -55,10 +55,8 @@ const verifyEmail = async (link) => {
     loading.value = false;
     console.log('Verification response:', res);
     
-    if (res && (res.code === 0 || res.success)) {
-      success.value = true;
-    } else if (res && res.data) {
-      // Response has data wrapped
+    // Check for successful verification - either code 0 or success true
+    if (res && (res.code === 0 || res.success === true)) {
       success.value = true;
     } else {
       console.error('Verification failed - unexpected response:', res);

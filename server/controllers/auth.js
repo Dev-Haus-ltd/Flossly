@@ -27,6 +27,10 @@ import {
   sendInvitationEmail,
   sendOnBoardingMail,
   sendOrgnisationAddedToRegisteredUsers,
+  sendEmailVerificationEmail,
+  portalReadyTrainingInvite,
+  accountCreationNotification,
+  sendOtpForPasswordReset,
 } from "../utils/emailNotifications";
 import requestIp from "request-ip";
 import { HrDocument } from "../models/hrDocuments";
@@ -56,6 +60,18 @@ export const login = async (event) => {
       isActive: true, // Only load active organizations
     } 
   });
+  
+  // Check if user is disabled or expired
+  if (user.status === "Disabled" || user.status === "Expired") {
+    return error(403, "Your account is deactivated");
+  }
+  
+  if (orgs.length === 0) {
+    return error(403, "You are not part of any active organizations");
+  }
+  
+  const activeOrgs = orgs;
+  
   const userPreference = await UserPreference.findOne({
     where: { userId: user.id },
   });
@@ -65,8 +81,21 @@ export const login = async (event) => {
       return error(401, "License Expired");
     }
   }
-  const orgIds = orgs.map((o) => o.organisationId).sort();
-  const orgId = orgIds[0]; // default to first
+  
+  // Prefer last logged in organization if it's not deactivated
+  let orgId;
+  if (userPreference && userPreference.lastLoginOrganisationId) {
+    const lastOrg = activeOrgs.find((o) => o.organisationId === userPreference.lastLoginOrganisationId);
+    if (lastOrg) {
+      orgId = lastOrg.organisationId;
+    }
+  }
+  
+  // If no last org or last org is deactivated, use first available
+  if (!orgId) {
+    const orgIds = activeOrgs.map((o) => o.organisationId).sort();
+    orgId = orgIds[0];
+  }
   const token = jwt.sign(
     { userId: user.id, orgId, roleId: user.roleId, purpose: 'login' },
     config.JWT_SECRET
@@ -231,6 +260,18 @@ export const signupRequest = async (event) => {
 export const profile = async (event) => {
   const loggedUser = event.context.user;
   try {
+    if (!loggedUser || !loggedUser.userId || !loggedUser.orgId) {
+      return error(401, "Unauthenticated");
+    }
+
+    // Ensure user is still active in this organisation
+    const membership = await UserOrganisation.findOne({
+      where: { userId: loggedUser.userId, organisationId: loggedUser.orgId, isActive: true },
+    });
+    if (!membership) {
+      return error(403, "Your organisation membership is inactive");
+    }
+
     const user = await User.findByPk(loggedUser.userId, {
       attributes: { exclude: ["password"] },
       include: [
@@ -245,7 +286,11 @@ export const profile = async (event) => {
         {
           model: UserOrganisation,
           as: "userOrganisations",
-          where: { isActive: true }, // Only show active organizations
+          // Keep only active orgs in the included association, but don't filter out the user row
+          where: { 
+            isActive: true,
+          },
+          required: false,
           include: [
             {
               model: Organisation,
@@ -259,6 +304,12 @@ export const profile = async (event) => {
         },
       ],
     });
+    
+    // Check if user is disabled or expired
+    if (user.status === "Disabled" || user.status === "Expired") {
+      return error(403, "Your account is deactivated");
+    }
+    
     const userObj = user.toJSON();
     userObj.currentLoggedInOrgId = loggedUser.orgId;
     if (userObj.preferences && userObj.preferences.taskTableColumns) {
@@ -460,6 +511,12 @@ export const switchOrgnanisation = async (event) => {
       },
     });
     if (!record) return error(403, "Not part of selected organisation or invitation not accepted");
+    
+    // Check if user is disabled or expired
+    const userRecord = await User.findByPk(user.userId);
+    if (userRecord && (userRecord.status === "Disabled" || userRecord.status === "Expired")) {
+      return error(403, "Your account is deactivated");
+    }
     const newToken = jwt.sign(
       { userId: user.userId, roleId: user.roleId, orgId, purpose: 'login' },
       config.JWT_SECRET
@@ -513,18 +570,27 @@ export const verifyEmail = async (event) => {
         const statuses = await OrganisationStatus.findAll({
           where: { organisationId: userOrg[0].organisationId },
         });
-        const userTasks = tasks.map((task) => ({
-          userId: user.id,
-          taskId: task.id,
-          organisationId: userOrg[0].organisationId,
-          statusId: statuses.find((x) => x.key === "upcoming").id,
-          priorityId: priorities.find((x) => x.key === "medium").id,
-          title: task.title,
-          documentLink: "",
-          frequency: task.defaultFrequency,
-          comments: "",
-        }));
-        await UserTask.bulkCreate(userTasks);
+        
+        // Find default status and priority, with fallbacks
+        const defaultStatus = statuses.find((x) => x.key === "upcoming") || statuses[0];
+        const defaultPriority = priorities.find((x) => x.key === "medium") || priorities[0];
+        
+        // Only proceed if we have valid status and priority
+        if (defaultStatus && defaultPriority) {
+          const userTasks = tasks.map((task) => ({
+            userId: user.id,
+            taskId: task.id,
+            organisationId: userOrg[0].organisationId,
+            statusId: defaultStatus.id,
+            priorityId: defaultPriority.id,
+            title: task.title,
+            documentLink: "",
+            frequency: task.defaultFrequency,
+            comments: "",
+          }));
+          await UserTask.bulkCreate(userTasks);
+        }
+        
         await assignDefaultHRDocsToUser(user.id);
         await portalReadyTrainingInvite(user);
       }
@@ -547,12 +613,24 @@ export const inviteMembers = async (event) => {
     if (!Array.isArray(users) || !users.length) {
       return error(400, "Invitee list is required");
     }
+    
+    // Check for self-invitation
+    const currentUser = await User.findByPk(loggedUser.userId);
+    const currentUserEmail = currentUser?.email?.toLowerCase();
+    if (currentUserEmail) {
+      const selfInviteAttempt = users.some(
+        (user) => user.email?.toLowerCase() === currentUserEmail
+      );
+      if (selfInviteAttempt) {
+        return error(400, "You cannot invite yourself");
+      }
+    }
+    
     const existingUsers = await User.findAll({
       where: { email: users.map((i) => i.email) },
       attributes: ["id", "email"],
     });
     const currentOrganisation = await Organisation.findByPk(currentOrg);
-    const currentUser = await User.findByPk(loggedUser.userId);
     if (existingUsers.length) {
       // Check which existing users already have a UserOrganisation record for this org
       const existingUsersOrgsForCurrentOrg = await UserOrganisation.findAll({
@@ -1076,7 +1154,7 @@ export const resendOrganisationInvitation = async (event) => {
       },
     });
     
-    const isFirstOrganization = userOtherOrgs.length === 0;
+    const isFirstOrganization = userOtherOrgs.length === 0; // determines template selection for resend
     
     // No need to delete and recreate - just generate new token and resend email
     // The UserOrganisation record already exists with isActive: false
@@ -1084,7 +1162,7 @@ export const resendOrganisationInvitation = async (event) => {
     
     try {
       
-      if (isFirstOrganization) {
+      if (isFirstOrganization && loggedUser.orgId === orgId) {
         // User doesn't belong to any organization - use new user invitation email
         // Generate new inviteToken for the user (UUID format to match model)
         const inviteToken = uuidv4();
@@ -1112,7 +1190,7 @@ export const resendOrganisationInvitation = async (event) => {
             invitedBy: loggedUser.userId,
           },
           config.JWT_SECRET,
-          { expiresIn: '7d' } // 30 days to respond (increased from 7d)
+          { expiresIn: '7d' }
         );
         
         // Send invitation email using the existing user email template

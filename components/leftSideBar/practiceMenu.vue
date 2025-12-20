@@ -94,12 +94,18 @@ const validOrganizations = computed(() => {
     console.log(`Org ${index} has name:`, org?.organisation?.name);
   });
   
-  // Filter organizations that have valid data and are active
+  // Filter organizations that have valid data, are active, and user is not deactivated
   const valid = user.value.userOrganisations.filter(org => {
     const orgData = getOrgData(org);
     const isActive = org.isActive !== undefined ? org.isActive : true; // Default to true for backward compatibility
-    const isValid = orgData !== null && isActive;
-    console.log('Filtering org:', org, 'orgData:', orgData, 'isActive:', isActive, 'isValid:', isValid);
+    // Check if user is deactivated:
+    // 1. Globally disabled/expired, OR
+    // 2. Not active in this organization (org-specific deactivation)
+    const isGloballyDeactivated = user.value.status === "Disabled" || user.value.status === "Expired";
+    const isOrgDeactivated = !isActive && user.value.status === "Active";
+    const isNotDeactivated = !isGloballyDeactivated && !isOrgDeactivated;
+    const isValid = orgData !== null && isActive && isNotDeactivated;
+    console.log('Filtering org:', org, 'orgData:', orgData, 'isActive:', isActive, 'isNotDeactivated:', isNotDeactivated, 'isValid:', isValid);
     return isValid;
   });
   

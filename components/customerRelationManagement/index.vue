@@ -110,7 +110,7 @@
     variant="flat"
     rounded="lg"
     class="add-task-btn"
-    @click="addLeadDrawer = true"
+    @click="handleAddLeadClick"
   >
     <template #prepend>
       <v-icon size="18">mdi-plus-circle-outline</v-icon>
@@ -145,8 +145,17 @@
 
     
 
-      <!-- Sidebar drawer for add - Only render after page loads -->
+      <!-- Sidebar drawer for add - Always available -->
       <ClientOnly>
+        <!-- Add New Lead Panel - Right Side -->
+        <CustomerRelationManagementAddNewLead
+          v-model="addLeadDrawer"
+          :lead-sources="leadSources"
+          :treatment-sources="treatmentSources"
+          :staff-list="userList"
+          @close="addLeadDrawer = false"
+          @success="handleSuccess"
+        />
         <template v-if="!isLoading && leadSources.length > 0 && userList.length > 0">
           <!-- Add New Lead Panel - Right Side -->
           <CustomerRelationManagementAddNewLead
@@ -187,6 +196,9 @@ import { storeToRefs } from 'pinia'
 import AddAppointment from '@/components/diary/addAppointment.vue'
 import { useDiaryStore } from '@/stores/diary'
 import { useMainStore } from '@/stores/index'
+import { useCrmStore } from '@/stores/crm'
+import { useUserStore } from '@/stores/user'
+import { useAuthStore } from '@/stores/auth'
 const crmStore = useCrmStore();
 const userStore = useUserStore();
 const { users: storeUsers } = storeToRefs(userStore);
@@ -457,6 +469,11 @@ const onConnectChatbot = async () => {
 
 const updateLeads = (newLead) => {
   leads.value.push(newLead);
+};
+
+const handleAddLeadClick = () => {
+ 
+  addLeadDrawer.value = true;
 };
 
 const handleSuccess = (newLead) => {

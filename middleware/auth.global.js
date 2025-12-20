@@ -1,12 +1,24 @@
 import { isAuthenticated, profileCompletion, userRole } from "../lib/auth";
 import { currentPath } from "~/lib/redirect";
 
-export default defineNuxtRouteMiddleware((to, from) => {
+export default defineNuxtRouteMiddleware(async (to, from) => {
   if (!process.client) return;
   if (currentPath(to.path)) {
     if (!isAuthenticated()) {
       return navigateTo("/login");
     }
+
+    // Validate active membership client-side to block deactivated users
+    const authStore = useAuthStore?.();
+    if (authStore && typeof authStore.profile === 'function') {
+      try {
+        await authStore.profile();
+      } catch (e) {
+        // authStore.profile handles redirect/snackbar on 403; just stop here
+        return;
+      }
+    }
+
     if (
       profileCompletion() <= 1 &&
       (userRole() === 8 || userRole() === 1) &&
