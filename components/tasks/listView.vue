@@ -1003,7 +1003,7 @@ watch(
     tasksForCalender.value = newVal.flatMap((group) =>
       group.tasks.map((task) => ({
         id: task.id,
-        taskId: task.taskId || task.originalTaskId || task.taskDetails?.id,
+        taskId: task.taskId || task.taskDetails?.id,
         title: task.title,
         name: task.title,
         start: calenderDate(task.dueDate || task.createdAt),
@@ -1012,8 +1012,6 @@ watch(
         status: task.status,
         priority: task.priority,
         frequency: task.frequency,
-        isVirtualInstance: task.isVirtualInstance || false,
-        originalTaskId: task.originalTaskId,
         userId: task.userId,
         assignedUsers: task.assignedUsers ? task.assignedUsers : [user.value],
         category: task.taskDetails?.category,

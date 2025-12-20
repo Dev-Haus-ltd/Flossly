@@ -346,15 +346,4 @@ export default {
         });
     });
   },
-  generateCalendarRecurringTasks(data) {
-    return new Promise((resolve, reject) => {
-      Post("/tasks/calendarRecurring", data)
-        .then((res) => {
-          resolve(res);
-        })
-        .catch((err) => {
-          reject(err);
-        });
-    });
-  },
 };
