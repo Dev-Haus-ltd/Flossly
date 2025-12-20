@@ -129,16 +129,41 @@ export const createPatient = async (event) => {
       title: payload.title || null,
       sex: payload.sex || null,
       firstName: payload.firstName,
+      middleName: payload.middleName || null,
       lastName: payload.lastName,
+      preferredName: payload.preferredName || null,
+      niNumber: payload.niNumber || null,
+      nhsNumber: payload.nhsNumber || null,
+      insuranceNumber: payload.insuranceNumber || null,
+      legacyId: payload.legacyId || null,
+      imagingId: payload.imagingId || null,
+      ethnicity: payload.ethnicity || null,
       address1: payload.address1 || null,
+      address2: payload.address2 || null,
+      address3: payload.address3 || null,
+      town: payload.town || null,
+      county: payload.county || null,
       postcode: payload.postcode || null,
+      homePhone: payload.homePhone || null,
+      workPhone: payload.workPhone || null,
       dob: payload.dob || null,
       mobile: payload.mobile || null,
+      preferredPhone: payload.preferredPhone || null,
       email: payload.email || null,
+      doctor: payload.doctor || null,
+      occupation: payload.occupation || null,
+      family: payload.family || null,
       marketingConsent: payload.marketingConsent || null,
       receiveSms: payload.receiveSms === true || payload.receiveSms === 'Yes',
       receiveEmail: payload.receiveEmail === true || payload.receiveEmail === 'Yes',
       paymentPlan: payload.paymentPlan || null,
+      dentist: payload.dentist || null,
+      hygienist: payload.hygienist || null,
+      dentistRecallInterval: payload.dentistRecallInterval || payload.recallInterval || null,
+      nextDentistRecall: payload.nextDentistRecall || null,
+      hygienistRecallInterval: payload.hygienistRecallInterval || null,
+      nextHygienistRecall: payload.nextHygienistRecall || null,
+      acquisitionSource: payload.acquisitionSource || null,
       defaultDentistId: payload.dentistId || null,
       recallMethod: payload.recallMethod || null,
       recallInterval: payload.recallInterval || null,
@@ -161,7 +186,16 @@ export const updatePatient = async (event) => {
     if (!id) return error(400, 'id is required')
     const row = await DiaryPatient.findOne({ where: { id, organisationId: Number(orgId) } })
     if (!row) return error(404, 'Patient not found')
-    const fields = ['title','sex','firstName','lastName','address1','postcode','dob','mobile','email','marketingConsent','receiveSms','receiveEmail','paymentPlan','defaultDentistId','recallMethod','recallInterval']
+    const fields = [
+      'title','sex','firstName','middleName','lastName','preferredName',
+      'niNumber','nhsNumber','insuranceNumber','legacyId','imagingId','ethnicity',
+      'address1','address2','address3','town','county','postcode',
+      'homePhone','workPhone','mobile','preferredPhone','email',
+      'doctor','occupation','family',
+      'marketingConsent','receiveSms','receiveEmail','paymentPlan',
+      'dentist','hygienist','dentistRecallInterval','nextDentistRecall','hygienistRecallInterval','nextHygienistRecall','acquisitionSource',
+      'defaultDentistId','recallMethod','recallInterval'
+    ]
     for (const f of fields) {
       if (payload[f] !== undefined) {
         row[f] = payload[f]
