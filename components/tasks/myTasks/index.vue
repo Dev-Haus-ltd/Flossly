@@ -2,6 +2,14 @@
   <div>
     <div class="cust-border d-flex align-center">
       <p class="mr-1">My Tasks</p>
+      <!-- <div class="ml-auto d-flex align-center" v-if="isPrivileged">
+        <v-btn size="small" variant="outlined" class="mr-2" @click="showUploadDialog = true">
+          Upload Checklist (Dev)
+        </v-btn>
+        <v-btn size="small" variant="text" :href="'/samples/checklist-sample.csv'" target="_blank">
+          Download sample
+        </v-btn>
+      </div> -->
     </div>
     <div class="pa-5 rounded-lg">
       <div class="task-summary">
@@ -172,14 +180,6 @@
             <span class="action-label">Unarchive</span>
           </div>
 
-          <div
-            v-if="!hasArchivedTasks"
-            class="action-item d-flex flex-column align-center"
-            @click="handleStatusAction"
-          >
-            <v-icon size="24">mdi-check-circle-outline</v-icon>
-            <span class="action-label">{{ getActionButtonLabel }}</span>
-          </div>
 
           <div
             class="action-item d-flex flex-column align-center"
@@ -222,9 +222,11 @@
       />
     </div>
   </div>
+  <TasksBulkChecklistUploadDialog v-model="showUploadDialog" @uploaded="getMyStats" />
 </template>
 
 <script setup>
+import { TasksBulkChecklistUploadDialog } from '#components'
 import { useDisplay } from "vuetify";
 import { nextTick } from "vue";
 import { getContrastingTextColor } from "~/lib/misc";
@@ -244,6 +246,13 @@ const currentTab = ref(0);
 const categories = ref([]);
 const taskStats = ref([]);
 const user = ref(null);
+const showUploadDialog = ref(false);
+const isPrivileged = computed(() => {
+  try {
+    const usr = JSON.parse(localStorage.getItem('user') || '{}');
+    return [1, 8].includes(Number(usr?.roleId));
+  } catch (_) { return false; }
+});
 const userList = ref([]);
 const addCategoryDialog = ref(false);
 const isTrayHidden = ref(false);
@@ -401,17 +410,6 @@ const availableHeaders = computed(() => {
   return mainStore.getTeamTaskAllHeaders;
 });
 
-const getActionButtonLabel = computed(() => {
-  if (!selectedRowItems.value.length) return "Complete";
-  
-  const uniqueStatuses = [...new Set(selectedRowItems.value.map(item => item.status?.key))];
-  
-  if (uniqueStatuses.length === 1 && uniqueStatuses[0] === "upcoming") {
-    return "Mark In Progress";
-  }
-  
-  return "Complete";
-});
 
 const hasArchivedTasks = computed(() => {
   if (!selectedRowItems.value || selectedRowItems.value.length === 0) {

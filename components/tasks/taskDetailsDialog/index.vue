@@ -387,12 +387,13 @@
                     >
                       <!-- Top Right Icons -->
                       <div
-                        class="d-flex flex-column align-center"
+                        class="d-flex flex-row align-center"
                         style="
                           position: absolute;
                           top: 8px;
                           right: 8px;
                           z-index: 1;
+                          gap: 4px;
                         "
                       >
                         <v-btn
@@ -574,8 +575,17 @@ watch(
     if (newValue) {
       await fetchTaskDetails();
     } else {
-      taskDetails.value = {}; // Optional: reset on close
+      // Reset all state when modal is closed
+      taskDetails.value = {};
+      comments.value = [];
+      newComment.value = "";
+      editingCommentId.value = null;
+      editCommentText.value = "";
+      commentsPage.value = 0;
+      commentsEnd.value = false;
+      currentUserTaskId.value = null;
       isDirty.value = false;
+      tab.value = "overview"; // Reset to overview tab
     }
   },
   { immediate: true }
@@ -606,11 +616,14 @@ const touchDirty = () => {
 const fetchComments = async (userTaskId, reset = false) => {
   if (!userTaskId) return;
   if (isLoadingComments.value) return;
-  if (reset) {
+  
+  // Always reset when fetching for a new task or when explicitly requested
+  if (reset || currentUserTaskId.value !== userTaskId) {
     commentsPage.value = 0;
     commentsEnd.value = false;
     comments.value = [];
   }
+  
   try {
     isLoadingComments.value = true;
     const res = await taskStore.listTaskComments({
@@ -624,7 +637,7 @@ const fetchComments = async (userTaskId, reset = false) => {
         commentsEnd.value = true;
       }
       const ordered = [...payload].reverse(); // backend returns newest first
-      if (commentsPage.value === 0 || reset) {
+      if (commentsPage.value === 0 || reset || currentUserTaskId.value !== userTaskId) {
         comments.value = ordered;
         nextTick(() => scrollCommentsToBottom());
       } else {
@@ -773,7 +786,10 @@ const deleteFile = async (file) => {
 
     if (res.code === 0) {
       // Refresh task details to update the attachments list
+      const wasDirty = isDirty.value;
       await fetchTaskDetails();
+      // Restore dirty state or set to true if file was deleted
+      isDirty.value = wasDirty || true;
       store.setSnackbar({
         title: res.data || "File removed from task",
         type: "success",
@@ -846,7 +862,11 @@ const uploadFile = async (files) => {
     uploadProgress.value = 100;
 
     if (res.code === 0) {
-      fetchTaskDetails();
+      // Store the current dirty state before refreshing
+      const wasDirty = isDirty.value;
+      await fetchTaskDetails();
+      // Restore dirty state or set to true if file was uploaded
+      isDirty.value = wasDirty || true;
       store.setSnackbar({
         title: "File upload successful",
         type: "success",

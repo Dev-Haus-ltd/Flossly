@@ -108,11 +108,11 @@
                   <div class="checklist-row has-border">
                     <div class="table-cell checkbox-cell">
                       <v-checkbox
-                        v-model="selectAll"
+                        :model-value="selectAll"
                         hide-details
                         density="compact"
                         class="ma-0 pa-0"
-                        @change="toggleAll"
+                        @update:model-value="toggleAll"
                         color="primary"
                       />
                     </div>
@@ -353,36 +353,24 @@ const handleCheck = ( data ) => {
   }
 };
 
-const selectAll = computed({
-  get: () => tasks.value.length > 0 && tasks.value.every((i) => i.checked),
-  set: (val) => {
-    tasks.value.forEach((i) => {
-      i.checked = val;
-      if (val) {
-        // Add to selectedTasks if not already present
-        if (!selectedTasks.value.some((t) => t.id === i.id)) {
-          selectedTasks.value.push(i);
-        }
-      } else {
-        // Remove from selectedTasks
-        selectedTasks.value = selectedTasks.value.filter((t) => t.id !== i.id);
-      }
-    });
-  },
+const selectAll = computed(() => {
+  return tasks.value.length > 0 && tasks.value.every((i) => i.checked);
 });
 
 function toggleAll() {
-  const value = !selectAll.value;
-  tasks.value.forEach((i) => {
-    i.checked = value;
-    if (value) {
+  const shouldSelectAll = !selectAll.value;
+  
+  tasks.value.forEach((task) => {
+    task.checked = shouldSelectAll;
+    
+    if (shouldSelectAll) {
       // Add to selectedTasks if not already present
-      if (!selectedTasks.value.some((t) => t.id === i.id)) {
-        selectedTasks.value.push(i);
+      if (!selectedTasks.value.some((t) => t.id === task.id)) {
+        selectedTasks.value.push(task);
       }
     } else {
       // Remove from selectedTasks
-      selectedTasks.value = selectedTasks.value.filter((t) => t.id !== i.id);
+      selectedTasks.value = selectedTasks.value.filter((t) => t.id !== task.id);
     }
   });
 }

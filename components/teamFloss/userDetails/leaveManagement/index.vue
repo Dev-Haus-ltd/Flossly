@@ -5,8 +5,8 @@
         <team-floss-user-details-leave-management-holiday-card
           :iconImg="Annual"
           title="Annual Leaves"
-          :total="entitlementStats.allowedAnnualLeaves"
-          :taken="entitlementStats.takenAnnualLeaves"
+          :total="dynamicLeaveStats.annualLeaves.total"
+          :taken="dynamicLeaveStats.annualLeaves.taken"
           color="success"
         />
       </v-col>
@@ -14,8 +14,8 @@
         <team-floss-user-details-leave-management-holiday-card
           :iconImg="Sick"
           title="Sick Leaves"
-          :total="entitlementStats.allowedSickLeaves"
-          :taken="entitlementStats.takenSickLeaves"
+          :total="dynamicLeaveStats.sickLeaves.total"
+          :taken="dynamicLeaveStats.sickLeaves.taken"
           color="error"
         />
       </v-col>
@@ -23,8 +23,8 @@
         <team-floss-user-details-leave-management-holiday-card
           :iconImg="Training"
           title="Other Leaves"
-          :total="entitlementStats.allowedOtherLeaves"
-          :taken="entitlementStats.takenOtherLeaves"
+          :total="dynamicLeaveStats.otherLeaves.total"
+          :taken="dynamicLeaveStats.otherLeaves.taken"
           color="warning"
         />
       </v-col>
@@ -54,7 +54,7 @@
             color="primary"
             class="mr-3"
             variant="flat"
-            @click="openDrawer = true"
+            @click="handleAddLeave"
           >
             Add Leave
           </v-btn>
@@ -140,12 +140,13 @@
     <TeamFlossUserDetailsLeaveManagementHolidayRequestDrawer
       v-model="openDrawer"
       :user="user"
-      @close="openDrawer = false"
+      @close="handleClose"
       @success="handleSuccess"
     />
   </div>
 </template>
 <script setup>
+import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import Annual from "@/assets/icons/teamfloss/total.svg";
 import Sick from "@/assets/icons/teamfloss/birthday.svg";
 import Training from "@/assets/icons/teamfloss/pending.svg";
@@ -203,16 +204,76 @@ const statusChipClass = (status) => {
   if (status.toLowerCase() === "rejected") return "status-chip-rejected";
   return "";
 };
+// Dynamic stats calculated from actual leave history
+const dynamicLeaveStats = computed(() => {
+  if (!leaveHistory.value || leaveHistory.value.length === 0) {
+    return {
+      annualLeaves: { total: entitlementStats.value.allowedAnnualLeaves || 0, taken: 0, approved: 0 },
+      sickLeaves: { total: entitlementStats.value.allowedSickLeaves || 0, taken: 0, approved: 0 },
+      otherLeaves: { total: entitlementStats.value.allowedOtherLeaves || 0, taken: 0, approved: 0 }
+    };
+  }
+
+  const stats = {
+    annualLeaves: { total: entitlementStats.value.allowedAnnualLeaves || 0, taken: 0, approved: 0 },
+    sickLeaves: { total: entitlementStats.value.allowedSickLeaves || 0, taken: 0, approved: 0 },
+    otherLeaves: { total: entitlementStats.value.allowedOtherLeaves || 0, taken: 0, approved: 0 }
+  };
+
+  leaveHistory.value.forEach(leave => {
+    const leaveType = (leave.leaveType || '').toLowerCase();
+    const status = (leave.status || '').toLowerCase();
+    const hours = parseFloat(leave.totalHours || 0);
+
+    // Categorize leave types
+    let category = 'otherLeaves';
+    if (leaveType.includes('annual') || leaveType.includes('holiday') || leaveType.includes('vacation')) {
+      category = 'annualLeaves';
+    } else if (leaveType.includes('sick') || leaveType.includes('illness')) {
+      category = 'sickLeaves';
+    }
+
+    // Count all leaves that are not rejected
+    if (status !== 'rejected') {
+      stats[category].taken += hours;
+    }
+
+    // Count only approved leaves
+    if (status === 'approved') {
+      stats[category].approved += hours;
+    }
+  });
+
+  return stats;
+});
+
+// Watch for changes and force reactivity
+watch([leaveHistory, entitlementStats], () => {
+  nextTick(() => {
+    // Force re-render of cards
+  });
+}, { deep: true });
+
 const handleSuccess = (data) => {
   openDrawer.value = false;
   getLeaveStats();
+};
+
+const handleAddLeave = () => {
+  openDrawer.value = true;
+};
+
+const handleClose = () => {
+  openDrawer.value = false;
 };
 </script>
 
 <style scoped>
 .leave-table th {
-  background-color: rgb(var(--v-theme-surface-variant));
+  background-color: #F6F6F6;
   font-weight: 500;
+  font-size: 14px;
+  padding: 12px 16px;
 }
 
 .status-chip-accepted {

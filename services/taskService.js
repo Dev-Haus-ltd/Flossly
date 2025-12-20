@@ -190,6 +190,13 @@ export default {
         });
     });
   },
+  bulkAddChecklists(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/bulkAddChecklists", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   generalTasks(data) {
     return new Promise((resolve, reject) => {
       Post("/tasks/generalTaskByCategory", data)
@@ -331,6 +338,17 @@ export default {
   unarchiveBulkTasks(data) {
     return new Promise((resolve, reject) => {
       Post("/tasks/unarchiveBulk", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  generateCalendarRecurringTasks(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/calendarRecurring", data)
         .then((res) => {
           resolve(res);
         })

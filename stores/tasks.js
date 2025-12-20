@@ -379,6 +379,24 @@ export const useTaskStore = defineStore("taskStore", {
       });
     },
     generalTasks(data) {
+    },
+    bulkAddChecklists(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        taskService
+          .bulkAddChecklists(data)
+          .then((res) => {
+            this.isLoading = false;
+            if (res?.code === 0) this.clearTasksCache();
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    generalTasks(data) {
       return new Promise((resolve, reject) => {
         this.isLoading = true;
         taskService

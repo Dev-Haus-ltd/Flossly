@@ -10,10 +10,10 @@
         single-line
         placeholder="example@email.com"
         @keydown.enter.prevent
-        @input="validateDuplicateEmail(index)"
-        @blur="validateDuplicateEmail(index)"
+        @input="validateDuplicateEmail(index); validateSelfInvitation(index)"
+        @blur="validateDuplicateEmail(index); validateSelfInvitation(index)"
         :rules="[emailRule]"
-        :error-messages="duplicateEmailErrors[index] || undefined"
+        :error-messages="duplicateEmailErrors[index] || selfInviteErrors[index] || undefined"
         class="mt-2 input-bordered"
         flat
       >
@@ -90,8 +90,13 @@ const form = ref(null);
 const showform = ref(false);
 const duplicateEmailErrors = ref({});
 const roleErrors = ref({});
+const selfInviteErrors = ref({});
 
 const model = defineModel({ users: [{ roleId: null, email: "" }] });
+
+// Get current user's email from auth store
+const authStore = useAuthStore();
+const currentUserEmail = authStore.getLoggedUser?.email?.toLowerCase();
 
 // Validate duplicate emails for a specific index
 const validateDuplicateEmail = (index) => {
@@ -121,6 +126,21 @@ const validateDuplicateEmail = (index) => {
   }
 };
 
+// Validate self-invitation for a specific index
+const validateSelfInvitation = (index) => {
+  const userEmail = model.value.users[index]?.email?.trim().toLowerCase();
+  if (!userEmail || !currentUserEmail) {
+    selfInviteErrors.value[index] = null;
+    return;
+  }
+
+  if (userEmail === currentUserEmail) {
+    selfInviteErrors.value[index] = "You cannot invite yourself";
+  } else {
+    selfInviteErrors.value[index] = null;
+  }
+};
+
 // Validate all duplicate emails
 const validateAllDuplicateEmails = () => {
   model.value.users.forEach((_, index) => {
@@ -128,9 +148,17 @@ const validateAllDuplicateEmails = () => {
   });
 };
 
-// Watch for email changes to validate duplicates in real-time
+// Validate all self-invitations
+const validateAllSelfInvitations = () => {
+  model.value.users.forEach((_, index) => {
+    validateSelfInvitation(index);
+  });
+};
+
+// Watch for email changes to validate duplicates and self-invitations in real-time
 watch(() => model.value.users.map(u => u.email), () => {
   validateAllDuplicateEmails();
+  validateAllSelfInvitations();
 }, { deep: true });
 
 const updateModel = () => {
@@ -138,6 +166,7 @@ const updateModel = () => {
   // Clear errors for new user
   const newIndex = model.value.users.length - 1;
   duplicateEmailErrors.value[newIndex] = null;
+  selfInviteErrors.value[newIndex] = null;
   roleErrors.value[newIndex] = false;
 };
 
@@ -146,9 +175,11 @@ const removeUser = (index) => {
     model.value.users.splice(index, 1);
     // Clear errors for removed user
     delete duplicateEmailErrors.value[index];
+    delete selfInviteErrors.value[index];
     delete roleErrors.value[index];
     // Revalidate all emails after removal
     validateAllDuplicateEmails();
+    validateAllSelfInvitations();
   }
 };
 
@@ -219,8 +250,16 @@ defineExpose({
     // Validate all duplicate emails
     validateAllDuplicateEmails();
     
+    // Validate all self-invitations
+    validateAllSelfInvitations();
+    
     // Check if there are any duplicate email errors
     const hasDuplicateErrors = Object.values(duplicateEmailErrors.value).some(
+      error => error !== null
+    );
+    
+    // Check if there are any self-invitation errors
+    const hasSelfInviteErrors = Object.values(selfInviteErrors.value).some(
       error => error !== null
     );
     
@@ -231,7 +270,7 @@ defineExpose({
     const teamValidation = validateTeamMembers();
     
     // Check if all validations pass
-    const isValid = formValidation.valid && teamValidation && roleValidation && !hasDuplicateErrors;
+    const isValid = formValidation.valid && teamValidation && roleValidation && !hasDuplicateErrors && !hasSelfInviteErrors;
     
     // Update the valid ref
     valid.value = isValid;
@@ -242,6 +281,11 @@ defineExpose({
         mainStore.setSnackbar({
           type: "error",
           title: "Duplicate emails detected. Please ensure each email is unique.",
+        });
+      } else if (hasSelfInviteErrors) {
+        mainStore.setSnackbar({
+          type: "error",
+          title: "You cannot invite yourself. Please enter a different email address.",
         });
       } else if (!roleValidation) {
         mainStore.setSnackbar({

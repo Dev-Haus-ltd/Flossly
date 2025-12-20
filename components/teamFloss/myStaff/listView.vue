@@ -100,7 +100,7 @@
                           <p class="mb-2 mt-3" style="font-weight: 500;">Available Columns</p>
                           <div class="d-flex flex-wrap">
                             <div
-                              v-for="(item, index) in computedAvailableHeaders"
+                              v-for="(item, index) in props.availableHeaders"
                               :key="index"
                               class="color-box ma-1 pa-2 d-flex align-center justify-center"
                               :style="{ backgroundColor: getRandomHexColor(item.title) }"
@@ -109,7 +109,7 @@
                             >
                               <span style="color: white; font-size: 12px;">{{ item.title }}</span>
                             </div>
-                            <p v-if="computedAvailableHeaders.length === 0" class="text-grey text-caption pa-2">
+                            <p v-if="props.availableHeaders.length === 0" class="text-grey text-caption pa-2">
                               No available columns to add
                             </p>
                           </div>
@@ -203,9 +203,9 @@
               <div class="text-center">
                 <v-chip 
                   label 
-                  :style="getStatusChipStyle(item.status || 'Active')"
+                  :style="getStatusChipStyle(getDisplayStatus(item))"
                 >
-                  {{ item.status ? item.status : "Active" }}
+                  {{ getDisplayStatus(item) }}
                 </v-chip>
               </div>
             </template>
@@ -249,7 +249,7 @@
             <template v-else-if="col.key === 'resend'">
               <div class="d-flex justify-center align-center pa-2" style="min-width: 100px;">
                 <v-btn
-                  v-if="item.status === 'Invited'"
+                  v-if="item.isActive === false || item.status === 'Invited'"
                   size="small"
                   variant="flat"
                   color="primary"
@@ -269,6 +269,61 @@
               <div class="d-flex justify-center align-center pa-2" style="min-width: 100px;">
                 <!-- This column is for the + menu in the header, no content needed in cells -->
                 <span style="color: #ccc; font-size: 12px;">-</span>
+              </div>
+            </template>
+
+            <template v-else-if="col.key === 'userActions'">
+              <div class="d-flex justify-center align-center pa-2 gap-2" style="min-width: 120px;">
+                <!-- Show Activate or Deactivate based on current status -->
+                <template v-if="(item.status || '').toLowerCase() !== 'invited'">
+                  <v-tooltip :text="isUserActive(item) ? 'Deactivate User' : 'Activate User'" location="top">
+                    <template #activator="{ props }">
+                      <v-btn
+                        v-bind="props"
+                        size="small"
+                        variant="text"
+                        icon
+                        @click="isUserActive(item) ? $emit('deactivateUser', { org, user: item }) : $emit('activateUser', { org, user: item })"
+                        class="action-btn"
+                      >
+                        <img 
+                          v-if="isUserActive(item)"
+                          src="@/assets/icons/teamfloss/userDetails/unpublish.svg" 
+                          alt="Deactivate" 
+                          width="16"
+                          height="16"
+                        />
+                        <img 
+                          v-else
+                          src="@/assets/icons/teamfloss/userDetails/publish.svg" 
+                          alt="Activate" 
+                          width="16"
+                          height="16"
+                        />
+                      </v-btn>
+                    </template>
+                  </v-tooltip>
+                </template>
+                
+                <v-tooltip text="Delete User" location="top">
+                  <template #activator="{ props }">
+                    <v-btn
+                      v-bind="props"
+                      size="small"
+                      variant="text"
+                      icon
+                      @click="$emit('deleteUser', { org, user: item })"
+                      class="action-btn delete-btn"
+                    >
+                      <img 
+                        src="@/assets/icons/teamfloss/shifts/delete.svg" 
+                        alt="Delete" 
+                        width="16"
+                        height="16"
+                      />
+                    </v-btn>
+                  </template>
+                </v-tooltip>
               </div>
             </template>
           </template>
@@ -303,7 +358,7 @@ const focusedField = ref({});
 const openedPanels = ref([0]);
 const authStore = useAuthStore()
 const mainStore = useMainStore()
-const emit = defineEmits(["add", "details", "onUpdate", "onUpdateHeaders"]);
+const emit = defineEmits(["add", "details", "onUpdate", "onUpdateHeaders", "deactivateUser", "activateUser", "deleteUser"]);
 
 // Resend invitation state
 const resendingInvitation = ref(null);
@@ -359,6 +414,30 @@ const resendInvitation = async (user, org) => {
 const sortBy = ref([]);
 const sortDesc = ref([]);
 
+const getDisplayStatus = (user) => {
+  // Check global status first (takes precedence)
+  const status = (user?.status || 'Active').toLowerCase();
+  
+  // If globally disabled or expired, show that status regardless of isActive
+  if (status === 'disabled' || status === 'expired') {
+    return status.charAt(0).toUpperCase() + status.slice(1);
+  }
+  
+  // Check organization-specific status (isActive)
+  // If isActive is false, user is either Invited (pending) or Deactivated in this org
+  if (user?.isActive === false) {
+    // If status is "Active" but isActive is false, it means org-specific deactivation
+    if (status === 'active') {
+      return 'Deactivated';
+    }
+    // Otherwise, it's a pending invitation (status is "Invited")
+    return 'Invited';
+  }
+  
+  // User is active in this org (isActive === true) and status is Active
+  return 'Active';
+};
+
 const formattedDate = (dateStr) => {
   return parsedDate(dateStr);
 };
@@ -374,9 +453,12 @@ const getStatusChipStyle = (status) => {
   } else if (statusLower === 'invited') {
     color = 'hsla(29, 100%, 50%, 1)';
     bgColor = 'hsla(29, 100%, 50%, 0.1)';
-  } else if (statusLower === 'inactive') {
+  } else if (statusLower === 'disabled') {
     color = 'hsla(357, 100%, 57%, 1)';
     bgColor = 'hsla(357, 100%, 57%, 0.1)';
+  } else if (statusLower === 'expired') {
+    color = '#6b7280';
+    bgColor = 'rgba(107, 114, 128, 0.1)';
   } else {
     // Default to Active colors
     color = 'hsla(124, 57%, 46%, 1)';
@@ -414,7 +496,8 @@ const updateUser = (user, key) => {
           type: "success",
         });
         // Emit event to refresh the teams data
-        emit("onUpdate");
+        // Force refresh to avoid cached results
+        emit("onUpdate", { force: true });
       } else {
         mainStore.setSnackbar({
           title: res?.data?.message || res?.message || "Failed to update profile",
@@ -593,11 +676,18 @@ const removeHeaderFromSelected = (column) => {
   }
 };
 
-// Compute available headers (exclude already selected ones, resend, and action)
-const computedAvailableHeaders = computed(() => {
-  const selectedKeys = props.selectedHeaders.map(h => h.key);
-  return props.availableHeaders.filter(h => !selectedKeys.includes(h.key) && h.key !== 'resend' && h.key !== 'action');
-});
+// Available headers are now computed in the parent component
+
+// Helper function to check if user is active in this organization (for activate/deactivate actions)
+const isUserActive = (user) => {
+  // User is active if:
+  // 1. isActive is true (active in this org) AND
+  // 2. global status is not Disabled or Expired
+  return user.isActive === true && 
+         user.status !== "Disabled" && 
+         user.status !== "Expired";
+};
+
 </script>
 
 <style scoped>
@@ -672,5 +762,21 @@ const computedAvailableHeaders = computed(() => {
 
 .color-box:hover {
   opacity: 0.8;
+}
+
+.action-btn {
+  min-width: 32px !important;
+  height: 32px !important;
+  padding: 4px !important;
+  border-radius: 6px !important;
+  transition: background-color 0.2s ease !important;
+}
+
+.action-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+.action-btn.delete-btn:hover {
+  background-color: rgba(244, 67, 54, 0.1) !important;
 }
 </style>

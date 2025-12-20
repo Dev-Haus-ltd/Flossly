@@ -5,7 +5,11 @@ export const Get = async (url) => {
     method: "GET",
   };
   const response = await fetch(APIURL + url  , args)
-  return response.json()
+  const data = await response.json();
+  if (!response.ok) {
+    throw data;
+  }
+  return data;
 };
 export const Post = async (url, body) => {
   const args = {

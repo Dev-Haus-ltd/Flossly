@@ -157,14 +157,6 @@
               <span class="action-label">Unarchive</span>
             </div>
 
-            <div
-              v-if="!hasArchivedTasks"
-              class="action-item d-flex flex-column align-center"
-              @click="handleComplete"
-            >
-              <v-icon size="24">mdi-check-circle-outline</v-icon>
-              <span class="action-label">Complete</span>
-            </div>
 
             <div
               class="action-item d-flex flex-column align-center"

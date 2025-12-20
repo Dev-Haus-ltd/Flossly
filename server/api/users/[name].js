@@ -1,6 +1,9 @@
 import {
+  activateUser,
   allusersLeavesHistory,
   applyLeave,
+  deactivateUser,
+  deleteUser,
   leaveHistory,
   updateAllowedLeaves,
   updateBankDetails,
@@ -36,6 +39,12 @@ export default defineEventHandler(async (event) => {
       return await allusersLeavesHistory(event);
     case "updateLeave":
       return await updateLeaveStatus(event);
+    case "deactivate":
+      return await deactivateUser(event);
+    case "activate":
+      return await activateUser(event);
+    case "delete":
+      return await deleteUser(event);
     default:
       return { code: 0, error: "Not found" };
   }
