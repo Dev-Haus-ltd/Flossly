@@ -1,7 +1,20 @@
 <template>
   <v-card class="mt-5 rounded-lg" :elevation="0" style="border: 1px solid #e0e0e0">
-    <v-card-title class="title d-flex justify-start align-center py-3">
+    <v-card-title class="d-flex justify-space-between align-center px-5 py-4">
+      
+      <div>
       Patient's Details
+      </div>
+      <v-btn
+        color="primary"
+        variant="flat"
+        class="mr-3"
+        :disabled="!isDirty || savingDetails"
+        :loading="savingDetails"
+        @click="saveSection"
+      >
+        Update Details
+      </v-btn>
     </v-card-title>
     <v-divider />
     <v-card-text class=" py-0" style="max-height: 100%; overflow: auto">
@@ -21,10 +34,7 @@
               <v-card class="pa-6 panel-card" variant="text">
                 <template v-if="section==='basic'">
                   <InfoRow label="ID" :value="editable.id || '-'" />
-                  <EditRow label="Title" field="title" />
-                  <InfoRow label="Full Name" :value="fullName || '-'" />
                   <EditRow label="First name" field="firstName" />
-                  <EditRow label="Middle name" field="middleName" />
                   <EditRow label="Last name" field="lastName" />
                   <EditRow label="Preferred name" field="preferredName" />
                   <div class="mb-4">
@@ -154,10 +164,7 @@
             </v-col>
           </v-row>
 
-          <!-- Update button aligned to the right after both cards -->
-          <div class="mt-4 d-flex justify-end">
-            <v-btn color="primary" variant="flat" @click="saveSection">Update Details</v-btn>
-          </div>
+          <!-- Update button moved to header -->
         </div>
       </div>
     </v-card-text>
@@ -165,7 +172,7 @@
 </template>
 
 <script setup>
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, resolveComponent } from 'vue'
 import CommonSideBar from '@/components/Common/sideBar.vue'
 import profileIcon from '@/assets/icons/myProfile/profile.svg'
 import workIcon from '@/assets/icons/myProfile/work.svg'
@@ -185,15 +192,6 @@ const items = [
 const diaryStore = useDiaryStore()
 const mainStore = useMainStore()
 
-const editable = reactive({})
-watch(() => props.patient, (v) => {
-  const incoming = v || {}
-  Object.assign(editable, {
-    dentistRecallInterval: incoming.recallInterval || incoming.dentistRecallInterval || null,
-    ...incoming,
-  })
-}, { immediate: true })
-
 const dobMenu = ref(false)
 const dobFormatted = computed(() => editable.dob ? formatDateDDMMYYYY(editable.dob) : '')
 const nextHygRecallMenu = ref(false)
@@ -201,19 +199,70 @@ const nextDentistRecallMenu = ref(false)
 const nextHygienistRecallFormatted = computed(() => editable.nextHygienistRecall ? formatDateDDMMYYYY(editable.nextHygienistRecall) : '')
 const nextDentistRecallFormatted = computed(() => editable.nextDentistRecall ? formatDateDDMMYYYY(editable.nextDentistRecall) : '')
 const fullName = computed(() => [editable.firstName, editable.lastName].filter(Boolean).join(' '))
+const normalizeEditable = (data) => {
+  const keys = [
+    'id','title','sex','firstName','middleName','lastName','preferredName','dob',
+    'niNumber','nhsNumber','insuranceNumber','legacyId','imagingId','ethnicity',
+    'address1','address2','address3','town','county','postcode','homePhone','workPhone',
+    'mobile','preferredPhone','email','doctor','occupation','family',
+    'paymentPlan','dentist','hygienist','receiveEmail','receiveSms','marketingConsent',
+    'recallMethod','dentistRecallInterval','recallInterval','nextDentistRecall',
+    'hygienistRecallInterval','nextHygienistRecall','acquisitionSource'
+  ]
+  const out = {}
+  keys.forEach((k) => { out[k] = data?.[k] ?? null })
+  return out
+}
+const editable = reactive({})
+const originalSnapshot = ref('')
+const savingDetails = ref(false)
+watch(() => props.patient, (v) => {
+  const incoming = v || {}
+  Object.assign(editable, {
+    dentistRecallInterval: incoming.recallInterval || incoming.dentistRecallInterval || null,
+    ...incoming,
+  })
+  originalSnapshot.value = JSON.stringify(normalizeEditable(editable))
+}, { immediate: true })
+
+const titleOptions = ['Mr', 'Mrs', 'Ms', 'Dr']
+const isDirty = computed(() => {
+  const current = JSON.stringify(normalizeEditable(editable))
+  return current !== originalSnapshot.value
+})
 
 const EditRow = defineComponent({
   name: 'EditRow',
   props: { label: String, field: String },
   setup(p){
-    return () => h('div', { class: 'mb-4' }, [
-      h('label', { class: 'info-label' }, p.label),
-      h('p', {
-        class: 'editable',
-        contentEditable: 'true',
-        onBlur: (e) => { editable[p.field] = e.target.innerText.trim() },
-      }, String(editable[p.field] ?? '-')),
-    ])
+    return () => {
+      if (p.field === 'title') {
+        const VSelect = resolveComponent('v-select')
+        return h('div', { class: 'mb-4' }, [
+          h('label', { class: 'info-label' }, p.label),
+          h(VSelect, {
+            modelValue: editable[p.field] || null,
+            'onUpdate:modelValue': (val) => { editable[p.field] = val },
+            items: titleOptions,
+            variant: 'solo',
+            density: 'compact',
+            class: 'input-bordered mb-0',
+            hideDetails: true,
+            flat: true,
+            bgColor: 'white',
+            menuProps: { maxHeight: 240 },
+          }),
+        ])
+      }
+      return h('div', { class: 'mb-4' }, [
+        h('label', { class: 'info-label' }, p.label),
+        h('p', {
+          class: 'editable',
+          contentEditable: 'true',
+          onBlur: (e) => { editable[p.field] = e.target.innerText.trim() },
+        }, String(editable[p.field] ?? '-')),
+      ])
+    }
   }
 })
 
@@ -228,6 +277,7 @@ const InfoRow = defineComponent({
 
 const saveSection = async () => {
   if (!editable?.id) return
+  savingDetails.value = true
   const payload = { id: editable.id }
   if (section.value === 'basic') {
     Object.assign(payload, {
@@ -279,9 +329,17 @@ const saveSection = async () => {
       acquisitionSource: editable.acquisitionSource,
     })
   }
-  const res = await diaryStore.updatePatient(payload)
-  if (res?.code === 0) mainStore.setSnackbar({ title: 'Patient updated', type: 'success' })
-  else mainStore.setSnackbar({ title: res?.message || 'Update failed', type: 'error' })
+  try {
+    const res = await diaryStore.updatePatient(payload)
+    if (res?.code === 0) {
+      mainStore.setSnackbar({ title: 'Patient updated', type: 'success' })
+      originalSnapshot.value = JSON.stringify(normalizeEditable(editable))
+    } else {
+      mainStore.setSnackbar({ title: res?.message || 'Update failed', type: 'error' })
+    }
+  } finally {
+    savingDetails.value = false
+  }
 }
 </script>
 
@@ -304,4 +362,8 @@ const saveSection = async () => {
 .info-value{ color:#111827; font-weight:500 }
 .input-plain :deep(.v-field){ border:none !important; border-radius:0 !important; background:transparent !important; min-height:32px; font-size:14px; padding:0 !important; }
 .input-plain :deep(.v-field__outline){ display:none; }
+.input-select :deep(.v-field__input){
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
 </style>

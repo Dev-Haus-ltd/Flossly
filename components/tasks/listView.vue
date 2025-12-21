@@ -103,7 +103,7 @@
           </v-menu>
         </div>
       </div>
-      <div class="d-inline-flex" style="flex-wrap: nowrap;">
+      <div class="d-inline-flex ml-auto" style="flex-wrap: nowrap;">
         <v-btn
           color="tertiary"
           variant="flat"
@@ -263,6 +263,7 @@
                 <template #item="{ element: column, index: i }">
                   <th
                     :style="{
+                      width: column.width + 'px',
                       minWidth: column.width + 'px',
                       padding: '0px 7px',
                       backgroundColor: '#F6F6F6',
@@ -746,8 +747,11 @@ watch(
 );
 const updateHeaderOrder = (newOrder) => {
   const selectable = newOrder.findIndex((x) => !x.title);
-  newOrder.splice(selectable, 1);
+  if (selectable !== -1) {
+    newOrder.splice(selectable, 1);
+  }
   selectedHeaders.value = newOrder;
+  updateUserPreferences();
 };
 const emit = defineEmits([
   "onFilter",
@@ -1000,7 +1004,7 @@ onMounted(() => {
   statuses.value = orgStatuses;
   priorityStatuses.value = priorities;
   user.value = JSON.parse(localStorage.getItem("user"));
-    // Add keyboard shortcut listener
+      // Add keyboard shortcut listener
   window.addEventListener('keydown', handleKeyboardShortcut);
 
 });
@@ -1596,7 +1600,7 @@ function stopResize(e) {
         handleEl.releasePointerCapture(e.pointerId);
     }
   } catch (err) {
-    // ignore capture release errors
+  // ignore capture release errors
   }
   currentCol = null
 }
@@ -1742,6 +1746,10 @@ th {
   text-transform: none;
   box-shadow: none;
   color: #737373;
+}
+.resizable-table :deep(.v-table__wrapper table) {
+  width: 100%;
+  table-layout: fixed;
 }
 .resizable-table .th-content {
   display: flex;

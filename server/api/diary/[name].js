@@ -1,4 +1,4 @@
-import { listTreatments, listPatients, createPatient, updatePatient, listAppointments, createAppointment, updateAppointment, listDentistsForDate, getStats, getPatient, listNotes, createNote, deleteNote, getPatientComfort, savePatientComfort, updatePatientComfort, getPatientSurvey, savePatientSurvey, uploadSurveyPhotos, downloadPatientSurvey, printPatientSurvey, sharePatientSurvey, getSurveyStructure } from '~/server/controllers/diary'
+import { listTreatments, listPatients, listPatientsPaged, getPatientStats, createPatient, updatePatient, listAppointments, createAppointment, updateAppointment, listDentistsForDate, getStats, getPatient, listNotes, createNote, deleteNote, getPatientComfort, savePatientComfort, updatePatientComfort, getPatientSurvey, savePatientSurvey, uploadSurveyPhotos, downloadPatientSurvey, printPatientSurvey, sharePatientSurvey, getSurveyStructure } from '~/server/controllers/diary'
 import { success } from '~/server/utils/response'
 
 export default defineEventHandler(async (event) => {
@@ -8,6 +8,10 @@ export default defineEventHandler(async (event) => {
       return await listTreatments(event)
     case 'patients':
       return await listPatients(event)
+    case 'patientsPaged':
+      return await listPatientsPaged(event)
+    case 'patientStats':
+      return await getPatientStats(event)
     case 'patientCreate':
       return await createPatient(event)
     case 'patientUpdate':

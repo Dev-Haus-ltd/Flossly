@@ -75,6 +75,12 @@ export default defineNuxtConfig({
           content: process.env.npm_package_description || "",
         },
       ],
+       link: [
+      // Favicon
+      { rel: "icon", type: "image/png", href: "/Logoicon2.svg" },
+
+      { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" }
+    ],
       script: [{ src: "https://js.stripe.com/v3/", defer: true }
       ],
     },

@@ -7,14 +7,14 @@
       <div class="task-summary">
         <!-- Cards Grid -->
         <v-row
-          v-if="visibleTaskStats && visibleTaskStats.length > 0"
+          v-if="orderedTaskStats && orderedTaskStats.length > 0"
           style="flex-wrap: nowrap; overflow: auto;"
         >
           <v-col
             cols="12"
             md="3"
             lg="2"
-            v-for="(item, i) in visibleTaskStats"
+            v-for="(item, i) in orderedTaskStats"
             :key="i"
           >
             <CommonStatCard
@@ -27,51 +27,62 @@
           </v-col>
         </v-row>
       </div>
-      <v-tabs
-        v-model="currentTab"
-        class="custom-tabs mt-5"
-        slider-color="primary"
-      >
-        <v-tab
-          v-for="(cat, index) in visibleTaskStats"
-          :value="cat.categoryId"
-          :key="index"
-          class="tab-text category-tab"
-          :style="getTabStyle(cat)"
-          @click="updateTasksList"
+        <v-tabs
+          v-model="currentTab"
+          class="custom-tabs mt-5"
+          slider-color="primary"
         >
-          <div class="d-flex align-center justify-center tab-inner">
-            <span class="tab-label">{{ cat.categoryName }}</span>
-            <v-menu offset-y>
-              <template #activator="{ props }">
-                <v-btn
-                  v-bind="props"
-                  icon
-                  variant="text"
-                  size="x-small"
-                  class="ml-1 category-menu-btn"
-                  @click.stop
-                >
-                  <v-icon size="16">mdi-dots-horizontal</v-icon>
-                </v-btn>
-              </template>
-              <v-list density="compact">
-                <v-list-item
-                  v-if="canHideCategory(cat)"
-                  @click.stop="hideCategory(cat)"
-                >
-                  <v-list-item-title>Hide</v-list-item-title>
-                </v-list-item>
-                <v-list-item
-                  v-if="canEditCategory(cat)"
-                  @click.stop="startEditCategory(cat)"
-                >
-                  <v-list-item-title>Edit</v-list-item-title>
-                </v-list-item>
-              </v-list>
-            </v-menu>
-          </div>
-        </v-tab>
+        <draggable
+          tag="div"
+          class="d-flex"
+          :model-value="orderedTaskStats"
+          item-key="categoryId"
+          direction="horizontal"
+          handle=".tab-inner"
+          @update:model-value="updateCategoryOrder"
+        >
+          <template #item="{ element: cat }">
+            <v-tab
+              :value="cat.categoryId"
+              :key="cat.categoryId"
+              class="tab-text category-tab"
+              :style="getTabStyle(cat)"
+              @click="updateTasksList"
+            >
+              <div class="d-flex align-center justify-center tab-inner">
+                <span class="tab-label">{{ cat.categoryName }}</span>
+                <v-menu offset-y>
+                  <template #activator="{ props }">
+                    <v-btn
+                      v-bind="props"
+                      icon
+                      variant="text"
+                      size="x-small"
+                      class="ml-1 category-menu-btn"
+                      @click.stop
+                    >
+                      <v-icon size="16">mdi-dots-horizontal</v-icon>
+                    </v-btn>
+                  </template>
+                  <v-list density="compact">
+                    <v-list-item
+                      v-if="canHideCategory(cat)"
+                      @click.stop="hideCategory(cat)"
+                    >
+                      <v-list-item-title>Hide</v-list-item-title>
+                    </v-list-item>
+                    <v-list-item
+                      v-if="canEditCategory(cat)"
+                      @click.stop="startEditCategory(cat)"
+                    >
+                      <v-list-item-title>Edit</v-list-item-title>
+                    </v-list-item>
+                  </v-list>
+                </v-menu>
+              </div>
+            </v-tab>
+          </template>
+        </draggable>
 
         <!-- Plus Button Tab -->
         <v-tab
@@ -214,6 +225,7 @@
 import { useDisplay } from "vuetify";
 import { nextTick } from "vue";
 import { getContrastingTextColor } from "~/lib/misc";
+import draggable from "vuedraggable";
 
 const bus = useBus();
 const { xs } = useDisplay();
@@ -246,6 +258,8 @@ const totalCount = ref(0);
 const hiddenCategoryIds = ref([]);
 const categoryToEdit = ref(null);
 const hiddenCategoryStorageKey = "teamTasksHiddenCategoryIds";
+const categoryOrder = ref([]);
+const categoryOrderStorageKey = "teamTasksCategoryOrder";
 const defaultCategoryNames = [
   "Staff Management",
   "Marketing",
@@ -256,6 +270,63 @@ const visibleTaskStats = computed(() =>
   (taskStats.value || [])
     .filter((cat) => !hiddenCategoryIds.value.includes(cat.categoryId))
     .filter((cat) => !cat?.parentId)
+);
+const loadCategoryOrder = () => {
+  try {
+    const stored = JSON.parse(
+      localStorage.getItem(categoryOrderStorageKey) || "[]"
+    );
+    categoryOrder.value = Array.isArray(stored) ? stored : [];
+  } catch (err) {
+    categoryOrder.value = [];
+  }
+};
+
+const persistCategoryOrder = () => {
+  localStorage.setItem(
+    categoryOrderStorageKey,
+    JSON.stringify(categoryOrder.value)
+  );
+};
+
+const applyCategoryOrder = (list) => {
+  const order = categoryOrder.value || [];
+  if (!order.length) return list;
+  const map = new Map(list.map((cat) => [cat.categoryId, cat]));
+  const ordered = order
+    .map((id) => map.get(id))
+    .filter(Boolean);
+  const missing = list.filter((cat) => !order.includes(cat.categoryId));
+  return [...ordered, ...missing];
+};
+
+const orderedTaskStats = computed(() =>
+  applyCategoryOrder(visibleTaskStats.value || [])
+);
+
+const syncCategoryOrder = (list) => {
+  const ids = (list || []).map((cat) => cat.categoryId);
+  if (!ids.length) {
+    categoryOrder.value = [];
+    return;
+  }
+  const filtered = categoryOrder.value.filter((id) => ids.includes(id));
+  const missing = ids.filter((id) => !filtered.includes(id));
+  categoryOrder.value = [...filtered, ...missing];
+  persistCategoryOrder();
+};
+
+const updateCategoryOrder = (newOrder = []) => {
+  categoryOrder.value = newOrder.map((cat) => cat.categoryId);
+  persistCategoryOrder();
+};
+
+watch(
+  visibleTaskStats,
+  (list) => {
+    syncCategoryOrder(list || []);
+  },
+  { immediate: true }
 );
 
 const loadHiddenCategories = () => {
@@ -300,15 +371,15 @@ const canHideCategory = (cat) => {
 };
 
 const ensureCurrentTabVisible = () => {
-  if (!visibleTaskStats.value.length) {
+  if (!orderedTaskStats.value.length) {
     currentTab.value = null;
     return;
   }
-  const hasCurrent = visibleTaskStats.value.some(
+  const hasCurrent = orderedTaskStats.value.some(
     (cat) => cat.categoryId === currentTab.value
   );
   if (!hasCurrent) {
-    currentTab.value = visibleTaskStats.value[0].categoryId;
+    currentTab.value = orderedTaskStats.value[0].categoryId;
   }
 };
 
@@ -368,6 +439,7 @@ const resetCategoryEditing = () => {
 
 onMounted(async () => {
   loadHiddenCategories();
+  loadCategoryOrder();
   user.value = JSON.parse(localStorage.getItem("user"));
   if (user && user.preferences) {
     headers.value = user.preferences.taskTableColumns;
@@ -558,8 +630,8 @@ const getTeamStats = async () => {
     const res = await taskStore.getTeamTaskStatsByCategory();
     if (res.code === 0) {
       setTaskStats(res.data || []);
-      if (!currentTab.value && visibleTaskStats.value.length) {
-        currentTab.value = visibleTaskStats.value[0].categoryId;
+      if (!currentTab.value && orderedTaskStats.value.length) {
+        currentTab.value = orderedTaskStats.value[0].categoryId;
       }
       getTeamTasks(currentTab.value ?? null);
     } else {

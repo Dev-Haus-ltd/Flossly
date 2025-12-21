@@ -1,5 +1,16 @@
 import cron from "node-cron";
-import { OrganisationStatus, UserTask, User, Task } from "../models/index.js";
+import {
+  OrganisationStatus,
+  UserTask,
+  User,
+  Task,
+  CrmLead,
+  CrmAutomationTemplate,
+  DiaryPatient,
+  DiaryAppointment,
+  PatientAutomationTemplate,
+  Organisation,
+} from "../models/index.js";
 
 const frequencyMap = {
   Daily: "0 0 * * *", // every day at midnight
@@ -77,7 +88,6 @@ export const startTaskScheduler = () => {
   });
 }
 
-import { CrmLead, CrmAutomationTemplate } from "../models/index.js";
 import { transporter } from "./nodeMailer.js";
 import { template as EMAIL_TEMPLATE } from './emailTemplate.js'
 import { buildLeadContext, renderTokens } from './tokenRenderer.js'
@@ -220,7 +230,7 @@ export const startLeadAutomationScheduler = () => {
                   const d = daysSince(inquiry)
                   const due = { whitening_immediate: 0, whitening_2_days: 2, whitening_5_days: 5 }[tpl.key]
                   if (d !== null && d >= due && !hasSent(raw, tpl.key)) {
-                    await transporter.sendMail({ to: lead.email, from: process.env.MAIL_FROM || 'helloflossly@gmail.com', subject, html })
+                    await transporter.sendMail({ to: lead.email, from: process.env.MAIL_FROM || 'helloflossly@gmail.com', subject, html: wrap(html) })
                     await markSent(lead, raw, tpl.key)
                   }
                 }
@@ -235,7 +245,7 @@ export const startLeadAutomationScheduler = () => {
                   const d = daysSince(inquiry)
                   const due = { exam_immediate: 0, exam_3_days: 3, exam_7_days: 7 }[tpl.key]
                   if (d !== null && d >= due && !hasSent(raw, tpl.key)) {
-                    await transporter.sendMail({ to: lead.email, from: process.env.MAIL_FROM || 'helloflossly@gmail.com', subject, html })
+                    await transporter.sendMail({ to: lead.email, from: process.env.MAIL_FROM || 'helloflossly@gmail.com', subject, html: wrap(html) })
                     await markSent(lead, raw, tpl.key)
                   }
                 }
@@ -290,6 +300,298 @@ export const startLeadAutomationScheduler = () => {
     }
   });
 };
+
+const PATIENT_JOURNEY_PRE_APPT_GROUPS = new Set([
+  'new_patient_booking',
+  'composite_bonding',
+  'invisalign',
+  'check_up',
+  'implant',
+  'teeth_whitening',
+])
+const PATIENT_JOURNEY_POST_APPT_GROUPS = new Set([
+  'appointment_follow_up',
+  'patient_cancelled_appointment',
+  'patient_no_show_follow_up',
+  'post_treatment_check_in',
+  'referral_automation',
+  'social_review_campaigns',
+])
+const TREATMENT_KEYWORDS_BY_GROUP = {
+  composite_bonding: ['composite bonding', 'bonding'],
+  invisalign: ['invisalign'],
+  check_up: ['check', 'check-up', 'checkup', 'exam', 'examination'],
+  implant: ['implant'],
+  teeth_whitening: ['whitening', 'teeth whitening'],
+}
+
+const parseDayOffset = (sending) => {
+  const match = String(sending || '').match(/day\s*(\d+)/i)
+  if (!match) return null
+  const num = Number(match[1])
+  return Number.isFinite(num) ? num : null
+}
+
+const toYmd = (value) => {
+  if (!value) return null
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return null
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const addDaysSafe = (value, days) => {
+  const base = value instanceof Date ? new Date(value) : new Date(value || Date.now())
+  if (Number.isNaN(base.getTime())) return null
+  base.setDate(base.getDate() + Number(days || 0))
+  return base
+}
+
+const extractSubjectAndBody = (template) => {
+  const raw = String(template || '')
+  const subjectMatch = raw.match(/<strong>Subject:<\/strong>\s*([^<]+)<\/p>/i)
+  const subject = subjectMatch ? subjectMatch[1].trim() : ''
+  const body = subjectMatch
+    ? raw.replace(subjectMatch[0], '').trim()
+    : raw
+  return { subject, body }
+}
+
+const renderPatientTokens = (text, ctx) => {
+  if (!text) return ''
+  const tokens = {
+    'First Name': ctx.firstName || 'there',
+    'Practice Name': ctx.practiceName || 'your practice',
+    'Practice Phone': ctx.practicePhone || '',
+    'Practice Address': ctx.practiceAddress || '',
+    'Date/Time': ctx.dateTime || '',
+    'Appointment Date': ctx.appointmentDate || '',
+    'Appointment Time': ctx.appointmentTime || '',
+  }
+  let out = String(text)
+  Object.entries(tokens).forEach(([key, value]) => {
+    const safe = value || ''
+    const re = new RegExp(`\\[${key.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\]`, 'gi')
+    out = out.replace(re, safe)
+  })
+  return out
+}
+
+const matchesTreatment = (appointment, keywords = []) => {
+  const hay = `${appointment?.treatmentName || ''} ${appointment?.notes || ''}`.toLowerCase()
+  return keywords.length ? keywords.some((k) => hay.includes(k)) : true
+}
+
+const statusEquals = (status, targets = []) => {
+  const s = String(status || '').toLowerCase()
+  return targets.some((t) => s === String(t).toLowerCase())
+}
+
+const hasPatientSent = (patient, key) => {
+  const raw = patient?.rawData || {}
+  return !!(raw?.automationSentKeys && raw.automationSentKeys[key])
+}
+
+const markPatientSent = async (patient, key) => {
+  const raw = patient?.rawData || {}
+  const map = { ...(raw.automationSentKeys || {}) }
+  map[key] = new Date().toISOString()
+  patient.rawData = { ...raw, automationSentKeys: map }
+  await patient.save()
+}
+
+export const startPatientJourneyAutomationScheduler = () => {
+  const minutes = Number(process.env.PATIENT_JOURNEY_AUTOMATION_MINUTES || 60)
+  const pattern = minutes > 0 ? `*/${minutes} * * * *` : null
+  if (!pattern) return
+
+  cron.schedule(pattern, async () => {
+    try {
+      try {
+        await PatientAutomationTemplate.sync()
+      } catch {}
+      const templates = await PatientAutomationTemplate.findAll({ where: { enabled: true } })
+      if (!templates.length) return
+
+      const orgIds = [...new Set(templates.map((t) => Number(t.organisationId)).filter(Boolean))]
+      if (!orgIds.length) return
+      const organisations = await Organisation.findAll({ where: { id: orgIds } })
+      const orgMap = new Map(organisations.map((o) => [Number(o.id), o]))
+
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const todayYmd = toYmd(today)
+
+      const maxOffset = Math.max(
+        0,
+        ...templates
+          .map((t) => parseDayOffset(t.sending))
+          .filter((n) => Number.isFinite(n))
+      )
+      const rangeStart = addDaysSafe(today, -(maxOffset + 7))
+      const rangeEnd = addDaysSafe(today, maxOffset + 7)
+
+      const templatesByOrg = new Map()
+      templates.forEach((tpl) => {
+        const key = Number(tpl.organisationId)
+        const list = templatesByOrg.get(key) || []
+        list.push(tpl)
+        templatesByOrg.set(key, list)
+      })
+
+      for (const [orgId, orgTemplates] of templatesByOrg.entries()) {
+        const organisation = orgMap.get(Number(orgId))
+        const patients = await DiaryPatient.findAll({
+          where: {
+            organisationId: Number(orgId),
+            email: { [Op.ne]: null },
+            [Op.or]: [{ receiveEmail: true }, { receiveEmail: null }],
+          },
+        })
+        const patientMap = new Map(patients.map((p) => [Number(p.id), p]))
+        const appointments = await DiaryAppointment.findAll({
+          where: {
+            organisationId: Number(orgId),
+            startTime: { [Op.between]: [rangeStart, rangeEnd] },
+          },
+        })
+        for (const tpl of orgTemplates) {
+          const dayOffset = parseDayOffset(tpl.sending)
+          if (!dayOffset) continue
+          const offsetDays = Math.max(0, dayOffset - 1)
+          const { subject: subjectRaw, body: bodyRaw } = extractSubjectAndBody(tpl.template || '')
+          const baseSubject = subjectRaw || tpl.name || 'Patient update'
+
+          if (PATIENT_JOURNEY_PRE_APPT_GROUPS.has(tpl.groupKey)) {
+            const keywords = TREATMENT_KEYWORDS_BY_GROUP[tpl.groupKey] || []
+            for (const appt of appointments) {
+              if (!matchesTreatment(appt, keywords)) continue
+              const triggerDate = addDaysSafe(appt.createdAt || appt.startTime, offsetDays)
+              if (toYmd(triggerDate) !== todayYmd) continue
+              const patient = patientMap.get(Number(appt.patientId))
+              if (!patient?.email) continue
+              const key = `${tpl.key}:${tpl.groupKey}:${appt.id || ''}:${todayYmd}`
+              if (hasPatientSent(patient, key)) continue
+              const ctx = {
+                firstName: patient.firstName,
+                practiceName: organisation?.name,
+                practicePhone: organisation?.contact,
+                practiceAddress: [organisation?.address, organisation?.postalCode].filter(Boolean).join(', '),
+                dateTime: `${toYmd(appt.startTime)} ${appt.startTime ? appt.startTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''}`.trim(),
+                appointmentDate: toYmd(appt.startTime),
+                appointmentTime: appt.startTime ? appt.startTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '',
+              }
+              const subject = renderPatientTokens(baseSubject, ctx)
+              const html = renderPatientTokens(bodyRaw, ctx)
+              const wrap = (inner) => EMAIL_TEMPLATE.replaceAll('{subject}', subject).replace('{content}', inner)
+              await transporter.sendMail({
+                to: patient.email,
+                from: process.env.MAIL_FROM || 'helloflossly@gmail.com',
+                subject,
+                html: wrap(html),
+              })
+              await markPatientSent(patient, key)
+            }
+          } else if (tpl.groupKey === 'recalls_reactivation') {
+            for (const patient of patients) {
+              const recallDate = tpl.key.includes('hygiene')
+                ? patient.nextHygienistRecall
+                : patient.nextDentistRecall
+              if (!recallDate) continue
+              const triggerDate = addDaysSafe(recallDate, offsetDays)
+              if (toYmd(triggerDate) !== todayYmd) continue
+              const key = `${tpl.key}:${tpl.groupKey}::${todayYmd}`
+              if (hasPatientSent(patient, key)) continue
+              const ctx = {
+                firstName: patient.firstName,
+                practiceName: organisation?.name,
+                practicePhone: organisation?.contact,
+                practiceAddress: [organisation?.address, organisation?.postalCode].filter(Boolean).join(', '),
+                appointmentDate: toYmd(recallDate),
+              }
+              const subject = renderPatientTokens(baseSubject, ctx)
+              const html = renderPatientTokens(bodyRaw, ctx)
+              const wrap = (inner) => EMAIL_TEMPLATE.replaceAll('{subject}', subject).replace('{content}', inner)
+              await transporter.sendMail({
+                to: patient.email,
+                from: process.env.MAIL_FROM || 'helloflossly@gmail.com',
+                subject,
+                html: wrap(html),
+              })
+              await markPatientSent(patient, key)
+            }
+          } else if (tpl.groupKey === 'birthday_anniversary') {
+            for (const patient of patients) {
+              if (!patient.dob) continue
+              const dob = new Date(patient.dob)
+              if (Number.isNaN(dob.getTime())) continue
+              const base = new Date(today.getFullYear(), dob.getMonth(), dob.getDate())
+              const triggerDate = addDaysSafe(base, offsetDays)
+              if (toYmd(triggerDate) !== todayYmd) continue
+              const key = `${tpl.key}:${tpl.groupKey}::${todayYmd}`
+              if (hasPatientSent(patient, key)) continue
+              const ctx = {
+                firstName: patient.firstName,
+                practiceName: organisation?.name,
+                practicePhone: organisation?.contact,
+                practiceAddress: [organisation?.address, organisation?.postalCode].filter(Boolean).join(', '),
+              }
+              const subject = renderPatientTokens(baseSubject, ctx)
+              const html = renderPatientTokens(bodyRaw, ctx)
+              const wrap = (inner) => EMAIL_TEMPLATE.replaceAll('{subject}', subject).replace('{content}', inner)
+              await transporter.sendMail({
+                to: patient.email,
+                from: process.env.MAIL_FROM || 'helloflossly@gmail.com',
+                subject,
+                html: wrap(html),
+              })
+              await markPatientSent(patient, key)
+            }
+          } else if (PATIENT_JOURNEY_POST_APPT_GROUPS.has(tpl.groupKey)) {
+            for (const appt of appointments) {
+              if (!appt?.patientId) continue
+              const patient = patientMap.get(Number(appt.patientId))
+              if (!patient?.email) continue
+              const apptStatus = appt.status || ''
+              if (tpl.groupKey === 'patient_cancelled_appointment' && !statusEquals(apptStatus, ['Cancelled'])) continue
+              if (tpl.groupKey === 'patient_no_show_follow_up' && !statusEquals(apptStatus, ['Did not attend', 'No Show', 'No show'])) continue
+              if (['appointment_follow_up', 'post_treatment_check_in', 'referral_automation', 'social_review_campaigns'].includes(tpl.groupKey)) {
+                if (statusEquals(apptStatus, ['Cancelled'])) continue
+              }
+              const triggerDate = addDaysSafe(appt.startTime, offsetDays)
+              if (toYmd(triggerDate) !== todayYmd) continue
+              const key = `${tpl.key}:${tpl.groupKey}:${appt.id || ''}:${todayYmd}`
+              if (hasPatientSent(patient, key)) continue
+              const ctx = {
+                firstName: patient.firstName,
+                practiceName: organisation?.name,
+                practicePhone: organisation?.contact,
+                practiceAddress: [organisation?.address, organisation?.postalCode].filter(Boolean).join(', '),
+                dateTime: `${toYmd(appt.startTime)} ${appt.startTime ? appt.startTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''}`.trim(),
+                appointmentDate: toYmd(appt.startTime),
+                appointmentTime: appt.startTime ? appt.startTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '',
+              }
+              const subject = renderPatientTokens(baseSubject, ctx)
+              const html = renderPatientTokens(bodyRaw, ctx)
+              const wrap = (inner) => EMAIL_TEMPLATE.replaceAll('{subject}', subject).replace('{content}', inner)
+              await transporter.sendMail({
+                to: patient.email,
+                from: process.env.MAIL_FROM || 'helloflossly@gmail.com',
+                subject,
+                html: wrap(html),
+              })
+              await markPatientSent(patient, key)
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[PatientJourney] automation tick error', e?.message)
+    }
+  })
+}
 
 import { Op } from 'sequelize'
 import { sendTaskDueReminderEmail } from './emailNotifications.js'
