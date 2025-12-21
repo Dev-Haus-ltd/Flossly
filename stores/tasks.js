@@ -28,7 +28,7 @@ export const useTaskStore = defineStore("taskStore", {
 
   actions: {
     clearTasksCache() {
-      this.tasksCache.clear();
+      this.tasksCache?.clear();
     },
     getMyTasks(data) {
       return new Promise((resolve, reject) => {
@@ -200,10 +200,10 @@ export const useTaskStore = defineStore("taskStore", {
     tasksGroupedByStatusWithCache(data) {
       const key = makeTasksCacheKey(data);
 
-      if (this.tasksCache.has(key)) {
+      if (this.tasksCache?.has(key)) {
         return Promise.resolve({
           code: 0,
-          data: this.tasksCache.get(key),
+          data: this.tasksCache?.get(key),
         });
       }
 
@@ -214,7 +214,7 @@ export const useTaskStore = defineStore("taskStore", {
           .then((res) => {
             this.isLoading = false;
             if (res?.code === 0 && res?.data) {
-              this.tasksCache.set(key, res.data);
+              this.tasksCache?.set(key, res.data);
             }
             resolve(res);
           })
