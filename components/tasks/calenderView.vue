@@ -87,7 +87,7 @@
             <!-- Quick Action Buttons -->
             <div class="d-flex flex-column mt-3" style="gap: 8px;">
               <v-btn
-                v-if="event.status.key !== 'completed' && !event.isVirtualInstance"
+                v-if="event.status.key !== 'completed'"
                 size="small"
                 color="success"
                 variant="flat"
@@ -99,7 +99,6 @@
               </v-btn>
               
               <v-btn
-                v-if="!event.isVirtualInstance"
                 size="small"
                 color="primary"
                 variant="outlined"
@@ -108,16 +107,6 @@
                 <v-icon size="16" class="mr-1">mdi-pencil</v-icon>
                 Edit Details
               </v-btn>
-
-              <v-chip 
-                v-if="event.isVirtualInstance"
-                size="small"
-                color="info"
-                variant="outlined"
-              >
-                <v-icon size="14" class="mr-1">mdi-clock-outline</v-icon>
-                Future Instance
-              </v-chip>
             </div>
           </v-card>
         </v-menu>
@@ -156,27 +145,21 @@ const openTaskDetails = (task) => {
 };
 
 const completeTask = async (task) => {
-  if (!task.id || task.isVirtualInstance) {
-    mainStore.setSnackbar({
-      title: "Cannot complete virtual future instances. Please wait for the actual due date.",
-      type: "warning",
-    });
+  if (!task.id) {
     return;
   }
   
   completingTask.value = task.id;
   
   try {
-    // Find the completed status ID
     const completedStatusId = await getCompletedStatusId();
     if (!completedStatusId) {
       throw new Error("Completed status not found");
     }
 
-    // Update the task status to completed
     const response = await taskStore.updateUserTask({
       id: task.id,
-      taskId: task.taskId || task.originalTaskId || task.id,
+      taskId: task.taskId || task.id,
       statusId: completedStatusId,
     });
 
@@ -186,7 +169,6 @@ const completeTask = async (task) => {
         type: "success",
       });
       
-      // Emit event to refresh the calendar
       emit("onTaskCompleted");
     } else {
       throw new Error(response.message || "Failed to complete task");
@@ -211,7 +193,6 @@ const getCompletedStatusId = async () => {
     }
     return null;
   } catch (error) {
-    console.error("Error fetching task statuses:", error);
     return null;
   }
 };

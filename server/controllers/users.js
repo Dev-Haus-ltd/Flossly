@@ -25,7 +25,6 @@ export const usersList = async (event) => {
   if (roleId) {
     where.roleId = roleId;
   }
-  // Include both Active and Invited users (exclude Disabled, Expired)
   where.status = { [Op.in]: ["Active", "Invited"] };
   try {
     const userOrganisations = await UserOrganisation.findAll({
@@ -57,15 +56,11 @@ export const usersList = async (event) => {
         },
       ],
     });
-    // Map users and add computed status based on isActive
+  
     const users = userOrganisations.map((uo) => {
       const user = uo.user.toJSON();
-      // Expose organisation membership state to the UI separately from onboarding status
       user.isActive = Boolean(uo.isActive);
-      // Account deactivation: user is deactivated if:
-      // 1. Globally disabled/expired (status), OR
-      // 2. Not active in this organization (isActive = false) AND status is Active (org-specific deactivation)
-      const isGloballyDeactivated = user.status === "Disabled" || user.status === "Expired";
+       const isGloballyDeactivated = user.status === "Disabled" || user.status === "Expired";
       const isOrgDeactivated = !uo.isActive && user.status === "Active";
       user.isAccountDeactivated = isGloballyDeactivated || isOrgDeactivated;
       return user;
@@ -82,7 +77,7 @@ export const userAcrossOrgs = async (event) => {
     const userOrganisations = await UserOrganisation.findAll({
       where: { 
         userId: loggedUser.userId,
-        isActive: true, // Only show active organizations
+        isActive: true, 
       },
       include: [
         {
@@ -128,12 +123,10 @@ export const userAcrossOrgs = async (event) => {
     });
     const formattedData = userOrganisations.map((orgItem) => {
       try {
-        // Check if organisation exists
         if (!orgItem.organisation) {
           return null;
         }
 
-        // Convert to plain object using toJSON for safer access
         const orgItemPlain = orgItem.toJSON ? orgItem.toJSON() : orgItem;
         const orgData = orgItemPlain.organisation;
         
@@ -149,30 +142,23 @@ export const userAcrossOrgs = async (event) => {
           if (!uo || !uo.user) {
             return null;
           }
-          const user = uo.user;
+          const userPlain = uo.user.toJSON ? uo.user.toJSON() : uo.user;
+          const user = JSON.parse(JSON.stringify(userPlain));
+          
           const isActive = uo.isActive !== undefined ? uo.isActive : 
                           (uo.get ? uo.get('isActive') : true);
-          // Account deactivation: user is deactivated if:
-          // 1. Globally disabled/expired (status), OR
-          // 2. Not active in this organization (isActive = false) AND status is Active (org-specific deactivation)
-          const isGloballyDeactivated = user.status === "Disabled" || user.status === "Expired";
-          const isOrgDeactivated = !isActive && user.status === "Active";
-          const isAccountDeactivated = isGloballyDeactivated || isOrgDeactivated;
-          // Expose organisation membership state to the UI separately from onboarding status
+          
           user.isActive = Boolean(isActive);
-          user.isAccountDeactivated = Boolean(isAccountDeactivated);
           return user;
         }).filter(Boolean), // Remove any null entries
       };
       } catch (err) {
-        console.error('Error processing organisation item:', err);
         return null;
       }
     }).filter(Boolean); // Remove any null entries
     
     return success(formattedData);
   } catch (err) {
-    console.error('Error in userAcrossOrgs:', err);
     return error(500, err.message || err);
   }
 };
@@ -206,7 +192,6 @@ export const updateUserPreferences = async (event) => {
     }
     return success("Preferences updated successfully");
   } catch (err) {
-    console.log(err);
     return error(500, err.message);
   }
 };
@@ -622,8 +607,6 @@ export const deactivateUser = async (event) => {
       });
     }
 
-    // Deactivate user in this specific organization by setting isActive to false
-    // This allows organization-specific deactivation without affecting other orgs
     userOrg.isActive = false;
     await userOrg.save({ transaction });
 
@@ -661,12 +644,9 @@ export const activateUser = async (event) => {
       });
     }
 
-    // Activate user in this specific organization by setting isActive to true
-    // This allows organization-specific activation
     userOrg.isActive = true;
     await userOrg.save({ transaction });
     
-    // Also ensure the user's global status is Active (if it was Disabled/Expired, activate globally)
     const user = await User.findByPk(userId, { transaction });
     if (user && (user.status === "Disabled" || user.status === "Expired")) {
       user.status = "Active";
@@ -694,7 +674,6 @@ export const deleteUser = async (event) => {
       });
     }
 
-    // Check how many active organizations this user belongs to
     const activeOrgCount = await UserOrganisation.count({
       where: { 
         userId, 
@@ -704,7 +683,6 @@ export const deleteUser = async (event) => {
     });
 
     if (activeOrgCount > 1) {
-      // User is in multiple organizations - just remove from current org
       await UserOrganisation.destroy({
         where: { userId, organisationId },
         transaction,
@@ -712,8 +690,6 @@ export const deleteUser = async (event) => {
       await transaction.commit();
       return success("User removed from organization successfully");
     } else {
-      // User is only in this organization - delete the entire user record
-      // This will cascade delete all related records automatically
       const user = await User.findByPk(userId, { transaction });
       
       if (!user) {

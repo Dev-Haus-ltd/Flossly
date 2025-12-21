@@ -80,7 +80,6 @@ function normalizeBoolean(val) {
 
 function onFileChange() {
   error.value = "";
-  // Vuetify v-file-input may pass files via v-model; read from inputFile to be safe
   const fileModel = inputFile.value;
   const file = Array.isArray(fileModel) ? fileModel[0] : fileModel;
   if (!file) { groupedRows.value = []; preview.value = []; return; }
@@ -106,7 +105,6 @@ function onFileChange() {
     reader.onerror = () => { error.value = 'Unable to read Excel file'; };
     reader.readAsBinaryString(file);
   } else {
-    // treat as CSV
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
@@ -127,7 +125,6 @@ function onFileChange() {
 }
 
 function normalizeSheetRows(list) {
-  // Accept keys in various cases/spellings
   return list.map((r) => {
     const get = (k) => r[k] ?? r[k?.toLowerCase?.()] ?? r[k?.toUpperCase?.()];
     const taskTitle = String(get('taskTitle') ?? get('Task Title') ?? '').trim();
@@ -160,8 +157,6 @@ function parseCsv(text) {
     const showRadio = normalizeBoolean(cols[idx.showRadio]);
     const defaultComment = idx.defaultComment >= 0 ? (cols[idx.defaultComment] || '').trim() : '';
     if (!taskTitle || !itemTitle) {
-      // Collect row-level parse errors for better UX
-      console.warn(`[Checklist Upload] Skipping line ${lineNumber}: Missing taskTitle or itemTitle`);
       continue;
     }
     rows.push({ taskTitle, itemTitle, showRadio, defaultComment });
@@ -213,7 +208,6 @@ async function submit() {
   }
   submitting.value = true;
   try {
-    // Attach file stats for better server error context
     const meta = preview.value.reduce((acc, r) => acc + (r.items?.length || 0), 0);
     const res = await taskStore.bulkAddChecklists({ rows: rowsPayload, _clientMeta: { totalRows: meta } });
     if (res.code === 0) {

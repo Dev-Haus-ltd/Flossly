@@ -127,7 +127,6 @@ const props = defineProps({
   rolesList: Array
 });
 
-// Store and service instances
 const mainStore = useMainStore();
 const $userService = userService;
 const addStaffDrawer = ref(false);
@@ -236,7 +235,7 @@ const filteredTeams = computed(() => {
     };
   });
 });
-console.log(filteredTeams.value)
+
 const updateTeams = () => {
   emit("onUpdate");
   addStaffDrawer.value = false;
@@ -286,33 +285,25 @@ const loadSavedHeaders = () => {
     const saved = localStorage.getItem('myStaffTableColumns');
     if (saved) {
       const parsed = JSON.parse(saved);
-      // Ensure resend column is always present
-      // Ensure resend column is always present
       if (!parsed.find(h => h.key === 'resend')) {
         parsed.push({ title: "Resend", key: "resend", width: 100, sortable: false });
       }
       
-      // Ensure Action column is always present (before + column)
       if (!parsed.find(h => h.key === 'userActions')) {
-        // Find the index of the + column
         const actionIndex = parsed.findIndex(h => h.key === 'action');
         if (actionIndex !== -1) {
-          // Insert Action column before the + column
           parsed.splice(actionIndex, 0, { title: "Action", key: "userActions", width: 120, sortable: false });
         } else {
-          // If + column doesn't exist, just add it
           parsed.push({ title: "Action", key: "userActions", width: 120, sortable: false });
         }
       }
       
-      // Ensure + column is always present (at the end)
       if (!parsed.find(h => h.key === 'action')) {
         parsed.push({ title: "+", key: "action", width: 100, sortable: false });
       }
       return parsed;
     }
   } catch (e) {
-    console.error('Error loading saved headers:', e);
   }
   return defaultHeaders;
 };
@@ -352,25 +343,19 @@ const availableHeaders = computed(() => {
 });
 
 const onUpdateHeaders = (updatedHeaders) => {
-  // Ensure resend column is always present
   if (!updatedHeaders.find(h => h.key === 'resend')) {
     updatedHeaders.push({ title: "Resend", key: "resend", width: 100, sortable: false });
   }
   
-  // Ensure Action column is always present (before + column)
   if (!updatedHeaders.find(h => h.key === 'userActions')) {
-    // Find the index of the + column
     const actionIndex = updatedHeaders.findIndex(h => h.key === 'action');
     if (actionIndex !== -1) {
-      // Insert Action column before the + column
       updatedHeaders.splice(actionIndex, 0, { title: "Action", key: "userActions", width: 120, sortable: false });
     } else {
-      // If + column doesn't exist, just add it
       updatedHeaders.push({ title: "Action", key: "userActions", width: 120, sortable: false });
     }
   }
   
-  // Ensure + column is always present (at the end)
   if (!updatedHeaders.find(h => h.key === 'action')) {
     updatedHeaders.push({ title: "+", key: "action", width: 100, sortable: false });
   }
@@ -380,12 +365,10 @@ const onUpdateHeaders = (updatedHeaders) => {
     try {
       localStorage.setItem('myStaffTableColumns', JSON.stringify(updatedHeaders));
     } catch (e) {
-      console.error('Error saving headers:', e);
     }
   }
 };
 const handleAdd = (item) => {
-  console.log("Add clicked:", item);
 };
 
 // Dialog states for confirmations
@@ -399,7 +382,6 @@ const selectedOrgId = ref(null);
 
 const handleDeactivateUser = (payload) => {
   const { org, user } = payload || {};
-  console.log("Deactivate user clicked:", user);
   selectedUser.value = user;
   selectedOrgId.value = org?.organisation?.id || null;
   deactivateDialog.value = true;
@@ -407,7 +389,6 @@ const handleDeactivateUser = (payload) => {
 
 const handleActivateUser = (payload) => {
   const { org, user } = payload || {};
-  console.log("Activate user clicked:", user);
   selectedUser.value = user;
   selectedOrgId.value = org?.organisation?.id || null;
   activateDialog.value = true;
@@ -415,7 +396,6 @@ const handleActivateUser = (payload) => {
 
 const handleDeleteUser = (payload) => {
   const { org, user } = payload || {};
-  console.log("Delete user clicked:", user);
   selectedUser.value = user;
   selectedOrgId.value = org?.organisation?.id || null;
   deleteDialog.value = true;
@@ -424,7 +404,6 @@ const handleDeleteUser = (payload) => {
 const confirmDeactivateUser = async () => {
   if (!selectedUser.value || !props.teams.length) return;
   
-  // Use selected organisation ID from the clicked row, fallback to the first team's organisation
   const organisationId = selectedOrgId.value || props.teams[0]?.organisation?.id;
   if (!organisationId) {
     mainStore.setSnackbar({
@@ -447,14 +426,12 @@ const confirmDeactivateUser = async () => {
         type: "success",
       });
       
-      // Emit update to refresh the team list
       emit("onUpdate");
       deactivateDialog.value = false;
     } else {
       throw new Error(response.message || "Failed to deactivate user");
     }
   } catch (error) {
-    console.error("Error deactivating user:", error);
     mainStore.setSnackbar({
       title: error.message || "Error deactivating user",
       type: "error",
@@ -467,7 +444,6 @@ const confirmDeactivateUser = async () => {
 const confirmActivateUser = async () => {
   if (!selectedUser.value || !props.teams.length) return;
   
-  // Use selected organisation ID from the clicked row, fallback to the first team's organisation
   const organisationId = selectedOrgId.value || props.teams[0]?.organisation?.id;
   if (!organisationId) {
     mainStore.setSnackbar({
@@ -490,14 +466,12 @@ const confirmActivateUser = async () => {
         type: "success",
       });
       
-      // Emit update to refresh the team list
       emit("onUpdate");
       activateDialog.value = false;
     } else {
       throw new Error(response.message || "Failed to activate user");
     }
   } catch (error) {
-    console.error("Error activating user:", error);
     mainStore.setSnackbar({
       title: error.message || "Error activating user",
       type: "error",
@@ -510,7 +484,6 @@ const confirmActivateUser = async () => {
 const confirmDeleteUser = async () => {
   if (!selectedUser.value || !props.teams.length) return;
   
-  // Use selected organisation ID from the clicked row, fallback to the first team's organisation
   const organisationId = selectedOrgId.value || props.teams[0]?.organisation?.id;
   if (!organisationId) {
     mainStore.setSnackbar({
@@ -533,14 +506,12 @@ const confirmDeleteUser = async () => {
         type: "success",
       });
       
-      // Emit update to refresh the team list
       emit("onUpdate");
       deleteDialog.value = false;
     } else {
       throw new Error(response.message || "Failed to delete user");
     }
   } catch (error) {
-    console.error("Error deleting user:", error);
     mainStore.setSnackbar({
       title: error.message || "Error deleting user",
       type: "error",

@@ -61,7 +61,6 @@ export const login = async (event) => {
     } 
   });
   
-  // Check if user is disabled or expired
   if (user.status === "Disabled" || user.status === "Expired") {
     return error(403, "Your account is deactivated");
   }
@@ -82,7 +81,6 @@ export const login = async (event) => {
     }
   }
   
-  // Prefer last logged in organization if it's not deactivated
   let orgId;
   if (userPreference && userPreference.lastLoginOrganisationId) {
     const lastOrg = activeOrgs.find((o) => o.organisationId === userPreference.lastLoginOrganisationId);
@@ -91,7 +89,6 @@ export const login = async (event) => {
     }
   }
   
-  // If no last org or last org is deactivated, use first available
   if (!orgId) {
     const orgIds = activeOrgs.map((o) => o.organisationId).sort();
     orgId = orgIds[0];
@@ -264,7 +261,6 @@ export const profile = async (event) => {
       return error(401, "Unauthenticated");
     }
 
-    // Ensure user is still active in this organisation
     const membership = await UserOrganisation.findOne({
       where: { userId: loggedUser.userId, organisationId: loggedUser.orgId, isActive: true },
     });
@@ -286,7 +282,6 @@ export const profile = async (event) => {
         {
           model: UserOrganisation,
           as: "userOrganisations",
-          // Keep only active orgs in the included association, but don't filter out the user row
           where: { 
             isActive: true,
           },
@@ -305,7 +300,6 @@ export const profile = async (event) => {
       ],
     });
     
-    // Check if user is disabled or expired
     if (user.status === "Disabled" || user.status === "Expired") {
       return error(403, "Your account is deactivated");
     }
@@ -512,7 +506,6 @@ export const switchOrgnanisation = async (event) => {
     });
     if (!record) return error(403, "Not part of selected organisation or invitation not accepted");
     
-    // Check if user is disabled or expired
     const userRecord = await User.findByPk(user.userId);
     if (userRecord && (userRecord.status === "Disabled" || userRecord.status === "Expired")) {
       return error(403, "Your account is deactivated");
@@ -571,11 +564,9 @@ export const verifyEmail = async (event) => {
           where: { organisationId: userOrg[0].organisationId },
         });
         
-        // Find default status and priority, with fallbacks
         const defaultStatus = statuses.find((x) => x.key === "upcoming") || statuses[0];
         const defaultPriority = priorities.find((x) => x.key === "medium") || priorities[0];
         
-        // Only proceed if we have valid status and priority
         if (defaultStatus && defaultPriority) {
           const userTasks = tasks.map((task) => ({
             userId: user.id,
@@ -614,7 +605,6 @@ export const inviteMembers = async (event) => {
       return error(400, "Invitee list is required");
     }
     
-    // Check for self-invitation
     const currentUser = await User.findByPk(loggedUser.userId);
     const currentUserEmail = currentUser?.email?.toLowerCase();
     if (currentUserEmail) {
@@ -1063,7 +1053,6 @@ export const declineOrganisationInvitation = async (event) => {
     // Record deleted successfully - user will no longer appear in organization's user list
     return success("Invitation declined successfully");
   } catch (err) {
-    console.error('Error in declineOrganisationInvitation:', err);
     if (err.name === 'TokenExpiredError') {
       return error(400, "Invitation link has expired");
     }
@@ -1154,9 +1143,8 @@ export const resendOrganisationInvitation = async (event) => {
       },
     });
     
-    const isFirstOrganization = userOtherOrgs.length === 0; // determines template selection for resend
+    const isFirstOrganization = userOtherOrgs.length === 0;
     
-    // No need to delete and recreate - just generate new token and resend email
     // The UserOrganisation record already exists with isActive: false
     const transaction = await DB.transaction();
     
@@ -1211,9 +1199,6 @@ export const resendOrganisationInvitation = async (event) => {
       throw err;
     }
   } catch (err) {
-    console.error('Error in resendOrganisationInvitation:', err);
-    console.error('Error stack:', err.stack);
-    console.error('Error details:', JSON.stringify(err, null, 2));
     const errorMessage = err.message || err.toString() || "Failed to resend invitation";
     return error(500, errorMessage);
   }

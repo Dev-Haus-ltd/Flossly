@@ -86,20 +86,20 @@
           class="staff-col first-col-color d-flex align-center pa-4 pos-sticky-left"
         >
           <CommonAvatar :user="user.isTempUser ? { name: user.tempUserName } : user?.user" class="mr-2" size="45" />
-          <div class="w-100">
+          <div class="w-100" style="min-width: 0;">
             <div class="d-flex align-center w-100">
-              <h3 class="fst-col-title">{{ user?.isTempUser ? user?.tempUserName : user?.user.fullName }}</h3>
+              <h3 class="fst-col-title text-truncate">{{ user?.isTempUser ? user?.tempUserName : user?.user.fullName }}</h3>
               <v-btn
                 color="#000000"
                 size="small"
                 variant="text"
-                class="ml-auto"
+                class="ml-auto flex-shrink-0"
                 @click="removeStaff(user)"
               >
                 <v-icon>mdi-close</v-icon>
               </v-btn>
             </div>
-            <small class="fst-col--subtit">{{  user?.isTempUser ? user?.role.title : user?.user.role.title }}</small>
+            <small class="fst-col--subtit text-truncate d-block">{{  user?.isTempUser ? user?.role.title : user?.user.role.title }}</small>
           </div>
         </div>
 
@@ -268,8 +268,8 @@
           class="staff-col first-col-color d-flex align-center pa-4 pos-sticky-left"
         >
           <CommonAvatar :user="surg" class="mr-2" size="45" />
-          <div>
-            <h3 class="fst-col-title">{{ surg?.name }}</h3>
+          <div style="min-width: 0; flex: 1;">
+            <h3 class="fst-col-title text-truncate">{{ surg?.name }}</h3>
           </div>
         </div>
 
@@ -765,6 +765,10 @@ const removeStaff = async (user) => {
   font-style: "SemiBold";
   font-size: 14px;
   color: #1e1e1e;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 .fst-col--subtit {
   
@@ -772,6 +776,9 @@ const removeStaff = async (user) => {
   font-style: Regular;
   font-size: 14px;
   color: #1e1e1e;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .head-date {
   
@@ -804,6 +811,8 @@ const removeStaff = async (user) => {
 }
 .staff-col {
   height: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 .total-col {
   background-color: #f3f6fa;
