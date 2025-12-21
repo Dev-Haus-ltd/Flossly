@@ -132,16 +132,6 @@ watch(loggedIn, (newVal) => {
 }
 
 
-@import "@/node_modules/@syncfusion/ej2-base/styles/material.css";
-@import "@/node_modules/@syncfusion/ej2-buttons/styles/material.css";
-@import "@/node_modules/@syncfusion/ej2-inputs/styles/material.css";
-@import "@/node_modules/@syncfusion/ej2-popups/styles/material.css";
-@import "@/node_modules/@syncfusion/ej2-lists/styles/material.css";
-@import "@/node_modules/@syncfusion/ej2-navigations/styles/material.css";
-@import "@/node_modules/@syncfusion/ej2-splitbuttons/styles/material.css";
-@import "@/node_modules/@syncfusion/ej2-dropdowns/styles/material.css";
-@import "@/node_modules/@syncfusion/ej2-vue-documenteditor/styles/material.css";
-
 .floating-buttons {
   position: fixed;
   bottom: 20px;
@@ -167,7 +157,7 @@ watch(loggedIn, (newVal) => {
 }
 .v-table__wrapper {
   table {
-    width: max-content !important;
+    // width: max-content !important;
     tbody tr {
       max-height: 30px !important;
       td {

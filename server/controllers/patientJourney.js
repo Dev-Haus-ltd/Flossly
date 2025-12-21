@@ -1,37 +1,5 @@
 import { PatientAutomationDictionary, PatientAutomationTemplate } from '../models'
 import { success, error } from '../utils/response'
-
-const defaultAutomationGroups = [
-  {
-    key: 'appointment_reminder',
-    title: 'Appointment Reminder',
-    description: 'Send a series of appointment reminders to reduce no-show',
-    itemCount: (defaultTemplatesByGroup.appointment_reminder || []).length,
-    image: null,
-  },
-  {
-    key: 'dentist_recall',
-    title: 'Dentist Recall',
-    description: 'Send a series of dentist and hygienist recall automations',
-    itemCount: (defaultTemplatesByGroup.dentist_recall || []).length,
-    image: null,
-  },
-  {
-    key: 'google_review',
-    title: 'Google Review',
-    description: 'Send a series of google review request automations',
-    itemCount: (defaultTemplatesByGroup.google_review || []).length,
-    image: null,
-  },
-  {
-    key: 'patient_cancellation',
-    title: 'Patient Cancellation',
-    description: 'Send a series of automations asking the patient to rebook their appointment',
-    itemCount: (defaultTemplatesByGroup.patient_cancellation || []).length,
-    image: null,
-  },
-]
-
 const defaultTemplatesByGroup = {
   appointment_reminder: [
     {
@@ -114,6 +82,36 @@ const defaultTemplatesByGroup = {
     },
   ],
 }
+const defaultAutomationGroups = [
+  {
+    key: 'appointment_reminder',
+    title: 'Appointment Reminder',
+    description: 'Send a series of appointment reminders to reduce no-show',
+    itemCount: (defaultTemplatesByGroup.appointment_reminder || []).length,
+    image: null,
+  },
+  {
+    key: 'dentist_recall',
+    title: 'Dentist Recall',
+    description: 'Send a series of dentist and hygienist recall automations',
+    itemCount: (defaultTemplatesByGroup.dentist_recall || []).length,
+    image: null,
+  },
+  {
+    key: 'google_review',
+    title: 'Google Review',
+    description: 'Send a series of google review request automations',
+    itemCount: (defaultTemplatesByGroup.google_review || []).length,
+    image: null,
+  },
+  {
+    key: 'patient_cancellation',
+    title: 'Patient Cancellation',
+    description: 'Send a series of automations asking the patient to rebook their appointment',
+    itemCount: (defaultTemplatesByGroup.patient_cancellation || []).length,
+    image: null,
+  },
+]
 
 const ensureDictionarySeed = async () => {
   await PatientAutomationDictionary.sync()

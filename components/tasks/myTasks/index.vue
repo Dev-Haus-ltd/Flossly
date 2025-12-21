@@ -396,6 +396,7 @@ onMounted(async () => {
   getTaskPriorities();
   getTaskStatuses();
   getUsers();
+  console.log(visibleTaskStats.value)
 });
 
 watch(currentTab, (newVal) => {

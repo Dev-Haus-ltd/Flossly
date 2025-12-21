@@ -25,7 +25,6 @@ export const usersList = async (event) => {
   if (roleId) {
     where.roleId = roleId;
   }
-  where.status = { [Op.in]: ["Active", "Invited"] };
   try {
     const userOrganisations = await UserOrganisation.findAll({
       where: { organisationId: currentOrg },
@@ -34,7 +33,6 @@ export const usersList = async (event) => {
           model: User,
           as: "user",
           attributes: { exclude: ["password"] },
-          where,
           include: [
             {
               model: Role,

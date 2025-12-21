@@ -2,7 +2,7 @@
   <div>
     <div
       class="d-flex align-center my-2"
-      style="flex-wrap: nowrap; overflow-x: auto;"
+      style="flex-wrap: nowrap; justify-content: space-between; overflow-x: auto;"
     >
       <div class="d-inline-flex align-center py-1" style="flex-wrap: nowrap;">
         <v-btn-toggle v-model="viewType" mandatory class="custom-toggle">
@@ -1078,8 +1078,9 @@ const calenderDate = (data) => {
   return formatted;
 };
 const getTaskUsers = (task) => {
+  console.log(task)
   if (users) {
-    return users.filter((x) => x.roleId !== task.taskDetails.roleId && x.status === "Active");
+    return users.filter((x) => x.roleId !== task.taskDetails.roleId && x.isActive);
   } else return [];
 };
 const isEditingLink = (id, key) =>

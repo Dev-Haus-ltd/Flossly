@@ -204,7 +204,7 @@ OrganisationSurgery.belongsTo(Organisation, { foreignKey: "organisationId", as: 
 Organisation.hasMany(OrganisationGroup, { foreignKey: "organisationId", as: "groups" });
 OrganisationGroup.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", onDelete: "CASCADE", hooks: true });
 
-Organisation.hasMany(OrganisationGroupUser, { foreignKey: "organisationId", as: "groupUsers" });
+OrganisationGroup.hasMany(OrganisationGroupUser, { foreignKey: "groupId", as: "groupUsers" });
 OrganisationGroupUser.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", hooks: true });
 OrganisationGroupUser.belongsTo(OrganisationGroup, { foreignKey: "groupId", as: "group", onDelete: "CASCADE", hooks: true });
 OrganisationGroupUser.belongsTo(User, { foreignKey: "userId", as: "user", onDelete: "CASCADE", hooks: true });
