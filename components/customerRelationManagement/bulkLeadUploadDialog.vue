@@ -662,41 +662,41 @@ const validateLead = (index, existingLead) => {
     lead.hasErrors = true;
   }
 
-  if (lead.originalLeadSource?.trim() && !lead.leadSourceId) {
-    lead.errors.leadSource = `Lead source "${lead.originalLeadSource}" is invalid. Select from dropdown.`;
-    lead.hasErrors = true;
-  }
+  // if (lead.originalLeadSource?.trim() && !lead.leadSourceId) {
+  //   lead.errors.leadSource = `Lead source "${lead.originalLeadSource}" is invalid. Select from dropdown.`;
+  //   lead.hasErrors = true;
+  // }
 
-  if (lead.originalTreatment?.trim() && !lead.treatmentId) {
-    lead.errors.treatment = `Treatment "${lead.originalTreatment}" is invalid. Select from dropdown.`;
-    lead.hasErrors = true;
-  }
+  // if (lead.originalTreatment?.trim() && !lead.treatmentId) {
+  //   lead.errors.treatment = `Treatment "${lead.originalTreatment}" is invalid. Select from dropdown.`;
+  //   lead.hasErrors = true;
+  // }
 
-  if (lead.leadStatus) {
-    const status = statusLookup.value.get(lead.leadStatus.trim().toLowerCase());
-    if (!status) {
-      lead.errors.leadStatus = "Invalid lead status";
-      lead.hasErrors = true;
-    } else {
-      lead.leadStatus = status;
-    }
-  } else {
-    lead.leadStatus = "New";
-  }
+  // if (lead.leadStatus) {
+  //   const status = statusLookup.value.get(lead.leadStatus.trim().toLowerCase());
+  //   if (!status) {
+  //     lead.errors.leadStatus = "Invalid lead status";
+  //     lead.hasErrors = true;
+  //   } else {
+  //     lead.leadStatus = status;
+  //   }
+  // } else {
+  //   lead.leadStatus = "New";
+  // }
 
-  if (lead.assignedUser?.trim() && !lead.userId) {
-    lead.errors.user = `User "${lead.assignedUser}" not found. Select from dropdown.`;
-    lead.hasErrors = true;
-  }
+  // if (lead.assignedUser?.trim() && !lead.userId) {
+  //   lead.errors.user = `User "${lead.assignedUser}" not found. Select from dropdown.`;
+  //   lead.hasErrors = true;
+  // }
 
-  if (lead.inquiryDate === null && lead.originalInquiryDate) {
-    lead.errors.inquiryDate = "Invalid inquiry date";
-    lead.hasErrors = true;
-  }
-  if (lead.followUpDate === null && lead.originalFollowUpDate) {
-    lead.errors.followUpDate = "Invalid follow-up date";
-    lead.hasErrors = true;
-  }
+  // if (lead.inquiryDate === null && lead.originalInquiryDate) {
+  //   lead.errors.inquiryDate = "Invalid inquiry date";
+  //   lead.hasErrors = true;
+  // }
+  // if (lead.followUpDate === null && lead.originalFollowUpDate) {
+  //   lead.errors.followUpDate = "Invalid follow-up date";
+  //   lead.hasErrors = true;
+  // }
 };
 
 const onSourceChange = (index, val) => {
