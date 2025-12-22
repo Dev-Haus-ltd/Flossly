@@ -129,8 +129,11 @@ export const toggleJourneyAutomationGroup = async (event) => {
     const { groupKey, enabled } = payload || {}
     if (!groupKey || enabled === undefined) return error(400, 'groupKey and enabled required')
     await ensureDictionarySeed()
-    const defaults = mergeTemplates(groupKey, [])
-    const rows = defaults.map((d) => ({
+    const saved = await PatientAutomationTemplate.findAll({
+      where: { organisationId: Number(orgId), groupKey },
+    })
+    const merged = mergeTemplates(groupKey, saved)
+    const rows = merged.map((d) => ({
       organisationId: Number(orgId),
       groupKey,
       key: d.key,

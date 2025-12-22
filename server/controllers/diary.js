@@ -193,9 +193,7 @@ export const createPatient = async (event) => {
       title: payload.title || null,
       sex: payload.sex || null,
       firstName: payload.firstName,
-      middleName: payload.middleName || null,
       lastName: payload.lastName,
-      preferredName: payload.preferredName || null,
       niNumber: payload.niNumber || null,
       nhsNumber: payload.nhsNumber || null,
       insuranceNumber: payload.insuranceNumber || null,
@@ -251,7 +249,7 @@ export const updatePatient = async (event) => {
     const row = await DiaryPatient.findOne({ where: { id, organisationId: Number(orgId) } })
     if (!row) return error(404, 'Patient not found')
     const fields = [
-      'title','sex','firstName','middleName','lastName','preferredName',
+      'title','sex','firstName','lastName',
       'niNumber','nhsNumber','insuranceNumber','legacyId','imagingId','ethnicity',
       'address1','address2','address3','town','county','postcode',
       'homePhone','workPhone','mobile','preferredPhone','email',

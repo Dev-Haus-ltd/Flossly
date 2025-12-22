@@ -650,6 +650,13 @@
                 <v-divider />
 
                 <div class="modal-body">
+                  <v-overlay
+                    :model-value="editorLoading"
+                    class="align-center justify-center"
+                    contained
+                  >
+                    <v-progress-circular indeterminate color="primary" size="44" />
+                  </v-overlay>
                   <div class="recipient-section">
                     <div class="d-flex align-center justify-space-between mb-3">
                       <div class="text-subtitle-2 font-weight-bold text-grey-darken-2">
@@ -686,6 +693,7 @@
                     variant="flat"
                     @click="saveContent"
                     :loading="saving"
+                    :disabled="editorLoading"
                   >
                     <v-icon size="18" class="mr-1">mdi-content-save</v-icon>
                     Save Changes
@@ -829,6 +837,7 @@ const search = ref('')
 const filterEnabled = ref(false)
 const filterDisabled = ref(false)
 const saving = ref(false)
+const editorLoading = ref(false)
 const showEditor = ref(false)
 const activeItem = ref(null)
 const editorEl = ref(null)
@@ -966,8 +975,10 @@ const initEditor = async (html = '') => {
 const openEditor = async (row) => {
   activeItem.value = { ...row }
   showEditor.value = true
+  editorLoading.value = true
   await nextTick()
   await initEditor(row.template || '')
+  editorLoading.value = false
 }
 
 const saveContent = async () => {
@@ -975,7 +986,7 @@ const saveContent = async () => {
   saving.value = true
   try {
     const data = await ej.save()
-    const html = blocksToHtml(data.blocks || [])
+    const html = blocksToHtml({ blocks: data.blocks || [] })
     const payload = {
       ...activeItem.value,
       groupKey: activeAutomation.value?.key,
@@ -999,6 +1010,7 @@ watch(selectedSection, (val) => {
 
 watch(showEditor, (v) => {
   if (!v) destroyEditor()
+  if (!v) editorLoading.value = false
 })
 
 const sampleRecipient = {
@@ -1151,7 +1163,7 @@ const handleSave = () => {
 .name-field :deep(input) { font-weight: 500; font-size: 14px; }
 .modal-header { display:flex; justify-content:space-between; align-items:flex-start; padding:16px 20px; }
 .modal-title { font-weight:600; font-size:18px; margin:0; }
-.modal-body { padding:20px; max-height:70vh; overflow:auto; background:#fafafa; }
+.modal-body { position: relative; padding:20px; max-height:70vh; overflow:auto; background:#fafafa; }
 .modal-footer { display:flex; justify-content:flex-end; gap:12px; padding:12px 20px; }
 .recipient-section { background: white; padding: 18px; border-radius: 12px; margin-bottom: 16px; border: 1px solid #e8e8e8; }
 .editor-section { background: white; padding: 20px; border-radius: 12px; border: 1px solid #e8e8e8; }

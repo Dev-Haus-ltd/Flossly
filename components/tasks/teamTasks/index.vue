@@ -27,73 +27,76 @@
           </v-col>
         </v-row>
       </div>
+      <div class="tabs-bar mt-5">
         <v-tabs
           v-model="currentTab"
-          class="custom-tabs mt-5"
+          class="custom-tabs tabs-scroll"
           slider-color="primary"
+          show-arrows
+          prev-icon="mdi-chevron-left"
+          next-icon="mdi-chevron-right"
         >
-        <draggable
-          tag="div"
-          class="d-flex"
-          :model-value="orderedTaskStats"
-          item-key="categoryId"
-          direction="horizontal"
-          handle=".tab-inner"
-          @update:model-value="updateCategoryOrder"
-        >
-          <template #item="{ element: cat }">
-            <v-tab
-              :value="cat.categoryId"
-              :key="cat.categoryId"
-              class="tab-text category-tab"
-              :style="getTabStyle(cat)"
-              @click="updateTasksList"
-            >
-              <div class="d-flex align-center justify-center tab-inner">
-                <span class="tab-label">{{ cat.categoryName }}</span>
-                <v-menu offset-y>
-                  <template #activator="{ props }">
-                    <v-btn
-                      v-bind="props"
-                      icon
-                      variant="text"
-                      size="x-small"
-                      class="ml-1 category-menu-btn"
-                      @click.stop
-                    >
-                      <v-icon size="16">mdi-dots-horizontal</v-icon>
-                    </v-btn>
-                  </template>
-                  <v-list density="compact">
-                    <v-list-item
-                      v-if="canHideCategory(cat)"
-                      @click.stop="hideCategory(cat)"
-                    >
-                      <v-list-item-title>Hide</v-list-item-title>
-                    </v-list-item>
-                    <v-list-item
-                      v-if="canEditCategory(cat)"
-                      @click.stop="startEditCategory(cat)"
-                    >
-                      <v-list-item-title>Edit</v-list-item-title>
-                    </v-list-item>
-                  </v-list>
-                </v-menu>
-              </div>
-            </v-tab>
-          </template>
-        </draggable>
-
-        <!-- Plus Button Tab -->
-        <v-tab
-          class="tab-text d-flex align-center justify-center"
-          style="min-width: 40px; padding: 0 8px"
-          :value="null"
+          <draggable
+            tag="div"
+            class="d-flex tabs-draggable"
+            :model-value="orderedTaskStats"
+            item-key="categoryId"
+            direction="horizontal"
+            handle=".tab-inner"
+            @update:model-value="updateCategoryOrder"
+          >
+            <template #item="{ element: cat }">
+              <v-tab
+                :value="cat.categoryId"
+                :key="cat.categoryId"
+                class="tab-text category-tab"
+                :style="getTabStyle(cat)"
+                @click="updateTasksList"
+              >
+                <div class="d-flex align-center justify-center tab-inner">
+                  <span class="tab-label">{{ cat.categoryName }}</span>
+                  <v-menu offset-y>
+                    <template #activator="{ props }">
+                      <v-btn
+                        v-bind="props"
+                        icon
+                        variant="text"
+                        size="x-small"
+                        class="ml-1 category-menu-btn"
+                        @click.stop
+                      >
+                        <v-icon size="16">mdi-dots-horizontal</v-icon>
+                      </v-btn>
+                    </template>
+                    <v-list density="compact">
+                      <v-list-item
+                        v-if="canHideCategory(cat)"
+                        @click.stop="hideCategory(cat)"
+                      >
+                        <v-list-item-title>Hide</v-list-item-title>
+                      </v-list-item>
+                      <v-list-item
+                        v-if="canEditCategory(cat)"
+                        @click.stop="startEditCategory(cat)"
+                      >
+                        <v-list-item-title>Edit</v-list-item-title>
+                      </v-list-item>
+                    </v-list>
+                  </v-menu>
+                </div>
+              </v-tab>
+            </template>
+          </draggable>
+        </v-tabs>
+        <v-btn
+          class="add-tab-btn"
+          icon
+          variant="text"
           @click.stop.prevent="addNewCategoryDialog"
         >
           <v-icon size="20">mdi-plus</v-icon>
-        </v-tab>
-      </v-tabs>
+        </v-btn>
+      </div>
       <v-tabs-window v-model="currentTab">
         <v-tabs-window-item :value="currentTab">
           <TasksListView
@@ -1118,21 +1121,63 @@ const handleComplete = async () => {
 .custom-tabs {
   border-bottom: 1px solid #dbdbdb;
 }
+.tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.tabs-scroll {
+  flex: 1;
+  min-width: 0;
+}
+.tabs-draggable {
+  gap: 10px;
+  padding: 0 6px;
+}
+.add-tab-btn {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  border-radius: 10px;
+}
+.custom-tabs :deep(.v-slide-group__container) {
+  overflow-x: auto;
+}
+.custom-tabs :deep(.v-slide-group__content) {
+  gap: 10px;
+  padding: 0;
+  align-items: center;
+}
+.custom-tabs :deep(.v-btn__overlay),
+.custom-tabs :deep(.v-btn__underlay) {
+  display: none;
+}
+.custom-tabs :deep(.v-tab__slider) {
+  display: none !important;
+}
 .custom-tabs .v-tab {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 400;
   text-transform: none;
   color: var(--tab-text-color, #1e1e1e) !important;
-  min-height: 40px;
+  min-height: 34px;
+  height: 34px;
   min-width: max-content;
+  padding: 0 12px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
 }
 
 .custom-tabs .v-tab.v-tab--selected {
-  font-weight: 500;
+  font-weight: 600;
+  border-radius: 20px;
+  border-bottom: 4px solid currentColor;
   color: var(--tab-text-color, #1e1e1e) !important;
 }
 .custom-tabs .v-tabs-slider {
-  height: 2px;
+  display: none;
 }
 .action-bar {
   position: fixed;
@@ -1175,6 +1220,7 @@ const handleComplete = async () => {
 .tab-inner {
   gap: 6px;
   min-width: 0;
+  align-items: center;
 }
 .tab-label {
   max-width: 140px;
@@ -1182,13 +1228,19 @@ const handleComplete = async () => {
   text-overflow: ellipsis;
   white-space: nowrap;
   display: inline-block;
+  line-height: 1;
 }
 .category-menu-btn {
   opacity: 0;
   transition: opacity 0.15s ease;
+  width: 18px;
+  height: 18px;
 }
 .category-tab:hover .category-menu-btn,
 .category-menu-btn:focus-visible {
+  opacity: 1;
+}
+.category-tab.v-tab--selected .category-menu-btn {
   opacity: 1;
 }
 .category-tab .v-icon {
