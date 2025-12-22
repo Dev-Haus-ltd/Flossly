@@ -200,7 +200,7 @@ const filteredSuggestions = computed(() => {
     const matchesSearch = matchText.includes(q);
     
     // Only show active users
-    return matchesSearch && u.status === "Active";
+    return matchesSearch;
   });
 });
 

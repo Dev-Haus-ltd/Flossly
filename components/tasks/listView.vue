@@ -2,9 +2,13 @@
   <div>
     <div
       class="d-flex align-center my-2"
-      style="flex-wrap: nowrap; justify-content: space-between; overflow-x: auto;"
+      style="
+        flex-wrap: nowrap;
+        justify-content: space-between;
+        overflow-x: auto;
+      "
     >
-      <div class="d-inline-flex align-center py-1" style="flex-wrap: nowrap;">
+      <div class="d-inline-flex align-center py-1" style="flex-wrap: nowrap">
         <v-btn-toggle v-model="viewType" mandatory class="custom-toggle">
           <v-btn value="list" class="toggle-btn">
             <img
@@ -103,7 +107,7 @@
           </v-menu>
         </div>
       </div>
-      <div class="d-inline-flex ml-auto" style="flex-wrap: nowrap;">
+      <div class="d-inline-flex ml-auto" style="flex-wrap: nowrap">
         <v-btn
           color="tertiary"
           variant="flat"
@@ -146,7 +150,7 @@
     <div
       v-if="activeFilterChips.length"
       class="d-flex align-center flex-wrap mt-2"
-      style="gap: 8px;"
+      style="gap: 8px"
     >
       <v-chip
         v-for="chip in activeFilterChips"
@@ -200,7 +204,11 @@
                 {{ getStatuses(group.status) }}
               </v-chip>
               <v-chip class="ml-2" :color="getColor(group.status)" label>
-                {{ group.total ?? getStatusTotal(group.status) ?? group.tasks.length }}
+                {{
+                  group.total ??
+                  getStatusTotal(group.status) ??
+                  group.tasks.length
+                }}
               </v-chip>
             </div>
           </template>
@@ -289,7 +297,7 @@
                       <p
                         v-if="!isEditing(column, index)"
                         @click="enableEditing(column, index)"
-                        style="cursor: text;"
+                        style="cursor: text"
                       >
                         {{ column.title }}
                       </p>
@@ -309,24 +317,24 @@
                         class="small-input"
                       />
 
-                     <div class="d-flex justify-end">
-                      <v-icon
-                        size="14"
-                        color="black"
-                        style="cursor: pointer"
-                        @click.stop="removeHeaderFromSeleted(column)"
-                      >
-                        mdi-minus
-                      </v-icon>
-                      <v-icon
-                        v-if="column.sortable"
-                        size="12"
-                        class="ml-2"
-                        @click="toggleSort(column)"
-                      >
-                        {{ getSortIcon(column) }}
-                      </v-icon>
-                     </div>
+                      <div class="d-flex justify-end">
+                        <v-icon
+                          size="14"
+                          color="black"
+                          style="cursor: pointer"
+                          @click.stop="removeHeaderFromSeleted(column)"
+                        >
+                          mdi-minus
+                        </v-icon>
+                        <v-icon
+                          v-if="column.sortable"
+                          size="12"
+                          class="ml-2"
+                          @click="toggleSort(column)"
+                        >
+                          {{ getSortIcon(column) }}
+                        </v-icon>
+                      </div>
                       <span
                         class="resize-handle"
                         :id="`resize-handle-${column.key}-${index}`"
@@ -347,8 +355,15 @@
                 <div class="pa-1 d-flex justify-space-between align-center">
                   <v-text-field
                     v-model="item.title"
-                    :variant="isFocused(item.id, 'title') ? 'outlined' : 'plain'"
-                    @focus="() => { setFocus(item.id, 'title', true); storeOriginalValue(item.id, 'title', item); }"
+                    :variant="
+                      isFocused(item.id, 'title') ? 'outlined' : 'plain'
+                    "
+                    @focus="
+                      () => {
+                        setFocus(item.id, 'title', true);
+                        storeOriginalValue(item.id, 'title', item);
+                      }
+                    "
                     @blur="updateValueRow(item, 'title')"
                     density="compact"
                     hide-details
@@ -374,7 +389,7 @@
                   :column="col"
                   @update="updateValueRow(item, 'status')"
                 />
-              </template> 
+              </template>
               <template v-else-if="col.key === 'priority.name'">
                 <DataTableColumnsPriorities
                   :priorities="priorities"
@@ -431,11 +446,20 @@
                   <template v-else>
                     <v-text-field
                       :model-value="item.documentLink"
-                      @update:modelValue="(val) => {
-                        item.documentLink = val;
-                      }"
-                      :variant="isFocused(item.id, col.key) ? 'outlined' : 'plain'"
-                      @focus="() => { setFocus(item.id, col.key, true); storeOriginalValue(item.id, col.key, item); }"
+                      @update:modelValue="
+                        (val) => {
+                          item.documentLink = val;
+                        }
+                      "
+                      :variant="
+                        isFocused(item.id, col.key) ? 'outlined' : 'plain'
+                      "
+                      @focus="
+                        () => {
+                          setFocus(item.id, col.key, true);
+                          storeOriginalValue(item.id, col.key, item);
+                        }
+                      "
                       @blur="updateValueRow(item, 'documentLink')"
                       density="compact"
                       @keyup.enter="(e) => handleEnterKey(e, item, col.key)"
@@ -475,11 +499,20 @@
                 <div class="d-flex align-center pa-1">
                   <v-text-field
                     :model-value="getNestedValue(item, col.key)"
-                    @update:modelValue="(val) => {
-                      setNestedValue(item, col.key, val);
-                    }"
-                    :variant="isFocused(item.id, col.key) ? 'outlined' : 'plain'"
-                    @focus="() => { setFocus(item.id, col.key, true); storeOriginalValue(item.id, col.key, item); }"
+                    @update:modelValue="
+                      (val) => {
+                        setNestedValue(item, col.key, val);
+                      }
+                    "
+                    :variant="
+                      isFocused(item.id, col.key) ? 'outlined' : 'plain'
+                    "
+                    @focus="
+                      () => {
+                        setFocus(item.id, col.key, true);
+                        storeOriginalValue(item.id, col.key, item);
+                      }
+                    "
                     @blur="updateValueRow(item, col.key)"
                     density="compact"
                     @keyup.enter="(e) => handleEnterKey(e, item, col.key)"
@@ -552,7 +585,9 @@
                               <span
                                 class="resize-handle"
                                 :id="`resize-handle-${column.key}-${index}`"
-                                @pointerdown="startResize($event, column, index)"
+                                @pointerdown="
+                                  startResize($event, column, index)
+                                "
                               >
                               </span>
                             </div>
@@ -627,7 +662,9 @@
                 color="primary"
                 variant="flat"
                 rounded="lg"
-                @click="openAddTaskDialogForStatus(group.status, currentCategoryId)"
+                @click="
+                  openAddTaskDialogForStatus(group.status, currentCategoryId)
+                "
                 class="add-status-task-btn"
               >
                 <v-icon size="16" class="mr-1">mdi-plus-circle-outline</v-icon>
@@ -640,9 +677,9 @@
       </v-expansion-panel>
     </v-expansion-panels>
 
-    <TasksCalenderView 
-      v-else-if="viewType === 'calender' && taskDetails && taskDetails.length" 
-      :tasks="tasksForCalender" 
+    <TasksCalenderView
+      v-else-if="viewType === 'calender' && taskDetails && taskDetails.length"
+      :tasks="tasksForCalender"
       @onTaskCompleted="updateTasks"
     />
 
@@ -659,7 +696,14 @@
 
     <!-- Add Task Panel - Only render after page loads -->
     <ClientOnly>
-      <template v-if="categories && categories.length > 0 && priorities && priorities.length > 0">
+      <template
+        v-if="
+          categories &&
+          categories.length > 0 &&
+          priorities &&
+          priorities.length > 0
+        "
+      >
         <TasksAddTask
           v-model="drawerOpen"
           :preSelectedStatus="selectedStatusForNewTask"
@@ -832,22 +876,19 @@ const searchInput = ref("");
 const search = ref("");
 let searchTimeout = null;
 
-watch(
-  searchInput,
-  (val) => {
-    if (searchTimeout) clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(() => {
-      const trimmed = (val || "").trim();
-      if (!trimmed) {
-        search.value = "";
-        emit("onSearch", "");
-        return;
-      }
-      search.value = trimmed;
-      emit("onSearch", trimmed);
-    }, 250);
-  }
-);
+watch(searchInput, (val) => {
+  if (searchTimeout) clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    const trimmed = (val || "").trim();
+    if (!trimmed) {
+      search.value = "";
+      emit("onSearch", "");
+      return;
+    }
+    search.value = trimmed;
+    emit("onSearch", trimmed);
+  }, 250);
+});
 const expanded = ref([]);
 const focusedField = ref({});
 const originalFieldValues = ref({}); // Store original values for Escape key functionality
@@ -880,17 +921,17 @@ const tasksForCalender = ref([]);
 const bulkTaskUploadDialog = ref(false);
 const rolesList = ref([]);
 const isResizing = ref(false);
-const editingColumn = ref({})
+const editingColumn = ref({});
 const editingLinkField = ref({});
 
 const enableEditing = (column, index) => {
   editingColumn.value[`${index}-${column.key}`] = true;
-  setFocus('header', column.key, true)
-}
+  setFocus("header", column.key, true);
+};
 
 const isEditing = (column, index) => {
-  return editingColumn.value[`${index}-${column.key}`] === true
-}
+  return editingColumn.value[`${index}-${column.key}`] === true;
+};
 
 // Computed property to filter available headers (exclude already selected ones)
 const filteredAvailableHeaders = computed(() => {
@@ -899,10 +940,10 @@ const filteredAvailableHeaders = computed(() => {
   }
 
   // Get the keys of all selected headers
-  const selectedKeys = new Set(selectedHeaders.value.map(h => h.key));
+  const selectedKeys = new Set(selectedHeaders.value.map((h) => h.key));
 
   // Filter out headers that are already selected
-  return availableHeaders.filter(header => !selectedKeys.has(header.key));
+  return availableHeaders.filter((header) => !selectedKeys.has(header.key));
 });
 
 const dueDateLabels = {
@@ -947,7 +988,8 @@ const activeFilterChips = computed(() => {
   if (filters.dueDateFilter) {
     chips.push({
       key: "dueDateFilter",
-      label: dueDateLabels[filters.dueDateFilter] || `Due: ${filters.dueDateFilter}`,
+      label:
+        dueDateLabels[filters.dueDateFilter] || `Due: ${filters.dueDateFilter}`,
     });
   }
 
@@ -1004,21 +1046,19 @@ onMounted(() => {
   statuses.value = orgStatuses;
   priorityStatuses.value = priorities;
   user.value = JSON.parse(localStorage.getItem("user"));
-      // Add keyboard shortcut listener
-  window.addEventListener('keydown', handleKeyboardShortcut);
-
+  // Add keyboard shortcut listener
+  window.addEventListener("keydown", handleKeyboardShortcut);
 });
 
 // Add cleanup on unmount
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', handleKeyboardShortcut);
+  window.removeEventListener("keydown", handleKeyboardShortcut);
 });
 
 // Add this new function to handle keyboard shortcuts
 const handleKeyboardShortcut = (event) => {
-  
   // Option 1: Ctrl/Cmd + Shift + +
-  if (event.shiftKey && event.key === '+') {
+  if (event.shiftKey && event.key === "+") {
     event.preventDefault();
     openAddTaskDialog();
   }
@@ -1028,7 +1068,7 @@ watch(
   () => headers,
   (newVal) => {
     if (newVal && newVal.length > 0) {
-      selectedHeaders.value = sortHeaders(newVal)
+      selectedHeaders.value = sortHeaders(newVal);
     }
   },
   { immediate: true, deep: true }
@@ -1082,9 +1122,14 @@ const calenderDate = (data) => {
   return formatted;
 };
 const getTaskUsers = (task) => {
-  console.log(task)
   if (users) {
-    return users.filter((x) => x.roleId !== task.taskDetails.roleId && x.isActive);
+    if (task.taskDetails.roleId) {
+      return users.filter(
+        (x) => x.roleId === task.taskDetails.roleId && x.isActive
+      );
+    } else {
+      return users.filter((x) => x.isActive);
+    }
   } else return [];
 };
 const isEditingLink = (id, key) =>
@@ -1134,17 +1179,17 @@ const getColor = (key) => {
   }
 };
 const formattedDate = (date) => {
-  if (!date) return '';
-  
+  if (!date) return "";
+
   try {
     const dateObj = new Date(date);
-    const day = String(dateObj.getDate()).padStart(2, '0');
-    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, "0");
+    const month = String(dateObj.getMonth() + 1).padStart(2, "0");
     const year = dateObj.getFullYear();
-    
+
     return `${day}/${month}/${year}`;
   } catch (error) {
-    return '';
+    return "";
   }
 };
 const templateLinkDetails = (value) => describeTextContent(value || "");
@@ -1241,7 +1286,7 @@ const updateUserPreferences = async () => {
 };
 
 const updateValueColumn = (column) => {
-  editingColumn.value = {}
+  editingColumn.value = {};
   setFocus("header", column.key, false);
 };
 const updateSubtaskValueColumn = (column) => {
@@ -1262,7 +1307,7 @@ const updateTaskInfo = (task) => {
     // Include description from taskDetails if it exists
     description: task.taskDetails?.description,
   };
-  
+
   taskStore
     .updateUserTask(updateData)
     .then((res) => {
@@ -1288,7 +1333,7 @@ const storeOriginalValue = (id, key, row) => {
   const fieldId = `${id}-${key}`;
 
   // Store the original value (handle both simple and nested values)
-  if (key.includes('.')) {
+  if (key.includes(".")) {
     originalFieldValues.value[fieldId] = getNestedValue(row, key);
   } else {
     originalFieldValues.value[fieldId] = row[key];
@@ -1303,7 +1348,7 @@ const handleEscapeKey = (event, row, key) => {
 
   if (originalValue !== undefined) {
     // Revert to the original value
-    if (key.includes('.')) {
+    if (key.includes(".")) {
       setNestedValue(row, key, originalValue);
     } else {
       row[key] = originalValue;
@@ -1336,10 +1381,13 @@ const updateValueRow = async (row, key) => {
   setFocus(row.id, key, false);
 
   // Validate title before saving (handle both 'name' and 'title' keys)
-  if ((key === "name" || key === "title") && row.title !== undefined && row.title !== null) {
-    
+  if (
+    (key === "name" || key === "title") &&
+    row.title !== undefined &&
+    row.title !== null
+  ) {
     // Check if title is empty or only whitespace
-    if (!row.title || typeof row.title !== 'string' || !row.title.trim()) {
+    if (!row.title || typeof row.title !== "string" || !row.title.trim()) {
       // Revert to original value
       if (originalValue !== undefined && originalValue !== null) {
         row.title = originalValue;
@@ -1353,10 +1401,10 @@ const updateValueRow = async (row, key) => {
       });
       return;
     }
-    
+
     // Trim the title to remove leading/trailing spaces
     const trimmedTitle = row.title.trim();
-    
+
     // Check if trimmed title is empty after trimming
     if (!trimmedTitle) {
       // Revert to original value
@@ -1372,7 +1420,7 @@ const updateValueRow = async (row, key) => {
       });
       return;
     }
-    
+
     // Check length after trimming
     if (trimmedTitle.length > 150) {
       // Revert to original value
@@ -1388,10 +1436,10 @@ const updateValueRow = async (row, key) => {
       });
       return;
     }
-    
+
     // Apply trimmed title
     row.title = trimmedTitle;
-    
+
     // Clean up the stored original value after validation passes
     delete originalFieldValues.value[fieldId];
   } else {
@@ -1415,7 +1463,7 @@ const updateValueRow = async (row, key) => {
   // New nested-value handling
   const currentValue = getNestedValue(row, key);
 
-  if (key.includes('.')) {
+  if (key.includes(".")) {
     const nestedValue = getNestedValue(row, key);
     console.log(`Sending update for ${key}:`, nestedValue);
   }
@@ -1425,7 +1473,8 @@ const updateValueRow = async (row, key) => {
 
     if (res.code !== 0) {
       mainStore.setSnackbar({
-        title: res.data?.message || res.message || "Error while updating the task",
+        title:
+          res.data?.message || res.message || "Error while updating the task",
         type: "error",
       });
       emit("onUpdate");
@@ -1440,7 +1489,6 @@ const updateValueRow = async (row, key) => {
       title: "Task updated successfully",
       type: "success",
     });
-
   } catch (err) {
     mainStore.setSnackbar({
       title: err.message || "Error while updating the task",
@@ -1452,11 +1500,15 @@ const updateValueRow = async (row, key) => {
 
 const updateTitle = (row, key) => {
   setFocus(row.id, key, false);
-  
+
   // Validate title before saving (handle both 'name' and 'title' keys)
-  if ((key === 'name' || key === 'title') && row.title !== undefined && row.title !== null) {
+  if (
+    (key === "name" || key === "title") &&
+    row.title !== undefined &&
+    row.title !== null
+  ) {
     // Check if title is empty or only whitespace
-    if (!row.title || typeof row.title !== 'string' || !row.title.trim()) {
+    if (!row.title || typeof row.title !== "string" || !row.title.trim()) {
       // Revert to previous value
       emit("onUpdate");
       mainStore.setSnackbar({
@@ -1465,10 +1517,10 @@ const updateTitle = (row, key) => {
       });
       return;
     }
-    
+
     // Trim the title to remove leading/trailing spaces
     const trimmedTitle = row.title.trim();
-    
+
     // Check if trimmed title is empty after trimming
     if (!trimmedTitle) {
       emit("onUpdate");
@@ -1478,7 +1530,7 @@ const updateTitle = (row, key) => {
       });
       return;
     }
-    
+
     // Check length after trimming
     if (trimmedTitle.length > 150) {
       emit("onUpdate");
@@ -1488,17 +1540,18 @@ const updateTitle = (row, key) => {
       });
       return;
     }
-    
+
     // Apply trimmed title
     row.title = trimmedTitle;
   }
-  
+
   taskStore
     .updateUserTask(row)
     .then((res) => {
       if (res.code !== 0) {
         mainStore.setSnackbar({
-          title: res.data?.message || res.message || "Error while updating the task",
+          title:
+            res.data?.message || res.message || "Error while updating the task",
           type: "error",
         });
         // Revert changes on error
@@ -1518,7 +1571,6 @@ const updateTitle = (row, key) => {
     });
 };
 
-
 function getNestedValue(obj, path) {
   return path
     .split(".")
@@ -1527,18 +1579,18 @@ function getNestedValue(obj, path) {
 function setNestedValue(obj, path, value) {
   const keys = path.split(".");
   let current = obj;
-  
+
   // Navigate through all keys except the last one
   for (let i = 0; i < keys.length - 1; i++) {
     const key = keys[i];
-    
+
     // Create intermediate objects if they don't exist
-    if (!(key in current) || typeof current[key] !== 'object') {
+    if (!(key in current) || typeof current[key] !== "object") {
       current[key] = {};
     }
     current = current[key];
   }
-  
+
   // Set the final value
   const lastKey = keys[keys.length - 1];
   current[lastKey] = value;
@@ -1555,7 +1607,8 @@ function startResize(e, col, i) {
   currentCol = col;
   startX = e.clientX;
   startWidth = col.width;
-  const handleEl = document.getElementById(`resize-handle-${col.key}-${i}`) || e.target;
+  const handleEl =
+    document.getElementById(`resize-handle-${col.key}-${i}`) || e.target;
 
   // use pointer capture on the actual handle if available
   try {
@@ -1600,11 +1653,10 @@ function stopResize(e) {
         handleEl.releasePointerCapture(e.pointerId);
     }
   } catch (err) {
-  // ignore capture release errors
+    // ignore capture release errors
   }
-  currentCol = null
+  currentCol = null;
 }
-
 
 const updateHeaderTitle = (key, value) => {
   const target = selectedHeaders.value.find((col) => col.key === key);
