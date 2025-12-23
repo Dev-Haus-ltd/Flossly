@@ -131,6 +131,7 @@
 import PatientsIndex from '@/components/patients/index.vue'
 import PatientJourney from '@/components/patients/patientJourney.vue'
 import { useDiaryStore } from '@/stores/diary'
+import { useMainStore } from '@/stores/index'
 import AddAppointment from '@/components/diary/addAppointment.vue'
 import { ref, computed, onMounted, watch } from 'vue'
 import CommonStatCard from '@/components/Common/statCard.vue'
@@ -139,6 +140,7 @@ definePageMeta({ layout: 'home' })
 
 const route = useRoute()
 const store = useDiaryStore()
+const mainStore = useMainStore()
 const patient = ref(null)
 const activeTab = ref('details')
 const patientName = computed(() => {
@@ -356,14 +358,18 @@ const handleAppointmentSave = async (payload) => {
         startTime,
         endTime,
       })
+      mainStore?.setSnackbar?.({ title: 'Appointment updated', type: 'success' })
     } else {
       await store.createAppointment({
         ...base,
       })
+      mainStore?.setSnackbar?.({ title: 'Appointment created', type: 'success' })
     }
     await fetchAppointments()
   } catch (e) {
-    // log silently; UI already handles validation inside drawer
+    const msg = e?.data?.message || e?.message || 'Failed to save appointment'
+    mainStore?.setSnackbar?.({ title: msg, type: 'error' })
+    showAppointmentDrawer.value = true
   }
 }
 </script>

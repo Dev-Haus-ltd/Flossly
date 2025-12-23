@@ -128,7 +128,7 @@
             </v-col>
 
             <v-col cols="12">
-              <label class="fld-lbl">Practitioner</label>
+              <label class="fld-lbl">Practitioner <span class="req-star">*</span></label>
               <v-select
                 v-model="practitioner"
                 :items="practitionerOptions"
@@ -179,7 +179,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { formatDateDDMMYYYY } from '@/lib/dateFormatter'
+import { formatDateDDMMYYYY, clinicDateToYMD } from '@/lib/dateFormatter'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -341,7 +341,7 @@ const onSave = () => {
     id: props.editAppointment?.id || null,
     patientId: selectedPatientId.value || props.preselectedPatientId || null,
     patient: '',
-    date: date.value,
+    date: clinicDateToYMD(date.value),
     time: time.value,
     duration: duration.value,
     exam: exam.value,
@@ -360,4 +360,5 @@ const onSave = () => {
 :deep(.v-field) { border-radius: 10px; }
 .fld-lbl { font-weight: 400; font-size: 14px; color: #737373; }
 .input-bordered :deep(.v-field) { border: 1px solid #dfdfdf !important; border-radius: 8px !important; background-color: white !important; min-height: 40px; font-size: 14px; }
+.req-star { color: #d32f2f; }
 </style>
