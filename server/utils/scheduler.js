@@ -458,6 +458,13 @@ export const startPatientJourneyAutomationScheduler = () => {
           },
         })
         for (const tpl of orgTemplates) {
+          const targetPatients = tpl.patientId
+            ? patients.filter((p) => Number(p.id) === Number(tpl.patientId))
+            : patients
+          if (tpl.patientId && !targetPatients.length) continue
+          const targetAppointments = tpl.patientId
+            ? appointments.filter((a) => Number(a.patientId) === Number(tpl.patientId))
+            : appointments
           const dayOffset = parseDayOffset(tpl.sending)
           if (!dayOffset) continue
           const offsetDays = Math.max(0, dayOffset - 1)
@@ -466,7 +473,7 @@ export const startPatientJourneyAutomationScheduler = () => {
 
           if (PATIENT_JOURNEY_PRE_APPT_GROUPS.has(tpl.groupKey)) {
             const keywords = TREATMENT_KEYWORDS_BY_GROUP[tpl.groupKey] || []
-            for (const appt of appointments) {
+            for (const appt of targetAppointments) {
               if (!matchesTreatment(appt, keywords)) continue
               const triggerDate = addDaysSafe(appt.createdAt || appt.startTime, offsetDays)
               if (toYmd(triggerDate) !== todayYmd) continue
@@ -495,7 +502,7 @@ export const startPatientJourneyAutomationScheduler = () => {
               await markPatientSent(patient, key)
             }
           } else if (tpl.groupKey === 'recalls_reactivation') {
-            for (const patient of patients) {
+            for (const patient of targetPatients) {
               const recallDate = tpl.key.includes('hygiene')
                 ? patient.nextHygienistRecall
                 : patient.nextDentistRecall
@@ -523,7 +530,7 @@ export const startPatientJourneyAutomationScheduler = () => {
               await markPatientSent(patient, key)
             }
           } else if (tpl.groupKey === 'birthday_anniversary') {
-            for (const patient of patients) {
+            for (const patient of targetPatients) {
               if (!patient.dob) continue
               const dob = new Date(patient.dob)
               if (Number.isNaN(dob.getTime())) continue
@@ -550,7 +557,7 @@ export const startPatientJourneyAutomationScheduler = () => {
               await markPatientSent(patient, key)
             }
           } else if (PATIENT_JOURNEY_POST_APPT_GROUPS.has(tpl.groupKey)) {
-            for (const appt of appointments) {
+            for (const appt of targetAppointments) {
               if (!appt?.patientId) continue
               const patient = patientMap.get(Number(appt.patientId))
               if (!patient?.email) continue

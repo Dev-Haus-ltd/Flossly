@@ -6,6 +6,7 @@ export const PatientAutomationTemplate = sequelize.define(
   {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     organisationId: { type: DataTypes.INTEGER, allowNull: false },
+    patientId: { type: DataTypes.INTEGER, allowNull: true },
     groupKey: { type: DataTypes.STRING(80), allowNull: false },
     key: { type: DataTypes.STRING(80), allowNull: false },
     type: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'Email' },
