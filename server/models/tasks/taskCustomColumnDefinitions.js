@@ -9,14 +9,6 @@ export const TaskCustomColumnDefinition = sequelize.define(
       primaryKey: true,
       autoIncrement: true,
     },
-    organisationId: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      references: {
-        model: "Organisations",
-        key: "id",
-      },
-    },
     columnName: {
       type: DataTypes.STRING(100),
       allowNull: false,
@@ -54,16 +46,23 @@ export const TaskCustomColumnDefinition = sequelize.define(
     },
     createdBy: {
       type: DataTypes.INTEGER,
-      allowNull: true,
+      allowNull: false,
       references: {
         model: "Users",
         key: "id",
       },
+      onDelete: "CASCADE",
     },
   },
   {
     modelName: "TaskCustomColumnDefinitions",
     timestamps: true,
+    indexes: [
+      {
+        unique: true,
+        fields: ["createdBy", "columnName"], 
+      },
+    ],
   }
 );
 

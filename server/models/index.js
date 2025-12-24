@@ -70,6 +70,7 @@ import { TaskCustomColumnDefinition } from "./tasks/taskCustomColumnDefinitions"
 import { UserTaskCustomField } from "./tasks/userTaskCustomFields";
 import { PatientAutomationDictionary } from "./patientJourney/patientAutomationDictionary";
 import { PatientAutomationTemplate } from "./patientJourney/patientAutomationTemplates";
+import { OrganisationReferral } from "./organisationReferrals";
 
 /*
   Cascade Policy chosen:
@@ -309,16 +310,39 @@ User.hasMany(UserHrDocument, { foreignKey: "userId", as: "hrDocuments", onDelete
 Organisation.hasMany(OrganisationScript, { foreignKey: "organisationId", as: "scripts" });
 OrganisationScript.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", onDelete: 'CASCADE', hooks: true });
 
-// TaskCustomColumnDefinition -> Organisation / User (ORG_DELETE)
-Organisation.hasMany(TaskCustomColumnDefinition, { foreignKey: "organisationId", as: "taskCustomColumns" });
-TaskCustomColumnDefinition.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", onDelete: "CASCADE", hooks: true });
-TaskCustomColumnDefinition.belongsTo(User, { foreignKey: "createdBy", as: "creator", onDelete: "SET NULL" });
+
+// TaskCustomColumnDefinition -> User (ORG_DELETE)
+User.hasMany(TaskCustomColumnDefinition, {
+  foreignKey: "createdBy",
+  as: "taskCustomColumns",
+  onDelete: "CASCADE",
+  hooks: true,
+});
+
+TaskCustomColumnDefinition.belongsTo(User, {
+  foreignKey: "createdBy",
+  as: "creator",
+  onDelete: "CASCADE",
+  hooks: true,
+});
 
 // UserTaskCustomField -> UserTask / TaskCustomColumnDefinition (cascade on delete of UserTask)
 UserTask.hasMany(UserTaskCustomField, { foreignKey: "userTaskId", as: "customFields" });
 UserTaskCustomField.belongsTo(UserTask, { foreignKey: "userTaskId", as: "userTask", onDelete: "CASCADE", hooks: true });
 TaskCustomColumnDefinition.hasMany(UserTaskCustomField, { foreignKey: "columnDefinitionId", as: "customFieldValues" });
 UserTaskCustomField.belongsTo(TaskCustomColumnDefinition, { foreignKey: "columnDefinitionId", as: "columnDefinition", onDelete: "CASCADE", hooks: true });
+
+
+OrganisationReferral.belongsTo(User, {
+  foreignKey: "referredBy",
+  as: "referrer",
+  onDelete: "CASCADE",
+});
+
+User.hasMany(OrganisationReferral, {
+  foreignKey: "referredBy",
+  as: "organisationReferrals",
+});
 
 // Export models
 export {
@@ -347,6 +371,7 @@ export {
   OrganisationEquipment,
   OrganisationGroup,
   OrganisationGroupUser,
+  OrganisationReferral,
   EmailVerification,
   DefaultPriority,
   DefaultStatus,
