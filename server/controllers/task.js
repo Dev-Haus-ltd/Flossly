@@ -2300,7 +2300,7 @@ export const teamTasksCountByCategory = async (event) => {
     const loggedUser = event.context.user;
     ensureManagerOrOwner(loggedUser);
 
-    const DEFAULT_PARENT_CATEGORIES = [
+    const defaultCategoryNames = [
       "Staff Management",
       "Marketing",
       "Finance",
@@ -2315,10 +2315,6 @@ export const teamTasksCountByCategory = async (event) => {
 
     const categoryMap = new Map();
     allCategories.forEach((cat) => categoryMap.set(cat.id, cat));
-
-    const defaultCategoryIds = allCategories
-      .filter((c) => DEFAULT_PARENT_CATEGORIES.includes(c.name))
-      .map((c) => c.id);
 
     const teamTasks = await UserTask.findAll({
       where: {
@@ -2345,36 +2341,9 @@ export const teamTasksCountByCategory = async (event) => {
 
     const parentCounts = {};
 
-    for (const cat of allCategories) {
-      if (DEFAULT_PARENT_CATEGORIES.includes(cat.name)) {
-        parentCounts[cat.id] = {
-          categoryId: cat.id,
-          categoryName: cat.name,
-          color: cat.color,
-          taskCount: 0,
-        };
-      }
-    }
 
-    const taskMap = new Map();
-    for (const userTask of teamTasks) {
-      const taskId = userTask.taskId;
-      if (!taskMap.has(taskId)) {
-        taskMap.set(taskId, {
-          taskId,
-          category: userTask.taskDetails?.category,
-          assignedUserIds: new Set(),
-        });
-      }
-      taskMap.get(taskId).assignedUserIds.add(userTask.userId);
-    }
-
-    const filteredTasks = Array.from(taskMap.values()).filter(
-      (task) => !task.assignedUserIds.has(loggedUser.userId)
-    );
-
-    for (const task of filteredTasks) {
-      const cat = task.category;
+    for (const task of teamTasks) {
+      const cat = task.taskDetails?.category;
       if (!cat) continue;
 
       let currentCat = categoryMap.get(cat.id);
@@ -2391,12 +2360,36 @@ export const teamTasksCountByCategory = async (event) => {
 
       if (!currentCat) continue;
 
-      if (!parentCounts[currentCat.id]) continue;
+      if (!parentCounts[currentCat.id]) {
+        parentCounts[currentCat.id] = {
+          categoryId: currentCat.id,
+          categoryName: currentCat.name,
+          color: currentCat.color,
+          taskCount: 0,
+        };
+      }
 
       parentCounts[currentCat.id].taskCount += 1;
     }
 
-    const result = Object.values(parentCounts);
+    let result = Object.values(parentCounts);
+
+    for (const defaultName of defaultCategoryNames) {
+      const exists = result.some((c) => c.categoryName === defaultName);
+
+      if (!exists) {
+        const cat = allCategories.find((c) => c.name === defaultName);
+
+        if (cat) {
+          result.push({
+            categoryId: cat.id,
+            categoryName: cat.name,
+            color: cat.color,
+            taskCount: 0,
+          });
+        }
+      }
+    }
 
     return success(result);
   } catch (err) {
