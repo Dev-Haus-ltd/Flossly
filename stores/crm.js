@@ -51,7 +51,7 @@ export const useCrmStore = defineStore("crmStore", {
     deleteLeadTreatment(leadId) { return this._wrap(() => crmService.deleteLeadTreatment(leadId)); },
 
     // Automation
-    listAutomation() { return this._wrap(() => crmService.listAutomation()); },
+    listAutomation(leadId) { return this._wrap(() => crmService.listAutomation(leadId)); },
     saveAutomation(payload) { return this._wrap(() => crmService.saveAutomation(payload)); },
 
     // Mail

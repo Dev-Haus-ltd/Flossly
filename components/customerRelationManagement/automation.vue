@@ -1,154 +1,181 @@
 <template>
   <div>
-    <!-- Header Toolbar -->
-    <div class="d-flex flex-wrap justify-space-between align-center mb-3">
-      <div class="d-flex align-center gap-2">
-        <v-text-field
-          v-model="search"
-          placeholder="Search automations..."
-          append-inner-icon="mdi-magnify"
-          variant="solo"
-          :elevation="0"
-          density="compact"
-          hide-details
-          bg-color="#FFFFFF"
-          flat
-          class="custom-search"
-          style="width: 280px"
-        />
-        
-        <v-menu :close-on-content-click="false">
-          <template #activator="{ props }">
-            <v-btn
-              v-bind="props"
-              variant="flat"
-              density="compact"
-              class="filter-btn"
-            >
-              <v-icon class="mr-2" size="18">mdi-filter-variant</v-icon>
-              Filter
-              <v-badge
-                v-if="activeFilters > 0"
-                :content="activeFilters"
-                color="primary"
-                inline
-                class="ml-2"
-              />
-            </v-btn>
-          </template>
-          <v-card class="pa-4" min-width="280">
-            <p class="text-subtitle-2 font-weight-bold mb-3">Filter by Status</p>
-            <v-checkbox
-              v-model="filterEnabled"
-              label="Enabled only"
-              density="compact"
-              hide-details
-              class="mb-2"
-            />
-            <v-checkbox
-              v-model="filterDisabled"
-              label="Disabled only"
-              density="compact"
-              hide-details
-            />
-            <v-divider class="my-3" />
-            <v-btn
-              size="small"
-              variant="text"
-              color="primary"
-              @click="clearFilters"
-            >
-              Clear filters
-            </v-btn>
-          </v-card>
-        </v-menu>
+    <template v-if="!activeAutomation">
+      <v-row dense>
+        <v-col
+          v-for="card in automationCards"
+          :key="card.key"
+          cols="12"
+          sm="6"
+          md="3"
+        >
+          <AutomationCard
+            :title="card.title"
+            :description="card.description"
+            :count="card.itemCount"
+            :enabled="card.enabled"
+            :selected="activeAutomation?.key === card.key"
+            @select="selectAutomation(card)"
+            @toggle="(val) => toggleAutomationGroup(card, val)"
+          />
+        </v-col>
+      </v-row>
+    </template>
+    <template v-else>
+      <div class="d-flex align-center justify-space-between mb-4 flex-wrap gap-3">
+        <div class="d-flex align-center gap-2">
+          <v-btn icon variant="text" @click="clearAutomationSelection">
+            <v-icon>mdi-arrow-left</v-icon>
+          </v-btn>
+          <div>
+            <div class="field-label mb-1">{{ activeAutomation.title }}</div>
+            <div class="text-caption text-medium-emphasis">{{ activeAutomation.description }}</div>
+          </div>
+        </div>
       </div>
-    </div>
-
-    <!-- Main Card -->
-    <v-card class="with-border rounded-lg elevation-0">
-      
-      
-      <v-divider />
-
-      <v-data-table
-        :items="filteredRows"
-        :headers="tableHeaders"
-        :search="search"
-        item-value="key"
-        class="automation-data-table full-width-table"
-        density="comfortable"
-        hover
-        :items-per-page="15"
-      >
-        <!-- Type Column -->
-        <template #item.type="{ item }">
-          <v-chip size="small" variant="tonal" color="primary" class="font-weight-medium">
-            <v-icon size="14" class="mr-1">mdi-email-outline</v-icon>
-            {{ item.type }}
-          </v-chip>
-        </template>
-
-        <!-- Name Column (Editable) -->
-        <template #item.name="{ item }">
+      <!-- Header Toolbar -->
+      <div class="d-flex flex-wrap justify-space-between align-center mb-3 automation-toolbar">
+        <div class="d-flex align-center gap-2">
           <v-text-field
-            v-model="item.name"
-            variant="plain"
+            v-model="search"
+            placeholder="Search automations..."
+            append-inner-icon="mdi-magnify"
+            variant="solo"
+            :elevation="0"
             density="compact"
             hide-details
-            class="name-field"
-            @blur="onNameUpdate(item)"
+            bg-color="#FFFFFF"
+            flat
+            class="custom-search"
+            style="width: 280px"
           />
-        </template>
 
-        <!-- Sending/Trigger Column -->
-        <template #item.sending="{ item }">
-          <div class="d-flex align-center">
-            <v-icon size="16" color="grey-darken-1" class="mr-2">mdi-clock-outline</v-icon>
-            <span class="text-body-2 text-medium-emphasis">{{ item.sending }}</span>
+          <v-menu :close-on-content-click="false">
+            <template #activator="{ props }">
+              <v-btn
+                v-bind="props"
+                variant="flat"
+                density="compact"
+                class="filter-btn"
+              >
+                <v-icon class="mr-2" size="18">mdi-filter-variant</v-icon>
+                Filter
+                <v-badge
+                  v-if="activeFilters > 0"
+                  :content="activeFilters"
+                  color="primary"
+                  inline
+                  class="ml-2"
+                />
+              </v-btn>
+            </template>
+            <v-card class="pa-4" min-width="280">
+              <p class="text-subtitle-2 font-weight-bold mb-3">Filter by Status</p>
+              <v-checkbox
+                v-model="filterEnabled"
+                label="Enabled only"
+                density="compact"
+                hide-details
+                class="mb-2"
+              />
+              <v-checkbox
+                v-model="filterDisabled"
+                label="Disabled only"
+                density="compact"
+                hide-details
+              />
+              <v-divider class="my-3" />
+              <v-btn
+                size="small"
+                variant="text"
+                color="primary"
+                @click="clearFilters"
+              >
+                Clear filters
+              </v-btn>
+            </v-card>
+          </v-menu>
+        </div>
+      </div>
+
+      <!-- Main Card -->
+      <v-card class="with-border rounded-lg elevation-0">
+        <v-divider />
+
+        <v-data-table
+          :items="filteredRows"
+          :headers="tableHeaders"
+          :search="search"
+          item-value="key"
+          class="automation-data-table full-width-table"
+          density="comfortable"
+          hover
+          :items-per-page="15"
+        >
+          <!-- Type Column -->
+          <template #item.type="{ item }">
+            <v-chip size="small" variant="tonal" color="primary" class="font-weight-medium">
+              <v-icon size="14" class="mr-1">mdi-email-outline</v-icon>
+              {{ item.type }}
+            </v-chip>
+          </template>
+
+        <!-- Name Column -->
+        <template #item.name="{ item }">
+          <div class="name-text">
+            {{ item.name || item.key }}
           </div>
         </template>
 
-        <!-- Actions Column -->
-        <template #item.actions="{ item }">
-          <v-btn
-            variant="outlined"
-            size="small"
-            color="primary"
-            @click="openPreview(item)"
-          >
-            <v-icon size="16" class="mr-1">mdi-pencil</v-icon>
-            Edit
-          </v-btn>
-        </template>
+          <!-- Sending/Trigger Column -->
+          <template #item.sending="{ item }">
+            <div class="d-flex align-center">
+              <v-icon size="16" color="grey-darken-1" class="mr-2">mdi-clock-outline</v-icon>
+              <span class="text-body-2 text-medium-emphasis">{{ item.sending }}</span>
+            </div>
+          </template>
 
-        <!-- Status/Toggle Column -->
-        <template #item.enabled="{ item }">
-          <div class="d-flex align-center justify-center">
-            <v-switch
-              v-model="item.enabled"
-              inset
-              hide-details
-              color="success"
-              density="compact"
-              :class="{ 'switch-active': item.enabled }"
-              @update:model-value="onToggleEnabled(item, $event)"
-            />
-          </div>
-        </template>
+          <!-- Actions Column -->
+          <template #item.actions="{ item }">
+            <v-btn
+              variant="outlined"
+              size="small"
+              color="primary"
+              @click="openPreview(item)"
+            >
+              <v-icon size="16" class="mr-1">mdi-pencil</v-icon>
+              Edit
+            </v-btn>
+          </template>
 
-        <!-- Empty State -->
-        <template #no-data>
-          <div class="text-center py-8">
-            <v-icon size="64" color="grey-lighten-1">mdi-email-off-outline</v-icon>
-            <p class="text-h6 mt-4 mb-2">No automations found</p>
-            <p class="text-body-2 text-medium-emphasis">
-              Try adjusting your search or filters
-            </p>
-          </div>
-        </template>
-      </v-data-table>
-    </v-card>
+          <!-- Status/Toggle Column -->
+          <template #item.enabled="{ item }">
+            <div class="d-flex align-center justify-center">
+              <v-switch
+                v-model="item.enabled"
+                inset
+                hide-details
+                color="success"
+                density="compact"
+                :class="{ 'switch-active': item.enabled }"
+                @update:model-value="onToggleEnabled(item, $event)"
+              />
+            </div>
+          </template>
+
+          <!-- Empty State -->
+          <template #no-data>
+            <div class="text-center py-8">
+              <v-icon size="64" color="grey-lighten-1">mdi-email-off-outline</v-icon>
+              <p class="text-h6 mt-4 mb-2">No automations found</p>
+              <p class="text-body-2 text-medium-emphasis">
+                Try adjusting your search or filters
+              </p>
+            </div>
+          </template>
+        </v-data-table>
+      </v-card>
+    </template>
 
     <!-- Preview / Edit Modal -->
     <v-dialog v-model="show" max-width="1100px" scrollable>
@@ -171,7 +198,7 @@
             <v-icon>mdi-close</v-icon>
           </v-btn>
         </div>
-        
+
         <v-divider />
 
         <div class="modal-body">
@@ -204,7 +231,7 @@
         </div>
 
         <v-divider />
-        
+
         <div class="modal-footer">
           <v-btn variant="text" @click="show = false">
             Cancel
@@ -226,6 +253,12 @@
 
 <script setup>
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
+import AutomationCard from '@/components/patients/automationCard.vue'
+import { crmAutomationDefaults, crmAutomationGroups } from '@/lib/crmAutomationDefaults'
+
+const props = defineProps({
+  leadId: { type: [Number, String], default: null },
+})
 const crmStore = useCrmStore()
 const emit = defineEmits(['update:rows','save'])
 
@@ -235,6 +268,7 @@ const search = ref('')
 const filterEnabled = ref(false)
 const filterDisabled = ref(false)
 const saving = ref(false)
+const activeAutomation = ref(null)
 
 const tableHeaders = [
   { title: 'Type', key: 'type', sortable: false },
@@ -252,15 +286,11 @@ const activeFilters = computed(() => {
 })
 
 const filteredRows = computed(() => {
-  let result = [...rows]
-  
-  if (filterEnabled.value && !filterDisabled.value) {
-    result = result.filter(r => r.enabled === true)
-  }
-  if (filterDisabled.value && !filterEnabled.value) {
-    result = result.filter(r => r.enabled === false)
-  }
-  
+  if (!activeAutomation.value) return []
+  const keys = new Set(activeAutomation.value.templateKeys || [])
+  let result = rows.filter(r => keys.has(r.key))
+  if (filterEnabled.value && !filterDisabled.value) result = result.filter(r => r.enabled === true)
+  if (filterDisabled.value && !filterEnabled.value) result = result.filter(r => r.enabled === false)
   return result
 })
 
@@ -269,91 +299,72 @@ const clearFilters = () => {
   filterDisabled.value = false
 }
 
-// Default automation templates
-const defaults = [
-  {
-    key: 'new_patient_enquiry_immediate',
-    type: 'Email',
-    name: 'New Enquiry – Welcome (Immediate)',
-    sending: 'Immediately when lead comes into CRM',
-    enabled: false,
-    template: `<p>Hi [First Name],</p><p>Thank you for reaching out! We're thrilled you're considering us for your dental care. At [Practice Name], we believe every smile tells a story, and we can't wait to be part of yours.</p><p>Our team is carefully reviewing your enquiry and will contact you within 24 hours to discuss your needs and find the perfect appointment time that fits your schedule.</p><p>In the meantime, meet our award-winning team and explore our state-of-the-art facility [link to virtual tour].</p><p>Welcome to the family!</p>`
-  },
-  {
-    key: 'new_patient_enquiry_1_day',
-    type: 'Email',
-    name: 'New Enquiry – Why Us (Day 1)',
-    sending: '1 day afterward',
-    enabled: false,
-    template: `<p>Hi [First Name],</p><p>Choosing a dental practice is a big decision, and we want you to feel completely confident about joining our family.</p><p>Here's what our patients love most about us:</p><ul><li>Anxiety-free appointments with our gentle care approach</li><li>Same-day emergency availability</li><li>Advanced technology for pain-free treatments</li><li>A team that actually listens to your concerns</li></ul><p>Over 2,500 patients trust us with their smiles. Read their stories [link to testimonials] and discover why they've made us their dental home.</p><p>Ready to book? Simply reply to this email or call us at [phone number].</p>`
-  },
-  {
-    key: 'new_patient_enquiry_3_days',
-    type: 'Email',
-    name: 'New Enquiry – Final Nudge (Day 3)',
-    sending: '3 days after enquiry',
-    enabled: false,
-    template: `<p>Hi [First Name],</p><p>We noticed you haven't scheduled your appointment yet, and we wanted to reach out one more time.</p><p>Did you know? 94% of our new patients wish they'd booked sooner! Don't let dental anxiety or a busy schedule hold you back from the smile you deserve.</p><p>This month, we're offering extended evening hours to accommodate your lifestyle. Limited slots available!</p><p>Watch this 60-second video of patient transformations that will inspire you [link].</p><p>Your future smile is waiting - let's make it happen together.</p>`
-  },
-  {
-    key: 'black_friday_7_days_before',
-    type: 'Email',
-    name: 'Black Friday – Teaser (7 Days Before)',
-    sending: '7 days before Black Friday',
-    enabled: false,
-    template: `<p>Hi [First Name],</p><p>We've been working on something extraordinary, and we can't keep it a secret any longer.</p><p>This Black Friday, we're launching our biggest promotion of the year - and it's going to transform the way you think about dental care.</p><p>Mark your calendar for November 29th. You won't want to miss this.</p><p>Set your reminder now, because when this drops, it's going to be incredible.</p><p>The countdown begins...</p>`
-  },
-  {
-    key: 'black_friday_launch',
-    type: 'Email',
-    name: 'Black Friday – Launch (Morning)',
-    sending: 'Black Friday morning',
-    enabled: false,
-    template: `<p>Hi [First Name],</p><p>BLACK FRIDAY IS LIVE!</p><p>For the next 24 hours only, unlock exclusive access to premium dental treatments that will revolutionize your smile.</p><ul><li>✨ Composite Bonding Transformation</li><li>✨ Professional Teeth Whitening</li><li>✨ Complete Smile Makeovers</li><li>✨ Advanced Dental Examinations</li></ul><p>This is our ONE annual promotion where we make premium dental care more accessible than ever. Hundreds of appointments available, but they're filling FAST.</p><p>Secure your spot before midnight: [booking link]</p><p>Over 150 patients have already claimed their appointments in the first hour. Don't miss your chance!</p>`
-  },
-  {
-    key: 'black_friday_last_chance',
-    type: 'Email',
-    name: 'Black Friday – Last Chance (Evening)',
-    sending: 'Black Friday evening (6 hours before deadline)',
-    enabled: false,
-    template: `<p>Hi [First Name],</p><p>This is it - your last chance.</p><p>In just 6 hours, our Black Friday promotion disappears forever. We've already helped 300+ patients secure their dream smile today.</p><p>Only 25 appointment slots remaining.</p><p>Don't wake up tomorrow with regret. Your future self will thank you for taking action today.</p><p>Book now before midnight: [booking link]</p><p>Time is running out. Your smile transformation awaits.</p>`
-  },
-  {
-    key: 'birthday_day',
-    type: 'Email',
-    name: 'Birthday – Gift Email (Day 0)',
-    sending: 'On birthday',
-    enabled: false,
-    template: `<p>Hi [First Name],</p><p>HAPPY BIRTHDAY! 🎂</p><p>Today is all about celebrating YOU, and we wanted to make your day even brighter with a special birthday gift from our team.</p><p>As our valued patient, we're giving you exclusive birthday access to treatments that will make you smile even wider this year:</p><ul><li>🎁 Complimentary smile enhancement consultation</li><li>🎁 Professional teeth whitening session</li><li>🎁 Priority booking privileges</li></ul><p>Your birthday gift is valid for 30 days - because your celebration shouldn't end today!</p><p>Book your birthday appointment here: [link]</p><p>Here's to another year of confident, radiant smiles. You deserve to shine!</p>`
-  },
-  {
-    key: 'birthday_reminder_20_days',
-    type: 'Email',
-    name: 'Birthday – Gift Reminder (Day 20)',
-    sending: '20 days after birthday',
-    enabled: false,
-    template: `<p>Hi [First Name],</p><p>We hope you had an amazing birthday! Just a friendly reminder that your exclusive birthday gift is still waiting for you - but not for long.</p><p>You have just 10 days left to claim your complimentary treatments. Don't let this special opportunity slip away!</p><p>Hundreds of our patients tell us that using their birthday gift was the best decision they made all year.</p><p>Claim your gift now: [booking link]</p><p>Make this birthday month truly unforgettable!</p>`
-  },
-]
+const automationCards = computed(() => {
+  return crmAutomationGroups.map((group) => {
+    const groupRows = rows.filter(r => group.templateKeys.includes(r.key))
+    return {
+      ...group,
+      itemCount: groupRows.length,
+      enabled: groupRows.some(r => r.enabled),
+    }
+  })
+})
 
-onMounted(async () => {
+const selectAutomation = (card) => {
+  activeAutomation.value = card
+  search.value = ''
+  clearFilters()
+}
+
+const clearAutomationSelection = () => {
+  activeAutomation.value = null
+  search.value = ''
+  clearFilters()
+}
+
+const resolvedLeadId = computed(() => {
+  const id = props.leadId
+  return id ? Number(id) : null
+})
+
+const buildPayload = (row) => {
+  const payload = {
+    key: row.key,
+    type: row.type,
+    name: row.name,
+    sending: row.sending,
+    enabled: !!row.enabled,
+    template: row.template,
+  }
+  if (resolvedLeadId.value) payload.leadId = resolvedLeadId.value
+  return payload
+}
+
+const toggleAutomationGroup = async (card, val) => {
+  const groupRows = rows.filter(r => (card.templateKeys || []).includes(r.key))
+  for (const row of groupRows) {
+    row.enabled = !!val
+    try {
+      await crmStore.saveAutomation(buildPayload(row))
+    } catch (e) {}
+  }
+}
+
+const loadRows = async () => {
   try {
-    const res = await crmStore.listAutomation()
-    const map = new Map((res?.data || []).map(r => [r.key, r]))
-    const items = defaults.map((d) => {
-      const saved = map.get(d.key) || {}
-      return {
-        ...d,
-        ...saved,
-        type: saved.type || d.type,
-        name: saved.name || d.name,
-        sending: saved.sending || d.sending,
-        template: saved.template || d.template,
-      }
-    })
+    const res = await crmStore.listAutomation(resolvedLeadId.value || undefined)
+    const items = (res?.data && res.data.length)
+      ? res.data
+      : crmAutomationDefaults.map((item) => ({ ...item }))
     rows.splice(0, rows.length, ...items)
   } catch {}
+}
+
+onMounted(loadRows)
+
+watch(resolvedLeadId, () => {
+  clearAutomationSelection()
+  loadRows()
 })
 
 // Preview dialog state
@@ -400,14 +411,7 @@ const saveContent = async () => {
       active.value.template = blocksToHtml(saved)
     }
     emit('update:rows', rows)
-    const payload = {
-      key: active.value?.key,
-      type: active.value?.type,
-      name: active.value?.name,
-      sending: active.value?.sending,
-      enabled: !!active.value?.enabled,
-      template: active.value?.template,
-    }
+    const payload = buildPayload(active.value || {})
     await crmStore.saveAutomation(payload)
     emit('save', payload)
     show.value = false
@@ -418,15 +422,15 @@ const saveContent = async () => {
 
 const onToggleEnabled = async (row, val) => {
   row.enabled = !!val
-  const def = defaults.find(d => d.key === row.key) || {}
-  const payload = {
+  const def = crmAutomationDefaults.find(d => d.key === row.key) || {}
+  const payload = buildPayload({
     key: row.key,
     type: row.type || def.type || 'Email',
     name: row.name || def.name || row.key,
     sending: row.sending || def.sending || '',
     enabled: row.enabled,
     template: (row.template && row.template.trim()) ? row.template : (def.template || ''),
-  }
+  })
   try { await crmStore.saveAutomation(payload) } catch (e) {}
 }
 
@@ -440,6 +444,19 @@ watch(show, (v) => { if (!v && ej) { ej.destroy(); ej = null } })
 <style scoped>
 .gap-2 {
   gap: 8px;
+}
+
+.field-label {
+  font-weight: 600;
+  font-size: 14px;
+  color: rgb(var(--v-theme-on-surface));
+}
+
+.automation-toolbar {
+  background: #f6f6f6;
+  border: 1px solid rgba(var(--v-theme-outline), 0.3);
+  border-radius: 10px;
+  padding: 10px 12px;
 }
 
 .with-border { 
@@ -462,7 +479,7 @@ watch(show, (v) => { if (!v && ej) { ej.destroy(); ej = null } })
   height: 40px;
   border-radius: 8px;
   font-size: 14px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  box-shadow: none;
 }
 
 .filter-btn,
@@ -471,12 +488,19 @@ watch(show, (v) => { if (!v && ej) { ej.destroy(); ej = null } })
   text-transform: none;
   font-weight: 500;
   font-size: 14px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  box-shadow: none;
 }
 
 /* Data Table Styles */
 .automation-data-table {
   background: transparent;
+}
+
+.automation-data-table :deep(.v-table__wrapper) {
+  border: 1px solid rgba(var(--v-theme-outline), 0.3);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
 }
 
 .full-width-table :deep(.v-table__wrapper) {
@@ -489,13 +513,13 @@ watch(show, (v) => { if (!v && ej) { ej.destroy(); ej = null } })
 }
 
 .full-width-table :deep(th:nth-child(1)) { width: 120px; }
-.full-width-table :deep(th:nth-child(2)) { width: auto; min-width: 300px; }
-.full-width-table :deep(th:nth-child(3)) { width: 320px; }
-.full-width-table :deep(th:nth-child(4)) { width: 130px; }
+.full-width-table :deep(th:nth-child(2)) { width: auto; min-width: 260px; }
+.full-width-table :deep(th:nth-child(3)) { width: 260px; }
+.full-width-table :deep(th:nth-child(4)) { width: 140px; }
 .full-width-table :deep(th:nth-child(5)) { width: 120px; }
 
 .automation-data-table :deep(thead) {
-  background: #f8f9fa;
+  background: #f6f6f6;
 }
 
 .automation-data-table :deep(thead th) {
@@ -503,9 +527,14 @@ watch(show, (v) => { if (!v && ej) { ej.destroy(); ej = null } })
   font-size: 12px !important;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: rgb(var(--v-theme-on-surface-variant)) !important;
-  padding: 16px 20px !important;
-  border-bottom: 2px solid #e8e8e8 !important;
+  color: #4b5563 !important;
+  padding: 12px 16px !important;
+  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.4) !important;
+}
+
+.automation-data-table :deep(.v-data-table-header__content) {
+  color: #4b5563;
+  font-weight: 600;
 }
 
 .automation-data-table :deep(tbody tr) {
@@ -517,24 +546,28 @@ watch(show, (v) => { if (!v && ej) { ej.destroy(); ej = null } })
 }
 
 .automation-data-table :deep(tbody td) {
-  padding: 14px 20px !important;
+  padding: 12px 16px !important;
   font-size: 14px;
   vertical-align: middle !important;
-  border-bottom: 1px solid #f0f0f0 !important;
+  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.2) !important;
 }
 
-.name-field {
-  max-width: 100%;
+.automation-data-table :deep(.v-table__wrapper > table > thead > tr > th:not(:last-child)) {
+  border-right: 1px solid rgba(var(--v-theme-outline), 0.25);
 }
 
-.name-field :deep(.v-field__input) {
-  padding: 4px 0 !important;
-  min-height: 32px;
+.automation-data-table :deep(.v-table__wrapper > table > tbody > tr > td:not(:last-child)) {
+  border-right: 1px solid rgba(var(--v-theme-outline), 0.2);
 }
 
-.name-field :deep(input) {
+.automation-data-table :deep(tbody tr:nth-child(2n)) {
+  background: #fcfcfc;
+}
+
+.name-text {
   font-weight: 500;
   font-size: 14px;
+  color: rgb(var(--v-theme-on-surface));
 }
 
 .switch-active :deep(.v-selection-control__input) {
@@ -616,3 +649,4 @@ watch(show, (v) => { if (!v && ej) { ej.destroy(); ej = null } })
   background: white;
 }
 </style>
+

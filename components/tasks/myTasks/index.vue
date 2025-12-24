@@ -1219,8 +1219,8 @@ const handleQuickStatus = (statusKey) => {
 
 .custom-tabs .v-tab.v-tab--selected {
   font-weight: 600;
-  border-radius: 20px;
-  border-bottom: 4px solid currentColor;
+  border-radius: 999px;
+  border: 2px solid currentColor;
   color: var(--tab-text-color, #1e1e1e) !important;
 }
 .custom-tabs .v-tabs-slider {
@@ -1265,7 +1265,7 @@ const handleQuickStatus = (statusKey) => {
   color: #c3c3c3;
 }
 .category-tab {
-  border-radius: 10px;
+  border-radius: 999px;
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 .tab-inner {
