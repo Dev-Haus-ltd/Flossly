@@ -101,96 +101,9 @@
             </v-row>
           </div>
         </v-card>
-      </v-col>
-      <v-col cols="12" sm="12" md="4" class="d-flex">
+        <!-- Refer & Earn Card -->
         <v-card
-          class="card flex-grow-1"
-          elevation="0"
-          rounded="lg"
-          v-if="user?.roleId === 8 || user?.roleId === 1"
-        >
-          <h4 class="card-head mb-4">Lead Conversion</h4>
-          <div class="ma-5">
-            <DashBoardRevenueCard title="This Week" subtitle="£ 29,985" />
-
-            <v-row no-gutters class="performance-grid mt-5">
-              <v-col
-                v-for="(stat, index) in performaces"
-                :key="index"
-                cols="4"
-                class="perform-col"
-                :class="{
-                  'no-right-border': (index + 1) % 3 === 0, // last in row
-                  'no-bottom-border': index >= performaces.length - 2, // last row
-                }"
-              >
-                <DashBoardPerformaceCard
-                  :count="stat.count"
-                  :title="stat.title"
-                  :percentage="stat.percentage"
-                  :color="stat.color"
-                  :trend="stat.trend"
-                />
-              </v-col>
-            </v-row>
-
-            <div
-              v-for="source in inquirySources"
-              :key="source.label"
-              class="d-flex justify-space-between align-center text-body-2 font-weight-medium mb-1 mt-5 mx-1"
-            >
-              <span>{{ source.label }}</span>
-              <div class="d-flex align-center" style="gap: 70px">
-                <span>{{ source.count }}</span>
-                <span>{{ source.percent }}%</span>
-              </div>
-            </div>
-          </div>
-        </v-card>
-        <v-card
-          class="card flex-grow-1"
-          elevation="0"
-          rounded="lg"
-          v-else
-        >
-          <h4 class="card-head mb-4">Calender</h4>
-
-          <v-calendar
-            v-model="value"
-            :events="[]"
-            hide-day-header
-            hide-week-number
-            hide-header
-            color="primary"
-            type="month"
-            class="user-dashboard-calender"
-          >
-            <template v-slot:day-event="{ event }">
-              <v-tooltip>
-                <template #activator="{ props: tooltipProps }">
-                  <v-icon
-                    v-bind="tooltipProps"
-                    class="mx-auto"
-                  :color="event.color"
-                  size="8"
-                >
-                  mdi-circle
-                </v-icon>
-                </template>
-                <span>{{ event.title }}</span>
-              </v-tooltip>
-            </template>
-            <template v-slot:day-title="{ title }">
-              <span style="font-size: 10px">{{ title }}</span>
-            </template>
-          </v-calendar>
-        </v-card>
-      </v-col>
-    </v-row>
-    <v-row class="d-flex align-stretch">
-      <v-col cols="12" sm="12" md="8" class="pr-md-0 pt-0">
-        <v-card
-          class="refer-card card pa-5"
+          class="mt-3 refer-card card pa-5 flex-grow-1"
           elevation="0"
           rounded="lg"
         >
@@ -283,9 +196,95 @@
           </v-row>
         </v-card>
       </v-col>
+      <v-col cols="12" sm="12" md="4" class="d-flex">
+        <v-card
+          class="card flex-grow-1"
+          elevation="0"
+          rounded="lg"
+          v-if="user?.roleId === 8 || user?.roleId === 1"
+        >
+          <h4 class="card-head mb-4">Lead Conversion</h4>
+          <div class="ma-5">
+            <DashBoardRevenueCard title="This Week" subtitle="£ 29,985" />
+
+            <v-row no-gutters class="performance-grid mt-5">
+              <v-col
+                v-for="(stat, index) in performaces"
+                :key="index"
+                cols="4"
+                class="perform-col"
+                :class="{
+                  'no-right-border': (index + 1) % 3 === 0, // last in row
+                  'no-bottom-border': index >= performaces.length - 2, // last row
+                }"
+              >
+                <DashBoardPerformaceCard
+                  :count="stat.count"
+                  :title="stat.title"
+                  :percentage="stat.percentage"
+                  :color="stat.color"
+                  :trend="stat.trend"
+                />
+              </v-col>
+            </v-row>
+
+            <div
+              v-for="source in inquirySources"
+              :key="source.label"
+              class="d-flex justify-space-between align-center text-body-2 font-weight-medium mb-1 mt-5 mx-1"
+            >
+              <span>{{ source.label }}</span>
+              <div class="d-flex align-center" style="gap: 70px">
+                <span>{{ source.count }}</span>
+                <span>{{ source.percent }}%</span>
+              </div>
+            </div>
+          </div>
+        </v-card>
+        <v-card
+          class="card flex-grow-1"
+          elevation="0"
+          rounded="lg"
+          v-else
+        >
+          <h4 class="card-head mb-4">Calender</h4>
+
+          <v-calendar
+            v-model="value"
+            :events="[]"
+            hide-day-header
+            hide-week-number
+            hide-header
+            color="primary"
+            type="month"
+            class="user-dashboard-calender"
+          >
+            <template v-slot:day-event="{ event }">
+              <v-tooltip>
+                <template #activator="{ props: tooltipProps }">
+                  <v-icon
+                    v-bind="tooltipProps"
+                    class="mx-auto"
+                  :color="event.color"
+                  size="8"
+                >
+                  mdi-circle
+                </v-icon>
+                </template>
+                <span>{{ event.title }}</span>
+              </v-tooltip>
+            </template>
+            <template v-slot:day-title="{ title }">
+              <span style="font-size: 10px">{{ title }}</span>
+            </template>
+          </v-calendar>
+        </v-card>
+      </v-col>
+    </v-row>
+    <v-row class="d-flex align-stretch justify-end">
       <v-col cols="12" sm="12" md="4" class="pt-0">
         <v-card
-          class="review-card card pa-5"
+          class="review-card pa-5"
           color="white"
           elevation="0"
           rounded="lg"
@@ -301,21 +300,31 @@
             Earn +50 Points
           </v-chip>
 
-          <!-- 📦 Content -->
-          <div class="card-content">
-            <lord-icon
-              src="https://cdn.lordicon.com/wstfgfud.json"
-              trigger="hover"
-              :style="{
-                width: mdAndDown ? '100px' : '150px',
-                height: mdAndDown ? '100px' : '150px',
-              }"
-            ></lord-icon>
+          <!-- 📦 Content (on top of background) -->
+          <div class="card-content pt-5">
+            <!-- ✅ Custom Image (replaces lord-icon) -->
+            <img
+              src="@/assets/dashBoard/review-card-logo.svg"
+              alt="Review Icon"
+              class="review-logo"
+            />
 
             <p class="review-text">
-              <span class="highlight">Happy with Flossly? </span>
-              <span class="normal">Give us a Google review.</span>
+              <span class="normal">Want to Become </span>
+              <span class="highlight">FlosslyOS</span>
+              <br />
+              <span class="highlight">Brand Ambassador,</span>
             </p>
+            <v-btn
+              class="align-center"
+              variant="flat"
+              append-icon="mdi-arrow-top-right"
+              color="primary"
+              height="46"
+              rounded="lg"
+            >
+              View more
+            </v-btn>
           </div>
         </v-card>
       </v-col>
@@ -724,10 +733,35 @@ const handleClickProductCard = (uid) => {
 .review-card {
   position: relative;
   height: 100%; /* optional if you want it to stretch */
+  max-width: 525px;
+  width: 100%;
+  margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
+
+  /* ✅ Background image */
+  background-image: url('/assets/dashboard/review-card-bg.svg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
+.review-card {
+  width: 100%;
+  max-width: 525px;
+}
+
+@media (max-width: 960px) {
+  .review-card {
+    max-width: 100%;
+  }
+}
+
+.review-logo {
+  width: 72px;
+  height: 72px;
+}
+
 
 .bonus-chip {
   position: absolute;
@@ -747,6 +781,9 @@ const handleClickProductCard = (uid) => {
 }
 
 .card-content {
+  position: relative;
+  z-index: 2;
+
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -757,7 +794,7 @@ const handleClickProductCard = (uid) => {
 
 .review-text {
   font-size: 24px;
-  color: #1e1e1e;
+  color: #FFFFFF;
   
 }
 

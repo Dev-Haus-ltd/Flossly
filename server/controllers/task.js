@@ -1851,7 +1851,7 @@ export const groupTeamTasksByTaskId = async (event) => {
                   model: TaskCustomColumnDefinition,
                   as: "columnDefinition",
                   where: {
-                    createdBy: loggedUser.id,
+                    createdBy: loggedUser.userId,
                     isActive: true,
                   },
                   required: false,
@@ -1918,22 +1918,6 @@ export const groupTeamTasksByTaskId = async (event) => {
             attributes: ["id", "key", "name", "color"],
           },
           { model: UserTaskAttachment, as: "attachments", required: false },
-          {
-            model: UserTaskCustomField,
-            as: "customFields",
-            required: false,
-            include: [
-              {
-                model: TaskCustomColumnDefinition,
-                as: "columnDefinition",
-                where: {
-                  createdBy: loggedUser.id,
-                  isActive: true,
-                },
-                required: false,
-              },
-            ],
-          },
           {
             model: User,
             as: "assignedUser",
@@ -2593,7 +2577,7 @@ export const getUserTasksStatusWise = async (event) => {
               model: TaskCustomColumnDefinition,
               as: "columnDefinition",
               where: {
-                createdBy: loggedUser.id,
+                createdBy: loggedUser.userId,
                 isActive: true,
               },
               required: false,

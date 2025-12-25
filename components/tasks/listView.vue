@@ -94,6 +94,7 @@
               <div class="d-flex align-center justify-space-between">
                 <p class="mb-0">Available Columns</p>
                 <v-btn
+                  v-if="!hideAddCustomColumn"
                   color="primary"
                   variant="text"
                   size="small"
@@ -1022,6 +1023,10 @@ const {
   activeFilters: {
     type: Object,
     default: () => ({}),
+  },
+  hideAddCustomColumn: {
+    type: Boolean,
+    default: false, // show button by default
   },
 });
 watch(

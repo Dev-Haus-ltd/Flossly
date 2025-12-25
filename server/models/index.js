@@ -68,8 +68,6 @@ import { CrmOption } from "./crm/options";
 import { CrmLeadCommunication } from "./crm/leadCommunications";
 import { CrmLeadAssignee } from "./crm/leadAssignees";
 import { CrmAutomationTemplate } from "./crm/automationTemplates";
-import { TaskCustomColumnDefinition } from "./tasks/taskCustomColumnDefinitions";
-import { UserTaskCustomField } from "./tasks/userTaskCustomFields";
 import { PatientAutomationDictionary } from "./patientJourney/patientAutomationDictionary";
 import { PatientAutomationTemplate } from "./patientJourney/patientAutomationTemplates";
 import { OrganisationReferral } from "./organisationReferrals";
@@ -334,28 +332,6 @@ Organisation.hasMany(OrganisationScript, { foreignKey: "organisationId", as: "sc
 OrganisationScript.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", onDelete: 'CASCADE', hooks: true });
 
 
-// TaskCustomColumnDefinition -> User (ORG_DELETE)
-User.hasMany(TaskCustomColumnDefinition, {
-  foreignKey: "createdBy",
-  as: "taskCustomColumns",
-  onDelete: "CASCADE",
-  hooks: true,
-});
-
-TaskCustomColumnDefinition.belongsTo(User, {
-  foreignKey: "createdBy",
-  as: "creator",
-  onDelete: "CASCADE",
-  hooks: true,
-});
-
-// UserTaskCustomField -> UserTask / TaskCustomColumnDefinition (cascade on delete of UserTask)
-UserTask.hasMany(UserTaskCustomField, { foreignKey: "userTaskId", as: "customFields" });
-UserTaskCustomField.belongsTo(UserTask, { foreignKey: "userTaskId", as: "userTask", onDelete: "CASCADE", hooks: true });
-TaskCustomColumnDefinition.hasMany(UserTaskCustomField, { foreignKey: "columnDefinitionId", as: "customFieldValues" });
-UserTaskCustomField.belongsTo(TaskCustomColumnDefinition, { foreignKey: "columnDefinitionId", as: "columnDefinition", onDelete: "CASCADE", hooks: true });
-
-
 OrganisationReferral.belongsTo(User, {
   foreignKey: "referredBy",
   as: "referrer",
@@ -439,8 +415,6 @@ export {
   OrganisationTreatment,
   DictionaryScript,
   OrganisationScript,
-  UserTaskCustomField,
-  TaskCustomColumnDefinition,
   PatientAutomationDictionary,
   PatientAutomationTemplate
 };
