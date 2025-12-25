@@ -655,6 +655,24 @@ export const unAssignTask = async (event) => {
     const isOwner = userTask.userId === loggedUser.userId;
     const isAssigner = userTask.assignedBy === loggedUser.userId;
     const isPrivileged = isManagerOrOwner(loggedUser.roleId);
+    
+    // Check if task was assigned by Practice Profile (Admin)
+    let wasAssignedByPracticeProfile = false;
+    if (userTask.assignedBy) {
+      const assignerUser = await User.findByPk(userTask.assignedBy);
+      if (assignerUser && isManagerOrOwner(assignerUser.roleId)) {
+        wasAssignedByPracticeProfile = true;
+      }
+    }
+    
+    // Prevent normal users from deleting tasks assigned by Practice Profile
+    if (wasAssignedByPracticeProfile && !isPrivileged) {
+      throw createError({
+        statusCode: 403,
+        message: "You do not have permission to delete tasks assigned by Practice Profile",
+      });
+    }
+    
     if (!isOwner && !isAssigner && !isPrivileged) {
       throw createError({
         statusCode: 403,
@@ -787,11 +805,32 @@ export const unAssignBulkTask = async (event) => {
     if (!tasks.length) {
       throw createError({ message: "No matching UserTasks found" });
     }
+    const isPrivileged = isManagerOrOwner(loggedUser.roleId);
+    
+    // Check for tasks assigned by Practice Profile (Admin)
+    const tasksAssignedByPracticeProfile = [];
+    for (const task of tasks) {
+      if (task.assignedBy) {
+        const assignerUser = await User.findByPk(task.assignedBy);
+        if (assignerUser && isManagerOrOwner(assignerUser.roleId)) {
+          tasksAssignedByPracticeProfile.push(task);
+        }
+      }
+    }
+    
+    // Prevent normal users from deleting tasks assigned by Practice Profile
+    if (tasksAssignedByPracticeProfile.length > 0 && !isPrivileged) {
+      throw createError({
+        statusCode: 403,
+        message: "You do not have permission to delete tasks assigned by Practice Profile",
+      });
+    }
+    
     const unauthorized = tasks.filter(
       (ut) =>
         ut.userId !== loggedUser.userId &&
         ut.assignedBy !== loggedUser.userId &&
-        !isManagerOrOwner(loggedUser.roleId) // privileged roles are authorized
+        !isPrivileged // privileged roles are authorized
     );
     if (unauthorized.length) {
       throw createError({
@@ -1728,6 +1767,12 @@ export const groupTeamTasksByTaskId = async (event) => {
     tasks.map((task) => {
       const assignments = task.userTasks || [];
       const firstAssignment = assignments[0];
+      
+      // Check if any assignment was made by Practice Profile (Admin)
+      const hasPracticeProfileAssignment = assignments.some((assignment) => {
+        const assignerRoleId = assignment.assigner?.roleId;
+        return assignerRoleId ? isManagerOrOwner(assignerRoleId) : false;
+      });
 
       return {
         taskId: task.id,
@@ -1747,6 +1792,7 @@ export const groupTeamTasksByTaskId = async (event) => {
         updatedAt: firstAssignment?.updatedAt || task.updatedAt,
         taskDetails: task,
         isArchieved: firstAssignment?.isArchieved || false,
+        isAssignedByPracticeProfile: hasPracticeProfileAssignment,
         assignedUsers: assignments
           .map((assignment) => ({
             id: assignment.assignedUser?.id,
@@ -1755,6 +1801,7 @@ export const groupTeamTasksByTaskId = async (event) => {
             photo: assignment.assignedUser?.photo,
             status: assignment.status,
             userTaskId: assignment.id,
+            isAssignedByPracticeProfile: assignment.assigner?.roleId ? isManagerOrOwner(assignment.assigner.roleId) : false,
           }))
           .filter((u) => u.id),
       };
@@ -1801,6 +1848,12 @@ export const groupTeamTasksByTaskId = async (event) => {
               model: User,
               as: "assignedUser",
               attributes: ["id", "fullName", "email", "photo"],
+            },
+            {
+              model: User,
+              as: "assigner",
+              attributes: ["id", "roleId"],
+              required: false,
             },
           ],
         },
@@ -2512,6 +2565,12 @@ export const getUserTasksStatusWise = async (event) => {
         as: "attachments",
         attributes: ["id", "title", "link", "type"],
       },
+      {
+        model: User,
+        as: "assigner",
+        attributes: ["id", "roleId"],
+        required: false,
+      },
     ];
 
     const statuses = [];
@@ -2527,12 +2586,20 @@ export const getUserTasksStatusWise = async (event) => {
         distinct: true,
       });
 
+      // Add isAssignedByPracticeProfile flag to each task
+      const tasksWithFlags = rows.map((task) => {
+        const taskData = task.toJSON ? task.toJSON() : task;
+        const assignerRoleId = taskData.assigner?.roleId;
+        taskData.isAssignedByPracticeProfile = assignerRoleId ? isManagerOrOwner(assignerRoleId) : false;
+        return taskData;
+      });
+
       statuses.push({
         status: status.key,
         total: count,
         page: currentPage,
         pageSize: perPage,
-        tasks: rows,
+        tasks: tasksWithFlags,
       });
     }
 
@@ -2546,12 +2613,20 @@ export const getUserTasksStatusWise = async (event) => {
         distinct: true,
       });
 
+    // Add isAssignedByPracticeProfile flag to archived tasks
+    const archivedTasksWithFlags = archivedRows.map((task) => {
+      const taskData = task.toJSON ? task.toJSON() : task;
+      const assignerRoleId = taskData.assigner?.roleId;
+      taskData.isAssignedByPracticeProfile = assignerRoleId ? isManagerOrOwner(assignerRoleId) : false;
+      return taskData;
+    });
+
     statuses.push({
       status: "archived",
       total: archivedCount,
       page: currentPage,
       pageSize: perPage,
-      tasks: archivedRows,
+      tasks: archivedTasksWithFlags,
     });
 
     const total = statuses.reduce((sum, s) => sum + Number(s.total || 0), 0);
@@ -2627,6 +2702,7 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
           completed: 0,
           overdue: 0,
           progress: 0,
+          todo: 0,
           upcoming: 0,
         });
       }
@@ -2667,7 +2743,7 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
             ],
           };
 
-    const [completed, progress, upcoming] = await Promise.all([
+    const [completed, progress, todo] = await Promise.all([
       statusMap.completed
         ? UserTask.count({
             where: {
@@ -2688,11 +2764,11 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
             distinct: true,
           })
         : 0,
-      statusMap.upcoming
+      (statusMap.todo || statusMap.upcoming)
         ? UserTask.count({
             where: {
               ...baseWhere,
-              statusId: statusMap.upcoming,
+              statusId: statusMap.todo || statusMap.upcoming,
             },
             include: [taskInclude],
             distinct: true,
@@ -2722,7 +2798,8 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
       completed: completed || 0,
       overdue: overdue || 0,
       progress: progress || 0,
-      upcoming: upcoming || 0,
+      todo: todo || 0,
+      upcoming: todo || 0, // Keep for backward compatibility
     });
   } catch (err) {
     return error(500, err.message);

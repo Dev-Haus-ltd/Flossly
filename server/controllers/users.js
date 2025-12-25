@@ -58,8 +58,9 @@ export const usersList = async (event) => {
     const users = userOrganisations.map((uo) => {
       const user = uo.user.toJSON();
       user.isActive = Boolean(uo.isActive);
-       const isGloballyDeactivated = user.status === "Disabled" || user.status === "Expired";
-      const isOrgDeactivated = !uo.isActive && user.status === "Active";
+      user.orgStatus = uo.status || (uo.isActive ? "Active" : "Invited");
+      const isGloballyDeactivated = user.status === "Disabled" || user.status === "Expired";
+      const isOrgDeactivated = (user.orgStatus === "Disabled") || (!uo.isActive && user.status === "Active");
       user.isAccountDeactivated = isGloballyDeactivated || isOrgDeactivated;
       return user;
     });
@@ -147,6 +148,7 @@ export const userAcrossOrgs = async (event) => {
                           (uo.get ? uo.get('isActive') : true);
           
           user.isActive = Boolean(isActive);
+          user.orgStatus = uo.status || (user.isActive ? "Active" : "Invited");
           return user;
         }).filter(Boolean), // Remove any null entries
       };
@@ -606,6 +608,7 @@ export const deactivateUser = async (event) => {
     }
 
     userOrg.isActive = false;
+    userOrg.status = "Disabled";
     await userOrg.save({ transaction });
 
     await transaction.commit();
@@ -643,6 +646,7 @@ export const activateUser = async (event) => {
     }
 
     userOrg.isActive = true;
+    userOrg.status = "Active";
     await userOrg.save({ transaction });
     
     const user = await User.findByPk(userId, { transaction });

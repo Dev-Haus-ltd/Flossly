@@ -235,6 +235,103 @@
             </v-col>
           </v-row>
         </div>
+
+       
+       <div class="mt-2" v-if="selectedOption === 'copy'">
+         <v-row>
+           <v-col cols="4">
+             <h2 class="rota-title">Copy an existing rota</h2>
+
+             
+             <label class="field-label">Select a rota to copy<span class="required">*</span></label>
+             <v-select
+               v-model="copyForm.selectedRotaId"
+               :items="existingRotas.map(r => ({ title: r.name + ' (' + formatDateDDMMYYYY(r.startDate) + ' - ' + formatDateDDMMYYYY(r.endDate) + ')', value: r.id }))"
+               variant="solo"
+               flat
+               density="compact"
+               class="input-bordered"
+               :rules="[rules.required]"
+               placeholder="Choose a rota"
+             />
+
+            
+             <label class="field-label">Copy the notes for this rota?</label>
+             <v-radio-group v-model="copyForm.copyNotes" inline>
+               <v-radio :value="true" label="Yes" />
+               <v-radio :value="false" label="No" />
+             </v-radio-group>
+
+           
+             <label class="field-label">Rota name<span class="required">*</span></label>
+             <v-text-field
+               v-model="form.name"
+               variant="solo"
+               flat
+               density="compact"
+               class="input-bordered"
+               :rules="[rules.required]"
+             />
+
+             
+             <label class="field-label">Rota start date<span class="required">*</span></label>
+             <v-menu v-model="menuStartDateCreaterota" :close-on-content-click="false" transition="scale-transition" offset-y>
+               <template #activator="{ props }">
+                 <v-text-field
+                   v-bind="props"
+                   :model-value="form.startDate ? formatDateDDMMYYYY(form.startDate) : ''"
+                   readonly
+                   variant="solo"
+                   flat
+                   density="compact"
+                   class="input-bordered"
+                   :rules="[rules.required]"
+                   append-inner-icon="mdi-calendar"
+                 />
+               </template>
+               <v-date-picker v-model="form.startDate" color="primary" @update:model-value="menuStartDateCreaterota = false" />
+             </v-menu>
+
+           
+             <label class="field-label">Rota End date<span class="required">*</span></label>
+             <v-menu v-model="menuEndDateCreaterota" :close-on-content-click="false" transition="scale-transition" offset-y>
+               <template #activator="{ props }">
+                 <v-text-field
+                   v-bind="props"
+                   :model-value="form.endDate ? formatDateDDMMYYYY(form.endDate) : ''"
+                   readonly
+                   variant="solo"
+                   flat
+                   density="compact"
+                   class="input-bordered"
+                   :rules="[rules.required]"
+                   append-inner-icon="mdi-calendar"
+                 />
+               </template>
+               <v-date-picker v-model="form.endDate" color="primary" @update:model-value="menuEndDateCreaterota = false" />
+             </v-menu>
+
+             
+             <label class="field-label">Rota duration<span class="required">*</span></label>
+             <v-text-field
+               v-model="form.duration"
+               variant="solo"
+               flat
+               density="compact"
+               class="input-bordered"
+               :disabled="form.endDate"
+               :rules="[rules.required]"
+             />
+
+             
+             <div class="mt-6 text-right">
+               <v-btn color="primary" variant="flat" @click="submitCopyForm">
+                 Create Rota
+               </v-btn>
+             </div>
+           </v-col>
+         </v-row>
+       </div>
       </v-form>
     </div>
   </div>
@@ -242,7 +339,7 @@
 
 <script setup>
 import { formatDateDDMMYYYY } from "~/lib/dateFormatter";
-import { differenceInDays, addDays } from "date-fns";
+import { differenceInDays, differenceInCalendarDays, addDays } from "date-fns";
 const mainStore = useMainStore();
 const rotaStore = useRotaStore();
 const userStore = useUserStore();
@@ -264,6 +361,7 @@ const practiceError = ref("");
 const rotaForm = ref(null);
 const menuStartDateCreaterota = ref(false);
 const menuEndDateCreaterota = ref(false);
+const copyForm = ref({ selectedRotaId: null, copyNotes: true });
 const rules = { 
   required: (v) =>
     (Array.isArray(v) ? v.length > 0 : !!v) || "This field is required",
@@ -308,7 +406,7 @@ const allRotaOptions = [
   { value: "copy", label: "Copy an existing rota", icon: "mdi-content-copy" },
 ];
 const rotaOptions = computed(() => {
-  // Hide "copy" option if no rotas exist
+  
   if (existingRotas.value.length === 0) {
     return allRotaOptions.filter(opt => opt.value !== "copy");
   }
@@ -430,6 +528,90 @@ const handleAddRotaUser = async (rota, users) => {
     });
   }
 };
+
+async function submitCopyForm() {
+  practiceError.value = "";
+  if (!form.value.orgId) {
+    practiceError.value = "Please select a practice";
+    return;
+  }
+
+  if (!copyForm.value.selectedRotaId) {
+    mainStore.setSnackbar({ type: 'error', title: 'Please select a rota to copy' });
+    return;
+  }
+  if (!form.value.name || !form.value.startDate || !form.value.endDate) {
+    mainStore.setSnackbar({ type: 'error', title: 'Please complete the required fields' });
+    return;
+  }
+  try {
+  
+    const res = await rotaStore.addRota({
+      orgId: form.value.orgId,
+      name: form.value.name,
+      startDate: form.value.startDate,
+      endDate: form.value.endDate,
+      duration: form.value.duration,
+      notes: copyForm.value.copyNotes ? undefined : "",
+    });
+    if (res.code !== 0) {
+      mainStore.setSnackbar({ type: 'error', title: res?.data?.message || res.message || 'Failed to create rota' });
+      return;
+    }
+
+    const newRota = res.data;
+
+   
+    const selected = existingRotas.value.find(r => r.id === copyForm.value.selectedRotaId);
+
+    try {
+      const usersRes = await rotaStore.getRotaUsers({ rotaId: selected.id });
+      if (usersRes.code === 0) {
+        const rotaUsers = (usersRes.data || []).map(u => ({ userId: u.userId ?? u.user?.id, roleId: u.roleId }));
+        // Filter undefined ids
+        const cleanUsers = rotaUsers.filter(u => !!u.userId);
+        if (cleanUsers.length > 0) {
+          await rotaStore.addRotaUsers({ rotaId: newRota.id, users: cleanUsers });
+        }
+      }
+    } catch (_) {}
+
+
+    try {
+      const shiftsRes = await rotaStore.getAllShifts({ rotaId: selected.id });
+      if (shiftsRes.code === 0) {
+        const shifts = shiftsRes.data || [];
+        for (const s of shifts) {
+          const offsetDays = differenceInCalendarDays(new Date(form.value.startDate), new Date(selected.startDate));
+          const shiftedStart = addDays(new Date(s.startDate), offsetDays);
+          const shiftedEnd = addDays(new Date(s.endDate), offsetDays);
+          await rotaStore.addRotaShift({
+            rotaId: newRota.id,
+            label: s.label,
+            color: copyForm.value.copyNotes ? s.color : null,
+            startDate: shiftedStart,
+            endDate: shiftedEnd,
+            breakTime: s.breakTime,
+            notes: copyForm.value.copyNotes ? s.notes : undefined,
+            userId: s.userId,
+            dentistId: s.dentistId,
+            nurseId: s.nurseId,
+            surgeryId: s.surgeryId,
+            isLocumShift: s.isLocumShift,
+            locumUserId: s.locumUserId,
+          });
+        }
+      }
+    } catch (_) {}
+
+    mainStore.setSnackbar({ type: 'success', title: 'Rota copied successfully' });
+    resetForm();
+    await checkExistingRotas();
+    emit('onAddRota', newRota);
+  } catch (err) {
+    mainStore.setSnackbar({ type: 'error', title: err?.data?.message || err.message || 'Something went wrong' });
+  }
+}
 
 function resetForm() {
   form.value = {

@@ -212,65 +212,8 @@ const getOrgData = (orgWrapper) => {
 };
 
 onMounted(() => {
-  const storedUser = JSON.parse(localStorage.getItem("user"));
-  user.value = storedUser;
-  console.log('Left Sidebar - Stored User:', storedUser);
-  console.log('Left Sidebar - User Organisations:', storedUser?.userOrganisations);
-  console.log('Left Sidebar - Current Logged In Org ID:', storedUser?.currentLoggedInOrgId);
-  
-  if (storedUser?.userOrganisations?.length) {
-    // Log each organization structure for debugging
-    storedUser.userOrganisations.forEach((org, index) => {
-      console.log(`Left Sidebar - Org ${index}:`, org);
-      console.log(`Left Sidebar - Org ${index} organisation:`, org?.organisation);
-      console.log(`Left Sidebar - Org ${index} orgData:`, getOrgData(org));
-    });
-    
-    // Try to find the current organization
-    let foundOrg = null;
-    
-    // Filter to only active organizations and user is not deactivated
-    const activeOrgs = storedUser.userOrganisations.filter(org => {
-      const isActive = org.isActive !== undefined ? org.isActive : true; // Default to true for backward compatibility
-      // Check if user is deactivated:
-      // 1. Globally disabled/expired, OR
-      // 2. Not active in this organization (org-specific deactivation)
-      const isGloballyDeactivated = storedUser.status === "Disabled" || storedUser.status === "Expired";
-      const isOrgDeactivated = !isActive && storedUser.status === "Active";
-      const isNotDeactivated = !isGloballyDeactivated && !isOrgDeactivated;
-      return isActive && isNotDeactivated;
-    });
-    
-    // First try to find by organisationId
-    if (storedUser.currentLoggedInOrgId) {
-      const orgWrapper = activeOrgs.find(
-        (org) => org.organisationId === storedUser.currentLoggedInOrgId
-      );
-      if (orgWrapper) {
-        foundOrg = getOrgData(orgWrapper);
-      }
-    }
-    
-    // If not found, try to find by id
-    if (!foundOrg && storedUser.currentLoggedInOrgId) {
-      const orgWrapper = activeOrgs.find(
-        (org) => getOrgData(org)?.id === storedUser.currentLoggedInOrgId
-      );
-      if (orgWrapper) {
-        foundOrg = getOrgData(orgWrapper);
-      }
-    }
-    
-    // If still not found, use the first available active organization
-    if (!foundOrg && activeOrgs.length > 0) {
-      const firstOrg = activeOrgs[0];
-      foundOrg = getOrgData(firstOrg);
-    }
-    
-    currentOrg.value = foundOrg || {};
-    console.log('Left Sidebar - Current Org:', currentOrg.value);
-  } else {
-    console.log('Left Sidebar - No user organisations found');
+  if (user.value) {
+    updateCurrentOrg(user.value);
   }
 });
 const norm = (p) => (p || "").replace(/\/+$/, "") || "/";
@@ -340,56 +283,64 @@ watch(
   },
   { immediate: true }
 );
-const user = ref(null);
+const { user } = useUser(); 
 const currentOrg = ref({});
 
-// Watch for changes in user data and update currentOrg accordingly
-watch(() => user.value, (newUser) => {
-  if (newUser?.userOrganisations?.length) {
-    // Filter to only active organizations and user is not deactivated
-    const activeOrgs = newUser.userOrganisations.filter(org => {
-      const isActive = org.isActive !== undefined ? org.isActive : true; // Default to true for backward compatibility
-      // Check if user is deactivated:
-      // 1. Globally disabled/expired, OR
-      // 2. Not active in this organization (org-specific deactivation)
-      const isGloballyDeactivated = newUser.status === "Disabled" || newUser.status === "Expired";
-      const isOrgDeactivated = !isActive && newUser.status === "Active";
-      const isNotDeactivated = !isGloballyDeactivated && !isOrgDeactivated;
-      return isActive && isNotDeactivated;
-    });
-    
-    // Try to find the current organization
-    let foundOrg = null;
-    
-    // First try to find by organisationId
-    if (newUser.currentLoggedInOrgId) {
-      const orgWrapper = activeOrgs.find(
-        (org) => org.organisationId === newUser.currentLoggedInOrgId
-      );
-      if (orgWrapper) {
-        foundOrg = getOrgData(orgWrapper);
-      }
-    }
-    
-    // If not found, try to find by id
-    if (!foundOrg && newUser.currentLoggedInOrgId) {
-      const orgWrapper = activeOrgs.find(
-        (org) => getOrgData(org)?.id === newUser.currentLoggedInOrgId
-      );
-      if (orgWrapper) {
-        foundOrg = getOrgData(orgWrapper);
-      }
-    }
-    
-    // If still not found, use the first available active organization
-    if (!foundOrg && activeOrgs.length > 0) {
-      const firstOrg = activeOrgs[0];
-      foundOrg = getOrgData(firstOrg);
-    }
-    
-    currentOrg.value = foundOrg || {};
+const updateCurrentOrg = (userData) => {
+  if (!userData?.userOrganisations?.length) {
+    currentOrg.value = {};
+    return;
   }
-}, { deep: true });
+
+  // Filter to only active organizations and user is not deactivated
+  const activeOrgs = userData.userOrganisations.filter(org => {
+    const isActive = org.isActive !== undefined ? org.isActive : true; // Default to true for backward compatibility
+    // Check if user is deactivated:
+    // 1. Globally disabled/expired, OR
+    // 2. Not active in this organization (org-specific deactivation)
+    const isGloballyDeactivated = userData.status === "Disabled" || userData.status === "Expired";
+    const isOrgDeactivated = !isActive && userData.status === "Active";
+    const isNotDeactivated = !isGloballyDeactivated && !isOrgDeactivated;
+    return isActive && isNotDeactivated;
+  });
+  
+  // Try to find the current organization
+  let foundOrg = null;
+  
+  // First try to find by organisationId
+  if (userData.currentLoggedInOrgId) {
+    const orgWrapper = activeOrgs.find(
+      (org) => org.organisationId === userData.currentLoggedInOrgId
+    );
+    if (orgWrapper) {
+      foundOrg = getOrgData(orgWrapper);
+    }
+  }
+  
+  // If not found, try to find by id
+  if (!foundOrg && userData.currentLoggedInOrgId) {
+    const orgWrapper = activeOrgs.find(
+      (org) => getOrgData(org)?.id === userData.currentLoggedInOrgId
+    );
+    if (orgWrapper) {
+      foundOrg = getOrgData(orgWrapper);
+    }
+  }
+  
+  // If still not found, use the first available active organization
+  if (!foundOrg && activeOrgs.length > 0) {
+    const firstOrg = activeOrgs[0];
+    foundOrg = getOrgData(firstOrg);
+  }
+  
+  currentOrg.value = foundOrg || {};
+};
+
+watch(() => user.value, (newUser) => {
+  if (newUser) {
+    updateCurrentOrg(newUser);
+  }
+}, { deep: true, immediate: true });
 </script>
 
 <style scoped lang="scss">

@@ -116,7 +116,7 @@ const taskStatsConfig = computed(() => [
   },
   {
     icon: "https://cdn.lordicon.com/ibjcmcbv.json",
-    label: 'Upcoming Tasks',
+    label: 'To do',
     value: myTaskCounts.value.todo
   }
 ])

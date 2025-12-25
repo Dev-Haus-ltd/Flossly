@@ -103,6 +103,7 @@ UserTask.belongsTo(Task, { foreignKey: "taskId", as: "taskDetails", onDelete: "C
 // User -> UserTask (USER_DELETE)
 User.hasMany(UserTask, { foreignKey: "userId", as: "assignedTasks" });
 UserTask.belongsTo(User, { foreignKey: "userId", as: "assignedUser", onDelete: "CASCADE", hooks: true });
+UserTask.belongsTo(User, { foreignKey: "assignedBy", as: "assigner", onDelete: "SET NULL" });
 
 // UserTask -> Organisation / Status / Priority (ORG_DELETE for organisation FK)
 UserTask.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", onDelete: "CASCADE", hooks: true });

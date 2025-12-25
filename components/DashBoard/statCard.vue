@@ -46,7 +46,7 @@ const imageMap = {
 
 // Dynamically choose the correct image based on keyName
 const resolvedImage = computed(() => {
-  if (props.keyName === "upcoming") return upcoming;
+  if (props.keyName === "todo" || props.keyName === "upcoming") return upcoming;
   if (props.keyName === "completed") return completed;
   if (props.keyName === "overdue") return overdue;
   if (props.keyName === "progress") return progress;

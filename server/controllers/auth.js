@@ -58,6 +58,7 @@ export const login = async (event) => {
     where: {
       userId: user.id,
       isActive: true, // Only load active organizations
+      status: "Active", // Ensure org-level status is Active
     },
   });
 
@@ -264,7 +265,7 @@ export const signupRequest = async (event) => {
 
     // associate user-org
     await UserOrganisation.create(
-      { userId: user.id, organisationId: org.id },
+      { userId: user.id, organisationId: org.id, isActive: true, status: "Active" },
       { transaction }
     );
     const link = generateVerificationLink();
@@ -296,12 +297,10 @@ export const profile = async (event) => {
       where: {
         userId: loggedUser.userId,
         organisationId: loggedUser.orgId,
-        isActive: true,
       },
     });
-    if (!membership) {
-      return error(403, "Your organisation membership is inactive");
-    }
+    
+    const isCurrentOrgActive = membership && membership.isActive && (membership.status === "Active" || !membership.status);
 
     const user = await User.findByPk(loggedUser.userId, {
       attributes: { exclude: ["password"] },
@@ -317,9 +316,6 @@ export const profile = async (event) => {
         {
           model: UserOrganisation,
           as: "userOrganisations",
-          where: {
-            isActive: true,
-          },
           required: false,
           include: [
             {
@@ -341,6 +337,17 @@ export const profile = async (event) => {
 
     const userObj = user.toJSON();
     userObj.currentLoggedInOrgId = loggedUser.orgId;
+    userObj.isCurrentOrgActive = isCurrentOrgActive; 
+    
+    if (!isCurrentOrgActive && userObj.userOrganisations) {
+      const activeOrg = userObj.userOrganisations.find(
+        (uo) => uo.isActive && (uo.status === "Active" || !uo.status)
+      );
+      if (activeOrg) {
+        userObj.suggestedOrgId = activeOrg.organisationId || activeOrg.organisation?.id;
+      }
+    }
+    
     if (userObj.preferences && userObj.preferences.taskTableColumns) {
       userObj.preferences.taskTableColumns = JSON.parse(
         userObj.preferences.taskTableColumns
@@ -539,6 +546,7 @@ export const switchOrgnanisation = async (event) => {
         userId: user.userId,
         organisationId: orgId,
         isActive: true, // Only allow switching to active organizations
+        status: "Active", // And org-level status must be Active
       },
     });
     if (!record)
@@ -598,6 +606,7 @@ export const verifyEmail = async (event) => {
         where: {
           userId: user.id,
           isActive: true, // Only use active organizations
+          status: "Active",
         },
       });
       if (userOrg && userOrg.length) {
@@ -717,6 +726,7 @@ export const inviteMembers = async (event) => {
             userId: userId,
             organisationId: currentOrg,
             isActive: false, // Set to false for pending invitations
+            status: "Invited",
           };
         });
         await UserOrganisation.bulkCreate(newUserOrgAssociation, {
@@ -823,17 +833,26 @@ const inviteNewUsers = async (
       userId: u.id,
       organisationId: currentOrg,
       isActive: false, // Set to false for pending invitations
+      status: "Invited",
     };
   });
   await UserOrganisation.bulkCreate(orgAssociations, { transaction });
-  newUsers.forEach(async (el) => {
-    await sendInvitationEmail({
-      email: el.email,
-      orgTitle: currentOrganisation.name,
-      link: el.inviteToken,
-      manager: currentUser.fullName,
-    });
-  });
+  
+  await Promise.all(
+    newUsers.map(async (el) => {
+      if (!el.inviteToken) {
+        // Fallback: generate token if somehow missing
+        el.inviteToken = uuidv4();
+        await el.save({ transaction });
+      }
+      await sendInvitationEmail({
+        email: el.email,
+        orgTitle: currentOrganisation.name,
+        link: el.inviteToken,
+        manager: currentUser.fullName,
+      });
+    })
+  );
 };
 
 export const acceptInvitation = async (event) => {
@@ -873,6 +892,7 @@ export const acceptInvitation = async (event) => {
 
     // Activate organization membership
     userOrg.isActive = true;
+    userOrg.status = "Active";
     await userOrg.save();
 
     // Removed dummy tasks assignment for invited members
@@ -1009,6 +1029,7 @@ export const acceptOrganisationInvitation = async (event) => {
 
     // Activate the organization membership
     userOrg.isActive = true;
+    userOrg.status = "Active";
     await userOrg.save();
 
     // If user is not logged in, generate auth token and return user data for auto-login

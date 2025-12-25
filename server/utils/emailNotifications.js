@@ -284,9 +284,7 @@ export const sendEmailVerificationEmail = async (data) => {
       <br />
       <p>Welcome on board. Please click the link below the verify your email.</p>
       <br/>
-      <a href=${
-        baseUrl + "/verifyemail/" + data.link
-      } target="blank"> Verify Email </a>
+      <a href="${baseUrl}/verifyemail/${data.link}" target="blank"> Verify Email </a>
           <br/><br/>
           <p>Best regards,<br/>The Flossly Team</p>`;
   const html = template
@@ -340,6 +338,9 @@ export const sendOrgnisationAddedToRegisteredUsers = async (data) => {
 
 export const sendInvitationEmail = async (data) => {
   const subject = `Invitation`;
+  const baseUrl = config.public.BASE_URL.endsWith('/') 
+    ? config.public.BASE_URL.slice(0, -1) 
+    : config.public.BASE_URL;
   const content = `
  <p>Dear User</p>
       <br />
@@ -348,9 +349,7 @@ export const sendInvitationEmail = async (data) => {
       } to join their ${data.orgTitle}.</p>
       <br/>
       <p> Please click on the link below to get started with Flossly. </p>
-       <a href=${
-         config.public.BASE_URL + "invite/" + data.link
-       } target="blank"> Get Started </a>
+       <a href="${baseUrl}/invite/${data.link}" target="blank"> Get Started </a>
           <br/><br/>
           <p>Best regards,<br/>The Flossly Team</p>`;
   const html = template

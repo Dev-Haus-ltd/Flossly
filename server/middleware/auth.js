@@ -1,4 +1,6 @@
 import jwt from 'jsonwebtoken'
+import { User, UserOrganisation } from '../models'
+import { error } from '../utils/response'
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig();
@@ -30,8 +32,44 @@ export default defineEventHandler(async (event) => {
   
   try {
     const decoded = jwt.verify(token, config.JWT_SECRET);
+    
+    // Validate organization membership if orgId is present in token
+    if (decoded.orgId && decoded.userId) {
+      // Check if user's global status is not disabled/expired
+      const user = await User.findByPk(decoded.userId, {
+        attributes: ['status'],
+      });
+      
+      if (user && (user.status === "Disabled" || user.status === "Expired")) {
+        return error(403, "Your account is deactivated");
+      }
+      
+      // Check if user's organization membership is still active
+      const membership = await UserOrganisation.findOne({
+        where: {
+          userId: decoded.userId,
+          organisationId: decoded.orgId,
+          isActive: true,
+          status: "Active",
+        },
+      });
+      
+      // Allow profile and switchOrg endpoints even if current org is inactive
+      // This allows users to switch to another active org
+      const isOrgSwitchEndpoint = path.includes('/api/auth/profile') || 
+                                   path.includes('/api/auth/switchOrg');
+      
+      if (!membership && !isOrgSwitchEndpoint) {
+        return error(403, "Your organisation membership is inactive");
+      }
+    }
+    
     event.context.user = decoded;
   } catch (err) {
+    // If it's already an error response, re-throw it
+    if (err.statusCode) {
+      throw err;
+    }
     console.log('[AUTH] Token verification failed:', err.message);
     return error(401, "Invalid/Expired Token");
   }
