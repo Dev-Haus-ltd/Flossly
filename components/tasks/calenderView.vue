@@ -65,7 +65,7 @@
             </div>
           </template>
 
-          <v-card class="rounded-lg pa-4" width="200">
+          <v-card class="rounded-lg pa-4" width="250">
             <h4>{{ "Task: " + event.title }}</h4>
             <p>Assigned To:</p>
             <CommonAvatar
@@ -80,6 +80,34 @@
             <p :style="{ color: event.priority.color }">
               {{ "Priority: " + event.priority.name }}
             </p>
+            <p v-if="event.frequency">
+              {{ "Frequency: " + event.frequency }}
+            </p>
+            
+            <!-- Quick Action Buttons -->
+            <div class="d-flex flex-column mt-3" style="gap: 8px;">
+              <v-btn
+                v-if="event.status.key !== 'completed'"
+                size="small"
+                color="success"
+                variant="flat"
+                @click="completeTask(event)"
+                :loading="completingTask === event.id"
+              >
+                <v-icon size="16" class="mr-1">mdi-check-circle</v-icon>
+                Mark Complete
+              </v-btn>
+              
+              <v-btn
+                size="small"
+                color="primary"
+                variant="outlined"
+                @click="openTaskDetails(event)"
+              >
+                <v-icon size="16" class="mr-1">mdi-pencil</v-icon>
+                Edit Details
+              </v-btn>
+            </div>
           </v-card>
         </v-menu>
       </template>
@@ -96,7 +124,7 @@
 import { useDisplay } from 'vuetify'
 
 const { xs } = useDisplay()
-const emit = defineEmits(["onOpen"]);
+const emit = defineEmits(["onOpen", "onTaskCompleted"]);
 const detailsDialog = ref(false);
 const selectedItem = ref(null);
 const calender = ref(null);
@@ -105,10 +133,68 @@ const { tasks } = defineProps({
   tasks: Array,
 });
 const showingAllTasks = ref(false);
+const completingTask = ref(null);
+
+// Composables and stores
+const taskStore = useTaskStore();
+const mainStore = useMainStore();
 
 const openTaskDetails = (task) => {
   detailsDialog.value = true;
   selectedItem.value = task;
+};
+
+const completeTask = async (task) => {
+  if (!task.id) {
+    return;
+  }
+  
+  completingTask.value = task.id;
+  
+  try {
+    const completedStatusId = await getCompletedStatusId();
+    if (!completedStatusId) {
+      throw new Error("Completed status not found");
+    }
+
+    const response = await taskStore.updateUserTask({
+      id: task.id,
+      taskId: task.taskId || task.id,
+      statusId: completedStatusId,
+    });
+
+    if (response.code === 0) {
+      mainStore.setSnackbar({
+        title: `Task "${task.title}" completed successfully!${task.frequency && task.frequency !== 'One off' ? ' Next instance has been generated.' : ''}`,
+        type: "success",
+      });
+      
+      emit("onTaskCompleted");
+    } else {
+      throw new Error(response.message || "Failed to complete task");
+    }
+  } catch (error) {
+    mainStore.setSnackbar({
+      title: error.message || "Failed to complete task. Please try again.",
+      type: "error",
+    });
+  } finally {
+    completingTask.value = null;
+  }
+};
+
+const getCompletedStatusId = async () => {
+  try {
+    const orgStore = useOrgStore();
+    const statuses = await orgStore.getTaskStatuses();
+    if (statuses.code === 0) {
+      const completedStatus = statuses.data.find(s => s.key === "completed");
+      return completedStatus?.id;
+    }
+    return null;
+  } catch (error) {
+    return null;
+  }
 };
 function setToday() {
   focus.value = "";

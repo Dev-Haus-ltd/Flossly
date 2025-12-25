@@ -229,10 +229,16 @@ onMounted(() => {
     // Try to find the current organization
     let foundOrg = null;
     
-    // Filter to only active organizations
+    // Filter to only active organizations and user is not deactivated
     const activeOrgs = storedUser.userOrganisations.filter(org => {
       const isActive = org.isActive !== undefined ? org.isActive : true; // Default to true for backward compatibility
-      return isActive;
+      // Check if user is deactivated:
+      // 1. Globally disabled/expired, OR
+      // 2. Not active in this organization (org-specific deactivation)
+      const isGloballyDeactivated = storedUser.status === "Disabled" || storedUser.status === "Expired";
+      const isOrgDeactivated = !isActive && storedUser.status === "Active";
+      const isNotDeactivated = !isGloballyDeactivated && !isOrgDeactivated;
+      return isActive && isNotDeactivated;
     });
     
     // First try to find by organisationId
@@ -340,10 +346,16 @@ const currentOrg = ref({});
 // Watch for changes in user data and update currentOrg accordingly
 watch(() => user.value, (newUser) => {
   if (newUser?.userOrganisations?.length) {
-    // Filter to only active organizations
+    // Filter to only active organizations and user is not deactivated
     const activeOrgs = newUser.userOrganisations.filter(org => {
       const isActive = org.isActive !== undefined ? org.isActive : true; // Default to true for backward compatibility
-      return isActive;
+      // Check if user is deactivated:
+      // 1. Globally disabled/expired, OR
+      // 2. Not active in this organization (org-specific deactivation)
+      const isGloballyDeactivated = newUser.status === "Disabled" || newUser.status === "Expired";
+      const isOrgDeactivated = !isActive && newUser.status === "Active";
+      const isNotDeactivated = !isGloballyDeactivated && !isOrgDeactivated;
+      return isActive && isNotDeactivated;
     });
     
     // Try to find the current organization

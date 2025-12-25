@@ -529,7 +529,7 @@ const getUsers = () => {
       users.value = res.data;
       // Initialize userList with all active users if no role is selected
       if (!form.value.roleId) {
-        const activeUsers = res.data.filter((x) => x.status === "Active");
+        const activeUsers = res.data.filter((x) => x.isActive);
         userList.value = activeUsers;
         form.value.userIds = form.value.userIds.filter((id) =>
           activeUsers.some((u) => u.id === id)

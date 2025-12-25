@@ -2,9 +2,13 @@
   <div>
     <div
       class="d-flex align-center my-2"
-      style="flex-wrap: nowrap; overflow-x: auto;"
+      style="
+        flex-wrap: nowrap;
+        justify-content: space-between;
+        overflow-x: auto;
+      "
     >
-      <div class="d-inline-flex align-center py-1" style="flex-wrap: nowrap;">
+      <div class="d-inline-flex align-center py-1" style="flex-wrap: nowrap">
         <v-btn-toggle v-model="viewType" mandatory class="custom-toggle">
           <v-btn value="list" class="toggle-btn">
             <img
@@ -33,6 +37,8 @@
             v-model="searchInput"
             placeholder="Search"
             append-inner-icon="mdi-magnify"
+            clearable
+            @click:clear="clearSearch"
             variant="solo"
             :elevation="0"
             density="compact"
@@ -47,6 +53,8 @@
         <TasksMenuItemsFilterMenu
           :priorities="priorities"
           :users="users"
+          :statuses="statuses"
+          :clear-trigger="clearFiltersTrigger"
           @update:filters="onFiltersUpdated"
         />
         <div class="">
@@ -172,7 +180,7 @@
         </v-card>
       </v-dialog>
 
-      <div class="d-inline-flex" style="flex-wrap: nowrap;">
+      <div class="d-inline-flex ml-auto" style="flex-wrap: nowrap">
         <v-btn
           color="tertiary"
           variant="flat"
@@ -212,6 +220,33 @@
       </div>
     </div>
 
+    <div
+      v-if="activeFilterChips.length"
+      class="d-flex align-center flex-wrap mt-2"
+      style="gap: 8px"
+    >
+      <v-chip
+        v-for="chip in activeFilterChips"
+        :key="chip.key"
+        size="small"
+        color="primary"
+        variant="elevated"
+        closable
+        @click:close="removeFilter(chip.key)"
+      >
+        {{ chip.label }}
+      </v-chip>
+      <v-chip
+        color="secondary"
+        size="small"
+        variant="text"
+        class="ml-1"
+        @click="clearAllFilters"
+      >
+        Clear filters
+      </v-chip>
+    </div>
+
     <v-expansion-panels
       v-if="viewType === 'list' && taskDetails && taskDetails.length"
       v-model="openedPanels"
@@ -242,24 +277,33 @@
                 {{ getStatuses(group.status) }}
               </v-chip>
               <v-chip class="ml-2" :color="getColor(group.status)" label>
-                {{ group.tasks.length }}
+                {{
+                  group.total ??
+                  getStatusTotal(group.status) ??
+                  group.tasks.length
+                }}
               </v-chip>
             </div>
           </template>
         </v-expansion-panel-title>
         <v-expansion-panel-text>
-          <v-data-table
+          <v-data-table-server
             v-if="group.tasks.length"
             :items="group.tasks"
             v-model="selectedTasks"
             v-model:search="search"
             :headers="selectedHeaders"
             :expanded="expanded"
+            :items-per-page="pageSize"
+            :items-length="group.total ?? getStatusTotal(group.status)"
+            :page="page"
             item-value="id"
             class="resizable-table"
             density="compact"
             :item-selectable="() => true"
             @update:modelValue="onSelectionChange"
+            @update:page="onPageChange"
+            @update:items-per-page="onPageSizeChange"
             return-object
             show-select
             hover
@@ -300,6 +344,7 @@
                 <template #item="{ element: column, index: i }">
                   <th
                     :style="{
+                      width: column.width + 'px',
                       minWidth: column.width + 'px',
                       padding: '0px 7px',
                       backgroundColor: '#F6F6F6',
@@ -325,7 +370,7 @@
                       <p
                         v-if="!isEditing(column, index)"
                         @click="enableEditing(column, index)"
-                        style="cursor: text;"
+                        style="cursor: text"
                       >
                         {{ column.title }}
                       </p>
@@ -345,24 +390,24 @@
                         class="small-input"
                       />
 
-                     <div class="d-flex justify-end">
-                      <v-icon
-                        size="14"
-                        color="black"
-                        style="cursor: pointer"
-                        @click.stop="removeHeaderFromSeleted(column)"
-                      >
-                        mdi-minus
-                      </v-icon>
-                      <v-icon
-                        v-if="column.sortable"
-                        size="12"
-                        class="ml-2"
-                        @click="toggleSort(column)"
-                      >
-                        {{ getSortIcon(column) }}
-                      </v-icon>
-                     </div>
+                      <div class="d-flex justify-end">
+                        <v-icon
+                          size="14"
+                          color="black"
+                          style="cursor: pointer"
+                          @click.stop="removeHeaderFromSeleted(column)"
+                        >
+                          mdi-minus
+                        </v-icon>
+                        <v-icon
+                          v-if="column.sortable"
+                          size="12"
+                          class="ml-2"
+                          @click="toggleSort(column)"
+                        >
+                          {{ getSortIcon(column) }}
+                        </v-icon>
+                      </div>
                       <span
                         class="resize-handle"
                         :id="`resize-handle-${column.key}-${index}`"
@@ -383,8 +428,15 @@
                 <div class="pa-1 d-flex justify-space-between align-center">
                   <v-text-field
                     v-model="item.title"
-                    :variant="isFocused(item.id, 'title') ? 'outlined' : 'plain'"
-                    @focus="() => { setFocus(item.id, 'title', true); storeOriginalValue(item.id, 'title', item); }"
+                    :variant="
+                      isFocused(item.id, 'title') ? 'outlined' : 'plain'
+                    "
+                    @focus="
+                      () => {
+                        setFocus(item.id, 'title', true);
+                        storeOriginalValue(item.id, 'title', item);
+                      }
+                    "
                     @blur="updateValueRow(item, 'title')"
                     density="compact"
                     hide-details
@@ -410,7 +462,7 @@
                   :column="col"
                   @update="updateValueRow(item, 'status')"
                 />
-              </template> 
+              </template>
               <template v-else-if="col.key === 'priority.name'">
                 <DataTableColumnsPriorities
                   :priorities="priorities"
@@ -437,6 +489,59 @@
                   v-model="item.dueDate"
                   @update:modelValue="updateValueRow(item, 'dueDate')"
                 />
+              </template>
+              <template v-else-if="col.key === 'documentLink'">
+                <div class="d-flex align-center pa-1">
+                  <template
+                    v-if="
+                      templateLinkDetails(item.documentLink).type === 'link' &&
+                      !isEditingLink(item.id, col.key)
+                    "
+                  >
+                    <a
+                      :href="templateLinkDetails(item.documentLink).value"
+                      target="_blank"
+                      rel="noopener"
+                      class="template-link-anchor"
+                    >
+                      {{ item.documentLink }}
+                    </a>
+                    <v-btn
+                      icon
+                      size="x-small"
+                      variant="text"
+                      class="ml-1"
+                      @click.stop="startEditingLink(item, col.key)"
+                    >
+                      <v-icon size="14">mdi-pencil</v-icon>
+                    </v-btn>
+                  </template>
+                  <template v-else>
+                    <v-text-field
+                      :model-value="item.documentLink"
+                      @update:modelValue="
+                        (val) => {
+                          item.documentLink = val;
+                        }
+                      "
+                      :variant="
+                        isFocused(item.id, col.key) ? 'outlined' : 'plain'
+                      "
+                      @focus="
+                        () => {
+                          setFocus(item.id, col.key, true);
+                          storeOriginalValue(item.id, col.key, item);
+                        }
+                      "
+                      @blur="updateValueRow(item, 'documentLink')"
+                      density="compact"
+                      @keyup.enter="(e) => handleEnterKey(e, item, col.key)"
+                      @keyup.escape="(e) => handleEscapeKey(e, item, col.key)"
+                      hide-details
+                      class="small-input"
+                    />
+                  </template>
+                </div>
               </template>
               <template v-else-if="col.key === 'updatedAt'">
                 <p class="text-center">{{ formattedDate(item.updatedAt) }}</p>
@@ -551,11 +656,20 @@
                 <div class="d-flex align-center pa-1">
                   <v-text-field
                     :model-value="getNestedValue(item, col.key)"
-                    @update:modelValue="(val) => {
-                      setNestedValue(item, col.key, val);
-                    }"
-                    :variant="isFocused(item.id, col.key) ? 'outlined' : 'plain'"
-                    @focus="() => { setFocus(item.id, col.key, true); storeOriginalValue(item.id, col.key, item); }"
+                    @update:modelValue="
+                      (val) => {
+                        setNestedValue(item, col.key, val);
+                      }
+                    "
+                    :variant="
+                      isFocused(item.id, col.key) ? 'outlined' : 'plain'
+                    "
+                    @focus="
+                      () => {
+                        setFocus(item.id, col.key, true);
+                        storeOriginalValue(item.id, col.key, item);
+                      }
+                    "
                     @blur="updateValueRow(item, col.key)"
                     density="compact"
                     @keyup.enter="(e) => handleEnterKey(e, item, col.key)"
@@ -628,7 +742,9 @@
                               <span
                                 class="resize-handle"
                                 :id="`resize-handle-${column.key}-${index}`"
-                                @pointerdown="startResize($event, column, index)"
+                                @pointerdown="
+                                  startResize($event, column, index)
+                                "
                               >
                               </span>
                             </div>
@@ -788,7 +904,9 @@
                 color="primary"
                 variant="flat"
                 rounded="lg"
-                @click="openAddTaskDialogForStatus(group.status, currentCategoryId)"
+                @click="
+                  openAddTaskDialogForStatus(group.status, currentCategoryId)
+                "
                 class="add-status-task-btn"
               >
                 <v-icon size="16" class="mr-1">mdi-plus-circle-outline</v-icon>
@@ -796,12 +914,16 @@
               </v-btn>
               <v-spacer></v-spacer>
             </template>
-          </v-data-table>
+          </v-data-table-server>
         </v-expansion-panel-text>
       </v-expansion-panel>
     </v-expansion-panels>
 
-    <TasksCalenderView v-else-if="viewType === 'calender' && taskDetails && taskDetails.length" :tasks="tasksForCalender" />
+    <TasksCalenderView
+      v-else-if="viewType === 'calender' && taskDetails && taskDetails.length"
+      :tasks="tasksForCalender"
+      @onTaskCompleted="updateTasks"
+    />
 
     <div v-else class="d-flex justify-center mt-5">
       <p class="mt-7">No current task found.</p>
@@ -816,7 +938,14 @@
 
     <!-- Add Task Panel - Only render after page loads -->
     <ClientOnly>
-      <template v-if="categories && categories.length > 0 && priorities && priorities.length > 0 && users && users.length > 0">
+      <template
+        v-if="
+          categories &&
+          categories.length > 0 &&
+          priorities &&
+          priorities.length > 0
+        "
+      >
         <TasksAddTask
           v-model="drawerOpen"
           :preSelectedStatus="selectedStatusForNewTask"
@@ -845,6 +974,7 @@
 
 <script setup>
 import { parsedDate } from "@/lib/dateFormatter";
+import { describeTextContent } from "@/lib/misc";
 import draggable from "vuedraggable";
 import listicon from "@/assets/icons/listView/listicon.svg";
 import calendericon from "@/assets/icons/listView/calendericon.svg";
@@ -858,6 +988,11 @@ const {
   categories,
   clearSelection,
   customColumnHeaders,
+  page,
+  pageSize,
+  statusTotals,
+  currentCategoryId,
+  activeFilters,
 } = defineProps({
   headers: Array,
   taskDetails: Array,
@@ -868,9 +1003,25 @@ const {
   users: Array,
   categories: Array,
   clearSelection: Boolean,
-    currentCategoryId: {  // ← ADD THIS NEW PROP
+  page: {
+    type: Number,
+    default: 1,
+  },
+  pageSize: {
+    type: Number,
+    default: 10,
+  },
+  statusTotals: {
+    type: Object,
+    default: () => ({}),
+  },
+  currentCategoryId: {
     type: Number,
     default: null,
+  },
+  activeFilters: {
+    type: Object,
+    default: () => ({}),
   },
 });
 watch(
@@ -884,10 +1035,20 @@ watch(
 );
 const updateHeaderOrder = (newOrder) => {
   const selectable = newOrder.findIndex((x) => !x.title);
-  newOrder.splice(selectable, 1);
+  if (selectable !== -1) {
+    newOrder.splice(selectable, 1);
+  }
   selectedHeaders.value = newOrder;
+  updateUserPreferences();
 };
-const emit = defineEmits(["onFilter", "onUpdate", "updateSelectedRowItems"]);
+const emit = defineEmits([
+  "onFilter",
+  "onUpdate",
+  "updateSelectedRowItems",
+  "onPageChange",
+  "onPageSizeChange",
+  "onSearch",
+]);
 const fixedColumnOrder = [
   "title",
   "status",
@@ -1055,15 +1216,19 @@ const searchInput = ref("");
 const search = ref("");
 let searchTimeout = null;
 
-watch(
-  searchInput,
-  (val) => {
-    if (searchTimeout) clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(() => {
-      search.value = val;
-    }, 250);
-  }
-);
+watch(searchInput, (val) => {
+  if (searchTimeout) clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    const trimmed = (val || "").trim();
+    if (!trimmed) {
+      search.value = "";
+      emit("onSearch", "");
+      return;
+    }
+    search.value = trimmed;
+    emit("onSearch", trimmed);
+  }, 250);
+});
 const expanded = ref([]);
 const focusedField = ref({});
 const originalFieldValues = ref({}); // Store original values for Escape key functionality
@@ -1101,6 +1266,7 @@ const dataTypeOptions = [
   { label: "Boolean", value: "boolean" },
   { label: "Dropdown", value: "dropdown" },
 ];
+const clearFiltersTrigger = ref(0);
 
 const openAddTaskDialog = () => {
   selectedStatusForNewTask.value = null;
@@ -1180,16 +1346,17 @@ const tasksForCalender = ref([]);
 const bulkTaskUploadDialog = ref(false);
 const rolesList = ref([]);
 const isResizing = ref(false);
-const editingColumn = ref({})
+const editingColumn = ref({});
+const editingLinkField = ref({});
 
 const enableEditing = (column, index) => {
   editingColumn.value[`${index}-${column.key}`] = true;
-  setFocus('header', column.key, true)
-}
+  setFocus("header", column.key, true);
+};
 
 const isEditing = (column, index) => {
-  return editingColumn.value[`${index}-${column.key}`] === true
-}
+  return editingColumn.value[`${index}-${column.key}`] === true;
+};
 
 // Computed property to filter available headers (exclude already selected ones)
 const filteredAvailableHeaders = computed(() => {
@@ -1204,11 +1371,93 @@ const filteredAvailableHeaders = computed(() => {
   ];
 
   // Get the keys of all selected headers
-  const selectedKeys = new Set(selectedHeaders.value.map(h => h.key));
+  const selectedKeys = new Set(selectedHeaders.value.map((h) => h.key));
 
   // Filter out headers that are already selected
-  return allHeaders.filter(header => !selectedKeys.has(header.key));
+  return allHeaders.filter((header) => !selectedKeys.has(header.key));
 });
+
+const dueDateLabels = {
+  overdue: "Due: Overdue",
+  today: "Due: Today",
+  week: "Due: This week",
+};
+
+const activeFilterChips = computed(() => {
+  const chips = [];
+  const filters = activeFilters || {};
+
+  if (filters.search) {
+    chips.push({ key: "search", label: `Search: ${filters.search}` });
+  }
+  if (filters.priority) {
+    const match = priorities?.find?.((p) => p.id === filters.priority);
+    chips.push({
+      key: "priority",
+      label: `Priority: ${match?.name || filters.priority}`,
+    });
+  }
+  if (filters.user) {
+    const match = users?.find?.((u) => u.id === filters.user);
+    chips.push({
+      key: "user",
+      label: `Assignee: ${match?.fullName || filters.user}`,
+    });
+  }
+  if (filters.frequency) {
+    chips.push({ key: "frequency", label: `Frequency: ${filters.frequency}` });
+  }
+  if (filters.status) {
+    const match = statuses.value?.find?.(
+      (s) => s.key?.toLowerCase?.() === String(filters.status).toLowerCase()
+    );
+    chips.push({
+      key: "status",
+      label: `Status: ${match?.name || filters.status}`,
+    });
+  }
+  if (filters.dueDateFilter) {
+    chips.push({
+      key: "dueDateFilter",
+      label:
+        dueDateLabels[filters.dueDateFilter] || `Due: ${filters.dueDateFilter}`,
+    });
+  }
+
+  return chips;
+});
+
+const getStatusTotal = (statusKey) => {
+  const normalize = (key) =>
+    typeof key === "string" ? key.toLowerCase().replace(/\s+/g, "") : key;
+
+  const normKey = normalize(statusKey);
+  if (statusTotals && typeof statusTotals === "object") {
+    const totalRaw =
+      statusTotals[statusKey] ??
+      statusTotals[normKey] ??
+      statusTotals[normKey?.toUpperCase?.()];
+    const totalNum = Number(totalRaw);
+    if (!Number.isNaN(totalNum)) {
+      return totalNum;
+    }
+  }
+  // Fallback to group-level total, then loaded items length
+  const matchingGroup = taskDetails?.find?.(
+    (t) => normalize(t.status) === normKey
+  );
+  const groupTotal = Number(matchingGroup?.total);
+  if (!Number.isNaN(groupTotal)) return groupTotal;
+  return matchingGroup?.tasks?.length || 0;
+};
+
+const onPageChange = (val) => {
+  emit("onPageChange", val);
+};
+
+const onPageSizeChange = (val) => {
+  emit("onPageSizeChange", val);
+};
 
 const getRoles = () => {
   mainStore
@@ -1228,21 +1477,19 @@ onMounted(() => {
   statuses.value = orgStatuses;
   priorityStatuses.value = priorities;
   user.value = JSON.parse(localStorage.getItem("user"));
-    // Add keyboard shortcut listener
-  window.addEventListener('keydown', handleKeyboardShortcut);
-
+  // Add keyboard shortcut listener
+  window.addEventListener("keydown", handleKeyboardShortcut);
 });
 
 // Add cleanup on unmount
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', handleKeyboardShortcut);
+  window.removeEventListener("keydown", handleKeyboardShortcut);
 });
 
 // Add this new function to handle keyboard shortcuts
 const handleKeyboardShortcut = (event) => {
-  
   // Option 1: Ctrl/Cmd + Shift + +
-  if (event.shiftKey && event.key === '+') {
+  if (event.shiftKey && event.key === "+") {
     event.preventDefault();
     openAddTaskDialog();
   }
@@ -1252,7 +1499,7 @@ watch(
   () => headers,
   (newVal) => {
     if (newVal && newVal.length > 0) {
-      selectedHeaders.value = sortHeaders(newVal)
+      selectedHeaders.value = sortHeaders(newVal);
     }
   },
   { immediate: true, deep: true }
@@ -1272,9 +1519,12 @@ watch(
   () => taskDetails,
   (newVal) => {
     selectedItem.value = [];
+    selectedTasks.value = []; // Clear selections when task details change
+    emit("updateSelectedRowItems", []); // Notify parent to clear selection UI
     tasksForCalender.value = newVal.flatMap((group) =>
       group.tasks.map((task) => ({
         id: task.id,
+        taskId: task.taskId || task.taskDetails?.id,
         title: task.title,
         name: task.title,
         start: calenderDate(task.dueDate || task.createdAt),
@@ -1282,6 +1532,7 @@ watch(
         color: task.status?.color || task.priority?.color || "#2196F3",
         status: task.status,
         priority: task.priority,
+        frequency: task.frequency,
         userId: task.userId,
         assignedUsers: task.assignedUsers ? task.assignedUsers : [user.value],
         category: task.taskDetails?.category,
@@ -1303,12 +1554,33 @@ const calenderDate = (data) => {
 };
 const getTaskUsers = (task) => {
   if (users) {
-    return users.filter((x) => x.roleId !== task.taskDetails.roleId && x.status === "Active");
+    if (task.taskDetails.roleId) {
+      return users.filter(
+        (x) => x.roleId === task.taskDetails.roleId && x.isActive
+      );
+    } else {
+      return users.filter((x) => x.isActive);
+    }
   } else return [];
+};
+const isEditingLink = (id, key) =>
+  editingLinkField.value[`${id}-${key}`] === true;
+
+const startEditingLink = (item, key) => {
+  editingLinkField.value[`${item.id}-${key}`] = true;
+  setFocus(item.id, key, true);
+  storeOriginalValue(item.id, key, item);
+};
+
+const stopEditingLink = (id, key) => {
+  delete editingLinkField.value[`${id}-${key}`];
+  setFocus(id, key, false);
 };
 const updateTasks = () => {
   drawerOpen.value = false;
   taskPoolDialog.value = false;
+  selectedTasks.value = []; // Clear selections when tasks are updated
+  emit("updateSelectedRowItems", []); // Notify parent to clear selection UI
   emit("onUpdate");
 };
 // sub tasks
@@ -1338,19 +1610,20 @@ const getColor = (key) => {
   }
 };
 const formattedDate = (date) => {
-  if (!date) return '';
-  
+  if (!date) return "";
+
   try {
     const dateObj = new Date(date);
-    const day = String(dateObj.getDate()).padStart(2, '0');
-    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, "0");
+    const month = String(dateObj.getMonth() + 1).padStart(2, "0");
     const year = dateObj.getFullYear();
-    
+
     return `${day}/${month}/${year}`;
   } catch (error) {
-    return '';
+    return "";
   }
 };
+const templateLinkDetails = (value) => describeTextContent(value || "");
 const setFocus = (id, key, state) => {
   focusedField.value[`${id}-${key}`] = state;
 };
@@ -1444,7 +1717,7 @@ const updateUserPreferences = async () => {
 };
 
 const updateValueColumn = (column) => {
-  editingColumn.value = {}
+  editingColumn.value = {};
   setFocus("header", column.key, false);
 };
 const updateSubtaskValueColumn = (column) => {
@@ -1467,7 +1740,7 @@ const updateTaskInfo = (task) => {
       description: task.taskDetails?.description,
     },
   };
-  
+
   taskStore
     .updateUserTask(updateData)
     .then((res) => {
@@ -1493,7 +1766,7 @@ const storeOriginalValue = (id, key, row) => {
   const fieldId = `${id}-${key}`;
 
   // Store the original value (handle both simple and nested values)
-  if (key.includes('.')) {
+  if (key.includes(".")) {
     originalFieldValues.value[fieldId] = getNestedValue(row, key);
   } else {
     originalFieldValues.value[fieldId] = row[key];
@@ -1508,7 +1781,7 @@ const handleEscapeKey = (event, row, key) => {
 
   if (originalValue !== undefined) {
     // Revert to the original value
-    if (key.includes('.')) {
+    if (key.includes(".")) {
       setNestedValue(row, key, originalValue);
     } else {
       row[key] = originalValue;
@@ -1540,12 +1813,90 @@ const updateValueRow = async (row, key) => {
 
   setFocus(row.id, key, false);
 
-  if (key === "name") return;
+  // Validate title before saving (handle both 'name' and 'title' keys)
+  if (
+    (key === "name" || key === "title") &&
+    row.title !== undefined &&
+    row.title !== null
+  ) {
+    // Check if title is empty or only whitespace
+    if (!row.title || typeof row.title !== "string" || !row.title.trim()) {
+      // Revert to original value
+      if (originalValue !== undefined && originalValue !== null) {
+        row.title = originalValue;
+      } else {
+        emit("onUpdate");
+      }
+      // Don't delete originalValue - keep it for next attempt
+      mainStore.setSnackbar({
+        title: "Task title cannot be empty or only spaces",
+        type: "error",
+      });
+      return;
+    }
+
+    // Trim the title to remove leading/trailing spaces
+    const trimmedTitle = row.title.trim();
+
+    // Check if trimmed title is empty after trimming
+    if (!trimmedTitle) {
+      // Revert to original value
+      if (originalValue !== undefined && originalValue !== null) {
+        row.title = originalValue;
+      } else {
+        emit("onUpdate");
+      }
+      // Don't delete originalValue - keep it for next attempt
+      mainStore.setSnackbar({
+        title: "Task title cannot be empty or only spaces",
+        type: "error",
+      });
+      return;
+    }
+
+    // Check length after trimming
+    if (trimmedTitle.length > 150) {
+      // Revert to original value
+      if (originalValue !== undefined && originalValue !== null) {
+        row.title = originalValue;
+      } else {
+        emit("onUpdate");
+      }
+      // Don't delete originalValue - keep it for next attempt
+      mainStore.setSnackbar({
+        title: "Task title must be 150 characters or less",
+        type: "error",
+      });
+      return;
+    }
+
+    // Apply trimmed title
+    row.title = trimmedTitle;
+
+    // Clean up the stored original value after validation passes
+    delete originalFieldValues.value[fieldId];
+  } else {
+    // For non-title fields, clean up original value
+    delete originalFieldValues.value[fieldId];
+  }
+
+  // Skip saving for comments only
+  if (key === "comments") return;
+
+  if (key === "documentLink") {
+    const meta = templateLinkDetails(row.documentLink);
+    if (meta.type === "empty") {
+      row.documentLink = "";
+    } else {
+      row.documentLink = meta.value;
+    }
+    stopEditingLink(row.id, key);
+  }
 
   // New nested-value handling
   const currentValue = getNestedValue(row, key);
 
-  if (key.includes('.')) {
+  if (key.includes(".")) {
     const nestedValue = getNestedValue(row, key);
     console.log(`Sending update for ${key}:`, nestedValue);
   }
@@ -1555,7 +1906,8 @@ const updateValueRow = async (row, key) => {
 
     if (res.code !== 0) {
       mainStore.setSnackbar({
-        title: "Error while updating the task",
+        title:
+          res.data?.message || res.message || "Error while updating the task",
         type: "error",
       });
       return;
@@ -1569,15 +1921,87 @@ const updateValueRow = async (row, key) => {
       title: "Task updated successfully",
       type: "success",
     });
-
   } catch (err) {
     mainStore.setSnackbar({
       title: "Error while updating the task",
       type: "error",
     });
+    emit("onUpdate");
   }
 };
 
+const updateTitle = (row, key) => {
+  setFocus(row.id, key, false);
+
+  // Validate title before saving (handle both 'name' and 'title' keys)
+  if (
+    (key === "name" || key === "title") &&
+    row.title !== undefined &&
+    row.title !== null
+  ) {
+    // Check if title is empty or only whitespace
+    if (!row.title || typeof row.title !== "string" || !row.title.trim()) {
+      // Revert to previous value
+      emit("onUpdate");
+      mainStore.setSnackbar({
+        title: "Task title cannot be empty or only spaces",
+        type: "error",
+      });
+      return;
+    }
+
+    // Trim the title to remove leading/trailing spaces
+    const trimmedTitle = row.title.trim();
+
+    // Check if trimmed title is empty after trimming
+    if (!trimmedTitle) {
+      emit("onUpdate");
+      mainStore.setSnackbar({
+        title: "Task title cannot be empty or only spaces",
+        type: "error",
+      });
+      return;
+    }
+
+    // Check length after trimming
+    if (trimmedTitle.length > 150) {
+      emit("onUpdate");
+      mainStore.setSnackbar({
+        title: "Task title must be 150 characters or less",
+        type: "error",
+      });
+      return;
+    }
+
+    // Apply trimmed title
+    row.title = trimmedTitle;
+  }
+
+  taskStore
+    .updateUserTask(row)
+    .then((res) => {
+      if (res.code !== 0) {
+        mainStore.setSnackbar({
+          title:
+            res.data?.message || res.message || "Error while updating the task",
+          type: "error",
+        });
+        // Revert changes on error
+        emit("onUpdate");
+      } else {
+        if (key === "status") {
+          emit("onUpdate");
+        }
+      }
+    })
+    .catch((err) => {
+      mainStore.setSnackbar({
+        title: err.message || "Error while updating the task",
+        type: "error",
+      });
+      emit("onUpdate");
+    });
+};
 
 function getNestedValue(obj, path) {
   return path
@@ -1587,18 +2011,18 @@ function getNestedValue(obj, path) {
 function setNestedValue(obj, path, value) {
   const keys = path.split(".");
   let current = obj;
-  
+
   // Navigate through all keys except the last one
   for (let i = 0; i < keys.length - 1; i++) {
     const key = keys[i];
-    
+
     // Create intermediate objects if they don't exist
-    if (!(key in current) || typeof current[key] !== 'object') {
+    if (!(key in current) || typeof current[key] !== "object") {
       current[key] = {};
     }
     current = current[key];
   }
-  
+
   // Set the final value
   const lastKey = keys[keys.length - 1];
   current[lastKey] = value;
@@ -1615,7 +2039,8 @@ function startResize(e, col, i) {
   currentCol = col;
   startX = e.clientX;
   startWidth = col.width;
-  const handleEl = document.getElementById(`resize-handle-${col.key}-${i}`) || e.target;
+  const handleEl =
+    document.getElementById(`resize-handle-${col.key}-${i}`) || e.target;
 
   // use pointer capture on the actual handle if available
   try {
@@ -1662,9 +2087,8 @@ function stopResize(e) {
   } catch (err) {
     // ignore capture release errors
   }
-  currentCol = null
+  currentCol = null;
 }
-
 
 const updateHeaderTitle = (key, value) => {
   const target = selectedHeaders.value.find((col) => col.key === key);
@@ -1708,8 +2132,37 @@ function onFiltersUpdated(newFilters) {
   emit("onFilter", newFilters);
 }
 
+const clearSearch = () => {
+  searchInput.value = "";
+  search.value = "";
+  emit("onSearch", "");
+};
+
+const clearAllFilters = () => {
+  clearSearch();
+  emit("onFilter", {
+    frequency: null,
+    priority: null,
+    user: null,
+    status: null,
+    dueDateFilter: null,
+    search: "",
+  });
+  clearFiltersTrigger.value += 1;
+};
+
+const removeFilter = (key) => {
+  if (key === "search") {
+    clearSearch();
+    emit("onFilter", { search: "" });
+    return;
+  }
+  emit("onFilter", { [key]: null });
+};
+
 const onSelectionChange = (newSelected) => {
-  emit("updateSelectedRowItems", selectedTasks.value);
+  selectedTasks.value = newSelected;
+  emit("updateSelectedRowItems", newSelected);
 };
 
 const openAddTaskDialogForStatus = (status, categoryId) => {
@@ -1778,6 +2231,10 @@ th {
   box-shadow: none;
   color: #737373;
 }
+.resizable-table :deep(.v-table__wrapper table) {
+  width: 100%;
+  table-layout: fixed;
+}
 .resizable-table .th-content {
   display: flex;
   align-items: center;
@@ -1833,6 +2290,12 @@ th {
   background-color: #fff;
   margin-top: 16px;
   gap: 16px;
+}
+.template-link-anchor {
+  font-size: 13px;
+  color: #0061fb;
+  text-decoration: underline;
+  white-space: nowrap;
 }
 .cust-checkbox {
   width: 18px;

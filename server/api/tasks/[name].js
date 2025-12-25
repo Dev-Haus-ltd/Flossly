@@ -34,6 +34,7 @@ import {
   listUserTaskComments,
   updateUserTaskComment,
   deleteUserTaskComment,
+  bulkAddChecklistsByTitle,
   createCustomColumn,
   listCustomColumns,
   updateCustomColumn,
@@ -113,6 +114,8 @@ export default defineEventHandler(async (event) => {
       return await unAssignBulkTask(event);
     case "statsByCategory":
       return await getTeamTaskStatsByStatusAndCategory(event);
+    case "bulkAddChecklists":
+      return await bulkAddChecklistsByTitle(event);
     case "createCustomColumn":
       return await createCustomColumn(event);
     case "listCustomColumns":

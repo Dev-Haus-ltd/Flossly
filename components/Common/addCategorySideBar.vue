@@ -8,7 +8,9 @@
     :width="600"
   >
     <v-toolbar flat color="white">
-      <v-toolbar-title class="title-text"> Add New Category </v-toolbar-title>
+      <v-toolbar-title class="title-text">
+        {{ drawerTitle }}
+      </v-toolbar-title>
       <v-spacer />
       <v-btn
         icon
@@ -83,17 +85,17 @@
 
             <v-col cols="12">
               <label class="mb-1 fld-lbl">Color</label>
-              <v-text-field
-                density="compact"
-                variant="solo"
-                hide-details
-                class="w-100 input-bordered"
-                flat
-              >
-                <template #prepend-inner>
-                  <CommonColorPickerInput :item="form" />
-                </template>
-              </v-text-field>
+              <div class="color-swatches">
+                <button
+                  v-for="color in defaultColors"
+                  :key="color"
+                  type="button"
+                  class="color-swatch"
+                  :class="{ 'is-selected': form.color === color }"
+                  :style="{ backgroundColor: color }"
+                  @click="form.color = color"
+                />
+              </div>
             </v-col>
           </v-row>
         </v-form>
@@ -121,16 +123,20 @@
         @click="onSubmit()"
         flat
       >
-        Save
+        {{ isEditMode ? "Update" : "Save" }}
       </v-btn>
     </div>
   </v-navigation-drawer>
 </template>
 
 <script setup>
-const { modelValue, categories } = defineProps({
+const props = defineProps({
   modelValue: Boolean,
   categories: Array,
+  editCategory: {
+    type: Object,
+    default: null,
+  },
 });
 
 const mainStore = useMainStore();
@@ -147,25 +153,74 @@ const form = ref({
   parentId: null,
   color: "",
 });
+const defaultColors = [
+  "#7e22ce",
+  "#a855f7",
+  "#d946ef",
+  "#1e40af",
+  "#1d4ed8",
+  "#14b8a6",
+  "#a3a600",
+  "#65a30d",
+  "#f59e0b",
+  "#f97316",
+  "#dc2626",
+];
 
-const modelValueRef = toRef(() => modelValue);
+const modelValueRef = toRef(props, "modelValue");
+const editCategoryRef = toRef(props, "editCategory");
+const isEditMode = computed(() => !!editCategoryRef.value);
+const drawerTitle = computed(() =>
+  isEditMode.value ? "Edit Category" : "Add New Category"
+);
+
+const populateForm = (category = null) => {
+  const source = category || editCategoryRef.value;
+  form.value = {
+    id: source?.id || null,
+    name: source?.name || "",
+    description: source?.description || "",
+    parentId: source?.parentId || null,
+    color: source?.color || defaultColors[0],
+  };
+  if (formRef.value) {
+    formRef.value.resetValidation();
+  }
+};
 
 watch(
   modelValueRef,
   (newValue) => {
     if (newValue) {
-      mainCategories.value = categories?.filter((x) => !x.parentId) || [];
+        const list = props.categories || [];
+        const currentId = editCategoryRef.value?.id;
+        mainCategories.value = list.filter((x) => !x.parentId && x.id !== currentId);
       resetForm();
     }
   },
   { immediate: true }
 );
 
+watch(
+  editCategoryRef,
+  (updated) => {
+    if (modelValueRef.value && updated) {
+      populateForm(updated);
+    }
+  },
+  { deep: true }
+);
+
 const onSubmit = async () => {
   const formValidation = await formRef.value.validate();
   if (formValidation.valid) {
+    const payload = { ...form.value };
+    if (isEditMode.value && editCategoryRef.value?.id) {
+      payload.id = editCategoryRef.value.id;
+    }
+
     taskStore
-      .addCategory(form.value)
+      .addCategory(payload)
       .then((res) => {
         if (res.code === 0) {
           // Extract the newly created category from API response
@@ -184,7 +239,9 @@ const onSubmit = async () => {
           // Show success message
           mainStore.setSnackbar({
             type: "success",
-            title: "Category created successfully",
+            title: isEditMode.value
+              ? "Category updated successfully"
+              : "Category created successfully",
           });
         } else {
           mainStore.setSnackbar({
@@ -203,20 +260,11 @@ const onSubmit = async () => {
 };
 
 const resetForm = () => {
-  form.value = {
-    name: "",
-    description: "",
-    parentId: null,
-    color: "",
-  };
-  if (formRef.value) {
-    formRef.value.reset();
-    formRef.value.resetValidation();
-  }
+  populateForm();
 };
 
 const handleModelValueUpdate = (value) => {
-  if (!value && modelValue) {
+  if (!value && props.modelValue) {
     resetForm();
     emit("close");
   }
@@ -247,5 +295,22 @@ const onClose = () => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
+}
+.color-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 4px;
+}
+.color-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+}
+.color-swatch.is-selected {
+  border-color: #111827;
 }
 </style>

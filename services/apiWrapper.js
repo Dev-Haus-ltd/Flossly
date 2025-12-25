@@ -5,7 +5,11 @@ export const Get = async (url) => {
     method: "GET",
   };
   const response = await fetch(APIURL + url  , args)
-  return response.json()
+  const data = await response.json();
+  if (!response.ok) {
+    throw data;
+  }
+  return data;
 };
 export const Post = async (url, body) => {
   const args = {
@@ -21,7 +25,7 @@ export const Post = async (url, body) => {
   
   return data;
 };
-// 
+
 export const Delete = async (url, itemId) => {
   const args = {
     method: "POST",
@@ -30,9 +34,8 @@ export const Delete = async (url, itemId) => {
   const response = await fetch(APIURL + url, args);
   return response.json();
 };
-// post form data with optional upload progress support
+
 export const PostFormData = (url, body, onProgress) => {
-  // If no progress callback provided, fall back to fetch
   if (!onProgress) {
     return fetch(APIURL + url, {
       method: "POST",

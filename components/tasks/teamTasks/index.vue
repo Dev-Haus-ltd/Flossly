@@ -6,11 +6,17 @@
     <div class="pa-5 rounded-lg">
       <div class="task-summary">
         <!-- Cards Grid -->
-        <v-row v-if="taskStats && taskStats.length > 0"
+        <v-row
+          v-if="orderedTaskStats && orderedTaskStats.length > 0"
           style="flex-wrap: nowrap; overflow: auto;"
+        >
+          <v-col
+            cols="12"
+            md="3"
+            lg="2"
+            v-for="(item, i) in orderedTaskStats"
+            :key="i"
           >
-          <v-col cols="12"  md="3"
-          lg="2" v-for="(item, i) in taskStats" :key="i">
             <CommonStatCard
               :icon="getIcon(item.categoryName)"
               :label="item.categoryName"
@@ -21,30 +27,76 @@
           </v-col>
         </v-row>
       </div>
-      <v-tabs
-        v-model="currentTab"
-        class="custom-tabs mt-5"
-        slider-color="primary"
-      >
-        <v-tab
-          v-for="(cat, index) in taskStats"
-          :value="cat.categoryId"
-          :key="index"
-          class="tab-text"
-          @click="updateTasksList"
-          >{{ cat.categoryName }}</v-tab
+      <div class="tabs-bar mt-5">
+        <v-tabs
+          v-model="currentTab"
+          class="custom-tabs tabs-scroll"
+          slider-color="primary"
+          show-arrows
+          prev-icon="mdi-chevron-left"
+          next-icon="mdi-chevron-right"
         >
-
-        <!-- Plus Button Tab -->
-        <v-tab
-          class="tab-text d-flex align-center justify-center"
-          style="min-width: 40px; padding: 0 8px"
-          :value="null"
+          <draggable
+            tag="div"
+            class="d-flex tabs-draggable"
+            :model-value="orderedTaskStats"
+            item-key="categoryId"
+            direction="horizontal"
+            handle=".tab-inner"
+            @update:model-value="updateCategoryOrder"
+          >
+            <template #item="{ element: cat }">
+              <v-tab
+                :value="cat.categoryId"
+                :key="cat.categoryId"
+                class="tab-text category-tab"
+                :style="getTabStyle(cat)"
+                @click="updateTasksList"
+              >
+                <div class="d-flex align-center justify-center tab-inner">
+                  <span class="tab-label">{{ cat.categoryName }}</span>
+                  <v-menu offset-y>
+                    <template #activator="{ props }">
+                      <v-btn
+                        v-bind="props"
+                        icon
+                        variant="text"
+                        size="x-small"
+                        class="ml-1 category-menu-btn"
+                        @click.stop
+                      >
+                        <v-icon size="16">mdi-dots-horizontal</v-icon>
+                      </v-btn>
+                    </template>
+                    <v-list density="compact">
+                      <v-list-item
+                        v-if="canHideCategory(cat)"
+                        @click.stop="hideCategory(cat)"
+                      >
+                        <v-list-item-title>Hide</v-list-item-title>
+                      </v-list-item>
+                      <v-list-item
+                        v-if="canEditCategory(cat)"
+                        @click.stop="startEditCategory(cat)"
+                      >
+                        <v-list-item-title>Edit</v-list-item-title>
+                      </v-list-item>
+                    </v-list>
+                  </v-menu>
+                </div>
+              </v-tab>
+            </template>
+          </draggable>
+        </v-tabs>
+        <v-btn
+          class="add-tab-btn"
+          icon
+          variant="text"
           @click.stop.prevent="addNewCategoryDialog"
         >
           <v-icon size="20">mdi-plus</v-icon>
-        </v-tab>
-      </v-tabs>
+        </v-btn>
+      </div>
       <v-tabs-window v-model="currentTab">
         <v-tabs-window-item :value="currentTab">
           <TasksListView
@@ -57,9 +109,14 @@
             :categories="categories"
             :users="userList"
             :clearSelection="isTrayHidden"
+            :page="page"
+            :page-size="pageSize"
+            :status-totals="statusTotals"
             @onFilter="applyFilters"
             @onUpdate="updateTasks"
             @updateSelectedRowItems="updateSelectedRowItems"
+            @onPageChange="handlePageChange"
+            @onPageSizeChange="handlePageSizeChange"
           />
           <v-card
             v-if="selectedRowItems.length"
@@ -115,14 +172,6 @@
               <span class="action-label">Unarchive</span>
             </div>
 
-            <div
-              v-if="!hasArchivedTasks"
-              class="action-item d-flex flex-column align-center"
-              @click="handleComplete"
-            >
-              <v-icon size="24">mdi-check-circle-outline</v-icon>
-              <span class="action-label">Complete</span>
-            </div>
 
             <div
               class="action-item d-flex flex-column align-center"
@@ -170,6 +219,7 @@
         @close="handleCategoryDialogClose"
         @success="handleCategorySuccess"
         :categories="categories"
+        :edit-category="categoryToEdit"
       />
     </div>
   </div>
@@ -178,6 +228,8 @@
 <script setup>
 import { useDisplay } from "vuetify";
 import { nextTick } from "vue";
+import { getContrastingTextColor } from "~/lib/misc";
+import draggable from "vuedraggable";
 
 const bus = useBus();
 const { xs } = useDisplay();
@@ -202,15 +254,204 @@ const isTrayHidden = ref(false);
 const recommendDialog = ref(false);
 const showDeleteConfirm = ref(false);
 const deleteLoading = ref(false);
-onMounted(() => {
+const activeFilters = ref({});
+const page = ref(1);
+const pageSize = ref(10);
+const statusTotals = ref({});
+const totalCount = ref(0);
+const hiddenCategoryIds = ref([]);
+const categoryToEdit = ref(null);
+const hiddenCategoryStorageKey = "teamTasksHiddenCategoryIds";
+const categoryOrder = ref([]);
+const categoryOrderStorageKey = "teamTasksCategoryOrder";
+const defaultCategoryNames = [
+  "Staff Management",
+  "Marketing",
+  "Finance",
+  "HR",
+];
+const visibleTaskStats = computed(() =>
+  (taskStats.value || [])
+    .filter((cat) => !hiddenCategoryIds.value.includes(cat.categoryId))
+    .filter((cat) => !cat?.parentId)
+);
+const loadCategoryOrder = () => {
+  try {
+    const stored = JSON.parse(
+      localStorage.getItem(categoryOrderStorageKey) || "[]"
+    );
+    categoryOrder.value = Array.isArray(stored) ? stored : [];
+  } catch (err) {
+    categoryOrder.value = [];
+  }
+};
+
+const persistCategoryOrder = () => {
+  localStorage.setItem(
+    categoryOrderStorageKey,
+    JSON.stringify(categoryOrder.value)
+  );
+};
+
+const applyCategoryOrder = (list) => {
+  const order = categoryOrder.value || [];
+  if (!order.length) return list;
+  const map = new Map(list.map((cat) => [cat.categoryId, cat]));
+  const ordered = order
+    .map((id) => map.get(id))
+    .filter(Boolean);
+  const missing = list.filter((cat) => !order.includes(cat.categoryId));
+  return [...ordered, ...missing];
+};
+
+const orderedTaskStats = computed(() =>
+  applyCategoryOrder(visibleTaskStats.value || [])
+);
+
+const syncCategoryOrder = (list) => {
+  const ids = (list || []).map((cat) => cat.categoryId);
+  if (!ids.length) {
+    categoryOrder.value = [];
+    return;
+  }
+  const filtered = categoryOrder.value.filter((id) => ids.includes(id));
+  const missing = ids.filter((id) => !filtered.includes(id));
+  categoryOrder.value = [...filtered, ...missing];
+  persistCategoryOrder();
+};
+
+const updateCategoryOrder = (newOrder = []) => {
+  categoryOrder.value = newOrder.map((cat) => cat.categoryId);
+  persistCategoryOrder();
+};
+
+watch(
+  visibleTaskStats,
+  (list) => {
+    syncCategoryOrder(list || []);
+  },
+  { immediate: true }
+);
+
+const loadHiddenCategories = () => {
+  try {
+    const stored = JSON.parse(
+      localStorage.getItem(hiddenCategoryStorageKey) || "[]"
+    );
+    hiddenCategoryIds.value = Array.isArray(stored) ? stored : [];
+  } catch (err) {
+    hiddenCategoryIds.value = [];
+  }
+};
+
+const persistHiddenCategories = () => {
+  localStorage.setItem(
+    hiddenCategoryStorageKey,
+    JSON.stringify(hiddenCategoryIds.value)
+  );
+};
+
+const isMandatoryCategory = (cat) => !!(cat?.isDefault);
+const getCategoryTaskCount = (cat) => {
+  const count = Number(
+    cat?.taskCount ?? cat?.total ?? cat?.count ?? cat?.taskTotal ?? 0
+  );
+  return Number.isNaN(count) ? 0 : count;
+};
+
+const isDefaultNamedCategory = (cat) =>
+  defaultCategoryNames.includes((cat?.categoryName || cat?.name || "").trim());
+
+const canEditCategory = () => true;
+
+const canHideCategory = (cat) => {
+  if (!cat) return false;
+  const name = (cat.categoryName || cat.name || "").trim().toLowerCase();
+  const isAllowedDefault = defaultCategoryNames.some(
+    (n) => n.toLowerCase() === name
+  );
+  if (!isAllowedDefault) return false;
+  return getCategoryTaskCount(cat) === 0;
+};
+
+const ensureCurrentTabVisible = () => {
+  if (!orderedTaskStats.value.length) {
+    currentTab.value = null;
+    return;
+  }
+  const hasCurrent = orderedTaskStats.value.some(
+    (cat) => cat.categoryId === currentTab.value
+  );
+  if (!hasCurrent) {
+    currentTab.value = orderedTaskStats.value[0].categoryId;
+  }
+};
+
+const mergeCategoriesWithStats = (stats = []) => {
+  const map = new Map();
+
+  (categories.value || []).forEach((cat) => {
+    const id = cat.id ?? cat.categoryId;
+    if (id === undefined || id === null) return;
+    map.set(String(id), {
+      categoryId: id,
+      categoryName: cat.name || cat.categoryName,
+      taskCount: 0,
+      isMandatory: cat.isMandatory ?? cat.isDefault ?? false,
+      color: cat.color,
+      parentId: cat.parentId ?? null,
+      description: cat.description ?? "",
+    });
+  });
+
+  (stats || []).forEach((stat) => {
+    const id = stat.categoryId ?? stat.id;
+    if (id === undefined || id === null) return;
+    const key = String(id);
+    const existing = map.get(key) || {};
+    map.set(key, {
+      ...existing,
+      ...stat,
+      categoryId: id,
+      categoryName: stat.categoryName || existing.categoryName,
+      isMandatory: stat.isMandatory ?? existing.isMandatory ?? false,
+    });
+  });
+
+  return Array.from(map.values());
+};
+
+const setTaskStats = (stats = []) => {
+  const merged = mergeCategoriesWithStats(stats);
+  const filtered = merged.filter((cat) => {
+    const count = Number(
+      cat.taskCount ?? cat.total ?? cat.count ?? cat.taskTotal ?? 0
+    );
+    return (
+      isMandatoryCategory(cat) ||
+      isDefaultNamedCategory(cat) ||
+      count > 0
+    );
+  });
+  taskStats.value = filtered;
+  ensureCurrentTabVisible();
+};
+
+const resetCategoryEditing = () => {
+  categoryToEdit.value = null;
+};
+
+onMounted(async () => {
+  loadHiddenCategories();
+  loadCategoryOrder();
   user.value = JSON.parse(localStorage.getItem("user"));
   if (user && user.preferences) {
     headers.value = user.preferences.taskTableColumns;
   } else {
     headers.value = mainStore.getTeamTaskTableHeaders;
   }
-  getCategories();
-  getTeamStats();
+  await getCategories();
+  await getTeamStats();
   getTaskPriorities();
   getTaskStatuses();
   getUsers();
@@ -261,12 +502,16 @@ const availableHeaders = computed(() => {
 });
 const selectedStatusId = ref(null);
 const statusUpdateLoading = ref(false);
-const getCategories = () => {
-  taskStore.listCategories().then((res) => {
+const getCategories = async () => {
+  try {
+    const res = await taskStore.listCategories();
     if (res.code === 0) {
-      categories.value = res.data;
+      categories.value = res.data || [];
     }
-  });
+    return res;
+  } catch (err) {
+    return err;
+  }
 };
 const hideTray = () => {
   selectedRowItems.value = [];
@@ -274,6 +519,7 @@ const hideTray = () => {
   selectedStatusId.value = null;
 };
 const addNewCategoryDialog = () => {
+  resetCategoryEditing();
   addCategoryDialog.value = true;
 };
 const quickStatusActions = computed(() => [
@@ -281,6 +527,16 @@ const quickStatusActions = computed(() => [
   { key: "progress", label: "In Progress", icon: "mdi-timer-sand", color: "#f6a609" },
   { key: "upcoming", label: "Upcoming", icon: "mdi-calendar-clock", color: "#5d87ff" },
 ]);
+
+const getTabStyle = (cat) => {
+  const bgColor = cat?.color;
+  if (!bgColor) return {};
+  const textColor = getContrastingTextColor(bgColor);
+  return {
+    backgroundColor: bgColor,
+    "--tab-text-color": textColor,
+  };
+};
 const findStatusByKey = (key) => taskStatuses.value.find((s) => s.key === key);
 
 const handleStatusUpdate = async (statusId) => {
@@ -385,36 +641,60 @@ const handleQuickStatus = (statusKey) => {
 };
 
 const handleCategoryDialogClose = () => {
+  resetCategoryEditing();
   addCategoryDialog.value = false;
 };
 
 const handleCategorySuccess = () => {
   // Refresh categories after successful addition
+  resetCategoryEditing();
   getCategories();
   getTeamStats();
   addCategoryDialog.value = false;
 };
-const getTeamStats = () => {
-  taskStore.getTeamTaskStatsByCategory().then((res) => {
+const getTeamStats = async () => {
+  try {
+    const res = await taskStore.getTeamTaskStatsByCategory();
     if (res.code === 0) {
-      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-        const filteredData = res.data
-        if (filteredData.length > 0) {
-          if (!currentTab.value) {
-            currentTab.value = filteredData[0].categoryId;
-          }
-          taskStats.value = filteredData;
-          getTeamTasks(currentTab.value);
-        } else {
-          taskStats.value = [];
-        }
-      } else {
-        taskStats.value = [];
+      setTaskStats(res.data || []);
+      if (!currentTab.value && orderedTaskStats.value.length) {
+        currentTab.value = orderedTaskStats.value[0].categoryId;
       }
+      getTeamTasks(currentTab.value ?? null);
+    } else {
+      setTaskStats([]);
+      getTeamTasks(null);
     }
-  }).catch((err) => {
-    taskStats.value = [];
-  });
+  } catch (err) {
+    setTaskStats([]);
+    getTeamTasks(null);
+  }
+};
+
+const hideCategory = (cat) => {
+  const id = cat?.categoryId ?? cat?.id;
+  if (!id) return;
+  if (!hiddenCategoryIds.value.includes(id)) {
+    hiddenCategoryIds.value = [...hiddenCategoryIds.value, id];
+    persistHiddenCategories();
+    ensureCurrentTabVisible();
+    mainStore.setSnackbar({
+      title: `${cat.categoryName || "Category"} hidden`,
+      type: "info",
+    });
+  }
+};
+
+const startEditCategory = (cat) => {
+  categoryToEdit.value = {
+    id: cat?.categoryId ?? cat?.id,
+    name: cat?.categoryName || cat?.name || "",
+    description: cat?.description || "",
+    parentId: cat?.parentId ?? null,
+    color: cat?.color || "",
+    isMandatory: cat?.isMandatory ?? false,
+  };
+  addCategoryDialog.value = true;
 };
 
 const getTaskStatuses = () => {
@@ -448,33 +728,75 @@ const getTaskPriorities = () => {
       // set snack
     });
 };
-const updateTasksList = () => {
-  getTeamTasks(currentTab.value);
+
+const setTaskResponse = (payload) => {
+  const groups = payload?.statuses || payload || [];
+  const myId = user.value?.id;
+
+  const mapped = groups.map((group) => ({
+    ...group,
+    tasks:
+      group.tasks?.filter(
+        (task) => !task.assignedUsers?.some((u) => u.id === myId)
+      ) || [],
+  }));
+
+  taskDetails.value = sortByCustomStatus(mapped);
+
+  const totals = {};
+  mapped.forEach((group) => {
+    totals[group.status] = group.total ?? group.tasks?.length ?? 0;
+  });
+  statusTotals.value = totals;
+
+  totalCount.value =
+    typeof payload?.total === "number"
+      ? payload.total
+      : Object.values(totals).reduce((sum, val) => sum + (Number(val) || 0), 0);
+
+  if (payload?.page) page.value = payload.page;
+  if (payload?.pageSize) pageSize.value = payload.pageSize;
 };
-const applyFilters = (filters) => {
-  filters.categoryId = currentTab.value;
+
+const loadTasks = (filters = {}, resetPage = false) => {
+  if (resetPage) {
+    page.value = 1;
+  }
+
+  const request = {
+    ...activeFilters.value,
+    ...filters,
+    categoryId: currentTab.value,
+    page: page.value,
+    pageSize: pageSize.value,
+  };
+
+  activeFilters.value = request;
+
   taskStore
-    .teamTasksGroupedByStatus(filters)
+    .teamTasksGroupedByStatus(request)
     .then((res) => {
       if (res.code === 0) {
-        const myId = user.value?.id;
-        const filteredData = res.data
-          .map(group => ({
-            ...group,
-            tasks: group.tasks.filter(task =>
-              !task.assignedUsers?.some(u => u.id === myId)
-            )
-          }))
-          .filter(group => group.tasks && group.tasks.length > 0); // Filter out status groups with 0 tasks
-        taskDetails.value = sortByCustomStatus(filteredData);
-      } else {
-        // set snack
+        setTaskResponse(res.data);
       }
     })
-    .catch((err) => {
-      return err;
-      // set snack
-    });
+    .catch(() => {});
+};
+
+const handlePageChange = (val) => {
+  page.value = val;
+  loadTasks(activeFilters.value, false);
+};
+
+const handlePageSizeChange = (val) => {
+  pageSize.value = val;
+  loadTasks(activeFilters.value, true);
+};
+const updateTasksList = () => {
+  loadTasks({}, true);
+};
+const applyFilters = (filters) => {
+  loadTasks(filters, true);
 };
 const getUsers = () => {
   userStore.getUserList({ roleId: null }).then((res) => {
@@ -498,26 +820,10 @@ function sortByCustomStatus(arr) {
   });
 }
 const getTeamTasks = (categoryId) => {
-  taskStore
-    .teamTasksGroupedByStatus({ categoryId })
-    .then((res) => {
-      if (res.code === 0) {
-        const myId = user.value?.id;
-        
-        const filteredData = res.data
-          .map(group => ({
-            ...group,
-            tasks: group.tasks.filter(task => {
-              const isAssignedToMe = task.assignedUsers?.some(u => u.id === myId);
-              return !isAssignedToMe;
-            })
-          }))
-        taskDetails.value = sortByCustomStatus(filteredData);
-      }
-    })
-    .catch((err) => {
-      // Silent error handling
-    });
+  if (categoryId !== undefined && categoryId !== null) {
+    currentTab.value = categoryId;
+  }
+  loadTasks({}, true);
 };
 const selectedRowItems = ref([]);
 
@@ -839,21 +1145,63 @@ const handleComplete = async () => {
 .custom-tabs {
   border-bottom: 1px solid #dbdbdb;
 }
+.tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.tabs-scroll {
+  flex: 1;
+  min-width: 0;
+}
+.tabs-draggable {
+  gap: 10px;
+  padding: 0 6px;
+}
+.add-tab-btn {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  border-radius: 10px;
+}
+.custom-tabs :deep(.v-slide-group__container) {
+  overflow-x: auto;
+}
+.custom-tabs :deep(.v-slide-group__content) {
+  gap: 10px;
+  padding: 0;
+  align-items: center;
+}
+.custom-tabs :deep(.v-btn__overlay),
+.custom-tabs :deep(.v-btn__underlay) {
+  display: none;
+}
+.custom-tabs :deep(.v-tab__slider) {
+  display: none !important;
+}
 .custom-tabs .v-tab {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 400;
   text-transform: none;
-  color: #1e1e1e !important;
-  min-height: 40px;
+  color: var(--tab-text-color, #1e1e1e) !important;
+  min-height: 34px;
+  height: 34px;
   min-width: max-content;
+  padding: 0 12px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
 }
 
 .custom-tabs .v-tab.v-tab--selected {
-  font-weight: 500;
-  color: #1e1e1e !important;
+  font-weight: 600;
+  border-radius: 20px;
+  border-bottom: 4px solid currentColor;
+  color: var(--tab-text-color, #1e1e1e) !important;
 }
 .custom-tabs .v-tabs-slider {
-  height: 2px;
+  display: none;
 }
 .action-bar {
   position: fixed;
@@ -888,5 +1236,38 @@ const handleComplete = async () => {
 .cust-border p {
   font-size: 12px;
   color: #c3c3c3;
+}
+.category-tab {
+  border-radius: 10px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.tab-inner {
+  gap: 6px;
+  min-width: 0;
+  align-items: center;
+}
+.tab-label {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  line-height: 1;
+}
+.category-menu-btn {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  width: 18px;
+  height: 18px;
+}
+.category-tab:hover .category-menu-btn,
+.category-menu-btn:focus-visible {
+  opacity: 1;
+}
+.category-tab.v-tab--selected .category-menu-btn {
+  opacity: 1;
+}
+.category-tab .v-icon {
+  color: var(--tab-text-color, #1e1e1e) !important;
 }
 </style>

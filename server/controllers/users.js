@@ -25,8 +25,6 @@ export const usersList = async (event) => {
   if (roleId) {
     where.roleId = roleId;
   }
-  // Include both Active and Invited users (exclude Disabled, Expired)
-  where.status = { [Op.in]: ["Active", "Invited"] };
   try {
     const userOrganisations = await UserOrganisation.findAll({
       where: { organisationId: currentOrg },
@@ -35,7 +33,6 @@ export const usersList = async (event) => {
           model: User,
           as: "user",
           attributes: { exclude: ["password"] },
-          where,
           include: [
             {
               model: Role,
@@ -57,16 +54,13 @@ export const usersList = async (event) => {
         },
       ],
     });
-    // Map users and add computed status based on isActive
+  
     const users = userOrganisations.map((uo) => {
       const user = uo.user.toJSON();
-      // If user is not active in this organization and their account status is Active,
-      // show status as "Invited" (they're an existing user with pending invitation)
-      if (!uo.isActive && user.status === "Active") {
-        user.status = "Invited";
-      }
-      // If user status is already "Invited" (new user), keep it as "Invited"
-      // regardless of isActive (they haven't set up their account yet)
+      user.isActive = Boolean(uo.isActive);
+       const isGloballyDeactivated = user.status === "Disabled" || user.status === "Expired";
+      const isOrgDeactivated = !uo.isActive && user.status === "Active";
+      user.isAccountDeactivated = isGloballyDeactivated || isOrgDeactivated;
       return user;
     });
     return success(users);
@@ -81,7 +75,7 @@ export const userAcrossOrgs = async (event) => {
     const userOrganisations = await UserOrganisation.findAll({
       where: { 
         userId: loggedUser.userId,
-        isActive: true, // Only show active organizations
+        isActive: true, 
       },
       include: [
         {
@@ -127,12 +121,10 @@ export const userAcrossOrgs = async (event) => {
     });
     const formattedData = userOrganisations.map((orgItem) => {
       try {
-        // Check if organisation exists
         if (!orgItem.organisation) {
           return null;
         }
 
-        // Convert to plain object using toJSON for safer access
         const orgItemPlain = orgItem.toJSON ? orgItem.toJSON() : orgItem;
         const orgData = orgItemPlain.organisation;
         
@@ -148,29 +140,23 @@ export const userAcrossOrgs = async (event) => {
           if (!uo || !uo.user) {
             return null;
           }
-          const user = uo.user;
-          // Get isActive from the nested UserOrganisation instance (uo)
-          // uo might be a Sequelize instance or plain object
+          const userPlain = uo.user.toJSON ? uo.user.toJSON() : uo.user;
+          const user = JSON.parse(JSON.stringify(userPlain));
+          
           const isActive = uo.isActive !== undefined ? uo.isActive : 
                           (uo.get ? uo.get('isActive') : true);
-          // If user is not active in this organization and their account status is Active,
-          // show status as "Invited" (they're an existing user with pending invitation)
-          if (!isActive && user.status === "Active") {
-            user.status = "Invited";
-          }
-          // If user status is already "Invited" (new user), keep it as "Invited"
+          
+          user.isActive = Boolean(isActive);
           return user;
         }).filter(Boolean), // Remove any null entries
       };
       } catch (err) {
-        console.error('Error processing organisation item:', err);
         return null;
       }
     }).filter(Boolean); // Remove any null entries
     
     return success(formattedData);
   } catch (err) {
-    console.error('Error in userAcrossOrgs:', err);
     return error(500, err.message || err);
   }
 };
@@ -204,7 +190,6 @@ export const updateUserPreferences = async (event) => {
     }
     return success("Preferences updated successfully");
   } catch (err) {
-    console.log(err);
     return error(500, err.message);
   }
 };
@@ -590,6 +575,134 @@ export const updateAllowedLeaves = async (event) => {
     }
     return success("Updated");
   } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const deactivateUser = async (event) => {
+  const body = await readBody(event);
+  const { userId, organisationId } = JSON.parse(body);
+  const transaction = await DB.transaction();
+  
+  try {
+    if (!userId || !organisationId) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: "userId and organisationId are required",
+      });
+    }
+
+    // Find the user organization relationship
+    const userOrg = await UserOrganisation.findOne({
+      where: { userId, organisationId },
+      transaction,
+    });
+
+    if (!userOrg) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: "User not found in this organization",
+      });
+    }
+
+    userOrg.isActive = false;
+    await userOrg.save({ transaction });
+
+    await transaction.commit();
+    return success("User deactivated successfully");
+  } catch (err) {
+    await transaction.rollback();
+    return error(500, err.message);
+  }
+};
+
+export const activateUser = async (event) => {
+  const body = await readBody(event);
+  const { userId, organisationId } = JSON.parse(body);
+  const transaction = await DB.transaction();
+  
+  try {
+    if (!userId || !organisationId) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: "userId and organisationId are required",
+      });
+    }
+
+    // Find the user organization relationship
+    const userOrg = await UserOrganisation.findOne({
+      where: { userId, organisationId },
+      transaction,
+    });
+
+    if (!userOrg) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: "User not found in this organization",
+      });
+    }
+
+    userOrg.isActive = true;
+    await userOrg.save({ transaction });
+    
+    const user = await User.findByPk(userId, { transaction });
+    if (user && (user.status === "Disabled" || user.status === "Expired")) {
+      user.status = "Active";
+      await user.save({ transaction });
+    }
+
+    await transaction.commit();
+    return success("User activated successfully");
+  } catch (err) {
+    await transaction.rollback();
+    return error(500, err.message);
+  }
+};
+
+export const deleteUser = async (event) => {
+  const body = await readBody(event);
+  const { userId, organisationId } = JSON.parse(body);
+  const transaction = await DB.transaction();
+  
+  try {
+    if (!userId || !organisationId) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: "userId and organisationId are required",
+      });
+    }
+
+    const activeOrgCount = await UserOrganisation.count({
+      where: { 
+        userId, 
+        isActive: true 
+      },
+      transaction,
+    });
+
+    if (activeOrgCount > 1) {
+      await UserOrganisation.destroy({
+        where: { userId, organisationId },
+        transaction,
+      });
+      await transaction.commit();
+      return success("User removed from organization successfully");
+    } else {
+      const user = await User.findByPk(userId, { transaction });
+      
+      if (!user) {
+        throw createError({
+          statusCode: 404,
+          statusMessage: "User not found",
+        });
+      }
+
+      await user.destroy({ transaction });
+      await transaction.commit();
+      return success("User deleted successfully");
+    }
+  } catch (err) {
+    await transaction.rollback();
     return error(500, err.message);
   }
 };

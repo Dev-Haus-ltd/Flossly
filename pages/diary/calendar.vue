@@ -71,6 +71,14 @@
 
     <!-- Calendar grid -->
     <div>
+      <v-alert
+        v-if="!dentists || dentists.length === 0"
+        type="warning"
+        variant="tonal"
+        class="mb-4"
+      >
+        No dentists available for your role or the selected date.
+      </v-alert>
       <DiaryCalendar
         :date="dateStr"
         :view="view"
@@ -106,9 +114,7 @@
     
     <!-- Add Patient Panel - Only render after page loads -->
     <ClientOnly>
-      <template v-if="dentists && dentists.length > 0">
-        <AddPatient v-model="showAddPatient" @save="onPatientSaved" />
-      </template>
+      <AddPatient v-model="showAddPatient" @save="onPatientSaved" />
     </ClientOnly>
     
     <NotesModal

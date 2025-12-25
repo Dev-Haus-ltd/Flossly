@@ -27,6 +27,10 @@ import {
   sendInvitationEmail,
   sendOnBoardingMail,
   sendOrgnisationAddedToRegisteredUsers,
+  sendEmailVerificationEmail,
+  portalReadyTrainingInvite,
+  accountCreationNotification,
+  sendOtpForPasswordReset,
 } from "../utils/emailNotifications";
 import requestIp from "request-ip";
 import { HrDocument } from "../models/hrDocuments";
@@ -50,12 +54,23 @@ export const login = async (event) => {
   if (!user.isEmailVerified) {
     return error(401, "Email not verified");
   }
-  const orgs = await UserOrganisation.findAll({ 
-    where: { 
+  const orgs = await UserOrganisation.findAll({
+    where: {
       userId: user.id,
       isActive: true, // Only load active organizations
-    } 
+    },
   });
+
+  if (user.status === "Disabled" || user.status === "Expired") {
+    return error(403, "Your account is deactivated");
+  }
+
+  if (orgs.length === 0) {
+    return error(403, "You are not part of any active organizations");
+  }
+
+  const activeOrgs = orgs;
+
   const userPreference = await UserPreference.findOne({
     where: { userId: user.id },
   });
@@ -65,10 +80,23 @@ export const login = async (event) => {
       return error(401, "License Expired");
     }
   }
-  const orgIds = orgs.map((o) => o.organisationId).sort();
-  const orgId = orgIds[0]; // default to first
+
+  let orgId;
+  if (userPreference && userPreference.lastLoginOrganisationId) {
+    const lastOrg = activeOrgs.find(
+      (o) => o.organisationId === userPreference.lastLoginOrganisationId
+    );
+    if (lastOrg) {
+      orgId = lastOrg.organisationId;
+    }
+  }
+
+  if (!orgId) {
+    const orgIds = activeOrgs.map((o) => o.organisationId).sort();
+    orgId = orgIds[0];
+  }
   const token = jwt.sign(
-    { userId: user.id, orgId, roleId: user.roleId, purpose: 'login' },
+    { userId: user.id, orgId, roleId: user.roleId, purpose: "login" },
     config.JWT_SECRET
   );
   await UserPreference.update(
@@ -83,7 +111,12 @@ export const login = async (event) => {
 export const createShortLivedToken = async (event) => {
   const loggedUser = event.context.user;
   try {
-    if (!loggedUser || !loggedUser.userId || !loggedUser.orgId || !loggedUser.roleId) {
+    if (
+      !loggedUser ||
+      !loggedUser.userId ||
+      !loggedUser.orgId ||
+      !loggedUser.roleId
+    ) {
       return error(401, "Unauthenticated");
     }
     const shortToken = jwt.sign(
@@ -104,7 +137,8 @@ export const createShortLivedToken = async (event) => {
 
 export const exchangeShortLivedToken = async (event) => {
   const body = await readBody(event);
-  const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+  const parsed =
+    typeof body === "string" ? JSON.parse(body || "{}") : body || {};
   const { shortToken } = parsed;
   try {
     if (!shortToken) return error(400, "shortToken required");
@@ -113,7 +147,12 @@ export const exchangeShortLivedToken = async (event) => {
       return error(400, "Invalid token purpose");
     }
     const token = jwt.sign(
-      { userId: payload.userId, orgId: payload.orgId, roleId: payload.roleId, purpose: 'login' },
+      {
+        userId: payload.userId,
+        orgId: payload.orgId,
+        roleId: payload.roleId,
+        purpose: "login",
+      },
       config.JWT_SECRET
     );
     // setCookie(event, "accessToken", token, { maxAge: 31536000 });
@@ -125,29 +164,30 @@ export const exchangeShortLivedToken = async (event) => {
 
 export const resendVerificationEmail = async (event) => {
   const body = await readBody(event);
-  const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+  const parsed =
+    typeof body === "string" ? JSON.parse(body || "{}") : body || {};
   const { email } = parsed;
-  
+
   if (!email) return error(400, "Email required");
-  
+
   try {
     const user = await User.findOne({ where: { email } });
     if (!user) {
       return error(404, "User not found");
     }
-    
+
     if (user.isEmailVerified) {
       return error(400, "Email already verified");
     }
-    
+
     // Delete old verification links
     await EmailVerification.destroy({ where: { userId: user.id } });
-    
+
     // Create new verification link
     const link = generateVerificationLink();
     await EmailVerification.create({ email, link, userId: user.id });
     await sendEmailVerificationEmail({ email, fullName: user.fullName, link });
-    
+
     return success("Verification email sent");
   } catch (err) {
     return error(500, err.message || "Failed to send verification email");
@@ -156,15 +196,16 @@ export const resendVerificationEmail = async (event) => {
 
 export const signupRequest = async (event) => {
   const body = await readBody(event);
-  const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+  const parsed =
+    typeof body === "string" ? JSON.parse(body || "{}") : body || {};
   const { fullName, email, password, organisationName, roleId } = parsed;
-  
+
   // Trim and validate fullName
-  const trimmedFullName = fullName ? fullName.trim() : '';
+  const trimmedFullName = fullName ? fullName.trim() : "";
   if (!trimmedFullName || !email || !password || !organisationName) {
     return error(400, "Missing required fields");
   }
-  
+
   // Additional validation for fullName
   if (trimmedFullName.length === 0) {
     return error(400, "Full name cannot be empty or contain only spaces");
@@ -173,13 +214,19 @@ export const signupRequest = async (event) => {
   // Check if organization already exists
   let org = await Organisation.findOne({ where: { name: organisationName } });
   if (org) {
-    return error(402, "Organization already exists. Please choose a different organization name or contact support if you believe this is an error.");
+    return error(
+      402,
+      "Organization already exists. Please choose a different organization name or contact support if you believe this is an error."
+    );
   }
 
   // Check if user already exists
   let user = await User.findOne({ where: { email } });
   if (user) {
-    return error(409, "Email already exists. Please use a different email address or try logging in instead.");
+    return error(
+      409,
+      "Email already exists. Please use a different email address or try logging in instead."
+    );
   }
 
   const transaction = await DB.transaction();
@@ -193,7 +240,13 @@ export const signupRequest = async (event) => {
     // hash password
     const hashed = await bcrypt.hash(password, 10);
     user = await User.create(
-      { fullName: trimmedFullName, email, password: hashed, profileCompletion: 0, roleId },
+      {
+        fullName: trimmedFullName,
+        email,
+        password: hashed,
+        profileCompletion: 0,
+        roleId,
+      },
       { transaction }
     );
     org.managerId = user.id;
@@ -219,7 +272,11 @@ export const signupRequest = async (event) => {
       { email, link, userId: user.id },
       { transaction }
     );
-    await sendEmailVerificationEmail({ email, fullName: trimmedFullName, link });
+    await sendEmailVerificationEmail({
+      email,
+      fullName: trimmedFullName,
+      link,
+    });
     await transaction.commit();
     return success("Email sent");
   } catch (err) {
@@ -231,6 +288,21 @@ export const signupRequest = async (event) => {
 export const profile = async (event) => {
   const loggedUser = event.context.user;
   try {
+    if (!loggedUser || !loggedUser.userId || !loggedUser.orgId) {
+      return error(401, "Unauthenticated");
+    }
+
+    const membership = await UserOrganisation.findOne({
+      where: {
+        userId: loggedUser.userId,
+        organisationId: loggedUser.orgId,
+        isActive: true,
+      },
+    });
+    if (!membership) {
+      return error(403, "Your organisation membership is inactive");
+    }
+
     const user = await User.findByPk(loggedUser.userId, {
       attributes: { exclude: ["password"] },
       include: [
@@ -245,7 +317,10 @@ export const profile = async (event) => {
         {
           model: UserOrganisation,
           as: "userOrganisations",
-          where: { isActive: true }, // Only show active organizations
+          where: {
+            isActive: true,
+          },
+          required: false,
           include: [
             {
               model: Organisation,
@@ -259,6 +334,11 @@ export const profile = async (event) => {
         },
       ],
     });
+
+    if (user.status === "Disabled" || user.status === "Expired") {
+      return error(403, "Your account is deactivated");
+    }
+
     const userObj = user.toJSON();
     userObj.currentLoggedInOrgId = loggedUser.orgId;
     if (userObj.preferences && userObj.preferences.taskTableColumns) {
@@ -275,7 +355,7 @@ export const profile = async (event) => {
     });
     return success(userObj);
   } catch (err) {
-    return error(500, err);
+    return error(500, err.message);
   }
 };
 
@@ -294,10 +374,10 @@ export const updateProfile = async (event) => {
   } = JSON.parse(body);
   try {
     const user = await User.findByPk(id);
-    
+
     // Validate fullName if provided
     if (fullName !== undefined) {
-      const trimmedFullName = fullName ? fullName.trim() : '';
+      const trimmedFullName = fullName ? fullName.trim() : "";
       if (trimmedFullName.length === 0) {
         return error(400, "Full name cannot be empty or contain only spaces");
       }
@@ -305,13 +385,14 @@ export const updateProfile = async (event) => {
     } else {
       user.fullName = user.fullName;
     }
-    
+
     user.phone = phone !== undefined ? phone : user.phone;
     user.address = address !== undefined ? address : user.address;
     user.dob = dob !== undefined ? dob : user.dob;
     user.gender = gender !== undefined ? gender : user.gender;
     user.nextOfKin = nextOfKin !== undefined ? nextOfKin : user.nextOfKin;
-    user.nextOfKinContact = nextOfKinContact !== undefined ? nextOfKinContact : user.nextOfKinContact;
+    user.nextOfKinContact =
+      nextOfKinContact !== undefined ? nextOfKinContact : user.nextOfKinContact;
     if (roleId !== undefined) {
       user.roleId = roleId;
     }
@@ -376,11 +457,12 @@ export const updateBankDetails = async (event) => {
 
 export const forgetPasswordRequest = async (event) => {
   const body = await readBody(event);
-  const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+  const parsed =
+    typeof body === "string" ? JSON.parse(body || "{}") : body || {};
   const { email } = parsed;
-  
+
   if (!email) return error(403, "Email required");
-  
+
   try {
     const user = await User.findOne({ where: { email } });
     if (!user) {
@@ -390,8 +472,8 @@ export const forgetPasswordRequest = async (event) => {
         data: {
           code: 1,
           success: false,
-          message: "User not found"
-        }
+          message: "User not found",
+        },
       });
     }
     const otp = generateOTP();
@@ -453,15 +535,27 @@ export const switchOrgnanisation = async (event) => {
   const user = event.context.user;
   try {
     const record = await UserOrganisation.findOne({
-      where: { 
-        userId: user.userId, 
+      where: {
+        userId: user.userId,
         organisationId: orgId,
         isActive: true, // Only allow switching to active organizations
       },
     });
-    if (!record) return error(403, "Not part of selected organisation or invitation not accepted");
+    if (!record)
+      return error(
+        403,
+        "Not part of selected organisation or invitation not accepted"
+      );
+
+    const userRecord = await User.findByPk(user.userId);
+    if (
+      userRecord &&
+      (userRecord.status === "Disabled" || userRecord.status === "Expired")
+    ) {
+      return error(403, "Your account is deactivated");
+    }
     const newToken = jwt.sign(
-      { userId: user.userId, roleId: user.roleId, orgId, purpose: 'login' },
+      { userId: user.userId, roleId: user.roleId, orgId, purpose: "login" },
       config.JWT_SECRET
     );
 
@@ -484,24 +578,24 @@ export const verifyEmail = async (event) => {
       if (verification.verified || user.isEmailVerified) {
         return success("Email already verified");
       }
-      
+
       // Verify the email
       user.isEmailVerified = true;
       await user.save();
-      
+
       // Mark verification as verified instead of deleting
       verification.verified = true;
       await verification.save();
-      
+
       const tasks = await Task.findAll({
         limit: 100,
         where: {
-          categoryId: [3,4,5,10,11,12],
-          isSystemTask: true
+          categoryId: [3, 4, 5, 10, 11, 12],
+          isSystemTask: true,
         },
       });
       const userOrg = await UserOrganisation.findAll({
-        where: { 
+        where: {
           userId: user.id,
           isActive: true, // Only use active organizations
         },
@@ -513,18 +607,27 @@ export const verifyEmail = async (event) => {
         const statuses = await OrganisationStatus.findAll({
           where: { organisationId: userOrg[0].organisationId },
         });
-        const userTasks = tasks.map((task) => ({
-          userId: user.id,
-          taskId: task.id,
-          organisationId: userOrg[0].organisationId,
-          statusId: statuses.find((x) => x.key === "upcoming").id,
-          priorityId: priorities.find((x) => x.key === "medium").id,
-          title: task.title,
-          documentLink: "",
-          frequency: task.defaultFrequency,
-          comments: "",
-        }));
-        await UserTask.bulkCreate(userTasks);
+
+        const defaultStatus =
+          statuses.find((x) => x.key === "upcoming") || statuses[0];
+        const defaultPriority =
+          priorities.find((x) => x.key === "medium") || priorities[0];
+
+        if (defaultStatus && defaultPriority) {
+          const userTasks = tasks.map((task) => ({
+            userId: user.id,
+            taskId: task.id,
+            organisationId: userOrg[0].organisationId,
+            statusId: defaultStatus.id,
+            priorityId: defaultPriority.id,
+            title: task.title,
+            documentLink: "",
+            frequency: task.defaultFrequency,
+            comments: "",
+          }));
+          await UserTask.bulkCreate(userTasks);
+        }
+
         await assignDefaultHRDocsToUser(user.id);
         await portalReadyTrainingInvite(user);
       }
@@ -547,49 +650,66 @@ export const inviteMembers = async (event) => {
     if (!Array.isArray(users) || !users.length) {
       return error(400, "Invitee list is required");
     }
+
+    const currentUser = await User.findByPk(loggedUser.userId);
+    const currentUserEmail = currentUser?.email?.toLowerCase();
+    if (currentUserEmail) {
+      const selfInviteAttempt = users.some(
+        (user) => user.email?.toLowerCase() === currentUserEmail
+      );
+      if (selfInviteAttempt) {
+        return error(400, "You cannot invite yourself");
+      }
+    }
+
     const existingUsers = await User.findAll({
       where: { email: users.map((i) => i.email) },
       attributes: ["id", "email"],
     });
     const currentOrganisation = await Organisation.findByPk(currentOrg);
-    const currentUser = await User.findByPk(loggedUser.userId);
     if (existingUsers.length) {
       // Check which existing users already have a UserOrganisation record for this org
       const existingUsersOrgsForCurrentOrg = await UserOrganisation.findAll({
-        where: { 
+        where: {
           userId: existingUsers.map((u) => u.id),
-          organisationId: currentOrg
+          organisationId: currentOrg,
         },
       });
-      
+
       // Separate users into: already active, already invited (pending), and new to this org
       const alreadyActiveUserIds = existingUsersOrgsForCurrentOrg
         .filter((uo) => uo.isActive === true)
         .map((uo) => uo.userId);
-      
+
       const alreadyInvitedUserIds = existingUsersOrgsForCurrentOrg
         .filter((uo) => uo.isActive === false)
         .map((uo) => uo.userId);
-      
+
       // Check for errors first - if any users are already active or already invited, return error
       if (alreadyActiveUserIds.length > 0 || alreadyInvitedUserIds.length > 0) {
         let errorMessage = "";
-        if (alreadyActiveUserIds.length > 0 && alreadyInvitedUserIds.length > 0) {
-          errorMessage = "User already active or invited. Use Resend button in the table";
+        if (
+          alreadyActiveUserIds.length > 0 &&
+          alreadyInvitedUserIds.length > 0
+        ) {
+          errorMessage =
+            "User already active or invited. Use Resend button in the table";
         } else if (alreadyActiveUserIds.length > 0) {
           errorMessage = "User already active member";
         } else if (alreadyInvitedUserIds.length > 0) {
           errorMessage = "User already Invited. Use Resend button in the table";
         }
-        
+
         return error(400, errorMessage);
       }
-      
+
       // Filter out users who are already active members or already have pending invitations
       const usersToInvite = existingUsers.filter(
-        (u) => !alreadyActiveUserIds.includes(u.id) && !alreadyInvitedUserIds.includes(u.id)
+        (u) =>
+          !alreadyActiveUserIds.includes(u.id) &&
+          !alreadyInvitedUserIds.includes(u.id)
       );
-      
+
       if (usersToInvite.length) {
         const newUserIds = usersToInvite.map((u) => u.id);
         const newUserOrgAssociation = newUserIds.map((userId) => {
@@ -602,36 +722,36 @@ export const inviteMembers = async (event) => {
         await UserOrganisation.bulkCreate(newUserOrgAssociation, {
           transaction,
         });
-        
+
         // Generate invitation tokens for existing users
         const invitationData = [];
         for (const userId of newUserIds) {
           const user = usersToInvite.find((u) => u.id === userId);
           if (!user) continue;
-          
+
           const invitationToken = jwt.sign(
             {
               userId: userId,
               orgId: currentOrg,
-              purpose: 'org_invitation',
+              purpose: "org_invitation",
               invitedBy: loggedUser.userId,
             },
             config.JWT_SECRET,
-            { expiresIn: '7d' } // 7 days to respond
+            { expiresIn: "7d" } // 7 days to respond
           );
-          
+
           invitationData.push({
             email: user.email,
             token: invitationToken,
           });
         }
-        
+
         await sendOrgnisationAddedToRegisteredUsers({
           users: invitationData,
           orgTitle: currentOrganisation.name,
           manager: currentUser.fullName,
         });
-        
+
         // Don't return here - let transaction commit below
       } else {
         const existingUsersEmails = existingUsers.map((u) => u.email);
@@ -699,8 +819,8 @@ const inviteNewUsers = async (
     transaction,
   });
   const orgAssociations = newUsers.map((u) => {
-    return { 
-      userId: u.id, 
+    return {
+      userId: u.id,
       organisationId: currentOrg,
       isActive: false, // Set to false for pending invitations
     };
@@ -721,11 +841,11 @@ export const acceptInvitation = async (event) => {
   const { inviteToken, password, fullName } = JSON.parse(body);
   try {
     // Trim and validate fullName
-    const trimmedFullName = fullName ? fullName.trim() : '';
+    const trimmedFullName = fullName ? fullName.trim() : "";
     if (!inviteToken || !password || !trimmedFullName) {
       return error(400, "Missing required fields");
     }
-    
+
     // Additional validation for fullName
     if (trimmedFullName.length === 0) {
       return error(400, "Full name cannot be empty or contain only spaces");
@@ -750,18 +870,23 @@ export const acceptInvitation = async (event) => {
     user.isEmailVerified = true;
     user.status = "Active";
     await user.save();
-    
+
     // Activate organization membership
     userOrg.isActive = true;
     await userOrg.save();
-    
+
     // Removed dummy tasks assignment for invited members
     await assignDefaultTasksToUser(user, userOrg.organisationId);
     await assignDefaultHRDocsToUser(user.id);
     await accountCreationNotification(user);
     await portalReadyTrainingInvite(user);
     const token = jwt.sign(
-      { userId: user.id, orgId: userOrg.organisationId, roleId: user.roleId, purpose: 'login' },
+      {
+        userId: user.id,
+        orgId: userOrg.organisationId,
+        roleId: user.roleId,
+        purpose: "login",
+      },
       config.JWT_SECRET
     );
     const manager = await UserPreference.findOne({
@@ -792,30 +917,30 @@ export const acceptInvitation = async (event) => {
 export const verifyInvitationToken = async (event) => {
   const body = await readBody(event);
   const { token } = JSON.parse(body);
-  
+
   try {
     if (!token) return error(400, "Token required");
-    
+
     // Verify and decode the token
     const decoded = jwt.verify(token, config.JWT_SECRET);
-    
-    if (decoded.purpose !== 'org_invitation') {
+
+    if (decoded.purpose !== "org_invitation") {
       return error(400, "Invalid token purpose");
     }
-    
+
     const { userId, orgId, invitedBy } = decoded;
-    
+
     // Get organization details
     const organisation = await Organisation.findByPk(orgId);
     if (!organisation) {
       return error(404, "Organization not found");
     }
-    
+
     // Get inviter details
     const inviter = await User.findByPk(invitedBy, {
-      attributes: ['fullName'],
+      attributes: ["fullName"],
     });
-    
+
     // Check invitation status
     const userOrg = await UserOrganisation.findOne({
       where: {
@@ -823,23 +948,23 @@ export const verifyInvitationToken = async (event) => {
         organisationId: orgId,
       },
     });
-    
+
     if (!userOrg) {
       return error(404, "Invitation not found");
     }
-    
+
     return success({
       orgId,
       orgName: organisation.name,
-      inviterName: inviter?.fullName || 'Unknown',
-      status: userOrg.isActive ? 'accepted' : 'pending',
+      inviterName: inviter?.fullName || "Unknown",
+      status: userOrg.isActive ? "accepted" : "pending",
       userId,
     });
   } catch (err) {
-    if (err.name === 'TokenExpiredError') {
+    if (err.name === "TokenExpiredError") {
       return error(400, "Invitation link has expired");
     }
-    if (err.name === 'JsonWebTokenError') {
+    if (err.name === "JsonWebTokenError") {
       return error(400, "Invalid invitation token");
     }
     return error(500, err.message);
@@ -849,26 +974,27 @@ export const verifyInvitationToken = async (event) => {
 export const acceptOrganisationInvitation = async (event) => {
   try {
     const body = await readBody(event);
-    const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+    const parsed =
+      typeof body === "string" ? JSON.parse(body || "{}") : body || {};
     const { token } = parsed;
-    
+
     if (!token) return error(400, "Token required");
-    
+
     // Verify and decode the token
     const decoded = jwt.verify(token, config.JWT_SECRET);
-    
-    if (decoded.purpose !== 'org_invitation') {
+
+    if (decoded.purpose !== "org_invitation") {
       return error(400, "Invalid token purpose");
     }
-    
+
     const { userId, orgId } = decoded;
-    
+
     // Check if user is logged in and matches token
     const loggedUser = event.context.user;
     if (loggedUser && loggedUser.userId !== userId) {
       return error(403, "Token does not match logged in user");
     }
-    
+
     const userOrg = await UserOrganisation.findOne({
       where: {
         userId,
@@ -876,45 +1002,55 @@ export const acceptOrganisationInvitation = async (event) => {
         isActive: false, // Only accept pending invitations
       },
     });
-    
+
     if (!userOrg) {
       return error(404, "Invitation not found or already accepted");
     }
-    
+
     // Activate the organization membership
     userOrg.isActive = true;
     await userOrg.save();
-    
+
     // If user is not logged in, generate auth token and return user data for auto-login
     if (!loggedUser) {
       const user = await User.findByPk(userId, {
         attributes: { exclude: ["password"] },
       });
-      
+
       if (!user) {
         return error(404, "User not found");
       }
-      
+
+      await assignDefaultTasksToUser(user, orgId);
+
       // Check if user's email is verified (required for login)
       if (!user.isEmailVerified) {
-        return error(401, "Please verify your email before accepting the invitation");
+        return error(
+          401,
+          "Please verify your email before accepting the invitation"
+        );
       }
-      
+
       // Generate authentication token with the accepted organization
       const authToken = jwt.sign(
-        { userId: user.id, orgId: orgId, roleId: user.roleId, purpose: 'login' },
+        {
+          userId: user.id,
+          orgId: orgId,
+          roleId: user.roleId,
+          purpose: "login",
+        },
         config.JWT_SECRET
       );
-      
+
       // Update last login info
       await UserPreference.update(
         { lastLoginDate: new Date(), lastLoginOrganisationId: orgId },
         { where: { userId: user.id } }
       );
-      
+
       // Set authentication cookie
       setCookie(event, "accessToken", authToken, { maxAge: 31536000 });
-      
+
       // Return token and user data for frontend to complete login
       return success({
         message: "Invitation accepted successfully",
@@ -924,14 +1060,14 @@ export const acceptOrganisationInvitation = async (event) => {
         autoLogin: true,
       });
     }
-    
+
     // User is already logged in, just return success
-            return success("Invitation accepted successfully");
+    return success("Invitation accepted successfully");
   } catch (err) {
-    if (err.name === 'TokenExpiredError') {
+    if (err.name === "TokenExpiredError") {
       return error(400, "Invitation link has expired");
     }
-    if (err.name === 'JsonWebTokenError') {
+    if (err.name === "JsonWebTokenError") {
       return error(400, "Invalid invitation token");
     }
     return error(500, err.message);
@@ -941,26 +1077,27 @@ export const acceptOrganisationInvitation = async (event) => {
 export const declineOrganisationInvitation = async (event) => {
   try {
     const body = await readBody(event);
-    const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+    const parsed =
+      typeof body === "string" ? JSON.parse(body || "{}") : body || {};
     const { token } = parsed;
-    
+
     if (!token) return error(400, "Token required");
-    
+
     // Verify and decode the token
     const decoded = jwt.verify(token, config.JWT_SECRET);
-    
-    if (decoded.purpose !== 'org_invitation') {
+
+    if (decoded.purpose !== "org_invitation") {
       return error(400, "Invalid token purpose");
     }
-    
+
     const { userId, orgId } = decoded;
-    
+
     // Check if user is logged in and matches token (optional check - token is already verified)
     const loggedUser = event.context.user;
     if (loggedUser && loggedUser.userId !== userId) {
       return error(403, "Token does not match logged in user");
     }
-    
+
     // Use raw SQL query to delete - bypasses Sequelize hooks that cause hanging
     // This permanently removes the UserOrganisation record, so the user will no longer
     // appear in the organization's user list for the person who invited them
@@ -973,30 +1110,30 @@ export const declineOrganisationInvitation = async (event) => {
         replacements: { userId, orgId },
       }
     );
-    
+
     // Check if any rows were deleted
     // result[1] contains the number of affected rows for DELETE queries
     const deletedCount = result?.[1] || 0;
-    
+
     if (deletedCount === 0) {
       return error(404, "Invitation not found or already processed");
     }
-    
+
     // Record deleted successfully - user will no longer appear in organization's user list
     return success("Invitation declined successfully");
   } catch (err) {
-    console.error('Error in declineOrganisationInvitation:', err);
-    if (err.name === 'TokenExpiredError') {
+    if (err.name === "TokenExpiredError") {
       return error(400, "Invitation link has expired");
     }
-    if (err.name === 'JsonWebTokenError') {
+    if (err.name === "JsonWebTokenError") {
       return error(400, "Invalid invitation token");
     }
     // Handle createError objects that might already have statusCode
     if (err.statusCode) {
       throw err; // Re-throw if it's already a proper error
     }
-    const errorMessage = err.message || err.toString() || "Failed to decline invitation";
+    const errorMessage =
+      err.message || err.toString() || "Failed to decline invitation";
     return error(500, errorMessage);
   }
 };
@@ -1004,18 +1141,19 @@ export const declineOrganisationInvitation = async (event) => {
 export const resendOrganisationInvitation = async (event) => {
   try {
     const body = await readBody(event);
-    const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+    const parsed =
+      typeof body === "string" ? JSON.parse(body || "{}") : body || {};
     const { userId, orgId } = parsed;
-    
+
     if (!userId || !orgId) {
       return error(400, "User ID and Organization ID are required");
     }
-    
+
     const loggedUser = event.context.user;
     if (!loggedUser) {
       return error(401, "Authentication required");
     }
-    
+
     // Verify the user has permission to resend invitations for this organization
     const userOrg = await UserOrganisation.findOne({
       where: {
@@ -1024,11 +1162,14 @@ export const resendOrganisationInvitation = async (event) => {
         isActive: true, // Only active members can resend invitations
       },
     });
-    
+
     if (!userOrg) {
-      return error(403, "You don't have permission to resend invitations for this organization");
+      return error(
+        403,
+        "You don't have permission to resend invitations for this organization"
+      );
     }
-    
+
     // Check if the target user has a pending invitation
     const targetUserOrg = await UserOrganisation.findOne({
       where: {
@@ -1037,17 +1178,17 @@ export const resendOrganisationInvitation = async (event) => {
         isActive: false, // Only resend if invitation is pending
       },
     });
-    
+
     if (!targetUserOrg) {
       return error(404, "No pending invitation found for this user");
     }
-    
+
     // Get user details
     const user = await User.findByPk(userId);
     if (!user) {
       return error(404, "User not found");
     }
-    
+
     // Check if pending invitation exists
     const existingUserOrg = await UserOrganisation.findOne({
       where: {
@@ -1056,18 +1197,18 @@ export const resendOrganisationInvitation = async (event) => {
         isActive: false,
       },
     });
-    
+
     if (!existingUserOrg) {
       return error(404, "No pending invitation found for this user");
     }
-    
+
     // Get organization and current user details
     const organisation = await Organisation.findByPk(orgId);
     if (!organisation) {
       return error(404, "Organization not found");
     }
     const currentUser = await User.findByPk(loggedUser.userId);
-    
+
     // Check if user belongs to any other active organization
     const userOtherOrgs = await UserOrganisation.findAll({
       where: {
@@ -1075,25 +1216,23 @@ export const resendOrganisationInvitation = async (event) => {
         isActive: true, // Check for active organizations
       },
     });
-    
+
     const isFirstOrganization = userOtherOrgs.length === 0;
-    
-    // No need to delete and recreate - just generate new token and resend email
+
     // The UserOrganisation record already exists with isActive: false
     const transaction = await DB.transaction();
-    
+
     try {
-      
-      if (isFirstOrganization) {
+      if (isFirstOrganization && loggedUser.orgId === orgId) {
         // User doesn't belong to any organization - use new user invitation email
         // Generate new inviteToken for the user (UUID format to match model)
         const inviteToken = uuidv4();
         user.inviteToken = inviteToken;
         await user.save({ transaction });
-        
+
         // Build invitation link for new users (sendInvitationEmail will prepend the base URL)
         const invitationLink = inviteToken;
-        
+
         // Send new user invitation email
         await sendInvitationEmail({
           email: user.email,
@@ -1108,24 +1247,26 @@ export const resendOrganisationInvitation = async (event) => {
           {
             userId: userId,
             orgId: orgId,
-            purpose: 'org_invitation',
+            purpose: "org_invitation",
             invitedBy: loggedUser.userId,
           },
           config.JWT_SECRET,
-          { expiresIn: '7d' } // 30 days to respond (increased from 7d)
+          { expiresIn: "7d" }
         );
-        
+
         // Send invitation email using the existing user email template
         await sendOrgnisationAddedToRegisteredUsers({
-          users: [{
-            email: user.email,
-            token: invitationToken,
-          }],
+          users: [
+            {
+              email: user.email,
+              token: invitationToken,
+            },
+          ],
           orgTitle: organisation.name,
           manager: currentUser.fullName,
         });
       }
-      
+
       await transaction.commit();
       return success("Invitation resent successfully");
     } catch (err) {
@@ -1133,10 +1274,8 @@ export const resendOrganisationInvitation = async (event) => {
       throw err;
     }
   } catch (err) {
-    console.error('Error in resendOrganisationInvitation:', err);
-    console.error('Error stack:', err.stack);
-    console.error('Error details:', JSON.stringify(err, null, 2));
-    const errorMessage = err.message || err.toString() || "Failed to resend invitation";
+    const errorMessage =
+      err.message || err.toString() || "Failed to resend invitation";
     return error(500, errorMessage);
   }
 };
@@ -1147,7 +1286,7 @@ const assignDefaultTasksToUser = async (user, organisationId) => {
   try {
     const tasks = await Task.findAll({
       where: { roleId, isSystemTask: true },
-      limit: 15,
+      limit: 50,
     });
     if (!tasks.length) return;
     const [defaultStatus, defaultPriority] = await Promise.all([

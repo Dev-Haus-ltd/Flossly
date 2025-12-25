@@ -238,9 +238,7 @@
 
   <!-- Add Patient Panel - Only render after page loads -->
   <ClientOnly>
-    <template v-if="dentists && dentists.length > 0 && treatments && treatments.length > 0">
-      <AddPatient v-model="showAddPatient" @save="onSavePatient" />
-    </template>
+    <AddPatient v-model="showAddPatient" @save="onSavePatient" />
   </ClientOnly>
 </template>
 
@@ -249,11 +247,13 @@ import DiaryStatCard from '@/components/diary/DiaryStatCard.vue'
 import DiaryFilterMenu from '@/components/diary/filterMenu.vue'
 import { useDiaryStore } from '@/stores/diary'
 import { useOrgStore } from '@/stores/organisation'
+import { useMainStore } from '@/stores/index'
 import AddPatient from '@/components/diary/addPatient.vue'
 
 const activeTab = ref('takings')
 const search = ref('')
 const diaryStore = useDiaryStore()
+const mainStore = useMainStore()
 const debounce = (fn, ms=400) => { let t; return (...args) => { clearTimeout(t); t=setTimeout(()=>fn(...args), ms) } }
 
 // Stats cards (dynamic)
@@ -422,8 +422,17 @@ function onCardSelect(index, value) {
 
 const showAddPatient = ref(false)
 const onSavePatient = async (p) => {
-  await diaryStore.createPatient(p)
-  await loadAppointments()
+  try {
+    const res = await diaryStore.createPatient(p)
+    if (res?.code === 0) {
+      mainStore.setSnackbar({ title: 'Patient created', type: 'success' })
+      await loadAppointments()
+    } else {
+      mainStore.setSnackbar({ title: res?.message || 'Create failed', type: 'error' })
+    }
+  } catch (err) {
+    mainStore.setSnackbar({ title: err?.message || 'Save failed', type: 'error' })
+  }
 }
 
 const onFilters = (f) => { filters.value = f || {}; loadAppointments() }

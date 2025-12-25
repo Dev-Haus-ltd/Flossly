@@ -128,7 +128,7 @@
             </v-col>
 
             <v-col cols="12">
-              <label class="fld-lbl">Practitioner</label>
+              <label class="fld-lbl">Practitioner <span class="req-star">*</span></label>
               <v-select
                 v-model="practitioner"
                 :items="practitionerOptions"
@@ -152,15 +152,34 @@
       </v-card>
     </div>
 
-    <div class="px-4 pb-4">
-      <v-btn block color="primary" @click="onSave">Save Appointment</v-btn>
+    <div class="d-flex justify-space-between align-center px-4 py-2" style="background-color: white; padding: 12px 16px;">
+      <v-btn
+        color="white"
+        class="text-primary"
+        style="width: 48%; border-radius: 8px; border: 1px solid #DFDFDF !important; min-height: 40px;"
+        @click="$emit('update:modelValue', false)"
+        flat
+      >
+        Cancel
+      </v-btn>
+      <v-btn
+        color="primary"
+        class="text-white"
+        style="width: 48%; border-radius: 8px; border: 1px solid #DFDFDF !important; min-height: 40px;"
+        @click="onSave"
+        :loading="isSaving"
+        :disabled="isSaving"
+        flat
+      >
+        Save
+      </v-btn>
     </div>
   </v-navigation-drawer>
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { formatDateDDMMYYYY } from '@/lib/dateFormatter'
+import { formatDateDDMMYYYY, clinicDateToYMD } from '@/lib/dateFormatter'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -184,6 +203,7 @@ const duration = ref(15)
 const practitioner = ref('')
 const notes = ref('')
 const dateMenu = ref(false)
+const isSaving = ref(false)
 const errors = reactive({
   patient: '',
   date: '',
@@ -275,6 +295,8 @@ watch(() => props.modelValue, (open) => {
         if (res?.code === 0) treatmentOptions.value = (res.data || []).map(r => ({ id: r.id, name: r.name, defaultDuration: r.defaultDuration || 15, amount: r.amount || 0 }))
       })
     }
+  } else {
+    isSaving.value = false
   }
 })
 
@@ -313,12 +335,13 @@ const validate = () => {
 
 const onSave = () => {
   if (!validate()) return
+  isSaving.value = true
   const selectedTreatment = treatmentOptions.value.find(t => t.name === exam.value)
   emit('save', {
     id: props.editAppointment?.id || null,
     patientId: selectedPatientId.value || props.preselectedPatientId || null,
     patient: '',
-    date: date.value,
+    date: clinicDateToYMD(date.value),
     time: time.value,
     duration: duration.value,
     exam: exam.value,
@@ -337,4 +360,5 @@ const onSave = () => {
 :deep(.v-field) { border-radius: 10px; }
 .fld-lbl { font-weight: 400; font-size: 14px; color: #737373; }
 .input-bordered :deep(.v-field) { border: 1px solid #dfdfdf !important; border-radius: 8px !important; background-color: white !important; min-height: 40px; font-size: 14px; }
+.req-star { color: #d32f2f; }
 </style>

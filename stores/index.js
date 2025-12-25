@@ -42,14 +42,14 @@ export const useMainStore = defineStore("mainStore", {
           title: "Flossly Tasks",
           imgPath: tasksIcon,
           value: "tasks-group",
-          to: "/tasks",
+          to: "/tasks/mytasks",
           children: [
-            {
-              title: "My Tasks",
-              value: "myTasks",
-              imgPath: tasksIcon,
-              to: "/tasks/mytasks",
-            },
+            // {
+            //   title: "My Tasks",
+            //   value: "myTasks",
+            //   imgPath: tasksIcon,
+            //   to: "/tasks/mytasks",
+            // },
             {
               title: "My Team Tasks",
               value: "myTeamTasks",
@@ -138,6 +138,12 @@ export const useMainStore = defineStore("mainStore", {
               value: "diaryCalendar",
               imgPath: tasksIcon,
               to: "/diary/calendar",
+            },
+            {
+              title: "Patients",
+              value: "diaryPatients",
+              imgPath: tasksIcon,
+              to: "/diary/patients",
             },
           ],
         },

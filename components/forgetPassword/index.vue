@@ -170,7 +170,7 @@ const submitEmail = async () => {
   if (!valid) return;
 
   try {
-    const res = await authStore.requestReset({ email: email.value });
+    const res = await authStore.requestReset({ email: email.value.toLowerCase() });
     if (res.code === 0) {
       step.value = 2;
       store.setSnackbar({

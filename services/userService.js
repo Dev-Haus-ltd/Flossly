@@ -121,4 +121,37 @@ export default {
         });
     });
   },
+  deactivateUser(data) {
+    return new Promise((resolve, reject) => {
+      Post("/users/deactivate", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  activateUser(data) {
+    return new Promise((resolve, reject) => {
+      Post("/users/activate", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  deleteUser(data) {
+    return new Promise((resolve, reject) => {
+      Post("/users/delete", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
 };

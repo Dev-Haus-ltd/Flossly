@@ -38,7 +38,10 @@ const localChecked = ref(props.checked)
 
 watch(
   () => props.checked,
-  (val) => { localChecked.value = val }
+  (val) => { 
+    localChecked.value = val 
+  },
+  { immediate: true }
 )
 
 watch(localChecked, (val) => {

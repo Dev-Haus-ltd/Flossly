@@ -117,6 +117,23 @@ export const useAuthStore = defineStore("authStore", {
           })
           .catch((err) => {
             this.isLoading = false;
+            try {
+              const status = err?.statusCode || err?.status || err?.data?.statusCode;
+              const message = err?.data?.message || err?.message || '';
+              const deactivated = /deactivated/i.test(message);
+              if (status === 403 || deactivated) {
+                const mainStore = useMainStore();
+                mainStore.setSnackbar({
+                  title: message || 'Your account is deactivated for this organisation',
+                  type: 'error',
+                });
+                const token = useCookie('accessToken');
+                if (token) token.value = null;
+                if (process.client) {
+                  window.location.href = '/login';
+                }
+              }
+            } catch {}
             reject(err);
           });
       });

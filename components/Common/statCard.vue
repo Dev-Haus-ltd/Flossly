@@ -1,7 +1,7 @@
 <template>
   <div class="task-div" :id="`stat-card-${uid}`">
     <div class="d-flex justify-space-between w-100 border-b pb-3">
-      <div class="d-flex align-center">
+      <div class="d-flex align-center title-row">
         <lord-icon
           :src="icon"
           trigger="hover"
@@ -10,9 +10,9 @@
           style="width: 24px; height: 24px"
         >
         </lord-icon>
-       
-            <p  class="ml-2 ellipsis-text">{{ label }}</p>
-       
+
+        <p class="ml-2 ellipsis-text">{{ label }}</p>
+
       </div>
 
       <v-tooltip :text="tooltip">
@@ -81,6 +81,9 @@ defineProps({
 .task-div:hover {
   box-shadow: 0px 0px 0px 3px #ff85da29;
 }
+.title-row {
+  min-width: 0;
+}
 .bonus-chip {
   border: 1px solid #fea200;
   background-color: #fff0d5;
@@ -95,6 +98,9 @@ defineProps({
   color: #fea200;
 }
 .ellipsis-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 170px;
 }
 </style>

@@ -17,21 +17,8 @@
           <v-icon>mdi-close</v-icon>
         </v-btn>
       </v-card-title>
-
-      <!-- Editable Document -->
-      <div v-if="doc.type === 'editable'" class="pa-5">
-        <DocumentEditorContainerComponent
-          v-if="isClient"
-          ref="editor"
-          height="500px"
-          :serviceUrl="serviceUrl"
-          :enableToolbar="true"
-          :enableRibbon="true"
-        />
-      </div>
-
       <!-- PDF Viewer -->
-      <div v-else class="pa-5" style="height: 700px">
+      <div class="pa-5" style="height: 700px">
         <iframe
           v-if="pdfurl"
           :src="pdfurl"
@@ -51,7 +38,7 @@
         >
           Cancel
         </v-btn>
-        <v-btn color="primary" @click="updateFile" flat>
+        <v-btn color="primary" @click="close" flat>
           {{ doc.type === "editable" ? "Save" : "Close" }}
         </v-btn>
       </v-card-actions>
@@ -78,55 +65,9 @@
 </template>
 
 <script setup>
-const isClient = process.client
 
-let DocumentEditorContainerComponent
-let editorModules = {}
 
-if (isClient) {
-  const basePkg = await import("@syncfusion/ej2-base")
-  const { registerLicense } = basePkg
-  registerLicense("Ngo9BigBOggjHTQxAR8/V1JEaF1cWWhAYVJwWmFZfVtgd19HaVZQR2YuP1ZhSXxWdk1iXn9dcX1UTmlUU0Z9XEI=")
-  const pkg = await import("@syncfusion/ej2-vue-documenteditor")
-  DocumentEditorContainerComponent = pkg.DocumentEditorContainerComponent
-
-  editorModules = {
-    Toolbar: pkg.Toolbar,
-    Print: pkg.Print,
-    Ribbon: pkg.Ribbon,
-    SfdtExport: pkg.SfdtExport,
-    WordExport: pkg.WordExport,
-    TextExport: pkg.TextExport,
-    Selection: pkg.Selection,
-    Search: pkg.Search,
-    Editor: pkg.Editor,
-    EditorHistory: pkg.EditorHistory,
-    OptionsPane: pkg.OptionsPane,
-    ContextMenu: pkg.ContextMenu,
-    ImageResizer: pkg.ImageResizer,
-    HyperlinkDialog: pkg.HyperlinkDialog,
-    TableDialog: pkg.TableDialog,
-    BookmarkDialog: pkg.BookmarkDialog,
-    TableOfContentsDialog: pkg.TableOfContentsDialog,
-    PageSetupDialog: pkg.PageSetupDialog,
-    StyleDialog: pkg.StyleDialog,
-    ListDialog: pkg.ListDialog,
-    ParagraphDialog: pkg.ParagraphDialog,
-    BulletsAndNumberingDialog: pkg.BulletsAndNumberingDialog,
-    FontDialog: pkg.FontDialog,
-    TablePropertiesDialog: pkg.TablePropertiesDialog,
-    BordersAndShadingDialog: pkg.BordersAndShadingDialog,
-    TableOptionsDialog: pkg.TableOptionsDialog,
-    CellOptionsDialog: pkg.CellOptionsDialog,
-    StylesDialog: pkg.StylesDialog,
-    Comment: pkg.Comment,
-  }
-  provide("editor", Object.values(editorModules))
-}
-
-const editor = ref(null)
 const pdfurl = ref(null)
-const serviceUrl = "https://services.syncfusion.com/vue/production/api/documenteditor/"
 const isLoading = ref(false)
 
 const props = defineProps({
@@ -134,7 +75,6 @@ const props = defineProps({
   doc: Object,
 })
 const emit = defineEmits(["update:modelValue", "onUpdate"])
-const docStore = useDocStore()
 
 const isOpen = ref(props.modelValue)
 
@@ -144,32 +84,10 @@ watch(
   async (val) => {
     isOpen.value = val
     if (!val) return
-
     isLoading.value = true
-    if (props.doc.type === "editable" && isClient) {
-      const response = await fetch(`/api/docs/view`, {
-        method: "POST",
-        body: JSON.stringify({ id: props.doc.id }),
-      })
-      const blob = await response.blob()
-
-      const formData = new FormData()
-      formData.append("files", blob, "sample.docx")
-
-      // Send to Syncfusion service to convert into SFDT
-      const res = await fetch(serviceUrl + "Import", {
-        method: "POST",
-        body: formData,
-      })
-      const data = await res.json()
-
-      editor.value?.ej2Instances?.documentEditor.open(data)
-      isLoading.value = false
-    } else {
-      const config = useRuntimeConfig()
+    const config = useRuntimeConfig()
       pdfurl.value = `${config.public.BASE_URL}${props.doc.link}`
       isLoading.value = false
-    }
   }
 )
 
@@ -179,24 +97,6 @@ const close = () => {
   isOpen.value = false
 }
 
-const updateFile = () => {
-  if (props.doc.type === "readonly") {
-    close()
-    return
-  }
-  const docEditor = editor.value?.ej2Instances?.documentEditor
-  const exported = docEditor.saveAsBlob("Docx")
-  exported.then(async (blob) => {
-    const formData = new FormData()
-    formData.append("id", props.doc.id)
-    formData.append("file", blob, "sample.docx")
-    docStore.updateDocument(formData).then((res) => {
-      if (res.code === 0) {
-        close()
-      }
-    })
-  })
-}
 </script>
 
 <style scoped>

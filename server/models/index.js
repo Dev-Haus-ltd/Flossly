@@ -58,6 +58,8 @@ import { DiaryTreatment } from "./diary/treatments";
 import { DiaryPatient } from "./diary/patients";
 import { DiaryAppointment } from "./diary/appointments";
 import { DiaryNote } from "./diary/notes";
+import { DiaryPatientComfort } from "./diary/patientComfort";
+import { DiaryPatientSurvey } from "./diary/patientSurvey";
 // Organisation dictionary
 import { OrganisationTreatment } from "./organisations/organisationTreatments";
 import { CrmLeadTreatment } from "./crm/leadTreatments";
@@ -66,6 +68,11 @@ import { CrmOption } from "./crm/options";
 import { CrmLeadCommunication } from "./crm/leadCommunications";
 import { CrmLeadAssignee } from "./crm/leadAssignees";
 import { CrmAutomationTemplate } from "./crm/automationTemplates";
+import { TaskCustomColumnDefinition } from "./tasks/taskCustomColumnDefinitions";
+import { UserTaskCustomField } from "./tasks/userTaskCustomFields";
+import { PatientAutomationDictionary } from "./patientJourney/patientAutomationDictionary";
+import { PatientAutomationTemplate } from "./patientJourney/patientAutomationTemplates";
+import { OrganisationReferral } from "./organisationReferrals";
 
 /*
   Cascade Policy chosen:
@@ -197,6 +204,14 @@ DiaryNote.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisat
 DiaryNote.belongsTo(User, { foreignKey: 'dentistId', as: 'dentist', onDelete: 'CASCADE', hooks: true });
 User.hasMany(DiaryNote, { foreignKey: 'dentistId', as: 'diaryNotes', onDelete: 'CASCADE', hooks: true });
 
+DiaryPatient.hasOne(DiaryPatientComfort, { foreignKey: 'patientId', as: 'comfort', onDelete: 'CASCADE', hooks: true });
+DiaryPatientComfort.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
+DiaryPatientComfort.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+
+DiaryPatient.hasOne(DiaryPatientSurvey, { foreignKey: 'patientId', as: 'survey', onDelete: 'CASCADE', hooks: true });
+DiaryPatientSurvey.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
+DiaryPatientSurvey.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+
 // OrganisationTreatment
 OrganisationTreatment.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 
@@ -213,7 +228,7 @@ OrganisationSurgery.belongsTo(Organisation, { foreignKey: "organisationId", as: 
 Organisation.hasMany(OrganisationGroup, { foreignKey: "organisationId", as: "groups" });
 OrganisationGroup.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", onDelete: "CASCADE", hooks: true });
 
-Organisation.hasMany(OrganisationGroupUser, { foreignKey: "organisationId", as: "groupUsers" });
+OrganisationGroup.hasMany(OrganisationGroupUser, { foreignKey: "groupId", as: "groupUsers" });
 OrganisationGroupUser.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", hooks: true });
 OrganisationGroupUser.belongsTo(OrganisationGroup, { foreignKey: "groupId", as: "group", onDelete: "CASCADE", hooks: true });
 OrganisationGroupUser.belongsTo(User, { foreignKey: "userId", as: "user", onDelete: "CASCADE", hooks: true });
@@ -246,6 +261,10 @@ User.hasOne(UserAccount, { foreignKey: "userId", as: "account", onDelete: "CASCA
 // Leave / HR Documents
 UserLeaveHistory.belongsTo(User, { foreignKey: "userId", as: "user", onDelete: "CASCADE", hooks: true });
 User.hasMany(UserLeaveHistory, { foreignKey: "userId", as: "leaveHistory", onDelete: "CASCADE", hooks: true });
+
+// Association for the approver (the user who approved the leave)
+UserLeaveHistory.belongsTo(User, { foreignKey: "approvedBy", as: "approver", onDelete: "SET NULL" });
+User.hasMany(UserLeaveHistory, { foreignKey: "approvedBy", as: "approvedLeaves", onDelete: "SET NULL" });
 
 UserLeaveEntitlement.belongsTo(User, { foreignKey: "userId", as: "user", onDelete: "CASCADE", hooks: true });
 User.hasOne(UserLeaveEntitlement, { foreignKey: "userId", as: "leaveEntitlement", onDelete: "CASCADE", hooks: true });
@@ -290,6 +309,9 @@ CrmLeadAssignee.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'C
 Organisation.hasMany(CrmAutomationTemplate, { foreignKey: 'organisationId', as: 'crmAutomationTemplates' });
 CrmAutomationTemplate.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 
+Organisation.hasMany(PatientAutomationTemplate, { foreignKey: 'organisationId', as: 'patientAutomationTemplates' });
+PatientAutomationTemplate.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+
 ChatbotConfig.belongsTo(Organisation, { foreignKey: 'organizationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 ChatbotConfig.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', hooks: true });
 Organisation.hasOne(ChatbotConfig, { foreignKey: 'organizationId', as: 'chatbotConfig', onDelete: 'CASCADE', hooks: true });
@@ -310,6 +332,40 @@ User.hasMany(UserHrDocument, { foreignKey: "userId", as: "hrDocuments", onDelete
 // Organisation Scripts
 Organisation.hasMany(OrganisationScript, { foreignKey: "organisationId", as: "scripts" });
 OrganisationScript.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", onDelete: 'CASCADE', hooks: true });
+
+
+// TaskCustomColumnDefinition -> User (ORG_DELETE)
+User.hasMany(TaskCustomColumnDefinition, {
+  foreignKey: "createdBy",
+  as: "taskCustomColumns",
+  onDelete: "CASCADE",
+  hooks: true,
+});
+
+TaskCustomColumnDefinition.belongsTo(User, {
+  foreignKey: "createdBy",
+  as: "creator",
+  onDelete: "CASCADE",
+  hooks: true,
+});
+
+// UserTaskCustomField -> UserTask / TaskCustomColumnDefinition (cascade on delete of UserTask)
+UserTask.hasMany(UserTaskCustomField, { foreignKey: "userTaskId", as: "customFields" });
+UserTaskCustomField.belongsTo(UserTask, { foreignKey: "userTaskId", as: "userTask", onDelete: "CASCADE", hooks: true });
+TaskCustomColumnDefinition.hasMany(UserTaskCustomField, { foreignKey: "columnDefinitionId", as: "customFieldValues" });
+UserTaskCustomField.belongsTo(TaskCustomColumnDefinition, { foreignKey: "columnDefinitionId", as: "columnDefinition", onDelete: "CASCADE", hooks: true });
+
+
+OrganisationReferral.belongsTo(User, {
+  foreignKey: "referredBy",
+  as: "referrer",
+  onDelete: "CASCADE",
+});
+
+User.hasMany(OrganisationReferral, {
+  foreignKey: "referredBy",
+  as: "organisationReferrals",
+});
 
 // Export models
 export {
@@ -340,6 +396,7 @@ export {
   OrganisationEquipment,
   OrganisationGroup,
   OrganisationGroupUser,
+  OrganisationReferral,
   EmailVerification,
   DefaultPriority,
   DefaultStatus,
@@ -377,7 +434,13 @@ export {
   DiaryPatient,
   DiaryAppointment,
   DiaryNote,
+  DiaryPatientComfort,
+  DiaryPatientSurvey,
   OrganisationTreatment,
   DictionaryScript,
   OrganisationScript,
+  UserTaskCustomField,
+  TaskCustomColumnDefinition,
+  PatientAutomationDictionary,
+  PatientAutomationTemplate
 };

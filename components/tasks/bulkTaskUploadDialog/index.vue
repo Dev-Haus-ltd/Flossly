@@ -349,6 +349,13 @@
 <script setup>
 import { ref, watch, computed } from "vue";
 import * as XLSX from "xlsx";
+import {
+  extractExtension,
+  formatFileSize as formatFileSizeUtil,
+  getFileIcon as getFileIconUtil,
+  parseCSV,
+  validateFileBasics,
+} from "~/lib/fileImportUtils";
 
 const props = defineProps({
   modelValue: Boolean,
@@ -442,49 +449,23 @@ const processUploadedFile = () => {
   }
 };
 
-// Get file icon based on extension
-const getFileIcon = (filename) => {
-  const ext = filename.split(".").pop().toLowerCase();
-  switch (ext) {
-    case "csv":
-      return "mdi-file-delimited";
-    case "xlsx":
-    case "xls":
-      return "mdi-file-excel";
-    default:
-      return "mdi-file-document";
-  }
-};
-
-// Format file size
-const formatFileSize = (bytes) => {
-  if (bytes === 0) return "0 Bytes";
-  const k = 1024;
-  const sizes = ["Bytes", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + " " + sizes[i];
-};
+// Get file icon based on extension (kept for template compatibility)
+const getFileIcon = (filename) => getFileIconUtil(filename);
+const formatFileSize = (bytes) => formatFileSizeUtil(bytes);
 
 // Process file (Excel or CSV)
 const processFile = async (file) => {
   excelError.value = null;
   isProcessing.value = true;
 
-  // Check file size
-  if (file.size > MAX_FILE_SIZE) {
-    excelError.value = `File size exceeds ${MAX_FILE_SIZE / (1024 * 1024)}MB limit`;
+  const validationError = validateFileBasics(file, MAX_FILE_SIZE);
+  if (validationError) {
+    excelError.value = validationError;
     isProcessing.value = false;
     return;
   }
 
-  const fileExtension = file.name.split(".").pop().toLowerCase();
-
-  // Validate file type
-  if (!["xlsx", "xls", "csv"].includes(fileExtension)) {
-    excelError.value = "Invalid file format. Only .xlsx, .xls, and .csv are supported.";
-    isProcessing.value = false;
-    return;
-  }
+  const fileExtension = extractExtension(file.name);
 
   const reader = new FileReader();
 
@@ -514,13 +495,10 @@ const processFile = async (file) => {
 
       // Validate required columns
       const requiredColumns = [
-        "frequency",
-        "description",
         "title",
         "category",
         "priority",
         "role",
-        "user",
       ];
       const hasRequiredColumns = requiredColumns.every((col) =>
         Object.keys(json[0] || {}).includes(col)
@@ -597,25 +575,6 @@ const processFile = async (file) => {
 };
 
 // Parse CSV manually
-const parseCSV = (text) => {
-  const lines = text.split("\n").filter((line) => line.trim());
-  if (lines.length < 2) return [];
-
-  const headers = lines[0].split(",").map((h) => h.trim().replace(/"/g, ""));
-  const rows = [];
-
-  for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(",").map((v) => v.trim().replace(/"/g, ""));
-    const row = {};
-    headers.forEach((header, index) => {
-      row[header] = values[index] || "";
-    });
-    rows.push(row);
-  }
-
-  return rows;
-};
-
 // Validate individual task row
 const validateTaskRow = (task, index) => {
   // Reset without replacing the reference
@@ -632,15 +591,7 @@ const validateTaskRow = (task, index) => {
     task.hasErrors = true;
   }
 
-  if (!task.description?.trim()) {
-    task.errors.description = "Description is required";
-    task.hasErrors = true;
-  }
-
-  if (!task.defaultFrequency?.trim()) {
-    task.errors.frequency = "Frequency is required";
-    task.hasErrors = true;
-  }
+  // Frequency is optional - no validation needed
 
   // --- Category Validation ---
   if (!task.categoryId) {
@@ -694,35 +645,35 @@ const validateTaskRow = (task, index) => {
     delete task.errors.role;
   }
 
-  // --- User Validation ---
-  if (!task.userId) {
-    if (!task.originalUser?.trim()) {
-      task.errors.user = "User is missing. Please select from dropdown.";
-    } else {
-      const matched = props.users?.find(
-        u => u.fullName?.trim()?.toLowerCase() === task.originalUser.trim().toLowerCase()
-      );
-      if (!matched) {
-        task.errors.user = `User "${task.originalUser}" is invalid. Please select from dropdown.`;
-      }
+  // --- User Validation (optional) ---
+  // User is now optional, but if provided, validate it exists
+  if (task.originalUser?.trim() && !task.userId) {
+    const matched = props.users?.find(
+      u => u.fullName?.trim()?.toLowerCase() === task.originalUser.trim().toLowerCase()
+    );
+    if (!matched) {
+      task.errors.user = `User "${task.originalUser}" is invalid. Please select from dropdown.`;
+      task.hasErrors = true;
     }
-    if (task.errors.user) task.hasErrors = true;
-  } else {
+  } else if (task.userId) {
     delete task.errors.user;
   }
 
   // --- Duplicate Detection ---
+  // Only check duplicates if both title and userId are provided
   const titleKey = task.title?.trim()?.toLowerCase();
   const userKey = task.userId;
-  const duplicates = parsedTasks.value.filter(
-    (t, i) => i !== index &&
-      t.title?.trim()?.toLowerCase() === titleKey &&
-      t.userId === userKey
-  );
+  if (titleKey && userKey) {
+    const duplicates = parsedTasks.value.filter(
+      (t, i) => i !== index &&
+        t.title?.trim()?.toLowerCase() === titleKey &&
+        t.userId === userKey
+    );
 
-  if (duplicates.length > 0 && titleKey && userKey) {
-    task.errors.title = "Duplicate task: Same title and user combination already exists";
-    task.hasErrors = true;
+    if (duplicates.length > 0) {
+      task.errors.title = "Duplicate task: Same title and user combination already exists";
+      task.hasErrors = true;
+    }
   }
 };
 

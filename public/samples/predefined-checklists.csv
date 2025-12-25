@@ -1,0 +1,90 @@
+taskTitle,itemTitle,showRadio,defaultComment
+Review and approve new patient registration,Registration form fully completed,TRUE,Comments / Notes
+Review and approve new patient registration,ID and proof of address provided,TRUE,Comments / Notes
+Review and approve new patient registration,Medical history / consent forms signed,TRUE,Comments / Notes
+Review and approve new patient registration,NHS / Private patient eligibility checked,TRUE,Comments / Notes
+Review and approve new patient registration,Contact details verified (phone / email),TRUE,Comments / Notes
+Review and approve new patient registration,Emergency contact provided,TRUE,Comments / Notes
+Review and approve new patient registration,GDPR consent to contact options ticked,TRUE,Comments / Notes
+Review and approve new patient registration,All documents uploaded / archived correctly,TRUE,Comments / Notes
+Review and approve new patient registration,Patient record created in PMS / CRM,TRUE,Comments / Notes
+Review and approve new patient registration,Welcome message / info pack sent,TRUE,Comments / Notes
+Send welcome email / SMS,Send welcome email / SMS,FALSE,Comments / Notes
+Assign patient online intake forms for completion,Assign / send online intake forms to patient,FALSE,Comments / Notes
+Assign patient online intake forms for completion,Track form completion,FALSE,Comments / Notes
+Assign patient online intake forms for completion,Review responses and follow up if needed,FALSE,Comments / Notes
+Check returned forms for accuracy and completion,All Sections Complete,TRUE,Form Type
+Check returned forms for accuracy and completion,Signatures / Consents Present,TRUE,Form Type
+Check returned forms for accuracy and completion,Info Accurate & Legible,TRUE,Form Type
+Verify insurance details (if applicable),Verify patient insurance details,FALSE,Comments / Notes
+Verify insurance details (if applicable),Contact insurer / patient for confirmation,FALSE,Comments / Notes
+Verify insurance details (if applicable),Record insurance verification outcome,FALSE,Comments / Notes
+Set reminder to call patient if forms not returned within 24 hours,Monitor patient online form submissions,FALSE,Comments / Notes
+Set reminder to call patient if forms not returned within 24 hours,Set reminder to call if forms not returned within 24h,FALSE,Comments / Notes
+Set reminder to call patient if forms not returned within 24 hours,Call patient to follow up on form completion,FALSE,Comments / Notes
+Confirm appointment booking and readiness for first visit,Confirm appointment date / time with patient,FALSE,Comments / Notes
+Confirm appointment booking and readiness for first visit,Send confirmation message (SMS / Email / WhatsApp),FALSE,Comments / Notes
+Confirm appointment booking and readiness for first visit,Verify all pre-visit forms completed,FALSE,Comments / Notes
+Confirm appointment booking and readiness for first visit,Confirm insurance details (if applicable),FALSE,Comments / Notes
+Confirm appointment booking and readiness for first visit,Send pre-appointment info pack,FALSE,Comments / Notes
+Confirm appointment booking and readiness for first visit,Answer pre-visit questions or concerns,FALSE,Comments / Notes
+Confirm appointment booking and readiness for first visit,Flag outstanding items for follow-up,FALSE,Comments / Notes
+Verify all patient contact details are current,Phone Number Verified,TRUE,Checked By (Initials)
+Verify all patient contact details are current,Email Verified,TRUE,Checked By (Initials)
+Verify all patient contact details are current,Address Verified,TRUE,Checked By (Initials)
+Send booking confirmation email / SMS,Send booking confirmation email / SMS,FALSE,Comments / Notes
+Schedule and send appointment reminders,48-hour reminder → 48h before appointment,FALSE,Comments / Notes
+Schedule and send appointment reminders,24-hour reminder → 24h before appointment,FALSE,Comments / Notes
+Prepare patient chart and day's appointment list,Prep / print patient charts,FALSE,Comments / Notes
+Prepare patient chart and day's appointment list,Review all scheduled appointments,FALSE,Comments / Notes
+Prepare patient chart and day's appointment list,Verify forms and clinical notes are complete,FALSE,Comments / Notes
+Prepare patient chart and day's appointment list,Check for special requirements / alerts,FALSE,Comments / Notes
+Prepare patient chart and day's appointment list,Prepare appointment list for clinicians,FALSE,Comments / Notes
+Track appointment confirmation,Confirmation Received,TRUE,Appointment Date / Time
+Follow up unconfirmed appointments,Follow-Up Needed,TRUE,Appointment Date / Time
+Update appointment and notify provider,Update appointment in diary / PMS,FALSE,Comments / Notes
+Update appointment and notify provider,Verify new appointment info,FALSE,Comments / Notes
+Update appointment and notify provider,Notify provider (email / SMS / in-app),FALSE,Comments / Notes
+Update appointment and notify provider,Confirm provider acknowledgement,FALSE,Comments / Notes
+Send reschedule confirmation message,Send reschedule confirmation message,FALSE,Comments / Notes
+Update provider schedule after reschedule,Update provider diary,FALSE,Comments / Notes
+Update provider schedule after reschedule,Verify accurate schedule details,FALSE,Comments / Notes
+Update provider schedule after reschedule,Notify provider,FALSE,Comments / Notes
+Update provider schedule after reschedule,Confirm provider has seen update,FALSE,Comments / Notes
+Fill cancelled appointment slot,Identify cancelled slot,FALSE,Comments / Notes
+Fill cancelled appointment slot,Review waiting / cancellation list,FALSE,Comments / Notes
+Fill cancelled appointment slot,Contact candidate patients,FALSE,Comments / Notes
+Fill cancelled appointment slot,Confirm and book new appointment,FALSE,Comments / Notes
+Fill cancelled appointment slot,Notify provider and team,FALSE,Comments / Notes
+Mark case as resolved after reschedule,Acknowledged by Patient,TRUE,New Appointment Date / Time
+Send cancellation confirmation and rebooking link,Send cancellation confirmation and rebooking link,FALSE,Comments / Notes
+Log reason for cancellation,Cancellation Reason logged,FALSE,Appointment Date / Time
+Contact patient to rebook after cancellation,Contact patient to rebook after cancellation,FALSE,Comments / Notes
+Update provider diary to reflect open slot,Update provider diary to reflect open slot,FALSE,Comments / Notes
+Confirm removal from active schedule,Final Confirmation,TRUE,Appointment Date / Time
+Run recall report and identify overdue patients,Generate recall report,FALSE,Comments / Notes
+Run recall report and identify overdue patients,Identify overdue patients,FALSE,Comments / Notes
+Run recall report and identify overdue patients,Segment by recall type,FALSE,Comments / Notes
+Run recall report and identify overdue patients,Export list for follow-up,FALSE,Comments / Notes
+Send recall reminders,Send recall reminders,FALSE,Comments / Notes
+Manual recall follow-up call,Manual recall follow-up call,FALSE,Due Date
+Update recall workflow status,Status (Contacted / Scheduled),FALSE,Recall Type
+Review persistent non-responders,Provider Notified,TRUE,Recall Attempts
+Send aftercare message and feedback survey,Send aftercare message and feedback survey,FALSE,Comments / Notes
+Payment and billing follow-up,Check account balance,FALSE,Comments / Notes
+Payment and billing follow-up,Assign unpaid balance follow-up,FALSE,Comments / Notes
+Payment and billing follow-up,Contact patient for payment,FALSE,Comments / Notes
+Payment and billing follow-up,Track payment outcome,FALSE,Comments / Notes
+Review feedback and assign actions,Review feedback and assign actions,FALSE,Action Items Identified
+Escalate negative feedback,Escalated to Practice Manager,TRUE,Nature of Feedback / Concern
+Close loop: payment and survey completion,Loop Closed,TRUE,Payment Status (Paid / Outstanding)
+Segment patients for special offers,Define segmentation criteria,FALSE,Segment Criteria / Notes
+Segment patients for special offers,Extract target group,FALSE,Segment Criteria / Notes
+Segment patients for special offers,Review and clean data,FALSE,Segment Criteria / Notes
+Segment patients for special offers,Generate and save final list,FALSE,Output File / Format
+Prepare and send promotional messages,Prepare promotional content,FALSE,Campaign / Offer Details
+Prepare and send promotional messages,Personalize message,FALSE,Campaign / Offer Details
+Prepare and send promotional messages,Send via email / SMS,FALSE,Campaign / Offer Details
+Track responses and assign calls,Response Type (Interested / Not Interested),FALSE,Staff Assigned to Call
+Track promotion redemption,Logged in System,TRUE,Offer / Promotion
+Evaluate campaign results,Key Metrics Reviewed,TRUE,Metrics (Opens, CTR, Bookings, Redemptions)

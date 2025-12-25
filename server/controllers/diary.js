@@ -1,6 +1,10 @@
 import { Op } from 'sequelize'
-import { DiaryTreatment, DiaryPatient, DiaryAppointment, DiaryNote, User, RotaShift, Rota, OrganisationTreatment, Role, UserOrganisation } from '../models'
+import { DiaryTreatment, DiaryPatient, DiaryAppointment, DiaryNote, DiaryPatientComfort, DiaryPatientSurvey, User, RotaShift, Rota, OrganisationTreatment, Role, UserOrganisation } from '../models'
 import { success, error } from '../utils/response'
+import { readBody, getQuery, createError } from 'h3'
+import formidable from 'formidable'
+import path from 'path'
+import fs from 'fs'
 
 const pad2 = (n) => String(n).padStart(2, '0')
 const resolveTimeMode = () => {
@@ -113,6 +117,70 @@ export const listPatients = async (event) => {
   }
 }
 
+export const listPatientsPaged = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const q = getQuery(event) || {}
+    const page = Math.max(1, Number(q.page || 1))
+    const itemsPerPage = Math.max(1, Math.min(100, Number(q.itemsPerPage || q.perPage || 10)))
+    const search = (q.search || q.q || '').trim()
+    const where = { organisationId: Number(orgId) }
+    if (q.sex) where.sex = q.sex
+    if (q.paymentPlan) where.paymentPlan = q.paymentPlan
+    if (q.marketingConsent) where.marketingConsent = q.marketingConsent
+    if (q.dentistId) where.defaultDentistId = Number(q.dentistId)
+    if (search) {
+      where[Op.or] = [
+        { firstName: { [Op.iLike]: `%${search}%` } },
+        { lastName: { [Op.iLike]: `%${search}%` } },
+        { email: { [Op.iLike]: `%${search}%` } },
+        { mobile: { [Op.iLike]: `%${search}%` } },
+      ]
+    }
+    const order = []
+    if (q.sortBy) {
+      const dir = String(q.sortDesc).toLowerCase() === 'true' ? 'DESC' : 'ASC'
+      order.push([q.sortBy, dir])
+    } else {
+      order.push(['createdAt', 'DESC'])
+    }
+    const result = await DiaryPatient.findAndCountAll({
+      where,
+      order,
+      limit: itemsPerPage,
+      offset: (page - 1) * itemsPerPage,
+    })
+    return success({ rows: result.rows || [], total: result.count || 0 })
+  } catch (e) {
+    const msg = e?.message || e?.data?.message || e?.original?.detail || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const getPatientStats = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const where = { organisationId: Number(orgId) }
+    const total = await DiaryPatient.count({ where })
+    const startOfMonth = new Date()
+    startOfMonth.setDate(1)
+    startOfMonth.setHours(0, 0, 0, 0)
+    const newThisMonth = await DiaryPatient.count({
+      where: { ...where, createdAt: { [Op.gte]: startOfMonth } },
+    })
+    const withEmail = await DiaryPatient.count({
+      where: { ...where, email: { [Op.ne]: null } },
+    })
+    const withMobile = await DiaryPatient.count({
+      where: { ...where, mobile: { [Op.ne]: null } },
+    })
+    return success({ total, newThisMonth, withEmail, withMobile })
+  } catch (e) {
+    const msg = e?.message || e?.data?.message || e?.original?.detail || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
 export const createPatient = async (event) => {
   try {
     const { orgId } = event.context.user
@@ -126,15 +194,38 @@ export const createPatient = async (event) => {
       sex: payload.sex || null,
       firstName: payload.firstName,
       lastName: payload.lastName,
+      niNumber: payload.niNumber || null,
+      nhsNumber: payload.nhsNumber || null,
+      insuranceNumber: payload.insuranceNumber || null,
+      legacyId: payload.legacyId || null,
+      imagingId: payload.imagingId || null,
+      ethnicity: payload.ethnicity || null,
       address1: payload.address1 || null,
+      address2: payload.address2 || null,
+      address3: payload.address3 || null,
+      town: payload.town || null,
+      county: payload.county || null,
       postcode: payload.postcode || null,
+      homePhone: payload.homePhone || null,
+      workPhone: payload.workPhone || null,
       dob: payload.dob || null,
       mobile: payload.mobile || null,
+      preferredPhone: payload.preferredPhone || null,
       email: payload.email || null,
+      doctor: payload.doctor || null,
+      occupation: payload.occupation || null,
+      family: payload.family || null,
       marketingConsent: payload.marketingConsent || null,
       receiveSms: payload.receiveSms === true || payload.receiveSms === 'Yes',
       receiveEmail: payload.receiveEmail === true || payload.receiveEmail === 'Yes',
       paymentPlan: payload.paymentPlan || null,
+      dentist: payload.dentist || null,
+      hygienist: payload.hygienist || null,
+      dentistRecallInterval: payload.dentistRecallInterval || payload.recallInterval || null,
+      nextDentistRecall: payload.nextDentistRecall || null,
+      hygienistRecallInterval: payload.hygienistRecallInterval || null,
+      nextHygienistRecall: payload.nextHygienistRecall || null,
+      acquisitionSource: payload.acquisitionSource || null,
       defaultDentistId: payload.dentistId || null,
       recallMethod: payload.recallMethod || null,
       recallInterval: payload.recallInterval || null,
@@ -157,7 +248,16 @@ export const updatePatient = async (event) => {
     if (!id) return error(400, 'id is required')
     const row = await DiaryPatient.findOne({ where: { id, organisationId: Number(orgId) } })
     if (!row) return error(404, 'Patient not found')
-    const fields = ['title','sex','firstName','lastName','address1','postcode','dob','mobile','email','marketingConsent','receiveSms','receiveEmail','paymentPlan','defaultDentistId','recallMethod','recallInterval']
+    const fields = [
+      'title','sex','firstName','lastName',
+      'niNumber','nhsNumber','insuranceNumber','legacyId','imagingId','ethnicity',
+      'address1','address2','address3','town','county','postcode',
+      'homePhone','workPhone','mobile','preferredPhone','email',
+      'doctor','occupation','family',
+      'marketingConsent','receiveSms','receiveEmail','paymentPlan',
+      'dentist','hygienist','dentistRecallInterval','nextDentistRecall','hygienistRecallInterval','nextHygienistRecall','acquisitionSource',
+      'defaultDentistId','recallMethod','recallInterval'
+    ]
     for (const f of fields) {
       if (payload[f] !== undefined) {
         row[f] = payload[f]
@@ -177,11 +277,16 @@ export const listAppointments = async (event) => {
     const { orgId } = event.context.user
     const q = getQuery(event) || {}
     const dateStr = q.date
-    if (!dateStr) return error(400, 'date is required')
-    const range = getUtcRangeForDate(dateStr)
-    if (!range) return error(400, 'Invalid date format')
-    const { start, end } = range
-    const where = { organisationId: Number(orgId), startTime: { [Op.between]: [start, end] } }
+    const patientId = q.patientId ? Number(q.patientId) : null
+    if (!dateStr && !patientId) return error(400, 'date or patientId is required')
+    const where = { organisationId: Number(orgId) }
+    if (dateStr) {
+      const range = getUtcRangeForDate(dateStr)
+      if (!range) return error(400, 'Invalid date format')
+      const { start, end } = range
+      where.startTime = { [Op.between]: [start, end] }
+    }
+    if (patientId) where.patientId = patientId
     if (q.dentistId) where.dentistId = Number(q.dentistId)
     if (q.status) where.status = q.status
     if (q.treatmentId) where.treatmentId = Number(q.treatmentId)
@@ -378,8 +483,13 @@ export const listDentistsForDate = async (event) => {
         { model: UserOrganisation, as: 'userOrganisations', attributes: [], where: { organisationId: Number(orgId) } },
       ],
     })
+    const dentistRoleIds = new Set([1, 2, 5])
     const out = users
-      .filter(u => u.roleId === 5 || (u.role?.title || '').toLowerCase().includes('dentist'))
+      .filter((u) => {
+        const roleId = Number(u.roleId)
+        const title = (u.role?.title || '').toLowerCase()
+        return dentistRoleIds.has(roleId) || title.includes('dentist')
+      })
       .map(u => ({ id: u.id, name: u.fullName, role: u.role?.title || 'Dentist', start: null, end: null }))
     return success(out)
   } catch (e) { const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'; return error(500, msg) }
@@ -483,5 +593,623 @@ export const deleteNote = async (event) => {
     await row.destroy()
     return success({ ok: true })
   } catch (e) { const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'; return error(500, msg) }
+}
+
+// --- Patient Comfort (Unique Patient Comfort) ---
+export const getPatientComfort = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const q = getQuery(event) || {}
+    const patientId = Number(q.patientId || 0)
+    
+    if (!patientId) {
+      return error(400, 'patientId is required')
+    }
+
+    // Verify patient belongs to organization
+    const patient = await DiaryPatient.findOne({
+      where: { id: patientId, organisationId: Number(orgId) },
+    })
+
+    if (!patient) {
+      return error(404, 'Patient not found')
+    }
+
+    // Get or create comfort record
+    let comfort = await DiaryPatientComfort.findOne({
+      where: { patientId, organisationId: Number(orgId) },
+    })
+
+    // If not found, return empty structure
+    if (!comfort) {
+      return success({
+        patientId,
+        beveragePreference: null,
+        blanketPreference: null,
+        entertainmentOptions: null,
+        lightingPreference: null,
+        roomTemperaturePreference: null,
+        aromatherapyPreference: null,
+        communicationStyle: null,
+        anxietyLevel: null,
+        customQuestions: [],
+      })
+    }
+
+    return success(comfort)
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const savePatientComfort = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    
+    const patientId = Number(payload.patientId || 0)
+    if (!patientId) {
+      return error(400, 'patientId is required')
+    }
+
+    // Verify patient belongs to organization
+    const patient = await DiaryPatient.findOne({
+      where: { id: patientId, organisationId: Number(orgId) },
+    })
+
+    if (!patient) {
+      return error(404, 'Patient not found')
+    }
+
+    // Validate custom questions (max 10)
+    const customQuestions = payload.customQuestions || []
+    if (customQuestions.length > 10) {
+      return error(400, 'Maximum 10 custom questions allowed')
+    }
+
+    // Validate anxiety level if provided
+    if (payload.anxietyLevel !== undefined && payload.anxietyLevel !== null) {
+      const anxietyLevel = Number(payload.anxietyLevel)
+      if (isNaN(anxietyLevel) || anxietyLevel < 1 || anxietyLevel > 10) {
+        return error(400, 'Anxiety level must be between 1 and 10')
+      }
+    }
+
+    // Validate communication style if provided
+    if (payload.communicationStyle && !['Detailed', 'Minimal', 'Visual'].includes(payload.communicationStyle)) {
+      return error(400, 'Communication style must be one of: Detailed, Minimal, Visual')
+    }
+
+    // Check if comfort record exists
+    let comfort = await DiaryPatientComfort.findOne({
+      where: { patientId, organisationId: Number(orgId) },
+    })
+
+    const comfortData = {
+      patientId,
+      organisationId: Number(orgId),
+      beveragePreference: payload.beveragePreference || null,
+      blanketPreference: payload.blanketPreference || null,
+      entertainmentOptions: payload.entertainmentOptions || null,
+      lightingPreference: payload.lightingPreference || null,
+      roomTemperaturePreference: payload.roomTemperaturePreference || null,
+      aromatherapyPreference: payload.aromatherapyPreference || null,
+      communicationStyle: payload.communicationStyle || null,
+      anxietyLevel: payload.anxietyLevel !== undefined && payload.anxietyLevel !== null ? Number(payload.anxietyLevel) : null,
+      customQuestions: customQuestions,
+    }
+
+    if (comfort) {
+      // Update existing record
+      await comfort.update(comfortData)
+      return success(comfort)
+    } else {
+      // Create new record
+      const created = await DiaryPatientComfort.create(comfortData)
+      return success(created)
+    }
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const updatePatientComfort = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    
+    const patientId = Number(payload.patientId || 0)
+    if (!patientId) {
+      return error(400, 'patientId is required')
+    }
+
+    // Verify patient belongs to organization
+    const patient = await DiaryPatient.findOne({
+      where: { id: patientId, organisationId: Number(orgId) },
+    })
+
+    if (!patient) {
+      return error(404, 'Patient not found')
+    }
+
+    // Find existing comfort record
+    const comfort = await DiaryPatientComfort.findOne({
+      where: { patientId, organisationId: Number(orgId) },
+    })
+
+    if (!comfort) {
+      return error(404, 'Patient comfort record not found. Use save endpoint to create it first.')
+    }
+
+    // Validate custom questions if provided
+    if (payload.customQuestions !== undefined) {
+      if (payload.customQuestions.length > 10) {
+        return error(400, 'Maximum 10 custom questions allowed')
+      }
+    }
+
+    // Validate anxiety level if provided
+    if (payload.anxietyLevel !== undefined && payload.anxietyLevel !== null) {
+      const anxietyLevel = Number(payload.anxietyLevel)
+      if (isNaN(anxietyLevel) || anxietyLevel < 1 || anxietyLevel > 10) {
+        return error(400, 'Anxiety level must be between 1 and 10')
+      }
+    }
+
+    // Validate communication style if provided
+    if (payload.communicationStyle && !['Detailed', 'Minimal', 'Visual'].includes(payload.communicationStyle)) {
+      return error(400, 'Communication style must be one of: Detailed, Minimal, Visual')
+    }
+
+    // Update only provided fields
+    const updateFields = [
+      'beveragePreference',
+      'blanketPreference',
+      'entertainmentOptions',
+      'lightingPreference',
+      'roomTemperaturePreference',
+      'aromatherapyPreference',
+      'communicationStyle',
+      'anxietyLevel',
+      'customQuestions',
+    ]
+
+    for (const field of updateFields) {
+      if (payload[field] !== undefined) {
+        if (field === 'anxietyLevel') {
+          comfort[field] = payload[field] !== null ? Number(payload[field]) : null
+        } else {
+          comfort[field] = payload[field]
+        }
+      }
+    }
+
+    await comfort.save()
+    return success(comfort)
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+// --- Static Survey Structure Helper ---
+export const getSurveyStructure = () => {
+  return {
+    categories: [
+      {
+        id: 'category1',
+        name: 'Current Dental Concerns',
+        questions: [
+          {
+            id: 'question1',
+            text: 'Do you currently experience any of the following? (Select all that apply)',
+            type: 'checkbox',
+            options: [], // Will be provided by frontend or can be defined here
+          },
+        ],
+      },
+      {
+        id: 'category2',
+        name: 'Smile Aesthetic Concerns',
+        questions: [
+          {
+            id: 'question2',
+            text: 'What would you most like to change about your smile? (Select all that apply)',
+            type: 'checkbox',
+            subcategories: [
+              { id: 'color_brightness', name: 'Color and Brightness', options: [] },
+              { id: 'alignment_spacing', name: 'Alignment and Spacing', options: [] },
+              { id: 'tooth_appearance', name: 'Tooth Appearance', options: [] },
+              { id: 'missing_teeth', name: 'Missing Teeth', options: [] },
+              { id: 'overall', name: 'Overall', options: [] },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'category3',
+        name: 'Smile Confidence Assessment',
+        questions: [
+          {
+            id: 'question3',
+            text: 'How important is your smile to you?',
+            type: 'range',
+            min: 1,
+            max: 10,
+          },
+          {
+            id: 'question4',
+            text: 'How confident do you feel about your smile?',
+            type: 'range',
+            min: 1,
+            max: 10,
+          },
+          {
+            id: 'question5',
+            text: 'Do you ever feel self-conscious about your smile in social situations?',
+            type: 'single_choice',
+            options: ['Yes', 'No', 'Sometimes'],
+          },
+        ],
+      },
+      {
+        id: 'category4',
+        name: 'Treatment Interest & Priorities',
+        questions: [
+          {
+            id: 'question6',
+            text: 'Which treatments are you most interested in learning more about? (Select all that apply)',
+            type: 'checkbox',
+            subcategories: [
+              { id: 'teeth_whitening', name: 'Teeth Whitening', options: [] },
+              { id: 'orthodontics', name: 'Orthodontics', options: [] },
+              { id: 'cosmetic_treatments', name: 'Cosmetic Treatments', options: [] },
+              { id: 'restorative', name: 'Restorative', options: [] },
+              { id: 'other', name: 'Other', options: [] },
+            ],
+          },
+          {
+            id: 'question7',
+            text: 'What is your main priority for improving your smile?',
+            type: 'single_choice',
+            options: [], // Will be provided by frontend
+          },
+        ],
+      },
+      {
+        id: 'category5',
+        name: 'Photo Upload (Optional)',
+        questions: [
+          {
+            id: 'question8',
+            text: 'Would you like to upload photos of your smile?',
+            type: 'file_upload',
+            accept: 'image/*',
+            multiple: true,
+          },
+        ],
+      },
+      {
+        id: 'category6',
+        name: 'Timeline & Budget (Conditional)',
+        questions: [
+          {
+            id: 'question9',
+            text: 'When are you hoping to start treatment?',
+            type: 'text',
+          },
+          {
+            id: 'question10',
+            text: 'Do you have a budget in mind for your smile improvement?',
+            type: 'text',
+          },
+        ],
+      },
+      {
+        id: 'category7',
+        name: 'Additional Information',
+        questions: [
+          {
+            id: 'question11',
+            text: 'Is there anything else you\'d like us to know about your smile concerns or goals?',
+            type: 'textarea',
+          },
+          {
+            id: 'question12',
+            text: 'How would you like us to follow up with you?',
+            type: 'single_choice',
+            options: [], // Will be provided by frontend
+          },
+        ],
+      },
+      {
+        id: 'category8',
+        name: 'Preferred Contact Time',
+        questions: [
+          {
+            id: 'question13',
+            text: 'Preferred contact time:',
+            type: 'text',
+          },
+        ],
+      },
+    ],
+  }
+}
+
+// --- Patient Survey ---
+export const getPatientSurvey = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const q = getQuery(event) || {}
+    const patientId = Number(q.patientId || 0)
+    
+    if (!patientId) {
+      return error(400, 'patientId is required')
+    }
+
+    // Verify patient belongs to organization
+    const patient = await DiaryPatient.findOne({
+      where: { id: patientId, organisationId: Number(orgId) },
+    })
+
+    if (!patient) {
+      return error(404, 'Patient not found')
+    }
+
+    // Get survey structure
+    const surveyStructure = getSurveyStructure()
+
+    // Get or return empty survey
+    let survey = await DiaryPatientSurvey.findOne({
+      where: { patientId, organisationId: Number(orgId), surveyType: 'smile_concern' },
+    })
+
+    if (!survey) {
+      return success({
+        patientId,
+        surveyType: 'smile_concern',
+        structure: surveyStructure,
+        answers: {},
+        uploadedPhotos: [],
+        isCompleted: false,
+        completedAt: null,
+      })
+    }
+
+    return success({
+      ...survey.toJSON(),
+      structure: surveyStructure,
+    })
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const savePatientSurvey = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    
+    const patientId = Number(payload.patientId || 0)
+    if (!patientId) {
+      return error(400, 'patientId is required')
+    }
+
+    // Verify patient belongs to organization
+    const patient = await DiaryPatient.findOne({
+      where: { id: patientId, organisationId: Number(orgId) },
+    })
+
+    if (!patient) {
+      return error(404, 'Patient not found')
+    }
+
+    // Find or create survey
+    let survey = await DiaryPatientSurvey.findOne({
+      where: { patientId, organisationId: Number(orgId), surveyType: 'smile_concern' },
+    })
+
+    const surveyData = {
+      patientId,
+      organisationId: Number(orgId),
+      surveyType: 'smile_concern',
+      answers: payload.answers || {},
+      uploadedPhotos: payload.uploadedPhotos || survey?.uploadedPhotos || [],
+      isCompleted: payload.isCompleted || false,
+      completedAt: payload.isCompleted ? new Date() : null,
+    }
+
+    if (survey) {
+      await survey.update(surveyData)
+      return success(survey)
+    } else {
+      const created = await DiaryPatientSurvey.create(surveyData)
+      return success(created)
+    }
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const uploadSurveyPhotos = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const uploadDir = path.join(process.cwd(), 'public/uploads/survey')
+    
+    // Ensure directory exists
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true })
+    }
+
+    const form = formidable({
+      multiples: true,
+      uploadDir,
+      keepExtensions: true,
+      filename: (name, ext, part) => {
+        const timestamp = Date.now()
+        const random = Math.random().toString(36).substring(7)
+        return `survey-${timestamp}-${random}${ext}`
+      },
+    })
+
+    const { files, fields } = await new Promise((resolve, reject) => {
+      form.parse(event.node.req, (err, fields, files) => {
+        if (err) reject(err)
+        resolve({ files, fields })
+      })
+    })
+
+    const patientId = Number(fields.patientId?.[0] || 0)
+    if (!patientId) {
+      return error(400, 'patientId is required')
+    }
+
+    // Verify patient belongs to organization
+    const patient = await DiaryPatient.findOne({
+      where: { id: patientId, organisationId: Number(orgId) },
+    })
+
+    if (!patient) {
+      return error(404, 'Patient not found')
+    }
+
+    // Get or create survey
+    let survey = await DiaryPatientSurvey.findOne({
+      where: { patientId, organisationId: Number(orgId), surveyType: 'smile_concern' },
+    })
+
+    const uploadedFiles = Array.isArray(files.photos) ? files.photos : [files.photos]
+    const filePaths = uploadedFiles.map((file) => `/uploads/survey/${path.basename(file.filepath)}`)
+
+    const existingPhotos = survey?.uploadedPhotos || []
+    const updatedPhotos = [...existingPhotos, ...filePaths]
+
+    if (survey) {
+      await survey.update({ uploadedPhotos: updatedPhotos })
+      return success({ uploadedPhotos: updatedPhotos, newFiles: filePaths })
+    } else {
+      const created = await DiaryPatientSurvey.create({
+        patientId,
+        organisationId: Number(orgId),
+        surveyType: 'smile_concern',
+        answers: {},
+        uploadedPhotos: updatedPhotos,
+        isCompleted: false,
+      })
+      return success({ uploadedPhotos: updatedPhotos, newFiles: filePaths })
+    }
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const downloadPatientSurvey = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const q = getQuery(event) || {}
+    const patientId = Number(q.patientId || 0)
+    
+    if (!patientId) {
+      return error(400, 'patientId is required')
+    }
+
+    const survey = await DiaryPatientSurvey.findOne({
+      where: { patientId, organisationId: Number(orgId), surveyType: 'smile_concern' },
+      include: [
+        {
+          model: DiaryPatient,
+          as: 'patient',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'mobile'],
+        },
+      ],
+    })
+
+    if (!survey) {
+      return error(404, 'Survey not found')
+    }
+
+    const surveyStructure = getSurveyStructure()
+    
+    // Format data for download (JSON format)
+    const downloadData = {
+      patient: {
+        name: `${survey.patient.firstName} ${survey.patient.lastName}`,
+        email: survey.patient.email,
+        mobile: survey.patient.mobile,
+      },
+      surveyType: survey.surveyType,
+      completedAt: survey.completedAt,
+      answers: survey.answers,
+      uploadedPhotos: survey.uploadedPhotos,
+      structure: surveyStructure,
+    }
+
+    return success(downloadData)
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const printPatientSurvey = async (event) => {
+  // Same as download but can be formatted differently for printing
+  return await downloadPatientSurvey(event)
+}
+
+export const sharePatientSurvey = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    
+    const patientId = Number(payload.patientId || 0)
+    const shareMethod = payload.shareMethod || 'email' // email, link, etc.
+    const recipientEmail = payload.recipientEmail
+
+    if (!patientId) {
+      return error(400, 'patientId is required')
+    }
+
+    const survey = await DiaryPatientSurvey.findOne({
+      where: { patientId, organisationId: Number(orgId), surveyType: 'smile_concern' },
+      include: [
+        {
+          model: DiaryPatient,
+          as: 'patient',
+          attributes: ['id', 'firstName', 'lastName', 'email'],
+        },
+      ],
+    })
+
+    if (!survey) {
+      return error(404, 'Survey not found')
+    }
+
+    // For now, return the survey data that can be shared
+    // Email sending can be implemented separately
+    const shareData = {
+      patient: {
+        name: `${survey.patient.firstName} ${survey.patient.lastName}`,
+      },
+      survey: survey.toJSON(),
+      shareMethod,
+      recipientEmail,
+    }
+
+    // TODO: Implement actual email sending or link generation
+    return success({ message: 'Survey shared successfully', shareData })
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
 }
 

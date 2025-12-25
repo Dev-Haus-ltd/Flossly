@@ -1,4 +1,4 @@
-import { createLead, deleteLeads, listLeads, updateLead, getLeadTreatment, saveLeadTreatment, deleteLeadTreatment, listLeadNotes, addLeadNote, deleteLeadNote, listOptions, addOption, deleteOption, getLeadCommunication, saveLeadCommunication, listAutomation, saveAutomation, sendLeadMail } from '~/server/controllers/crm'
+import { createLead, deleteLeads, listLeads, updateLead, getLeadTreatment, saveLeadTreatment, deleteLeadTreatment, listLeadNotes, addLeadNote, deleteLeadNote, listOptions, addOption, deleteOption, getLeadCommunication, saveLeadCommunication, listAutomation, saveAutomation, sendLeadMail, bulkUploadLeads } from '~/server/controllers/crm'
 
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, 'name')
@@ -11,6 +11,8 @@ export default defineEventHandler(async (event) => {
       return await updateLead(event)
     case 'delete':
       return await deleteLeads(event)
+    case 'bulkUpload':
+      return await bulkUploadLeads(event)
     case 'treatmentGet':
       return await getLeadTreatment(event)
     case 'treatmentSave':
