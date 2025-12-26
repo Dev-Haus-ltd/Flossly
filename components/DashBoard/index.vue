@@ -740,6 +740,17 @@ const submitReferral = async () => {
     });
   }
 };
+watch(showReferralDialog, (isOpen) => {
+  if (!isOpen) {
+    referralForm.value = {
+      fullName: "",
+      email: "",
+      phoneNumber: "",
+      practiceName: "",
+    };
+  }
+});
+
 
 watch(tab, async (newId) => {
   if (newId && categoryList.value.length > 0) {
