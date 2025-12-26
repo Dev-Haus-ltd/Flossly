@@ -151,6 +151,20 @@ export default {
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
-  }
+  },
+  createOrganisationReferral(data) {
+    return new Promise((resolve, reject) => {
+      Post("/organisations/createReferral", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getAllOrganisationReferrals() {
+    return new Promise((resolve, reject) => {
+      Get("/organisations/allReferrals")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
 
 }

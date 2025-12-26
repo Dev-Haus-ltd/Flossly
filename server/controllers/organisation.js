@@ -11,6 +11,7 @@ import {
   OrganisationScript,
   DictionaryScript,
   User,
+  OrganisationReferral,
 } from "../models";
 import formidable from "formidable";
 import fs from "fs/promises";
@@ -698,5 +699,87 @@ export const seedScripts = async (event) => {
     return success(result);
   } catch (err) {
     return error(500, err.message);
+  }
+};
+
+export const createOrganisationReferral = async (event) => {
+  try {
+    const loggedUser = event.context.user;
+
+    if (!loggedUser || !loggedUser.userId) {
+      throw createError({
+        statusCode: 401,
+        statusMessage: "Unauthorized",
+      });
+    }
+
+    const rawBody = await readBody(event);
+    const body = typeof rawBody === "string"
+      ? JSON.parse(rawBody)
+      : rawBody;
+
+    const {
+      orgName,
+      orgEmail,
+      managerName,
+      phoneNumber,
+      address,
+    } = body;
+
+    if (!orgName || !orgEmail || !managerName) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: "orgName, orgEmail and managerName are required",
+      });
+    }
+
+    const referral = await OrganisationReferral.create({
+      orgName,
+      orgEmail,
+      managerName,
+      phoneNumber,
+      address,
+      referredBy: loggedUser.userId,
+    });
+
+    return {
+      success: true,
+      data: referral,
+    };
+  } catch (err) {
+    console.error("Create Organisation Referral Error:", err);
+    throw createError({
+      statusCode: err.statusCode || 500,
+      statusMessage: err.message || "Internal server error",
+    });
+  }
+};
+
+// need enhancement currently now ui to show this
+export const getAllOrganisationReferrals = async (event) => {
+  try {
+    const referrals = await OrganisationReferral.findAll({
+      include: [
+        {
+          model: User,
+          as: "referrer",
+          attributes: ["id", "name", "email"],
+        },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
+
+    return {
+      success: true,
+      count: referrals.length,
+      data: referrals,
+    };
+  } catch (err) {
+    console.error("Get Organisation Referrals Error:", err);
+
+    throw createError({
+      statusCode: 500,
+      statusMessage: "Internal server error",
+    });
   }
 };
