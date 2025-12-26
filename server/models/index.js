@@ -58,6 +58,7 @@ import { DiaryAppointment } from "./diary/appointments";
 import { DiaryNote } from "./diary/notes";
 import { DiaryPatientComfort } from "./diary/patientComfort";
 import { DiaryPatientSurvey } from "./diary/patientSurvey";
+import { DiaryPatientForm } from "./diary/patientForm";
 // Organisation dictionary
 import { OrganisationTreatment } from "./organisations/organisationTreatments";
 import { CrmLeadTreatment } from "./crm/leadTreatments";
@@ -185,6 +186,12 @@ DiaryPatientComfort.belongsTo(Organisation, { foreignKey: 'organisationId', as: 
 DiaryPatient.hasOne(DiaryPatientSurvey, { foreignKey: 'patientId', as: 'survey', onDelete: 'CASCADE', hooks: true });
 DiaryPatientSurvey.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
 DiaryPatientSurvey.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+
+DiaryPatient.hasMany(DiaryPatientForm, { foreignKey: 'patientId', as: 'forms', onDelete: 'CASCADE', hooks: true });
+DiaryPatientForm.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
+DiaryPatientForm.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+DiaryPatientForm.belongsTo(User, { foreignKey: 'createdBy', as: 'creator', onDelete: 'CASCADE', hooks: true });
+User.hasMany(DiaryPatientForm, { foreignKey: 'createdBy', as: 'createdForms', onDelete: 'CASCADE', hooks: true });
 
 // OrganisationTreatment
 OrganisationTreatment.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
@@ -377,6 +384,7 @@ export {
   DiaryNote,
   DiaryPatientComfort,
   DiaryPatientSurvey,
+  DiaryPatientForm,
   OrganisationTreatment,
   DictionaryScript,
   OrganisationScript,

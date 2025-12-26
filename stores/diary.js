@@ -210,5 +210,209 @@ export const useDiaryStore = defineStore("diaryStore", {
           });
       });
     },
+
+    // Unique Patient Comfort
+    getPatientComfort(patientId) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        diaryService
+          .getPatientComfort(patientId)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+
+    savePatientComfort(payload) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        diaryService
+          .savePatientComfort(payload)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+
+    // Smile Concern Survey
+    getPatientSurvey(patientId) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        diaryService
+          .getPatientSurvey(patientId)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+
+    savePatientSurvey(payload) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        diaryService
+          .savePatientSurvey(payload)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+
+    uploadSurveyPhotos(formData) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        diaryService
+          .uploadSurveyPhotos(formData)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    sharePatientSurvey(payload) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        diaryService
+          .sharePatientSurvey(payload)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    printPatientSurvey(patientId) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        diaryService
+          .printPatientSurvey(patientId)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    downloadPatientSurvey(patientId) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        diaryService
+          .downloadPatientSurvey(patientId)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+
+    // Patient Forms
+    listPatientForms(patientId) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        diaryService
+          .listPatientForms(patientId)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    getPatientForm(formId) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        diaryService
+          .getPatientForm(formId)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    savePatientForm(payload) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        diaryService
+          .savePatientForm(payload)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    updatePatientForm(payload) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        diaryService
+          .updatePatientForm(payload)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    deletePatientForm(formId) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        diaryService
+          .deletePatientForm(formId)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
   },
 });

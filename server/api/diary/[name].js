@@ -1,4 +1,4 @@
-import { listTreatments, listPatients, createPatient, updatePatient, listAppointments, createAppointment, updateAppointment, listDentistsForDate, getStats, getPatient, listNotes, createNote, deleteNote, getPatientComfort, savePatientComfort, updatePatientComfort, getPatientSurvey, savePatientSurvey, uploadSurveyPhotos, downloadPatientSurvey, printPatientSurvey, sharePatientSurvey, getSurveyStructure } from '~/server/controllers/diary'
+import { listTreatments, listPatients, createPatient, updatePatient, listAppointments, createAppointment, updateAppointment, listDentistsForDate, getStats, getPatient, listNotes, createNote, deleteNote, getPatientComfort, savePatientComfort, updatePatientComfort, getPatientSurvey, savePatientSurvey, uploadSurveyPhotos, downloadPatientSurvey, printPatientSurvey, sharePatientSurvey, getSurveyStructure, listPatientForms, getPatientForm, savePatientForm, updatePatientForm, deletePatientForm } from '~/server/controllers/diary'
 import { success } from '~/server/utils/response'
 
 export default defineEventHandler(async (event) => {
@@ -50,6 +50,16 @@ export default defineEventHandler(async (event) => {
       return await sharePatientSurvey(event)
     case 'surveyStructure':
       return success(getSurveyStructure())
+    case 'formsList':
+      return await listPatientForms(event)
+    case 'formGet':
+      return await getPatientForm(event)
+    case 'formSave':
+      return await savePatientForm(event)
+    case 'formUpdate':
+      return await updatePatientForm(event)
+    case 'formDelete':
+      return await deletePatientForm(event)
     default:
       return { code: 1, message: 'Not found' }
   }

@@ -31,12 +31,20 @@ defineEmits(["select"]);
 <style scoped>
 .sidebar-list {
   border-right: 1px solid #e0e0e0; /* light grey line */
-  min-width: 200px;
+  min-width: 239px;
 }
 .cust-label {
-  
   font-weight: 400;
   font-size: 13px;
   color: #737373;
+}
+:deep(.v-list-item--active) {
+  width: 239px;
+  height: 44px;
+  border-radius: 8px;
+  background: #EFF5F5 !important;
+  border-right-width: 1px;
+  border-right-style: solid;
+  border-right-color: #e0e0e0;
 }
 </style>

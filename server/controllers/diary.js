@@ -1,5 +1,5 @@
 import { Op } from 'sequelize'
-import { DiaryTreatment, DiaryPatient, DiaryAppointment, DiaryNote, DiaryPatientComfort, DiaryPatientSurvey, User, RotaShift, Rota, OrganisationTreatment, Role, UserOrganisation } from '../models'
+import { DiaryTreatment, DiaryPatient, DiaryAppointment, DiaryNote, DiaryPatientComfort, DiaryPatientSurvey, DiaryPatientForm, User, RotaShift, Rota, OrganisationTreatment, Role, UserOrganisation } from '../models'
 import { success, error } from '../utils/response'
 import { readBody, getQuery, createError } from 'h3'
 import formidable from 'formidable'
@@ -702,7 +702,16 @@ export const getSurveyStructure = () => {
             id: 'question1',
             text: 'Do you currently experience any of the following? (Select all that apply)',
             type: 'checkbox',
-            options: [], // Will be provided by frontend or can be defined here
+            options: [
+              'Tooth sensitivity (hot/cold/sweet)',
+              'Tooth pain or discomfort when chewing',
+              'Bleeding or swollen gums',
+              'Loose or shifting teeth',
+              'Jaw joint pain or clicking',
+              'Grinding or clenching teeth (especially at night)',
+              'Teeth or fillings breaking/chipping',
+              'None of the above',
+            ],
           },
         ],
       },
@@ -715,11 +724,49 @@ export const getSurveyStructure = () => {
             text: 'What would you most like to change about your smile? (Select all that apply)',
             type: 'checkbox',
             subcategories: [
-              { id: 'color_brightness', name: 'Color and Brightness', options: [] },
-              { id: 'alignment_spacing', name: 'Alignment and Spacing', options: [] },
-              { id: 'tooth_appearance', name: 'Tooth Appearance', options: [] },
-              { id: 'missing_teeth', name: 'Missing Teeth', options: [] },
-              { id: 'overall', name: 'Overall', options: [] },
+              {
+                id: 'color_brightness',
+                name: 'Color and Brightness',
+                options: [
+                  'Make my teeth whiter/brighter',
+                  'Remove stains or discoloration',
+                ],
+              },
+              {
+                id: 'alignment_spacing',
+                name: 'Alignment and Spacing',
+                options: [
+                  'Make my teeth straighter',
+                  'Close gaps between my teeth',
+                ],
+              },
+              {
+                id: 'tooth_appearance',
+                name: 'Tooth Appearance',
+                options: [
+                  'Repair chipped or cracked teeth',
+                  'Replace old/dark fillings with natural-looking ones',
+                  'Replace old crowns that don\'t match my teeth',
+                  'Fix uneven or worn teeth',
+                  'Make my teeth look more even in size',
+                ],
+              },
+              {
+                id: 'missing_teeth',
+                name: 'Missing Teeth',
+                options: [
+                  'Replace missing teeth',
+                  'Replace my removable denture with a permanent solution',
+                ],
+              },
+              {
+                id: 'overall',
+                name: 'Overall',
+                options: [
+                  'Complete smile makeover',
+                  'I\'m happy with my smile as it is',
+                ],
+              },
             ],
           },
         ],
@@ -745,8 +792,13 @@ export const getSurveyStructure = () => {
           {
             id: 'question5',
             text: 'Do you ever feel self-conscious about your smile in social situations?',
-            type: 'single_choice',
-            options: ['Yes', 'No', 'Sometimes'],
+            type: 'checkbox',
+            options: [
+              'Yes, frequently',
+              'Yes, sometimes',
+              'Rarely',
+              'Never',
+            ],
           },
         ],
       },
@@ -759,18 +811,62 @@ export const getSurveyStructure = () => {
             text: 'Which treatments are you most interested in learning more about? (Select all that apply)',
             type: 'checkbox',
             subcategories: [
-              { id: 'teeth_whitening', name: 'Teeth Whitening', options: [] },
-              { id: 'orthodontics', name: 'Orthodontics', options: [] },
-              { id: 'cosmetic_treatments', name: 'Cosmetic Treatments', options: [] },
-              { id: 'restorative', name: 'Restorative', options: [] },
-              { id: 'other', name: 'Other', options: [] },
+              {
+                id: 'teeth_whitening',
+                name: 'Teeth Whitening',
+                options: [
+                  'Professional teeth whitening (in-office)',
+                  'Take-home whitening kits',
+                ],
+              },
+              {
+                id: 'orthodontics',
+                name: 'Orthodontics',
+                options: [
+                  'Invisalign (clear aligners)',
+                  'Traditional braces',
+                  'Quick cosmetic alignment (6-month braces)',
+                ],
+              },
+              {
+                id: 'cosmetic_treatments',
+                name: 'Cosmetic Treatments',
+                options: [
+                  'Porcelain veneers',
+                  'Composite bonding',
+                  'Tooth contouring/reshaping',
+                  'Gum recontouring',
+                ],
+              },
+              {
+                id: 'restorative',
+                name: 'Restorative',
+                options: [
+                  'Dental implants',
+                  'Crowns or bridges',
+                  'White fillings (replacing silver/amalgam)',
+                ],
+              },
+              {
+                id: 'other',
+                name: 'Other',
+                options: [
+                  'Smile makeover consultation',
+                  'Not sure - I\'d like professional advice',
+                ],
+              },
             ],
           },
           {
             id: 'question7',
             text: 'What is your main priority for improving your smile?',
-            type: 'single_choice',
-            options: [], // Will be provided by frontend
+            type: 'checkbox',
+            options: [
+              'Appearance and aesthetics',
+              'Function and comfort',
+              'Both equally important',
+              'Health concerns (pain, decay, gum disease)',
+            ],
           },
         ],
       },
@@ -794,12 +890,28 @@ export const getSurveyStructure = () => {
           {
             id: 'question9',
             text: 'When are you hoping to start treatment?',
-            type: 'text',
+            type: 'checkbox',
+            options: [
+              'As soon as possible',
+              'Within the next 3 months',
+              'Within the next 6 months',
+              'Within the next year',
+              'Just exploring options for now',
+            ],
           },
           {
             id: 'question10',
             text: 'Do you have a budget in mind for your smile improvement?',
-            type: 'text',
+            type: 'checkbox',
+            options: [
+              'Under £500',
+              '£500 - £1,000',
+              '£1,000 - £2,500',
+              '£2,500 - £5,000',
+              'Over £5,000',
+              'Over £5,000',
+              'Not sure yet',
+            ],
           },
         ],
       },
@@ -815,19 +927,22 @@ export const getSurveyStructure = () => {
           {
             id: 'question12',
             text: 'How would you like us to follow up with you?',
-            type: 'single_choice',
-            options: [], // Will be provided by frontend
-          },
-        ],
-      },
-      {
-        id: 'category8',
-        name: 'Preferred Contact Time',
-        questions: [
-          {
-            id: 'question13',
-            text: 'Preferred contact time:',
-            type: 'text',
+            type: 'checkbox',
+            options: [
+              'Phone Call',
+              'Email',
+              'Text Message',
+              'Via Patient Portal Message',
+            ],
+            preferredContactTime: {
+              label: 'Preferred contact time:',
+              options: [
+                'Morning (9am-12pm)',
+                'Afternoon (12pm-5pm)',
+                'Evening (5pm-7pm)',
+                'Anytime',
+              ],
+            },
           },
         ],
       },
@@ -855,13 +970,20 @@ export const getPatientSurvey = async (event) => {
       return error(404, 'Patient not found')
     }
 
-    // Get survey structure
+    // Get survey structure (always available, static)
     const surveyStructure = getSurveyStructure()
 
-    // Get or return empty survey
-    let survey = await DiaryPatientSurvey.findOne({
-      where: { patientId, organisationId: Number(orgId), surveyType: 'smile_concern' },
-    })
+    // Try to get existing survey, but handle case where table doesn't exist yet
+    let survey = null
+    try {
+      survey = await DiaryPatientSurvey.findOne({
+        where: { patientId, organisationId: Number(orgId), surveyType: 'smile_concern' },
+      })
+    } catch (dbError) {
+      // Table doesn't exist yet - that's okay, return empty structure
+      // This allows the form to load even before migrations are run
+      console.warn('DiaryPatientSurveys table not found, returning empty survey structure:', dbError.message)
+    }
 
     if (!survey) {
       return success({
@@ -1101,6 +1223,309 @@ export const sharePatientSurvey = async (event) => {
 
     // TODO: Implement actual email sending or link generation
     return success({ message: 'Survey shared successfully', shareData })
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+// --- Patient Forms ---
+export const listPatientForms = async (event) => {
+  try {
+    const { orgId, userId } = event.context.user
+    const query = getQuery(event)
+    const patientId = Number(query.patientId || 0)
+
+    if (!patientId) {
+      return error(400, 'patientId is required')
+    }
+
+    // Verify patient belongs to organization
+    const patient = await DiaryPatient.findOne({
+      where: { id: patientId, organisationId: Number(orgId) },
+    })
+
+    if (!patient) {
+      return error(404, 'Patient not found')
+    }
+
+    // Get all forms for this patient
+    const forms = await DiaryPatientForm.findAll({
+      where: {
+        patientId,
+        organisationId: Number(orgId),
+      },
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['id', 'firstName', 'lastName', 'email'],
+        },
+      ],
+      order: [['createdAt', 'DESC']],
+    })
+
+    // Format response
+    const formattedForms = forms.map((form) => ({
+      id: form.id,
+      formType: form.formType,
+      answers: form.answers || {},
+      patientComments: form.patientComments || '',
+      ourComments: form.ourComments || '',
+      additionalInfo: form.additionalInfo || '',
+      createdBy: form.creator
+        ? `${form.creator.firstName || ''} ${form.creator.lastName || ''}`.trim() || form.creator.email
+        : 'Unknown',
+      createdAt: form.createdAt,
+      updatedAt: form.updatedAt,
+    }))
+
+    return success(formattedForms)
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const getPatientForm = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const query = getQuery(event)
+    const formId = Number(query.id || 0)
+
+    if (!formId) {
+      return error(400, 'Form id is required')
+    }
+
+    const form = await DiaryPatientForm.findOne({
+      where: {
+        id: formId,
+        organisationId: Number(orgId),
+      },
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['id', 'firstName', 'lastName', 'email'],
+        },
+      ],
+    })
+
+    if (!form) {
+      return error(404, 'Form not found')
+    }
+
+    const formattedForm = {
+      id: form.id,
+      patientId: form.patientId,
+      formType: form.formType,
+      answers: form.answers || {},
+      patientComments: form.patientComments || '',
+      ourComments: form.ourComments || '',
+      additionalInfo: form.additionalInfo || '',
+      createdBy: form.creator
+        ? `${form.creator.firstName || ''} ${form.creator.lastName || ''}`.trim() || form.creator.email
+        : 'Unknown',
+      createdAt: form.createdAt,
+      updatedAt: form.updatedAt,
+    }
+
+    return success(formattedForm)
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const savePatientForm = async (event) => {
+  try {
+    const { orgId, userId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? JSON.parse(body) : body
+
+    const patientId = Number(payload.patientId || 0)
+    const formType = payload.formType
+
+    if (!patientId) {
+      return error(400, 'patientId is required')
+    }
+
+    if (!formType || !['medical_history', 'consent'].includes(formType)) {
+      return error(400, 'formType must be either "medical_history" or "consent"')
+    }
+
+    // Verify patient belongs to organization
+    const patient = await DiaryPatient.findOne({
+      where: { id: patientId, organisationId: Number(orgId) },
+    })
+
+    if (!patient) {
+      return error(404, 'Patient not found')
+    }
+
+    // Validate answers structure
+    const answers = payload.answers || {}
+    if (typeof answers !== 'object') {
+      return error(400, 'answers must be an object')
+    }
+
+    // Validate that all answer values are 'yes' or 'no'
+    for (const key in answers) {
+      if (answers[key] !== 'yes' && answers[key] !== 'no') {
+        return error(400, `Answer for ${key} must be either "yes" or "no"`)
+      }
+    }
+
+    const formData = {
+      patientId,
+      organisationId: Number(orgId),
+      formType,
+      answers,
+      patientComments: payload.patientComments || null,
+      ourComments: payload.ourComments || null,
+      additionalInfo: payload.additionalInfo || null,
+      createdBy: userId,
+    }
+
+    const created = await DiaryPatientForm.create(formData)
+
+    // Fetch with creator info
+    const form = await DiaryPatientForm.findByPk(created.id, {
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['id', 'firstName', 'lastName', 'email'],
+        },
+      ],
+    })
+
+    const formattedForm = {
+      id: form.id,
+      patientId: form.patientId,
+      formType: form.formType,
+      answers: form.answers || {},
+      patientComments: form.patientComments || '',
+      ourComments: form.ourComments || '',
+      additionalInfo: form.additionalInfo || '',
+      createdBy: form.creator
+        ? `${form.creator.firstName || ''} ${form.creator.lastName || ''}`.trim() || form.creator.email
+        : 'Unknown',
+      createdAt: form.createdAt,
+      updatedAt: form.updatedAt,
+    }
+
+    return success(formattedForm)
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const updatePatientForm = async (event) => {
+  try {
+    const { orgId, userId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? JSON.parse(body) : body
+
+    const formId = Number(payload.id || 0)
+
+    if (!formId) {
+      return error(400, 'Form id is required')
+    }
+
+    // Find existing form
+    const form = await DiaryPatientForm.findOne({
+      where: {
+        id: formId,
+        organisationId: Number(orgId),
+      },
+    })
+
+    if (!form) {
+      return error(404, 'Form not found')
+    }
+
+    // Validate answers if provided
+    if (payload.answers !== undefined) {
+      if (typeof payload.answers !== 'object') {
+        return error(400, 'answers must be an object')
+      }
+
+      // Validate that all answer values are 'yes' or 'no'
+      for (const key in payload.answers) {
+        if (payload.answers[key] !== 'yes' && payload.answers[key] !== 'no') {
+          return error(400, `Answer for ${key} must be either "yes" or "no"`)
+        }
+      }
+    }
+
+    // Update form
+    const updateData = {}
+    if (payload.answers !== undefined) updateData.answers = payload.answers
+    if (payload.patientComments !== undefined) updateData.patientComments = payload.patientComments || null
+    if (payload.ourComments !== undefined) updateData.ourComments = payload.ourComments || null
+    if (payload.additionalInfo !== undefined) updateData.additionalInfo = payload.additionalInfo || null
+
+    await form.update(updateData)
+
+    // Fetch updated form with creator info
+    const updatedForm = await DiaryPatientForm.findByPk(form.id, {
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['id', 'firstName', 'lastName', 'email'],
+        },
+      ],
+    })
+
+    const formattedForm = {
+      id: updatedForm.id,
+      patientId: updatedForm.patientId,
+      formType: updatedForm.formType,
+      answers: updatedForm.answers || {},
+      patientComments: updatedForm.patientComments || '',
+      ourComments: updatedForm.ourComments || '',
+      additionalInfo: updatedForm.additionalInfo || '',
+      createdBy: updatedForm.creator
+        ? `${updatedForm.creator.firstName || ''} ${updatedForm.creator.lastName || ''}`.trim() || updatedForm.creator.email
+        : 'Unknown',
+      createdAt: updatedForm.createdAt,
+      updatedAt: updatedForm.updatedAt,
+    }
+
+    return success(formattedForm)
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const deletePatientForm = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const query = getQuery(event)
+    const formId = Number(query.id || 0)
+
+    if (!formId) {
+      return error(400, 'Form id is required')
+    }
+
+    const form = await DiaryPatientForm.findOne({
+      where: {
+        id: formId,
+        organisationId: Number(orgId),
+      },
+    })
+
+    if (!form) {
+      return error(404, 'Form not found')
+    }
+
+    await form.destroy()
+
+    return success({ message: 'Form deleted successfully' })
   } catch (e) {
     const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
     return error(500, msg)

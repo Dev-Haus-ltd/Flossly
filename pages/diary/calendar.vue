@@ -203,6 +203,17 @@ function onOpenNotes(dentist) {
 }
 
 function onOpenExistingAppointment({ appt, dentist }) {
+  // If appointment is linked to a patient, navigate to Patient Journey view
+  if (appt.patientId) {
+    const router = useRouter()
+    router.push({
+      path: `/patients/${appt.patientId}`,
+      query: { tab: 'journey' },
+    })
+    return
+  }
+
+  // Fallback to existing edit modal if no patient is linked
   editingAppointment.value = {
     id: appt.id,
     patientId: appt.patientId,

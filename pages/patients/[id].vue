@@ -6,14 +6,26 @@
     <div class="pa-6">
       <v-tabs v-model="activeTab" bg-color="transparent" color="primary" class="custom-tabs">
         <v-tab value="details">Details</v-tab>
+        <v-tab value="journey">Patient Journey</v-tab>
+        <v-tab value="forms">Forms</v-tab>
       </v-tabs>
-      <PatientsIndex :patient="patient" />
+      <div v-if="activeTab === 'details'">
+        <PatientsIndex :patient="patient" />
+      </div>
+      <div v-else-if="activeTab === 'journey'">
+        <PatientJourney :patient="patient" />
+      </div>
+      <div v-else-if="activeTab === 'forms'">
+        <PatientForms :patient="patient" />
+      </div>
     </div>
   </v-sheet>
 </template>
 
 <script setup>
 import PatientsIndex from '@/components/patients/index.vue'
+import PatientJourney from '@/components/patients/PatientJourney.vue'
+import PatientForms from '@/components/patients/PatientForms.vue'
 import { useDiaryStore } from '@/stores/diary'
 import { watch } from 'vue'
 
@@ -37,11 +49,23 @@ const loadPatient = async (id) => {
 
 onMounted(async () => {
   loadPatient(route.params.id)
+  if (route.query.tab === 'journey') {
+    activeTab.value = 'journey'
+  }
 })
 
 watch(() => route.params.id, (id) => {
   loadPatient(id)
 })
+
+watch(
+  () => route.query.tab,
+  (tab) => {
+    if (tab === 'journey') activeTab.value = 'journey'
+    else if (tab === 'forms') activeTab.value = 'forms'
+    else if (tab === 'details') activeTab.value = 'details'
+  }
+)
 </script>
 
 <style scoped>
