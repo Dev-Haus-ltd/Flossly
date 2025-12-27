@@ -149,7 +149,7 @@ export const addDocument = async (event) => {
     const createdDocuments = [];
     for (const file of uploadedFiles) {
       const type = getFileType(file.originalFilename);
-      const filePath = `/documents/${path.basename(file.filepath)}`;
+      const filePath = `documents/${path.basename(file.filepath)}`;
       const document = await UserDocument.create({
         userId: loggedUser.userId,
         organisationId: loggedUser.orgId,
@@ -242,7 +242,7 @@ export const updateDocument = async (event) => {
     if (prevLink && fs.existsSync(prevLink)) {
       fs.unlinkSync(prevLink);
     }
-    userDoc.link = `/documents/${newFile.newFilename}`;
+    userDoc.link = `documents/${newFile.newFilename}`;
     userDoc.save();
     return success(userDoc);
   } catch (err) {

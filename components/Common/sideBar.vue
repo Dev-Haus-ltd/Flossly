@@ -34,7 +34,7 @@ defineEmits(["select"]);
 <style scoped>
 .sidebar-list {
   border-right: 1px solid #e0e0e0; /* light grey line */
-  min-width: 200px;
+  min-width: 239px;
 }
 .sidebar-item { margin: 2px 8px 6px; padding-left: 12px; transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease; }
 .sidebar-item:hover { background: #f6f7fb; }

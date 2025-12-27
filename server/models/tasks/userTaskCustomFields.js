@@ -16,6 +16,7 @@ export const UserTaskCustomField = sequelize.define(
         model: "UserTasks",
         key: "id",
       },
+      onDelete: "CASCADE",
     },
     columnDefinitionId: {
       type: DataTypes.INTEGER,
@@ -24,6 +25,7 @@ export const UserTaskCustomField = sequelize.define(
         model: "TaskCustomColumnDefinitions",
         key: "id",
       },
+      onDelete: "CASCADE",
     },
     value: {
       type: DataTypes.TEXT,
@@ -33,6 +35,12 @@ export const UserTaskCustomField = sequelize.define(
   {
     modelName: "UserTaskCustomFields",
     timestamps: true,
+    indexes: [
+      {
+        unique: true,
+        fields: ["userTaskId", "columnDefinitionId"], 
+      },
+    ],
   }
 );
 

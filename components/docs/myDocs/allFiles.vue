@@ -83,7 +83,7 @@
               />
 
               <!-- Edit -->
-              <img
+              <!-- <img
                 src="@/assets/icons/edit.svg"
                 alt="Edit"
                 width="20"
@@ -91,6 +91,17 @@
                 class="mr-2"
                 style="cursor: pointer"
                 @click="$emit('edit-file', file)"
+              /> -->
+
+              <!-- Copy Link -->
+              <img
+                src="@/assets/icons/copy.svg"
+                alt="Copy link"
+                width="20"
+                height="20"
+                class="mr-2"
+                style="cursor: pointer"
+                @click="copyLink(file)"
               />
 
               <!-- Download -->
@@ -113,6 +124,7 @@
 <script setup>
 import { ref, computed } from "vue";
 import { parsedDate } from "~/lib/dateFormatter";
+import { buildAbsoluteLink } from "~/lib/misc";
 
 const props = defineProps({
   files: {
@@ -130,6 +142,8 @@ const props = defineProps({
 });
 
 const search = ref("");
+const runtimeConfig = useRuntimeConfig();
+const mainStore = useMainStore();
 
 const filteredFiles = computed(() =>
   props.files.filter(
@@ -148,6 +162,32 @@ const updateValueRow = (file, field, event) => {
   const newValue = event.target.innerText.trim();
   console.log("Updated value:", newValue);
   file[field] = newValue;
+};
+
+const copyLink = async (file) => {
+  const url = buildAbsoluteLink(file?.link || "", runtimeConfig.public?.BASE_URL);
+  if (!url) {
+    mainStore.setSnackbar({ title: "Document link unavailable", type: "error" });
+    return;
+  }
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+    } else {
+      const textarea = document.createElement("textarea");
+      textarea.value = url;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "absolute";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }
+    mainStore.setSnackbar({ title: "Document link copied", type: "success" });
+  } catch (e) {
+    mainStore.setSnackbar({ title: "Failed to copy link", type: "error" });
+  }
 };
 </script>
 

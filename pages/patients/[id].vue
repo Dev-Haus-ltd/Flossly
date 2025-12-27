@@ -7,10 +7,12 @@
       <v-tabs v-model="activeTab" bg-color="transparent" color="primary" class="custom-tabs">
         <v-tab value="details">Details</v-tab>
         <v-tab value="journey">Patient Journey</v-tab>
+        <v-tab value="forms">Forms</v-tab>
         <v-tab value="appointments">Appointments</v-tab>
       </v-tabs>
       <PatientsIndex v-if="activeTab === 'details'" :patient="patient" />
       <PatientJourney v-else-if="activeTab === 'journey'" :patient="patient" @save="handleJourneySave" />
+      <PatientForms v-else-if="activeTab === 'forms'" :patient="patient" />
       <div v-else class="mt-4">
         <v-row class="px-1 mb-4" align="stretch">
           <v-col v-for="(card, i) in appointmentStatCards" :key="card.label" style="flex: 1 1 0;">
@@ -129,7 +131,8 @@
 
 <script setup>
 import PatientsIndex from '@/components/patients/index.vue'
-import PatientJourney from '@/components/patients/patientJourney.vue'
+import PatientJourney from '@/components/patients/PatientJourney.vue'
+import PatientForms from '@/components/patients/PatientForms.vue'
 import { useDiaryStore } from '@/stores/diary'
 import { useMainStore } from '@/stores/index'
 import AddAppointment from '@/components/diary/addAppointment.vue'
@@ -157,6 +160,9 @@ const loadPatient = async (id) => {
 
 onMounted(async () => {
   loadPatient(route.params.id)
+  if (route.query.tab === 'journey') {
+    activeTab.value = 'journey'
+  }
 })
 
 watch(() => route.params.id, (id) => {
@@ -374,7 +380,7 @@ const handleAppointmentSave = async (payload) => {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .cust-border {
   border-bottom: 1px solid #dbdbdb;
   padding: 17px;

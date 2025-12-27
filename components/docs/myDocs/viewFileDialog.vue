@@ -65,6 +65,8 @@
 </template>
 
 <script setup>
+import { buildAbsoluteLink } from '~/lib/misc'
+
 
 
 const pdfurl = ref(null)
@@ -86,8 +88,8 @@ watch(
     if (!val) return
     isLoading.value = true
     const config = useRuntimeConfig()
-      pdfurl.value = `${config.public.BASE_URL}${props.doc.link}`
-      isLoading.value = false
+    pdfurl.value = buildAbsoluteLink(props.doc.link, config.public.BASE_URL)
+    isLoading.value = false
   }
 )
 
