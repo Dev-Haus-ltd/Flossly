@@ -1,8 +1,10 @@
 import { Op } from 'sequelize'
 import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, User, UserOrganisation } from '../models'
+import { crmAutomationDefaults } from '~/lib/crmAutomationDefaults'
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
 import { success, error } from '../utils/response'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
+import { sendImmediateCrmAutomationsForLead } from '../utils/crmAutomation.js'
 import DB from '../utils/db'
 
 const parseDateValue = (value) => {
@@ -145,6 +147,9 @@ export const createLead = async (event) => {
       })
       created.setDataValue('preferredContact', payload.contactMethod)
     }
+    try {
+      await sendImmediateCrmAutomationsForLead(created)
+    } catch (e) {}
     return success(created)
   } catch (e) {
     return error(500, e.message)
@@ -581,8 +586,46 @@ export const listAutomation = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
+    const query = getQuery(event) || {}
+    const leadId = Number(query.leadId || 0)
     const rows = await CrmAutomationTemplate.findAll({ where: { organisationId: Number(orgId) }, order: [['createdAt','ASC']] })
-    return success(rows)
+    const dbRows = rows.map((tpl) => (typeof tpl?.toJSON === 'function' ? tpl.toJSON() : tpl))
+    const dbMap = new Map(dbRows.map((r) => [r.key, r]))
+    let overrides = {}
+    if (leadId) {
+      const lead = await CrmLead.findOne({ where: { organisationId: Number(orgId), id: leadId } })
+      if (!lead) return error(404, 'Lead not found')
+      overrides = lead?.rawData?.crmAutomationOverrides || {}
+    }
+
+    const merged = []
+    const seen = new Set()
+
+    crmAutomationDefaults.forEach((def) => {
+      const saved = dbMap.get(def.key) || {}
+      const override = overrides[def.key] || {}
+      const combined = { ...def, ...saved, ...override, key: def.key }
+      if (!saved?.type) combined.type = def.type
+      if (!saved?.sending) combined.sending = def.sending
+      if (!saved?.template) combined.template = def.template
+      if (!saved?.name || saved.name === saved.key) combined.name = def.name
+      merged.push(combined)
+      seen.add(def.key)
+    })
+
+    dbRows.forEach((row) => {
+      if (seen.has(row.key)) return
+      const override = overrides[row.key]
+      merged.push(override ? { ...row, ...override, key: row.key } : row)
+      seen.add(row.key)
+    })
+
+    Object.entries(overrides).forEach(([key, override]) => {
+      if (seen.has(key)) return
+      merged.push({ key, ...override })
+    })
+
+    return success(merged)
   } catch (e) {
     return error(500, e.message)
   }
@@ -594,8 +637,25 @@ export const saveAutomation = async (event) => {
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
     const payload = typeof body === 'string' ? JSON.parse(body) : body
-    const { key, type = 'Email', name, sending, enabled, template } = payload || {}
+    const { key, type = 'Email', name, sending, enabled, template, leadId } = payload || {}
     if (!key) return error(400, 'key required')
+    if (leadId) {
+      const lead = await CrmLead.findOne({ where: { organisationId: Number(orgId), id: Number(leadId) } })
+      if (!lead) return error(404, 'Lead not found')
+      const raw = lead.rawData || {}
+      const overrides = { ...(raw.crmAutomationOverrides || {}) }
+      overrides[key] = {
+        key,
+        type,
+        name: name || key,
+        sending: sending || '',
+        enabled: !!enabled,
+        template: template || '',
+      }
+      lead.rawData = { ...raw, crmAutomationOverrides: overrides }
+      await lead.save()
+      return success(overrides[key])
+    }
     const where = { organisationId: Number(orgId), key }
     const exists = await CrmAutomationTemplate.findOne({ where })
     if (exists) {

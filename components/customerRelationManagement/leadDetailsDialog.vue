@@ -318,7 +318,7 @@
 
             <v-tabs-window-item value="automation">
               <div class="pa-6">
-                <CustomerRelationManagementAutomation />
+                <CustomerRelationManagementAutomation :lead-id="selectedLead?.id" />
               </div>
             </v-tabs-window-item>
           </v-tabs-window>

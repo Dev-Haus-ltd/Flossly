@@ -594,6 +594,8 @@
                         variant="outlined"
                         size="small"
                         color="primary"
+                        :disabled="item.sent"
+                        :title="item.sent ? 'Already sent. Editing is disabled.' : 'Edit'"
                         @click="openEditor(item)"
                       >
                         <v-icon size="16" class="mr-1">mdi-pencil</v-icon>
@@ -719,6 +721,7 @@ const props = defineProps({ patient: { type: Object, default: null } })
 const emit = defineEmits(['save'])
 
 const selectedSection = ref('uniqueComfort')
+const patientId = computed(() => (props.patient?.id ? Number(props.patient.id) : null))
 const journeyItems = [
   { key: 'uniqueComfort', label: 'Unique Patient Comfort' },
   { key: 'smileSurvey', label: 'Smile Concern Survey'},
@@ -859,9 +862,14 @@ const activeFilters = computed(() => {
 })
 
 const fetchAutomationGroups = async () => {
+  const id = patientId.value
+  if (!id) {
+    automationGroups.value = []
+    return
+  }
   automationGroupsLoading.value = true
   try {
-    const res = await patientJourneyService.listAutomationGroups()
+    const res = await patientJourneyService.listAutomationGroups(id)
     const data = res?.data || []
     automationGroups.value = data
   } catch (e) {
@@ -872,10 +880,11 @@ const fetchAutomationGroups = async () => {
 }
 
 const fetchAutomationRows = async (groupKey) => {
-  if (!groupKey) return
+  const id = patientId.value
+  if (!groupKey || !id) return
   automationLoading.value = true
   try {
-    const res = await patientJourneyService.listAutomationTemplates(groupKey)
+    const res = await patientJourneyService.listAutomationTemplates(groupKey, id)
     automationRows.value = res?.data || []
   } catch (e) {
     automationRows.value = []
@@ -891,8 +900,13 @@ const selectAutomation = async (card) => {
 
 const toggleAutomationGroup = async (card) => {
   const enabled = !!card.enabled
+  const id = patientId.value
+  if (!id) {
+    card.enabled = !enabled
+    return
+  }
   try {
-    await patientJourneyService.toggleAutomationGroup({ groupKey: card.key, enabled })
+    await patientJourneyService.toggleAutomationGroup({ groupKey: card.key, enabled, patientId: id })
     automationRows.value = automationRows.value.map((r) => ({ ...r, enabled }))
   } catch (e) {
     card.enabled = !enabled
@@ -925,10 +939,16 @@ const clearFilters = () => {
 
 const onToggleEnabled = async (row, val) => {
   row.enabled = !!val
+  const id = patientId.value
+  if (!id) {
+    row.enabled = !val
+    return
+  }
   const payload = {
     ...row,
     groupKey: activeAutomation.value?.key,
     template: row.template || '',
+    patientId: id,
   }
   try {
     await patientJourneyService.saveAutomationTemplate(payload)
@@ -982,7 +1002,7 @@ const openEditor = async (row) => {
 }
 
 const saveContent = async () => {
-  if (!activeAutomation.value || !activeItem.value || !ej) return
+  if (!activeAutomation.value || !activeItem.value || !ej || !patientId.value) return
   saving.value = true
   try {
     const data = await ej.save()
@@ -991,6 +1011,7 @@ const saveContent = async () => {
       ...activeItem.value,
       groupKey: activeAutomation.value?.key,
       template: html,
+      patientId: patientId.value,
     }
     await patientJourneyService.saveAutomationTemplate(payload)
     automationRows.value = automationRows.value.map((r) => (r.key === activeItem.value.key ? { ...r, ...payload } : r))
@@ -1003,7 +1024,7 @@ const saveContent = async () => {
 }
 
 watch(selectedSection, (val) => {
-  if (val === 'automations' && !automationGroups.value.length) {
+  if (val === 'automations' && !automationGroups.value.length && patientId.value) {
     fetchAutomationGroups()
   }
 })
@@ -1012,6 +1033,18 @@ watch(showEditor, (v) => {
   if (!v) destroyEditor()
   if (!v) editorLoading.value = false
 })
+
+watch(
+  () => props.patient?.id,
+  (id, prev) => {
+    if (id === prev) return
+    clearAutomationSelection()
+    automationGroups.value = []
+    if (selectedSection.value === 'automations' && id) {
+      fetchAutomationGroups()
+    }
+  }
+)
 
 const sampleRecipient = {
   name: 'Ava Patel',

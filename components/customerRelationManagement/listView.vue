@@ -540,7 +540,7 @@ const editingCell = reactive({
 });
 
 const actions = [
-  { key: "call", label: "Call", icon: callIcon },
+  // { key: "call", label: "Call", icon: callIcon },
   { key: "mail", label: "Send Mail", icon: sendMailIcon },
   { key: "whatsapp", label: "WhatsApp", icon: whatsappIcon },
   { key: "book", label: "Book", icon: bookIcon },

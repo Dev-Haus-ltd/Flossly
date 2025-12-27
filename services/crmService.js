@@ -193,9 +193,10 @@ export default {
     });
   },
   // Automation
-  listAutomation() {
+  listAutomation(leadId) {
+    const q = leadId ? `?leadId=${encodeURIComponent(leadId)}` : '';
     return new Promise((resolve, reject) => {
-      Get('/lead/automationList')
+      Get(`/lead/automationList${q}`)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
