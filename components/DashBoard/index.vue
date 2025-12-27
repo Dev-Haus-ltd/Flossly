@@ -289,7 +289,6 @@
                     height="44"
                     class="mt-4 w-100"
                     rounded="md"
-                    :loading="orgStore.isLoading"
                     block
                   >
                     Submit information
