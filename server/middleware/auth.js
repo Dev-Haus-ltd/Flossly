@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken'
-import { User, UserOrganisation } from '../models'
+import { User } from '../models'
 import { error } from '../utils/response'
 
 export default defineEventHandler(async (event) => {
@@ -42,25 +42,6 @@ export default defineEventHandler(async (event) => {
       
       if (user && (user.status === "Disabled" || user.status === "Expired")) {
         return error(403, "Your account is deactivated");
-      }
-      
-      // Check if user's organization membership is still active
-      const membership = await UserOrganisation.findOne({
-        where: {
-          userId: decoded.userId,
-          organisationId: decoded.orgId,
-          isActive: true,
-          status: "Active",
-        },
-      });
-      
-      // Allow profile and switchOrg endpoints even if current org is inactive
-      // This allows users to switch to another active org
-      const isOrgSwitchEndpoint = path.includes('/api/auth/profile') || 
-                                   path.includes('/api/auth/switchOrg');
-      
-      if (!membership && !isOrgSwitchEndpoint) {
-        return error(403, "Your organisation membership is inactive");
       }
     }
     

@@ -57,8 +57,7 @@ export const login = async (event) => {
   const orgs = await UserOrganisation.findAll({
     where: {
       userId: user.id,
-      isActive: true, // Only load active organizations
-      status: "Active", // Ensure org-level status is Active
+      status: "Active", // Only load active organizations
     },
   });
 
@@ -265,7 +264,7 @@ export const signupRequest = async (event) => {
 
     // associate user-org
     await UserOrganisation.create(
-      { userId: user.id, organisationId: org.id, isActive: true, status: "Active" },
+      { userId: user.id, organisationId: org.id, status: "Active" },
       { transaction }
     );
     const link = generateVerificationLink();
@@ -300,7 +299,7 @@ export const profile = async (event) => {
       },
     });
     
-    const isCurrentOrgActive = membership && membership.isActive && (membership.status === "Active" || !membership.status);
+    const isCurrentOrgActive = Boolean(membership && membership.status === "Active");
 
     const user = await User.findByPk(loggedUser.userId, {
       attributes: { exclude: ["password"] },
@@ -341,7 +340,7 @@ export const profile = async (event) => {
     
     if (!isCurrentOrgActive && userObj.userOrganisations) {
       const activeOrg = userObj.userOrganisations.find(
-        (uo) => uo.isActive && (uo.status === "Active" || !uo.status)
+        (uo) => uo.status === "Active"
       );
       if (activeOrg) {
         userObj.suggestedOrgId = activeOrg.organisationId || activeOrg.organisation?.id;
@@ -545,8 +544,7 @@ export const switchOrgnanisation = async (event) => {
       where: {
         userId: user.userId,
         organisationId: orgId,
-        isActive: true, // Only allow switching to active organizations
-        status: "Active", // And org-level status must be Active
+        status: "Active", // Only allow switching to active organizations
       },
     });
     if (!record)
@@ -605,7 +603,6 @@ export const verifyEmail = async (event) => {
       const userOrg = await UserOrganisation.findAll({
         where: {
           userId: user.id,
-          isActive: true, // Only use active organizations
           status: "Active",
         },
       });
@@ -687,11 +684,11 @@ export const inviteMembers = async (event) => {
 
       // Separate users into: already active, already invited (pending), and new to this org
       const alreadyActiveUserIds = existingUsersOrgsForCurrentOrg
-        .filter((uo) => uo.isActive === true)
+        .filter((uo) => uo.status === "Active")
         .map((uo) => uo.userId);
 
       const alreadyInvitedUserIds = existingUsersOrgsForCurrentOrg
-        .filter((uo) => uo.isActive === false)
+        .filter((uo) => uo.status !== "Active")
         .map((uo) => uo.userId);
 
       // Check for errors first - if any users are already active or already invited, return error
@@ -725,7 +722,6 @@ export const inviteMembers = async (event) => {
           return {
             userId: userId,
             organisationId: currentOrg,
-            isActive: false, // Set to false for pending invitations
             status: "Invited",
           };
         });
@@ -832,7 +828,6 @@ const inviteNewUsers = async (
     return {
       userId: u.id,
       organisationId: currentOrg,
-      isActive: false, // Set to false for pending invitations
       status: "Invited",
     };
   });
@@ -891,7 +886,6 @@ export const acceptInvitation = async (event) => {
     await user.save();
 
     // Activate organization membership
-    userOrg.isActive = true;
     userOrg.status = "Active";
     await userOrg.save();
 
@@ -977,7 +971,7 @@ export const verifyInvitationToken = async (event) => {
       orgId,
       orgName: organisation.name,
       inviterName: inviter?.fullName || "Unknown",
-      status: userOrg.isActive ? "accepted" : "pending",
+      status: userOrg.status === "Active" ? "accepted" : "pending",
       userId,
     });
   } catch (err) {
@@ -1019,7 +1013,7 @@ export const acceptOrganisationInvitation = async (event) => {
       where: {
         userId,
         organisationId: orgId,
-        isActive: false, // Only accept pending invitations
+        status: "Invited", // Only accept pending invitations
       },
     });
 
@@ -1028,7 +1022,6 @@ export const acceptOrganisationInvitation = async (event) => {
     }
 
     // Activate the organization membership
-    userOrg.isActive = true;
     userOrg.status = "Active";
     await userOrg.save();
 
@@ -1126,7 +1119,7 @@ export const declineOrganisationInvitation = async (event) => {
       `DELETE FROM "dev"."UserOrganisations" 
        WHERE "userId" = :userId 
        AND "organisationId" = :orgId 
-       AND "isActive" = false`,
+       AND "status" = 'Invited'`,
       {
         replacements: { userId, orgId },
       }
@@ -1180,7 +1173,7 @@ export const resendOrganisationInvitation = async (event) => {
       where: {
         userId: loggedUser.userId,
         organisationId: orgId,
-        isActive: true, // Only active members can resend invitations
+        status: "Active", // Only active members can resend invitations
       },
     });
 
@@ -1196,7 +1189,7 @@ export const resendOrganisationInvitation = async (event) => {
       where: {
         userId,
         organisationId: orgId,
-        isActive: false, // Only resend if invitation is pending
+        status: "Invited", // Only resend if invitation is pending
       },
     });
 
@@ -1215,7 +1208,7 @@ export const resendOrganisationInvitation = async (event) => {
       where: {
         userId,
         organisationId: orgId,
-        isActive: false,
+        status: "Invited",
       },
     });
 
@@ -1234,13 +1227,13 @@ export const resendOrganisationInvitation = async (event) => {
     const userOtherOrgs = await UserOrganisation.findAll({
       where: {
         userId: userId,
-        isActive: true, // Check for active organizations
+        status: "Active", // Check for active organizations
       },
     });
 
     const isFirstOrganization = userOtherOrgs.length === 0;
 
-    // The UserOrganisation record already exists with isActive: false
+    // The UserOrganisation record already exists with status: Invited
     const transaction = await DB.transaction();
 
     try {

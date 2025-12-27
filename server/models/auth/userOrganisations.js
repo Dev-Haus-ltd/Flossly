@@ -25,11 +25,6 @@ export const UserOrganisation = sequelize.define(
         key: "id",
       },
     },
-    isActive: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: true, // Existing records will be active
-      allowNull: false,
-    },
     status: {
       type: DataTypes.ENUM("Active", "Disabled", "Invited", "Expired"),
       allowNull: false,

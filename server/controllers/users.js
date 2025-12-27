@@ -57,10 +57,10 @@ export const usersList = async (event) => {
   
     const users = userOrganisations.map((uo) => {
       const user = uo.user.toJSON();
-      user.isActive = Boolean(uo.isActive);
-      user.orgStatus = uo.status || (uo.isActive ? "Active" : "Invited");
+      user.orgStatus = uo.status || "Active";
+      user.isActive = user.orgStatus === "Active";
       const isGloballyDeactivated = user.status === "Disabled" || user.status === "Expired";
-      const isOrgDeactivated = (user.orgStatus === "Disabled") || (!uo.isActive && user.status === "Active");
+      const isOrgDeactivated = user.orgStatus === "Disabled";
       user.isAccountDeactivated = isGloballyDeactivated || isOrgDeactivated;
       return user;
     });
@@ -76,7 +76,7 @@ export const userAcrossOrgs = async (event) => {
     const userOrganisations = await UserOrganisation.findAll({
       where: { 
         userId: loggedUser.userId,
-        isActive: true, 
+        status: "Active", 
       },
       include: [
         {
@@ -144,11 +144,8 @@ export const userAcrossOrgs = async (event) => {
           const userPlain = uo.user.toJSON ? uo.user.toJSON() : uo.user;
           const user = JSON.parse(JSON.stringify(userPlain));
           
-          const isActive = uo.isActive !== undefined ? uo.isActive : 
-                          (uo.get ? uo.get('isActive') : true);
-          
-          user.isActive = Boolean(isActive);
-          user.orgStatus = uo.status || (user.isActive ? "Active" : "Invited");
+          user.orgStatus = uo.status || "Active";
+          user.isActive = user.orgStatus === "Active";
           return user;
         }).filter(Boolean), // Remove any null entries
       };
@@ -607,7 +604,6 @@ export const deactivateUser = async (event) => {
       });
     }
 
-    userOrg.isActive = false;
     userOrg.status = "Disabled";
     await userOrg.save({ transaction });
 
@@ -645,7 +641,6 @@ export const activateUser = async (event) => {
       });
     }
 
-    userOrg.isActive = true;
     userOrg.status = "Active";
     await userOrg.save({ transaction });
     
@@ -679,7 +674,7 @@ export const deleteUser = async (event) => {
     const activeOrgCount = await UserOrganisation.count({
       where: { 
         userId, 
-        isActive: true 
+        status: "Active" 
       },
       transaction,
     });

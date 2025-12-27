@@ -294,12 +294,12 @@ const updateCurrentOrg = (userData) => {
 
   // Filter to only active organizations and user is not deactivated
   const activeOrgs = userData.userOrganisations.filter(org => {
-    const isActive = org.isActive !== undefined ? org.isActive : true; // Default to true for backward compatibility
+    const isActive = org.status === "Active";
     // Check if user is deactivated:
     // 1. Globally disabled/expired, OR
     // 2. Not active in this organization (org-specific deactivation)
     const isGloballyDeactivated = userData.status === "Disabled" || userData.status === "Expired";
-    const isOrgDeactivated = !isActive && userData.status === "Active";
+    const isOrgDeactivated = (org.status === "Disabled") && userData.status === "Active";
     const isNotDeactivated = !isGloballyDeactivated && !isOrgDeactivated;
     return isActive && isNotDeactivated;
   });

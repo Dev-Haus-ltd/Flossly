@@ -252,7 +252,7 @@ const getAccountType = () => {
 
 const getPracticeName = () => {
   const org = user?.userOrganisations?.find(
-    (x) => x.organisationId === user.currentLoggedInOrgId && (x.isActive !== false) // Only active organizations
+    (x) => x.organisationId === user.currentLoggedInOrgId && x.status === "Active" // Only active organizations
   );
   return org?.organisation?.name;
 };

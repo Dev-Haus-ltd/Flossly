@@ -60,7 +60,7 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
               if (userData.userOrganisations && userData.userOrganisations.length > 0) {
                 // Find an active org
                 const activeOrg = userData.userOrganisations.find(
-                  (uo) => uo.isActive && (uo.status === "Active" || !uo.status)
+                  (uo) => uo.status === "Active"
                 );
                 
                 if (activeOrg) {

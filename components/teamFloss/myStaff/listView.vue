@@ -429,11 +429,9 @@ const getDisplayStatus = (user) => {
     if (orgStatus === 'invited') return 'Invited';
     if (orgStatus === 'active') return 'Active';
   }
-  // Fallback to isActive logic for backward compatibility
-  if (user?.isActive === false) {
-    if (globalStatus === 'active') return 'Deactivated';
-    return 'Invited';
-  }
+  // Use orgStatus only
+  if (orgStatus === 'disabled') return 'Disabled';
+  if (orgStatus === 'invited') return 'Invited';
   return 'Active';
 };
 
@@ -682,7 +680,7 @@ const isUserActive = (user) => {
   // User is active if:
   // 1. isActive is true (active in this org) AND
   // 2. global status is not Disabled or Expired
-  return user.isActive === true && 
+  return (user.orgStatus || user.status) === "Active" && 
          user.status !== "Disabled" && 
          user.status !== "Expired";
 };

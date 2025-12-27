@@ -79,9 +79,9 @@ const validOrganizations = computed(() => {
   
   const valid = user.value.userOrganisations.filter(org => {
     const orgData = getOrgData(org);
-    const isActive = org.isActive !== undefined ? org.isActive : true;
+    const isActive = org.status === "Active";
     const isGloballyDeactivated = user.value.status === "Disabled" || user.value.status === "Expired";
-    const isOrgDeactivated = !isActive && user.value.status === "Active";
+    const isOrgDeactivated = (org.status === "Disabled") && user.value.status === "Active";
     const isNotDeactivated = !isGloballyDeactivated && !isOrgDeactivated;
     const isValid = orgData !== null && isActive && isNotDeactivated;
     return isValid;
