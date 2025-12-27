@@ -393,6 +393,16 @@
 
                       <div class="d-flex justify-end">
                         <v-icon
+                          v-if="column.isCustom"
+                          size="14"
+                          color="error"
+                          class="mr-2 cursor-pointer"
+                          title="Delete custom column"
+                          @click.stop="deleteCustomColumn(column)"
+                        >
+                          mdi-close
+                        </v-icon>
+                        <v-icon
                           size="14"
                           color="black"
                           style="cursor: pointer"
@@ -1347,6 +1357,36 @@ const createCustomColumn = async () => {
     isCreatingColumn.value = false;
   }
 };
+const deleteCustomColumn = async (column) => {
+  try {
+    const res = await taskStore.deleteCustomColumn({
+      columnId: column.columnDefinitionId, // ✅ FIX
+    });
+
+    if (res.code === 0) {
+      mainStore.setSnackbar({
+        title: "Custom column deleted successfully",
+        type: "success",
+      });
+
+      selectedHeaders.value = selectedHeaders.value.filter(
+        (h) => h.columnDefinitionId !== column.columnDefinitionId
+      );
+    } else {
+      mainStore.setSnackbar({
+        title: res.message || "Failed to delete custom column",
+        type: "error",
+      });
+    }
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: "Failed to delete custom column",
+      type: "error",
+    });
+  }
+};
+
+
 const tasksForCalender = ref([]);
 const bulkTaskUploadDialog = ref(false);
 const rolesList = ref([]);

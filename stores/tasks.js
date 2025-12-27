@@ -588,5 +588,22 @@ export const useTaskStore = defineStore("taskStore", {
           });
       });
     },
+    deleteCustomColumn(data) {
+      return new Promise((resolve, reject) => {
+        taskService
+          .deleteCustomColumn(data)
+          .then((res) => {
+            if (res.code === 0) {
+              // Refresh custom columns list
+              const mainStore = useMainStore();
+              mainStore.getCustomColumns();
+            }
+            resolve(res);
+          })
+          .catch((err) => {
+            reject(err);
+          });
+      });
+    },
   },
 });
