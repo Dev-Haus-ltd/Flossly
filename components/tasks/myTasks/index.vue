@@ -37,7 +37,7 @@
       </div>
       <!-- Tabs -->
        <div class="mt-5">
-        <div class="tabs-bar">
+        <div class="tabs-bar fill-color">
           <v-tabs
             v-model="currentTab"
             class="custom-tabs tabs-scroll"
@@ -1325,5 +1325,8 @@ const handleQuickStatus = (statusKey) => {
 }
 .category-tab .v-icon {
   color: var(--tab-text-color, #1e1e1e) !important;
+}
+.fill-color {
+  background-color: #F3F4F6;
 }
 </style>
