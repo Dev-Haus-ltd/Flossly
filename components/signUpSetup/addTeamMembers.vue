@@ -21,7 +21,7 @@
         <template #append-inner>
           <div class="d-flex align-center gap-2">
             <v-menu
-              activator="parent"
+              v-model="menuOpenStates[index]"
               offset-y
               open-on-click
               close-on-content-click
@@ -91,6 +91,7 @@ const showform = ref(false);
 const duplicateEmailErrors = ref({});
 const roleErrors = ref({});
 const selfInviteErrors = ref({});
+const menuOpenStates = ref({});
 
 const model = defineModel({ users: [{ roleId: null, email: "" }] });
 
@@ -172,13 +173,20 @@ const updateModel = () => {
 
 const removeUser = (index) => {
   if (model.value.users.length > 1) {
-    model.value.users.splice(index, 1);
-    // Clear errors for removed user
-    delete duplicateEmailErrors.value[index];
-    delete selfInviteErrors.value[index];
+    // Close any open menus before removal
+    menuOpenStates.value[index] = false;
+    
+    // Small delay to ensure menu closes
+    setTimeout(() => {
+      model.value.users.splice(index, 1);
+      // Clear errors for removed user
+      delete duplicateEmailErrors.value[index];
+      delete selfInviteErrors.value[index];
     delete roleErrors.value[index];
-    // Revalidate all emails after removal
-    validateAllDuplicateEmails();
+      delete menuOpenStates.value[index];
+      // Revalidate all emails after removal
+      validateAllDuplicateEmails();
+    }, 50);
     validateAllSelfInvitations();
   }
 };

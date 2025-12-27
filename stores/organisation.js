@@ -212,5 +212,35 @@ export const useOrgStore = defineStore("orgStore", {
           });
       });
     },
+    createOrganisationReferral(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        orgService
+          .createOrganisationReferral(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    getAllOrganisationReferrals() {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        orgService
+          .getAllOrganisationReferrals()
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
   },
 });

@@ -101,6 +101,205 @@
             </v-row>
           </div>
         </v-card>
+        <!-- Refer & Earn Card -->
+        <v-card
+          class="mt-3 refer-card card pa-5 flex-grow-1"
+          elevation="0"
+          rounded="lg"
+        >
+          <v-row no-gutters>
+            <v-col cols="12" xs="12" sm="5" class="left-side">
+              <v-chip
+                class="bonus-chip"
+                variant="flat"
+                size="small"
+                prepend-icon="mdi-star"
+                label
+              >
+                Earn +50 Points
+              </v-chip>
+
+              <div class="left-content">
+                <lord-icon
+                  src="https://cdn.lordicon.com/pbkbjgyv.json"
+                  colors="primary:#e8b730,secondary:#ffc738,tertiary:#2ca58d"
+                  trigger="hover"
+                  :style="{
+                    width: mdAndDown ? '100px' : '150px',
+                    height: mdAndDown ? '100px' : '150px',
+                  }"
+                ></lord-icon>
+              </div>
+            </v-col>
+
+            <v-col
+              cols="12"
+              xs="12"
+              sm="7"
+              class="right-side d-flex flex-column justify-center"
+            >
+              <div class="ml-5">
+                <!-- Heading -->
+                <h3 class="refer-heading mb-4 mt-2 mt-sm-0">
+                  Refer & Earn with Flossly
+                </h3>
+
+                <!-- Points -->
+                <div class="refer-point d-flex align-center mb-3">
+                  <lord-icon
+                    src="https://cdn.lordicon.com/vumnblwp.json"
+                    trigger="hover"
+                    colors="primary:#1e1e1e"
+                    style="width: 40px; height: 40px"
+                  >
+                  </lord-icon>
+                  <span class="ml-3">Enter details</span>
+                </div>
+                <div class="refer-point d-flex align-center mb-3">
+                  <lord-icon
+                    src="https://cdn.lordicon.com/fozsorqm.json"
+                    trigger="hover"
+                    colors="primary:#121331,secondary:#1e1e1e"
+                    style="width: 40px; height: 40px"
+                  >
+                  </lord-icon>
+                  <span class="ml-3"
+                    >Refer, share, and review to earn flossly loyalty
+                    points</span
+                  >
+                </div>
+                <div class="refer-point d-flex align-center mb-3">
+                  <lord-icon
+                    src="https://cdn.lordicon.com/hpjdqzlq.json"
+                    trigger="hover"
+                    colors="primary:#121331,secondary:#1e1e1e"
+                    style="width: 40px; height: 40px"
+                  >
+                  </lord-icon>
+                  <span class="ml-3"
+                    >Redeem your loyalty points for exclusive prizes</span
+                  >
+                </div>
+
+                <!-- Button -->
+                <v-btn
+                  class="mt-6 align-self-start px-6 custom-btn"
+                  variant="flat"
+                  append-icon="mdi-open-in-new"
+                  color="primary"
+                  height="46"
+                  @click="showReferralDialog = true"
+                >
+                  Refer a business
+                </v-btn>
+              </div>
+            </v-col>
+          </v-row>
+        </v-card>
+        <v-dialog
+          v-model="showReferralDialog"
+          max-width="568"
+          persistent
+        >
+          <v-card rounded="xl" class="pa-0">
+            
+            <!-- Header -->
+            <v-card-title class="px-0 cust-border">
+               <div class="form-container d-flex align-center justify-space-between">
+                <span class="text-h6 custom-text">
+                  Refer a Business
+                </span>
+
+                <v-btn
+                  icon
+                  variant="text"
+                  @click="showReferralDialog = false"
+                >
+                  <v-icon>mdi-close</v-icon>
+                </v-btn>
+              </div>
+            </v-card-title>
+
+            <!-- Body -->
+            <v-card-text class="px-0">
+              <div class="form-container">
+                <v-form @submit.prevent="submitReferral" class="d-flex flex-column align-center">
+
+                  <!-- Full Name -->
+                  <div class="mb-4 w-100">
+                    <label class="form-label pb-2">Full name</label>
+                    <v-text-field
+                      v-model="referralForm.fullName"
+                      variant="outlined"
+                      density="compact"
+                      height="44"
+                      rounded="lg"
+                      hide-details
+                      required
+                    />
+                  </div>
+
+                  <!-- Email -->
+                  <div class="mb-4 w-100">
+                    <label class="form-label pb-2">Email</label>
+                    <v-text-field
+                      v-model="referralForm.email"
+                      type="email"
+                      variant="outlined"
+                      density="compact"
+                      height="44"
+                      rounded="lg"
+                      hide-details
+                      required
+                    />
+                  </div>
+
+                  <!-- Phone Number -->
+                  <div class="mb-4 w-100">
+                    <label class="form-label pb-2">Phone Number</label>
+                    <v-text-field
+                      v-model="referralForm.phoneNumber"
+                      variant="outlined"
+                      density="compact"
+                      height="44"
+                      rounded="lg"
+                      hide-details
+                    />
+                  </div>
+
+                  <!-- Practice Name -->
+                  <div class="mb-4 w-100">
+                    <label class="form-label pb-2">Practice Name</label>
+                    <v-text-field
+                      v-model="referralForm.practiceName"
+                      variant="outlined"
+                      density="compact"
+                      height="44"
+                      rounded="lg"
+                      hide-details
+                      required
+                    />
+                  </div>
+
+                  <!-- Submit -->
+                  <v-btn
+                    type="submit"
+                    color="primary"
+                    flat
+                    height="44"
+                    class="mt-4 w-100"
+                    rounded="md"
+                    :loading="orgStore.isLoading"
+                    block
+                  >
+                    Submit information
+                  </v-btn>
+
+                </v-form>
+              </div>
+            </v-card-text>
+          </v-card>
+        </v-dialog>
       </v-col>
       <v-col cols="12" sm="12" md="4" class="d-flex">
         <v-card
@@ -187,105 +386,10 @@
         </v-card>
       </v-col>
     </v-row>
-    <v-row class="d-flex align-stretch">
-      <v-col cols="12" sm="12" md="8" class="pr-md-0 pt-0">
-        <v-card
-          class="refer-card card pa-5"
-          elevation="0"
-          rounded="lg"
-        >
-          <v-row no-gutters>
-            <v-col cols="12" xs="12" sm="5" class="left-side">
-              <v-chip
-                class="bonus-chip"
-                variant="flat"
-                size="small"
-                prepend-icon="mdi-star"
-                label
-              >
-                Earn +50 Points
-              </v-chip>
-
-              <div class="left-content">
-                <lord-icon
-                  src="https://cdn.lordicon.com/pbkbjgyv.json"
-                  colors="primary:#e8b730,secondary:#ffc738,tertiary:#2ca58d"
-                  trigger="hover"
-                  :style="{
-                    width: mdAndDown ? '100px' : '150px',
-                    height: mdAndDown ? '100px' : '150px',
-                  }"
-                ></lord-icon>
-              </div>
-            </v-col>
-
-            <v-col
-              cols="12"
-              xs="12"
-              sm="7"
-              class="right-side d-flex flex-column justify-center"
-            >
-              <div class="ml-5">
-                <!-- Heading -->
-                <h3 class="refer-heading mb-4 mt-2 mt-sm-0">
-                  Refer & Earn with Flossly
-                </h3>
-
-                <!-- Points -->
-                <div class="refer-point d-flex align-center mb-3">
-                  <lord-icon
-                    src="https://cdn.lordicon.com/vumnblwp.json"
-                    trigger="hover"
-                    colors="primary:#1e1e1e"
-                    style="width: 40px; height: 40px"
-                  >
-                  </lord-icon>
-                  <span class="ml-3">Enter details</span>
-                </div>
-                <div class="refer-point d-flex align-center mb-3">
-                  <lord-icon
-                    src="https://cdn.lordicon.com/fozsorqm.json"
-                    trigger="hover"
-                    colors="primary:#121331,secondary:#1e1e1e"
-                    style="width: 40px; height: 40px"
-                  >
-                  </lord-icon>
-                  <span class="ml-3"
-                    >Refer, share, and review to earn flossly loyalty
-                    points</span
-                  >
-                </div>
-                <div class="refer-point d-flex align-center mb-3">
-                  <lord-icon
-                    src="https://cdn.lordicon.com/hpjdqzlq.json"
-                    trigger="hover"
-                    colors="primary:#121331,secondary:#1e1e1e"
-                    style="width: 40px; height: 40px"
-                  >
-                  </lord-icon>
-                  <span class="ml-3"
-                    >Redeem your loyalty points for exclusive prizes</span
-                  >
-                </div>
-
-                <!-- Button -->
-                <v-btn
-                  class="mt-6 align-self-start px-6 custom-btn"
-                  variant="flat"
-                  append-icon="mdi-open-in-new"
-                  color="primary"
-                  height="46"
-                >
-                  Refer a business
-                </v-btn>
-              </div>
-            </v-col>
-          </v-row>
-        </v-card>
-      </v-col>
+    <v-row class="d-flex align-stretch justify-end">
       <v-col cols="12" sm="12" md="4" class="pt-0">
         <v-card
-          class="review-card card pa-5"
+          class="review-card pa-5"
           color="white"
           elevation="0"
           rounded="lg"
@@ -301,21 +405,31 @@
             Earn +50 Points
           </v-chip>
 
-          <!-- 📦 Content -->
-          <div class="card-content">
-            <lord-icon
-              src="https://cdn.lordicon.com/wstfgfud.json"
-              trigger="hover"
-              :style="{
-                width: mdAndDown ? '100px' : '150px',
-                height: mdAndDown ? '100px' : '150px',
-              }"
-            ></lord-icon>
+          <!-- 📦 Content (on top of background) -->
+          <div class="card-content pt-5">
+            <!-- ✅ Custom Image (replaces lord-icon) -->
+            <img
+              src="@/assets/dashBoard/review-card-logo.svg"
+              alt="Review Icon"
+              class="review-logo"
+            />
 
             <p class="review-text">
-              <span class="highlight">Happy with Flossly? </span>
-              <span class="normal">Give us a Google review.</span>
+              <span class="normal">Want to Become </span>
+              <span class="highlight">FlosslyOS</span>
+              <br />
+              <span class="highlight">Brand Ambassador,</span>
             </p>
+            <v-btn
+              class="align-center"
+              variant="flat"
+              append-icon="mdi-arrow-top-right"
+              color="primary"
+              height="46"
+              rounded="lg"
+            >
+              View more
+            </v-btn>
           </div>
         </v-card>
       </v-col>
@@ -334,6 +448,8 @@ const showCard = ref(true);
 const isLoading = ref(true);
 const taskStore = useTaskStore();
 const mainStore = useMainStore();
+const orgStore = useOrgStore();
+const showReferralDialog = ref(false);
 const docStore = useDocStore();
 const recentFiles = ref([]);
 const user = ref({});
@@ -587,6 +703,55 @@ const fetchDummyStats = async () => {
   }
 };
 
+const referralForm = ref({
+  fullName: "",
+  email: "",
+  phoneNumber: "",
+  practiceName: "",
+});
+
+const submitReferral = async () => {
+  try {
+    await orgStore.createOrganisationReferral({
+      managerName: referralForm.value.fullName,
+      orgEmail: referralForm.value.email,
+      phoneNumber: referralForm.value.phoneNumber,
+      orgName: referralForm.value.practiceName,
+    });
+
+    mainStore.setSnackbar({
+      title: "Referral submitted successfully",
+      type: "Success",
+    });
+
+    referralForm.value = {
+      fullName: "",
+      email: "",
+      phoneNumber: "",
+      practiceName: "",
+    };
+
+    showReferralDialog.value = false; // ✅ CLOSE MODAL
+
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: err?.message || "Failed to submit referral",
+      type: "Error",
+    });
+  }
+};
+watch(showReferralDialog, (isOpen) => {
+  if (!isOpen) {
+    referralForm.value = {
+      fullName: "",
+      email: "",
+      phoneNumber: "",
+      practiceName: "",
+    };
+  }
+});
+
+
 watch(tab, async (newId) => {
   if (newId && categoryList.value.length > 0) {
     await fetchDummyStats();
@@ -724,10 +889,35 @@ const handleClickProductCard = (uid) => {
 .review-card {
   position: relative;
   height: 100%; /* optional if you want it to stretch */
+  max-width: 525px;
+  width: 100%;
+  margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
+
+  /* ✅ Background image */
+  background-image: url('/assets/dashboard/review-card-bg.svg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
+.review-card {
+  width: 100%;
+  max-width: 525px;
+}
+
+@media (max-width: 960px) {
+  .review-card {
+    max-width: 100%;
+  }
+}
+
+.review-logo {
+  width: 72px;
+  height: 72px;
+}
+
 
 .bonus-chip {
   position: absolute;
@@ -747,6 +937,9 @@ const handleClickProductCard = (uid) => {
 }
 
 .card-content {
+  position: relative;
+  z-index: 2;
+
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -757,8 +950,8 @@ const handleClickProductCard = (uid) => {
 
 .review-text {
   font-size: 24px;
-  color: #1e1e1e;
-  
+  color: #FFFFFF;
+  font-family: 'Poppins', sans-serif;
 }
 
 .review-text .highlight {
@@ -869,4 +1062,36 @@ const handleClickProductCard = (uid) => {
     max-width: 100%;
   }
 }
+
+.custom-text {
+  color: #1E1E1E !important;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;          /* SemiBold */
+  font-size: 18px;
+  line-height: 1;            /* 100% */
+  letter-spacing: 0;
+}
+.cust-border {
+  border-bottom: 1px solid #DBDBDB;
+  padding: 17px;
+}
+.form-label {
+  display: block;
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;          /* Regular */
+  font-size: 16px;
+  line-height: 1.3;          /* 130% */
+  letter-spacing: 0;
+  color: #1E1E1E;            /* neutral dark */
+}
+.v-field--variant-outlined .v-field__outline {
+  --v-field-border-opacity: 1;
+  border-color: #DFDFDF;
+}
+.form-container {
+  max-width: 420px;
+  width: 100%;
+  margin: 0 auto; /* centers content */
+}
+
 </style>

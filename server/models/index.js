@@ -18,6 +18,8 @@ import { UserTaskAttachment } from "./tasks/userTaskAttachments";
 import { TaskChecklist } from "./tasks/taskChecklist";
 import { UserTaskChecklist } from "./tasks/userTaskChecklist";
 import { UserTaskComment } from "./tasks/userTaskComments";
+import { TaskCustomColumnDefinition } from "./tasks/taskCustomColumnDefinitions";
+import { UserTaskCustomField } from "./tasks/userTaskCustomFields";
 import { UserSubscription } from "./auth/userSubscriptions";
 import { LoginHistory } from "./auth/loginHistory";
 import { Rota } from "./rota/rota";
@@ -67,8 +69,6 @@ import { CrmOption } from "./crm/options";
 import { CrmLeadCommunication } from "./crm/leadCommunications";
 import { CrmLeadAssignee } from "./crm/leadAssignees";
 import { CrmAutomationTemplate } from "./crm/automationTemplates";
-import { TaskCustomColumnDefinition } from "./tasks/taskCustomColumnDefinitions";
-import { UserTaskCustomField } from "./tasks/userTaskCustomFields";
 import { PatientAutomationDictionary } from "./patientJourney/patientAutomationDictionary";
 import { PatientAutomationTemplate } from "./patientJourney/patientAutomationTemplates";
 import { OrganisationReferral } from "./organisationReferrals";
@@ -124,6 +124,27 @@ TaskChecklist.belongsTo(Task, { foreignKey: "taskId", as: "task", onDelete: "CAS
 
 UserTask.hasMany(UserTaskChecklist, { foreignKey: "userTaskId", as: "userTaskChecklist" });
 UserTaskChecklist.belongsTo(UserTask, { foreignKey: "userTaskId", as: "userTask", onDelete: "CASCADE", hooks: true });
+
+// TaskCustomColumnDefinition -> User (ORG_DELETE)
+User.hasMany(TaskCustomColumnDefinition, {
+  foreignKey: "createdBy",
+  as: "taskCustomColumns",
+  onDelete: "CASCADE",
+  hooks: true,
+});
+
+TaskCustomColumnDefinition.belongsTo(User, {
+  foreignKey: "createdBy",
+  as: "creator",
+  onDelete: "CASCADE",
+  hooks: true,
+});
+
+// UserTaskCustomField -> UserTask / TaskCustomColumnDefinition (cascade on delete of UserTask)
+UserTask.hasMany(UserTaskCustomField, { foreignKey: "userTaskId", as: "customFields" });
+UserTaskCustomField.belongsTo(UserTask, { foreignKey: "userTaskId", as: "userTask", onDelete: "CASCADE", hooks: true });
+TaskCustomColumnDefinition.hasMany(UserTaskCustomField, { foreignKey: "columnDefinitionId", as: "customFieldValues" });
+UserTaskCustomField.belongsTo(TaskCustomColumnDefinition, { foreignKey: "columnDefinitionId", as: "columnDefinition", onDelete: "CASCADE", hooks: true });
 
 // Role -> Users
 Role.hasMany(User, { foreignKey: "roleId", as: "users" });
@@ -318,28 +339,6 @@ Organisation.hasMany(OrganisationScript, { foreignKey: "organisationId", as: "sc
 OrganisationScript.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", onDelete: 'CASCADE', hooks: true });
 
 
-// TaskCustomColumnDefinition -> User (ORG_DELETE)
-User.hasMany(TaskCustomColumnDefinition, {
-  foreignKey: "createdBy",
-  as: "taskCustomColumns",
-  onDelete: "CASCADE",
-  hooks: true,
-});
-
-TaskCustomColumnDefinition.belongsTo(User, {
-  foreignKey: "createdBy",
-  as: "creator",
-  onDelete: "CASCADE",
-  hooks: true,
-});
-
-// UserTaskCustomField -> UserTask / TaskCustomColumnDefinition (cascade on delete of UserTask)
-UserTask.hasMany(UserTaskCustomField, { foreignKey: "userTaskId", as: "customFields" });
-UserTaskCustomField.belongsTo(UserTask, { foreignKey: "userTaskId", as: "userTask", onDelete: "CASCADE", hooks: true });
-TaskCustomColumnDefinition.hasMany(UserTaskCustomField, { foreignKey: "columnDefinitionId", as: "customFieldValues" });
-UserTaskCustomField.belongsTo(TaskCustomColumnDefinition, { foreignKey: "columnDefinitionId", as: "columnDefinition", onDelete: "CASCADE", hooks: true });
-
-
 OrganisationReferral.belongsTo(User, {
   foreignKey: "referredBy",
   as: "referrer",
@@ -365,6 +364,8 @@ export {
   UserTaskChecklist,
   UserTaskAttachment,
   UserTaskComment,
+  TaskCustomColumnDefinition,
+  UserTaskCustomField,
   UserLeaveEntitlement,
   UserLeaveHistory,
   UserHrDocument,
@@ -422,8 +423,6 @@ export {
   OrganisationTreatment,
   DictionaryScript,
   OrganisationScript,
-  UserTaskCustomField,
-  TaskCustomColumnDefinition,
   PatientAutomationDictionary,
   PatientAutomationTemplate
 };

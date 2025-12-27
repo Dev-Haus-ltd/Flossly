@@ -34,7 +34,11 @@ import {
   listUserTaskComments,
   updateUserTaskComment,
   deleteUserTaskComment,
-  bulkAddChecklistsByTitle
+  bulkAddChecklistsByTitle,
+  createCustomColumn,
+  listCustomColumns,
+  updateCustomColumn,
+  deleteCustomColumn,
 } from "~/server/controllers/task";
 
 export default defineEventHandler(async (event) => {
@@ -112,6 +116,14 @@ export default defineEventHandler(async (event) => {
       return await getTeamTaskStatsByStatusAndCategory(event);
     case "bulkAddChecklists":
       return await bulkAddChecklistsByTitle(event);
+    case "createCustomColumn":
+      return await createCustomColumn(event);
+    case "listCustomColumns":
+      return await listCustomColumns(event);
+    case "updateCustomColumn":
+      return await updateCustomColumn(event);
+    case "deleteCustomColumn":
+      return await deleteCustomColumn(event);
     default:
       return { code: 0, error: "Not found" };
   }

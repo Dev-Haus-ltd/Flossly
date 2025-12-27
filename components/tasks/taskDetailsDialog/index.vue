@@ -369,20 +369,14 @@
                   rounded
                   striped
                 />
-                <v-row class="mt-5" dense>
-                  <v-col
-                    cols="3"
+                <div class="mt-5 attachments-grid">
+                  <div
                     v-for="file in taskDetails.attachments"
                     :key="file.id"
+                    class="attachment-item"
                   >
                     <v-card
-                      class="d-flex flex-column justify-space-between pa-3"
-                      style="
-                        border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
-                        border-radius: 8px;
-                        position: relative;
-                        min-height: 150px;
-                      "
+                      class="d-flex flex-column justify-space-between pa-3 card-equal"
                       elevation="0"
                     >
                       <!-- Top Right Icons -->
@@ -405,59 +399,33 @@
                         >
                           <v-icon size="16">mdi-download</v-icon>
                         </v-btn>
-                        <v-btn
-                          icon
-                          size="x-small"
-                          variant="text"
-                          @click="deleteFile(file)"
-                        >
+                        <v-btn icon size="x-small" variant="text" @click="deleteFile(file)">
                           <v-icon size="16" color="error">mdi-delete</v-icon>
                         </v-btn>
                       </div>
 
                       <!-- Center File Icon or Preview -->
-                      <div
-                        class="d-flex align-center justify-center"
-                        style="margin-top: 30px; min-height: 100px;"
-                      >
-                        <!-- Image Preview for image files -->
-                        <div v-if="isImageFile(file)" class="image-preview-wrapper">
-                          <img
-                            v-if="!imageLoadErrors[file.id]"
-                            :src="getImageUrl(file.link)"
-                            :alt="file.title"
-                            class="file-preview-image"
-                            @error="handleImageError($event, file)"
-                            @click="openImageInNewTab(file)"
-                          />
-                          <v-icon
-                            v-else
-                            size="60"
-                            class="fallback-icon"
-                          >
-                            mdi-file
-                          </v-icon>
-                        </div>
-                        <!-- File Icon for non-image files -->
-                        <v-icon v-else size="60">mdi-file</v-icon>
+                      <div class="image-preview-wrapper">
+                        <img
+                          v-if="isImageFile(file) && !imageLoadErrors[file.id]"
+                          :src="getImageUrl(file.link)"
+                          :alt="file.title"
+                          class="file-preview-image"
+                          @error="handleImageError($event, file)"
+                          @click="openImageInNewTab(file)"
+                        />
+                        <v-icon v-else size="60" class="fallback-icon">mdi-file</v-icon>
                       </div>
 
-                      <!-- Divider -->
                       <v-divider class="mt-4 mb-1"></v-divider>
 
-                      <!-- Footer: Name and Meta -->
                       <div class="text-center">
-                        <div class="text-body-2 font-weight-medium">
-                          {{ file.title }}
-                        </div>
-                        <div class="text-caption text-grey">
-                          {{ formatFileSize(file.size) }} |
-                          {{ formatDate(file.createdAt) }}
-                        </div>
+                        <div class="text-body-2 font-weight-medium">{{ file.title }}</div>
+                        <div class="text-caption text-grey">{{ formatFileSize(file.size) }} | {{ formatDate(file.createdAt) }}</div>
                       </div>
                     </v-card>
-                  </v-col>
-                </v-row>
+                  </div>
+                </div>
               </div>
             </v-tabs-window-item>
           </v-tabs-window>
@@ -465,10 +433,11 @@
 
         <!-- Footer -->
         <div
+          v-if="tab === 'overview'"
           class="d-flex justify-end pa-6"
           style="border-top: 1px solid rgba(var(--v-theme-on-surface), 0.12)"
         >
-        
+
 
           <v-btn
             color="primary"
@@ -505,15 +474,27 @@ const tab = ref("overview");
 const taskDetails = ref({});
 const isDirty = ref(false);
 const currentUserTaskId = ref(null);
-const comments = ref([]);
+
+// ==================== NEW COMMENT STATE MANAGEMENT ====================
+// Replace old pagination state with normalized store
+const commentMap = ref({});              // { [id]: comment } - O(1) lookups
+const commentIds = ref([]);              // [id1, id2, id3] - ordered list
+const hasMoreComments = ref(true);       // Simple flag: more to load?
+const isLoadingComments = ref(false);    // Single loading state
+let commentsCursor = 0;                  // Private pagination cursor
+
+// Derived: Current visible comments from normalized state
+const comments = computed(() =>
+  commentIds.value.map(id => commentMap.value[id]).filter(Boolean)
+);
+
+// For adding new comments
 const newComment = ref("");
 const editingCommentId = ref(null);
 const editCommentText = ref("");
+// ========================================================================
+
 const submitDisabled = computed(() => !isDirty.value);
-const commentsPage = ref(0);
-const commentsLimit = ref(10);
-const commentsEnd = ref(false);
-const isLoadingComments = ref(false);
 const commentListRef = ref(null);
 const imageLoadErrors = ref({});
 const uploadProgress = ref(0);
@@ -557,7 +538,7 @@ const fetchTaskDetails = async () => {
     if (res.code === 0) {
       taskDetails.value = res.data;
       currentUserTaskId.value = userTaskId;
-      await fetchComments(userTaskId);
+      await fetchComments(true);
       isDirty.value = false;
       console.log(taskDetails.value);
     } else {
@@ -573,17 +554,19 @@ watch(
   async (newValue) => {
     modelValue.value = newValue;
     if (newValue) {
+      // Reset normalized comment state
+      commentMap.value = {};
+      commentIds.value = [];
+      hasMoreComments.value = true;
+      commentsCursor = 0;
       await fetchTaskDetails();
     } else {
-      // Reset all state when modal is closed
       taskDetails.value = {};
-      comments.value = [];
-      newComment.value = "";
-      editingCommentId.value = null;
-      editCommentText.value = "";
-      commentsPage.value = 0;
-      commentsEnd.value = false;
-      currentUserTaskId.value = null;
+      // Reset normalized comment state
+      commentMap.value = {};
+      commentIds.value = [];
+      hasMoreComments.value = true;
+      commentsCursor = 0;
       isDirty.value = false;
       tab.value = "overview"; // Reset to overview tab
     }
@@ -613,37 +596,50 @@ const touchDirty = () => {
   isDirty.value = true;
 };
 
-const fetchComments = async (userTaskId, reset = false) => {
-  if (!userTaskId) return;
+// ==================== NEW FETCH COMMENTS WITH NORMALIZED STATE ====================
+const fetchComments = async (reset = false) => {
+  if (!currentUserTaskId.value) return;
   if (isLoadingComments.value) return;
-  
-  // Always reset when fetching for a new task or when explicitly requested
-  if (reset || currentUserTaskId.value !== userTaskId) {
-    commentsPage.value = 0;
-    commentsEnd.value = false;
-    comments.value = [];
-  }
   
   try {
     isLoadingComments.value = true;
+    
+    // Calculate offset based on already loaded comments
+    const offset = reset ? 0 : Object.keys(commentMap.value).length;
+    
+    if (reset) {
+      // Clear normalized state on reset
+      commentMap.value = {};
+      commentIds.value = [];
+      commentsCursor = 0;
+      hasMoreComments.value = true;
+    }
+    
     const res = await taskStore.listTaskComments({
-      userTaskId,
-      limit: commentsLimit.value,
-      offset: commentsPage.value * commentsLimit.value,
+      userTaskId: currentUserTaskId.value,
+      limit: 10,
+      offset,
     });
+    
     if (res.code === 0) {
-      const payload = res.data || [];
-      if (payload.length < commentsLimit.value) {
-        commentsEnd.value = true;
-      }
-      const ordered = [...payload].reverse(); // backend returns newest first
-      if (commentsPage.value === 0 || reset || currentUserTaskId.value !== userTaskId) {
-        comments.value = ordered;
+      const newComments = res.data || [];
+      
+      // Add new comments to normalized store
+      newComments.forEach(comment => {
+        commentMap.value[comment.id] = comment;
+        if (!commentIds.value.includes(comment.id)) {
+          // Prepend newer comments at start (for infinite scroll)
+          commentIds.value.unshift(comment.id);
+        }
+      });
+      
+      // Update flag: if we got fewer than requested, no more to load
+      hasMoreComments.value = newComments.length >= 10;
+      
+      // Scroll to bottom after first load
+      if (reset) {
         nextTick(() => scrollCommentsToBottom());
-      } else {
-        comments.value = ordered.concat(comments.value);
       }
-      commentsPage.value += 1;
     }
   } catch (err) {
     console.error("Failed to fetch comments", err);
@@ -651,23 +647,121 @@ const fetchComments = async (userTaskId, reset = false) => {
     isLoadingComments.value = false;
   }
 };
+// ==============================================================================
 
+// ==================== OPTIMISTIC ADD COMMENT ====================
 const addComment = async () => {
   if (!newComment.value.trim()) return;
+  
+  const tempId = 'temp_' + Date.now();
+  const tempComment = {
+    id: tempId,
+    comment: newComment.value.trim(),
+    author: { fullName: store.currentUser?.fullName || 'You' },
+    createdAt: new Date().toISOString(),
+  };
+  
   try {
+    // OPTIMISTIC: Add to UI immediately
+    commentMap.value[tempId] = tempComment;
+    commentIds.value.unshift(tempId);
+    const userInput = newComment.value;
+    newComment.value = "";
+    
+    // API call
     const res = await taskStore.addTaskComment({
       userTaskId: currentUserTaskId.value,
-      comment: newComment.value.trim(),
+      comment: userInput,
     });
+    
     if (res.code === 0) {
-      newComment.value = "";
-      await fetchComments(currentUserTaskId.value, true);
+      const actualComment = res.data;
+      const commentWithAuthor = {
+        ...actualComment,
+        author: {
+          fullName: store.currentUser?.fullName || 'You',
+          id: actualComment.userId,
+        },
+      };
+      // Replace temp comment with real one
+      delete commentMap.value[tempId];
+      commentMap.value[commentWithAuthor.id] = commentWithAuthor;
+      
+      const idx = commentIds.value.indexOf(tempId);
+      if (idx !== -1) {
+        commentIds.value[idx] = commentWithAuthor.id;
+      }
+      
+      store.setSnackbar({
+        title: "Comment added successfully",
+        type: "success",
+      });
+    } else {
+      // ROLLBACK: Remove temp comment on API failure
+      delete commentMap.value[tempId];
+      commentIds.value = commentIds.value.filter(id => id !== tempId);
+      newComment.value = userInput; // Restore text
+      
+      store.setSnackbar({
+        title: res.message || "Failed to add comment",
+        type: "error",
+      });
     }
   } catch (err) {
+    // ROLLBACK: Remove temp comment on error
+    delete commentMap.value[tempId];
+    commentIds.value = commentIds.value.filter(id => id !== tempId);
+    
     console.error("Failed to add comment", err);
+    store.setSnackbar({
+      title: err.message || "Failed to add comment",
+      type: "error",
+    });
   }
 };
+// =================================================================
 
+// ==================== OPTIMISTIC DELETE COMMENT ====================
+const deleteComment = async (comment) => {
+  try {
+    // OPTIMISTIC: Remove from UI immediately
+    const backup = commentMap.value[comment.id];
+    delete commentMap.value[comment.id];
+    commentIds.value = commentIds.value.filter(id => id !== comment.id);
+    
+    // API call
+    const res = await taskStore.deleteTaskComment({ commentId: comment.id });
+    
+    if (res.code === 0) {
+      store.setSnackbar({
+        title: "Comment deleted successfully",
+        type: "success",
+      });
+    } else {
+      // ROLLBACK: Restore comment if API fails
+      commentMap.value[comment.id] = backup;
+      commentIds.value.push(comment.id);
+      
+      store.setSnackbar({
+        title: res.message || "Failed to delete comment",
+        type: "error",
+      });
+    }
+  } catch (err) {
+    // ROLLBACK: Restore comment on error
+    commentMap.value[comment.id] = comment;
+    commentIds.value.push(comment.id);
+    
+    console.error("Failed to delete comment", err);
+    store.setSnackbar({
+      title: err.message || "Failed to delete comment",
+      type: "error",
+    });
+  }
+};
+// =====================================================================
+
+// ==================== EDIT COMMENT WITH OPTIMISM ====================
 const startEditComment = (comment) => {
   editingCommentId.value = comment.id;
   editCommentText.value = comment.comment;
@@ -680,38 +774,63 @@ const cancelEdit = () => {
 
 const saveEditComment = async (comment) => {
   if (!editCommentText.value.trim()) return;
+  
   try {
+    const original = { ...commentMap.value[comment.id] };
+    
+    // OPTIMISTIC: Update UI immediately
+    commentMap.value[comment.id].comment = editCommentText.value.trim();
+    editingCommentId.value = null;
+    
+    // API call
     const res = await taskStore.updateTaskComment({
       commentId: comment.id,
       comment: editCommentText.value.trim(),
     });
+    
     if (res.code === 0) {
-      cancelEdit();
-      await fetchComments(currentUserTaskId.value, true);
+      store.setSnackbar({
+        title: "Comment updated successfully",
+        type: "success",
+      });
+    } else {
+      // ROLLBACK: Restore original comment if API fails
+      commentMap.value[comment.id] = original;
+      editingCommentId.value = comment.id;
+      editCommentText.value = original.comment;
+      
+      store.setSnackbar({
+        title: res.message || "Failed to update comment",
+        type: "error",
+      });
     }
   } catch (err) {
+    // ROLLBACK on error
+    commentMap.value[comment.id].comment = comment.comment;
+    editingCommentId.value = null;
+    
     console.error("Failed to update comment", err);
+    store.setSnackbar({
+      title: err.message || "Failed to update comment",
+      type: "error",
+    });
   }
 };
+// =====================================================================
 
-const deleteComment = async (comment) => {
-  try {
-    const res = await taskStore.deleteTaskComment({ commentId: comment.id });
-    if (res.code === 0) {
-      await fetchComments(currentUserTaskId.value, true);
-    }
-  } catch (err) {
-    console.error("Failed to delete comment", err);
-  }
-};
-
+// ==================== SMART SCROLL LOADING ====================
 const onCommentsScroll = () => {
   const el = commentListRef.value;
-  if (!el || isLoadingComments.value || commentsEnd.value) return;
-  if (el.scrollTop === 0) {
-    fetchComments(currentUserTaskId.value);
+  if (!el) return;
+  
+  // Load when scrolled to top (with buffer) AND more comments exist AND not already loading
+  const isAtTop = el.scrollTop < 50;
+  
+  if (isAtTop && hasMoreComments.value && !isLoadingComments.value) {
+    fetchComments(false);
   }
 };
+// ==============================================================
 
 const scrollCommentsToBottom = () => {
   const el = commentListRef.value;
@@ -954,21 +1073,45 @@ const uploadFile = async (files) => {
   font-weight: bold;
   font-size: 14px;
 }
+.attachments-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); /* each card min 220px; grows to fill row */
+  gap: 18px; /* uniform horizontal + vertical gap */
+  align-items: start; /* don't stretch grid items vertically */
+}
+.attachment-item {
+  display: flex;
+}
+.card-equal {
+  width: 100%;
+  min-height: 260px; /* ensures uniform height for all cards */
+  box-sizing: border-box;
+}
+.top-icons {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+}
+
+/* ensure card uses relative positioning for absolute top-icons */
+.card-equal { position: relative; }
 
 .image-preview-wrapper {
-  position: relative;
-  width: 100%;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
 }
 
 .file-preview-image {
-  max-width: 100%;
-  max-height: 120px;
-  width: auto;
-  height: auto;
-  object-fit: contain;
+  width: 100%;
+  height: 140px;         /* consistent preview height */
+  object-fit: cover;     /* fill box, crop if needed */
   border-radius: 4px;
   cursor: pointer;
   transition: transform 0.2s;

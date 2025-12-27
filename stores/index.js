@@ -1,4 +1,5 @@
 import authService from "../services/authService";
+import orgService from "../services/orgService";
 import dashBoard from "@/assets/icons/mainDrawerIcons/dashboard.svg";
 import tasksIcon from "@/assets/icons/mainDrawerIcons/tasks.svg";
 import teamIcon from "@/assets/icons/mainDrawerIcons/team.svg";
@@ -13,6 +14,7 @@ export const useMainStore = defineStore("mainStore", {
     roles: [],
     isLoading: false,
     loginSkipSplash: false,
+    customColumns: [],
     snackbar: {
       title: "",
       subtitle: "",
@@ -375,6 +377,21 @@ export const useMainStore = defineStore("mainStore", {
     },
     setSnackbar(toast) {
       this.snackbar = toast;
+    },
+    getCustomColumns() {
+      return new Promise((resolve, reject) => {
+        orgService
+          .listCustomColumns()
+          .then((res) => {
+            if (res.code === 0 && res.data) {
+              this.customColumns = res.data;
+            }
+            resolve(res);
+          })
+          .catch((err) => {
+            reject(err);
+          });
+      });
     },
   },
 });

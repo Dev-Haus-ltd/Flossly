@@ -111,6 +111,7 @@
             :page="page"
             :page-size="pageSize"
             :status-totals="statusTotals"
+            hide-add-custom-column
             @onFilter="applyFilters"
             @onUpdate="updateTasks"
             @updateSelectedRowItems="updateSelectedRowItems"
@@ -454,6 +455,7 @@ onMounted(async () => {
   getTaskPriorities();
   getTaskStatuses();
   getUsers();
+  mainStore.getCustomColumns();
 });
 const updateTasks = () => {
   getTeamStats();
@@ -473,6 +475,7 @@ const getIcon = (categoryName) => {
       return "https://cdn.lordicon.com/qlpudrww.json"; // fallback
   }
 };
+
 const availableHeaders = computed(() => {
   return mainStore.getTeamTaskAllHeaders;
 });

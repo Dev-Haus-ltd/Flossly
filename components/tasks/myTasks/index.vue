@@ -35,74 +35,78 @@
           </v-col>
         </v-row>
       </div>
-      <div class="tabs-bar mt-5">
-        <v-tabs
-          v-model="currentTab"
-          class="custom-tabs tabs-scroll"
-          slider-color="primary"
-          show-arrows
-          prev-icon="mdi-chevron-left"
-          next-icon="mdi-chevron-right"
-        >
-          <draggable
-            tag="div"
-            class="d-flex tabs-draggable"
-            :model-value="orderedTaskStats"
-            item-key="categoryId"
-            direction="horizontal"
-            handle=".tab-inner"
-            @update:model-value="updateCategoryOrder"
+      <!-- Tabs -->
+       <div class="mt-5">
+        <div class="tabs-bar">
+          <v-tabs
+            v-model="currentTab"
+            class="custom-tabs tabs-scroll"
+            slider-color="primary"
+            show-arrows
+            prev-icon="mdi-chevron-left"
+            next-icon="mdi-chevron-right"
           >
-            <template #item="{ element: cat }">
-              <v-tab
-                :value="cat.categoryId"
-                :key="cat.categoryId"
-                class="tab-text category-tab"
-                :style="getTabStyle(cat)"
-              >
-                <div class="d-flex align-center justify-center tab-inner">
-                  <span class="tab-label">{{ cat.categoryName }}</span>
-                  <v-menu offset-y>
-                    <template #activator="{ props }">
-                      <v-btn
-                        v-bind="props"
-                        icon
-                        variant="text"
-                        size="x-small"
-                        class="ml-1 category-menu-btn"
-                        @click.stop
-                      >
-                        <v-icon size="16">mdi-dots-horizontal</v-icon>
-                      </v-btn>
-                    </template>
-                    <v-list density="compact">
-                      <v-list-item
-                        v-if="canHideCategory(cat)"
-                        @click.stop="hideCategory(cat)"
-                      >
-                        <v-list-item-title>Hide</v-list-item-title>
-                      </v-list-item>
-                      <v-list-item
-                        v-if="canEditCategory(cat)"
-                        @click.stop="startEditCategory(cat)"
-                      >
-                        <v-list-item-title>Edit</v-list-item-title>
-                      </v-list-item>
-                    </v-list>
-                  </v-menu>
-                </div>
-              </v-tab>
-            </template>
-          </draggable>
-        </v-tabs>
-        <v-btn
-          class="add-tab-btn"
-          icon
-          variant="text"
-          @click.stop.prevent="addNewCategoryDialog"
-        >
-          <v-icon size="20">mdi-plus</v-icon>
-        </v-btn>
+            <draggable
+              tag="div"
+              class="d-flex tabs-draggable"
+              :model-value="orderedTaskStats"
+              item-key="categoryId"
+              direction="horizontal"
+              handle=".tab-inner"
+              @update:model-value="updateCategoryOrder"
+            >
+              <template #item="{ element: cat }">
+                <v-tab
+                  :value="cat.categoryId"
+                  :key="cat.categoryId"
+                  class="tab-text category-tab"
+                  :style="getTabStyle(cat)"
+                >
+                  <div class="d-flex align-center justify-center tab-inner">
+                    <span class="tab-label">{{ cat.categoryName }}</span>
+                    <v-menu offset-y>
+                      <template #activator="{ props }">
+                        <v-btn
+                          v-bind="props"
+                          icon
+                          variant="text"
+                          size="x-small"
+                          class="ml-1 category-menu-btn"
+                          @click.stop
+                        >
+                          <v-icon size="16">mdi-dots-horizontal</v-icon>
+                        </v-btn>
+                      </template>
+                      <v-list density="compact">
+                        <v-list-item
+                          v-if="canHideCategory(cat)"
+                          @click.stop="hideCategory(cat)"
+                        >
+                          <v-list-item-title>Hide</v-list-item-title>
+                        </v-list-item>
+                        <v-list-item
+                          v-if="canEditCategory(cat)"
+                          @click.stop="startEditCategory(cat)"
+                        >
+                          <v-list-item-title>Edit</v-list-item-title>
+                        </v-list-item>
+                      </v-list>
+                    </v-menu>
+                  </div>
+                </v-tab>
+              </template>
+            </draggable>
+          </v-tabs>
+          <v-btn
+            class="add-tab-btn"
+            icon
+            variant="text"
+            @click.stop.prevent="addNewCategoryDialog"
+          >
+            <v-icon size="20">mdi-plus</v-icon>
+          </v-btn>
+
+        </div>
       </div>
       <v-tabs-window v-model="currentTab">
         <v-tabs-window-item :value="currentTab">
@@ -110,6 +114,7 @@
             :clearSelection="isTrayHidden"
             :headers="headers"
             :availableHeaders="availableHeaders"
+            :customColumnHeaders="customColumnHeaders"
             :taskDetails="taskDetails"
             :orgStatuses="taskStatuses"
             :priorities="taskPriorities"
@@ -471,6 +476,7 @@ onMounted(async () => {
   getTaskPriorities();
   getTaskStatuses();
   getUsers();
+  mainStore.getCustomColumns();
   console.log(visibleTaskStats.value)
 });
 
@@ -482,6 +488,29 @@ const updateTasks = () => {
   getMyStats();
 };
 bus.on("updateMyTasks", updateTasks);
+
+// Transform custom columns from store into header format
+const customColumnHeaders = computed(() => {
+  if (!mainStore.customColumns || !Array.isArray(mainStore.customColumns)) {
+    return [];
+  }
+
+  return mainStore.customColumns
+    .filter((col) => col.isActive)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((col) => ({
+      key: `custom_${col.columnName}`,
+      title: col.displayName,
+      sortable: true,
+      width: 200,
+      isCustom: true,
+      columnDefinitionId: col.id,
+      dataType: col.dataType,
+      sortOrder: col.sortOrder,
+      dropdownOptions: col.dropdownOptions,
+    }));
+});
+
 const availableHeaders = computed(() => {
   return mainStore.getTeamTaskAllHeaders;
 });
@@ -1165,13 +1194,13 @@ const handleQuickStatus = (statusKey) => {
   font-size: 13px;
   color: #737373;
 }
-.custom-tabs {
-  border-bottom: 1px solid #dbdbdb;
-}
+
 .tabs-bar {
   display: flex;
   align-items: center;
   gap: 10px;
+  border-radius: 8px;
+  border: 1px solid #F3F4F6;
 }
 .tabs-scroll {
   flex: 1;
