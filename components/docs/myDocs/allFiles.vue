@@ -149,7 +149,7 @@ const filteredFiles = computed(() =>
   props.files.filter(
     (file) =>
       file.name.toLowerCase().includes(search.value.toLowerCase()) ||
-      file.folder.name.toLowerCase().includes(search.value.toLowerCase())
+      file.folder?.name?.toLowerCase().includes(search.value.toLowerCase())
   )
 );
 

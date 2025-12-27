@@ -1,4 +1,13 @@
 <template>
+  <CommonConfirmDialog
+    v-model="deleteDialog.open"
+    title="Delete Shift"
+    message="Are you sure you want to delete this shift? This action cannot be undone."
+    confirm-text="Delete"
+    :loading="deleteDialog.loading"
+    @confirm="confirmDeleteShift"
+    @cancel="deleteDialog.open = false"
+  />
   <v-card
     class="rounded-lg parent-card mt-6"
     :elevation="0"
@@ -477,6 +486,7 @@
 </template>
 
 <script setup>
+const deleteDialog = reactive({ open: false, loading: false, shift: null });
 import { differenceInCalendarDays, addDays, parseISO, format } from "date-fns";
 const { isManager } = useUser();
 const { shifts, rota, users, selectedView } = defineProps({
@@ -612,7 +622,7 @@ const getUserTotalHours = (user, days) => {
   return shifts
     .filter(
       (s) =>
-        s.userId === user.user.userId &&
+        s.userId === (user?.user?.id) &&
         days.some(
           (d) =>
             format(new Date(s.startDate), "yyyy-MM-dd") ===
@@ -676,7 +686,16 @@ function formatTime(value) {
   const m = String(d.getMinutes()).padStart(2, "0");
   return `${h}:${m}`;
 }
+
 const deleteShift = async (shift) => {
+  deleteDialog.shift = shift;
+  deleteDialog.open = true;
+};
+
+const confirmDeleteShift = async () => {
+  if (!deleteDialog.shift) return;
+  const shift = deleteDialog.shift;
+  deleteDialog.loading = true;
   try {
     const res = await rotaStore.deleteRotaShift({
       rotaId: rota.id,
@@ -684,12 +703,12 @@ const deleteShift = async (shift) => {
     });
 
     if (res.code === 0) {
-      // Show success snackbar
+      deleteDialog.open = false;
+      deleteDialog.shift = null;
       mainStore.setSnackbar({
         title: "Shift deleted successfully",
         type: "success",
       });
-      // const updatedShifts = shifts.filter((s) => s.id !== shift.id);
       emit("updateShifts", rota);
     } else {
       mainStore.setSnackbar({
@@ -702,6 +721,8 @@ const deleteShift = async (shift) => {
       title: "Something went wrong while deleting the shift",
       type: "error",
     });
+  } finally {
+    deleteDialog.loading = false;
   }
 };
 

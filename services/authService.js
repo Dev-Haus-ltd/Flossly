@@ -168,13 +168,24 @@ export default {
   },
   updateProfile(data) {
     return new Promise((resolve, reject) => {
-      Post("/auth/updateProfile", data)
-        .then((res) => {
-          resolve(res);
-        })
-        .catch((err) => {
-          reject(err);
+     
+      if (data && (typeof File !== 'undefined') && (data._photoFile instanceof File || data.photo instanceof File)) {
+        const form = new FormData();
+        Object.keys(data).forEach((key) => {
+          if (key === 'photo' || key === '_photoFile' || key === '_photoPreviewUrl') return; 
+          const val = data[key];
+          if (val !== undefined && val !== null) form.append(key, String(val));
         });
+        const fileToSend = data._photoFile instanceof File ? data._photoFile : data.photo;
+        form.append('photo', fileToSend);
+        PostFormData("/auth/updateProfile", form)
+          .then(resolve)
+          .catch(reject);
+      } else {
+        Post("/auth/updateProfile", data)
+          .then(resolve)
+          .catch(reject);
+      }
     });
   },
   getContractDetails() {

@@ -35,7 +35,7 @@ import {
 import requestIp from "request-ip";
 import { HrDocument } from "../models/hrDocuments";
 import path from "path";
-import fs from "fs";
+import fs from "fs/promises";
 import { createError, setCookie } from "h3";
 import { success, error } from "../utils/response";
 
@@ -366,30 +366,53 @@ export const profile = async (event) => {
 };
 
 export const updateProfile = async (event) => {
-  const body = await readBody(event);
-  const {
-    id,
-    phone,
-    address,
-    dob,
-    gender,
-    nextOfKin,
-    fullName,
-    nextOfKinContact,
-    roleId,
-  } = JSON.parse(body);
   try {
-    const user = await User.findByPk(id);
+    let fields = {};
+    let fileItem = null;
 
-    // Validate fullName if provided
+    try {
+      const form = await readMultipartFormData(event);
+      if (form) {
+        form.forEach((item) => {
+          if (item.type) {
+            if (!fileItem) fileItem = item; 
+          } else {
+            fields[item.name] = item.data.toString();
+          }
+        });
+      }
+    } catch (_) {}
+
+    if (!Object.keys(fields).length && !fileItem) {
+      const body = await readBody(event);
+      fields = typeof body === 'string' ? JSON.parse(body || '{}') : (body || {});
+    }
+
+    const {
+      id,
+      phone,
+      address,
+      dob,
+      gender,
+      nextOfKin,
+      fullName,
+      nextOfKinContact,
+      roleId,
+    } = fields;
+
+    if (!id) {
+      return error(400, 'Missing user id');
+    }
+
+    const user = await User.findByPk(id);
+    if (!user) return error(404, 'User not found');
+
     if (fullName !== undefined) {
-      const trimmedFullName = fullName ? fullName.trim() : "";
+      const trimmedFullName = fullName ? fullName.trim() : '';
       if (trimmedFullName.length === 0) {
-        return error(400, "Full name cannot be empty or contain only spaces");
+        return error(400, 'Full name cannot be empty or contain only spaces');
       }
       user.fullName = trimmedFullName;
-    } else {
-      user.fullName = user.fullName;
     }
 
     user.phone = phone !== undefined ? phone : user.phone;
@@ -397,15 +420,27 @@ export const updateProfile = async (event) => {
     user.dob = dob !== undefined ? dob : user.dob;
     user.gender = gender !== undefined ? gender : user.gender;
     user.nextOfKin = nextOfKin !== undefined ? nextOfKin : user.nextOfKin;
-    user.nextOfKinContact =
-      nextOfKinContact !== undefined ? nextOfKinContact : user.nextOfKinContact;
+    user.nextOfKinContact = nextOfKinContact !== undefined ? nextOfKinContact : user.nextOfKinContact;
     if (roleId !== undefined) {
       user.roleId = roleId;
     }
+
+    if (fileItem) {
+      const uploadDir = path.resolve('public/uploads/avatars');
+      await fs.mkdir(uploadDir, { recursive: true });
+      const originalName = fileItem.filename || 'avatar';
+      const fileExt = path.extname(originalName) || '';
+      const filename = `user-${id}-${Date.now()}${fileExt}`;
+      const filepath = path.join(uploadDir, filename);
+    
+      await fs.writeFile(filepath, fileItem.data);
+      user.photo = `/uploads/avatars/${filename}`;
+    }
+
     await user.save();
-    return success("saved");
+    return success({ message: 'saved', user: user.toJSON() });
   } catch (err) {
-    return error(500, err.message);
+    return error(500, err.message || err);
   }
 };
 
