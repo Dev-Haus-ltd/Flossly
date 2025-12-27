@@ -398,7 +398,7 @@
                           color="error"
                           class="mr-2 cursor-pointer"
                           title="Delete custom column"
-                          @click.stop="deleteCustomColumn(column)"
+                          @click.stop="openDeleteColumnConfirm(column)"
                         >
                           mdi-close
                         </v-icon>
@@ -946,6 +946,14 @@
       @close="dialogOpen = false"
       @save="updateTaskInfo"
     />
+    <CommonConfirmDialog
+      v-model="showDeleteConfirm"
+      title="Delete column?"
+      message="Are you sure you want to delete this custom column? This action cannot be undone."
+      confirm-text="Delete"
+      @confirm="confirmDeleteCustomColumn"
+      @cancel="cancelDeleteCustomColumn"
+    />
 
     <!-- Add Task Panel - Only render after page loads -->
     <ClientOnly>
@@ -1357,10 +1365,19 @@ const createCustomColumn = async () => {
     isCreatingColumn.value = false;
   }
 };
-const deleteCustomColumn = async (column) => {
+const showDeleteConfirm = ref(false);
+const deleteLoading = ref(false);
+
+// store which column is being deleted
+const columnToDelete = ref(null);
+const confirmDeleteCustomColumn = async () => {
+  if (!columnToDelete.value) return;
+
+  deleteLoading.value = true;
+
   try {
     const res = await taskStore.deleteCustomColumn({
-      columnId: column.columnDefinitionId, // ✅ FIX
+      columnId: columnToDelete.value.columnDefinitionId, // ✅ correct key
     });
 
     if (res.code === 0) {
@@ -1369,9 +1386,15 @@ const deleteCustomColumn = async (column) => {
         type: "success",
       });
 
+      // remove from UI immediately
       selectedHeaders.value = selectedHeaders.value.filter(
-        (h) => h.columnDefinitionId !== column.columnDefinitionId
+        (h) =>
+          h.columnDefinitionId !==
+          columnToDelete.value.columnDefinitionId
       );
+
+      showDeleteConfirm.value = false;
+      columnToDelete.value = null;
     } else {
       mainStore.setSnackbar({
         title: res.message || "Failed to delete custom column",
@@ -1383,7 +1406,17 @@ const deleteCustomColumn = async (column) => {
       title: "Failed to delete custom column",
       type: "error",
     });
+  } finally {
+    deleteLoading.value = false;
   }
+};
+const openDeleteColumnConfirm = (column) => {
+  columnToDelete.value = column;
+  showDeleteConfirm.value = true;
+};
+const cancelDeleteCustomColumn = () => {
+  showDeleteConfirm.value = false;
+  columnToDelete.value = null;
 };
 
 
