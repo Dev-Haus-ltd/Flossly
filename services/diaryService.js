@@ -142,4 +142,115 @@ export default {
         .catch(reject);
     });
   },
+
+  // Unique Patient Comfort
+  getPatientComfort(patientId) {
+    const q = new URLSearchParams();
+    if (patientId) q.append("patientId", patientId);
+    return new Promise((resolve, reject) => {
+      Get(`/diary/patientComfortGet?${q.toString()}`)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+  savePatientComfort(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/patientComfortSave", payload)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+
+  // Smile Concern Survey
+  getPatientSurvey(patientId) {
+    const q = new URLSearchParams();
+    if (patientId) q.append("patientId", patientId);
+    return new Promise((resolve, reject) => {
+      Get(`/diary/surveyGet?${q.toString()}`)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+  savePatientSurvey(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/surveySave", payload)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+  uploadSurveyPhotos(formData) {
+    return new Promise((resolve, reject) => {
+      PostFormData("/diary/surveyUploadPhotos", formData)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+  sharePatientSurvey(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/surveyShare", payload)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+  printPatientSurvey(patientId) {
+    const q = new URLSearchParams();
+    if (patientId) q.append("patientId", patientId);
+    return new Promise((resolve, reject) => {
+      Get(`/diary/surveyPrint?${q.toString()}`)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+  downloadPatientSurvey(patientId) {
+    const q = new URLSearchParams();
+    if (patientId) q.append("patientId", patientId);
+    return new Promise((resolve, reject) => {
+      Get(`/diary/surveyDownload?${q.toString()}`)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+
+  // Patient Forms
+  listPatientForms(patientId) {
+    const q = new URLSearchParams();
+    if (patientId) q.append("patientId", patientId);
+    return new Promise((resolve, reject) => {
+      Get(`/diary/formsList?${q.toString()}`)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+  getPatientForm(formId) {
+    const q = new URLSearchParams();
+    if (formId) q.append("id", formId);
+    return new Promise((resolve, reject) => {
+      Get(`/diary/formGet?${q.toString()}`)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+  savePatientForm(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/formSave", payload)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+  updatePatientForm(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/formUpdate", payload)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+  deletePatientForm(formId) {
+    const q = new URLSearchParams();
+    if (formId) q.append("id", formId);
+    return new Promise((resolve, reject) => {
+      Get(`/diary/formDelete?${q.toString()}`)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
 };
