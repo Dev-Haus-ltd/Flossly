@@ -357,4 +357,15 @@ export default {
         });
     });
   },
+  deleteCustomColumn(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/deleteCustomColumn", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
 };

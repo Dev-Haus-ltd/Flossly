@@ -519,8 +519,9 @@ const taskDescription = computed({
   },
 });
 
-const fetchTaskDetails = async () => {
-  if (isDirty.value) return; // don't overwrite local edits while typing
+const fetchTaskDetails = async (force = false) => {
+  if (isDirty.value && !force) return;
+
   let userTaskId;
   if (props.selectedItem.id) {
     userTaskId = props.selectedItem.id;
@@ -529,23 +530,19 @@ const fetchTaskDetails = async () => {
     props.selectedItem.assignedUser = users[0];
     userTaskId = users[0].userTaskId;
   }
-  // Reset image load errors when fetching new task details
+
   imageLoadErrors.value = {};
+
   try {
-    const res = await taskStore.getTaskDetails({
-      userTaskId,
-    });
+    const res = await taskStore.getTaskDetails({ userTaskId });
     if (res.code === 0) {
       taskDetails.value = res.data;
       currentUserTaskId.value = userTaskId;
       await fetchComments(true);
       isDirty.value = false;
-      console.log(taskDetails.value);
-    } else {
-      console.error("Failed to fetch task details:", res.message);
     }
   } catch (err) {
-    console.error("Error fetching task details:", err);
+    console.error(err);
   }
 };
 
@@ -906,7 +903,7 @@ const deleteFile = async (file) => {
     if (res.code === 0) {
       // Refresh task details to update the attachments list
       const wasDirty = isDirty.value;
-      await fetchTaskDetails();
+      await fetchTaskDetails(true);
       // Restore dirty state or set to true if file was deleted
       isDirty.value = wasDirty || true;
       store.setSnackbar({
@@ -983,7 +980,7 @@ const uploadFile = async (files) => {
     if (res.code === 0) {
       // Store the current dirty state before refreshing
       const wasDirty = isDirty.value;
-      await fetchTaskDetails();
+      await fetchTaskDetails(true);
       // Restore dirty state or set to true if file was uploaded
       isDirty.value = wasDirty || true;
       store.setSnackbar({

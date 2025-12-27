@@ -289,7 +289,6 @@
                     height="44"
                     class="mt-4 w-100"
                     rounded="md"
-                    :loading="orgStore.isLoading"
                     block
                   >
                     Submit information
@@ -424,6 +423,8 @@
               class="align-center"
               variant="flat"
               append-icon="mdi-arrow-top-right"
+              href="https://www.flossly.ai/brand-ambasaddor-info"
+              target="_blank"
               color="primary"
               height="46"
               rounded="lg"
