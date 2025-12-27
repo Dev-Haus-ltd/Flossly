@@ -409,7 +409,7 @@
           <div class="card-content pt-5">
             <!-- ✅ Custom Image (replaces lord-icon) -->
             <img
-              src="@/assets/dashBoard/review-card-logo.svg"
+              src="@/assets/dashboard/review-card-logo.svg"
               alt="Review Icon"
               class="review-logo"
             />
