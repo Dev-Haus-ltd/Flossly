@@ -1,6 +1,4 @@
 import jwt from 'jsonwebtoken'
-import { User } from '../models'
-import { error } from '../utils/response'
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig();
@@ -27,22 +25,8 @@ export default defineEventHandler(async (event) => {
   
   try {
     const decoded = jwt.verify(token, config.JWT_SECRET);
-    
-    if (decoded.orgId && decoded.userId) {
-      const user = await User.findByPk(decoded.userId, {
-        attributes: ['status'],
-      });
-      
-      if (user && (user.status === "Disabled" || user.status === "Expired")) {
-        return error(403, "Your account is deactivated");
-      }
-    }
-    
     event.context.user = decoded;
   } catch (err) {
-    if (err.statusCode) {
-      throw err;
-    }
     return error(401, "Invalid/Expired Token");
   }
 });
