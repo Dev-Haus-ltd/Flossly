@@ -453,6 +453,18 @@ const processUploadedFile = () => {
 const getFileIcon = (filename) => getFileIconUtil(filename);
 const formatFileSize = (bytes) => formatFileSizeUtil(bytes);
 
+const normalizeHeaderKey = (key) =>
+  String(key || "").trim().toLowerCase();
+
+const normalizeRow = (row) => {
+  const normalized = {};
+  Object.entries(row || {}).forEach(([key, value]) => {
+    normalized[normalizeHeaderKey(key)] =
+      typeof value === "string" ? value.trim() : value ?? "";
+  });
+  return normalized;
+};
+
 // Process file (Excel or CSV)
 const processFile = async (file) => {
   excelError.value = null;
@@ -483,7 +495,7 @@ const processFile = async (file) => {
         const workbook = XLSX.read(data, { type: "array" });
 
         if (!workbook.SheetNames?.length) {
-          excelError.value = "Invalid file — no sheets found.";
+          excelError.value = "Invalid file - no sheets found.";
           isProcessing.value = false;
           return;
         }
@@ -493,6 +505,14 @@ const processFile = async (file) => {
         json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
       }
 
+      if (!json.length) {
+        excelError.value = "No rows found in the file.";
+        isProcessing.value = false;
+        return;
+      }
+
+      const normalizedRows = json.map((row) => normalizeRow(row));
+
       // Validate required columns
       const requiredColumns = [
         "title",
@@ -500,18 +520,21 @@ const processFile = async (file) => {
         "priority",
         "role",
       ];
+      const normalizedKeys = Object.keys(normalizedRows[0] || {});
       const hasRequiredColumns = requiredColumns.every((col) =>
-        Object.keys(json[0] || {}).includes(col)
+        normalizedKeys.includes(col)
       );
 
       if (!hasRequiredColumns) {
-        excelError.value = "Invalid file structure — missing required columns: " + requiredColumns.join(", ");
+        excelError.value =
+          "Invalid file structure - missing required columns: " +
+          requiredColumns.join(", ");
         isProcessing.value = false;
         return;
       }
 
       // Map and validate tasks
-      const formatted = json.map((row, index) => {
+      const formatted = normalizedRows.map((row, index) => {
         const task = {
           defaultFrequency: row["frequency"] ?? "",
           description: row["description"] ?? "",
@@ -562,7 +585,7 @@ const processFile = async (file) => {
       isProcessing.value = false;
     } catch (err) {
       console.error("❌ Error reading file:", err);
-      excelError.value = "Error reading file — please check the format.";
+      excelError.value = "Error reading file - please check the format.";
       isProcessing.value = false;
     }
   };
