@@ -509,8 +509,6 @@ const processFile = async (file) => {
       const requiredColumns = [
         "title",
         "category",
-        "priority",
-        "role",
       ];
       const normalizedKeys = Object.keys(normalizedRows[0] || {});
       const hasRequiredColumns = requiredColumns.every((col) =>
