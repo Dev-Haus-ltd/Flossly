@@ -1186,14 +1186,14 @@ const handleComplete = async () => {
 }
 .custom-tabs .v-tab {
   font-size: 13px;
-  font-weight: 400;
+  font-weight: 400 !important;
   text-transform: none;
   color: var(--tab-text-color, #1e1e1e) !important;
-  min-height: 34px;
-  height: 34px;
-  min-width: max-content;
+  min-height: 34px !important;
+  height: 34px !important;
+  min-width: max-content !important;
   padding: 0 12px;
-  border-radius: 8px;
+  border-radius: 8px !important;
   display: inline-flex;
   align-items: center;
   line-height: 1;
