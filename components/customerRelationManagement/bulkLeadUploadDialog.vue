@@ -359,6 +359,7 @@ import {
   extractExtension,
   formatFileSize as formatFileSizeUtil,
   getFileIcon as getFileIconUtil,
+  normalizeHeaderKey,
   parseCSV as parseCSVUtil,
   validateFileBasics,
 } from "~/lib/fileImportUtils";
@@ -399,9 +400,6 @@ const statusLookup = computed(() => {
   leadStatusOptions.forEach((s) => map.set(s.label.toLowerCase(), s.label));
   return map;
 });
-const normalizeHeaderKey = (value) =>
-  String(value || "").trim().toLowerCase();
-
 watch(
   () => props.modelValue,
   (val) => (isOpen.value = val)

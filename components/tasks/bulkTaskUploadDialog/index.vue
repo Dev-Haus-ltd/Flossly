@@ -353,6 +353,8 @@ import {
   extractExtension,
   formatFileSize as formatFileSizeUtil,
   getFileIcon as getFileIconUtil,
+  normalizeHeaderKey,
+  normalizeRowBasic,
   parseCSV,
   validateFileBasics,
 } from "~/lib/fileImportUtils";
@@ -453,17 +455,7 @@ const processUploadedFile = () => {
 const getFileIcon = (filename) => getFileIconUtil(filename);
 const formatFileSize = (bytes) => formatFileSizeUtil(bytes);
 
-const normalizeHeaderKey = (key) =>
-  String(key || "").trim().toLowerCase();
-
-const normalizeRow = (row) => {
-  const normalized = {};
-  Object.entries(row || {}).forEach(([key, value]) => {
-    normalized[normalizeHeaderKey(key)] =
-      typeof value === "string" ? value.trim() : value ?? "";
-  });
-  return normalized;
-};
+const normalizeRow = (row) => normalizeRowBasic(row);
 
 // Process file (Excel or CSV)
 const processFile = async (file) => {
