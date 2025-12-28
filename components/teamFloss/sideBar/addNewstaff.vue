@@ -62,7 +62,7 @@
                 density="compact"
                 class="mb-1 input-bordered"
                 bg-color="white"
-                :rules="[...requiredRule, selfInviteRule]"
+                :rules="[...requiredRule, emailRule, selfInviteRule]"
                 :error-messages="selfInviteError"
                 @input="validateSelfInvitation"
                 @blur="validateSelfInvitation"
@@ -132,7 +132,12 @@ const userStore = useUserStore();
 
 const emit = defineEmits(["close", "success", "update:modelValue"]);
 const formRef = ref(null);
-const requiredRule = [(v) => !!v || "This field is required"];
+const requiredRule = [(v) => !!v || "This field is required"]; 
+const emailRule = (v) => {
+  if (!v) return true; // requiredRule will catch empty
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(String(v).trim()) || "Please enter a valid email address";
+};
 const authStore = useAuthStore();
 const selfInviteError = ref("");
 
@@ -189,7 +194,9 @@ const onSubmit = async () => {
   validateSelfInvitation();
   
   const formValidation = await formRef.value.validate();
-  if (formValidation.valid && !selfInviteError.value) {
+  // Block submit if email invalid
+  const emailValid = !form.value.email || emailRule(form.value.email) === true;
+  if (formValidation.valid && emailValid && !selfInviteError.value) {
     authStore.inviteMembers({users: [form.value]}).then((res) => {
       if (res.code === 0) {
         // Reset the user cache to ensure new invited users will be fetched when they become active

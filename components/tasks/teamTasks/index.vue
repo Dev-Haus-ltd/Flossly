@@ -182,6 +182,7 @@
             </div>
 
             <div
+                v-if="canDeleteSelectedTasks"
                 class="action-item d-flex flex-column align-center"
                 @click="handleDelete"
               >
@@ -882,6 +883,31 @@ const hasArchivedTasks = computed(() => {
   return selectedRowItems.value.some(item => 
     item.isArchieved === true || item.status?.key === 'archived'
   );
+});
+
+
+const isNormalUser = computed(() => {
+  if (!user.value || !user.value.roleId) return true;
+  const privilegedRoleIds = [1, 8]; // Manager and Owner roles
+  return !privilegedRoleIds.includes(Number(user.value.roleId));
+});
+
+const hasPracticeProfileTasks = computed(() => {
+  if (!selectedRowItems.value || selectedRowItems.value.length === 0) {
+    return false;
+  }
+  const taskAssignedByPracticeProfile = selectedRowItems.value.some(item => 
+    item.isAssignedByPracticeProfile === true
+  );
+  const userTaskAssignedByPracticeProfile = selectedRowItems.value.some(item => 
+    item.assignedUsers?.some(user => user.isAssignedByPracticeProfile === true)
+  );
+  return taskAssignedByPracticeProfile || userTaskAssignedByPracticeProfile;
+});
+
+const canDeleteSelectedTasks = computed(() => {
+  if (!isNormalUser.value) return true;
+  return !hasPracticeProfileTasks.value;
 });
 
 const handleArchive = async () => {

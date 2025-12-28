@@ -129,6 +129,9 @@ const props = defineProps({
 
 const mainStore = useMainStore();
 const $userService = userService;
+const authStore = useAuthStore();
+const userStore = useUserStore();
+const { user: currentUser, setUser } = useUser();
 const addStaffDrawer = ref(false);
 
 const search = ref("");
@@ -175,7 +178,7 @@ const filteredTeams = computed(() => {
     }
 
     if (filter === "approvals") {
-      filteredUsers = filteredUsers.filter((user) => user.status === "Invited");
+      filteredUsers = filteredUsers.filter((user) => (user.orgStatus === "Invited") || (user.status === "Invited"));
     }
 
     // Apply filter menu filters
@@ -426,6 +429,24 @@ const confirmDeactivateUser = async () => {
         type: "success",
       });
       
+      const isCurrentUser = currentUser.value && currentUser.value.id === selectedUser.value.id;
+      
+      if (isCurrentUser) {
+       
+        try {
+          const profileResponse = await authStore.profile();
+          if (profileResponse.code === 0) {
+            setUser(profileResponse.data);
+           
+            await userStore.getUserList({ roleId: null, force: true });
+          }
+        } catch (profileError) {
+          console.error('Failed to refresh user profile:', profileError);
+        }
+      } else {
+        await userStore.getUserList({ roleId: null, force: true });
+      }
+      
       emit("onUpdate");
       deactivateDialog.value = false;
     } else {
@@ -465,6 +486,22 @@ const confirmActivateUser = async () => {
         title: "User activated successfully",
         type: "success",
       });
+      
+      const isCurrentUser = currentUser.value && currentUser.value.id === selectedUser.value.id;
+      
+      if (isCurrentUser) {
+        try {
+          const profileResponse = await authStore.profile();
+          if (profileResponse.code === 0) {
+            setUser(profileResponse.data);
+            await userStore.getUserList({ roleId: null, force: true });
+          }
+        } catch (profileError) {
+          console.error('Failed to refresh user profile:', profileError);
+        }
+      } else {
+        await userStore.getUserList({ roleId: null, force: true });
+      }
       
       emit("onUpdate");
       activateDialog.value = false;

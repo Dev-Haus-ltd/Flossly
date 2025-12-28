@@ -35,7 +35,7 @@ import {
 import requestIp from "request-ip";
 import { HrDocument } from "../models/hrDocuments";
 import path from "path";
-import fs from "fs";
+import fs from "fs/promises";
 import { createError, setCookie } from "h3";
 import { success, error } from "../utils/response";
 
@@ -57,7 +57,7 @@ export const login = async (event) => {
   const orgs = await UserOrganisation.findAll({
     where: {
       userId: user.id,
-      isActive: true, // Only load active organizations
+      status: "Active", // Only load active organizations
     },
   });
 
@@ -264,7 +264,7 @@ export const signupRequest = async (event) => {
 
     // associate user-org
     await UserOrganisation.create(
-      { userId: user.id, organisationId: org.id },
+      { userId: user.id, organisationId: org.id, status: "Active" },
       { transaction }
     );
     const link = generateVerificationLink();
@@ -296,12 +296,10 @@ export const profile = async (event) => {
       where: {
         userId: loggedUser.userId,
         organisationId: loggedUser.orgId,
-        isActive: true,
       },
     });
-    if (!membership) {
-      return error(403, "Your organisation membership is inactive");
-    }
+    
+    const isCurrentOrgActive = Boolean(membership && membership.status === "Active");
 
     const user = await User.findByPk(loggedUser.userId, {
       attributes: { exclude: ["password"] },
@@ -317,9 +315,6 @@ export const profile = async (event) => {
         {
           model: UserOrganisation,
           as: "userOrganisations",
-          where: {
-            isActive: true,
-          },
           required: false,
           include: [
             {
@@ -341,6 +336,17 @@ export const profile = async (event) => {
 
     const userObj = user.toJSON();
     userObj.currentLoggedInOrgId = loggedUser.orgId;
+    userObj.isCurrentOrgActive = isCurrentOrgActive; 
+    
+    if (!isCurrentOrgActive && userObj.userOrganisations) {
+      const activeOrg = userObj.userOrganisations.find(
+        (uo) => uo.status === "Active"
+      );
+      if (activeOrg) {
+        userObj.suggestedOrgId = activeOrg.organisationId || activeOrg.organisation?.id;
+      }
+    }
+    
     if (userObj.preferences && userObj.preferences.taskTableColumns) {
       userObj.preferences.taskTableColumns = JSON.parse(
         userObj.preferences.taskTableColumns
@@ -360,30 +366,53 @@ export const profile = async (event) => {
 };
 
 export const updateProfile = async (event) => {
-  const body = await readBody(event);
-  const {
-    id,
-    phone,
-    address,
-    dob,
-    gender,
-    nextOfKin,
-    fullName,
-    nextOfKinContact,
-    roleId,
-  } = JSON.parse(body);
   try {
-    const user = await User.findByPk(id);
+    let fields = {};
+    let fileItem = null;
 
-    // Validate fullName if provided
+    try {
+      const form = await readMultipartFormData(event);
+      if (form) {
+        form.forEach((item) => {
+          if (item.type) {
+            if (!fileItem) fileItem = item; 
+          } else {
+            fields[item.name] = item.data.toString();
+          }
+        });
+      }
+    } catch (_) {}
+
+    if (!Object.keys(fields).length && !fileItem) {
+      const body = await readBody(event);
+      fields = typeof body === 'string' ? JSON.parse(body || '{}') : (body || {});
+    }
+
+    const {
+      id,
+      phone,
+      address,
+      dob,
+      gender,
+      nextOfKin,
+      fullName,
+      nextOfKinContact,
+      roleId,
+    } = fields;
+
+    if (!id) {
+      return error(400, 'Missing user id');
+    }
+
+    const user = await User.findByPk(id);
+    if (!user) return error(404, 'User not found');
+
     if (fullName !== undefined) {
-      const trimmedFullName = fullName ? fullName.trim() : "";
+      const trimmedFullName = fullName ? fullName.trim() : '';
       if (trimmedFullName.length === 0) {
-        return error(400, "Full name cannot be empty or contain only spaces");
+        return error(400, 'Full name cannot be empty or contain only spaces');
       }
       user.fullName = trimmedFullName;
-    } else {
-      user.fullName = user.fullName;
     }
 
     user.phone = phone !== undefined ? phone : user.phone;
@@ -391,15 +420,27 @@ export const updateProfile = async (event) => {
     user.dob = dob !== undefined ? dob : user.dob;
     user.gender = gender !== undefined ? gender : user.gender;
     user.nextOfKin = nextOfKin !== undefined ? nextOfKin : user.nextOfKin;
-    user.nextOfKinContact =
-      nextOfKinContact !== undefined ? nextOfKinContact : user.nextOfKinContact;
+    user.nextOfKinContact = nextOfKinContact !== undefined ? nextOfKinContact : user.nextOfKinContact;
     if (roleId !== undefined) {
       user.roleId = roleId;
     }
+
+    if (fileItem) {
+      const uploadDir = path.resolve('public/uploads/avatars');
+      await fs.mkdir(uploadDir, { recursive: true });
+      const originalName = fileItem.filename || 'avatar';
+      const fileExt = path.extname(originalName) || '';
+      const filename = `user-${id}-${Date.now()}${fileExt}`;
+      const filepath = path.join(uploadDir, filename);
+    
+      await fs.writeFile(filepath, fileItem.data);
+      user.photo = `/uploads/avatars/${filename}`;
+    }
+
     await user.save();
-    return success("saved");
+    return success({ message: 'saved', user: user.toJSON() });
   } catch (err) {
-    return error(500, err.message);
+    return error(500, err.message || err);
   }
 };
 
@@ -538,7 +579,7 @@ export const switchOrgnanisation = async (event) => {
       where: {
         userId: user.userId,
         organisationId: orgId,
-        isActive: true, // Only allow switching to active organizations
+        status: "Active", // Only allow switching to active organizations
       },
     });
     if (!record)
@@ -597,7 +638,7 @@ export const verifyEmail = async (event) => {
       const userOrg = await UserOrganisation.findAll({
         where: {
           userId: user.id,
-          isActive: true, // Only use active organizations
+          status: "Active",
         },
       });
       if (userOrg && userOrg.length) {
@@ -678,11 +719,11 @@ export const inviteMembers = async (event) => {
 
       // Separate users into: already active, already invited (pending), and new to this org
       const alreadyActiveUserIds = existingUsersOrgsForCurrentOrg
-        .filter((uo) => uo.isActive === true)
+        .filter((uo) => uo.status === "Active")
         .map((uo) => uo.userId);
 
       const alreadyInvitedUserIds = existingUsersOrgsForCurrentOrg
-        .filter((uo) => uo.isActive === false)
+        .filter((uo) => uo.status !== "Active")
         .map((uo) => uo.userId);
 
       // Check for errors first - if any users are already active or already invited, return error
@@ -716,7 +757,7 @@ export const inviteMembers = async (event) => {
           return {
             userId: userId,
             organisationId: currentOrg,
-            isActive: false, // Set to false for pending invitations
+            status: "Invited",
           };
         });
         await UserOrganisation.bulkCreate(newUserOrgAssociation, {
@@ -822,18 +863,26 @@ const inviteNewUsers = async (
     return {
       userId: u.id,
       organisationId: currentOrg,
-      isActive: false, // Set to false for pending invitations
+      status: "Invited",
     };
   });
   await UserOrganisation.bulkCreate(orgAssociations, { transaction });
-  newUsers.forEach(async (el) => {
-    await sendInvitationEmail({
-      email: el.email,
-      orgTitle: currentOrganisation.name,
-      link: el.inviteToken,
-      manager: currentUser.fullName,
-    });
-  });
+  
+  await Promise.all(
+    newUsers.map(async (el) => {
+      if (!el.inviteToken) {
+        // Fallback: generate token if somehow missing
+        el.inviteToken = uuidv4();
+        await el.save({ transaction });
+      }
+      await sendInvitationEmail({
+        email: el.email,
+        orgTitle: currentOrganisation.name,
+        link: el.inviteToken,
+        manager: currentUser.fullName,
+      });
+    })
+  );
 };
 
 export const acceptInvitation = async (event) => {
@@ -872,7 +921,7 @@ export const acceptInvitation = async (event) => {
     await user.save();
 
     // Activate organization membership
-    userOrg.isActive = true;
+    userOrg.status = "Active";
     await userOrg.save();
 
     // Removed dummy tasks assignment for invited members
@@ -957,7 +1006,7 @@ export const verifyInvitationToken = async (event) => {
       orgId,
       orgName: organisation.name,
       inviterName: inviter?.fullName || "Unknown",
-      status: userOrg.isActive ? "accepted" : "pending",
+      status: userOrg.status === "Active" ? "accepted" : "pending",
       userId,
     });
   } catch (err) {
@@ -999,7 +1048,7 @@ export const acceptOrganisationInvitation = async (event) => {
       where: {
         userId,
         organisationId: orgId,
-        isActive: false, // Only accept pending invitations
+        status: "Invited", // Only accept pending invitations
       },
     });
 
@@ -1008,7 +1057,7 @@ export const acceptOrganisationInvitation = async (event) => {
     }
 
     // Activate the organization membership
-    userOrg.isActive = true;
+    userOrg.status = "Active";
     await userOrg.save();
 
     // If user is not logged in, generate auth token and return user data for auto-login
@@ -1105,7 +1154,7 @@ export const declineOrganisationInvitation = async (event) => {
       `DELETE FROM "dev"."UserOrganisations" 
        WHERE "userId" = :userId 
        AND "organisationId" = :orgId 
-       AND "isActive" = false`,
+       AND "status" = 'Invited'`,
       {
         replacements: { userId, orgId },
       }
@@ -1159,7 +1208,7 @@ export const resendOrganisationInvitation = async (event) => {
       where: {
         userId: loggedUser.userId,
         organisationId: orgId,
-        isActive: true, // Only active members can resend invitations
+        status: "Active", // Only active members can resend invitations
       },
     });
 
@@ -1175,7 +1224,7 @@ export const resendOrganisationInvitation = async (event) => {
       where: {
         userId,
         organisationId: orgId,
-        isActive: false, // Only resend if invitation is pending
+        status: "Invited", // Only resend if invitation is pending
       },
     });
 
@@ -1194,7 +1243,7 @@ export const resendOrganisationInvitation = async (event) => {
       where: {
         userId,
         organisationId: orgId,
-        isActive: false,
+        status: "Invited",
       },
     });
 
@@ -1213,13 +1262,13 @@ export const resendOrganisationInvitation = async (event) => {
     const userOtherOrgs = await UserOrganisation.findAll({
       where: {
         userId: userId,
-        isActive: true, // Check for active organizations
+        status: "Active", // Check for active organizations
       },
     });
 
     const isFirstOrganization = userOtherOrgs.length === 0;
 
-    // The UserOrganisation record already exists with isActive: false
+    // The UserOrganisation record already exists with status: Invited
     const transaction = await DB.transaction();
 
     try {

@@ -110,7 +110,7 @@ const teamStats = computed(() => {
         dob.getDate() === today.getDate() && dob.getMonth() === today.getMonth()
       );
     }).length;
-    approvals += users.filter((user) => user.status === "Invited").length;
+    approvals += users.filter((user) => (user.orgStatus === "Invited") || (user.status === "Invited")).length;
     newcomers += users.filter((user) => {
       if (!user.createdAt) return false;
       const joinedDate = new Date(user.createdAt);

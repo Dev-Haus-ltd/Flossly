@@ -75,6 +75,7 @@
       </div>
     </div>
     <TeamFlossRotaManagementShiftView
+      v-if="selectedView !== 0"
       :users="users"
       :shifts="shifts"
       :rota="rota"
@@ -105,7 +106,7 @@ const props = defineProps({
   users: Array,
 });
 const { isManager } = useUser();
-const emit = defineEmits(["onChangeStatus", "onUpdate", "onAddUser"]);
+const emit = defineEmits(["onChangeStatus", "onUpdate", "onAddUser", "onOpenRoomManagement"]);
 const searchCal = ref("");
 const shiftData = ref({});
 const filterMenu = ref(false);
@@ -137,6 +138,9 @@ const clearFilters = () => {
 
 watch(selectedView, (newVal) => {
   emit("onFilterUsers", newVal);
+  if (newVal === 0) {
+    emit("onOpenRoomManagement");
+  }
 });
 const showShiftDialog = ref(false);
 

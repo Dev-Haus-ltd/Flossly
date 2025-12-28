@@ -252,7 +252,7 @@ const getAccountType = () => {
 
 const getPracticeName = () => {
   const org = user?.userOrganisations?.find(
-    (x) => x.organisationId === user.currentLoggedInOrgId && (x.isActive !== false) // Only active organizations
+    (x) => x.organisationId === user.currentLoggedInOrgId && x.status === "Active" // Only active organizations
   );
   return org?.organisation?.name;
 };
@@ -274,7 +274,33 @@ const updateProfile = () => {
     .updateProfile(user) 
     .then((res) => {
       if (res.code === 0) {
-        localStorage.setItem("user", JSON.stringify(user))
+        // Merge returned user (may include new photo URL)
+        const returnedUser = res?.data?.user;
+        if (returnedUser && typeof returnedUser === 'object') {
+          // Preserve file reference only for preview before refresh; replace with URL if provided
+          if (returnedUser.photo) {
+            user.photo = returnedUser.photo;
+          }
+          // Merge basic fields
+          user.fullName = returnedUser.fullName ?? user.fullName;
+          user.phone = returnedUser.phone ?? user.phone;
+          user.address = returnedUser.address ?? user.address;
+          user.dob = returnedUser.dob ?? user.dob;
+          user.gender = returnedUser.gender ?? user.gender;
+          user.nextOfKin = returnedUser.nextOfKin ?? user.nextOfKin;
+          user.nextOfKinContact = returnedUser.nextOfKinContact ?? user.nextOfKinContact;
+          user.roleId = returnedUser.roleId ?? user.roleId;
+        }
+        // Clean up temporary preview/file fields before persisting
+        try {
+          if (user._photoPreviewUrl && typeof URL !== 'undefined') {
+            try { URL.revokeObjectURL(user._photoPreviewUrl); } catch {}
+          }
+          delete user._photoPreviewUrl;
+          delete user._photoFile;
+        } catch {}
+        // Persist to localStorage to refresh avatar across app
+        try { localStorage.setItem("user", JSON.stringify(user)); } catch {}
         mainStore.setSnackbar({
           title: res?.data?.message || "Profile updated successfully",
           type: "success",
@@ -295,10 +321,22 @@ const updateProfile = () => {
 }
 const handleFileUpload = (event) => {
   const file = event.target.files[0]
-  console.log(file)
-  if (file) {
-    user.photo = file
+  if (!file) return;
+  try {
     
+    if (user._photoPreviewUrl && typeof URL !== 'undefined') {
+      try { URL.revokeObjectURL(user._photoPreviewUrl); } catch {}
+    }
+    
+    const previewUrl = (typeof URL !== 'undefined') ? URL.createObjectURL(file) : null;
+    if (previewUrl) {
+      user._photoPreviewUrl = previewUrl;
+      user.photo = previewUrl; 
+    }
+    
+    user._photoFile = file;
+  } catch (e) {
+    user._photoFile = file;
   }
 }
 </script>

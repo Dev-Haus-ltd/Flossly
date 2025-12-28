@@ -1634,10 +1634,10 @@ const getTaskUsers = (task) => {
   if (users) {
     if (task.taskDetails.roleId) {
       return users.filter(
-        (x) => x.roleId === task.taskDetails.roleId && x.isActive
+        (x) => x.roleId === task.taskDetails.roleId && (x.orgStatus || x.status) === 'Active'
       );
     } else {
-      return users.filter((x) => x.isActive);
+      return users.filter((x) => (x.orgStatus || x.status) === 'Active');
     }
   } else return [];
 };

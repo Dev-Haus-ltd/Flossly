@@ -24,6 +24,7 @@
               :class="{ 'is-placeholder': !data.salaryPerHour }"
               contenteditable="true"
               @focus="onFocus($event)"
+              @input="onInput($event, 'salaryPerHour')"
               @blur="onBlur($event, 'salaryPerHour')"
               @keydown.enter.prevent="onEnter($event, 'salaryPerHour')"
             >
@@ -37,6 +38,7 @@
               :class="{ 'is-placeholder': !data.weeklyHours }"
               contenteditable="true"
               @focus="onFocus($event)"
+              @input="onInput($event, 'weeklyHours')"
               @blur="onBlur($event, 'weeklyHours')"
               @keydown.enter.prevent="onEnter($event, 'weeklyHours')"
             >
@@ -50,6 +52,7 @@
               :class="{ 'is-placeholder': !data.paymentFrequency }"
               contenteditable="true"
               @focus="onFocus($event)"
+              @input="onInput($event, 'paymentFrequency')"
               @blur="onBlur($event, 'paymentFrequency')"
               @keydown.enter.prevent="onEnter($event, 'paymentFrequency')"
             >
@@ -87,7 +90,7 @@
             </v-menu>
           </v-col>
         </v-row>
-        <div class="d-flex justify-end mt-4">
+        <div class="d-flex justify-end mt-4" v-if="panel === 0 && isDirty">
           <v-btn color="primary" @click="savePanel"> Save </v-btn>
         </div>
       </v-expansion-panel-text>
@@ -96,7 +99,7 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { ref, onMounted, nextTick } from "vue";
 import { formatDateDDMMYYYY } from "~/lib/dateFormatter";
 const menu = ref(false);
 
@@ -104,6 +107,49 @@ const props = defineProps({
   data: { type: Object, required: true },
 });
 const emit = defineEmits(["updateField"]);
+
+const isDirty = ref(false);
+const original = ref("{}");
+const initialized = ref(false);
+
+const normalizeData = (obj) => {
+  if (!obj) return {};
+  const normalized = { ...obj };
+  // Normalize empty strings, null, undefined to consistent values for comparison
+  Object.keys(normalized).forEach(key => {
+    if (normalized[key] === null || normalized[key] === undefined || normalized[key] === '') {
+      normalized[key] = '';
+    }
+  });
+  return normalized;
+};
+
+const checkDirty = () => {
+  if (!initialized.value) return;
+  try {
+    const current = normalizeData(props.data);
+    const originalData = JSON.parse(original.value || '{}');
+    const normalizedOriginal = normalizeData(originalData);
+    isDirty.value = JSON.stringify(current) !== JSON.stringify(normalizedOriginal);
+  } catch {
+    isDirty.value = true;
+  }
+};
+
+
+onMounted(async () => {
+  await nextTick();
+  try {
+    const initialData = normalizeData(props.data);
+    original.value = JSON.stringify(initialData);
+    isDirty.value = false;
+    initialized.value = true;
+  } catch {
+    original.value = '{}';
+    isDirty.value = false;
+    initialized.value = true;
+  }
+});
 
 const panel = ref(0);
 const togglePanel = () => {
@@ -117,15 +163,39 @@ const onFocus = (e) => {
   }
 };
 
+const onInput = (e, key) => {
+  if (!initialized.value) return;
+  const typedValue = e.target.innerText.trim();
+  const originalValue = (props.data?.[key] ?? "").toString().trim();
+  
+  if (typedValue === "" || typedValue === "Not specified") {
+    isDirty.value = originalValue !== "";
+  } else {
+    isDirty.value = typedValue !== originalValue;
+  }
+};
+
 // restore placeholder if left empty
 const onBlur = (e, key) => {
-  if (!e.target.innerText.trim()) {
+  const typedValue = e.target.innerText.trim();
+  const originalValue = (props.data?.[key] ?? "").toString().trim();
+  
+  if (!typedValue) {
     e.target.innerText = "Not specified";
+    if (originalValue) {
+      const updated = props.data;
+      updated[key] = "";
+      emit("updateField", { sync: false, updated });
+      checkDirty();
+    }
   } else {
-    const value = e.target.innerText.trim();
-    const updated = props.data;
-    updated[key] = value;
-    emit("updateField", { sync: false, updated });
+    const value = typedValue;
+    if (value !== originalValue) {
+      const updated = props.data;
+      updated[key] = value;
+      emit("updateField", { sync: false, updated });
+      checkDirty();
+    }
   }
 };
 
@@ -135,11 +205,17 @@ const onEnter = (e, key) => {
   const updated = props.data;
   updated[key] = value;
   emit("updateField", { sync: true, updated });
+  try { 
+    const savedData = normalizeData(props.data);
+    original.value = JSON.stringify(savedData); 
+  } catch {}
+  isDirty.value = false;
   e.target.blur(); // exit editing mode
 };
 const onDateChange = (val) => {
   if (val) {
     props.data.paymentStartDate = val;
+    checkDirty();
   }
   menu.value = false;
 };
@@ -147,6 +223,11 @@ const savePanel = () => {
   const updated = props.data;
 
   emit("updateField", { sync: true, updated });
+  try { 
+    const savedData = normalizeData(props.data);
+    original.value = JSON.stringify(savedData); 
+  } catch {}
+  isDirty.value = false;
 };
 </script>
 

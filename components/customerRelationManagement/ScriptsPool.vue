@@ -93,7 +93,7 @@ const practiceNameFromStore = computed(() => {
     const storedUser = JSON.parse(localStorage.getItem("user"));
     if (storedUser?.userOrganisations?.length && storedUser?.currentLoggedInOrgId) {
       // Filter to only active organizations first
-      const activeOrgs = storedUser.userOrganisations.filter(org => org.isActive !== false);
+      const activeOrgs = storedUser.userOrganisations.filter(org => org.status === 'Active');
       // Find the current organization
       const orgWrapper = activeOrgs.find(
         (org) => org.organisationId === storedUser.currentLoggedInOrgId
