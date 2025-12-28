@@ -1231,26 +1231,25 @@ const handleQuickStatus = (statusKey) => {
 .custom-tabs :deep(.v-tab__slider) {
   display: none !important;
 }
-.custom-tabs .v-tab {
+.custom-tabs :deep(.v-tab.v-btn) {
   font-size: 13px;
-  font-weight: 400 !important;
+  font-weight: 400;
   text-transform: none;
-  color: var(--tab-text-color, #1e1e1e) !important;
-  min-height: 34px !important;
-  height: 34px !important;
-  min-width: max-content !important;
+  color: var(--tab-text-color, #1e1e1e);
+  min-height: 34px;
+  height: 34px;
+  min-width: max-content;
   padding: 0 12px;
-  border-radius: 8px !important;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   line-height: 1;
 }
 
-.custom-tabs .v-tab.v-tab--selected {
+.custom-tabs :deep(.v-tab.v-btn.v-tab--selected) {
   font-weight: 600;
   border-radius: 999px;
   border: 2px solid currentColor;
-  color: var(--tab-text-color, #1e1e1e) !important;
 }
 .custom-tabs .v-tabs-slider {
   display: none;

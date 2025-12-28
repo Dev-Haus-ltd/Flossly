@@ -466,8 +466,14 @@ const processFile = async (file) => {
   }
 
   const fileExtension = extractExtension(file.name);
-
   const reader = new FileReader();
+
+  // Normalize column headers to lowercase
+  const normalizeRowKeys = (row) =>
+    Object.keys(row).reduce((acc, key) => {
+      acc[key.trim().toLowerCase()] = row[key];
+      return acc;
+    }, {});
 
   reader.onload = (e) => {
     try {
@@ -493,25 +499,25 @@ const processFile = async (file) => {
         json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
       }
 
-      // Validate required columns
-      const requiredColumns = [
-        "title",
-        "category",
-        "priority",
-        "role",
-      ];
+      // Normalize all rows (case-insensitive headers)
+      json = json.map(normalizeRowKeys);
+
+      // Validate required columns (ONLY title & category)
+      const requiredColumns = ["title", "category"];
       const hasRequiredColumns = requiredColumns.every((col) =>
         Object.keys(json[0] || {}).includes(col)
       );
 
       if (!hasRequiredColumns) {
-        excelError.value = "Invalid file structure — missing required columns: " + requiredColumns.join(", ");
+        excelError.value =
+          "Invalid file structure — missing required columns: " +
+          requiredColumns.join(", ");
         isProcessing.value = false;
         return;
       }
 
-      // Map and validate tasks
-      const formatted = json.map((row, index) => {
+      // Map tasks
+      const formatted = json.map((row) => {
         const task = {
           defaultFrequency: row["frequency"] ?? "",
           description: row["description"] ?? "",
@@ -520,30 +526,35 @@ const processFile = async (file) => {
           originalPriority: row["priority"] ?? "",
           originalRole: row["role"] ?? "",
           originalUser: row["user"] ?? "",
+
           categoryId:
             props.categories?.find(
               (c) =>
                 c.name?.trim()?.toLowerCase() ===
                 row["category"]?.trim()?.toLowerCase()
             )?.id ?? null,
+
           priorityId:
             props.priorities?.find(
               (p) =>
                 p.name?.trim()?.toLowerCase() ===
                 row["priority"]?.trim()?.toLowerCase()
             )?.id ?? null,
+
           roleId:
             props.roles?.find(
               (r) =>
                 r.title?.trim()?.toLowerCase() ===
                 row["role"]?.trim()?.toLowerCase()
             )?.id ?? null,
+
           userId:
             props.users?.find(
               (u) =>
                 u.fullName?.trim()?.toLowerCase() ===
                 row["user"]?.trim()?.toLowerCase()
             )?.id ?? null,
+
           errors: {},
           hasErrors: false,
         };
@@ -551,10 +562,10 @@ const processFile = async (file) => {
         return task;
       });
 
-      // Store all parsed tasks first
+      // Store parsed tasks
       parsedTasks.value = formatted;
-      
-      // Then validate each task (needed for duplicate detection)
+
+      // Validate rows (duplicates, empty title/category, etc.)
       parsedTasks.value.forEach((task, index) => {
         validateTaskRow(task, index);
       });
@@ -577,12 +588,12 @@ const processFile = async (file) => {
 // Parse CSV manually
 // Validate individual task row
 const validateTaskRow = (task, index) => {
-  // Reset without replacing the reference
+  // Reset errors without breaking reactivity
   if (!task.errors) task.errors = {};
   Object.keys(task.errors).forEach((k) => delete task.errors[k]);
   task.hasErrors = false;
 
-  // Required text fields
+  // --- Title (REQUIRED) ---
   if (!task.title?.trim()) {
     task.errors.title = "Title is required";
     task.hasErrors = true;
@@ -591,91 +602,91 @@ const validateTaskRow = (task, index) => {
     task.hasErrors = true;
   }
 
-  // Frequency is optional - no validation needed
-
-  // --- Category Validation ---
+  // --- Category (REQUIRED) ---
   if (!task.categoryId) {
-    // If user hasn’t selected yet but has originalCategory value
     if (!task.originalCategory?.trim()) {
-      task.errors.category = "Category is missing. Please select from dropdown.";
+      task.errors.category = "Category is required. Please select from dropdown.";
     } else {
       const matched = props.categories?.find(
-        c => c.name?.trim()?.toLowerCase() === task.originalCategory.trim().toLowerCase()
+        (c) =>
+          c.name?.trim()?.toLowerCase() ===
+          task.originalCategory.trim().toLowerCase()
       );
       if (!matched) {
         task.errors.category = `Category "${task.originalCategory}" is invalid. Please select from dropdown.`;
       }
     }
-    if (task.errors.category) task.hasErrors = true;
+    task.hasErrors = true;
   } else {
     delete task.errors.category;
   }
 
-  // --- Priority Validation ---
-  if (!task.priorityId) {
-    if (!task.originalPriority?.trim()) {
-      task.errors.priority = "Priority is missing. Please select from dropdown.";
-    } else {
-      const matched = props.priorities?.find(
-        p => p.name?.trim()?.toLowerCase() === task.originalPriority.trim().toLowerCase()
-      );
-      if (!matched) {
-        task.errors.priority = `Priority "${task.originalPriority}" is invalid. Please select from dropdown.`;
-      }
+  // --- Priority (OPTIONAL) ---
+  if (task.originalPriority?.trim() && !task.priorityId) {
+    const matched = props.priorities?.find(
+      (p) =>
+        p.name?.trim()?.toLowerCase() ===
+        task.originalPriority.trim().toLowerCase()
+    );
+    if (!matched) {
+      task.errors.priority = `Priority "${task.originalPriority}" is invalid. Please select from dropdown.`;
+      task.hasErrors = true;
     }
-    if (task.errors.priority) task.hasErrors = true;
   } else {
     delete task.errors.priority;
   }
 
-  // --- Role Validation ---
-  if (!task.roleId) {
-    if (!task.originalRole?.trim()) {
-      task.errors.role = "Role is missing. Please select from dropdown.";
-    } else {
-      const matched = props.roles?.find(
-        r => r.title?.trim()?.toLowerCase() === task.originalRole.trim().toLowerCase()
-      );
-      if (!matched) {
-        task.errors.role = `Role "${task.originalRole}" is invalid. Please select from dropdown.`;
-      }
+  // --- Role (OPTIONAL) ---
+  if (task.originalRole?.trim() && !task.roleId) {
+    const matched = props.roles?.find(
+      (r) =>
+        r.title?.trim()?.toLowerCase() ===
+        task.originalRole.trim().toLowerCase()
+    );
+    if (!matched) {
+      task.errors.role = `Role "${task.originalRole}" is invalid. Please select from dropdown.`;
+      task.hasErrors = true;
     }
-    if (task.errors.role) task.hasErrors = true;
   } else {
     delete task.errors.role;
   }
 
-  // --- User Validation (optional) ---
-  // User is now optional, but if provided, validate it exists
+  // --- User (OPTIONAL) ---
   if (task.originalUser?.trim() && !task.userId) {
     const matched = props.users?.find(
-      u => u.fullName?.trim()?.toLowerCase() === task.originalUser.trim().toLowerCase()
+      (u) =>
+        u.fullName?.trim()?.toLowerCase() ===
+        task.originalUser.trim().toLowerCase()
     );
     if (!matched) {
       task.errors.user = `User "${task.originalUser}" is invalid. Please select from dropdown.`;
       task.hasErrors = true;
     }
-  } else if (task.userId) {
+  } else {
     delete task.errors.user;
   }
 
   // --- Duplicate Detection ---
-  // Only check duplicates if both title and userId are provided
+  // Only if title + user are present
   const titleKey = task.title?.trim()?.toLowerCase();
   const userKey = task.userId;
+
   if (titleKey && userKey) {
     const duplicates = parsedTasks.value.filter(
-      (t, i) => i !== index &&
+      (t, i) =>
+        i !== index &&
         t.title?.trim()?.toLowerCase() === titleKey &&
         t.userId === userKey
     );
 
     if (duplicates.length > 0) {
-      task.errors.title = "Duplicate task: Same title and user combination already exists";
+      task.errors.title =
+        "Duplicate task: Same title and user combination already exists";
       task.hasErrors = true;
     }
   }
 };
+
 
 // Validate specific task on edit
 const validateTask = (index) => {
