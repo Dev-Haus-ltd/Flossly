@@ -249,7 +249,18 @@
 import { TasksBulkChecklistUploadDialog } from '#components'
 import { useDisplay } from "vuetify";
 import { nextTick } from "vue";
-import { getContrastingTextColor } from "~/lib/misc";
+import {
+  applyCategoryOrder as applyCategoryOrderUtil,
+  autoUnhideCategoryIds,
+  canHideCategory,
+  getContrastingTextColor,
+  getTaskCategoryIcon,
+  isDefaultNamedCategory,
+  isMandatoryCategory,
+  mergeCategoriesWithStats,
+  sortByCustomStatus,
+  syncCategoryOrder as syncCategoryOrderUtil,
+} from "~/lib/misc";
 import draggable from "vuedraggable";
 const bus = useBus();
 // Stores
@@ -314,14 +325,7 @@ const persistCategoryOrder = () => {
 };
 
 const applyCategoryOrder = (list) => {
-  const order = categoryOrder.value || [];
-  if (!order.length) return list;
-  const map = new Map(list.map((cat) => [cat.categoryId, cat]));
-  const ordered = order
-    .map((id) => map.get(id))
-    .filter(Boolean);
-  const missing = list.filter((cat) => !order.includes(cat.categoryId));
-  return [...ordered, ...missing];
+  return applyCategoryOrderUtil(list, categoryOrder.value || []);
 };
 
 const orderedTaskStats = computed(() =>
@@ -329,15 +333,14 @@ const orderedTaskStats = computed(() =>
 );
 
 const syncCategoryOrder = (list) => {
-  const ids = (list || []).map((cat) => cat.categoryId);
-  if (!ids.length) {
-    categoryOrder.value = [];
-    return;
+  const nextOrder = syncCategoryOrderUtil(categoryOrder.value || [], list || []);
+  const isSame =
+    nextOrder.length === categoryOrder.value.length &&
+    nextOrder.every((id, idx) => id === categoryOrder.value[idx]);
+  if (!isSame) {
+    categoryOrder.value = nextOrder;
+    persistCategoryOrder();
   }
-  const filtered = categoryOrder.value.filter((id) => ids.includes(id));
-  const missing = ids.filter((id) => !filtered.includes(id));
-  categoryOrder.value = [...filtered, ...missing];
-  persistCategoryOrder();
 };
 
 const updateCategoryOrder = (newOrder = []) => {
@@ -370,35 +373,18 @@ const persistHiddenCategories = () => {
   );
 };
 
-const defaultCategoryNames = [
-  "Staff Management",
-  "Marketing",
-  "Finance",
-  "HR",
-];
-
-const isMandatoryCategory = (cat) => !!(cat?.isDefault);
-const getCategoryTaskCount = (cat) => {
-  const count = Number(
-    cat?.taskCount ?? cat?.total ?? cat?.count ?? cat?.taskTotal ?? 0
-  );
-  return Number.isNaN(count) ? 0 : count;
+const autoUnhideCategories = (list = []) => {
+  const nextHidden = autoUnhideCategoryIds(hiddenCategoryIds.value, list || []);
+  const isSame =
+    nextHidden.length === hiddenCategoryIds.value.length &&
+    nextHidden.every((id, idx) => id === hiddenCategoryIds.value[idx]);
+  if (!isSame) {
+    hiddenCategoryIds.value = nextHidden;
+    persistHiddenCategories();
+  }
 };
-
-const isDefaultNamedCategory = (cat) =>
-  defaultCategoryNames.includes((cat?.categoryName || cat?.name || "").trim());
 
 const canEditCategory = () => true;
-
-const canHideCategory = (cat) => {
-  if (!cat) return false;
-  const name = (cat.categoryName || cat.name || "").trim().toLowerCase();
-  const isAllowedDefault = defaultCategoryNames.some(
-    (n) => n.toLowerCase() === name
-  );
-  if (!isAllowedDefault) return false;
-  return getCategoryTaskCount(cat) === 0;
-};
 
 const ensureCurrentTabVisible = () => {
   if (!orderedTaskStats.value.length) {
@@ -413,42 +399,9 @@ const ensureCurrentTabVisible = () => {
   }
 };
 
-const mergeCategoriesWithStats = (stats = []) => {
-  const map = new Map();
-
-  (categories.value || []).forEach((cat) => {
-    const id = cat.id ?? cat.categoryId;
-    if (id === undefined || id === null) return;
-    map.set(String(id), {
-      categoryId: id,
-      categoryName: cat.name || cat.categoryName,
-      taskCount: 0,
-      isMandatory: cat.isMandatory ?? cat.isDefault ?? false,
-      color: cat.color,
-      parentId: cat.parentId ?? null,
-      description: cat.description ?? "",
-    });
-  });
-
-  (stats || []).forEach((stat) => {
-    const id = stat.categoryId ?? stat.id;
-    if (id === undefined || id === null) return;
-    const key = String(id);
-    const existing = map.get(key) || {};
-    map.set(key, {
-      ...existing,
-      ...stat,
-      categoryId: id,
-      categoryName: stat.categoryName || existing.categoryName,
-      isMandatory: stat.isMandatory ?? existing.isMandatory ?? false,
-    });
-  });
-
-  return Array.from(map.values());
-};
-
 const setTaskStats = (stats = []) => {
-  const merged = mergeCategoriesWithStats(stats);
+  const merged = mergeCategoriesWithStats(categories.value || [], stats);
+  autoUnhideCategories(merged);
   const filtered = merged.filter((cat) => {
     const count = Number(
       cat.taskCount ?? cat.total ?? cat.count ?? cat.taskTotal ?? 0
@@ -569,20 +522,7 @@ const getTabStyle = (cat) => {
     "--tab-text-color": textColor,
   };
 };
-const getIcon = (categoryName) => {
-  switch (categoryName) {
-    case "Marketing":
-      return "https://cdn.lordicon.com/excswhey.json";
-    case "Staff Management":
-      return "https://cdn.lordicon.com/kphwxuxr.json";
-    case "Finance":
-      return "https://cdn.lordicon.com/tzynxkwl.json";
-    case "Compliance":
-      return "https://cdn.lordicon.com/yraqammt.json";
-    default:
-      return "https://cdn.lordicon.com/qlpudrww.json"; // fallback
-  }
-};
+const getIcon = (categoryName) => getTaskCategoryIcon(categoryName);
 const getUsers = () => {
   userStore.getUserList({ roleId: null }).then((res) => {
     if (res.code === 0) userList.value = res.data;
@@ -767,24 +707,8 @@ const getTaskPriorities = () => {
 };
 const updateTasksList = () => {
   selectedRowItems.value = [];
-  getMyTasks(currentTab.value);
+  getMyStats();
 };
-function sortByCustomStatus(arr) {
-  const order = ["upcoming", "todo", "progress", "cancelled", "completed"];
-  const priority = Object.fromEntries(
-    order.map((status, index) => [status, index])
-  );
-
-  return [...arr].sort((a, b) => {
-    // Archived tasks always go last
-    if (a.status?.toLowerCase() === "archived") return 1;
-    if (b.status?.toLowerCase() === "archived") return -1;
-    
-    const aPriority = priority[a.status?.toLowerCase()] ?? Infinity;
-    const bPriority = priority[b.status?.toLowerCase()] ?? Infinity;
-    return aPriority - bPriority;
-  });
-}
 const getMyTasks = (categoryId) => {
   if (categoryId !== undefined && categoryId !== null) {
     currentTab.value = categoryId;
