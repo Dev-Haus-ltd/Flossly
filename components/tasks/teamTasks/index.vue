@@ -1486,11 +1486,11 @@ const handleComplete = async () => {
   width: 18px;
   height: 18px;
 }
-.category-tab:hover .category-menu-btn,
+.custom-tab-item:hover .category-menu-btn,
 .category-menu-btn:focus-visible {
   opacity: 1;
 }
-.category-tab.v-tab--selected .category-menu-btn {
+.custom-tab-item.custom-tab-active .category-menu-btn {
   opacity: 1;
 }
 .category-tab .v-icon {
