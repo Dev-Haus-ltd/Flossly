@@ -131,7 +131,7 @@
 
 <script setup>
 import PatientsIndex from '@/components/patients/index.vue'
-import PatientJourney from '@/components/patients/PatientJourney.vue'
+import PatientJourney from '@/components/patients/patientJourney.vue'
 import PatientForms from '@/components/patients/PatientForms.vue'
 import { useDiaryStore } from '@/stores/diary'
 import { useMainStore } from '@/stores/index'

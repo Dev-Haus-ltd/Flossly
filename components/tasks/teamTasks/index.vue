@@ -27,75 +27,102 @@
           </v-col>
         </v-row>
       </div>
-      <div class="tabs-bar mt-5">
-        <v-tabs
-          v-model="currentTab"
-          class="custom-tabs tabs-scroll"
-          slider-color="primary"
-          show-arrows
-          prev-icon="mdi-chevron-left"
-          next-icon="mdi-chevron-right"
-        >
-          <draggable
-            tag="div"
-            class="d-flex tabs-draggable"
-            :model-value="orderedTaskStats"
-            item-key="categoryId"
-            direction="horizontal"
-            handle=".tab-inner"
-            @update:model-value="updateCategoryOrder"
+      <div class="mt-5">
+        <div class="tabs-bar fill-color">
+          <!-- Custom scroll navigation buttons -->
+          <v-btn
+            v-show="showScrollButtons && canScrollLeft"
+            class="scroll-nav-btn scroll-nav-left"
+            icon
+            variant="flat"
+            size="small"
+            color="white"
+            @click="scrollTabs('left')"
           >
-            <template #item="{ element: cat }">
-              <v-tab
-                :value="cat.categoryId"
-                :key="cat.categoryId"
-                class="tab-text category-tab"
-                :style="getTabStyle(cat)"
-                @click="updateTasksList"
+            <v-icon color="#1e1e1e">mdi-chevron-left</v-icon>
+          </v-btn>
+
+          <!-- Custom scrollable tabs container (no Vuetify scrolling) -->
+          <div class="tabs-scroll-wrapper" ref="tabsScrollContainer">
+            <div class="custom-tabs-container">
+              <draggable
+                tag="div"
+                class="tabs-draggable-list"
+                :model-value="orderedTaskStats"
+                item-key="categoryId"
+                direction="horizontal"
+                handle=".tab-inner"
+                @update:model-value="updateCategoryOrder"
               >
-                <div class="d-flex align-center justify-center tab-inner">
-                  <span class="tab-label">{{ cat.categoryName }}</span>
-                  <v-menu offset-y>
-                    <template #activator="{ props }">
-                      <v-btn
-                        v-bind="props"
-                        icon
-                        variant="text"
-                        size="x-small"
-                        class="ml-1 category-menu-btn"
-                        @click.stop
-                      >
-                        <v-icon size="16">mdi-dots-horizontal</v-icon>
-                      </v-btn>
-                    </template>
-                    <v-list density="compact">
-                      <v-list-item
-                        v-if="canHideCategory(cat)"
-                        @click.stop="hideCategory(cat)"
-                      >
-                        <v-list-item-title>Hide</v-list-item-title>
-                      </v-list-item>
-                      <v-list-item
-                        v-if="canEditCategory(cat)"
-                        @click.stop="startEditCategory(cat)"
-                      >
-                        <v-list-item-title>Edit</v-list-item-title>
-                      </v-list-item>
-                    </v-list>
-                  </v-menu>
-                </div>
-              </v-tab>
-            </template>
-          </draggable>
-        </v-tabs>
-        <v-btn
-          class="add-tab-btn"
-          icon
-          variant="text"
-          @click.stop.prevent="addNewCategoryDialog"
-        >
-          <v-icon size="20">mdi-plus</v-icon>
-        </v-btn>
+                <template #item="{ element: cat }">
+                  <div
+                    :key="cat.categoryId"
+                    class="custom-tab-item"
+                    :class="{ 'custom-tab-active': currentTab === cat.categoryId }"
+                    :style="getTabStyle(cat)"
+                    :ref="(el) => setTabRef(el, cat.categoryId)"
+                    @click="handleTabClick(cat.categoryId)"
+                  >
+                    <div class="d-flex align-center justify-center tab-inner">
+                      <span class="tab-label">{{ cat.categoryName }}</span>
+                      <v-menu offset-y>
+                        <template #activator="{ props }">
+                          <v-btn
+                            v-bind="props"
+                            icon
+                            variant="text"
+                            size="x-small"
+                            class="ml-1 category-menu-btn"
+                            @click.stop
+                          >
+                            <v-icon size="16">mdi-dots-horizontal</v-icon>
+                          </v-btn>
+                        </template>
+                        <v-list density="compact">
+                          <v-list-item
+                            v-if="canHideCategory(cat)"
+                            @click.stop="hideCategory(cat)"
+                          >
+                            <v-list-item-title>Hide</v-list-item-title>
+                          </v-list-item>
+                          <v-list-item
+                            v-if="canEditCategory(cat)"
+                            @click.stop="startEditCategory(cat)"
+                          >
+                            <v-list-item-title>Edit</v-list-item-title>
+                          </v-list-item>
+                        </v-list>
+                      </v-menu>
+                    </div>
+                  </div>
+                </template>
+              </draggable>
+            </div>
+          </div>
+
+          <!-- Custom scroll navigation buttons -->
+          <v-btn
+            v-show="showScrollButtons && canScrollRight"
+            class="scroll-nav-btn scroll-nav-right"
+            icon
+            variant="flat"
+            size="small"
+            color="white"
+            @click="scrollTabs('right')"
+          >
+            <v-icon color="#1e1e1e">mdi-chevron-right</v-icon>
+          </v-btn>
+
+          <v-btn
+            class="add-tab-btn"
+            icon
+            variant="text"
+            @click.stop.prevent="addNewCategoryDialog"
+          >
+            <v-icon size="20">mdi-plus</v-icon>
+          </v-btn>
+
+        </div>
       </div>
       <v-tabs-window v-model="currentTab">
         <v-tabs-window-item :value="currentTab">
@@ -276,6 +303,32 @@ const categoryToEdit = ref(null);
 const hiddenCategoryStorageKey = "teamTasksHiddenCategoryIds";
 const categoryOrder = ref([]);
 const categoryOrderStorageKey = "teamTasksCategoryOrder";
+const defaultCategoryNames = [
+  "Staff Management",
+  "Marketing",
+  "Finance",
+  "HR",
+];
+
+// Custom scrolling functionality
+const tabsScrollContainer = ref(null);
+const tabRefs = ref({});
+const canScrollLeft = ref(false);
+const canScrollRight = ref(false);
+const showScrollButtons = ref(false);
+const isScrolling = ref(false); // Prevent infinite loops
+
+const setTabRef = (el, categoryId) => {
+  if (el) {
+    tabRefs.value[categoryId] = el;
+  }
+};
+
+// Handle tab click
+const handleTabClick = (categoryId) => {
+  currentTab.value = categoryId;
+};
+
 const visibleTaskStats = computed(() =>
   (taskStats.value || [])
     .filter((cat) => !hiddenCategoryIds.value.includes(cat.categoryId))
@@ -396,6 +449,91 @@ const resetCategoryEditing = () => {
   categoryToEdit.value = null;
 };
 
+// Custom scroll methods - completely independent of Vuetify
+const updateScrollButtons = () => {
+  if (!tabsScrollContainer.value || isScrolling.value) {
+    return;
+  }
+
+  const container = tabsScrollContainer.value;
+  const scrollLeft = container.scrollLeft;
+  const scrollWidth = container.scrollWidth;
+  const clientWidth = container.clientWidth;
+
+  // Check if content overflows
+  const hasOverflow = scrollWidth > clientWidth + 1; // +1 for rounding
+  showScrollButtons.value = hasOverflow;
+
+  // Update individual button states
+  canScrollLeft.value = hasOverflow && scrollLeft > 5;
+  canScrollRight.value = hasOverflow && scrollLeft < scrollWidth - clientWidth - 5;
+};
+
+const scrollTabs = (direction) => {
+  if (!tabsScrollContainer.value) return;
+
+  const container = tabsScrollContainer.value;
+  const scrollAmount = 200; // Pixels to scroll
+
+  const targetScroll = direction === 'left'
+    ? container.scrollLeft - scrollAmount
+    : container.scrollLeft + scrollAmount;
+
+  // Set scrolling flag to prevent event loops
+  isScrolling.value = true;
+
+  container.scrollTo({
+    left: targetScroll,
+    behavior: 'smooth'
+  });
+
+  // Update button states after scroll completes
+  setTimeout(() => {
+    isScrolling.value = false;
+    updateScrollButtons();
+  }, 350);
+};
+
+const scrollToActiveTab = () => {
+  if (!currentTab.value || !tabsScrollContainer.value || isScrolling.value) return;
+
+  const activeTabEl = tabRefs.value[currentTab.value];
+  if (!activeTabEl) return;
+
+  const container = tabsScrollContainer.value;
+  const tabElement = activeTabEl;
+
+  const containerRect = container.getBoundingClientRect();
+  const tabRect = tabElement.getBoundingClientRect();
+
+  // Calculate if tab is fully visible
+  const isFullyVisible =
+    tabRect.left >= containerRect.left + 10 &&
+    tabRect.right <= containerRect.right - 10;
+
+  if (!isFullyVisible) {
+    // Calculate scroll position to center the tab
+    const tabOffsetLeft = tabElement.offsetLeft;
+    const tabWidth = tabElement.offsetWidth;
+    const containerWidth = container.clientWidth;
+
+    const targetScroll = tabOffsetLeft - (containerWidth / 2) + (tabWidth / 2);
+
+    // Set scrolling flag
+    isScrolling.value = true;
+
+    container.scrollTo({
+      left: Math.max(0, targetScroll),
+      behavior: 'smooth'
+    });
+
+    setTimeout(() => {
+      isScrolling.value = false;
+      updateScrollButtons();
+    }, 350);
+  }
+};
+
 onMounted(async () => {
   loadHiddenCategories();
   loadCategoryOrder();
@@ -411,7 +549,66 @@ onMounted(async () => {
   getTaskStatuses();
   getUsers();
   mainStore.getCustomColumns();
+
+  // Initialize custom scroll functionality
+  nextTick(() => {
+    if (tabsScrollContainer.value) {
+      console.log('🎯 Initializing custom scroll container (Team Tasks)');
+
+      const container = tabsScrollContainer.value;
+
+      // Add scroll event listener with debouncing
+      let scrollTimeout;
+      const handleScroll = () => {
+        if (scrollTimeout) clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+          if (!isScrolling.value) {
+            updateScrollButtons();
+          }
+        }, 100);
+      };
+
+      container.addEventListener('scroll', handleScroll, { passive: true });
+
+      // Add resize observer to update buttons when container size changes
+      const resizeObserver = new ResizeObserver(() => {
+        if (!isScrolling.value) {
+          updateScrollButtons();
+        }
+      });
+      resizeObserver.observe(container);
+
+      // Initial update after DOM is fully rendered
+      setTimeout(() => {
+        updateScrollButtons();
+      }, 300);
+    }
+  });
 });
+
+// Watch for tab changes and update scroll
+watch(currentTab, (newVal) => {
+  getTeamTasks(newVal);
+  // Scroll selected tab into view after a delay to account for width changes
+  // Only if not already scrolling to prevent loops
+  if (!isScrolling.value) {
+    nextTick(() => {
+      setTimeout(() => {
+        scrollToActiveTab();
+      }, 150);
+    });
+  }
+});
+
+// Update scroll button visibility when tabs change
+watch(orderedTaskStats, () => {
+  if (!isScrolling.value) {
+    nextTick(() => {
+      setTimeout(() => updateScrollButtons(), 200);
+    });
+  }
+}, { deep: true });
+
 const updateTasks = () => {
   getTeamStats();
 };
@@ -1072,66 +1269,122 @@ const handleComplete = async () => {
   font-size: 13px;
   color: #737373;
 }
-.custom-tabs {
-  border-bottom: 1px solid #dbdbdb;
-}
+
 .tabs-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  border-radius: 8px;
+  border: 1px solid #F3F4F6;
+  position: relative;
+  padding: 6px;
 }
-.tabs-scroll {
+
+.tabs-scroll-wrapper {
   flex: 1;
   min-width: 0;
-}
-.tabs-draggable {
-  gap: 10px;
-  padding: 0 6px;
-}
-.add-tab-btn {
-  width: 38px;
-  height: 38px;
-  min-width: 38px;
-  border-radius: 10px;
-}
-.custom-tabs :deep(.v-slide-group__container) {
   overflow-x: auto;
+  overflow-y: hidden;
+  position: relative;
+  /* Hide scrollbar but keep functionality */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
 }
-.custom-tabs :deep(.v-slide-group__content) {
-  gap: 10px;
-  padding: 0;
+
+.tabs-scroll-wrapper::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+.custom-tabs-container {
+  display: flex;
   align-items: center;
+  min-width: min-content;
+  height: 100%;
 }
-.custom-tabs :deep(.v-btn__overlay),
-.custom-tabs :deep(.v-btn__underlay) {
-  display: none;
+
+.tabs-draggable-list {
+  display: flex;
+  gap: 10px;
+  padding: 6px;
+  align-items: center;
+  flex-wrap: nowrap;
 }
-.custom-tabs :deep(.v-tab__slider) {
-  display: none !important;
-}
-.custom-tabs .v-tab {
+
+.custom-tab-item {
   font-size: 13px;
   font-weight: 400 !important;
   text-transform: none;
-  color: var(--tab-text-color, #1e1e1e) !important;
-  min-height: 34px !important;
-  height: 34px !important;
-  min-width: max-content !important;
+  color: var(--tab-text-color, #1e1e1e);
+  min-height: 34px;
+  height: 34px;
+  min-width: max-content;
   padding: 0 12px;
   border-radius: 8px !important;
   display: inline-flex;
   align-items: center;
   line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  flex-shrink: 0;
 }
 
-.custom-tabs .v-tab.v-tab--selected {
+.custom-tab-item:hover {
+  opacity: 0.8;
+}
+
+.custom-tab-item.custom-tab-active {
   font-weight: 600;
   border-radius: 999px;
   border: 2px solid currentColor;
-  color: var(--tab-text-color, #1e1e1e) !important;
 }
-.custom-tabs .v-tabs-slider {
-  display: none;
+
+.scroll-nav-btn {
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  border-radius: 6px !important;
+  background-color: #ffffff !important;
+  border: 1px solid #e0e0e0 !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.scroll-nav-btn :deep(.v-btn__overlay),
+.scroll-nav-btn :deep(.v-btn__underlay) {
+  display: none !important;
+}
+
+.scroll-nav-btn :deep(.v-icon) {
+  color: #1e1e1e !important;
+  opacity: 1 !important;
+}
+
+.scroll-nav-btn:hover {
+  background-color: #f5f5f5 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+  border-color: #d0d0d0 !important;
+}
+
+.scroll-nav-left {
+  margin-right: 4px;
+  z-index: 10;
+}
+
+.scroll-nav-right {
+  margin-left: 4px;
+  z-index: 10;
+}
+
+.add-tab-btn {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  border-radius: 10px;
+  flex-shrink: 0;
 }
 .action-bar {
   position: fixed;
@@ -1190,14 +1443,17 @@ const handleComplete = async () => {
   width: 18px;
   height: 18px;
 }
-.category-tab:hover .category-menu-btn,
+.custom-tab-item:hover .category-menu-btn,
 .category-menu-btn:focus-visible {
   opacity: 1;
 }
-.category-tab.v-tab--selected .category-menu-btn {
+.custom-tab-item.custom-tab-active .category-menu-btn {
   opacity: 1;
 }
 .category-tab .v-icon {
   color: var(--tab-text-color, #1e1e1e) !important;
+}
+.fill-color {
+  background-color: #F3F4F6;
 }
 </style>
