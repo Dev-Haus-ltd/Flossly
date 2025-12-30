@@ -31,6 +31,7 @@ import {
   sendTaskUnassignmentEmail,
   sendTaskDueReminderEmail,
   sendTaskCommentNotificationEmail,
+  sendTaskDetailsEmail,
 } from "../utils/emailNotifications";
 
 const PRIVILEGED_ROLE_IDS = [1, 8];
@@ -3036,3 +3037,76 @@ export const deleteCustomColumn = async (event) => {
     return error(500, err.message);
   }
 };
+
+export const sendTaskDetailsByEmail = async (event) => {
+
+  try {
+    let body = await readBody(event);
+
+    // ✅ Normalize body (string → object)
+    if (typeof body === "string") {
+      body = JSON.parse(body);
+    }
+
+    const { userTaskId, email } = body || {};
+
+    if (!userTaskId || !email) {
+      throw createError({
+        statusCode: 400,
+        message: "userTaskId and email are required",
+      });
+    }
+
+    // 1️⃣ Assert existence
+    const exists = await UserTask.findByPk(userTaskId);
+    if (!exists) {
+      throw createError({ statusCode: 404, message: "Task not found" });
+    }
+
+    // 2️⃣ Load aggregate safely
+    const task = await UserTask.findByPk(userTaskId, {
+      include: [
+        { model: User, as: "assignedUser", attributes: ["fullName", "email"] },
+        {
+          model: Task,
+          as: "taskDetails",
+          required: false,
+          include: [
+            {
+              model: TaskCategory,
+              as: "category",
+              required: false,
+              where: { isDeleted: false },
+              attributes: ["name"],
+            },
+          ],
+        },
+        { model: OrganisationStatus, as: "status", attributes: ["name"] },
+        { model: OrganisationPriority, as: "priority", attributes: ["name"] },
+        { model: UserTaskChecklist, as: "userTaskChecklist", separate: true },
+        { model: UserTaskAttachment, as: "attachments", separate: true },
+      ],
+    });
+
+    await sendTaskDetailsEmail({
+      email,
+      taskTitle: task.taskDetails?.title,
+      description: task.taskDetails?.description,
+      category: task.taskDetails?.category?.name,
+      priority: task.priority?.name,
+      status: task.status?.name,
+      assignedUser: task.assignedUser?.fullName,
+      dueDate: task.dueDate
+        ? new Date(task.dueDate).toLocaleDateString()
+        : null,
+      checklist: task.userTaskChecklist || [],
+      attachments: task.attachments || [],
+    });
+
+    return success({ message: "Task details email sent successfully" });
+  } catch (err) {
+    return error(500, err.message || err);
+  }
+};
+
+

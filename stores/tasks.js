@@ -460,6 +460,21 @@ export const useTaskStore = defineStore("taskStore", {
           });
       });
     },
+    sendTaskDetailsByEmail(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        taskService
+          .sendTaskDetailsByEmail(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
     unAssignBulkTasks(data) {
       return new Promise((resolve, reject) => {
         this.isLoading = true;

@@ -39,6 +39,7 @@ import {
   listCustomColumns,
   updateCustomColumn,
   deleteCustomColumn,
+  sendTaskDetailsByEmail,
 } from "~/server/controllers/task";
 
 export default defineEventHandler(async (event) => {
@@ -124,6 +125,8 @@ export default defineEventHandler(async (event) => {
       return await updateCustomColumn(event);
     case "deleteCustomColumn":
       return await deleteCustomColumn(event);
+    case "sendTaskDetailsByEmail":
+      return await sendTaskDetailsByEmail(event);
     default:
       return { code: 0, error: "Not found" };
   }

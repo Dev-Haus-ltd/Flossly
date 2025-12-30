@@ -571,11 +571,13 @@
               <!-- avatar assignedUser -->
               <template v-else-if="col.key === 'assignedUser.fullName'">
                 <DataTableColumnsAssignedUsers
+                  :user-task-id="item.id"
                   :assigned-users="item.assignedUsers || [user]"
                   :all-users="getTaskUsers(item)"
                   :current-user="user"
                   @assign="assignTask(item, $event)"
                   @unassign="unAssign(item, $event)"
+                  @add-staff="addStaffDrawer = true"
                 />
               </template>
               <!-- Custom column template -->
@@ -954,6 +956,11 @@
       @confirm="confirmDeleteCustomColumn"
       @cancel="cancelDeleteCustomColumn"
     />
+    <TeamFlossSideBarAddNewstaff
+      v-model="addStaffDrawer"
+      :rolesList="rolesList"
+      @success="onStaffAdded"
+    />
 
     <!-- Add Task Panel - Only render after page loads -->
     <ClientOnly>
@@ -1270,6 +1277,7 @@ const drawerOpen = ref(false);
 const openedPanels = ref([0]);
 const dialogOpen = ref(false);
 const taskPoolDialog = ref(false);
+const addStaffDrawer = ref(false);
 const isAllSelected = ref(false);
 const selectedStatusForNewTask = ref(null);
 const selectedCategoryForNewTask = ref(null);
@@ -1778,6 +1786,12 @@ const assignTask = async (task, user) => {
     });
   }
 };
+
+const onStaffAdded = () => {
+  addStaffDrawer.value = false;
+  refreshTasks(); // or emit("onUpdate"), whatever you already use
+};
+
 const addHeaderInSelected = async (column) => {
   if (!selectedHeaders.value.find((x) => x.key === column.key)) {
     selectedHeaders.value.push(column);

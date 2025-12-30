@@ -47,23 +47,23 @@
       >
         <template v-if="hoveredItem && hoveredItem !== 'plus'">
           <div class="d-flex flex-wrap mb-3">
-  <v-chip
-    v-for="(a, index) in assignedUsers"
-    :key="index"
-    color="#1E1E1E"
-    class="me-1 mb-1 py-5 d-flex align-center rounded-lg"
-    style=" font-weight: 500; font-size: 14px; background-color: #d0e1e2;"
-    label
-      closable
-    @click:close="emit('unassign', a)"
-  >
-    <CommonAvatar :user="a" class="me-2" :size="30" />
+            <v-chip
+              v-for="(a, index) in assignedUsers"
+              :key="index"
+              color="#1E1E1E"
+              class="me-1 mb-1 py-5 d-flex align-center rounded-lg"
+              style=" font-weight: 500; font-size: 14px; background-color: #d0e1e2;"
+              label
+                closable
+              @click:close="emit('unassign', a)"
+            >
+              <CommonAvatar :user="a" class="me-2" :size="30" />
 
-    {{ a.id === currentUser?.id ? "Me" : a.fullName }}
+              {{ a.id === currentUser?.id ? "Me" : a.fullName }}
 
- 
-  </v-chip>
-</div>
+          
+            </v-chip>
+          </div>
         </template>
 
         <template v-else-if="hoveredItem === 'plus'">
@@ -82,6 +82,19 @@
           class="mb-3 input-bordered"
           flat
         />
+        <v-btn
+          color="primary"
+          variant="text"
+          @click="handleBottomAction"
+        >
+          <template #prepend>
+            <v-icon size="18">
+              {{ isValidEmail ? "mdi-email-check-outline" : "mdi-account-plus-outline" }}
+            </v-icon>
+          </template>
+
+          {{ isValidEmail ? "Send email" : "Invite member" }}
+        </v-btn>
 
         <div class="text-subtitle-2 text-grey-darken-1 mb-1">Suggested People</div>
 
@@ -112,8 +125,9 @@
 
 <script setup>
 import { ref, computed } from "vue";
-const emit = defineEmits(["assign", "unassign"]);
+const emit = defineEmits(["assign", "unassign", "add-staff"]);
 const props = defineProps({
+  userTaskId: { type: Number, required: true },
   assignedUsers: { type: Array, required: true },
   allUsers: { type: Array, required: true },
   currentUser: { type: Object, required: true },
@@ -122,6 +136,7 @@ const props = defineProps({
 const menu = ref(false);
 const currentActivator = ref(null); // DOM element the menu should anchor to
 const hoveredItem = ref(null); // either a user object or 'plus'
+const taskStore = useTaskStore();
 
 // timers to prevent flicker and to close/reopen safely
 let openTimeout = null;
@@ -209,6 +224,36 @@ const selectUser = (user) => {
   // close after assigning
   menu.value = false;
 };
+
+const openAddStaff = () => {
+  emit("add-staff");
+  menu.value = false; // optional but recommended UX
+};
+
+const isValidEmail = computed(() => {
+  if (!search.value) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(search.value.trim());
+});
+
+const sendTaskDetailsByEmail = (email) => {
+  if (!email) return;
+
+  taskStore.sendTaskDetailsByEmail({
+    userTaskId: props.userTaskId,
+    email,
+  });
+};
+
+const handleBottomAction = () => {
+  if (isValidEmail.value) {
+    sendTaskDetailsByEmail(search.value.trim());
+    menu.value = false;
+    search.value = "";
+  } else {
+    openAddStaff();
+  }
+};
+
 </script>
 
 <style scoped>
