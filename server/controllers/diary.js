@@ -683,9 +683,30 @@ export const savePatientComfort = async (event) => {
     }
 
     // Check if comfort record exists
-    let comfort = await DiaryPatientComfort.findOne({
-      where: { patientId, organisationId: Number(orgId) },
-    })
+    let comfort = null
+    try {
+      comfort = await DiaryPatientComfort.findOne({
+        where: { patientId, organisationId: Number(orgId) },
+      })
+    } catch (dbError) {
+      // Handle case where table might not exist yet
+      if (dbError.message && dbError.message.includes('does not exist')) {
+        console.warn('DiaryPatientComforts table not found, attempting to sync:', dbError.message)
+        try {
+          await DiaryPatientComfort.sync({ alter: true })
+          console.log('DiaryPatientComforts table synced successfully')
+        } catch (syncError) {
+          console.error('Failed to sync DiaryPatientComforts table:', syncError)
+          return error(500, `Database table not found. Please ensure the DiaryPatientComforts table exists. Error: ${syncError.message || dbError.message}`)
+        }
+        // Retry the findOne after sync
+        comfort = await DiaryPatientComfort.findOne({
+          where: { patientId, organisationId: Number(orgId) },
+        })
+      } else {
+        throw dbError
+      }
+    }
 
     const comfortData = {
       patientId,
@@ -711,7 +732,9 @@ export const savePatientComfort = async (event) => {
       return success(created)
     }
   } catch (e) {
-    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    // Log the full error for debugging
+    console.error('Error in savePatientComfort:', e)
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && (e.original.message || e.original.detail)))) || 'Internal server error'
     return error(500, msg)
   }
 }
