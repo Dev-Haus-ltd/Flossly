@@ -39,7 +39,7 @@
                 <v-list density="compact">
                   <v-list-item @click="editItem" class="menu-item" rounded="lg">
                     <template #prepend>
-                      <v-icon size="18" class="mr-2">mdi-pencil</v-icon>
+                      <img src="@/assets/tasks/edit.svg" alt="Edit" width="18" height="18" class="mr-2" />
                     </template>
                     <v-list-item-title>Edit</v-list-item-title>
                   </v-list-item>
@@ -292,7 +292,7 @@
                       class="comment-action-btn"
                       @click="startEditComment(comment)"
                     >
-                      <v-icon size="18">mdi-pencil</v-icon>
+                      <img src="@/assets/tasks/edit.svg" alt="Edit" width="18" height="18" />
                     </v-btn>
                     <v-btn
                       icon
@@ -301,7 +301,7 @@
                       class="comment-action-btn"
                       @click="deleteComment(comment)"
                     >
-                      <v-icon size="18" color="error">mdi-delete</v-icon>
+                      <img src="@/assets/tasks/delete.svg" alt="Delete" width="18" height="18" style="filter: brightness(0) saturate(100%) invert(27%) sepia(51%) saturate(2878%) hue-rotate(346deg) brightness(104%) contrast(97%);" />
                     </v-btn>
                   </div>
                 </div>
@@ -397,10 +397,10 @@
                           :href="file.link"
                           target="_blank"
                         >
-                          <v-icon size="16">mdi-download</v-icon>
+                          <img src="@/assets/tasks/download.svg" alt="Download" width="16" height="16" />
                         </v-btn>
                         <v-btn icon size="x-small" variant="text" @click="deleteFile(file)">
-                          <v-icon size="16" color="error">mdi-delete</v-icon>
+                          <img src="@/assets/tasks/delete.svg" alt="Delete" width="16" height="16" style="filter: brightness(0) saturate(100%) invert(27%) sepia(51%) saturate(2878%) hue-rotate(346deg) brightness(104%) contrast(97%);" />
                         </v-btn>
                       </div>
 

@@ -75,7 +75,6 @@
       </div>
     </div>
     <TeamFlossRotaManagementShiftView
-      v-if="selectedView !== 0"
       :users="users"
       :shifts="shifts"
       :rota="rota"
@@ -84,6 +83,7 @@
       @updateShifts="updateShifts"
       @onAddUser="emit('onAddUser')"
       @handleShiftEdit="handleShiftEdit"
+      @onOpenRoomManagement="emit('onOpenRoomManagement')"
     />
     <TeamFlossRotaManagementShiftDialog
       v-model="showShiftDialog"
@@ -120,10 +120,19 @@ const handleShiftEdit = (shift) => {
   currentShift.value = shift;
 };
 const addNewShift = (data) => {
-  shiftData.value = {
-    day: data.day.date,
-    user: data.user.isTempUser ? data.user : data.user.user,
-  };
+  if (data.surgery) {
+    // Surgery view
+    shiftData.value = {
+      day: data.day.date,
+      surgery: data.surgery,
+    };
+  } else {
+    // User view
+    shiftData.value = {
+      day: data.day.date,
+      user: data.user.isTempUser ? data.user : data.user.user,
+    };
+  }
 
   showShiftDialog.value = true;
 };
@@ -138,9 +147,6 @@ const clearFilters = () => {
 
 watch(selectedView, (newVal) => {
   emit("onFilterUsers", newVal);
-  if (newVal === 0) {
-    emit("onOpenRoomManagement");
-  }
 });
 const showShiftDialog = ref(false);
 

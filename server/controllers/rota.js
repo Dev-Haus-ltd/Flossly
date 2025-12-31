@@ -1,4 +1,4 @@
-import { Role, Rota, RotaShift, RotaUser, User } from "../models";
+import { Role, Rota, RotaShift, RotaUser, User, UserOrganisation, Organisation } from "../models";
 import { Op, fn, col } from "sequelize";
 import DB from "../utils/db";
 
@@ -212,6 +212,98 @@ export const addRotaUsers = async (event) => {
   }
 };
 
+const checkCrossOrgShiftConflicts = async (staffIds, startDate, endDate, excludeShiftId = null) => {
+  const conflicts = [];
+  
+  if (!staffIds || staffIds.length === 0) return conflicts;
+
+  const userOrgs = await UserOrganisation.findAll({
+    where: {
+      userId: { [Op.in]: staffIds.filter(Boolean) },
+      status: 'Active'
+    },
+    attributes: ['organisationId', 'userId'],
+    distinct: true
+  });
+
+  if (userOrgs.length === 0) return conflicts;
+
+  const orgIds = [...new Set(userOrgs.map(uo => uo.organisationId).filter(Boolean))];
+  
+  const rotas = await Rota.findAll({
+    where: {
+      organisationId: { [Op.in]: orgIds },
+      isDeleted: false
+    },
+    attributes: ['id', 'organisationId', 'name']
+  });
+
+  if (rotas.length === 0) return conflicts;
+
+  const rotaIds = rotas.map(r => r.id);
+
+  const conflictConditions = [];
+  staffIds.forEach(staffId => {
+    if (staffId) {
+      conflictConditions.push(
+        { userId: staffId },
+        { dentistId: staffId },
+        { nurseId: staffId }
+      );
+    }
+  });
+
+  if (conflictConditions.length === 0) return conflicts;
+
+  const whereClause = {
+    rotaId: { [Op.in]: rotaIds },
+    isDeleted: false,
+    [Op.or]: conflictConditions,
+    [Op.and]: [
+      {
+        startDate: { [Op.lt]: endDate },
+        endDate: { [Op.gt]: startDate }
+      }
+    ]
+  };
+
+  if (excludeShiftId) {
+    whereClause.id = { [Op.ne]: excludeShiftId };
+  }
+
+  const conflictingShifts = await RotaShift.findAll({
+    where: whereClause,
+    include: [
+      {
+        model: Rota,
+        as: 'rota',
+        attributes: ['id', 'name', 'organisationId'],
+        include: [
+          {
+            model: Organisation,
+            as: 'organisation',
+            attributes: ['id', 'name']
+          }
+        ]
+      }
+    ]
+  });
+
+  conflictingShifts.forEach(shift => {
+    conflicts.push({
+      shiftId: shift.id,
+      label: shift.label,
+      startDate: shift.startDate,
+      endDate: shift.endDate,
+      rotaName: shift.rota?.name,
+      organisationName: shift.rota?.organisation?.name,
+      organisationId: shift.rota?.organisationId
+    });
+  });
+
+  return conflicts;
+};
+
 export const addRotaShift = async (event) => {
   try {
     const body = await readBody(event);
@@ -229,10 +321,42 @@ export const addRotaShift = async (event) => {
       isLocumShift,
       locumUserId,
       notes,
+      forceCreate,
     } = JSON.parse(body);
 
-    if (!rotaId || (!userId && !locumUserId) || !label || !startDate || !endDate) {
+    // For surgery view, we need surgeryId. For user view, we need userId or locumUserId
+    const hasUser = userId || locumUserId;
+    const hasSurgery = surgeryId;
+    
+    if (!rotaId || (!hasUser && !hasSurgery) || !label || !startDate || !endDate) {
       throw createError({ message: "Required fields missing" });
+    }
+
+    const currentRota = await Rota.findByPk(rotaId);
+    if (!currentRota) {
+      throw createError({ message: "Rota not found" });
+    }
+
+    const staffIds = [userId, dentistId, nurseId, locumUserId].filter(Boolean);
+    
+    const crossOrgConflicts = await checkCrossOrgShiftConflicts(
+      staffIds,
+      new Date(startDate),
+      new Date(endDate)
+    );
+
+    if (crossOrgConflicts.length > 0 && !forceCreate) {
+      const conflictMessages = crossOrgConflicts.map(conflict => 
+        `${conflict.label} at ${conflict.organisationName} (${new Date(conflict.startDate).toLocaleString()} - ${new Date(conflict.endDate).toLocaleString()})`
+      ).join(', ');
+      
+      return {
+        code: 0,
+        success: true,
+        data: null,
+        warning: `Warning: This staff member has overlapping shifts in other organizations: ${conflictMessages}`,
+        conflicts: crossOrgConflicts
+      };
     }
 
     const conflictConditions = [];
@@ -254,21 +378,9 @@ export const addRotaShift = async (event) => {
           [Op.or]: conflictConditions,
           [Op.and]: [
             {
-              [Op.or]: [
-                {
-                  startDate: { [Op.between]: [startDate, endDate] },
-                },
-                {
-                  endDate: { [Op.between]: [startDate, endDate] },
-                },
-                {
-                  [Op.and]: [
-                    { startDate: { [Op.lte]: startDate } },
-                    { endDate: { [Op.gte]: endDate } },
-                  ],
-                },
-              ],
-            },
+              startDate: { [Op.lt]: endDate },
+              endDate: { [Op.gt]: startDate }
+            }
           ],
         },
       });
@@ -281,6 +393,7 @@ export const addRotaShift = async (event) => {
         });
       }
     }
+
     const shift = await RotaShift.create({
       rotaId,
       dentistId,
@@ -296,9 +409,9 @@ export const addRotaShift = async (event) => {
       locumUserId,
       notes,
     });
+
     return success(shift);
   } catch (err) {
-    console.error(err);
     return error(500, err.message);
   }
 };
@@ -324,7 +437,6 @@ export const deleteRotaShift = async (event) => {
 
     return success({ message: "Shift deleted from rota successfully" });
   } catch (err) {
-    console.log(err);
     return error(500, err.message);
   }
 };
@@ -332,10 +444,77 @@ export const deleteRotaShift = async (event) => {
 export const updateShift = async (event) => {
   try {
     const body = await readBody(event);
-    const { id } = JSON.parse(body);
-    const shift = await RotaShift.findByPk(id);
+    const parsedBody = typeof body === 'string' ? JSON.parse(body) : body;
+    const { id, startDate, endDate, dentistId, nurseId, userId, locumUserId, forceCreate } = parsedBody;
+    
+    const shift = await RotaShift.findByPk(id, {
+      include: [{ model: Rota, as: 'rota' }]
+    });
+    
     if (!shift) throw createError({ message: "shift not found" });
-    await shift.update(JSON.parse(body));
+
+    const finalStartDate = startDate ? new Date(startDate) : shift.startDate;
+    const finalEndDate = endDate ? new Date(endDate) : shift.endDate;
+    const finalDentistId = dentistId !== undefined ? dentistId : shift.dentistId;
+    const finalNurseId = nurseId !== undefined ? nurseId : shift.nurseId;
+    const finalUserId = userId !== undefined ? userId : shift.userId;
+    const finalLocumUserId = locumUserId !== undefined ? locumUserId : shift.locumUserId;
+
+    const staffIds = [finalUserId, finalDentistId, finalNurseId, finalLocumUserId].filter(Boolean);
+    
+    const crossOrgConflicts = await checkCrossOrgShiftConflicts(
+      staffIds,
+      finalStartDate,
+      finalEndDate,
+      id
+    );
+
+    if (crossOrgConflicts.length > 0 && !forceCreate) {
+      const conflictMessages = crossOrgConflicts.map(conflict => 
+        `${conflict.label} at ${conflict.organisationName} (${new Date(conflict.startDate).toLocaleString()} - ${new Date(conflict.endDate).toLocaleString()})`
+      ).join(', ');
+      
+      return {
+        code: 0,
+        success: true,
+        data: null,
+        warning: `Warning: This staff member has overlapping shifts in other organizations: ${conflictMessages}`,
+        conflicts: crossOrgConflicts
+      };
+    }
+
+    const conflictConditions = [];
+    if (finalDentistId) conflictConditions.push({ dentistId: finalDentistId });
+    if (finalNurseId) conflictConditions.push({ nurseId: finalNurseId });
+    if (finalUserId) conflictConditions.push({ userId: finalUserId });
+
+    if (conflictConditions.length > 0) {
+      const conflictShift = await RotaShift.findOne({
+        where: {
+          rotaId: shift.rotaId,
+          id: { [Op.ne]: id },
+          [Op.or]: conflictConditions,
+          [Op.and]: [
+            {
+              [Op.or]: [
+                { startDate: { [Op.lt]: finalEndDate } },
+                { endDate: { [Op.gt]: finalStartDate } }
+              ]
+            }
+          ]
+        }
+      });
+
+      if (conflictShift) {
+        throw createError({
+          statusCode: 400,
+          message: "Shift conflict: another shift already exists in this time range",
+        });
+      }
+    }
+
+    await shift.update(parsedBody);
+
     return success(shift);
   } catch (err) {
     return error(500, err.message);
@@ -399,6 +578,16 @@ export const getRotaUsers = async (event) => {
         statusMessage: "rotaId is required",
       });
     }
+    
+    // Get the rota to find organisationId
+    const rota = await Rota.findOne({ where: { id: rotaId } });
+    if (!rota) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: "Rota not found",
+      });
+    }
+    
     const rotaUsers = await RotaUser.findAll({
       where: { rotaId },
       include: [
@@ -412,6 +601,13 @@ export const getRotaUsers = async (event) => {
               model: Role,
               as: "role",
             },
+            {
+              model: UserOrganisation,
+              as: "userOrganisations",
+              where: { organisationId: rota.organisationId },
+              required: false,
+              attributes: ["status"],
+            },
           ],
         },
         {
@@ -420,7 +616,23 @@ export const getRotaUsers = async (event) => {
         },
       ],
     });
-    return success(rotaUsers);
+    
+    // Map the data to include orgStatus on the user object
+    const formattedRotaUsers = rotaUsers.map((rotaUser) => {
+      const userData = rotaUser.toJSON();
+      if (userData.user && userData.user.userOrganisations && userData.user.userOrganisations.length > 0) {
+        userData.user.orgStatus = userData.user.userOrganisations[0].status || "Active";
+      } else if (userData.user) {
+        userData.user.orgStatus = "Active"; // Default to Active if no UserOrganisation found
+      }
+      // Remove userOrganisations from the response to keep it clean
+      if (userData.user && userData.user.userOrganisations) {
+        delete userData.user.userOrganisations;
+      }
+      return userData;
+    });
+    
+    return success(formattedRotaUsers);
   } catch (err) {
     return error(500, err.message);
   }

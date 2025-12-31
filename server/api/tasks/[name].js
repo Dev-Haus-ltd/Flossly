@@ -8,6 +8,7 @@ import {
   uploadBulkTasks,
   createUserTaskChecklist,
   deleteAttachment,
+  deleteTaskCategory,
   deleteTaskChecklist,
   deleteUserTaskChecklist,
   getUserTaskDetails,
@@ -51,6 +52,8 @@ export default defineEventHandler(async (event) => {
       return await listMyTasks(event);
     case "addCategory":
       return await addTaskCategory(event);
+    case "deleteCategory":
+      return await deleteTaskCategory(event);
     case "listCategories":
       return await getCategories(event);
     case "listCategoriesForPool":

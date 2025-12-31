@@ -238,14 +238,14 @@
         <v-card class="pa-3 note-card" :elevation="0">
           <div class="d-flex justify-space-between align-center mb-2">
             <span class="note-title">{{ note.title }}</span>
-            <v-icon
-              size="18"
-              color="#000000"
+            <img
+              src="@/assets/tasks/delete.svg"
+              alt="Delete"
+              width="18"
+              height="18"
               class="cursor-pointer"
               @click="onDeleteNote(note, i)"
-            >
-              mdi-delete
-            </v-icon>
+            />
           </div>
 
           <div class="mb-1">

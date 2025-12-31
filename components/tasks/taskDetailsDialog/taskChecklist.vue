@@ -1,15 +1,9 @@
 <template>
   <!-- Title -->
   <div v-if="!isEditing && item.id">
-    <div class="d-flex align-center justify-space-between mb-1">
+    <div class="d-flex align-center justify-space-between mb-4">
       <div class="d-flex align-center">
-        <img
-          src="@/assets/icons/category.svg"
-          alt="Category"
-          width="20"
-          class="mr-2"
-        />
-        <span class="card-title">{{ item.category }}</span>
+        <span class="card-title" style="font-weight: 600;">{{ item.question }}</span>
       </div>
 
       <!-- Delete Button with Icon -->
@@ -22,7 +16,7 @@
           @click="emit('deleteItem', item)"
           class="mr-2 action-btn"
         >
-          <v-icon>mdi-delete</v-icon>
+          <img src="@/assets/tasks/delete.svg" alt="Delete" width="18" height="18" style="filter: brightness(0) saturate(100%) invert(27%) sepia(51%) saturate(2878%) hue-rotate(346deg) brightness(104%) contrast(97%);" />
         </v-btn>
         <v-btn
           icon
@@ -32,14 +26,9 @@
           @click="isEditing = true"
           class="ml-2 action-btn"
         >
-          <v-icon>mdi-pencil</v-icon>
+          <img src="@/assets/tasks/edit.svg" alt="Edit" width="18" height="18" />
         </v-btn>
       </div>
-    </div>
-
-    <!-- Subtitle -->
-    <div class="card-subtitle mb-4">
-      {{ item.question }}
     </div>
 
     <v-row class="mb-4" dense>

@@ -2,7 +2,17 @@
   <v-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" max-width="500" persistent>
     <v-card>
       <v-card-title class="d-flex align-center">
-        <v-icon 
+        <img
+          v-if="icon === 'mdi-delete'"
+          src="@/assets/tasks/delete.svg"
+          alt="Delete"
+          width="28"
+          height="28"
+          class="mr-3"
+          :style="{ filter: iconColor === 'red' ? 'brightness(0) saturate(100%) invert(27%) sepia(51%) saturate(2878%) hue-rotate(346deg) brightness(104%) contrast(97%);' : '' }"
+        />
+        <v-icon
+          v-else
           :color="iconColor" 
           class="mr-3"
           size="28"

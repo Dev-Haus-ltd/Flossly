@@ -313,6 +313,17 @@ export default {
         });
     });
   },
+  deleteCategory(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/deleteCategory", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
   unAssignBulkTask(data) {
     return new Promise((resolve, reject) => {
       Post("/tasks/unassignBulk", data)

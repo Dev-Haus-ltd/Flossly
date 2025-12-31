@@ -2,9 +2,10 @@
   <div class="px-7 py-3">
     <div class="d-flex align-center justify-space-between my-4">
       <h3 class="heading-text">E-Form</h3>
-      <v-btn v-if="checklist?.length" prepend-icon="mdi-download" flat color="primary" variant="outlined" @click="downloadChecklist"
-        >download checklist</v-btn
-      >
+      <v-btn v-if="checklist?.length" flat color="primary" variant="outlined" @click="downloadChecklist">
+        <img src="@/assets/tasks/download.svg" alt="Download" width="18" height="18" class="mr-2" />
+        download checklist
+      </v-btn>
     </div>
     <div ref="checklistRef">
       <v-card

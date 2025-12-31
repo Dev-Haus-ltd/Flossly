@@ -212,6 +212,53 @@ export const addTaskCategory = async (event) => {
   }
 };
 
+export const deleteTaskCategory = async (event) => {
+  const loggedUser = event.context.user;
+  ensureManagerOrOwner(loggedUser);
+  const body = await readBody(event);
+  const { id } = typeof body === "string" ? JSON.parse(body) : body;
+  
+  if (!id) return error(400, "Category ID required");
+
+  try {
+    // Find the category - must be a user-created category (not system category)
+    const category = await TaskCategory.findOne({
+      where: {
+        id,
+        organisationId: loggedUser.orgId,
+        isDeleted: false,
+      },
+    });
+
+    if (!category) {
+      return error(404, "Category not found or cannot be deleted");
+    }
+
+    // Check if category has any non-system tasks
+    const taskCount = await Task.count({
+      where: {
+        categoryId: id,
+        [Op.or]: [
+          { isSystemTask: false },
+          { isSystemTask: { [Op.is]: null } },
+        ],
+      },
+    });
+
+    if (taskCount > 0) {
+      return error(400, "Cannot delete category with existing tasks");
+    }
+
+    // Soft delete the category
+    category.isDeleted = true;
+    await category.save();
+
+    return success({ message: "Category deleted successfully" });
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
 export const bulkUploadTasks = async (event) => {
   try {
     const form = formidable({ multiples: false });
@@ -2270,6 +2317,25 @@ export const getCategories = async (event) => {
           { organisationId: loggedUser.orgId },
         ],
       },
+      attributes: {
+        include: [[fn("COUNT", col("tasks.id")), "taskCount"]],
+      },
+      include: [
+        {
+          model: Task,
+          as: "tasks",
+          attributes: [],
+          required: false, // important: allows categories with 0 tasks
+          where: {
+            [Op.or]: [
+              { isSystemTask: false },
+              { isSystemTask: { [Op.is]: null } },
+            ],
+          },
+        },
+      ],
+      group: ["TaskCategories.id"],
+      order: [["id", "ASC"]],
     });
     return success(categories);
   } catch (err) {

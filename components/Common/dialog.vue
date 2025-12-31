@@ -38,7 +38,7 @@
     <v-list density="compact">
       <v-list-item @click="editItem" class="menu-item" rounded="lg">
         <template #prepend>
-          <v-icon size="18" class="mr-2">mdi-pencil</v-icon>
+          <img src="@/assets/tasks/edit.svg" alt="Edit" width="18" height="18" class="mr-2" />
         </template>
         <v-list-item-title >Edit</v-list-item-title>
       </v-list-item>

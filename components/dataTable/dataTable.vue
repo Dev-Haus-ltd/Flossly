@@ -172,13 +172,15 @@
 
           <!-- Delete icon for 'actions' column -->
           <template v-else-if="col.key === 'actions'">
-            <v-icon
-              color="error"
+            <img
+              src="@/assets/tasks/delete.svg"
+              alt="Delete"
+              width="18"
+              height="18"
               class="cursor-pointer"
+              style="filter: brightness(0) saturate(100%) invert(27%) sepia(51%) saturate(2878%) hue-rotate(346deg) brightness(104%) contrast(97%);"
               @click="deleteRow(item.id)"
-            >
-              mdi-delete
-            </v-icon>
+            />
           </template>
 
           <!-- Generic editable field for all other columns -->
@@ -340,13 +342,15 @@
 
                   <!-- Delete icon for 'actions' column -->
                   <template v-else-if="col.key === 'actions'">
-                    <v-icon
-                      color="error"
+                    <img
+                      src="@/assets/tasks/delete.svg"
+                      alt="Delete"
+                      width="18"
+                      height="18"
                       class="cursor-pointer"
+                      style="filter: brightness(0) saturate(100%) invert(27%) sepia(51%) saturate(2878%) hue-rotate(346deg) brightness(104%) contrast(97%);"
                       @click="deleteSubtaskRow(item.id)"
-                    >
-                      mdi-delete
-                    </v-icon>
+                    />
                   </template>
 
                   <!-- Generic editable field for all other columns -->

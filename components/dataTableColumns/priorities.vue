@@ -74,11 +74,20 @@
             variant="flat"
             @click="togglePriorityEdit = !togglePriorityEdit"
           >
-            <v-icon 
+            <img
+              v-if="!togglePriorityEdit"
+              src="@/assets/tasks/edit.svg"
+              alt="Edit"
+              width="16"
+              height="16"
+              class="edit-icon"
+            />
+            <v-icon
+              v-else
               size="16" 
               class="edit-icon"
             >
-              {{ togglePriorityEdit ? "mdi-check" : "mdi-pencil-outline" }}
+              mdi-check
             </v-icon>
             <span class="edit-text">{{ togglePriorityEdit ? "Apply" : "Edit Labels" }}</span>
           </v-btn>

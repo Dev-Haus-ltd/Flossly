@@ -100,7 +100,7 @@ watch(
     const config = useRuntimeConfig()
     
     if (isDocxFile(props.doc)) {
-      const fileUrl = `https://dev.flossly.ai${props.doc.link}`
+      const fileUrl = `${config.public.BASE_URL}/${props.doc.link}`
       viewerUrl.value = `https://docs.google.com/gview?url=${encodeURIComponent(fileUrl)}&embedded=true`
     } else {
       viewerUrl.value = buildAbsoluteLink(props.doc.link, config.public.BASE_URL)

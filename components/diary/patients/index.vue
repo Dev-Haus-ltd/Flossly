@@ -104,7 +104,7 @@
               icon
               @click="openEditPatient(item)"
             >
-              <v-icon size="18">mdi-pencil</v-icon>
+              <img src="@/assets/tasks/edit.svg" alt="Edit" width="18" height="18" />
             </v-btn>
             <v-btn
               size="small"

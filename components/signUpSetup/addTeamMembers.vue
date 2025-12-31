@@ -70,7 +70,7 @@
               class="delete-btn"
               flat
             >
-              <v-icon size="16">mdi-delete</v-icon>
+              <img src="@/assets/tasks/delete.svg" alt="Delete" width="16" height="16" />
             </v-btn>
           </div>
         </template>

@@ -571,6 +571,22 @@ export const useTaskStore = defineStore("taskStore", {
           });
       });
     },
+    deleteCategory(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        taskService
+          .deleteCategory(data)
+          .then((res) => {
+            this.isLoading = false;
+            if (res?.code === 0) this.clearTasksCache();
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
     getTeamTaskStatsByStatusAndCategory(categoryId) {
       return new Promise((resolve, reject) => {
         this.isLoading = true;
