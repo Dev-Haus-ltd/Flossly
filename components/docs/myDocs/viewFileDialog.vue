@@ -17,11 +17,11 @@
           <v-icon>mdi-close</v-icon>
         </v-btn>
       </v-card-title>
-      <!-- PDF Viewer -->
+      <!-- Viewer -->
       <div class="pa-5" style="height: 700px">
         <iframe
-          v-if="pdfurl"
-          :src="pdfurl"
+          v-if="viewerUrl"
+          :src="viewerUrl"
           width="100%"
           height="100%"
           style="border: none"
@@ -69,7 +69,7 @@ import { buildAbsoluteLink } from '~/lib/misc'
 
 
 
-const pdfurl = ref(null)
+const viewerUrl = ref(null)
 const isLoading = ref(false)
 
 const props = defineProps({
@@ -80,15 +80,31 @@ const emit = defineEmits(["update:modelValue", "onUpdate"])
 
 const isOpen = ref(props.modelValue)
 
+// Check if file is DOCX/DOC
+const isDocxFile = (doc) => {
+  if (!doc) return false
+  const fileName = doc.name?.toLowerCase() || doc.link?.toLowerCase() || ''
+  return fileName.endsWith('.docx') || fileName.endsWith('.doc')
+}
+
 // Sync prop with local state
 watch(
   () => props.modelValue,
   async (val) => {
     isOpen.value = val
-    if (!val) return
+    if (!val) {
+      viewerUrl.value = null
+      return
+    }
     isLoading.value = true
     const config = useRuntimeConfig()
-    pdfurl.value = buildAbsoluteLink(props.doc.link, config.public.BASE_URL)
+    
+    if (isDocxFile(props.doc)) {
+      const fileUrl = `https://dev.flossly.ai${props.doc.link}`
+      viewerUrl.value = `https://docs.google.com/gview?url=${encodeURIComponent(fileUrl)}&embedded=true`
+    } else {
+      viewerUrl.value = buildAbsoluteLink(props.doc.link, config.public.BASE_URL)
+    }
     isLoading.value = false
   }
 )

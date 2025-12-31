@@ -4,16 +4,11 @@ export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig();
   const path = event.path;
   
-  // Skip non-API routes entirely
   if (!path.includes('/api')) return;
   
-  // CRITICAL: Check public paths FIRST before any auth logic
   if (isPublicPath(path)) {
-    console.log('[AUTH] Public path allowed:', path); // Add logging
-    return; // Exit immediately for public paths
+    return;
   }
-  
-  // Now check for authentication
   let token = getCookie(event, 'accessToken')
   if (!token) {
     const authHeader = getHeader(event, 'Authorization')
@@ -32,7 +27,6 @@ export default defineEventHandler(async (event) => {
     const decoded = jwt.verify(token, config.JWT_SECRET);
     event.context.user = decoded;
   } catch (err) {
-    console.log('[AUTH] Token verification failed:', err.message);
     return error(401, "Invalid/Expired Token");
   }
 });
@@ -58,7 +52,6 @@ const isPublicPath = (path) => {
     "/api/chatbot/createLead",
   ];
   
-  // Exact match or starts with the path (to handle query params and trailing slashes)
   const isPublic = publicPaths.some(publicPath => 
     path === publicPath || path.startsWith(publicPath + '?') || path.startsWith(publicPath + '/')
   );

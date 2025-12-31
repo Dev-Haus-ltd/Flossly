@@ -353,6 +353,8 @@ import {
   extractExtension,
   formatFileSize as formatFileSizeUtil,
   getFileIcon as getFileIconUtil,
+  normalizeHeaderKey,
+  normalizeRowBasic,
   parseCSV,
   validateFileBasics,
 } from "~/lib/fileImportUtils";
@@ -453,6 +455,8 @@ const processUploadedFile = () => {
 const getFileIcon = (filename) => getFileIconUtil(filename);
 const formatFileSize = (bytes) => formatFileSizeUtil(bytes);
 
+const normalizeRow = (row) => normalizeRowBasic(row);
+
 // Process file (Excel or CSV)
 const processFile = async (file) => {
   excelError.value = null;
@@ -468,13 +472,6 @@ const processFile = async (file) => {
   const fileExtension = extractExtension(file.name);
   const reader = new FileReader();
 
-  // Normalize column headers to lowercase
-  const normalizeRowKeys = (row) =>
-    Object.keys(row).reduce((acc, key) => {
-      acc[key.trim().toLowerCase()] = row[key];
-      return acc;
-    }, {});
-
   reader.onload = (e) => {
     try {
       let json;
@@ -489,7 +486,7 @@ const processFile = async (file) => {
         const workbook = XLSX.read(data, { type: "array" });
 
         if (!workbook.SheetNames?.length) {
-          excelError.value = "Invalid file — no sheets found.";
+          excelError.value = "Invalid file - no sheets found.";
           isProcessing.value = false;
           return;
         }
@@ -499,13 +496,19 @@ const processFile = async (file) => {
         json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
       }
 
-      // Normalize all rows (case-insensitive headers)
-      json = json.map(normalizeRowKeys);
+      if (!json.length) {
+        excelError.value = "No rows found in the file.";
+        isProcessing.value = false;
+        return;
+      }
+
+      const normalizedRows = json.map((row) => normalizeRow(row));
+      const normalizedKeys = Object.keys(normalizedRows[0] || {});
 
       // Validate required columns (ONLY title & category)
       const requiredColumns = ["title", "category"];
       const hasRequiredColumns = requiredColumns.every((col) =>
-        Object.keys(json[0] || {}).includes(col)
+        normalizedKeys.includes(col)
       );
 
       if (!hasRequiredColumns) {
@@ -516,8 +519,8 @@ const processFile = async (file) => {
         return;
       }
 
-      // Map tasks
-      const formatted = json.map((row) => {
+      // Map and validate tasks
+      const formatted = normalizedRows.map((row, index) => {
         const task = {
           defaultFrequency: row["frequency"] ?? "",
           description: row["description"] ?? "",
@@ -573,7 +576,7 @@ const processFile = async (file) => {
       isProcessing.value = false;
     } catch (err) {
       console.error("❌ Error reading file:", err);
-      excelError.value = "Error reading file — please check the format.";
+      excelError.value = "Error reading file - please check the format.";
       isProcessing.value = false;
     }
   };

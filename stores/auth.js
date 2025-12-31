@@ -113,6 +113,13 @@ export const useAuthStore = defineStore("authStore", {
           .then((res) => {
             this.loggedUser = res.data;
             this.isLoading = false;
+            
+            // Update user state with profile data
+            if (res.data && process.client) {
+              const { setUser } = useUser();
+              setUser(res.data);
+            }
+            
             resolve(res);
           })
           .catch((err) => {

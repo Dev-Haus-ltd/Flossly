@@ -25,7 +25,15 @@
 
     <TeamFlossRotaManagementShifts v-if="activeComponent === 3" :shifts="shifts" :users="rotaUsers" :rota="selectedRota"
       @onChangeStatus="changeRotaStatus" @onUpdate="getAllShifts" @onFilterUsers="filterUsers"
-      @onAddUser="getRotaUsers" />
+      @onAddUser="getRotaUsers" @onOpenRoomManagement="openRoomManagement" />
+    
+    <!-- Practice Profile Dialog -->
+    <v-dialog v-model="showPracticeProfileDialog" max-width="1800">
+      <PracticeProfile 
+        @close="showPracticeProfileDialog = false" 
+        :initialSection="practiceProfileInitialSection"
+      />
+    </v-dialog>
   </div>
 </template>
 <script setup>
@@ -42,7 +50,9 @@ const allShifts = ref([]);
 const activeComponent = ref(1);
 const selectedRota = ref(null);
 const { isManager } = useUser();
-const user = ref({})
+const user = ref({});
+const showPracticeProfileDialog = ref(false);
+const practiceProfileInitialSection = ref("profile");
 onMounted(() => {
   if (localStorage.getItem('user')) {
     user.value = JSON.parse(localStorage.getItem('user'))
@@ -189,6 +199,11 @@ const breadcrumbStyle = computed(() => {
 const home = () => {
   activeComponent.value = 1;
   selectedRota.value = null;
+};
+
+const openRoomManagement = () => {
+  practiceProfileInitialSection.value = "room";
+  showPracticeProfileDialog.value = true;
 };
 </script>
 <style scoped>

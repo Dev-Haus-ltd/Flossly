@@ -62,13 +62,13 @@ export const useMainStore = defineStore("mainStore", {
           title: "Flossly docs",
           imgPath: flosslyDocs,
           value: "flosllyDocs",
-          to: "/documents/mydocs",
+          to: "/docs/mydocs",
           // children: [
           //   {
           //     title: "My Docs",
           //     value: "mydocs",
           //     imgPath: flosslyDocs,
-          //     to: "/documents/mydocs",
+          //     to: "/docs/mydocs",
           //   },
         
           // ],
@@ -198,13 +198,13 @@ export const useMainStore = defineStore("mainStore", {
           title: "Flossly docs",
           imgPath: dashBoard,
           value: "flosllyDocs",
-          to: "/documents/mydocs",
+          to: "/docs/mydocs",
           // children: [
           //   {
           //     title: "My Docs",
           //     value: "mydocs",
           //     imgPath: flosslyDocs,
-          //     to: "/documents/mydocs",
+          //     to: "/docs/mydocs",
           //   },
         
           // ],

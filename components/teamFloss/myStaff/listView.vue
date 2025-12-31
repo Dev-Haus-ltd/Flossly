@@ -249,7 +249,7 @@
             <template v-else-if="col.key === 'resend'">
               <div class="d-flex justify-center align-center pa-2" style="min-width: 100px;">
                 <v-btn
-                  v-if="item.isActive === false || item.status === 'Invited'"
+                  v-if="((item.orgStatus || item.status || '').toLowerCase() === 'invited')"
                   size="small"
                   variant="flat"
                   color="primary"
@@ -275,7 +275,7 @@
             <template v-else-if="col.key === 'userActions'">
               <div class="d-flex justify-center align-center pa-2 gap-2" style="min-width: 120px;">
                 <!-- Show Activate or Deactivate based on current status -->
-                <template v-if="(item.status || '').toLowerCase() !== 'invited'">
+                <template v-if="(item.orgStatus || item.status || '').toLowerCase() !== 'invited'">
                   <v-tooltip :text="isUserActive(item) ? 'Deactivate User' : 'Activate User'" location="top">
                     <template #activator="{ props }">
                       <v-btn
@@ -416,25 +416,22 @@ const sortDesc = ref([]);
 
 const getDisplayStatus = (user) => {
   // Check global status first (takes precedence)
-  const status = (user?.status || 'Active').toLowerCase();
-  
-  // If globally disabled or expired, show that status regardless of isActive
-  if (status === 'disabled' || status === 'expired') {
-    return status.charAt(0).toUpperCase() + status.slice(1);
+  const globalStatus = (user?.status || 'Active').toLowerCase();
+  if (globalStatus === 'disabled' || globalStatus === 'expired') {
+    return globalStatus.charAt(0).toUpperCase() + globalStatus.slice(1);
   }
-  
-  // Check organization-specific status (isActive)
-  // If isActive is false, user is either Invited (pending) or Deactivated in this org
-  if (user?.isActive === false) {
-    // If status is "Active" but isActive is false, it means org-specific deactivation
-    if (status === 'active') {
-      return 'Deactivated';
+  // Prefer organization-level status if provided
+  const orgStatus = (user?.orgStatus || '').toLowerCase();
+  if (orgStatus) {
+    if (orgStatus === 'disabled' || orgStatus === 'expired') {
+      return orgStatus.charAt(0).toUpperCase() + orgStatus.slice(1);
     }
-    // Otherwise, it's a pending invitation (status is "Invited")
-    return 'Invited';
+    if (orgStatus === 'invited') return 'Invited';
+    if (orgStatus === 'active') return 'Active';
   }
-  
-  // User is active in this org (isActive === true) and status is Active
+  // Use orgStatus only
+  if (orgStatus === 'disabled') return 'Disabled';
+  if (orgStatus === 'invited') return 'Invited';
   return 'Active';
 };
 
@@ -683,7 +680,7 @@ const isUserActive = (user) => {
   // User is active if:
   // 1. isActive is true (active in this org) AND
   // 2. global status is not Disabled or Expired
-  return user.isActive === true && 
+  return (user.orgStatus || user.status) === "Active" && 
          user.status !== "Disabled" && 
          user.status !== "Expired";
 };

@@ -408,7 +408,7 @@
           <div class="card-content pt-5">
             <!-- ✅ Custom Image (replaces lord-icon) -->
             <img
-              src="@/assets/dashBoard/review-card-logo.svg"
+              src="@/assets/dashboard/review-card-logo.svg"
               alt="Review Icon"
               class="review-logo"
             />
@@ -628,9 +628,9 @@ const fetchDummyStats = async () => {
           image: "/images/completed-icon.svg",
         },
         {
-          status: "Upcoming Tasks",
-          key: "upcoming",
-          total: data.upcoming || 0,
+          status: "To do",
+          key: "todo",
+          total: data.todo || data.upcoming || 0,
           link: "/tasks/teamtasks",
           image: "/images/completed-icon.svg",
         },
@@ -660,8 +660,8 @@ const fetchDummyStats = async () => {
           image: "/images/completed-icon.svg",
         },
         {
-          status: "Upcoming Tasks",
-          key: "upcoming",
+          status: "To do",
+          key: "todo",
           total: 0,
           link: "/tasks/teamtasks",
           image: "/images/completed-icon.svg",
@@ -694,8 +694,8 @@ const fetchDummyStats = async () => {
         image: "/images/completed-icon.svg",
       },
       {
-        status: "Upcoming Tasks",
-        key: "upcoming",
+        status: "To do",
+        key: "todo",
         total: 0,
         link: "/tasks/teamtasks",
         image: "/images/completed-icon.svg",

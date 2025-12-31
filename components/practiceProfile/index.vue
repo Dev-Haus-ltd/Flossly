@@ -62,7 +62,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { useDisplay } from "vuetify";
 
 // Import components
@@ -82,9 +82,16 @@ import ImportantPeopleImg from "@/assets/icons/practiceProfile/importantPeople.s
 
 const { mdAndDown } = useDisplay();
 
+const props = defineProps({
+  initialSection: {
+    type: String,
+    default: "profile",
+  },
+});
+
 const showMobileSidebar = ref(false);
 const practiceDetails = ref({});
-const selectedSection = ref("profile");
+const selectedSection = ref(props.initialSection);
 const orgStore = useOrgStore();
 
 // Sidebar menu items
@@ -115,6 +122,11 @@ const currentComponent = computed(() => componentsMap[selectedSection.value]);
 
 onMounted(() => {
   getDetails();
+});
+
+// Watch for prop changes to update selected section
+watch(() => props.initialSection, (newSection) => {
+  selectedSection.value = newSection;
 });
 
 const getDetails = async () => {

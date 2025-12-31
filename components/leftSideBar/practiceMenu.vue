@@ -57,7 +57,7 @@ const { currentOrg, rail } = defineProps({
 });
 const authStore = useAuthStore();
 const mainStore = useMainStore();
-const user = ref({});
+const { user } = useUser();
 const menu = ref(false);
 
 const getOrgData = (orgWrapper) => {
@@ -79,9 +79,9 @@ const validOrganizations = computed(() => {
   
   const valid = user.value.userOrganisations.filter(org => {
     const orgData = getOrgData(org);
-    const isActive = org.isActive !== undefined ? org.isActive : true;
+    const isActive = org.status === "Active";
     const isGloballyDeactivated = user.value.status === "Disabled" || user.value.status === "Expired";
-    const isOrgDeactivated = !isActive && user.value.status === "Active";
+    const isOrgDeactivated = (org.status === "Disabled") && user.value.status === "Active";
     const isNotDeactivated = !isGloballyDeactivated && !isOrgDeactivated;
     const isValid = orgData !== null && isActive && isNotDeactivated;
     return isValid;
@@ -89,26 +89,6 @@ const validOrganizations = computed(() => {
   
   return valid;
 });
-
-const initializeUser = () => {
-  const storedUser = localStorage.getItem("user");
-  if (storedUser) {
-    user.value = JSON.parse(storedUser);
-  }
-};
-
-onMounted(() => {
-  initializeUser();
-});
-
-watch(() => localStorage.getItem("user"), (newUserData) => {
-  if (newUserData) {
-    user.value = JSON.parse(newUserData);
-  }
-});
-
-watch(() => user.value, (newUser) => {
-}, { deep: true });
 const handleOrgClick = async (org) => {
   if (!org || !org.id) {
     mainStore.setSnackbar({

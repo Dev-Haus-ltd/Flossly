@@ -209,6 +209,7 @@
             </div>
 
             <div
+                v-if="canDeleteSelectedTasks"
                 class="action-item d-flex flex-column align-center"
                 @click="handleDelete"
               >
@@ -255,7 +256,18 @@
 <script setup>
 import { useDisplay } from "vuetify";
 import { nextTick } from "vue";
-import { getContrastingTextColor } from "~/lib/misc";
+import {
+  applyCategoryOrder as applyCategoryOrderUtil,
+  autoUnhideCategoryIds,
+  canHideCategory,
+  getContrastingTextColor,
+  getTaskCategoryIcon,
+  isDefaultNamedCategory,
+  isMandatoryCategory,
+  mergeCategoriesWithStats,
+  sortByCustomStatus,
+  syncCategoryOrder as syncCategoryOrderUtil,
+} from "~/lib/misc";
 import draggable from "vuedraggable";
 
 const bus = useBus();
@@ -341,14 +353,7 @@ const persistCategoryOrder = () => {
 };
 
 const applyCategoryOrder = (list) => {
-  const order = categoryOrder.value || [];
-  if (!order.length) return list;
-  const map = new Map(list.map((cat) => [cat.categoryId, cat]));
-  const ordered = order
-    .map((id) => map.get(id))
-    .filter(Boolean);
-  const missing = list.filter((cat) => !order.includes(cat.categoryId));
-  return [...ordered, ...missing];
+  return applyCategoryOrderUtil(list, categoryOrder.value || []);
 };
 
 const orderedTaskStats = computed(() =>
@@ -356,15 +361,14 @@ const orderedTaskStats = computed(() =>
 );
 
 const syncCategoryOrder = (list) => {
-  const ids = (list || []).map((cat) => cat.categoryId);
-  if (!ids.length) {
-    categoryOrder.value = [];
-    return;
+  const nextOrder = syncCategoryOrderUtil(categoryOrder.value || [], list || []);
+  const isSame =
+    nextOrder.length === categoryOrder.value.length &&
+    nextOrder.every((id, idx) => id === categoryOrder.value[idx]);
+  if (!isSame) {
+    categoryOrder.value = nextOrder;
+    persistCategoryOrder();
   }
-  const filtered = categoryOrder.value.filter((id) => ids.includes(id));
-  const missing = ids.filter((id) => !filtered.includes(id));
-  categoryOrder.value = [...filtered, ...missing];
-  persistCategoryOrder();
 };
 
 const updateCategoryOrder = (newOrder = []) => {
@@ -398,28 +402,18 @@ const persistHiddenCategories = () => {
   );
 };
 
-const isMandatoryCategory = (cat) => !!(cat?.isDefault);
-const getCategoryTaskCount = (cat) => {
-  const count = Number(
-    cat?.taskCount ?? cat?.total ?? cat?.count ?? cat?.taskTotal ?? 0
-  );
-  return Number.isNaN(count) ? 0 : count;
+const autoUnhideCategories = (list = []) => {
+  const nextHidden = autoUnhideCategoryIds(hiddenCategoryIds.value, list || []);
+  const isSame =
+    nextHidden.length === hiddenCategoryIds.value.length &&
+    nextHidden.every((id, idx) => id === hiddenCategoryIds.value[idx]);
+  if (!isSame) {
+    hiddenCategoryIds.value = nextHidden;
+    persistHiddenCategories();
+  }
 };
-
-const isDefaultNamedCategory = (cat) =>
-  defaultCategoryNames.includes((cat?.categoryName || cat?.name || "").trim());
 
 const canEditCategory = () => true;
-
-const canHideCategory = (cat) => {
-  if (!cat) return false;
-  const name = (cat.categoryName || cat.name || "").trim().toLowerCase();
-  const isAllowedDefault = defaultCategoryNames.some(
-    (n) => n.toLowerCase() === name
-  );
-  if (!isAllowedDefault) return false;
-  return getCategoryTaskCount(cat) === 0;
-};
 
 const ensureCurrentTabVisible = () => {
   if (!orderedTaskStats.value.length) {
@@ -434,42 +428,9 @@ const ensureCurrentTabVisible = () => {
   }
 };
 
-const mergeCategoriesWithStats = (stats = []) => {
-  const map = new Map();
-
-  (categories.value || []).forEach((cat) => {
-    const id = cat.id ?? cat.categoryId;
-    if (id === undefined || id === null) return;
-    map.set(String(id), {
-      categoryId: id,
-      categoryName: cat.name || cat.categoryName,
-      taskCount: 0,
-      isMandatory: cat.isMandatory ?? cat.isDefault ?? false,
-      color: cat.color,
-      parentId: cat.parentId ?? null,
-      description: cat.description ?? "",
-    });
-  });
-
-  (stats || []).forEach((stat) => {
-    const id = stat.categoryId ?? stat.id;
-    if (id === undefined || id === null) return;
-    const key = String(id);
-    const existing = map.get(key) || {};
-    map.set(key, {
-      ...existing,
-      ...stat,
-      categoryId: id,
-      categoryName: stat.categoryName || existing.categoryName,
-      isMandatory: stat.isMandatory ?? existing.isMandatory ?? false,
-    });
-  });
-
-  return Array.from(map.values());
-};
-
 const setTaskStats = (stats = []) => {
-  const merged = mergeCategoriesWithStats(stats);
+  const merged = mergeCategoriesWithStats(categories.value || [], stats);
+  autoUnhideCategories(merged);
   const filtered = merged.filter((cat) => {
     const count = Number(
       cat.taskCount ?? cat.total ?? cat.count ?? cat.taskTotal ?? 0
@@ -652,20 +613,7 @@ const updateTasks = () => {
   getTeamStats();
 };
 bus.on("updateTeamTasks", updateTasks);
-const getIcon = (categoryName) => {
-  switch (categoryName) {
-    case "Marketing":
-      return "https://cdn.lordicon.com/excswhey.json";
-    case "Staff Management":
-      return "https://cdn.lordicon.com/kphwxuxr.json";
-    case "Finance":
-      return "https://cdn.lordicon.com/tzynxkwl.json";
-    case "Compliance":
-      return "https://cdn.lordicon.com/yraqammt.json";
-    default:
-      return "https://cdn.lordicon.com/qlpudrww.json"; // fallback
-  }
-};
+const getIcon = (categoryName) => getTaskCategoryIcon(categoryName);
 
 const availableHeaders = computed(() => {
   return mainStore.getTeamTaskAllHeaders;
@@ -963,7 +911,7 @@ const handlePageSizeChange = (val) => {
   loadTasks(activeFilters.value, true);
 };
 const updateTasksList = () => {
-  loadTasks({}, true);
+  getTeamStats();
 };
 const applyFilters = (filters) => {
   loadTasks(filters, true);
@@ -973,22 +921,6 @@ const getUsers = () => {
     if (res.code === 0) userList.value = res.data;
   });
 };
-function sortByCustomStatus(arr) {
-  const order = ["upcoming", "todo", "progress", "cancelled", "completed"];
-  const priority = Object.fromEntries(
-    order.map((status, index) => [status, index])
-  );
-
-  return [...arr].sort((a, b) => {
-    // Archived tasks always go last
-    if (a.status?.toLowerCase() === "archived") return 1;
-    if (b.status?.toLowerCase() === "archived") return -1;
-    
-    const aPriority = priority[a.status?.toLowerCase()] ?? Infinity;
-    const bPriority = priority[b.status?.toLowerCase()] ?? Infinity;
-    return aPriority - bPriority;
-  });
-}
 const getTeamTasks = (categoryId) => {
   if (categoryId !== undefined && categoryId !== null) {
     currentTab.value = categoryId;
@@ -1073,6 +1005,31 @@ const hasArchivedTasks = computed(() => {
   return selectedRowItems.value.some(item => 
     item.isArchieved === true || item.status?.key === 'archived'
   );
+});
+
+
+const isNormalUser = computed(() => {
+  if (!user.value || !user.value.roleId) return true;
+  const privilegedRoleIds = [1, 8]; // Manager and Owner roles
+  return !privilegedRoleIds.includes(Number(user.value.roleId));
+});
+
+const hasPracticeProfileTasks = computed(() => {
+  if (!selectedRowItems.value || selectedRowItems.value.length === 0) {
+    return false;
+  }
+  const taskAssignedByPracticeProfile = selectedRowItems.value.some(item => 
+    item.isAssignedByPracticeProfile === true
+  );
+  const userTaskAssignedByPracticeProfile = selectedRowItems.value.some(item => 
+    item.assignedUsers?.some(user => user.isAssignedByPracticeProfile === true)
+  );
+  return taskAssignedByPracticeProfile || userTaskAssignedByPracticeProfile;
+});
+
+const canDeleteSelectedTasks = computed(() => {
+  if (!isNormalUser.value) return true;
+  return !hasPracticeProfileTasks.value;
 });
 
 const handleArchive = async () => {
@@ -1355,14 +1312,14 @@ const handleComplete = async () => {
 
 .custom-tab-item {
   font-size: 13px;
-  font-weight: 400;
+  font-weight: 400 !important;
   text-transform: none;
   color: var(--tab-text-color, #1e1e1e);
   min-height: 34px;
   height: 34px;
   min-width: max-content;
   padding: 0 12px;
-  border-radius: 8px;
+  border-radius: 8px !important;
   display: inline-flex;
   align-items: center;
   line-height: 1;
