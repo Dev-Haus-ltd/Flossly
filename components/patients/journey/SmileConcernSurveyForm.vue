@@ -207,22 +207,22 @@
             />
           </div>
         </div>
+      </div>
 
-        <!-- Bottom Action Buttons -->
-        <div class="form-actions">
+      <!-- Bottom Action Buttons - Outside form-content-wrapper -->
+      <div v-if="structure && structure.categories && !loading && !error" class="form-actions-wrapper">
+        <div class="form-actions d-flex justify-end mt-8" style="gap: 12px">
           <v-btn
             variant="outlined"
             color="primary"
-            class="action-btn"
             @click="onReset"
             :disabled="loading"
           >
             Reset
           </v-btn>
           <v-btn
-            variant="flat"
             color="primary"
-            class="action-btn"
+            variant="flat"
             @click="onSubmit"
             :disabled="loading"
           >
@@ -502,16 +502,10 @@ h4 {
   margin-top: 10px;
   margin-bottom: 10px;
 }
-.form-actions {
+.form-actions-wrapper {
+  width: 1350px;
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
-  margin-top: 32px;
-  padding-top: 24px;
-}
-.action-btn {
-  min-width: 120px;
-  height: 46px;
 }
 .introduction-heading {
   background: #8C3BC51A;
