@@ -2,7 +2,14 @@
   <div class="survey-form">
     <v-form @submit.prevent="onSave">
       <div v-if="loading" class="text-center py-8">
-        <v-progress-circular indeterminate color="primary" />
+        <lottie-player
+          src="/FlossslyLogoBlue.json"
+          background="transparent"
+          speed="1"
+          style="width: 200px; height: 200px; margin: 0 auto;"
+          loop
+          autoplay
+        />
         <p class="mt-2">Loading survey...</p>
       </div>
       <div v-else-if="error" class="text-center py-8">

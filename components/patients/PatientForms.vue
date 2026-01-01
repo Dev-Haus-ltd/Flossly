@@ -31,17 +31,34 @@
           class="forms-table"
           density="comfortable"
         >
+          <template #item.formType="{ item }">
+            <v-chip size="small" :color="item.formType === 'medical_history' ? 'primary' : 'secondary'">
+              {{ item.formType === 'medical_history' ? 'Medical History' : 'Consent' }}
+            </v-chip>
+          </template>
           <template #item.createdBy="{ item }">
             {{ item.createdBy || '-' }}
           </template>
+          <template #item.createdAt="{ item }">
+            {{ item.createdAt || '-' }}
+          </template>
           <template #item.patientComments="{ item }">
-            {{ item.patientComments || '-' }}
+            <span v-if="item.patientComments" class="text-truncate" style="max-width: 200px" :title="item.patientComments">
+              {{ item.patientComments }}
+            </span>
+            <span v-else>-</span>
           </template>
           <template #item.ourComments="{ item }">
-            {{ item.ourComments || '-' }}
+            <span v-if="item.ourComments" class="text-truncate" style="max-width: 200px" :title="item.ourComments">
+              {{ item.ourComments }}
+            </span>
+            <span v-else>-</span>
           </template>
           <template #item.additionalInfo="{ item }">
-            {{ item.additionalInfo || '-' }}
+            <span v-if="item.additionalInfo" class="text-truncate" style="max-width: 200px" :title="item.additionalInfo">
+              {{ item.additionalInfo }}
+            </span>
+            <span v-else>-</span>
           </template>
           <template #item.actions="{ item }">
             <div class="d-flex align-center" style="gap: 8px">
@@ -82,6 +99,7 @@
             <MedicalHistoryForm
               ref="medicalFormRef"
               :form-data="editingForm"
+              :disabled="isViewing"
               @submit="onFormSubmit"
               @reset="onFormReset"
             />
@@ -90,6 +108,7 @@
             <ConsentForm
               ref="consentFormRef"
               :form-data="editingForm"
+              :disabled="isViewing"
               @submit="onFormSubmit"
               @reset="onFormReset"
             />
@@ -118,7 +137,9 @@ const medicalFormRef = ref(null)
 const consentFormRef = ref(null)
 
 const tableHeaders = [
+  { title: 'Form Type', key: 'formType', sortable: true },
   { title: 'Created by', key: 'createdBy', sortable: true },
+  { title: 'Created At', key: 'createdAt', sortable: true },
   { title: 'Patients Comments', key: 'patientComments', sortable: false },
   { title: 'Our comments', key: 'ourComments', sortable: false },
   { title: 'Additional informations', key: 'additionalInfo', sortable: false },
@@ -133,6 +154,7 @@ const formItems = [
 const openFormView = () => {
   editingForm.value = null
   selectedForm.value = 'medical'
+  isViewing.value = false
   showFormView.value = true
 }
 
@@ -140,27 +162,60 @@ const closeFormView = () => {
   showFormView.value = false
   editingForm.value = null
   selectedForm.value = 'medical'
+  isViewing.value = false
 }
+
+const isViewing = ref(false)
 
 const viewForm = (form) => {
   editingForm.value = { ...form }
-  // TODO: Set selected form based on form type
-  selectedForm.value = 'medical' // or 'consent' based on form.type
+  selectedForm.value = form.formType === 'medical_history' ? 'medical' : 'consent'
+  isViewing.value = true
   showFormView.value = true
 }
 
 const editForm = (form) => {
   editingForm.value = { ...form }
-  // TODO: Set selected form based on form type
-  selectedForm.value = 'medical' // or 'consent' based on form.type
+  selectedForm.value = form.formType === 'medical_history' ? 'medical' : 'consent'
+  isViewing.value = false
   showFormView.value = true
 }
 
-const onFormSubmit = (formData) => {
-  console.log('Form submitted:', formData)
-  // TODO: Save form data via API
-  closeFormView()
-  // TODO: Refresh forms list
+const onFormSubmit = async (formData) => {
+  try {
+    const { useDiaryStore } = await import('@/stores/diary')
+    const { useMainStore } = await import('@/stores/index')
+    const diaryStore = useDiaryStore()
+    const mainStore = useMainStore()
+
+    const payload = {
+      patientId: props.patient?.id,
+      formType: formData.type || 'medical_history',
+      answers: formData.answers || {},
+      patientComments: formData.patientComments || '',
+      ourComments: formData.ourComments || '',
+      additionalInfo: formData.additionalInfo || '',
+    }
+
+    if (editingForm.value && editingForm.value.id) {
+      // Update existing form
+      payload.id = editingForm.value.id
+      await diaryStore.updatePatientForm(payload)
+      mainStore.setSnackbar({ title: 'Form updated successfully', type: 'success' })
+    } else {
+      // Create new form
+      await diaryStore.savePatientForm(payload)
+      mainStore.setSnackbar({ title: 'Form saved successfully', type: 'success' })
+    }
+
+    closeFormView()
+    await loadForms()
+  } catch (error) {
+    console.error('Error saving form:', error)
+    const { useMainStore } = await import('@/stores/index')
+    const mainStore = useMainStore()
+    mainStore.setSnackbar({ title: error.message || 'Failed to save form', type: 'error' })
+  }
 }
 
 const onFormReset = () => {
@@ -171,9 +226,35 @@ const onFormReset = () => {
   }
 }
 
-// TODO: Load forms on mount
+const loadForms = async () => {
+  if (!props.patient?.id) return
+  
+  try {
+    loading.value = true
+    const { useDiaryStore } = await import('@/stores/diary')
+    const diaryStore = useDiaryStore()
+    const response = await diaryStore.listPatientForms(props.patient.id)
+    if (response && response.data) {
+      forms.value = response.data || []
+    }
+  } catch (error) {
+    console.error('Error loading forms:', error)
+    const { useMainStore } = await import('@/stores/index')
+    const mainStore = useMainStore()
+    mainStore.setSnackbar({ title: 'Failed to load forms', type: 'error' })
+  } finally {
+    loading.value = false
+  }
+}
+
 onMounted(() => {
-  // loadForms()
+  loadForms()
+})
+
+watch(() => props.patient?.id, () => {
+  if (props.patient?.id) {
+    loadForms()
+  }
 })
 </script>
 
