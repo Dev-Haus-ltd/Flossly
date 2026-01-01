@@ -1388,7 +1388,7 @@ export const listPatientForms = async (event) => {
         {
           model: User,
           as: 'creator',
-          attributes: ['id', 'firstName', 'lastName', 'email'],
+          attributes: ['id', 'fullName', 'email'],
         },
       ],
       order: [['createdAt', 'DESC']],
@@ -1403,10 +1403,10 @@ export const listPatientForms = async (event) => {
       ourComments: form.ourComments || '',
       additionalInfo: form.additionalInfo || '',
       createdBy: form.creator
-        ? `${form.creator.firstName || ''} ${form.creator.lastName || ''}`.trim() || form.creator.email
+        ? form.creator.fullName || form.creator.email || 'Unknown'
         : 'Unknown',
-      createdAt: form.createdAt,
-      updatedAt: form.updatedAt,
+      createdAt: form.createdAt ? new Date(form.createdAt).toLocaleDateString() : '',
+      updatedAt: form.updatedAt ? new Date(form.updatedAt).toLocaleDateString() : '',
     }))
 
     return success(formattedForms)
@@ -1435,7 +1435,7 @@ export const getPatientForm = async (event) => {
         {
           model: User,
           as: 'creator',
-          attributes: ['id', 'firstName', 'lastName', 'email'],
+          attributes: ['id', 'fullName', 'email'],
         },
       ],
     })
@@ -1453,7 +1453,7 @@ export const getPatientForm = async (event) => {
       ourComments: form.ourComments || '',
       additionalInfo: form.additionalInfo || '',
       createdBy: form.creator
-        ? `${form.creator.firstName || ''} ${form.creator.lastName || ''}`.trim() || form.creator.email
+        ? form.creator.fullName || form.creator.email || 'Unknown'
         : 'Unknown',
       createdAt: form.createdAt,
       updatedAt: form.updatedAt,
@@ -1498,12 +1498,17 @@ export const savePatientForm = async (event) => {
       return error(400, 'answers must be an object')
     }
 
-    // Validate that all answer values are 'yes' or 'no'
-    for (const key in answers) {
-      if (answers[key] !== 'yes' && answers[key] !== 'no') {
-        return error(400, `Answer for ${key} must be either "yes" or "no"`)
+    // For medical_history forms, answers can be a complex nested structure
+    // For consent forms, validate yes/no answers
+    if (formType === 'consent') {
+      // Validate that all answer values are 'yes' or 'no' for consent forms
+      for (const key in answers) {
+        if (answers[key] !== 'yes' && answers[key] !== 'no') {
+          return error(400, `Answer for ${key} must be either "yes" or "no"`)
+        }
       }
     }
+    // For medical_history forms, accept any structure (nested objects, arrays, strings, etc.)
 
     const formData = {
       patientId,
@@ -1516,18 +1521,44 @@ export const savePatientForm = async (event) => {
       createdBy: userId,
     }
 
-    const created = await DiaryPatientForm.create(formData)
+    let created
+    try {
+      created = await DiaryPatientForm.create(formData)
+    } catch (dbError) {
+      // Handle case where table might not exist yet
+      if (dbError.message && dbError.message.includes('does not exist')) {
+        console.warn('DiaryPatientForms table not found, attempting to sync:', dbError.message)
+        try {
+          await DiaryPatientForm.sync({ alter: true })
+          console.log('DiaryPatientForms table synced successfully')
+          // Retry the create after sync
+          created = await DiaryPatientForm.create(formData)
+        } catch (syncError) {
+          console.error('Failed to sync DiaryPatientForms table:', syncError)
+          return error(500, `Database table not found. Please ensure the DiaryPatientForms table exists. Error: ${syncError.message || dbError.message}`)
+        }
+      } else {
+        throw dbError
+      }
+    }
 
     // Fetch with creator info
-    const form = await DiaryPatientForm.findByPk(created.id, {
-      include: [
-        {
-          model: User,
-          as: 'creator',
-          attributes: ['id', 'firstName', 'lastName', 'email'],
-        },
-      ],
-    })
+    let form
+    try {
+      form = await DiaryPatientForm.findByPk(created.id, {
+        include: [
+          {
+            model: User,
+            as: 'creator',
+            attributes: ['id', 'fullName', 'email'],
+          },
+        ],
+      })
+    } catch (includeError) {
+      // If include fails, just return the form without creator info
+      console.warn('Failed to include creator info:', includeError.message)
+      form = created
+    }
 
     const formattedForm = {
       id: form.id,
@@ -1538,7 +1569,7 @@ export const savePatientForm = async (event) => {
       ourComments: form.ourComments || '',
       additionalInfo: form.additionalInfo || '',
       createdBy: form.creator
-        ? `${form.creator.firstName || ''} ${form.creator.lastName || ''}`.trim() || form.creator.email
+        ? form.creator.fullName || form.creator.email || 'Unknown'
         : 'Unknown',
       createdAt: form.createdAt,
       updatedAt: form.updatedAt,
@@ -1546,7 +1577,10 @@ export const savePatientForm = async (event) => {
 
     return success(formattedForm)
   } catch (e) {
-    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    // Log the full error for debugging
+    console.error('Error in savePatientForm:', e)
+    console.error('Error stack:', e.stack)
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && (e.original.message || e.original.detail)))) || 'Internal server error'
     return error(500, msg)
   }
 }
@@ -1604,7 +1638,7 @@ export const updatePatientForm = async (event) => {
         {
           model: User,
           as: 'creator',
-          attributes: ['id', 'firstName', 'lastName', 'email'],
+          attributes: ['id', 'fullName', 'email'],
         },
       ],
     })
@@ -1618,7 +1652,7 @@ export const updatePatientForm = async (event) => {
       ourComments: updatedForm.ourComments || '',
       additionalInfo: updatedForm.additionalInfo || '',
       createdBy: updatedForm.creator
-        ? `${updatedForm.creator.firstName || ''} ${updatedForm.creator.lastName || ''}`.trim() || updatedForm.creator.email
+        ? updatedForm.creator.fullName || updatedForm.creator.email || 'Unknown'
         : 'Unknown',
       createdAt: updatedForm.createdAt,
       updatedAt: updatedForm.updatedAt,
