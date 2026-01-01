@@ -227,7 +227,6 @@ export const updateDocument = async (event) => {
   try {
     const form = formidable({
       multiples: false,
-      uploadDir: path.join(process.cwd(), "public/documents"),
       keepExtensions: true,
     });
     const { fields, files } = await new Promise((resolve, reject) => {
@@ -238,12 +237,23 @@ export const updateDocument = async (event) => {
     });
     const newFile = files.file[0];
     const userDoc = await UserDocument.findOne({ where: { id: fields.id[0] } });
-    const prevLink = path.join(process.cwd(), "public", userDoc.link);
-    if (prevLink && fs.existsSync(prevLink)) {
-      fs.unlinkSync(prevLink);
+    if (!userDoc) {
+      return error(404, "Document not found");
     }
-    userDoc.link = `documents/${newFile.newFilename}`;
-    userDoc.save();
+    
+    // Get the original file path
+    const originalFilePath = path.join(process.cwd(), "public", userDoc.link);
+    
+    // Read the new file content
+    const fileBuffer = fs.readFileSync(newFile.filepath);
+    
+    // Write directly to the original file path (overwrite)
+    fs.writeFileSync(originalFilePath, fileBuffer);
+    
+    // Clean up the temporary file created by formidable
+    fs.unlinkSync(newFile.filepath);
+    
+    // No need to update the link in database since we're using the same path
     return success(userDoc);
   } catch (err) {
     return error(500, err.message);

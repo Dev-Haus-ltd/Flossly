@@ -19,6 +19,7 @@
       </v-card-title>
       <!-- Viewer -->
       <div class="pa-5" style="height: 700px">
+        <!-- Iframe for file viewing -->
         <iframe
           v-if="viewerUrl"
           :src="viewerUrl"
@@ -30,16 +31,8 @@
 
       <!-- Actions -->
       <v-card-actions class="justify-end">
-        <v-btn
-          v-if="doc.type === 'editable'"
-          text
-          @click="close"
-          style="font-weight: 500; text-transform: none"
-        >
-          Cancel
-        </v-btn>
         <v-btn color="primary" @click="close" flat>
-          {{ doc.type === "editable" ? "Save" : "Close" }}
+          Close
         </v-btn>
       </v-card-actions>
     </v-card>
@@ -67,8 +60,6 @@
 <script setup>
 import { buildAbsoluteLink } from '~/lib/misc'
 
-
-
 const viewerUrl = ref(null)
 const isLoading = ref(false)
 
@@ -79,13 +70,6 @@ const props = defineProps({
 const emit = defineEmits(["update:modelValue", "onUpdate"])
 
 const isOpen = ref(props.modelValue)
-
-// Check if file is DOCX/DOC
-const isDocxFile = (doc) => {
-  if (!doc) return false
-  const fileName = doc.name?.toLowerCase() || doc.link?.toLowerCase() || ''
-  return fileName.endsWith('.docx') || fileName.endsWith('.doc')
-}
 
 // Sync prop with local state
 watch(
@@ -99,12 +83,8 @@ watch(
     isLoading.value = true
     const config = useRuntimeConfig()
     
-    if (isDocxFile(props.doc)) {
-      const fileUrl = `${config.public.BASE_URL}/${props.doc.link}`
-      viewerUrl.value = `https://docs.google.com/gview?url=${encodeURIComponent(fileUrl)}&embedded=true`
-    } else {
-      viewerUrl.value = buildAbsoluteLink(props.doc.link, config.public.BASE_URL)
-    }
+    // For non-DOCX files, use iframe viewer
+    viewerUrl.value = buildAbsoluteLink(props.doc.link, config.public.BASE_URL)
     isLoading.value = false
   }
 )
@@ -124,6 +104,6 @@ const close = () => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  
 }
+
 </style>
