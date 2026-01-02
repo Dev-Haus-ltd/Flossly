@@ -1,4 +1,4 @@
-import { authStart, authCallback, listLeads, fetchLeadsNow, subscribePages, webhook, connectionStatus, adAccounts, campaigns, ads } from "../../controllers/meta";
+import { authStart, authCallback, listLeads, fetchLeadsNow, subscribePages, webhook, connectionStatus } from "../../controllers/meta";
 
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, 'name')
@@ -15,12 +15,6 @@ export default defineEventHandler(async (event) => {
       return await subscribePages(event)
     case 'connection':
       return await connectionStatus(event)
-    case 'adaccounts':
-      return await adAccounts(event)
-    case 'campaigns':
-      return await campaigns(event)
-    case 'ads':
-      return await ads(event)
     case 'webhook':
       return await webhook(event)
     default:

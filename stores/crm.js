@@ -20,9 +20,6 @@ export const useCrmStore = defineStore("crmStore", {
     connectionStatus() { return this._wrap(() => crmService.connectionStatus()); },
     fetchLeadsNow() { return this._wrap(() => crmService.fetchLeadsNow()); },
     subscribePages() { return this._wrap(() => crmService.subscribePages()); },
-    getAdAccounts() { return this._wrap(() => crmService.getAdAccounts()); },
-    getCampaigns(accountId) { return this._wrap(() => crmService.getCampaigns(accountId)); },
-    getAds({ accountId, campaignId }) { return this._wrap(() => crmService.getAds({ accountId, campaignId })); },
 
     // Leads
     listLeads(filters = {}) { return this._wrap(() => crmService.listLeads(filters)); },

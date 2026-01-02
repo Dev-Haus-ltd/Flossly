@@ -42,10 +42,8 @@ export const authStart = async (event) => {
 
   const scope = [
     'pages_show_list',
-    'pages_read_engagement',
     'pages_manage_metadata',
     'leads_retrieval',
-    'ads_read',
   ].join(',')
 
   // ✅ FIX: Add auth_type=rerequest to force fresh login
@@ -398,93 +396,6 @@ export const connectionStatus = async (event) => {
   }))
   
   return success({ count, lastConnectedAt, pages: data })
-}
-
-const getLongLivedUserToken = async (orgId, userId) => {
-  try { await MetaUserToken.sync() } catch (_) {}
-  const rec = await MetaUserToken.findOne({ 
-    where: { organisationId: orgId, userId } 
-  })
-  if (!rec) return null
-  
-  // Check if token is expired
-  if (rec.expiresAt && new Date(rec.expiresAt) < new Date()) {
-    console.warn('[META] User token expired')
-    return null
-  }
-  
-  return decrypt(rec.userTokenEnc)
-}
-
-export const adAccounts = async (event) => {
-  const { orgId, userId } = event.context.user || {}
-  if (!orgId || !userId) return error(401, 'Unauthenticated')
-  
-  const token = await getLongLivedUserToken(orgId, userId)
-  if (!token) return error(400, 'Meta not connected or token expired')
-  
-  try {
-    const url = `https://graph.facebook.com/${META_VERSION}/me/adaccounts?fields=id,account_status,name,currency,timezone_name&limit=100&access_token=${encodeURIComponent(token)}`
-    const resp = await $fetch(url, { method: 'GET' })
-    const data = Array.isArray(resp?.data) ? resp.data : []
-    return success(data)
-  } catch (e) {
-    const msg = e?.data?.error?.message || e?.message || 'Failed to fetch ad accounts'
-    return error(500, msg)
-  }
-}
-
-export const campaigns = async (event) => {
-  const { orgId, userId } = event.context.user || {}
-  if (!orgId || !userId) return error(401, 'Unauthenticated')
-  
-  const q = getQuery(event)
-  const accountId = q.account_id || q.accountId
-  if (!accountId) return error(400, 'Missing account_id')
-  
-  const token = await getLongLivedUserToken(orgId, userId)
-  if (!token) return error(400, 'Meta not connected or token expired')
-  
-  try {
-    const act = accountId.startsWith('act_') ? accountId : `act_${accountId}`
-    const fields = 'id,name,status,objective,daily_budget,created_time,updated_time'
-    const url = `https://graph.facebook.com/${META_VERSION}/${act}/campaigns?effective_status=%5B%22ACTIVE%22,%22PAUSED%22%5D&fields=${encodeURIComponent(fields)}&limit=100&access_token=${encodeURIComponent(token)}`
-    const resp = await $fetch(url, { method: 'GET' })
-    const data = Array.isArray(resp?.data) ? resp.data : []
-    return success(data)
-  } catch (e) {
-    const msg = e?.data?.error?.message || e?.message || 'Failed to fetch campaigns'
-    return error(500, msg)
-  }
-}
-
-export const ads = async (event) => {
-  const { orgId, userId } = event.context.user || {}
-  if (!orgId || !userId) return error(401, 'Unauthenticated')
-  
-  const q = getQuery(event)
-  const accountId = q.account_id || q.accountId
-  const campaignId = q.campaign_id || q.campaignId
-  const token = await getLongLivedUserToken(orgId, userId)
-  if (!token) return error(400, 'Meta not connected or token expired')
-  
-  try {
-    let url
-    const fields = 'id,name,status,adset{id,name},campaign{id,name},created_time,updated_time'
-    if (campaignId) {
-      url = `https://graph.facebook.com/${META_VERSION}/${campaignId}/ads?fields=${encodeURIComponent(fields)}&limit=100&access_token=${encodeURIComponent(token)}`
-    } else {
-      if (!accountId) return error(400, 'Missing account_id or campaign_id')
-      const act = accountId.startsWith('act_') ? accountId : `act_${accountId}`
-      url = `https://graph.facebook.com/${META_VERSION}/${act}/ads?fields=${encodeURIComponent(fields)}&limit=100&access_token=${encodeURIComponent(token)}`
-    }
-    const resp = await $fetch(url, { method: 'GET' })
-    const data = Array.isArray(resp?.data) ? resp.data : []
-    return success(data)
-  } catch (e) {
-    const msg = e?.data?.error?.message || e?.message || 'Failed to fetch ads'
-    return error(500, msg)
-  }
 }
 
 export const webhook = async (event) => {
