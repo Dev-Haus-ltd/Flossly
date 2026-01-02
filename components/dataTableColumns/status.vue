@@ -76,11 +76,20 @@
             variant="flat"
             @click="toggleStatusEdit = !toggleStatusEdit"
           >
-            <v-icon 
+            <img
+              v-if="!toggleStatusEdit"
+              src="@/assets/tasks/edit.svg"
+              alt="Edit"
+              width="16"
+              height="16"
+              class="edit-icon"
+            />
+            <v-icon
+              v-else
               size="16" 
               class="edit-icon"
             >
-              {{ toggleStatusEdit ? "mdi-check" : "mdi-pencil-outline" }}
+              mdi-check
             </v-icon>
             <span class="edit-text">{{ toggleStatusEdit ? "Apply" : "Edit Labels" }}</span>
           </v-btn>

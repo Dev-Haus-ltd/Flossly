@@ -524,7 +524,7 @@
                       class="ml-1"
                       @click.stop="startEditingLink(item, col.key)"
                     >
-                      <v-icon size="14">mdi-pencil</v-icon>
+                      <img src="@/assets/tasks/edit.svg" alt="Edit" width="14" height="14" />
                     </v-btn>
                   </template>
                   <template v-else>
@@ -560,22 +560,26 @@
 
               <!-- Delete icon for 'actions' column -->
               <template v-else-if="col.key === 'actions'">
-                <v-icon
-                  color="error"
+                <img
+                  src="@/assets/tasks/delete.svg"
+                  alt="Delete"
+                  width="18"
+                  height="18"
                   class="cursor-pointer"
+                  style="filter: brightness(0) saturate(100%) invert(27%) sepia(51%) saturate(2878%) hue-rotate(346deg) brightness(104%) contrast(97%);"
                   @click="deleteRow(item.id)"
-                >
-                  mdi-delete
-                </v-icon>
+                />
               </template>
               <!-- avatar assignedUser -->
               <template v-else-if="col.key === 'assignedUser.fullName'">
                 <DataTableColumnsAssignedUsers
+                  :user-task-id="item.id"
                   :assigned-users="item.assignedUsers || [user]"
                   :all-users="getTaskUsers(item)"
                   :current-user="user"
                   @assign="assignTask(item, $event)"
                   @unassign="unAssign(item, $event)"
+                  @add-staff="addStaffDrawer = true"
                 />
               </template>
               <!-- Custom column template -->
@@ -796,13 +800,15 @@
 
                       <!-- Delete icon for 'actions' column -->
                       <template v-else-if="col.key === 'actions'">
-                        <v-icon
-                          color="error"
+                        <img
+                          src="@/assets/tasks/delete.svg"
+                          alt="Delete"
+                          width="18"
+                          height="18"
                           class="cursor-pointer"
+                          style="filter: brightness(0) saturate(100%) invert(27%) sepia(51%) saturate(2878%) hue-rotate(346deg) brightness(104%) contrast(97%);"
                           @click="deleteSubtaskRow(item.id)"
-                        >
-                          mdi-delete
-                        </v-icon>
+                        />
                       </template>
 
                       <!-- Custom column template for subtasks -->
@@ -953,6 +959,11 @@
       confirm-text="Delete"
       @confirm="confirmDeleteCustomColumn"
       @cancel="cancelDeleteCustomColumn"
+    />
+    <TeamFlossSideBarAddNewstaff
+      v-model="addStaffDrawer"
+      :rolesList="rolesList"
+      @success="onStaffAdded"
     />
 
     <!-- Add Task Panel - Only render after page loads -->
@@ -1270,6 +1281,7 @@ const drawerOpen = ref(false);
 const openedPanels = ref([0]);
 const dialogOpen = ref(false);
 const taskPoolDialog = ref(false);
+const addStaffDrawer = ref(false);
 const isAllSelected = ref(false);
 const selectedStatusForNewTask = ref(null);
 const selectedCategoryForNewTask = ref(null);
@@ -1778,6 +1790,12 @@ const assignTask = async (task, user) => {
     });
   }
 };
+
+const onStaffAdded = () => {
+  addStaffDrawer.value = false;
+  refreshTasks(); // or emit("onUpdate"), whatever you already use
+};
+
 const addHeaderInSelected = async (column) => {
   if (!selectedHeaders.value.find((x) => x.key === column.key)) {
     selectedHeaders.value.push(column);

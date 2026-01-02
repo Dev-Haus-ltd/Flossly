@@ -76,6 +76,19 @@
                   @update:search="searchCategory"
                   :menu-props="{ closeOnContentClick: true }"
                 >
+                  <template #item="{ props, item }">
+                    <v-list-item v-bind="props">
+                      <template #append v-if="shouldShowDeleteIcon(item.raw)">
+                        <img
+                          src="@/assets/tasks/delete.svg"
+                          alt="Delete"
+                          class="cursor-pointer"
+                          style="width: 18px; height: 18px;"
+                          @click.stop="handleDeleteCategory(item.raw)"
+                        />
+                      </template>
+                    </v-list-item>
+                  </template>
                   <!-- Add New Category Option -->
                   <template #append-item>
                     <v-divider class="my-2" />
@@ -315,6 +328,17 @@
         @success="handleCategorySuccess"
         :categories="taskCategories"
       />
+
+      <!-- Delete Category Confirmation Dialog -->
+      <CommonConfirmDialog
+        v-model="showDeleteConfirm"
+        title="Delete category?"
+        message="Are you sure you want to delete this category? This action cannot be undone."
+        confirm-text="Delete"
+        :loading="deleteLoading"
+        @confirm="confirmDeleteCategory"
+        @cancel="cancelDeleteCategory"
+      />
     </v-navigation-drawer>
   </teleport>
 </template>
@@ -385,6 +409,9 @@ const users = ref([]);
 const taskCategories = ref([]);
 const addCategoryDialog = ref(false);
 const searchQuery = ref("");
+const showDeleteConfirm = ref(false);
+const deleteLoading = ref(false);
+const categoryToDelete = ref(null);
 
 const frequencies = ref([
   { id: 0, name: "One off"},
@@ -541,6 +568,67 @@ const getUsers = () => {
 
 const searchCategory = (searchValue) => {
   searchQuery.value = searchValue;
+};
+
+const getTaskCount = (category) => {
+  // Handle taskCount as string or number (Sequelize COUNT returns string)
+  const count = category.taskCount;
+  if (count === null || count === undefined) return 0;
+  return typeof count === 'string' ? parseInt(count, 10) || 0 : count || 0;
+};
+
+const shouldShowDeleteIcon = (category) => {
+  // Show delete icon for user-created categories (organisationId !== null) with 0 tasks
+  const taskCount = getTaskCount(category);
+  return category.organisationId !== null && taskCount === 0;
+};
+
+const handleDeleteCategory = (category) => {
+  categoryToDelete.value = category;
+  showDeleteConfirm.value = true;
+};
+
+const confirmDeleteCategory = async () => {
+  if (!categoryToDelete.value) return;
+
+  deleteLoading.value = true;
+  try {
+    const res = await taskStore.deleteCategory({ id: categoryToDelete.value.id });
+    if (res.code === 0) {
+      // Remove category from list
+      taskCategories.value = taskCategories.value.filter((c) => c.id !== categoryToDelete.value.id);
+      
+      // Clear selection if deleted category was selected
+      if (form.value.categoryId === categoryToDelete.value.id) {
+        form.value.categoryId = null;
+      }
+
+      mainStore.setSnackbar({
+        type: "success",
+        title: "Category deleted successfully",
+      });
+      
+      showDeleteConfirm.value = false;
+      categoryToDelete.value = null;
+    } else {
+      mainStore.setSnackbar({
+        type: "error",
+        title: res.data?.message || res.message || "Failed to delete category",
+      });
+    }
+  } catch (err) {
+    mainStore.setSnackbar({
+      type: "error",
+      title: err.message || "Failed to delete category",
+    });
+  } finally {
+    deleteLoading.value = false;
+  }
+};
+
+const cancelDeleteCategory = () => {
+  showDeleteConfirm.value = false;
+  categoryToDelete.value = null;
 };
 
 const openCategoryDialog = () => {

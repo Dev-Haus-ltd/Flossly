@@ -9,7 +9,8 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     }
 
     const authStore = useAuthStore?.();
-    if (authStore && typeof authStore.profile === 'function') {
+    // Only fetch profile if it's not already loaded
+    if (authStore && typeof authStore.profile === 'function' && !authStore.loggedUser) {
       try {
         await authStore.profile();
       } catch (e) {

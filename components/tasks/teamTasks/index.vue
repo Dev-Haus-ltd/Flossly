@@ -213,7 +213,7 @@
                 class="action-item d-flex flex-column align-center"
                 @click="handleDelete"
               >
-                <v-icon size="20" color="#6d6d6d">mdi-delete-outline</v-icon>
+                <img src="@/assets/tasks/delete.svg" alt="Delete" width="20" height="20" style="opacity: 0.7;" />
                 <span class="action-label">Delete</span>
               </div>
 

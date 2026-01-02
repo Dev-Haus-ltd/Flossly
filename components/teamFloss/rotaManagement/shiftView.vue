@@ -287,6 +287,7 @@
           v-for="day in visibleDays"
           :key="day.date + '-' + surg.id"
           class="day-col shift-cell"
+          @click="addSurgeryShift(surg, day)"
         >
           <div
             v-for="(shift, i) in getSurgeryShifts(surg.id, day.date)"
@@ -300,7 +301,7 @@
                 <div
                   v-bind="props"
                   class="shift-chip"
-                  @click="editShift(shift)"
+                  @click.stop="editSurgeryShift(shift, surg, day)"
                   :style="{
                     backgroundColor: shift.color + '1A',
                     borderBottom: `4px solid ${shift.color}`,
@@ -328,7 +329,7 @@
                       </template>
 
                       <v-list width="220" class="rounded-xl" :elevation="2">
-                        <v-list-item @click="editShift(shift)">
+                        <v-list-item @click="editSurgeryShift(shift, surg, day)">
                           <div class="menu-item">
                             <img
                               src="@/assets/icons/teamfloss/shifts/edit.svg"
@@ -340,7 +341,7 @@
                           </div>
                         </v-list-item>
 
-                        <v-list-item @click="addShift(shift)">
+                        <v-list-item @click.stop="addSurgeryShift(surg, day)">
                           <div class="menu-item">
                             <img
                               src="@/assets/icons/teamfloss/shifts/add.svg"
@@ -440,6 +441,7 @@
         class="staff-col first-col-color d-flex align-center justify-center pa-4 pos-sticky-left"
       >
         <v-btn
+          v-if="selectedView !== 0"
           class="add-staff-btn"
           color="#3ADF8D"
           rounded="lg"
@@ -454,6 +456,23 @@
             </v-icon>
           </template>
           Manage Staff
+        </v-btn>
+        <v-btn
+          v-if="selectedView === 0"
+          class="add-staff-btn"
+          color="#3ADF8D"
+          rounded="lg"
+          width="100%"
+          style="background-color: white; color: #1e1e1e"
+          flat
+          @click="emit('onOpenRoomManagement')"
+        >
+          <template #prepend>
+            <v-icon size="20" style="color: #1e1e1e">
+              mdi-plus-circle-outline
+            </v-icon>
+          </template>
+          Manage rooms
         </v-btn>
       </div>
     </div>
@@ -495,7 +514,7 @@ const { shifts, rota, users, selectedView } = defineProps({
   users: Array,
   selectedView: Number,
 });
-const emit = defineEmits(["onAddShift", "updateShifts", "onAddUser"]);
+const emit = defineEmits(["onAddShift", "updateShifts", "onAddUser", "onOpenRoomManagement"]);
 
 const mainStore = useMainStore();
 const rotaStore = useRotaStore();
@@ -533,7 +552,10 @@ const getAllUsers = () => {
     .getUserList({ roleId: null, orgId: rota.organisationId })
     .then((res) => {
       if (res.code === 0) {
-        employees.value = res.data;
+        // Filter out deactivated staff members
+        employees.value = res.data.filter(
+          (user) => !user.isAccountDeactivated && user.orgStatus === "Active"
+        );
       }
     });
 };
@@ -662,6 +684,20 @@ const addShift = (user, day) => {
 
   emit("handleShiftEdit", {});
   emit("onAddShift", { user, day });
+};
+
+const addSurgeryShift = (surgery, day) => {
+  if (!isManager.value) {
+    return;
+  }
+
+  emit("handleShiftEdit", {});
+  emit("onAddShift", { surgery, day });
+};
+
+const editSurgeryShift = (shift, surgery, day) => {
+  emit("handleShiftEdit", { ...shift });
+  emit("onAddShift", { surgery, day });
 };
 
 const editShift = (shift, user, day) => {

@@ -143,7 +143,7 @@
               color="primary"
               @click="openPreview(item)"
             >
-              <v-icon size="16" class="mr-1">mdi-pencil</v-icon>
+              <img src="@/assets/tasks/edit.svg" alt="Edit" width="16" height="16" class="mr-1" />
               Edit
             </v-btn>
           </template>

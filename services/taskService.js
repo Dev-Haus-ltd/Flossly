@@ -291,9 +291,31 @@ export default {
         });
     });
   },
+  sendTaskDetailsByEmail(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/sendTaskDetailsByEmail", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
   addCategory(data) {
     return new Promise((resolve, reject) => {
       Post("/tasks/addCategory", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  deleteCategory(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/deleteCategory", data)
         .then((res) => {
           resolve(res);
         })

@@ -8,6 +8,7 @@ import {
   uploadBulkTasks,
   createUserTaskChecklist,
   deleteAttachment,
+  deleteTaskCategory,
   deleteTaskChecklist,
   deleteUserTaskChecklist,
   getUserTaskDetails,
@@ -39,6 +40,7 @@ import {
   listCustomColumns,
   updateCustomColumn,
   deleteCustomColumn,
+  sendTaskDetailsByEmail,
 } from "~/server/controllers/task";
 
 export default defineEventHandler(async (event) => {
@@ -50,6 +52,8 @@ export default defineEventHandler(async (event) => {
       return await listMyTasks(event);
     case "addCategory":
       return await addTaskCategory(event);
+    case "deleteCategory":
+      return await deleteTaskCategory(event);
     case "listCategories":
       return await getCategories(event);
     case "listCategoriesForPool":
@@ -124,6 +128,8 @@ export default defineEventHandler(async (event) => {
       return await updateCustomColumn(event);
     case "deleteCustomColumn":
       return await deleteCustomColumn(event);
+    case "sendTaskDetailsByEmail":
+      return await sendTaskDetailsByEmail(event);
     default:
       return { code: 0, error: "Not found" };
   }

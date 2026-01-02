@@ -82,7 +82,19 @@
       :folder="selectedFolder"
       @onUpdate="updateView"
     />
-    <DocsMyDocsViewFileDialog v-model="viewFileDialog" :doc="selectedDoc" />
+    <!-- Custom dialog for DOCX files -->
+    <DocsMyDocsDocxEditorDialog 
+      v-if="selectedDoc && isDocxFile(selectedDoc)"
+      v-model="viewFileDialog" 
+      :doc="selectedDoc" 
+      @onUpdate="updateView"
+    />
+    <!-- Vuetify dialog for other file types -->
+    <DocsMyDocsViewFileDialog 
+      v-else
+      v-model="viewFileDialog" 
+      :doc="selectedDoc" 
+    />
   </div>
 </template>
 
@@ -153,6 +165,13 @@ const getDocs = (data) => {
       //snack
     });
 };
+
+// Check if file is DOCX/DOC
+const isDocxFile = (doc) => {
+  if (!doc) return false
+  const fileName = doc.name?.toLowerCase() || doc.link?.toLowerCase() || ''
+  return fileName.endsWith('.docx') || fileName.endsWith('.doc')
+}
 
 const openFile = (file) => {
   selectedDoc.value = file;

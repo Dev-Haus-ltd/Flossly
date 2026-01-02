@@ -86,7 +86,7 @@
             color="error"
             @click="clearParsedData"
           >
-            <v-icon left>mdi-delete</v-icon>
+            <img src="@/assets/tasks/delete.svg" alt="Delete" width="18" height="18" class="mr-1" style="vertical-align: middle;" />
             Clear
           </v-btn>
         </div>

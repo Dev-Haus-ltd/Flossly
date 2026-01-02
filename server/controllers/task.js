@@ -31,6 +31,7 @@ import {
   sendTaskUnassignmentEmail,
   sendTaskDueReminderEmail,
   sendTaskCommentNotificationEmail,
+  sendTaskDetailsEmail,
 } from "../utils/emailNotifications";
 
 const PRIVILEGED_ROLE_IDS = [1, 8];
@@ -206,6 +207,53 @@ export const addTaskCategory = async (event) => {
     });
 
     return success({ message: "Saved", category: newCategory });
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const deleteTaskCategory = async (event) => {
+  const loggedUser = event.context.user;
+  ensureManagerOrOwner(loggedUser);
+  const body = await readBody(event);
+  const { id } = typeof body === "string" ? JSON.parse(body) : body;
+  
+  if (!id) return error(400, "Category ID required");
+
+  try {
+    // Find the category - must be a user-created category (not system category)
+    const category = await TaskCategory.findOne({
+      where: {
+        id,
+        organisationId: loggedUser.orgId,
+        isDeleted: false,
+      },
+    });
+
+    if (!category) {
+      return error(404, "Category not found or cannot be deleted");
+    }
+
+    // Check if category has any non-system tasks
+    const taskCount = await Task.count({
+      where: {
+        categoryId: id,
+        [Op.or]: [
+          { isSystemTask: false },
+          { isSystemTask: { [Op.is]: null } },
+        ],
+      },
+    });
+
+    if (taskCount > 0) {
+      return error(400, "Cannot delete category with existing tasks");
+    }
+
+    // Soft delete the category
+    category.isDeleted = true;
+    await category.save();
+
+    return success({ message: "Category deleted successfully" });
   } catch (err) {
     return error(500, err.message);
   }
@@ -2269,6 +2317,25 @@ export const getCategories = async (event) => {
           { organisationId: loggedUser.orgId },
         ],
       },
+      attributes: {
+        include: [[fn("COUNT", col("tasks.id")), "taskCount"]],
+      },
+      include: [
+        {
+          model: Task,
+          as: "tasks",
+          attributes: [],
+          required: false, // important: allows categories with 0 tasks
+          where: {
+            [Op.or]: [
+              { isSystemTask: false },
+              { isSystemTask: { [Op.is]: null } },
+            ],
+          },
+        },
+      ],
+      group: ["TaskCategories.id"],
+      order: [["id", "ASC"]],
     });
     return success(categories);
   } catch (err) {
@@ -3113,3 +3180,76 @@ export const deleteCustomColumn = async (event) => {
     return error(500, err.message);
   }
 };
+
+export const sendTaskDetailsByEmail = async (event) => {
+
+  try {
+    let body = await readBody(event);
+
+    // ✅ Normalize body (string → object)
+    if (typeof body === "string") {
+      body = JSON.parse(body);
+    }
+
+    const { userTaskId, email } = body || {};
+
+    if (!userTaskId || !email) {
+      throw createError({
+        statusCode: 400,
+        message: "userTaskId and email are required",
+      });
+    }
+
+    // 1️⃣ Assert existence
+    const exists = await UserTask.findByPk(userTaskId);
+    if (!exists) {
+      throw createError({ statusCode: 404, message: "Task not found" });
+    }
+
+    // 2️⃣ Load aggregate safely
+    const task = await UserTask.findByPk(userTaskId, {
+      include: [
+        { model: User, as: "assignedUser", attributes: ["fullName", "email"] },
+        {
+          model: Task,
+          as: "taskDetails",
+          required: false,
+          include: [
+            {
+              model: TaskCategory,
+              as: "category",
+              required: false,
+              where: { isDeleted: false },
+              attributes: ["name"],
+            },
+          ],
+        },
+        { model: OrganisationStatus, as: "status", attributes: ["name"] },
+        { model: OrganisationPriority, as: "priority", attributes: ["name"] },
+        { model: UserTaskChecklist, as: "userTaskChecklist", separate: true },
+        { model: UserTaskAttachment, as: "attachments", separate: true },
+      ],
+    });
+
+    await sendTaskDetailsEmail({
+      email,
+      taskTitle: task.taskDetails?.title,
+      description: task.taskDetails?.description,
+      category: task.taskDetails?.category?.name,
+      priority: task.priority?.name,
+      status: task.status?.name,
+      assignedUser: task.assignedUser?.fullName,
+      dueDate: task.dueDate
+        ? new Date(task.dueDate).toLocaleDateString()
+        : null,
+      checklist: task.userTaskChecklist || [],
+      attachments: task.attachments || [],
+    });
+
+    return success({ message: "Task details email sent successfully" });
+  } catch (err) {
+    return error(500, err.message || err);
+  }
+};
+
+

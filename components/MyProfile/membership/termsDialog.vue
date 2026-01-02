@@ -31,11 +31,11 @@
             Effective Date: 07-Mar-2023
           </div>
           <v-btn
-            prepend-icon="mdi-download"
             class="text-white mx-5"
             style="background-color: #213536; text-transform: none"
             @click="$emit('download')"
           >
+            <img src="@/assets/tasks/download.svg" alt="Download" width="18" height="18" class="mr-2" />
             Download
           </v-btn>
           <v-btn icon flat @click="$emit('update:modelValue', false)">

@@ -964,4 +964,93 @@ export const leadStatusChangedNotification = async (data) => {
   });
 };
 
+export const sendTaskDetailsEmail = async (data) => {
+  const {
+    email,
+    taskTitle,
+    description,
+    category,
+    priority,
+    status,
+    assignedUser,
+    dueDate,
+    checklist = [],
+    attachments = [],
+  } = data;
+
+  // ✅ Correct checklist rendering
+  const checklistHtml = checklist.length
+    ? `
+      <p><strong>Checklist:</strong></p>
+      <ul>
+        ${checklist
+          .map((item) => {
+            let value =
+              item.fieldOneValue ||
+              item.fieldTwoValue ||
+              item.radioValue ||
+              item.timeValue ||
+              item.dateValue ||
+              "";
+
+            return `<li>
+              <strong>${item.question}</strong>
+              ${value ? `: ${value}` : ""}
+            </li>`;
+          })
+          .join("")}
+      </ul>
+    `
+    : "";
+
+  // ✅ Attachments rendering (unchanged)
+  const attachmentsHtml = attachments.length
+    ? `
+      <p><strong>Attachments:</strong></p>
+      <ul>
+        ${attachments
+          .map(
+            (att) =>
+              `<li><a href="${att.link}" target="_blank">${att.title}</a></li>`
+          )
+          .join("")}
+      </ul>
+    `
+    : "";
+
+  const content = `
+    <p>Hello,</p>
+
+    <p>The following task details have been shared with you:</p>
+
+    <p><strong>Task:</strong> ${taskTitle}</p>
+    ${category ? `<p><strong>Category:</strong> ${category}</p>` : ""}
+    ${priority ? `<p><strong>Priority:</strong> ${priority}</p>` : ""}
+    ${status ? `<p><strong>Status:</strong> ${status}</p>` : ""}
+    ${assignedUser ? `<p><strong>Assigned To:</strong> ${assignedUser}</p>` : ""}
+    ${dueDate ? `<p><strong>Due Date:</strong> ${dueDate}</p>` : ""}
+    ${description ? `<p><strong>Description:</strong><br/>${description}</p>` : ""}
+
+    ${checklistHtml}
+    ${attachmentsHtml}
+
+    <br/>
+    <p>Best regards,<br/>Flossly Team</p>
+  `;
+
+  const subject = "Task Details Shared With You";
+
+  const html = template
+    .replaceAll("{subject}", subject)
+    .replace("{content}", content);
+
+  await transporter.sendMail({
+    from: "Flossly <helloflossly@gmail.com>",
+    to: [email],
+    subject,
+    html,
+  });
+};
+
+
 // leaves

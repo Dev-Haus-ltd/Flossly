@@ -35,7 +35,8 @@ import {
 import requestIp from "request-ip";
 import { HrDocument } from "../models/hrDocuments";
 import path from "path";
-import fs from "fs/promises";
+import fs from "fs";
+import fsPromises from "fs/promises";
 import { createError, setCookie } from "h3";
 import { success, error } from "../utils/response";
 
@@ -427,13 +428,13 @@ export const updateProfile = async (event) => {
 
     if (fileItem) {
       const uploadDir = path.resolve('public/uploads/avatars');
-      await fs.mkdir(uploadDir, { recursive: true });
+      await fsPromises.mkdir(uploadDir, { recursive: true });
       const originalName = fileItem.filename || 'avatar';
       const fileExt = path.extname(originalName) || '';
       const filename = `user-${id}-${Date.now()}${fileExt}`;
       const filepath = path.join(uploadDir, filename);
     
-      await fs.writeFile(filepath, fileItem.data);
+      await fsPromises.writeFile(filepath, fileItem.data);
       user.photo = `/uploads/avatars/${filename}`;
     }
 
