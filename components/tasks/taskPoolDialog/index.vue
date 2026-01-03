@@ -57,7 +57,8 @@
                     @click="fetchGeneralTasks(card)"
                   />
                 </v-col>
-                <v-col v-if="hasTasks"   cols="12"
+                <!-- Hidden "Other" subcategory for now -->
+                <!-- <v-col v-if="hasTasks"   cols="12"
                   sm="6" 
                   md="3">
                   <TasksTaskPoolDialogTaskCards 
@@ -66,7 +67,7 @@
                     :count="hasTasks"
                     @click="fetchGeneralTasks({id: tab})"
                   />
-                </v-col>
+                </v-col> -->
               </v-row>
               <v-card
                 v-else

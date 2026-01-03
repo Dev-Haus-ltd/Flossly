@@ -769,30 +769,24 @@ export const streamTranscribeChunk = async (event) => {
   }
 };
 
-// Initialize GitHub AI Inference client using OpenAI SDK
-let githubClient = null;
+// Initialize OpenAI client using official OpenAI platform
+let openaiClient = null;
 
-const initializeGitHubClient = () => {
-  if (githubClient) return githubClient;
-  
+const initializeOpenAIClient = () => {
+  if (openaiClient) return openaiClient;
   try {
     const config = useRuntimeConfig();
-    const token = config.GITHUB_TOKEN;
-    
-    if (!token) {
-      throw new Error("GITHUB_TOKEN not configured");
+    const apiKey = config.OPENAI_API_KEY;
+
+    if (!apiKey) {
+      throw new Error("OPENAI_API_KEY not configured");
     }
 
-    const endpoint = "https://models.github.ai/inference";
-    githubClient = new OpenAI({
-      baseURL: endpoint,
-      apiKey: token
-    });
-    
-    return githubClient;
+    openaiClient = new OpenAI({ apiKey });
+    return openaiClient;
   } catch (err) {
-    console.error("Error initializing GitHub AI client:", err);
-    throw new Error("Failed to initialize GitHub AI client");
+    console.error("Error initializing OpenAI client:", err);
+    throw new Error("Failed to initialize OpenAI client");
   }
 };
 
@@ -806,9 +800,9 @@ export const summarizeTranscription = async (event) => {
       return error(400, "No text provided for summarization");
     }
 
-    // Initialize GitHub AI client
-    const client = initializeGitHubClient();
-    const model = "openai/gpt-4o";
+    // Initialize OpenAI client
+    const client = initializeOpenAIClient();
+    const model = "gpt-4o-mini"; // or "gpt-4o" for higher quality
 
     // Create a prompt that focuses on removing useless text and keeping only relevant content
     const prompt = `Please summarize the following transcription. Remove any useless text, filler words, repeated phrases, and irrelevant information. Keep only the meaningful and important content. Maintain proper grammar and clarity. If the transcription contains a conversation, preserve the key points and main ideas.
@@ -818,7 +812,7 @@ ${text}
 
 Summary:`;
 
-    // Call GitHub AI Inference API using OpenAI SDK
+    // Call OpenAI Chat Completions API
     const response = await client.chat.completions.create({
       messages: [
         {
@@ -848,15 +842,13 @@ Summary:`;
     });
   } catch (err) {
     console.error("Summarization error:", err);
-    
-    // Handle specific GitHub token errors
-    if (err.message && err.message.includes("GITHUB_TOKEN")) {
-      return error(500, "GitHub token not configured. Please check environment variables.");
+
+    if (err.message && err.message.includes("OPENAI_API_KEY")) {
+      return error(500, "OpenAI API key not configured. Please set OPENAI_API_KEY.");
     }
-    
-    // Handle OpenAI API errors
+
     if (err.status === 401 || err.statusCode === 401) {
-      return error(401, "Invalid GitHub token. Please check your configuration.");
+      return error(401, "Invalid OpenAI API key. Please check OPENAI_API_KEY.");
     }
     
     if (err.status === 429 || err.statusCode === 429) {
