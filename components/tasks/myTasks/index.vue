@@ -2,14 +2,14 @@
   <div>
     <div class="cust-border d-flex align-center">
       <p class="mr-1">My Tasks</p>
-       <div class="ml-auto d-flex align-center" v-if="isPrivileged">
+      <!-- <div class="ml-auto d-flex align-center" v-if="isPrivileged">
         <v-btn size="small" variant="outlined" class="mr-2" @click="showUploadDialog = true">
           Upload Checklist (Dev)
         </v-btn>
         <v-btn size="small" variant="text" :href="'/samples/checklist-sample.csv'" target="_blank">
           Download sample
         </v-btn>
-      </div>
+      </div> -->
     </div>
     <div class="pa-5 rounded-lg">
       <div class="task-summary">
