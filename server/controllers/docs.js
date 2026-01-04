@@ -252,8 +252,10 @@ export const updateDocument = async (event) => {
     
     // Clean up the temporary file created by formidable
     fs.unlinkSync(newFile.filepath);
+
+    // Touch the document so updatedAt changes (used for cache-busting and UI)
+    await userDoc.update({ updatedAt: new Date() });
     
-    // No need to update the link in database since we're using the same path
     return success(userDoc);
   } catch (err) {
     return error(500, err.message);
@@ -306,6 +308,9 @@ export const viewDocument = async (event) => {
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     );
+    event.node.res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    event.node.res.setHeader("Pragma", "no-cache");
+    event.node.res.setHeader("Expires", "0");
     return fileBuffer;
   } catch (err) {
     return error(500, err.message);
@@ -328,6 +333,9 @@ export const viewSystemDocument = async (event) => {
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     );
+    event.node.res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    event.node.res.setHeader("Pragma", "no-cache");
+    event.node.res.setHeader("Expires", "0");
     return fileBuffer;
   } catch (err) {
     return error(500, err.message);
