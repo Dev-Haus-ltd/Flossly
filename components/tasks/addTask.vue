@@ -92,12 +92,12 @@
                   <!-- Add New Category Option -->
                   <template #append-item>
                     <v-divider class="my-2" />
-                    <v-list-item @click="openCategoryDialog">
-                      <v-icon start color="primary">mdi-plus</v-icon>
-                      <v-list-item-title class="text-primary">
-                        Add New Category
-                      </v-list-item-title>
-                    </v-list-item>
+                   <v-list-item @click="openCategoryDialog" class="pa-0 ms-3" density="compact">
+                     <v-list-item-title class="text-primary d-inline-flex align-center" style="gap: 4px;">
+                       <v-icon color="primary" size="22">mdi-plus</v-icon>
+                       <span>Add New Category</span>
+                     </v-list-item-title>
+                   </v-list-item>
                   </template>
                 </v-autocomplete>
               </v-col>
