@@ -45,6 +45,21 @@
             <span class="ml-2 title-text text-grey">No practices available</span>
           </div>
         </v-list-item>
+
+        <!-- Add Workspace Button - Only visible to privileged roles -->
+        <template v-if="canAddWorkspace">
+          <v-divider class="my-1" />
+          <v-list-item
+            @click="handleAddWorkspace"
+            :disabled="isCreatingWorkspace"
+            class="add-workspace-item"
+          >
+            <div class="d-flex align-center">
+              <v-icon size="20" color="primary">mdi-plus-circle-outline</v-icon>
+              <span class="ml-2 title-text text-primary">Add Practice</span>
+            </div>
+          </v-list-item>
+        </template>
       </v-list>
     </v-menu>
   </div>
@@ -55,20 +70,23 @@ const { currentOrg, rail } = defineProps({
   currentOrg: Object,
   rail: Boolean,
 });
+const router = useRouter();
 const authStore = useAuthStore();
 const mainStore = useMainStore();
-const { user } = useUser();
+const orgStore = useOrgStore();
+const { user, canAddWorkspace } = useUser();
 const menu = ref(false);
+const isCreatingWorkspace = ref(false);
 
 const getOrgData = (orgWrapper) => {
   if (orgWrapper?.organisation?.id && orgWrapper?.organisation?.name) {
     return orgWrapper.organisation;
   }
-  
+
   if (orgWrapper?.id && orgWrapper?.name) {
     return orgWrapper;
   }
-  
+
   return null;
 };
 
@@ -76,7 +94,7 @@ const validOrganizations = computed(() => {
   if (!user.value?.userOrganisations?.length) {
     return [];
   }
-  
+
   const valid = user.value.userOrganisations.filter(org => {
     const orgData = getOrgData(org);
     const isActive = org.status === "Active";
@@ -86,9 +104,10 @@ const validOrganizations = computed(() => {
     const isValid = orgData !== null && isActive && isNotDeactivated;
     return isValid;
   });
-  
+
   return valid;
 });
+
 const handleOrgClick = async (org) => {
   if (!org || !org.id) {
     mainStore.setSnackbar({
@@ -130,6 +149,67 @@ const handleOrgClick = async (org) => {
       type: "error",
       title: err.message || "An error occurred while switching organisation",
     });
+  }
+};
+
+// Add Workspace Handler
+const handleAddWorkspace = async () => {
+  if (isCreatingWorkspace.value) return;
+
+  // Double-check permission on frontend (backend also validates)
+  if (!canAddWorkspace.value) {
+    mainStore.setSnackbar({
+      type: "error",
+      title: "You do not have permission to add workspaces",
+    });
+    return;
+  }
+
+  isCreatingWorkspace.value = true;
+
+  try {
+    // Generate unique temporary name
+    const tempName = `New Practice ${Date.now()}`;
+
+    // Create new organization
+    const createRes = await orgStore.createOrganisationForUser({
+      organisationName: tempName,
+    });
+
+    if (createRes.code !== 0) {
+      mainStore.setSnackbar({
+        type: "error",
+        title: createRes.message || "Failed to create workspace",
+      });
+      return;
+    }
+
+    // Switch to the new organization
+    const switchRes = await authStore.switchOrgnanisation({
+      orgId: createRes.data.organisationId,
+    });
+
+    if (switchRes.code !== 0) {
+      mainStore.setSnackbar({
+        type: "error",
+        title: switchRes.message || "Failed to switch workspace",
+      });
+      return;
+    }
+
+    // Refresh profile to get updated org list
+    await authStore.profile();
+
+    // Close menu and navigate to onboarding
+    menu.value = false;
+    router.push("/onboarding");
+  } catch (err) {
+    mainStore.setSnackbar({
+      type: "error",
+      title: err.message || "Failed to create workspace",
+    });
+  } finally {
+    isCreatingWorkspace.value = false;
   }
 };
 
@@ -176,5 +256,11 @@ const getProfile = () => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.add-workspace-item {
+  cursor: pointer;
+}
+.add-workspace-item:hover {
+  background-color: rgba(var(--v-theme-primary), 0.08);
 }
 </style>

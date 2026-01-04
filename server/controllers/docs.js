@@ -13,15 +13,27 @@ import fs from "fs";
 export const createFolder = async (event) => {
   const body = await readBody(event);
   const loggedUser = event.context.user;
-  const { name, color, description } = JSON.parse(body);
+  const { name, color, description, parentId } = JSON.parse(body);
   if (!name) throw createError({ message: "Folder name required" });
   try {
+    // If parentId is provided, validate depth (max 2 levels: root -> level 1 -> level 2)
+    if (parentId) {
+      const parentFolder = await UserDocumentFolder.findByPk(parentId);
+      if (!parentFolder) {
+        throw createError({ message: "Parent folder not found" });
+      }
+      // Check if parent folder already has a parent (meaning it's level 2, can't go deeper)
+      if (parentFolder.parentId) {
+        throw createError({ message: "Maximum folder nesting depth reached (2 levels)" });
+      }
+    }
     const folder = await UserDocumentFolder.create({
       userId: loggedUser.userId,
       organisationId: loggedUser.orgId,
       name,
       color,
       description,
+      parentId: parentId || null,
     });
     return success(folder);
   } catch (err) {
@@ -77,9 +89,16 @@ export const deleteFolder = async (event) => {
 
 export const listFolders = async (event) => {
   const loggedUser = event.context.user;
+  const body = await readBody(event);
+  const { parentId } = body ? JSON.parse(body) : {};
   try {
+    const where = {
+      userId: loggedUser.userId,
+      organisationId: loggedUser.orgId,
+      parentId: parentId || null, // Filter by parent (null = root level folders)
+    };
     const folders = await UserDocumentFolder.findAll({
-      where: { userId: loggedUser.userId, organisationId: loggedUser.orgId },
+      where,
       attributes: {
         include: [
           [
@@ -95,8 +114,14 @@ export const listFolders = async (event) => {
           attributes: [],
           required: false,
         },
+        {
+          model: UserDocumentFolder,
+          as: "parent",
+          attributes: ["id", "name", "color", "parentId"],
+          required: false,
+        },
       ],
-      group: ["UserDocumentFolders.id"], // group by folder ID
+      group: ["UserDocumentFolders.id", "parent.id"], // group by folder ID and parent
       order: [["createdAt", "DESC"]],
     });
     return success(folders);

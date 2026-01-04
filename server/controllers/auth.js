@@ -73,19 +73,23 @@ export const login = async (event) => {
   const activeOrgs = orgs;
 
   const userPreference = await UserPreference.findOne({
-    where: { userId: user.id },
+    where: { 
+      userId: user.id,
+      organisationId: user.lastLoginOrganisationId || activeOrgs[0].organisationId,
+     },
   });
-  if (userPreference && userPreference.licenseRenewalDate) {
-    const renewalDate = new Date(userPreference.licenseRenewalDate);
-    if (renewalDate < new Date() && userPreference.licenseType === "Trial") {
-      return error(401, "License Expired");
-    }
+  if (
+    userPreference &&
+    userPreference.licenseType === "Trial" &&
+    new Date(userPreference.licenseRenewalDate) < new Date()
+  ) {
+    return error(401, "License Expired");
   }
 
   let orgId;
-  if (userPreference && userPreference.lastLoginOrganisationId) {
+  if (user.lastLoginOrganisationId) {
     const lastOrg = activeOrgs.find(
-      (o) => o.organisationId === userPreference.lastLoginOrganisationId
+      (o) => o.organisationId === user.lastLoginOrganisationId
     );
     if (lastOrg) {
       orgId = lastOrg.organisationId;
@@ -100,10 +104,9 @@ export const login = async (event) => {
     { userId: user.id, orgId, roleId: user.roleId, purpose: "login" },
     config.JWT_SECRET
   );
-  await UserPreference.update(
-    { lastLoginDate: new Date(), lastLoginOrganisationId: orgId },
-    { where: { userId: user.id } }
-  );
+  user.lastLoginDate = new Date()
+  user.lastLoginOrganisationId = orgId
+  await user.save()
   await LoginHistory.create({ userId: user.id, browserAgent });
   setCookie(event, "accessToken", token, { maxAge: 31536000 });
   return success(token);
@@ -234,7 +237,9 @@ export const signupRequest = async (event) => {
   try {
     // create organisation
     org = await Organisation.create(
-      { name: organisationName },
+      { name: organisationName,
+        hasUsedTrial: false,
+       },
       { transaction }
     );
 
@@ -252,14 +257,19 @@ export const signupRequest = async (event) => {
     );
     org.managerId = user.id;
     await org.save({ transaction });
-    const today = new Date().getDate();
-    const renewalDate = new Date(new Date().setDate(today + 15));
+    const trialEndDate = new Date();
+    trialEndDate.setDate(trialEndDate.getDate() + 15);
     await UserPreference.create(
       {
-        licenseType: "Trial",
         userId: user.id,
-        licenseRenewalDate: renewalDate,
+        organisationId: org.id,
+        licenseType: "Trial",
+        licenseRenewalDate: trialEndDate,
       },
+      { transaction }
+    );
+    await org.update(
+      { hasUsedTrial: true },
       { transaction }
     );
 
@@ -939,21 +949,25 @@ export const acceptInvitation = async (event) => {
       },
       config.JWT_SECRET
     );
-    const manager = await UserPreference.findOne({
-      where: { userId: userOrgDetails.managerId },
+    const managerPreference = await UserPreference.findOne({
+      where: {
+        userId: userOrgDetails.managerId,
+        organisationId: userOrg.organisationId,
+      },
     });
-    const today = new Date().getDate();
-    const renewalDate = new Date(new Date().setDate(today + 15));
+    const trialEndDate = new Date();
+    trialEndDate.setDate(trialEndDate.getDate() + 15);
+
     let licenseType = "Trial";
-    let licenseRenewalDate = renewalDate;
-    if (manager) {
-      licenseType = manager.licenseType;
-      licenseRenewalDate = manager.licenseRenewalDate;
+    let licenseRenewalDate = trialEndDate;
+
+    if (managerPreference) {
+      licenseType = managerPreference.licenseType;
+      licenseRenewalDate = managerPreference.licenseRenewalDate;
     }
     await UserPreference.create({
       userId: user.id,
-      lastLoginDate: new Date(),
-      lastLoginOrganisationId: userOrg.organisationId,
+      organisationId: userOrg.organisationId,
       licenseType,
       licenseRenewalDate,
     });
@@ -1090,12 +1104,6 @@ export const acceptOrganisationInvitation = async (event) => {
           purpose: "login",
         },
         config.JWT_SECRET
-      );
-
-      // Update last login info
-      await UserPreference.update(
-        { lastLoginDate: new Date(), lastLoginOrganisationId: orgId },
-        { where: { userId: user.id } }
       );
 
       // Set authentication cookie

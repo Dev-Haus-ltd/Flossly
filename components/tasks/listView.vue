@@ -183,6 +183,7 @@
 
       <div class="d-inline-flex ml-auto" style="flex-wrap: nowrap">
         <v-btn
+          v-if="canAddWorkspace"
           color="tertiary"
           variant="flat"
           rounded="lg"
@@ -1281,6 +1282,7 @@ const drawerOpen = ref(false);
 const openedPanels = ref([0]);
 const dialogOpen = ref(false);
 const taskPoolDialog = ref(false);
+const { canAddWorkspace } = useUser()
 const addStaffDrawer = ref(false);
 const isAllSelected = ref(false);
 const selectedStatusForNewTask = ref(null);

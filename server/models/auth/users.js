@@ -58,6 +58,18 @@ export const User = sequelize.define(
       defaultValue: false,
       allowNull: false,
     },
+    lastLoginDate: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    lastLoginOrganisationId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: "Organisations",
+        key: "id",
+      },
+    },
     gender: {
       type: DataTypes.ENUM("Male", "Female", "Other"),
       allowNull: true,

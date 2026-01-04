@@ -69,13 +69,14 @@
       <!-- Actions -->
       <v-card-actions class="justify-end">
         <v-btn
-          text
+          variant="flat"
           @click="close"
           style="font-weight: 500; text-transform: none"
         >
           Cancel
         </v-btn>
         <v-btn
+          variant="flat"
           color="primary"
           @click="saveFile"
           style="font-weight: 500; text-transform: none"

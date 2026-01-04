@@ -258,13 +258,15 @@
     </div>
   </v-card>
       </v-tabs-window>
-      <CommonAddCategorySideBar
-        v-model="addCategoryDialog"
-        @close="handleCategoryDialogClose"
-        @success="handleCategorySuccess"
-        :categories="categories"
-        :edit-category="categoryToEdit"
-      />
+      <ClientOnly>
+        <CommonAddCategorySideBar
+          v-model="addCategoryDialog"
+          @close="handleCategoryDialogClose"
+          @success="handleCategorySuccess"
+          :categories="categories"
+          :edit-category="categoryToEdit"
+        />
+      </ClientOnly>
     </div>
   </div>
   <TasksBulkChecklistUploadDialog v-model="showUploadDialog" @uploaded="getMyStats" />

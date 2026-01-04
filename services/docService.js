@@ -1,8 +1,8 @@
 import { Get, Post, PostFormData } from "./apiWrapper";
 export default {
-  getFolders() {
+  getFolders(data) {
     return new Promise((resolve, reject) => {
-      Post("/docs/listFolders")
+      Post("/docs/listFolders", data)
         .then((res) => {
           resolve(res);
         })

@@ -166,5 +166,11 @@ export default {
         .catch((err) => reject(err));
     });
   },
-
+  createOrganisationForUser(data) {
+    return new Promise((resolve, reject) => {
+      Post("/organisations/createForUser", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
 }
