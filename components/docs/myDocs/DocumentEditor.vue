@@ -8,7 +8,7 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
 import { SuperDoc } from 'superdoc'
 import 'superdoc/style.css'
 
