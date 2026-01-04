@@ -241,21 +241,38 @@ export const updateDocument = async (event) => {
       return error(404, "Document not found");
     }
     
-    // Get the original file path
-    const originalFilePath = path.join(process.cwd(), "public", userDoc.link);
-    
-    // Read the new file content
-    const fileBuffer = fs.readFileSync(newFile.filepath);
-    
-    // Write directly to the original file path (overwrite)
-    fs.writeFileSync(originalFilePath, fileBuffer);
-    
-    // Clean up the temporary file created by formidable
-    fs.unlinkSync(newFile.filepath);
 
-    // Touch the document so updatedAt changes (used for cache-busting and UI)
-    await userDoc.update({ updatedAt: new Date() });
-    
+    const oldFullPath = path.join(process.cwd(), "public", userDoc.link);
+    try {
+      if (fs.existsSync(oldFullPath)) {
+        fs.unlinkSync(oldFullPath);
+      }
+    } catch (e) {
+      // ignore unlink errors
+    }
+
+
+    const documentsDir = path.join(process.cwd(), "public", "documents");
+    if (!fs.existsSync(documentsDir)) {
+      fs.mkdirSync(documentsDir, { recursive: true });
+    }
+    const newBaseName = path.basename(newFile.filepath);
+    const newRelPath = `documents/${newBaseName}`;
+    const newFullPath = path.join(process.cwd(), "public", newRelPath);
+
+ 
+    try {
+      fs.renameSync(newFile.filepath, newFullPath);
+    } catch (e) {
+
+      const fileBuffer = fs.readFileSync(newFile.filepath);
+      fs.writeFileSync(newFullPath, fileBuffer);
+      try { fs.unlinkSync(newFile.filepath); } catch (_) {}
+    }
+
+    // Update document link and touch updatedAt
+    await userDoc.update({ link: newRelPath, updatedAt: new Date() });
+
     return success(userDoc);
   } catch (err) {
     return error(500, err.message);
