@@ -1312,14 +1312,14 @@ const handleComplete = async () => {
 
 .custom-tab-item {
   font-size: 13px;
-  font-weight: 400 !important;
+  font-weight: 400;
   text-transform: none;
   color: var(--tab-text-color, #1e1e1e);
   min-height: 34px;
   height: 34px;
   min-width: max-content;
   padding: 0 12px;
-  border-radius: 8px !important;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   line-height: 1;

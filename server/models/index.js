@@ -152,7 +152,7 @@ Role.hasMany(User, { foreignKey: "roleId", as: "users" });
 User.belongsTo(Role, { foreignKey: "roleId", as: "role", onDelete: "SET NULL" });
 
 // User -> Preference (USER_DELETE)
-User.hasOne(UserPreference, { foreignKey: "userId", as: "preferences" });
+User.hasMany(UserPreference, { foreignKey: "userId", as: "preferences" });
 UserPreference.belongsTo(User, { foreignKey: "userId", as: "user", onDelete: "CASCADE", hooks: true });
 
 // User -> UserOrganisations (USER_DELETE)
@@ -170,6 +170,10 @@ UserSubscription.belongsTo(Organisation, { foreignKey: "organisationId", as: "or
 // UserDocumentFolder -> UserDocument (USER_DELETE)
 UserDocument.belongsTo(UserDocumentFolder, { foreignKey: "folderId", as: "folder" });
 UserDocumentFolder.hasMany(UserDocument, { foreignKey: "folderId", as: "documents", onDelete: "CASCADE", hooks: true });
+
+// UserDocumentFolder -> Self-referencing for nested folders (max 2 levels)
+UserDocumentFolder.hasMany(UserDocumentFolder, { foreignKey: "parentId", as: "subfolders", onDelete: "CASCADE", hooks: true });
+UserDocumentFolder.belongsTo(UserDocumentFolder, { foreignKey: "parentId", as: "parent", onDelete: "CASCADE", hooks: true });
 
 // LoginHistory (USER_DELETE)
 LoginHistory.belongsTo(User, { foreignKey: "userId", onDelete: "CASCADE", hooks: true });

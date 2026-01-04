@@ -17,6 +17,14 @@ export const UserPreference = sequelize.define(
         key: "id",
       },
     },
+    organisationId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: "Organisations",
+        key: "id",
+      },
+    },
     lastLoginDate: {
       type: DataTypes.DATE,
       allowNull: true,
@@ -45,5 +53,18 @@ export const UserPreference = sequelize.define(
   {
     modelName: "UserPreferences",
     timestamps: true,
+    indexes: [
+      {
+        unique: true,
+        fields: ["userId", "organisationId"], // 🔐 one license per user per org
+      },
+      {
+        unique: true,
+        fields: ["organisationId"],
+        where: {
+          licenseType: "Trial",
+        },
+      },
+    ],
   }
 );

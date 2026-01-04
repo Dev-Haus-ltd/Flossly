@@ -972,7 +972,6 @@ export const sendTaskDetailsEmail = async (data) => {
     category,
     priority,
     status,
-    assignedUser,
     dueDate,
     checklist = [],
     attachments = [],
@@ -1009,10 +1008,15 @@ export const sendTaskDetailsEmail = async (data) => {
       <p><strong>Attachments:</strong></p>
       <ul>
         ${attachments
-          .map(
-            (att) =>
-              `<li><a href="${att.link}" target="_blank">${att.title}</a></li>`
-          )
+          .map((att) => {
+            const link = att.link?.startsWith("http")
+              ? att.link
+              : `${config.public.BASE_URL}${att.link}`;
+
+            return `<li>
+              <a href="${link}" target="_blank">${att.title}</a>
+            </li>`;
+          })
           .join("")}
       </ul>
     `
@@ -1027,7 +1031,6 @@ export const sendTaskDetailsEmail = async (data) => {
     ${category ? `<p><strong>Category:</strong> ${category}</p>` : ""}
     ${priority ? `<p><strong>Priority:</strong> ${priority}</p>` : ""}
     ${status ? `<p><strong>Status:</strong> ${status}</p>` : ""}
-    ${assignedUser ? `<p><strong>Assigned To:</strong> ${assignedUser}</p>` : ""}
     ${dueDate ? `<p><strong>Due Date:</strong> ${dueDate}</p>` : ""}
     ${description ? `<p><strong>Description:</strong><br/>${description}</p>` : ""}
 
@@ -1052,5 +1055,56 @@ export const sendTaskDetailsEmail = async (data) => {
   });
 };
 
+export const sendTrialActivatedEmail = async (data) => {
+  const subject = "Your 15-Day Free Trial Is Active 🎉";
+
+  const trialEndDateFormatted = new Date(data.trialEndsOn).toLocaleDateString(
+    "en-GB",
+    {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    }
+  );
+
+  const content = `
+    <p>Dear ${data.fullName || "User"},</p>
+    <br />
+
+    <p>
+      Your <strong>15-day free trial</strong> has been successfully activated for the organisation
+      <strong>${data.organisationName}</strong>.
+    </p>
+
+    <p>
+      You now have full access to all features until
+      <strong>${trialEndDateFormatted}</strong>.
+    </p>
+
+    <br />
+
+    <p>
+      If you have any questions or need help getting started, our support team is always happy to help.
+    </p>
+
+    <br />
+
+    <p>
+      Best regards,<br />
+      The Flossly Team
+    </p>
+  `;
+
+  const html = template
+    .replaceAll("{subject}", subject)
+    .replace("{content}", content);
+
+  await transporter.sendMail({
+    from: "Flossly <helloflossly@gmail.com>",
+    to: [data.email],
+    subject,
+    html,
+  });
+};
 
 // leaves

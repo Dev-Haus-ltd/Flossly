@@ -72,13 +72,17 @@ export const login = async (event) => {
   const activeOrgs = orgs;
 
   const userPreference = await UserPreference.findOne({
-    where: { userId: user.id },
+    where: { 
+      userId: user.id,
+      organisationId: orgId,
+     },
   });
-  if (userPreference && userPreference.licenseRenewalDate) {
-    const renewalDate = new Date(userPreference.licenseRenewalDate);
-    if (renewalDate < new Date() && userPreference.licenseType === "Trial") {
-      return error(401, "License Expired");
-    }
+  if (
+    userPreference &&
+    userPreference.licenseType === "Trial" &&
+    new Date(userPreference.licenseRenewalDate) < new Date()
+  ) {
+    return error(401, "License Expired");
   }
 
   let orgId;
@@ -101,7 +105,10 @@ export const login = async (event) => {
   );
   await UserPreference.update(
     { lastLoginDate: new Date(), lastLoginOrganisationId: orgId },
-    { where: { userId: user.id } }
+    { where: { userId: user.id,
+      organisationId: orgId,
+     } 
+    }
   );
   await LoginHistory.create({ userId: user.id, browserAgent });
   setCookie(event, "accessToken", token, { maxAge: 31536000 });
@@ -233,7 +240,9 @@ export const signupRequest = async (event) => {
   try {
     // create organisation
     org = await Organisation.create(
-      { name: organisationName },
+      { name: organisationName,
+        hasUsedTrial: false,
+       },
       { transaction }
     );
 
@@ -251,14 +260,19 @@ export const signupRequest = async (event) => {
     );
     org.managerId = user.id;
     await org.save({ transaction });
-    const today = new Date().getDate();
-    const renewalDate = new Date(new Date().setDate(today + 15));
+    const trialEndDate = new Date();
+    trialEndDate.setDate(trialEndDate.getDate() + 15);
     await UserPreference.create(
       {
-        licenseType: "Trial",
         userId: user.id,
-        licenseRenewalDate: renewalDate,
+        organisationId: org.id,
+        licenseType: "Trial",
+        licenseRenewalDate: trialEndDate,
       },
+      { transaction }
+    );
+    await org.update(
+      { hasUsedTrial: true },
       { transaction }
     );
 
@@ -938,19 +952,25 @@ export const acceptInvitation = async (event) => {
       },
       config.JWT_SECRET
     );
-    const manager = await UserPreference.findOne({
-      where: { userId: userOrgDetails.managerId },
+    const managerPreference = await UserPreference.findOne({
+      where: {
+        userId: userOrgDetails.managerId,
+        organisationId: userOrg.organisationId,
+      },
     });
-    const today = new Date().getDate();
-    const renewalDate = new Date(new Date().setDate(today + 15));
+    const trialEndDate = new Date();
+    trialEndDate.setDate(trialEndDate.getDate() + 15);
+
     let licenseType = "Trial";
-    let licenseRenewalDate = renewalDate;
-    if (manager) {
-      licenseType = manager.licenseType;
-      licenseRenewalDate = manager.licenseRenewalDate;
+    let licenseRenewalDate = trialEndDate;
+
+    if (managerPreference) {
+      licenseType = managerPreference.licenseType;
+      licenseRenewalDate = managerPreference.licenseRenewalDate;
     }
     await UserPreference.create({
       userId: user.id,
+      organisationId: userOrg.organisationId,
       lastLoginDate: new Date(),
       lastLoginOrganisationId: userOrg.organisationId,
       licenseType,
@@ -1094,7 +1114,10 @@ export const acceptOrganisationInvitation = async (event) => {
       // Update last login info
       await UserPreference.update(
         { lastLoginDate: new Date(), lastLoginOrganisationId: orgId },
-        { where: { userId: user.id } }
+        { where: { userId: user.id,
+          organisationId: orgId,
+         },
+        }
       );
 
       // Set authentication cookie
