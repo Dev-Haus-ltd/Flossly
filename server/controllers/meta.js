@@ -42,6 +42,8 @@ export const authStart = async (event) => {
 
   const scope = [
     'pages_show_list',
+    'pages_read_engagement',
+    'pages_manage_ads',
     'pages_manage_metadata',
     'leads_retrieval',
   ].join(',')
