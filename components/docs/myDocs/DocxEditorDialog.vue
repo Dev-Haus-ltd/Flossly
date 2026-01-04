@@ -107,16 +107,22 @@ const saveDocument = async () => {
   try {
     isLoading.value = true
     
-    // Export document as blob from editor
+   
     const blob = await documentEditorRef.value.exportDocument()
+    
+    
+    const arrayBuffer = await blob.arrayBuffer()
+    const materializedBlob = new Blob([arrayBuffer], { 
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
+    })
     
     // Create FormData for upload
     const formData = new FormData()
     formData.append('id', props.doc.id)
     
-    // Create a File object from the blob with the original filename
+   
     const fileName = props.doc.name || 'document.docx'
-    const file = new File([blob], fileName, { 
+    const file = new File([materializedBlob], fileName, { 
       type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
     })
     formData.append('file', file)
