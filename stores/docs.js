@@ -8,11 +8,11 @@ export const useDocStore = defineStore("docStore", {
   getters: {},
 
   actions: {
-    getFolders() {
+    getFolders(data) {
       this.isLoading = true;
       return new Promise((resolve, reject) => {
         docService
-          .getFolders()
+          .getFolders(data)
           .then((res) => {
             this.isLoading = false;
             resolve(res);

@@ -81,8 +81,13 @@ export const Organisation = sequelize.define(
     status: {
       type: DataTypes.ENUM("Invited", "Active", "InActive"),
       allowNull: true,
-    }
-  },
+      },
+    hasUsedTrial: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    },
   {
     modelName: "Organisations",
     timestamps: true,

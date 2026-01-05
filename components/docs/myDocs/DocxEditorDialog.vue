@@ -27,7 +27,7 @@
 
         <!-- Actions -->
         <div class="docx-editor-dialog-actions">
-          <button class="docx-editor-dialog-button docx-editor-dialog-button-cancel" @click="close">
+          <button class="docx-editor-dialog-button docx-editor-dialog-button-cancel" @click="close" :disabled="isLoading">
             Cancel
           </button>
           <button 
@@ -61,13 +61,20 @@ const documentEditorRef = ref(null)
 const mainStore = useMainStore()
 const docStore = useDocStore()
 
+const appendCacheBuster = (absoluteUrl) => {
+  const sep = absoluteUrl.includes('?') ? '&' : '?'
+  const ver = props?.doc?.updatedAt ? new Date(props.doc.updatedAt).getTime() : Date.now()
+  return `${absoluteUrl}${sep}v=${ver}`
+}
+
 // Set document URL immediately when doc changes
 watch(
   () => props.doc,
   (newDoc) => {
     if (newDoc?.link) {
       const config = useRuntimeConfig()
-      docxFileUrl.value = buildAbsoluteLink(newDoc.link, config.public.BASE_URL)
+      const abs = buildAbsoluteLink(newDoc.link, config.public.BASE_URL)
+      docxFileUrl.value = appendCacheBuster(abs)
     }
   },
   { immediate: true }
@@ -85,7 +92,8 @@ watch(
     // Ensure URL is set when dialog opens
     if (props.doc?.link && !docxFileUrl.value) {
       const config = useRuntimeConfig()
-      docxFileUrl.value = buildAbsoluteLink(props.doc.link, config.public.BASE_URL)
+      const abs = buildAbsoluteLink(props.doc.link, config.public.BASE_URL)
+      docxFileUrl.value = appendCacheBuster(abs)
     }
   },
   { immediate: true }
@@ -99,37 +107,41 @@ const handleOverlayClick = () => {
 }
 
 const saveDocument = async () => {
-  if (!documentEditorRef.value) {
-    close()
+  if (!documentEditorRef.value || typeof documentEditorRef.value.exportDocument !== 'function') {
+    mainStore.setSnackbar({
+      title: 'Editor is not ready yet. Please wait a moment and try again.',
+      type: 'warning',
+    })
     return
   }
 
   try {
     isLoading.value = true
-    
-   
+
     const blob = await documentEditorRef.value.exportDocument()
-    
-    
+    if (!blob) {
+      throw new Error('Failed to export document')
+    }
+
     const arrayBuffer = await blob.arrayBuffer()
-    const materializedBlob = new Blob([arrayBuffer], { 
-      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
+    const materializedBlob = new Blob([arrayBuffer], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     })
-    
+
     // Create FormData for upload
     const formData = new FormData()
     formData.append('id', props.doc.id)
     
-   
+
     const fileName = props.doc.name || 'document.docx'
-    const file = new File([materializedBlob], fileName, { 
-      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
+    const file = new File([materializedBlob], fileName, {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     })
     formData.append('file', file)
-    
+
     // Upload the document
     const res = await docStore.updateDocument(formData)
-    
+
     if (res.code === 0) {
       mainStore.setSnackbar({
         title: 'Document saved successfully',

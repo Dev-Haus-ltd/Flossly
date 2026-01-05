@@ -24,6 +24,14 @@ export const UserDocumentFolder = sequelize.define(
         key: "id",
       },
     },
+    parentId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: "UserDocumentFolders",
+        key: "id",
+      },
+    },
     name: {
       type: DataTypes.STRING(50),
       allowNull: false,

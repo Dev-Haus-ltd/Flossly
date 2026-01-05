@@ -122,34 +122,50 @@ export const referPractice = async (event) => {
   // Trim and validate managerName
   const trimmedManagerName = managerName ? managerName.trim() : '';
   if (!practiceName || !managerEmail || !trimmedManagerName) {
-    throw createError({ message: "practice name, manager name and manager email required" });
+    throw createError({
+      message: "practice name, manager name and manager email required",
+    });
   }
   
   // Additional validation for managerName
   if (trimmedManagerName.length === 0) {
-    throw createError({ message: "Manager name cannot be empty or contain only spaces" });
+    throw createError({
+      message: "Manager name cannot be empty or contain only spaces",
+    });
   }
+
   const transaction = await DB.transaction();
   try {
-    const organisation = {
+    /** -------------------------
+     * 1. Create Organisation (Invited)
+     --------------------------*/
+    const organisationPayload = {
       name: practiceName,
       status: "Invited",
       address,
       contact,
       referedBy: userId,
+      hasUsedTrial: false,
     };
-    let org = await Organisation.findOne({ where: { name: practiceName } });
-    if (!org) {
-      org = await Organisation.create(organisation, { transaction });
-    } else {
-      throw createError({ message: "Orgnisation is already onboarded" });
-    }
-    let user = await User.findOne({ where: { email: managerEmail } });
-    if (user) throw createError({ message: "User already exists" });
 
-    // hash password
+    let org = await Organisation.findOne({ where: { name: practiceName } });
+    if (org) {
+      throw createError({ message: "Organisation is already onboarded" });
+    }
+
+    org = await Organisation.create(organisationPayload, { transaction });
+
+    /** -------------------------
+     * 2. Create Manager User
+     --------------------------*/
+    let user = await User.findOne({ where: { email: managerEmail } });
+    if (user) {
+      throw createError({ message: "User already exists" });
+    }
+
     const password = managerEmail.split("@")[0];
     const hashed = await bcrypt.hash(password, 10);
+
     user = await User.create(
       {
         fullName: trimmedManagerName,
@@ -160,37 +176,64 @@ export const referPractice = async (event) => {
       },
       { transaction }
     );
-    const today = new Date().getDate();
-    const renewalDate = new Date(new Date().setDate(today + 15));
+
+    /** -------------------------
+     * 3. Trial License (PER ORG)
+     --------------------------*/
+    const trialEndDate = new Date();
+    trialEndDate.setDate(trialEndDate.getDate() + 15);
+
     await UserPreference.create(
       {
-        licenseType: "Trial",
         userId: user.id,
-        licenseRenewalDate: renewalDate,
+        organisationId: org.id,
+        licenseType: "Trial",
+        licenseRenewalDate: trialEndDate,
       },
       { transaction }
     );
 
-    // associate user-org
-    await UserOrganisation.create(
-      { userId: user.id, organisationId: org.id },
+    // 🔐 mark trial as used
+    await org.update(
+      { hasUsedTrial: true },
       { transaction }
     );
+
+    /** -------------------------
+     * 4. Associate User ↔ Organisation
+     --------------------------*/
+    await UserOrganisation.create(
+      {
+        userId: user.id,
+        organisationId: org.id,
+        status: "Invited",
+      },
+      { transaction }
+    );
+
+    /** -------------------------
+     * 5. Email Verification
+     --------------------------*/
     const link = generateVerificationLink();
     await EmailVerification.create(
       { email: managerEmail, link, userId: user.id },
       { transaction }
     );
+
     await sendEmailVerificationEmail({
       email: managerEmail,
       fullName: trimmedManagerName,
       link,
     });
+
     await transaction.commit();
     return success("Email sent");
   } catch (err) {
-    await transaction.rollback();
-    return error(500, err.message);
+    if (!transaction.finished) {
+      await transaction.rollback();
+    }
+    console.error("Refer Practice Error:", err);
+    return error(500, "Failed to refer practice");
   }
 };
 

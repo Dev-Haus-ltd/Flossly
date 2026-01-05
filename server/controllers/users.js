@@ -43,8 +43,6 @@ export const usersList = async (event) => {
               as: "preferences",
               attributes: {
                 include: [
-                  "lastLoginDate",
-                  "lastLoginOrganisationId",
                   "licenseType",
                   "licenseRenewalDate",
                 ],
@@ -180,7 +178,8 @@ export const updateUserPreferences = async (event) => {
     throw createError({ message: "column should have key and title" });
   }
   try {
-    const userPreference = await UserPreference.findOne({ where: { userId } });
+    const { orgId } = event.context.user;
+    const userPreference = await UserPreference.findOne({ where: { userId, organisationId: orgId, }, });
     if (!userPreference) {
       throw createError({ message: "userPreference not found" });
     } else {
