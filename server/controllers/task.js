@@ -1529,6 +1529,18 @@ export const uploadBulkTasks = async (event) => {
         };
       });
 
+      const existingAssignments = await UserTask.findAll({
+        where: { userId: userIds },
+        attributes: ["userId", [fn("COUNT", col("id")), "count"]],
+        group: ["userId"],
+      });
+      const existingCounts = new Map(
+        existingAssignments.map((row) => [
+          row.userId,
+          Number(row.get("count") || 0),
+        ])
+      );
+
       const createdUserTasks = await UserTask.bulkCreate(userTaskData, {
         transaction,
         returning: true,
@@ -1565,13 +1577,33 @@ export const uploadBulkTasks = async (event) => {
       });
       const userMap = new Map(users.map((u) => [u.id, u]));
 
-      for (const t of tasksWithUsers) {
-        const user = userMap.get(t.userId);
-        if (user?.email) {
+      const tasksByUserId = tasksWithUsers.reduce((acc, task) => {
+        if (!task.userId) return acc;
+        if (!acc[task.userId]) acc[task.userId] = [];
+        acc[task.userId].push(task);
+        return acc;
+      }, {});
+
+      for (const [userId, assignedTasks] of Object.entries(tasksByUserId)) {
+        const numericUserId = Number(userId);
+        const user = userMap.get(numericUserId);
+        if (!user?.email) continue;
+
+        const hadExistingTasks = (existingCounts.get(numericUserId) || 0) > 0;
+        if (!hadExistingTasks && assignedTasks.length > 1) {
           await sendTaskAssignmentEmail({
             email: user.email,
             name: user.fullName,
-            taskTitle: t.title,
+            taskTitle: `${assignedTasks.length} default tasks`,
+          });
+          continue;
+        }
+
+        for (const task of assignedTasks) {
+          await sendTaskAssignmentEmail({
+            email: user.email,
+            name: user.fullName,
+            taskTitle: task.title,
           });
         }
       }

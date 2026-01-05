@@ -394,6 +394,14 @@
                           icon
                           size="x-small"
                           variant="text"
+                          @click="viewFile(file)"
+                        >
+                          <img src="@/assets/icons/view.svg" alt="View" width="16" height="16" />
+                        </v-btn>
+                        <v-btn
+                          icon
+                          size="x-small"
+                          variant="text"
                           :href="file.link"
                           target="_blank"
                         >
@@ -407,12 +415,30 @@
                       <!-- Center File Icon or Preview -->
                       <div class="image-preview-wrapper">
                         <img
-                          v-if="isImageFile(file) && !imageLoadErrors[file.id]"
+                          v-if="isImageFile(file) && file.link && !imageLoadErrors[file.id]"
                           :src="getImageUrl(file.link)"
                           :alt="file.title"
                           class="file-preview-image"
                           @error="handleImageError($event, file)"
                           @click="openImageInNewTab(file)"
+                        />
+                        <img
+                          v-else-if="isImageFile(file) && (!file.link || imageLoadErrors[file.id])"
+                          src="@/assets/icons/taskFiles/image.svg"
+                          :alt="file.title"
+                          class="file-type-icon"
+                        />
+                        <img
+                          v-else-if="isWordFile(file)"
+                          src="@/assets/icons/taskFiles/word.svg"
+                          :alt="file.title"
+                          class="file-type-icon"
+                        />
+                        <img
+                          v-else-if="isPdfFile(file)"
+                          src="@/assets/icons/taskFiles/pdf.svg"
+                          :alt="file.title"
+                          class="file-type-icon"
                         />
                         <v-icon v-else size="60" class="fallback-icon">mdi-file</v-icon>
                       </div>
@@ -857,6 +883,33 @@ const isImageFile = (file) => {
   return file.type.startsWith('image/');
 };
 
+// Check if file is a Word document
+const isWordFile = (file) => {
+  if (!file) return false;
+  if (file.type) {
+    return file.type === 'application/msword' || 
+           file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  }
+  if (file.title) {
+    const ext = file.title.split('.').pop()?.toLowerCase();
+    return ext === 'doc' || ext === 'docx';
+  }
+  return false;
+};
+
+// Check if file is a PDF
+const isPdfFile = (file) => {
+  if (!file) return false;
+  if (file.type) {
+    return file.type === 'application/pdf';
+  }
+  if (file.title) {
+    const ext = file.title.split('.').pop()?.toLowerCase();
+    return ext === 'pdf';
+  }
+  return false;
+};
+
 // Get full image URL
 const getImageUrl = (link) => {
   if (!link) return '';
@@ -881,6 +934,35 @@ const handleImageError = (event, file) => {
 const openImageInNewTab = (file) => {
   if (file && file.link) {
     const fullUrl = getImageUrl(file.link);
+    window.open(fullUrl, '_blank');
+  }
+};
+
+// Get full file URL
+const getFileUrl = (link) => {
+  if (!link) return '';
+  // If link already starts with http, return as is
+  if (link.startsWith('http://') || link.startsWith('https://')) {
+    return link;
+  }
+  // Otherwise, prepend BASE_URL
+  const baseUrl = config.public.BASE_URL || '';
+  return `${baseUrl}${link}`;
+};
+
+// View file - opens Word docs in Google Docs Viewer, others normally
+const viewFile = (file) => {
+  if (!file || !file.link) return;
+  
+  const fullUrl = getFileUrl(file.link);
+  
+  if (isWordFile(file)) {
+    // Open Word documents in Google Docs Viewer
+    const encodedUrl = encodeURIComponent(fullUrl);
+    const viewerUrl = `https://docs.google.com/viewer?url=${encodedUrl}&embedded=true`;
+    window.open(viewerUrl, '_blank');
+  } else {
+    // Open other files normally
     window.open(fullUrl, '_blank');
   }
 };
@@ -1124,6 +1206,12 @@ const uploadFile = async (files) => {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+}
+
+.file-type-icon {
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
 }
 .comment-list {
   display: flex;

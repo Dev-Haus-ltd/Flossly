@@ -46,8 +46,9 @@ export default defineNuxtConfig({
     MAX_FILE_SIZE_FOR_LOGO: process.env.MAX_FILE_SIZE_FOR_LOGO || 5 * 1024 * 1024, // Default 5MB in bytes
     // Google Cloud Speech-to-Text credentials
     GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-    // GitHub token for GPT-5 model (testing)
-    GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+    // OpenAI API key for summarization
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+
     // Redis connection URL for centralized session management
     REDIS_URL: process.env.REDIS_URL,
   },
