@@ -2,6 +2,58 @@ import stripe from "@/server/utils/stripe";
 import { UserPreference, UserSubscription } from "../models";
 import { User } from "../models";
 
+const LICENSE_TYPES = {
+  TRIAL: "Trial",
+  GLIDE: "Glide",
+  SOAR: "Soar",
+};
+
+const BILLING_CYCLES = {
+  MONTHLY: "Monthly",
+  YEARLY: "Yearly",
+};
+
+const resolveLicenseTypeFromProduct = (productName = "") => {
+  const name = String(productName).toLowerCase();
+  if (name.includes("soar")) return LICENSE_TYPES.SOAR;
+  if (name.includes("glide")) return LICENSE_TYPES.GLIDE;
+  if (name.includes("drift")) return LICENSE_TYPES.TRIAL;
+  return LICENSE_TYPES.TRIAL;
+};
+
+const resolveBillingCycleFromPrice = (price) => {
+  const interval = price?.recurring?.interval;
+  const count = Number(price?.recurring?.interval_count || 1);
+  if (interval === "year") return BILLING_CYCLES.YEARLY;
+  if (interval === "month" && count >= 12) return BILLING_CYCLES.YEARLY;
+  return BILLING_CYCLES.MONTHLY;
+};
+
+const resolveLicenseFromPrice = (price) => {
+  const productName = price?.product?.name || "";
+  return {
+    licenseType: resolveLicenseTypeFromProduct(productName),
+    licenseBillingCycle: resolveBillingCycleFromPrice(price),
+  };
+};
+
+const addDays = (date, days) => {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+};
+
+const resolvePriceForSubscription = async (subscriptionId, priceId) => {
+  if (priceId) {
+    return stripe.prices.retrieve(priceId, { expand: ["product"] });
+  }
+
+  const stripeSub = await stripe.subscriptions.retrieve(subscriptionId, {
+    expand: ["items.data.price.product"],
+  });
+  return stripeSub?.items?.data?.[0]?.price || null;
+};
+
 export const createSubscription = async (event) => {
   const body = await readBody(event);
   const loggedUser = event.context.user;
@@ -113,11 +165,21 @@ export const confirmPayment = async (event) => {
     subscription.stripeSubscriptionStatus = "active";
     await subscription.save();
     const user = await UserPreference.findOne({
-      where: { userId: loggedUser.userId },
+      where: { userId: loggedUser.userId,
+        organisationId: loggedUser.orgId,
+       },
     });
-    const today = new Date().getDate();
-    const renewalDate = new Date(new Date().setDate(today + 30));
-    user.licenseType = "Monthly";
+    const price = await resolvePriceForSubscription(
+      subscriptionId,
+      subscription.packagePriceId
+    );
+    const { licenseType, licenseBillingCycle } = resolveLicenseFromPrice(price);
+    const renewalDays =
+      licenseBillingCycle === BILLING_CYCLES.YEARLY ? 365 : 30;
+    const renewalDate = addDays(new Date(), renewalDays);
+
+    user.licenseType = licenseType;
+    user.licenseBillingCycle = licenseBillingCycle;
     user.licenseRenewalDate = renewalDate;
     await user.save();
     const loggedUserObj = await User.findByPk(loggedUser.userId)

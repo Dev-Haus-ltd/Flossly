@@ -3270,7 +3270,6 @@ export const sendTaskDetailsByEmail = async (event) => {
       category: task.taskDetails?.category?.name,
       priority: task.priority?.name,
       status: task.status?.name,
-      assignedUser: task.assignedUser?.fullName,
       dueDate: task.dueDate
         ? new Date(task.dueDate).toLocaleDateString()
         : null,

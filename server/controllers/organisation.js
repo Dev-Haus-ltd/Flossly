@@ -12,13 +12,26 @@ import {
   DictionaryScript,
   User,
   OrganisationReferral,
+  UserOrganisation,
+  UserPreference,
+  Task,
+  UserTask,
+  UserHrDocument,
 } from "../models";
+import { HrDocument } from "../models/hrDocuments";
 import formidable from "formidable";
 import fs from "fs/promises";
 import path from "path";
 import DB from "../utils/db";
 import { success, error } from "../utils/response";
 import { readBody, createError } from "h3";
+import {
+  sendTrialActivatedEmail,
+} from "../utils/emailNotifications";
+
+// Role constants for access control
+// Role ID 1 = Practice Manager, Role ID 8 = Principal Dentist / Practice Owner
+const PRIVILEGED_ROLE_IDS = [1, 8];
 
 export const updateOrganisationDetails = async (event) => {
   const loggedUser = event.context.user;
@@ -782,4 +795,203 @@ export const getAllOrganisationReferrals = async (event) => {
       statusMessage: "Internal server error",
     });
   }
+};
+
+/**
+ * Creates a new organisation for an existing authenticated user.
+ * This is used when a user wants to add a new workspace.
+ *
+ * RBAC: Only users with Practice Manager (roleId=1) or
+ * Principal Dentist / Practice Owner (roleId=8) can create new workspaces.
+ */
+export const createOrganisationForUser = async (event) => {
+  const loggedUser = event.context.user;
+
+  // RBAC check
+  if (!PRIVILEGED_ROLE_IDS.includes(Number(loggedUser.roleId))) {
+    return error(
+      403,
+      "You do not have permission to create a new organisation."
+    );
+  }
+
+  let body;
+  try {
+    const rawBody = await readBody(event);
+    body = typeof rawBody === "string" ? JSON.parse(rawBody) : rawBody;
+  } catch {
+    return error(400, "Invalid JSON body");
+  }
+
+  const { organisationName } = body;
+
+  if (!organisationName || !organisationName.trim()) {
+    return error(400, "Organisation name is required");
+  }
+
+  const transaction = await DB.transaction();
+  let org;
+  let trialEndDate;
+
+  try {
+    /** -------------------------
+     * 1. Create Organisation
+     --------------------------*/
+    org = await Organisation.create(
+      {
+        name: organisationName.trim(),
+        managerId: loggedUser.userId,
+        hasUsedTrial: false,
+      },
+      { transaction }
+    );
+
+    /** -------------------------
+     * 2. Associate User → Organisation
+     --------------------------*/
+    await UserOrganisation.create(
+      {
+        userId: loggedUser.userId,
+        organisationId: org.id,
+        status: "Active",
+      },
+      { transaction }
+    );
+
+    /** -------------------------
+     * 3. Trial License (ONE TIME PER ORG)
+     --------------------------*/
+    if (org.hasUsedTrial) {
+      throw new Error("This organisation has already used its free trial.");
+    }
+
+    trialEndDate = new Date();
+    trialEndDate.setDate(trialEndDate.getDate() + 15);
+
+    await UserPreference.create(
+      {
+        userId: loggedUser.userId,
+        organisationId: org.id,
+        licenseType: "Trial",
+        licenseRenewalDate: trialEndDate,
+      },
+      { transaction }
+    );
+
+    // 🔐 Permanently mark trial as used
+    await org.update(
+      { hasUsedTrial: true },
+      { transaction }
+    );
+
+    /** -------------------------
+     * 4. System Task Initialization
+     --------------------------*/
+    const tasks = await Task.findAll({
+      limit: 100,
+      where: {
+        categoryId: [3, 4, 5, 10, 11, 12],
+        isSystemTask: true,
+      },
+      transaction,
+    });
+
+    const priorities = await OrganisationPriority.findAll({
+      where: { organisationId: org.id },
+      transaction,
+    });
+
+    const statuses = await OrganisationStatus.findAll({
+      where: { organisationId: org.id },
+      transaction,
+    });
+
+    const defaultStatus =
+      statuses.find((s) => s.key === "upcoming") || statuses[0];
+    const defaultPriority =
+      priorities.find((p) => p.key === "medium") || priorities[0];
+
+    if (defaultStatus && defaultPriority && tasks.length) {
+      const userTasks = tasks.map((task) => ({
+        userId: loggedUser.userId,
+        taskId: task.id,
+        organisationId: org.id,
+        statusId: defaultStatus.id,
+        priorityId: defaultPriority.id,
+        title: task.title,
+        documentLink: "",
+        frequency: task.defaultFrequency,
+        comments: "",
+      }));
+
+      await UserTask.bulkCreate(userTasks, { transaction });
+    }
+
+    /** -------------------------
+     * 5. Assign Default HR Docs
+     --------------------------*/
+    await assignDefaultHRDocsToUser(loggedUser.userId);
+
+    /** -------------------------
+     * Commit transaction (DB DONE)
+     --------------------------*/
+    await transaction.commit();
+  } catch (err) {
+    if (!transaction.finished) {
+      await transaction.rollback();
+    }
+
+    if (err.name === "SequelizeUniqueConstraintError") {
+      return error(409, "Organisation already exists");
+    }
+
+    console.error("Create Organisation Error:", err);
+    return error(500, err.message || "Failed to create organisation");
+  }
+
+  /** -------------------------
+   * 6. Trial Activation Email (OUTSIDE TX)
+   --------------------------*/
+  const user = await User.findByPk(loggedUser.userId, {
+    attributes: ["email", "fullName"],
+  });
+
+  if (!user?.email) {
+    console.warn(
+      `Trial email skipped: user ${loggedUser.userId} has no email`
+    );
+  } else {
+    try {
+      await sendTrialActivatedEmail({
+        email: user.email,
+        fullName: user.fullName,
+        organisationName: org.name,
+        trialDays: 15,
+        trialEndsOn: trialEndDate,
+      });
+    } catch (emailErr) {
+      console.error("Trial email failed:", emailErr);
+    }
+  }
+
+  return success({
+    organisationId: org.id,
+    name: org.name,
+    trialEndsOn: trialEndDate,
+  });
+};
+
+// temperory placing this function here for testing has its not possible to import it from auth controller
+
+const assignDefaultHRDocsToUser = async (userId) => {
+  const defaultDocs = await HrDocument.findAll();
+
+  const userDocs = defaultDocs.map((doc) => ({
+    userId,
+    name: doc.name,
+    type: doc.type,
+    status: "Pending",
+  }));
+
+  await UserHrDocument.bulkCreate(userDocs);
 };

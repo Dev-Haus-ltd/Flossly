@@ -20,6 +20,7 @@ import {
   seedScripts,
   createOrganisationReferral,
   getAllOrganisationReferrals,
+  createOrganisationForUser,
 } from "~/server/controllers/organisation";
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, "name");
@@ -62,10 +63,12 @@ export default defineEventHandler(async (event) => {
       return await saveScript(event);
     case "seedScripts":
       return await seedScripts(event);
-      case "createReferral":
+    case "createReferral":
       return await createOrganisationReferral(event);
     case "allReferrals":
       return await getAllOrganisationReferrals(event);
+    case "createForUser":
+      return await createOrganisationForUser(event);
     default:
       return { code: 0, error: "Not found" };
   }

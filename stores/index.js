@@ -7,6 +7,75 @@ import flosslyDocs from '@/assets/icons/mainDrawerIcons/docs.svg'
 import crmIcon from '@/assets/icons/mainDrawerIcons/crm.svg'
 import academyIcon from '@/assets/icons/mainDrawerIcons/academy.svg'
 
+const LICENSE_TYPES = {
+  SYSTEM: "System",
+  TRIAL: "Trial",
+  GLIDE: "Glide",
+  SOAR: "Soar",
+};
+
+const LICENSE_FEATURES = {
+  [LICENSE_TYPES.TRIAL]: new Set(["dashboard", "tasks", "docs"]),
+  [LICENSE_TYPES.GLIDE]: new Set(["dashboard", "tasks", "docs", "team", "crm"]),
+  [LICENSE_TYPES.SOAR]: new Set([
+    "dashboard",
+    "tasks",
+    "docs",
+    "team",
+    "crm",
+    "diary",
+  ]),
+  [LICENSE_TYPES.SYSTEM]: new Set([
+    "dashboard",
+    "tasks",
+    "docs",
+    "team",
+    "crm",
+    "diary",
+  ]),
+};
+
+const getLicenseTypeFromStorage = () => {
+  if (typeof localStorage === "undefined") {
+    return LICENSE_TYPES.TRIAL;
+  }
+
+  try {
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    return user?.preferences?.licenseType || LICENSE_TYPES.TRIAL;
+  } catch {
+    return LICENSE_TYPES.TRIAL;
+  }
+};
+
+const filterMenuByLicense = (menuItems, licenseType) => {
+  const allowed =
+    LICENSE_FEATURES[licenseType] || LICENSE_FEATURES[LICENSE_TYPES.TRIAL];
+
+  return menuItems.reduce((acc, item) => {
+    if (!allowed.has(item.featureKey)) {
+      return acc;
+    }
+
+    const next = { ...item };
+    if (Array.isArray(next.children) && next.children.length) {
+      next.children = next.children.filter((child) =>
+        allowed.has(child.featureKey || next.featureKey)
+      );
+    }
+    acc.push(next);
+    return acc;
+  }, []);
+};
+
+const createDocsItem = (imgPath) => ({
+  title: "Flossly docs",
+  imgPath,
+  value: "flosllyDocs",
+  to: "/docs/mydocs",
+  featureKey: "docs",
+});
+
 
 export const useMainStore = defineStore("mainStore", {
   state: () => ({
@@ -31,18 +100,21 @@ export const useMainStore = defineStore("mainStore", {
       return state.roles;
     },
     getManagerOptions() {
-      return [
+      const licenseType = getLicenseTypeFromStorage();
+      const menuItems = [
         {
           title: "DashBoard",
           imgPath: dashBoard,
           value: "dashBoard",
           to: "/",
+          featureKey: "dashboard",
         },
         {
           title: "Flossly Tasks",
           imgPath: tasksIcon,
           value: "tasks-group",
           to: "/tasks/mytasks",
+          featureKey: "tasks",
           children: [
             // {
             //   title: "My Tasks",
@@ -55,41 +127,31 @@ export const useMainStore = defineStore("mainStore", {
               value: "myTeamTasks",
               imgPath: tasksIcon,
               to: "/tasks/teamtasks",
+              featureKey: "tasks",
             },
           ],
         },
-        {
-          title: "Flossly docs",
-          imgPath: flosslyDocs,
-          value: "flosllyDocs",
-          to: "/docs/mydocs",
-          // children: [
-          //   {
-          //     title: "My Docs",
-          //     value: "mydocs",
-          //     imgPath: flosslyDocs,
-          //     to: "/docs/mydocs",
-          //   },
-        
-          // ],
-        },
+        createDocsItem(flosslyDocs),
         {
           title: "Team floss",
           imgPath: teamIcon,
           value: "teamFloss",
           to: "/teams",
+          featureKey: "team",
           children: [
             {
               title: "Rota Management",
               value: "rotaManagement",
               imgPath: teamIcon,
               to: "/teams/rota",
+              featureKey: "team",
             },
             {
               title: "Holiday Tracker",
               value: "holidayTracker",
               imgPath: teamIcon,
               to: "/teams/holiday",
+              featureKey: "team",
             },
             // {
             //   title: "Payroll",
@@ -126,24 +188,28 @@ export const useMainStore = defineStore("mainStore", {
           value: "crm",
           to:"/crm",
           children: [],
+          featureKey: "crm",
         },
         {
           title: "Flossy Diary",
           imgPath: tasksIcon,
           value: "flosslyDiary",
           to:"/diary",
+          featureKey: "diary",
           children: [
             {
               title: "Calendar",
               value: "diaryCalendar",
               imgPath: tasksIcon,
               to: "/diary/calendar",
+              featureKey: "diary",
             },
             {
               title: "Patients",
               value: "diaryPatients",
               imgPath: tasksIcon,
               to: "/diary/patients",
+              featureKey: "diary",
             },
           ],
         },
@@ -179,47 +245,40 @@ export const useMainStore = defineStore("mainStore", {
         //   ],
         // },
       ];
+
+      return filterMenuByLicense(menuItems, licenseType);
     },
     getuserOptions() {
-      return [
+      const licenseType = getLicenseTypeFromStorage();
+      const menuItems = [
         {
           title: "DashBoard",
           imgPath: dashBoard,
           value: "dashBoard",
           to: "/",
+          featureKey: "dashboard",
         },
         {
           title: "My Tasks",
           value: "myTasks",
           imgPath: tasksIcon,
           to: "/tasks/mytasks",
+          featureKey: "tasks",
         },
-        {
-          title: "Flossly docs",
-          imgPath: dashBoard,
-          value: "flosllyDocs",
-          to: "/docs/mydocs",
-          // children: [
-          //   {
-          //     title: "My Docs",
-          //     value: "mydocs",
-          //     imgPath: flosslyDocs,
-          //     to: "/docs/mydocs",
-          //   },
-        
-          // ],
-        },
+        createDocsItem(dashBoard),
         {
           title: "Rota",
           value: "rotaManagement",
           imgPath: teamIcon,
           to: "/teams/rota",
+          featureKey: "team",
         },
         {
           title: "Holiday Tracker",
           value: "holidayTracker",
           imgPath: teamIcon,
           to: "/teams/holiday",
+          featureKey: "team",
         },
         // {
         //   title: "Floss Academy",
@@ -236,6 +295,8 @@ export const useMainStore = defineStore("mainStore", {
         //   ],
         // },
       ];
+
+      return filterMenuByLicense(menuItems, licenseType);
     },
     getTeamTaskTableHeaders() {
       return [

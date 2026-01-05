@@ -13,15 +13,27 @@ import fs from "fs";
 export const createFolder = async (event) => {
   const body = await readBody(event);
   const loggedUser = event.context.user;
-  const { name, color, description } = JSON.parse(body);
+  const { name, color, description, parentId } = JSON.parse(body);
   if (!name) throw createError({ message: "Folder name required" });
   try {
+    // If parentId is provided, validate depth (max 2 levels: root -> level 1 -> level 2)
+    if (parentId) {
+      const parentFolder = await UserDocumentFolder.findByPk(parentId);
+      if (!parentFolder) {
+        throw createError({ message: "Parent folder not found" });
+      }
+      // Check if parent folder already has a parent (meaning it's level 2, can't go deeper)
+      if (parentFolder.parentId) {
+        throw createError({ message: "Maximum folder nesting depth reached (2 levels)" });
+      }
+    }
     const folder = await UserDocumentFolder.create({
       userId: loggedUser.userId,
       organisationId: loggedUser.orgId,
       name,
       color,
       description,
+      parentId: parentId || null,
     });
     return success(folder);
   } catch (err) {
@@ -77,9 +89,16 @@ export const deleteFolder = async (event) => {
 
 export const listFolders = async (event) => {
   const loggedUser = event.context.user;
+  const body = await readBody(event);
+  const { parentId } = body ? JSON.parse(body) : {};
   try {
+    const where = {
+      userId: loggedUser.userId,
+      organisationId: loggedUser.orgId,
+      parentId: parentId || null, // Filter by parent (null = root level folders)
+    };
     const folders = await UserDocumentFolder.findAll({
-      where: { userId: loggedUser.userId, organisationId: loggedUser.orgId },
+      where,
       attributes: {
         include: [
           [
@@ -95,8 +114,14 @@ export const listFolders = async (event) => {
           attributes: [],
           required: false,
         },
+        {
+          model: UserDocumentFolder,
+          as: "parent",
+          attributes: ["id", "name", "color", "parentId"],
+          required: false,
+        },
       ],
-      group: ["UserDocumentFolders.id"], // group by folder ID
+      group: ["UserDocumentFolders.id", "parent.id"], // group by folder ID and parent
       order: [["createdAt", "DESC"]],
     });
     return success(folders);
@@ -241,19 +266,38 @@ export const updateDocument = async (event) => {
       return error(404, "Document not found");
     }
     
-    // Get the original file path
-    const originalFilePath = path.join(process.cwd(), "public", userDoc.link);
-    
-    // Read the new file content
-    const fileBuffer = fs.readFileSync(newFile.filepath);
-    
-    // Write directly to the original file path (overwrite)
-    fs.writeFileSync(originalFilePath, fileBuffer);
-    
-    // Clean up the temporary file created by formidable
-    fs.unlinkSync(newFile.filepath);
-    
-    // No need to update the link in database since we're using the same path
+
+    const oldFullPath = path.join(process.cwd(), "public", userDoc.link);
+    try {
+      if (fs.existsSync(oldFullPath)) {
+        fs.unlinkSync(oldFullPath);
+      }
+    } catch (e) {
+      // ignore unlink errors
+    }
+
+
+    const documentsDir = path.join(process.cwd(), "public", "documents");
+    if (!fs.existsSync(documentsDir)) {
+      fs.mkdirSync(documentsDir, { recursive: true });
+    }
+    const newBaseName = path.basename(newFile.filepath);
+    const newRelPath = `documents/${newBaseName}`;
+    const newFullPath = path.join(process.cwd(), "public", newRelPath);
+
+ 
+    try {
+      fs.renameSync(newFile.filepath, newFullPath);
+    } catch (e) {
+
+      const fileBuffer = fs.readFileSync(newFile.filepath);
+      fs.writeFileSync(newFullPath, fileBuffer);
+      try { fs.unlinkSync(newFile.filepath); } catch (_) {}
+    }
+
+    // Update document link and touch updatedAt
+    await userDoc.update({ link: newRelPath, updatedAt: new Date() });
+
     return success(userDoc);
   } catch (err) {
     return error(500, err.message);
@@ -306,6 +350,9 @@ export const viewDocument = async (event) => {
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     );
+    event.node.res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    event.node.res.setHeader("Pragma", "no-cache");
+    event.node.res.setHeader("Expires", "0");
     return fileBuffer;
   } catch (err) {
     return error(500, err.message);
@@ -328,6 +375,9 @@ export const viewSystemDocument = async (event) => {
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     );
+    event.node.res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    event.node.res.setHeader("Pragma", "no-cache");
+    event.node.res.setHeader("Expires", "0");
     return fileBuffer;
   } catch (err) {
     return error(500, err.message);
