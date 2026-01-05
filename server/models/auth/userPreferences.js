@@ -26,8 +26,12 @@ export const UserPreference = sequelize.define(
       },
     },
     licenseType: {
-      type: DataTypes.ENUM("System", "Trial", "Monthly", "Yearly"),
+      type: DataTypes.ENUM("System", "Trial", "Glide", "Soar"),
       allowNull: false,
+    },
+    licenseBillingCycle: {
+      type: DataTypes.ENUM("Monthly", "Yearly"),
+      allowNull: true,
     },
     licenseRenewalDate: {
       type: DataTypes.DATE,
