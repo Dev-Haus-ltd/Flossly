@@ -51,6 +51,15 @@ export default defineNuxtConfig({
 
     // Redis connection URL for centralized session management
     REDIS_URL: process.env.REDIS_URL,
+
+    // Database configuration
+    DATABASE_URL: process.env.DATABASE_URL,
+    DB_NAME: process.env.DB_NAME,
+    DB_USER: process.env.DB_USER,
+    DB_PASSWORD: process.env.DB_PASSWORD,
+    DB_HOST: process.env.DB_HOST,
+    DB_PORT: process.env.DB_PORT,
+    DB_SCHEMA: process.env.DB_SCHEMA,
   },
   modules: [ 
     async (options, nuxt) => {
