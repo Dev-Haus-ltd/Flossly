@@ -273,6 +273,13 @@ export const signupRequest = async (event) => {
       { transaction }
     );
 
+    await createDummyDentistForOrganisation({
+      organisationId: org.id,
+      organisationName: org.name,
+      createdBy: user.id,
+      transaction,
+    });
+
     // associate user-org
     await UserOrganisation.create(
       { userId: user.id, organisationId: org.id, status: "Active" },
@@ -1336,6 +1343,59 @@ export const resendOrganisationInvitation = async (event) => {
       err.message || err.toString() || "Failed to resend invitation";
     return error(500, errorMessage);
   }
+};
+
+const getDentistRoleId = async (transaction) => {
+  const roles = await Role.findAll({
+    attributes: ["id", "title"],
+    transaction,
+  });
+  const dentistRole = roles.find((role) =>
+    (role.title || "").toLowerCase().includes("dentist")
+  );
+  return dentistRole ? dentistRole.id : 5;
+};
+
+const createDummyDentistForOrganisation = async ({
+  organisationId,
+  organisationName,
+  createdBy,
+  transaction,
+}) => {
+  const roleId = await getDentistRoleId(transaction);
+  const email = `dummy-dentist+org-${organisationId}@flossly.local`;
+  const existing = await User.findOne({ where: { email }, transaction });
+  if (existing) return existing;
+
+  const password = await bcrypt.hash(
+    `dummy-${organisationId}-${Date.now()}`,
+    10
+  );
+
+  const dentistUser = await User.create(
+    {
+      fullName: organisationName,
+      email,
+      password,
+      profileCompletion: 0,
+      roleId,
+      status: "Active",
+      isEmailVerified: true,
+      createdBy,
+    },
+    { transaction }
+  );
+
+  await UserOrganisation.create(
+    {
+      userId: dentistUser.id,
+      organisationId,
+      status: "Active",
+    },
+    { transaction }
+  );
+
+  return dentistUser;
 };
 
 const assignDefaultTasksToUser = async (user, organisationId) => {

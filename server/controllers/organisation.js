@@ -11,6 +11,7 @@ import {
   OrganisationScript,
   DictionaryScript,
   User,
+  Role,
   OrganisationReferral,
   UserOrganisation,
   UserPreference,
@@ -28,10 +29,64 @@ import { readBody, createError } from "h3";
 import {
   sendTrialActivatedEmail,
 } from "../utils/emailNotifications";
+import bcrypt from "bcrypt";
 
 // Role constants for access control
 // Role ID 1 = Practice Manager, Role ID 8 = Principal Dentist / Practice Owner
 const PRIVILEGED_ROLE_IDS = [1, 8];
+
+const getDentistRoleId = async (transaction) => {
+  const roles = await Role.findAll({
+    attributes: ["id", "title"],
+    transaction,
+  });
+  const dentistRole = roles.find((role) =>
+    (role.title || "").toLowerCase().includes("dentist")
+  );
+  return dentistRole ? dentistRole.id : 5;
+};
+
+const createDummyDentistForOrganisation = async ({
+  organisationId,
+  organisationName,
+  createdBy,
+  transaction,
+}) => {
+  const roleId = await getDentistRoleId(transaction);
+  const email = `dummy-dentist+org-${organisationId}@flossly.local`;
+  const existing = await User.findOne({ where: { email }, transaction });
+  if (existing) return existing;
+
+  const password = await bcrypt.hash(
+    `dummy-${organisationId}-${Date.now()}`,
+    10
+  );
+
+  const dentistUser = await User.create(
+    {
+      fullName: organisationName,
+      email,
+      password,
+      profileCompletion: 0,
+      roleId,
+      status: "Active",
+      isEmailVerified: true,
+      createdBy,
+    },
+    { transaction }
+  );
+
+  await UserOrganisation.create(
+    {
+      userId: dentistUser.id,
+      organisationId,
+      status: "Active",
+    },
+    { transaction }
+  );
+
+  return dentistUser;
+};
 
 export const updateOrganisationDetails = async (event) => {
   const loggedUser = event.context.user;
@@ -883,6 +938,13 @@ export const createOrganisationForUser = async (event) => {
       { hasUsedTrial: true },
       { transaction }
     );
+
+    await createDummyDentistForOrganisation({
+      organisationId: org.id,
+      organisationName: org.name,
+      createdBy: loggedUser.userId,
+      transaction,
+    });
 
     /** -------------------------
      * 4. System Task Initialization
