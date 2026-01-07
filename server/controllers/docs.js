@@ -78,11 +78,201 @@ export const deleteFolder = async (event) => {
       await transaction.rollback();
       throw createError({ message: "Folder not found" });
     }
-    await folder.destroy({ transaction });
+
+    // Collect all folder IDs to delete (including nested folders at all levels)
+    const allFolderIds = [id];
+    const collectNestedFolderIds = async (parentIds) => {
+      if (parentIds.length === 0) return;
+      const childFolders = await UserDocumentFolder.findAll({
+        where: { parentId: parentIds },
+        attributes: ["id"],
+        transaction,
+      });
+      const childIds = childFolders.map((f) => f.id);
+      if (childIds.length > 0) {
+        allFolderIds.push(...childIds);
+        // Recursively collect deeper nested folders
+        await collectNestedFolderIds(childIds);
+      }
+    };
+    await collectNestedFolderIds([id]);
+
+    // Delete all documents in all collected folders (deepest first doesn't matter for docs)
+    await UserDocument.destroy({
+      where: { folderId: allFolderIds },
+      transaction,
+    });
+
+    // Delete folders from deepest to shallowest (reverse order of collection)
+    // The allFolderIds array is already in order: parent first, then children
+    // So we reverse it to delete children first
+    const reversedFolderIds = [...allFolderIds].reverse();
+    for (const folderId of reversedFolderIds) {
+      await UserDocumentFolder.destroy({
+        where: { id: folderId },
+        transaction,
+      });
+    }
+
     await transaction.commit();
     return success("Folder deleted successfully");
   } catch (err) {
     await transaction.rollback();
+    return error(500, err.message);
+  }
+};
+
+// Get all folders (flat list for folder picker)
+export const listAllFolders = async (event) => {
+  const loggedUser = event.context.user;
+  try {
+    const folders = await UserDocumentFolder.findAll({
+      where: {
+        userId: loggedUser.userId,
+        organisationId: loggedUser.orgId,
+      },
+      attributes: {
+        include: [
+          [fn("COUNT", col("documents.id")), "documentCount"],
+        ],
+      },
+      include: [
+        {
+          model: UserDocument,
+          as: "documents",
+          attributes: [],
+          required: false,
+        },
+        {
+          model: UserDocumentFolder,
+          as: "parent",
+          attributes: ["id", "name", "color", "parentId"],
+          required: false,
+        },
+        {
+          model: UserDocumentFolder,
+          as: "subfolders",
+          attributes: ["id", "name", "color", "parentId"],
+          required: false,
+        },
+      ],
+      group: ["UserDocumentFolders.id", "parent.id", "subfolders.id"],
+      order: [["createdAt", "DESC"]],
+    });
+    return success(folders);
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+// Move document to a different folder
+export const moveDocument = async (event) => {
+  const body = await readBody(event);
+  const loggedUser = event.context.user;
+  const { documentId, targetFolderId } = JSON.parse(body);
+
+  if (!documentId) {
+    throw createError({ message: "Document ID is required" });
+  }
+
+  try {
+    const document = await UserDocument.findOne({
+      where: {
+        id: documentId,
+        userId: loggedUser.userId,
+        organisationId: loggedUser.orgId,
+      },
+    });
+
+    if (!document) {
+      throw createError({ message: "Document not found" });
+    }
+
+    // Validate target folder if provided
+    if (targetFolderId) {
+      const targetFolder = await UserDocumentFolder.findOne({
+        where: {
+          id: targetFolderId,
+          userId: loggedUser.userId,
+          organisationId: loggedUser.orgId,
+        },
+      });
+
+      if (!targetFolder) {
+        throw createError({ message: "Target folder not found" });
+      }
+    }
+
+    await document.update({ folderId: targetFolderId || null });
+    return success(document);
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+// Move folder to a different parent folder
+export const moveFolder = async (event) => {
+  const body = await readBody(event);
+  const loggedUser = event.context.user;
+  const { folderId, targetParentId } = JSON.parse(body);
+
+  if (!folderId) {
+    throw createError({ message: "Folder ID is required" });
+  }
+
+  try {
+    const folder = await UserDocumentFolder.findOne({
+      where: {
+        id: folderId,
+        userId: loggedUser.userId,
+        organisationId: loggedUser.orgId,
+      },
+    });
+
+    if (!folder) {
+      throw createError({ message: "Folder not found" });
+    }
+
+    // Prevent moving folder into itself
+    if (targetParentId === folderId) {
+      throw createError({ message: "Cannot move folder into itself" });
+    }
+
+    // Validate target parent folder if provided
+    if (targetParentId) {
+      const targetFolder = await UserDocumentFolder.findOne({
+        where: {
+          id: targetParentId,
+          userId: loggedUser.userId,
+          organisationId: loggedUser.orgId,
+        },
+      });
+
+      if (!targetFolder) {
+        throw createError({ message: "Target folder not found" });
+      }
+
+      // Prevent moving folder into its own subfolder (circular reference)
+      if (targetFolder.parentId === folderId) {
+        throw createError({ message: "Cannot move folder into its own subfolder" });
+      }
+
+      // Check depth constraint (max 2 levels)
+      // If target has a parent, it's at level 2, so we can't add more children
+      if (targetFolder.parentId) {
+        throw createError({ message: "Maximum folder nesting depth reached (2 levels)" });
+      }
+
+      // If the folder being moved has subfolders, it can only go to root
+      const hasSubfolders = await UserDocumentFolder.count({ where: { parentId: folderId } });
+      if (hasSubfolders > 0) {
+        throw createError({ message: "Folder with subfolders can only be moved to root level" });
+      }
+    }
+
+    await folder.update({ parentId: targetParentId || null });
+    return success(folder);
+  } catch (err) {
     return error(500, err.message);
   }
 };
