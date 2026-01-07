@@ -834,6 +834,11 @@ export const createOrganisationForUser = async (event) => {
   let trialEndDate;
 
   try {
+    const user = await User.findByPk(loggedUser.userId, { transaction });
+    if (!user) {
+      throw new Error("User not found");
+    }
+
     /** -------------------------
      * 1. Create Organisation
      --------------------------*/
@@ -864,6 +869,9 @@ export const createOrganisationForUser = async (event) => {
     if (org.hasUsedTrial) {
       throw new Error("This organisation has already used its free trial.");
     }
+    if (user.hasUsedTrial) {
+      throw new Error("This email has already used its free trial.");
+    }
 
     trialEndDate = new Date();
     trialEndDate.setDate(trialEndDate.getDate() + 15);
@@ -880,6 +888,10 @@ export const createOrganisationForUser = async (event) => {
 
     // 🔐 Permanently mark trial as used
     await org.update(
+      { hasUsedTrial: true },
+      { transaction }
+    );
+    await user.update(
       { hasUsedTrial: true },
       { transaction }
     );

@@ -58,6 +58,11 @@ export const User = sequelize.define(
       defaultValue: false,
       allowNull: false,
     },
+    hasUsedTrial: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      allowNull: false,
+    },
     lastLoginDate: {
       type: DataTypes.DATE,
       allowNull: true,

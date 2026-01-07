@@ -78,13 +78,13 @@ export const login = async (event) => {
       organisationId: user.lastLoginOrganisationId || activeOrgs[0].organisationId,
      },
   });
-  if (
-    userPreference &&
-    userPreference.licenseType === "Trial" &&
-    new Date(userPreference.licenseRenewalDate) < new Date()
-  ) {
-    return error(401, "License Expired");
-  }
+    if (
+      userPreference &&
+      userPreference.licenseType !== "System" &&
+      new Date(userPreference.licenseRenewalDate) < new Date()
+    ) {
+      return error(401, "License Expired");
+    }
 
   let orgId;
   if (user.lastLoginOrganisationId) {
@@ -252,6 +252,7 @@ export const signupRequest = async (event) => {
         password: hashed,
         profileCompletion: 0,
         roleId,
+        hasUsedTrial: true,
       },
       { transaction }
     );

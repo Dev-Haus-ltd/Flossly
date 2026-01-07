@@ -2,8 +2,11 @@ import stripe from "@/server/utils/stripe";
 import { UserPreference, UserSubscription } from "../models";
 import { User } from "../models";
 
+const config = useRuntimeConfig();
+
 const LICENSE_TYPES = {
   TRIAL: "Trial",
+  DRIFT: "Drift",
   GLIDE: "Glide",
   SOAR: "Soar",
 };
@@ -13,11 +16,29 @@ const BILLING_CYCLES = {
   YEARLY: "Yearly",
 };
 
-const resolveLicenseTypeFromProduct = (productName = "") => {
-  const name = String(productName).toLowerCase();
+const normalizeLicenseType = (raw) => {
+  const value = String(raw || "").trim().toLowerCase();
+  if (!value) return null;
+  if (value === "soar") return LICENSE_TYPES.SOAR;
+  if (value === "glide") return LICENSE_TYPES.GLIDE;
+  if (value === "drift") return LICENSE_TYPES.DRIFT;
+  if (value === "trial") return LICENSE_TYPES.TRIAL;
+  return null;
+};
+
+const resolveLicenseTypeFromPrice = (price) => {
+  const direct =
+    normalizeLicenseType(price?.metadata?.license_type) ||
+    normalizeLicenseType(price?.metadata?.licenseType) ||
+    normalizeLicenseType(price?.product?.metadata?.license_type) ||
+    normalizeLicenseType(price?.product?.metadata?.licenseType);
+  if (direct) return direct;
+
+  const name = String(price?.product?.name || "").toLowerCase();
   if (name.includes("soar")) return LICENSE_TYPES.SOAR;
   if (name.includes("glide")) return LICENSE_TYPES.GLIDE;
-  if (name.includes("drift")) return LICENSE_TYPES.TRIAL;
+  if (name.includes("drift")) return LICENSE_TYPES.DRIFT;
+  if (name.includes("trial")) return LICENSE_TYPES.TRIAL;
   return LICENSE_TYPES.TRIAL;
 };
 
@@ -29,13 +50,10 @@ const resolveBillingCycleFromPrice = (price) => {
   return BILLING_CYCLES.MONTHLY;
 };
 
-const resolveLicenseFromPrice = (price) => {
-  const productName = price?.product?.name || "";
-  return {
-    licenseType: resolveLicenseTypeFromProduct(productName),
-    licenseBillingCycle: resolveBillingCycleFromPrice(price),
-  };
-};
+const resolveLicenseFromPrice = (price) => ({
+  licenseType: resolveLicenseTypeFromPrice(price),
+  licenseBillingCycle: resolveBillingCycleFromPrice(price),
+});
 
 const addDays = (date, days) => {
   const result = new Date(date);
@@ -52,6 +70,51 @@ const resolvePriceForSubscription = async (subscriptionId, priceId) => {
     expand: ["items.data.price.product"],
   });
   return stripeSub?.items?.data?.[0]?.price || null;
+};
+
+const resolveRenewalDateFromSubscription = (subscription) => {
+  const periodEnd = Number(subscription?.current_period_end);
+  if (Number.isFinite(periodEnd) && periodEnd > 0) {
+    return new Date(periodEnd * 1000);
+  }
+  return null;
+};
+
+const updateUserPreferenceFromSubscription = async (stripeSubscription) => {
+  if (!stripeSubscription) return;
+
+  const subscriptionId = stripeSubscription.id;
+  const subscription = stripeSubscription.items?.data?.[0]?.price?.product
+    ? stripeSubscription
+    : await stripe.subscriptions.retrieve(subscriptionId, {
+        expand: ["items.data.price.product"],
+      });
+
+  const subRecord = await UserSubscription.findOne({
+    where: { stripeSubscriptionId: subscription.id },
+  });
+  if (!subRecord) return;
+
+  const userPreference = await UserPreference.findOne({
+    where: {
+      userId: subRecord.userId,
+      organisationId: subRecord.organisationId,
+    },
+  });
+  if (!userPreference) return;
+
+  const price = subscription?.items?.data?.[0]?.price || null;
+  const { licenseType, licenseBillingCycle } = resolveLicenseFromPrice(price);
+  const renewalDate = resolveRenewalDateFromSubscription(subscription);
+  const updates = {
+    licenseType,
+    licenseBillingCycle,
+  };
+  if (renewalDate) {
+    updates.licenseRenewalDate = renewalDate;
+  }
+
+  await userPreference.update(updates);
 };
 
 export const createSubscription = async (event) => {
@@ -169,14 +232,23 @@ export const confirmPayment = async (event) => {
         organisationId: loggedUser.orgId,
        },
     });
-    const price = await resolvePriceForSubscription(
+    const stripeSubscription = await stripe.subscriptions.retrieve(
       subscriptionId,
-      subscription.packagePriceId
+      { expand: ["items.data.price.product"] }
     );
+    const price =
+      stripeSubscription?.items?.data?.[0]?.price ||
+      (await resolvePriceForSubscription(
+        subscriptionId,
+        subscription.packagePriceId
+      ));
     const { licenseType, licenseBillingCycle } = resolveLicenseFromPrice(price);
-    const renewalDays =
-      licenseBillingCycle === BILLING_CYCLES.YEARLY ? 365 : 30;
-    const renewalDate = addDays(new Date(), renewalDays);
+    const renewalDate =
+      resolveRenewalDateFromSubscription(stripeSubscription) ||
+      addDays(
+        new Date(),
+        licenseBillingCycle === BILLING_CYCLES.YEARLY ? 365 : 30
+      );
 
     user.licenseType = licenseType;
     user.licenseBillingCycle = licenseBillingCycle;
@@ -247,6 +319,11 @@ export const webhook = async (event) => {
           { stripeSubscriptionStatus: "active" },
           { where: { stripeSubscriptionId: subscriptionId } }
         );
+        const subscription = await stripe.subscriptions.retrieve(
+          subscriptionId,
+          { expand: ["items.data.price.product"] }
+        );
+        await updateUserPreferenceFromSubscription(subscription);
         break;
       }
       case "invoice.payment_failed": {
@@ -266,10 +343,12 @@ export const webhook = async (event) => {
           },
           { where: { stripeCustomerId: subscription.customer } }
         );
+        await updateUserPreferenceFromSubscription(subscription);
         break;
       }
       case "customer.subscription.deleted": {
         const subscription = obj;
+        await updateUserPreferenceFromSubscription(subscription);
         await UserSubscription.update(
           {
             stripeSubscriptionStatus: "canceled",
