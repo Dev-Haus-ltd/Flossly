@@ -164,7 +164,7 @@ const props = defineProps({
 
 // get license type from localStorage
 const user = JSON.parse(localStorage.getItem("user") || "{}");
-const licenseType = user?.preferences?.licenseType || null;
+const licenseType = user?.preferences[0]?.licenseType || null;
 
 const features = ref([
   {

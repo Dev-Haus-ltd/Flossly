@@ -1810,7 +1810,7 @@ const updateUserPreferences = async () => {
     userId: user.value.id,
     taskTableColumns: selectedHeaders.value,
   });
-  user.value.preferences.taskTableColumns = selectedHeaders.value;
+  user.value.preferences[0].taskTableColumns = selectedHeaders.value;
   localStorage.setItem("user", JSON.stringify(user.value));
 };
 
