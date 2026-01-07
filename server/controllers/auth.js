@@ -318,6 +318,9 @@ export const profile = async (event) => {
         {
           model: UserPreference,
           as: "preferences",
+          where: {
+            organisationId: loggedUser.orgId
+          }
         },
         {
           model: Role,
@@ -358,9 +361,9 @@ export const profile = async (event) => {
       }
     }
     
-    if (userObj.preferences && userObj.preferences.taskTableColumns) {
-      userObj.preferences.taskTableColumns = JSON.parse(
-        userObj.preferences.taskTableColumns
+    if (userObj.preferences && userObj.preferences.length && userObj.preferences[0].taskTableColumns) {
+      userObj.preferences[0].taskTableColumns = JSON.parse(
+        userObj.preferences[0].taskTableColumns
       );
     }
     setCookie(event, "loggedUserId", userObj.id, { maxAge: 31536000 });
