@@ -19,7 +19,7 @@ export const UserPreference = sequelize.define(
     },
     organisationId: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: "Organisations",
         key: "id",

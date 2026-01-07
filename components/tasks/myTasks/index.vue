@@ -570,8 +570,8 @@ onMounted(async () => {
   loadHiddenCategories();
   loadCategoryOrder();
   user.value = JSON.parse(localStorage.getItem("user"));
-  if (user && user.preferences) {
-    headers.value = user.preferences.taskTableColumns;
+  if (user && user.preferences && user.preferences.length) {
+    headers.value = user.preferences[0].taskTableColumns;
   } else {
     headers.value = mainStore.getTeamTaskTableHeaders;
   }
