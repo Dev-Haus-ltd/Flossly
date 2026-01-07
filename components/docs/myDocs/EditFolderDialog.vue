@@ -47,7 +47,6 @@
           variant="flat"
           color="primary"
           @click="save"
-          :loading="loading"
           :disabled="!folderName.trim() || folderName === originalName"
           style="font-weight: 500; text-transform: none"
         >
