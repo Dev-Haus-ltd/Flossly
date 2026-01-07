@@ -52,16 +52,15 @@
         >
           <!-- Folder Image -->
           <img
-            src="@/assets/images/flosslydocs/folder.svg" 
+            src="@/assets/images/flosslydocs/folder.svg"
             style="height: 50px; width: 50px"
             class="mr-3"
           />
 
           <!-- Folder Details -->
-          <div>
+          <div class="flex-grow-1">
             <div
               style="
-                
                 font-weight: 400;
                 font-size: 13px;
                 font-style: Regular;
@@ -72,7 +71,6 @@
             <div
               style="
                 color: #737373;
-                
                 font-weight: 400;
                 font-size: 13px;
                 font-style: Regular;
@@ -81,6 +79,67 @@
               Files: {{ folder.documentCount }}
             </div>
           </div>
+          <v-spacer />
+          <!-- Menu -->
+          <v-menu 
+            location="bottom start"
+            origin="top start"
+            content-class="folder-menu"
+          >
+            <template #activator="{ props: menuProps }">
+              <img
+                v-bind="menuProps"
+                src="@/assets/icons/menu.svg"
+                alt="Menu"
+                width="24"
+                height="24"
+                style="cursor: pointer"
+                @click.stop
+              />
+            </template>
+            <v-list density="compact" class="pa-0">
+              <v-list-item
+                @click.stop="$emit('edit-folder', folder)"
+              >
+                <template #prepend>
+                  <img
+                    src="@/assets/icons/edit_1.svg"
+                    width="20"
+                    height="20"
+                    class="mr-3"
+                  />
+                </template>
+                <v-list-item-title>Edit</v-list-item-title>
+              </v-list-item>
+              <v-list-item
+                @click.stop="$emit('move-folder', { folder, event: $event })"
+              >
+                <template #prepend>
+                  <img
+                    src="@/assets/icons/move.svg"
+                    width="20"
+                    height="20"
+                    class="mr-3"
+                  />
+                </template>
+                <v-list-item-title>Move</v-list-item-title>
+              </v-list-item>
+              <v-list-item
+                @click.stop="$emit('delete-folder', folder)"
+                class="text-error"
+              >
+                <template #prepend>
+                  <img
+                    src="@/assets/icons/delete_1.svg"
+                    width="20"
+                    height="20"
+                    class="mr-3"
+                  />
+                </template>
+                <v-list-item-title>Delete</v-list-item-title>
+              </v-list-item>
+            </v-list>
+          </v-menu>
         </v-card>
       </v-col>
     </v-row>
@@ -138,4 +197,15 @@ const toggleShowAll = () => {
 .cust-border {
   border: 1px solid #dfdfdf !important;
 }
+
+:deep(.folder-menu) {
+  width: 220px;
+  height: 133px;
+}
+
+:deep(.folder-menu > .v-list) {
+  box-shadow: 0 8px 14px rgba(0, 0, 0, 0.15) !important;
+}
+
+
 </style>

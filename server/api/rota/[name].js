@@ -14,7 +14,6 @@ import {
   unPublishRota,
   updateRota,
   updateShift,
-  deleteRotaShift,
   getUserRotas,
 } from "~/server/controllers/rota";
 
