@@ -1,7 +1,9 @@
 import {
   acceptInvitation,
+  acceptOrganisationInvitation,
   bankDetails,
   contractDetails,
+  declineOrganisationInvitation,
   forgetPasswordRequest,
   inviteMembers,
   login,
@@ -10,9 +12,18 @@ import {
   signupRequest,
   userLoginHistory,
   verifyEmail,
+  verifyInvitationToken,
   updateProfile,
   updatePassword,
-  updateBankDetails
+  updateBankDetails,
+  getUserHrDocuments,
+  addUserHrDoc,
+  removeUserDoc,
+  switchOrgnanisation,
+  createShortLivedToken,
+  exchangeShortLivedToken,
+  resendVerificationEmail,
+  resendOrganisationInvitation
 } from "../../controllers/auth";
 import bcrypt from "bcrypt";
 export default defineEventHandler(async (event) => {
@@ -22,6 +33,8 @@ export default defineEventHandler(async (event) => {
       return await login(event);
     case "signUpRequest":
       return await signupRequest(event);
+    case "resendVerificationEmail":
+      return await resendVerificationEmail(event);
     case "verifyEmail":
       return await verifyEmail(event);
     case "createHash":
@@ -40,6 +53,14 @@ export default defineEventHandler(async (event) => {
       return await inviteMembers(event);
     case "acceptInvitation":
       return await acceptInvitation(event);
+    case "verifyInvitationToken":
+      return await verifyInvitationToken(event);
+    case "acceptOrganisationInvitation":
+      return await acceptOrganisationInvitation(event);
+    case "declineOrganisationInvitation":
+      return await declineOrganisationInvitation(event);
+    case "resendOrganisationInvitation":
+      return await resendOrganisationInvitation(event);
     case "loginHistory":
       return await userLoginHistory(event);
     case "bankDetails":
@@ -48,6 +69,18 @@ export default defineEventHandler(async (event) => {
       return await updateBankDetails(event);
     case "contractDetails":
       return await contractDetails(event);
+    case "hrDocs":
+      return await getUserHrDocuments(event)
+    case "addHrDoc":
+      return await addUserHrDoc(event)
+    case "removeHrDoc":
+      return await removeUserDoc(event)
+      case "switchOrg":
+        return await switchOrgnanisation(event)
+    case "createShortToken":
+      return await createShortLivedToken(event);
+    case "exchangeShortToken":
+      return await exchangeShortLivedToken(event);
     default:
       return { code: 0, error: "Not found" };
   }
@@ -55,8 +88,6 @@ export default defineEventHandler(async (event) => {
 
 const createHash = async (event) => {
   const body = await readBody(event);
-  console.log(body);
-  // const { password }  = JSON.parse(body)
   const hashPassword = await bcrypt.hash(body.password, 10);
 
   return hashPassword;

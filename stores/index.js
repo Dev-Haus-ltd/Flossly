@@ -1,16 +1,11 @@
 import authService from "../services/authService";
+import orgService from "../services/orgService";
 import dashBoard from "@/assets/icons/mainDrawerIcons/dashboard.svg";
 import tasksIcon from "@/assets/icons/mainDrawerIcons/tasks.svg";
 import teamIcon from "@/assets/icons/mainDrawerIcons/team.svg";
-import academyIcon from "@/assets/icons/mainDrawerIcons/academy.svg";
-import flowIcon from "@/assets/icons/mainDrawerIcons/flow.svg";
-import contentIcon from "@/assets/icons/mainDrawerIcons/content.svg";
-import checkIcon from "@/assets/icons/mainDrawerIcons/check.svg";
-import settingsIcon from "@/assets/icons/mainDrawerIcons/settings.svg";
-import cleanIcon from "@/assets/icons/mainDrawerIcons/clean.svg";
-import profileIcon from "@/assets/icons/mainDrawerIcons/profile.svg";
 import flosslyDocs from '@/assets/icons/mainDrawerIcons/docs.svg'
 import crmIcon from '@/assets/icons/mainDrawerIcons/crm.svg'
+import academyIcon from '@/assets/icons/mainDrawerIcons/academy.svg'
 
 
 export const useMainStore = defineStore("mainStore", {
@@ -18,6 +13,8 @@ export const useMainStore = defineStore("mainStore", {
     locale: "en",
     roles: [],
     isLoading: false,
+    loginSkipSplash: false,
+    customColumns: [],
     snackbar: {
       title: "",
       subtitle: "",
@@ -45,14 +42,14 @@ export const useMainStore = defineStore("mainStore", {
           title: "Flossly Tasks",
           imgPath: tasksIcon,
           value: "tasks-group",
-          to: "/tasks",
+          to: "/tasks/mytasks",
           children: [
-            {
-              title: "My Tasks",
-              value: "myTasks",
-              imgPath: tasksIcon,
-              to: "/tasks/mytasks",
-            },
+            // {
+            //   title: "My Tasks",
+            //   value: "myTasks",
+            //   imgPath: tasksIcon,
+            //   to: "/tasks/mytasks",
+            // },
             {
               title: "My Team Tasks",
               value: "myTeamTasks",
@@ -65,16 +62,16 @@ export const useMainStore = defineStore("mainStore", {
           title: "Flossly docs",
           imgPath: flosslyDocs,
           value: "flosllyDocs",
-          to: "/documents",
-          children: [
-            {
-              title: "My Docs",
-              value: "mydocs",
-              imgPath: flosslyDocs,
-              to: "/documents/mydocs",
-            },
+          to: "/docs/mydocs",
+          // children: [
+          //   {
+          //     title: "My Docs",
+          //     value: "mydocs",
+          //     imgPath: flosslyDocs,
+          //     to: "/docs/mydocs",
+          //   },
         
-          ],
+          // ],
         },
         {
           title: "Team floss",
@@ -94,21 +91,35 @@ export const useMainStore = defineStore("mainStore", {
               imgPath: teamIcon,
               to: "/teams/holiday",
             },
-            {
-              title: "Payroll",
-              value: "payroll",
-              imgPath: teamIcon,
-              to: "/teams/payroll",
-            },
-            {
-              title: "Invoice",
-              value: "invoice",
-              imgPath: teamIcon,
-              to: "/teams/invoice",
-            }, 
+            // {
+            //   title: "Payroll",
+            //   value: "payroll",
+            //   imgPath: teamIcon,
+            //   to: "/teams/payroll",
+            // },
+            // {
+            //   title: "Invoice",
+            //   value: "invoice",
+            //   imgPath: teamIcon,
+            //   to: "/teams/invoice",
+            // }, 
         
           ],
         },
+        // {
+        //   title: "Floss Academy",
+        //   imgPath: academyIcon,
+        //   value: "flossAcademy",
+        //   to:"/academy",
+        //   children: [
+        //     {
+        //       title: "My Courses",
+        //       value: "myCourses",
+        //       imgPath: academyIcon,
+        //       to: "/academy/mycourses",
+        //     },
+        //   ],
+        // },
         {
           title: "CRM",
           imgPath: crmIcon,
@@ -121,7 +132,20 @@ export const useMainStore = defineStore("mainStore", {
           imgPath: tasksIcon,
           value: "flosslyDiary",
           to:"/diary",
-          children: [],
+          children: [
+            {
+              title: "Calendar",
+              value: "diaryCalendar",
+              imgPath: tasksIcon,
+              to: "/diary/calendar",
+            },
+            {
+              title: "Patients",
+              value: "diaryPatients",
+              imgPath: tasksIcon,
+              to: "/diary/patients",
+            },
+          ],
         },
         // {
         //   title: "Staff",
@@ -174,17 +198,43 @@ export const useMainStore = defineStore("mainStore", {
           title: "Flossly docs",
           imgPath: dashBoard,
           value: "flosllyDocs",
-          to: "/documents",
-          children: [
-            {
-              title: "My Docs",
-              value: "mydocs",
-              imgPath: flosslyDocs,
-              to: "/documents/mydocs",
-            },
+          to: "/docs/mydocs",
+          // children: [
+          //   {
+          //     title: "My Docs",
+          //     value: "mydocs",
+          //     imgPath: flosslyDocs,
+          //     to: "/docs/mydocs",
+          //   },
         
-          ],
+          // ],
         },
+        {
+          title: "Rota",
+          value: "rotaManagement",
+          imgPath: teamIcon,
+          to: "/teams/rota",
+        },
+        {
+          title: "Holiday Tracker",
+          value: "holidayTracker",
+          imgPath: teamIcon,
+          to: "/teams/holiday",
+        },
+        // {
+        //   title: "Floss Academy",
+        //   imgPath: academyIcon,
+        //   value: "flossAcademy",
+        //   to:"/academy",
+        //   children: [
+        //     {
+        //       title: "My Courses",
+        //       value: "myCourses",
+        //       imgPath: academyIcon,
+        //       to: "/academy/mycourses",
+        //     },
+        //   ],
+        // },
       ];
     },
     getTeamTaskTableHeaders() {
@@ -192,6 +242,12 @@ export const useMainStore = defineStore("mainStore", {
         {
           key: "title",
           title: "Task",
+          sortable: true,
+          width: 200,
+        },
+        {
+          key: "status",
+          title: "Status",
           sortable: true,
           width: 200,
         },
@@ -208,12 +264,6 @@ export const useMainStore = defineStore("mainStore", {
           width: 200,
         },
         {
-          key: "status.name",
-          title: "Status",
-          sortable: true,
-          width: 200,
-        },
-        {
           key: "assignedUser.fullName",
           title: "Assigned User",
           sortable: true,
@@ -222,12 +272,6 @@ export const useMainStore = defineStore("mainStore", {
         {
           key: "documentLink",
           title: "Template Link",
-          sortable: true,
-          width: 200,
-        },
-        {
-          key: "comments",
-          title: "Comments",
           sortable: true,
           width: 200,
         },
@@ -255,12 +299,6 @@ export const useMainStore = defineStore("mainStore", {
           width: 200,
         },
         {
-          key: "status.name",
-          title: "Status",
-          sortable: true,
-          width: 200,
-        },
-        {
           key: "assignedUser.fullName",
           title: "Assigned User",
           sortable: true,
@@ -269,12 +307,6 @@ export const useMainStore = defineStore("mainStore", {
         {
           key: "documentLink",
           title: "Template Link",
-          sortable: true,
-          width: 200,
-        },
-        {
-          key: "comments",
-          title: "Comments",
           sortable: true,
           width: 200,
         },
@@ -325,6 +357,9 @@ export const useMainStore = defineStore("mainStore", {
   },
 
   actions: {
+    setLoginSkipSplash(value) {
+      this.loginSkipSplash = !!value;
+    },
     getRoles() {
       return new Promise((resolve, reject) => {
         this.isLoading = true;
@@ -342,6 +377,21 @@ export const useMainStore = defineStore("mainStore", {
     },
     setSnackbar(toast) {
       this.snackbar = toast;
+    },
+    getCustomColumns() {
+      return new Promise((resolve, reject) => {
+        orgService
+          .listCustomColumns()
+          .then((res) => {
+            if (res.code === 0 && res.data) {
+              this.customColumns = res.data;
+            }
+            resolve(res);
+          })
+          .catch((err) => {
+            reject(err);
+          });
+      });
     },
   },
 });

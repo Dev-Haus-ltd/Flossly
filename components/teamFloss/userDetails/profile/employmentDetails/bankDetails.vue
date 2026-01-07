@@ -24,6 +24,7 @@
               :class="{ 'is-placeholder': !data.bankName }"
               contenteditable="true"
               @focus="onFocus($event)"
+              @input="onInput($event, 'bankName')"
               @blur="onBlur($event, 'bankName')"
               @keydown.enter.prevent="onEnter($event, 'bankName')"
             >
@@ -37,6 +38,7 @@
               :class="{ 'is-placeholder': !data.accountTitle }"
               contenteditable="true"
               @focus="onFocus($event)"
+              @input="onInput($event, 'accountTitle')"
               @blur="onBlur($event, 'accountTitle')"
               @keydown.enter.prevent="onEnter($event, 'accountTitle')"
             >
@@ -50,6 +52,7 @@
               :class="{ 'is-placeholder': !data.accountNumber }"
               contenteditable="true"
               @focus="onFocus($event)"
+              @input="onInput($event, 'accountNumber')"
               @blur="onBlur($event, 'accountNumber')"
               @keydown.enter.prevent="onEnter($event, 'accountNumber')"
             >
@@ -63,6 +66,7 @@
               :class="{ 'is-placeholder': !data.sortCode }"
               contenteditable="true"
               @focus="onFocus($event)"
+              @input="onInput($event, 'sortCode')"
               @blur="onBlur($event, 'sortCode')"
               @keydown.enter.prevent="onEnter($event, 'sortCode')"
             >
@@ -70,7 +74,7 @@
             </p>
           </v-col>
         </v-row>
-        <div class="d-flex justify-end mt-4">
+        <div class="d-flex justify-end mt-4" v-if="panel === 0 && isDirty">
           <v-btn color="primary" @click="savePanel"> Save </v-btn>
         </div>
       </v-expansion-panel-text>
@@ -79,12 +83,55 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { ref, onMounted, nextTick } from "vue";
 
 const props = defineProps({
   data: { type: Object, required: true },
 });
 const emit = defineEmits(["updateField"]);
+
+const isDirty = ref(false);
+const original = ref("{}");
+const initialized = ref(false);
+
+const normalizeData = (obj) => {
+  if (!obj) return {};
+  const normalized = { ...obj };
+  // Normalize empty strings, null, undefined to consistent values for comparison
+  Object.keys(normalized).forEach(key => {
+    if (normalized[key] === null || normalized[key] === undefined || normalized[key] === '') {
+      normalized[key] = '';
+    }
+  });
+  return normalized;
+};
+
+const checkDirty = () => {
+  if (!initialized.value) return;
+  try {
+    const current = normalizeData(props.data);
+    const originalData = JSON.parse(original.value || '{}');
+    const normalizedOriginal = normalizeData(originalData);
+    isDirty.value = JSON.stringify(current) !== JSON.stringify(normalizedOriginal);
+  } catch {
+    isDirty.value = true;
+  }
+};
+
+
+onMounted(async () => {
+  await nextTick();
+  try {
+    const initialData = normalizeData(props.data);
+    original.value = JSON.stringify(initialData);
+    isDirty.value = false;
+    initialized.value = true;
+  } catch {
+    original.value = '{}';
+    isDirty.value = false;
+    initialized.value = true;
+  }
+});
 
 const panel = ref(0);
 const togglePanel = () => {
@@ -98,15 +145,39 @@ const onFocus = (e) => {
   }
 };
 
+const onInput = (e, key) => {
+  if (!initialized.value) return;
+  const typedValue = e.target.innerText.trim();
+  const originalValue = (props.data?.[key] ?? "").toString().trim();
+  
+  if (typedValue === "" || typedValue === "Not specified") {
+    isDirty.value = originalValue !== "";
+  } else {
+    isDirty.value = typedValue !== originalValue;
+  }
+};
+
 // restore placeholder if left empty
 const onBlur = (e, key) => {
-  if (!e.target.innerText.trim()) {
+  const typedValue = e.target.innerText.trim();
+  const originalValue = (props.data?.[key] ?? "").toString().trim();
+  
+  if (!typedValue) {
     e.target.innerText = "Not specified";
+    if (originalValue) {
+      const updated = props.data;
+      updated[key] = "";
+      emit("updateField", { sync: false, updated });
+      checkDirty();
+    }
   } else {
-    const value = e.target.innerText.trim();
-    const updated = props.data;
-    updated[key] = value;
-    emit("updateField", { sync: false, updated });
+    const value = typedValue;
+    if (value !== originalValue) {
+      const updated = props.data;
+      updated[key] = value;
+      emit("updateField", { sync: false, updated });
+      checkDirty();
+    }
   }
 };
 
@@ -116,12 +187,22 @@ const onEnter = (e, key) => {
   const updated = props.data;
   updated[key] = value;
   emit("updateField", { sync: true, updated });
-  e.target.blur(); // exit editing mode
+  try { 
+    const savedData = normalizeData(props.data);
+    original.value = JSON.stringify(savedData); 
+  } catch {}
+  isDirty.value = false;
+  e.target.blur();
 };
 const savePanel = () => {
   const updated = props.data;
 
   emit("updateField", { sync: true, updated });
+  try { 
+    const savedData = normalizeData(props.data);
+    original.value = JSON.stringify(savedData); 
+  } catch {}
+  isDirty.value = false;
 };
 </script>
 
@@ -137,14 +218,14 @@ const savePanel = () => {
 
 /* Heading & subtitle */
 .title-text {
-  font-family: Poppins, sans-serif;
+  
   font-weight: 600;
   font-size: 16px;
   color: #1e1e1e;
   margin: 0;
 }
 .subtitle-text {
-  font-family: Poppins, sans-serif;
+  
   font-weight: 400;
   font-size: 13px;
   color: #1e1e1e;
@@ -156,7 +237,7 @@ const savePanel = () => {
   border-radius: 8px;
   padding: 12px;
   margin: 16px 0;
-  font-family: Poppins, sans-serif;
+  
   font-weight: 400;
   font-size: 13px;
   background-color: #f9fafa;
@@ -179,7 +260,7 @@ const savePanel = () => {
 /* Field label + value */
 .field-label {
   display: block;
-  font-family: Poppins, sans-serif;
+  
   font-weight: 600;
   font-size: 13px;
   color: #1e1e1e;
@@ -187,7 +268,7 @@ const savePanel = () => {
 }
 
 .field-value {
-  font-family: Poppins, sans-serif;
+  
   font-weight: 400;
   font-size: 14px;
   color: #101010;

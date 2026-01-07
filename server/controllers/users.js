@@ -9,7 +9,7 @@ import {
   UserOrganisation,
   UserPreference,
 } from "../models";
-
+import { Op } from "sequelize";
 import DB from "../utils/db";
 import fs from "fs";
 import path from "path";
@@ -19,7 +19,7 @@ export const usersList = async (event) => {
   const body = await readBody(event);
   const { roleId, orgId } = JSON.parse(body);
   if (orgId) {
-    currentOrg = orgId
+    currentOrg = orgId;
   }
   const where = {};
   if (roleId) {
@@ -33,7 +33,6 @@ export const usersList = async (event) => {
           model: User,
           as: "user",
           attributes: { exclude: ["password"] },
-          where,
           include: [
             {
               model: Role,
@@ -44,8 +43,6 @@ export const usersList = async (event) => {
               as: "preferences",
               attributes: {
                 include: [
-                  "lastLoginDate",
-                  "lastLoginOrganisationId",
                   "licenseType",
                   "licenseRenewalDate",
                 ],
@@ -55,7 +52,16 @@ export const usersList = async (event) => {
         },
       ],
     });
-    const users = userOrganisations.map((uo) => uo.user);
+  
+    const users = userOrganisations.map((uo) => {
+      const user = uo.user.toJSON();
+      user.orgStatus = uo.status || "Active";
+      user.isActive = user.orgStatus === "Active";
+      const isGloballyDeactivated = user.status === "Disabled" || user.status === "Expired";
+      const isOrgDeactivated = user.orgStatus === "Disabled";
+      user.isAccountDeactivated = isGloballyDeactivated || isOrgDeactivated;
+      return user;
+    });
     return success(users);
   } catch (err) {
     return error(500, err);
@@ -66,7 +72,10 @@ export const userAcrossOrgs = async (event) => {
   const loggedUser = event.context.user;
   try {
     const userOrganisations = await UserOrganisation.findAll({
-      where: { userId: loggedUser.userId },
+      where: { 
+        userId: loggedUser.userId,
+        status: "Active", 
+      },
       include: [
         {
           model: Organisation,
@@ -110,20 +119,42 @@ export const userAcrossOrgs = async (event) => {
       ],
     });
     const formattedData = userOrganisations.map((orgItem) => {
-      const { userOrganisations, ...orgData } = orgItem.organisation.get({
-        plain: true,
-      });
+      try {
+        if (!orgItem.organisation) {
+          return null;
+        }
+
+        const orgItemPlain = orgItem.toJSON ? orgItem.toJSON() : orgItem;
+        const orgData = orgItemPlain.organisation;
+        
+        if (!orgData) {
+          return null;
+        }
+
+        const { userOrganisations: orgUserOrgs, ...orgInfo } = orgData;
 
       return {
-        organisation: orgData,
-        orgUsers: userOrganisations.map((uo) => ({
-          ...uo.user, // user details
-        })),
+        organisation: orgInfo,
+        orgUsers: (orgUserOrgs || []).map((uo) => {
+          if (!uo || !uo.user) {
+            return null;
+          }
+          const userPlain = uo.user.toJSON ? uo.user.toJSON() : uo.user;
+          const user = JSON.parse(JSON.stringify(userPlain));
+          
+          user.orgStatus = uo.status || "Active";
+          user.isActive = user.orgStatus === "Active";
+          return user;
+        }).filter(Boolean), // Remove any null entries
       };
-    });
+      } catch (err) {
+        return null;
+      }
+    }).filter(Boolean); // Remove any null entries
+    
     return success(formattedData);
   } catch (err) {
-    return error(500, err);
+    return error(500, err.message || err);
   }
 };
 export const updateUserPreferences = async (event) => {
@@ -147,7 +178,8 @@ export const updateUserPreferences = async (event) => {
     throw createError({ message: "column should have key and title" });
   }
   try {
-    const userPreference = await UserPreference.findOne({ where: { userId } });
+    const { orgId } = event.context.user;
+    const userPreference = await UserPreference.findOne({ where: { userId, organisationId: orgId, }, });
     if (!userPreference) {
       throw createError({ message: "userPreference not found" });
     } else {
@@ -156,7 +188,6 @@ export const updateUserPreferences = async (event) => {
     }
     return success("Preferences updated successfully");
   } catch (err) {
-    console.log(err);
     return error(500, err.message);
   }
 };
@@ -288,6 +319,7 @@ export const updateBankDetails = async (event) => {
   }
 };
 export const applyLeave = async (event) => {
+  const actor = event.context.user;
   const transaction = await DB.transaction();
   try {
     const form = await readMultipartFormData(event);
@@ -316,7 +348,7 @@ export const applyLeave = async (event) => {
       endDate,
       reason,
       isPaid,
-      totalHours
+      totalHours,
     } = fields;
 
     if (!userId || !leaveType || !startDate || !endDate) {
@@ -337,14 +369,21 @@ export const applyLeave = async (event) => {
       documentPath = `/leave-documents/${fileName}`;
     }
 
-    const entitlement = await UserLeaveEntitlement.findOne({
+    let entitlement = await UserLeaveEntitlement.findOne({
       where: { userId, organisationId },
     });
 
-    if (!entitlement)
-      throw createError({
-        message: "Leave Entitlement is not available for this user",
-      });
+    if (!entitlement) {
+      entitlement = await UserLeaveEntitlement.create({
+        userId,
+        organisationId,
+        allowedAnnualLeaves: 14,
+        allowedCasualLeaves: 10,
+        allowedCompationateLeaves: 5,
+        allowedSickLeaves: 5,
+        allowedOtherLeaves: 5,
+      }, { transaction });
+    }
 
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -396,10 +435,10 @@ export const applyLeave = async (event) => {
         startDate,
         endDate,
         reason,
-        totalHours: totalHours === 'Full Day' ? 8 : 4,
+        totalHours: totalHours === "Full Day" ? 8 : 4,
         isPaid: isPaid === "true", // because form data sends strings
         document: documentPath,
-        status: "Pending",
+        status: userId == actor.userId ? "Pending" : "Approved",
       },
       { transaction }
     );
@@ -407,8 +446,33 @@ export const applyLeave = async (event) => {
     await transaction.commit();
     return success(leave);
   } catch (err) {
-    console.log(err)
     await transaction.rollback();
+    return error(500, err.message);
+  }
+};
+
+export const updateLeaveStatus = async (event) => {
+  const body = await readBody(event);
+  try {
+    const { id, status } = JSON.parse(body);
+    const leave = await UserLeaveHistory.findOne({ where: { id } });
+    if (!leave) throw createError({ message: "No Leave found" });
+    leave.status = status;
+    await leave.save();
+    const user = await User.findOne({ where: { id: leave.userId } });
+    const data = {
+      startDate: new Date(leave.startDate),
+      endDate: new Date(leave.endDate),
+      fullName: user.fullName,
+      email: user.email,
+    };
+    if (status === "Approved") {
+      await leaveRequestApprovedNotification(data);
+    } else {
+      await leaveRequestDeniedNotification(data);
+    }
+    return success("Updated");
+  } catch (err) {
     return error(500, err.message);
   }
 };
@@ -436,6 +500,7 @@ export const allusersLeavesHistory = async (event) => {
     const formatted = leaves.map((leave) => ({
       title: leave.leaveType,
       start: leave.startDate,
+      id: leave.id,
       end: leave.endDate,
       status: leave.status,
       reason: leave.reason,
@@ -508,6 +573,134 @@ export const updateAllowedLeaves = async (event) => {
     }
     return success("Updated");
   } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const deactivateUser = async (event) => {
+  const body = await readBody(event);
+  const { userId, organisationId } = JSON.parse(body);
+  const transaction = await DB.transaction();
+  
+  try {
+    if (!userId || !organisationId) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: "userId and organisationId are required",
+      });
+    }
+
+    // Find the user organization relationship
+    const userOrg = await UserOrganisation.findOne({
+      where: { userId, organisationId },
+      transaction,
+    });
+
+    if (!userOrg) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: "User not found in this organization",
+      });
+    }
+
+    userOrg.status = "Disabled";
+    await userOrg.save({ transaction });
+
+    await transaction.commit();
+    return success("User deactivated successfully");
+  } catch (err) {
+    await transaction.rollback();
+    return error(500, err.message);
+  }
+};
+
+export const activateUser = async (event) => {
+  const body = await readBody(event);
+  const { userId, organisationId } = JSON.parse(body);
+  const transaction = await DB.transaction();
+  
+  try {
+    if (!userId || !organisationId) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: "userId and organisationId are required",
+      });
+    }
+
+    // Find the user organization relationship
+    const userOrg = await UserOrganisation.findOne({
+      where: { userId, organisationId },
+      transaction,
+    });
+
+    if (!userOrg) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: "User not found in this organization",
+      });
+    }
+
+    userOrg.status = "Active";
+    await userOrg.save({ transaction });
+    
+    const user = await User.findByPk(userId, { transaction });
+    if (user && (user.status === "Disabled" || user.status === "Expired")) {
+      user.status = "Active";
+      await user.save({ transaction });
+    }
+
+    await transaction.commit();
+    return success("User activated successfully");
+  } catch (err) {
+    await transaction.rollback();
+    return error(500, err.message);
+  }
+};
+
+export const deleteUser = async (event) => {
+  const body = await readBody(event);
+  const { userId, organisationId } = JSON.parse(body);
+  const transaction = await DB.transaction();
+  
+  try {
+    if (!userId || !organisationId) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: "userId and organisationId are required",
+      });
+    }
+
+    const activeOrgCount = await UserOrganisation.count({
+      where: { 
+        userId, 
+        status: "Active" 
+      },
+      transaction,
+    });
+
+    if (activeOrgCount > 1) {
+      await UserOrganisation.destroy({
+        where: { userId, organisationId },
+        transaction,
+      });
+      await transaction.commit();
+      return success("User removed from organization successfully");
+    } else {
+      const user = await User.findByPk(userId, { transaction });
+      
+      if (!user) {
+        throw createError({
+          statusCode: 404,
+          statusMessage: "User not found",
+        });
+      }
+
+      await user.destroy({ transaction });
+      await transaction.commit();
+      return success("User deleted successfully");
+    }
+  } catch (err) {
+    await transaction.rollback();
     return error(500, err.message);
   }
 };

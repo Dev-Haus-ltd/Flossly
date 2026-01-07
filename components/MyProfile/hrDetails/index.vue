@@ -13,17 +13,23 @@
               <label class="info-label">Contract Type</label>
               <p
                 class="editable"
+                contenteditable="true"
+                @blur="logValue($event, 'contractType')"
               >
-                {{ contractDetails?.contractType }}
+                {{ contractInfo?.contractType || "Add Contract Type" }}
               </p>
             </div>
 
             <!-- Start Date -->
             <div class="mb-4" style="width: 40%">
               <label class="info-label">Start Date</label>
-              <p class="editable" v-bind="props">
-                    {{ contractDetails?.contractStartDate }}
-                  </p>
+              <p
+                class="editable"
+                contenteditable="true"
+                @blur="logValue($event, 'contractStartDate')"
+              >
+                {{ contractInfo?.contractStartDate || "Add Start Date" }}
+              </p>
             </div>
 
             <!-- Hours Worked -->
@@ -31,8 +37,10 @@
               <label class="info-label">Hours Worked (weekly)</label>
               <p
                 class="editable"
+                contenteditable="true"
+                @blur="logValue($event, 'weeklyHours')"
               >
-                {{ contractDetails?.weeklyHours  }}
+                {{ contractInfo?.weeklyHours || "Add Weekly Hours" }}
               </p>
             </div>
 
@@ -41,8 +49,10 @@
               <label class="info-label">Salary (per hour)</label>
               <p
                 class="editable"
+                contenteditable="true"
+                @blur="logValue($event, 'salaryPerHour')"
               >
-                {{ contractDetails?.salaryPerHour }}
+                {{ contractInfo?.salaryPerHour || "Add Salary Per Hour" }}
               </p>
             </div>
 
@@ -51,8 +61,10 @@
               <label class="info-label">Probation Period End</label>
               <p
                 class="editable"
+                contenteditable="true"
+                @blur="logValue($event, 'probEndDate')"
               >
-                {{ contractDetails?.probEndDate  }}
+                {{ contractInfo?.probEndDate || "Add Probation End Date" }}
               </p>
             </div>
 
@@ -61,40 +73,84 @@
               <label class="info-label">Holiday Entitlement (days)</label>
               <p
                 class="editable"
+                contenteditable="true"
+                @blur="logValue($event, 'holidaysEntitled')"
               >
-                {{ contractDetails?.holidaysEntitled  }}
+                {{ contractInfo?.holidaysEntitled || "Add Holiday Entitlement" }}
               </p>
             </div>
           </div>
         </v-card>
       </v-col>
     </v-row>
+    <div class="d-flex justify-end pa-2">
+      <v-btn @click="updateProfile" color="primary" variant="flat">Update Details</v-btn>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { reactive } from "vue";
+import { ref, watch } from 'vue';
 
 const emit = defineEmits(["update"]);
-const { contractDetails } = defineProps({
-  contractDetails: Object
-})
+const userStore = useUserStore();
+const mainStore = useMainStore();
 
-const menus = reactive({
-  startDate: false,
-  dob: false,
+const { user, contractDetails } = defineProps({
+  user: Object,
+  contractDetails: Object
 });
 
+const contractInfo = ref({...contractDetails} || {});
+
+// Watch for prop changes and update local copy
+watch(() => contractDetails, (newVal) => {
+  if (newVal) {
+    contractInfo.value = {...newVal};
+  }
+}, { deep: true });
+
 function logValue(e, key) {
-  contractDetails[key] = e.target.innerText.trim();
-  emit("update", contractDetails);
+  contractInfo.value[key] = e.target.innerText.trim();
+  console.log(contractInfo.value);
+  // Emit the updated contractInfo, not the old contractDetails
+  emit("update", contractInfo.value);
 }
+
+const updateProfile = () => {
+  userStore
+    .updateContract({
+      userId: user.id,
+      organisationId: user.currentLoggedInOrgId,
+      details: contractInfo.value
+    })
+    .then((res) => {
+      if (res.code === 0) {
+        // Update parent prop after successful API call
+        emit("update", contractInfo.value);
+        mainStore.setSnackbar({
+          title: res?.data?.message || "Contract details updated successfully",
+          type: "success",
+        });
+      } else {
+        mainStore.setSnackbar({
+          title: res?.data?.message || res?.message || "Failed to update contract details",
+          type: "error",
+        });
+      }
+    })
+    .catch((err) => {
+      mainStore.setSnackbar({
+        title: err?.message || "Something went wrong",
+        type: "error",
+      });
+    });
+};
 </script>
 
 <style scoped>
 .info-label {
   display: block;
-  font-family: Poppins;
   font-weight: 600;
   font-size: 13px;
   color: #1e1e1e;
@@ -102,7 +158,6 @@ function logValue(e, key) {
 }
 
 .editable {
-  font-family: Poppins;
   font-weight: 400;
   font-size: 14px;
   color: #101010;
@@ -112,6 +167,7 @@ function logValue(e, key) {
   border: 1px solid transparent;
   border-radius: 6px;
 }
+
 .editable:focus {
   border: 1px solid #dfdfdf;
   padding: 4px 6px;

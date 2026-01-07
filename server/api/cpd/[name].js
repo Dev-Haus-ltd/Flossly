@@ -1,0 +1,39 @@
+import {
+    listCourses,
+    startQuiz,
+    submitQuiz,
+    addCourse,
+    getUserCourseHistory,
+    assignCourseToUsers,
+  } from "../../controllers/cpd.js";
+  
+  export default defineEventHandler(async (event) => {
+    const name = getRouterParam(event, "name");
+
+      switch (name) {
+        case "listCourses":
+          return await listCourses(event);
+  
+        case "startQuiz":
+          return await startQuiz(event);
+   
+        case "submitQuiz":
+          return await submitQuiz(event);
+  
+        case "addCourse":
+          return await addCourse(event);
+
+        case "getUserCourseHistory":
+          return await getUserCourseHistory(event);
+
+        case "assignCourseToUser":
+          return await assignCourseToUsers(event);
+  
+        case "ping":
+          return { ok: true, ts: Date.now() };
+  
+        default:
+          setResponseStatus(event, 404);
+          return { code: 0, error: `Not found: ${name}` };
+      }
+  });

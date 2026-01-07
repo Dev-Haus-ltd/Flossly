@@ -1,3 +1,4 @@
+
 import orgService from "../services/orgService";
 
 export const useOrgStore = defineStore("orgStore", {
@@ -28,6 +29,21 @@ export const useOrgStore = defineStore("orgStore", {
           });
       });
     },
+    listTreatments() { 
+      return new Promise((resolve, reject) => {
+        this.isLoading = true
+        orgService
+          .listTreatments()
+          .then((res) => {
+            this.isLoading = false
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false
+            reject(err);
+          });
+      });
+     },
     getTaskStatuses() {
       return new Promise((resolve, reject) => {
         this.isLoading = true
@@ -162,6 +178,84 @@ export const useOrgStore = defineStore("orgStore", {
             reject(err);
           });
       });
-    }
+    },
+    updateImportantPeople(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        orgService
+          .updateImportantPeople(data)
+          .then((res) => {
+            this.isLoading = false;
+            if (this.organisation) {
+              this.organisation.importantPeople = res.data;
+            }
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    deleteAttribute(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        orgService
+          .deleteAttribute(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    createOrganisationReferral(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        orgService
+          .createOrganisationReferral(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    getAllOrganisationReferrals() {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        orgService
+          .getAllOrganisationReferrals()
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    createOrganisationForUser(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        orgService
+          .createOrganisationForUser(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
   },
 });

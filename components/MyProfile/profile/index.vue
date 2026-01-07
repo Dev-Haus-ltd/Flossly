@@ -6,18 +6,46 @@
         <v-card
           elevation="0"
           class="pa-7 flex-grow-1"
-          style="border: 1px solid #dbdbdb; border-radius: 12px"
+          style="border: 1px solid rgba(var(--v-theme-on-surface), 0.12); border-radius: 12px"
         >
           <!-- Top Section: Avatar + Name + Practice -->
           <div class="d-flex align-center mb-6">
-            <CommonAvatar :user="{ fullName: user?.fullName }" size="80" />
+            <CommonAvatar :user="user" size="80" /> 
 
-            <div class="ml-4">
-              <p class="user-name">{{ user.fullName }}</p>
+            <div class="ml-4 w-100">
+            
+              <p
+                class="editable"
+                style="font-size: 20px;"
+                contenteditable="true"
+                @blur="logValue($event, 'fullName')"
+              >
+                {{ user.fullName }}
+              </p>
               <p class="practice-name">{{ getPracticeName() }}</p>
+              <div class="mt-1">
+  <v-btn
+   color="tertiary" variant="outlined"
+    size="small"
+    class="upload-btn"
+    @click="$refs.fileInput.click()"
+    flat
+  >
+    <v-icon size="18" class="upload-btn__icon">mdi-upload</v-icon>
+    <span class="upload-btn__label">Add avatar</span>
+  </v-btn>
+
+  <input
+    ref="fileInput"
+    type="file"
+    accept="image/*"
+    class="d-none"
+    @change="handleFileUpload"
+  />
+</div>
             </div>
           </div>
-
+        
           <!-- Info Section: Labels + Editable -->
           <div class="info-section">
             <!-- Email -->
@@ -68,19 +96,16 @@
                   <v-radio
                     label="Male"
                     value="Male"
-                    color="black"
                     class="gender-radio"
                   />
                   <v-radio
                     label="Female"
                     value="Female"
-                    color="black"
                     class="gender-radio ml-2"
                   />
                   <v-radio
                     label="Other"
                     value="Other"
-                    color="black"
                     class="gender-radio ml-2"
                   />
                 </v-radio-group>
@@ -95,7 +120,7 @@
         <v-card
           elevation="0"
           class="pa-7 flex-grow-1"
-          style="border: 1px solid #dbdbdb; border-radius: 12px"
+          style="border: 1px solid rgba(var(--v-theme-on-surface), 0.12); border-radius: 12px"
         >
           <!-- Info Section -->
           <div class="info-section">
@@ -153,7 +178,7 @@
               >
                 <template #activator="{ props }">
                   <p class="editable" v-bind="props">
-                    {{ user?.dob || "Select Date of Birth" }}
+                    {{ user?.dob ? formatDateDDMMYYYY(user.dob) : "Select Date of Birth" }}
                   </p>
                 </template>
                 <v-date-picker
@@ -193,10 +218,11 @@
 </template>
 
 <script setup>
+import { formatDateDDMMYYYY } from '@/lib/dateFormatter'
+
 const { user } = defineProps({
   user: Object,
 });
-console.log(user)
 const mainStore= useMainStore();
 const dbMenu = ref(false)
 const authStore = useAuthStore()
@@ -204,29 +230,77 @@ const authStore = useAuthStore()
 // const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const logValue = (e, key) => {
-  user[key] = e.target.innerText.trim();
+  const trimmedValue = e.target.innerText.trim();
+  
+  // Validate fullName specifically
+  if (key === 'fullName' && trimmedValue.length === 0) {
+    e.target.innerText = user[key]; // Revert to original value
+    mainStore.setSnackbar({
+      title: "Full name cannot be empty or contain only spaces",
+      type: "error",
+    });
+    return;
+  }
+  
+  user[key] = trimmedValue;
   console.log(`${key}:`, user[key]);
 };
 
 const getAccountType = () => {
-  return user?.preferences?.licenseType;
+  return user?.preferences[0]?.licenseType;
 };
 
 const getPracticeName = () => {
-  return user?.userOrganisations?.find(
-    (x) => x.organisationId === user.currentLoggedInOrgId
-  ).organisation.name;
+  const org = user?.userOrganisations?.find(
+    (x) => x.organisationId === user.currentLoggedInOrgId && x.status === "Active" // Only active organizations
+  );
+  return org?.organisation?.name;
 };
 
 const getUserRole = () => {
   return user?.role.title;
 };
 const updateProfile = () => {
+  // Validate fullName before sending request
+  if (user.fullName && user.fullName.trim().length === 0) {
+    mainStore.setSnackbar({
+      title: "Full name cannot be empty or contain only spaces",
+      type: "error",
+    });
+    return;
+  }
+  
   authStore
-    .updateProfile(user)
+    .updateProfile(user) 
     .then((res) => {
       if (res.code === 0) {
-        localStorage.setItem("user", JSON.stringify(user))
+        // Merge returned user (may include new photo URL)
+        const returnedUser = res?.data?.user;
+        if (returnedUser && typeof returnedUser === 'object') {
+          // Preserve file reference only for preview before refresh; replace with URL if provided
+          if (returnedUser.photo) {
+            user.photo = returnedUser.photo;
+          }
+          // Merge basic fields
+          user.fullName = returnedUser.fullName ?? user.fullName;
+          user.phone = returnedUser.phone ?? user.phone;
+          user.address = returnedUser.address ?? user.address;
+          user.dob = returnedUser.dob ?? user.dob;
+          user.gender = returnedUser.gender ?? user.gender;
+          user.nextOfKin = returnedUser.nextOfKin ?? user.nextOfKin;
+          user.nextOfKinContact = returnedUser.nextOfKinContact ?? user.nextOfKinContact;
+          user.roleId = returnedUser.roleId ?? user.roleId;
+        }
+        // Clean up temporary preview/file fields before persisting
+        try {
+          if (user._photoPreviewUrl && typeof URL !== 'undefined') {
+            try { URL.revokeObjectURL(user._photoPreviewUrl); } catch {}
+          }
+          delete user._photoPreviewUrl;
+          delete user._photoFile;
+        } catch {}
+        // Persist to localStorage to refresh avatar across app
+        try { localStorage.setItem("user", JSON.stringify(user)); } catch {}
         mainStore.setSnackbar({
           title: res?.data?.message || "Profile updated successfully",
           type: "success",
@@ -245,19 +319,38 @@ const updateProfile = () => {
       })
     })
 }
-
+const handleFileUpload = (event) => {
+  const file = event.target.files[0]
+  if (!file) return;
+  try {
+    
+    if (user._photoPreviewUrl && typeof URL !== 'undefined') {
+      try { URL.revokeObjectURL(user._photoPreviewUrl); } catch {}
+    }
+    
+    const previewUrl = (typeof URL !== 'undefined') ? URL.createObjectURL(file) : null;
+    if (previewUrl) {
+      user._photoPreviewUrl = previewUrl;
+      user.photo = previewUrl; 
+    }
+    
+    user._photoFile = file;
+  } catch (e) {
+    user._photoFile = file;
+  }
+}
 </script>
 
 <style scoped>
 .user-name {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 24px;
   margin: 0;
 }
 
 .practice-name {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 13px;
   color: #737373;
@@ -266,7 +359,7 @@ const updateProfile = () => {
 
 .info-label {
   display: block;
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 13px;
   color: #1e1e1e; /* second column labels */
@@ -274,7 +367,7 @@ const updateProfile = () => {
 }
 
 .editable {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 14px;
   color: #101010;
@@ -289,6 +382,8 @@ const updateProfile = () => {
 .editable:focus {
   border: 1px solid #dfdfdf;
   padding: 4px 6px;
+
+  
 }
 
 .gender-radio .v-input--selection-controls__input {
@@ -308,5 +403,18 @@ const updateProfile = () => {
 
 .day-checkbox input:checked + .v-selection-control__wrapper .v-icon {
   color: white !important;
+}
+.upload-icon {
+  color: #b0b0b0;
+  min-width: 28px !important;
+  min-height: 28px !important;
+  width: 28px !important;
+  height: 28px !important;
+}
+
+.upload-icon:hover {
+  color: #8a8a8a;
+  transform: scale(1.05);
+  transition: transform 0.15s ease;
 }
 </style>

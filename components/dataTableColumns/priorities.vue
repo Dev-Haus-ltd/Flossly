@@ -63,15 +63,34 @@
 
           <!-- + Add Status Button -->
         </v-list>
-        <br />
-        <v-divider class="mb-2"></v-divider>
-        <div class="pa-2 d-flex justify-center">
+        
+        <!-- Border line above edit button -->
+        <div class="edit-button-divider"></div>
+        
+        <!-- Edit/Apply button -->
+        <div class="edit-button-container">
           <v-btn
-            @click="togglePriorityEdit = !togglePriorityEdit"
+            class="edit-button"
             variant="flat"
-            color="primary"
-            >{{ togglePriorityEdit ? "Apply" : "Edit Labels" }}</v-btn
+            @click="togglePriorityEdit = !togglePriorityEdit"
           >
+            <img
+              v-if="!togglePriorityEdit"
+              src="@/assets/tasks/edit.svg"
+              alt="Edit"
+              width="16"
+              height="16"
+              class="edit-icon"
+            />
+            <v-icon
+              v-else
+              size="16" 
+              class="edit-icon"
+            >
+              mdi-check
+            </v-icon>
+            <span class="edit-text">{{ togglePriorityEdit ? "Apply" : "Edit Labels" }}</span>
+          </v-btn>
         </div>
       </v-card>
     </v-menu>
@@ -112,7 +131,44 @@ const addPriorityAndEdit = () => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
   border-radius: 8px;
+}
+
+.edit-button-divider {
+  width: 160px;
+  height: 1px;
+  background-color: hsla(0, 0%, 86%, 1);
+  margin: 10px auto;
+}
+
+.edit-button-container {
+  display: flex;
+  justify-content: center;
+  padding: 0 16px 16px;
+}
+
+.edit-button {
+  opacity: 1;
+  border-bottom-width: 1px;
+  border-radius: 6px;
+  padding: 6px 16px;
+  background-color: hsla(180, 11%, 98%, 1) !important;
+  box-shadow: none;
+  text-transform: none;
+  min-width: auto;
+  height: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.edit-icon {
+  color: hsla(0, 0%, 43%, 1) !important;
+}
+
+.edit-text {
+  color: hsla(0, 0%, 43%, 1);
+  font-size: 14px;
 }
 </style>

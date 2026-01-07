@@ -154,9 +154,9 @@ export default {
         });
     });
   },
-  deleteRota(data) {
+  getUserRotas(data) {
     return new Promise((resolve, reject) => {
-      Post("/rota/delete",data)
+      Post("/rota/myRotas",data)
         .then((res) => {
           resolve(res);
         })

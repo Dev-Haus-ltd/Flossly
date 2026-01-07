@@ -6,7 +6,7 @@
     <!-- Button group -->
     <div
       class="btn-group mb-4 pa-1 rounded-lg"
-      style="border: 1px solid #dbdbdb; width: fit-content"
+      style="border: 1px solid rgba(var(--v-theme-on-surface), 0.12); width: fit-content"
     >
       <v-btn
         class="toggle-btn"
@@ -30,7 +30,7 @@
 
     <!-- Table container -->
     <div
-      style="border: 1px solid #dbdbdb; border-radius: 6px; overflow: hidden"
+      style="border: 1px solid rgba(var(--v-theme-on-surface), 0.12); border-radius: 6px; overflow: hidden"
     >
       <v-table class="super-table" density="comfortable">
         <thead>
@@ -60,7 +60,6 @@
                   <v-card class="pa-2">
                     <v-checkbox
                       class="menu-checkbox"
-                      color="black"
                       :model-value="fullAll"
                       :indeterminate="!fullAll && !fullNone"
                       label="Select All"
@@ -69,7 +68,6 @@
                     />
                     <v-checkbox
                       class="menu-checkbox"
-                      color="black"
                       :model-value="fullNone"
                       :indeterminate="!fullAll && !fullNone"
                       label="Select None"
@@ -99,7 +97,6 @@
                   <v-card class="pa-2">
                     <v-checkbox
                       class="menu-checkbox"
-                      color="black"
                       :model-value="noneAll"
                       :indeterminate="!noneAll && !noneNone"
                       label="Select All"
@@ -108,7 +105,6 @@
                     />
                     <v-checkbox
                       class="menu-checkbox"
-                      color="black"
                       :model-value="noneNone"
                       :indeterminate="!noneAll && !noneNone"
                       label="Select None"
@@ -133,7 +129,6 @@
             <td class="col-center">
               <v-radio
                 :model-value="row.access === true"
-                color="black"
                 class="row-radio"
                 @click="setRow(row, true)"
               />
@@ -143,7 +138,6 @@
             <td class="col-center">
               <v-radio
                 :model-value="row.access === false"
-                color="black"
                 class="row-radio"
                 @click="setRow(row, false)"
               />
@@ -197,11 +191,9 @@ function setRow(row, value) {
 <style scoped>
 /* Heading style (Super User) */
 .super-heading {
-  font-family: Poppins;
   font-weight: 600;
   font-style: SemiBold;
   font-size: 13px;
-  color: #1e1e1e;
 }
 
 /* Toggle buttons */
@@ -210,16 +202,11 @@ function setRow(row, value) {
 }
 .toggle-btn {
   text-transform: none;
-  background: #f5f5f5;
-  color: #1e1e1e;
-  font-family: Poppins;
   font-weight: 500;
   font-size: 13px;
   border-radius: 6px;
 }
 .toggle-btn.active {
-  background: #213536 !important;
-  color: #ffffff !important;
 }
 
 /* Make table 100% width and match your notif-table look */
@@ -233,13 +220,12 @@ function setRow(row, value) {
   border: 0;
   padding: 12px 16px;
   vertical-align: middle;
-  font-family: Poppins;
+  
   font-weight: 400;
   font-size: 14px;
 }
 .super-table thead th {
-  background: #fff;
-  border-bottom: 1px solid #dbdbdb !important; /* header line only */
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.12) !important; /* header line only */
 }
 
 /* Column widths and alignment */
@@ -275,18 +261,16 @@ function setRow(row, value) {
   flex-direction: column;
 }
 .head-title {
-  font-family: Poppins;
   font-weight: 600;
   font-style: SemiBold;
   font-size: 13px;
-  color: #1e1e1e;
 }
 .head-right-wrap {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  font-family: Poppins;
+  
   font-weight: 500;
   font-size: 14px;
 }
@@ -294,7 +278,6 @@ function setRow(row, value) {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #101010;
   padding: 0 16px;
 }
 .chev {
@@ -303,7 +286,6 @@ function setRow(row, value) {
 
 /* Header menu labels (visual match) */
 .menu-checkbox :deep(.v-label) {
-  color: #737373;
   font-size: 14px;
 }
 /* Remove all default td/th borders */
@@ -314,6 +296,6 @@ function setRow(row, value) {
 
 /* Add only header bottom border */
 :deep(.super-table thead th) {
-  border-bottom: 1px solid #dbdbdb !important;
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.12) !important;
 }
 </style>

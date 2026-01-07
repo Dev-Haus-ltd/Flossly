@@ -76,7 +76,7 @@ const currentComponent = computed(() => componentsMap[selectedSection.value]);
 
 <style scoped>
 .title {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-style: "SemiBold";
   font-size: 18px;

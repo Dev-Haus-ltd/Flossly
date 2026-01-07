@@ -17,7 +17,7 @@
       :tasks="history"
     />
     <MyProfileLoyaltyPointsRewardsContentRecommendPracticeDialog
-      v-model="openRecommendPracticeDialog"
+      v-model="showReferralDialog"
       @onSubmit="handleSubmit"
     />
     <MyProfileLoyaltyPointsRewardsContentFeedBackDialog
@@ -33,7 +33,7 @@ import GoogleImg from "@/assets/images/myProfile/loyalty/review.svg";
 import SocialImg from "@/assets/images/myProfile/loyalty/social.svg";
 import FeedBackImg from "@/assets/images/myProfile/loyalty/feedback.svg";
 
-const openRecommendPracticeDialog = ref(false);
+const showReferralDialog = ref(false);
 const openFeedbackDialog = ref(false);
 const pointStore = usePointStore()
 const history = ref([])
@@ -47,6 +47,13 @@ const getRewardHistory = () => {
     }
   })
 }
+const userBalance = computed(() => {
+  if (!history.value?.length) return 0;
+
+  return history.value.reduce((total, item) => {
+    return total + (item?.points ?? 0);
+  }, 0);
+});
 const cards = [
   {
     id: 1,
@@ -87,9 +94,12 @@ const cards = [
 ];
 const handleCardClick = (id) => {
   if (id === 1) {
-    openRecommendPracticeDialog.value = true;
+    showReferralDialog.value = true;
   } else if (id === 4) {
     openFeedbackDialog.value = true;
   }
 };
+const handleSubmit=()=>{
+  getRewardHistory()
+}
 </script>

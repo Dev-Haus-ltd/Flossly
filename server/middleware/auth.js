@@ -1,8 +1,16 @@
 import jwt from 'jsonwebtoken'
+import { error } from '../utils/response'
+
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig();
-  if (publicPath(event.path) || !event.path.includes('/api')) return;
-  let token =  getCookie(event, 'accessToken')
+  const path = event.path;
+  
+  if (!path.includes('/api')) return;
+  
+  if (isPublicPath(path)) {
+    return;
+  }
+  let token = getCookie(event, 'accessToken')
   if (!token) {
     const authHeader = getHeader(event, 'Authorization')
     if (!authHeader) {
@@ -11,19 +19,20 @@ export default defineEventHandler(async (event) => {
       token = authHeader.split(' ')[1]
     }
   }
+  
   if (!token) {
     return error(401, "Missing Authentication");
   }
+  
   try {
     const decoded = jwt.verify(token, config.JWT_SECRET);
     event.context.user = decoded;
   } catch (err) {
-    console.log(err)
     return error(401, "Invalid/Expired Token");
   }
 });
 
-const publicPath = (path) => {
+const isPublicPath = (path) => {
   const publicPaths = [
     "/api/auth/login",
     "/api/auth/signUpRequest",
@@ -32,7 +41,21 @@ const publicPath = (path) => {
     "/api/auth/requestResetPassword",
     "/api/auth/resetPassword",
     "/api/auth/acceptInvitation",
-    "/api/misc/getRoles"
+    "/api/auth/acceptOrganisationInvitation",
+    "/api/auth/declineOrganisationInvitation",
+    "/api/auth/verifyInvitationToken",
+    "/api/auth/exchangeShortToken",
+    "/api/auth/resendVerificationEmail",
+    "/api/misc/getRoles",
+    "/api/meta/callback",
+    "/api/meta/webhook",
+    "/api/chatbot/createAppointment",
+    "/api/chatbot/createLead",
   ];
-  return publicPaths.includes(path);
+  
+  const isPublic = publicPaths.some(publicPath => 
+    path === publicPath || path.startsWith(publicPath + '?') || path.startsWith(publicPath + '/')
+  );
+  
+  return isPublic;
 };

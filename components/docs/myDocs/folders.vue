@@ -7,7 +7,7 @@
     >
       <h3
         style="
-          font-family: Poppins;
+          
           font-weight: 600;
           font-size: 14px;
           margin: 0;
@@ -61,7 +61,7 @@
           <div>
             <div
               style="
-                font-family: Poppins;
+                
                 font-weight: 400;
                 font-size: 13px;
                 font-style: Regular;
@@ -72,7 +72,7 @@
             <div
               style="
                 color: #737373;
-                font-family: Poppins;
+                
                 font-weight: 400;
                 font-size: 13px;
                 font-style: Regular;
@@ -132,7 +132,7 @@ const toggleShowAll = () => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
   width: 200px;
 }
 .cust-border {

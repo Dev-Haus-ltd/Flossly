@@ -14,7 +14,7 @@
     </div>
 
     <p class="mt-2">{{ label }}</p>
-    <h1>{{ value }}</h1>
+    <h1>{{ value }} </h1>
   </div>
 </template>
 
@@ -46,7 +46,7 @@ const imageMap = {
 
 // Dynamically choose the correct image based on keyName
 const resolvedImage = computed(() => {
-  if (props.keyName === "upcoming") return upcoming;
+  if (props.keyName === "todo" || props.keyName === "upcoming") return upcoming;
   if (props.keyName === "completed") return completed;
   if (props.keyName === "overdue") return overdue;
   if (props.keyName === "progress") return progress;
@@ -64,11 +64,11 @@ const resolvedImage = computed(() => {
   height: 170px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 
   img {
-    width: 40px;
-    height: 40px;
+    width: 52px;
+    height: 52px;
     cursor: pointer;
   }
 

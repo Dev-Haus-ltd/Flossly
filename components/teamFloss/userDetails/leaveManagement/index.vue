@@ -5,45 +5,43 @@
         <team-floss-user-details-leave-management-holiday-card
           :iconImg="Annual"
           title="Annual Leaves"
-          :total="entitlementStats.allowedAnnualLeaves"
-          :taken="entitlementStats.takenAnnualLeaves"
-          color="#E8FAE8"
+          :total="dynamicLeaveStats.annualLeaves.total"
+          :taken="dynamicLeaveStats.annualLeaves.taken"
+          color="success"
         />
       </v-col>
       <v-col cols="4">
         <team-floss-user-details-leave-management-holiday-card
           :iconImg="Sick"
           title="Sick Leaves"
-          :total="entitlementStats.allowedSickLeaves"
-          :taken="entitlementStats.takenSickLeaves"
-          color="#FDE8E8"
+          :total="dynamicLeaveStats.sickLeaves.total"
+          :taken="dynamicLeaveStats.sickLeaves.taken"
+          color="error"
         />
       </v-col>
       <v-col cols="4">
         <team-floss-user-details-leave-management-holiday-card
           :iconImg="Training"
           title="Other Leaves"
-          :total="entitlementStats.allowedOtherLeaves"
-          :taken="entitlementStats.takenOtherLeaves"
-          color="#FFF3E8"
+          :total="dynamicLeaveStats.otherLeaves.total"
+          :taken="dynamicLeaveStats.otherLeaves.taken"
+          color="warning"
         />
       </v-col>
     </v-row>
     <div
-      style="border: 1px solid #dbdbdb; border-radius: 6px; overflow: auto"
+      style="border: 1px solid rgba(var(--v-theme-on-surface), 0.12); border-radius: 6px; overflow: auto"
       class="my-5"
     >
       <!-- Header -->
       <div
-        style="border-bottom: 1px solid #dbdbdb"
+        style="border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.12)"
         class="d-flex align-center justify-space-between px-4 py-2"
       >
         <h3
           style="
-            font-family: Poppins;
             font-weight: 600;
             font-size: 14px;
-            color: #1e1e1e;
             margin: 0;
           "
         >
@@ -56,7 +54,7 @@
             color="primary"
             class="mr-3"
             variant="flat"
-            @click="openDrawer = true"
+            @click="handleAddLeave"
           >
             Add Leave
           </v-btn>
@@ -142,12 +140,13 @@
     <TeamFlossUserDetailsLeaveManagementHolidayRequestDrawer
       v-model="openDrawer"
       :user="user"
-      @close="openDrawer = false"
+      @close="handleClose"
       @success="handleSuccess"
     />
   </div>
 </template>
 <script setup>
+import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import Annual from "@/assets/icons/teamfloss/total.svg";
 import Sick from "@/assets/icons/teamfloss/birthday.svg";
 import Training from "@/assets/icons/teamfloss/pending.svg";
@@ -205,35 +204,94 @@ const statusChipClass = (status) => {
   if (status.toLowerCase() === "rejected") return "status-chip-rejected";
   return "";
 };
+// Dynamic stats calculated from actual leave history
+const dynamicLeaveStats = computed(() => {
+  if (!leaveHistory.value || leaveHistory.value.length === 0) {
+    return {
+      annualLeaves: { total: entitlementStats.value.allowedAnnualLeaves || 0, taken: 0, approved: 0 },
+      sickLeaves: { total: entitlementStats.value.allowedSickLeaves || 0, taken: 0, approved: 0 },
+      otherLeaves: { total: entitlementStats.value.allowedOtherLeaves || 0, taken: 0, approved: 0 }
+    };
+  }
+
+  const stats = {
+    annualLeaves: { total: entitlementStats.value.allowedAnnualLeaves || 0, taken: 0, approved: 0 },
+    sickLeaves: { total: entitlementStats.value.allowedSickLeaves || 0, taken: 0, approved: 0 },
+    otherLeaves: { total: entitlementStats.value.allowedOtherLeaves || 0, taken: 0, approved: 0 }
+  };
+
+  leaveHistory.value.forEach(leave => {
+    const leaveType = (leave.leaveType || '').toLowerCase();
+    const status = (leave.status || '').toLowerCase();
+    const hours = parseFloat(leave.totalHours || 0);
+
+    // Categorize leave types
+    let category = 'otherLeaves';
+    if (leaveType.includes('annual') || leaveType.includes('holiday') || leaveType.includes('vacation')) {
+      category = 'annualLeaves';
+    } else if (leaveType.includes('sick') || leaveType.includes('illness')) {
+      category = 'sickLeaves';
+    }
+
+    // Count all leaves that are not rejected
+    if (status !== 'rejected') {
+      stats[category].taken += hours;
+    }
+
+    // Count only approved leaves
+    if (status === 'approved') {
+      stats[category].approved += hours;
+    }
+  });
+
+  return stats;
+});
+
+// Watch for changes and force reactivity
+watch([leaveHistory, entitlementStats], () => {
+  nextTick(() => {
+    // Force re-render of cards
+  });
+}, { deep: true });
+
 const handleSuccess = (data) => {
   openDrawer.value = false;
   getLeaveStats();
+};
+
+const handleAddLeave = () => {
+  openDrawer.value = true;
+};
+
+const handleClose = () => {
+  openDrawer.value = false;
 };
 </script>
 
 <style scoped>
 .leave-table th {
-  background-color: #f6f6f6;
+  background-color: #F6F6F6;
   font-weight: 500;
+  font-size: 14px;
+  padding: 12px 16px;
 }
 
 .status-chip-accepted {
-  background-color: #33b93c1a !important;
-  color: #33b93c !important;
+  background-color: rgba(var(--v-theme-success), 0.12) !important;
+  color: rgb(var(--v-theme-success)) !important;
 }
 .status-chip-pending {
-  background-color: #fdd8351a !important;
-  color: #fbc02d !important;
+  background-color: rgba(var(--v-theme-warning), 0.12) !important;
+  color: rgb(var(--v-theme-warning)) !important;
 }
 .status-chip-rejected {
-  background-color: #ff52521a !important;
-  color: #ff5252 !important;
+  background-color: rgba(var(--v-theme-error), 0.12) !important;
+  color: rgb(var(--v-theme-error)) !important;
 }
 
 .input-bordered :deep(.v-field) {
-  border: 1px solid #dfdfdf !important;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.12) !important;
   border-radius: 8px !important;
-  background-color: white !important;
 }
 :deep(.v-table__wrapper table) {
   width: 100% !important;
@@ -248,7 +306,7 @@ const handleSuccess = (data) => {
   border-right: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 :deep(.v-data-table .v-table__wrapper tbody tr:hover) {
-  background-color: #f5f5f5;
+  background-color: rgba(var(--v-theme-on-surface), 0.06);
   transition: background-color 0.2s ease;
 }
 </style>

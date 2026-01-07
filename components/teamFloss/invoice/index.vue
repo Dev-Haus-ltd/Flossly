@@ -1,38 +1,9 @@
 <template>
-    <div 
-      class="invoice-page"
-      :style="{ backgroundImage: `url(${images[currentIndex]})` }"
-    >
-      <!-- Floating buttons (only show if more than 1 image) -->
-      <div class="nav-buttons" v-if="images.length > 1">
-        <button @click="prevImage" :disabled="currentIndex === 0">⬅️</button>
-        <button @click="nextImage" :disabled="currentIndex === images.length - 1">➡️</button>
-      </div>
-    </div>
+invoice
   </template>
   
   <script setup>
-  import { ref } from "vue";
-  
-  // Import invoice assets
-  import invoice1 from "@/assets/images/teamfloss/invoice/invoice.svg";
-  
-  // Later you can add invoice2.svg, invoice3.svg, etc.
-  const images = [invoice1];
-  
-  const currentIndex = ref(0);
-  
-  const nextImage = () => {
-    if (currentIndex.value < images.length - 1) {
-      currentIndex.value++;
-    }
-  };
-  
-  const prevImage = () => {
-    if (currentIndex.value > 0) {
-      currentIndex.value--;
-    }
-  };
+
   </script>
   
   <style scoped>

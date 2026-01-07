@@ -5,7 +5,7 @@
       <v-card-title
         class="d-flex align-center justify-space-between"
         style="
-          font-family: Poppins;
+          
           font-weight: 600;
           font-size: 16px;
           border-bottom: 1px solid #dbdbdb;
@@ -39,13 +39,14 @@
       <!-- Actions -->
       <v-card-actions class="justify-end">
         <v-btn
-          text
+          variant="flat"
           @click="close"
           style="font-weight: 500; text-transform: none"
         >
           Cancel
         </v-btn>
         <v-btn
+          variant="flat"
           color="primary"
           @click="save"
           style="font-weight: 500; text-transform: none"
@@ -63,8 +64,12 @@ import { getRandomHexColor } from "~/lib/misc";
 
 const props = defineProps({
   modelValue: Boolean,
+  parentId: {
+    type: Number,
+    default: null,
+  },
 });
-const mainStore =useMainStore();
+const mainStore = useMainStore();
 const docStore = useDocStore();
 
 const emit = defineEmits(["update:modelValue", "onUpdate"]);
@@ -80,6 +85,7 @@ watch(isOpen, (val) => emit("update:modelValue", val));
 
 const close = () => {
   isOpen.value = false;
+  name.value = "";
 };
 
 const save = () => {
@@ -87,19 +93,20 @@ const save = () => {
     name: name.value,
     color: getRandomHexColor(),
     description: "",
+    parentId: props.parentId || null,
   };
   docStore
     .craeteFolder(data)
     .then((res) => {
       if (res.code === 0) {
-        emit("update:modelValue", false)
+        name.value = "";
+        emit("update:modelValue", false);
         emit("onUpdate");
-           mainStore.setSnackbar({
+        mainStore.setSnackbar({
           title: "Folder created successfully",
           type: "success",
         });
       } else {
-        //snack
         mainStore.setSnackbar({
           title: res.data?.message || res.message || "Unable to create folder. Please try again.",
           type: "error",
@@ -107,11 +114,10 @@ const save = () => {
       }
     })
     .catch((err) => {
-      // snack
       mainStore.setSnackbar({
-          title: err.message || "An unexpected error occurred. Please try again later.",
-          type: "error",
-        });
+        title: err.message || "An unexpected error occurred. Please try again later.",
+        type: "error",
+      });
     });
 };
 </script>
@@ -122,6 +128,6 @@ const save = () => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 </style>

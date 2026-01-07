@@ -1,12 +1,14 @@
 <template>
   <div class="parent">
     <div class="cust-border d-flex align-center">
-      <p class="mr-1">Flossly docs</p>
       <p
-        v-if="selectedFolder?.name"
+        class="mr-1"
         @click="goBack"
-        style="color: blue !important; cursor: pointer"
+        :style="selectedFolder?.name ? 'color: blue; cursor: pointer;' : ''"
       >
+        Flossly docs
+      </p>
+      <p v-if="selectedFolder?.name">
         {{ " / " + selectedFolder.name }}
       </p>
     </div>
@@ -16,7 +18,7 @@
         <!-- Heading -->
         <div
           style="
-            font-family: Poppins;
+            
             font-weight: 600;
             font-size: 14px;
             font-style: SemiBold;
@@ -176,7 +178,7 @@ const goBack = () => {
   }
 }
 .head {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-style: "Regular";
   font-size: 14px;

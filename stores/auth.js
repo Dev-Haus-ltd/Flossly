@@ -30,6 +30,21 @@ export const useAuthStore = defineStore("authStore", {
           });
       });
     },
+    resendVerificationEmail(data) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        authService
+          .resendVerificationEmail(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
     verifyEmail(data) {
       return new Promise((resolve, reject) => {
         this.isLoading = true;
@@ -98,10 +113,34 @@ export const useAuthStore = defineStore("authStore", {
           .then((res) => {
             this.loggedUser = res.data;
             this.isLoading = false;
+            
+            // Update user state with profile data
+            if (res.data && process.client) {
+              const { setUser } = useUser();
+              setUser(res.data);
+            }
+            
             resolve(res);
           })
           .catch((err) => {
             this.isLoading = false;
+            try {
+              const status = err?.statusCode || err?.status || err?.data?.statusCode;
+              const message = err?.data?.message || err?.message || '';
+              const deactivated = /deactivated/i.test(message);
+              if (status === 403 || deactivated) {
+                const mainStore = useMainStore();
+                mainStore.setSnackbar({
+                  title: message || 'Your account is deactivated for this organisation',
+                  type: 'error',
+                });
+                const token = useCookie('accessToken');
+                if (token) token.value = null;
+                if (process.client) {
+                  window.location.href = '/login';
+                }
+              }
+            } catch {}
             reject(err);
           });
       });
@@ -200,7 +239,7 @@ export const useAuthStore = defineStore("authStore", {
       return new Promise((resolve, reject) => {
         this.isLoading = true;
         authService 
-          .updatePassword(data)
+          .updatePassword(data) 
           .then((res) =>  {
             this.isLoading = false;
             resolve(res);
@@ -208,6 +247,156 @@ export const useAuthStore = defineStore("authStore", {
           .catch((err) => {
             this.isLoading = false; 
             reject(err); 
+          });
+      });
+    },
+    getUserHrDocuments(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService 
+          .getUserHrDocuments(data) 
+          .then((res) =>  {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false; 
+            reject(err); 
+          });
+      });
+    },
+    addUserHrDoc(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService 
+          .addUserHrDoc(data) 
+          .then((res) =>  {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false; 
+            reject(err); 
+          });
+      });
+    },
+    removeUserDoc(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService 
+          .removeUserDoc(data) 
+          .then((res) =>  {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false; 
+            reject(err); 
+          });
+      });
+    },
+    switchOrgnanisation(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService 
+          .switchOrgnanisation(data) 
+          .then((res) =>  {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false; 
+            reject(err); 
+          });
+      });
+    },
+    createShortToken() {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService 
+          .createShortToken() 
+          .then((res) =>  {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false; 
+            reject(err); 
+          });
+      });
+    },
+    getLoginHistory(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService
+          .getLoginHistory(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    acceptOrganisationInvitation(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService
+          .acceptOrganisationInvitation(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    declineOrganisationInvitation(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService
+          .declineOrganisationInvitation(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    verifyInvitationToken(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService
+          .verifyInvitationToken(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    resendOrganisationInvitation(data) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService
+          .resendOrganisationInvitation(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
           });
       });
     },

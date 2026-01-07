@@ -1,14 +1,23 @@
 <template>
   <div class="parent">
     <div class="cust-border d-flex align-center">
-      <p class="mr-1">My docs</p>
       <p
-        v-if="selectedFolder?.name"
-        @click="goBack"
-        style="color: blue !important; cursor: pointer"
+        class="mr-1"
+        @click="goToRoot"
+        :style="folderStack.length > 0 ? 'color: blue; cursor: pointer;' : ''"
       >
-        {{ " / " + selectedFolder.name }}
+        My docs
       </p>
+      <template v-for="(folder, index) in folderStack" :key="folder.id">
+        <p class="mr-1">/</p>
+        <p
+          class="mr-1"
+          @click="goToFolder(index)"
+          :style="index < folderStack.length - 1 ? 'color: blue; cursor: pointer;' : ''"
+        >
+          {{ folder.name }}
+        </p>
+      </template>
     </div>
     <div v-if="!showFolderDetails">
       <!-- recently assessed  -->
@@ -16,7 +25,7 @@
         <!-- Heading -->
         <div
           style="
-            font-family: Poppins;
+
             font-weight: 600;
             font-size: 14px;
             font-style: SemiBold;
@@ -43,6 +52,7 @@
       <div class="mt-5 px-5">
         <DocsMyDocsFolders
           :folders="foldersList"
+          :hideAddFolderButton="!canCreateSubfolder"
           @open-folder="handleOpenFolder"
           @add-folder="showAddFolderDialog = true"
         />
@@ -51,20 +61,28 @@
       <div class="my-5 px-5">
         <DocsMyDocsAllFiles
           :files="files"
-         
           @view-file="openFile"
           @edit-file="handleEdit"
           @download-file="handleDownload"
-            @addFileHandle="showAddFileDialog = true"
-        /> 
+          @addFileHandle="showAddFileDialog = true"
+        />
       </div>
     </div>
     <div v-else>
+      <!-- Show folders section when inside a folder (at depth < 2 for subfolder creation) -->
+      <div class="mt-5 px-5" v-if="canCreateSubfolder">
+        <DocsMyDocsFolders
+          :folders="foldersList"
+          :hideAddFolderButton="false"
+          @open-folder="handleOpenFolder"
+          @add-folder="showAddFolderDialog = true"
+        />
+      </div>
+      <!-- Show files section -->
       <div class="my-5 px-5">
         <DocsMyDocsAllFiles
-          :files="files.filter((x) => x.folderId === selectedFolder.id)"
+          :files="files"
           :folder="selectedFolder"
-        
           @view-file="openFile"
           @edit-file="handleEdit"
           @download-file="handleDownload"
@@ -74,7 +92,8 @@
     </div>
     <DocsMyDocsAddFolderDialog
       v-model="showAddFolderDialog"
-      @onUpdate="getFolders" 
+      :parentId="selectedFolder?.id"
+      @onUpdate="updateView"
     />
     <DocsMyDocsAddFileDialog
       v-model="showAddFileDialog"
@@ -82,7 +101,19 @@
       :folder="selectedFolder"
       @onUpdate="updateView"
     />
-    <DocsMyDocsViewFileDialog v-model="viewFileDialog" :doc="selectedDoc" />
+    <!-- Custom dialog for DOCX files -->
+    <DocsMyDocsDocxEditorDialog 
+      v-if="selectedDoc && isDocxFile(selectedDoc)"
+      v-model="viewFileDialog" 
+      :doc="selectedDoc" 
+      @onUpdate="updateView"
+    />
+    <!-- Vuetify dialog for other file types -->
+    <DocsMyDocsViewFileDialog 
+      v-else
+      v-model="viewFileDialog" 
+      :doc="selectedDoc" 
+    />
   </div>
 </template>
 
@@ -100,28 +131,37 @@ const docStore = useDocStore();
 const recentFiles = ref([]);
 const files = ref([]);
 const foldersList = ref([]);
+
+// Track folder navigation stack for breadcrumb and depth (max 2 levels)
+const folderStack = ref([]);
+
+// Computed property for current depth (0 = root, 1 = first level, 2 = second level)
+const currentDepth = computed(() => folderStack.value.length);
+
+// Check if we can create more subfolders (only allowed at depth 0 and 1)
+const canCreateSubfolder = computed(() => currentDepth.value < 2);
+
 onMounted(() => {
   getFolders();
   getRecentDocs();
   getDocs({ folderId: null });
 });
+
 const updateView = () => {
-  getFolders();
-  getDocs({ folderId: null });
+  const parentId = selectedFolder.value?.id || null;
+  getFolders(parentId);
+  getDocs({ folderId: parentId });
 };
-const getFolders = () => {
+
+const getFolders = (parentId = null) => {
   docStore
-    .getFolders()
+    .getFolders({ parentId })
     .then((res) => {
       if (res.code === 0) {
         foldersList.value = res.data;
-      } else {
-        //snack
       }
     })
-    .catch((err) => {
-      //snack
-    });
+    .catch(() => {});
 };
 
 const getRecentDocs = () => {
@@ -130,13 +170,9 @@ const getRecentDocs = () => {
     .then((res) => {
       if (res.code === 0) {
         recentFiles.value = res.data;
-      } else {
-        //snack
       }
     })
-    .catch((err) => {
-      //snack
-    });
+    .catch(() => {});
 };
 
 const getDocs = (data) => {
@@ -145,14 +181,17 @@ const getDocs = (data) => {
     .then((res) => {
       if (res.code === 0) {
         files.value = res.data;
-      } else {
-        //snack
       }
     })
-    .catch((err) => {
-      //snack
-    });
+    .catch(() => {});
 };
+
+// Check if file is DOCX/DOC
+const isDocxFile = (doc) => {
+  if (!doc) return false
+  const fileName = doc.name?.toLowerCase() || doc.link?.toLowerCase() || ''
+  return fileName.endsWith('.docx') || fileName.endsWith('.doc')
+}
 
 const openFile = (file) => {
   selectedDoc.value = file;
@@ -168,13 +207,31 @@ const handleDownload = (file) => {
 };
 
 const handleOpenFolder = (folder) => {
+  folderStack.value.push(folder);
   selectedFolder.value = folder;
   showFolderDetails.value = true;
+  // Load subfolders and files for the selected folder
+  getFolders(folder.id);
+  getDocs({ folderId: folder.id });
 };
 
-const goBack = () => {
+const goToRoot = () => {
+  folderStack.value = [];
   selectedFolder.value = null;
   showFolderDetails.value = false;
+  getFolders();
+  getDocs({ folderId: null });
+};
+
+const goToFolder = (index) => {
+  // Navigate to specific folder in breadcrumb
+  if (index < folderStack.value.length - 1) {
+    const targetFolder = folderStack.value[index];
+    folderStack.value = folderStack.value.slice(0, index + 1);
+    selectedFolder.value = targetFolder;
+    getFolders(targetFolder.id);
+    getDocs({ folderId: targetFolder.id });
+  }
 };
 </script>
 
@@ -191,7 +248,7 @@ const goBack = () => {
   }
 }
 .head {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-style: "Regular";
   font-size: 14px;

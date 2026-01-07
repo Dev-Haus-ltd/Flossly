@@ -21,8 +21,8 @@ export default {
           reject(err);
         });
     });
-  }, 
-   getTaskStatuses() {
+  },
+  getTaskStatuses() {
     return new Promise((resolve, reject) => {
       Get("/organisations/statuses")
         .then((res) => {
@@ -40,10 +40,10 @@ export default {
           resolve(res);
         })
         .catch((err) => {
-          reject(err); 
+          reject(err);
         });
     });
-  }, 
+  },
   addContacts(data) {
     return new Promise((resolve, reject) => {
       Post("/organisations/addContacts", data)
@@ -109,5 +109,68 @@ export default {
           reject(err);
         });
     });
-  }
-};
+  },
+  updateImportantPeople(data) {
+    return new Promise((resolve, reject) => {
+      Post("/organisations/updatePeople", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getScripts() {
+    return new Promise((resolve, reject) => {
+      Get("/organisations/scripts")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  saveScript(data) {
+    return new Promise((resolve, reject) => {
+      Post("/organisations/saveScript", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  listTreatments() {
+    return new Promise((resolve, reject) => {
+      Post("/diary/treamtments")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteAttribute(data) {
+  return new Promise((resolve, reject) => {
+    Post("/organisations/deleteAttribute", data)
+      .then(resolve)
+      .catch(reject);
+  });
+},
+  listCustomColumns() {
+    return new Promise((resolve, reject) => {
+      Get("/tasks/listCustomColumns")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  createOrganisationReferral(data) {
+    return new Promise((resolve, reject) => {
+      Post("/organisations/createReferral", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getAllOrganisationReferrals() {
+    return new Promise((resolve, reject) => {
+      Get("/organisations/allReferrals")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  createOrganisationForUser(data) {
+    return new Promise((resolve, reject) => {
+      Post("/organisations/createForUser", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+}

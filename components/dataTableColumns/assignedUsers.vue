@@ -14,16 +14,14 @@
     </div>
 
     <!-- Plus button trigger -->
-    <div>
-      <v-btn
-        icon
-        size="18"
-        style="background-color: black; color: white"
-        @mouseenter="onTriggerEnter($event, 'plus')"
-        @mouseleave="onTriggerLeave"
-      >
-        <v-icon size="16">mdi-plus</v-icon>
-      </v-btn>
+    <div
+      class="plus-trigger d-flex align-center justify-center"
+      @mouseenter="onTriggerEnter($event, 'plus')"
+      @mouseleave="onTriggerLeave"
+    >
+      <div class="circle-add">
+        <v-icon size="14" color="white">mdi-plus</v-icon>
+      </div>
     </div>
 
     <!-- Single shared menu, positioned using :activator -->
@@ -33,36 +31,39 @@
       location="bottom"
       transition="scale-transition"
       :close-on-content-click="false"
+      :close-on-click="false"
       max-width="320"
+      offset="4"
     >
       <!-- menu content -->
       <v-card
         width="320"
-        class="pa-3 rounded-lg"
+        class="pa-3 rounded-lg menu-card"
         :elevation="0"
         flat
         @mouseenter="cancelClose"   
-        @mouseleave="onTriggerLeave" 
+        @mouseleave="onTriggerLeave"
+        style="pointer-events: auto;"
       >
         <template v-if="hoveredItem && hoveredItem !== 'plus'">
           <div class="d-flex flex-wrap mb-3">
-  <v-chip
-    v-for="(a, index) in assignedUsers"
-    :key="index"
-    color="#1E1E1E"
-    class="me-1 mb-1 py-5 d-flex align-center rounded-lg"
-    style="font-family: Poppins; font-weight: 500; font-size: 14px; background-color: #d0e1e2;"
-    label
-      closable
-    @click:close="emit('unassign', a)"
-  >
-    <CommonAvatar :user="a" class="me-2" :size="30" />
+            <v-chip
+              v-for="(a, index) in assignedUsers"
+              :key="index"
+              color="#1E1E1E"
+              class="me-1 mb-1 py-5 d-flex align-center rounded-lg"
+              style=" font-weight: 500; font-size: 14px; background-color: #d0e1e2;"
+              label
+                closable
+              @click:close="emit('unassign', a)"
+            >
+              <CommonAvatar :user="a" class="me-2" :size="30" />
 
-    {{ a.id === currentUser?.id ? "Me" : a.fullName }}
+              {{ a.id === currentUser?.id ? "Me" : a.fullName }}
 
- 
-  </v-chip>
-</div>
+          
+            </v-chip>
+          </div>
         </template>
 
         <template v-else-if="hoveredItem === 'plus'">
@@ -81,6 +82,19 @@
           class="mb-3 input-bordered"
           flat
         />
+        <v-btn
+          color="primary"
+          variant="text"
+          @click="handleBottomAction"
+        >
+          <template #prepend>
+            <v-icon size="18">
+              {{ isValidEmail ? "mdi-email-check-outline" : "mdi-account-plus-outline" }}
+            </v-icon>
+          </template>
+
+          {{ isValidEmail ? "Send email" : "Invite member" }}
+        </v-btn>
 
         <div class="text-subtitle-2 text-grey-darken-1 mb-1">Suggested People</div>
 
@@ -111,8 +125,9 @@
 
 <script setup>
 import { ref, computed } from "vue";
-const emit = defineEmits(["assign", "unassign"]);
+const emit = defineEmits(["assign", "unassign", "add-staff"]);
 const props = defineProps({
+  userTaskId: { type: Number, required: true },
   assignedUsers: { type: Array, required: true },
   allUsers: { type: Array, required: true },
   currentUser: { type: Object, required: true },
@@ -121,12 +136,13 @@ const props = defineProps({
 const menu = ref(false);
 const currentActivator = ref(null); // DOM element the menu should anchor to
 const hoveredItem = ref(null); // either a user object or 'plus'
+const taskStore = useTaskStore();
 
 // timers to prevent flicker and to close/reopen safely
 let openTimeout = null;
 let closeTimeout = null;
-const OPEN_REOPEN_DELAY = 0; // ms — when switching activator
-const CLOSE_DELAY = 0; // ms — delay before actually closing menu
+const OPEN_REOPEN_DELAY = 50; // ms — when switching activator
+const CLOSE_DELAY = 200; // ms — delay before actually closing menu (prevents flickering)
 
 const search = ref("");
 
@@ -134,6 +150,7 @@ const search = ref("");
 const onTriggerEnter = (event, item) => {
   // stop any scheduled close
   clearTimeout(closeTimeout);
+  clearTimeout(openTimeout);
 
   const el = event.currentTarget;
   hoveredItem.value = item;
@@ -141,15 +158,17 @@ const onTriggerEnter = (event, item) => {
   // if menu already open and activator is different -> force reopen to reposition
   if (menu.value && currentActivator.value !== el) {
     menu.value = false; // close first so Vuetify can rebind activator
-    clearTimeout(openTimeout);
     openTimeout = setTimeout(() => {
       currentActivator.value = el;
       menu.value = true;
     }, OPEN_REOPEN_DELAY);
-  } else {
-    // normal open
+  } else if (!menu.value) {
+    // normal open - only if menu is not already open
     currentActivator.value = el;
     menu.value = true;
+  } else {
+    // menu is already open with same activator, just update hovered item
+    currentActivator.value = el;
   }
 };
 
@@ -167,14 +186,36 @@ const onTriggerLeave = () => {
 // called when mouse enters the menu itself — cancel any scheduled close
 const cancelClose = () => {
   clearTimeout(closeTimeout);
+  clearTimeout(openTimeout);
+  // Keep menu open when hovering over it
+  if (!menu.value) {
+    menu.value = true;
+  }
 };
 
 const filteredSuggestions = computed(() => {
   const q = (search.value || "").toLowerCase();
-  const assignedIds = props.assignedUsers.map((u) => u?.id);
+  
+  // Create a Set of assigned user IDs to handle duplicates and improve performance
+  // Filter out null/undefined values and ensure we only use valid IDs
+  const assignedIds = new Set(
+    props.assignedUsers
+      .map((u) => u?.id)
+      .filter((id) => id != null && id !== undefined)
+  );
+  
   return props.allUsers.filter((u) => {
+    // Skip if user is already assigned
+    if (assignedIds.has(u.id)) {
+      return false;
+    }
+    
+    // Check if user matches search query
     const matchText = `${u.fullName} ${u.role?.title || ""}`.toLowerCase();
-    return !assignedIds.includes(u.id) && matchText.includes(q);
+    const matchesSearch = matchText.includes(q);
+    
+    // Only show active users
+    return matchesSearch;
   });
 });
 
@@ -183,9 +224,43 @@ const selectUser = (user) => {
   // close after assigning
   menu.value = false;
 };
+
+const openAddStaff = () => {
+  emit("add-staff");
+  menu.value = false; // optional but recommended UX
+};
+
+const isValidEmail = computed(() => {
+  if (!search.value) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(search.value.trim());
+});
+
+const sendTaskDetailsByEmail = (email) => {
+  if (!email) return;
+
+  taskStore.sendTaskDetailsByEmail({
+    userTaskId: props.userTaskId,
+    email,
+  });
+};
+
+const handleBottomAction = () => {
+  if (isValidEmail.value) {
+    sendTaskDetailsByEmail(search.value.trim());
+    menu.value = false;
+    search.value = "";
+  } else {
+    openAddStaff();
+  }
+};
+
 </script>
 
 <style scoped>
+
+.menu-card {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
 .suggested-list {
   max-height: 200px;
   overflow-y: auto;
@@ -196,10 +271,26 @@ const selectUser = (user) => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 /* make trigger elements inline-block so event.currentTarget is that wrapper */
 .avatar-trigger {
   display: inline-block;
+}
+
+.plus-trigger {
+  display: inline-block;
+  padding: 2px; /* Add small padding to increase hover area */
+}
+
+.circle-add {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: hsla(183, 24%, 17%, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 </style>

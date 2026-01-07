@@ -1,10 +1,14 @@
 import {
+  activateUser,
   allusersLeavesHistory,
   applyLeave,
+  deactivateUser,
+  deleteUser,
   leaveHistory,
   updateAllowedLeaves,
   updateBankDetails,
   updateContractDetails,
+  updateLeaveStatus,
   updateUserPreferences,
   userAcrossOrgs,
   userDetails,
@@ -32,7 +36,15 @@ export default defineEventHandler(async (event) => {
     case "updateLeaveEntitlement":
       return await updateAllowedLeaves(event);
     case "teamLeaves":
-      return await allusersLeavesHistory(event)
+      return await allusersLeavesHistory(event);
+    case "updateLeave":
+      return await updateLeaveStatus(event);
+    case "deactivate":
+      return await deactivateUser(event);
+    case "activate":
+      return await activateUser(event);
+    case "delete":
+      return await deleteUser(event);
     default:
       return { code: 0, error: "Not found" };
   }

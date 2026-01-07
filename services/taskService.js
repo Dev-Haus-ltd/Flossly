@@ -33,6 +33,17 @@ export default {
         });
     });
   },
+    addBulkTasks(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/addBulkTasks", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
   getMyTeamTasks() {
     return new Promise((resolve, reject) => {
       Get("/tasks/teamTasks")
@@ -110,6 +121,20 @@ export default {
         });
     });
   },
+  getTeamTaskStatsByStatusAndCategory(categoryId) {
+    return new Promise((resolve, reject) => {
+      const url = categoryId 
+        ? `/tasks/statsByCategory?categoryId=${encodeURIComponent(categoryId)}`
+        : "/tasks/statsByCategory";
+      Get(url)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
   tasksGroupedByStatus(data) {
     return new Promise((resolve, reject) => {
       Post("/tasks/filteredByStatus", data)
@@ -165,6 +190,13 @@ export default {
         });
     });
   },
+  bulkAddChecklists(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/bulkAddChecklists", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   generalTasks(data) {
     return new Promise((resolve, reject) => {
       Post("/tasks/generalTaskByCategory", data)
@@ -187,9 +219,48 @@ export default {
         });
     });
   },
-  addAttachments(data) {
+  addTaskComment(data) {
     return new Promise((resolve, reject) => {
-      PostFormData("/tasks/addAttachments", data)
+      Post("/tasks/addComment", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  listTaskComments(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/comments", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  updateTaskComment(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/updateComment", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteTaskComment(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/deleteComment", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  addAttachments(data, options = {}) {
+    return new Promise((resolve, reject) => {
+      PostFormData("/tasks/addAttachments", data, options.onProgress)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  deleteAttachment(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/deleteAttachment", data)
         .then((res) => {
           resolve(res);
         })
@@ -220,9 +291,31 @@ export default {
         });
     });
   },
+  sendTaskDetailsByEmail(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/sendTaskDetailsByEmail", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
   addCategory(data) {
     return new Promise((resolve, reject) => {
       Post("/tasks/addCategory", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  deleteCategory(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/deleteCategory", data)
         .then((res) => {
           resolve(res);
         })
@@ -256,6 +349,39 @@ export default {
   archieveBulkTasks(data) {
     return new Promise((resolve, reject) => {
       Post("/tasks/archieveBulk", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  unarchiveBulkTasks(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/unarchiveBulk", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  createCustomColumn(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/createCustomColumn", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  deleteCustomColumn(data) {
+    return new Promise((resolve, reject) => {
+      Post("/tasks/deleteCustomColumn", data)
         .then((res) => {
           resolve(res);
         })

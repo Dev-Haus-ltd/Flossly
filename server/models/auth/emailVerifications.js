@@ -14,6 +14,11 @@ export const EmailVerification = sequelize.define(
         key: "id",
       },
     },
+    verified: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      allowNull: false,
+    },
   },
   {
     modelName: "EmailVerifications",

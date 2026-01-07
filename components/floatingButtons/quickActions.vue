@@ -3,14 +3,12 @@
     <v-menu v-model="menu" location="top" offset="10">
       <!-- Activator Button -->
       <template #activator="{ props }">
-        <lord-icon
+        <img
           v-bind="props"
-          src="https://cdn.lordicon.com/ioqhhtdq.json"
-          trigger="hover"
-          colors="primary:#60e5a3,secondary:#213536,tertiary:#60e5a3"
-          style="width: 60px; height: 60px"
-        >
-        </lord-icon>
+          src="@/assets/icons/floatButton/quick-action.svg"
+          alt="Support Menu Icon"
+          class="support-icon"
+        />
       </template>
 
       <!-- Menu Items -->
@@ -59,5 +57,15 @@ const emitAction = (action) => {
 <style scoped>
 .custom-menu {
   min-width: 220px; /* adjust as needed */
+}
+.support-icon {
+  width: 60px;
+  height: 60px;
+  cursor: pointer;
+  transition: transform 0.25s ease;
+}
+
+.support-icon:hover {
+  transform: scale(1.05);
 }
 </style>

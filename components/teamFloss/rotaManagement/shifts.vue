@@ -2,24 +2,14 @@
   <div class="pa-5 bg-white">
     <div class="mt-5">
       <!-- Title -->
-      <h3 class="rota-title mb-2">Dentozen London</h3>
+      <h3 class="rota-title mb-2">{{ rota.name }}</h3>
 
       <!-- Top Bar -->
       <div class="d-flex justify-space-between align-center">
         <!-- Left Side -->
         <div class="d-flex align-center ga-3">
           <!-- Search -->
-          <v-text-field
-            v-model="searchCal"
-            variant="solo"
-            flat
-            density="compact"
-            class="input-bordered"
-            append-inner-icon="mdi-magnify"
-            placeholder="Search"
-            hide-details
-            style="width: 240px"
-          />
+        
 
           <!-- Filter Menu -->
           <v-menu
@@ -72,13 +62,14 @@
         </div>
         <div class="d-flex align-center ga-3">
           <v-btn
+          v-if="isManager"
             color="secondary"
             class="text-none rounded-lg"
             prepend-icon="mdi-open-in-new"
             flat
-            @click="toggleRotaStatus"
+            @click="changeRotaStatus"
           >
-            {{ rota?.isPublished ? 'Unpublish Rota' : 'Publish Rota' }}
+            {{ props?.rota?.isPublished ? "Unpublished Rota" : "Publish Rota" }}
           </v-btn>
         </div>
       </div>
@@ -87,8 +78,12 @@
       :users="users"
       :shifts="shifts"
       :rota="rota"
+      :selectedView="selectedView"
       @onAddShift="addNewShift"
       @updateShifts="updateShifts"
+      @onAddUser="emit('onAddUser')"
+      @handleShiftEdit="handleShiftEdit"
+      @onOpenRoomManagement="emit('onOpenRoomManagement')"
     />
     <TeamFlossRotaManagementShiftDialog
       v-model="showShiftDialog"
@@ -98,45 +93,68 @@
       :users="users"
       :shiftData="shiftData"
       @updateShifts="updateShifts"
+      :currentShift="currentShift ?? currentShift"
     />
   </div>
 </template>
 
 <script setup>
+
 const props = defineProps({
   shifts: Array,
   rota: Object,
   users: Array,
 });
-const emit = defineEmits(["onChangeStatus", "onUpdate"]);
+const { isManager } = useUser();
+const emit = defineEmits(["onChangeStatus", "onUpdate", "onAddUser", "onOpenRoomManagement"]);
 const searchCal = ref("");
 const shiftData = ref({});
 const filterMenu = ref(false);
-
+const currentShift = ref({});
 const rotaViews = [
-  { title: "Day View", value: "day" },
-  { title: "Week View", value: "week" },
-  { title: "Month View", value: "month" },
+  { title: "Surgery View", value: 0 },
+  { title: "Dentist View", value: 5 },
+  { title: "Nurse View", value: 6 },
 ];
-
+const handleShiftEdit = (shift) => {
+  currentShift.value = shift;
+};
 const addNewShift = (data) => {
-  shiftData.value = {
-    day: data.day.date,
-    user: data.user.user,
-  };
+  if (data.surgery) {
+    // Surgery view
+    shiftData.value = {
+      day: data.day.date,
+      surgery: data.surgery,
+    };
+  } else {
+    // User view
+    shiftData.value = {
+      day: data.day.date,
+      user: data.user.isTempUser ? data.user : data.user.user,
+    };
+  }
+
   showShiftDialog.value = true;
 };
 const selectedView = ref(null);
 
 const clearFilters = () => {
   selectedView.value = null;
+  nextTick(() => {
+    emit("onFilterUsers", "clear");
+  });
 };
 
+watch(selectedView, (newVal) => {
+  emit("onFilterUsers", newVal);
+});
 const showShiftDialog = ref(false);
 
-const toggleRotaStatus = () => {
-  const action = props.rota?.isPublished ? "unpublish" : "publish";
-  emit("onChangeStatus", { type: action, id: props.rota.id });
+const changeRotaStatus = () => {
+  emit("onChangeStatus", {
+    type: `${props?.rota?.isPublished ? "unPublish" : "publish"}`,
+    id: props.rota.id,
+  });
 };
 const updateShifts = (rota) => {
   showShiftDialog.value = false;
@@ -146,7 +164,7 @@ const updateShifts = (rota) => {
 
 <style scoped>
 .rota-title {
-  font-family: Poppins, sans-serif;
+  
   font-weight: 600;
   font-style: SemiBold;
   font-size: 14px;
@@ -158,6 +176,6 @@ const updateShifts = (rota) => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 </style>

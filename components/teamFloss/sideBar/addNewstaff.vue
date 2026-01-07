@@ -1,6 +1,7 @@
 <template>
   <v-navigation-drawer
     :model-value="modelValue"
+    @update:model-value="$emit('update:modelValue', $event)"
     location="right"
     temporary
     :width="600"
@@ -13,7 +14,7 @@
         icon
         variant="outlined"
         color="#8B8B8B"
-        @click="emit('close')"
+        @click="handleClose"
         class="mr-4"
         style="
           width: 20px;
@@ -61,7 +62,10 @@
                 density="compact"
                 class="mb-1 input-bordered"
                 bg-color="white"
-                :rules="requiredRule"
+                :rules="[...requiredRule, emailRule, selfInviteRule]"
+                :error-messages="selfInviteError"
+                @input="validateSelfInvitation"
+                @blur="validateSelfInvitation"
                 required
                 flat
               />
@@ -97,7 +101,7 @@
         color="white"
         class="text-primary"
         style="width: 48%; border-radius: 8px; border: 1px solid #dfdfdf"
-        @click="emit('close')"
+        @click="handleClose"
         flat
       >
         Back
@@ -124,31 +128,118 @@ const { modelValue, rolesList } = defineProps({
 });
 
 const mainStore = useMainStore();
+const userStore = useUserStore();
 
-const emit = defineEmits(["close", "success"]);
+const emit = defineEmits(["close", "success", "update:modelValue"]);
 const formRef = ref(null);
-const requiredRule = [(v) => !!v || "This field is required"];
+const requiredRule = [(v) => !!v || "This field is required"]; 
+const emailRule = (v) => {
+  if (!v) return true; // requiredRule will catch empty
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(String(v).trim()) || "Please enter a valid email address";
+};
 const authStore = useAuthStore();
+const selfInviteError = ref("");
+
+// Get current user's email from auth store
+const currentUserEmail = authStore.getLoggedUser?.email?.toLowerCase();
+
+// Self-invitation validation rule
+const selfInviteRule = (v) => {
+  if (!v || !currentUserEmail) return true;
+  return v.toLowerCase() !== currentUserEmail || "You cannot invite yourself";
+};
+
+// Validate self-invitation
+const validateSelfInvitation = () => {
+  if (!form.value.email || !currentUserEmail) {
+    selfInviteError.value = "";
+    return;
+  }
+  
+  if (form.value.email.toLowerCase() === currentUserEmail) {
+    selfInviteError.value = "You cannot invite yourself";
+  } else {
+    selfInviteError.value = "";
+  }
+};
+
 const form = ref({
   fullName: "",
   email: "",
   roleId: null,
 });
 
+const resetForm = () => {
+  form.value = {
+    fullName: "",
+    email: "",
+    roleId: null,
+  };
+  selfInviteError.value = "";
+  if (formRef.value) {
+    formRef.value.reset();
+    formRef.value.resetValidation();
+  }
+};
 
-
+const handleClose = () => {
+  resetForm();
+  emit("update:modelValue", false);
+  emit("close");
+};
 
 const onSubmit = async () => {
+  // Validate self-invitation before form validation
+  validateSelfInvitation();
+  
   const formValidation = await formRef.value.validate();
-  if (formValidation.valid) {
+  // Block submit if email invalid
+  const emailValid = !form.value.email || emailRule(form.value.email) === true;
+  if (formValidation.valid && emailValid && !selfInviteError.value) {
     authStore.inviteMembers({users: [form.value]}).then((res) => {
       if (res.code === 0) {
+        // Reset the user cache to ensure new invited users will be fetched when they become active
+        userStore.resetUsers();
         setSnack("success", "User Invited Successfully");
+        resetForm();
+        emit("update:modelValue", false);
         emit("success");
       } else {
-        setSnack("error", "User is not Invited.");
+        const errorMessage = res?.data?.message || res?.message || "User is not Invited.";
+        setSnack("error", errorMessage);
       }
+    }).catch((err) => {
+      // Extract error message from the nested error response structure
+      // Error structure: { data: { message: { data: { message: "..." } } } }
+      let errorMessage = "Failed to invite user.";
+      
+      // Try to extract from nested structure: err.data.message.data.message
+      if (err?.data?.message?.data?.message && typeof err.data.message.data.message === 'string' && err.data.message.data.message.trim() !== '') {
+        errorMessage = err.data.message.data.message;
+      }
+      // Fallback: err.data.message (if it's a string)
+      else if (err?.data?.message && typeof err.data.message === 'string' && err.data.message.trim() !== '') {
+        errorMessage = err.data.message;
+      }
+      // Fallback: err.data.message.message
+      else if (err?.data?.message?.message && typeof err.data.message.message === 'string' && err.data.message.message.trim() !== '') {
+        errorMessage = err.data.message.message;
+      }
+      // Fallback: err.message
+      else if (err?.message && typeof err.message === 'string' && err.message.trim() !== '') {
+        errorMessage = err.message;
+      }
+      // Additional fallback: check if message is directly in data
+      else if (err?.data?.data?.message && typeof err.data.data.message === 'string' && err.data.data.message.trim() !== '') {
+        errorMessage = err.data.data.message;
+      }
+      
+      setSnack("error", errorMessage);
     });
+  } else if (selfInviteError.value) {
+    // Show specific error for self-invitation
+    setSnack("error", selfInviteError.value);
   }
 };
 
@@ -162,12 +253,12 @@ const setSnack = (type, title) => {
 
 <style scoped>
 .title-text {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 16px;
 }
 .fld-lbl {
-  font-family: "Poppins";
+  
   font-weight: 400;
   font-size: 14px;
   color: #737373;
@@ -178,6 +269,6 @@ const setSnack = (type, title) => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 </style>

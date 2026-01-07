@@ -25,6 +25,11 @@ export const UserOrganisation = sequelize.define(
         key: "id",
       },
     },
+    status: {
+      type: DataTypes.ENUM("Active", "Disabled", "Invited", "Expired"),
+      allowNull: false,
+      defaultValue: "Active",
+    },
   },
   {
     modelName: "UserOrganisations",

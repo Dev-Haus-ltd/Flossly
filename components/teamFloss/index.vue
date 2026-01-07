@@ -1,11 +1,13 @@
 <template>
   <div class="parent">
     <div class="cust-border d-flex align-center">
-      <p class="mr-1">Team Floss</p>
+      <p class="mr-1"
+      :style="showUserDetails ? 'color: blue; cursor: pointer;' : ''"
+      @click="showUserDetails=false"
+      >Team Floss</p>
       <p
         v-if="showUserDetails"
-        @click="showUserDetails = false"
-        style="color: blue !important; cursor: pointer"
+     
       >
         {{ " / " + selectedItem.fullName }}
       </p>
@@ -14,19 +16,20 @@
       <!-- stats -->
       <div class="mt-5 px-5">
         <v-row>
+          <v-col cols="12" sm="4"  md="3" v-for="(stat, i) in teamStats" :key="i">
           <CommonStatCard
-            v-for="(stat, i) in teamStats"
-            :key="i"
             :icon="stat.icon"
             :label="stat.label"
             :value="stat.value"
+            :uid="i"
             hide-chip
           />
+          </v-col>
         </v-row>
       </div>
       <!-- my staff -->
       <div class="mt-5 px-5">
-        <TeamFlossMyStaff 
+        <TeamFlossMyStaff  
           v-if="teams.length"
           :teams="teams"
           @getDetails="getDetails"
@@ -107,7 +110,7 @@ const teamStats = computed(() => {
         dob.getDate() === today.getDate() && dob.getMonth() === today.getMonth()
       );
     }).length;
-    approvals += users.filter((user) => user.status === "Invited").length;
+    approvals += users.filter((user) => (user.orgStatus === "Invited") || (user.status === "Invited")).length;
     newcomers += users.filter((user) => {
       if (!user.createdAt) return false;
       const joinedDate = new Date(user.createdAt);
@@ -119,22 +122,22 @@ const teamStats = computed(() => {
 
   return [
     {
-      icon: "https://cdn.lordicon.com/umvndfds.json",
+      icon: "https://cdn.lordicon.com/kphwxuxr.json",
       label: "Total Staff",
       value: totalMembers,
     },
     {
-      icon: "https://cdn.lordicon.com/rprwxqaf.json",
+      icon: "https://cdn.lordicon.com/bushiqea.json",
       label: "New Joiner",
       value: newcomers,
     },
     {
-      icon: "https://cdn.lordicon.com/bwmsmpql.json",
+      icon: "https://cdn.lordicon.com/namwvlmv.json",
       label: "Staff Birthday",
       value: birthdays,
     },
     {
-      icon: "https://cdn.lordicon.com/hrwiqpqi.json",
+      icon: "https://cdn.lordicon.com/wpequvda.json",
       label: "Pending Approvals",
       value: approvals,
     },
@@ -155,7 +158,7 @@ const teamStats = computed(() => {
   }
 }
 :deep(.v-breadcrumbs) {
-  font-family: "Poppins", sans-serif;
+  
   font-weight: 400;
   font-size: 14px;
 }

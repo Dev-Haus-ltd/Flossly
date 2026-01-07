@@ -50,19 +50,23 @@ const success = ref(false);
 const hasToken = ref(false);
 
 const verifyEmail = async (link) => {
-  authStore
-    .verifyEmail({ link })
-    .then((res) => {
-      loading.value = false;
-      if (res.code === 0) {
-        success.value = true;
-      } else {
-        success.value = false;
-      }
-    })
-    .catch((err) => {
+  try {
+    const res = await authStore.verifyEmail({ link });
+    loading.value = false;
+    console.log('Verification response:', res);
+    
+    // Check for successful verification - either code 0 or success true
+    if (res && (res.code === 0 || res.success === true)) {
+      success.value = true;
+    } else {
+      console.error('Verification failed - unexpected response:', res);
       success.value = false;
-    });
+    }
+  } catch (err) {
+    console.error('Verification error:', err);
+    success.value = false;
+    loading.value = false;
+  }
 };
 
 onMounted(() => {

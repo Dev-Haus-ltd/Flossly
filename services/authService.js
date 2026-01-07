@@ -11,6 +11,17 @@ export default {
         });
     });
   },
+  resendVerificationEmail(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/resendVerificationEmail", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
   getRoles() {
     return new Promise((resolve, reject) => {
       Get("/misc/getRoles")
@@ -157,13 +168,24 @@ export default {
   },
   updateProfile(data) {
     return new Promise((resolve, reject) => {
-      Post("/auth/updateProfile", data)
-        .then((res) => {
-          resolve(res);
-        })
-        .catch((err) => {
-          reject(err);
+     
+      if (data && (typeof File !== 'undefined') && (data._photoFile instanceof File || data.photo instanceof File)) {
+        const form = new FormData();
+        Object.keys(data).forEach((key) => {
+          if (key === 'photo' || key === '_photoFile' || key === '_photoPreviewUrl') return; 
+          const val = data[key];
+          if (val !== undefined && val !== null) form.append(key, String(val));
         });
+        const fileToSend = data._photoFile instanceof File ? data._photoFile : data.photo;
+        form.append('photo', fileToSend);
+        PostFormData("/auth/updateProfile", form)
+          .then(resolve)
+          .catch(reject);
+      } else {
+        Post("/auth/updateProfile", data)
+          .then(resolve)
+          .catch(reject);
+      }
     });
   },
   getContractDetails() {
@@ -191,6 +213,116 @@ export default {
   updatePassword(data) {
     return new Promise((resolve, reject) => {
       Post("/auth/updatePassword", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => { 
+          reject(err);
+        });
+    });
+  },
+  getUserHrDocuments(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/hrDocs", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  addUserHrDoc(data) {
+    return new Promise((resolve, reject) => {
+      PostFormData("/auth/addHrDoc", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  removeUserDoc(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/removeHrDoc", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  switchOrgnanisation(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/switchOrg", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  createShortToken() {
+    return new Promise((resolve, reject) => {
+      Get("/auth/createShortToken")
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  getLoginHistory(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/loginHistory", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  acceptOrganisationInvitation(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/acceptOrganisationInvitation", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  declineOrganisationInvitation(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/declineOrganisationInvitation", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  verifyInvitationToken(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/verifyInvitationToken", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
+  resendOrganisationInvitation(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/resendOrganisationInvitation", data)
         .then((res) => {
           resolve(res);
         })

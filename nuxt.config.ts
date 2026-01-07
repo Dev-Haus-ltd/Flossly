@@ -6,26 +6,53 @@ export default defineNuxtConfig({
     { path: "/api", handler: "@/server/api.js" },
     { path: "/api/**", handler: "@/server/api.js" },
   ],
+  router: {
+    prefetchLinks: true,
+  },
+  experimental: {
+    payloadExtraction: true,
+    renderJsonPayloads: true,
+  },
   runtimeConfig: {
     public: {
       BASE_URL: process.env.BASE_URL,
+      CHATBOT_URL: process.env.CHATBOT_URL,
       colors: {
-        primary: "#60E5A3",
-        "primary-dark": "#39C487",
-        "primary-light": "#C8F6E5",
-        secondary: "#213536",
-        "secondary-dark": "#162627",
-        "secondary-light": "#334A4A",
+        primary: "#0061FB",
+        "primary-dark": "#0061FB",
+        "primary-light": "#008AFE",
+        secondary: "#171952",
+        "secondary-dark": "#171952",
+        "secondary-light": "#263AAD", 
+        tertiary: "#7D77FF",      
+        "tertiary-dark": "#6C63E7",
+        "tertiary-light": "#8A82FF"
       },
       Stripe_PK: process.env.STRIPE_PK,
+      MAX_FILE_SIZE_FOR_LOGO: process.env.MAX_FILE_SIZE_FOR_LOGO || 5 * 1024 * 1024, // Default 5MB in bytes
     },
     API_AUTH: "BasicAuth",
     JWT_SECRET: process.env.JWT_SECRET,
     Stripe_PK: process.env.STRIPE_PK,
     Sripte_SK: process.env.STRIPE_SK,
     StripeWS: process.env.STRIPE_WS,
+    // Meta (Facebook) App Credentials
+    META_APP_ID: process.env.META_APP_ID,
+    META_APP_SECRET: process.env.META_APP_SECRET,
+    META_REDIRECT_URI: process.env.META_REDIRECT_URI,
+    META_VERIFY_TOKEN: process.env.META_VERIFY_TOKEN,
+    //file size
+    MAX_FILE_SIZE_FOR_TASK_SHEET: process.env.MAX_FILE_SIZE_FOR_TASK_SHEET,
+    MAX_FILE_SIZE_FOR_LOGO: process.env.MAX_FILE_SIZE_FOR_LOGO || 5 * 1024 * 1024, // Default 5MB in bytes
+    // Google Cloud Speech-to-Text credentials
+    GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+    // OpenAI API key for summarization
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+
+    // Redis connection URL for centralized session management
+    REDIS_URL: process.env.REDIS_URL,
   },
-  modules: [
+  modules: [ 
     async (options, nuxt) => {
       nuxt.hooks.hook("vite:extendConfig", (config) =>
         // @ts-ignore
@@ -49,7 +76,14 @@ export default defineNuxtConfig({
           content: process.env.npm_package_description || "",
         },
       ],
-      script: [{ src: "https://js.stripe.com/v3/", defer: true }],
+       link: [
+      // Favicon
+      { rel: "icon", type: "image/png", href: "/Logoicon2.svg" },
+
+      { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" }
+    ],
+      script: [{ src: "https://js.stripe.com/v3/", defer: true }
+      ],
     },
   },
   imports: {

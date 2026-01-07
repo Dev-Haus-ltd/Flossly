@@ -20,7 +20,6 @@ export const Rota = sequelize.define(
     isPublished: { type: DataTypes.BOOLEAN, defaultValue: false },
     publishedDate: { type: DataTypes.DATE, allowNull: true },
     notes: { type: DataTypes.TEXT, allowNull: true },
-    isDeleted: { type: DataTypes.BOOLEAN, defaultValue: false },
-  },
+    isDeleted: { type: DataTypes.BOOLEAN, defaultValue: false },  },
   { tableName: "Rota", timestamps: true }
 );

@@ -218,11 +218,11 @@ export const useRotaStore = defineStore("rotaStore", {
           });
       });
     },
-    deleteRota(data) {
+    getUserRotas(data) {
       this.isLoading = true;
       return new Promise((resolve, reject) => {
         rotaService
-          .deleteRota(data)
+          .getUserRotas(data)
           .then((res) => {
             this.isLoading = false;
             resolve(res);

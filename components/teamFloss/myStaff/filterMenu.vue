@@ -21,7 +21,7 @@
       <v-card style="min-width: 300px; border-radius: 12px; padding: 16px">
         <v-list class="pa-0">
           <div class="pa-0 d-flex align-center justify-space-between">
-            <div style="font-family: Poppins; font-weight: 500; font-size: 14px">
+            <div style=" font-weight: 500; font-size: 14px">
               Filters by
             </div>
   
@@ -29,7 +29,7 @@
               variant="text"
               density="comfortable"
               color="primary"
-              style="text-transform: none; font-family: Poppins; font-weight: 500; font-size: 13px"
+              style="text-transform: none;  font-weight: 500; font-size: 13px"
               @click="clearFilters"
             >
               Clear filters
@@ -39,13 +39,13 @@
           <v-divider style="background-color: #dbdbdb" class="my-3" />
   
           <!-- Role -->
-          <v-label class="my-1" style="font-family: Poppins; font-size: 14px">
+          <v-label class="my-1" style=" font-size: 14px">
             Role
           </v-label>
           <v-select
             v-model="selectedRole"
             :items="roles"
-            item-title="name"
+            item-title="title"
             item-value="id"
             variant="solo"
             flat
@@ -55,7 +55,7 @@
           />
   
           <!-- Date of Joining -->
-          <v-label class="my-1" style="font-family: Poppins; font-size: 14px">
+          <v-label class="my-1" style=" font-size: 14px">
             Date of Joining
           </v-label>
           <v-text-field
@@ -69,7 +69,7 @@
           />
   
           <!-- Profile Completion % -->
-          <v-label class="my-1" style="font-family: Poppins; font-size: 14px">
+          <v-label class="my-1" style=" font-size: 14px">
             Profile Completion %
           </v-label>
           <v-select
@@ -83,7 +83,7 @@
           />
   
           <!-- Recruitment Docs % -->
-          <v-label class="my-1" style="font-family: Poppins; font-size: 14px">
+          <v-label class="my-1" style=" font-size: 14px">
             Recruitment Docs %
           </v-label>
           <v-select
@@ -97,7 +97,7 @@
           />
   
           <!-- CPD Training Completion % -->
-          <v-label class="my-1" style="font-family: Poppins; font-size: 14px">
+          <v-label class="my-1" style=" font-size: 14px">
             CPD Training Completion %
           </v-label>
           <v-select
@@ -134,7 +134,7 @@
     [selectedRole, selectedDOJ, selectedProfileCompletion, selectedRecruitmentDocs, selectedCPD],
     () => {
       emit("update:filters", {
-        role: selectedRole.value,
+        role: selectedRole.value ? Number(selectedRole.value) : null,
         doj: selectedDOJ.value,
         profileCompletion: selectedProfileCompletion.value,
         recruitmentDocs: selectedRecruitmentDocs.value,
@@ -159,7 +159,7 @@
     background-color: white !important;
     min-height: 40px;
     font-size: 14px;
-    font-family: "Poppins", sans-serif;
+    
   }
   .tbl-top-btn {
     height: 40px;

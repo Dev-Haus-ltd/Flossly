@@ -4,20 +4,51 @@ import {
   OrganisationEquipment,
   OrganisationGroup,
   OrganisationGroupUser,
+  OrganisationPeople,
   OrganisationPriority,
   OrganisationStatus,
   OrganisationSurgery,
+  OrganisationScript,
+  DictionaryScript,
   User,
+  OrganisationReferral,
+  UserOrganisation,
+  UserPreference,
+  Task,
+  UserTask,
+  UserHrDocument,
 } from "../models";
+import { HrDocument } from "../models/hrDocuments";
 import formidable from "formidable";
 import fs from "fs/promises";
 import path from "path";
 import DB from "../utils/db";
+import { success, error } from "../utils/response";
+import { readBody, createError } from "h3";
+import {
+  sendTrialActivatedEmail,
+} from "../utils/emailNotifications";
+
+// Role constants for access control
+// Role ID 1 = Practice Manager, Role ID 8 = Principal Dentist / Practice Owner
+const PRIVILEGED_ROLE_IDS = [1, 8];
 
 export const updateOrganisationDetails = async (event) => {
   const loggedUser = event.context.user;
   const orgId = loggedUser.orgId;
   const form = formidable({ multiples: false, keepExtensions: true });
+
+  // Helper: pick first value, treat empty strings as undefined
+  const firstNonEmpty = (fields, key) => {
+    if (!fields || !(key in fields)) return undefined;
+    const raw = Array.isArray(fields[key]) ? fields[key][0] : fields[key];
+    if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      return trimmed === '' ? undefined : trimmed;
+    }
+    return raw === '' ? undefined : raw;
+  };
+
   try {
     const { fields, files } = await new Promise((resolve, reject) => {
       form.parse(event.node.req, (err, fields, files) => {
@@ -25,45 +56,101 @@ export const updateOrganisationDetails = async (event) => {
         else resolve({ fields, files });
       });
     });
+
     const organisation = await Organisation.findByPk(orgId);
     if (!organisation) {
       return error(404, "Organisation not found");
     }
-    // Update organisation fields
-    organisation.name = fields.name[0] || organisation.name;
-    organisation.address = fields.address[0] || organisation.address;
-    organisation.contact = fields.contact[0] || organisation.contact;
-    organisation.type = fields.type[0] || organisation.type;
 
+    // STRING fields (only update when non-empty was provided)
+    const name = firstNonEmpty(fields, 'name');
+    const address = firstNonEmpty(fields, 'address');
+    const contact = firstNonEmpty(fields, 'contact');
+    const typeVal = firstNonEmpty(fields, 'type');
 
-    organisation.managerId = fields.managerId ? fields.managerId[0] : organisation.managerId;
-    organisation.teamCount = fields.teamCount ? fields.teamCount[0] : organisation.teamCount;
-    organisation.surgeryCount = fields.surgeryCount ? fields.surgeryCount[0] : organisation.surgeryCount;
-    organisation.cqcInspectionDate = fields.cqcInspectionDate ? fields.cqcInspectionDate[0] : organisation.cqcInspectionDate;
+    if (name !== undefined) organisation.name = name;
+    if (address !== undefined) organisation.address = address;
+    if (contact !== undefined) organisation.contact = contact;
+
+    // Validate enum against model allowed values (Sequelize stores them on rawAttributes)
+    if (typeVal !== undefined) {
+      const enumValues =
+        Organisation.rawAttributes &&
+        Organisation.rawAttributes.type &&
+        Organisation.rawAttributes.type.values;
+      if (Array.isArray(enumValues) && !enumValues.includes(typeVal)) {
+        return error(
+          400,
+          `Invalid organisation type. Allowed values: ${enumValues.join(', ')}`
+        );
+      }
+      organisation.type = typeVal;
+    }
+
+    // Numeric fields
+    const managerId = firstNonEmpty(fields, 'managerId');
+    const teamCount = firstNonEmpty(fields, 'teamCount');
+    const surgeryCount = firstNonEmpty(fields, 'surgeryCount');
+    const cqcInspectionDate = firstNonEmpty(fields, 'cqcInspectionDate');
+
+    if (managerId !== undefined) organisation.managerId = parseInt(managerId, 10) || organisation.managerId;
+    if (teamCount !== undefined) organisation.teamCount = Number.isNaN(Number(teamCount)) ? organisation.teamCount : parseInt(teamCount, 10);
+    if (surgeryCount !== undefined) organisation.surgeryCount = Number.isNaN(Number(surgeryCount)) ? organisation.surgeryCount : parseInt(surgeryCount, 10);
+    if (cqcInspectionDate !== undefined) {
+      const d = new Date(cqcInspectionDate);
+      organisation.cqcInspectionDate = isNaN(d.getTime()) ? organisation.cqcInspectionDate : d;
+    }
 
     // Handle logo upload (if provided)
-    if (files.logo) {
-      const logoFile = files.logo[0] || files.logo;
+    if (files && files.logo) {
+      const logoFile = Array.isArray(files.logo) ? files.logo[0] : files.logo;
       const uploadDir = path.resolve("public/uploads/logos");
       await fs.mkdir(uploadDir, { recursive: true });
-      const fileExt = path.extname(logoFile.originalFilename);
+      const fileExt = path.extname(logoFile.originalFilename || logoFile.newFilename || "");
       const filename = `org-${orgId}-${Date.now()}${fileExt}`;
       const filepath = path.join(uploadDir, filename);
-      await fs.copyFile(logoFile.filepath, filepath);
+      // formidable on some setups gives .filepath or .path
+      const sourcePath = logoFile.filepath || logoFile.path;
+      await fs.copyFile(sourcePath, filepath);
       organisation.logo = `/uploads/logos/${filename}`;
     }
-    if (fields.origin && fields.origin[0] === "onboarding") {
+
+    if (firstNonEmpty(fields, 'origin') === "onboarding") {
       const user = await User.findByPk(loggedUser.userId);
-      user.profileCompletion = 50;
-      await user.save();
+      if (user) {
+        user.profileCompletion = 50;
+        await user.save();
+      }
     }
+
     await organisation.save();
-    return success(organisation.toJSON);
+    return success(organisation.toJSON());
+
   } catch (err) {
-    console.log(err.message);
-    return error(500, err.message);
+    // Log full error server-side
+    console.error('updateOrganisationDetails error:', err);
+
+    // Friendly errors for common DB enum error
+    if (err.name === 'SequelizeDatabaseError' && /invalid input value for enum/i.test(err.message)) {
+      // Try to get allowed enum values to show a helpful message
+      const enumValues =
+        Organisation.rawAttributes &&
+        Organisation.rawAttributes.type &&
+        Organisation.rawAttributes.type.values;
+      const allowed = Array.isArray(enumValues) ? enumValues.join(', ') : 'valid enum values';
+      return error(400, `Invalid organisation type provided. Allowed values: ${allowed}`);
+    }
+
+    // Sequelize validation errors
+    if (err.name === 'SequelizeValidationError' && err.errors && err.errors.length) {
+      return error(400, err.errors.map(e => e.message).join('; '));
+    }
+
+    // Generic safe fallback
+    return error(500, 'Unable to update organisation at this time');
   }
 };
+
 
 export const getPriorities = async (event) => {
   const loggedUser = event.context.user;
@@ -210,6 +297,10 @@ export const getdetails = async (event) => {
           as: "surgeries",
         },
         {
+          model: OrganisationPeople,
+          as: "importantPeople"
+        },
+        {
           model: OrganisationGroup,
           as: "groups",
           include: [
@@ -231,6 +322,53 @@ export const getdetails = async (event) => {
     return success(organisation);
   } catch (err) {
     return error(500, err.message);
+  }
+};
+
+export const updateImportantPeople = async (event) => {
+  try {
+    const body = await readBody(event)
+    const {
+      id,
+      organisationId,
+      safeguardingLead,
+      firstAider,
+      fireMarshal,
+      crossInfectionLead,
+      complaintsHandler,
+      dpo,
+      rpa
+    } = JSON.parse(body);
+
+    let people = await OrganisationPeople.findOne({ where: { organisationId, id } });
+
+    if (people) {
+      await people.update({
+        safeguardingLead,
+        firstAider,
+        fireMarshal,
+        crossInfectionLead,
+        complaintsHandler,
+        dpo,
+        rpa
+      });
+    } else {
+      people = await OrganisationPeople.create({
+        organisationId,
+        safeguardingLead,
+        firstAider,
+        fireMarshal,
+        crossInfectionLead,
+        complaintsHandler,
+        dpo,
+        rpa
+      });
+    }
+
+
+    return success(people);
+  } catch (err) {
+    return error(500, err.message)
   }
 };
 
@@ -451,3 +589,409 @@ export const getSurgeries = async (event) => {
     return error(500, err.message)
   }
 }
+
+export const getScripts = async (event) => {
+  const loggedUser = event.context.user;
+  const organisationId = loggedUser.orgId;
+  try {
+    // Get all default scripts from dictionary
+    const defaultScripts = await DictionaryScript.findAll({
+      order: [["sortOrder", "ASC"]],
+    });
+
+    if (!defaultScripts || defaultScripts.length === 0) {
+      // Return empty array if no default scripts found
+      return success([]);
+    }
+
+    // Get user-edited scripts for this organisation
+    const orgScripts = await OrganisationScript.findAll({
+      where: { organisationId },
+    }).catch(() => {
+      // If OrganisationScripts table doesn't exist or query fails, just use empty array
+      return [];
+    });
+
+    // Create a map of user-edited scripts by scriptKey
+    const orgScriptsMap = {};
+    if (orgScripts && Array.isArray(orgScripts)) {
+      orgScripts.forEach((script) => {
+        orgScriptsMap[script.scriptKey] = script;
+      });
+    }
+
+    // Merge: use org script if exists, otherwise use default
+    const scripts = defaultScripts.map((defaultScript) => {
+      const orgScript = orgScriptsMap[defaultScript.key];
+      if (orgScript) {
+        // User has edited this script, use their version
+        return {
+          id: orgScript.id,
+          key: defaultScript.key,
+          title: orgScript.title,
+          content: orgScript.content,
+          isCustom: true,
+        };
+      } else {
+        // Use default script
+        return {
+          id: defaultScript.id,
+          key: defaultScript.key,
+          title: defaultScript.title,
+          content: defaultScript.content,
+          isCustom: false,
+        };
+      }
+    });
+
+    return success(scripts);
+  } catch (err) {
+    console.error('Error in getScripts:', err);
+    return error(500, err.message);
+  }
+};
+
+export const saveScript = async (event) => {
+  const loggedUser = event.context.user;
+  const organisationId = loggedUser.orgId;
+  const body = await readBody(event);
+  const parsed = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+  const { scriptKey, title, content } = parsed;
+
+  if (!scriptKey || !title || !content) {
+    return error(400, "scriptKey, title, and content are required");
+  }
+
+  try {
+    // Check if default script exists
+    const defaultScript = await DictionaryScript.findOne({
+      where: { key: scriptKey },
+    });
+
+    if (!defaultScript) {
+      return error(404, "Script not found in dictionary");
+    }
+
+    // Find or create organisation script
+    const [orgScript, created] = await OrganisationScript.findOrCreate({
+      where: {
+        organisationId,
+        scriptKey,
+      },
+      defaults: {
+        organisationId,
+        scriptKey,
+        title,
+        content,
+      },
+    });
+
+    if (!created) {
+      // Update existing script
+      orgScript.title = title;
+      orgScript.content = content;
+      await orgScript.save();
+    }
+
+    return success({
+      id: orgScript.id,
+      key: scriptKey,
+      title: orgScript.title,
+      content: orgScript.content,
+      isCustom: true,
+    });
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const seedScripts = async (event) => {
+  try {
+    const { seedDefaultScripts } = await import("../utils/seedScripts");
+    const result = await seedDefaultScripts();
+    return success(result);
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const createOrganisationReferral = async (event) => {
+  try {
+    const loggedUser = event.context.user;
+
+    if (!loggedUser || !loggedUser.userId) {
+      throw createError({
+        statusCode: 401,
+        statusMessage: "Unauthorized",
+      });
+    }
+
+    const rawBody = await readBody(event);
+    const body = typeof rawBody === "string"
+      ? JSON.parse(rawBody)
+      : rawBody;
+
+    const {
+      orgName,
+      orgEmail,
+      managerName,
+      phoneNumber,
+      address,
+    } = body;
+
+    if (!orgName || !orgEmail || !managerName) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: "orgName, orgEmail and managerName are required",
+      });
+    }
+
+    const referral = await OrganisationReferral.create({
+      orgName,
+      orgEmail,
+      managerName,
+      phoneNumber,
+      address,
+      referredBy: loggedUser.userId,
+    });
+
+    return {
+      success: true,
+      data: referral,
+    };
+  } catch (err) {
+    console.error("Create Organisation Referral Error:", err);
+    throw createError({
+      statusCode: err.statusCode || 500,
+      statusMessage: err.message || "Internal server error",
+    });
+  }
+};
+
+// need enhancement currently now ui to show this
+export const getAllOrganisationReferrals = async (event) => {
+  try {
+    const referrals = await OrganisationReferral.findAll({
+      include: [
+        {
+          model: User,
+          as: "referrer",
+          attributes: ["id", "name", "email"],
+        },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
+
+    return {
+      success: true,
+      count: referrals.length,
+      data: referrals,
+    };
+  } catch (err) {
+    console.error("Get Organisation Referrals Error:", err);
+
+    throw createError({
+      statusCode: 500,
+      statusMessage: "Internal server error",
+    });
+  }
+};
+
+/**
+ * Creates a new organisation for an existing authenticated user.
+ * This is used when a user wants to add a new workspace.
+ *
+ * RBAC: Only users with Practice Manager (roleId=1) or
+ * Principal Dentist / Practice Owner (roleId=8) can create new workspaces.
+ */
+export const createOrganisationForUser = async (event) => {
+  const loggedUser = event.context.user;
+
+  // RBAC check
+  if (!PRIVILEGED_ROLE_IDS.includes(Number(loggedUser.roleId))) {
+    return error(
+      403,
+      "You do not have permission to create a new organisation."
+    );
+  }
+
+  let body;
+  try {
+    const rawBody = await readBody(event);
+    body = typeof rawBody === "string" ? JSON.parse(rawBody) : rawBody;
+  } catch {
+    return error(400, "Invalid JSON body");
+  }
+
+  const { organisationName } = body;
+
+  if (!organisationName || !organisationName.trim()) {
+    return error(400, "Organisation name is required");
+  }
+
+  const transaction = await DB.transaction();
+  let org;
+  let trialEndDate;
+
+  try {
+    /** -------------------------
+     * 1. Create Organisation
+     --------------------------*/
+    org = await Organisation.create(
+      {
+        name: organisationName.trim(),
+        managerId: loggedUser.userId,
+        hasUsedTrial: false,
+      },
+      { transaction }
+    );
+
+    /** -------------------------
+     * 2. Associate User → Organisation
+     --------------------------*/
+    await UserOrganisation.create(
+      {
+        userId: loggedUser.userId,
+        organisationId: org.id,
+        status: "Active",
+      },
+      { transaction }
+    );
+
+    /** -------------------------
+     * 3. Trial License (ONE TIME PER ORG)
+     --------------------------*/
+    if (org.hasUsedTrial) {
+      throw new Error("This organisation has already used its free trial.");
+    }
+
+    trialEndDate = new Date();
+    trialEndDate.setDate(trialEndDate.getDate() + 15);
+
+    await UserPreference.create(
+      {
+        userId: loggedUser.userId,
+        organisationId: org.id,
+        licenseType: "Trial",
+        licenseRenewalDate: trialEndDate,
+      },
+      { transaction }
+    );
+
+    // 🔐 Permanently mark trial as used
+    await org.update(
+      { hasUsedTrial: true },
+      { transaction }
+    );
+
+    /** -------------------------
+     * 4. System Task Initialization
+     --------------------------*/
+    const tasks = await Task.findAll({
+      limit: 100,
+      where: {
+        categoryId: [3, 4, 5, 10, 11, 12],
+        isSystemTask: true,
+      },
+      transaction,
+    });
+
+    const priorities = await OrganisationPriority.findAll({
+      where: { organisationId: org.id },
+      transaction,
+    });
+
+    const statuses = await OrganisationStatus.findAll({
+      where: { organisationId: org.id },
+      transaction,
+    });
+
+    const defaultStatus =
+      statuses.find((s) => s.key === "upcoming") || statuses[0];
+    const defaultPriority =
+      priorities.find((p) => p.key === "medium") || priorities[0];
+
+    if (defaultStatus && defaultPriority && tasks.length) {
+      const userTasks = tasks.map((task) => ({
+        userId: loggedUser.userId,
+        taskId: task.id,
+        organisationId: org.id,
+        statusId: defaultStatus.id,
+        priorityId: defaultPriority.id,
+        title: task.title,
+        documentLink: "",
+        frequency: task.defaultFrequency,
+        comments: "",
+      }));
+
+      await UserTask.bulkCreate(userTasks, { transaction });
+    }
+
+    /** -------------------------
+     * 5. Assign Default HR Docs
+     --------------------------*/
+    await assignDefaultHRDocsToUser(loggedUser.userId);
+
+    /** -------------------------
+     * Commit transaction (DB DONE)
+     --------------------------*/
+    await transaction.commit();
+  } catch (err) {
+    if (!transaction.finished) {
+      await transaction.rollback();
+    }
+
+    if (err.name === "SequelizeUniqueConstraintError") {
+      return error(409, "Organisation already exists");
+    }
+
+    console.error("Create Organisation Error:", err);
+    return error(500, err.message || "Failed to create organisation");
+  }
+
+  /** -------------------------
+   * 6. Trial Activation Email (OUTSIDE TX)
+   --------------------------*/
+  const user = await User.findByPk(loggedUser.userId, {
+    attributes: ["email", "fullName"],
+  });
+
+  if (!user?.email) {
+    console.warn(
+      `Trial email skipped: user ${loggedUser.userId} has no email`
+    );
+  } else {
+    try {
+      await sendTrialActivatedEmail({
+        email: user.email,
+        fullName: user.fullName,
+        organisationName: org.name,
+        trialDays: 15,
+        trialEndsOn: trialEndDate,
+      });
+    } catch (emailErr) {
+      console.error("Trial email failed:", emailErr);
+    }
+  }
+
+  return success({
+    organisationId: org.id,
+    name: org.name,
+    trialEndsOn: trialEndDate,
+  });
+};
+
+// temperory placing this function here for testing has its not possible to import it from auth controller
+
+const assignDefaultHRDocsToUser = async (userId) => {
+  const defaultDocs = await HrDocument.findAll();
+
+  const userDocs = defaultDocs.map((doc) => ({
+    userId,
+    name: doc.name,
+    type: doc.type,
+    status: "Pending",
+  }));
+
+  await UserHrDocument.bulkCreate(userDocs);
+};

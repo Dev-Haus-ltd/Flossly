@@ -5,7 +5,7 @@
       <v-card-title
         class="d-flex align-center justify-space-between"
         style="
-          font-family: Poppins;
+          
           font-weight: 600;
           font-size: 16px;
           border-bottom: 1px solid #dbdbdb;
@@ -91,7 +91,7 @@
 
 <script setup>
 import { ref, watch } from "vue";
-
+const { user } = useUser();
 const props = defineProps({
   modelValue: Boolean,
 });
@@ -117,7 +117,7 @@ const close = () => {
   message.value = "";
 };
 
-const submit = () => {
+const submit = async () => {
   if (!name.value || !email.value || !message.value) return;
 
   const data = {
@@ -126,36 +126,43 @@ const submit = () => {
     message: message.value,
   };
 
-  pointStore
-    .feedback(data)
-    .then((res) => {
-      if (res.code === 0) {
-        const user = JSON.parse(localStorage.getItem("user"));
-        if (user && user.userPoints) {
-          user.userPoints[0].balance += 50;
-        }
-        localStorage.setItem("user", JSON.stringify(user));
-        mainStore.setSnackbar({
-          title: res?.data?.message || "Feedback submitted successfully",
-          type: "success",
-        });
+  try {
+    const res = await pointStore.feedback(data);
 
-        emit("onSubmit", data);
-        close();
-      } else {
-        mainStore.setSnackbar({
-          title:
-            res?.data?.message || res?.message || "Failed to submit feedback",
-          type: "error",
-        });
+    if (res.code === 0) {
+      if (user.value.id) {
+        // Add 50 points
+        user.value.userPoints.balance =
+          (user.value.userPoints?.balance ?? 0) + 50;
+
+        // Optionally also update `totalPointsRewarded`
+        user.value.userPoints.totalPointsRewarded =
+          (user.value.userPoints?.totalPointsRewarded ?? 0) + 50;
+
+        // Save updated object back to localStorage
+        localStorage.setItem("user", JSON.stringify(user));
       }
-    })
-    .catch((err) => {
+
       mainStore.setSnackbar({
-        title: err?.message || "Something went wrong",
+        title: res?.data?.message || "Feedback submitted successfully",
+        type: "success",
+      });
+
+      emit("onSubmit", data);
+      close();
+    } else {
+      mainStore.setSnackbar({
+        title:
+          res?.data?.message || res?.message || "Failed to submit feedback",
         type: "error",
       });
+    }
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: err?.message || "Something went wrong",
+      type: "error",
     });
+  }
 };
 </script>
 
@@ -166,10 +173,10 @@ const submit = () => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
-  font-family: "Poppins", sans-serif;
+  
 }
 .field-label {
-  font-family: "Poppins", sans-serif;
+  
   font-size: 13px;
   font-weight: 500;
   color: #1e1e1e;

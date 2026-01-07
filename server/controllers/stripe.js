@@ -113,13 +113,17 @@ export const confirmPayment = async (event) => {
     subscription.stripeSubscriptionStatus = "active";
     await subscription.save();
     const user = await UserPreference.findOne({
-      where: { userId: loggedUser.userId },
+      where: { userId: loggedUser.userId,
+        organisationId: loggedUser.orgId,
+       },
     });
     const today = new Date().getDate();
     const renewalDate = new Date(new Date().setDate(today + 30));
     user.licenseType = "Monthly";
     user.licenseRenewalDate = renewalDate;
     await user.save();
+    const loggedUserObj = await User.findByPk(loggedUser.userId)
+    await paymentSuccessNotification(loggedUserObj)
     return success("Subscription updated");
   } catch (err) {
     return error(500, err.message);

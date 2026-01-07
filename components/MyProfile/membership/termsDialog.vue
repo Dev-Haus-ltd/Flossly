@@ -22,7 +22,7 @@
         <div class="d-flex align-center gap-2">
           <div
             style="
-              font-family: Poppins;
+              
               font-weight: 400;
               font-size: 14px;
               color: #737373;
@@ -31,11 +31,11 @@
             Effective Date: 07-Mar-2023
           </div>
           <v-btn
-            prepend-icon="mdi-download"
             class="text-white mx-5"
             style="background-color: #213536; text-transform: none"
             @click="$emit('download')"
           >
+            <img src="@/assets/tasks/download.svg" alt="Download" width="18" height="18" class="mr-2" />
             Download
           </v-btn>
           <v-btn icon flat @click="$emit('update:modelValue', false)">
@@ -47,7 +47,7 @@
       <!-- Scrollable Content -->
       <v-card-text
         style="
-          font-family: Poppins;
+          
           font-weight: 400;
           font-size: 14px;
           color: #1e1e1e;
@@ -175,7 +175,7 @@
       </v-card-text>
     </v-card>
   </v-dialog>
-</template>
+</template> 
 
 <script setup>
 import { computed } from "vue";
@@ -193,13 +193,13 @@ const internalValue = computed({
 
 <style scoped>
 .terms-heading {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 20px;
   color: #1e1e1e;
 }
 .dialog-title {
-  font-family: "Poppins";
+  
   font-weight: 600;
   font-size: 18px;
 }

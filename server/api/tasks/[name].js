@@ -5,7 +5,10 @@ import {
   assignBulkTasks,
   bulkUploadTasks,
   createNewTask,
+  uploadBulkTasks,
   createUserTaskChecklist,
+  deleteAttachment,
+  deleteTaskCategory,
   deleteTaskChecklist,
   deleteUserTaskChecklist,
   getUserTaskDetails,
@@ -24,8 +27,20 @@ import {
   groupTeamTasksByTaskId,
   teamTasksCountByCategory,
   archieveBulkTasks,
+  unarchiveBulkTasks,
   completeBulkTasks,
   unAssignBulkTask,
+  getTeamTaskStatsByStatusAndCategory,
+  addUserTaskComment,
+  listUserTaskComments,
+  updateUserTaskComment,
+  deleteUserTaskComment,
+  bulkAddChecklistsByTitle,
+  createCustomColumn,
+  listCustomColumns,
+  updateCustomColumn,
+  deleteCustomColumn,
+  sendTaskDetailsByEmail,
 } from "~/server/controllers/task";
 
 export default defineEventHandler(async (event) => {
@@ -37,6 +52,8 @@ export default defineEventHandler(async (event) => {
       return await listMyTasks(event);
     case "addCategory":
       return await addTaskCategory(event);
+    case "deleteCategory":
+      return await deleteTaskCategory(event);
     case "listCategories":
       return await getCategories(event);
     case "listCategoriesForPool":
@@ -49,10 +66,22 @@ export default defineEventHandler(async (event) => {
       return await viewTeamTasksTaskWise(event);
     case "updateUserTask":
       return await updateTask(event);
+    case "addComment":
+      return await addUserTaskComment(event);
+    case "comments":
+      return await listUserTaskComments(event);
+    case "updateComment":
+      return await updateUserTaskComment(event);
+    case "deleteComment":
+      return await deleteUserTaskComment(event);
     case "addAttachments":
       return await addAttachments(event);
+    case "deleteAttachment":
+      return await deleteAttachment(event);
     case "addNewTask":
-      return await createNewTask(event);
+      return await createNewTask(event); 
+    case "addBulkTasks":
+      return await uploadBulkTasks(event);
     case "teamTaskCounts":
       return await teamTasksCounts(event);
     case "createChecklist":
@@ -81,10 +110,26 @@ export default defineEventHandler(async (event) => {
       return await getGeneralTasksByCategory(event);
     case "archieveBulk":
       return await archieveBulkTasks(event);
+    case "unarchiveBulk":
+      return await unarchiveBulkTasks(event);
     case "completeBulk":
       return await completeBulkTasks(event);
     case "unassignBulk":
       return await unAssignBulkTask(event);
+    case "statsByCategory":
+      return await getTeamTaskStatsByStatusAndCategory(event);
+    case "bulkAddChecklists":
+      return await bulkAddChecklistsByTitle(event);
+    case "createCustomColumn":
+      return await createCustomColumn(event);
+    case "listCustomColumns":
+      return await listCustomColumns(event);
+    case "updateCustomColumn":
+      return await updateCustomColumn(event);
+    case "deleteCustomColumn":
+      return await deleteCustomColumn(event);
+    case "sendTaskDetailsByEmail":
+      return await sendTaskDetailsByEmail(event);
     default:
       return { code: 0, error: "Not found" };
   }
