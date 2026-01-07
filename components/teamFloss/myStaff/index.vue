@@ -54,6 +54,7 @@
     :availableHeaders="availableHeaders"
     :search="search"
     :roleList="rolesList"
+    :clearSelection="clearSelection"
     @add="handleAdd"
     @onUserSelect="getUserDetails"
     @onUpdate="updateTeams"
@@ -61,7 +62,70 @@
     @deactivateUser="handleDeactivateUser"
     @activateUser="handleActivateUser"
     @deleteUser="handleDeleteUser"
+    @updateSelectedStaff="updateSelectedStaff"
   />
+
+  <!-- Bulk Actions Tray -->
+  <v-card
+    v-if="selectedStaff.length"
+    class="action-bar py-4 d-flex justify-center align-center rounded-lg"
+    :style="{
+      padding: xs ? '0px 20px' : '0px 50px',
+      gap: xs ? '10px' : '40px',
+    }"
+    :elevation="5"
+    flat
+  >
+    <!-- Selected Count -->
+    <div class="selected-count d-flex align-center">
+      <span class="selected-text">
+        {{ selectedStaff.length }}
+      </span>
+      <p class="ml-3 mt-1">Staff Selected</p>
+    </div>
+
+    <!-- Actions Container -->
+    <div class="actions-container d-flex align-center" :style="{ gap: xs ? '4px' : '8px' }">
+      <!-- Activate Action -->
+      <div
+        class="action-item d-flex flex-column align-center"
+        @click="handleBulkActivate"
+      >
+        <v-icon size="24" color="success">mdi-account-check-outline</v-icon>
+        <span class="action-label">Activate</span>
+      </div>
+
+      <!-- Deactivate Action -->
+      <div
+        class="action-item d-flex flex-column align-center"
+        @click="handleBulkDeactivate"
+      >
+        <v-icon size="24" color="warning">mdi-account-off-outline</v-icon>
+        <span class="action-label">Deactivate</span>
+      </div>
+
+      <!-- Delete Action -->
+      <div
+        class="action-item d-flex flex-column align-center"
+        @click="handleBulkDelete"
+      >
+        <v-icon size="24" color="error">mdi-delete-outline</v-icon>
+        <span class="action-label">Delete</span>
+      </div>
+
+      <!-- Divider -->
+      <v-divider vertical class="mx-2" style="height: 40px" />
+
+      <!-- Close Button -->
+      <div
+        class="action-item d-flex flex-column align-center"
+        @click="hideBulkTray"
+      >
+        <v-icon size="20" color="#6d6d6d">mdi-close</v-icon>
+        <span class="action-label">Close</span>
+      </div>
+    </div>
+  </v-card>
 
   <TeamFlossSideBarAddNewstaff
     v-model="addStaffDrawer"
@@ -114,12 +178,55 @@
     :loading="actionLoading"
     @confirm="confirmDeleteUser"
   />
+
+  <!-- Bulk Activate Confirmation Dialog -->
+  <CommonActionConfirmDialog
+    v-model="bulkActivateDialog"
+    title="Activate Multiple Users"
+    :message="`Are you sure you want to activate ${selectedStaff.length} user(s)? They will regain access to this organization.`"
+    confirm-button-text="Activate All"
+    confirm-button-color="success"
+    icon="mdi-account-check"
+    icon-color="green"
+    warning-text="These users will be reactivated and will regain full access to this organization."
+    :loading="bulkActionLoading"
+    @confirm="confirmBulkActivate"
+  />
+
+  <!-- Bulk Deactivate Confirmation Dialog -->
+  <CommonActionConfirmDialog
+    v-model="bulkDeactivateDialog"
+    title="Deactivate Multiple Users"
+    :message="`Are you sure you want to deactivate ${selectedStaff.length} user(s)? They will no longer be able to access this organization.`"
+    confirm-button-text="Deactivate All"
+    confirm-button-color="warning"
+    icon="mdi-account-off"
+    icon-color="orange"
+    warning-text="These users will be deactivated from this organization but their data will be preserved. This action can be reversed."
+    :loading="bulkActionLoading"
+    @confirm="confirmBulkDeactivate"
+  />
+
+  <!-- Bulk Delete Confirmation Dialog -->
+  <CommonActionConfirmDialog
+    v-model="bulkDeleteDialog"
+    title="Delete Multiple Users"
+    :message="`Are you sure you want to delete ${selectedStaff.length} user(s)? This action cannot be undone.`"
+    confirm-button-text="Delete All"
+    confirm-button-color="error"
+    icon="mdi-delete"
+    icon-color="red"
+    warning-text="This will permanently delete the selected users and all their associated data if they don't belong to other organizations. This action cannot be undone."
+    :loading="bulkActionLoading"
+    @confirm="confirmBulkDelete"
+  />
 </div>
 </template>
 
 <script setup>
 import userService from "@/services/userService";
 import { useMainStore } from "@/stores/index";
+import { useDisplay } from "vuetify";
 
 const emit = defineEmits(["getDetails", "onUpdate"]);
 const props = defineProps({
@@ -132,7 +239,14 @@ const $userService = userService;
 const authStore = useAuthStore();
 const userStore = useUserStore();
 const { user: currentUser, setUser } = useUser();
+const { xs } = useDisplay();
 const addStaffDrawer = ref(false);
+const selectedStaff = ref([]);
+const bulkActivateDialog = ref(false);
+const bulkDeactivateDialog = ref(false);
+const bulkDeleteDialog = ref(false);
+const bulkActionLoading = ref(false);
+const clearSelection = ref(false);
 
 const search = ref("");
 const selectedFilter = ref("all");
@@ -572,6 +686,274 @@ const onFiltersUpdated = (filters) => {
     cpd: null,
   };
 };
+
+// Bulk action handlers
+const updateSelectedStaff = (staff) => {
+  selectedStaff.value = staff;
+};
+
+const hideBulkTray = () => {
+  selectedStaff.value = [];
+  clearSelection.value = true;
+  // Reset clearSelection flag after a short delay
+  setTimeout(() => {
+    clearSelection.value = false;
+  }, 100);
+};
+
+const handleBulkActivate = () => {
+  if (!selectedStaff.value.length) {
+    mainStore.setSnackbar({
+      title: "No staff selected",
+      type: "warning",
+    });
+    return;
+  }
+  bulkActivateDialog.value = true;
+};
+
+const handleBulkDeactivate = () => {
+  if (!selectedStaff.value.length) {
+    mainStore.setSnackbar({
+      title: "No staff selected",
+      type: "warning",
+    });
+    return;
+  }
+  bulkDeactivateDialog.value = true;
+};
+
+const handleBulkDelete = () => {
+  if (!selectedStaff.value.length) {
+    mainStore.setSnackbar({
+      title: "No staff selected",
+      type: "warning",
+    });
+    return;
+  }
+  bulkDeleteDialog.value = true;
+};
+
+const confirmBulkActivate = async () => {
+  if (!selectedStaff.value.length || !props.teams.length) return;
+
+  // Filter out the current user from the selection
+  const staffToActivate = selectedStaff.value.filter(
+    (staff) => !currentUser.value || staff.id !== currentUser.value.id
+  );
+
+  if (staffToActivate.length === 0) {
+    mainStore.setSnackbar({
+      title: "No users to activate (cannot activate yourself)",
+      type: "warning",
+    });
+    bulkActivateDialog.value = false;
+    return;
+  }
+
+  bulkActionLoading.value = true;
+
+  try {
+    // Create a map to find the organization for each user
+    const userOrgMap = new Map();
+    props.teams.forEach((team) => {
+      const orgId = team.organisation?.id;
+      if (orgId) {
+        team.orgUsers.forEach((user) => {
+          userOrgMap.set(user.id, orgId);
+        });
+      }
+    });
+
+    const results = await Promise.allSettled(
+      staffToActivate.map((staff) => {
+        const organisationId = userOrgMap.get(staff.id);
+        if (!organisationId) {
+          return Promise.reject(new Error(`Organisation not found for user ${staff.fullName}`));
+        }
+        return $userService.activateUser({
+          userId: staff.id,
+          organisationId: organisationId
+        });
+      })
+    );
+
+    const successful = results.filter((r) => r.status === "fulfilled" && r.value.code === 0);
+    const failed = results.filter((r) => r.status === "rejected" || (r.status === "fulfilled" && r.value.code !== 0));
+
+    if (successful.length > 0) {
+      mainStore.setSnackbar({
+        title: `${successful.length} user(s) activated successfully${failed.length > 0 ? `, ${failed.length} failed` : ""}`,
+        type: failed.length > 0 ? "warning" : "success",
+      });
+      
+      await userStore.getUserList({ roleId: null, force: true });
+      emit("onUpdate");
+    } else {
+      mainStore.setSnackbar({
+        title: "Failed to activate users",
+        type: "error",
+      });
+    }
+
+    bulkActivateDialog.value = false;
+    hideBulkTray();
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: err?.message || "Something went wrong",
+      type: "error",
+    });
+  } finally {
+    bulkActionLoading.value = false;
+  }
+};
+
+const confirmBulkDeactivate = async () => {
+  if (!selectedStaff.value.length || !props.teams.length) return;
+
+  // Filter out the current user from the selection
+  const staffToDeactivate = selectedStaff.value.filter(
+    (staff) => !currentUser.value || staff.id !== currentUser.value.id
+  );
+
+  if (staffToDeactivate.length === 0) {
+    mainStore.setSnackbar({
+      title: "No users to deactivate (cannot deactivate yourself)",
+      type: "warning",
+    });
+    bulkDeactivateDialog.value = false;
+    return;
+  }
+
+  bulkActionLoading.value = true;
+
+  try {
+    // Create a map to find the organization for each user
+    const userOrgMap = new Map();
+    props.teams.forEach((team) => {
+      const orgId = team.organisation?.id;
+      if (orgId) {
+        team.orgUsers.forEach((user) => {
+          userOrgMap.set(user.id, orgId);
+        });
+      }
+    });
+
+    const results = await Promise.allSettled(
+      staffToDeactivate.map((staff) => {
+        const organisationId = userOrgMap.get(staff.id);
+        if (!organisationId) {
+          return Promise.reject(new Error(`Organisation not found for user ${staff.fullName}`));
+        }
+        return $userService.deactivateUser({
+          userId: staff.id,
+          organisationId: organisationId
+        });
+      })
+    );
+
+    const successful = results.filter((r) => r.status === "fulfilled" && r.value.code === 0);
+    const failed = results.filter((r) => r.status === "rejected" || (r.status === "fulfilled" && r.value.code !== 0));
+
+    if (successful.length > 0) {
+      mainStore.setSnackbar({
+        title: `${successful.length} user(s) deactivated successfully${failed.length > 0 ? `, ${failed.length} failed` : ""}`,
+        type: failed.length > 0 ? "warning" : "success",
+      });
+      
+      await userStore.getUserList({ roleId: null, force: true });
+      emit("onUpdate");
+    } else {
+      mainStore.setSnackbar({
+        title: "Failed to deactivate users",
+        type: "error",
+      });
+    }
+
+    bulkDeactivateDialog.value = false;
+    hideBulkTray();
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: err?.message || "Something went wrong",
+      type: "error",
+    });
+  } finally {
+    bulkActionLoading.value = false;
+  }
+};
+
+const confirmBulkDelete = async () => {
+  if (!selectedStaff.value.length || !props.teams.length) return;
+
+  // Filter out the current user from the selection
+  const staffToDelete = selectedStaff.value.filter(
+    (staff) => !currentUser.value || staff.id !== currentUser.value.id
+  );
+
+  if (staffToDelete.length === 0) {
+    mainStore.setSnackbar({
+      title: "No users to delete (cannot delete yourself)",
+      type: "warning",
+    });
+    bulkDeleteDialog.value = false;
+    return;
+  }
+
+  bulkActionLoading.value = true;
+
+  try {
+    // Create a map to find the organization for each user
+    const userOrgMap = new Map();
+    props.teams.forEach((team) => {
+      const orgId = team.organisation?.id;
+      if (orgId) {
+        team.orgUsers.forEach((user) => {
+          userOrgMap.set(user.id, orgId);
+        });
+      }
+    });
+
+    const results = await Promise.allSettled(
+      staffToDelete.map((staff) => {
+        const organisationId = userOrgMap.get(staff.id);
+        if (!organisationId) {
+          return Promise.reject(new Error(`Organisation not found for user ${staff.fullName}`));
+        }
+        return $userService.deleteUser({
+          userId: staff.id,
+          organisationId: organisationId
+        });
+      })
+    );
+
+    const successful = results.filter((r) => r.status === "fulfilled" && r.value.code === 0);
+    const failed = results.filter((r) => r.status === "rejected" || (r.status === "fulfilled" && r.value.code !== 0));
+
+    if (successful.length > 0) {
+      mainStore.setSnackbar({
+        title: `${successful.length} user(s) deleted successfully${failed.length > 0 ? `, ${failed.length} failed` : ""}`,
+        type: failed.length > 0 ? "warning" : "success",
+      });
+      
+      emit("onUpdate");
+    } else {
+      mainStore.setSnackbar({
+        title: "Failed to delete users",
+        type: "error",
+      });
+    }
+
+    bulkDeleteDialog.value = false;
+    hideBulkTray();
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: err?.message || "Something went wrong",
+      type: "error",
+    });
+  } finally {
+    bulkActionLoading.value = false;
+  }
+};
 </script>
 
 <style scoped>
@@ -596,5 +978,40 @@ const onFiltersUpdated = (filters) => {
   font-style: "SemiBold";
   font-size: 18px;
   color: #1e1e1e;
+}
+
+/* Bulk Actions Tray Styles */
+.action-bar {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: white;
+  z-index: 1000;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.selected-text {
+  font-weight: 600;
+  font-size: 14px;
+  padding: 5px 13px;
+  border-radius: 50%;
+  color: #fff;
+  background: #0061fb;
+}
+
+.action-item {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-item:hover {
+  opacity: 0.7;
+}
+
+.action-label {
+  font-size: 13px;
+  margin-top: 4px;
+  color: #6d6d6d;
 }
 </style>

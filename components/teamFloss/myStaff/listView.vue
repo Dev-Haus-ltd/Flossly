@@ -274,29 +274,55 @@
 
             <template v-else-if="col.key === 'userActions'">
               <div class="d-flex justify-center align-center pa-2 gap-2" style="min-width: 120px;">
-                <!-- Show Activate or Deactivate based on current status -->
-                <template v-if="(item.orgStatus || item.status || '').toLowerCase() !== 'invited'">
-                  <v-tooltip :text="isUserActive(item) ? 'Deactivate User' : 'Activate User'" location="top">
+                <!-- Hide actions if this is the current user -->
+                <template v-if="currentUser && currentUser.id === item.id">
+                  <span style="color: #ccc; font-size: 12px;">-</span>
+                </template>
+                <template v-else>
+                  <!-- Show Activate or Deactivate based on current status -->
+                  <template v-if="(item.orgStatus || item.status || '').toLowerCase() !== 'invited'">
+                    <v-tooltip :text="isUserActive(item) ? 'Deactivate User' : 'Activate User'" location="top">
+                      <template #activator="{ props }">
+                        <v-btn
+                          v-bind="props"
+                          size="small"
+                          variant="text"
+                          icon
+                          @click="isUserActive(item) ? $emit('deactivateUser', { org, user: item }) : $emit('activateUser', { org, user: item })"
+                          class="action-btn"
+                        >
+                          <img 
+                            v-if="isUserActive(item)"
+                            src="@/assets/icons/teamfloss/userDetails/unpublish.svg" 
+                            alt="Deactivate" 
+                            width="16"
+                            height="16"
+                          />
+                          <img 
+                            v-else
+                            src="@/assets/icons/teamfloss/userDetails/publish.svg" 
+                            alt="Activate" 
+                            width="16"
+                            height="16"
+                          />
+                        </v-btn>
+                      </template>
+                    </v-tooltip>
+                  </template>
+                  
+                  <v-tooltip text="Delete User" location="top">
                     <template #activator="{ props }">
                       <v-btn
                         v-bind="props"
                         size="small"
                         variant="text"
                         icon
-                        @click="isUserActive(item) ? $emit('deactivateUser', { org, user: item }) : $emit('activateUser', { org, user: item })"
-                        class="action-btn"
+                        @click="$emit('deleteUser', { org, user: item })"
+                        class="action-btn delete-btn"
                       >
                         <img 
-                          v-if="isUserActive(item)"
-                          src="@/assets/icons/teamfloss/userDetails/unpublish.svg" 
-                          alt="Deactivate" 
-                          width="16"
-                          height="16"
-                        />
-                        <img 
-                          v-else
-                          src="@/assets/icons/teamfloss/userDetails/publish.svg" 
-                          alt="Activate" 
+                          src="@/assets/icons/teamfloss/shifts/delete.svg" 
+                          alt="Delete" 
                           width="16"
                           height="16"
                         />
@@ -304,26 +330,6 @@
                     </template>
                   </v-tooltip>
                 </template>
-                
-                <v-tooltip text="Delete User" location="top">
-                  <template #activator="{ props }">
-                    <v-btn
-                      v-bind="props"
-                      size="small"
-                      variant="text"
-                      icon
-                      @click="$emit('deleteUser', { org, user: item })"
-                      class="action-btn delete-btn"
-                    >
-                      <img 
-                        src="@/assets/icons/teamfloss/shifts/delete.svg" 
-                        alt="Delete" 
-                        width="16"
-                        height="16"
-                      />
-                    </v-btn>
-                  </template>
-                </v-tooltip>
               </div>
             </template>
           </template>
@@ -348,17 +354,30 @@ const props = defineProps({
   selectedHeaders: { type: Array, required: true },
   search: { type: String, default: "" },
   roleList: { type: Array, default: []},
-  availableHeaders: { type: Array, default: () => [] }
+  availableHeaders: { type: Array, default: () => [] },
+  clearSelection: { type: Boolean, default: false }
 });
 const selectedStaff=ref([]);
 const isAllSelected=ref(false);
+
+// Watch for clearSelection prop to reset selections
+watch(
+  () => props.clearSelection,
+  (newVal) => {
+    if (newVal) {
+      selectedStaff.value = [];
+      isAllSelected.value = false;
+    }
+  }
+);
 
 const focusedField = ref({});
 
 const openedPanels = ref([0]);
 const authStore = useAuthStore()
 const mainStore = useMainStore()
-const emit = defineEmits(["add", "details", "onUpdate", "onUpdateHeaders", "deactivateUser", "activateUser", "deleteUser"]);
+const { user: currentUser } = useUser()
+const emit = defineEmits(["add", "details", "onUpdate", "onUpdateHeaders", "deactivateUser", "activateUser", "deleteUser", "updateSelectedStaff", "onUserSelect"]);
 
 // Resend invitation state
 const resendingInvitation = ref(null);
@@ -526,7 +545,8 @@ const toggleAll = () => {
    console.log(selectedStaff.value)
 };
 const onSelectionChange = (newSelected) => {
-  console.log( selectedStaff.value);
+  selectedStaff.value = newSelected;
+  emit('updateSelectedStaff', newSelected);
 };
 
 // Handle sorting with custom logic
