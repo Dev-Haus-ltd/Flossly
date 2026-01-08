@@ -373,7 +373,7 @@ export const addDocument = async (event) => {
         tags: fields.tags ? fields.tags[0] : null,
         link: filePath,
         folderId: fields.folderId ? fields.folderId[0] : null,
-        lastViewedOn: null,
+        lastViewedOn: new Date(),
       });
       createdDocuments.push(document);
     }
@@ -409,7 +409,7 @@ export const addSystemDocument = async (event) => {
         tags: fields.tags ? fields.tags[0] : null,
         link: filePath,
         folderId: fields.folderId ? fields.folderId[0] : null,
-        lastViewedOn: null,
+        lastViewedOn: new Date(),
       });
       createdDocuments.push(document);
     }
@@ -504,8 +504,10 @@ export const recentDocuments = async (event) => {
         organisationId: loggedUser.orgId,
         userId: loggedUser.userId,
         lastViewedOn: {
-          [Op.ne]: null,
-          [Op.gte]: sevenDaysAgo,
+          [Op.and]: {
+            [Op.ne]: null,
+            [Op.gte]: sevenDaysAgo,
+          },
         },
       },
       include: [
