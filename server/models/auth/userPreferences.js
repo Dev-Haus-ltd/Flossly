@@ -19,14 +19,14 @@ export const UserPreference = sequelize.define(
     },
     organisationId: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: "Organisations",
         key: "id",
       },
     },
     licenseType: {
-      type: DataTypes.ENUM("System", "Trial", "Glide", "Soar"),
+      type: DataTypes.ENUM("System", "Trial", "Drift", "Glide", "Soar"),
       allowNull: false,
     },
     licenseBillingCycle: {

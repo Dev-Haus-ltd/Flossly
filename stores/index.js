@@ -10,12 +10,21 @@ import academyIcon from '@/assets/icons/mainDrawerIcons/academy.svg'
 const LICENSE_TYPES = {
   SYSTEM: "System",
   TRIAL: "Trial",
+  DRIFT: "Drift",
   GLIDE: "Glide",
   SOAR: "Soar",
 };
 
 const LICENSE_FEATURES = {
-  [LICENSE_TYPES.TRIAL]: new Set(["dashboard", "tasks", "docs"]),
+  [LICENSE_TYPES.TRIAL]: new Set([
+    "dashboard",
+    "tasks",
+    "docs",
+    "team",
+    "crm",
+    "diary",
+  ]),
+  [LICENSE_TYPES.DRIFT]: new Set(["dashboard", "tasks", "docs"]),
   [LICENSE_TYPES.GLIDE]: new Set(["dashboard", "tasks", "docs", "team", "crm"]),
   [LICENSE_TYPES.SOAR]: new Set([
     "dashboard",

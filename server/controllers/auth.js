@@ -78,13 +78,13 @@ export const login = async (event) => {
       organisationId: user.lastLoginOrganisationId || activeOrgs[0].organisationId,
      },
   });
-  if (
-    userPreference &&
-    userPreference.licenseType === "Trial" &&
-    new Date(userPreference.licenseRenewalDate) < new Date()
-  ) {
-    return error(401, "License Expired");
-  }
+    if (
+      userPreference &&
+      userPreference.licenseType !== "System" &&
+      new Date(userPreference.licenseRenewalDate) < new Date()
+    ) {
+      return error(401, "License Expired");
+    }
 
   let orgId;
   if (user.lastLoginOrganisationId) {
@@ -252,6 +252,7 @@ export const signupRequest = async (event) => {
         password: hashed,
         profileCompletion: 0,
         roleId,
+        hasUsedTrial: true,
       },
       { transaction }
     );
@@ -272,6 +273,13 @@ export const signupRequest = async (event) => {
       { hasUsedTrial: true },
       { transaction }
     );
+
+    await createDummyDentistForOrganisation({
+      organisationId: org.id,
+      organisationName: org.name,
+      createdBy: user.id,
+      transaction,
+    });
 
     // associate user-org
     await UserOrganisation.create(
@@ -318,6 +326,9 @@ export const profile = async (event) => {
         {
           model: UserPreference,
           as: "preferences",
+          where: {
+            organisationId: loggedUser.orgId
+          }
         },
         {
           model: Role,
@@ -358,9 +369,9 @@ export const profile = async (event) => {
       }
     }
     
-    if (userObj.preferences && userObj.preferences.taskTableColumns) {
-      userObj.preferences.taskTableColumns = JSON.parse(
-        userObj.preferences.taskTableColumns
+    if (userObj.preferences && userObj.preferences.length && userObj.preferences[0].taskTableColumns) {
+      userObj.preferences[0].taskTableColumns = JSON.parse(
+        userObj.preferences[0].taskTableColumns
       );
     }
     setCookie(event, "loggedUserId", userObj.id, { maxAge: 31536000 });
@@ -1336,6 +1347,59 @@ export const resendOrganisationInvitation = async (event) => {
       err.message || err.toString() || "Failed to resend invitation";
     return error(500, errorMessage);
   }
+};
+
+const getDentistRoleId = async (transaction) => {
+  const roles = await Role.findAll({
+    attributes: ["id", "title"],
+    transaction,
+  });
+  const dentistRole = roles.find((role) =>
+    (role.title || "").toLowerCase().includes("dentist")
+  );
+  return dentistRole ? dentistRole.id : 5;
+};
+
+const createDummyDentistForOrganisation = async ({
+  organisationId,
+  organisationName,
+  createdBy,
+  transaction,
+}) => {
+  const roleId = await getDentistRoleId(transaction);
+  const email = `dummy-dentist+org-${organisationId}@flossly.local`;
+  const existing = await User.findOne({ where: { email }, transaction });
+  if (existing) return existing;
+
+  const password = await bcrypt.hash(
+    `dummy-${organisationId}-${Date.now()}`,
+    10
+  );
+
+  const dentistUser = await User.create(
+    {
+      fullName: organisationName,
+      email,
+      password,
+      profileCompletion: 0,
+      roleId,
+      status: "Active",
+      isEmailVerified: true,
+      createdBy,
+    },
+    { transaction }
+  );
+
+  await UserOrganisation.create(
+    {
+      userId: dentistUser.id,
+      organisationId,
+      status: "Active",
+    },
+    { transaction }
+  );
+
+  return dentistUser;
 };
 
 const assignDefaultTasksToUser = async (user, organisationId) => {
