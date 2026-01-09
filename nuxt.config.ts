@@ -34,7 +34,7 @@ export default defineNuxtConfig({
     API_AUTH: "BasicAuth",
     JWT_SECRET: process.env.JWT_SECRET,
     Stripe_PK: process.env.STRIPE_PK,
-    Sripte_SK: process.env.STRIPE_SK,
+    Stripe_SK: process.env.STRIPE_SK,
     StripeWS: process.env.STRIPE_WS,
     // Meta (Facebook) App Credentials
     META_APP_ID: process.env.META_APP_ID,
