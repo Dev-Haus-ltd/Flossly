@@ -109,7 +109,7 @@ export const getUserRotas = async (event) => {
 export const updateRota = async (event) => {
   try {
     const body = await readBody(event);
-    const { id, name, startDate, endDate, duration, notes } = body;
+    const { id, name, startDate, endDate, duration, notes } = JSON.parse(body);
     if (endDate && startDate && new Date(endDate) < new Date(startDate)) {
       return error("End date cannot be before start date");
     }
