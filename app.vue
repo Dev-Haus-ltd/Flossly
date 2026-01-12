@@ -37,6 +37,23 @@ import { CommonLoader } from "#components";
 import { isAuthenticated } from "./lib/auth.js";
 const loggedIn = computed(() => isAuthenticated());
 
+
+onMounted(() => {
+  
+  document.body.classList.add('app-loaded');
+  
+  
+  setTimeout(() => {
+    const appLoader = document.getElementById('app-loader');
+    if (appLoader) {
+      appLoader.classList.add('hide');
+      setTimeout(() => {
+        appLoader.remove();
+      }, 300);
+    }
+  }, 200);
+});
+
 const bus = useBus();
 const drawerOpen = ref(false);
 const addStaffDrawer = ref(false);
