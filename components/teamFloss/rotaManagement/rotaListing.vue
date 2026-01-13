@@ -245,6 +245,14 @@
                         class="action-icon ml-3"
                         @click.stop="changeRotaStatus('unpublish', item)"
                       />
+
+                        <img
+                        v-if="isManager"
+                        src="@/assets/icons/teamfloss/userDetails/export.svg"
+                        alt="Export"
+                        class="action-icon ml-3"
+                        @click.stop="onExport(item)"
+                      />
                     </div>
                   </template>
                 </v-data-table>
@@ -410,6 +418,14 @@
                         class="action-icon ml-3"
                         @click.stop="changeRotaStatus('publish', item)"
                       />
+
+                       <img
+                        v-if="isManager"
+                        src="@/assets/icons/teamfloss/userDetails/export.svg"
+                        alt="Export"
+                        class="action-icon ml-3"
+                        @click.stop="onExport(item)"
+                      />
                     </div>
                   </template>
                 </v-data-table>
@@ -436,13 +452,14 @@
   </div>
 </template>
 <script setup>
+import rotaService from '~/services/rotaService';
 const { isManager } = useUser();
 import { parsedDate } from "~/lib/dateFormatter";
 const { rotaList } = defineProps({
   rotaList: Array,
 });
 
-const emit = defineEmits(["onChangeStatus", "changeComponent", "getAllShifts"]);
+const emit = defineEmits(["onChangeStatus", "changeComponent", "getAllShifts", "editRota"]);
 
 const currentTab = ref(0);
 const menuDate = ref(false);
@@ -557,6 +574,160 @@ const changeRotaStatus = (type, item) => {
 };
 const onView = (item) => {
   emit("getAllShifts", item);
+};
+
+const onEdit = (item) => {
+  emit("editRota", item);
+};
+
+const onExport = async (item) => {
+  try {
+    console.log("Starting export for:", item.name);
+    
+    // Dynamic import for client-side only - import in correct order
+    const jsPDFModule = await import('jspdf');
+    const jsPDF = jsPDFModule.default || jsPDFModule.jsPDF;
+    
+    // Import autoTable - this extends jsPDF
+    const autoTableModule = await import('jspdf-autotable');
+    const autoTable = autoTableModule.default;
+    
+    const shiftsResponse = await rotaService.getAllShifts({ rotaId: item.id });
+    const usersResponse = await rotaService.getRotaUsers({ rotaId: item.id });
+    
+    console.log("Shifts response:", shiftsResponse);
+    console.log("Users response:", usersResponse);
+    
+    const shifts = shiftsResponse?.data || [];
+    const users = usersResponse?.data || [];
+    
+    const doc = new jsPDF('l', 'mm', 'a4'); // Landscape orientation
+    
+    // Calculate all dates in the rota period
+    const startDate = new Date(item.startDate);
+    const endDate = new Date(item.endDate);
+    const allDates = [];
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      allDates.push(new Date(d));
+    }
+    
+    // Process in weeks (7 days at a time)
+    let currentY = 15;
+    
+    for (let weekStart = 0; weekStart < allDates.length; weekStart += 7) {
+      const weekDates = allDates.slice(weekStart, weekStart + 7);
+      
+      // Add page if needed
+      if (weekStart > 0) {
+        doc.addPage();
+        currentY = 15;
+      }
+      
+      // Title for this week
+      doc.setFontSize(14);
+      doc.setFont(undefined, 'bold');
+      const weekTitle = `${item.name} - Week ${Math.floor(weekStart / 7) + 1}`;
+      doc.text(weekTitle, 148, currentY, { align: 'center' });
+      
+      currentY += 8;
+      
+      // Build the grid table
+      // Header row: ["Staff", "Mon DD MMM", "Tue DD MMM", ...]
+      const headerRow = ["Staff"];
+      weekDates.forEach(date => {
+        const dayName = new Date(date).toLocaleDateString('en-GB', { weekday: 'short' });
+        const dateStr = new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+        headerRow.push(`${dayName}\n${dateStr}`);
+      });
+      
+      // Data rows: one row per staff member
+      const tableBody = [];
+      
+      users.forEach(user => {
+        const userName = user?.isTempUser ? user?.tempUserName : user?.user?.fullName || 'Unknown';
+        const userRole = user?.isTempUser ? user?.role?.title : user?.user?.role?.title || '';
+        const staffCell = `${userName}\n${userRole}`;
+        
+        const rowData = [staffCell];
+        
+        // For each day in the week
+        weekDates.forEach(date => {
+          const dateStr = date.toISOString().split('T')[0];
+          
+          // Find shifts for this user on this date
+          const userId = user.userId || user.user?.id;
+          const dayShifts = shifts.filter(shift => {
+            const shiftUserId = shift.userId || shift.dentistId || shift.nurseId;
+            const shiftDate = new Date(shift.startDate).toISOString().split('T')[0];
+            return shiftUserId == userId && shiftDate === dateStr;
+          });
+          
+          if (dayShifts.length > 0) {
+            // Build cell content with all shifts for this day
+            const shiftTexts = dayShifts.map(shift => {
+              const startTime = new Date(shift.startDate).toLocaleTimeString('en-GB', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: false
+              });
+              const endTime = new Date(shift.endDate).toLocaleTimeString('en-GB', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: false
+              });
+              return `${startTime}-${endTime}\n${shift.label || ''}`;
+            });
+            rowData.push(shiftTexts.join('\n\n'));
+          } else {
+            rowData.push('-');
+          }
+        });
+        
+        tableBody.push(rowData);
+      });
+      
+      // Generate table
+      autoTable(doc, {
+        head: [headerRow],
+        body: tableBody,
+        startY: currentY,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [58, 223, 141],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          halign: 'center',
+          fontSize: 9,
+          cellPadding: 3
+        },
+        bodyStyles: {
+          fontSize: 8,
+          cellPadding: 3,
+          valign: 'top',
+          minCellHeight: 20
+        },
+        columnStyles: {
+          0: { 
+            cellWidth: 35, 
+            fontStyle: 'bold',
+            halign: 'left'
+          }
+        },
+        styles: {
+          overflow: 'linebreak',
+          cellWidth: 'wrap'
+        }
+      });
+      
+      currentY = doc.lastAutoTable.finalY + 10;
+    }
+
+    doc.save(`${item.name}_rota.pdf`);
+    console.log("PDF saved successfully");
+  } catch (error) {
+    console.error("Error exporting rota:", error);
+    alert(`Failed to export rota: ${error.message}`);
+  }
 };
 function getRotaStatus(item) {
   const now = new Date();

@@ -331,4 +331,11 @@ export default {
         });
     });
   },
+  recordOnboardingEvent(data) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/onboardingEvent", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
 };

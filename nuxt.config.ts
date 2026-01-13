@@ -17,6 +17,15 @@ export default defineNuxtConfig({
     public: {
       BASE_URL: process.env.BASE_URL,
       CHATBOT_URL: process.env.CHATBOT_URL,
+      ONBOARDING_WELCOME_VIDEO_URL: process.env.ONBOARDING_WELCOME_VIDEO_URL || "https://youtu.be/gEuICxXisnw?si=1L-7jdiwwnr_VpDC",
+      ONBOARDING_FOUNDER_NAME: process.env.ONBOARDING_FOUNDER_NAME || "Saba",
+      ONBOARDING_SUCCESS_MANAGER_NAME: process.env.ONBOARDING_SUCCESS_MANAGER_NAME || "FlosslyOS Team",
+      ONBOARDING_QUIET_HOUR_START: process.env.ONBOARDING_QUIET_HOUR_START,
+      ONBOARDING_QUIET_HOUR_END: process.env.ONBOARDING_QUIET_HOUR_END,
+      ONBOARDING_QUIET_APPLIES_TO: process.env.ONBOARDING_QUIET_APPLIES_TO,
+      ONBOARDING_WELCOME_CAP_HOURS: process.env.ONBOARDING_WELCOME_CAP_HOURS,
+      ONBOARDING_VIDEO_CAP_HOURS: process.env.ONBOARDING_VIDEO_CAP_HOURS,
+      ONBOARDING_INAPP_CAP_HOURS: process.env.ONBOARDING_INAPP_CAP_HOURS,
       colors: {
         primary: "#0061FB",
         "primary-dark": "#0061FB",
@@ -73,6 +82,13 @@ export default defineNuxtConfig({
     // "vue-social-sharing/nuxt"
   ],
   css: ["vuetify/lib/styles/main.sass", "@/assets/css/fonts.css"],
+  // Add loading indicator for page transitions
+  loading: {
+    color: '#0061FB',
+    height: '3px',
+    continuous: true,
+    duration: 3000
+  },
   app: {
     head: {
       title: "Flossly",
@@ -91,8 +107,61 @@ export default defineNuxtConfig({
 
       { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" }
     ],
-      script: [{ src: "https://js.stripe.com/v3/", defer: true }
+      script: [
+        { src: "https://js.stripe.com/v3/", defer: true },
+        // Load lottie-player synchronously in head - no defer so it loads immediately
+        { src: "https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js", body: false }
       ],
+      style: [
+        {
+          children: `
+            /* Critical CSS - Loaded immediately to prevent FOUC */
+            #__nuxt {
+              visibility: hidden;
+            }
+            #app-loader {
+              position: fixed;
+              top: 0;
+              left: 0;
+              right: 0;
+              bottom: 0;
+              background: #ffffff;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              z-index: 99999;
+              transition: opacity 0.3s ease-out;
+            }
+            #app-loader.hide {
+              opacity: 0;
+              pointer-events: none;
+            }
+            body.app-loaded #__nuxt {
+              visibility: visible;
+            }
+            /* Placeholder styles while lottie loads */
+            #loader-container:empty::before {
+              content: '';
+              display: block;
+              width: 200px;
+              height: 200px;
+              background-image: url('/Logoicon2.svg');
+              background-size: 80px 80px;
+              background-repeat: no-repeat;
+              background-position: center;
+              animation: fadeInOut 1.5s ease-in-out infinite;
+            }
+            @keyframes fadeInOut {
+              0%, 100% { opacity: 1; }
+              50% { opacity: 0.5; }
+            }
+          `,
+          type: 'text/css'
+        }
+      ],
+      bodyAttrs: {
+        class: ''
+      }
     },
   },
   imports: {

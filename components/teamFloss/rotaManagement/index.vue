@@ -19,9 +19,9 @@
         </v-col>
       </v-row>
       <TeamFlossRotaManagementRotaListing v-if="activeComponent === 1" @changeComponent="changecomponent"
-        @onChangeStatus="changeRotaStatus" @getAllShifts="getAllShifts" :rotaList="rotas" />
+        @onChangeStatus="changeRotaStatus" @getAllShifts="getAllShifts" :rotaList="rotas" @editRota="onEditRota" />
     </div>
-    <TeamFlossRotaManagementAddRota v-if="activeComponent === 2" @onAddRota="onAddRotaHandle" />
+    <TeamFlossRotaManagementAddRota v-if="activeComponent === 2" @onAddRota="onAddRotaHandle" :rotaToEdit="editingRota" />
 
     <TeamFlossRotaManagementShifts v-if="activeComponent === 3" :shifts="shifts" :users="rotaUsers" :rota="selectedRota"
       @onChangeStatus="changeRotaStatus" @onUpdate="getAllShifts" @onFilterUsers="filterUsers"
@@ -51,6 +51,7 @@ const activeComponent = ref(1);
 const selectedRota = ref(null);
 const { isManager } = useUser();
 const user = ref({});
+const editingRota = ref(null);
 const showPracticeProfileDialog = ref(false);
 const practiceProfileInitialSection = ref("profile");
 onMounted(() => {
@@ -190,6 +191,11 @@ const changecomponent = (id) => {
 const onAddRotaHandle = (rota) => {
   getRotas()
   getAllShifts(rota)
+  editingRota.value = null; // Reset editing rota
+};
+const onEditRota = (item) => {
+  editingRota.value = item;
+  activeComponent.value = 2;
 };
 const breadcrumbStyle = computed(() => {
   return (selectedRota.value || activeComponent.value === 2)
@@ -199,6 +205,7 @@ const breadcrumbStyle = computed(() => {
 const home = () => {
   activeComponent.value = 1;
   selectedRota.value = null;
+  editingRota.value = null; // Reset editing rota
 };
 
 const openRoomManagement = () => {

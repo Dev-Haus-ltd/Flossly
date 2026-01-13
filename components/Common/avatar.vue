@@ -3,9 +3,10 @@
     <v-avatar :color="getRandomHexColor()" :size="props.size">
       <!-- <v-icon v-if="!props?.user?.photo" icon="mdi-account-circle"></v-icon> -->
       <v-img
-        v-if="props?.user?.photo || props?.user?.logo"
+        v-if="(props?.user?.photo || props?.user?.logo) && !imageError"
         alt="John"
         :src="props?.user?.photo || props?.user?.logo"
+        @error="handleImageError"
       ></v-img>
       <span v-else>{{ getInitials() }}</span> 
     </v-avatar>
@@ -19,6 +20,13 @@ const props = defineProps({
     default: '34px'
   }
 })
+
+const imageError = ref(false)
+
+const handleImageError = () => {
+  imageError.value = true
+}
+
 const getInitials = () => {
   const name = props?.user?.fullName || props.user.name || props.user.title; 
   if (!name) return '?'
@@ -45,5 +53,10 @@ const getRandomHexColor = () => {
   const index = firstChar.charCodeAt(0) - 65
   return index >= 0 && index < 26 ? colors[index] : '#999999'
 }
+
+// Reset imageError when user or photo changes
+watch(() => [props?.user?.photo, props?.user?.logo], () => {
+  imageError.value = false
+})
 
 </script>

@@ -1,4 +1,4 @@
-// TasksAddTask.vue - Updated to accept and use preSelectedCategory prop
+﻿// TasksAddTask.vue - Updated to accept and use preSelectedCategory prop
 <template>
   <teleport to="body">
     <v-navigation-drawer
@@ -122,7 +122,7 @@
                       flat
                       readonly
                     >
-                    <!-- 👇 Custom icon slot instead of append-inner-icon -->
+                    <!-- ðŸ‘‡ Custom icon slot instead of append-inner-icon -->
                       <template #append-inner>
                         <v-icon class="cursor-pointer" @click.stop="menu = true">
                           mdi-calendar
@@ -330,23 +330,38 @@
       />
 
       <!-- Delete Category Confirmation Dialog -->
-      <CommonConfirmDialog
-        v-model="showDeleteConfirm"
-        title="Delete category?"
-        message="Are you sure you want to delete this category? This action cannot be undone."
-        confirm-text="Delete"
-        :loading="deleteLoading"
-        @confirm="confirmDeleteCategory"
-        @cancel="cancelDeleteCategory"
-      />
-    </v-navigation-drawer>
-  </teleport>
+    <CommonConfirmDialog
+      v-model="showDeleteConfirm"
+      title="Delete category?"
+      message="Are you sure you want to delete this category? This action cannot be undone."
+      confirm-text="Delete"
+      :loading="deleteLoading"
+      @confirm="confirmDeleteCategory"
+      @cancel="cancelDeleteCategory"
+    />
+  </v-navigation-drawer>
+  <OnboardingPopup
+    v-model="showAchievementDialog"
+    max-width="560"
+    :show-marker="true"
+    icon="mdi-trophy-variant-outline"
+    :title="achievement?.title || 'Achievement Unlocked!'"
+    :primary-label="achievement?.ctaText || 'Invite your team now'"
+    secondary-label="Done"
+    @primary="handleAchievementAction"
+    @secondary="showAchievementDialog = false"
+  >
+    <p class="mb-3">{{ achievement?.message }}</p>
+    <p class="mb-0">Want to see it in action?</p>
+  </OnboardingPopup>
+</teleport>
 </template>
 
 <script setup>
 import { TasksCreateChecklist } from "#components";
 import { format } from "date-fns";
 import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
+const router = useRouter();
 
 // Add preSelectedStatus and preSelectedCategory props
 const props = defineProps({
@@ -367,6 +382,8 @@ const orgStore = useOrgStore();
 const userStore = useUserStore();
 
 const formRef = ref(null);
+const showAchievementDialog = ref(false);
+const achievement = ref(null);
 const categoryAutocomplete = ref(null);
 const menu = ref(false);
 const emit = defineEmits(["close", "success", "update:modelValue"]);
@@ -754,6 +771,10 @@ const onSubmit = async () => {
             type: "success",
             title: "Task Added Successfully",
           });
+          if (res.data?.achievement) {
+            achievement.value = res.data.achievement;
+            showAchievementDialog.value = true;
+          }
           resetForm();
         } else {
           mainStore.setSnackbar({
@@ -805,6 +826,16 @@ const handleCancel = () => {
   resetForm();
   emit("update:modelValue", false);
   emit("close");
+};
+
+const handleAchievementAction = () => {
+  showAchievementDialog.value = false;
+  const link = achievement.value?.ctaLink || "/teams";
+  if (link.startsWith("http")) {
+    window.location.href = link;
+  } else {
+    router.push(link);
+  }
 };
 </script>
 

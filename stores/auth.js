@@ -400,5 +400,13 @@ export const useAuthStore = defineStore("authStore", {
           });
       });
     },
+    recordOnboardingEvent(data) {
+      return new Promise((resolve, reject) => {
+        authService
+          .recordOnboardingEvent(data)
+          .then((res) => resolve(res))
+          .catch((err) => reject(err));
+      });
+    },
   },
 });

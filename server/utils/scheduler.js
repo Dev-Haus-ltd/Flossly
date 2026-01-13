@@ -12,7 +12,20 @@ import {
   DiaryAppointment,
   PatientAutomationTemplate,
   Organisation,
+  UserPreference,
+  OnboardingEvent,
 } from "../models/index.js";
+import {
+  ONBOARDING_EMAIL_TEMPLATES,
+  buildOnboardingContext,
+  sendOnboardingEmail,
+} from "./onboardingCampaign.js";
+import {
+  ensureOnboardingEventsTable,
+  getDiffDaysFromStart,
+  getOnboardingMetrics,
+  recordOnboardingEvent,
+} from "./onboardingService.js";
 
 const frequencyMap = {
   Daily: "0 0 * * *", // every day at midnight
@@ -518,6 +531,103 @@ export const startTaskDueReminderScheduler = () => {
       }
     } catch (err) {
       console.error("Error in due reminder scheduler:", err);
+    }
+  });
+};
+
+export const startOnboardingScheduler = () => {
+  const pattern = process.env.ONBOARDING_EMAIL_SCHEDULE || "0 6 * * *";
+  if (!pattern) return;
+  cron.schedule(pattern, async () => {
+    try {
+      await ensureOnboardingEventsTable();
+      const startEvents = await OnboardingEvent.findAll({
+        where: { key: "onboarding_start" },
+      });
+      if (!startEvents.length) return;
+
+      const userIds = [...new Set(startEvents.map((evt) => evt.userId))];
+      const orgIds = [...new Set(startEvents.map((evt) => evt.organisationId))];
+
+      const [users, organisations, preferences] = await Promise.all([
+        User.findAll({
+          where: { id: userIds },
+          attributes: ["id", "fullName", "email", "status"],
+        }),
+        Organisation.findAll({ where: { id: orgIds } }),
+        UserPreference.findAll({ where: { userId: userIds, organisationId: orgIds } }),
+      ]);
+
+      const usersById = new Map(users.map((u) => [Number(u.id), u]));
+      const orgById = new Map(organisations.map((o) => [Number(o.id), o]));
+      const prefByKey = new Map(
+        preferences.map((p) => [`${p.userId}:${p.organisationId}`, p])
+      );
+
+      const emailKeys = ONBOARDING_EMAIL_TEMPLATES.map((t) => t.key);
+      const existing = await OnboardingEvent.findAll({
+        where: {
+          userId: userIds,
+          organisationId: orgIds,
+          key: { [Op.in]: emailKeys },
+        },
+      });
+      const sentKeys = new Set(
+        existing.map((evt) => `${evt.userId}:${evt.organisationId}:${evt.key}`)
+      );
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const runtimeConfig = useRuntimeConfig();
+
+      for (const evt of startEvents) {
+        const user = usersById.get(Number(evt.userId));
+        if (!user?.email) continue;
+        if (user.status && user.status !== "Active") continue;
+        const org = orgById.get(Number(evt.organisationId));
+        const pref = prefByKey.get(`${evt.userId}:${evt.organisationId}`);
+
+        const diffDays = getDiffDaysFromStart(evt.createdAt, today);
+        if (!Number.isFinite(diffDays) || diffDays < 0) continue;
+
+        let metrics = null;
+        if (diffDays === 7 || diffDays === 13) {
+          metrics = await getOnboardingMetrics(evt.organisationId);
+        }
+
+        const ctx = buildOnboardingContext({
+          user,
+          organisation: org,
+          userPreference: pref,
+          metrics,
+          config: runtimeConfig,
+        });
+
+        for (const tpl of ONBOARDING_EMAIL_TEMPLATES) {
+          if (tpl.offsetDays !== diffDays) continue;
+          const sentKey = `${evt.userId}:${evt.organisationId}:${tpl.key}`;
+          if (sentKeys.has(sentKey)) continue;
+
+          try {
+            await sendOnboardingEmail({
+              key: tpl.key,
+              to: user.email,
+              ctx,
+            });
+            await recordOnboardingEvent({
+              userId: evt.userId,
+              organisationId: evt.organisationId,
+              key: tpl.key,
+              payload: { sentAt: new Date().toISOString() },
+            });
+            sentKeys.add(sentKey);
+          } catch (err) {
+            console.error("[Onboarding] email send failed", err?.message);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[Onboarding] scheduler error", err?.message);
     }
   });
 };

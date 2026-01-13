@@ -62,7 +62,12 @@
                   class="mb-1 input-bordered"
                   flat
                   required
+                  :error="validationErrors.title"
+                  @input="clearValidationError('title')"
                 />
+                <div v-if="validationErrors.title" class="validation-error">
+                  Title is required
+                </div>
               </v-col>
 
               <!-- Date -->
@@ -84,6 +89,7 @@
                       class="mb-1 input-bordered"
                       flat
                       readonly
+                      :error="validationErrors.date"
                     >
                       <template #append-inner>
                         <v-icon class="cursor-pointer" @click.stop="noteDateMenu = true">
@@ -98,6 +104,9 @@
                     @update:modelValue="onNoteDateSelected"
                   />
                 </v-menu>
+                <div v-if="validationErrors.date" class="validation-error">
+                  Date is required
+                </div>
               </v-col>
 
               <!-- Time -->
@@ -120,6 +129,7 @@
                       flat
                       readonly
                       required
+                      :error="validationErrors.time"
                     >
                       <template #append-inner>
                         <v-icon class="cursor-pointer" @click.stop="timeMenu = true">
@@ -135,6 +145,9 @@
                     @update:modelValue="onTimeSelected"
                   />
                 </v-menu>
+                <div v-if="validationErrors.time" class="validation-error">
+                  Time is required
+                </div>
               </v-col>
 
               <!-- Channel -->
@@ -148,7 +161,12 @@
                   class="mb-1 input-bordered"
                   flat
                   required
+                  :error="validationErrors.channel"
+                  @update:model-value="clearValidationError('channel')"
                 />
+                <div v-if="validationErrors.channel" class="validation-error">
+                  Channel is required
+                </div>
               </v-col>
 
               <!-- Summary -->
@@ -161,7 +179,12 @@
                   class="mb-1 input-bordered"
                   flat
                   required
+                  :error="validationErrors.summary"
+                  @input="clearValidationError('summary')"
                 />
+                <div v-if="validationErrors.summary" class="validation-error">
+                  Summary is required
+                </div>
               </v-col>
 
               <!-- Add Note -->
@@ -196,24 +219,37 @@
               Stop
             </v-btn>
           </div>
-          <template v-if="!isSummarizing">
-            <div v-if="!isRecording && !transcribedText" class="voice-center">
-              <div class="mic-circle" @click="toggleRecording">
-                <v-icon size="36" color="#ffffff">mdi-microphone</v-icon>
-              </div>
+          
+          <!-- Error message -->
+          <div v-if="error" class="voice-center">
+            <v-alert type="error" variant="tonal" class="mb-4">
+              {{ error }}
+            </v-alert>
+          </div>
+          
+          <!-- Idle state: Show microphone button -->
+          <div v-else-if="!isRecording && !transcribedText && !isSummarizing" class="voice-center">
+            <div class="mic-circle" @click="toggleRecording">
+              <v-icon size="36" color="#ffffff">mdi-microphone</v-icon>
             </div>
-            <div v-else class="editor-wrapper">
-              <div ref="editorEl" class="editor-holder" />
+            <div v-if="!isSupported" class="mt-3 text-caption text-error">
+              Speech recognition not supported in this browser
             </div>
-          </template>
-          <template v-else>
-            <div class="editor-wrapper">
-              <div ref="editorEl" class="editor-holder" />
-              <div class="loader-overlay">
-                <v-progress-circular indeterminate color="primary" size="56" width="6" />
-              </div>
+          </div>
+          
+          <!-- Recording or has transcript -->
+          <div v-else class="transcript-wrapper">
+            <!-- Summarizing overlay -->
+            <div v-if="isSummarizing" class="loader-overlay">
+              <v-progress-circular indeterminate color="primary" size="56" width="6" />
+              <div class="mt-3 text-caption">Summarizing with AI...</div>
             </div>
-          </template>
+            
+            <!-- Simple read-only transcript viewer -->
+            <div v-else class="transcript-viewer">
+              {{ transcribedText || 'Listening...' }}
+            </div>
+          </div>
         </div>
       </v-col>
 
@@ -283,7 +319,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from "vue";
 import { parsedDate, formatDateDDMMYYYY } from "@/lib/dateFormatter";
-import { useTranscription } from "@/composables/useTranscription";
+import { useWebSpeechTranscription } from "@/composables/useWebSpeechTranscription";
 import ScriptsPool from "./ScriptsPool.vue";
 const crmStore = useCrmStore();
 
@@ -312,6 +348,15 @@ const form = ref({
   summary: "",
 });
 
+// Validation errors
+const validationErrors = ref({
+  title: false,
+  date: false,
+  time: false,
+  channel: false,
+  summary: false,
+});
+
 // Preferences
 const preferences = ref({
   preferredContactMethod: initialPreferences.preferredContactMethod || null,
@@ -328,12 +373,14 @@ const channelOptions = ["Phone", "Email", "WhatsApp", "SMS", "In-person"];
 const onTimeSelected = (val) => {
   form.value.time = val;
   timeMenu.value = false;
+  clearValidationError('time');
 };
 
 const onNoteDateSelected = (val) => {
   form.value.date = val;
   formattedNoteDate.value = val ? formatDateDDMMYYYY(val) : "";
   noteDateMenu.value = false;
+  clearValidationError('date');
 };
 
 // Save preferences
@@ -354,8 +401,19 @@ const onPrefChange = async () => {
 // Add note
 const onAddNote = async () => {
   console.log('onAddNote called');
-  if (!form.value.title || !form.value.date || !form.value.time || !form.value.channel || !form.value.summary)
+  
+  // Validate all required fields
+  validationErrors.value.title = !form.value.title;
+  validationErrors.value.date = !form.value.date;
+  validationErrors.value.time = !form.value.time;
+  validationErrors.value.channel = !form.value.channel;
+  validationErrors.value.summary = !form.value.summary;
+
+  // If any validation errors, don't proceed
+  if (validationErrors.value.title || validationErrors.value.date || validationErrors.value.time || 
+      validationErrors.value.channel || validationErrors.value.summary) {
     return;
+  }
 
   try {
     saving.value = true;
@@ -367,10 +425,23 @@ const onAddNote = async () => {
       form.value = { title: "", date: "", time: "", channel: null, summary: "" };
       formattedNoteDate.value = "";
       clearEditor();
+      // Clear validation errors after successful save
+      validationErrors.value = {
+        title: false,
+        date: false,
+        time: false,
+        channel: false,
+        summary: false,
+      };
     }
   } finally {
     saving.value = false;
   }
+};
+
+// Clear validation error when field is filled
+const clearValidationError = (field) => {
+  validationErrors.value[field] = false;
 };
 
 // Delete note
@@ -399,21 +470,20 @@ const confirmDelete = async () => {
 };
 
 // Transcription integration
-const editorEl = ref(null);
 const notesFormEl = ref(null);
 const scriptsScrollEl = ref(null);
 let notesFormResizeObserver = null;
 const {
   isRecording,
-  isProcessing,
   isSummarizing,
   transcribedText,
   summarizedText,
   toggleRecording,
-  initEditor,
   stopRecording,
-  clearEditor,
-} = useTranscription(editorEl);
+  clearTranscription,
+  isSupported,
+  error,
+} = useWebSpeechTranscription();
 
 // Keep scripts container height capped to notes form height
 const syncScriptsMaxHeight = () => {
@@ -449,9 +519,6 @@ onMounted(async () => {
     }
   } catch {}
 
-  // Ensure editor is initialized when the holder becomes available
-  await initEditor();
-
   // Wait for DOM, then sync heights and observe future changes
   await nextTick();
   syncScriptsMaxHeight();
@@ -472,7 +539,7 @@ watch(
   (val) => {
     if (val && typeof val === "string") {
       form.value.summary = val;
-      clearEditor();
+      clearTranscription();
     }
   },
 );
@@ -570,25 +637,49 @@ onBeforeUnmount(() => {
   font-size: 14px;
   color: #4b4b4b;
 }
-.editor-holder {
-  min-height: 260px;
-}
-.editor-wrapper {
+.transcript-wrapper {
   position: relative;
+  min-height: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.transcript-viewer {
+  width: 100%;
+  min-height: 260px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 16px;
+  background-color: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #333;
 }
 .loader-overlay {
   position: absolute;
   inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(255,255,255,0.6);
+  background: rgba(255,255,255,0.9);
   border-radius: 8px;
+  z-index: 10;
 }
 .scripts-scroll {
   
   
   min-height: 260px;
   overflow: auto;
+}
+.validation-error {
+  color: rgb(var(--v-theme-error));
+  font-size: 12px;
+  margin-top: 4px;
+  margin-bottom: 8px;
 }
 </style>
