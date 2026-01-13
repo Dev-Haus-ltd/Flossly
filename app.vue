@@ -73,6 +73,7 @@
     </OnboardingPopup>
     <OnboardingPopup
       :model-value="showInAppDialog"
+      
       max-width="680"
       :show-marker="true"
       :icon="inAppIcon"
@@ -137,11 +138,18 @@ const showInAppDialog = computed(
 const toEmbedUrl = (url) => {
   const raw = String(url || "").trim();
   if (!raw) return "";
-  if (raw.includes("youtube.com/embed/")) return raw;
-  const youtuMatch = raw.match(/youtu\\.be\\/([\\w-]+)/i);
-  if (youtuMatch?.[1]) return `https://www.youtube.com/embed/${youtuMatch[1]}`;
-  const ytMatch = raw.match(/v=([\\w-]+)/i);
-  if (ytMatch?.[1]) return `https://www.youtube.com/embed/${ytMatch[1]}`;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.hostname === "youtu.be") {
+      const id = parsed.pathname.replace("/", "");
+      return id ? "https://www.youtube.com/embed/" + id : raw;
+    }
+    if (parsed.hostname.includes("youtube.com")) {
+      const id = parsed.searchParams.get("v");
+      return id ? "https://www.youtube.com/embed/" + id : raw;
+    }
+  } catch (err) {
+  }
   return raw;
 };
 const welcomeVideoUrl = computed(() => {
