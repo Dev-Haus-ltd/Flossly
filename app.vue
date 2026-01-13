@@ -73,6 +73,7 @@
     </OnboardingPopup>
     <OnboardingPopup
       :model-value="showInAppDialog"
+      
       max-width="680"
       :show-marker="true"
       :icon="inAppIcon"
