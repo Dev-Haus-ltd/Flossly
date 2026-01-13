@@ -510,14 +510,23 @@
                       !isEditingLink(item.id, col.key)
                     "
                   >
-                    <a
-                      :href="templateLinkDetails(item.documentLink).value"
-                      target="_blank"
-                      rel="noopener"
-                      class="template-link-anchor"
+                    <CommonTruncatedText
+                      :text="item.documentLink"
+                      :max-width="150"
+                      text-class="template-link-text"
                     >
-                      {{ item.documentLink }}
-                    </a>
+                      <template #default="{ truncatedText, style }">
+                        <a
+                          :href="templateLinkDetails(item.documentLink).value"
+                          target="_blank"
+                          rel="noopener"
+                          class="template-link-anchor"
+                          :style="style"
+                        >
+                          {{ truncatedText }}
+                        </a>
+                      </template>
+                    </CommonTruncatedText>
                     <v-btn
                       icon
                       size="x-small"
@@ -2394,6 +2403,13 @@ th {
   color: #0061fb;
   text-decoration: underline;
   white-space: nowrap;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.template-link-text {
+  display: inline-block;
 }
 .cust-checkbox {
   width: 18px;
