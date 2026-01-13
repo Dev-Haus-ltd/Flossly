@@ -102,6 +102,23 @@ const onboardingUiStorageKey = "flossly_onboarding_ui";
 const onboardingShownInSession = new Set();
 const DEFAULT_ONBOARDING_VIDEO_URL = "https://youtu.be/gEuICxXisnw?si=1L-7jdiwwnr_VpDC";
 
+
+onMounted(() => {
+  
+  document.body.classList.add('app-loaded');
+  
+  
+  setTimeout(() => {
+    const appLoader = document.getElementById('app-loader');
+    if (appLoader) {
+      appLoader.classList.add('hide');
+      setTimeout(() => {
+        appLoader.remove();
+      }, 300);
+    }
+  }, 200);
+});
+
 const bus = useBus();
 const drawerOpen = ref(false);
 const addStaffDrawer = ref(false);
