@@ -32,7 +32,7 @@
       class="input-bordered mt-2"
       flat
     />
-    <label class="mb-2 lbl"> Clinic Type</label>
+    <!-- <label class="mb-2 lbl"> Clinic Type</label>
     <v-select
       variant="solo"
       :items="['Dental', 'General Practice', 'Dermatology', 'Physiotherapy']"
@@ -42,7 +42,7 @@
       density="comfortable"
       class="input-bordered mt-2"
       flat
-    />
+    /> -->
   </v-form>
 </template>
 

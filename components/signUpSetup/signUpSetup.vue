@@ -130,7 +130,7 @@ const currentComponent = computed(() => steps[step.value].component);
 // Form refs & models
 const stepComponent = ref();
 const stepModels = ref([
-  { name: "", logo: null, contact: "", address: "", type: "" }, // Clinic model
+  { name: "", logo: null, contact: "", address: "" }, // Clinic model  // removed , type: ""
   { users: [{ roleId: null, email: "" }] }, // Team model
   {}, // Pricing model
 ]);
@@ -138,14 +138,25 @@ const stepModels = ref([
 const user = ref({});
 const userOrgs = ref([]);
 
+// Check if this is a new practice creation flow (from Add Practice in sidebar)
+const isNewPractice = computed(() => orgStore.getIsNewPractice);
+
 onMounted(() => {
   if (localStorage.getItem("user")) {
     user.value = JSON.parse(localStorage.getItem("user"));
     userOrgs.value = user.value.userOrganisations;
   }
-  stepModels.value[0].name = userOrgs.value.find(
-    (x) => x.organisationId === user.value.currentLoggedInOrgId
-  ).organisation?.name;
+
+  // For new practice flow, start with empty name (no org exists yet)
+  if (isNewPractice.value) {
+    stepModels.value[0].name = "";
+  } else {
+    // For existing org update flow, pre-fill with current org name
+    const currentOrg = userOrgs.value.find(
+      (x) => x.organisationId === user.value.currentLoggedInOrgId
+    );
+    stepModels.value[0].name = currentOrg?.organisation?.name || "";
+  }
 });
 
 const nextStep = async () => {
@@ -159,40 +170,75 @@ const nextStep = async () => {
     const formData = new FormData();
     formData.append("name", data.name);
     formData.append("contact", data.contact);
-    formData.append("type", data.type);
+    // formData.append("type", data.type);
     formData.append("address", data.address);
     formData.append("origin", "onboarding");
     if (data.logo) {
       formData.append("logo", data.logo, data.logo?.name);
     }
-    orgStore
-      .updateOrganisation(formData)
-      .then((res) => {
+
+    // Determine which API to call based on whether this is a new practice creation
+    const apiCall = isNewPractice.value
+      ? orgStore.createOrganisationForUser(formData)
+      : orgStore.updateOrganisation(formData);
+
+    apiCall
+      .then(async (res) => {
         if (res.code === 0) {
           const profileCompletion = useCookie("profileCompletion");
           profileCompletion.value = 50;
-          user.value.userOrganisations.find(
-            (x) => x.organisationId === user.value.currentLoggedInOrgId
-          ).organisation = res.data;
-          localStorage.setItem("user", JSON.stringify(user.value));
+
+          // For new practice creation, switch to the new organization
+          if (isNewPractice.value && res.data.organisationId) {
+            const switchRes = await authStore.switchOrgnanisation({
+              orgId: res.data.organisationId,
+            });
+
+            if (switchRes.code !== 0) {
+              mainStore.setSnackbar({
+                title: switchRes.message || "Failed to switch to new workspace",
+                type: "Error",
+              });
+              return;
+            }
+
+            // Refresh profile to get updated org list
+            await authStore.profile();
+
+            // Reload user data from localStorage after profile refresh
+            if (localStorage.getItem("user")) {
+              user.value = JSON.parse(localStorage.getItem("user"));
+              userOrgs.value = user.value.userOrganisations;
+            }
+
+            // Clear the new practice mode flag after successful creation and switch
+            orgStore.clearNewPracticeMode();
+          } else {
+            // For update flow, just update the local org data
+            user.value.userOrganisations.find(
+              (x) => x.organisationId === user.value.currentLoggedInOrgId
+            ).organisation = res.data;
+            localStorage.setItem("user", JSON.stringify(user.value));
+          }
+
           step.value++;
         } else {
           mainStore.setSnackbar({
-            title: res.data.message,
+            title: res.data?.message || res.message || "Failed to save clinic details",
             type: "Error",
           });
         }
       })
       .catch((err) => {
         let errorMessage = err.message;
-        
+
         // Handle specific error cases for logo upload
         if (err.response?.status === 413) {
           errorMessage = "Logo image is too large. Please choose an image smaller than 5MB.";
         } else if (err.response?.status === 400) {
           errorMessage = "Invalid image format. Please upload a valid image file (JPG, PNG, GIF).";
         }
-        
+
         mainStore.setSnackbar({
           title: errorMessage,
           type: "Error",
