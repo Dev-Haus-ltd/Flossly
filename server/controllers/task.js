@@ -33,6 +33,10 @@ import {
   sendTaskCommentNotificationEmail,
   sendTaskDetailsEmail,
 } from "../utils/emailNotifications";
+import {
+  ensureOnboardingEventsTable,
+  recordOnboardingEvent,
+} from "../utils/onboardingService";
 
 const PRIVILEGED_ROLE_IDS = [1, 8];
 const isManagerOrOwner = (roleId) =>
@@ -54,6 +58,18 @@ const parseJsonBody = async (event) => {
     }
   }
   return body;
+};
+
+const recordFirstTaskAchievement = async ({ userId, organisationId }) => {
+  await ensureOnboardingEventsTable();
+  const key = "onboarding_first_task_created";
+  const result = await recordOnboardingEvent({
+    userId,
+    organisationId,
+    key,
+    payload: { createdAt: new Date().toISOString() },
+  });
+  return result.created;
 };
 
 const autoArchiveCompletedTasks = async (organisationId, days = 5) => {
@@ -1268,6 +1284,14 @@ export const createNewTask = async (event) => {
     return error(403, "Cannot assign users outside your organisation");
   }
 
+  const existingTaskCount = await UserTask.count({
+    where: {
+      userId: loggedUser.userId,
+      organisationId: loggedUser.orgId,
+    },
+  });
+  const isFirstTask = existingTaskCount === 0;
+
   const transaction = await DB.transaction();
   try {
     const newTask = {
@@ -1380,7 +1404,29 @@ export const createNewTask = async (event) => {
       }
     }
     await transaction.commit();
-    return success("Task Added");
+
+    let achievement = null;
+    if (isFirstTask) {
+      try {
+        const recorded = await recordFirstTaskAchievement({
+          userId: loggedUser.userId,
+          organisationId: loggedUser.orgId,
+        });
+        if (recorded) {
+          achievement = {
+            key: "onboarding_first_task_created",
+            title: "Achievement Unlocked: Task Master!",
+            message:
+              "You just created your first FlosslyOS task. Assign it to your team → They get notified instantly → You get real-time updates → Nothing falls through the cracks.",
+            ctaText: "Invite Your Team Now →",
+            ctaLink: "/teams",
+          };
+        }
+      } catch (achievementErr) {
+      }
+    }
+
+    return success({ message: "Task Added", achievement });
   } catch (err) {
     await transaction.rollback();
     return error(500, err);

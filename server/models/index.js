@@ -43,6 +43,7 @@ import { SystemDocument } from "./documents/systemDocuments";
 import { UserLeaveHistory } from "./leaves/userLeaveHistory";
 import { UserLeaveEntitlement } from "./leaves/userLeaveEntitlements";
 import { UserHrDocument } from "./auth/userHrDocuments";
+import { OnboardingEvent } from "./auth/onboardingEvents";
 
 import { Course } from "./cpd/course";
 import { CourseQuestionaire } from "./cpd/courseQuestionaire";
@@ -154,6 +155,10 @@ User.belongsTo(Role, { foreignKey: "roleId", as: "role", onDelete: "SET NULL" })
 // User -> Preference (USER_DELETE)
 User.hasMany(UserPreference, { foreignKey: "userId", as: "preferences" });
 UserPreference.belongsTo(User, { foreignKey: "userId", as: "user", onDelete: "CASCADE", hooks: true });
+
+// User -> OnboardingEvents (USER_DELETE)
+User.hasMany(OnboardingEvent, { foreignKey: "userId", as: "onboardingEvents" });
+OnboardingEvent.belongsTo(User, { foreignKey: "userId", as: "user", onDelete: "CASCADE", hooks: true });
 
 // User -> UserOrganisations (USER_DELETE)
 User.hasMany(UserOrganisation, { foreignKey: "userId", as: "userOrganisations" });
@@ -374,6 +379,7 @@ export {
   UserLeaveEntitlement,
   UserLeaveHistory,
   UserHrDocument,
+  OnboardingEvent,
   TaskChecklist,
   Role,
   Organisation,
