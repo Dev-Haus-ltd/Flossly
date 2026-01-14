@@ -15,8 +15,8 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     public: {
-      BASE_URL: process.env.BASE_URL,
-      CHATBOT_URL: process.env.CHATBOT_URL,
+      BASE_URL: process.env.NUXT_PUBLIC_BASE_URL || process.env.BASE_URL,
+      CHATBOT_URL: process.env.NUXT_PUBLIC_CHATBOT_URL || process.env.CHATBOT_URL,
       ONBOARDING_WELCOME_VIDEO_URL: process.env.ONBOARDING_WELCOME_VIDEO_URL || "https://youtu.be/gEuICxXisnw?si=1L-7jdiwwnr_VpDC",
       ONBOARDING_FOUNDER_NAME: process.env.ONBOARDING_FOUNDER_NAME || "Saba",
       ONBOARDING_SUCCESS_MANAGER_NAME: process.env.ONBOARDING_SUCCESS_MANAGER_NAME || "FlosslyOS Team",
@@ -56,7 +56,7 @@ export default defineNuxtConfig({
     // Google Cloud Speech-to-Text credentials
     GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS,
     // OpenAI API key for summarization
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    OPENAI_API_KEY: process.env.NUXT_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
 
     // Redis connection URL for centralized session management
     REDIS_URL: process.env.REDIS_URL,

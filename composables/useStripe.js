@@ -20,7 +20,21 @@ export const useStripe = () => {
     try {
       const res = await $fetch("/api/stripe/prices");
       if (res.code === 0) {
-        prices.value = res.data;
+        const all = Array.isArray(res.data) ? res.data : [];
+        const monthly = all.filter((p) => p?.recurring?.interval === "month");
+        const candidates = monthly.length ? monthly : all;
+        const sorted = [...candidates].sort(
+          (a, b) => Number(b?.created || 0) - Number(a?.created || 0)
+        );
+        const deduped = [];
+        const seen = new Set();
+        sorted.forEach((p) => {
+          const key = p?.product?.id || p?.product?.name || p?.id;
+          if (!key || seen.has(key)) return;
+          seen.add(key);
+          deduped.push(p);
+        });
+        prices.value = deduped;
       } else {
         console.error("Failed to fetch prices", res.error);
       }

@@ -2,7 +2,6 @@
   <v-container style="min-height: 100vh">
     <v-card class="pa-4" rounded="xl" :elevation="0" flat>
       <v-card-text>
-        <pre>{{ currSubscription?.data?.id }}</pre>
         <SignUpSetupPricing />
       </v-card-text>
     </v-card>

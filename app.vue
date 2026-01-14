@@ -38,6 +38,7 @@
       primary-label="Done"
       footnote="After your trial ends, you can continue with our Soar plan or choose our Drift or Glide plan."
       @primary="handleWelcomeDone"
+      @close="handleWelcomeClose"
     >
       <div class="onboarding-copy">
         <p class="mb-2">
@@ -57,6 +58,7 @@
       primary-label="Done"
       @primary="closeWelcomeVideo"
       @update:model-value="showVideoDialog = $event"
+      @close="closeWelcomeVideo"
     >
       <div class="video-wrapper" v-if="welcomeVideoUrl">
         <iframe
@@ -83,6 +85,7 @@
       @primary="handleInAppPrimary"
       @secondary="dismissInAppMessage"
       @update:model-value="handleInAppDialogToggle"
+      @close="dismissInAppMessage"
     >
       <p class="onboarding-message">
         {{ activeInAppMessage?.message }}
@@ -132,6 +135,7 @@ const router = useRouter();
 const showWelcomeDialog = ref(false);
 const showVideoDialog = ref(false);
 const activeInAppMessage = ref(null);
+const isDashboardRoute = computed(() => route.name === "index" || route.path === "/");
 const showInAppDialog = computed(
   () => !showWelcomeDialog.value && !showVideoDialog.value && !!activeInAppMessage.value
 );
@@ -305,6 +309,13 @@ const syncOnboardingState = () => {
     return;
   }
   const onboarding = user.value?.onboarding || {};
+  const needsWelcomeFlow = Boolean(onboarding.showWelcomePopup || onboarding.showWelcomeVideoPopup);
+  if (needsWelcomeFlow && !isDashboardRoute.value) {
+    showWelcomeDialog.value = false;
+    showVideoDialog.value = false;
+    activeInAppMessage.value = null;
+    return;
+  }
   const wantsWelcome = Boolean(onboarding.showWelcomePopup);
   showWelcomeDialog.value = wantsWelcome && isPopupAllowed("welcome");
   if (showWelcomeDialog.value) {
@@ -357,6 +368,17 @@ const handleWelcomeDone = async () => {
     practiceName: practiceName.value,
   });
   trackOnboardingUi("primary", { type: "welcome" });
+  updateLocalOnboarding({ showWelcomePopup: false, showWelcomeVideoPopup: true });
+  showWelcomeDialog.value = false;
+  showVideoDialog.value = true;
+};
+
+const handleWelcomeClose = async () => {
+  await recordOnboardingEvent("welcome_quiz_done", {
+    skipped: true,
+    practiceName: practiceName.value,
+  });
+  trackOnboardingUi("closed", { type: "welcome" });
   updateLocalOnboarding({ showWelcomePopup: false, showWelcomeVideoPopup: true });
   showWelcomeDialog.value = false;
   showVideoDialog.value = true;
@@ -480,6 +502,13 @@ watch(loggedIn, (newVal) => {
 watch(user, () => {
   syncOnboardingState();
 }, { deep: true });
+
+watch(
+  () => route.path,
+  () => {
+    syncOnboardingState();
+  }
+);
 </script>
 
 <style lang="scss">

@@ -1,144 +1,103 @@
 <template>
-    <v-row v-if="prices && !selectedPriceId" class="pricing-row">
-      <v-col
-        v-for="(plan, index) in prices"
-        :key="index"
-        cols="12"
-        sm="12"
-        md="6"
-        lg="6"
-        xl="6"
-        class="d-flex"
-      >
-        <v-card
-          class="pa-6 pa-md-8 d-flex flex-column justify-space-between pricing-card"
-          :elevation="0"
-          :style="{
-            border: '1px solid #DCDCDC',
-            borderRadius: '24px',
-            backgroundColor: plan.product.name === 'Flossly - Glide Package' ? '#EFF5F5' : plan.bgColor
-          }"
-        >
-          <div class="card-content flex-grow-1">
-            <div class="font-title mb-2">{{ plan.product.name }}</div>
-            <div class="font-subtitle text-grey-darken-1 mb-5">
-              {{ plan.description }}
-            </div>
-
-            <!-- Price -->
-            <div class="font-price mb-1">
-              {{ formatPrice(plan.unit_amount, plan.currency) }}
-            </div>
-            <div class="font-price-desc mb-5">
-              Per user/month, billed monthly
-            </div>
-
-            <!-- Core Features -->
-            <div class="font-section-title mb-3">Core Features</div>
-            <div
-              v-for="(feature, i) in features.find(
-                (x) => x.type === plan.product.name
-              )?.features"
-              :key="i"
-              class="feature-item mb-2"
-            >
-              <div class="d-flex align-start">
-                <img
-                  src="@/assets/icons/checkbox.svg"
-                  alt="checkbox"
-                  class="mr-3 mt-1 flex-shrink-0"
-                  style="width: 18px; height: 18px;"
-                />
-
-                <!-- Label with tooltip -->
-                <v-tooltip v-if="feature.length > 30" location="top">
-                  <template #activator="{ props }">
-                    <span
-                      v-bind="props"
-                      class="feature-text"
-                      :title="feature"
-                    >
-                      {{ feature }}
-                    </span>
-                  </template>
-
-                  <!-- Tooltip text goes here -->
-                  {{ feature }}
-                </v-tooltip>
-
-                <span v-else class="feature-text">
-                  {{ feature }}
-                </span>
-              </div>
-              <!-- Checkbox image -->
-            </div>
-          </div>
-          <div class="card-footer mt-6">
-            <v-btn
-              variant="flat"
-              rounded="lg" size="x-large"
-              color="primary"
-              class="font-button"
-              block
-              :disabled="licenseType === plan.product.id"
-              @click="handleSubscribe(plan.id)"
-            >
-              <span v-if="licenseType === plan.product.id">Active</span>
-              <span v-else-if="!licenseType">Start Now</span>
-
-              <span v-else>Upgrade</span>
-            </v-btn>
-          </div>
-        </v-card>
-      </v-col>
-    </v-row>
-    <v-card
-      v-else-if="selectedPriceId && !isPaymentCompleted"
-      :elevation="0"
-      flat
-      rouneded="lg"
-      class="pa-4"
-    >
-      <v-card-title>Payment Details</v-card-title>
-
-      <v-card-text>
-        <div id="payment-element" class="pa-2" />
-        <div v-if="error" class="text-red">{{ error }}</div>
-      </v-card-text>
-      <br />
-
-      <v-btn @click="confirmPayment" flat color="primary"> Checkout </v-btn>
-    </v-card>
-    <v-card
-      v-else-if="selectedPriceId && isPaymentCompleted"
-      class="pa-5"
-      :elevation="0"
-      rouneded="lg"
-      flat
-    >
-      <h1>Thankyou for choosing Flossly...</h1>
-      <p>
-        You can safely navigate to your flossly dashboard and start using the
-        application
-      </p>
-     
-    </v-card>
-    <v-overlay
-      v-model="loading"
-      contained
-      class="justify-center align-center full-page"
-    >
-      <div class="loader">
-        <lottie-player
-          src="/loader.json"
-          background="transparent"
-          speed="1"
-          style="width: 200px; height: 200px"
-          loop
-          autoplay
-        />
+  <div v-if="prices && !selectedPriceId" class="pricing-shell">
+    <div class="pricing-header">
+      <div class="pricing-title">Pricing Plan</div>
+      <div class="pricing-subtitle">
+        Enhance your team's collaboration and efficiency by inviting new members to your Key Stone platform.
       </div>
-    </v-overlay>
+    </div>
+    <div class="pricing-grid">
+      <div class="plan-list">
+        <button
+          v-for="plan in displayPlans"
+          :key="plan.id"
+          type="button"
+          class="plan-option"
+          :class="{ selected: plan.id === selectedPlanId }"
+          @click="selectedPlanId = plan.id"
+        >
+          <span class="plan-radio" :class="{ selected: plan.id === selectedPlanId }"></span>
+          <div class="plan-text">
+            <div class="plan-name">{{ plan.displayName }}</div>
+            <div class="plan-desc">{{ plan.product?.description || plan.description || '' }}</div>
+          </div>
+        </button>
+      </div>
+      <div class="plan-detail" v-if="selectedPlan">
+        <div class="plan-detail-header">
+          <span v-if="selectedPlan.badge" class="plan-badge">{{ selectedPlan.badge }}</span>
+          <div class="plan-detail-title">{{ selectedPlan.displayName }}</div>
+        </div>
+        <div class="plan-detail-price">
+          <span class="plan-price">{{ formatPrice(selectedPlan.unit_amount, selectedPlan.currency) }}</span>
+          <span class="plan-price-cycle">per {{ billingLabel(selectedPlan) }}</span>
+        </div>
+        <div class="plan-feature-title">{{ selectedPlan.shortName }} plan includes:</div>
+        <ul class="plan-features">
+          <li v-for="(feature, idx) in selectedPlan.features" :key="idx">
+            <img src="@/assets/icons/checkbox.svg" alt="checkbox" />
+            <span>{{ feature }}</span>
+          </li>
+        </ul>
+        <v-btn
+          v-if="showCta"
+          color="primary"
+          variant="flat"
+          class="plan-cta"
+          rounded="lg"
+          @click="handleCtaClick"
+        >
+          Continue to checkout
+        </v-btn>
+      </div>
+    </div>
+  </div>
+  <v-card
+    v-else-if="selectedPriceId && !isPaymentCompleted"
+    :elevation="0"
+    flat
+    rouneded="lg"
+    class="pa-4"
+  >
+    <v-card-title>Payment Details</v-card-title>
+
+    <v-card-text>
+      <div id="payment-element" class="pa-2" />
+      <div v-if="error" class="text-red">{{ error }}</div>
+    </v-card-text>
+    <br />
+
+    <v-btn @click="confirmPayment" flat color="primary"> Checkout </v-btn>
+  </v-card>
+  <v-card
+    v-else-if="selectedPriceId && isPaymentCompleted"
+    class="pa-5"
+    :elevation="0"
+    rouneded="lg"
+    flat
+  >
+    <h1>Thankyou for choosing Flossly...</h1>
+    <p>
+      You can safely navigate to your flossly dashboard and start using the
+      application
+    </p>
+  </v-card>
+  <v-overlay
+    v-model="loading"
+    contained
+    class="justify-center align-center full-page"
+  >
+    <div class="loader">
+      <lottie-player
+        src="/loader.json"
+        background="transparent"
+        speed="1"
+        style="width: 200px; height: 200px"
+        loop
+        autoplay
+      />
+    </div>
+  </v-overlay>
 </template>
 <script setup>
 import { useStripe } from "@/composables/useStripe";
@@ -154,11 +113,15 @@ const {
   formatPrice,
   handleSubscribe,
 } = useStripe();
-console.log(prices)
+
 const props = defineProps({
   col: {
     type: String,
     default: "4",
+  },
+  showCta: {
+    type: Boolean,
+    default: true,
   },
 });
 
@@ -208,6 +171,90 @@ const features = ref([
   },
 ]);
 
+const getPlanKey = (plan) => {
+  const name = String(plan?.product?.name || "").toLowerCase();
+  if (name.includes("soar")) return "soar";
+  if (name.includes("glide")) return "glide";
+  if (name.includes("drift")) return "drift";
+  return "other";
+};
+
+const getFeatureKeyFromType = (type) => {
+  const name = String(type || "").toLowerCase();
+  if (name.includes("soar")) return "soar";
+  if (name.includes("glide")) return "glide";
+  if (name.includes("drift")) return "drift";
+  return "other";
+};
+
+const planOrder = { drift: 0, glide: 1, soar: 2, other: 3 };
+const planSequence = ["drift", "glide", "soar"];
+const selectedPlanId = ref(null);
+
+const displayPlans = computed(() => {
+  const list = Array.isArray(prices.value) ? prices.value : [];
+  const mapped = list
+    .map((plan) => {
+      const key = getPlanKey(plan);
+      const featureKey = getFeatureKeyFromType(plan.product?.name);
+      const displayName =
+        key === "soar"
+          ? "Soar (Full Access)"
+          : key === "glide"
+          ? "Glide"
+          : key === "drift"
+          ? "Drift"
+          : plan.product?.name || "Plan";
+      const shortName =
+        key === "soar" ? "Soar" : key === "glide" ? "Glide" : key === "drift" ? "Drift" : "Plan";
+      const badge = key === "soar" ? "Soar (Full Access)" : "";
+      const featureList =
+        features.value.find((x) => getFeatureKeyFromType(x.type) === featureKey)?.features || [];
+      return { ...plan, key, displayName, shortName, badge, features: featureList };
+    })
+    .sort((a, b) => (planOrder[a.key] || 99) - (planOrder[b.key] || 99));
+  const planMap = new Map();
+  mapped.forEach((plan) => {
+    if (planMap.has(plan.key)) return;
+    planMap.set(plan.key, plan);
+  });
+  const ordered = [];
+  planSequence.forEach((key) => {
+    const plan = planMap.get(key);
+    if (plan) ordered.push(plan);
+  });
+  const extras = [];
+  planMap.forEach((plan, key) => {
+    if (planSequence.includes(key)) return;
+    extras.push(plan);
+  });
+  extras.sort((a, b) => String(a.displayName || "").localeCompare(String(b.displayName || "")));
+  return ordered.concat(extras);
+});
+
+const selectedPlan = computed(() =>
+  displayPlans.value.find((plan) => plan.id === selectedPlanId.value) ||
+  displayPlans.value[0] ||
+  null
+);
+
+const billingLabel = (plan) => {
+  const interval = plan?.recurring?.interval || "month";
+  return interval === "year" ? "year" : "month";
+};
+
+const handleCtaClick = () => {
+  if (!selectedPlan.value) return;
+  handleSubscribe(selectedPlan.value.id);
+};
+
+watch(displayPlans, (list) => {
+  if (!selectedPlanId.value && list.length) {
+    selectedPlanId.value = list[0].id;
+  }
+});
+
+
 const gotoHome = () => {
   const router = useRouter();
   router.push("/");
@@ -227,100 +274,190 @@ const cancelPaymentFlow = () => {
   if (error.value) error.value = "";
 };
 
-defineExpose({ isPaymentOpen, cancelPaymentFlow });
+const startCheckout = () => {
+  if (!selectedPlan.value) return false;
+  handleSubscribe(selectedPlan.value.id);
+  return true;
+};
+
+defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout });
 </script>
 
 <style scoped>
-.pricing-row {
-  margin: 0 -12px;
-}
-
-.pricing-row > .v-col {
-  padding: 12px;
-}
-
-.pricing-card {
+.pricing-shell {
   width: 100%;
-  min-height: 600px;
-  height: auto;
-  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
 }
 
-.pricing-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1) !important;
+.pricing-header {
+  margin-bottom: 20px;
 }
 
-/* Ensure equal height cards in the same row */
-.d-flex > .pricing-card {
-  display: flex;
-  flex-direction: column;
+.pricing-title {
+  font-weight: 600;
+  font-size: 22px;
+  color: #1e1e1e;
 }
 
-.card-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.card-footer {
-  flex-shrink: 0;
-  margin-top: auto;
-}
-
-.font-title {
-  
-  font-weight: 400;
-  font-size: 20px;
-  line-height: 100%;
-}
-
-.font-subtitle {
-  
-  font-weight: 400;
+.pricing-subtitle {
   font-size: 12px;
-  line-height: 100%;
+  color: #6b7280;
+  margin-top: 4px;
 }
 
-.font-price {
-  
+.pricing-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(260px, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.plan-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #e6e6e6;
+  border-radius: 12px;
+  background: #ffffff;
+  text-align: left;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.plan-option.selected {
+  border-color: #f2a3d7;
+  box-shadow: 0 8px 16px rgba(242, 163, 215, 0.2);
+  background: linear-gradient(135deg, #f6b0da, #f3c6f1);
+}
+
+.plan-radio {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid #c7c7c7;
+  margin-top: 4px;
+  background: #ffffff;
+}
+
+.plan-radio.selected {
+  border-color: #0b5ff2;
+  background: #0b5ff2;
+  box-shadow: inset 0 0 0 2px #ffffff;
+}
+
+.plan-text {
+  flex: 1;
+}
+
+.plan-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.plan-desc {
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.plan-detail {
+  border: 1px solid #e6e6e6;
+  border-radius: 12px;
+  padding: 18px 20px;
+  background: #ffffff;
+}
+
+.plan-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.plan-badge {
+  font-size: 10px;
+  padding: 4px 8px;
+  border: 1px solid #0b5ff2;
+  color: #0b5ff2;
+  border-radius: 8px;
+}
+
+.plan-detail-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1f2937;
+}
+
+.plan-detail-price {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 12px 0 8px;
+}
+
+.plan-price {
   font-weight: 700;
-  font-size: 30px;
-  line-height: 100%;
+  font-size: 26px;
+  color: #111827;
 }
 
-.font-price-desc {
-  
-font-weight: 400;
-font-style: Regular;
-font-size: 14px;
-color: #878787;
-
+.plan-price-cycle {
+  font-size: 11px;
+  color: #6b7280;
 }
 
-.font-section-title {
-  
-  font-weight: 700;
-  font-size: 14px;
-  line-height: 100%;
+.plan-feature-title {
+  font-size: 11px;
+  color: #6b7280;
+  margin-bottom: 8px;
 }
 
-.font-feature {
-  
-  font-weight: 400;
-  font-size: 14px;
+.plan-features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+  display: grid;
+  gap: 8px;
 }
 
-.font-button {
-  font-weight: 500;
-  font-size: 14px;
+.plan-features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: #374151;
+}
+
+.plan-features img {
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+}
+
+.plan-cta {
   text-transform: none;
-  height: 44px !important;
-  letter-spacing: 0.5px;
+  height: 34px;
+  min-width: 90px;
+  font-size: 12px;
 }
-::v-deep(.v-selection-control) {
-  align-items: baseline !important;
+
+.plan-trial {
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
 }
+
+
 #payment-element {
   min-height: 50px;
   border: 1px solid #e0e0e0;
@@ -328,8 +465,6 @@ color: #878787;
   border-radius: 6px;
 }
 
-/* Style Stripe payment element error messages consistently */
-/* Target Stripe Elements error messages - these are the classes Stripe uses */
 #payment-element :deep(.p-Input--empty),
 #payment-element :deep(.p-ErrorMessage),
 #payment-element :deep(.p-InputError),
@@ -345,14 +480,12 @@ color: #878787;
   line-height: 1.4 !important;
 }
 
-/* Target all error text elements within Stripe payment element */
 #payment-element :deep(.p-InputError::before),
 #payment-element :deep(.FieldError::before),
 #payment-element :deep([class*="error"]::before) {
   display: none;
 }
 
-/* Ensure consistent styling for all field error messages - comprehensive selectors */
 #payment-element :deep(span[class*="error"]),
 #payment-element :deep(div[class*="error"]),
 #payment-element :deep(p[class*="error"]),
@@ -366,51 +499,10 @@ color: #878787;
   color: #d32f2f !important;
   line-height: 1.4 !important;
 }
-.feature-item {
-  line-height: 1.5;
-}
-
-.feature-text {
-  font-weight: 400;
-  font-size: 14px;
-  line-height: 1.6;
-  color: #414141;
-  display: block;
-}
-
-/* For responsive screens */
-@media (max-width: 1280px) {
-  .pricing-row {
-    margin: 0 -8px;
-  }
-  
-  .pricing-row > .v-col {
-    padding: 8px;
-  }
-  
-  .pricing-card {
-    min-height: 550px;
-  }
-}
 
 @media (max-width: 960px) {
-  .pricing-card {
-    min-height: auto;
-  }
-  
-  .pricing-row {
-    margin: 0 -4px;
-  }
-  
-  .pricing-row > .v-col {
-    padding: 4px;
-  }
-}
-
-@media (max-width: 600px) {
-  .pricing-card {
-    min-height: auto;
-    padding: 20px !important;
+  .pricing-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

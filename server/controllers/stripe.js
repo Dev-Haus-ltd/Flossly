@@ -275,6 +275,7 @@ export const prices = async (event) => {
       unit_amount: p.unit_amount,
       currency: p.currency,
       recurring: p.recurring,
+      created: p.created,
       product: {
         id: p.product.id,
         name: p.product.name,
