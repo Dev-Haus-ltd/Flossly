@@ -1,6 +1,13 @@
 import { QueryTypes } from "sequelize";
 import sequelize from "../utils/db";
-import { startTaskScheduler, startLeadAutomationScheduler, startPatientJourneyAutomationScheduler, startTaskOverDueScheduler, startTaskDueReminderScheduler } from "../utils/scheduler";
+import {
+  startTaskScheduler,
+  startLeadAutomationScheduler,
+  startPatientJourneyAutomationScheduler,
+  startTaskOverDueScheduler,
+  startTaskDueReminderScheduler,
+  startOnboardingScheduler,
+} from "../utils/scheduler";
 
 const SCHEDULER_LOCK_KEY = 3482173901;
 
@@ -29,6 +36,7 @@ export default defineNitroPlugin(async (nitroApp) => {
     startPatientJourneyAutomationScheduler();
     startTaskOverDueScheduler();
     startTaskDueReminderScheduler();
+    startOnboardingScheduler();
     console.log("Scheduler Started");
   } catch (error) {
     console.error("Unable to start scheduler", error);

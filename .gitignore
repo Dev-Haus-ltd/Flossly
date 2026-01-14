@@ -150,3 +150,6 @@ config/google-cloud-key.json
 
 .gemini
 .nvmrc
+
+/public/documents/
+

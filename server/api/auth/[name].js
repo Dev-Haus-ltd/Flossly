@@ -23,7 +23,8 @@ import {
   createShortLivedToken,
   exchangeShortLivedToken,
   resendVerificationEmail,
-  resendOrganisationInvitation
+  resendOrganisationInvitation,
+  recordOnboardingEvent
 } from "../../controllers/auth";
 import bcrypt from "bcrypt";
 export default defineEventHandler(async (event) => {
@@ -81,6 +82,8 @@ export default defineEventHandler(async (event) => {
       return await createShortLivedToken(event);
     case "exchangeShortToken":
       return await exchangeShortLivedToken(event);
+    case "onboardingEvent":
+      return await recordOnboardingEvent(event);
     default:
       return { code: 0, error: "Not found" };
   }

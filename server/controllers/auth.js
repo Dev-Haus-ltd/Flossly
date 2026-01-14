@@ -39,8 +39,23 @@ import fs from "fs";
 import fsPromises from "fs/promises";
 import { createError, setCookie } from "h3";
 import { success, error } from "../utils/response";
+import {
+  buildOnboardingContext,
+  buildOnboardingInAppMessages,
+  sendOnboardingEmail,
+} from "../utils/onboardingCampaign";
+import {
+  CLIENT_ONBOARDING_KEYS,
+  ensureOnboardingStartEvent,
+  getDiffDaysFromStart,
+  getOnboardingEventMap,
+  getOnboardingKeys,
+  getOnboardingMetrics,
+  recordOnboardingEvent as recordOnboardingEventInternal,
+} from "../utils/onboardingService";
 
 const config = useRuntimeConfig();
+
 export const login = async (event) => {
   let browserAgent = getHeader(event, "User-Agent");
   const ip = requestIp.getClientIp(event.node.req);
@@ -374,6 +389,77 @@ export const profile = async (event) => {
         userObj.preferences[0].taskTableColumns
       );
     }
+
+    try {
+      const { event: startEvent, created } = await ensureOnboardingStartEvent({
+        userId: loggedUser.userId,
+        organisationId: loggedUser.orgId,
+      });
+      const onboardingKeys = getOnboardingKeys();
+      const eventMap = await getOnboardingEventMap({
+        userId: loggedUser.userId,
+        organisationId: loggedUser.orgId,
+        keys: onboardingKeys,
+      });
+      const showWelcomePopup = !eventMap.has("welcome_quiz_done");
+      const showWelcomeVideoPopup =
+        eventMap.has("welcome_quiz_done") && !eventMap.has("welcome_video_done");
+      const startAt = startEvent?.createdAt || user?.createdAt;
+      const diffDays = getDiffDaysFromStart(startAt);
+
+      const organisation = await Organisation.findByPk(loggedUser.orgId);
+      const preference = userObj.preferences?.[0];
+      const metrics =
+        diffDays === 7 || diffDays === 13
+          ? await getOnboardingMetrics(loggedUser.orgId)
+          : null;
+      const ctx = buildOnboardingContext({
+        user: userObj,
+        organisation,
+        userPreference: preference,
+        metrics,
+        config,
+      });
+
+      const inAppMessages = buildOnboardingInAppMessages({
+        startAt,
+        ctx,
+        seenKeys: new Set(eventMap.keys()),
+      });
+
+      userObj.onboarding = {
+        startAt,
+        showWelcomePopup,
+        showWelcomeVideoPopup,
+        inAppMessages,
+      };
+
+      if (created && userObj?.email) {
+        if (!eventMap.has("onboarding_email_day0")) {
+          try {
+            await sendOnboardingEmail({
+              key: "onboarding_email_day0",
+              to: userObj.email,
+              ctx,
+            });
+            await recordOnboardingEventInternal({
+              userId: loggedUser.userId,
+              organisationId: loggedUser.orgId,
+              key: "onboarding_email_day0",
+              payload: { sentAt: new Date().toISOString() },
+            });
+          } catch (emailErr) {
+          }
+        }
+      }
+    } catch (onboardingErr) {
+      userObj.onboarding = userObj.onboarding || {
+        showWelcomePopup: false,
+        showWelcomeVideoPopup: false,
+        inAppMessages: [],
+      };
+    }
+
     setCookie(event, "loggedUserId", userObj.id, { maxAge: 31536000 });
     setCookie(event, "profileCompletion", userObj.profileCompletion, {
       maxAge: 31536000,
@@ -384,6 +470,33 @@ export const profile = async (event) => {
     return success(userObj);
   } catch (err) {
     return error(500, err.message);
+  }
+};
+
+export const recordOnboardingEvent = async (event) => {
+  const loggedUser = event.context.user;
+  if (!loggedUser || !loggedUser.userId || !loggedUser.orgId) {
+    return error(401, "Unauthenticated");
+  }
+  const body = await readBody(event);
+  const parsed = typeof body === "string" ? JSON.parse(body || "{}") : body || {};
+  const { key, payload } = parsed;
+  if (!key) return error(400, "key is required");
+  if (!CLIENT_ONBOARDING_KEYS.has(key)) {
+    return error(400, "Unsupported onboarding event");
+  }
+
+  try {
+    const result = await recordOnboardingEventInternal({
+      userId: loggedUser.userId,
+      organisationId: loggedUser.orgId,
+      key,
+      payload,
+      allowList: CLIENT_ONBOARDING_KEYS,
+    });
+    return success({ created: result.created });
+  } catch (err) {
+    return error(500, err.message || err);
   }
 };
 

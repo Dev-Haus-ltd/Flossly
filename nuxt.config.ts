@@ -17,6 +17,15 @@ export default defineNuxtConfig({
     public: {
       BASE_URL: process.env.BASE_URL,
       CHATBOT_URL: process.env.CHATBOT_URL,
+      ONBOARDING_WELCOME_VIDEO_URL: process.env.ONBOARDING_WELCOME_VIDEO_URL || "https://youtu.be/gEuICxXisnw?si=1L-7jdiwwnr_VpDC",
+      ONBOARDING_FOUNDER_NAME: process.env.ONBOARDING_FOUNDER_NAME || "Saba",
+      ONBOARDING_SUCCESS_MANAGER_NAME: process.env.ONBOARDING_SUCCESS_MANAGER_NAME || "FlosslyOS Team",
+      ONBOARDING_QUIET_HOUR_START: process.env.ONBOARDING_QUIET_HOUR_START,
+      ONBOARDING_QUIET_HOUR_END: process.env.ONBOARDING_QUIET_HOUR_END,
+      ONBOARDING_QUIET_APPLIES_TO: process.env.ONBOARDING_QUIET_APPLIES_TO,
+      ONBOARDING_WELCOME_CAP_HOURS: process.env.ONBOARDING_WELCOME_CAP_HOURS,
+      ONBOARDING_VIDEO_CAP_HOURS: process.env.ONBOARDING_VIDEO_CAP_HOURS,
+      ONBOARDING_INAPP_CAP_HOURS: process.env.ONBOARDING_INAPP_CAP_HOURS,
       colors: {
         primary: "#0061FB",
         "primary-dark": "#0061FB",
