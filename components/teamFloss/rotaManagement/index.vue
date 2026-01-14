@@ -40,8 +40,16 @@
 definePageMeta({
   layout: "home",
 });
+
+import { useBus } from "~/composables/useBus";
+import unpublish  from "~/assets/logos/unpublish.svg";
+import publish  from "~/assets/logos/publish.svg";
+
+
+const bus = useBus();
 const rotaStore = useRotaStore();
 const mainStore = useMainStore();
+
 const rotas = ref([]);
 const shifts = ref([]);
 const rotaUsers = ref([]);
@@ -105,15 +113,40 @@ const getRotas = async () => {
 };
 
 const changeRotaStatus = async (data) => {
-  let res = null;
+  const ids = Array.isArray(data.ids)
+    ? data.ids
+    : data.id != null
+      ? [data.id]
+      : []
+
+  const isBulk = ids.length > 1
+  const verb = data.type === 'publish' ? 'publish' : 'unpublish'
+
+  let subject = ''
+  if (!isBulk && ids.length === 1) {
+    const found = rotas.value.find(r => r.id === ids[0])
+    subject = found?.name ? `“${found.name}”` : `#${ids[0]}`
+  }
+
+  const ok = await popup.ask({
+    text: isBulk
+      ? `Are you sure you want to ${verb} ${ids.length} rota(s)?`
+      : `Are you sure you want to ${verb} rota ${subject}?`,
+    confirmLabel: 'Yes',
+    cancelLabel: 'No',
+    logo: data.type === 'publish' ? publish : unpublish,
+    logoAlt: 'Rota'
+  })
+  if (!ok) return
+
+  popup.setLoading(true)
   try {
-    if (data.type === "publish") {
-      res = await rotaStore.publishRota({ id: data.id });
-    } else {
-      res = await rotaStore.unPublishRota({ id: data.id });
-    }
+    const res = data.type === 'publish'
+      ? await rotaStore.publishRota({ ids })
+      : await rotaStore.unPublishRota({ ids })
+
     if (res.code === 0) {
-      getRotas();
+      await getRotas()
       mainStore.setSnackbar({
         type: "success",
         title:
@@ -124,19 +157,18 @@ const changeRotaStatus = async (data) => {
       activeComponent.value = 1;
     } else {
       mainStore.setSnackbar({
-        type: "error",
-        title:
-          res?.message ||
-          `Failed to ${data.type === "publish" ? "publish" : "unpublish"} rota`,
-      });
+        type: 'error',
+        title: `Failed to ${verb} ${isBulk ? 'rotas' : 'rota'}`,
+      })
     }
-  } catch (error) {
-    mainStore.setSnackbar({
-      type: "error",
-      title: "Something went wrong",
-    });
+  } catch {
+    mainStore.setSnackbar({ type: 'error', title: 'Something went wrong' })
+  } finally {
+    popup.setLoading(false)
   }
-};
+}
+
+
 
 const getAllShifts = async (item) => {
   try {

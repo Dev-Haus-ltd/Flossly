@@ -4,6 +4,7 @@ import {
   deleteDocument,
   deleteFolder,
   listFolders,
+  listAllFolders,
   recentDocuments,
   listDocuments,
   updateFolder,
@@ -14,6 +15,8 @@ import {
   addSystemDocument,
   viewSystemDocument,
   listSystemDocuments,
+  moveDocument,
+  moveFolder,
 } from "~/server/controllers/docs";
 
 export default defineEventHandler(async (event) => {
@@ -25,6 +28,8 @@ export default defineEventHandler(async (event) => {
       return await createSystemFolder(event);
     case "listFolders":
       return await listFolders(event);
+    case "listAllFolders":
+      return await listAllFolders(event);
     case "listSystemFolders":
       return await listSystemFolders(event);
     case "deleteFolder":
@@ -49,6 +54,10 @@ export default defineEventHandler(async (event) => {
       return await listSystemDocuments(event);
     case "update":
       return await updateDocument(event);
+    case "moveDocument":
+      return await moveDocument(event);
+    case "moveFolder":
+      return await moveFolder(event);
     default:
       return { code: 0, error: "Not found" };
   }

@@ -113,7 +113,7 @@ export const updateRota = async (event) => {
     if (endDate && startDate && new Date(endDate) < new Date(startDate)) {
       return error("End date cannot be before start date");
     }
-    const rota = await Rota.findByPk(id);
+    const rota = await Rota.findOne({ where: { id, isDeleted: false } });
     if (!rota) throw createError({ message: "Rota not found " });
     await rota.update({ name, startDate, endDate, duration, notes });
     return success(rota);
@@ -150,21 +150,60 @@ export const publishRota = async (event) => {
   }
 };
 
-export const unPublishRota = async (event) => {
-  const body = await readBody(event);
-  const { id } = JSON.parse(body);
-  try {
-    const rota = await Rota.findByPk(id);
-    if (!rota) throw createError({ message: "Rota not found " });
-    await rota.update({
-      isPublished: false,
-    });
 
-    return success(rota);
+export const unPublishRota = async (event) => {
+  try {
+    const body = await readBody(event);
+    const { ids } = JSON.parse(body || "{}");
+    const targetIds = Array.isArray(ids) ? ids : [];
+
+    if (!targetIds.length) return error("ids required");
+
+    const where = { id: targetIds, isDeleted: false };
+    if (event?.context?.user?.orgId) where.organisationId = event.context.user.orgId;
+
+    const [updated] = await Rota.update(
+      { isPublished: false }, // keep publishedDate untouched
+      { where }
+    );
+    if (!updated) return error("Rota not found");
+
+    if (targetIds.length === 1) {
+      const rota = await Rota.findByPk(targetIds[0]);
+      return success(rota);
+    }
+
+    const rotas = await Rota.findAll({ where });
+    return success({ updated, rotas });
   } catch (err) {
     return error(500, err.message);
   }
 };
+
+export const deleteRota = async (event) => {
+  try {
+    const body = await readBody(event);
+    const { ids } = JSON.parse(body || "{}");
+    const targetIds = Array.isArray(ids) ? ids : [];
+
+    if (!targetIds.length) return error("ids required");
+
+    const where = { id: targetIds, isDeleted: false };
+    if (event?.context?.user?.orgId) where.organisationId = event.context.user.orgId;
+
+    const [updated] = await Rota.update(
+      { isDeleted: true },
+      { where }
+    );
+    if (!updated) return error("Rota not found or already deleted");
+
+    return success({ message: "Rota(s) deleted successfully", deletedCount: updated });
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+ 
 
 export const removeRotaUser = async (event) => {
   const body = await readBody(event);
