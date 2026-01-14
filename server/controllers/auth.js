@@ -343,7 +343,8 @@ export const profile = async (event) => {
           as: "preferences",
           where: {
             organisationId: loggedUser.orgId
-          }
+          },
+          required: false,
         },
         {
           model: Role,
@@ -366,6 +367,10 @@ export const profile = async (event) => {
         },
       ],
     });
+
+    if (!user) {
+      return error(404, "User not found");
+    }
 
     if (user.status === "Disabled" || user.status === "Expired") {
       return error(403, "Your account is deactivated");
