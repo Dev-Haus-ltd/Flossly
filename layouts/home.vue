@@ -16,7 +16,7 @@
       @update:drawer="updateDrawer"
       @update:rail="updateRail"
     />
-    <v-main>
+    <v-main :style="{ paddingTop: 'calc(70px + var(--trial-banner-height, 0px))' }">
       <slot />
     </v-main>
   </v-layout>
@@ -50,12 +50,16 @@ watch(
   },
   { immediate: true } 
 );
-const user = ref(null);
-const { setUser } = useUser();
+const { user, isManager, setUser } = useUser();
 const mainStore = useMainStore();
 const userStore = useUserStore();
 const router = useRouter()
-const menuItems = ref([]);
+const menuItems = computed(() => {
+  // Read license type to refresh menu when preferences change.
+  const licenseType = user.value?.preferences?.licenseType;
+  if (!user.value) return [];
+  return isManager.value ? mainStore.getManagerOptions : mainStore.getuserOptions;
+});
 const preloadUsers = async () => {
   try {
     await userStore.getUserList({ roleId: null });
@@ -65,16 +69,15 @@ const preloadUsers = async () => {
 };
 onMounted(async () => {
   await preloadUsers();
-  if (localStorage.getItem("user")) {
-    user.value = JSON.parse(localStorage.getItem("user"));
-    setUser(user.value)
-    if (user.value.roleId === 8 || user.value.roleId === 1) {
-      menuItems.value = mainStore.getManagerOptions;
-    } else {
-      menuItems.value = mainStore.getuserOptions;
+  if (!user.value && process.client) {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+      return;
     }
-  } else {
-    router.push('/logout')
+  }
+  if (!user.value) {
+    router.push("/logout");
   }
 });
 </script>

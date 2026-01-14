@@ -4,7 +4,7 @@
     :rail="rail"
     :temporary="smAndDown"
     :permanent="!smAndDown"
-    style="z-index: 1000 !important"
+    :style="drawerStyle"
   >
     <LeftSideBarPracticeMenu :currentOrg="currentOrg" :rail="rail" />
     <v-card
@@ -285,6 +285,14 @@ watch(
 );
 const { user } = useUser(); 
 const currentOrg = ref({});
+
+const appBarHeight = 70;
+const drawerOffset = `${appBarHeight}px + var(--trial-banner-height, 0px)`;
+const drawerStyle = computed(() => ({
+  zIndex: "1000",
+  top: `calc(${drawerOffset})`,
+  height: `calc(100% - (${drawerOffset}))`,
+}));
 
 const updateCurrentOrg = (userData) => {
   if (!userData?.userOrganisations?.length) {

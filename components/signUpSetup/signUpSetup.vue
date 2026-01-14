@@ -13,11 +13,13 @@
       <h2 class="mb-3 mb-md-4 sub-title">{{ steps[step].subTitle }}</h2>
 
       <!-- Dynamic Step Component -->
-      <component
-        :is="currentComponent"
-        ref="stepComponent"
-        v-model="stepModels[step]"
-      />
+    <component
+      :is="currentComponent"
+      ref="stepComponent"
+      v-model="stepModels[step]"
+      :show-cta="step !== steps.length - 1"
+      @back="handleBack"
+    />
     </div>
 
     <!-- Navigation Buttons -->
@@ -63,19 +65,31 @@
       Skip for now
       </v-btn>
 
-      <v-btn
-        v-if="step === steps.length - 1"
-        color="primary"
-        @click="navigateToDashboard"
-        height="48"
-        width="150"
-        class="nav-button"
-        rounded="lg" size="x-large"
-        variant="flat"
-        style="font-size: 16px;"
-      >
-        Go to Dashboard
-      </v-btn>
+      <template v-if="step === steps.length - 1">
+        <v-btn
+          color="primary"
+          @click="handlePricingCheckout"
+          height="48"
+          width="150"
+          class="nav-button"
+          rounded="lg"
+          size="x-large"
+          variant="flat"
+          style="font-size: 16px;"
+        >
+          Buy Now
+        </v-btn>
+        <v-btn
+          color="primary"
+          variant="text"
+          @click="navigateToDashboard"
+          class="nav-button trial-link"
+          height="48"
+          rounded="lg"
+        >
+          Start your free trial
+        </v-btn>
+      </template>
     </div>
   </div>
 </template>
@@ -301,6 +315,21 @@ const navigateToDashboard = () => {
   router.push("/");
 };
 
+const handlePricingCheckout = () => {
+  const pricingRef = stepComponent.value;
+  if (pricingRef?.startCheckout) {
+    const started = pricingRef.startCheckout();
+    if (!started) {
+      mainStore.setSnackbar({
+        title: "Please select a plan to continue.",
+        type: "error",
+      });
+    }
+    return;
+  }
+  navigateToDashboard();
+};
+
 // Handle back navigation with awareness of Pricing payment modal
 const handleBack = () => {
   // If on first step (step 0), go back to initial screen
@@ -371,6 +400,10 @@ const handleBack = () => {
 /* Button font size */
 .nav-button {
   font-size: 16px !important;
+}
+
+.trial-link {
+  text-transform: none !important;
 }
 
 /* Mobile Responsive Adjustments */

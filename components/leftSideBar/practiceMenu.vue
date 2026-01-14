@@ -73,7 +73,7 @@ const router = useRouter();
 const authStore = useAuthStore();
 const mainStore = useMainStore();
 const orgStore = useOrgStore();
-const { user, canAddWorkspace } = useUser();
+const { user, canAddWorkspace, setUser } = useUser();
 const menu = ref(false);
 
 const getOrgData = (orgWrapper) => {
@@ -170,14 +170,11 @@ const handleAddWorkspace = () => {
   router.push("/onboarding");
 };
 
-const getProfile = () => {
-  authStore.profile().then((res) => {
-    if (res.code === 0) {
-      const user = res.data;
-      localStorage.setItem("user", JSON.stringify(user));
-      window.location.reload();
-    }
-  });
+const getProfile = async () => {
+  const res = await authStore.profile();
+  if (res.code === 0 && res.data) {
+    setUser(res.data);
+  }
 };
 </script>
 

@@ -56,7 +56,10 @@ const form = ref(null);
 const required = (v) => !!v || "Required.";
 
 defineExpose({
-  validate: () => form.value.validate(),
+  validate: async () => {
+    const result = await form.value.validate();
+    return result.valid;
+  },
   valid,
 });
 </script>

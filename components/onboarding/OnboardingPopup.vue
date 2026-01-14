@@ -22,6 +22,16 @@
           @keydown.esc="handleEscape"
           @keydown.enter="handleEnter"
         >
+          <v-btn
+            v-if="showClose"
+            class="onboarding-close"
+            icon
+            variant="text"
+            aria-label="Close dialog"
+            @click="handleClose"
+          >
+            <v-icon icon="mdi-close" />
+          </v-btn>
           <div class="onboarding-card__inner">
             <div v-if="iconSrc || icon" class="onboarding-icon">
               <img v-if="iconSrc" :src="iconSrc" alt="" />
@@ -75,9 +85,10 @@ const props = defineProps({
   icon: { type: String, default: "" },
   iconSrc: { type: String, default: "" },
   showMarker: { type: Boolean, default: false },
+  showClose: { type: Boolean, default: true },
 });
 
-const emit = defineEmits(["update:modelValue", "primary", "secondary"]);
+const emit = defineEmits(["update:modelValue", "primary", "secondary", "close"]);
 const dialogCard = ref(null);
 const primaryBtn = ref(null);
 
@@ -93,6 +104,11 @@ const emitPrimary = () => {
 
 const emitSecondary = () => {
   emit("secondary");
+};
+
+const handleClose = () => {
+  updateModel(false);
+  emit("close");
 };
 
 const handleEscape = (event) => {
@@ -165,6 +181,7 @@ watch(
 
 .onboarding-card {
   background: #ffffff;
+  position: relative;
 }
 
 .onboarding-card__inner {
@@ -232,6 +249,13 @@ watch(
   margin-top: 12px;
   font-size: 12px;
   color: #8a94a6;
+}
+
+.onboarding-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
 }
 
 @media (max-width: 600px) {
