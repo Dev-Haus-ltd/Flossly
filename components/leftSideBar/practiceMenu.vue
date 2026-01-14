@@ -51,7 +51,6 @@
           <v-divider class="my-1" />
           <v-list-item
             @click="handleAddWorkspace"
-            :disabled="isCreatingWorkspace"
             class="add-workspace-item"
           >
             <div class="d-flex align-center">
@@ -76,7 +75,6 @@ const mainStore = useMainStore();
 const orgStore = useOrgStore();
 const { user, canAddWorkspace } = useUser();
 const menu = ref(false);
-const isCreatingWorkspace = ref(false);
 
 const getOrgData = (orgWrapper) => {
   if (orgWrapper?.organisation?.id && orgWrapper?.organisation?.name) {
@@ -153,9 +151,7 @@ const handleOrgClick = async (org) => {
 };
 
 // Add Workspace Handler
-const handleAddWorkspace = async () => {
-  if (isCreatingWorkspace.value) return;
-
+const handleAddWorkspace = () => {
   // Double-check permission on frontend (backend also validates)
   if (!canAddWorkspace.value) {
     mainStore.setSnackbar({
@@ -165,52 +161,13 @@ const handleAddWorkspace = async () => {
     return;
   }
 
-  isCreatingWorkspace.value = true;
+  // Set the new practice mode flag in the store (hidden from URL)
+  // The actual organization creation will happen during onboarding
+  orgStore.setNewPracticeMode();
 
-  try {
-    // Generate unique temporary name
-    const tempName = `New Practice ${Date.now()}`;
-
-    // Create new organization
-    const createRes = await orgStore.createOrganisationForUser({
-      organisationName: tempName,
-    });
-
-    if (createRes.code !== 0) {
-      mainStore.setSnackbar({
-        type: "error",
-        title: createRes.message || "Failed to create workspace",
-      });
-      return;
-    }
-
-    // Switch to the new organization
-    const switchRes = await authStore.switchOrgnanisation({
-      orgId: createRes.data.organisationId,
-    });
-
-    if (switchRes.code !== 0) {
-      mainStore.setSnackbar({
-        type: "error",
-        title: switchRes.message || "Failed to switch workspace",
-      });
-      return;
-    }
-
-    // Refresh profile to get updated org list
-    await authStore.profile();
-
-    // Close menu and navigate to onboarding
-    menu.value = false;
-    router.push("/onboarding");
-  } catch (err) {
-    mainStore.setSnackbar({
-      type: "error",
-      title: err.message || "Failed to create workspace",
-    });
-  } finally {
-    isCreatingWorkspace.value = false;
-  }
+  // Close menu and navigate to onboarding
+  menu.value = false;
+  router.push("/onboarding");
 };
 
 const getProfile = () => {

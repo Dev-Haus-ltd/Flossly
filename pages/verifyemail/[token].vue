@@ -2,13 +2,10 @@
   <v-container class="full-height d-flex" fluid>
     <v-row align="center" justify="center">
       <v-col cols="12" md="6" class="text-center">
-        <!-- Loading Spinner -->
-        <v-progress-circular
-          v-if="loading"
-          indeterminate
-          size="64"
-          color="primary"
-        />
+        <!-- Loader -->
+        <div v-if="loading" class="loader-wrapper">
+          <div class="loader"></div>
+        </div>
 
         <!-- No Token Found -->
         <div v-else-if="!hasToken && !success">
@@ -44,6 +41,7 @@
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+const mainstore = useMainStore();
 
 const loading = ref(true);
 const success = ref(false);
@@ -58,14 +56,28 @@ const verifyEmail = async (link) => {
     // Check for successful verification - either code 0 or success true
     if (res && (res.code === 0 || res.success === true)) {
       success.value = true;
+      mainstore.setSnackbar({
+        title: "Email verified successfully!",
+        type: "success",
+      });
     } else {
       console.error('Verification failed - unexpected response:', res);
       success.value = false;
+      const message = res?.data?.message || res?.message || "Email verification failed";
+      mainstore.setSnackbar({
+        title: message,
+        type: "error",
+      });
     }
   } catch (err) {
     console.error('Verification error:', err);
     success.value = false;
     loading.value = false;
+    const errorMessage = err.data?.message || err.message || "An error occurred during email verification";
+    mainstore.setSnackbar({
+      title: errorMessage,
+      type: "error",
+    });
   }
 };
 
@@ -90,4 +102,35 @@ const navigateToLogin = () => {
 .full-height {
   height: 100vh;
 }
+
+.loader-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 120px;
+}
+
+.loader {
+  height: 30px;
+  aspect-ratio: 6;
+
+  --c: transparent 64%,
+       #0061FB 66% 98%,
+       transparent 101%;
+
+  background:
+    radial-gradient(35% 146% at 50% 159%, var(--c)) 0 0,
+    radial-gradient(35% 146% at 50% -59%, var(--c)) 25% 100%;
+  background-size: calc(100% / 3) 50%;
+  background-repeat: repeat-x;
+  clip-path: inset(0 100% 0 0);
+  animation: l5 1.5s infinite linear;
+}
+
+@keyframes l5 {
+  50% { clip-path: inset(0) }
+  to  { clip-path: inset(0 0 0 100%) }
+}
+
+
 </style>

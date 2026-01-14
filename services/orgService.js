@@ -168,7 +168,7 @@ export default {
   },
   createOrganisationForUser(data) {
     return new Promise((resolve, reject) => {
-      Post("/organisations/createForUser", data)
+      PostFormData("/organisations/createForUser", data)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });

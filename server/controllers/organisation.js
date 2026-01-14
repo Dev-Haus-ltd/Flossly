@@ -854,7 +854,8 @@ export const getAllOrganisationReferrals = async (event) => {
 
 /**
  * Creates a new organisation for an existing authenticated user.
- * This is used when a user wants to add a new workspace.
+ * This is used when a user wants to add a new workspace via the "Add Practice" flow.
+ * Receives full organization details from the onboarding form (name, contact, address, logo).
  *
  * RBAC: Only users with Practice Manager (roleId=1) or
  * Principal Dentist / Practice Owner (roleId=8) can create new workspaces.
@@ -870,17 +871,40 @@ export const createOrganisationForUser = async (event) => {
     );
   }
 
-  let body;
+  const form = formidable({ multiples: false, keepExtensions: true });
+
+  // Helper: pick first value, treat empty strings as undefined
+  const firstNonEmpty = (fields, key) => {
+    if (!fields || !(key in fields)) return undefined;
+    const raw = Array.isArray(fields[key]) ? fields[key][0] : fields[key];
+    if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      return trimmed === '' ? undefined : trimmed;
+    }
+    return raw === '' ? undefined : raw;
+  };
+
+  let fields, files;
   try {
-    const rawBody = await readBody(event);
-    body = typeof rawBody === "string" ? JSON.parse(rawBody) : rawBody;
-  } catch {
-    return error(400, "Invalid JSON body");
+    const parsed = await new Promise((resolve, reject) => {
+      form.parse(event.node.req, (err, fields, files) => {
+        if (err) reject(err);
+        else resolve({ fields, files });
+      });
+    });
+    fields = parsed.fields;
+    files = parsed.files;
+  } catch (parseErr) {
+    console.error("Form parse error:", parseErr);
+    return error(400, "Invalid form data");
   }
 
-  const { organisationName } = body;
+  const organisationName = firstNonEmpty(fields, 'name') || firstNonEmpty(fields, 'organisationName');
+  const contact = firstNonEmpty(fields, 'contact');
+  const address = firstNonEmpty(fields, 'address');
+  const typeVal = firstNonEmpty(fields, 'type');
 
-  if (!organisationName || !organisationName.trim()) {
+  if (!organisationName) {
     return error(400, "Organisation name is required");
   }
 
@@ -897,14 +921,40 @@ export const createOrganisationForUser = async (event) => {
     /** -------------------------
      * 1. Create Organisation
      --------------------------*/
-    org = await Organisation.create(
-      {
-        name: organisationName.trim(),
-        managerId: loggedUser.userId,
-        hasUsedTrial: false,
-      },
-      { transaction }
-    );
+    const orgData = {
+      name: organisationName,
+      managerId: loggedUser.userId,
+      hasUsedTrial: false,
+    };
+
+    // Add optional fields if provided (for full creation mode)
+    if (contact) orgData.contact = contact;
+    if (address) orgData.address = address;
+    if (typeVal) {
+      const enumValues =
+        Organisation.rawAttributes &&
+        Organisation.rawAttributes.type &&
+        Organisation.rawAttributes.type.values;
+      if (!Array.isArray(enumValues) || enumValues.includes(typeVal)) {
+        orgData.type = typeVal;
+      }
+    }
+
+    org = await Organisation.create(orgData, { transaction });
+
+    // Handle logo upload if provided
+    if (files && files.logo) {
+      const logoFile = Array.isArray(files.logo) ? files.logo[0] : files.logo;
+      const uploadDir = path.resolve("public/uploads/logos");
+      await fs.mkdir(uploadDir, { recursive: true });
+      const fileExt = path.extname(logoFile.originalFilename || logoFile.newFilename || "");
+      const filename = `org-${org.id}-${Date.now()}${fileExt}`;
+      const filepath = path.join(uploadDir, filename);
+      const sourcePath = logoFile.filepath || logoFile.path;
+      await fs.copyFile(sourcePath, filepath);
+      org.logo = `/uploads/logos/${filename}`;
+      await org.save({ transaction });
+    }
 
     /** -------------------------
      * 2. Associate User → Organisation
@@ -923,9 +973,6 @@ export const createOrganisationForUser = async (event) => {
      --------------------------*/
     if (org.hasUsedTrial) {
       throw new Error("This organisation has already used its free trial.");
-    }
-    if (user.hasUsedTrial) {
-      throw new Error("This email has already used its free trial.");
     }
 
     trialEndDate = new Date();
