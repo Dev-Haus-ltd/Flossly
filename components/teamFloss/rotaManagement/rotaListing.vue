@@ -469,7 +469,6 @@ const search = ref("");
 const openedPanels = ref([0]);
 const published = computed(() => rotaList.filter((r) => r.isPublished));
 const unpublished = computed(() => rotaList.filter((r) => !r.isPublished));
-
 // Selection models
 const selectedPublished = ref([]);
 const selectedUnpublished = ref([]);
@@ -485,10 +484,6 @@ const headers = [
   { title: "Actions", key: "actions", sortable: false },
 ];
 
-// Bulk action bar store and event bus
-const bus = useBus()
-const bulkBar = inject("bulkBar")
-
 const matchesSearch = (item) => {
   if (!search.value) return true;
   const q = search.value.toLowerCase();
@@ -500,22 +495,22 @@ const matchesSearch = (item) => {
 };
 
 const inDateRange = (item) => {
-if (!dateRangeModel.value || dateRangeModel.value.length !== 2) return true;
-if (!item.startDate) return false;
-const [sRaw, eRaw] = dateRangeModel.value;
-const s = new Date(sRaw);
-s.setHours(0, 0, 0, 0);
-const e = new Date(eRaw);
-e.setHours(23, 59, 59, 999);
-const d = new Date(item.startDate);
-return d >= s && d <= e;
+  if (!dateRangeModel.value || dateRangeModel.value.length !== 2) return true;
+  if (!item.startDate) return false;
+  const [sRaw, eRaw] = dateRangeModel.value;
+  const s = new Date(sRaw);
+  s.setHours(0, 0, 0, 0);
+  const e = new Date(eRaw);
+  e.setHours(23, 59, 59, 999);
+  const d = new Date(item.startDate);
+  return d >= s && d <= e;
 };
 
 const filteredPublished = computed(() =>
-published.value.filter((it) => matchesSearch(it) && inDateRange(it))
+  published.value.filter((it) => matchesSearch(it) && inDateRange(it))
 );
 const filteredUnpublished = computed(() =>
-unpublished.value.filter((it) => matchesSearch(it) && inDateRange(it))
+  unpublished.value.filter((it) => matchesSearch(it) && inDateRange(it))
 );
 
 const toggleAll = (which) => {
@@ -559,21 +554,20 @@ const onSelectionChangeUnPublished=(newSelected) => {
   console.log( selectedUnpublished.value);
 };
 function applyDate() {
-dateRangeModel.value = tempRange.value ? [...tempRange.value] : [];
-menuDate.value = false;
+  dateRangeModel.value = tempRange.value ? [...tempRange.value] : [];
+  menuDate.value = false;
 }
-
 function clearDate() {
-tempRange.value = [];
-dateRangeModel.value = [];
+  tempRange.value = [];
+  dateRangeModel.value = [];
 }
 
 // date-range display text
 const dateRangeText = computed(() => {
-if (!dateRangeModel.value || dateRangeModel.value.length !== 2) return "";
-return `${parsedDate(dateRangeModel.value[0])} - ${parsedDate(
- dateRangeModel.value[1]
-)}`;
+  if (!dateRangeModel.value || dateRangeModel.value.length !== 2) return "";
+  return `${parsedDate(dateRangeModel.value[0])} - ${parsedDate(
+    dateRangeModel.value[1]
+  )}`;
 });
 const changeRotaStatus = (type, item) => {
   emit("onChangeStatus", { type, id: item.id });
@@ -764,29 +758,29 @@ function getRotaStatusColor(status) {
 </script>
 <style scoped>
 .custom-tabs {
-border-bottom: 1px solid #dbdbdb;
+  border-bottom: 1px solid #dbdbdb;
 }
 
 .custom-tabs .v-tab {
-display: flex;
-align-items: center;
-justify-content: center;
-gap: 6px;
-font-size: 14px;
-font-weight: 400;
-text-transform: none;
-color: #1e1e1e !important;
-min-height: 40px;
-min-width: max-content;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 400;
+  text-transform: none;
+  color: #1e1e1e !important;
+  min-height: 40px;
+  min-width: max-content;
 }
 
 .custom-tabs .v-tab.v-tab--selected {
-font-weight: 500;
-color: #1e1e1e !important;
+  font-weight: 500;
+  color: #1e1e1e !important;
 }
 
 .custom-tabs .v-tabs-slider {
-height: 2px;
+  height: 2px;
 }
 
 .tab-content-title {
@@ -797,43 +791,43 @@ height: 2px;
 }
 /* expansion table */
 :deep(.v-table__wrapper table) {
-width: 100% !important;
-table-layout: fixed;
+  width: 100% !important;
+  table-layout: fixed;
 }
 :deep() .v-table .v-table__wrapper > table > thead > tr > th {
-border-top: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-top: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 
 :deep() .v-table .v-table__wrapper > table > thead > tr > th:not(:last-child) {
-border-right: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-right: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 :deep() .v-table .v-table__wrapper > table > tbody > tr > td:not(:last-child),
 .v-table .v-table__wrapper > table > tbody > tr > th:not(:last-child) {
-border-right: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-right: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 :deep(.v-data-table .v-table__wrapper tbody tr:hover) {
-background-color: #f5f5f5;
-transition: background-color 0.2s ease;
+  background-color: #f5f5f5;
+  transition: background-color 0.2s ease;
 }
 .chip-published {
-background-color: #8c3bc51a !important;
-color: #8c3bc5 !important;
+  background-color: #8c3bc51a !important;
+  color: #8c3bc5 !important;
 }
 .chip-unpublished {
-background-color: #0165b91a !important;
-color: #0165b9 !important;
+  background-color: #0165b91a !important;
+  color: #0165b9 !important;
 }
 .chip-count {
-background-color: #f3f3f3;
-color: #333;
+  background-color: #f3f3f3;
+  color: #333;
 }
 .chip-progress {
-background-color: #33b93c1a !important;
-color: #33b93c !important;
+  background-color: #33b93c1a !important;
+  color: #33b93c !important;
 }
 .chip-future {
-background-color: #ff7c001a !important;
-color: #ff7c00 !important;
+  background-color: #ff7c001a !important;
+  color: #ff7c00 !important;
 }
 
 .action-icon {

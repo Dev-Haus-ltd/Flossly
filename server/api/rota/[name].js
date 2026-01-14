@@ -3,8 +3,6 @@ import {
   addRotaShift,
   addRotaUsers,
   completeShift,
-  deleteRota,
-  deleteRotaShift,
   getAllShifts,
   getRotas,
   getRotaUsers,
@@ -14,6 +12,7 @@ import {
   unPublishRota,
   updateRota,
   updateShift,
+  deleteRotaShift,
   getUserRotas,
 } from "~/server/controllers/rota";
 

@@ -166,37 +166,4 @@ export default {
         });
     });
   },
-  getAllFolders() {
-    return new Promise((resolve, reject) => {
-      Post("/docs/listAllFolders")
-        .then((res) => {
-          resolve(res);
-        })
-        .catch((err) => {
-          reject(err);
-        });
-    });
-  },
-  moveDocument(data) {
-    return new Promise((resolve, reject) => {
-      Post("/docs/moveDocument", data)
-        .then((res) => {
-          resolve(res);
-        })
-        .catch((err) => {
-          reject(err);
-        });
-    });
-  },
-  moveFolder(data) {
-    return new Promise((resolve, reject) => {
-      Post("/docs/moveFolder", data)
-        .then((res) => {
-          resolve(res);
-        })
-        .catch((err) => {
-          reject(err);
-        });
-    });
-  },
 };
