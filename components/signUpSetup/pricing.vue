@@ -1,5 +1,5 @@
 <template>
-  <div v-if="prices && !selectedPriceId" class="pricing-shell">
+  <div v-if="prices && !paymentDialogOpen" class="pricing-shell">
     <div class="pricing-header">
       <div class="pricing-title">Pricing Plan</div>
       <div class="pricing-subtitle">
@@ -19,13 +19,12 @@
           <span class="plan-radio" :class="{ selected: plan.id === selectedPlanId }"></span>
           <div class="plan-text">
             <div class="plan-name">{{ plan.displayName }}</div>
-            <div class="plan-desc">{{ plan.product?.description || plan.description || '' }}</div>
+            <div class="plan-desc">{{ plan.shortSummary }}</div>
           </div>
         </button>
       </div>
       <div class="plan-detail" v-if="selectedPlan">
         <div class="plan-detail-header">
-          <span v-if="selectedPlan.badge" class="plan-badge">{{ selectedPlan.badge }}</span>
           <div class="plan-detail-title">{{ selectedPlan.displayName }}</div>
         </div>
         <div class="plan-detail-price">
@@ -35,53 +34,57 @@
         <div class="plan-feature-title">{{ selectedPlan.shortName }} plan includes:</div>
         <ul class="plan-features">
           <li v-for="(feature, idx) in selectedPlan.features" :key="idx">
-            <img src="@/assets/icons/checkbox.svg" alt="checkbox" />
+            <span class="feature-dot"></span>
             <span>{{ feature }}</span>
           </li>
         </ul>
         <v-btn
-          v-if="showCta"
+          v-if="props.showCta"
           color="primary"
           variant="flat"
           class="plan-cta"
           rounded="lg"
           @click="handleCtaClick"
         >
-          Continue to checkout
+          Checkout
         </v-btn>
       </div>
     </div>
   </div>
-  <v-card
-    v-else-if="selectedPriceId && !isPaymentCompleted"
-    :elevation="0"
-    flat
-    rouneded="lg"
-    class="pa-4"
-  >
-    <v-card-title>Payment Details</v-card-title>
+  <v-dialog v-model="paymentDialogOpen" max-width="720" persistent>
+    <v-card class="pa-4" :elevation="0" rounded="lg">
+      <div class="payment-header">
+        <v-card-title class="payment-title">Payment Details</v-card-title>
+        <v-btn icon variant="text" @click="cancelPaymentFlow">
+          <v-icon>mdi-close</v-icon>
+        </v-btn>
+      </div>
 
-    <v-card-text>
-      <div id="payment-element" class="pa-2" />
-      <div v-if="error" class="text-red">{{ error }}</div>
-    </v-card-text>
-    <br />
+      <v-card-text v-if="!isPaymentCompleted">
+        <div id="payment-element" class="pa-2" />
+        <div v-if="error" class="text-red mt-2">{{ error }}</div>
+      </v-card-text>
 
-    <v-btn @click="confirmPayment" flat color="primary"> Checkout </v-btn>
-  </v-card>
-  <v-card
-    v-else-if="selectedPriceId && isPaymentCompleted"
-    class="pa-5"
-    :elevation="0"
-    rouneded="lg"
-    flat
-  >
-    <h1>Thankyou for choosing Flossly...</h1>
-    <p>
-      You can safely navigate to your flossly dashboard and start using the
-      application
-    </p>
-  </v-card>
+      <v-card-text v-else>
+        <h2 class="payment-success-title">Thank you for choosing Flossly...</h2>
+        <p class="payment-success-text">
+          You can safely navigate to your Flossly dashboard and start using the
+          application.
+        </p>
+      </v-card-text>
+
+      <v-card-actions class="payment-actions">
+        <v-btn
+          v-if="!isPaymentCompleted"
+          @click="confirmPayment"
+          flat
+          color="primary"
+        >
+          Checkout
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
   <v-overlay
     v-model="loading"
     contained
@@ -124,10 +127,6 @@ const props = defineProps({
     default: true,
   },
 });
-
-// get license type from localStorage
-const user = JSON.parse(localStorage.getItem("user") || "{}");
-const licenseType = user?.preferences[0]?.licenseType || null;
 
 const features = ref([
   {
@@ -187,9 +186,18 @@ const getFeatureKeyFromType = (type) => {
   return "other";
 };
 
-const planOrder = { drift: 0, glide: 1, soar: 2, other: 3 };
-const planSequence = ["drift", "glide", "soar"];
+const planOrder = { soar: 0, glide: 1, drift: 2, other: 3 };
+const planSequence = ["soar", "glide", "drift"];
 const selectedPlanId = ref(null);
+
+const planSummaries = {
+  soar:
+    "Suited for organizations desiring enterprise-level automation, data-driven insights, and seamless scaling across multiple sites.",
+  glide:
+    "Intended for clinics seeking comprehensive team and compliance management alongside workflow tools.",
+  drift:
+    "Ideal for small practices needing basic workflow and documentation management without advanced HR or AI.",
+};
 
 const displayPlans = computed(() => {
   const list = Array.isArray(prices.value) ? prices.value : [];
@@ -207,10 +215,16 @@ const displayPlans = computed(() => {
           : plan.product?.name || "Plan";
       const shortName =
         key === "soar" ? "Soar" : key === "glide" ? "Glide" : key === "drift" ? "Drift" : "Plan";
-      const badge = key === "soar" ? "Soar (Full Access)" : "";
       const featureList =
         features.value.find((x) => getFeatureKeyFromType(x.type) === featureKey)?.features || [];
-      return { ...plan, key, displayName, shortName, badge, features: featureList };
+      return {
+        ...plan,
+        key,
+        displayName,
+        shortName,
+        shortSummary: planSummaries[key] || plan.product?.description || plan.description || "",
+        features: featureList,
+      };
     })
     .sort((a, b) => (planOrder[a.key] || 99) - (planOrder[b.key] || 99));
   const planMap = new Map();
@@ -247,6 +261,16 @@ const handleCtaClick = () => {
   if (!selectedPlan.value) return;
   handleSubscribe(selectedPlan.value.id);
 };
+
+const paymentDialogOpen = computed({
+  get: () => Boolean(selectedPriceId.value),
+  set: (value) => {
+    if (!value) {
+      cancelPaymentFlow();
+    }
+  },
+});
+
 
 watch(displayPlans, (list) => {
   if (!selectedPlanId.value && list.length) {
@@ -306,7 +330,7 @@ defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout });
 
 .pricing-grid {
   display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(260px, 1fr);
+  grid-template-columns: minmax(280px, 360px) minmax(260px, 1fr);
   gap: 20px;
   align-items: start;
 }
@@ -323,16 +347,20 @@ defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout });
   gap: 12px;
   padding: 14px 16px;
   border: 1px solid #e6e6e6;
-  border-radius: 12px;
+  border-radius: 20px;
   background: #ffffff;
   text-align: left;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  min-height: 170px;
+  width: 100%;
+  max-width: 360px;
 }
 
 .plan-option.selected {
-  border-color: #f2a3d7;
-  box-shadow: 0 8px 16px rgba(242, 163, 215, 0.2);
-  background: linear-gradient(135deg, #f6b0da, #f3c6f1);
+  border-color: transparent;
+  box-shadow: 0 10px 18px rgba(125, 119, 255, 0.18);
+  background: linear-gradient(105.87deg, #ffa977 -11.93%, #ff85da 32.01%, #7d77ff 117.29%);
+  color: #ffffff;
 }
 
 .plan-radio {
@@ -345,8 +373,8 @@ defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout });
 }
 
 .plan-radio.selected {
-  border-color: #0b5ff2;
-  background: #0b5ff2;
+  border-color: #1c2a8c;
+  background: #1c2a8c;
   box-shadow: inset 0 0 0 2px #ffffff;
 }
 
@@ -356,20 +384,28 @@ defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout });
 
 .plan-name {
   font-weight: 600;
-  font-size: 13px;
+  font-size: 14px;
   color: #1f2937;
   margin-bottom: 4px;
 }
 
+.plan-option.selected .plan-name {
+  color: #ffffff;
+}
+
 .plan-desc {
-  font-size: 11px;
+  font-size: 12px;
   color: #6b7280;
   line-height: 1.4;
 }
 
+.plan-option.selected .plan-desc {
+  color: #f4f2ff;
+}
+
 .plan-detail {
-  border: 1px solid #e6e6e6;
-  border-radius: 12px;
+  border: 1px solid #1d5cff;
+  border-radius: 20px;
   padding: 18px 20px;
   background: #ffffff;
 }
@@ -379,14 +415,6 @@ defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout });
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
-}
-
-.plan-badge {
-  font-size: 10px;
-  padding: 4px 8px;
-  border: 1px solid #0b5ff2;
-  color: #0b5ff2;
-  border-radius: 8px;
 }
 
 .plan-detail-title {
@@ -435,26 +463,20 @@ defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout });
   color: #374151;
 }
 
-.plan-features img {
-  width: 14px;
-  height: 14px;
-  margin-top: 2px;
+.feature-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: #1c2a8c;
+  flex-shrink: 0;
 }
 
 .plan-cta {
   text-transform: none;
-  height: 34px;
-  min-width: 90px;
-  font-size: 12px;
-}
-
-.plan-trial {
-  background: none;
-  border: none;
-  color: #6b7280;
-  font-size: 11px;
-  cursor: pointer;
-  padding: 0;
+  height: 36px;
+  min-width: 120px;
+  font-size: 13px;
 }
 
 
@@ -498,6 +520,35 @@ defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout });
   font-weight: 400 !important;
   color: #d32f2f !important;
   line-height: 1.4 !important;
+}
+
+.payment-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.payment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.payment-title {
+  padding: 0;
+}
+
+.payment-success-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.payment-success-text {
+  color: #4b5563;
+  font-size: 14px;
 }
 
 @media (max-width: 960px) {

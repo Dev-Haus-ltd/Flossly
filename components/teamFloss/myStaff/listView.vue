@@ -529,20 +529,30 @@ const updateUser = (user, key) => {
     })
 }
 const toggleAll = () => {
-  if (isAllSelected.value) {
+  // Get all users from all teams
+  const allUsers = [];
+  props.teams.forEach((el) => {
+    el.orgUsers.forEach((u) => {
+      allUsers.push(u);
+    });
+  });
+
+  // Check if all users are currently selected
+  const allCurrentlySelected = allUsers.length > 0 && 
+    allUsers.every((user) => 
+      selectedStaff.value.some((sel) => sel.id === user.id)
+    );
+
+  if (allCurrentlySelected) {
+    // Deselect all
     isAllSelected.value = false;
     selectedStaff.value = [];
   } else {
-    const selected = [];
-    props.teams.forEach((el) => {
-      el.orgUsers.forEach((u) => {
-        selected.push(u);
-      });
-    });
-    selectedStaff.value = selected;
+    // Select all users
+    selectedStaff.value = [...allUsers];
     isAllSelected.value = true;
   }
-   console.log(selectedStaff.value)
+  console.log(selectedStaff.value);
 };
 const onSelectionChange = (newSelected) => {
   selectedStaff.value = newSelected;

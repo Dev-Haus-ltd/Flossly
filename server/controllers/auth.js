@@ -16,7 +16,10 @@ import {
   UserContract,
   UserHrDocument,
   UserPointsHistory,
+  TaskChecklist,
+  UserTaskChecklist,
 } from "../models";
+import { Op } from "sequelize";
 import { generateOTP, generateVerificationLink } from "../utils/misc";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
@@ -806,7 +809,37 @@ export const verifyEmail = async (event) => {
             frequency: task.defaultFrequency,
             comments: "",
           }));
-          await UserTask.bulkCreate(userTasks);
+          const createdUserTasks = await UserTask.bulkCreate(userTasks, { returning: true });
+
+          // Copy checklists from TaskChecklist to UserTaskChecklist
+          const taskIds = tasks.map((t) => t.id);
+          const templates = await TaskChecklist.findAll({
+            where: { taskId: { [Op.in]: taskIds } },
+          });
+
+          if (templates?.length) {
+            const checklistToCreate = [];
+            for (const ut of createdUserTasks) {
+              const tpls = templates.filter((tpl) => tpl.taskId === ut.taskId);
+              if (!tpls.length) continue;
+              tpls.forEach((tpl) => {
+                checklistToCreate.push({
+                  userTaskId: ut.id,
+                  question: tpl.question,
+                  category: tpl.category,
+                  showRadio: tpl.showRadio,
+                  showDate: tpl.showDate,
+                  showTime: tpl.showTime,
+                  fieldOneTitle: tpl.fieldOneTitle,
+                  fieldTwoTitle: tpl.fieldTwoTitle,
+                  radioValue: 'N/A',
+                });
+              });
+            }
+            if (checklistToCreate.length) {
+              await UserTaskChecklist.bulkCreate(checklistToCreate);
+            }
+          }
         }
 
         await assignDefaultHRDocsToUser(user.id);
@@ -1557,7 +1590,37 @@ const assignDefaultTasksToUser = async (user, organisationId) => {
       comments: "",
     }));
 
-    await UserTask.bulkCreate(userTasks);
+    const createdUserTasks = await UserTask.bulkCreate(userTasks, { returning: true });
+
+    // Copy checklists from TaskChecklist to UserTaskChecklist
+    const taskIds = tasks.map((t) => t.id);
+    const templates = await TaskChecklist.findAll({
+      where: { taskId: { [Op.in]: taskIds } },
+    });
+
+    if (templates?.length) {
+      const checklistToCreate = [];
+      for (const ut of createdUserTasks) {
+        const tpls = templates.filter((tpl) => tpl.taskId === ut.taskId);
+        if (!tpls.length) continue;
+        tpls.forEach((tpl) => {
+          checklistToCreate.push({
+            userTaskId: ut.id,
+            question: tpl.question,
+            category: tpl.category,
+            showRadio: tpl.showRadio,
+            showDate: tpl.showDate,
+            showTime: tpl.showTime,
+            fieldOneTitle: tpl.fieldOneTitle,
+            fieldTwoTitle: tpl.fieldTwoTitle,
+            radioValue: 'N/A',
+          });
+        });
+      }
+      if (checklistToCreate.length) {
+        await UserTaskChecklist.bulkCreate(checklistToCreate);
+      }
+    }
   } catch (err) {
     return err;
   }

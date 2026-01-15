@@ -510,14 +510,23 @@
                       !isEditingLink(item.id, col.key)
                     "
                   >
-                    <a
-                      :href="templateLinkDetails(item.documentLink).value"
-                      target="_blank"
-                      rel="noopener"
-                      class="template-link-anchor"
+                    <CommonTruncatedText
+                      :text="item.documentLink"
+                      :max-width="150"
+                      text-class="template-link-text"
                     >
-                      {{ item.documentLink }}
-                    </a>
+                      <template #default="{ truncatedText, style }">
+                        <a
+                          :href="templateLinkDetails(item.documentLink).value"
+                          target="_blank"
+                          rel="noopener"
+                          class="template-link-anchor"
+                          :style="style"
+                        >
+                          {{ truncatedText }}
+                        </a>
+                      </template>
+                    </CommonTruncatedText>
                     <v-btn
                       icon
                       size="x-small"
@@ -1094,7 +1103,7 @@ const fixedColumnOrder = [
   "createdAt",
   "dueDate",
   "documentLink",
-  "assignedBy",
+  "assigner.fullName",
   "attachments",
   "taskDetails.description",
   "updatedAt",
@@ -1806,12 +1815,29 @@ const addHeaderInSelected = async (column) => {
   }
 };
 const updateUserPreferences = async () => {
-  await userStore.updatePreferences({
-    userId: user.value.id,
-    taskTableColumns: selectedHeaders.value,
-  });
-  user.value.preferences[0].taskTableColumns = selectedHeaders.value;
-  localStorage.setItem("user", JSON.stringify(user.value));
+  try {
+    const res = await userStore.updatePreferences({
+      userId: user.value.id,
+      taskTableColumns: selectedHeaders.value,
+    });
+    
+    if (res.code === 0) {
+      // Only update local storage if API call succeeds
+      user.value.preferences[0].taskTableColumns = selectedHeaders.value;
+      localStorage.setItem("user", JSON.stringify(user.value));
+    } else {
+      mainStore.setSnackbar({
+        title: "Failed to save column preferences",
+        type: "error",
+      });
+    }
+  } catch (err) {
+    console.error("Error updating user preferences:", err);
+    mainStore.setSnackbar({
+      title: "Failed to save column preferences",
+      type: "error",
+    });
+  }
 };
 
 const updateValueColumn = (column) => {
@@ -2202,20 +2228,34 @@ const updateSubtaskHeaderTitle = (key, value) => {
 };
 
 const toggleAll = (group) => {
-  if (isAllSelected.value) {
+  if (!group || !group.tasks) return;
+  
+  const currentGroupTasks = group.tasks;
+  
+  // Check how many tasks from this group are currently selected
+  const currentSelectionInGroup = selectedTasks.value.filter((task) =>
+    currentGroupTasks.some((gt) => gt.id === task.id)
+  );
+  
+  // If all tasks in this group are selected, deselect them
+  // Otherwise, select all tasks in the group
+  if (currentSelectionInGroup.length === currentGroupTasks.length) {
+    // Deselect all from this group
+    selectedTasks.value = selectedTasks.value.filter(
+      (task) => !currentGroupTasks.some((gt) => gt.id === task.id)
+    );
     isAllSelected.value = false;
-    selectedTasks.value = [];
   } else {
-    const selected = [];
-    taskDetails.forEach((el) => {
-      if (el.status === group.status) {
-        el.tasks.forEach((t) => {
-          selected.push(t);
-        });
-      }
-    });
-    selectedTasks.value = selected;
-    isAllSelected.value = true;
+    // Select all from this group (add missing ones)
+    const tasksToAdd = currentGroupTasks.filter(
+      (gt) => !selectedTasks.value.some((st) => st.id === gt.id)
+    );
+    selectedTasks.value = [...selectedTasks.value, ...tasksToAdd];
+    
+    // Check if all tasks across all groups are now selected
+    const allTasks = taskDetails.flatMap(el => el.tasks || []);
+    isAllSelected.value = allTasks.length > 0 && 
+      allTasks.every(task => selectedTasks.value.some(st => st.id === task.id));
   }
 
   emit("updateSelectedRowItems", selectedTasks.value);
@@ -2394,6 +2434,13 @@ th {
   color: #0061fb;
   text-decoration: underline;
   white-space: nowrap;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.template-link-text {
+  display: inline-block;
 }
 .cust-checkbox {
   width: 18px;

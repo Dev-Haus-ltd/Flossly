@@ -36,7 +36,19 @@
 import initialScreen from "./initialScreen.vue";
 import leftStepperTemplate from "./leftStepperTemplate.vue";
 
-const isInitScreen = ref(true);
+const orgStore = useOrgStore();
+const router = useRouter();
+const isInitScreen = ref(!orgStore.getIsNewPractice);
+
+watch(
+  isInitScreen,
+  (val) => {
+    if (val && orgStore.getIsNewPractice) {
+      orgStore.clearNewPracticeMode();
+      router.push("/");
+    }
+  }
+);
 const currentStep = ref(0);
 </script>
 

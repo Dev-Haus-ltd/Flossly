@@ -381,7 +381,7 @@ export const useMainStore = defineStore("mainStore", {
           width: 200,
         },
         {
-          key: "assignedBy",
+          key: "assigner.fullName",
           title: "Assigned By",
           sortable: true,
           width: 200,
