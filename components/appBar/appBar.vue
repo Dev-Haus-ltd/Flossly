@@ -8,7 +8,7 @@
       size="small"
       variant="outlined"
       class="trial-banner__cta"
-      @click="goToSubscription"
+      @click="openPricingModal"
     >
       Keep Soar
     </v-btn>
@@ -83,20 +83,65 @@
       <appBarRightMenu :user="props.user" />
     </div>
   </v-app-bar>
+  <!-- Pricing Modal Dialog -->
+  <v-dialog
+    v-model="showPricingDialog"
+    max-width="1000"
+    @click:outside="closePricingModal"
+  >
+    <v-card class="pricing-modal-card">
+      <v-card-text class="pa-6">
+        <div class="modal-header mb-4">
+          <v-btn
+            icon="mdi-close"
+            variant="text"
+            size="small"
+            @click="closePricingModal"
+            class="modal-close"
+          />
+        </div>
+
+        <!-- Pricing Modal Component -->
+        <PricingModal ref="pricingModalRef" />
+
+        <!-- Buy Now Button - shown when on pricing cards view -->
+        <div v-if="!pricingModalRef?.isPaymentOpen" class="modal-actions mt-6">
+          <v-btn
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            size="x-large"
+            @click="handleBuyNow"
+            class="buy-now-btn"
+            style="font-size: 16px;"
+            height="48"
+            width="150"
+          >
+            Buy Now
+          </v-btn>
+        </div>
+      </v-card-text>
+    </v-card>
+  </v-dialog>
 </template>
 
 <script setup>
 const { user } = useUser();
 import logoIcon from "@/assets/logos/Logoicon2.svg";
+import PricingModal from "@/components/signUpSetup/PricingModal.vue";
 const emit = defineEmits(["small-screen-drawer"]);
-const router = useRouter();
 const trialBanner = ref(null);
+const mainStore = useMainStore();
 
 const props = defineProps({
   drawer: Boolean,
   user: Object,
   rail: Boolean,
 });
+
+const pricingModalRef = ref(null);
+const showPricingDialog = ref(false);
+
 const handleDrawer = () => {
   emit("small-screen-drawer",!props.rail);
 };
@@ -132,8 +177,42 @@ const showTrialBanner = computed(
   () => String(licenseType.value || "").toLowerCase() === "trial"
 );
 
-const goToSubscription = () => {
-  router.push("/subscription");
+const openPricingModal = () => {
+  showPricingDialog.value = true;
+};
+
+const closePricingModal = () => {
+  showPricingDialog.value = false;
+  // Reset the modal when closing
+  if (pricingModalRef.value?.resetModal) {
+    pricingModalRef.value.resetModal();
+  }
+};
+
+const handleBuyNow = () => {
+  if (!pricingModalRef.value) {
+    mainStore.setSnackbar({
+      title: "Please select a plan to continue.",
+      type: "error",
+    });
+    return;
+  }
+
+  // Get the selected plan ID from the modal (selectedPlanId is the UI selection, selectedPriceId is set after checkout starts)
+  const selectedPlanId = pricingModalRef.value?.selectedPlanId;
+
+  if (!selectedPlanId) {
+    mainStore.setSnackbar({
+      title: "Please select a plan to continue.",
+      type: "error",
+    });
+    return;
+  }
+
+  // Trigger checkout - this will show the payment form
+  if (pricingModalRef.value?.handleSubscribe) {
+    pricingModalRef.value.handleSubscribe(selectedPlanId);
+  }
 };
 
 const setBannerHeight = (height) => {
@@ -237,4 +316,50 @@ onBeforeUnmount(() => {
   align-items: center; /* align title vertically with logo */
   height: 100%;
 }
+
+/* Pricing Modal Styles */
+.pricing-modal-card {
+  border-radius: 12px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-close {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.buy-now-btn {
+  min-width: 120px;
+  text-transform: none;
+  font-size: 14px;
+}
+
+.cancel-btn {
+  min-width: 100px;
+  text-transform: none;
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .modal-actions {
+    flex-direction: column;
+  }
+
+  .buy-now-btn {
+    width: 100%;
+  }
+}
+
 </style>

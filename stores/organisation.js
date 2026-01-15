@@ -6,7 +6,6 @@ export const useOrgStore = defineStore("orgStore", {
     organisation: null,
     isLoading: false,
     isNewPractice: false, // Flag to indicate if navigating to onboarding for new practice creation
-    newPracticeOrgId: null, // Stores the org ID of newly created practice
   }),
 
   getters: {
@@ -16,19 +15,14 @@ export const useOrgStore = defineStore("orgStore", {
     getIsNewPractice(state) {
       return state.isNewPractice;
     },
-    getNewPracticeOrgId(state) {
-      return state.newPracticeOrgId;
-    }
   },
 
   actions: {
     setNewPracticeMode(orgId = null) {
       this.isNewPractice = true;
-      this.newPracticeOrgId = orgId;
     },
     clearNewPracticeMode() {
       this.isNewPractice = false;
-      this.newPracticeOrgId = null;
     },
     updateOrganisation(data) {
       return new Promise((resolve, reject) => {

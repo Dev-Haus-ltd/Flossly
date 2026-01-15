@@ -25,7 +25,7 @@
         <!-- Form Content -->
         <sign-up-setup 
           @update:current-step="currentStep = $event"
-          @go-to-initial-screen="isInitScreen = true"
+          @go-to-initial-screen="handleGoToInitialScreen"
         />
       </v-col>
     </v-row>
@@ -36,8 +36,20 @@
 import initialScreen from "./initialScreen.vue";
 import leftStepperTemplate from "./leftStepperTemplate.vue";
 
-const isInitScreen = ref(true);
 const currentStep = ref(0);
+const orgStore = useOrgStore();
+const router = useRouter();
+
+const isNewPractice = computed(() => orgStore.getIsNewPractice);
+const isInitScreen = ref(!isNewPractice.value);
+
+const handleGoToInitialScreen = () => {
+  if (isNewPractice.value) {
+    router.push("/");
+  } else {
+    isInitScreen.value = true;
+  }
+};
 </script>
 
 <style scoped>
