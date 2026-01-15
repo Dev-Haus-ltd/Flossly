@@ -156,6 +156,11 @@ export const listMyTasks = async (event) => {
         as: "status",
         attributes: ["id", "key", "name", "color"],
       },
+      {
+        model: UserTaskChecklist,
+        as: "userTaskChecklist",
+        required: false,
+      },
     ];
     const tasks = await UserTask.findAndCountAll({
       where,
@@ -341,6 +346,7 @@ export const assignBulkTasks = async (event) => {
     const existingAssignments = await UserTask.findAll({
       where: {
         userId,
+        organisationId,
         taskId: {
           [Op.in]: taskIds,
         },
@@ -2039,7 +2045,7 @@ export const groupTeamTasksByTaskId = async (event) => {
             {
               model: User,
               as: "assigner",
-              attributes: ["id", "roleId"],
+              attributes: ["id", "fullName", "roleId"],
               required: false,
             },
           ],
@@ -2785,7 +2791,7 @@ export const getUserTasksStatusWise = async (event) => {
       {
         model: User,
         as: "assigner",
-        attributes: ["id", "roleId"],
+        attributes: ["id", "fullName", "roleId"],
         required: false,
       },
     ];
@@ -2868,11 +2874,19 @@ export const getGeneralTasksByCategory = async (event) => {
   try {
     const tasks = await Task.findAll({
       where: { categoryId, isSystemTask: true },
-      include: {
-        model: Role,
-        as: "role",
-        attributes: ["id", "title"],
-      },
+      include: [
+        {
+          model: Role,
+          as: "role",
+          attributes: ["id", "title"],
+        },
+        {
+          model: TaskChecklist,
+          as: "taskChecklist",
+          attributes: ["id", "question", "category", "showRadio", "showDate", "showTime", "fieldOneTitle", "fieldTwoTitle"],
+          required: false,
+        },
+      ],
     });
     return success(tasks);
   } catch (err) {
