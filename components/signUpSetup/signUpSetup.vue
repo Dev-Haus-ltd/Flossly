@@ -17,7 +17,7 @@
       :is="currentComponent"
       ref="stepComponent"
       v-model="stepModels[step]"
-      :show-cta="step !== steps.length - 1"
+      v-bind="currentComponentProps"
       @back="handleBack"
     />
     </div>
@@ -25,6 +25,7 @@
     <!-- Navigation Buttons -->
     <div class="button-container">
       <v-btn
+        v-if="!isPaymentOpen"
         color="grey-darken-1"
         variant="tonal"
         @click="handleBack"
@@ -44,7 +45,7 @@
         width="100"
         class="nav-button"
         @click="nextStep" 
-        v-if="step < steps.length - 1"
+        v-if="step < steps.length - 1 && !isPaymentOpen"
         rounded="lg" size="x-large"
         style="font-size: 16px;"
       >
@@ -65,7 +66,7 @@
       Skip for now
       </v-btn>
 
-      <template v-if="step === steps.length - 1">
+      <template v-if="step === steps.length - 1 && !isPaymentOpen">
         <v-btn
           color="primary"
           @click="handlePricingCheckout"
@@ -77,17 +78,7 @@
           variant="flat"
           style="font-size: 16px;"
         >
-          Buy Now
-        </v-btn>
-        <v-btn
-          color="primary"
-          variant="text"
-          @click="navigateToDashboard"
-          class="nav-button trial-link"
-          height="48"
-          rounded="lg"
-        >
-          Start your free trial
+          Checkout
         </v-btn>
       </template>
     </div>
@@ -104,6 +95,12 @@ const authStore = useAuthStore();
 const mainStore = useMainStore();
 const userStore = useUserStore();
 const router = useRouter();
+const newPracticeCompleted = ref(false);
+const isFinalizingNewPractice = ref(false);
+const isPaymentOpen = computed(() => {
+  if (step.value !== steps.length - 1) return false;
+  return Boolean(stepComponent.value?.isPaymentOpen);
+});
 
 // Define emit to send current step to parent
 const emit = defineEmits(['update:currentStep', 'go-to-initial-screen']);
@@ -136,11 +133,15 @@ const steps = [
     title: "",
     subTitle: "",
     component: Pricing,
+    showCta: false,
   },
 ];
 
 // Dynamically resolve current component
 const currentComponent = computed(() => steps[step.value].component);
+const currentComponentProps = computed(() => ({
+  showCta: steps[step.value]?.showCta !== false,
+}));
 // Form refs & models
 const stepComponent = ref();
 const stepModels = ref([
@@ -181,6 +182,10 @@ const nextStep = async () => {
   }
   if (step.value === 0) {
     const data = stepModels.value[0];
+    if (isNewPractice.value) {
+      step.value++;
+      return;
+    }
     const formData = new FormData();
     formData.append("name", data.name);
     formData.append("contact", data.contact);
@@ -260,6 +265,10 @@ const nextStep = async () => {
       });
   } else if (step.value === 1) {
     const data = stepModels.value[1];
+    if (isNewPractice.value) {
+      step.value++;
+      return;
+    }
     data.origin = "onboarding";
     authStore
       .inviteMembers(data)
@@ -311,11 +320,109 @@ const nextStep = async () => {
   }
 };
 
-const navigateToDashboard = () => {
+const buildOrgFormData = () => {
+  const data = stepModels.value[0];
+  const formData = new FormData();
+  formData.append("name", data.name);
+  formData.append("contact", data.contact);
+  // formData.append("type", data.type);
+  formData.append("address", data.address);
+  formData.append("origin", "onboarding");
+  if (data.logo) {
+    formData.append("logo", data.logo, data.logo?.name);
+  }
+  return formData;
+};
+
+const getInvitePayload = () => {
+  const data = stepModels.value[1] || {};
+  const users = Array.isArray(data.users) ? data.users : [];
+  const validUsers = users.filter((u) => u?.email && String(u.email).trim());
+  if (!validUsers.length) return null;
+  return { ...data, users: validUsers, origin: "onboarding" };
+};
+
+const finalizeNewPractice = async () => {
+  if (!isNewPractice.value || newPracticeCompleted.value || isFinalizingNewPractice.value) {
+    return true;
+  }
+  isFinalizingNewPractice.value = true;
+  try {
+    const formData = buildOrgFormData();
+    const res = await orgStore.createOrganisationForUser(formData);
+    if (res.code !== 0) {
+      mainStore.setSnackbar({
+        title: res.data?.message || res.message || "Failed to create practice",
+        type: "Error",
+      });
+      return false;
+    }
+
+    const profileCompletion = useCookie("profileCompletion");
+    profileCompletion.value = 50;
+
+    if (res.data?.organisationId) {
+      const switchRes = await authStore.switchOrgnanisation({
+        orgId: res.data.organisationId,
+      });
+
+      if (switchRes.code !== 0) {
+        mainStore.setSnackbar({
+          title: switchRes.message || "Failed to switch to new workspace",
+          type: "Error",
+        });
+        return false;
+      }
+    }
+
+    await authStore.profile();
+    if (localStorage.getItem("user")) {
+      user.value = JSON.parse(localStorage.getItem("user"));
+      userOrgs.value = user.value.userOrganisations;
+    }
+
+    const invitePayload = getInvitePayload();
+    if (invitePayload) {
+      const inviteRes = await authStore.inviteMembers(invitePayload);
+      if (inviteRes.code === 0) {
+        userStore.resetUsers();
+      } else {
+        const errorMessage =
+          inviteRes?.data?.message || inviteRes?.message || "Failed to invite team members.";
+        mainStore.setSnackbar({
+          title: errorMessage,
+          type: "error",
+        });
+      }
+    }
+
+    orgStore.clearNewPracticeMode();
+    newPracticeCompleted.value = true;
+    return true;
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: err.message || "Failed to finish practice setup",
+      type: "error",
+    });
+    return false;
+  } finally {
+    isFinalizingNewPractice.value = false;
+  }
+};
+
+const navigateToDashboard = async () => {
+  if (isNewPractice.value) {
+    const ok = await finalizeNewPractice();
+    if (!ok) return;
+  }
   router.push("/");
 };
 
-const handlePricingCheckout = () => {
+const handlePricingCheckout = async () => {
+  if (isNewPractice.value) {
+    const ok = await finalizeNewPractice();
+    if (!ok) return;
+  }
   const pricingRef = stepComponent.value;
   if (pricingRef?.startCheckout) {
     const started = pricingRef.startCheckout();
@@ -334,7 +441,12 @@ const handlePricingCheckout = () => {
 const handleBack = () => {
   // If on first step (step 0), go back to initial screen
   if (step.value === 0) {
-    emit('go-to-initial-screen');
+    if (isNewPractice.value) {
+      orgStore.clearNewPracticeMode();
+      router.push("/");
+    } else {
+      emit('go-to-initial-screen');
+    }
     return;
   }
   
@@ -351,6 +463,12 @@ const handleBack = () => {
   }
   step.value--;
 };
+
+onBeforeRouteLeave(() => {
+  if (isNewPractice.value && !newPracticeCompleted.value) {
+    orgStore.clearNewPracticeMode();
+  }
+});
 </script>
 <style scoped>
 .form-container {

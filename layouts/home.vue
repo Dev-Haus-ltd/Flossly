@@ -12,7 +12,7 @@
           class="trial-banner__cta"
           @click="goToSubscription"
         >
-          Keep Soar
+          upgrade
         </v-btn>
       </div>
       <!-- App Bar -->
@@ -71,6 +71,7 @@ const mainStore = useMainStore();
 const userStore = useUserStore();
 const router = useRouter()
 const trialBanner = ref(null);
+const DEFAULT_TRIAL_BANNER_HEIGHT = 36;
 
 const resolvePreference = () => {
   const raw = user.value || {};
@@ -105,15 +106,22 @@ const setBannerHeight = (height) => {
   document.documentElement.style.setProperty("--trial-banner-height", `${height}px`);
 };
 
+const updateBannerHeight = () => {
+  if (!trialBanner.value) {
+    setBannerHeight(0);
+    return;
+  }
+  const height = trialBanner.value.getBoundingClientRect().height || 0;
+  setBannerHeight(height);
+};
+
 let bannerObserver = null;
 const observeBanner = () => {
   if (typeof window === "undefined" || !trialBanner.value) return;
   if (bannerObserver) bannerObserver.disconnect();
-  bannerObserver = new ResizeObserver(() => {
-    setBannerHeight(trialBanner.value?.offsetHeight || 0);
-  });
+  bannerObserver = new ResizeObserver(() => updateBannerHeight());
   bannerObserver.observe(trialBanner.value);
-  setBannerHeight(trialBanner.value.offsetHeight || 0);
+  updateBannerHeight();
 };
 
 watch(
@@ -125,7 +133,11 @@ watch(
       setBannerHeight(0);
       return;
     }
-    nextTick(() => observeBanner());
+    setBannerHeight(DEFAULT_TRIAL_BANNER_HEIGHT);
+    nextTick(() => {
+      observeBanner();
+      requestAnimationFrame(() => updateBannerHeight());
+    });
   },
   { immediate: true }
 );
@@ -134,6 +146,9 @@ onBeforeUnmount(() => {
   if (bannerObserver) bannerObserver.disconnect();
   bannerObserver = null;
   setBannerHeight(0);
+  if (typeof window !== "undefined") {
+    window.removeEventListener("resize", updateBannerHeight);
+  }
 });
 const menuItems = computed(() => {
   // Read license type to refresh menu when preferences change.
@@ -149,6 +164,12 @@ const preloadUsers = async () => {
   }
 };
 onMounted(async () => {
+  if (typeof window !== "undefined") {
+    window.addEventListener("resize", updateBannerHeight, { passive: true });
+    if (document?.fonts?.ready) {
+      document.fonts.ready.then(() => updateBannerHeight()).catch(() => {});
+    }
+  }
   await preloadUsers();
   if (!user.value && process.client) {
     const storedUser = localStorage.getItem("user");
@@ -161,6 +182,7 @@ onMounted(async () => {
     router.push("/logout");
   }
 });
+
 </script>
 
 <style scopped>
