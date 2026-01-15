@@ -183,7 +183,7 @@ export const updateUserPreferences = async (event) => {
     if (!userPreference) {
       throw createError({ message: "userPreference not found" });
     } else {
-      userPreference.taskTableColumns = JSON.stringify(taskTableColumns);
+      userPreference.taskTableColumns = taskTableColumns;
       await userPreference.save();
     }
     return success("Preferences updated successfully");

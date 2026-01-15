@@ -11,8 +11,11 @@
         <v-expansion-panel-title>
           <div class="d-flex align-center justify-space-between w-100">
             <div class="d-flex align-center">
-              <h3 class="head mb-0">My Leads</h3>
-              <v-chip class="ml-2 rounded-lg" size="x-small" color="#213536">
+              <v-chip color="primary" label>
+                <v-icon class="mr-2">mdi-account-multiple</v-icon>
+                My Leads
+              </v-chip>
+              <v-chip class="ml-2" color="primary" label>
                 {{ activeLeads.length }}
               </v-chip>
             </div>
@@ -27,7 +30,8 @@
             item-value="id"
             show-select
             hover
-            class="full-width-table"
+            class="resizable-table"
+            density="compact"
             :item-selectable="() => true"
             @update:model-value="onSelect"
             return-object
@@ -54,9 +58,11 @@
                   <th
                     :style="{
                       width: column.width + 'px',
+                      minWidth: column.width + 'px',
                       padding: '0px 7px',
                       fontSize: '14px',
                       backgroundColor: '#F6F6F6',
+                      position: 'relative',
                     }"
                   >
                     <div v-if="i !== 0" class="d-flex align-center th-content">
@@ -64,7 +70,7 @@
 
                       <span
                         class="resize-handle"
-                        @mousedown="startResize($event, column)"
+                        @pointerdown="startResize($event, column, i)"
                       ></span>
                     </div>
 
@@ -167,38 +173,101 @@
                 </div>
               </template>
 
-              <!-- Comment column with inline edit -->
+              <!-- Comment column with scrollable cell -->
               <template v-else-if="col.key === 'comments'">
-                <div class="pa-1">
-                  <textarea
-                    v-if="editingCell.id === item.id && editingCell.field === 'comments'"
-                    v-model="editingCell.value"
-                    @blur="saveEdit(item, 'comments')"
-                    @keyup.esc="cancelEdit"
-                    class="inline-edit-textarea"
-                    ref="editInput"
-                    rows="2"
-                    autofocus
-                  />
-                  <p 
-                    v-else 
-                    class="ml-2 mb-0 editable-field comment-text" 
-                    @click="startEdit(item, 'comments')"
-                  >
-                    {{ item.comments || 'Click to edit' }}
-                  </p>
+                <div class="comment-cell-wrapper pa-1" @click="startEdit(item, 'comments')">
+                  <div class="comment-scrollable">
+                    {{ item.comments || 'Click to add comment' }}
+                  </div>
+                  <v-icon size="14" class="comment-edit-icon">mdi-pencil</v-icon>
                 </div>
+                
+                <!-- Edit Dialog -->
+                <v-dialog
+                  v-model="commentMenus[item.id]"
+                  max-width="500"
+                  :retain-focus="false"
+                >
+                  <v-card class="pa-4">
+                    <v-card-title class="text-subtitle-1 pa-0 mb-3 d-flex justify-space-between align-center">
+                      <span>Edit Comment</span>
+                      <v-btn
+                        icon
+                        variant="text"
+                        size="small"
+                        @click="cancelEdit"
+                      >
+                        <v-icon>mdi-close</v-icon>
+                      </v-btn>
+                    </v-card-title>
+                    <v-textarea
+                      v-model="editingCell.value"
+                      variant="outlined"
+                      density="comfortable"
+                      rows="5"
+                      hide-details
+                      autofocus
+                      placeholder="Enter comment..."
+                      @keyup.esc="cancelEdit"
+                    />
+                    <v-card-actions class="pa-0 mt-3">
+                      <v-spacer />
+                      <v-btn
+                        variant="text"
+                        @click="cancelEdit"
+                      >
+                        Cancel
+                      </v-btn>
+                      <v-btn
+                        color="primary"
+                        variant="flat"
+                        @click="saveEdit(item, 'comments')"
+                      >
+                        Save
+                      </v-btn>
+                    </v-card-actions>
+                  </v-card>
+                </v-dialog>
               </template>
 
               <template v-else-if="col.key === 'alert'">
                 <DataTableColumnsAlerts :selected="item" @update="updateValueRow(item, 'alert')" />
               </template>
               <template v-else-if="col.key === 'leadStatus'">
-                <DataTableColumnsLeadStatus
-                  :selected="item"
-                  :column="col"
-                  @update="updateValueRow(item, 'leadStatus')"
-                />
+                <div 
+                  :style="`background-color: ${getLeadStatusColor(item.leadStatus)}; height: 100%;`"
+                  class="pa-1 d-flex align-center"
+                >
+                  <v-menu
+                    v-model="item.statusMenu"
+                    :close-on-content-click="false"
+                    offset-y
+                  >
+                    <template #activator="{ props }">
+                      <p v-bind="props" style="width: 100%; cursor: pointer; color: white;" class="mb-0">
+                        {{ item.leadStatus || 'Select Status' }}
+                      </p>
+                    </template>
+
+                    <v-card width="250" class="pa-4">
+                      <v-list>
+                        <v-list-item
+                          v-for="(status, i) in leadStatusOptions"
+                          :key="i"
+                          :style="`background-color: ${status.color}; color:#fff; margin-bottom: 6px; min-height: 30px;`"
+                          class="rounded-sm"
+                          @click="() => {
+                            item.leadStatus = status.name;
+                            item.statusMenu = false;
+                            updateValueRow(item, 'leadStatus');
+                          }"
+                        >
+                          <v-list-item-title>{{ status.name }}</v-list-item-title>
+                        </v-list-item>
+                      </v-list>
+                    </v-card>
+                  </v-menu>
+                </div>
               </template>
               <template v-else-if="col.key === 'leadSource'">
                 <DataTableColumnsLeadSource
@@ -217,55 +286,29 @@
                 />
               </template>
               <template v-else-if="col.key === 'assigned'">
-                <DataTableColumnsAssignedUsers
-                  :assigned-users="item.assigned || [user]"
-                  :all-users="getLeadUsers(item)"
-                  :current-user="user"
-                  @assign="assignLead(item, $event)"
-                  @unassign="unAssign(item, $event)"
-                />
+                <div class="pa-1">
+                  <DataTableColumnsAssignedUsers
+                    :user-task-id="item.id"
+                    :assigned-users="item.assigned || [user]"
+                    :all-users="getLeadUsers(item)"
+                    :current-user="user"
+                    @assign="assignLead(item, $event)"
+                    @unassign="unAssign(item, $event)"
+                  />
+                </div>
               </template>
               <!-- Default renderer for other columns -->
               <template v-else-if="col.key === 'inquiryDate'">
-                <p class="ml-2 mb-0">{{ formatDate(item[col.key]) }}</p>
+                <div class="pa-1">
+                  <p class="mb-0 text-center">{{ formatDate(item[col.key]) }}</p>
+                </div>
               </template>
               <template v-else-if="col.key === 'followUpDate'">
-                <div class="ml-2 mb-0">
-                  <v-menu
-                    v-model="followUpMenus[item.id]"
-                    :close-on-content-click="false"
-                    transition="scale-transition"
-                    offset-y
-                    max-width="320"
-                    min-width="260"
-                    
-                  >
-                    <template #activator="{ props: menuProps }">
-                      <v-text-field
-                        v-bind="menuProps"
-                        :model-value="followUpDrafts[item.id] ?? formatDate(item.followUpDate)"
-                        density="compact"
-                        variant="plain"
-                        hide-details
-                        placeholder="Select date"
-                        readonly
-                        class="followup-input"
-                        @click="setupFollowUpDraft(item)"
-                        append-inner-icon="mdi-calendar"
-                      />
-                    </template>
-                    <div class="pa-2">
-                      <v-date-picker
-                        hide-header
-                        color="primary"
-                        :model-value="followUpDrafts[item.id] ?? formatDate(item.followUpDate)"
-                        @update:model-value="(value) => onFollowUpSelect(item, value)"
-                      />
-                      <div class="d-flex justify-end mt-2">
-                        <v-btn variant="text" size="small" @click="followUpMenus[item.id] = false">Cancel</v-btn>
-                      </div>
-                    </div>
-                  </v-menu>
+                <div class="pa-1">
+                  <DataTableColumnsDueDate
+                    :model-value="item.followUpDate"
+                    @update:modelValue="(val) => updateFollowUpDate(item, val)"
+                  />
                 </div>
               </template>
               <template v-else>
@@ -275,8 +318,8 @@
           </v-data-table>
           <v-card
             v-if="selectedLeads.length"
-            class="action-bar py-3 px-6 d-flex  align-center rounded-lg "
-            style="gap: 80px;"
+            class="action-bar py-4 d-flex justify-center align-center rounded-lg"
+            style="padding: 0px 50px; gap: 40px;"
             :elevation="5"
             flat
           >
@@ -287,7 +330,7 @@
               <p class="ml-3 mt-1">Items Selected</p>
             </div>
 
-    <div class="actions-container d-flex align-center">
+    <div class="actions-container d-flex align-center" style="gap: 8px;">
       <div
         v-for="(action, i) in actions"
         :key="i"
@@ -298,11 +341,11 @@
         <span class="action-label">{{ action.label }}</span>
       </div>
 
-      <v-divider vertical class="mx-4" />
+      <v-divider vertical class="mx-2" style="height: 40px;" />
 
       <div class="action-item d-flex flex-column align-center" @click="closeTray">
-        <v-icon size="24">mdi-close</v-icon>
-        <span class="action-label text-on-surface-variant">Close</span>
+        <v-icon size="20" color="#6d6d6d">mdi-close</v-icon>
+        <span class="action-label">Close</span>
       </div>
     </div>
 
@@ -318,8 +361,11 @@
         <v-expansion-panel-title>
           <div class="d-flex align-center justify-space-between w-100">
             <div class="d-flex align-center">
-              <h3 class="head mb-0">Archived Leads</h3>
-              <v-chip class="ml-2 rounded-lg" size="x-small" color="#213536">
+              <v-chip color="#9E9E9E" label>
+                <v-icon class="mr-2">mdi-archive-outline</v-icon>
+                Archived Leads
+              </v-chip>
+              <v-chip class="ml-2" color="#9E9E9E" label>
                 {{ archivedLeads.length }}
               </v-chip>
             </div>
@@ -342,7 +388,8 @@
             :items="archivedLeads"
             item-value="id"
             hover
-            class="full-width-table"
+            class="resizable-table"
+            density="compact"
             show-select
             :item-selectable="() => false"
             @update:model-value="onArchivedSelectionChange"
@@ -371,16 +418,18 @@
                   <th
                     :style="{
                       width: column.width + 'px',
+                      minWidth: column.width + 'px',
                       padding: '0px 7px',
                       fontSize: '14px',
                       backgroundColor: '#F6F6F6',
+                      position: 'relative',
                     }"
                   >
                     <div v-if="i !== 0" class="d-flex align-center th-content">
                       <p class="px-1 w-100 mb-0">{{ column.title }}</p>
                       <span
                         class="resize-handle"
-                        @mousedown="startResize($event, column)"
+                        @pointerdown="startResize($event, column, i)"
                       ></span>
                     </div>
                     <div v-else class="d-flex justify-center">
@@ -517,8 +566,21 @@ const selectedArchivedLeads = ref([]);
 const isAllArchived = ref(false);
 const showLeadDetailDialog = ref(false);
 const selectedLead = ref({});
-const followUpMenus = reactive({});
-const followUpDrafts = reactive({});
+const commentMenus = reactive({});
+
+const leadStatusOptions = [
+  { name: 'New', color: '#36a863' },
+  { name: 'Contacted', color: '#f6a609' },
+  { name: 'Converted', color: '#0061fb' },
+  { name: 'Lost', color: '#e15b64' },
+  { name: 'Archived', color: '#9E9E9E' },
+];
+
+const getLeadStatusColor = (status) => {
+  const statusLower = (status || '').toLowerCase();
+  const match = leadStatusOptions.find(s => s.name.toLowerCase() === statusLower);
+  return match ? match.color : '#0061fb';
+};
 const isArchivedLead = (lead) => {
   const status = (lead?.leadStatus || '').toLowerCase();
   return !!lead?.softDeleted || status === 'archived';
@@ -563,19 +625,33 @@ const startEdit = (item, field) => {
   editingCell.field = field;
   editingCell.value = item[field] || '';
   editingCell.originalValue = item[field] || '';
+  
+  if (field === 'comments') {
+    commentMenus[item.id] = true;
+  }
 };
 
 const cancelEdit = () => {
+  const itemId = editingCell.id;
+  const field = editingCell.field;
+  
   editingCell.id = null;
   editingCell.field = null;
   editingCell.value = null;
   editingCell.originalValue = null;
+  
+  if (field === 'comments' && itemId) {
+    commentMenus[itemId] = false;
+  }
 };
 
 const saveEdit = async (item, field) => {
   // Check if value actually changed
   if (editingCell.value === editingCell.originalValue) {
     cancelEdit();
+    if (field === 'comments') {
+      commentMenus[item.id] = false;
+    }
     return;
   }
 
@@ -590,12 +666,20 @@ const saveEdit = async (item, field) => {
     if (res?.code === 0) {
       // Update local item
       item[field] = editingCell.value;
+      if (mainStore?.setSnackbar) {
+        mainStore.setSnackbar({ title: 'Updated successfully', type: 'success' });
+      }
     }
   } catch (e) {
     console.error('Failed to update:', e);
-    // Optionally show error notification
+    if (mainStore?.setSnackbar) {
+      mainStore.setSnackbar({ title: 'Failed to update', type: 'error' });
+    }
   } finally {
     cancelEdit();
+    if (field === 'comments') {
+      commentMenus[item.id] = false;
+    }
   }
 };
 
@@ -613,43 +697,43 @@ const onActionClick = (key) => {
 const formatDate = (d) => {
   return formatDateDDMMYYYY(d);
 };
-const setupFollowUpDraft = (item) => {
-  if (followUpDrafts[item.id] === undefined) {
-    followUpDrafts[item.id] = formatDate(item.followUpDate) || '';
-  }
-};
-const onFollowUpSelect = async (item, value) => {
+
+const updateFollowUpDate = async (item, value) => {
   if (!value) return;
-  const normalized = typeof value === 'string' ? value.slice(0, 10) : formatDate(value);
-  followUpDrafts[item.id] = normalized;
   try {
-    const res = await crmStore.updateLead({ id: item.id, followUpDate: normalized });
+    const res = await crmStore.updateLead({ id: item.id, followUpDate: value });
     if (res?.code === 0) {
-      item.followUpDate = normalized;
+      item.followUpDate = value;
+      if (mainStore?.setSnackbar) {
+        mainStore.setSnackbar({ title: 'Follow-up date updated', type: 'success' });
+      }
     }
   } catch (e) {
     console.error('Failed to update follow up date', e);
-  } finally {
-    followUpMenus[item.id] = false;
+    if (mainStore?.setSnackbar) {
+      mainStore.setSnackbar({ title: 'Failed to update date', type: 'error' });
+    }
   }
 };
 const onSelect = (selection) => {
   console.log(selection);
 };
 const toggleAll = () => {
-  if (isAllSelected.value) {
+  // Check if all active leads are currently selected
+  const allCurrentlySelected = activeLeads.value.length > 0 && 
+    activeLeads.value.every((lead) => 
+      selectedLeads.value.some((sel) => sel.id === lead.id)
+    );
+
+  if (allCurrentlySelected) {
+    // Deselect all
     isAllSelected.value = false;
     selectedLeads.value = [];
   } else {
-    const selected = [];
-
-    activeLeads.value.forEach((l) => {
-      selected.push(l);
-    });
-    selectedLeads.value = selected;
+    // Select all active leads
+    selectedLeads.value = [...activeLeads.value];
     isAllSelected.value = true;
   }
-
 };
 const toggleAllArchived = () => {
   isAllArchived.value = false;
@@ -667,20 +751,35 @@ const closeTray = () => {
   selectedArchivedLeads.value = [];
   confirmArchive.value = false;
 };
-const startResize = (event, column) => {
-  if (typeof window === 'undefined') return;
-  const startX = event.clientX || 0;
-  const startWidth = Number(column.width) || 140;
-  const onMouseMove = (e) => {
-    const delta = (e.clientX || 0) - startX;
-    column.width = Math.max(80, startWidth + delta);
-  };
-  const onMouseUp = () => {
-    window.removeEventListener('mousemove', onMouseMove);
-    window.removeEventListener('mouseup', onMouseUp);
-  };
-  window.addEventListener('mousemove', onMouseMove);
-  window.addEventListener('mouseup', onMouseUp);
+const isResizing = ref(false);
+let startX = 0;
+let startWidth = 0;
+let currentCol = null;
+
+const startResize = (e, col, i) => {
+  e.stopPropagation();
+  e.preventDefault();
+  
+  isResizing.value = true;
+  currentCol = col;
+  startX = e.clientX;
+  startWidth = col.width;
+  
+  document.addEventListener('pointermove', resizeColumn);
+  document.addEventListener('pointerup', stopResize);
+};
+
+const resizeColumn = (e) => {
+  if (!isResizing.value || !currentCol) return;
+  const diff = e.clientX - startX;
+  currentCol.width = Math.max(120, startWidth + diff);
+};
+
+const stopResize = (e) => {
+  isResizing.value = false;
+  document.removeEventListener('pointermove', resizeColumn);
+  document.removeEventListener('pointerup', stopResize);
+  currentCol = null;
 };
 const updateValueRow = async (row, key) => {
   try {
@@ -867,23 +966,26 @@ const convertSelected = async () => {
 </script>
 
 <style scoped>
-.head {
-  
-  font-weight: 600;
-  font-style: "SemiBold";
-  font-size: 14px;
-}
 .lead-panels {
-  border: 1px solid rgb(var(--v-theme-outline));
-  border-radius: 14px;
-  background: #fff;
-  padding: 4px 0;
+  margin-top: 20px;
 }
+
+.border-sm {
+  border: 1px solid rgb(var(--v-theme-outline));
+  margin-bottom: 8px;
+}
+
 .table-panels :deep(.v-expansion-panel-title) {
   border-bottom: 1px solid #e5e7eb;
+  min-height: 48px;
 }
+
 .table-panels :deep(.v-expansion-panel-text) {
-  padding-top: 4px !important;
+  padding: 0 !important;
+}
+
+.table-panels :deep(.v-expansion-panel-text__wrapper) {
+  padding: 0 !important;
 }
 
 :deep(.v-table__wrapper table) {
@@ -896,15 +998,38 @@ const convertSelected = async () => {
 }
 
 /* Vertical lines between columns */
-:deep(.v-table .v-table__wrapper > table > thead > tr > th:not(:last-child)) {
-  border-right: 1px solid rgb(var(--v-theme-outline));
+/* Table borders for clear cell separation */
+:deep(.v-table .v-table__wrapper > table > thead > tr > th) {
+  border-right: 1px solid rgba(0, 0, 0, 0.12);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
 }
-:deep(.v-table .v-table__wrapper > table > tbody > tr > td:not(:last-child)) {
-  border-right: 1px solid rgb(var(--v-theme-outline));
+
+:deep(.v-table .v-table__wrapper > table > tbody > tr > td) {
+  border-right: 1px solid rgba(0, 0, 0, 0.12);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
 }
-.full-width-table {
-  border-top: 1px solid rgb(var(--v-theme-outline));
+
+:deep(.v-table .v-table__wrapper > table > thead > tr > th:last-child),
+:deep(.v-table .v-table__wrapper > table > tbody > tr > td:last-child) {
+  border-right: none;
+}
+.resizable-table {
+  border-top: none;
   border-radius: unset;
+}
+
+.resizable-table :deep(.v-table__wrapper) {
+  margin-top: 0 !important;
+}
+
+.resizable-table :deep(.v-data-table tbody tr) {
+  height: 48px !important;
+}
+
+.resizable-table :deep(.v-data-table td) {
+  height: 48px !important;
+  padding: 4px 8px !important;
+  vertical-align: middle !important;
 }
 
 .cursor-pointer {
@@ -956,35 +1081,47 @@ const convertSelected = async () => {
   color: rgb(var(--v-theme-on-primary));
   background: rgb(var(--v-theme-primary));
 }
-.action-bar { position: fixed; bottom: 30px; left: 60%; transform: translateX(-50%); z-index: 1000; }
+.action-bar {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: white;
+  z-index: 1000;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
 .actions-container {
   display: flex;
-  flex-wrap: nowrap; 
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: center;
-  gap: 0;
 }
 
 .action-item {
-  flex: 0 0 auto; /* ✅ prevents shrinking or stacking */
+  flex: 0 0 auto;
   cursor: pointer;
   border-radius: 8px;
-  padding: 6px 10px;
-  transition: background-color 0.15s ease;
+  padding: 6px 12px;
+  transition: background-color 0.15s ease, transform 0.1s ease;
   white-space: nowrap;
   text-align: center;
+  min-width: 60px;
 }
 
 .action-item:hover {
-  background-color: rgba(var(--v-theme-primary), 0.08); /* theme-aware hover */
+  background-color: rgba(0, 0, 0, 0.04);
+  transform: translateY(-1px);
 }
 
 .action-label {
-  font-size: 13px;
+  font-size: 12px;
   margin-top: 4px;
-  white-space: nowrap;
-  text-align: center;
+  font-weight: 400;
+  color: #6d6d6d;
+  line-height: 1.2;
 }
+
 .action-icon {
   width: 24px;
   height: 24px;
@@ -1026,11 +1163,65 @@ const convertSelected = async () => {
   box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.2);
 }
 
-.comment-text {
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 80px;
+/* Scrollable comment cell */
+.comment-cell-wrapper {
+  position: relative;
+  height: 100%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.comment-cell-wrapper:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.comment-scrollable {
+  flex: 1;
   overflow-y: auto;
+  max-height: 40px;
+  padding: 2px 4px;
+  word-wrap: break-word;
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(0, 0, 0, 0.87);
+}
+
+.comment-scrollable:empty::before {
+  content: 'Click to add comment';
+  color: rgba(0, 0, 0, 0.38);
+  font-style: italic;
+}
+
+.comment-edit-icon {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  color: rgba(0, 0, 0, 0.54);
+  flex-shrink: 0;
+}
+
+.comment-cell-wrapper:hover .comment-edit-icon {
+  opacity: 1;
+}
+
+/* Scrollbar styling for comment cell */
+.comment-scrollable::-webkit-scrollbar {
+  width: 4px;
+}
+
+.comment-scrollable::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.comment-scrollable::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 2px;
+}
+
+.comment-scrollable::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
 }
 
 .with-border { border: 1px solid rgb(var(--v-theme-outline)); }
