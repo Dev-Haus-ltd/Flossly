@@ -17,7 +17,7 @@
     elevation="0"
     height="70"
     class="pr-5 cust-border bg-secondary"
-    :style="{ marginTop: 'var(--trial-banner-height, 0px)' }"
+    :style="{ top: 'var(--trial-banner-height, 0px)', marginTop: 'var(--trial-banner-height, 0px)' }"
   >
     <v-btn icon class="d-md-none" @click="handleDrawer">
       <v-icon>mdi-menu</v-icon>
