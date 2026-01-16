@@ -10,9 +10,9 @@
           size="small"
           variant="outlined"
           class="trial-banner__cta"
-          @click="goToSubscription"
+          @click="openPricingModal"
         >
-          upgrade
+          Upgrade
         </v-btn>
       </div>
       <!-- App Bar -->
@@ -35,11 +35,53 @@
         <slot />
       </v-main>
     </v-layout>
+    <!-- Pricing Modal Dialog -->
+    <v-dialog
+      v-if="showPricingDialog"
+      v-model="showPricingDialog"
+      max-width="980"
+      scrollable
+      @click:outside="closePricingModal"
+    >
+      <v-card class="pricing-modal-card rounded-xl d-flex flex-column">
+        <div class="pricing-modal-header">
+          <v-btn
+            icon
+            variant="text"
+            size="32"
+            @click="closePricingModal"
+            class="pricing-modal-close"
+          >
+            <v-icon size="18">mdi-close</v-icon>
+          </v-btn>
+        </div>
+
+        <div class="pricing-modal-body">
+          <PricingModal ref="pricingModalRef" />
+        </div>
+
+        <div v-if="!pricingModalRef?.isPaymentOpen" class="modal-actions">
+          <v-btn
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            size="x-large"
+            @click="handleBuyNow"
+            class="buy-now-btn"
+            height="44"
+            width="140"
+          >
+            Buy Now
+          </v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
 <script setup>
 import { useDisplay } from "vuetify";
+import PricingModal from "@/components/signUpSetup/PricingModal.vue";
 
 const { smAndDown } = useDisplay();
 const drawer = ref(true);
@@ -71,6 +113,8 @@ const mainStore = useMainStore();
 const userStore = useUserStore();
 const router = useRouter()
 const trialBanner = ref(null);
+const pricingModalRef = ref(null);
+const showPricingDialog = ref(false);
 const DEFAULT_TRIAL_BANNER_HEIGHT = 36;
 
 const resolvePreference = () => {
@@ -97,8 +141,38 @@ const showTrialBanner = computed(
   () => String(licenseType.value || "").toLowerCase() === "trial"
 );
 
-const goToSubscription = () => {
-  router.push("/subscription");
+const openPricingModal = () => {
+  showPricingDialog.value = true;
+};
+
+const closePricingModal = () => {
+  showPricingDialog.value = false;
+  if (pricingModalRef.value?.resetModal) {
+    pricingModalRef.value.resetModal();
+  }
+};
+
+const handleBuyNow = () => {
+  if (!pricingModalRef.value) {
+    mainStore.setSnackbar({
+      title: "Please select a plan to continue.",
+      type: "error",
+    });
+    return;
+  }
+
+  const selectedPlanId = pricingModalRef.value?.selectedPlanId;
+  if (!selectedPlanId) {
+    mainStore.setSnackbar({
+      title: "Please select a plan to continue.",
+      type: "error",
+    });
+    return;
+  }
+
+  if (pricingModalRef.value?.handleSubscribe) {
+    pricingModalRef.value.handleSubscribe(selectedPlanId);
+  }
 };
 
 const setBannerHeight = (height) => {
@@ -232,5 +306,107 @@ onMounted(async () => {
   border-color: rgba(255, 255, 255, 0.6);
   color: #ffffff;
   text-transform: none;
+}
+
+/* Pricing Modal Styles */
+.pricing-modal-card {
+  min-height: 70vh;
+  background-color: rgb(var(--v-theme-surface));
+  overflow: hidden;
+}
+
+.pricing-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content:flex-end;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgb(var(--v-theme-outline));
+}
+
+.pricing-modal-title {
+  font-weight: 600;
+  font-size: 16px;
+  color: rgb(var(--v-theme-on-surface));
+}
+
+.pricing-modal-close {
+  min-width: 32px;
+  height: 32px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  padding: 0 16px 16px;
+}
+
+.buy-now-btn {
+  min-width: 120px;
+  text-transform: none;
+  font-size: 14px;
+}
+
+.cancel-btn {
+  min-width: 100px;
+  text-transform: none;
+  font-size: 14px;
+}
+
+.pricing-modal-body {
+  padding: 12px 16px 16px;
+  overflow-y: auto;
+}
+
+.pricing-modal-card :deep(.pricing-title) {
+  font-size: 24px;
+  line-height: 1.3;
+}
+
+.pricing-modal-card :deep(.pricing-subtitle) {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.pricing-modal-card :deep(.plan-name) {
+  font-size: 16px;
+}
+
+.pricing-modal-card :deep(.plan-desc) {
+  font-size: 12px;
+}
+
+.pricing-modal-card :deep(.plan-detail-title) {
+  font-size: 16px;
+}
+
+.pricing-modal-card :deep(.plan-price) {
+  font-size: 28px;
+}
+
+.pricing-modal-card :deep(.plan-feature-title) {
+  font-size: 12px;
+}
+
+.pricing-modal-card :deep(.plan-features span) {
+  font-size: 12px;
+}
+
+.pricing-modal-card :deep(.plan-detail) {
+  border-radius: 16px;
+}
+
+.pricing-modal-card :deep(.plan-option) {
+  border-radius: 16px;
+}
+
+@media (max-width: 768px) {
+  .modal-actions {
+    flex-direction: column;
+  }
+
+  .buy-now-btn {
+    width: 100%;
+  }
 }
 </style>
