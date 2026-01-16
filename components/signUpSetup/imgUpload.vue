@@ -21,8 +21,10 @@
       />
     </div>
   
-    <div v-if="modelValue" class="mt-2">
-      <p class="mb-2">Selected: {{ modelValue.name }}</p>
+    <div v-if="previewUrl" class="mt-2">
+      <p v-if="isFile" class="mb-2">
+        Selected: {{ modelValue.name }}
+      </p>
       <div class="image-preview-container" v-if="previewUrl">
         <img :src="previewUrl" alt="Preview" class="preview-image" />
         <v-btn
@@ -41,7 +43,7 @@
   </template>
   
   <script setup>
-import { ref, watch, onBeforeUnmount } from 'vue'
+import { ref, watchEffect , onBeforeUnmount } from 'vue'
 
 const modelValue = defineModel() // v-model for parent binding
 
@@ -51,6 +53,11 @@ const config = useRuntimeConfig()
 
 // Store previous object URL to revoke it later
 let previousUrl = null
+
+const baseUrl =
+  config.public.BASE_URL ||
+  config.public.API_BASE_URL ||
+  ''
 
 // Get max file size from env variable (defaults to 5MB if not set)
 const maxFileSize = computed(() => {
@@ -132,6 +139,44 @@ const removeImage = () => {
     fileInput.value.value = ''
   }
 }
+
+const isFile = computed(() => {
+  return (
+    modelValue.value &&
+    typeof modelValue.value === 'object' &&
+    typeof modelValue.value.name === 'string'
+  )
+})
+
+
+watchEffect(() => {
+  const val = modelValue.value
+
+  // Only revoke if we previously created a blob URL
+  if (previousUrl && !(val instanceof File)) {
+    URL.revokeObjectURL(previousUrl)
+    previousUrl = null
+  }
+
+  if (typeof val === 'string' && val) {
+    previewUrl.value = val.startsWith('http')
+      ? val
+      : `${baseUrl}${val}`
+    return
+  }
+
+  if (val && typeof val === 'object' && val.type?.startsWith('image/')) {
+    const url = URL.createObjectURL(val)
+    previewUrl.value = url
+    previousUrl = url
+    return
+  }
+
+  previewUrl.value = null
+})
+
+
+
 
 // Clean up when component is destroyed
 onBeforeUnmount(() => {

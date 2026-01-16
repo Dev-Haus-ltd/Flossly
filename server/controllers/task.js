@@ -2586,6 +2586,7 @@ export const teamTasksCountByCategory = async (event) => {
     const teamTasks = await UserTask.findAll({
       where: {
         organisationId: loggedUser.orgId,
+        userId: { [Op.ne]: loggedUser.userId },
         isArchieved: false,
       },
       include: [

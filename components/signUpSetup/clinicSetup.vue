@@ -1,8 +1,6 @@
 <template>
   <v-form ref="form" v-model="valid">
-    <label class="lbl">
-      Clinic Name <span class="required-marker">*</span>
-    </label>
+    <label class="lbl required">Clinic Name</label>
     <v-text-field
       v-model="clinic.name"
       :rules="[required]"
@@ -14,9 +12,7 @@
     />
     <label class="lbl">Logo Upload </label>
     <imgUpload v-model="clinic.logo" class="my-2"/>
-    <label class="lbl">
-      Contact <span class="required-marker">*</span>
-    </label>
+    <label class="lbl required">Contact</label>
     <v-text-field
       variant="solo"
       v-model="clinic.contact"
@@ -26,9 +22,7 @@
       class="input-bordered mt-2"
       flat
     />
-    <label class="mb-2 lbl">
-      Location Address <span class="required-marker">*</span>
-    </label>
+    <label class="lbl required">Location Address</label>
     <v-text-field
       variant="solo"
       v-model="clinic.address"
@@ -86,7 +80,10 @@ defineExpose({
   color: #1e1e1e;
   margin-bottom: 8px;
 }
-.required-marker {
-  color: #d32f2f;
+
+.lbl.required::after {
+  content: " *";
+  color: #e53935; /* red */
+  font-weight: 600;
 }
 </style>

@@ -75,12 +75,13 @@
 const { user } = useUser();
 import logoIcon from "@/assets/logos/Logoicon2.svg";
 const emit = defineEmits(["small-screen-drawer"]);
-const router = useRouter();
+
 const props = defineProps({
   drawer: Boolean,
   user: Object,
   rail: Boolean,
 });
+
 const handleDrawer = () => {
   emit("small-screen-drawer",!props.rail);
 };

@@ -17,6 +17,7 @@
       :is="currentComponent"
       ref="stepComponent"
       v-model="stepModels[step]"
+      :show-cta="step !== steps.length - 1"
       v-bind="currentComponentProps"
       @back="handleBack"
     />
@@ -45,7 +46,8 @@
         width="100"
         class="nav-button"
         @click="nextStep" 
-        v-if="step < steps.length - 1 && !isPaymentOpen"
+        v-if="step < steps.length - 1"
+        :disabled="isNextDisabled"
         rounded="lg" size="x-large"
         style="font-size: 16px;"
       >
@@ -66,7 +68,10 @@
       Skip for now
       </v-btn>
 
-      <template v-if="step === steps.length - 1 && !isPaymentOpen">
+      <template v-if="
+        step === steps.length - 1 &&
+        !stepComponent?.isPaymentOpen
+        ">
         <v-btn
           color="primary"
           @click="handlePricingCheckout"
@@ -78,7 +83,17 @@
           variant="flat"
           style="font-size: 16px;"
         >
-          Checkout
+          Buy Now
+        </v-btn>
+        <v-btn
+          color="primary"
+          variant="text"
+          @click="navigateToDashboard"
+          class="nav-button trial-link"
+          height="48"
+          rounded="lg"
+        >
+          Start your free trial
         </v-btn>
       </template>
     </div>
@@ -152,6 +167,7 @@ const stepModels = ref([
 
 const user = ref({});
 const userOrgs = ref([]);
+const initialClinicSnapshot = ref(null);
 
 // Check if this is a new practice creation flow (from Add Practice in sidebar)
 const isNewPractice = computed(() => orgStore.getIsNewPractice);
@@ -165,14 +181,77 @@ onMounted(() => {
   // For new practice flow, start with empty name (no org exists yet)
   if (isNewPractice.value) {
     stepModels.value[0].name = "";
+    stepModels.value[0].contact = "";
+    stepModels.value[0].address = "";
+    stepModels.value[0].logo = null;
   } else {
     // For existing org update flow, pre-fill with current org name
     const currentOrg = userOrgs.value.find(
       (x) => x.organisationId === user.value.currentLoggedInOrgId
     );
     stepModels.value[0].name = currentOrg?.organisation?.name || "";
+    stepModels.value[0].contact = currentOrg?.organisation?.contact || "";
+    stepModels.value[0].address = currentOrg?.organisation?.address || "";
+    stepModels.value[0].logo = currentOrg?.organisation?.logo || null;
+
+    // snapshot for dirty check
+    initialClinicSnapshot.value = {
+      name: stepModels.value[0].name,
+      contact: stepModels.value[0].contact,
+      address: stepModels.value[0].address,
+      logo: stepModels.value[0].logo, // string URL
+    };
   }
 });
+
+const isNextDisabled = computed(() => {
+  // STEP 0 – Clinic setup
+  if (step.value === 0) {
+    const clinic = stepModels.value[0];
+    return (
+      !clinic.name?.trim() ||
+      !clinic.contact?.trim() ||
+      !clinic.address?.trim()
+    );
+  }
+
+  // STEP 1 – Team members
+  if (step.value === 1) {
+    const users = stepModels.value[1]?.users || [];
+
+    // Require at least one valid email + role
+    return users.length === 0 || users.some(
+      u => !u.email?.trim() || !u.roleId
+    );
+  }
+
+  // STEP 2 – Pricing (Next button not shown anyway)
+  return false;
+});
+
+// 🔑 dirty check
+const isClinicDirty = () => {
+  if (isNewPractice.value || !initialClinicSnapshot.value) return true;
+
+  const current = stepModels.value[0];
+  const initial = initialClinicSnapshot.value;
+
+  if (current.name !== initial.name) return true;
+  if (current.contact !== initial.contact) return true;
+  if (current.address !== initial.address) return true;
+
+  // new logo selected
+  if (
+    current.logo &&
+    typeof current.logo === "object" &&
+    typeof current.logo.name === "string"
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
 
 const nextStep = async () => {
   const component = stepComponent.value;
@@ -181,6 +260,11 @@ const nextStep = async () => {
     if (!isValid) return;
   }
   if (step.value === 0) {
+    // ⛔ update flow + no changes → skip API
+    if (!isNewPractice.value && !isClinicDirty()) {
+      step.value++;
+      return;
+    }
     const data = stepModels.value[0];
     if (isNewPractice.value) {
       step.value++;
@@ -192,8 +276,12 @@ const nextStep = async () => {
     // formData.append("type", data.type);
     formData.append("address", data.address);
     formData.append("origin", "onboarding");
-    if (data.logo) {
-      formData.append("logo", data.logo, data.logo?.name);
+    if (
+      data.logo &&
+      typeof data.logo === "object" &&
+      typeof data.logo.name === "string"
+    ) {
+      formData.append("logo", data.logo, data.logo.name);
     }
 
     // Determine which API to call based on whether this is a new practice creation
