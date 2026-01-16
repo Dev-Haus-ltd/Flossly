@@ -392,10 +392,19 @@ export const profile = async (event) => {
       }
     }
     
-    if (userObj.preferences && userObj.preferences.length && userObj.preferences[0].taskTableColumns) {
-      userObj.preferences[0].taskTableColumns = JSON.parse(
-        userObj.preferences[0].taskTableColumns
-      );
+    if (
+      userObj.preferences &&
+      userObj.preferences.length &&
+      userObj.preferences[0].taskTableColumns
+    ) {
+      const taskTableColumns = userObj.preferences[0].taskTableColumns;
+      if (typeof taskTableColumns === "string") {
+        try {
+          userObj.preferences[0].taskTableColumns = JSON.parse(taskTableColumns);
+        } catch (_) {
+          // Leave as-is if malformed to avoid breaking profile payload.
+        }
+      }
     }
 
     try {
