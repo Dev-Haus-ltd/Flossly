@@ -115,7 +115,7 @@
               <tr>
                 <th>#</th>
                 <th>Title</th>
-                <th>Description</th>
+                <!-- <th>Description</th> -->
                 <th>Frequency</th>
                 <th>Category</th>
                 <th>Priority</th>
@@ -153,7 +153,7 @@
                 </td>
 
                 <!-- Description -->
-                <td :class="{ 'cell-error': task.errors?.description }">
+                <!-- <td :class="{ 'cell-error': task.errors?.description }">
                   <div class="relative">
                     <v-text-field
                       v-model="task.description"
@@ -169,7 +169,7 @@
                       <span>{{ task.errors.description }}</span>
                     </v-tooltip>
                   </div>
-                </td>
+                </td> -->
 
                 <!-- Frequency -->
                 <td :class="{ 'cell-error': task.errors?.frequency }">
@@ -417,6 +417,18 @@ const hasValidationErrors = computed(() => {
   return parsedTasks.value.some((task) => task.hasErrors);
 });
 
+// Centralizes all title logic
+const resolveTitleFromRow = (row) => {
+  const title =
+    row["title"]?.trim() ||
+    row["task"]?.trim() ||
+    row["name"]?.trim() ||
+    row["description"]?.trim() ||
+    "";
+
+  return title;
+};
+
 // Sync prop with local state
 watch(
   () => props.modelValue,
@@ -506,15 +518,15 @@ const processFile = async (file) => {
       const normalizedKeys = Object.keys(normalizedRows[0] || {});
 
       // Validate required columns (ONLY title & category)
-      const requiredColumns = ["title", "category"];
-      const hasRequiredColumns = requiredColumns.every((col) =>
-        normalizedKeys.includes(col)
-      );
+      const hasTitleColumn =
+        normalizedKeys.includes("title") ||
+        normalizedKeys.includes("task") ||
+        normalizedKeys.includes("name") ||
+        normalizedKeys.includes("description");
 
-      if (!hasRequiredColumns) {
+      if (!hasTitleColumn || !normalizedKeys.includes("category")) {
         excelError.value =
-          "Invalid file structure — missing required columns: " +
-          requiredColumns.join(", ");
+          "Invalid file structure — missing required columns. Please include one of title, task, name, or description, and category.";
         isProcessing.value = false;
         return;
       }
@@ -523,8 +535,7 @@ const processFile = async (file) => {
       const formatted = normalizedRows.map((row, index) => {
         const task = {
           defaultFrequency: row["frequency"] ?? "",
-          description: row["description"] ?? "",
-          title: row["title"] ?? "",
+          title: resolveTitleFromRow(row),
           originalCategory: row["category"] ?? "",
           originalPriority: row["priority"] ?? "",
           originalRole: row["role"] ?? "",

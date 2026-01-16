@@ -74,7 +74,7 @@
           color="primary"
           @click="handlePricingCheckout"
           height="48"
-          width="150"
+          width="100"
           class="nav-button"
           rounded="lg"
           size="x-large"
@@ -90,6 +90,7 @@
           class="nav-button trial-link"
           height="48"
           rounded="lg"
+          size="x-large"
         >
           Start your free trial
         </v-btn>
