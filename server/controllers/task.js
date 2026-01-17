@@ -189,34 +189,66 @@ export const addTaskCategory = async (event) => {
   if (!name) return error(400, "Name required");
 
   try {
-    // Prevent duplicate names (case-insensitive) inside the same org, excluding self on update
-    const existingName = await TaskCategory.findOne({
-      where: {
-        name: { [Op.iLike]: name },
-        organisationId: loggedUser.orgId,
-        ...(id ? { id: { [Op.ne]: id } } : {}),
-      },
-    });
-    if (existingName) {
-      throw createError({ message: `Category ${name} is already added` });
-    }
-
     // Update when id is provided, otherwise create
     if (id) {
+      // Find category - can be either system (organisationId: null) or user-created
       const category = await TaskCategory.findOne({
-        where: { id, organisationId: loggedUser.orgId },
+        where: {
+          id,
+          [Op.or]: [
+            { organisationId: null }, // System category
+            { organisationId: loggedUser.orgId }, // User-created category
+          ],
+        },
       });
+      
       if (!category) {
         throw createError({ message: "Category not found" });
       }
 
-      category.name = name;
-      category.description = description;
-      category.parentId = parentId;
-      category.color = color;
+      // Check if it's a system category (organisationId is null)
+      const isSystemCategory = category.organisationId === null;
+
+      // For system categories, only allow updating description and color (not name)
+      if (isSystemCategory) {
+        // Don't update the name for system categories
+        category.description = description;
+        category.color = color;
+        // Don't allow changing parentId for system categories
+      } else {
+        // For user-created categories, check for duplicate names
+        const existingName = await TaskCategory.findOne({
+          where: {
+            name: { [Op.iLike]: name },
+            organisationId: loggedUser.orgId,
+            id: { [Op.ne]: id },
+          },
+        });
+        if (existingName) {
+          throw createError({ message: `Category ${name} is already added` });
+        }
+
+        // Update all fields for user-created categories
+        category.name = name;
+        category.description = description;
+        category.parentId = parentId;
+        category.color = color;
+      }
+      
       await category.save();
 
       return success({ message: "Updated", category });
+    }
+
+    // Creating new category - check for duplicates
+    const existingName = await TaskCategory.findOne({
+      where: {
+        name: { [Op.iLike]: name },
+        organisationId: loggedUser.orgId,
+      },
+    });
+    if (existingName) {
+      throw createError({ message: `Category ${name} is already added` });
     }
 
     const newCategory = await TaskCategory.create({
@@ -1869,7 +1901,8 @@ export const groupTeamTasksByTaskId = async (event) => {
   } = body;
 
   const currentPage = Math.max(Number(page) || 1, 1);
-  const perPage = Math.min(Math.max(Number(pageSize) || 10, 1), 100);
+  const parsedPageSize = Number(pageSize) || 10;
+  const perPage = parsedPageSize === -1 ? 10000 : Math.min(Math.max(parsedPageSize, 1), 1000);
   const offset = (currentPage - 1) * perPage;
 
   let categoryIds = [];
@@ -1883,7 +1916,7 @@ export const groupTeamTasksByTaskId = async (event) => {
     });
     categoryIds = categories.map((c) => c.id);
     if (!categoryIds.length) {
-      return success({ page: currentPage, pageSize: perPage, total: 0, statuses: [] });
+      return success({ page: currentPage, pageSize: parsedPageSize, total: 0, statuses: [] });
     }
   } else {
     const allCategories = await TaskCategory.findAll({
@@ -1892,7 +1925,7 @@ export const groupTeamTasksByTaskId = async (event) => {
     });
     categoryIds = allCategories.map((c) => c.id);
     if (!categoryIds.length) {
-      return success({ page: currentPage, pageSize: perPage, total: 0, statuses: [] });
+      return success({ page: currentPage, pageSize: parsedPageSize, total: 0, statuses: [] });
     }
   }
 
@@ -2061,7 +2094,7 @@ export const groupTeamTasksByTaskId = async (event) => {
       status: status.key,
       total: count,
       page: currentPage,
-      pageSize: perPage,
+      pageSize: parsedPageSize,
       tasks: buildTasksResponse(rows),
     });
   }
@@ -2121,7 +2154,7 @@ export const groupTeamTasksByTaskId = async (event) => {
     status: "archived",
     total: archivedCount,
     page: currentPage,
-    pageSize: perPage,
+    pageSize: parsedPageSize,
     tasks: buildTasksResponse(archivedRows),
   });
 
@@ -2129,7 +2162,7 @@ export const groupTeamTasksByTaskId = async (event) => {
 
   return success({
     page: currentPage,
-    pageSize: perPage,
+    pageSize: parsedPageSize,
     total,
     statuses: statusGroups,
   });
@@ -2401,9 +2434,15 @@ export const getCategories = async (event) => {
           { organisationId: loggedUser.orgId },
         ],
       },
-      attributes: {
-        include: [[fn("COUNT", col("tasks.id")), "taskCount"]],
-      },
+      attributes: [
+        "id",
+        "name",
+        "description",
+        "color",
+        "parentId",
+        "organisationId",
+        [fn("COUNT", col("tasks.id")), "taskCount"]
+      ],
       include: [
         {
           model: Task,
@@ -2682,7 +2721,9 @@ export const getUserTasksStatusWise = async (event) => {
 
   try {
     const currentPage = Math.max(Number(page) || 1, 1);
-    const perPage = Math.min(Math.max(Number(pageSize) || 10, 1), 100);
+    // Handle "All" option: -1 means no limit, otherwise cap at 1000
+    const parsedPageSize = Number(pageSize) || 10;
+    const perPage = parsedPageSize === -1 ? 10000 : Math.min(Math.max(parsedPageSize, 1), 1000);
     const offset = (currentPage - 1) * perPage;
 
     const categories = await TaskCategory.findAll({
@@ -2695,7 +2736,7 @@ export const getUserTasksStatusWise = async (event) => {
 
     const categoryIds = categories.map((c) => c.id);
     if (!categoryIds.length) {
-      return success({ page: currentPage, pageSize: perPage, total: 0, statuses: [] });
+      return success({ page: currentPage, pageSize: parsedPageSize, total: 0, statuses: [] });
     }
 
     const orgStatuses = await OrganisationStatus.findAll({
@@ -2822,7 +2863,7 @@ export const getUserTasksStatusWise = async (event) => {
         status: status.key,
         total: count,
         page: currentPage,
-        pageSize: perPage,
+        pageSize: parsedPageSize,
         tasks: tasksWithFlags,
       });
     }
@@ -2849,7 +2890,7 @@ export const getUserTasksStatusWise = async (event) => {
       status: "archived",
       total: archivedCount,
       page: currentPage,
-      pageSize: perPage,
+      pageSize: parsedPageSize,
       tasks: archivedTasksWithFlags,
     });
 
@@ -2857,7 +2898,7 @@ export const getUserTasksStatusWise = async (event) => {
 
     return success({
       page: currentPage,
-      pageSize: perPage,
+      pageSize: parsedPageSize,
       total,
       statuses,
     });
