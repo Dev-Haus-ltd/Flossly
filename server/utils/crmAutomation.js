@@ -50,10 +50,21 @@ export const buildEffectiveCrmTemplates = (lead, templatesByOrg) => {
   return effectiveTemplates;
 };
 
+const cleanCrmSubject = (subject = "") =>
+  String(subject)
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\bday\s*\d+\b/gi, "")
+    .replace(/\b\d+\s*days?\s*(before|after)\b/gi, "")
+    .replace(/\b(morning|evening|afternoon|immediate(ly)?)\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+-\s+-/g, " - ")
+    .replace(/\s+-\s*$/g, "")
+    .trim();
+
 export const buildCrmEmail = (lead, tpl) => {
   const baseSubject = tpl.name || "Message from Flossly";
   const ctx = buildLeadContext({ lead, userName: "Team" });
-  const subject = renderTokens(baseSubject, ctx);
+  const subject = cleanCrmSubject(renderTokens(baseSubject, ctx));
   const html = renderTokens(tpl.template || "", ctx);
   return { subject, html };
 };

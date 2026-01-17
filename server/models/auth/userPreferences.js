@@ -40,6 +40,22 @@ export const UserPreference = sequelize.define(
     taskTableColumns: {
       type: DataTypes.TEXT,
       allowNull: true,
+      get() {
+        const rawValue = this.getDataValue('taskTableColumns');
+        if (!rawValue) return null;
+        try {
+          return JSON.parse(rawValue);
+        } catch (e) {
+          return null;
+        }
+      },
+      set(value) {
+        if (value === null || value === undefined) {
+          this.setDataValue('taskTableColumns', null);
+        } else {
+          this.setDataValue('taskTableColumns', JSON.stringify(value));
+        }
+      },
     },
   },
   {

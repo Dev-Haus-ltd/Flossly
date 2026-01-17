@@ -186,12 +186,13 @@
           <!-- Generic editable field for all other columns -->
           <template v-else>
             <v-text-field
-              v-model="item[col.key]"
+              :model-value="getNestedValue(item, col.key)"
               :variant="isFocused(item.id, col.key) ? 'outlined' : 'plain'"
               @focus="setFocus(item.id, col.key, true)"
               @blur="updateValueRow(item, col.key)"
               density="compact"
               hide-details
+              readonly
             />
           </template>
         </template>
@@ -356,7 +357,7 @@
                   <!-- Generic editable field for all other columns -->
                   <template v-else>
                     <v-text-field
-                      v-model="item[col.key]"
+                      :model-value="getNestedValue(item, col.key)"
                       :variant="
                         isFocused(item.id, col.key) ? 'outlined' : 'plain'
                       "
@@ -364,6 +365,7 @@
                       @blur="updateValueRow(item, col.key)"
                       density="compact"
                       hide-details
+                      readonly
                     />
                   </template>
                 </template>
@@ -433,6 +435,11 @@ const isFocused = (id, key) => {
 
 const setFocus = (id, key, state) => {
   focusedField.value[`${id}-${key}`] = state;
+};
+
+// Helper function to get nested property value
+const getNestedValue = (obj, path) => {
+  return path.split('.').reduce((current, key) => current?.[key], obj);
 };
 
 const favorites = ref([]);

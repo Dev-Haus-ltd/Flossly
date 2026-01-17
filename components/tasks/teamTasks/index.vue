@@ -538,8 +538,8 @@ onMounted(async () => {
   loadHiddenCategories();
   loadCategoryOrder();
   user.value = JSON.parse(localStorage.getItem("user"));
-  if (user && user.preferences && user.preferences.length) {
-    headers.value = user.preferences[0].taskTableColumns;
+  if (user.value && user.value.preferences && user.value.preferences.length && user.value.preferences[0].taskTableColumns) {
+    headers.value = user.value.preferences[0].taskTableColumns;
   } else {
     headers.value = mainStore.getTeamTaskTableHeaders;
   }
@@ -918,7 +918,10 @@ const applyFilters = (filters) => {
 };
 const getUsers = () => {
   userStore.getUserList({ roleId: null }).then((res) => {
-    if (res.code === 0) userList.value = res.data;
+    if (res.code === 0) {
+      // Filter to only show users with active organization status
+      userList.value = res.data.filter((x) => (x.orgStatus || x.status) === 'Active');
+    }
   });
 };
 const getTeamTasks = (categoryId) => {

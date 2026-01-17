@@ -35,7 +35,6 @@
 <script setup>
 import initialScreen from "./initialScreen.vue";
 import leftStepperTemplate from "./leftStepperTemplate.vue";
-
 const currentStep = ref(0);
 const orgStore = useOrgStore();
 const router = useRouter();

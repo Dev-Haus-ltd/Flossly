@@ -1,5 +1,5 @@
 <template>
-  <PricingModal ref="pricingModalRef" />
+  <PricingModal ref="pricingModalRef" :show-back="true" />
 </template>
 
 <script setup>
@@ -7,7 +7,6 @@ import PricingModal from "./PricingModal.vue";
 
 const pricingModalRef = ref(null);
 
-// Expose all the interface that signUpSetup.vue expects
 const isPaymentOpen = computed(() => {
   return pricingModalRef.value?.isPaymentOpen || false;
 });

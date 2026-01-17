@@ -55,8 +55,6 @@
       max-width="920"
       icon="mdi-play-circle-outline"
       title="Welcome video from the founder"
-      primary-label="Done"
-      @primary="closeWelcomeVideo"
       @update:model-value="showVideoDialog = $event"
       @close="closeWelcomeVideo"
     >

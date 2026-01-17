@@ -6,8 +6,8 @@
       offset-y
     >
       <template #activator="{ props }">
-        <p v-bind="props" class="px-2" style="width: 100%;">
-          {{ selected?.treatment?.name || 'N/A' }}
+        <p v-bind="props" class="px-2" style="width: 100%; cursor: pointer;">
+          {{ getTreatmentDisplay() }}
         </p>
       </template>
 
@@ -25,43 +25,56 @@
           </v-list-item>
         </v-list>
 
-        <br />
-        <v-divider class="mb-2"></v-divider>
+        <template v-if="!treatmentSources || treatmentSources.length === 0">
+          <v-alert type="info" variant="tonal" density="compact">
+            No treatments available
+          </v-alert>
+        </template>
+
+        <v-divider class="my-2"></v-divider>
       </v-card>
     </v-menu>
   </div>
 </template>
 
 <script setup>
-import { useOrgStore } from '@/stores/organisation'
-import { onMounted, ref } from 'vue'
-
-const organisationStore = useOrgStore()
-const { selected, column } = defineProps(["selected", "column"])
+const props = defineProps({
+  selected: { type: Object, required: true },
+  column: { type: Object },
+  treatmentSources: { type: Array, default: () => [] }
+})
 const emit = defineEmits(["update"])
 
-const treatmentSources = ref([])
+const getTreatmentDisplay = () => {
+  const treatment = props.selected?.treatment;
+  
+  // If treatment is null or undefined
+  if (!treatment) return 'N/A';
+  
+  // If treatment is an object
+  if (typeof treatment === 'object') {
+    // Check if it has a valid name
+    if (treatment.name && treatment.name.trim() !== '') {
+      return treatment.name;
+    }
+    // If it's an empty object or has empty name
+    return 'N/A';
+  }
+  
+  // If treatment is a string
+  if (typeof treatment === 'string') {
+    return treatment.trim() !== '' ? treatment : 'N/A';
+  }
+  
+  return 'N/A';
+};
 
 const handleTreatmentSelect = (t) => {
-  selected.treatmentId = t.id;
-  selected.treatment = t;
-  selected.treatmentMenu = false;
+  props.selected.treatmentId = t.id;
+  props.selected.treatment = t;
+  props.selected.treatmentMenu = false;
   emit('update');
 }
-
-onMounted(async () => {
-  try {
-    const res = await organisationStore.listTreatments()
-    if (res?.code === 0) {
-      treatmentSources.value = (res.data || []).map(r => ({
-        id: r.id,
-        name: r.name,
-      }))
-    }
-  } catch (e) {
-    console.error('Failed to load treatments', e)
-  }
-})
 </script>
 
 <style scoped>

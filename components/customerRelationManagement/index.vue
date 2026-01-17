@@ -21,17 +21,20 @@
       </v-row>
     </div>
     <div class="mt-5 px-5">
-      <div class="d-flex justify-space-between align-center mb-4">
+      <div class="d-flex align-center mb-2" style="flex-wrap: nowrap; justify-content: space-between; overflow-x: auto;">
         <!-- Left: Search + Filters -->
-        <div class="d-flex align-center">
+        <div class="d-inline-flex align-center py-1" style="flex-wrap: nowrap; gap: 8px;">
           <div style="width: 150px">
             <v-text-field
               v-model="search"
               placeholder="Search"
               append-inner-icon="mdi-magnify"
+              clearable
               variant="solo"
+              :elevation="0"
               density="compact"
               hide-details
+              bg-color="#FAFAFA"
               flat
               class="custom-search"
             />
@@ -44,92 +47,85 @@
         </div>
 
         <!-- Right: Connection Controls -->
-        <div class="d-flex align-center" style="gap: 12px">
-          <div class="d-flex align-center" style="gap: 12px">
-  <template v-if="isConnected">
-    <v-chip
-      color="success"
-      size="small"
-      variant="flat"
-    >
-      Meta Connected
-    </v-chip>
+        <div class="d-inline-flex ml-auto" style="flex-wrap: nowrap; gap: 12px;">
+          <template v-if="isConnected">
+            <v-chip
+              color="success"
+              size="small"
+              variant="flat"
+            >
+              Meta Connected
+            </v-chip>
 
-    <v-btn
-      size="small"
-      variant="text"
-      @click="fetchNow"
-      :disabled="!isConnected"
-    >
-      <v-icon size="16" class="mr-1">mdi-refresh</v-icon>
-      Fetch Leads Now
-    </v-btn>
-  </template>
+            <v-btn
+              size="small"
+              variant="text"
+              @click="fetchNow"
+              :disabled="!isConnected"
+            >
+              <v-icon size="16" class="mr-1">mdi-refresh</v-icon>
+              Fetch Leads Now
+            </v-btn>
+          </template>
 
-  <v-btn
-    color="primary"
-    variant="flat"
-    rounded="lg"
-    class="add-task-btn"
-    @click="integrateMeta"
-  >
-    <template #prepend>
-      <v-icon size="18">mdi-link-variant</v-icon>
-    </template>
-    {{ isConnected ? 'Reconnect Meta' : 'Integrate Meta' }}
-  </v-btn>
+          <v-btn
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            class="add-task-btn"
+            @click="integrateMeta"
+          >
+            <template #prepend>
+              <v-icon size="18">mdi-link-variant</v-icon>
+            </template>
+            {{ isConnected ? 'Reconnect Meta' : 'Integrate Meta' }}
+          </v-btn>
 
-  <v-btn
-    color="primary"
-    variant="flat"
-    rounded="lg"
-    class="add-task-btn"
-    @click="onConnectChatbot"
-  >
-    <template #prepend>
-      <v-icon size="18">mdi-robot-outline</v-icon>
-    </template>
-    Connect to Chatbot
-  </v-btn>
+          <v-btn
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            class="add-task-btn"
+            @click="onConnectChatbot"
+          >
+            <template #prepend>
+              <v-icon size="18">mdi-robot-outline</v-icon>
+            </template>
+            Connect to Chatbot
+          </v-btn>
 
-  <v-btn
-    color="secondary"
-    variant="flat"
-    rounded="lg"
-    class="add-task-btn"
-    @click="bulkLeadUploadDialog = true"
-  >
-    <template #prepend>
-      <v-icon size="18">mdi-upload</v-icon>
-    </template>
-    Upload bulk leads
-  </v-btn>
+          <v-btn
+            color="secondary"
+            variant="flat"
+            rounded="lg"
+            class="add-task-btn mx-2"
+            @click="bulkLeadUploadDialog = true"
+          >
+            <template #prepend>
+              <v-icon size="18">mdi-upload</v-icon>
+            </template>
+            Upload bulk leads
+          </v-btn>
 
-  <v-btn
-    color="primary"
-    variant="flat"
-    rounded="lg"
-    class="add-task-btn"
-    @click="handleAddLeadClick"
-  >
-    <template #prepend>
-      <v-icon size="18">mdi-plus-circle-outline</v-icon>
-    </template>
-    Add New Lead
-  </v-btn>
-</div>
+          <v-btn
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            class="add-task-btn"
+            @click="handleAddLeadClick"
+          >
+            <template #prepend>
+              <v-icon size="18">mdi-plus-circle-outline</v-icon>
+            </template>
+            Add New Lead
+          </v-btn>
 
         </div>
       </div>
 
-      <!-- Loading State - Blank -->
-      <div v-if="isLoading" class="loading-blank">
-        <!-- Empty space while loading -->
-      </div>
-
       <!-- List View (child) -->
       <CustomerRelationManagementListView
-        v-else-if="!isLoading && leads.length"
+        v-if="!isLoading && leads.length"
         :leads="filteredLeads"
         :headers="headers"
         :search="search"
@@ -140,6 +136,10 @@
         @delete="onDeleteSelected"
         @book="onBookLeads"
       />
+
+      <div v-else-if="!isLoading && !leads.length" class="d-flex justify-center mt-5">
+        <p class="mt-7">No leads found.</p>
+      </div>
 
    
 

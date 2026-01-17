@@ -86,5 +86,4 @@ defineExpose({
   color: #e53935; /* red */
   font-weight: 600;
 }
-
 </style>

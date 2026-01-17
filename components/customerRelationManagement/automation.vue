@@ -137,15 +137,28 @@
 
           <!-- Actions Column -->
           <template #item.actions="{ item }">
-            <v-btn
-              variant="outlined"
-              size="small"
-              color="primary"
-              @click="openPreview(item)"
-            >
-              <img src="@/assets/tasks/edit.svg" alt="Edit" width="16" height="16" class="mr-1" />
-              Edit
-            </v-btn>
+            <div class="d-flex align-center justify-center gap-2">
+              <v-btn
+                icon
+                variant="text"
+                size="small"
+                class="action-icon-btn"
+                aria-label="Preview email"
+                @click="openEmailPreview(item)"
+              >
+                <v-icon size="18">mdi-eye-outline</v-icon>
+              </v-btn>
+              <v-btn
+                icon
+                variant="text"
+                size="small"
+                class="action-icon-btn"
+                aria-label="Edit email"
+                @click="openEdit(item)"
+              >
+                <v-icon size="18">mdi-pencil-outline</v-icon>
+              </v-btn>
+            </div>
           </template>
 
           <!-- Status/Toggle Column -->
@@ -177,7 +190,31 @@
       </v-card>
     </template>
 
-    <!-- Preview / Edit Modal -->
+    <!-- Email Preview Modal -->
+    <v-dialog v-model="showPreview" max-width="980px">
+      <v-card class="rounded-lg elevation-8">
+        <div class="modal-header preview-modal-header">
+          <div class="text-subtitle-2 font-weight-bold">Email Preview</div>
+          <v-btn icon variant="text" @click="showPreview = false">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </div>
+
+        <v-divider />
+
+        <div class="modal-body preview-modal-body">
+          <div class="email-preview-frame">
+            <iframe
+              title="Email preview"
+              :srcdoc="emailPreviewHtml"
+              class="email-preview-iframe"
+            ></iframe>
+          </div>
+        </div>
+      </v-card>
+    </v-dialog>
+
+    <!-- Edit Modal -->
     <v-dialog v-model="show" max-width="1100px" scrollable>
       <v-card class="rounded-lg elevation-8">
         <div class="modal-header">
@@ -260,6 +297,7 @@ const props = defineProps({
   leadId: { type: [Number, String], default: null },
 })
 const crmStore = useCrmStore()
+const orgStore = useOrgStore()
 const emit = defineEmits(['update:rows','save'])
 
 // Table state
@@ -369,7 +407,9 @@ watch(resolvedLeadId, () => {
 
 // Preview dialog state
 const show = ref(false)
+const showPreview = ref(false)
 const active = ref(null)
+const previewItem = ref(null)
 let ej = null
 let EditorCtor = null
 let Header = null
@@ -377,8 +417,182 @@ let List = null
 const editorEl = ref(null)
 
 const sampleRecipient = reactive({ name: 'John Doe', email: 'john@example.com' })
+const EMAIL_TEMPLATE = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>{subject}</title>
+    <style>
+      /* CLIENT RESET */
+      body,
+      table,
+      td,
+      a {
+        -webkit-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
+      }
+      table,
+      td {
+        mso-table-lspace: 0pt;
+        mso-table-rspace: 0pt;
+      }
+      img {
+        -ms-interpolation-mode: bicubic;
+      }
+      img {
+        border: 0;
+        height: auto;
+        line-height: 100%;
+        outline: none;
+        text-decoration: none;
+      }
+      table {
+        border-collapse: collapse !important;
+      }
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100% !important;
+        height: 100% !important;
+        background-color: #f8f9fb;
+        font-family: Arial, Helvetica, sans-serif;
+      }
 
-const openPreview = async (row) => {
+      /* MAIN CARD */
+      .email-container {
+        max-width: 500px;
+        background: #ffffff;
+        margin-top: 10px;
+        border-radius: 10px;
+        border: 1px solid #e5e5e5;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        overflow: hidden;
+      }
+      .main-container {
+        max-width: 500px;
+        margin: 40px auto;
+        overflow: hidden;
+      }
+      .os {
+        margin-top: 40px;
+        display: inline;
+      }
+
+      .header {
+        text-align: center;
+        padding: 30px 20px 10px;
+      }
+      .logo {
+        font-size: 22px;
+        font-weight: 700;
+        color: #111;
+      }
+      .title {
+        font-size: 18px;
+        font-weight: 600;
+        max-width: 250px;
+        margin: auto;
+        margin-top: 15px;
+        color: #000;
+      }
+
+      .subtitle {
+        font-size: 13px;
+        color: #777;
+        margin-top: 4px;
+        margin-bottom: 0;
+      }
+
+      .content {
+        padding: 25px 25px 35px;
+        background-color: #f3f8ff;
+        border-top: 1px solid #e5eaf0;
+      }
+      .content p {
+        margin: 0 0 15px;
+        font-size: 14px;
+        color: #333;
+        line-height: 1.6;
+      }
+      .btn {
+        display: inline-block;
+        background-color: #2563eb;
+        color: #fff !important;
+        padding: 10px 28px;
+        border-radius: 6px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .footer {
+        text-align: center;
+        font-size: 12px;
+        color: #999;
+        padding: 20px 10px;
+      }
+
+      @media only screen and (max-width: 600px) {
+        .email-container {
+          width: 95% !important;
+        }
+        .content {
+          padding: 20px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <center>
+      <table
+        role="presentation"
+        cellspacing="0"
+        cellpadding="0"
+        border="0"
+        width="100%"
+      >
+        <tr>
+          <td>
+            <div class="main-container">
+              <div class="os">
+                <img
+                  src="https://dev.flossly.ai/emails/email-logo.png"
+                  alt="Flossly Logo"
+                  width="36"
+                  height="36"
+                  style="display: block"
+                />
+              </div>
+              <div class="email-container">
+                <!-- Header -->
+                <div class="header">
+                  <img
+                    src="https://dev.flossly.ai/emails/logo.png"
+                    alt="Flossly Logo"
+                    width="36"
+                    height="36"
+                    style="display: block; margin: 0 auto 8px"
+                  />
+                  <h2 class="title">{subject}</h2>
+                  <p class="subtitle">By flossly Team</p>
+                </div>
+
+                <!-- Content -->
+                <div class="content">{content}</div>
+
+                <!-- Footer -->
+                <div class="footer">Ac 2025 Flossly</div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      </table>
+    </center>
+  </body>
+</html>
+`
+
+const openEdit = async (row) => {
   active.value = row
   show.value = true
   await nextTick()
@@ -402,6 +616,130 @@ const openPreview = async (row) => {
     }
   })
 }
+
+const openEmailPreview = (row) => {
+  previewItem.value = row
+  showPreview.value = true
+}
+
+const getStoredOrg = () => {
+  if (typeof window !== 'undefined') {
+    try {
+      const storedUser = JSON.parse(localStorage.getItem('user'))
+      if (storedUser?.userOrganisations?.length && storedUser?.currentLoggedInOrgId) {
+        const activeOrgs = storedUser.userOrganisations.filter(org => org.status === 'Active')
+        const orgWrapper = activeOrgs.find(
+          (org) => org.organisationId === storedUser.currentLoggedInOrgId
+        ) || activeOrgs.find(
+          (org) => org.organisation?.id === storedUser.currentLoggedInOrgId
+        )
+        if (orgWrapper?.organisation) return orgWrapper.organisation
+        if (orgWrapper?.name) return orgWrapper
+      }
+    } catch {}
+  }
+  return null
+}
+
+const practiceName = computed(() => {
+  const storedOrg = getStoredOrg()
+  if (storedOrg?.name) return storedOrg.name
+  const details =
+    orgStore.getOrgDetails ||
+    orgStore.organisation ||
+    orgStore.organization ||
+    orgStore.org ||
+    orgStore.orgDetails ||
+    {}
+  return details?.name || orgStore.name || orgStore.orgName || '[Practice Name]'
+})
+
+const practiceInitials = computed(() => {
+  const name = practiceName.value || '[Practice Name]'
+  const parts = name.replace(/\s+/g, ' ').trim().split(' ')
+  const letters = parts.slice(0, 2).map(part => part[0]).join('')
+  return letters.toUpperCase() || 'P'
+})
+
+const practiceLogo = computed(() => {
+  const storedOrg = getStoredOrg()
+  if (storedOrg?.logo) return storedOrg.logo
+  const details =
+    orgStore.getOrgDetails ||
+    orgStore.organisation ||
+    orgStore.organization ||
+    orgStore.org ||
+    orgStore.orgDetails ||
+    {}
+  return details?.logo || orgStore.logo || null
+})
+
+const resolveDefault = (row) => crmAutomationDefaults.find(d => d.key === row?.key) || {}
+
+const applyPlaceholders = (text) => {
+  if (!text) return ''
+  const practice = practiceName.value || '[Practice Name]'
+  const firstName = sampleRecipient.name.split(' ')[0] || sampleRecipient.name
+  return text
+    .replace(/\[?\s*practice\s*name\s*\]?/gi, practice)
+    .replace(/\[?\s*first\s*name\s*\]?/gi, firstName)
+}
+
+const cleanSubject = (subject) => {
+  if (!subject) return ''
+  return subject
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\bday\s*\d+\b/gi, '')
+    .replace(/\b\d+\s*days?\s*(before|after)\b/gi, '')
+    .replace(/\b(morning|evening|afternoon|immediate(ly)?)\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+-\s+-/g, ' - ')
+    .replace(/\s+-\s*$/g, '')
+    .trim()
+}
+
+const previewSubject = computed(() => {
+  const row = previewItem.value
+  if (!row) return ''
+  const def = resolveDefault(row)
+  const rawName = row.name && row.name.trim() && row.name !== row.key ? row.name : def.name
+  const fallback = `Message from ${practiceName.value || '[Practice Name]'}`
+  return cleanSubject(applyPlaceholders(rawName || fallback))
+})
+
+const previewHtml = computed(() => {
+  const row = previewItem.value
+  if (!row) return ''
+  const def = resolveDefault(row)
+  const rawTemplate = row.template && row.template.trim() ? row.template : def.template || ''
+  return applyPlaceholders(rawTemplate)
+})
+
+const emailPreviewHtml = computed(() => {
+  if (!previewItem.value) return ''
+  const subject = previewSubject.value || ''
+  const content = previewHtml.value || ''
+  const orgName = practiceName.value || 'Flossly'
+  let html = EMAIL_TEMPLATE
+    .replaceAll('{subject}', subject)
+    .replace('{content}', content)
+    .replace(/By flossly Team/gi, `By ${orgName}`)
+
+  if (practiceLogo.value) {
+    html = html
+      .replaceAll('https://dev.flossly.ai/emails/email-logo.png', practiceLogo.value)
+      .replaceAll('https://dev.flossly.ai/emails/logo.png', practiceLogo.value)
+  } else {
+    const osLogo = `<div class="org-initials org-initials--os">${practiceInitials.value}</div>`
+    const headerLogo = `<div class="org-initials org-initials--header">${practiceInitials.value}</div>`
+    const osRegex = /<img[\s\S]*?email-logo\.png[\s\S]*?>/i
+    const headerRegex = /<img[\s\S]*?logo\.png[\s\S]*?>/i
+    html = html.replace(osRegex, osLogo).replace(headerRegex, headerLogo)
+    html = html.replace('</style>', `.org-initials{width:36px;height:36px;border-radius:50%;background:#e8f0fe;color:#1d4ed8;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;letter-spacing:0.5px}.org-initials--os{margin:0}.org-initials--header{margin:0 auto 8px}</style>`)
+  }
+
+  return html
+})
 
 const saveContent = async () => {
   saving.value = true
@@ -579,6 +917,14 @@ watch(show, (v) => { if (!v && ej) { ej.destroy(); ej = null } })
   font-size: 12px;
 }
 
+.action-icon-btn {
+  color: #4b5563;
+}
+
+.action-icon-btn:hover {
+  color: #111827;
+}
+
 /* Modal Styles */
 .modal-header {
   display: flex;
@@ -586,6 +932,10 @@ watch(show, (v) => { if (!v && ej) { ej.destroy(); ej = null } })
   align-items: flex-start;
   padding: 24px 28px;
   background: linear-gradient(to bottom, #fafafa, #ffffff);
+}
+
+.preview-modal-header {
+  padding: 14px 18px;
 }
 
 .modal-title {
@@ -601,6 +951,12 @@ watch(show, (v) => { if (!v && ej) { ej.destroy(); ej = null } })
   min-height: 450px;
   max-height: 70vh;
   overflow-y: auto;
+}
+
+.preview-modal-body {
+  padding: 18px;
+  max-height: none;
+  overflow: hidden;
 }
 
 .recipient-section {
@@ -647,6 +1003,20 @@ watch(show, (v) => { if (!v && ej) { ej.destroy(); ej = null } })
   gap: 12px;
   padding: 18px 28px;
   background: white;
+}
+
+.email-preview-frame {
+  background: #f3f4f6;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.email-preview-iframe {
+  width: 100%;
+  height: 70vh;
+  border: 0;
+  border-radius: 10px;
+  background: #f8f9fb;
 }
 </style>
 

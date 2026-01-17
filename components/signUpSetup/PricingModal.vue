@@ -60,7 +60,17 @@
     </v-card-text>
     <br />
 
-    <v-btn @click="confirmPayment" flat color="primary"> Checkout </v-btn>
+    <div class="payment-actions">
+      <v-btn
+        v-if="props.showBack"
+        variant="text"
+        @click="cancelPaymentFlow"
+        class="payment-back"
+      >
+        Back
+      </v-btn>
+      <v-btn @click="confirmPayment" flat color="primary"> Checkout </v-btn>
+    </div>
   </v-card>
   <v-card
     v-else-if="selectedPriceId && isPaymentCompleted"
@@ -95,6 +105,13 @@
 
 <script setup>
 import { useStripe } from "@/composables/useStripe";
+
+const props = defineProps({
+  showBack: {
+    type: Boolean,
+    default: false,
+  },
+});
 
 const {
   prices,
@@ -533,6 +550,16 @@ defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout, resetModal, sele
   font-weight: 400 !important;
   color: #d32f2f !important;
   line-height: 1.4 !important;
+}
+
+.payment-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.payment-back {
+  text-transform: none;
 }
 
 @media (max-width: 960px) {
