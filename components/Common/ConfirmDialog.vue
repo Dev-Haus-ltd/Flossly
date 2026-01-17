@@ -8,7 +8,7 @@
       <p class="mb-4">{{ message || 'Are you sure?' }}</p>
       <div class="d-flex justify-end" style="gap: 10px;">
         <v-btn variant="flat" :disabled="loading" @click="$emit('cancel')">Cancel</v-btn>
-        <v-btn color="primary" variant="flat" :loading="loading" @click="$emit('confirm')">
+        <v-btn color="primary" variant="flat" @click="$emit('confirm')">
           {{ confirmText || 'Confirm' }}
         </v-btn>
       </div>

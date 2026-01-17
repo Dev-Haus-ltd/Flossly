@@ -70,49 +70,90 @@
             <div class="px-4">{{ getParsedDate(file.updatedAt) }}</div>
           </td>
           <td>
-            <div class="px-4 d-flex align-center">
+            <div class="px-4 d-flex align-center gap-2">
               <!-- View -->
-              <img
-                src="@/assets/icons/view.svg"
-                alt="View"
-                width="20"
-                height="20"
-                class="mr-2"
-                style="cursor: pointer"
-                @click="$emit('view-file', file)"
-              />
-
-              <!-- Edit -->
-              <!-- <img
-                src="@/assets/icons/edit.svg"
-                alt="Edit"
-                width="20"
-                height="20"
-                class="mr-2"
-                style="cursor: pointer"
-                @click="$emit('edit-file', file)"
-              /> -->
+              <v-tooltip location="top">
+                <template #activator="{ props }">
+                  <img
+                    v-bind="props"
+                    src="@/assets/icons/view.svg"
+                    alt="View"
+                    width="20"
+                    height="20"
+                    class="mr-2"
+                    style="cursor: pointer"
+                    @click="$emit('view-file', file)"
+                  />
+                </template>
+                <span>View</span>
+              </v-tooltip>
 
               <!-- Copy Link -->
-              <img
-                src="@/assets/icons/copy.svg"
-                alt="Copy link"
-                width="20"
-                height="20"
-                class="mr-2"
-                style="cursor: pointer"
-                @click="copyLink(file)"
-              />
+              <v-tooltip location="top">
+                <template #activator="{ props }">
+                  <img
+                    v-bind="props"
+                    src="@/assets/icons/copy.svg"
+                    alt="Copy link"
+                    width="20"
+                    height="20"
+                    class="mr-2"
+                    style="cursor: pointer"
+                    @click="copyLink(file)"
+                  />
+                </template>
+                <span>Copy link</span>
+              </v-tooltip>
 
               <!-- Download -->
-              <img
-                src="@/assets/icons/download.svg"
-                alt="Download"
-                width="20"
-                height="20"
-                style="cursor: pointer"
-                @click="$emit('download-file', file)"
-              />
+              <v-tooltip location="top">
+                <template #activator="{ props }">
+                  <img
+                    v-bind="props"
+                    src="@/assets/icons/download.svg"
+                    alt="Download"
+                    width="20"
+                    height="20"
+                    class="mr-2"
+                    style="cursor: pointer"
+                    @click="$emit('download-file', file)"
+                  />
+                </template>
+                <span>Download</span>
+              </v-tooltip>
+
+              <!-- Move -->
+              <v-tooltip location="top">
+                <template #activator="{ props }">
+                  <img
+                    v-bind="props"
+                    src="@/assets/icons/move.svg"
+                    alt="Move to folder"
+                    width="20"
+                    height="20"
+                    class="mr-2"
+                    style="cursor: pointer"
+                    @click="$emit('move-file', { file, event: $event })"
+                  />
+                </template>
+                <span>Move to folder</span>
+              </v-tooltip>
+
+              <!-- Delete -->
+              <v-tooltip location="top">
+                <template #activator="{ props }">
+                  <img
+                    v-bind="props"
+                    src="@/assets/icons/delete_1.svg"
+                    alt="Delete"
+                    width="20"
+                    height="20"
+                    style="cursor: pointer"
+                    @click="$emit('delete-file', file)"
+                  />
+                </template>
+                <span>Delete</span>
+              </v-tooltip>
             </div>
           </td>
         </tr>

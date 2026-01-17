@@ -1,6 +1,5 @@
 <template>
   <v-container fluid class="pa-4 bg-white">
-
     <!-- Dashboard Content -->
     <div>
       <CommonFeatureCard
@@ -9,433 +8,437 @@
         v-if="showCard"
         class="my-4"
       />
-    <v-row>
-      <v-col
-        v-for="(item, index) in flosslyItems"
-        :key="index"
-        class="flossly-col"
-      >
-        <DashBoardProductCard
-          :title="item.title"
-          :img="item.img"
-          :colors="item.colors"
-          :isToolBox="item.isToolBox"
-          :route="item.route"
-          :uid="index"
-          @handleClick="handleClickProductCard"
-        />
-      </v-col>
-    </v-row>
 
-    <v-row class="d-flex align-stretch">
-      <v-col cols="12" sm="12" md="8" class="pr-md-0 d-flex flex-column">
-        <v-card
-          class="card flex-grow-1"
-          elevation="0"
-          rounded="lg"
+      <!-- Flossly Products Row -->
+      <v-row>
+        <v-col
+          v-for="(item, index) in flosslyItems"
+          :key="index"
+          class="flossly-col"
         >
-          <h4 class="mb-4 card-head">Activity Tasks by Category</h4>
-          <div class="mx-4">
-            <!-- Tabs -->
-            <v-tabs
-              v-model="tab"
-              class="custom-tabs px-4"
-              slider-color="primary"
-            >
-              <v-tab
-                v-for="(category, index) in filteredCategories"
-                :key="category.id"
-                :value="index + 1"
-                class="tab-text"
+          <DashBoardProductCard
+            :title="item.title"
+            :img="item.img"
+            :colors="item.colors"
+            :isToolBox="item.isToolBox"
+            :route="item.route"
+            :uid="index"
+            @handleClick="handleClickProductCard"
+          />
+        </v-col>
+      </v-row>
+
+      <!-- Main Dashboard Grid: 2 Columns -->
+      <v-row class="mt-3">
+        <!-- LEFT COLUMN (8) -->
+        <v-col cols="12" sm="12" md="8" class="d-flex flex-column dashboard-left-col pr-md-3">
+          
+          <!-- ROW 1: Activity Tasks Card -->
+          <v-card class="card" elevation="0" rounded="lg">
+            <h4 class="mb-4 card-head">Activity Tasks by Category</h4>
+            <div class="mx-4">
+              <!-- Tabs -->
+              <v-tabs
+                v-model="tab"
+                class="custom-tabs px-4"
+                slider-color="primary"
               >
-                {{ category.name }}
-              </v-tab>
-            </v-tabs>
-
-            <!-- Tab content -->
-            <v-tabs-window v-model="tab">
-              <v-tabs-window-item :value="tab">
-                <v-row class="my-2 mx-1">
-                  <v-col
-                    v-for="stat in stats"
-                    :key="stat.status"
-                    cols="12"
-                    sm="6"
-                    md="4"
-                    lg="3"
-                  >
-                    <DashBoardStatCard
-                      :image="stat.image"
-                      :label="stat.status"
-                      :value="stat.total"
-                      :link="stat.link"
-                      :keyName="stat.key"
-                    />
-                  </v-col>
-                </v-row>
-              </v-tabs-window-item>
-            </v-tabs-window>
-          </div>
-        </v-card>
-
-        <!-- ✅ Quick Actions under Recent + CPD -->
-        <v-card
-          v-if="recentFiles && recentFiles.length"
-          class="mt-3 card flex-grow-1"
-          color="white"
-          elevation="0"
-          rounded="lg"
-        >
-          <h4 class="mb-4 card-head">Recently Accessed</h4>
-          <div>
-            <v-row class="ma-5">
-              <v-col
-                v-for="(file, index) in recentFiles"
-                :key="index"
-                cols="12"
-                md="4"
-                xl="3"
-              >
-                <DashBoardRecentlyAccessed :file="file" @open="openFile" />
-              </v-col>
-            </v-row>
-          </div>
-        </v-card>
-        <!-- Refer & Earn Card -->
-        <v-card
-          class="mt-3 refer-card card pa-5 flex-grow-1"
-          elevation="0"
-          rounded="lg"
-        >
-          <v-row no-gutters>
-            <v-col cols="12" xs="12" sm="5" class="left-side">
-              <v-chip
-                class="bonus-chip"
-                variant="flat"
-                size="small"
-                prepend-icon="mdi-star"
-                label
-              >
-                Earn +50 Points
-              </v-chip>
-
-              <div class="left-content">
-                <lord-icon
-                  src="https://cdn.lordicon.com/pbkbjgyv.json"
-                  colors="primary:#e8b730,secondary:#ffc738,tertiary:#2ca58d"
-                  trigger="hover"
-                  :style="{
-                    width: mdAndDown ? '100px' : '150px',
-                    height: mdAndDown ? '100px' : '150px',
-                  }"
-                ></lord-icon>
-              </div>
-            </v-col>
-
-            <v-col
-              cols="12"
-              xs="12"
-              sm="7"
-              class="right-side d-flex flex-column justify-center"
-            >
-              <div class="ml-5">
-                <!-- Heading -->
-                <h3 class="refer-heading mb-4 mt-2 mt-sm-0">
-                  Refer & Earn with Flossly
-                </h3>
-
-                <!-- Points -->
-                <div class="refer-point d-flex align-center mb-3">
-                  <lord-icon
-                    src="https://cdn.lordicon.com/vumnblwp.json"
-                    trigger="hover"
-                    colors="primary:#1e1e1e"
-                    style="width: 40px; height: 40px"
-                  >
-                  </lord-icon>
-                  <span class="ml-3">Enter details</span>
-                </div>
-                <div class="refer-point d-flex align-center mb-3">
-                  <lord-icon
-                    src="https://cdn.lordicon.com/fozsorqm.json"
-                    trigger="hover"
-                    colors="primary:#121331,secondary:#1e1e1e"
-                    style="width: 40px; height: 40px"
-                  >
-                  </lord-icon>
-                  <span class="ml-3"
-                    >Refer, share, and review to earn flossly loyalty
-                    points</span
-                  >
-                </div>
-                <div class="refer-point d-flex align-center mb-3">
-                  <lord-icon
-                    src="https://cdn.lordicon.com/hpjdqzlq.json"
-                    trigger="hover"
-                    colors="primary:#121331,secondary:#1e1e1e"
-                    style="width: 40px; height: 40px"
-                  >
-                  </lord-icon>
-                  <span class="ml-3"
-                    >Redeem your loyalty points for exclusive prizes</span
-                  >
-                </div>
-
-                <!-- Button -->
-                <v-btn
-                  class="mt-6 align-self-start px-6 custom-btn"
-                  variant="flat"
-                  append-icon="mdi-open-in-new"
-                  color="primary"
-                  height="46"
-                  @click="showReferralDialog = true"
+                <v-tab
+                  v-for="(category, index) in filteredCategories"
+                  :key="category.id"
+                  :value="index + 1"
+                  class="tab-text"
                 >
-                  Refer a business
-                </v-btn>
-              </div>
-            </v-col>
-          </v-row>
-        </v-card>
-        <v-dialog
-          v-model="showReferralDialog"
-          max-width="568"
-          persistent
-        >
-          <v-card rounded="xl" class="pa-0">
-            
-            <!-- Header -->
-            <v-card-title class="px-0 cust-border">
-               <div class="form-container d-flex align-center justify-space-between">
-                <span class="text-h6 custom-text">
-                  Refer a Business
-                </span>
+                  {{ category.name }}
+                </v-tab>
+              </v-tabs>
 
-                <v-btn
-                  icon
-                  variant="text"
-                  @click="showReferralDialog = false"
-                >
-                  <v-icon>mdi-close</v-icon>
-                </v-btn>
-              </div>
-            </v-card-title>
-
-            <!-- Body -->
-            <v-card-text class="px-0">
-              <div class="form-container">
-                <v-form @submit.prevent="submitReferral" class="d-flex flex-column align-center">
-
-                  <!-- Full Name -->
-                  <div class="mb-4 w-100">
-                    <label class="form-label pb-2">Full name</label>
-                    <v-text-field
-                      v-model="referralForm.fullName"
-                      variant="outlined"
-                      density="compact"
-                      height="44"
-                      rounded="lg"
-                      hide-details
-                      required
-                    />
-                  </div>
-
-                  <!-- Email -->
-                  <div class="mb-4 w-100">
-                    <label class="form-label pb-2">Email</label>
-                    <v-text-field
-                      v-model="referralForm.email"
-                      type="email"
-                      variant="outlined"
-                      density="compact"
-                      height="44"
-                      rounded="lg"
-                      hide-details
-                      required
-                    />
-                  </div>
-
-                  <!-- Phone Number -->
-                  <div class="mb-4 w-100">
-                    <label class="form-label pb-2">Phone Number</label>
-                    <v-text-field
-                      v-model="referralForm.phoneNumber"
-                      variant="outlined"
-                      density="compact"
-                      height="44"
-                      rounded="lg"
-                      hide-details
-                    />
-                  </div>
-
-                  <!-- Practice Name -->
-                  <div class="mb-4 w-100">
-                    <label class="form-label pb-2">Practice Name</label>
-                    <v-text-field
-                      v-model="referralForm.practiceName"
-                      variant="outlined"
-                      density="compact"
-                      height="44"
-                      rounded="lg"
-                      hide-details
-                      required
-                    />
-                  </div>
-
-                  <!-- Submit -->
-                  <v-btn
-                    type="submit"
-                    color="primary"
-                    flat
-                    height="44"
-                    class="mt-4 w-100"
-                    rounded="md"
-                    block
-                  >
-                    Submit information
-                  </v-btn>
-
-                </v-form>
-              </div>
-            </v-card-text>
+              <!-- Tab content -->
+              <v-tabs-window v-model="tab">
+                <v-tabs-window-item :value="tab">
+                  <v-row class="my-2 mx-1">
+                    <v-col
+                      v-for="stat in stats"
+                      :key="stat.status"
+                      cols="12"
+                      sm="6"
+                      md="4"
+                      lg="3"
+                    >
+                      <DashBoardStatCard
+                        :image="stat.image"
+                        :label="stat.status"
+                        :value="stat.total"
+                        :link="stat.link"
+                        :keyName="stat.key"
+                      />
+                    </v-col>
+                  </v-row>
+                </v-tabs-window-item>
+              </v-tabs-window>
+            </div>
           </v-card>
-        </v-dialog>
-      </v-col>
-      <v-col cols="12" sm="12" md="4" class="d-flex">
-        <v-card
-          class="card flex-grow-1"
-          elevation="0"
-          rounded="lg"
-          v-if="user?.roleId === 8 || user?.roleId === 1"
-        >
-          <h4 class="card-head mb-4">Lead Conversion</h4>
-          <div class="ma-5">
-            <DashBoardRevenueCard title="This Week" subtitle="£ 29,985" />
 
-            <v-row no-gutters class="performance-grid mt-5">
+          <!-- ROW 2: Recently Accessed Card (Conditional) -->
+          <v-card
+            v-if="recentFiles && recentFiles.length"
+            class="card mt-3"
+            color="white"
+            elevation="0"
+            rounded="lg"
+          >
+            <h4 class="mb-4 card-head">Recently Accessed</h4>
+            <div>
+              <v-row class="ma-5">
+                <v-col
+                  v-for="(file, index) in recentFiles"
+                  :key="index"
+                  cols="12"
+                  md="4"
+                  xl="3"
+                >
+                  <DashBoardRecentlyAccessed :file="file" @open="openFile" />
+                </v-col>
+              </v-row>
+            </div>
+          </v-card>
+
+          <!-- ROW 2 or 3: Refer & Earn Card (Dynamic Position) -->
+          <v-card class="refer-card card pa-5 mt-3" elevation="0" rounded="lg">
+            <v-row no-gutters>
+              <v-col cols="12" xs="12" sm="5" class="left-side">
+                <v-chip
+                  class="bonus-chip"
+                  variant="flat"
+                  size="small"
+                  prepend-icon="mdi-star"
+                  label
+                >
+                  Earn +50 Points
+                </v-chip>
+
+                <div class="left-content">
+                  <lord-icon
+                    src="https://cdn.lordicon.com/pbkbjgyv.json"
+                    colors="primary:#e8b730,secondary:#ffc738,tertiary:#2ca58d"
+                    trigger="hover"
+                    :style="{
+                      width: mdAndDown ? '100px' : '150px',
+                      height: mdAndDown ? '100px' : '150px',
+                    }"
+                  ></lord-icon>
+                </div>
+              </v-col>
+
               <v-col
-                v-for="(stat, index) in performaces"
-                :key="index"
-                cols="4"
-                class="perform-col"
-                :class="{
-                  'no-right-border': (index + 1) % 3 === 0, // last in row
-                  'no-bottom-border': index >= performaces.length - 2, // last row
-                }"
+                cols="12"
+                xs="12"
+                sm="7"
+                class="right-side d-flex flex-column justify-center"
               >
-                <DashBoardPerformaceCard
-                  :count="stat.count"
-                  :title="stat.title"
-                  :percentage="stat.percentage"
-                  :color="stat.color"
-                  :trend="stat.trend"
-                />
+                <div class="ml-5">
+                  <!-- Heading -->
+                  <h3 class="refer-heading mb-4 mt-2 mt-sm-0">
+                    Refer & Earn with Flossly
+                  </h3>
+
+                  <!-- Points -->
+                  <div class="refer-point d-flex align-center mb-3">
+                    <lord-icon
+                      src="https://cdn.lordicon.com/vumnblwp.json"
+                      trigger="hover"
+                      colors="primary:#1e1e1e"
+                      style="width: 40px; height: 40px"
+                    >
+                    </lord-icon>
+                    <span class="ml-3">Enter details</span>
+                  </div>
+                  <div class="refer-point d-flex align-center mb-3">
+                    <lord-icon
+                      src="https://cdn.lordicon.com/fozsorqm.json"
+                      trigger="hover"
+                      colors="primary:#121331,secondary:#1e1e1e"
+                      style="width: 40px; height: 40px"
+                    >
+                    </lord-icon>
+                    <span class="ml-3"
+                      >Refer, share, and review to earn flossly loyalty
+                      points</span
+                    >
+                  </div>
+                  <div class="refer-point d-flex align-center mb-3">
+                    <lord-icon
+                      src="https://cdn.lordicon.com/hpjdqzlq.json"
+                      trigger="hover"
+                      colors="primary:#121331,secondary:#1e1e1e"
+                      style="width: 40px; height: 40px"
+                    >
+                    </lord-icon>
+                    <span class="ml-3"
+                      >Redeem your loyalty points for exclusive prizes</span
+                    >
+                  </div>
+
+                  <!-- Button -->
+                  <v-btn
+                    class="mt-6 align-self-start px-6 custom-btn"
+                    variant="flat"
+                    append-icon="mdi-open-in-new"
+                    color="primary"
+                    height="46"
+                    @click="showReferralDialog = true"
+                  >
+                    Refer a business
+                  </v-btn>
+                </div>
               </v-col>
             </v-row>
+          </v-card>
 
-            <div
-              v-for="source in inquirySources"
-              :key="source.label"
-              class="d-flex justify-space-between align-center text-body-2 font-weight-medium mb-1 mt-5 mx-1"
-            >
-              <span>{{ source.label }}</span>
-              <div class="d-flex align-center" style="gap: 70px">
-                <span>{{ source.count }}</span>
-                <span>{{ source.percent }}%</span>
+          <!-- Referral Dialog -->
+          <v-dialog
+            v-model="showReferralDialog"
+            max-width="568"
+            persistent
+          >
+            <v-card rounded="xl" class="pa-0">
+              <!-- Header -->
+              <v-card-title class="px-0 cust-border">
+                <div class="form-container d-flex align-center justify-space-between">
+                  <span class="text-h6 custom-text">
+                    Refer a Business
+                  </span>
+
+                  <v-btn
+                    icon
+                    variant="text"
+                    @click="showReferralDialog = false"
+                  >
+                    <v-icon>mdi-close</v-icon>
+                  </v-btn>
+                </div>
+              </v-card-title>
+
+              <!-- Body -->
+              <v-card-text class="px-0">
+                <div class="form-container">
+                  <v-form @submit.prevent="submitReferral" class="d-flex flex-column align-center">
+                    <!-- Full Name -->
+                    <div class="mb-4 w-100">
+                      <label class="form-label pb-2">Full name</label>
+                      <v-text-field
+                        v-model="referralForm.fullName"
+                        variant="outlined"
+                        density="compact"
+                        height="44"
+                        rounded="lg"
+                        hide-details
+                        required
+                      />
+                    </div>
+
+                    <!-- Email -->
+                    <div class="mb-4 w-100">
+                      <label class="form-label pb-2">Email</label>
+                      <v-text-field
+                        v-model="referralForm.email"
+                        type="email"
+                        variant="outlined"
+                        density="compact"
+                        height="44"
+                        rounded="lg"
+                        hide-details
+                        required
+                      />
+                    </div>
+
+                    <!-- Phone Number -->
+                    <div class="mb-4 w-100">
+                      <label class="form-label pb-2">Phone Number</label>
+                      <v-text-field
+                        v-model="referralForm.phoneNumber"
+                        variant="outlined"
+                        density="compact"
+                        height="44"
+                        rounded="lg"
+                        hide-details
+                      />
+                    </div>
+
+                    <!-- Practice Name -->
+                    <div class="mb-4 w-100">
+                      <label class="form-label pb-2">Practice Name</label>
+                      <v-text-field
+                        v-model="referralForm.practiceName"
+                        variant="outlined"
+                        density="compact"
+                        height="44"
+                        rounded="lg"
+                        hide-details
+                        required
+                      />
+                    </div>
+
+                    <!-- Submit -->
+                    <v-btn
+                      type="submit"
+                      color="primary"
+                      flat
+                      height="44"
+                      class="mt-4 w-100"
+                      rounded="md"
+                      block
+                    >
+                      Submit information
+                    </v-btn>
+                  </v-form>
+                </div>
+              </v-card-text>
+            </v-card>
+          </v-dialog>
+        </v-col>
+
+        <!-- RIGHT COLUMN (4) -->
+        <v-col cols="12" sm="12" md="4" class="d-flex flex-column dashboard-right-col pl-md-3">
+          
+          <!-- ROW 1-2: Lead Conversion Card (for admin/manager roles) - Spans 2 rows -->
+          <v-card
+            class="card"
+            elevation="0"
+            rounded="lg"
+            v-if="user?.roleId === 8 || user?.roleId === 1"
+          >
+            <h4 class="card-head mb-4">Lead Conversion</h4>
+            <div class="ma-5">
+              <DashBoardRevenueCard title="This Week" subtitle="£ 29,985" />
+
+              <v-row no-gutters class="performance-grid mt-5">
+                <v-col
+                  v-for="(stat, index) in performaces"
+                  :key="index"
+                  cols="4"
+                  class="perform-col"
+                  :class="{
+                    'no-right-border': (index + 1) % 3 === 0,
+                    'no-bottom-border': index >= performaces.length - 2,
+                  }"
+                >
+                  <DashBoardPerformaceCard
+                    :count="stat.count"
+                    :title="stat.title"
+                    :percentage="stat.percentage"
+                    :color="stat.color"
+                    :trend="stat.trend"
+                  />
+                </v-col>
+              </v-row>
+
+              <div
+                v-for="source in inquirySources"
+                :key="source.label"
+                class="d-flex justify-space-between align-center text-body-2 font-weight-medium mb-1 mt-5 mx-1"
+              >
+                <span>{{ source.label }}</span>
+                <div class="d-flex align-center" style="gap: 70px">
+                  <span>{{ source.count }}</span>
+                  <span>{{ source.percent }}%</span>
+                </div>
               </div>
             </div>
-          </div>
-        </v-card>
-        <v-card
-          class="card flex-grow-1"
-          elevation="0"
-          rounded="lg"
-          v-else
-        >
-          <h4 class="card-head mb-4">Calender</h4>
+          </v-card>
 
-          <v-calendar
-            v-model="value"
-            :events="[]"
-            hide-day-header
-            hide-week-number
-            hide-header
-            color="primary"
-            type="month"
-            class="user-dashboard-calender"
+          <!-- ROW 1-2: Calendar Card (for regular users) - Spans 2 rows -->
+          <v-card
+            class="card"
+            elevation="0"
+            rounded="lg"
+            v-else
           >
-            <template v-slot:day-event="{ event }">
-              <v-tooltip>
-                <template #activator="{ props: tooltipProps }">
-                  <v-icon
-                    v-bind="tooltipProps"
-                    class="mx-auto"
-                  :color="event.color"
-                  size="8"
-                >
-                  mdi-circle
-                </v-icon>
-                </template>
-                <span>{{ event.title }}</span>
-              </v-tooltip>
-            </template>
-            <template v-slot:day-title="{ title }">
-              <span style="font-size: 10px">{{ title }}</span>
-            </template>
-          </v-calendar>
-        </v-card>
-      </v-col>
-    </v-row>
-    <v-row class="d-flex align-stretch justify-end">
-      <v-col cols="12" sm="12" md="4" class="pt-0">
-        <v-card
-          class="review-card pa-5"
-          color="white"
-          elevation="0"
-          rounded="lg"
-        >
-          <!-- ⭐ Chip (absolute top-left) -->
-          <v-chip
-            class="bonus-chip"
-            variant="flat"
-            size="small"
-            prepend-icon="mdi-star"
-            label
-          >
-            Earn +50 Points
-          </v-chip>
+            <h4 class="card-head mb-4">Calender</h4>
 
-          <!-- 📦 Content (on top of background) -->
-          <div class="card-content pt-5">
-            <!-- ✅ Custom Image (replaces lord-icon) -->
-            <img
-              src="@/assets/dashboard/review-card-logo.svg"
-              alt="Review Icon"
-              class="review-logo"
-            />
-
-            <p class="review-text">
-              <span class="normal">Want to Become </span>
-              <span class="highlight">FlosslyOS</span>
-              <br />
-              <span class="highlight">Brand Ambassador,</span>
-            </p>
-            <v-btn
-              class="align-center"
-              variant="flat"
-              append-icon="mdi-arrow-top-right"
-              href="https://www.flossly.ai/brand-ambasaddor-info"
-              target="_blank"
+            <v-calendar
+              v-model="value"
+              :events="[]"
+              hide-day-header
+              hide-week-number
+              hide-header
               color="primary"
-              height="46"
-              rounded="lg"
+              type="month"
+              class="user-dashboard-calender"
             >
-              View more
-            </v-btn>
-          </div>
-        </v-card>
-      </v-col>
-    </v-row>
-    <DashBoardToolBoxDialog v-model="showToolboxDialog" @close="showToolboxDialog = false" />
+              <template v-slot:day-event="{ event }">
+                <v-tooltip>
+                  <template #activator="{ props: tooltipProps }">
+                    <v-icon
+                      v-bind="tooltipProps"
+                      class="mx-auto"
+                      :color="event.color"
+                      size="8"
+                    >
+                      mdi-circle
+                    </v-icon>
+                  </template>
+                  <span>{{ event.title }}</span>
+                </v-tooltip>
+              </template>
+              <template v-slot:day-title="{ title }">
+                <span style="font-size: 10px">{{ title }}</span>
+              </template>
+            </v-calendar>
+          </v-card>
+
+          <!-- ROW 3: Brand Ambassador Card (Always Row 3) -->
+          <v-card
+            class="review-card pa-5 mt-3"
+            color="white"
+            elevation="0"
+            rounded="lg"
+          >
+            <!-- ⭐ Chip (absolute top-left) -->
+            <v-chip
+              class="bonus-chip"
+              variant="flat"
+              size="small"
+              prepend-icon="mdi-star"
+              label
+            >
+              Earn +50 Points
+            </v-chip>
+
+            <!-- 📦 Content (on top of background) -->
+            <div class="card-content pt-5">
+              <!-- ✅ Custom Image (replaces lord-icon) -->
+              <img
+                src="@/assets/dashboard/review-card-logo.svg"
+                alt="Review Icon"
+                class="review-logo"
+              />
+
+              <p class="review-text">
+                <span class="normal">Want to Become </span>
+                <span class="highlight">FlosslyOS</span>
+                <br />
+                <span class="highlight">Brand Ambassador,</span>
+              </p>
+              <v-btn
+                class="align-center"
+                variant="flat"
+                append-icon="mdi-arrow-top-right"
+                href="https://www.flossly.ai/brand-ambasaddor-info"
+                target="_blank"
+                color="primary"
+                height="46"
+                rounded="lg"
+              >
+                View more
+              </v-btn>
+            </div>
+          </v-card>
+        </v-col>
+      </v-row>
+
+      <!-- Toolbox Dialog -->
+      <DashBoardToolBoxDialog v-model="showToolboxDialog" @close="showToolboxDialog = false" />
     </div>
   </v-container>
 </template>
@@ -821,26 +824,31 @@ const handleClickProductCard = (uid) => {
   color: #333;
   margin: 0;
 }
+
 .card {
   border: 1px solid #dbdbdb;
 }
+
 .card-head {
   font-weight: 600;
   font-size: 16px;
   padding: 24px;
   border-bottom: 1px solid #dbdbdb;
 }
+
 .custom-tabs {
   border-bottom: 1px solid #dbdbdb;
 }
+
 .custom-tabs .v-tab {
   color: inherit !important;
 }
+
 .custom-tabs .v-tab.v-tab--selected {
   font-weight: 500;
 }
 
-/* Style the Vuetify slider to be thicker and green */
+/* Style the Vuetify slider to be thicker and primary color */
 .custom-tabs :deep(.v-tabs-slider) {
   height: 8px !important;
   background-color: var(--v-theme-primary) !important;
@@ -863,6 +871,7 @@ const handleClickProductCard = (uid) => {
   color: var(--v-theme-primary);
   text-decoration: none;
 }
+
 .performance-grid {
   border: 1px solid #dbdbdb;
   border-radius: 12px;
@@ -883,34 +892,42 @@ const handleClickProductCard = (uid) => {
 .no-bottom-border {
   border-bottom: none;
 }
+
 .flossly-col {
   flex: 0 0 calc(100% / 5);
   max-width: calc(100% / 5);
 }
+
+/* Dashboard Grid Spacing - CRITICAL FOR GAPS */
+.dashboard-left-col {
+  row-gap: 24px;
+}
+
+.dashboard-right-col {
+  row-gap: 24px;
+}
+
+/* Review Card */
 .review-card {
   position: relative;
-  height: 100%; /* optional if you want it to stretch */
-  max-width: 525px;
   width: 100%;
-  margin: 0 auto;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-
-  /* ✅ Background image */
+  min-height: auto;
+  padding: 20px;
+  
+  /* Background image */
   background-image: url('/assets/dashboard/review-card-bg.svg');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
 }
-.review-card {
-  width: 100%;
-  max-width: 525px;
-}
 
 @media (max-width: 960px) {
   .review-card {
-    max-width: 100%;
+    width: 100%;
   }
 }
 
@@ -918,7 +935,6 @@ const handleClickProductCard = (uid) => {
   width: 72px;
   height: 72px;
 }
-
 
 .bonus-chip {
   position: absolute;
@@ -940,12 +956,11 @@ const handleClickProductCard = (uid) => {
 .card-content {
   position: relative;
   z-index: 2;
-
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px; /* space between icon and text */
+  gap: 16px;
   text-align: center;
 }
 
@@ -956,12 +971,13 @@ const handleClickProductCard = (uid) => {
 }
 
 .review-text .highlight {
-  font-weight: 700; /* Bold */
+  font-weight: 700;
 }
 
 .review-text .normal {
-  font-weight: 400; /* Regular */
+  font-weight: 400;
 }
+
 .refer-card {
   position: relative;
   overflow: hidden;
@@ -969,7 +985,7 @@ const handleClickProductCard = (uid) => {
 
 /* Left side background */
 .left-side {
-  background-image: url("@/assets/images/dashboard/stars-bg.svg"); /* replace with your image */
+  background-image: url("@/assets/images/dashboard/stars-bg.svg");
   background-size: cover;
   background-position: center;
   display: flex;
@@ -998,24 +1014,6 @@ const handleClickProductCard = (uid) => {
   pointer-events: none;
 }
 
-/* Chip inside left side */
-.bonus-chip {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  border: 1px solid #fea200;
-  background-color: #fff0d5;
-  color: #1e1e1e;
-  font-weight: 500;
-  font-size: 13px;
-  border-radius: 16px;
-}
-
-/* Deep icon color */
-::v-deep(.bonus-chip .v-icon) {
-  color: #fea200;
-}
-
 /* Lordicon centering */
 .left-content {
   flex: 1;
@@ -1024,6 +1022,7 @@ const handleClickProductCard = (uid) => {
   justify-content: center;
   width: 100%;
 }
+
 .custom-btn {
   color: #1e1e1e;
   font-weight: 400;
@@ -1033,22 +1032,21 @@ const handleClickProductCard = (uid) => {
 .custom-btn .v-icon {
   color: #1e1e1e;
 }
+
 /* Right side */
 .refer-heading {
-  
-  font-weight: 600; /* SemiBold */
+  font-weight: 600;
   font-size: 24px;
   color: #1e1e1e;
 }
 
 .refer-point {
-  
-  font-weight: 400; /* Regular */
+  font-weight: 400;
   font-size: 14px;
   color: #1e1e1e;
 }
 
-/* Tablet: 3 per row */
+/* Responsive - Tablet: 3 per row */
 @media (max-width: 960px) {
   .flossly-col {
     flex: 0 0 calc(100% / 3);
@@ -1056,7 +1054,7 @@ const handleClickProductCard = (uid) => {
   }
 }
 
-/* Mobile: 1 per row */
+/* Responsive - Mobile: 1 per row */
 @media (max-width: 600px) {
   .flossly-col {
     flex: 0 0 100%;
@@ -1067,32 +1065,35 @@ const handleClickProductCard = (uid) => {
 .custom-text {
   color: #1E1E1E !important;
   font-family: 'Poppins', sans-serif;
-  font-weight: 600;          /* SemiBold */
+  font-weight: 600;
   font-size: 18px;
-  line-height: 1;            /* 100% */
+  line-height: 1;
   letter-spacing: 0;
 }
+
 .cust-border {
   border-bottom: 1px solid #DBDBDB;
   padding: 17px;
 }
+
 .form-label {
   display: block;
   font-family: 'Inter', sans-serif;
-  font-weight: 400;          /* Regular */
+  font-weight: 400;
   font-size: 16px;
-  line-height: 1.3;          /* 130% */
+  line-height: 1.3;
   letter-spacing: 0;
-  color: #1E1E1E;            /* neutral dark */
+  color: #1E1E1E;
 }
+
 .v-field--variant-outlined .v-field__outline {
   --v-field-border-opacity: 1;
   border-color: #DFDFDF;
 }
+
 .form-container {
   max-width: 420px;
   width: 100%;
-  margin: 0 auto; /* centers content */
+  margin: 0 auto;
 }
-
 </style>

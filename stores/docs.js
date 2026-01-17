@@ -232,6 +232,51 @@ export const useDocStore = defineStore("docStore", {
             reject(err);
           });
       });
-    }
+    },
+    getAllFolders() {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        docService
+          .getAllFolders()
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    moveDocument(data) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        docService
+          .moveDocument(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    moveFolder(data) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        docService
+          .moveFolder(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
   },
 });
