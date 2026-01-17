@@ -191,16 +191,7 @@ const populateForm = (category = null) => {
   if (formRef.value) {
     formRef.value.resetValidation();
   }
-  
-  // Debug log to verify system category detection
-  if (source) {
-    console.log("Category data:", {
-      id: source.id,
-      name: source.name,
-      organisationId: source.organisationId,
-      isSystemCategory: source.organisationId === null
-    });
-  }
+    
 };
 
 watch(
