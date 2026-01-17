@@ -52,6 +52,9 @@
                 :rules="requiredRule"
                 required
                 flat
+                :disabled="isSystemCategory"
+                :hint="isSystemCategory ? 'System category names cannot be changed' : ''"
+                persistent-hint
               />
             </v-col>
 
@@ -80,6 +83,7 @@
                 bg-color="white"
                 flat
                 clearable
+                :disabled="isSystemCategory"
               />
             </v-col>
 
@@ -170,6 +174,7 @@ const defaultColors = [
 const modelValueRef = toRef(props, "modelValue");
 const editCategoryRef = toRef(props, "editCategory");
 const isEditMode = computed(() => !!editCategoryRef.value);
+const isSystemCategory = computed(() => editCategoryRef.value?.organisationId === null);
 const drawerTitle = computed(() =>
   isEditMode.value ? "Edit Category" : "Add New Category"
 );
@@ -185,6 +190,16 @@ const populateForm = (category = null) => {
   };
   if (formRef.value) {
     formRef.value.resetValidation();
+  }
+  
+  // Debug log to verify system category detection
+  if (source) {
+    console.log("Category data:", {
+      id: source.id,
+      name: source.name,
+      organisationId: source.organisationId,
+      isSystemCategory: source.organisationId === null
+    });
   }
 };
 

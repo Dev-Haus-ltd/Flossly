@@ -297,6 +297,7 @@
             :headers="selectedHeaders"
             :expanded="expanded"
             :items-per-page="pageSize"
+            :items-per-page-options="[10, 25, 50, 100, { value: -1, title: 'All' }]"
             :items-length="group.total ?? getStatusTotal(group.status)"
             :page="page"
             item-value="id"
@@ -348,7 +349,7 @@
                     :style="{
                       width: column.width + 'px',
                       minWidth: column.width + 'px',
-                      padding: '0px 7px',
+                      padding: i === 0 ? '0px' : '0px 7px',
                       backgroundColor: '#F6F6F6',
                       fontSize: '14px',
                       position: 'relative',
@@ -358,11 +359,11 @@
                   >
                     <div
                       v-if="!column.title && i === 0"
-                      class="d-flex align-center justify-center"
+                      class="d-flex align-center"
                     >
                       <input
                         type="checkbox"
-                        class="cust-checkbox ma-0"
+                        class="cust-checkbox"
                         :checked="allSelected"
                         :indeterminate.prop="someSelected && !allSelected"
                         @change="toggleAll(group)"
@@ -590,6 +591,12 @@
                   @assign="assignTask(item, $event)"
                   @unassign="unAssign(item, $event)"
                   @add-staff="addStaffDrawer = true"
+                />
+              </template>
+              <!-- Assigned By column with avatar -->
+              <template v-else-if="col.key === 'assigner.fullName'">
+                <DataTableColumnsAssignedBy
+                  :assigner="item.assigner"
                 />
               </template>
               <!-- Custom column template -->
@@ -1598,8 +1605,18 @@ const handleKeyboardShortcut = (event) => {
 
 watch(
   () => headers,
-  (newVal) => {
-    if (newVal && newVal.length > 0) {
+  (newVal, oldVal) => {
+    if (!newVal || newVal.length === 0) return;
+    
+    // Only update if this is the initial load (oldVal is undefined/empty)
+    // OR if custom columns have been added/removed (different lengths or keys)
+    const shouldUpdate = 
+      !oldVal || 
+      oldVal.length === 0 || 
+      newVal.length !== oldVal.length ||
+      newVal.some((h, i) => h.key !== oldVal[i]?.key);
+    
+    if (shouldUpdate) {
       selectedHeaders.value = sortHeaders(newVal);
     }
   },

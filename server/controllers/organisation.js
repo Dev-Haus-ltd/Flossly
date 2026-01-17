@@ -18,6 +18,8 @@ import {
   Task,
   UserTask,
   UserHrDocument,
+  TaskChecklist,
+  UserTaskChecklist,
 } from "../models";
 import { HrDocument } from "../models/hrDocuments";
 import formidable from "formidable";
@@ -30,6 +32,7 @@ import {
   sendTrialActivatedEmail,
 } from "../utils/emailNotifications";
 import bcrypt from "bcrypt";
+import { Op } from "sequelize";
 
 // Role constants for access control
 // Role ID 1 = Practice Manager, Role ID 8 = Principal Dentist / Practice Owner
@@ -1045,7 +1048,41 @@ export const createOrganisationForUser = async (event) => {
         comments: "",
       }));
 
-      await UserTask.bulkCreate(userTasks, { transaction });
+      const createdUserTasks = await UserTask.bulkCreate(userTasks, { 
+        transaction,
+        returning: true 
+      });
+
+      // Copy checklists from TaskChecklist to UserTaskChecklist
+      const taskIds = tasks.map((t) => t.id);
+      const templates = await TaskChecklist.findAll({
+        where: { taskId: { [Op.in]: taskIds } },
+        transaction,
+      });
+
+      if (templates?.length) {
+        const checklistToCreate = [];
+        for (const ut of createdUserTasks) {
+          const tpls = templates.filter((tpl) => tpl.taskId === ut.taskId);
+          if (!tpls.length) continue;
+          tpls.forEach((tpl) => {
+            checklistToCreate.push({
+              userTaskId: ut.id,
+              question: tpl.question,
+              category: tpl.category,
+              showRadio: tpl.showRadio,
+              showDate: tpl.showDate,
+              showTime: tpl.showTime,
+              fieldOneTitle: tpl.fieldOneTitle,
+              fieldTwoTitle: tpl.fieldTwoTitle,
+              radioValue: 'N/A',
+            });
+          });
+        }
+        if (checklistToCreate.length) {
+          await UserTaskChecklist.bulkCreate(checklistToCreate, { transaction });
+        }
+      }
     }
 
     /** -------------------------
