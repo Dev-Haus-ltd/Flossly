@@ -632,4 +632,7 @@ watch(
     max-width: 1611px;
   }
 }
+.v-navigation-drawer__scrim {
+    position: fixed !important;
+}
 </style>

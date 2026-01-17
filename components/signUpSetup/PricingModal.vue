@@ -13,7 +13,8 @@
           :key="plan.id"
           type="button"
           class="plan-option"
-          :class="{ selected: plan.id === selectedPlanId }"
+          :class="{ selected: plan.id === selectedPlanId, disabled: plan.disabled }"
+          :disabled="plan.disabled"
           @click="selectedPlanId = plan.id"
         >
           <span class="plan-radio" :class="{ selected: plan.id === selectedPlanId }"></span>
@@ -197,7 +198,7 @@ const displayPlans = computed(() => {
       const featureKey = getFeatureKeyFromType(plan.product?.name);
       const displayName =
         key === "soar"
-          ? "Soar (Full Access)"
+          ? "Soar (Coming Soon)" //Full Access
           : key === "glide"
           ? "Glide"
           : key === "drift"
@@ -209,7 +210,7 @@ const displayPlans = computed(() => {
       const featureObj = features.value.find((x) => getFeatureKeyFromType(x.type) === featureKey);
       const featureList = featureObj?.features || [];
       const description = featureObj?.description || plan.product?.description || plan.description || "";
-      return { ...plan, key, displayName, shortName, badge, features: featureList, description };
+      return { ...plan, key, displayName, shortName, badge, features: featureList, description, disabled: key === "soar"  }; // 🔴 UI-disable Soar
     })
     .sort((a, b) => (planOrder[a.key] || 99) - (planOrder[b.key] || 99));
   const planMap = new Map();
@@ -246,7 +247,7 @@ const billingLabel = (plan) => {
 
 watch(displayPlans, (list) => {
   if (!selectedPlanId.value && list.length) {
-    selectedPlanId.value = list[0].id;
+    selectedPlanId.value = list[1].id;
   }
 });
 
