@@ -1,6 +1,6 @@
 <template>
   <NuxtLayout>
-    <NuxtPage class="bck-org" />
+    <NuxtPage :key="pageKey" class="bck-org" />
     <CommonLoader />
     <Snackbar />
     <ClientOnly>
@@ -129,6 +129,7 @@ const rolesList = ref([]);
 
 const route = useRoute();
 const router = useRouter();
+const pageKey = computed(() => `${route.fullPath}-${user.value?.currentLoggedInOrgId || "no-org"}`);
 
 const showWelcomeDialog = ref(false);
 const showVideoDialog = ref(false);
