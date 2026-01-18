@@ -142,6 +142,7 @@
     <!-- Delete Confirmation Dialog -->
     <CommonConfirmDialog
       v-model="showDeleteConfirm"
+      icon="mdi-information-outline"
       :title="deleteConfirmTitle"
       :message="deleteConfirmMessage"
       confirm-text="Delete"

@@ -74,14 +74,20 @@
 
             <!-- Action -->
             <td class="col-action text-center">
-              <img
-                src="@/assets/icons/practiceProfile/contact/delete.svg"
-                alt="Delete"
-                width="18"
-                height="18"
-                style="cursor: pointer"
-                @click="deleteRow(index)"
-              />
+              <v-tooltip location="top">
+                <template #activator="{ props }">
+                  <img
+                    v-bind="props"
+                    src="@/assets/icons/practiceProfile/contact/delete.svg"
+                    alt="Delete"
+                    width="18"
+                    height="18"
+                    style="cursor: pointer"
+                    @click="openDeleteConfirm(index)"
+                  />
+                </template>
+                <span>Delete</span>
+              </v-tooltip>
             </td>
           </tr>
         </tbody>
@@ -94,6 +100,15 @@
       @onUpdate="handleAddContacts"
     />
   </div>
+  <CommonConfirmDialog
+    v-model="showDeleteConfirm"
+    icon="mdi-information-outline"
+    title="Delete contact?"
+    message="Are you sure you want to delete this contact? This action cannot be undone."
+    confirm-text="Delete"
+    @confirm="confirmDelete"
+    @cancel="cancelDelete"
+  />
 </template>
 
 <script setup>
@@ -113,6 +128,8 @@ const mainStore = useMainStore();
 const search = ref("");
 const showDialog = ref(false);
 const contacts = ref([]);
+const showDeleteConfirm = ref(false);
+const deleteIndex = ref(null);
 
 // Keep contacts in sync with props
 watch(
@@ -153,6 +170,25 @@ const updateField = (e, index, field) => {
 };
 
 // Delete row
+const openDeleteConfirm = (index) => {
+  deleteIndex.value = index;
+  showDeleteConfirm.value = true;
+};
+
+const cancelDelete = () => {
+  showDeleteConfirm.value = false;
+  deleteIndex.value = null;
+};
+
+const confirmDelete = async () => {
+  if (deleteIndex.value === null) return;
+
+  await deleteRow(deleteIndex.value);
+
+  showDeleteConfirm.value = false;
+  deleteIndex.value = null;
+};
+
 const deleteRow = async (index) => {
   const c = contacts.value[index];
   if (!c?.id) return;
@@ -162,15 +198,19 @@ const deleteRow = async (index) => {
 
     if (res.code === 0) {
       contacts.value.splice(index, 1);
-      emit("updateDetails"); // re-fetch parent details if needed
+      emit("updateDetails");
       mainStore.setSnackbar({ title: "Deleted", type: "success" });
     } else {
-      mainStore.setSnackbar({ title: res.message || "Delete failed", type: "error" });
+      mainStore.setSnackbar({
+        title: res.message || "Delete failed",
+        type: "error",
+      });
     }
   } catch (err) {
     mainStore.setSnackbar({ title: err.message, type: "error" });
   }
 };
+
 
 
 const handleAttributeUpdate = async (updated) => {

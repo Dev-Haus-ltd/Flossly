@@ -39,7 +39,7 @@
     <v-dialog
       v-if="showPricingDialog"
       v-model="showPricingDialog"
-      max-width="980"
+      max-width="690"
       scrollable
       @click:outside="closePricingModal"
     >
@@ -313,6 +313,9 @@ onMounted(async () => {
   min-height: 70vh;
   background-color: rgb(var(--v-theme-surface));
   overflow: hidden;
+  padding-right: 20px;
+  padding-left: 20px;
+  padding-bottom: 20px;
 }
 
 .pricing-modal-header {
