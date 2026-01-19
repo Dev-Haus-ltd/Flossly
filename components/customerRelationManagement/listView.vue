@@ -294,6 +294,7 @@
                     :current-user="user"
                     @assign="assignLead(item, $event)"
                     @unassign="unAssign(item, $event)"
+                    @add-staff="openAddStaff"
                   />
                 </div>
               </template>
@@ -402,15 +403,13 @@
                 toggleSelect,
               }"
             >
-              <div class="text-center">
-                <input
-                  type="checkbox"
-                  :checked="isSelected(internalItem)"
-                  disabled
-                  @change="() => toggleSelect(internalItem)"
-                  class="cust-checkbox"
-                />
-              </div>
+              <input
+                type="checkbox"
+                :checked="isSelected(internalItem)"
+                disabled
+                @change="() => toggleSelect(internalItem)"
+                class="cust-checkbox"
+              />
             </template>
             <template v-slot:headers="{ columns, allSelected, someSelected }">
               <tr>
@@ -466,6 +465,15 @@
                 <v-chip label size="small" color="primary" variant="tonal" class="ml-2">
                   {{ item.leadStatus || 'Archived' }}
                 </v-chip>
+              </template>
+              <template v-else-if="col.key === 'alert'">
+                <DataTableColumnsAlerts :selected="item" />
+              </template>
+              <template v-else-if="col.key === 'assigned'">
+                <p class="ml-2 mb-0">{{ formatAssignedUsers(item.assigned) }}</p>
+              </template>
+              <template v-else-if="col.key === 'treatment'">
+                <p class="ml-2 mb-0">{{ formatTreatmentValue(item.treatment) }}</p>
               </template>
               <template v-else>
                 <p class="ml-2 mb-0">{{ item[col.key]?.name || item[col.key] }}</p>
@@ -531,6 +539,12 @@
       @confirm="doDelete"
       @cancel="confirmDelete = false"
     />
+    <TeamFlossSideBarAddNewstaff
+      v-model="addStaffDrawer"
+      :rolesList="rolesList"
+      @success="onStaffAdded"
+      @close="addStaffDrawer = false"
+    />
   </div>
 </template>
 
@@ -538,6 +552,7 @@
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 import { buildRecipientContext, renderWithContext } from '@/lib/templateTokens'
 import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
+import { formatAssignedUsers, formatTreatmentValue } from "@/lib/misc";
 import callIcon from '@/assets/crm/call.svg'
 import sendMailIcon from '@/assets/crm/sendMail.svg'
 import whatsappIcon from '@/assets/crm/whatsapp.svg'
@@ -618,6 +633,8 @@ const deleting = ref(false);
 const confirmArchive = ref(false);
 const archiving = ref(false);
 const converting = ref(false);
+const addStaffDrawer = ref(false);
+const rolesList = ref([]);
 
 // Inline editing functions
 const startEdit = (item, field) => {
@@ -872,6 +889,17 @@ async function openCompose(actionKey) {
 watch(() => showCompose.value, (v) => { if (!v && composeEditor) { composeEditor.destroy(); composeEditor = null } })
 
 const mainStore = useMainStore?.() || null
+const openAddStaff = async () => {
+  addStaffDrawer.value = true;
+  if (rolesList.value.length || !mainStore?.getRoles) return;
+  try {
+    const res = await mainStore.getRoles();
+    if (res?.code === 0 && res.data) rolesList.value = res.data;
+  } catch (e) {}
+};
+const onStaffAdded = () => {
+  addStaffDrawer.value = false;
+};
 async function sendCompose() {
   try {
     composeLoading.value = true

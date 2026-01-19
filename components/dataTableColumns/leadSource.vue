@@ -7,7 +7,7 @@
       >
         <template #activator="{ props }">
           <p v-bind="props" class="px-2" style="width: 100%;">
-            {{ selected?.leadSource?.name  || 'N/A' }}
+            {{ displayLeadSource }}
           </p>
         </template>
   
@@ -86,6 +86,21 @@
   const emit = defineEmits(["update"]);
 
   const toggleEdit = ref(false);
+  const displayLeadSource = computed(() => {
+    if (selected?.leadSource?.name) return selected.leadSource.name;
+    const raw = selected?.leadSource;
+    if (typeof raw === "string" && raw.trim()) return raw.trim();
+    const rawId = selected?.leadSourceId ?? (typeof raw === "number" ? raw : null);
+    if (rawId != null) {
+      const match = (leadSources || []).find((s) => s.id === rawId);
+      if (match?.name) return match.name;
+    }
+    if (selected?.leadSourceName?.trim) {
+      const name = selected.leadSourceName.trim();
+      if (name) return name;
+    }
+    return "N/A";
+  });
 
   const addLeadSourceAndEdit = () => {
     if (!toggleEdit.value) {

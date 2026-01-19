@@ -250,7 +250,7 @@
                   <div class="relative">
                     <v-select
                       v-model="lead.userId"
-                      :items="users"
+                      :items="activeUsers"
                       item-title="fullName"
                       item-value="id"
                       density="compact"
@@ -400,6 +400,9 @@ const statusLookup = computed(() => {
   leadStatusOptions.forEach((s) => map.set(s.label.toLowerCase(), s.label));
   return map;
 });
+const activeUsers = computed(() =>
+  (props.users || []).filter((u) => u?.status === "Active")
+);
 watch(
   () => props.modelValue,
   (val) => (isOpen.value = val)
@@ -575,7 +578,7 @@ const normalizeRow = (row) => {
       (normalized["leadstatus"] || "").trim().toLowerCase()
     ) || "New",
     userId:
-      props.users.find((u) => {
+      activeUsers.value.find((u) => {
         const fullName = u.fullName?.trim()?.toLowerCase();
         const email = u.email?.trim()?.toLowerCase();
         const assigned = assignedUser?.trim()?.toLowerCase();

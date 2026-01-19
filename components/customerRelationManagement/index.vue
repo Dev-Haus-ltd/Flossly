@@ -476,6 +476,30 @@ const handleAddLeadClick = () => {
   addLeadDrawer.value = true;
 };
 
+const resolveLeadSource = (source) => {
+  if (source && typeof source === "object") {
+    if (source.name) return source;
+    const id = source.id ?? source.leadSourceId;
+    if (id != null) {
+      const match = leadSources.value.find((s) => s.id === id);
+      if (match) return match;
+    }
+  }
+  if (typeof source === "number") {
+    const match = leadSources.value.find((s) => s.id === source);
+    if (match) return match;
+    return { id: source, name: String(source) };
+  }
+  if (typeof source === "string" && source.trim()) {
+    const match = leadSources.value.find(
+      (s) => s.name?.trim()?.toLowerCase() === source.trim().toLowerCase()
+    );
+    if (match) return match;
+    return { id: null, name: source.trim() };
+  }
+  return { id: 99, name: "Meta Leadgen" };
+};
+
 const handleSuccess = (newLead) => {
   addLeadDrawer.value = false;
   const mapped = {
@@ -488,7 +512,7 @@ const handleSuccess = (newLead) => {
     dob: newLead.dob || null,
     occupation: newLead.occupation || "",
     location: newLead.location || "",
-    leadSource: newLead.leadSource || { id: 99, name: 'Meta Leadgen' },
+    leadSource: resolveLeadSource(newLead.leadSource ?? newLead.leadSourceId),
     leadStatus: newLead.leadStatus || 'New',
     treatment: newLead.treatment || { id: null, name: '' },
     assigned: newLead.assigned || [],
