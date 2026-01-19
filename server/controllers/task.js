@@ -1003,16 +1003,29 @@ export const unAssignBulkTask = async (event) => {
     });
 
     const remover = await User.findByPk(loggedUser.userId);
+    const tasksByUser = new Map();
     for (const task of tasksWithUsers) {
-      if (task.assignedUser?.email) {
-        await sendTaskUnassignmentEmail({
-          email: task.assignedUser.email,
-          name: task.assignedUser.fullName,
-          taskTitle:
-            task.title || (await Task.findByPk(task.taskId))?.title || "Task",
-          removedBy: remover?.fullName || "Team",
-        });
+      const assignedUser = task.assignedUser;
+      if (!assignedUser?.email) continue;
+      const title = task.title || "Task";
+      const key = assignedUser.id;
+      if (!tasksByUser.has(key)) {
+        tasksByUser.set(key, { user: assignedUser, titles: [] });
       }
+      tasksByUser.get(key).titles.push(title);
+    }
+    for (const { user, titles } of tasksByUser.values()) {
+      const uniqueTitles = Array.from(new Set(titles));
+      const taskTitle =
+        uniqueTitles.length === 1
+          ? uniqueTitles[0]
+          : `${uniqueTitles.length} tasks removed: ${uniqueTitles.join(", ")}`;
+      await sendTaskUnassignmentEmail({
+        email: user.email,
+        name: user.fullName,
+        taskTitle,
+        removedBy: remover?.fullName || "Team",
+      });
     }
 
     return success("UserTask successfully deleted (unassigned).");

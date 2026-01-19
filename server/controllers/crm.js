@@ -616,13 +616,15 @@ export const listAutomation = async (event) => {
     dbRows.forEach((row) => {
       if (seen.has(row.key)) return
       const override = overrides[row.key]
-      merged.push(override ? { ...row, ...override, key: row.key } : row)
+      const combined = override ? { ...row, ...override, key: row.key } : row
+      merged.push(combined)
       seen.add(row.key)
     })
 
     Object.entries(overrides).forEach(([key, override]) => {
       if (seen.has(key)) return
-      merged.push({ key, ...override })
+      const combined = { key, ...override }
+      merged.push(combined)
     })
 
     return success(merged)
@@ -637,7 +639,7 @@ export const saveAutomation = async (event) => {
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
     const payload = typeof body === 'string' ? JSON.parse(body) : body
-    const { key, type = 'Email', name, sending, enabled, template, leadId } = payload || {}
+    const { key, type = 'Email', name, subject, sending, enabled, template, leadId } = payload || {}
     if (!key) return error(400, 'key required')
     if (leadId) {
       const lead = await CrmLead.findOne({ where: { organisationId: Number(orgId), id: Number(leadId) } })
@@ -648,6 +650,7 @@ export const saveAutomation = async (event) => {
         key,
         type,
         name: name || key,
+        subject: subject || '',
         sending: sending || '',
         enabled: !!enabled,
         template: template || '',
@@ -664,10 +667,20 @@ export const saveAutomation = async (event) => {
       if (enabled !== undefined) exists.enabled = !!enabled
       if (type !== undefined) exists.type = type
       if (template !== undefined) exists.template = template
+      if (subject !== undefined) exists.subject = subject
       await exists.save()
       return success(exists)
     }
-    const created = await CrmAutomationTemplate.create({ organisationId: Number(orgId), key, type, name: name || key, sending: sending || '', enabled: !!enabled, template: template || null })
+    const created = await CrmAutomationTemplate.create({
+      organisationId: Number(orgId),
+      key,
+      type,
+      name: name || key,
+      subject: subject || null,
+      sending: sending || '',
+      enabled: !!enabled,
+      template: template || null
+    })
     return success(created)
   } catch (e) {
     return error(500, e.message)
@@ -691,10 +704,20 @@ export const sendLeadMail = async (event) => {
       const existing = await CrmAutomationTemplate.findOne({ where })
       if (existing) {
         existing.name = existing.name || subject
+        existing.subject = existing.subject || subject
         existing.template = html
         await existing.save()
       } else {
-        await CrmAutomationTemplate.create({ organisationId: Number(orgId), key, type: 'Email', name: subject, sending: 'Manual', enabled: true, template: html })
+        await CrmAutomationTemplate.create({
+          organisationId: Number(orgId),
+          key,
+          type: 'Email',
+          name: subject,
+          subject,
+          sending: 'Manual',
+          enabled: true,
+          template: html
+        })
       }
     }
 

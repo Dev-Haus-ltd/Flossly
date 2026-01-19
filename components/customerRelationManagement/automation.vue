@@ -263,6 +263,21 @@
                 Use [First Name] for personalization
               </v-chip>
             </div>
+            <div class="mb-4">
+              <div class="text-subtitle-2 font-weight-bold text-grey-darken-2 mb-2">
+                <v-icon size="18" class="mr-2">mdi-email-outline</v-icon>
+                Email Subject
+              </div>
+              <v-text-field
+                v-model="active.subject"
+                variant="solo"
+                density="compact"
+                hide-details
+                bg-color="#FFFFFF"
+                flat
+                placeholder="Subject line for this email"
+              />
+            </div>
             <div ref="editorEl" class="editor"></div>
           </div>
         </div>
@@ -370,6 +385,7 @@ const buildPayload = (row) => {
     key: row.key,
     type: row.type,
     name: row.name,
+    subject: row.subject,
     sending: row.sending,
     enabled: !!row.enabled,
     template: row.template,
@@ -685,26 +701,12 @@ const applyPlaceholders = (text) => {
     .replace(/\[?\s*first\s*name\s*\]?/gi, firstName)
 }
 
-const cleanSubject = (subject) => {
-  if (!subject) return ''
-  return subject
-    .replace(/\([^)]*\)/g, '')
-    .replace(/\bday\s*\d+\b/gi, '')
-    .replace(/\b\d+\s*days?\s*(before|after)\b/gi, '')
-    .replace(/\b(morning|evening|afternoon|immediate(ly)?)\b/gi, '')
-    .replace(/\s{2,}/g, ' ')
-    .replace(/\s+-\s+-/g, ' - ')
-    .replace(/\s+-\s*$/g, '')
-    .trim()
-}
-
 const previewSubject = computed(() => {
   const row = previewItem.value
   if (!row) return ''
   const def = resolveDefault(row)
-  const rawName = row.name && row.name.trim() && row.name !== row.key ? row.name : def.name
-  const fallback = `Message from ${practiceName.value || '[Practice Name]'}`
-  return cleanSubject(applyPlaceholders(rawName || fallback))
+  const rawSubject = row.subject || def.subject || def.name
+  return applyPlaceholders(rawSubject)
 })
 
 const previewHtml = computed(() => {
@@ -765,6 +767,7 @@ const onToggleEnabled = async (row, val) => {
     key: row.key,
     type: row.type || def.type || 'Email',
     name: row.name || def.name || row.key,
+    subject: row.subject || def.subject || def.name,
     sending: row.sending || def.sending || '',
     enabled: row.enabled,
     template: (row.template && row.template.trim()) ? row.template : (def.template || ''),
