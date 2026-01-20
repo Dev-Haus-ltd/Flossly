@@ -220,6 +220,13 @@ export const useMainStore = defineStore("mainStore", {
               to: "/diary/patients",
               featureKey: "diary",
             },
+            {
+              title: "Finance",
+              value: "diaryfinance",
+              imgPath: tasksIcon,
+              to: "/diary/finance",
+              featureKey: "diary",
+            },
           ],
         },
         // {

@@ -406,6 +406,7 @@ defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout, resetModal, sele
   color: #1E1E1E;
   margin: 0;
   line-height: 1.2;
+  margin-bottom: 8px;
 }
 
 .plan-option.selected .plan-name {
@@ -437,6 +438,7 @@ defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout, resetModal, sele
   max-height: 530px;
   width: 100%;
   max-width: 320px;
+  overflow: hidden;
 }
 
 .plan-detail-header {
@@ -496,6 +498,8 @@ defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout, resetModal, sele
   margin: 0 0 16px;
   display: grid;
   gap: 8px;
+  height: calc(530px - 36px - 16px - 120px);
+  overflow-y: auto;
 }
 
 .plan-features span {
@@ -580,7 +584,7 @@ defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout, resetModal, sele
   text-transform: none;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1024px) {
   .pricing-grid {
     grid-template-columns: 1fr;
   }

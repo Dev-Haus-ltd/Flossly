@@ -2,7 +2,7 @@
   <v-dialog v-model="model" max-width="420">
     <v-card class="pa-4">
       <div class="d-flex align-center mb-2">
-        <v-icon color="warning" class="mr-2">mdi-alert-outline</v-icon>
+        <v-icon color="warning" class="mr-2">{{ icon }}</v-icon>
         <h4 class="mb-0">{{ title || 'Please confirm' }}</h4>
       </div>
       <p class="mb-4">{{ message || 'Are you sure?' }}</p>
@@ -24,6 +24,10 @@ const props = defineProps({
   message: String,
   confirmText: String,
   loading: Boolean,
+  icon: {
+    type: String,
+    default: 'mdi-alert-outline',
+  },
 })
 const emit = defineEmits(['update:modelValue','confirm','cancel'])
 const model = computed({

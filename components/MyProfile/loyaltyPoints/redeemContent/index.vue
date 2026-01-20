@@ -2,7 +2,7 @@
   <div>
     <h3 class="head mb-5">Redeem Prizes</h3>
     <v-row>
-      <v-col cols="12" sm="6" md="2" v-for="item in redeemCards" :key="item.id">
+      <v-col cols="12" sm="6" md="3" v-for="item in redeemCards" :key="item.id">
         <MyProfileLoyaltyPointsRedeemContentRedeemCard
           :id="item.id"
           :img="item.img"
@@ -97,32 +97,32 @@ const redeemCards = [
   {
     id: 1,
     img: AmazoneImg,
-    title: "Amazon Gift Card",
+    title: "Amazon voucher",
     points: "500",
   },
   {
     id: 2,
     img: NandosImg,
-    title: "Starbucks Voucher",
-    points: "300",
+    title: "Nandos Gift Care",
+    points: "1500",
   },
   {
     id: 3,
     img: IpadImg,
-    title: "Spotify Premium",
-    points: "700",
+    title: "iPad Air 2022",
+    points: "2500",
   },
   {
     id: 4,
     img: SpaImg,
-    title: "Uber Credits",
-    points: "450",
+    title: "Weekend Spa break",
+    points: "5000",
   },
   {
     id: 5,
     img: MacImg,
-    title: "Uber Credits",
-    points: "450",
+    title: "MacBook Air 2025 13inch",
+    points: "7500",
   },
 ];
 const handleRedeem = (id) => {

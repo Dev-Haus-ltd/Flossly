@@ -194,108 +194,6 @@
               </v-col>
             </v-row>
           </v-card>
-
-          <!-- Referral Dialog -->
-          <v-dialog
-            v-model="showReferralDialog"
-            max-width="568"
-            persistent
-          >
-            <v-card rounded="xl" class="pa-0">
-              <!-- Header -->
-              <v-card-title class="px-0 cust-border">
-                <div class="form-container d-flex align-center justify-space-between">
-                  <span class="text-h6 custom-text">
-                    Refer a Business
-                  </span>
-
-                  <v-btn
-                    icon
-                    variant="text"
-                    @click="showReferralDialog = false"
-                  >
-                    <v-icon>mdi-close</v-icon>
-                  </v-btn>
-                </div>
-              </v-card-title>
-
-              <!-- Body -->
-              <v-card-text class="px-0">
-                <div class="form-container">
-                  <v-form @submit.prevent="submitReferral" class="d-flex flex-column align-center">
-                    <!-- Full Name -->
-                    <div class="mb-4 w-100">
-                      <label class="form-label pb-2">Full name</label>
-                      <v-text-field
-                        v-model="referralForm.fullName"
-                        variant="outlined"
-                        density="compact"
-                        height="44"
-                        rounded="lg"
-                        hide-details
-                        required
-                      />
-                    </div>
-
-                    <!-- Email -->
-                    <div class="mb-4 w-100">
-                      <label class="form-label pb-2">Email</label>
-                      <v-text-field
-                        v-model="referralForm.email"
-                        type="email"
-                        variant="outlined"
-                        density="compact"
-                        height="44"
-                        rounded="lg"
-                        hide-details
-                        required
-                      />
-                    </div>
-
-                    <!-- Phone Number -->
-                    <div class="mb-4 w-100">
-                      <label class="form-label pb-2">Phone Number</label>
-                      <v-text-field
-                        v-model="referralForm.phoneNumber"
-                        variant="outlined"
-                        density="compact"
-                        height="44"
-                        rounded="lg"
-                        hide-details
-                      />
-                    </div>
-
-                    <!-- Practice Name -->
-                    <div class="mb-4 w-100">
-                      <label class="form-label pb-2">Practice Name</label>
-                      <v-text-field
-                        v-model="referralForm.practiceName"
-                        variant="outlined"
-                        density="compact"
-                        height="44"
-                        rounded="lg"
-                        hide-details
-                        required
-                      />
-                    </div>
-
-                    <!-- Submit -->
-                    <v-btn
-                      type="submit"
-                      color="primary"
-                      flat
-                      height="44"
-                      class="mt-4 w-100"
-                      rounded="md"
-                      block
-                    >
-                      Submit information
-                    </v-btn>
-                  </v-form>
-                </div>
-              </v-card-text>
-            </v-card>
-          </v-dialog>
         </v-col>
 
         <!-- RIGHT COLUMN (4) -->
@@ -440,6 +338,9 @@
 
       <!-- Toolbox Dialog -->
       <DashBoardToolBoxDialog v-model="showToolboxDialog" @close="showToolboxDialog = false" />
+      <MyProfileLoyaltyPointsRewardsContentRecommendPracticeDialog
+        v-model="showReferralDialog"
+      />
     </div>
   </v-container>
 </template>
@@ -453,6 +354,7 @@ const showCard = ref(true);
 const isLoading = ref(true);
 const taskStore = useTaskStore();
 const mainStore = useMainStore();
+
 const crmStore = useCrmStore();
 const orgStore = useOrgStore();
 const showReferralDialog = ref(false);
