@@ -534,7 +534,7 @@ const fetchLeads = async (filters = {}) => {
     const payload = { ...filters, search: search.value || '', includeArchived: true }
     const res = await crmStore.listLeads(payload)
     if (res && res.code === 0) {
-      leads.value = (res.data || []).map((l) => ({
+      const mapped = (res.data || []).map((l) => ({
         alert: l.alert || "",
         name: l.name || "",
         email: l.email || "",
@@ -552,6 +552,7 @@ const fetchLeads = async (filters = {}) => {
         id: l.id,
         softDeleted: !!l.softDeleted,
       }))
+      leads.value = mapped;
     }
   } finally {
     isLoading.value = false

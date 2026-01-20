@@ -197,7 +197,21 @@
                     </div>
                   </v-col>
                   <v-col cols="12" md="5">
-                    <CommonAvatar :user="{ fullName: selectedLead?.assigned[0]?.fullName }" />
+                    <div v-if="assignedUsers.length" class="d-flex flex-wrap align-center assigned-avatars">
+                      <v-tooltip
+                        v-for="(user, index) in assignedUsers"
+                        :key="user.id || index"
+                        location="top"
+                        :text="user.fullName || user.name"
+                      >
+                        <template #activator="{ props: tooltipProps }">
+                          <span v-bind="tooltipProps" class="assigned-avatar">
+                            <CommonAvatar :user="user" size="28px" />
+                          </span>
+                        </template>
+                      </v-tooltip>
+                    </div>
+                    <span v-else class="value-text">Unassigned</span>
                   </v-col>
 
               
@@ -343,6 +357,16 @@ const formatDate = (date) => {
 };
 const selectedTreatment = ref({})
 const commPrefs = ref({})
+const assignedUsers = computed(() => {
+  const list = props.selectedLead?.assigned || [];
+  return list
+    .map((user) => {
+      if (!user) return null;
+      const fullName = user.fullName || user.name || user.email;
+      return fullName ? { ...user, fullName } : null;
+    })
+    .filter(Boolean);
+});
 const crmStore = useCrmStore();
 watch(
   () => props.selectedLead,
@@ -451,5 +475,15 @@ const savePreferences = async () => {
   min-height: 40px;
   font-size: 14px;
   
+}
+.assigned-avatars {
+  gap: 0;
+}
+.assigned-avatar {
+  display: inline-flex;
+  margin-left: -8px;
+}
+.assigned-avatar:first-child {
+  margin-left: 0;
 }
 </style>

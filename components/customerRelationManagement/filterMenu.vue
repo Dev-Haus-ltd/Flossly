@@ -134,7 +134,7 @@
           </v-label>
           <v-select
             v-model="selectedLeadSource"
-            :items="leadSources"
+            :items="leadSourceOptions"
             item-title="name"
             item-value="id"
             variant="solo"
@@ -226,8 +226,21 @@
   ]);
 
   // Derived names for chips
+  const leadSourceOptions = computed(() => {
+    const sources = Array.isArray(leadSources) ? [...leadSources] : [];
+    const hasChatbot = sources.some(
+      (source) => String(source?.name || "").trim().toLowerCase() === "chatbot"
+    );
+    if (!hasChatbot) {
+      sources.push({ id: "chatbot", name: "Chatbot" });
+    }
+    return sources;
+  });
+
   const selectedLeadSourceName = computed(() => {
-    const found = (leadSources || []).find?.(x => String(x.id) === String(selectedLeadSource.value))
+    const found = (leadSourceOptions.value || []).find?.(
+      (x) => String(x.id) === String(selectedLeadSource.value)
+    );
     return found?.name || ''
   })
   const selectedLeadStatusName = computed(() => {

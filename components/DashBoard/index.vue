@@ -310,25 +310,26 @@
           >
             <h4 class="card-head mb-4">Lead Conversion</h4>
             <div class="ma-5">
-              <DashBoardRevenueCard title="This Week" subtitle="£ 29,985" />
+              <DashBoardRevenueCard
+                title="Total Leads"
+                :subtitle="leadSummary.total"
+                label=""
+              />
 
               <v-row no-gutters class="performance-grid mt-5">
                 <v-col
                   v-for="(stat, index) in performaces"
                   :key="index"
-                  cols="4"
+                  cols="6"
                   class="perform-col"
                   :class="{
-                    'no-right-border': (index + 1) % 3 === 0,
+                    'no-right-border': (index + 1) % 2 === 0,
                     'no-bottom-border': index >= performaces.length - 2,
                   }"
                 >
                   <DashBoardPerformaceCard
                     :count="stat.count"
                     :title="stat.title"
-                    :percentage="stat.percentage"
-                    :color="stat.color"
-                    :trend="stat.trend"
                   />
                 </v-col>
               </v-row>
@@ -339,9 +340,9 @@
                 class="d-flex justify-space-between align-center text-body-2 font-weight-medium mb-1 mt-5 mx-1"
               >
                 <span>{{ source.label }}</span>
-                <div class="d-flex align-center" style="gap: 70px">
+                <div class="d-flex align-center" style="gap: 24px">
                   <span>{{ source.count }}</span>
-                  <span>{{ source.percent }}%</span>
+                  <span v-if="source.percent != null">{{ source.percent }}%</span>
                 </div>
               </div>
             </div>
@@ -452,57 +453,56 @@ const showCard = ref(true);
 const isLoading = ref(true);
 const taskStore = useTaskStore();
 const mainStore = useMainStore();
+const crmStore = useCrmStore();
 const orgStore = useOrgStore();
 const showReferralDialog = ref(false);
 const docStore = useDocStore();
 const recentFiles = ref([]);
 const user = ref({});
 const value = ref(null);
-const inquirySources = ref([
-  { label: "Meta Adverts", count: 16, percent: 35 },
-  { label: "Google Ads", count: 13, percent: 28 },
-  { label: "Organic Search", count: 18, percent: 18 },
-  { label: "Calls", count: 16, percent: 12 },
-  { label: "Walk-ins", count: 14, percent: 17 },
+const crmLeads = ref([]);
+const activeCrmLeads = computed(() =>
+  (crmLeads.value || []).filter((lead) => !lead?.softDeleted)
+);
+const leadSummary = computed(() => {
+  const active = activeCrmLeads.value;
+  const byStatus = (status) =>
+    active.filter((lead) => (lead.leadStatus || "").toLowerCase() === status)
+      .length;
+  return {
+    total: active.length,
+    new: byStatus("new"),
+    converted: byStatus("converted"),
+    contacted: byStatus("contacted"),
+    lost: byStatus("lost"),
+  };
+});
+const performaces = computed(() => [
+  { title: "New", count: leadSummary.value.new },
+  { title: "Converted", count: leadSummary.value.converted },
+  { title: "Contacted", count: leadSummary.value.contacted },
+  { title: "Lost", count: leadSummary.value.lost },
 ]);
-
-const performaces = ref([
-  {
-    count: 47,
-    title: "Inquiry",
-    percentage: "+15.9%",
-    color: "#60E5A3",
-    trend: "up",
-  },
-  {
-    count: 32,
-    title: "Inquiry",
-    percentage: "-8.4%",
-    color: "#FF5C5C",
-    trend: "down",
-  },
-  {
-    count: 58,
-    title: "Consultation",
-    percentage: "+4.3%",
-    color: "#60E5A3",
-    trend: "up",
-  },
-  {
-    count: 21,
-    title: "Booked",
-    percentage: "-12.1%",
-    color: "#FF5C5C",
-    trend: "down",
-  },
-  {
-    count: 22,
-    title: "Treated",
-    percentage: "-12.1%",
-    color: "#FF5C5C",
-    trend: "down",
-  },
-]);
+const normalizeLeadSource = (lead) => {
+  const source = lead?.leadSource;
+  if (source && typeof source === "object") {
+    return source.name || source.label || "Unknown";
+  }
+  if (typeof source === "string" && source.trim()) return source.trim();
+  if (source == null) return "Unknown";
+  return String(source);
+};
+const inquirySources = computed(() => {
+  const counts = new Map();
+  activeCrmLeads.value.forEach((lead) => {
+    const label = normalizeLeadSource(lead);
+    counts.set(label, (counts.get(label) || 0) + 1);
+  });
+  return Array.from(counts.entries())
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+});
 const flosslyItems = ref([
   {
     title: "Flossly Tasks",
@@ -706,6 +706,18 @@ const fetchDummyStats = async () => {
     ];
   }
 };
+const loadCrmLeads = async () => {
+  try {
+    const res = await crmStore.listLeads({ includeArchived: true });
+    if (res?.code === 0) {
+      crmLeads.value = res.data || [];
+    } else {
+      crmLeads.value = [];
+    }
+  } catch (err) {
+    crmLeads.value = [];
+  }
+};
 
 const referralForm = ref({
   fullName: "",
@@ -772,7 +784,8 @@ onMounted(async () => {
     await Promise.all([
       fetchListCategories(),
       getRecentDocs(),
-      user.value.roleId === 8 || user.value.roleId === 1 ? getMyTasks() : Promise.resolve()
+      user.value.roleId === 8 || user.value.roleId === 1 ? getMyTasks() : Promise.resolve(),
+      user.value.roleId === 8 || user.value.roleId === 1 ? loadCrmLeads() : Promise.resolve()
     ]);
   } catch (error) {
     console.error("Error loading dashboard data:", error);
