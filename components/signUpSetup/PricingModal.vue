@@ -32,7 +32,7 @@
           <div class="plan-detail-title">{{ selectedPlan.displayName }}</div>
         </div>
         <div class="plan-detail-price">
-          <span class="plan-price">{{ formatPrice(selectedPlan.unit_amount, selectedPlan.currency) }}</span>
+          <span class="plan-price">{{ formatPrice(selectedPlan.displayAmount ?? selectedPlan.unit_amount, selectedPlan.currency) }}</span>
           <span class="plan-price-cycle">per {{ billingLabel(selectedPlan) }}</span>
         </div>
         <div class="plan-feature-title">{{ selectedPlan.shortName }} plan includes:</div>
@@ -210,7 +210,25 @@ const displayPlans = computed(() => {
       const featureObj = features.value.find((x) => getFeatureKeyFromType(x.type) === featureKey);
       const featureList = featureObj?.features || [];
       const description = featureObj?.description || plan.product?.description || plan.description || "";
-      return { ...plan, key, displayName, shortName, badge, features: featureList, description, disabled: key === "soar"  }; // 🔴 UI-disable Soar
+      const displayAmount =
+        key === "drift"
+          ? 9900
+          : key === "glide"
+          ? 29900
+          : key === "soar"
+          ? 39900
+          : plan.unit_amount;
+      return {
+        ...plan,
+        key,
+        displayName,
+        shortName,
+        badge,
+        features: featureList,
+        description,
+        disabled: key === "soar", // 🔴 UI-disable Soar
+        displayAmount,
+      };
     })
     .sort((a, b) => (planOrder[a.key] || 99) - (planOrder[b.key] || 99));
   const planMap = new Map();

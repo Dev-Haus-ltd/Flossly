@@ -1,3 +1,4 @@
+import { Op } from 'sequelize'
 import { CrmLead, MetaPage, Organisation, User, MetaUserToken } from '../models'
 import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
@@ -142,6 +143,27 @@ export const authCallback = async (event) => {
       console.error('[META][AUTH] Table sync error:', e)
     }
 
+    // Enforce one active org per page to avoid lead routing ambiguity
+    const pageIds = pages.map((p) => p?.id).filter(Boolean)
+    if (pageIds.length) {
+      const conflicts = await MetaPage.findAll({
+        where: {
+          pageId: { [Op.in]: pageIds },
+          organisationId: { [Op.ne]: orgId },
+          status: 'Active',
+        },
+      })
+      if (conflicts.length) {
+        const names = conflicts.map((c) => c.pageName || c.pageId).join(', ')
+        setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
+        return sendRedirect(
+          event,
+          `/crm?error=${encodeURIComponent(
+            `Meta page already connected to another organisation: ${names}`
+          )}`
+        )
+      }
+    }
     // ✅ FIX: Store user token with Facebook user ID for tracking
     const encUser = encrypt(userToken)
     const expiresIn = Number(longResp?.expires_in || 0)
@@ -495,3 +517,4 @@ export const webhook = async (event) => {
   
   return success('ok')
 }
+

@@ -81,12 +81,12 @@
       :primary-label="activeInAppMessage?.primaryLabel || 'Continue'"
       :secondary-label="activeInAppMessage?.secondaryLabel || ''"
       @primary="handleInAppPrimary"
-      @secondary="dismissInAppMessage"
+      @secondary="handleInAppSecondary"
       @update:model-value="handleInAppDialogToggle"
       @close="dismissInAppMessage"
     >
       <p class="onboarding-message">
-        {{ activeInAppMessage?.message }}
+        {{ f?.message }}
       </p>
     </OnboardingPopup>
   </ClientOnly>
@@ -407,6 +407,25 @@ const handleInAppPrimary = async () => {
   await recordOnboardingEvent(activeInAppMessage.value.key, { clickedAt: new Date().toISOString() });
   trackOnboardingUi("primary", { type: "inapp", key: activeInAppMessage.value.key });
   const link = activeInAppMessage.value.primaryLink || "";
+  const remaining = (user.value?.onboarding?.inAppMessages || []).filter(
+    (msg) => msg.key !== activeInAppMessage.value.key
+  );
+  updateLocalOnboarding({ inAppMessages: remaining });
+  syncOnboardingState();
+  if (link.startsWith("http")) {
+    window.location.href = link;
+    return;
+  }
+  if (link) {
+    router.push(link);
+  }
+};
+
+const handleInAppSecondary = async () => {
+  if (!activeInAppMessage.value) return;
+  await recordOnboardingEvent(activeInAppMessage.value.key, { secondaryClickedAt: new Date().toISOString() });
+  trackOnboardingUi("secondary", { type: "inapp", key: activeInAppMessage.value.key });
+  const link = activeInAppMessage.value.secondaryLink || "";
   const remaining = (user.value?.onboarding?.inAppMessages || []).filter(
     (msg) => msg.key !== activeInAppMessage.value.key
   );

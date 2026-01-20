@@ -401,7 +401,14 @@ const statusLookup = computed(() => {
   return map;
 });
 const activeUsers = computed(() =>
-  (props.users || []).filter((u) => u?.status === "Active")
+  (props.users || []).filter((u) => {
+    const status = String(u?.status || "").toLowerCase();
+    const orgStatus = String(u?.orgStatus || "").toLowerCase();
+    if (orgStatus === "invited" || status === "invited") return false;
+    if (status) return status === "active";
+    if (orgStatus) return orgStatus === "active";
+    return true;
+  })
 );
 watch(
   () => props.modelValue,
