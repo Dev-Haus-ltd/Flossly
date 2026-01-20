@@ -373,6 +373,15 @@ defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout, resetModal, sele
   background: #1E2B80;
 }
 
+.plan-option.disabled .plan-name,
+.plan-option.disabled .plan-desc {
+  color: #888888;
+}
+
+.plan-option.disabled {
+  background-color: #EBEBEB;
+}
+
 .plan-radio.selected {
   position: relative;
 }
