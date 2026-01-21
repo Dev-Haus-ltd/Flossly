@@ -1,8 +1,6 @@
-CREATE SCHEMA IF NOT EXISTS dev;
-
-CREATE TABLE IF NOT EXISTS dev."CrmAutomationGroups" (
+CREATE TABLE IF NOT EXISTS "CrmAutomationGroups" (
   id SERIAL PRIMARY KEY,
-  "organisationId" INTEGER NOT NULL REFERENCES dev."Organisations"(id) ON DELETE CASCADE,
+  "organisationId" INTEGER NOT NULL REFERENCES "Organisations"(id) ON DELETE CASCADE,
   key VARCHAR(80) NOT NULL,
   title VARCHAR(150) NOT NULL,
   description VARCHAR(255),
@@ -13,12 +11,12 @@ CREATE TABLE IF NOT EXISTS dev."CrmAutomationGroups" (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS "crm_automation_groups_org_key_idx"
-ON dev."CrmAutomationGroups" ("organisationId", key);
+ON "CrmAutomationGroups" ("organisationId", key);
 
-CREATE TABLE IF NOT EXISTS dev."CrmAutomationGroupTemplates" (
+CREATE TABLE IF NOT EXISTS "CrmAutomationGroupTemplates" (
   id SERIAL PRIMARY KEY,
-  "organisationId" INTEGER NOT NULL REFERENCES dev."Organisations"(id) ON DELETE CASCADE,
-  "groupId" INTEGER NOT NULL REFERENCES dev."CrmAutomationGroups"(id) ON DELETE CASCADE,
+  "organisationId" INTEGER NOT NULL REFERENCES "Organisations"(id) ON DELETE CASCADE,
+  "groupId" INTEGER NOT NULL REFERENCES "CrmAutomationGroups"(id) ON DELETE CASCADE,
   "templateKey" VARCHAR(80) NOT NULL,
   ordering INTEGER DEFAULT 0,
   "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
@@ -26,7 +24,7 @@ CREATE TABLE IF NOT EXISTS dev."CrmAutomationGroupTemplates" (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS "crm_automation_group_templates_unique_idx"
-ON dev."CrmAutomationGroupTemplates" ("organisationId", "groupId", "templateKey");
+ON "CrmAutomationGroupTemplates" ("organisationId", "groupId", "templateKey");
 
 CREATE INDEX IF NOT EXISTS "crm_automation_group_templates_template_idx"
-ON dev."CrmAutomationGroupTemplates" ("organisationId", "templateKey");
+ON "CrmAutomationGroupTemplates" ("organisationId", "templateKey");
