@@ -86,7 +86,7 @@
       @close="dismissInAppMessage"
     >
       <p class="onboarding-message">
-        {{ f?.message }}
+        {{ activeInAppMessage?.message }}
       </p>
     </OnboardingPopup>
   </ClientOnly>
