@@ -529,7 +529,7 @@ const prefillForm = (id) => {
   form.value = {
     ...preserved,
     shiftLibrary: id,
-    label: template.label,
+    label: "", // Don't copy the label from template - user must provide unique name
     surgeryId: template.surgeryId ?? null,
     dentistId: template.dentistId ?? null,
     nurseId: template.nurseId ?? null,

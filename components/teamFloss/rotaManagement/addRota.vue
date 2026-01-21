@@ -457,7 +457,10 @@
               const getUsers = (orgId) => {
                 userStore.getUserList({ roleId: null, orgId }).then((res) => {
                   if (res.code === 0) {
-                    employees.value = res.data;
+                    // Filter to only include active members, excluding invited members
+                    employees.value = res.data.filter(
+                      (user) => !user.isAccountDeactivated && user.orgStatus === "Active"
+                    );
                   }
                 });
               };
