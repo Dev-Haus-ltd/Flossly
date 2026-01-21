@@ -276,9 +276,10 @@ export const leaveRequestDeniedNotification = async (data) => {
 
 export const sendEmailVerificationEmail = async (data) => {
   const subject = "Verify Email";
-  const baseUrl = config.public.BASE_URL.endsWith('/') 
-    ? config.public.BASE_URL.slice(0, -1) 
-    : config.public.BASE_URL;
+  const baseUrlRaw = config?.public?.BASE_URL || "";
+  const baseUrl = baseUrlRaw.endsWith("/")
+    ? baseUrlRaw.slice(0, -1)
+    : baseUrlRaw;
   const content = `
   <p>Dear ${data.fullName}</p>
       <br />

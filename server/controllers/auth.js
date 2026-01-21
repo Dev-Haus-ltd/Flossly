@@ -309,12 +309,21 @@ export const signupRequest = async (event) => {
       { email, link, userId: user.id },
       { transaction }
     );
-    await sendEmailVerificationEmail({
-      email,
-      fullName: trimmedFullName,
-      link,
-    });
     await transaction.commit();
+
+    try {
+      await sendEmailVerificationEmail({
+        email,
+        fullName: trimmedFullName,
+        link,
+      });
+    } catch (emailErr) {
+      console.error("Verification email failed to send", {
+        to: email,
+        error: emailErr?.message || emailErr,
+      });
+    }
+
     return success("Email sent");
   } catch (err) {
     await transaction.rollback();
