@@ -1,6 +1,6 @@
 import { Op } from 'sequelize'
-import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, User, UserOrganisation } from '../models'
-import { crmAutomationDefaults } from '~/lib/crmAutomationDefaults'
+import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, User, UserOrganisation } from '../models'
+import { crmAutomationDefaults, crmAutomationGroups } from '~/lib/crmAutomationDefaults'
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
 import { success, error } from '../utils/response'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
@@ -13,6 +13,95 @@ const parseDateValue = (value) => {
   if (!isNaN(d.getTime())) return d;
   return null;
 };
+
+const slugifyKey = (value) => {
+  const raw = String(value || '').trim().toLowerCase()
+  const base = raw
+    .replace(/[^a-z0-9\s_-]/g, '')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^-|-$|^_+|_+$/g, '')
+  return base || 'automation_group'
+}
+
+const ensureUniqueGroupKey = async ({ orgId, key, excludeId = null }) => {
+  let candidate = slugifyKey(key)
+  let suffix = 1
+  while (true) {
+    const existing = await CrmAutomationGroup.findOne({
+      where: {
+        organisationId: Number(orgId),
+        key: candidate,
+        ...(excludeId ? { id: { [Op.ne]: excludeId } } : {}),
+      },
+    })
+    if (!existing) return candidate
+    candidate = `${slugifyKey(key)}_${suffix}`
+    suffix += 1
+  }
+}
+
+const seedAutomationGroups = async (orgId) => {
+  const rows = await CrmAutomationGroup.findAll({
+    where: { organisationId: Number(orgId) },
+    order: [['ordering', 'ASC'], ['createdAt', 'ASC']],
+  })
+  const byKey = new Map(rows.map((g) => [g.key, g]))
+  const created = []
+
+  if (!rows.length) {
+    const fresh = await CrmAutomationGroup.bulkCreate(
+      crmAutomationGroups.map((group, idx) => ({
+        organisationId: Number(orgId),
+        key: group.key,
+        title: group.title,
+        description: group.description || null,
+        enabled: false,
+        ordering: idx,
+      }))
+    )
+    return fresh
+  }
+
+  for (let idx = 0; idx < crmAutomationGroups.length; idx += 1) {
+    const group = crmAutomationGroups[idx]
+    if (byKey.has(group.key)) continue
+    const row = await CrmAutomationGroup.create({
+      organisationId: Number(orgId),
+      key: group.key,
+      title: group.title,
+      description: group.description || null,
+      enabled: false,
+      ordering: rows.length + created.length,
+    })
+    created.push(row)
+    byKey.set(group.key, row)
+  }
+
+  const groupIdByKey = new Map([...byKey.entries()].map(([key, g]) => [key, g.id]))
+  const existingMappings = await CrmAutomationGroupTemplate.findAll({
+    where: { organisationId: Number(orgId) },
+  })
+  const existingSet = new Set(existingMappings.map((m) => `${m.groupId}:${m.templateKey}`))
+  const toCreate = []
+  crmAutomationGroups.forEach((group) => {
+    const groupId = groupIdByKey.get(group.key)
+    if (!groupId) return
+    ;(group.templateKeys || []).forEach((templateKey, idx) => {
+      const key = `${groupId}:${templateKey}`
+      if (existingSet.has(key)) return
+      toCreate.push({
+        organisationId: Number(orgId),
+        groupId,
+        templateKey,
+        ordering: idx,
+      })
+    })
+  })
+  if (toCreate.length) await CrmAutomationGroupTemplate.bulkCreate(toCreate)
+
+  return [...byKey.values()]
+}
  
 
 export const listLeads = async (event) => {
@@ -582,6 +671,118 @@ export const deleteLeadNote = async (event) => {
 }
 
 // Automation templates
+export const listAutomationGroups = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+
+    try { await CrmAutomationGroup.sync() } catch {}
+    try { await CrmAutomationGroupTemplate.sync() } catch {}
+
+    const groups = await seedAutomationGroups(orgId)
+    const mappings = await CrmAutomationGroupTemplate.findAll({
+      where: { organisationId: Number(orgId) },
+      order: [['ordering', 'ASC'], ['createdAt', 'ASC']],
+    })
+
+    const keysByGroup = new Map()
+    mappings.forEach((row) => {
+      const list = keysByGroup.get(row.groupId) || []
+      list.push(row.templateKey)
+      keysByGroup.set(row.groupId, list)
+    })
+
+    const shaped = groups.map((group) => {
+      const g = typeof group?.toJSON === 'function' ? group.toJSON() : group
+      return {
+        ...g,
+        templateKeys: keysByGroup.get(g.id) || [],
+      }
+    })
+    return success(shaped)
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const saveAutomationGroup = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const { id, key, title, description, enabled } = payload || {}
+
+    try { await CrmAutomationGroup.sync() } catch {}
+
+    if (!title && !key) return error(400, 'title or key required')
+
+    let group = null
+    if (id || key) {
+      group = await CrmAutomationGroup.findOne({
+        where: {
+          organisationId: Number(orgId),
+          ...(id ? { id: Number(id) } : {}),
+          ...(key ? { key: String(key) } : {}),
+        },
+      })
+    }
+
+    if (group) {
+      if (title !== undefined) group.title = title
+      if (description !== undefined) group.description = description
+      if (enabled !== undefined) group.enabled = !!enabled
+      if (key !== undefined) {
+        group.key = await ensureUniqueGroupKey({ orgId, key, excludeId: group.id })
+      }
+      await group.save()
+      return success(group)
+    }
+
+    const nextOrder = await CrmAutomationGroup.count({ where: { organisationId: Number(orgId) } })
+    const safeKey = await ensureUniqueGroupKey({ orgId, key: key || title })
+    const created = await CrmAutomationGroup.create({
+      organisationId: Number(orgId),
+      key: safeKey,
+      title: title || safeKey,
+      description: description || null,
+      enabled: !!enabled,
+      ordering: nextOrder,
+    })
+    return success(created)
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const deleteAutomationGroup = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const { id, key } = payload || {}
+    if (!id && !key) return error(400, 'id or key required')
+
+    const group = await CrmAutomationGroup.findOne({
+      where: {
+        organisationId: Number(orgId),
+        ...(id ? { id: Number(id) } : {}),
+        ...(key ? { key: String(key) } : {}),
+      },
+    })
+    if (!group) return error(404, 'Group not found')
+
+    await CrmAutomationGroupTemplate.destroy({
+      where: { organisationId: Number(orgId), groupId: group.id },
+    })
+    await group.destroy()
+    return success('deleted')
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
 export const listAutomation = async (event) => {
   try {
     const { orgId } = event.context.user || {}
@@ -598,6 +799,27 @@ export const listAutomation = async (event) => {
       overrides = lead?.rawData?.crmAutomationOverrides || {}
     }
 
+    let groupMappings = []
+    let groups = []
+    try {
+      await CrmAutomationGroup.sync()
+      await CrmAutomationGroupTemplate.sync()
+      groupMappings = await CrmAutomationGroupTemplate.findAll({
+        where: { organisationId: Number(orgId) },
+      })
+      const groupIds = [...new Set(groupMappings.map((m) => Number(m.groupId)).filter(Boolean))]
+      groups = groupIds.length
+        ? await CrmAutomationGroup.findAll({ where: { organisationId: Number(orgId), id: { [Op.in]: groupIds } } })
+        : []
+    } catch {}
+    const groupKeyById = new Map(groups.map((g) => [Number(g.id), g.key]))
+    const groupKeyByTemplate = new Map()
+    groupMappings.forEach((m) => {
+      const gKey = groupKeyById.get(Number(m.groupId))
+      if (!gKey || groupKeyByTemplate.has(m.templateKey)) return
+      groupKeyByTemplate.set(m.templateKey, gKey)
+    })
+
     const merged = []
     const seen = new Set()
 
@@ -605,10 +827,12 @@ export const listAutomation = async (event) => {
       const saved = dbMap.get(def.key) || {}
       const override = overrides[def.key] || {}
       const combined = { ...def, ...saved, ...override, key: def.key }
+      if (!combined.groupKey) combined.groupKey = groupKeyByTemplate.get(def.key)
       if (!saved?.type) combined.type = def.type
       if (!saved?.sending) combined.sending = def.sending
       if (!saved?.template) combined.template = def.template
       if (!saved?.name || saved.name === saved.key) combined.name = def.name
+      if (saved?.trigger === undefined && def.trigger !== undefined) combined.trigger = def.trigger
       merged.push(combined)
       seen.add(def.key)
     })
@@ -617,6 +841,7 @@ export const listAutomation = async (event) => {
       if (seen.has(row.key)) return
       const override = overrides[row.key]
       const combined = override ? { ...row, ...override, key: row.key } : row
+      if (!combined.groupKey) combined.groupKey = groupKeyByTemplate.get(row.key)
       merged.push(combined)
       seen.add(row.key)
     })
@@ -624,6 +849,7 @@ export const listAutomation = async (event) => {
     Object.entries(overrides).forEach(([key, override]) => {
       if (seen.has(key)) return
       const combined = { key, ...override }
+      if (!combined.groupKey) combined.groupKey = groupKeyByTemplate.get(key)
       merged.push(combined)
     })
 
@@ -639,7 +865,7 @@ export const saveAutomation = async (event) => {
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
     const payload = typeof body === 'string' ? JSON.parse(body) : body
-    const { key, type = 'Email', name, subject, sending, enabled, template, leadId } = payload || {}
+    const { key, type = 'Email', name, subject, sending, enabled, template, leadId, groupKey, trigger } = payload || {}
     if (!key) return error(400, 'key required')
     if (leadId) {
       const lead = await CrmLead.findOne({ where: { organisationId: Number(orgId), id: Number(leadId) } })
@@ -654,10 +880,26 @@ export const saveAutomation = async (event) => {
         sending: sending || '',
         enabled: !!enabled,
         template: template || '',
+        trigger: trigger ?? null,
       }
       lead.rawData = { ...raw, crmAutomationOverrides: overrides }
       await lead.save()
       return success(overrides[key])
+    }
+    if (groupKey) {
+      try { await CrmAutomationGroup.sync() } catch {}
+      try { await CrmAutomationGroupTemplate.sync() } catch {}
+      const group = await CrmAutomationGroup.findOne({ where: { organisationId: Number(orgId), key: String(groupKey) } })
+      if (!group) return error(400, 'Invalid group key')
+      await CrmAutomationGroupTemplate.destroy({
+        where: { organisationId: Number(orgId), templateKey: String(key) },
+      })
+      await CrmAutomationGroupTemplate.create({
+        organisationId: Number(orgId),
+        groupId: group.id,
+        templateKey: String(key),
+        ordering: 0,
+      })
     }
     const where = { organisationId: Number(orgId), key }
     const exists = await CrmAutomationTemplate.findOne({ where })
@@ -668,6 +910,7 @@ export const saveAutomation = async (event) => {
       if (type !== undefined) exists.type = type
       if (template !== undefined) exists.template = template
       if (subject !== undefined) exists.subject = subject
+      if (trigger !== undefined) exists.trigger = trigger
       await exists.save()
       return success(exists)
     }
@@ -679,7 +922,8 @@ export const saveAutomation = async (event) => {
       subject: subject || null,
       sending: sending || '',
       enabled: !!enabled,
-      template: template || null
+      template: template || null,
+      trigger: trigger ?? null
     })
     return success(created)
   } catch (e) {

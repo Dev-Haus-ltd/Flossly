@@ -13,6 +13,7 @@ export const CrmAutomationTemplate = sequelize.define(
     sending: { type: DataTypes.STRING(100), allowNull: false },
     enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     template: { type: DataTypes.TEXT, allowNull: true },
+    trigger: { type: DataTypes.JSONB, allowNull: true },
   },
   { modelName: 'CrmAutomationTemplates', timestamps: true }
 )

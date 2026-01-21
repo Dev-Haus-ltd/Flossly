@@ -380,7 +380,7 @@ const form = ref({
 });
 
 // Dropdown lists
-const leadStatuses = ["New", "In Progress", "Converted", "Lost"];
+const leadStatuses = ["New", "Contacted", "Converted", "Lost"];
 const contactMethods = ["Email", "Phone", "SMS", "In-Person"];
 
 // Date menus

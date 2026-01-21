@@ -186,6 +186,27 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  listAutomationGroups() {
+    return new Promise((resolve, reject) => {
+      Get('/lead/automationGroups')
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  saveAutomationGroup(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/automationGroupSave', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteAutomationGroup(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/automationGroupDelete', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   // Mail
   sendLeadMail(payload) {
     return new Promise((resolve, reject) => {

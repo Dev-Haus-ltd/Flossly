@@ -363,6 +363,7 @@ const recentFiles = ref([]);
 const user = ref({});
 const value = ref(null);
 const crmLeads = ref([]);
+const leadSources = ref([]);
 const activeCrmLeads = computed(() =>
   (crmLeads.value || []).filter((lead) => !lead?.softDeleted)
 );
@@ -400,10 +401,22 @@ const inquirySources = computed(() => {
     const label = normalizeLeadSource(lead);
     counts.set(label, (counts.get(label) || 0) + 1);
   });
-  return Array.from(counts.entries())
-    .map(([label, count]) => ({ label, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
+  const baseLabels = (leadSources.value || [])
+    .map((source) => {
+      if (typeof source === "string") return source.trim();
+      if (source?.name) return String(source.name).trim();
+      return "";
+    })
+    .filter((label) => label);
+  const baseSet = new Set(baseLabels);
+  const baseRows = baseLabels.map((label) => ({
+    label,
+    count: counts.get(label) || 0,
+  }));
+  const extraRows = Array.from(counts.entries())
+    .filter(([label]) => !baseSet.has(label))
+    .map(([label, count]) => ({ label, count }));
+  return [...baseRows, ...extraRows];
 });
 const flosslyItems = ref([
   {
@@ -620,6 +633,21 @@ const loadCrmLeads = async () => {
     crmLeads.value = [];
   }
 };
+const loadLeadSources = async () => {
+  try {
+    const res = await crmStore.listOptions("lead_source");
+    if (res?.code === 0) {
+      leadSources.value = (res.data || []).map((o) => ({
+        id: o.id,
+        name: o.name,
+      }));
+      return;
+    }
+    leadSources.value = [];
+  } catch (err) {
+    leadSources.value = [];
+  }
+};
 
 const referralForm = ref({
   fullName: "",
@@ -687,7 +715,8 @@ onMounted(async () => {
       fetchListCategories(),
       getRecentDocs(),
       user.value.roleId === 8 || user.value.roleId === 1 ? getMyTasks() : Promise.resolve(),
-      user.value.roleId === 8 || user.value.roleId === 1 ? loadCrmLeads() : Promise.resolve()
+      user.value.roleId === 8 || user.value.roleId === 1 ? loadCrmLeads() : Promise.resolve(),
+      user.value.roleId === 8 || user.value.roleId === 1 ? loadLeadSources() : Promise.resolve()
     ]);
   } catch (error) {
     console.error("Error loading dashboard data:", error);
