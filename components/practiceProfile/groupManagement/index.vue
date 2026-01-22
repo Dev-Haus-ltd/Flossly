@@ -85,14 +85,20 @@
 
             <!-- Action -->
             <td class="col-action text-center">
-              <img
-                src="@/assets/icons/practiceProfile/contact/delete.svg"
-                alt="Delete"
-                width="18"
-                height="18"
-                style="cursor: pointer"
-                @click="deleteRow(idx)"
-              />
+              <v-tooltip location="top">
+                <template #activator="{ props }">
+                  <img
+                    v-bind="props"
+                    src="@/assets/icons/practiceProfile/contact/delete.svg"
+                    alt="Delete"
+                    width="18"
+                    height="18"
+                    style="cursor: pointer"
+                    @click="openDeleteConfirm(idx)"
+                  />
+                </template>
+                <span>Delete</span>
+              </v-tooltip>
             </td>
           </tr>
         </tbody>
@@ -104,6 +110,15 @@
       v-model="showDialog"
       @onUpdate="handleAddGroup"
       :users="orgUsers"
+    />
+    <CommonConfirmDialog
+      v-model="showDeleteConfirm"
+      icon="mdi-information-outline"
+      title="Delete group?"
+      message="Are you sure you want to delete this group? This action cannot be undone."
+      confirm-text="Delete"
+      @confirm="confirmDelete"
+      @cancel="cancelDelete"
     />
   </div>
 </template>
@@ -126,6 +141,8 @@ const showDialog = ref(false);
 const groups = ref([]);
 const search = ref("");
 const orgUsers = ref([]);
+const showDeleteConfirm = ref(false);
+const deleteIndex = ref(null);
 
 const getUsers = () => {
   userStore.getUserList({ roleId: null }).then((res) => {
@@ -203,6 +220,26 @@ const handleAttributeUpdate = async (updated) => {
 };
 
 // Delete row
+
+const openDeleteConfirm = (index) => {
+  deleteIndex.value = index;
+  showDeleteConfirm.value = true;
+};
+
+const cancelDelete = () => {
+  showDeleteConfirm.value = false;
+  deleteIndex.value = null;
+};
+
+const confirmDelete = async () => {
+  if (deleteIndex.value === null) return;
+
+  await deleteRow(deleteIndex.value);
+
+  showDeleteConfirm.value = false;
+  deleteIndex.value = null;
+};
+
 const deleteRow = async (index) => {
   const group = groups.value[index];
   if (!group?.id) return;

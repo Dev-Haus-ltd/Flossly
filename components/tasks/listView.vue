@@ -8,15 +8,15 @@
         overflow-x: auto;
       "
     >
-      <div class="d-inline-flex align-center py-1" style="flex-wrap: nowrap">
+      <div class="d-inline-flex toolbar-wrapper">
         <v-btn-toggle v-model="viewType" mandatory class="custom-toggle">
           <v-btn value="list" class="toggle-btn">
             <img
               :src="listicon"
               alt="list icon"
               class="mr-1"
-              width="16"
-              height="16"
+              width="14"
+              height="14"
             />
             List
           </v-btn>
@@ -25,8 +25,8 @@
               :src="calendericon"
               alt="calendar icon"
               class="mr-1"
-              width="16"
-              height="16"
+              width="14"
+              height="14"
             />
             Calender
           </v-btn>
@@ -43,7 +43,7 @@
             :elevation="0"
             density="compact"
             hide-details
-            bg-color="#FAFAFA"
+            bg-color="#F3F4F6"
             flat
             class="custom-search"
           />
@@ -2353,18 +2353,34 @@ th {
 .v-table .v-table__wrapper > table > tbody > tr > th:not(:last-child) {
   border-right: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
+
+/* Wrapper = 46px */
+.toolbar-wrapper {
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Toggle container */
 .custom-toggle {
-  background-color: #f3f6fa;
+  height: 46px;
   display: flex;
-  height: 40px;
+  align-items: center; /* 🔥 this is what was missing */
+  background-color: #f3f6fa;
+  gap: 4px;
+  padding: 4px 4px 4px 4px !important;
 }
 
 .toggle-btn {
   background-color: #f3f6fa !important;
   text-transform: none;
   font-size: 14px;
-  color: #333;
+  color: #1E1E1E;
   transition: all 0.2s ease-in-out;
+  height: 38px;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
 }
 
 .v-btn--active.toggle-btn {
@@ -2372,19 +2388,20 @@ th {
   --v-theme-overlay-multiplier: 0 !important; /* reset overlay */
   --v-theme-primary: #ffffff !important; /* force white */
   box-shadow: 0px 6px 12px rgba(0, 0, 0, 0.15);
-  transform: translateY(-2px);
   border-radius: 6px;
   box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.08); /* subtle shadow under */
 }
 .custom-search,
 .tbl-top-btn {
-  height: 40px;
+  height: 46px;
   border-radius: 8px;
   font-size: 14px;
-  background-color: #ffffff !important;
+  background-color: #F3F4F6 !important;
   text-transform: none;
   box-shadow: none;
   color: #737373;
+  margin-left: 16px !important;
+  align-items: center;
 }
 .resizable-table :deep(.v-table__wrapper table) {
   width: 100%;

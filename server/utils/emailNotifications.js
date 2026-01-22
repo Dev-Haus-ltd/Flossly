@@ -276,9 +276,10 @@ export const leaveRequestDeniedNotification = async (data) => {
 
 export const sendEmailVerificationEmail = async (data) => {
   const subject = "Verify Email";
-  const baseUrl = config.public.BASE_URL.endsWith('/') 
-    ? config.public.BASE_URL.slice(0, -1) 
-    : config.public.BASE_URL;
+  const baseUrlRaw = config?.public?.BASE_URL || "";
+  const baseUrl = baseUrlRaw.endsWith("/")
+    ? baseUrlRaw.slice(0, -1)
+    : baseUrlRaw;
   const content = `
   <p>Dear ${data.fullName}</p>
       <br />
@@ -1106,5 +1107,45 @@ export const sendTrialActivatedEmail = async (data) => {
     html,
   });
 };
+
+export const sendOrganisationReferralEmail = async (data) => {
+  const {
+    orgName,
+    orgEmail,
+    managerName,
+    phoneNumber,
+    address,
+  } = data;
+
+  const content = `
+    <p>Hello Team,</p>
+
+    <p>A new organisation referral has been submitted.</p>
+
+    <p><strong>Organisation Name:</strong> ${orgName}</p>
+    <p><strong>Organisation Email:</strong> ${orgEmail}</p>
+    <p><strong>Manager Name:</strong> ${managerName}</p>
+
+    ${phoneNumber ? `<p><strong>Phone Number:</strong> ${phoneNumber}</p>` : ""}
+    ${address ? `<p><strong>Address:</strong> ${address}</p>` : ""}
+
+    <br/>
+    <p>Best regards,<br/>Flossly System</p>
+  `;
+
+  const subject = "New Organisation Referral Submitted";
+
+  const html = template
+    .replaceAll("{subject}", subject)
+    .replace("{content}", content);
+
+  await transporter.sendMail({
+    from: "Flossly <helloflossly@gmail.com>",
+    to: ["helloflossly@gmail.com"],
+    subject,
+    html,
+  });
+};
+
 
 // leaves

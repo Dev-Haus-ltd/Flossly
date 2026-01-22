@@ -317,6 +317,6 @@ const onClose = () => {
   cursor: pointer;
 }
 .color-swatch.is-selected {
-  border-color: #111827;
+  border-color: #DFDFDF;
 }
 </style>

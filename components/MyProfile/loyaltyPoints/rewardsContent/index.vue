@@ -18,7 +18,6 @@
     />
     <MyProfileLoyaltyPointsRewardsContentRecommendPracticeDialog
       v-model="showReferralDialog"
-      @onSubmit="handleSubmit"
     />
     <MyProfileLoyaltyPointsRewardsContentFeedBackDialog
       v-model="openFeedbackDialog"
