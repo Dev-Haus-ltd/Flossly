@@ -509,13 +509,19 @@ export const webhook = async (event) => {
   
   if (getMethod(event) === 'GET') {
     const q = getQuery(event)
+    const verifyToken = String(q['hub.verify_token'] || '').trim()
+    const expectedToken = String(
+      config.META_VERIFY_TOKEN ||
+      process.env.META_VERIFY_TOKEN ||
+      process.env.NUXT_META_VERIFY_TOKEN ||
+      ''
+    ).trim()
     console.log('[META][WEBHOOK][VERIFY]', {
       mode: q['hub.mode'],
-      hasToken: Boolean(q['hub.verify_token']),
+      hasToken: Boolean(verifyToken),
     })
     
-    if (q['hub.mode'] === 'subscribe' && 
-        q['hub.verify_token'] === config.META_VERIFY_TOKEN) {
+    if (q['hub.mode'] === 'subscribe' && verifyToken && verifyToken === expectedToken) {
       return send(event, q['hub.challenge'] || '')
     }
     return error(403, 'Verification failed')
