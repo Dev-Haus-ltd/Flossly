@@ -1,4 +1,4 @@
-import { authStart, authCallback, listLeads, fetchLeadsNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck } from "../../controllers/meta";
+import { authStart, authCallback, listLeads, fetchLeadsNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck, stream } from "../../controllers/meta";
 
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, 'name')
@@ -19,6 +19,8 @@ export default defineEventHandler(async (event) => {
       return await healthCheck(event)
     case 'disconnect':
       return await disconnect(event)
+    case 'stream':
+      return await stream(event)
     case 'webhook':
       return await webhook(event)
     default:

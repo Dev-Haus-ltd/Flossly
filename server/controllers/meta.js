@@ -2,6 +2,7 @@ import { Op } from 'sequelize'
 import { CrmLead, MetaPage, Organisation, User, MetaUserToken } from '../models'
 import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
+import { addMetaClient, broadcastMetaEvent } from '../utils/metaStream'
 
 const META_VERSION = 'v24.0'
 
@@ -345,6 +346,7 @@ export const fetchLeadsNow = async (event) => {
             existing.inquiryDate = existing.inquiryDate || on
             existing.rawData = existing.rawData || le
             await existing.save()
+            broadcastMetaEvent('lead', { orgId, leadId: le.id, pageId, formId: form.id })
           } else {
             await CrmLead.create({
               organisationId: orgId,
@@ -360,6 +362,7 @@ export const fetchLeadsNow = async (event) => {
               leadStatus: 'New',
             })
             imported++
+            broadcastMetaEvent('lead', { orgId, leadId: le.id, pageId, formId: form.id })
           }
         }
       }
@@ -419,6 +422,27 @@ export const connectionStatus = async (event) => {
   }))
   
   return success({ count, lastConnectedAt, pages: data })
+}
+
+export const stream = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const res = event.node.res
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  })
+  res.write(`event: ready\ndata: "ok"\n\n`)
+
+  const cleanup = addMetaClient(res, orgId)
+  event.node.req.on('close', () => {
+    cleanup()
+  })
+
+  return new Promise(() => {})
 }
 
 export const healthCheck = async (event) => {
@@ -545,6 +569,7 @@ export const webhook = async (event) => {
             existing.inquiryDate = existing.inquiryDate || on
             existing.rawData = existing.rawData || leadData
             await existing.save()
+            broadcastMetaEvent('lead', { orgId: mp.organisationId, leadId, pageId, formId })
           } else {
             await CrmLead.create({
               organisationId: mp.organisationId,
@@ -559,6 +584,7 @@ export const webhook = async (event) => {
               leadSource: 'Meta Leadgen',
               leadStatus: 'New',
             })
+            broadcastMetaEvent('lead', { orgId: mp.organisationId, leadId, pageId, formId })
           }
         }
       }

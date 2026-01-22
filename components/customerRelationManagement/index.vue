@@ -472,6 +472,9 @@ onMounted(() => {
   loadBookingPatients();
   handleMetaQuery(metaConnected, metaError);
 });
+onBeforeUnmount(() => {
+  stopMetaStream();
+});
 const initOptions = async () => {
   try {
     const [src, tr] = await Promise.all([
@@ -751,6 +754,45 @@ const openMetaHealth = async () => {
 
 const isConnected = ref(false);
 const connection = ref({ count: 0, pages: [], lastConnectedAt: null });
+let leadsPollTimer = null;
+let metaEventSource = null;
+const startLeadsPolling = () => {
+  if (leadsPollTimer) return;
+  leadsPollTimer = setInterval(async () => {
+    if (!isConnected.value || isLoading.value) return;
+    await fetchLeads(activeFilters.value);
+  }, 20000);
+};
+const stopLeadsPolling = () => {
+  if (leadsPollTimer) {
+    clearInterval(leadsPollTimer);
+    leadsPollTimer = null;
+  }
+};
+const startMetaStream = () => {
+  if (metaEventSource || typeof window === 'undefined') return;
+  if (!('EventSource' in window)) {
+    startLeadsPolling();
+    return;
+  }
+
+  metaEventSource = new EventSource('/api/meta/stream');
+  metaEventSource.addEventListener('lead', async () => {
+    if (isLoading.value) return;
+    await fetchLeads(activeFilters.value);
+  });
+  metaEventSource.onerror = () => {
+    stopMetaStream();
+    startLeadsPolling();
+  };
+};
+const stopMetaStream = () => {
+  if (metaEventSource) {
+    metaEventSource.close();
+    metaEventSource = null;
+  }
+  stopLeadsPolling();
+};
 const checkConnection = async () => {
   try {
     const res = await crmStore.connectionStatus();
@@ -796,6 +838,11 @@ const onDeleteSelected = async (ids) => {
     }
   } catch (e) {}
 }
+
+watch(isConnected, (val) => {
+  if (val) startMetaStream();
+  else stopMetaStream();
+});
 </script>
 
 <style scoped lang="scss">
