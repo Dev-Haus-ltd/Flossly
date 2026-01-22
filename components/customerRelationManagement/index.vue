@@ -48,27 +48,38 @@
 
         <!-- Right: Connection Controls -->
         <div class="d-inline-flex ml-auto" style="flex-wrap: nowrap; gap: 12px;">
-          <template v-if="isConnected">
-            <v-chip
-              color="success"
-              size="small"
-              variant="flat"
-            >
-              Meta Connected
-            </v-chip>
-
-            <v-btn
-              size="small"
-              variant="text"
-              @click="fetchNow"
-              :disabled="!isConnected"
-            >
-              <v-icon size="16" class="mr-1">mdi-refresh</v-icon>
-              Fetch Leads Now
-            </v-btn>
-          </template>
+          <v-menu
+            v-if="isConnected"
+            v-model="metaMenu"
+            location="bottom end"
+          >
+            <template #activator="{ props }">
+              <v-btn
+                v-bind="props"
+                color="primary"
+                variant="flat"
+                rounded="lg"
+                class="add-task-btn"
+              >
+                <template #prepend>
+                  <v-icon size="18">mdi-link-variant</v-icon>
+                </template>
+                Reconnect Meta
+                <v-icon size="16" class="ml-1">mdi-chevron-down</v-icon>
+              </v-btn>
+            </template>
+            <v-list density="compact">
+              <v-list-item @click="onReconnectMeta">
+                <v-list-item-title>Reconnect Meta</v-list-item-title>
+              </v-list-item>
+              <v-list-item @click="confirmDisconnect = true">
+                <v-list-item-title>Disconnect Meta</v-list-item-title>
+              </v-list-item>
+            </v-list>
+          </v-menu>
 
           <v-btn
+            v-else
             color="primary"
             variant="flat"
             rounded="lg"
@@ -78,7 +89,18 @@
             <template #prepend>
               <v-icon size="18">mdi-link-variant</v-icon>
             </template>
-            {{ isConnected ? 'Reconnect Meta' : 'Integrate Meta' }}
+            Connect Meta
+          </v-btn>
+
+          <v-btn
+            variant="text"
+            class="add-task-btn"
+            @click="openMetaHealth"
+          >
+            <template #prepend>
+              <v-icon size="18">mdi-heart-pulse</v-icon>
+            </template>
+            Meta Health
           </v-btn>
 
           <v-btn
@@ -187,6 +209,94 @@
           />
         </template>
       </ClientOnly>
+      <v-dialog v-model="metaErrorDialog" max-width="520">
+        <v-card class="pa-4">
+          <v-card-title class="text-subtitle-1 pa-0 mb-2">Meta connection failed</v-card-title>
+          <v-card-text class="pa-0">
+            {{ metaErrorMessage }}
+          </v-card-text>
+          <v-card-actions class="pa-0 mt-4">
+            <v-spacer />
+            <v-btn color="primary" variant="flat" @click="metaErrorDialog = false">
+              OK
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
+      <v-dialog v-model="confirmDisconnect" max-width="520">
+        <v-card class="pa-4">
+          <v-card-title class="text-subtitle-1 pa-0 mb-2">Disconnect Meta</v-card-title>
+          <v-card-text class="pa-0">
+            Disconnecting will stop new Meta leads from syncing to this CRM. You can reconnect anytime.
+          </v-card-text>
+          <v-card-actions class="pa-0 mt-4">
+            <v-spacer />
+            <v-btn variant="text" @click="confirmDisconnect = false">Cancel</v-btn>
+            <v-btn color="error" variant="flat" :loading="disconnecting" @click="disconnectMeta">
+              Disconnect
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
+      <v-dialog v-model="metaHealthDialog" max-width="760">
+        <v-card class="pa-4">
+          <v-card-title class="text-subtitle-1 pa-0 mb-2">Meta Health Check</v-card-title>
+          <v-card-text class="pa-0">
+            <div v-if="metaHealthLoading" class="py-6 text-center">
+              <v-progress-circular indeterminate size="28" />
+            </div>
+            <template v-else>
+              <v-alert
+                v-if="metaHealthData?.error"
+                type="error"
+                variant="tonal"
+                class="mb-3"
+              >
+                {{ metaHealthData.error }}
+              </v-alert>
+              <template v-else>
+                <div class="d-flex flex-wrap mb-3" style="gap: 12px;">
+                  <v-chip size="small" label>App ID: {{ metaHealthData?.appId || '—' }}</v-chip>
+                  <v-chip size="small" label>Verify Token: {{ metaHealthData?.verifyTokenSet ? 'Set' : 'Missing' }}</v-chip>
+                  <v-chip size="small" label>Total Pages: {{ metaHealthData?.totalPages || 0 }}</v-chip>
+                  <v-chip size="small" label>Active Pages: {{ metaHealthData?.activePages || 0 }}</v-chip>
+                </div>
+                <v-table density="compact">
+                  <thead>
+                    <tr>
+                      <th>Page</th>
+                      <th>Status</th>
+                      <th>Token</th>
+                      <th>Subscribed</th>
+                      <th>App Match</th>
+                      <th>Error</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in (metaHealthData?.pages || [])" :key="row.pageId">
+                      <td>{{ row.pageName || row.pageId }}</td>
+                      <td>{{ row.status }}</td>
+                      <td>{{ row.tokenPresent ? 'Yes' : 'No' }}</td>
+                      <td>{{ row.subscribed ? 'Yes' : 'No' }}</td>
+                      <td>{{ row.appMatched ? 'Yes' : 'No' }}</td>
+                      <td>{{ row.error || '—' }}</td>
+                    </tr>
+                    <tr v-if="!(metaHealthData?.pages || []).length">
+                      <td colspan="6" class="text-center py-3">No pages found.</td>
+                    </tr>
+                  </tbody>
+                </v-table>
+              </template>
+            </template>
+          </v-card-text>
+          <v-card-actions class="pa-0 mt-4">
+            <v-spacer />
+            <v-btn variant="text" @click="metaHealthDialog = false">Close</v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
     </div>
   </v-sheet>
 </template>
@@ -204,10 +314,20 @@ const userStore = useUserStore();
 const { users: storeUsers } = storeToRefs(userStore);
 const userList = computed(() => storeUsers.value || []);
 const authStore = useAuthStore();
+const route = useRoute();
+const router = useRouter();
 const diaryStore = useDiaryStore();
 const mainStore = useMainStore();
 const addLeadDrawer = ref(false);
 const bulkLeadUploadDialog = ref(false);
+const metaMenu = ref(false);
+const confirmDisconnect = ref(false);
+const disconnecting = ref(false);
+const metaErrorDialog = ref(false);
+const metaErrorMessage = ref('');
+const metaHealthDialog = ref(false);
+const metaHealthLoading = ref(false);
+const metaHealthData = ref(null);
 const isLoading = ref(false);
 const showBookingDrawer = ref(false);
 const bookingLead = ref(null);
@@ -307,6 +427,34 @@ const onLeadsFilterUpdate = async (filters) => {
   await fetchLeads(activeFilters.value)
 };
 
+const normalizeMetaMessage = (message) => {
+  if (!message) return '';
+  const raw = Array.isArray(message) ? message[0] : message;
+  try {
+    return decodeURIComponent(String(raw));
+  } catch (e) {
+    return String(raw);
+  }
+};
+const clearMetaQuery = () => {
+  const nextQuery = { ...route.query };
+  delete nextQuery.meta;
+  delete nextQuery.pages;
+  delete nextQuery.user;
+  delete nextQuery.error;
+  router.replace({ query: nextQuery });
+};
+const handleMetaQuery = (metaConnected, metaError) => {
+  if (metaError) {
+    metaErrorMessage.value =
+      normalizeMetaMessage(metaError) || 'Meta connection failed. Please try again.';
+    metaErrorDialog.value = true;
+  } else if (metaConnected && mainStore?.setSnackbar) {
+    mainStore.setSnackbar({ title: 'Meta connected successfully', type: 'success' });
+  }
+  if (metaConnected || metaError) clearMetaQuery();
+};
+
 const onSelect = (selection) => {
   if (selection === "all") {
     console.log("all");
@@ -315,11 +463,17 @@ const onSelect = (selection) => {
   }
 };
 onMounted(() => {
-  initLeads();
+  const metaConnected = route.query.meta === "connected";
+  const metaError = route.query.error;
+  initLeads(metaConnected);
   checkConnection();
   initOptions();
   loadBookingDentists();
   loadBookingPatients();
+  handleMetaQuery(metaConnected, metaError);
+});
+onBeforeUnmount(() => {
+  stopMetaStream();
 });
 const initOptions = async () => {
   try {
@@ -509,6 +663,7 @@ const handleSuccess = (newLead) => {
     email: newLead.email,
     telephone: newLead.telephone,
     inquiryDate: newLead.inquiryDate,
+    rawData: newLead.rawData || null,
     dob: newLead.dob || null,
     occupation: newLead.occupation || "",
     location: newLead.location || "",
@@ -527,7 +682,6 @@ const handleBulkUploadComplete = async () => {
   await fetchLeads(activeFilters.value);
 };
 
-const route = useRoute();
 const fetchLeads = async (filters = {}) => {
   isLoading.value = true
   try {
@@ -540,6 +694,7 @@ const fetchLeads = async (filters = {}) => {
         email: l.email || "",
         telephone: l.telephone || "",
         inquiryDate: l.inquiryDate || "",
+        rawData: l.rawData || null,
         dob: l.dob || null,
         occupation: l.occupation || "",
         location: l.location || "",
@@ -559,8 +714,8 @@ const fetchLeads = async (filters = {}) => {
   }
 }
 
-const initLeads = async () => {
-  if (route.query.meta === "connected") {
+const initLeads = async (metaConnected = false) => {
+  if (metaConnected) {
     try {
       await crmStore.fetchLeadsNow();
     } catch (e) {}
@@ -575,8 +730,69 @@ const integrateMeta = async () => {
   }
 };
 
+const onReconnectMeta = () => {
+  metaMenu.value = false;
+  integrateMeta();
+};
+
+const openMetaHealth = async () => {
+  metaHealthDialog.value = true;
+  metaHealthLoading.value = true;
+  try {
+    const res = await crmStore.metaHealth();
+    if (res?.code === 0) {
+      metaHealthData.value = res.data || null;
+    } else {
+      metaHealthData.value = { error: res?.error || res?.message || 'Failed to load health status' };
+    }
+  } catch (e) {
+    metaHealthData.value = { error: e?.data?.message || e?.message || 'Failed to load health status' };
+  } finally {
+    metaHealthLoading.value = false;
+  }
+};
+
 const isConnected = ref(false);
 const connection = ref({ count: 0, pages: [], lastConnectedAt: null });
+let leadsPollTimer = null;
+let metaEventSource = null;
+const startLeadsPolling = () => {
+  if (leadsPollTimer) return;
+  leadsPollTimer = setInterval(async () => {
+    if (!isConnected.value || isLoading.value) return;
+    await fetchLeads(activeFilters.value);
+  }, 20000);
+};
+const stopLeadsPolling = () => {
+  if (leadsPollTimer) {
+    clearInterval(leadsPollTimer);
+    leadsPollTimer = null;
+  }
+};
+const startMetaStream = () => {
+  if (metaEventSource || typeof window === 'undefined') return;
+  if (!('EventSource' in window)) {
+    startLeadsPolling();
+    return;
+  }
+
+  metaEventSource = new EventSource('/api/meta/stream');
+  metaEventSource.addEventListener('lead', async () => {
+    if (isLoading.value) return;
+    await fetchLeads(activeFilters.value);
+  });
+  metaEventSource.onerror = () => {
+    stopMetaStream();
+    startLeadsPolling();
+  };
+};
+const stopMetaStream = () => {
+  if (metaEventSource) {
+    metaEventSource.close();
+    metaEventSource = null;
+  }
+  stopLeadsPolling();
+};
 const checkConnection = async () => {
   try {
     const res = await crmStore.connectionStatus();
@@ -589,12 +805,24 @@ const checkConnection = async () => {
   }
 };
 
-const fetchNow = async () => {
+const disconnectMeta = async () => {
   try {
-    await crmStore.fetchLeadsNow();
-    await initLeads();
+    disconnecting.value = true;
+    const res = await crmStore.disconnectMeta();
+    if (res?.code === 0) {
+      await checkConnection();
+      mainStore?.setSnackbar?.({ title: 'Meta disconnected', type: 'success' });
+    } else {
+      const msg = res?.error || res?.message || 'Failed to disconnect Meta';
+      mainStore?.setSnackbar?.({ title: msg, type: 'error' });
+    }
   } catch (e) {
-    isLoading.value = false;
+    const msg = e?.data?.message || e?.message || 'Failed to disconnect Meta';
+    mainStore?.setSnackbar?.({ title: msg, type: 'error' });
+  } finally {
+    disconnecting.value = false;
+    confirmDisconnect.value = false;
+    metaMenu.value = false;
   }
 };
 
@@ -610,6 +838,11 @@ const onDeleteSelected = async (ids) => {
     }
   } catch (e) {}
 }
+
+watch(isConnected, (val) => {
+  if (val) startMetaStream();
+  else stopMetaStream();
+});
 </script>
 
 <style scoped lang="scss">

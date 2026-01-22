@@ -36,6 +36,20 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  disconnectMeta() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/disconnect")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  metaHealth() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/health")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   // Leads (app-managed)
   listLeads(filters = {}) {
     const params = new URLSearchParams();
