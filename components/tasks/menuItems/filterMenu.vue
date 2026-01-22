@@ -203,12 +203,13 @@ watch(
   
 }
 .tbl-top-btn {
-  height: 40px;
-  border-radius: 6px;
+  height: 46px;
+  border-radius: 8px;
   font-size: 14px;
   background-color: #fafafa !important;
   text-transform: none;
   box-shadow: none;
   color: #737373;
+  margin-left: 16px !important;
 }
 </style>

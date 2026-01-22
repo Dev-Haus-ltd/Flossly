@@ -134,7 +134,7 @@
           </v-label>
           <v-select
             v-model="selectedLeadSource"
-            :items="leadSources"
+            :items="leadSourceOptions"
             item-title="name"
             item-value="id"
             variant="solo"
@@ -226,10 +226,38 @@
   ]);
 
   // Derived names for chips
+  const leadSourceOptions = computed(() =>
+    Array.isArray(leadSources) ? [...leadSources] : []
+  );
+
+  const resolvedLeadSourceId = computed(() => {
+    const raw = selectedLeadSource.value;
+    if (raw == null || raw === "") return null;
+    if (typeof raw === "number") return raw;
+    const rawStr = String(raw).trim();
+    if (!rawStr) return null;
+    const byId = (leadSourceOptions.value || []).find(
+      (x) => String(x.id) === rawStr
+    );
+    if (byId?.id != null) return byId.id;
+    const byName = (leadSourceOptions.value || []).find(
+      (x) =>
+        String(x.name || "")
+          .trim()
+          .toLowerCase() === rawStr.toLowerCase()
+    );
+    return byName?.id ?? null;
+  });
+
   const selectedLeadSourceName = computed(() => {
-    const found = (leadSources || []).find?.(x => String(x.id) === String(selectedLeadSource.value))
-    return found?.name || ''
-  })
+    const raw = selectedLeadSource.value;
+    const found = (leadSourceOptions.value || []).find?.(
+      (x) => String(x.id) === String(raw)
+    );
+    if (found?.name) return found.name;
+    if (typeof raw === "string" && raw.trim()) return raw.trim();
+    return "";
+  });
   const selectedLeadStatusName = computed(() => {
     const found = (leadStatuses.value || []).find(x => String(x.key) === String(selectedLeadStatus.value))
     return found?.name || ''
@@ -253,7 +281,7 @@
     () => {
       emit("update:filters", {
         inquiryDate: selectedInquiryDate.value,
-        leadSourceId: selectedLeadSource.value,
+        leadSourceId: resolvedLeadSourceId.value,
         leadStatus: selectedLeadStatus.value,
         treatmentId: selectedTreatment.value,
       });

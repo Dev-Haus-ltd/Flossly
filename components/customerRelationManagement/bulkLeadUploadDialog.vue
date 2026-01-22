@@ -250,7 +250,7 @@
                   <div class="relative">
                     <v-select
                       v-model="lead.userId"
-                      :items="users"
+                      :items="activeUsers"
                       item-title="fullName"
                       item-value="id"
                       density="compact"
@@ -360,6 +360,8 @@ import {
   formatFileSize as formatFileSizeUtil,
   getFileIcon as getFileIconUtil,
   normalizeHeaderKey,
+  normalizeLeadColumnHeader,
+  LEAD_COLUMN_ALIASES,
   parseCSV as parseCSVUtil,
   validateFileBasics,
 } from "~/lib/fileImportUtils";
@@ -400,6 +402,16 @@ const statusLookup = computed(() => {
   leadStatusOptions.forEach((s) => map.set(s.label.toLowerCase(), s.label));
   return map;
 });
+const activeUsers = computed(() =>
+  (props.users || []).filter((u) => {
+    const status = String(u?.status || "").toLowerCase();
+    const orgStatus = String(u?.orgStatus || "").toLowerCase();
+    if (orgStatus === "invited" || status === "invited") return false;
+    if (status) return status === "active";
+    if (orgStatus) return orgStatus === "active";
+    return true;
+  })
+);
 watch(
   () => props.modelValue,
   (val) => (isOpen.value = val)
@@ -485,15 +497,11 @@ const processFile = async (file) => {
 
       const requiredColumns = ["name", "email", "telephone"];
       const normalizedKeys = Object.keys(json[0] || {}).map((k) =>
-        normalizeHeaderKey(k)
+        normalizeLeadColumnHeader(k)
       );
-      const hasName = normalizedKeys.some((k) =>
-        ["name", "full name", "lead name"].includes(k)
-      );
+      const hasName = normalizedKeys.includes("name");
       const hasEmail = normalizedKeys.includes("email");
-      const hasPhone = normalizedKeys.some((k) =>
-        ["telephone", "phone", "mobile", "whatsapp number", "whatsapp"].includes(k)
-      );
+      const hasPhone = normalizedKeys.includes("telephone");
       const hasRequiredColumns = hasName && hasEmail && hasPhone;
 
       if (!hasRequiredColumns) {
@@ -525,7 +533,7 @@ const processFile = async (file) => {
 const normalizeRow = (row) => {
   const normalized = {};
   Object.entries(row || {}).forEach(([key, value]) => {
-    normalized[normalizeHeaderKey(key)] = value ?? "";
+    normalized[normalizeLeadColumnHeader(key)] = value ?? "";
   });
 
   const cleanQuoted = (val) =>
@@ -533,30 +541,14 @@ const normalizeRow = (row) => {
       ? val.trim().replace(/^['"]+|['"]+$/g, "")
       : val || "";
 
-  const leadSourceName =
-    normalized["leadsource"] ||
-    normalized["lead source"] ||
-    normalized["source"] ||
-    "";
+  const leadSourceName = normalized["leadsource"] || "";
   const treatmentName = normalized["treatment"] || "";
-  const assignedUser =
-    normalized["assigned"] || normalized["user"] || normalized["owner"] || "";
+  const assignedUser = normalized["assigned"] || "";
   const cleanedEmail = cleanQuoted(normalized["email"]);
-  const cleanedTelephone = cleanQuoted(
-    normalized["telephone"] ||
-      normalized["phone"] ||
-      normalized["mobile"] ||
-      normalized["whatsapp number"] ||
-      normalized["whatsapp"] ||
-      normalized["secondary"]
-  );
+  const cleanedTelephone = cleanQuoted(normalized["telephone"]);
 
   return {
-    name:
-      normalized["name"] ||
-      normalized["full name"] ||
-      normalized["lead name"] ||
-      "",
+    name: normalized["name"] || "",
     email: cleanedEmail,
     telephone: cleanedTelephone,
     leadSourceId:
@@ -575,7 +567,7 @@ const normalizeRow = (row) => {
       (normalized["leadstatus"] || "").trim().toLowerCase()
     ) || "New",
     userId:
-      props.users.find((u) => {
+      activeUsers.value.find((u) => {
         const fullName = u.fullName?.trim()?.toLowerCase();
         const email = u.email?.trim()?.toLowerCase();
         const assigned = assignedUser?.trim()?.toLowerCase();
@@ -586,7 +578,7 @@ const normalizeRow = (row) => {
     followUpDate: normalizeDate(normalized["followupdate"]),
     originalInquiryDate: normalized["inquirydate"] || "",
     originalFollowUpDate: normalized["followupdate"] || "",
-    comments: normalized["comments"] || normalized["notes"] || "",
+    comments: normalized["comments"] || "",
     errors: {},
     hasErrors: false,
     originalLeadSource: leadSourceName,

@@ -1,4 +1,4 @@
-import { createLead, deleteLeads, listLeads, updateLead, getLeadTreatment, saveLeadTreatment, deleteLeadTreatment, listLeadNotes, addLeadNote, deleteLeadNote, listOptions, addOption, deleteOption, getLeadCommunication, saveLeadCommunication, listAutomation, saveAutomation, sendLeadMail, bulkUploadLeads } from '~/server/controllers/crm'
+import { createLead, deleteLeads, listLeads, updateLead, getLeadTreatment, saveLeadTreatment, deleteLeadTreatment, listLeadNotes, addLeadNote, deleteLeadNote, listOptions, addOption, deleteOption, getLeadCommunication, saveLeadCommunication, listAutomation, saveAutomation, sendLeadMail, bulkUploadLeads, listAutomationGroups, saveAutomationGroup, deleteAutomationGroup } from '~/server/controllers/crm'
 
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, 'name')
@@ -39,6 +39,12 @@ export default defineEventHandler(async (event) => {
       return await listAutomation(event)
     case 'automationSave':
       return await saveAutomation(event)
+    case 'automationGroups':
+      return await listAutomationGroups(event)
+    case 'automationGroupSave':
+      return await saveAutomationGroup(event)
+    case 'automationGroupDelete':
+      return await deleteAutomationGroup(event)
     case 'mailSend':
       return await sendLeadMail(event)
     default:

@@ -180,7 +180,7 @@
               <label class="mb-1 fld-lbl">Assign To</label>
               <v-select
                 v-model="form.assigned"
-                :items="staffList || []"
+                :items="activeStaffList"
                 item-title="fullName"
                 item-value="id"
                 multiple
@@ -380,7 +380,7 @@ const form = ref({
 });
 
 // Dropdown lists
-const leadStatuses = ["New", "In Progress", "Converted", "Lost"];
+const leadStatuses = ["New", "Contacted", "Converted", "Lost"];
 const contactMethods = ["Email", "Phone", "SMS", "In-Person"];
 
 // Date menus
@@ -447,6 +447,12 @@ const onDobSelected = (val) => {
 };
 
 const mainStore = useMainStore();
+const activeStaffList = computed(() => {
+  return (props.staffList || []).filter((user) => {
+    const status = String(user?.orgStatus || user?.status || "").toLowerCase();
+    return status === "active";
+  });
+});
 
 // Reset form to initial state
 const resetForm = () => {

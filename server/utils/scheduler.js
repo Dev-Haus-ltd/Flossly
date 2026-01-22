@@ -444,47 +444,61 @@ export const startTaskOverDueScheduler = () => {
   // Run every night at 12 AM (server time)
   cron.schedule("0 0 * * *", async () => {
     try {
-      const today = new Date();
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
 
-      // Find the "overdue" status
-      const overdueStatus = await OrganisationStatus.findOne({
-        where: { key: "overdue", status: "Active" },
-      });
-
-      if (!overdueStatus) {
-        console.error("❌ Overdue status not found in OrganisationStatuses table!");
-        return;
-      }
-
-      // Find all overdue tasks (dueDate < today) that are not already overdue
-      const overdueTasks = await UserTask.findAll({
+      const statuses = await OrganisationStatus.findAll({
         where: {
-          dueDate: { [Op.lt]: today },
-          statusId: { [Op.ne]: overdueStatus.id },
+          key: { [Op.in]: ["overdue", "completed"] },
+          status: "Active",
         },
+        attributes: ["id", "key", "organisationId"],
       });
 
-      if (overdueTasks.length === 0) {
-        console.log("⏰ No overdue tasks found today.");
+      const statusByOrg = new Map();
+      statuses.forEach((status) => {
+        const orgId = Number(status.organisationId);
+        if (!orgId) return;
+        const entry = statusByOrg.get(orgId) || {};
+        if (status.key === "overdue" && !entry.overdueId) entry.overdueId = status.id;
+        if (status.key === "completed" && !entry.completedId) entry.completedId = status.id;
+        statusByOrg.set(orgId, entry);
+      });
+
+      if (!statusByOrg.size) {
+        console.error("Overdue status not found in OrganisationStatuses table.");
         return;
       }
 
-      const taskIds = overdueTasks.map((t) => t.id);
+      let totalUpdated = 0;
+      for (const [orgId, ids] of statusByOrg.entries()) {
+        if (!ids?.overdueId) continue;
+        const excludedStatusIds = [ids.overdueId, ids.completedId].filter(Boolean);
+        const [updated] = await UserTask.update(
+          { statusId: ids.overdueId },
+          {
+            where: {
+              organisationId: orgId,
+              isArchieved: false,
+              dueDate: { [Op.lt]: startOfToday },
+              statusId: { [Op.notIn]: excludedStatusIds },
+            },
+          }
+        );
+        totalUpdated += Number(updated) || 0;
+      }
 
-      // Update tasks to "Overdue" status
-      await UserTask.update(
-        { statusId: overdueStatus.id },
-        { where: { id: taskIds } }
-      );
+      if (totalUpdated === 0) {
+        console.log("No overdue tasks found today.");
+        return;
+      }
 
-      console.log(`✅ ${taskIds.length} tasks marked as Overdue.`);
-
+      console.log(`${totalUpdated} tasks marked as overdue.`);
     } catch (err) {
-      console.error("❌ Error in overdue scheduler:", err);
+      console.error("Error in overdue scheduler:", err);
     }
   });
 };
-
 
 export const startTaskDueReminderScheduler = () => {
   // Run every night at 12 AM server time (same as overdue scheduler window)
@@ -631,3 +645,4 @@ export const startOnboardingScheduler = () => {
     }
   });
 };
+

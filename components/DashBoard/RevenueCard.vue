@@ -4,7 +4,7 @@
     <div class="text-section">
       <div class="title">{{ title }}</div>
       <div class="subtitle">{{ subtitle }}</div>
-      <div class="label">Total Revenue</div>
+      <div v-if="label" class="label">{{ label }}</div>
     </div>
 
       <!-- Right side Lordicon animation -->
@@ -26,8 +26,12 @@ defineProps({
     default: "This Week",
   },
   subtitle: {
-    type: String,
+    type: [String, Number],
     default: "£ 29,985",
+  },
+  label: {
+    type: String,
+    default: "Total Revenue",
   },
 });
 </script>

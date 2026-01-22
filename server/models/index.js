@@ -70,6 +70,8 @@ import { CrmOption } from "./crm/options";
 import { CrmLeadCommunication } from "./crm/leadCommunications";
 import { CrmLeadAssignee } from "./crm/leadAssignees";
 import { CrmAutomationTemplate } from "./crm/automationTemplates";
+import { CrmAutomationGroup } from "./crm/automationGroups";
+import { CrmAutomationGroupTemplate } from "./crm/automationGroupTemplates";
 import { PatientAutomationDictionary } from "./patientJourney/patientAutomationDictionary";
 import { PatientAutomationTemplate } from "./patientJourney/patientAutomationTemplates";
 import { OrganisationReferral } from "./organisationReferrals";
@@ -324,6 +326,14 @@ CrmLeadAssignee.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'C
 Organisation.hasMany(CrmAutomationTemplate, { foreignKey: 'organisationId', as: 'crmAutomationTemplates' });
 CrmAutomationTemplate.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 
+Organisation.hasMany(CrmAutomationGroup, { foreignKey: 'organisationId', as: 'crmAutomationGroups' });
+CrmAutomationGroup.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+
+CrmAutomationGroup.hasMany(CrmAutomationGroupTemplate, { foreignKey: 'groupId', as: 'templates' });
+CrmAutomationGroupTemplate.belongsTo(CrmAutomationGroup, { foreignKey: 'groupId', as: 'group', onDelete: 'CASCADE', hooks: true });
+CrmAutomationGroupTemplate.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+Organisation.hasMany(CrmAutomationGroupTemplate, { foreignKey: 'organisationId', as: 'crmAutomationGroupTemplates' });
+
 Organisation.hasMany(PatientAutomationTemplate, { foreignKey: 'organisationId', as: 'patientAutomationTemplates' });
 PatientAutomationTemplate.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 
@@ -421,6 +431,8 @@ export {
   CrmLeadCommunication,
   CrmLeadAssignee,
   CrmAutomationTemplate,
+  CrmAutomationGroup,
+  CrmAutomationGroupTemplate,
   MetaUserToken,
   ChatbotConfig,
   // Diary

@@ -162,7 +162,7 @@ export const template = `<!DOCTYPE html>
                 <div class="content">{content}</div>
 
                 <!-- Footer -->
-                <div class="footer">© 2025 Flossly</div>
+                <div class="footer">© 2026 Flossly</div>
               </div>
             </div>
           </td>

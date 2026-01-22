@@ -13,7 +13,8 @@
           :key="plan.id"
           type="button"
           class="plan-option"
-          :class="{ selected: plan.id === selectedPlanId }"
+          :class="{ selected: plan.id === selectedPlanId, disabled: plan.disabled }"
+          :disabled="plan.disabled"
           @click="selectedPlanId = plan.id"
         >
           <span class="plan-radio" :class="{ selected: plan.id === selectedPlanId }"></span>
@@ -31,7 +32,7 @@
           <div class="plan-detail-title">{{ selectedPlan.displayName }}</div>
         </div>
         <div class="plan-detail-price">
-          <span class="plan-price">{{ formatPrice(selectedPlan.unit_amount, selectedPlan.currency) }}</span>
+          <span class="plan-price">{{ formatPrice(selectedPlan.displayAmount ?? selectedPlan.unit_amount, selectedPlan.currency) }}</span>
           <span class="plan-price-cycle">per {{ billingLabel(selectedPlan) }}</span>
         </div>
         <div class="plan-feature-title">{{ selectedPlan.shortName }} plan includes:</div>
@@ -197,7 +198,7 @@ const displayPlans = computed(() => {
       const featureKey = getFeatureKeyFromType(plan.product?.name);
       const displayName =
         key === "soar"
-          ? "Soar (Full Access)"
+          ? "Soar (Coming Soon)" //Full Access
           : key === "glide"
           ? "Glide"
           : key === "drift"
@@ -209,7 +210,25 @@ const displayPlans = computed(() => {
       const featureObj = features.value.find((x) => getFeatureKeyFromType(x.type) === featureKey);
       const featureList = featureObj?.features || [];
       const description = featureObj?.description || plan.product?.description || plan.description || "";
-      return { ...plan, key, displayName, shortName, badge, features: featureList, description };
+      const displayAmount =
+        key === "drift"
+          ? 9900
+          : key === "glide"
+          ? 29900
+          : key === "soar"
+          ? 39900
+          : plan.unit_amount;
+      return {
+        ...plan,
+        key,
+        displayName,
+        shortName,
+        badge,
+        features: featureList,
+        description,
+        disabled: key === "soar", // 🔴 UI-disable Soar
+        displayAmount,
+      };
     })
     .sort((a, b) => (planOrder[a.key] || 99) - (planOrder[b.key] || 99));
   const planMap = new Map();
@@ -246,7 +265,7 @@ const billingLabel = (plan) => {
 
 watch(displayPlans, (list) => {
   if (!selectedPlanId.value && list.length) {
-    selectedPlanId.value = list[0].id;
+    selectedPlanId.value = list[1].id;
   }
 });
 
@@ -354,6 +373,15 @@ defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout, resetModal, sele
   background: #1E2B80;
 }
 
+.plan-option.disabled .plan-name,
+.plan-option.disabled .plan-desc {
+  color: #888888;
+}
+
+.plan-option.disabled {
+  background-color: #EBEBEB;
+}
+
 .plan-radio.selected {
   position: relative;
 }
@@ -387,6 +415,7 @@ defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout, resetModal, sele
   color: #1E1E1E;
   margin: 0;
   line-height: 1.2;
+  margin-bottom: 8px;
 }
 
 .plan-option.selected .plan-name {
@@ -418,6 +447,7 @@ defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout, resetModal, sele
   max-height: 530px;
   width: 100%;
   max-width: 320px;
+  overflow: hidden;
 }
 
 .plan-detail-header {
@@ -477,6 +507,8 @@ defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout, resetModal, sele
   margin: 0 0 16px;
   display: grid;
   gap: 8px;
+  height: calc(530px - 36px - 16px - 120px);
+  overflow-y: auto;
 }
 
 .plan-features span {
@@ -561,7 +593,7 @@ defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout, resetModal, sele
   text-transform: none;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1024px) {
   .pricing-grid {
     grid-template-columns: 1fr;
   }

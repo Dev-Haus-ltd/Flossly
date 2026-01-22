@@ -64,10 +64,10 @@
       <v-list-item @click="handleLogout" class="my-3"> Logout </v-list-item>
     </v-card>
   </v-menu>
-  <v-dialog v-model="showProfileDialog" max-width="1800">
+  <v-dialog v-model="showProfileDialog" width="1774" height="968">
     <MyProfile @close="showProfileDialog = false" :user="user" />
   </v-dialog>
-  <v-dialog v-model="showPracticeProfileDialog" max-width="1800">
+  <v-dialog v-model="showPracticeProfileDialog" width="1774" height="968">
     <PracticeProfile @close="showPracticeProfileDialog = false" />
   </v-dialog>
 </template>

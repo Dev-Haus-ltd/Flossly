@@ -18,6 +18,8 @@ import {
   Task,
   UserTask,
   UserHrDocument,
+  TaskChecklist,
+  UserTaskChecklist,
 } from "../models";
 import { HrDocument } from "../models/hrDocuments";
 import formidable from "formidable";
@@ -28,8 +30,10 @@ import { success, error } from "../utils/response";
 import { readBody, createError } from "h3";
 import {
   sendTrialActivatedEmail,
+  sendOrganisationReferralEmail,
 } from "../utils/emailNotifications";
 import bcrypt from "bcrypt";
+import { Op } from "sequelize";
 
 // Role constants for access control
 // Role ID 1 = Practice Manager, Role ID 8 = Principal Dentist / Practice Owner
@@ -595,37 +599,46 @@ export const deleteAttribute = async (event) => {
   if (!type || !id) throw createError({ message: "Type and Id is required" });
   const transaction = await DB.transaction();
   try {
+    let model;
+    let ModelRef;
+
     switch (type) {
-      case "equipment": {
-        const equipment = await OrganisationEquipment.findByPk(id);
-        if (!equipment) throw createError({ message: "Equipment not found" });
-        await equipment.destroy({ transaction });
+      case "equipment":
+        ModelRef = OrganisationEquipment;
         break;
-      }
 
-      case "contact": {
-        const contact = await OrganisationContact.findByPk(id);
-        if (!contact) throw createError({ message: "Contact not found" });
-        await contact.destroy({ transaction });
+      case "contact":
+        ModelRef = OrganisationContact;
         break;
-      }
 
-      case "surgery": {
-        const surgery = await OrganisationSurgery.findByPk(id);
-        if (!surgery) throw createError({ message: "Surgery not found" });
-        await surgery.destroy({ transaction });
+      case "surgery":
+        ModelRef = OrganisationSurgery;
         break;
-      }
 
-      case "group": {
-        const group = await OrganisationGroup.findByPk(id);
-        if (!group) throw createError({ message: "Group not found" });
-        await group.destroy({ transaction });
+      case "group":
+        ModelRef = OrganisationGroup;
         break;
-      }
+
       default:
         throw createError({ message: "Invalid type provided" });
     }
+
+    // 1️⃣ Get full context FIRST
+    model = await ModelRef.findByPk(id, { transaction });
+
+    if (!model) {
+      throw createError({ message: `${type} not found` });
+    }
+
+    // 🔥 You can use `model` here for logging / hooks replacement if needed
+    // console.log(model.toJSON());
+
+    // 2️⃣ Delete directly from DB (no instance hooks)
+    await ModelRef.destroy({
+      where: { id },
+      transaction
+    });
+
     await transaction.commit();
     return success("Deleted");
   } catch (err) {
@@ -808,6 +821,15 @@ export const createOrganisationReferral = async (event) => {
       phoneNumber,
       address,
       referredBy: loggedUser.userId,
+    });
+
+    // ✅ Send email notification
+    await sendOrganisationReferralEmail({
+      orgName,
+      orgEmail,
+      managerName,
+      phoneNumber,
+      address,
     });
 
     return {
@@ -1045,7 +1067,41 @@ export const createOrganisationForUser = async (event) => {
         comments: "",
       }));
 
-      await UserTask.bulkCreate(userTasks, { transaction });
+      const createdUserTasks = await UserTask.bulkCreate(userTasks, { 
+        transaction,
+        returning: true 
+      });
+
+      // Copy checklists from TaskChecklist to UserTaskChecklist
+      const taskIds = tasks.map((t) => t.id);
+      const templates = await TaskChecklist.findAll({
+        where: { taskId: { [Op.in]: taskIds } },
+        transaction,
+      });
+
+      if (templates?.length) {
+        const checklistToCreate = [];
+        for (const ut of createdUserTasks) {
+          const tpls = templates.filter((tpl) => tpl.taskId === ut.taskId);
+          if (!tpls.length) continue;
+          tpls.forEach((tpl) => {
+            checklistToCreate.push({
+              userTaskId: ut.id,
+              question: tpl.question,
+              category: tpl.category,
+              showRadio: tpl.showRadio,
+              showDate: tpl.showDate,
+              showTime: tpl.showTime,
+              fieldOneTitle: tpl.fieldOneTitle,
+              fieldTwoTitle: tpl.fieldTwoTitle,
+              radioValue: 'N/A',
+            });
+          });
+        }
+        if (checklistToCreate.length) {
+          await UserTaskChecklist.bulkCreate(checklistToCreate, { transaction });
+        }
+      }
     }
 
     /** -------------------------

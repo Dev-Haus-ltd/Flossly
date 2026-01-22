@@ -337,6 +337,22 @@ export const addRotaShift = async (event) => {
       throw createError({ message: "Rota not found" });
     }
 
+    // Check for duplicate shift name in the same rota
+    const duplicateShift = await RotaShift.findOne({
+      where: {
+        rotaId,
+        label,
+        isDeleted: false,
+      },
+    });
+
+    if (duplicateShift) {
+      throw createError({
+        statusCode: 400,
+        message: "A shift with this name already exists in this rota. Please use a unique name.",
+      });
+    }
+
     const staffIds = [userId, dentistId, nurseId, locumUserId].filter(Boolean);
     
     const crossOrgConflicts = await checkCrossOrgShiftConflicts(
@@ -445,13 +461,32 @@ export const updateShift = async (event) => {
   try {
     const body = await readBody(event);
     const parsedBody = typeof body === 'string' ? JSON.parse(body) : body;
-    const { id, startDate, endDate, dentistId, nurseId, userId, locumUserId, forceCreate } = parsedBody;
+    const { id, startDate, endDate, dentistId, nurseId, userId, locumUserId, forceCreate, label } = parsedBody;
     
     const shift = await RotaShift.findByPk(id, {
       include: [{ model: Rota, as: 'rota' }]
     });
     
     if (!shift) throw createError({ message: "shift not found" });
+
+    // Check for duplicate shift name if label is being updated
+    if (label && label !== shift.label) {
+      const duplicateShift = await RotaShift.findOne({
+        where: {
+          rotaId: shift.rotaId,
+          label,
+          isDeleted: false,
+          id: { [Op.ne]: id }, // Exclude current shift
+        },
+      });
+
+      if (duplicateShift) {
+        throw createError({
+          statusCode: 400,
+          message: "A shift with this name already exists in this rota. Please use a unique name.",
+        });
+      }
+    }
 
     const finalStartDate = startDate ? new Date(startDate) : shift.startDate;
     const finalEndDate = endDate ? new Date(endDate) : shift.endDate;

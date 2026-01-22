@@ -196,7 +196,22 @@ export const useMainStore = defineStore("mainStore", {
           imgPath: crmIcon,
           value: "crm",
           to:"/crm",
-          children: [],
+          children: [
+            {
+              title: "Leads",
+              value: "crmLeads",
+              imgPath: crmIcon,
+              to: "/crm",
+              featureKey: "crm",
+            },
+            {
+              title: "Automations",
+              value: "crmAutomations",
+              imgPath: crmIcon,
+              to: "/crm/automations",
+              featureKey: "crm",
+            },
+          ],
           featureKey: "crm",
         },
         {
@@ -218,6 +233,13 @@ export const useMainStore = defineStore("mainStore", {
               value: "diaryPatients",
               imgPath: tasksIcon,
               to: "/diary/patients",
+              featureKey: "diary",
+            },
+            {
+              title: "Finance",
+              value: "diaryfinance",
+              imgPath: tasksIcon,
+              to: "/diary/finance",
               featureKey: "diary",
             },
           ],
@@ -355,6 +377,12 @@ export const useMainStore = defineStore("mainStore", {
           sortable: true,
           width: 200,
           cellClass: "stickyClass",
+        },
+        {
+          key: "status",
+          title: "Status",
+          sortable: true,
+          width: 200,
         },
         {
           key: "frequency",

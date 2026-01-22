@@ -12,6 +12,7 @@ const crmTriggersByKey = new Map(
 );
 
 export const resolveCrmTrigger = (tpl) => {
+  if (tpl?.trigger) return tpl.trigger;
   const fromDefaults = crmTriggersByKey.get(tpl.key);
   if (fromDefaults) return fromDefaults;
   const days = parseDayOffsetFromText(tpl.sending);
@@ -50,21 +51,10 @@ export const buildEffectiveCrmTemplates = (lead, templatesByOrg) => {
   return effectiveTemplates;
 };
 
-const cleanCrmSubject = (subject = "") =>
-  String(subject)
-    .replace(/\([^)]*\)/g, "")
-    .replace(/\bday\s*\d+\b/gi, "")
-    .replace(/\b\d+\s*days?\s*(before|after)\b/gi, "")
-    .replace(/\b(morning|evening|afternoon|immediate(ly)?)\b/gi, "")
-    .replace(/\s{2,}/g, " ")
-    .replace(/\s+-\s+-/g, " - ")
-    .replace(/\s+-\s*$/g, "")
-    .trim();
-
 export const buildCrmEmail = (lead, tpl) => {
-  const baseSubject = tpl.name || "Message from Flossly";
+  const baseSubject = tpl?.subject || tpl?.name || "Message from Flossly";
   const ctx = buildLeadContext({ lead, userName: "Team" });
-  const subject = cleanCrmSubject(renderTokens(baseSubject, ctx));
+  const subject = renderTokens(baseSubject, ctx);
   const html = renderTokens(tpl.template || "", ctx);
   return { subject, html };
 };
@@ -98,6 +88,14 @@ const daysSince = (today, date) => {
   return Math.floor((today - d) / (24 * 60 * 60 * 1000));
 };
 
+const getNthWeekdayOfMonth = (year, monthIndex, weekday, weekIndex) => {
+  const first = new Date(year, monthIndex, 1);
+  const firstWeekday = first.getDay();
+  const offset = (weekday - firstWeekday + 7) % 7;
+  const day = 1 + offset + 7 * (weekIndex - 1);
+  return new Date(year, monthIndex, day);
+};
+
 export const shouldSendCrmTemplate = ({ lead, tpl, trigger, today }) => {
   if (!trigger) return { due: false, sentKey: null };
   if (trigger.type === "inquiry_days") {
@@ -121,6 +119,37 @@ export const shouldSendCrmTemplate = ({ lead, tpl, trigger, today }) => {
     const year = today.getFullYear();
     const bf = getBlackFriday(year);
     const target = new Date(bf);
+    target.setDate(target.getDate() + Number(trigger.offsetDays || 0));
+    const minHour = Number(trigger.minHour || 0);
+    return {
+      due: formatYmd(today) === formatYmd(target) && today.getHours() >= minHour,
+      sentKey: `${tpl.key}_${year}`,
+    };
+  }
+  if (trigger.type === "month_day") {
+    const year = today.getFullYear();
+    const month = Number(trigger.month || 0);
+    const day = Number(trigger.day || 0);
+    if (!month || !day) return { due: false, sentKey: null };
+    const base = new Date(year, month - 1, day);
+    const target = new Date(base);
+    target.setDate(target.getDate() + Number(trigger.offsetDays || 0));
+    const minHour = Number(trigger.minHour || 0);
+    return {
+      due: formatYmd(today) === formatYmd(target) && today.getHours() >= minHour,
+      sentKey: `${tpl.key}_${year}`,
+    };
+  }
+  if (trigger.type === "weekday_of_month") {
+    const year = today.getFullYear();
+    const month = Number(trigger.month || 0);
+    const weekday = Number(trigger.weekday);
+    const weekIndex = Number(trigger.weekIndex || 0);
+    if (!month || Number.isNaN(weekday) || !weekIndex) {
+      return { due: false, sentKey: null };
+    }
+    const base = getNthWeekdayOfMonth(year, month - 1, weekday, weekIndex);
+    const target = new Date(base);
     target.setDate(target.getDate() + Number(trigger.offsetDays || 0));
     const minHour = Number(trigger.minHour || 0);
     return {

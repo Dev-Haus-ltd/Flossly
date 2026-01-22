@@ -47,18 +47,17 @@ const emitCardId = (id) => {
 
 <style scoped>
 .redeem-card {
-  border: 1px solid #60e5a3;
-  background: #fff;
+  border: 1px solid #DBDBDB;
+  background: #FFFFFF;
   overflow: hidden;
   height: 100%;
 }
 
 .card-img {
   width: 100%;
-  height: 200px;
-  object-fit: contain;
+  object-fit: cover;
   height: 100%;
-  border-bottom: 1px solid #60e5a3;
+  border-bottom: 1px solid #DBDBDB;
 }
 
 .bonus-chip {

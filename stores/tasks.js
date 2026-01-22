@@ -11,7 +11,11 @@ const makeTasksCacheKey = (payload = {}) => {
         return acc;
       }, {});
   };
-  return JSON.stringify(sorted(payload));
+  const cachePayload = { ...payload };
+  if (!cachePayload.__cacheDay) {
+    cachePayload.__cacheDay = new Date().toISOString().slice(0, 10);
+  }
+  return JSON.stringify(sorted(cachePayload));
 };
 
 export const useTaskStore = defineStore("taskStore", {

@@ -53,15 +53,23 @@ export const usersList = async (event) => {
       ],
     });
   
-    const users = userOrganisations.map((uo) => {
-      const user = uo.user.toJSON();
-      user.orgStatus = uo.status || "Active";
-      user.isActive = user.orgStatus === "Active";
-      const isGloballyDeactivated = user.status === "Disabled" || user.status === "Expired";
-      const isOrgDeactivated = user.orgStatus === "Disabled";
-      user.isAccountDeactivated = isGloballyDeactivated || isOrgDeactivated;
-      return user;
-    });
+    const users = userOrganisations
+      .map((uo) => {
+        const user = uo.user.toJSON();
+        
+        // Filter out dummy dentist users (created for diary functionality)
+        if (user.email && user.email.includes('dummy-dentist') && user.email.includes('@flossly.local')) {
+          return null;
+        }
+        
+        user.orgStatus = uo.status || "Active";
+        user.isActive = user.orgStatus === "Active";
+        const isGloballyDeactivated = user.status === "Disabled" || user.status === "Expired";
+        const isOrgDeactivated = user.orgStatus === "Disabled";
+        user.isAccountDeactivated = isGloballyDeactivated || isOrgDeactivated;
+        return user;
+      })
+      .filter(Boolean); // Remove any null entries
     return success(users);
   } catch (err) {
     return error(500, err);
@@ -141,6 +149,11 @@ export const userAcrossOrgs = async (event) => {
           }
           const userPlain = uo.user.toJSON ? uo.user.toJSON() : uo.user;
           const user = JSON.parse(JSON.stringify(userPlain));
+          
+          // Filter out dummy dentist users (created for diary functionality)
+          if (user.email && user.email.includes('dummy-dentist') && user.email.includes('@flossly.local')) {
+            return null;
+          }
           
           user.orgStatus = uo.status || "Active";
           user.isActive = user.orgStatus === "Active";

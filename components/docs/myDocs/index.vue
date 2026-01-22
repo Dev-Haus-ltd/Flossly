@@ -55,6 +55,9 @@
           :hideAddFolderButton="!canCreateSubfolder"
           @open-folder="handleOpenFolder"
           @add-folder="showAddFolderDialog = true"
+          @move-folder="handleMoveFolder"
+          @edit-folder="handleEditFolder"
+          @delete-folder="handleDeleteFolder"
         />
       </div>
       <!-- all files table -->
@@ -65,6 +68,8 @@
           @edit-file="handleEdit"
           @download-file="handleDownload"
           @addFileHandle="showAddFileDialog = true"
+          @move-file="handleMoveFile"
+          @delete-file="handleDeleteFile"
         />
       </div>
     </div>
@@ -76,6 +81,9 @@
           :hideAddFolderButton="false"
           @open-folder="handleOpenFolder"
           @add-folder="showAddFolderDialog = true"
+          @move-folder="handleMoveFolder"
+          @edit-folder="handleEditFolder"
+          @delete-folder="handleDeleteFolder"
         />
       </div>
       <!-- Show files section -->
@@ -87,6 +95,8 @@
           @edit-file="handleEdit"
           @download-file="handleDownload"
           @addFileHandle="showAddFileDialog = true"
+          @move-file="handleMoveFile"
+          @delete-file="handleDeleteFile"
         />
       </div>
     </div>
@@ -102,17 +112,43 @@
       @onUpdate="updateView"
     />
     <!-- Custom dialog for DOCX files -->
-    <DocsMyDocsDocxEditorDialog 
+    <DocsMyDocsDocxEditorDialog
       v-if="selectedDoc && isDocxFile(selectedDoc)"
-      v-model="viewFileDialog" 
-      :doc="selectedDoc" 
+      v-model="viewFileDialog"
+      :doc="selectedDoc"
       @onUpdate="updateView"
     />
     <!-- Vuetify dialog for other file types -->
-    <DocsMyDocsViewFileDialog 
+    <DocsMyDocsViewFileDialog
       v-else
-      v-model="viewFileDialog" 
-      :doc="selectedDoc" 
+      v-model="viewFileDialog"
+      :doc="selectedDoc"
+    />
+    <!-- Move To Folder Dialog -->
+    <DocsMyDocsMoveToFolderDialog
+      v-model="moveMenuOpen"
+      :activator="moveMenuActivator"
+      :item="itemToMove"
+      :isFolder="isMoveFolder"
+      :currentFolderId="selectedFolder?.id"
+      @moved="handleMoved"
+    />
+    <!-- Edit Folder Dialog -->
+    <DocsMyDocsEditFolderDialog
+      v-model="showEditFolderDialog"
+      :folder="folderToEdit"
+      @updated="handleFolderUpdated"
+    />
+    <!-- Delete Confirmation Dialog -->
+    <CommonConfirmDialog
+      v-model="showDeleteConfirm"
+      icon="mdi-information-outline"
+      :title="deleteConfirmTitle"
+      :message="deleteConfirmMessage"
+      confirm-text="Delete"
+      :loading="deleteLoading"
+      @confirm="confirmDelete"
+      @cancel="showDeleteConfirm = false"
     />
   </div>
 </template>
@@ -127,10 +163,30 @@ const viewFileDialog = ref(false);
 const selectedFolder = ref(null);
 const selectedDoc = ref(null);
 const docStore = useDocStore();
+const mainStore = useMainStore();
 
 const recentFiles = ref([]);
 const files = ref([]);
 const foldersList = ref([]);
+
+// Move dialog state
+const moveMenuOpen = ref(false);
+const moveMenuActivator = ref(null);
+const itemToMove = ref(null);
+const isMoveFolder = ref(false);
+
+
+// Edit folder dialog state
+const showEditFolderDialog = ref(false);
+const folderToEdit = ref(null);
+
+// Delete confirmation state
+const showDeleteConfirm = ref(false);
+const deleteConfirmTitle = ref("");
+const deleteConfirmMessage = ref("");
+const deleteLoading = ref(false);
+const itemToDelete = ref(null);
+const isDeleteFolder = ref(false);
 
 // Track folder navigation stack for breadcrumb and depth (max 2 levels)
 const folderStack = ref([]);
@@ -231,6 +287,108 @@ const goToFolder = (index) => {
     selectedFolder.value = targetFolder;
     getFolders(targetFolder.id);
     getDocs({ folderId: targetFolder.id });
+  }
+};
+
+// Move file handler
+const handleMoveFile = ({ file, event }) => {
+  itemToMove.value = file;
+  isMoveFolder.value = false;
+  moveMenuActivator.value = event.currentTarget;
+  moveMenuOpen.value = true;
+};
+
+// Move folder handler
+const handleMoveFolder = ({ folder, event }) => {
+  itemToMove.value = folder;
+  isMoveFolder.value = true;
+  moveMenuActivator.value = event.currentTarget;
+  moveMenuOpen.value = true;
+};
+
+// Handle move completion
+const handleMoved = () => {
+  // Menu is already closed by the MoveToFolderDialog component
+  // Just need to clean up the state and refresh the view
+
+  // Use setTimeout to ensure DOM has settled after menu close animation
+  setTimeout(() => {
+    moveMenuActivator.value = null;
+    itemToMove.value = null;
+    isMoveFolder.value = false;
+  }, 100);
+
+  updateView();
+  getRecentDocs();
+};
+
+
+// Edit folder handler
+const handleEditFolder = (folder) => {
+  folderToEdit.value = folder;
+  showEditFolderDialog.value = true;
+};
+
+// Handle folder updated
+const handleFolderUpdated = () => {
+  showEditFolderDialog.value = false;
+  folderToEdit.value = null;
+  updateView();
+};
+
+// Delete file handler
+const handleDeleteFile = (file) => {
+  itemToDelete.value = file;
+  isDeleteFolder.value = false;
+  deleteConfirmTitle.value = "Delete File";
+  deleteConfirmMessage.value = `Are you sure you want to delete "${file.name}"? This action cannot be undone.`;
+  showDeleteConfirm.value = true;
+};
+
+// Delete folder handler
+const handleDeleteFolder = (folder) => {
+  itemToDelete.value = folder;
+  isDeleteFolder.value = true;
+  deleteConfirmTitle.value = "Delete Folder";
+  deleteConfirmMessage.value = `Are you sure you want to delete "${folder.name}" and all its contents? This action cannot be undone.`;
+  showDeleteConfirm.value = true;
+};
+
+// Confirm delete
+const confirmDelete = async () => {
+  if (!itemToDelete.value) return;
+
+  deleteLoading.value = true;
+  try {
+    let res;
+    if (isDeleteFolder.value) {
+      res = await docStore.deleteFolder({ id: itemToDelete.value.id });
+    } else {
+      res = await docStore.deleteDoc({ id: itemToDelete.value.id });
+    }
+
+    if (res.code === 0) {
+      mainStore.setSnackbar({
+        title: `${isDeleteFolder.value ? 'Folder' : 'File'} deleted successfully`,
+        type: "success",
+      });
+      updateView();
+      getRecentDocs();
+    } else {
+      mainStore.setSnackbar({
+        title: res.data?.message || res.message || "Failed to delete",
+        type: "error",
+      });
+    }
+  } catch (err) {
+    mainStore.setSnackbar({
+      title: err.message || "An error occurred",
+      type: "error",
+    });
+  } finally {
+    deleteLoading.value = false;
+    showDeleteConfirm.value = false;
+    itemToDelete.value = null;
   }
 };
 </script>

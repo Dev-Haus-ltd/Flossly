@@ -44,7 +44,7 @@
             />
               <v-row v-if="subCategoryView" class="mx-5 mt-2" align="stretch">
                 <v-col
-                  v-for="(card, index) in subCategories?.filter((x) => x?.name?.toLowerCase().includes(searchSubCategory))"
+                  v-for="(card, index) in subCategories?.filter((x) => x?.name?.toLowerCase().includes(searchSubCategory?.toLowerCase()))"
                   :key="index"
                   cols="12"
                   sm="6" 
@@ -122,7 +122,7 @@
                     </div>
                   </div>
                   <TasksTaskPoolDialogTaskRow
-                    v-for="item in tasks.filter((x) => x?.title?.toLowerCase().includes(search))"
+                    v-for="item in tasks.filter((x) => x?.title?.toLowerCase().includes(search?.toLowerCase()))"
                     :key="item.id"
                     :id="item.id"
                     :title="item.title"

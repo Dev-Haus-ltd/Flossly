@@ -1,6 +1,6 @@
 <template>
   <div>
-    <template v-if="!activeAutomation">
+    <template v-if="!activeAutomation || displayMode === 'modal'">
       <v-row dense>
         <v-col
           v-for="card in automationCards"
@@ -20,8 +20,16 @@
           />
         </v-col>
       </v-row>
+      <div v-if="!automationCards.length" class="text-center py-8">
+        <v-icon size="64" color="grey-lighten-1">mdi-email-off-outline</v-icon>
+        <p class="text-h6 mt-4 mb-2">No automation groups found</p>
+        <p class="text-body-2 text-medium-emphasis">
+          Create a group to start organizing your automations
+        </p>
+      </div>
     </template>
-    <template v-else>
+
+    <template v-if="activeAutomation && displayMode === 'inline'">
       <div class="d-flex align-center justify-space-between mb-4 flex-wrap gap-3">
         <div class="d-flex align-center gap-2">
           <v-btn icon variant="text" @click="clearAutomationSelection">
@@ -190,6 +198,182 @@
       </v-card>
     </template>
 
+    <v-dialog
+      v-if="displayMode === 'modal'"
+      v-model="showGroupDialog"
+      max-width="1200px"
+      scrollable
+    >
+      <v-card class="rounded-lg elevation-8">
+        <div class="modal-header preview-modal-header">
+          <div class="d-flex align-center gap-2">
+            <v-btn icon variant="text" @click="clearAutomationSelection">
+              <v-icon>mdi-arrow-left</v-icon>
+            </v-btn>
+            <div>
+              <div class="field-label mb-1">{{ activeAutomation?.title }}</div>
+              <div class="text-caption text-medium-emphasis">{{ activeAutomation?.description }}</div>
+            </div>
+          </div>
+          <v-btn icon variant="text" @click="clearAutomationSelection">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </div>
+
+        <v-divider />
+
+        <div class="pa-4">
+          <div class="d-flex flex-wrap justify-space-between align-center mb-3 automation-toolbar">
+            <div class="d-flex align-center gap-2">
+              <v-text-field
+                v-model="search"
+                placeholder="Search automations..."
+                append-inner-icon="mdi-magnify"
+                variant="solo"
+                :elevation="0"
+                density="compact"
+                hide-details
+                bg-color="#FFFFFF"
+                flat
+                class="custom-search"
+                style="width: 280px"
+              />
+
+              <v-menu :close-on-content-click="false">
+                <template #activator="{ props }">
+                  <v-btn
+                    v-bind="props"
+                    variant="flat"
+                    density="compact"
+                    class="filter-btn"
+                  >
+                    <v-icon class="mr-2" size="18">mdi-filter-variant</v-icon>
+                    Filter
+                    <v-badge
+                      v-if="activeFilters > 0"
+                      :content="activeFilters"
+                      color="primary"
+                      inline
+                      class="ml-2"
+                    />
+                  </v-btn>
+                </template>
+                <v-card class="pa-4" min-width="280">
+                  <p class="text-subtitle-2 font-weight-bold mb-3">Filter by Status</p>
+                  <v-checkbox
+                    v-model="filterEnabled"
+                    label="Enabled only"
+                    density="compact"
+                    hide-details
+                    class="mb-2"
+                  />
+                  <v-checkbox
+                    v-model="filterDisabled"
+                    label="Disabled only"
+                    density="compact"
+                    hide-details
+                  />
+                  <v-divider class="my-3" />
+                  <v-btn
+                    size="small"
+                    variant="text"
+                    color="primary"
+                    @click="clearFilters"
+                  >
+                    Clear filters
+                  </v-btn>
+                </v-card>
+              </v-menu>
+            </div>
+          </div>
+
+          <v-card class="with-border rounded-lg elevation-0">
+            <v-divider />
+
+            <v-data-table
+              :items="filteredRows"
+              :headers="tableHeaders"
+              :search="search"
+              item-value="key"
+              class="automation-data-table full-width-table"
+              density="comfortable"
+              hover
+              :items-per-page="15"
+            >
+              <template #item.type="{ item }">
+                <v-chip size="small" variant="tonal" color="primary" class="font-weight-medium">
+                  <v-icon size="14" class="mr-1">mdi-email-outline</v-icon>
+                  {{ item.type }}
+                </v-chip>
+              </template>
+
+              <template #item.name="{ item }">
+                <div class="name-text">
+                  {{ item.name || item.key }}
+                </div>
+              </template>
+
+              <template #item.sending="{ item }">
+                <div class="d-flex align-center">
+                  <v-icon size="16" color="grey-darken-1" class="mr-2">mdi-clock-outline</v-icon>
+                  <span class="text-body-2 text-medium-emphasis">{{ item.sending }}</span>
+                </div>
+              </template>
+
+              <template #item.actions="{ item }">
+                <div class="d-flex align-center justify-center gap-2">
+                  <v-btn
+                    icon
+                    variant="text"
+                    size="small"
+                    class="action-icon-btn"
+                    aria-label="Preview email"
+                    @click="openEmailPreview(item)"
+                  >
+                    <v-icon size="18">mdi-eye-outline</v-icon>
+                  </v-btn>
+                  <v-btn
+                    icon
+                    variant="text"
+                    size="small"
+                    class="action-icon-btn"
+                    aria-label="Edit email"
+                    @click="openEdit(item)"
+                  >
+                    <v-icon size="18">mdi-pencil-outline</v-icon>
+                  </v-btn>
+                </div>
+              </template>
+
+              <template #item.enabled="{ item }">
+                <div class="d-flex align-center justify-center">
+                  <v-switch
+                    v-model="item.enabled"
+                    inset
+                    hide-details
+                    color="success"
+                    density="compact"
+                    :class="{ 'switch-active': item.enabled }"
+                    @update:model-value="onToggleEnabled(item, $event)"
+                  />
+                </div>
+              </template>
+
+              <template #no-data>
+                <div class="text-center py-8">
+                  <v-icon size="64" color="grey-lighten-1">mdi-email-off-outline</v-icon>
+                  <p class="text-h6 mt-4 mb-2">No automations found</p>
+                  <p class="text-body-2 text-medium-emphasis">
+                    Try adjusting your search or filters
+                  </p>
+                </div>
+              </template>
+            </v-data-table>
+          </v-card>
+        </div>
+      </v-card>
+    </v-dialog>
+
     <!-- Email Preview Modal -->
     <v-dialog v-model="showPreview" max-width="980px">
       <v-card class="rounded-lg elevation-8">
@@ -263,6 +447,21 @@
                 Use [First Name] for personalization
               </v-chip>
             </div>
+            <div class="mb-4">
+              <div class="text-subtitle-2 font-weight-bold text-grey-darken-2 mb-2">
+                <v-icon size="18" class="mr-2">mdi-email-outline</v-icon>
+                Email Subject
+              </div>
+              <v-text-field
+                v-model="active.subject"
+                variant="solo"
+                density="compact"
+                hide-details
+                bg-color="#FFFFFF"
+                flat
+                placeholder="Subject line for this email"
+              />
+            </div>
             <div ref="editorEl" class="editor"></div>
           </div>
         </div>
@@ -295,6 +494,9 @@ import { crmAutomationDefaults, crmAutomationGroups } from '@/lib/crmAutomationD
 
 const props = defineProps({
   leadId: { type: [Number, String], default: null },
+  displayMode: { type: String, default: 'inline' },
+  groups: { type: Array, default: null },
+  useGroupsApi: { type: Boolean, default: true },
 })
 const crmStore = useCrmStore()
 const orgStore = useOrgStore()
@@ -307,6 +509,8 @@ const filterEnabled = ref(false)
 const filterDisabled = ref(false)
 const saving = ref(false)
 const activeAutomation = ref(null)
+const showGroupDialog = ref(false)
+const groupRows = ref([])
 
 const tableHeaders = [
   { title: 'Type', key: 'type', sortable: false },
@@ -325,8 +529,14 @@ const activeFilters = computed(() => {
 
 const filteredRows = computed(() => {
   if (!activeAutomation.value) return []
-  const keys = new Set(activeAutomation.value.templateKeys || [])
-  let result = rows.filter(r => keys.has(r.key))
+  const keys = activeAutomation.value.templateKeys || []
+  let result = []
+  if (keys.length) {
+    const keySet = new Set(keys)
+    result = rows.filter(r => keySet.has(r.key))
+  } else {
+    result = rows.filter(r => r.groupKey === activeAutomation.value.key)
+  }
   if (filterEnabled.value && !filterDisabled.value) result = result.filter(r => r.enabled === true)
   if (filterDisabled.value && !filterEnabled.value) result = result.filter(r => r.enabled === false)
   return result
@@ -337,9 +547,18 @@ const clearFilters = () => {
   filterDisabled.value = false
 }
 
+const resolvedGroups = computed(() => {
+  if (Array.isArray(props.groups) && props.groups.length) return props.groups
+  if (groupRows.value.length) return groupRows.value
+  return crmAutomationGroups
+})
+
 const automationCards = computed(() => {
-  return crmAutomationGroups.map((group) => {
-    const groupRows = rows.filter(r => group.templateKeys.includes(r.key))
+  return resolvedGroups.value.map((group) => {
+    const keys = group.templateKeys || []
+    const groupRows = keys.length
+      ? rows.filter(r => keys.includes(r.key))
+      : rows.filter(r => r.groupKey === group.key)
     return {
       ...group,
       itemCount: groupRows.length,
@@ -352,12 +571,16 @@ const selectAutomation = (card) => {
   activeAutomation.value = card
   search.value = ''
   clearFilters()
+  if (props.displayMode === 'modal') {
+    showGroupDialog.value = true
+  }
 }
 
 const clearAutomationSelection = () => {
   activeAutomation.value = null
   search.value = ''
   clearFilters()
+  showGroupDialog.value = false
 }
 
 const resolvedLeadId = computed(() => {
@@ -370,9 +593,13 @@ const buildPayload = (row) => {
     key: row.key,
     type: row.type,
     name: row.name,
+    subject: row.subject,
     sending: row.sending,
     enabled: !!row.enabled,
     template: row.template,
+  }
+  if (row.groupKey || activeAutomation.value?.key) {
+    payload.groupKey = row.groupKey || activeAutomation.value?.key
   }
   if (resolvedLeadId.value) payload.leadId = resolvedLeadId.value
   return payload
@@ -398,11 +625,28 @@ const loadRows = async () => {
   } catch {}
 }
 
-onMounted(loadRows)
+const loadGroups = async () => {
+  if (!props.useGroupsApi || (Array.isArray(props.groups) && props.groups.length)) return
+  try {
+    const res = await crmStore.listAutomationGroups()
+    if (res?.code === 0 && Array.isArray(res.data)) {
+      groupRows.value = res.data
+    }
+  } finally {
+  }
+}
+
+const refresh = async () => {
+  await Promise.all([loadGroups(), loadRows()])
+}
+
+defineExpose({ refresh })
+
+onMounted(refresh)
 
 watch(resolvedLeadId, () => {
   clearAutomationSelection()
-  loadRows()
+  refresh()
 })
 
 // Preview dialog state
@@ -685,26 +929,12 @@ const applyPlaceholders = (text) => {
     .replace(/\[?\s*first\s*name\s*\]?/gi, firstName)
 }
 
-const cleanSubject = (subject) => {
-  if (!subject) return ''
-  return subject
-    .replace(/\([^)]*\)/g, '')
-    .replace(/\bday\s*\d+\b/gi, '')
-    .replace(/\b\d+\s*days?\s*(before|after)\b/gi, '')
-    .replace(/\b(morning|evening|afternoon|immediate(ly)?)\b/gi, '')
-    .replace(/\s{2,}/g, ' ')
-    .replace(/\s+-\s+-/g, ' - ')
-    .replace(/\s+-\s*$/g, '')
-    .trim()
-}
-
 const previewSubject = computed(() => {
   const row = previewItem.value
   if (!row) return ''
   const def = resolveDefault(row)
-  const rawName = row.name && row.name.trim() && row.name !== row.key ? row.name : def.name
-  const fallback = `Message from ${practiceName.value || '[Practice Name]'}`
-  return cleanSubject(applyPlaceholders(rawName || fallback))
+  const rawSubject = row.subject || def.subject || def.name
+  return applyPlaceholders(rawSubject)
 })
 
 const previewHtml = computed(() => {
@@ -765,6 +995,7 @@ const onToggleEnabled = async (row, val) => {
     key: row.key,
     type: row.type || def.type || 'Email',
     name: row.name || def.name || row.key,
+    subject: row.subject || def.subject || def.name,
     sending: row.sending || def.sending || '',
     enabled: row.enabled,
     template: (row.template && row.template.trim()) ? row.template : (def.template || ''),
@@ -777,6 +1008,9 @@ const onNameUpdate = async (item) => {
 }
 
 watch(show, (v) => { if (!v && ej) { ej.destroy(); ej = null } })
+watch(showGroupDialog, (v) => {
+  if (!v && props.displayMode === 'modal') clearAutomationSelection()
+})
 </script>
 
 <style scoped>

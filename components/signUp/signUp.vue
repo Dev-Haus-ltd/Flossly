@@ -11,7 +11,7 @@
             >
               Get started with Flossly to streamline your clinic in minutes.
             </h2>
-            <v-form ref="form" @submit.prevent="signUp">
+            <v-form ref="form" @submit.prevent="openConfirmDialog">
               <label class="lbl">Full Name</label>
               <v-text-field
                 v-model="signUpDetails.fullName"
@@ -104,6 +104,7 @@
                 variant="flat"
                 class="mt-5 rounded-lg"
                 height="48"
+                :disabled="!isFormComplete"
               >
                 Create My Flossly Account
               </v-btn>
@@ -122,6 +123,14 @@
                 </v-btn>
               </div>
             </v-form>
+            <CommonConfirmDialog
+              v-model="showConfirmDialog"
+              title="Confirm Signup"
+              message="Have you read the Terms and Conditions?"
+              confirm-text="Yes"
+              @confirm="confirmSignUp"
+              @cancel="showConfirmDialog = false"
+            />
           </template>
           <template v-else>
             <h1>Congratulations!</h1>
@@ -193,6 +202,7 @@ const signUpDetails = ref({
   roleId: null,
 });
 const isSignedUp = ref(false);
+const showConfirmDialog = ref(false);
 
 const agreeTerms = ref(false);
 const showPassword = ref(false);
@@ -232,35 +242,56 @@ const togglePasswordVisibility = () => {
   showPassword.value = !showPassword.value;
 };
 
-const signUp = async () => {
-  const formValidation = await form.value.validate();
-  if (formValidation.valid) {
-    authStore
-      .requestSignUp(signUpDetails.value)
-      .then((res) => {
-        if (res.code === 0) {
-          isSignedUp.value = true;
-          mainStore.setSnackbar({
-            title: "Verification Email Sent",
-            type: "success",
-          });
-        } else {
-          mainStore.setSnackbar({
-            title: res.data.message || res.message,
-            type: "error",
-          });
-        }
-      })
-      .catch((err) => {
-        console.log('Signup error:', err); // Debug log
-        const errorMessage = err.data?.message || err.message || 'An error occurred during signup';
+const confirmSignUp = async () => {
+  showConfirmDialog.value = false;
+
+  authStore
+    .requestSignUp(signUpDetails.value)
+    .then((res) => {
+      if (res.code === 0) {
+        isSignedUp.value = true;
         mainStore.setSnackbar({
-          title: errorMessage,
+          title: "Verification Email Sent",
+          type: "success",
+        });
+      } else {
+        mainStore.setSnackbar({
+          title: res.data.message || res.message,
           type: "error",
         });
+      }
+    })
+    .catch((err) => {
+      const errorMessage =
+        err.data?.message || err.message || "An error occurred during signup";
+      mainStore.setSnackbar({
+        title: errorMessage,
+        type: "error",
       });
+    });
+};
+
+
+const isFormComplete = computed(() => {
+  return (
+    signUpDetails.value.fullName.trim() !== "" &&
+    signUpDetails.value.email.trim() !== "" &&
+    signUpDetails.value.password.trim() !== "" &&
+    signUpDetails.value.organisationName.trim() !== "" &&
+    signUpDetails.value.roleId !== null &&
+    agreeTerms.value === true
+  );
+});
+
+const openConfirmDialog = async () => {
+  const formValidation = await form.value.validate();
+
+  if (formValidation.valid) {
+    showConfirmDialog.value = true;
   }
 };
+
+
 const goToLogin = () => {
   mainStore.setLoginSkipSplash(true);
   router.push("/login");

@@ -1,0 +1,2 @@
+ALTER TABLE IF EXISTS "CrmAutomationTemplates"
+ADD COLUMN IF NOT EXISTS "subject" VARCHAR(200);

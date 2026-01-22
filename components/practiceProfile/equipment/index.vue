@@ -88,14 +88,20 @@
 
             <!-- Action -->
             <td class="col-action text-center">
-              <img
-                src="@/assets/icons/practiceProfile/contact/delete.svg"
-                alt="Delete"
-                width="18"
-                height="18"
-                style="cursor: pointer"
-                @click="deleteRow(index)"
-              />
+              <v-tooltip location="top">
+                <template #activator="{ props }">
+                  <img
+                    v-bind="props"
+                    src="@/assets/icons/practiceProfile/contact/delete.svg"
+                    alt="Delete"
+                    width="18"
+                    height="18"
+                    style="cursor: pointer"
+                    @click="openDeleteConfirm(index)"
+                  />
+                </template>
+                <span>Delete</span>
+              </v-tooltip>
             </td>
           </tr>
         </tbody>
@@ -106,6 +112,15 @@
     <PracticeProfileEquipmentAddEquipmentsDialog
       v-model="showDialog"
       @onUpdate="handleAddEquipments"
+    />
+    <CommonConfirmDialog
+      v-model="showDeleteConfirm"
+      icon="mdi-information-outline"
+      title="Delete equipment?"
+      message="Are you sure you want to delete this equipment? This action cannot be undone."
+      confirm-text="Delete"
+      @confirm="confirmDelete"
+      @cancel="cancelDelete"
     />
   </div>
 </template>
@@ -127,6 +142,8 @@ const showDialog = ref(false);
 const equipments = ref([]);
 
 const search = ref("");
+const showDeleteConfirm = ref(false);
+const deleteIndex = ref(null);
 
 // Computed: filtered list
 const filteredEquipment = computed(() => {
@@ -200,6 +217,27 @@ const handleAttributeUpdate = async (updated) => {
 };
 
 // Delete row
+
+const openDeleteConfirm = (index) => {
+  deleteIndex.value = index;
+  showDeleteConfirm.value = true;
+};
+
+const cancelDelete = () => {
+  showDeleteConfirm.value = false;
+  deleteIndex.value = null;
+};
+
+const confirmDelete = async () => {
+  if (deleteIndex.value === null) return;
+
+  await deleteRow(deleteIndex.value);
+
+  showDeleteConfirm.value = false;
+  deleteIndex.value = null;
+};
+
+
 const deleteRow = async (index) => {
   const item = equipments.value[index];
   if (!item?.id) return;

@@ -7,7 +7,7 @@
     <div class="title">{{ title }}</div>
 
     <!-- Percentage + Trend Icon -->
-    <div class="percentage" :style="{ color: color }">
+    <div v-if="percentage" class="percentage" :style="{ color: color }">
       <v-icon size="18" :color="color">
         {{ trend === "up" ? "mdi-arrow-up" : "mdi-arrow-down" }}
       </v-icon>
@@ -28,7 +28,7 @@ defineProps({
   },
   percentage: {
     type: String,
-    required: true,
+    default: "",
   },
   color: {
     type: String,

@@ -1,6 +1,6 @@
 <template>
   <NuxtLayout>
-    <NuxtPage class="bck-org" />
+    <NuxtPage :key="pageKey" class="bck-org" />
     <CommonLoader />
     <Snackbar />
     <ClientOnly>
@@ -81,7 +81,7 @@
       :primary-label="activeInAppMessage?.primaryLabel || 'Continue'"
       :secondary-label="activeInAppMessage?.secondaryLabel || ''"
       @primary="handleInAppPrimary"
-      @secondary="dismissInAppMessage"
+      @secondary="handleInAppSecondary"
       @update:model-value="handleInAppDialogToggle"
       @close="dismissInAppMessage"
     >
@@ -129,6 +129,7 @@ const rolesList = ref([]);
 
 const route = useRoute();
 const router = useRouter();
+const pageKey = computed(() => `${route.fullPath}-${user.value?.currentLoggedInOrgId || "no-org"}`);
 
 const showWelcomeDialog = ref(false);
 const showVideoDialog = ref(false);
@@ -420,6 +421,25 @@ const handleInAppPrimary = async () => {
   }
 };
 
+const handleInAppSecondary = async () => {
+  if (!activeInAppMessage.value) return;
+  await recordOnboardingEvent(activeInAppMessage.value.key, { secondaryClickedAt: new Date().toISOString() });
+  trackOnboardingUi("secondary", { type: "inapp", key: activeInAppMessage.value.key });
+  const link = activeInAppMessage.value.secondaryLink || "";
+  const remaining = (user.value?.onboarding?.inAppMessages || []).filter(
+    (msg) => msg.key !== activeInAppMessage.value.key
+  );
+  updateLocalOnboarding({ inAppMessages: remaining });
+  syncOnboardingState();
+  if (link.startsWith("http")) {
+    window.location.href = link;
+    return;
+  }
+  if (link) {
+    router.push(link);
+  }
+};
+
 const handleInAppDialogToggle = (val) => {
   if (!val) {
     dismissInAppMessage();
@@ -631,5 +651,8 @@ watch(
   .v-container {
     max-width: 1611px;
   }
+}
+.v-navigation-drawer__scrim {
+    position: fixed !important;
 }
 </style>

@@ -287,7 +287,7 @@ export const ONBOARDING_INAPP_MESSAGES = [
     title: "Pro Tip: Turn Facebook Leads Into Booked Appointments",
     message:
       "Right now, leads from your Meta ads are probably sitting in Facebook... while you're here in FlosslyOS. Connect them in 60 seconds: every Facebook enquiry flows straight into your CRM dashboard, auto-reply in 2 minutes, never lose another £2,000 treatment plan.",
-    primaryLabel: "Connect Meta Ads →",
+    primaryLabel: "Connect Meta Ads",
     primaryLink: "[Connect Meta Ads URL]",
     secondaryLabel: "Maybe Later",
   },
@@ -297,9 +297,10 @@ export const ONBOARDING_INAPP_MESSAGES = [
     title: "Leads that get 2-minute responses convert 300% better",
     message:
       "FlosslyAutomation sends instant SMS + email, auto-follow-ups (Day 1, 2, 4, 7), and team alerts. Your new conversion rate: 60% (up from 20%).",
-    primaryLabel: "Build First Automation →",
+    primaryLabel: "Build First Automation",
     primaryLink: "[Automation Builder URL]",
     secondaryLabel: "See Template Library",
+    secondaryLink: "[Automation Builder URL]",
   },
   {
     key: "onboarding_inapp_day4_noshows",
@@ -307,9 +308,10 @@ export const ONBOARDING_INAPP_MESSAGES = [
     title: "Day 4: Cut No-Shows by 40% (Save £103K/Year)",
     message:
       "Every no-show = £125-£350 lost revenue. FlosslyDiary sends automatic reminders: 48 hours before (SMS + Email), 24 hours before, 3 hours before (high-value only). Result: no-show rate drops from 18% → 7%.",
-    primaryLabel: "Set Up Reminders (3 Min) →",
+    primaryLabel: "Set Up Reminders (3 Min)",
     primaryLink: "[Set Up Diary URL]",
     secondaryLabel: "See How It Works",
+    secondaryLink: "[Set Up Diary URL]",
   },
   {
     key: "onboarding_inapp_day5_recalls",
@@ -317,9 +319,10 @@ export const ONBOARDING_INAPP_MESSAGES = [
     title: "Day 5: Recover £30K in Overdue Recalls",
     message:
       "You have patients overdue for check-ups right now. FlosslyRecalls sends automatic reminders and recovers an average £30,000/year.",
-    primaryLabel: "Run First Recall Campaign →",
+    primaryLabel: "Run First Recall Campaign",
     primaryLink: "[Recall Setup URL]",
     secondaryLabel: "See Overdue List",
+    secondaryLink: "[Recall Setup URL]",
   },
   {
     key: "onboarding_inapp_day6_automation",
@@ -327,9 +330,10 @@ export const ONBOARDING_INAPP_MESSAGES = [
     title: "Day 6: Eliminate 90% of Manual Work",
     message:
       "Your practice can run itself. FlosslyAutomation handles appointment reminders, lead follow-ups, task creation, and payment reminders. Save 14+ hours/week on manual work.",
-    primaryLabel: "Activate First Automation →",
+    primaryLabel: "Activate First Automation",
     primaryLink: "[Activate Automation URL]",
     secondaryLabel: "See Templates",
+    secondaryLink: "[Automation Builder URL]",
   },
   {
     key: "onboarding_inapp_day7_trial",
@@ -337,9 +341,10 @@ export const ONBOARDING_INAPP_MESSAGES = [
     title: "How's your FlosslyOS experience, [Name]?",
     message:
       "You've built [Tasks Count] tasks, [Leads Count] leads, [Automations Count] automations in 12 days. Your trial ends in 2 days. Subscribe to keep everything and continue saving 10+ hours/week.",
-    primaryLabel: "Subscribe Now - From £149/month →",
+    primaryLabel: "Subscribe Now - From GBP 99/month",
     primaryLink: "[Subscribe URL]",
-    secondaryLabel: "Not Yet",
+    secondaryLabel: "View Plans",
+    secondaryLink: "[Subscribe URL]",
   },
   {
     key: "onboarding_inapp_day13_trial",
@@ -347,9 +352,10 @@ export const ONBOARDING_INAPP_MESSAGES = [
     title: "Urgent: Trial Ends Tomorrow - Your Data Will Be Deleted",
     message:
       "You have 24 hours to save your work. Tasks: [Tasks Count]. Leads: [Leads Count]. Automations and documents will be deleted. Subscribe now to keep everything.",
-    primaryLabel: "Subscribe Now - Save My Data →",
+    primaryLabel: "Subscribe Now - From GBP 99/month",
     primaryLink: "[Subscribe URL]",
     secondaryLabel: "Export Data Instead",
+    secondaryLink: "[Export Data URL]",
   },
 ];
 
@@ -439,3 +445,5 @@ export const buildOnboardingContext = ({ user, organisation, userPreference, met
     exportDataUrl: `${baseUrl}/settings`,
   };
 };
+
+

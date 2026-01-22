@@ -1,6 +1,8 @@
 <template>
   <div class="mt-5 pb-5">
-    <SignUpSetupPricing col="3" />
+    <div class="pricing-section">
+      <SignUpSetupPricing />
+    </div>  
     <div class="mb-5">
       <!-- Invoices Table -->
       <MyProfileMembershipInvoicesTable
@@ -53,3 +55,13 @@ function handleDownloadTerms() {
   // implement API/pdf download here
 }
 </script>
+
+<style scoped>
+:deep(.pricing-grid) {
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+.pricing-section {
+  padding-bottom: 40px; /* adjust as needed */
+}
+</style>

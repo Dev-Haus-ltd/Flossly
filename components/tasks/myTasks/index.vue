@@ -1393,10 +1393,11 @@ const handleQuickStatus = (statusKey) => {
 }
 
 .custom-tab-item {
-  font-size: 13px;
   font-weight: 400;
+  font-size: 14px;
+  line-height: 130%;
+  font-style: normal;
   text-transform: none;
-  color: var(--tab-text-color, #1e1e1e);
   min-height: 34px;
   height: 34px;
   min-width: max-content;
@@ -1404,7 +1405,6 @@ const handleQuickStatus = (statusKey) => {
   border-radius: 8px;
   display: inline-flex;
   align-items: center;
-  line-height: 1;
   cursor: pointer;
   transition: all 0.2s ease;
   user-select: none;
@@ -1416,9 +1416,8 @@ const handleQuickStatus = (statusKey) => {
 }
 
 .custom-tab-item.custom-tab-active {
-  font-weight: 600;
-  border-radius: 999px;
-  border: 2px solid currentColor;
+  border-radius: 20px;
+  border: 2px solid #FFFF;
 }
 
 .scroll-nav-btn {
@@ -1518,18 +1517,21 @@ const handleQuickStatus = (statusKey) => {
   align-items: center;
 }
 .tab-label {
-  max-width: 140px;
+  height: 18px;
+  display: flex;
+  align-items: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  display: inline-block;
-  line-height: 1;
+  color: #ffffff !important;
 }
+
 .category-menu-btn {
   opacity: 0;
   transition: opacity 0.15s ease;
   width: 18px;
   height: 18px;
+  color: #ffffff !important;
 }
 .custom-tab-item:hover .category-menu-btn,
 .category-menu-btn:focus-visible {
@@ -1540,6 +1542,11 @@ const handleQuickStatus = (statusKey) => {
 }
 .category-tab .v-icon {
   color: var(--tab-text-color, #1e1e1e) !important;
+}
+.custom-tab-item.custom-tab-active {
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 130%;
 }
 .fill-color {
   background-color: #F3F4F6;
