@@ -159,7 +159,7 @@ export const authCallback = async (event) => {
         return sendRedirect(
           event,
           `/crm?error=${encodeURIComponent(
-            `Meta page already connected to another organisation: ${names}`
+            `Meta connection failed. The following page(s) are already connected to another organisation: ${names}`
           )}`
         )
       }
@@ -253,17 +253,17 @@ export const authCallback = async (event) => {
 
 // ✅ NEW: Add disconnect endpoint to cleanly remove connections
 export const disconnect = async (event) => {
-  const { userId, orgId } = event.context.user || {}
-  if (!userId || !orgId) return error(401, 'Unauthenticated')
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
 
   try {
-    // Remove user token
-    await MetaUserToken.destroy({ where: { organisationId: orgId, userId } })
+    // Remove all user tokens for the org
+    await MetaUserToken.destroy({ where: { organisationId: orgId } })
     
-    // Optionally deactivate pages (or remove them)
+    // Deactivate pages for the org
     await MetaPage.update(
-      { status: 'Disconnected' },
-      { where: { organisationId: orgId, userId } }
+      { status: 'Revoked' },
+      { where: { organisationId: orgId } }
     )
 
     return success({ disconnected: true })
@@ -419,6 +419,60 @@ export const connectionStatus = async (event) => {
   }))
   
   return success({ count, lastConnectedAt, pages: data })
+}
+
+export const healthCheck = async (event) => {
+  const config = useRuntimeConfig()
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const appId = config.META_APP_ID
+  const verifyTokenSet = Boolean(config.META_VERIFY_TOKEN)
+
+  const pages = await MetaPage.findAll({ where: { organisationId: orgId } })
+  const results = []
+
+  for (const page of pages) {
+    const pageId = page.pageId
+    const pageName = page.pageName
+    const status = page.status
+    const token = decrypt(page.accessTokenEnc)
+    const tokenPresent = Boolean(token)
+
+    let subscribed = false
+    let appMatched = false
+    let errorMsg = null
+
+    if (tokenPresent && appId) {
+      try {
+        const url = `https://graph.facebook.com/${META_VERSION}/${pageId}/subscribed_apps?access_token=${encodeURIComponent(token)}`
+        const resp = await $fetch(url, { method: 'GET' })
+        const data = Array.isArray(resp?.data) ? resp.data : []
+        subscribed = data.length > 0
+        appMatched = data.some((a) => String(a.id) === String(appId))
+      } catch (e) {
+        errorMsg = e?.data?.error?.message || e?.message || 'Failed to check subscription'
+      }
+    }
+
+    results.push({
+      pageId,
+      pageName,
+      status,
+      tokenPresent,
+      subscribed,
+      appMatched,
+      error: errorMsg,
+    })
+  }
+
+  return success({
+    appId: appId || null,
+    verifyTokenSet,
+    totalPages: pages.length,
+    activePages: pages.filter((p) => p.status === 'Active').length,
+    pages: results,
+  })
 }
 
 export const webhook = async (event) => {

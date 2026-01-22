@@ -283,6 +283,29 @@
                       selectedLead.location || "N/A"
                     }}</span>
                   </v-col>
+
+                  <v-col
+                    v-if="showMetaExtras"
+                    cols="12"
+                    class="mt-2"
+                  >
+                    <v-divider class="my-4" />
+                    <h4 class="cust-lbl mb-3">Additional Form Answers</h4>
+                    <v-row v-if="extraAnswers.length">
+                      <template v-for="item in extraAnswers" :key="item.key">
+                        <v-col cols="12" md="4">
+                          <span class="key-text">{{ item.label }}</span>
+                        </v-col>
+                        <v-col cols="12" md="8">
+                          <span class="value-text">{{ item.value }}</span>
+                        </v-col>
+                      </template>
+                    </v-row>
+                    <v-alert v-else type="info" variant="tonal">
+                      No additional answers found.
+                    </v-alert>
+                  </v-col>
+
                   <v-col cols="12">
                     <div>
                       <label class="cust-lbl">Comments</label>
@@ -357,6 +380,48 @@ const formatDate = (date) => {
 };
 const selectedTreatment = ref({})
 const commPrefs = ref({})
+const humanizeFieldLabel = (key) => {
+  return String(key)
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+const showMetaExtras = computed(() => {
+  const source = props.selectedLead?.leadSource
+  const name = typeof source === 'string' ? source : source?.name
+  return (name || '').trim() === 'Meta Leadgen'
+})
+const extraAnswers = computed(() => {
+  const raw = props.selectedLead?.rawData || {}
+  const fieldData = Array.isArray(raw.field_data)
+    ? raw.field_data
+    : Array.isArray(raw.fieldData)
+      ? raw.fieldData
+      : []
+  if (!fieldData.length) return []
+
+  const skip = new Set([
+    'full_name',
+    'name',
+    'email',
+    'email_address',
+    'phone_number',
+    'phone',
+  ])
+
+  return fieldData
+    .map((f, idx) => {
+      const key = f?.name ?? `field_${idx}`
+      const rawValues = Array.isArray(f?.values) ? f.values : [f?.values]
+      const value = rawValues.filter((v) => v !== undefined && v !== null && v !== '').join(', ')
+      return {
+        key: String(key),
+        label: humanizeFieldLabel(key),
+        value: value || '—',
+      }
+    })
+    .filter((item) => item.key && !skip.has(item.key))
+})
 const assignedUsers = computed(() => {
   const list = props.selectedLead?.assigned || [];
   return list

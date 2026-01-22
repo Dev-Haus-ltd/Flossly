@@ -20,6 +20,8 @@ export const useCrmStore = defineStore("crmStore", {
     connectionStatus() { return this._wrap(() => crmService.connectionStatus()); },
     fetchLeadsNow() { return this._wrap(() => crmService.fetchLeadsNow()); },
     subscribePages() { return this._wrap(() => crmService.subscribePages()); },
+    disconnectMeta() { return this._wrap(() => crmService.disconnectMeta()); },
+    metaHealth() { return this._wrap(() => crmService.metaHealth()); },
 
     // Leads
     listLeads(filters = {}) { return this._wrap(() => crmService.listLeads(filters)); },
