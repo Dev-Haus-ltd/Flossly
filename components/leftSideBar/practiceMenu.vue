@@ -27,7 +27,7 @@
         </v-btn>
       </template>
 
-      <v-list style="width: 235px">
+      <v-list class="org-menu-list">
         <v-list-item
           v-for="orgWrapper in validOrganizations"
           :key="getOrgData(orgWrapper)?.id || orgWrapper.id"
@@ -216,5 +216,11 @@ const getProfile = async () => {
 }
 .add-workspace-item:hover {
   background-color: rgba(var(--v-theme-primary), 0.08);
+}
+.org-menu-list {
+  width: 235px;
+  max-height: 60vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 </style>
