@@ -60,7 +60,7 @@
           <PricingModal ref="pricingModalRef" />
         </div>
 
-        <div v-if="!pricingModalRef?.isPaymentOpen" class="modal-actions">
+        <div v-if="!isModalPaymentOpen" class="modal-actions">
           <v-btn
             color="primary"
             variant="flat"
@@ -145,6 +145,14 @@ const openPricingModal = () => {
   showPricingDialog.value = true;
 };
 
+const isModalPaymentOpen = computed(() => {
+  const exposed = pricingModalRef.value?.isPaymentOpen;
+  if (typeof exposed === "object" && exposed && "value" in exposed) {
+    return Boolean(exposed.value);
+  }
+  return Boolean(exposed);
+});
+
 const closePricingModal = () => {
   showPricingDialog.value = false;
   if (pricingModalRef.value?.resetModal) {
@@ -162,7 +170,11 @@ const handleBuyNow = () => {
   }
 
   const selectedPlanId = pricingModalRef.value?.selectedPlanId;
-  if (!selectedPlanId) {
+  const resolvedPlanId =
+    typeof selectedPlanId === "object" && selectedPlanId && "value" in selectedPlanId
+      ? selectedPlanId.value
+      : selectedPlanId;
+  if (!resolvedPlanId) {
     mainStore.setSnackbar({
       title: "Please select a plan to continue.",
       type: "error",
@@ -171,7 +183,7 @@ const handleBuyNow = () => {
   }
 
   if (pricingModalRef.value?.handleSubscribe) {
-    pricingModalRef.value.handleSubscribe(selectedPlanId);
+    pricingModalRef.value.handleSubscribe(resolvedPlanId);
   }
 };
 
