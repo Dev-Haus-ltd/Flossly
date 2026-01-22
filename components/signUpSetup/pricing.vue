@@ -8,7 +8,11 @@ import PricingModal from "./PricingModal.vue";
 const pricingModalRef = ref(null);
 
 const isPaymentOpen = computed(() => {
-  return pricingModalRef.value?.isPaymentOpen || false;
+  const exposed = pricingModalRef.value?.isPaymentOpen;
+  if (typeof exposed === "object" && exposed && "value" in exposed) {
+    return Boolean(exposed.value);
+  }
+  return Boolean(exposed);
 });
 
 const selectedPriceId = computed(() => {
@@ -20,7 +24,11 @@ const isPaymentCompleted = computed(() => {
 });
 
 const loading = computed(() => {
-  return pricingModalRef.value?.loading || false;
+  const exposed = pricingModalRef.value?.loading;
+  if (typeof exposed === "object" && exposed && "value" in exposed) {
+    return Boolean(exposed.value);
+  }
+  return Boolean(exposed);
 });
 
 const error = computed(() => {

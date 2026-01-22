@@ -70,7 +70,7 @@
 
       <template v-if="
         step === steps.length - 1 &&
-        !stepComponent?.isPaymentOpen
+        !isPaymentOpen
         ">
         <v-btn
           color="primary"
@@ -115,7 +115,20 @@ const newPracticeCompleted = ref(false);
 const isFinalizingNewPractice = ref(false);
 const isPaymentOpen = computed(() => {
   if (step.value !== steps.length - 1) return false;
-  return Boolean(stepComponent.value?.isPaymentOpen);
+  const exposed = stepComponent.value?.isPaymentOpen;
+  if (typeof exposed === "object" && exposed && "value" in exposed) {
+    return Boolean(exposed.value);
+  }
+  return Boolean(exposed);
+});
+
+const isPaymentCompleted = computed(() => {
+  if (step.value !== steps.length - 1) return false;
+  const exposed = stepComponent.value?.isPaymentCompleted;
+  if (typeof exposed === "object" && exposed && "value" in exposed) {
+    return Boolean(exposed.value);
+  }
+  return Boolean(exposed);
 });
 
 // Define emit to send current step to parent
@@ -508,10 +521,7 @@ const navigateToDashboard = async () => {
 };
 
 const handlePricingCheckout = async () => {
-  if (isNewPractice.value) {
-    const ok = await finalizeNewPractice();
-    if (!ok) return;
-  }
+  await nextTick();
   const pricingRef = stepComponent.value;
   if (pricingRef?.startCheckout) {
     const started = pricingRef.startCheckout();
@@ -523,8 +533,20 @@ const handlePricingCheckout = async () => {
     }
     return;
   }
-  navigateToDashboard();
+  mainStore.setSnackbar({
+    title: "Checkout is not ready yet. Please try again.",
+    type: "error",
+  });
 };
+
+watch(isPaymentCompleted, async (completed) => {
+  if (!completed) return;
+  if (isNewPractice.value) {
+    const ok = await finalizeNewPractice();
+    if (!ok) return;
+  }
+  router.push("/");
+});
 
 // Handle back navigation with awareness of Pricing payment modal
 const handleBack = () => {
@@ -543,8 +565,13 @@ const handleBack = () => {
   if (step.value === 2) {
     const pricingRef = stepComponent.value;
     // If payment modal is open, close it instead of moving to previous step
-    if (pricingRef?.isPaymentOpen) {
-      if (pricingRef.isPaymentOpen) {
+    if (pricingRef) {
+      const exposed = pricingRef.isPaymentOpen;
+      const paymentOpen =
+        typeof exposed === "object" && exposed && "value" in exposed
+          ? Boolean(exposed.value)
+          : Boolean(exposed);
+      if (paymentOpen) {
         pricingRef.cancelPaymentFlow?.();
         return;
       }

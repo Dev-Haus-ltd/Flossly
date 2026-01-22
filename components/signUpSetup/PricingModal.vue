@@ -189,6 +189,10 @@ const getFeatureKeyFromType = (type) => {
 const planOrder = { soar: 0, glide: 1, drift: 2, other: 3 };
 const planSequence = ["soar", "glide", "drift"];
 const selectedPlanId = ref(null);
+const getFirstEnabledPlan = (list) =>
+  (Array.isArray(list) ? list : []).find((plan) => !plan?.disabled) ||
+  (Array.isArray(list) ? list : [])[0] ||
+  null;
 
 const displayPlans = computed(() => {
   const list = Array.isArray(prices.value) ? prices.value : [];
@@ -265,7 +269,10 @@ const billingLabel = (plan) => {
 
 watch(displayPlans, (list) => {
   if (!selectedPlanId.value && list.length) {
-    selectedPlanId.value = list[1].id;
+    const fallback = getFirstEnabledPlan(list);
+    if (fallback?.id) {
+      selectedPlanId.value = fallback.id;
+    }
   }
 });
 
@@ -282,8 +289,32 @@ const cancelPaymentFlow = () => {
 };
 
 const startCheckout = () => {
-  if (!selectedPlan.value) return false;
-  handleSubscribe(selectedPlan.value.id);
+  if (loading.value) return false;
+  const plan = selectedPlan.value;
+  if (plan?.id) {
+    handleSubscribe(plan.id);
+    return true;
+  }
+
+  const list = displayPlans.value || [];
+  if (!list.length) {
+    fetchPrices()
+      .then(() => nextTick())
+      .then(() => {
+        const fallback = getFirstEnabledPlan(displayPlans.value || []);
+        if (fallback?.id) {
+          selectedPlanId.value = fallback.id;
+          handleSubscribe(fallback.id);
+        }
+      })
+      .catch(() => {});
+    return true;
+  }
+
+  const fallback = getFirstEnabledPlan(list);
+  if (!fallback?.id) return false;
+  selectedPlanId.value = fallback.id;
+  handleSubscribe(fallback.id);
   return true;
 };
 
