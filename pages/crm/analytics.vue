@@ -3,6 +3,7 @@
     <!-- Page Header -->
     <div class="cust-border d-flex align-center">
       <p class="mr-1">CRM</p>
+      <span class="coming-soon-pill">Coming Soon</span>
     </div>
 
     <!-- Stats Cards Row -->
@@ -202,6 +203,19 @@ const filteredCampaigns = computed(() => {
   p {
     font-size: 12px;
   }
+}
+
+.coming-soon-pill {
+  background: #ffe3b3;
+  border: 1px solid #f1b658;
+  border-radius: 999px;
+  color: #7a4b00;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  margin-right: 8px;
+  padding: 3px 8px;
+  text-transform: uppercase;
 }
 
 .custom-search {
