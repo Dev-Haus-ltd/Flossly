@@ -60,74 +60,87 @@ import {
 const config = useRuntimeConfig();
 
 export const login = async (event) => {
-  let browserAgent = getHeader(event, "User-Agent");
-  const ip = requestIp.getClientIp(event.node.req);
-  browserAgent = browserAgent + ",ipAddress:" + ip;
-  const body = await readBody(event);
-  const { email, password } = JSON.parse(body);
-  if (!email || !password) return error(400, "Missing credentials");
-  const user = await User.findOne({ where: { email } });
-  if (!user || !(await bcrypt.compare(password, user.password))) {
-    return error(401, "Invalid credentials");
-  }
-  if (!user.isEmailVerified) {
-    return error(401, "Email not verified");
-  }
-  const orgs = await UserOrganisation.findAll({
-    where: {
-      userId: user.id,
-      status: "Active", // Only load active organizations
-    },
-  });
+  try {
+    let browserAgent = getHeader(event, "User-Agent");
+    const ip = requestIp.getClientIp(event.node.req);
+    browserAgent = browserAgent + ",ipAddress:" + ip;
+    const body = await readBody(event);
+    const { email, password } = JSON.parse(body);
+    if (!email || !password) return error(400, "Missing credentials");
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      return error(401, "Invalid credentials");
+    }
+    
+    // Check if user has a password set (invited users who haven't completed setup won't have one)
+    if (!user.password) {
+      return error(401, "Please complete your account setup by accepting the invitation first");
+    }
+    
+    if (!(await bcrypt.compare(password, user.password))) {
+      return error(401, "Invalid credentials");
+    }
+    if (!user.isEmailVerified) {
+      return error(401, "Email not verified");
+    }
+    const orgs = await UserOrganisation.findAll({
+      where: {
+        userId: user.id,
+        status: "Active", // Only load active organizations
+      },
+    });
 
-  if (user.status === "Disabled" || user.status === "Expired") {
-    return error(403, "Your account is deactivated");
-  }
-
-  if (orgs.length === 0) {
-    return error(403, "You are not part of any active organizations");
-  }
-
-  const activeOrgs = orgs;
-
-  const userPreference = await UserPreference.findOne({
-    where: { 
-      userId: user.id,
-      organisationId: user.lastLoginOrganisationId || activeOrgs[0].organisationId,
-     },
-  });
-    if (
-      userPreference &&
-      userPreference.licenseType !== "System" &&
-      new Date(userPreference.licenseRenewalDate) < new Date()
-    ) {
-      return error(401, "License Expired");
+    if (user.status === "Disabled" || user.status === "Expired") {
+      return error(403, "Your account is deactivated");
     }
 
-  let orgId;
-  if (user.lastLoginOrganisationId) {
-    const lastOrg = activeOrgs.find(
-      (o) => o.organisationId === user.lastLoginOrganisationId
+    if (orgs.length === 0) {
+      return error(403, "You are not part of any active organizations");
+    }
+
+    const activeOrgs = orgs;
+
+    const userPreference = await UserPreference.findOne({
+      where: { 
+        userId: user.id,
+        organisationId: user.lastLoginOrganisationId || activeOrgs[0].organisationId,
+       },
+    });
+      if (
+        userPreference &&
+        userPreference.licenseType !== "System" &&
+        new Date(userPreference.licenseRenewalDate) < new Date()
+      ) {
+        return error(401, "License Expired");
+      }
+
+    let orgId;
+    if (user.lastLoginOrganisationId) {
+      const lastOrg = activeOrgs.find(
+        (o) => o.organisationId === user.lastLoginOrganisationId
+      );
+      if (lastOrg) {
+        orgId = lastOrg.organisationId;
+      }
+    }
+
+    if (!orgId) {
+      const orgIds = activeOrgs.map((o) => o.organisationId).sort();
+      orgId = orgIds[0];
+    }
+    const token = jwt.sign(
+      { userId: user.id, orgId, roleId: user.roleId, purpose: "login" },
+      config.JWT_SECRET
     );
-    if (lastOrg) {
-      orgId = lastOrg.organisationId;
-    }
+    user.lastLoginDate = new Date()
+    user.lastLoginOrganisationId = orgId
+    await user.save()
+    await LoginHistory.create({ userId: user.id, browserAgent });
+    setCookie(event, "accessToken", token, { maxAge: 31536000 });
+    return success(token);
+  } catch (err) {
+    return error(500, err.message || "Login failed");
   }
-
-  if (!orgId) {
-    const orgIds = activeOrgs.map((o) => o.organisationId).sort();
-    orgId = orgIds[0];
-  }
-  const token = jwt.sign(
-    { userId: user.id, orgId, roleId: user.roleId, purpose: "login" },
-    config.JWT_SECRET
-  );
-  user.lastLoginDate = new Date()
-  user.lastLoginOrganisationId = orgId
-  await user.save()
-  await LoginHistory.create({ userId: user.id, browserAgent });
-  setCookie(event, "accessToken", token, { maxAge: 31536000 });
-  return success(token);
 };
 
 export const createShortLivedToken = async (event) => {
