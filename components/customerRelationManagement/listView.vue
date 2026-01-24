@@ -277,6 +277,20 @@
                   @update="updateValueRow(item, 'leadSource')"
                 />
               </template>
+              <template v-else-if="col.key === 'metaPage'">
+                <div class="pa-1 d-flex align-center">
+                  <v-chip
+                    v-if="item.metaPage"
+                    size="x-small"
+                    color="primary"
+                    variant="tonal"
+                    label
+                  >
+                    {{ item.metaPage }}
+                  </v-chip>
+                  <span v-else class="text-medium-emphasis">—</span>
+                </div>
+              </template>
               <template v-else-if="col.key === 'treatment'">
                 <DataTableColumnsLeadTreatment
                   :treatmentSources="treatmentSources"
@@ -468,6 +482,12 @@
               </template>
               <template v-else-if="col.key === 'alert'">
                 <DataTableColumnsAlerts :selected="item" />
+              </template>
+              <template v-else-if="col.key === 'metaPage'">
+                <v-chip v-if="item.metaPage" label size="small" color="primary" variant="tonal" class="ml-2">
+                  {{ item.metaPage }}
+                </v-chip>
+                <span v-else class="ml-2 text-medium-emphasis">—</span>
               </template>
               <template v-else-if="col.key === 'assigned'">
                 <p class="ml-2 mb-0">{{ formatAssignedUsers(item.assigned) }}</p>

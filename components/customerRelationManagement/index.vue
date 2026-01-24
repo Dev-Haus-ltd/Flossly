@@ -56,7 +56,7 @@
             <template #activator="{ props }">
               <v-btn
                 v-bind="props"
-                color="primary"
+                color="success"
                 variant="flat"
                 rounded="lg"
                 class="add-task-btn"
@@ -93,7 +93,8 @@
           </v-btn>
 
           <v-btn
-            variant="text"
+            :color="isConnected ? 'success' : undefined"
+            :variant="isConnected ? 'tonal' : 'text'"
             class="add-task-btn"
             @click="openMetaHealth"
           >
@@ -101,6 +102,17 @@
               <v-icon size="18">mdi-heart-pulse</v-icon>
             </template>
             Meta Health
+          </v-btn>
+          <v-btn
+            variant="text"
+            class="add-task-btn"
+            :loading="metaSyncLoading"
+            @click="syncMetaLeads"
+          >
+            <template #prepend>
+              <v-icon size="18">mdi-sync</v-icon>
+            </template>
+            Sync Meta Leads
           </v-btn>
 
           <v-btn
@@ -240,63 +252,11 @@
         </v-card>
       </v-dialog>
 
-      <v-dialog v-model="metaHealthDialog" max-width="760">
-        <v-card class="pa-4">
-          <v-card-title class="text-subtitle-1 pa-0 mb-2">Meta Health Check</v-card-title>
-          <v-card-text class="pa-0">
-            <div v-if="metaHealthLoading" class="py-6 text-center">
-              <v-progress-circular indeterminate size="28" />
-            </div>
-            <template v-else>
-              <v-alert
-                v-if="metaHealthData?.error"
-                type="error"
-                variant="tonal"
-                class="mb-3"
-              >
-                {{ metaHealthData.error }}
-              </v-alert>
-              <template v-else>
-                <div class="d-flex flex-wrap mb-3" style="gap: 12px;">
-                  <v-chip size="small" label>App ID: {{ metaHealthData?.appId || '—' }}</v-chip>
-                  <v-chip size="small" label>Verify Token: {{ metaHealthData?.verifyTokenSet ? 'Set' : 'Missing' }}</v-chip>
-                  <v-chip size="small" label>Total Pages: {{ metaHealthData?.totalPages || 0 }}</v-chip>
-                  <v-chip size="small" label>Active Pages: {{ metaHealthData?.activePages || 0 }}</v-chip>
-                </div>
-                <v-table density="compact">
-                  <thead>
-                    <tr>
-                      <th>Page</th>
-                      <th>Status</th>
-                      <th>Token</th>
-                      <th>Subscribed</th>
-                      <th>App Match</th>
-                      <th>Error</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="row in (metaHealthData?.pages || [])" :key="row.pageId">
-                      <td>{{ row.pageName || row.pageId }}</td>
-                      <td>{{ row.status }}</td>
-                      <td>{{ row.tokenPresent ? 'Yes' : 'No' }}</td>
-                      <td>{{ row.subscribed ? 'Yes' : 'No' }}</td>
-                      <td>{{ row.appMatched ? 'Yes' : 'No' }}</td>
-                      <td>{{ row.error || '—' }}</td>
-                    </tr>
-                    <tr v-if="!(metaHealthData?.pages || []).length">
-                      <td colspan="6" class="text-center py-3">No pages found.</td>
-                    </tr>
-                  </tbody>
-                </v-table>
-              </template>
-            </template>
-          </v-card-text>
-          <v-card-actions class="pa-0 mt-4">
-            <v-spacer />
-            <v-btn variant="text" @click="metaHealthDialog = false">Close</v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
+      <CustomerRelationManagementMetaHealthDialog
+        v-model="metaHealthDialog"
+        :loading="metaHealthLoading"
+        :data="metaHealthData"
+      />
     </div>
   </v-sheet>
 </template>
@@ -304,6 +264,7 @@
 <script setup>
 import { storeToRefs } from 'pinia'
 import AddAppointment from '@/components/diary/addAppointment.vue'
+import CustomerRelationManagementMetaHealthDialog from '@/components/customerRelationManagement/metaHealthDialog.vue'
 import { useDiaryStore } from '@/stores/diary'
 import { useMainStore } from '@/stores/index'
 import { useCrmStore } from '@/stores/crm'
@@ -328,6 +289,7 @@ const metaErrorMessage = ref('');
 const metaHealthDialog = ref(false);
 const metaHealthLoading = ref(false);
 const metaHealthData = ref(null);
+const metaSyncLoading = ref(false);
 const isLoading = ref(false);
 const showBookingDrawer = ref(false);
 const bookingLead = ref(null);
@@ -411,6 +373,7 @@ const headers = [
   { key: "telephone", title: "Telephone", width: 150 },
   { key: "inquiryDate", title: "Inquiry Date", width: 160 },
   { key: "leadSource", title: "Lead Source", width: 160 },
+  { key: "metaPage", title: "Meta Page", width: 190 },
   { key: "leadStatus", title: "Lead Status", width: 160 },
   { key: "treatment", title: "Treatment", width: 160 },
   { key: "assigned", title: "Assigned", width: 160 },
@@ -668,6 +631,7 @@ const handleSuccess = (newLead) => {
     occupation: newLead.occupation || "",
     location: newLead.location || "",
     leadSource: resolveLeadSource(newLead.leadSource ?? newLead.leadSourceId),
+    metaPage: newLead.pageName || newLead.pageId || '',
     leadStatus: newLead.leadStatus || 'New',
     treatment: newLead.treatment || { id: null, name: '' },
     assigned: newLead.assigned || [],
@@ -699,6 +663,7 @@ const fetchLeads = async (filters = {}) => {
         occupation: l.occupation || "",
         location: l.location || "",
         leadSource: l.leadSource?.name ? l.leadSource : { id: 99, name: l.leadSource || "Meta Leadgen" },
+        metaPage: l.pageName || l.pageId || "",
         leadStatus: l.leadStatus || "New",
         treatment: l.treatment || { id: null, name: "" },
         assigned: l.assigned || [],
@@ -749,6 +714,29 @@ const openMetaHealth = async () => {
     metaHealthData.value = { error: e?.data?.message || e?.message || 'Failed to load health status' };
   } finally {
     metaHealthLoading.value = false;
+  }
+};
+const syncMetaLeads = async () => {
+  if (metaSyncLoading.value) return;
+  metaSyncLoading.value = true;
+  try {
+    const res = await crmStore.fetchLeadsNow();
+    if (res?.code === 0) {
+      const imported = res?.data?.imported ?? 0;
+      mainStore?.setSnackbar?.({
+        title: `Meta sync complete (${imported} new lead${imported === 1 ? '' : 's'})`,
+        type: 'success',
+      });
+      await fetchLeads(activeFilters.value);
+    } else {
+      const msg = res?.error || res?.message || 'Meta sync failed';
+      mainStore?.setSnackbar?.({ title: msg, type: 'error' });
+    }
+  } catch (e) {
+    const msg = e?.data?.message || e?.message || 'Meta sync failed';
+    mainStore?.setSnackbar?.({ title: msg, type: 'error' });
+  } finally {
+    metaSyncLoading.value = false;
   }
 };
 
@@ -890,4 +878,5 @@ watch(isConnected, (val) => {
   min-height: 400px;
   /* Just empty space while loading */
 }
+
 </style>

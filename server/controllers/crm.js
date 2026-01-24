@@ -1,5 +1,5 @@
 import { Op } from 'sequelize'
-import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, User, UserOrganisation } from '../models'
+import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, MetaPage, User, UserOrganisation } from '../models'
 import { crmAutomationDefaults, crmAutomationGroups } from '~/lib/crmAutomationDefaults'
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
 import { success, error } from '../utils/response'
@@ -172,11 +172,27 @@ export const listLeads = async (event) => {
       ],
       order: [['createdAt', 'DESC']],
     })
+    const pageIds = [...new Set(rows.map((l) => l.pageId).filter(Boolean))]
+    let pageNameById = new Map()
+    if (pageIds.length) {
+      const pages = await MetaPage.findAll({
+        where: { organisationId: Number(logged.orgId), pageId: { [Op.in]: pageIds } },
+        attributes: ['pageId', 'pageName'],
+      })
+      pageNameById = new Map(
+        pages.map((p) => [String(p.pageId), p.pageName || null])
+      )
+    }
     const shaped = rows.map((l) => {
       const assigned = (l.assignees || [])
         .map((a) => (a.user ? { id: a.user.id, fullName: a.user.fullName, email: a.user.email } : null))
         .filter(Boolean)
       l.setDataValue('assigned', assigned)
+      if (l.pageId) {
+        l.setDataValue('pageName', pageNameById.get(String(l.pageId)) || null)
+      } else {
+        l.setDataValue('pageName', null)
+      }
       const tname = l.treatment || ''
       l.setDataValue('treatment', { id: null, name: tname || '' })
       // do not expose raw assignees relation by default

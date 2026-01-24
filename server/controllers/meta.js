@@ -1,4 +1,4 @@
-import { Op } from 'sequelize'
+import { Op, fn, col } from 'sequelize'
 import { CrmLead, MetaPage, Organisation, User, MetaUserToken } from '../models'
 import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
@@ -373,6 +373,7 @@ export const fetchLeadsNow = async (event) => {
   return success({ imported })
 }
 
+
 export const subscribePages = async (event) => {
   const { orgId } = event.context.user || {}
   if (!orgId) return error(401, 'Unauthenticated')
@@ -454,6 +455,30 @@ export const healthCheck = async (event) => {
   const verifyTokenSet = Boolean(config.META_VERIFY_TOKEN)
 
   const pages = await MetaPage.findAll({ where: { organisationId: orgId } })
+  const pageIds = pages.map((p) => p.pageId).filter(Boolean)
+  const leadStatsByPage = new Map()
+  if (pageIds.length) {
+    const leadStats = await CrmLead.findAll({
+      attributes: [
+        'pageId',
+        [fn('COUNT', col('id')), 'leadCount'],
+        [fn('MAX', col('inquiryDate')), 'lastLeadAt'],
+        [fn('MAX', col('createdAt')), 'lastCreatedAt'],
+      ],
+      where: { organisationId: orgId, pageId: { [Op.in]: pageIds } },
+      group: ['pageId'],
+      raw: true,
+    })
+    leadStats.forEach((row) => {
+      const pageId = String(row.pageId || '')
+      if (!pageId) return
+      const lastLeadAt = row.lastLeadAt || row.lastCreatedAt || null
+      leadStatsByPage.set(pageId, {
+        leadCount: Number(row.leadCount || 0),
+        lastLeadAt,
+      })
+    })
+  }
   const results = []
 
   for (const page of pages) {
@@ -486,6 +511,8 @@ export const healthCheck = async (event) => {
       tokenPresent,
       subscribed,
       appMatched,
+      leadCount: leadStatsByPage.get(String(pageId))?.leadCount || 0,
+      lastLeadAt: leadStatsByPage.get(String(pageId))?.lastLeadAt || null,
       error: errorMsg,
     })
   }
