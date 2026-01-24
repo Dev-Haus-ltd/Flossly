@@ -7,7 +7,7 @@
           class="pa-4 d-flex justify-space-between align-center"
           style="background-color: rgb(var(--v-theme-surface))"
         >
-          <h3 class="title ml-4">{{ selectedLead?.name + "'s profile" }}</h3>
+          <h3 class="title ml-4">{{ leadTitle }}</h3>
           <v-btn flat icon size="32" @click="onClose">
             <v-icon size="20">mdi-close</v-icon>
           </v-btn>
@@ -375,6 +375,16 @@ const props = defineProps({
 const emit = defineEmits(['close','update:modelValue'])
 const onClose = () => { emit('update:modelValue', false); emit('close') }
 const tab = ref("lead-info");
+const leadTitle = computed(() => {
+  const lead = props.selectedLead || {};
+  const name = String(lead.name || '').trim();
+  if (name) return `${name}'s profile`;
+  const email = String(lead.email || '').trim();
+  if (email) return `${email}'s profile`;
+  const phone = String(lead.telephone || '').trim();
+  if (phone) return `${phone}'s profile`;
+  return 'Lead profile';
+});
 const formatDate = (date) => {
   return formatDateOnly(date);
 };
@@ -487,9 +497,12 @@ const savePreferences = async () => {
 
 <style scoped>
 .title {
-  
   font-weight: 600;
   font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: calc(100% - 48px);
 }
 .custom-tabs {
   border-bottom: 1px solid rgb(var(--v-theme-outline));
