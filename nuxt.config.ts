@@ -51,6 +51,7 @@ export default defineNuxtConfig({
       process.env.STRIPE_PK,
     Stripe_SK: process.env.NUXT_STRIPE_SK || process.env.STRIPE_SK,
     StripeWS: process.env.NUXT_STRIPE_WS || process.env.STRIPE_WS,
+    stripeWebhookSecret: process.env.NUXT_STRIPE_WS || process.env.STRIPE_WS,
     // Meta (Facebook) App Credentials
     META_APP_ID: process.env.META_APP_ID,
     META_APP_SECRET: process.env.META_APP_SECRET,
