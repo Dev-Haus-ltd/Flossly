@@ -37,14 +37,21 @@ export default defineNuxtConfig({
         "tertiary-dark": "#6C63E7",
         "tertiary-light": "#8A82FF"
       },
-      Stripe_PK: process.env.STRIPE_PK,
+      Stripe_PK:
+        process.env.NUXT_PUBLIC_STRIPE_PK ||
+        process.env.NUXT_STRIPE_PK ||
+        process.env.STRIPE_PK,
       MAX_FILE_SIZE_FOR_LOGO: process.env.MAX_FILE_SIZE_FOR_LOGO || 5 * 1024 * 1024, // Default 5MB in bytes
     },
     API_AUTH: "BasicAuth",
     JWT_SECRET: process.env.JWT_SECRET,
-    Stripe_PK: process.env.STRIPE_PK,
-    Sripte_SK: process.env.STRIPE_SK,
-    StripeWS: process.env.STRIPE_WS,
+    Stripe_PK:
+      process.env.NUXT_PUBLIC_STRIPE_PK ||
+      process.env.NUXT_STRIPE_PK ||
+      process.env.STRIPE_PK,
+    Stripe_SK: process.env.NUXT_STRIPE_SK || process.env.STRIPE_SK,
+    StripeWS: process.env.NUXT_STRIPE_WS || process.env.STRIPE_WS,
+    stripeWebhookSecret: process.env.NUXT_STRIPE_WS || process.env.STRIPE_WS,
     // Meta (Facebook) App Credentials
     META_APP_ID: process.env.META_APP_ID,
     META_APP_SECRET: process.env.META_APP_SECRET,
