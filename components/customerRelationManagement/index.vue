@@ -360,7 +360,6 @@ const headers = [
   { key: "telephone", title: "Telephone", width: 150 },
   { key: "inquiryDate", title: "Inquiry Date", width: 160 },
   { key: "leadSource", title: "Lead Source", width: 160 },
-  { key: "metaPage", title: "Meta Page", width: 190 },
   { key: "leadStatus", title: "Lead Status", width: 160 },
   { key: "treatment", title: "Treatment", width: 160 },
   { key: "assigned", title: "Assigned", width: 160 },

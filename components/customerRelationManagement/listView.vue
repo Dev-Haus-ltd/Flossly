@@ -277,20 +277,6 @@
                   @update="updateValueRow(item, 'leadSource')"
                 />
               </template>
-              <template v-else-if="col.key === 'metaPage'">
-                <div class="pa-1 d-flex align-center">
-                  <v-chip
-                    v-if="item.metaPage"
-                    size="x-small"
-                    color="primary"
-                    variant="tonal"
-                    label
-                  >
-                    {{ item.metaPage }}
-                  </v-chip>
-                  <span v-else class="text-medium-emphasis">—</span>
-                </div>
-              </template>
               <template v-else-if="col.key === 'treatment'">
                 <DataTableColumnsLeadTreatment
                   :treatmentSources="treatmentSources"
