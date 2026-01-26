@@ -160,7 +160,6 @@ const handleAddWorkspace = () => {
     });
     return;
   }
-
   // Set the new practice mode flag in the store (hidden from URL)
   // The actual organization creation will happen during onboarding
   orgStore.setNewPracticeMode();

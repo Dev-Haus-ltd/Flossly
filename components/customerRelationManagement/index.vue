@@ -104,18 +104,6 @@
             Meta Health
           </v-btn>
           <v-btn
-            variant="text"
-            class="add-task-btn"
-            :loading="metaSyncLoading"
-            @click="syncMetaLeads"
-          >
-            <template #prepend>
-              <v-icon size="18">mdi-sync</v-icon>
-            </template>
-            Sync Meta Leads
-          </v-btn>
-
-          <v-btn
             color="primary"
             variant="flat"
             rounded="lg"
@@ -289,7 +277,6 @@ const metaErrorMessage = ref('');
 const metaHealthDialog = ref(false);
 const metaHealthLoading = ref(false);
 const metaHealthData = ref(null);
-const metaSyncLoading = ref(false);
 const isLoading = ref(false);
 const showBookingDrawer = ref(false);
 const bookingLead = ref(null);
@@ -405,6 +392,7 @@ const clearMetaQuery = () => {
   delete nextQuery.pages;
   delete nextQuery.user;
   delete nextQuery.error;
+  delete nextQuery.warning;
   router.replace({ query: nextQuery });
 };
 const handleMetaQuery = (metaConnected, metaError) => {
@@ -714,29 +702,6 @@ const openMetaHealth = async () => {
     metaHealthData.value = { error: e?.data?.message || e?.message || 'Failed to load health status' };
   } finally {
     metaHealthLoading.value = false;
-  }
-};
-const syncMetaLeads = async () => {
-  if (metaSyncLoading.value) return;
-  metaSyncLoading.value = true;
-  try {
-    const res = await crmStore.fetchLeadsNow();
-    if (res?.code === 0) {
-      const imported = res?.data?.imported ?? 0;
-      mainStore?.setSnackbar?.({
-        title: `Meta sync complete (${imported} new lead${imported === 1 ? '' : 's'})`,
-        type: 'success',
-      });
-      await fetchLeads(activeFilters.value);
-    } else {
-      const msg = res?.error || res?.message || 'Meta sync failed';
-      mainStore?.setSnackbar?.({ title: msg, type: 'error' });
-    }
-  } catch (e) {
-    const msg = e?.data?.message || e?.message || 'Meta sync failed';
-    mainStore?.setSnackbar?.({ title: msg, type: 'error' });
-  } finally {
-    metaSyncLoading.value = false;
   }
 };
 

@@ -3,7 +3,7 @@
     <v-layout>
       <div v-if="showTrialBanner" ref="trialBanner" class="trial-banner trial-banner--fixed">
         <div class="trial-banner__content">
-          We've upgraded you to a free trial of our Soar plan. Explore all the features Flossly has to offer and decide what works best for you
+          We've upgraded you to a free trial of our Glide plan. Explore all the features Flossly has to offer and decide what works best for you
           <span class="trial-banner__pill">{{ daysLeft }} days left on trial!</span>
         </div>
         <v-btn
@@ -76,6 +76,55 @@
         </div>
       </v-card>
     </v-dialog>
+    <v-dialog
+      v-model="trialExpiredDialog"
+      max-width="640"
+      persistent
+    >
+      <v-card class="trial-expired-card">
+        <div class="trial-expired-hero">
+          <div class="trial-expired-hero__icon">
+            <v-icon size="26">mdi-alert-circle-outline</v-icon>
+          </div>
+          <div>
+            <div class="trial-expired-hero__title">Trial expired for this organisation</div>
+            <div class="trial-expired-hero__subtitle">
+              Upgrade to keep access, or switch to another organisation with an active license.
+            </div>
+          </div>
+        </div>
+        <v-card-text class="trial-expired-body">
+          <div v-if="switchableOrgs.length" class="trial-expired-section">
+            <div class="trial-expired-section__title">Switch organisation</div>
+            <v-list density="compact" class="org-switch-list">
+              <v-list-item
+                v-for="org in switchableOrgs"
+                :key="org.id"
+                class="org-switch-item"
+                @click="handleOrgSwitch(org)"
+              >
+                <div class="d-flex align-center justify-space-between w-100">
+                  <div class="d-flex align-center">
+                    <CommonAvatar :user="org" />
+                    <div class="ml-2">
+                      <div class="org-switch-item__name">{{ org.name }}</div>
+                      <div class="org-switch-item__meta">Active organisation</div>
+                    </div>
+                  </div>
+                  <v-btn size="small" variant="outlined">Switch</v-btn>
+                </div>
+              </v-list-item>
+            </v-list>
+          </div>
+          <div v-else class="trial-expired-section trial-expired-section--empty">
+            No other active organisations found.
+          </div>
+        </v-card-text>
+        <v-card-actions class="trial-expired-actions">
+          <v-btn color="primary" variant="flat" @click="goToSubscription">Upgrade now</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -111,10 +160,12 @@ watch(
 const { user, isManager, setUser } = useUser();
 const mainStore = useMainStore();
 const userStore = useUserStore();
+const authStore = useAuthStore();
 const router = useRouter()
 const trialBanner = ref(null);
 const pricingModalRef = ref(null);
 const showPricingDialog = ref(false);
+const trialExpiredDialog = ref(false);
 const DEFAULT_TRIAL_BANNER_HEIGHT = 36;
 
 const resolvePreference = () => {
@@ -134,12 +185,39 @@ const daysLeft = computed(() => {
   const end = new Date(trialEndsOn.value);
   if (Number.isNaN(end.getTime())) return 14;
   const diff = end.getTime() - Date.now();
-  return Math.max(0, Math.ceil(diff / (24 * 60 * 60 * 1000)));
+  return Math.max(1, Math.ceil(diff / (24 * 60 * 60 * 1000)));
 });
 
 const showTrialBanner = computed(
   () => String(licenseType.value || "").toLowerCase() === "trial"
 );
+
+const isTrialExpired = computed(() => {
+  if (!showTrialBanner.value) return false;
+  if (!trialEndsOn.value) return false;
+  const end = new Date(trialEndsOn.value);
+  if (Number.isNaN(end.getTime())) return false;
+  return end.getTime() < Date.now();
+});
+
+const getOrgData = (orgWrapper) => {
+  if (orgWrapper?.organisation?.id && orgWrapper?.organisation?.name) {
+    return orgWrapper.organisation;
+  }
+  if (orgWrapper?.id && orgWrapper?.name) {
+    return orgWrapper;
+  }
+  return null;
+};
+
+const switchableOrgs = computed(() => {
+  const list = user.value?.userOrganisations || [];
+  const currentOrgId = user.value?.currentLoggedInOrgId;
+  return list
+    .filter((org) => org?.status === "Active")
+    .map((org) => getOrgData(org))
+    .filter((org) => org && Number(org.id) !== Number(currentOrgId));
+});
 
 const openPricingModal = () => {
   showPricingDialog.value = true;
@@ -157,6 +235,35 @@ const closePricingModal = () => {
   showPricingDialog.value = false;
   if (pricingModalRef.value?.resetModal) {
     pricingModalRef.value.resetModal();
+  }
+};
+
+const goToSubscription = () => {
+  trialExpiredDialog.value = false;
+  router.push("/subscription");
+};
+
+const handleOrgSwitch = async (org) => {
+  if (!org?.id) return;
+  try {
+    const res = await authStore.switchOrgnanisation({ orgId: org.id });
+    if (res?.code !== 0) {
+      mainStore.setSnackbar({
+        type: "error",
+        title: res?.message || res?.data?.message || "Failed to switch organisation",
+      });
+      return;
+    }
+    const profile = await authStore.profile();
+    if (profile?.code === 0 && profile?.data) {
+      setUser(profile.data);
+    }
+    trialExpiredDialog.value = false;
+  } catch (err) {
+    mainStore.setSnackbar({
+      type: "error",
+      title: err?.message || "An error occurred while switching organisation",
+    });
   }
 };
 
@@ -268,6 +375,23 @@ onMounted(async () => {
     router.push("/logout");
   }
 });
+
+watch(
+  [isTrialExpired, () => router.currentRoute.value?.path, switchableOrgs],
+  ([expired, path, orgs]) => {
+    if (!expired) {
+      trialExpiredDialog.value = false;
+      return;
+    }
+    if (path === "/subscription") return;
+    if (!orgs.length) {
+      router.push("/subscription");
+      return;
+    }
+    trialExpiredDialog.value = true;
+  },
+  { immediate: true }
+);
 
 </script>
 
@@ -413,6 +537,88 @@ onMounted(async () => {
 
 .pricing-modal-card :deep(.plan-option) {
   border-radius: 16px;
+}
+
+.trial-expired-card {
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.trial-expired-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #ffe6e6, #fef2f2);
+  color: #7f1d1d;
+}
+
+.trial-expired-hero__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(127, 29, 29, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.trial-expired-hero__title {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.trial-expired-hero__subtitle {
+  font-size: 13px;
+  color: rgba(127, 29, 29, 0.8);
+}
+
+.trial-expired-body {
+  padding: 16px 4px 8px;
+}
+
+.trial-expired-section__title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(0, 0, 0, 0.5);
+  margin-bottom: 8px;
+}
+
+.org-switch-list {
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 4px;
+}
+
+.org-switch-item {
+  border-radius: 10px;
+}
+
+.org-switch-item__name {
+  font-weight: 600;
+}
+
+.org-switch-item__meta {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.trial-expired-section--empty {
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 12px;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.trial-expired-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 8px 4px 4px;
 }
 
 @media (max-width: 768px) {

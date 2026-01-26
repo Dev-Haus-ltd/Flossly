@@ -122,15 +122,14 @@ export const createSubscription = async (event) => {
   const loggedUser = event.context.user;
   const { priceId } = body;
   if (!priceId) throw createError({ message: "priceId required" });
-  const user = await UserSubscription.findOne({
+  let user = await UserSubscription.findOne({
     where: { userId: loggedUser.userId, organisationId: loggedUser.orgId },
   });
   try {
     // create or reuse customer
-    let customerId;
-    if (user) {
-      customerId = user.stripeCustomerId;
-    } else {
+    let customerId = user?.stripeCustomerId || null;
+    const ensureCustomer = async () => {
+      if (customerId) return customerId;
       const userData = await User.findByPk(loggedUser.userId);
       if (!userData) throw createError({ message: "User not found" });
       const customer = await stripe.customers.create({
@@ -139,28 +138,69 @@ export const createSubscription = async (event) => {
         metadata: { userId: loggedUser.userId },
       });
       customerId = customer.id;
-      await UserSubscription.create({
-        stripeCustomerId: customerId,
-        userId: loggedUser.userId,
-        organisationId: loggedUser.orgId,
-      });
-    }
+      if (user) {
+        await user.update({ stripeCustomerId: customerId });
+      } else {
+        user = await UserSubscription.create({
+          stripeCustomerId: customerId,
+          userId: loggedUser.userId,
+          organisationId: loggedUser.orgId,
+        });
+      }
+      return customerId;
+    };
+    await ensureCustomer();
 
     // create subscription in incomplete state to get payment intent
-    const subscription = await stripe.subscriptions.create({
-      customer: customerId,
-      items: [{ price: priceId, quantity: 1 }],
-      payment_behavior: "default_incomplete",
-      payment_settings: {
-        save_default_payment_method: "on_subscription",
-        payment_method_types: ["card"],
-      },
-      expand: ["latest_invoice.payment_intent"],
-      metadata: {
-        userId: String(loggedUser.userId),
-        organisationId: loggedUser.orgId,
-      },
-    });
+    let subscription;
+    try {
+      subscription = await stripe.subscriptions.create({
+        customer: customerId,
+        items: [{ price: priceId, quantity: 1 }],
+        payment_behavior: "default_incomplete",
+        payment_settings: {
+          save_default_payment_method: "on_subscription",
+          payment_method_types: ["card"],
+        },
+        expand: ["latest_invoice.payment_intent"],
+        metadata: {
+          userId: String(loggedUser.userId),
+          organisationId: loggedUser.orgId,
+        },
+      });
+    } catch (err) {
+      const isMissingCustomer =
+        err?.code === "resource_missing" ||
+        err?.param === "customer" ||
+        /No such customer/i.test(err?.message || "");
+      if (isMissingCustomer) {
+        if (user) {
+          await user.update({
+            stripeCustomerId: null,
+            stripeSubscriptionId: null,
+            stripeSubscriptionStatus: null,
+          });
+        }
+        customerId = null;
+        await ensureCustomer();
+        subscription = await stripe.subscriptions.create({
+          customer: customerId,
+          items: [{ price: priceId, quantity: 1 }],
+          payment_behavior: "default_incomplete",
+          payment_settings: {
+            save_default_payment_method: "on_subscription",
+            payment_method_types: ["card"],
+          },
+          expand: ["latest_invoice.payment_intent"],
+          metadata: {
+            userId: String(loggedUser.userId),
+            organisationId: loggedUser.orgId,
+          },
+        });
+      } else {
+        throw err;
+      }
+    }
 
     // Save subscription id & package price id locally (status might be 'incomplete')
     await UserSubscription.update(
