@@ -50,10 +50,11 @@
         v-model="selectedLeave"
         ref="calender"
         :events="events"
-      :event-color="getEventColor"
+        :event-color="getEventColor"
         hide-week-number
         color="primary"
         type="month"
+        :event-more="false"
         class="team-holidays-calender"
       >
       <template v-slot:event="{ event }">
@@ -112,6 +113,7 @@
 <script setup>
 import { CommonAvatar } from "#components";
 import { parsedDate } from "~/lib/dateFormatter";
+import { differenceInCalendarDays } from "date-fns";
 
 const { events } = defineProps({
   events: Array,
@@ -128,7 +130,9 @@ const formatDate = (date) => {
     return parsedDate(date)
 }
 const getTotalDays = (event) => {
-    return new Date(new Date(event.end) - new Date(event.start)).getDay()
+    const start = new Date(event.start);
+    const end = new Date(event.end);
+    return differenceInCalendarDays(end, start) + 1;
 }
 function setToday() {
   focus.value = "";

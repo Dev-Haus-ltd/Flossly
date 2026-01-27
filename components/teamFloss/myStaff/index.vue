@@ -359,6 +359,7 @@ const updateTeams = () => {
 };
 // Default headers
 const defaultHeaders = [
+  { title: "ID", key: "id", width: 80, sortable: true },
   { title: "Name", key: "fullName", width: 200, sortable: true },
   { title: "Role", key: "role.title", width: 200, sortable: true },
   {
@@ -368,15 +369,15 @@ const defaultHeaders = [
     sortable: true,
   },
   {
-    title: "Profile Completion %",
+    title: "Profile Completion%",
     key: "profileCompletion",
-    width: 180,
+    width: 200,
     sortable: true,
   },
   {
-    title: "Recruitment Docs %",
+    title: "Recruitment Docs%",
     key: "recruitmentDocs",
-    width: 170,
+    width: 200,
     sortable: true,
   },
   {
@@ -434,11 +435,12 @@ onMounted(() => {
 
 // All possible headers (both default and optional)
 const allPossibleHeaders = [
+  { title: "ID", key: "id", width: 80, sortable: true },
   { title: "Name", key: "fullName", width: 200, sortable: true },
   { title: "Role", key: "role.title", width: 200, sortable: true },
   { title: "Date of Joining", key: "createdAt", width: 150, sortable: true },
-  { title: "Profile Completion %", key: "profileCompletion", width: 180, sortable: true },
-  { title: "Recruitment Docs %", key: "recruitmentDocs", width: 170, sortable: true },
+  { title: "Profile Completion%", key: "profileCompletion", width: 200, sortable: true },
+  { title: "Recruitment Docs%", key: "recruitmentDocs", width: 200, sortable: true },
   { title: "Status", key: "status", width: 210, sortable: true },
   { title: "Login History", key: "loginHistory", width: 210, sortable: true },
   { title: "Email", key: "email", width: 200, sortable: true },

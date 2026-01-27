@@ -449,8 +449,8 @@ const onDobSelected = (val) => {
 const mainStore = useMainStore();
 const activeStaffList = computed(() => {
   return (props.staffList || []).filter((user) => {
-    const status = String(user?.orgStatus || user?.status || "").toLowerCase();
-    return status === "active";
+    // Only show active users (not invited, disabled, or expired)
+    return user?.orgStatus === "Active" && !user?.isAccountDeactivated;
   });
 });
 

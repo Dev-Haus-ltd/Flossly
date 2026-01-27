@@ -103,17 +103,17 @@ const analyticsStats = ref([
   {
     icon: 'https://cdn.lordicon.com/tzynxkwl.json',
     label: 'ROAS',
-    value: '£500.00',
+    value: '40%',
   },
   {
     icon: 'https://cdn.lordicon.com/tzynxkwl.json',
     label: 'Total Impressions',
-    value: '£500.00',
+    value: '80',
   },
   {
     icon: 'https://cdn.lordicon.com/tzynxkwl.json',
     label: 'Total Reach',
-    value: '£500.00',
+    value: '300',
   },
 ]);
 

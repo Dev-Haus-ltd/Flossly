@@ -340,8 +340,8 @@ const leaveTypes = ref([
 const requiredRule = [(v) => !!v || "This field is required"];
 const startDateRule = [
   (v) => !!v || "Start date is required",
-  (v) => {
-    if (form.value.endDate && v > form.value.endDate) {
+  () => {
+    if (form.value.startDate && form.value.endDate && form.value.startDate > form.value.endDate) {
       return "Start date cannot be after end date";
     }
     return true;
@@ -350,8 +350,12 @@ const startDateRule = [
 
 const endDateRule = [
   (v) => !!v || "This field is required",
-  (v) => v < form.value.startDate ||
-    "End date must be after start date",
+  () => {
+    if (form.value.startDate && form.value.endDate && form.value.endDate < form.value.startDate) {
+      return "End date must be after start date";
+    }
+    return true;
+  },
 ];
 const leaveSummary = computed(() => {
   if (!form.value.startDate || !form.value.endDate) return "";
