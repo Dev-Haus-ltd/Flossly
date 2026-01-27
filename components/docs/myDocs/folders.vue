@@ -1,13 +1,12 @@
 <template>
-  <div style="border: 1px solid #dbdbdb; border-radius: 6px">
+  <div style="border: 1px solid #dbdbdb; border-radius: 12px">
     <!-- Header -->
     <div
       style="border-bottom: 1px solid #dbdbdb"
       class="d-flex align-center justify-space-between px-4 py-2"
     >
       <h3
-        style="
-          
+        style="          
           font-weight: 600;
           font-size: 14px;
           margin: 0;
@@ -28,8 +27,8 @@
           append-inner-icon="mdi-magnify"
         />
         <!-- Add Folder Button -->
-        <v-btn class="py-2 ml-2" color="primary" flat @click="$emit('add-folder')" v-if="!hideAddFolderButton">
-          <v-icon start>mdi-plus</v-icon>
+        <v-btn class="py-2 ml-2 folder-btn" color="primary" flat @click="$emit('add-folder')" v-if="!hideAddFolderButton">
+          <v-icon start>mdi-plus-circle-outline</v-icon>
           Add Folder
         </v-btn>
       </div>
@@ -45,7 +44,7 @@
         md="3"
       >
         <v-card
-          class="pa-3 d-flex align-center rounded-lg"
+          class="pa-3 d-flex align-center folder-cards"
           style="border: 1px solid #dbdbdb; cursor: pointer"
           @click="$emit('open-folder', folder)"
           flat
@@ -53,29 +52,16 @@
           <!-- Folder Image -->
           <img
             src="@/assets/images/flosslydocs/folder.svg"
-            style="height: 50px; width: 50px"
+            style="height: 60px; width: 60px"
             class="mr-3"
           />
 
           <!-- Folder Details -->
           <div class="flex-grow-1">
-            <div
-              style="
-                font-weight: 400;
-                font-size: 13px;
-                font-style: Regular;
-              "
-            >
+            <div class="folder-name">
               {{ folder.name }}
             </div>
-            <div
-              style="
-                color: #737373;
-                font-weight: 400;
-                font-size: 13px;
-                font-style: Regular;
-              "
-            >
+            <div class="folder-file-count">
               Files: {{ folder.documentCount }}
             </div>
           </div>
@@ -186,16 +172,24 @@ const toggleShowAll = () => {
 </script>
 <style scoped>
 .input-bordered :deep(.v-field) {
-  border: 1px solid #dfdfdf !important;
+  border: 1px solid #FAFAFA !important;
   border-radius: 8px !important;
-  background-color: white !important;
-  min-height: 40px;
+  min-height: 46px;
   font-size: 14px;
-  
-  width: 200px;
+  font-weight: 400;
+  line-height: 130%;
+  color: #737373;
+  font-style: normal;
+  width: 105px;
 }
 .cust-border {
   border: 1px solid #dfdfdf !important;
+  border-radius: 8px !important;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 130%;
+  color: #1E1E1E;
+  font-style: normal;
 }
 
 :deep(.folder-menu) {
@@ -207,5 +201,39 @@ const toggleShowAll = () => {
   box-shadow: 0 8px 14px rgba(0, 0, 0, 0.15) !important;
 }
 
+.folder-cards {
+  border-radius: 12px !important;
+}
+
+.folder-name {
+  font-weight: 400;
+  font-size: 13px;
+  color: #1E1E1E;
+  font-style: normal;
+  font-family: Poppins, sans-serif;
+  line-height: 130%;
+}
+.folder-file-count {
+  font-weight: 400;
+  font-size: 13px;
+  color: #737373;
+  font-style: normal;
+  font-family: Poppins, sans-serif;
+  line-height: 130%;
+}
+.folder-btn {
+  font-weight: 400;
+  font-size: 14px;
+  color: #1E1E1E;
+  font-style: normal;
+  font-family: Inter, sans-serif;
+  line-height: 130%;
+  align-items: center;
+  border-radius: 8px;
+  height: 46px;
+  min-height: 46px;
+  width: 135px;
+
+}
 
 </style>

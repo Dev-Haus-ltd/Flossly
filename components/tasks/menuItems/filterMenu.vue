@@ -14,7 +14,13 @@
         style="width: 100px"
       >
         <span>Filter</span>
-        <v-icon class="ml-2" size="20">mdi-filter-outline</v-icon>
+        <img
+          :src="filtericon"
+          alt="filtericon"
+          class="ml-2"
+          width="14"
+          height="14"
+        />
       </v-btn>
     </template>
 
@@ -125,6 +131,8 @@
 </template>
 
 <script setup>
+import filtericon from "@/assets/icons/listView/filter-icon.svg";
+
 const { priorities, users, statuses, clearTrigger } = defineProps({
   priorities: Array,
   users: Array,
@@ -206,7 +214,7 @@ watch(
   height: 46px;
   border-radius: 8px;
   font-size: 14px;
-  background-color: #fafafa !important;
+  background-color: #F3F4F6 !important;
   text-transform: none;
   box-shadow: none;
   color: #737373;

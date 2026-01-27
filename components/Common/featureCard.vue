@@ -16,8 +16,8 @@
         >
           <div class="content-wrapper">
             <img
-              src="@/assets/dashboard/demo-video-thumbnail.svg"
-              alt="thumbnail"
+              src="https://img.youtube.com/vi/my_5J6E-4RU/hqdefault.jpg"
+              alt="YouTube thumbnail"
               class="feature-img"
               :class="{ 'img-hidden': isHovered }"
             />
@@ -73,7 +73,7 @@
               <iframe
                 width="100%"
                 height="500"
-                :src="`https://www.youtube.com/embed/gEuICxXisnw?autoplay=1`"
+                :src="`https://www.youtube.com/embed/my_5J6E-4RU?autoplay=1`"
                 frameborder="0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowfullscreen
@@ -242,7 +242,7 @@
     right: 4px;
     bottom: 4px;
     background-image: 
-      url("@/assets/dashboard/demo-video-thumbnail-expanded.png"),
+      url("https://img.youtube.com/vi/my_5J6E-4RU/maxresdefault.jpg"),
       linear-gradient(180deg, #263388 0%, rgba(173, 124, 243, 0.08) 100%);
     background-size: contain;
     background-position: center;
