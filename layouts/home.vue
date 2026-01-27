@@ -3,7 +3,7 @@
     <v-layout>
       <div v-if="showTrialBanner" ref="trialBanner" class="trial-banner trial-banner--fixed">
         <div class="trial-banner__content">
-          We've upgraded you to a free trial of our Glide plan. Explore all the features Flossly has to offer and decide what works best for you
+          We've upgraded you to a free trial{{ trialPlanName ? ` of our ${trialPlanName} plan` : "" }}. Explore all the features Flossly has to offer and decide what works best for you
           <span class="trial-banner__pill">{{ daysLeft }} days left on trial!</span>
         </div>
         <v-btn
@@ -177,6 +177,11 @@ const resolvePreference = () => {
 };
 
 const licenseType = computed(() => resolvePreference().licenseType || null);
+const trialPlanName = computed(() => {
+  const license = String(resolvePreference().licenseType || "").trim();
+  if (["Drift", "Glide", "Soar"].includes(license)) return license;
+  return "";
+});
 
 const trialEndsOn = computed(() => resolvePreference().licenseRenewalDate || null);
 

@@ -615,6 +615,7 @@ export const startOnboardingScheduler = () => {
           userPreference: pref,
           metrics,
           config: runtimeConfig,
+          startAt: evt.createdAt,
         });
 
         for (const tpl of ONBOARDING_EMAIL_TEMPLATES) {

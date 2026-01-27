@@ -36,7 +36,7 @@
       title="Welcome to FlosslyOS"
       subtitle="UK's Number 1 Productivity Software for Dental Clinics"
       primary-label="Done"
-      footnote="After your trial ends, you can continue with our Soar plan or choose our Drift or Glide plan."
+      :footnote="welcomeFootnote"
       @primary="handleWelcomeDone"
       @close="handleWelcomeClose"
     >
@@ -45,7 +45,7 @@
           Let's get started. Complete this 2-minute setup and save 10 hours this week.
         </p>
         <p class="mb-0">
-          <strong>We've upgraded you to a free 14-day trial of our Soar plan.</strong>
+          <strong>We've upgraded you to a free {{ trialTotalDaysLabel }} {{ welcomeTrialPlanLabel }}.</strong>
           Explore all the features Flossly has to offer and decide what works best for you.
         </p>
       </div>
@@ -293,6 +293,51 @@ const practiceName = computed(() => {
   const match = orgs.find((org) => Number(org.organisationId) === Number(orgId));
   return match?.organisation?.name || user.value?.organisationName || "your practice";
 });
+
+const normalizeDate = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const resolvePreference = () => {
+  const raw = user.value || {};
+  const pref = raw?.preferences;
+  if (Array.isArray(pref)) return pref[0] || {};
+  if (pref && typeof pref === "object") return pref;
+  return {};
+};
+
+const trialPlanName = computed(() => {
+  const license = String(resolvePreference().licenseType || "").trim();
+  if (["Drift", "Glide", "Soar"].includes(license)) return license;
+  return "";
+});
+
+const trialTotalDays = computed(() => {
+  const pref = resolvePreference();
+  const end = normalizeDate(pref.licenseRenewalDate);
+  const start = normalizeDate(pref.createdAt || user.value?.createdAt);
+  if (!end || !start) return 14;
+  const diff = Math.ceil((end - start) / (24 * 60 * 60 * 1000));
+  return Number.isFinite(diff) && diff > 0 ? diff : 14;
+});
+
+const trialTotalDaysLabel = computed(() => `${trialTotalDays.value}-day`);
+
+const welcomeFootnote = computed(() => {
+  const plan = trialPlanName.value;
+  if (plan) {
+    return `After your trial ends, you can continue with our ${plan} plan or choose another plan.`;
+  }
+  return "After your trial ends, you can choose the plan that fits your practice.";
+});
+
+const welcomeTrialPlanLabel = computed(() =>
+  trialPlanName.value ? `${trialPlanName.value} plan` : "trial"
+);
 
 const updateLocalOnboarding = (updates) => {
   const current = user.value || {};

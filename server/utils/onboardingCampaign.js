@@ -3,6 +3,19 @@ import { transporter } from "./nodeMailer";
 import { formatDateDDMMYYYY } from "~/lib/dateFormatter.js";
 
 const DEFAULT_FROM = "Flossly <helloflossly@gmail.com>";
+const DEFAULT_PRICING = { drift: 149, glide: 249, soar: 449, currency: "£" };
+const DEFAULT_IMPACT = {
+  adminHours: 12,
+  hoursSaved: 10,
+  enquiryLoss: 15,
+  revenueRecovered: 18000,
+  noShowRate: 18,
+  noShowRateAfter: 7,
+  noShowSavings: 22000,
+  searchHours: 2,
+  totalAnnual: 47280,
+  hoursReturned: 520,
+};
 
 const formatDate = (date) => formatDateDDMMYYYY(date);
 
@@ -15,6 +28,29 @@ const renderTokens = (text, ctx = {}) => {
     "Success Manager Name": ctx.successManagerName || "FlosslyOS Team",
     "email": ctx.email || "",
     "Trial End Date": ctx.trialEndDate || "",
+    "Trial Days Remaining": ctx.trialDaysRemaining ?? "",
+    "Trial Days Remaining Unit": ctx.trialDaysRemainingUnit || "",
+    "Trial Days Used": ctx.trialDaysUsed ?? "",
+    "Trial Days Used Unit": ctx.trialDaysUsedUnit || "",
+    "Trial Total Days": ctx.trialTotalDays ?? "",
+    "Trial Total Days Unit": ctx.trialTotalDaysUnit || "",
+    "Plan Name": ctx.planName || "",
+    "Plan Drift Price": ctx.planDriftPrice || "",
+    "Plan Glide Price": ctx.planGlidePrice || "",
+    "Plan Soar Price": ctx.planSoarPrice || "",
+    "Pricing From Label": ctx.pricingFromLabel || "",
+    "Pricing Currency": ctx.pricingCurrency || "",
+    "Practice Snapshot": ctx.practiceSnapshot || "",
+    "Impact Admin Hours": ctx.impactAdminHours ?? "",
+    "Impact Hours Saved": ctx.impactHoursSaved ?? "",
+    "Impact Enquiry Loss": ctx.impactEnquiryLoss ?? "",
+    "Impact Revenue Recovered": ctx.impactRevenueRecovered ?? "",
+    "Impact NoShow Rate": ctx.impactNoShowRate ?? "",
+    "Impact NoShow Rate After": ctx.impactNoShowRateAfter ?? "",
+    "Impact NoShow Savings": ctx.impactNoShowSavings ?? "",
+    "Impact Search Hours": ctx.impactSearchHours ?? "",
+    "Impact Total Annual": ctx.impactTotalAnnual ?? "",
+    "Impact Hours Returned": ctx.impactHoursReturned ?? "",
     "Tasks Count": ctx.tasksCount || "0",
     "Leads Count": ctx.leadsCount || "0",
     "Automations Count": ctx.automationsCount || "0",
@@ -87,14 +123,14 @@ export const ONBOARDING_EMAIL_TEMPLATES = [
       <p>Morning [Name],</p>
       <p>You're officially 24 hours into FlosslyOS. Here's what that means for [Practice Name]:</p>
       <p><strong>Your Personalized Impact Forecast</strong><br/>
-      Based on practices like yours (3 chairs, mixed NHS/private, 8 staff):</p>
+      Based on practices like yours ([Practice Snapshot]):</p>
       <p>
-        12 hours/week on admin chaos → 10 hours back<br/>
-        15% of enquiries never followed up → £18,000/year recovered<br/>
-        18% no-show rate → Cut to 7% (£22K saved)<br/>
-        2 hours/day searching for info → Instant access, zero searching
+        [Impact Admin Hours] hours/week on admin chaos → [Impact Hours Saved] hours back<br/>
+        [Impact Enquiry Loss]% of enquiries never followed up → [Pricing Currency][Impact Revenue Recovered]/year recovered<br/>
+        [Impact NoShow Rate]% no-show rate → Cut to [Impact NoShow Rate After]% ([Pricing Currency][Impact NoShow Savings] saved)<br/>
+        [Impact Search Hours] hours/day searching for info → Instant access, zero searching
       </p>
-      <p><strong>Total Annual Impact:</strong> £47,280 saved + 520 hours back</p>
+      <p><strong>Total Annual Impact:</strong> [Pricing Currency][Impact Total Annual] saved + [Impact Hours Returned] hours back</p>
       <p>That's like hiring a full-time admin assistant—without the payroll.</p>
       <p><strong>Quick win for today:</strong> Set up automated appointment reminders in 3 minutes.<br/>
       Cut no-shows by 40% starting this afternoon.<br/>
@@ -127,7 +163,7 @@ export const ONBOARDING_EMAIL_TEMPLATES = [
   {
     key: "onboarding_email_day3",
     offsetDays: 3,
-    subject: "Day 3: The 2-minute rule that triples conversions",
+    subject: "The 2-minute rule that triples conversions",
     body: `
       <p>Hi [Name],</p>
       <p>If you don't respond to a lead within 5 minutes, your conversion rate drops by 400%.</p>
@@ -155,7 +191,7 @@ export const ONBOARDING_EMAIL_TEMPLATES = [
   {
     key: "onboarding_email_day4",
     offsetDays: 4,
-    subject: "Day 4: Why 18% of your appointments are no-shows (and how to cut it to 5%)",
+    subject: "Why 18% of your appointments are no-shows (and how to cut it to 5%)",
     body: `
       <p>Good morning [Name],</p>
       <p>Let's talk about the silent revenue killer: no-shows.</p>
@@ -183,7 +219,7 @@ export const ONBOARDING_EMAIL_TEMPLATES = [
   {
     key: "onboarding_email_day5",
     offsetDays: 5,
-    subject: "Day 5: The £30K sitting in your database right now",
+    subject: "The £30K sitting in your database right now",
     body: `
       <p>Hi [Name],</p>
       <p>Pop quiz: How many of your patients are overdue for their 6-month check-up right now?</p>
@@ -205,7 +241,7 @@ export const ONBOARDING_EMAIL_TEMPLATES = [
   {
     key: "onboarding_email_day6",
     offsetDays: 6,
-    subject: "Day 6: The automation that runs your practice while you sleep",
+    subject: "The automation that runs your practice while you sleep",
     body: `
       <p>Hi [Name],</p>
       <p>Here's what your practice does every single day: reminders, lead follow-ups, tasks, invoices, recalls, reviews.</p>
@@ -239,7 +275,7 @@ export const ONBOARDING_EMAIL_TEMPLATES = [
       ✅ [Documents Count] documents uploaded and organized<br/>
       ✅ [Hours Saved] hours saved through automation<br/>
       Estimated value created: £[Value Created]</p>
-      <p><strong>Quick Reminder:</strong> Your 14-day trial ends in 2 days (on [Trial End Date] at midnight).</p>
+      <p><strong>Quick Reminder:</strong> Your trial ends in [Trial Days Remaining] [Trial Days Remaining Unit] (on [Trial End Date] at midnight).</p>
       <p><strong>Ready to keep going?</strong><br/>
       Subscribe now and get our trial-exclusive bonus:</p>
       <p>🎁 3 months of implementation support (£1,500 value)<br/>
@@ -247,22 +283,22 @@ export const ONBOARDING_EMAIL_TEMPLATES = [
       🎁 Dedicated account manager</p>
       <p><a class="btn" href="[Subscribe URL]" target="_blank">Subscribe Now - Keep Everything →</a></p>
       <p>Pricing:<br/>
-      Starter: £149/month (1 location, 5 users)<br/>
-      Growth: £249/month (3 locations, 15 users)<br/>
-      Enterprise: £449/month (unlimited)</p>
+      Drift: [Pricing Currency][Plan Drift Price]/month<br/>
+      Glide: [Pricing Currency][Plan Glide Price]/month<br/>
+      Soar: [Pricing Currency][Plan Soar Price]/month</p>
       <p>Still have questions? Just reply to this email—we're here to help.</p>
       <p>Thanks for trying FlosslyOS. We hope you decide to stay!<br/>The FlosslyOS Team</p>
-      <p>P.S. - 87% of practices who complete their trial subscribe. Don't let 12 days of work go to waste.</p>
+      <p>P.S. - 87% of practices who complete their trial subscribe. Don't let [Trial Days Used] [Trial Days Used Unit] of work go to waste.</p>
     `,
   },
   {
     key: "onboarding_email_day13",
     offsetDays: 13,
-    subject: "Your trial ends tomorrow - don't lose your work",
+    subject: "Your trial ends on [Trial End Date] - don't lose your work",
     body: `
       <p>Hi [Name],</p>
-      <p>This is urgent. Your FlosslyOS trial ends tomorrow at midnight ([Trial End Date], 11:59 PM).</p>
-      <p>If you don't subscribe before then, you'll lose everything you've built over the past 13 days.</p>
+      <p>This is urgent. Your FlosslyOS trial ends on [Trial End Date] at midnight (11:59 PM).</p>
+      <p>If you don't subscribe before then, you'll lose everything you've built over the past [Trial Days Used] [Trial Days Used Unit].</p>
       <p><strong>What you'll lose:</strong><br/>
       ❌ All your tasks - [Tasks Count] tasks created, all deleted<br/>
       ❌ All your leads - [Leads Count] enquiries in your CRM, gone<br/>
@@ -274,7 +310,7 @@ export const ONBOARDING_EMAIL_TEMPLATES = [
       Subscribe now and: keep all your work, keep your team, keep automations running, and get a 60-day money-back guarantee.</p>
       <p><a class="btn" href="[Subscribe URL]" target="_blank">Subscribe Now - Don't Lose Your Data →</a></p>
       <p>Need more time? Reply "EXTEND" and we'll give you 7 extra days.</p>
-      <p>Don't let 13 days of work disappear tomorrow.</p>
+      <p>Don't let [Trial Days Used] [Trial Days Used Unit] of work disappear tomorrow.</p>
       <p>The FlosslyOS Team</p>
     `,
   },
@@ -305,7 +341,7 @@ export const ONBOARDING_INAPP_MESSAGES = [
   {
     key: "onboarding_inapp_day4_noshows",
     offsetDays: 4,
-    title: "Day 4: Cut No-Shows by 40% (Save £103K/Year)",
+    title: "Cut No-Shows by 40% (Save £103K/Year)",
     message:
       "Every no-show = £125-£350 lost revenue. FlosslyDiary sends automatic reminders: 48 hours before (SMS + Email), 24 hours before, 3 hours before (high-value only). Result: no-show rate drops from 18% → 7%.",
     primaryLabel: "Set Up Reminders (3 Min)",
@@ -316,7 +352,7 @@ export const ONBOARDING_INAPP_MESSAGES = [
   {
     key: "onboarding_inapp_day5_recalls",
     offsetDays: 5,
-    title: "Day 5: Recover £30K in Overdue Recalls",
+    title: "Recover £30K in Overdue Recalls",
     message:
       "You have patients overdue for check-ups right now. FlosslyRecalls sends automatic reminders and recovers an average £30,000/year.",
     primaryLabel: "Run First Recall Campaign",
@@ -327,7 +363,7 @@ export const ONBOARDING_INAPP_MESSAGES = [
   {
     key: "onboarding_inapp_day6_automation",
     offsetDays: 6,
-    title: "Day 6: Eliminate 90% of Manual Work",
+    title: "Eliminate 90% of Manual Work",
     message:
       "Your practice can run itself. FlosslyAutomation handles appointment reminders, lead follow-ups, task creation, and payment reminders. Save 14+ hours/week on manual work.",
     primaryLabel: "Activate First Automation",
@@ -340,8 +376,8 @@ export const ONBOARDING_INAPP_MESSAGES = [
     offsetDays: 7,
     title: "How's your FlosslyOS experience, [Name]?",
     message:
-      "You've built [Tasks Count] tasks, [Leads Count] leads, [Automations Count] automations in 12 days. Your trial ends in 2 days. Subscribe to keep everything and continue saving 10+ hours/week.",
-    primaryLabel: "Subscribe Now - From GBP 99/month",
+      "You've built [Tasks Count] tasks, [Leads Count] leads, [Automations Count] automations in [Trial Days Used] [Trial Days Used Unit]. Your trial ends in [Trial Days Remaining] [Trial Days Remaining Unit] (on [Trial End Date]). Subscribe to keep your [Plan Name] access and continue saving 10+ hours/week.",
+    primaryLabel: "Subscribe Now - [Pricing From Label]",
     primaryLink: "[Subscribe URL]",
     secondaryLabel: "View Plans",
     secondaryLink: "[Subscribe URL]",
@@ -349,10 +385,10 @@ export const ONBOARDING_INAPP_MESSAGES = [
   {
     key: "onboarding_inapp_day13_trial",
     offsetDays: 13,
-    title: "Urgent: Trial Ends Tomorrow - Your Data Will Be Deleted",
+    title: "Urgent: Trial Ends [Trial End Date] - Your Data Will Be Deleted",
     message:
-      "You have 24 hours to save your work. Tasks: [Tasks Count]. Leads: [Leads Count]. Automations and documents will be deleted. Subscribe now to keep everything.",
-    primaryLabel: "Subscribe Now - From GBP 99/month",
+      "Your trial ends on [Trial End Date]. Tasks: [Tasks Count]. Leads: [Leads Count]. Automations and documents will be deleted. Subscribe now to keep everything.",
+    primaryLabel: "Subscribe Now - [Pricing From Label]",
     primaryLink: "[Subscribe URL]",
     secondaryLabel: "Export Data Instead",
     secondaryLink: "[Export Data URL]",
@@ -410,13 +446,110 @@ export const buildOnboardingInAppMessages = ({
     }));
 };
 
-export const buildOnboardingContext = ({ user, organisation, userPreference, metrics, config }) => {
+export const buildOnboardingContext = ({
+  user,
+  organisation,
+  userPreference,
+  metrics,
+  config,
+  startAt,
+  now = new Date(),
+}) => {
   const baseUrlRaw = config?.public?.BASE_URL || "";
   const baseUrl = baseUrlRaw.endsWith("/") ? baseUrlRaw.slice(0, -1) : baseUrlRaw;
   const trialEndDate = formatDate(userPreference?.licenseRenewalDate);
   const watchVideoUrl =
     config?.public?.ONBOARDING_WELCOME_VIDEO_URL ||
     "https://youtu.be/gEuICxXisnw?si=1L-7jdiwwnr_VpDC";
+  const licenseType = String(userPreference?.licenseType || "").trim();
+  const planName = ["Drift", "Glide", "Soar"].includes(licenseType) ? licenseType : "Trial";
+
+  const normalizeDate = (value) => {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    date.setHours(0, 0, 0, 0);
+    return date;
+  };
+
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const today = normalizeDate(now);
+  const startDay = normalizeDate(startAt || userPreference?.createdAt || user?.createdAt);
+  const endDay = normalizeDate(userPreference?.licenseRenewalDate);
+
+  let trialDaysRemaining = "";
+  let trialDaysUsed = "";
+  let trialTotalDays = "";
+
+  if (endDay && today) {
+    trialDaysRemaining = Math.max(0, Math.ceil((endDay - today) / msPerDay));
+  }
+  if (startDay && today) {
+    trialDaysUsed = Math.max(0, Math.floor((today - startDay) / msPerDay));
+  }
+  if (startDay && endDay) {
+    trialTotalDays = Math.max(0, Math.ceil((endDay - startDay) / msPerDay));
+  }
+
+  const unitLabel = (value) => (Number(value) === 1 ? "day" : "days");
+  const trialDaysRemainingUnit = trialDaysRemaining !== "" ? unitLabel(trialDaysRemaining) : "";
+  const trialDaysUsedUnit = trialDaysUsed !== "" ? unitLabel(trialDaysUsed) : "";
+  const trialTotalDaysUnit = trialTotalDays !== "" ? unitLabel(trialTotalDays) : "";
+
+  const toNumber = (value, fallback) => {
+    if (value === null || value === undefined) return fallback;
+    const num = Number(value);
+    if (Number.isFinite(num)) return num;
+    if (typeof value === "string") {
+      const cleaned = value.replace(/[^0-9.]/g, "");
+      const parsed = Number(cleaned);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return fallback;
+  };
+
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+  const formatNumber = (value) =>
+    Number.isFinite(Number(value)) ? Number(value).toLocaleString("en-GB") : "";
+
+  const teamCountRaw = toNumber(organisation?.teamCount, null);
+  const chairCountRaw = toNumber(organisation?.surgeryCount, null);
+  const baseTeam = 8;
+  const baseChairs = 3;
+  const scale =
+    teamCountRaw || chairCountRaw
+      ? clamp(
+          (teamCountRaw ? teamCountRaw / baseTeam : 1) *
+            (chairCountRaw ? chairCountRaw / baseChairs : 1),
+          0.6,
+          2.5
+        )
+      : 1;
+
+  const impactDefaults = DEFAULT_IMPACT;
+
+  const impactAdminHours = Math.round(impactDefaults.adminHours * scale);
+  const impactHoursSaved = Math.round(impactDefaults.hoursSaved * scale);
+  const impactRevenueRecovered = Math.round(impactDefaults.revenueRecovered * scale);
+  const impactNoShowSavings = Math.round(impactDefaults.noShowSavings * scale);
+  const impactSearchHours = Math.round(impactDefaults.searchHours);
+  const impactTotalAnnual = Math.round(
+    (impactDefaults.totalAnnual * scale + impactRevenueRecovered + impactNoShowSavings) / 2
+  );
+  const impactHoursReturned = Math.round(impactDefaults.hoursReturned * scale);
+  const practiceSnapshot = chairCountRaw || teamCountRaw
+    ? `${chairCountRaw || baseChairs} chairs, ${teamCountRaw || baseTeam} staff`
+    : "your practice";
+
+  const planDriftPrice = formatNumber(DEFAULT_PRICING.drift);
+  const planGlidePrice = formatNumber(DEFAULT_PRICING.glide);
+  const planSoarPrice = formatNumber(DEFAULT_PRICING.soar);
+  const pricingCurrency = DEFAULT_PRICING.currency;
+  const pricingFromLabel = `From ${pricingCurrency}${Math.min(
+    DEFAULT_PRICING.drift,
+    DEFAULT_PRICING.glide,
+    DEFAULT_PRICING.soar
+  )}/month`;
 
   return {
     name: user?.fullName || "there",
@@ -425,6 +558,29 @@ export const buildOnboardingContext = ({ user, organisation, userPreference, met
     founderName: config?.public?.ONBOARDING_FOUNDER_NAME || "Saba",
     successManagerName: config?.public?.ONBOARDING_SUCCESS_MANAGER_NAME || "FlosslyOS Team",
     trialEndDate,
+    planName,
+    trialDaysRemaining,
+    trialDaysRemainingUnit,
+    trialDaysUsed,
+    trialDaysUsedUnit,
+    trialTotalDays,
+    trialTotalDaysUnit,
+    planDriftPrice,
+    planGlidePrice,
+    planSoarPrice,
+    pricingCurrency,
+    pricingFromLabel,
+    practiceSnapshot,
+    impactAdminHours: formatNumber(impactAdminHours),
+    impactHoursSaved: formatNumber(impactHoursSaved),
+    impactEnquiryLoss: formatNumber(impactDefaults.enquiryLoss),
+    impactRevenueRecovered: formatNumber(impactRevenueRecovered),
+    impactNoShowRate: formatNumber(impactDefaults.noShowRate),
+    impactNoShowRateAfter: formatNumber(impactDefaults.noShowRateAfter),
+    impactNoShowSavings: formatNumber(impactNoShowSavings),
+    impactSearchHours: formatNumber(impactSearchHours),
+    impactTotalAnnual: formatNumber(impactTotalAnnual),
+    impactHoursReturned: formatNumber(impactHoursReturned),
     tasksCount: metrics?.tasksCount ?? "0",
     leadsCount: metrics?.leadsCount ?? "0",
     automationsCount: metrics?.automationsCount ?? "0",
@@ -445,5 +601,4 @@ export const buildOnboardingContext = ({ user, organisation, userPreference, met
     exportDataUrl: `${baseUrl}/settings`,
   };
 };
-
 

@@ -458,6 +458,7 @@ export const profile = async (event) => {
         userPreference: preference,
         metrics,
         config,
+        startAt,
       });
 
       const inAppMessages = buildOnboardingInAppMessages({
