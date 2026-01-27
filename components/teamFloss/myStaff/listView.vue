@@ -158,26 +158,35 @@
             :key="col.key"
             v-slot:[`item.${col.key}`]="{ item }"
           >
-            <template v-if="col.key === 'fullName'">
-              <div class="pa-1 d-flex justify-space-between align-center">
-                <v-text-field
-                  v-model="item.fullName"
-                  :variant="isFocused(item.id, 'fullName') ? 'outlined' : 'plain'"
-                  @focus="setFocus(item.id, 'fullName', true)"
-                  @blur="updateValueRow(item, 'fullName')"
-                  @keyup.enter="updateUser(item, 'fullName')"
-                  density="compact"
-                  hide-details
-                  class="small-input"
-                />
+            <template v-if="col.key === 'id'">
+              <p class="ml-2">{{ getRowIndex(item) }}</p>
+            </template>
 
-                <img
-                  src="@/assets/dashboard/expandIcon.svg"
-                  alt=""
-                  class="ml-2"
-                  @click="$emit('onUserSelect', {org, item})"
-                  style="cursor: pointer"
-                />
+            <template v-else-if="col.key === 'fullName'">
+              <div class="fullname-cell-container">
+                <div class="d-flex justify-space-between align-center fullname-cell">
+                  <div class="name-field-wrapper">
+                    <v-text-field
+                      v-model="item.fullName"
+                      :variant="isFocused(item.id, 'fullName') ? 'outlined' : 'plain'"
+                      @focus="setFocus(item.id, 'fullName', true)"
+                      @blur="updateValueRow(item, 'fullName')"
+                      @keyup.enter="updateUser(item, 'fullName')"
+                      density="compact"
+                      hide-details
+                      class="small-input"
+                    />
+                  </div>
+
+                  <img
+                    src="@/assets/dashboard/expandIcon.svg"
+                    alt=""
+                    class="ml-2 mr-2"
+                    @click="$emit('onUserSelect', {org, item})"
+                    style="cursor: pointer"
+                  />
+                </div>
+                <div class="fullname-border"></div>
               </div>
             </template>
 
@@ -715,6 +724,20 @@ const isUserActive = (user) => {
          user.status !== "Expired";
 };
 
+// Helper function to get row index (1-based index across all teams)
+const getRowIndex = (item) => {
+  let index = 1;
+  for (const team of props.teams) {
+    const sortedUsers = getSortedUsers(team.orgUsers);
+    const foundIndex = sortedUsers.findIndex(u => u.id === item.id);
+    if (foundIndex !== -1) {
+      return index + foundIndex;
+    }
+    index += sortedUsers.length;
+  }
+  return index;
+};
+
 </script>
 
 <style scoped>
@@ -805,5 +828,33 @@ const isUserActive = (user) => {
 
 .action-btn.delete-btn:hover {
   background-color: rgba(244, 67, 54, 0.1) !important;
+}
+
+.fullname-cell-container {
+  position: relative;
+  height: 100%;
+}
+
+.fullname-cell {
+  padding: 4px;
+  height: 100%;
+}
+
+.name-field-wrapper {
+  flex: 1;
+  padding-right: 8px;
+  margin-right: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.fullname-border {
+  position: absolute;
+  right: 50px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: rgba(var(--v-border-color), var(--v-border-opacity));
+  pointer-events: none;
 }
 </style>

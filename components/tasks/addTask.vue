@@ -479,7 +479,7 @@ watch(
 watch(
   () => form.value.roleId,
   (newRoleId) => {
-    const activeUsers = users.value.filter((x) => x.status === "Active");
+    const activeUsers = users.value.filter((x) => x.orgStatus === "Active" && !x.isAccountDeactivated);
     if (newRoleId) {
       const filteredUsers = activeUsers.filter((x) => x.roleId === newRoleId);
       userList.value = filteredUsers;
@@ -573,7 +573,7 @@ const getUsers = () => {
       users.value = res.data;
       // Initialize userList with all active users if no role is selected
       if (!form.value.roleId) {
-        const activeUsers = res.data.filter((x) => (x.orgStatus || x.status) === 'Active');
+        const activeUsers = res.data.filter((x) => x.orgStatus === "Active" && !x.isAccountDeactivated);
         userList.value = activeUsers;
         form.value.userIds = form.value.userIds.filter((id) =>
           activeUsers.some((u) => u.id === id)
