@@ -479,21 +479,13 @@ watch(
 watch(
   () => form.value.roleId,
   (newRoleId) => {
-    const activeUsers = users.value.filter((x) => x.status === "Active");
-    if (newRoleId) {
-      const filteredUsers = activeUsers.filter((x) => x.roleId === newRoleId);
-      userList.value = filteredUsers;
-      form.value.userIds = form.value.userIds.filter((id) =>
-        filteredUsers.some((u) => u.id === id)
-      );
-    } else {
-      // If no role is selected, show all active users
-      userList.value = activeUsers;
-      // Keep only active users when the role filter is cleared
-      form.value.userIds = form.value.userIds.filter((id) =>
-        activeUsers.some((u) => u.id === id)
-      );
-    }
+    const activeUsers = users.value.filter((x) => x.orgStatus === "Active" && !x.isAccountDeactivated);
+    // Show all active users regardless of role selection
+    userList.value = activeUsers;
+    // Keep only active users when the role filter is cleared
+    form.value.userIds = form.value.userIds.filter((id) =>
+      activeUsers.some((u) => u.id === id)
+    );
   }
 );
 
@@ -573,7 +565,7 @@ const getUsers = () => {
       users.value = res.data;
       // Initialize userList with all active users if no role is selected
       if (!form.value.roleId) {
-        const activeUsers = res.data.filter((x) => (x.orgStatus || x.status) === 'Active');
+        const activeUsers = res.data.filter((x) => x.orgStatus === "Active" && !x.isAccountDeactivated);
         userList.value = activeUsers;
         form.value.userIds = form.value.userIds.filter((id) =>
           activeUsers.some((u) => u.id === id)

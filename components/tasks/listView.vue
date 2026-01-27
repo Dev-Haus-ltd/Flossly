@@ -1672,13 +1672,8 @@ const calenderDate = (data) => {
 };
 const getTaskUsers = (task) => {
   if (users) {
-    if (task.taskDetails.roleId) {
-      return users.filter(
-        (x) => x.roleId === task.taskDetails.roleId && (x.orgStatus || x.status) === 'Active'
-      );
-    } else {
-      return users.filter((x) => (x.orgStatus || x.status) === 'Active');
-    }
+    // Show all active users regardless of role
+    return users.filter((x) => x.orgStatus === "Active" && !x.isAccountDeactivated);
   } else return [];
 };
 const isEditingLink = (id, key) =>

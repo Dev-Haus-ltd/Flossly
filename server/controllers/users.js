@@ -27,7 +27,10 @@ export const usersList = async (event) => {
   }
   try {
     const userOrganisations = await UserOrganisation.findAll({
-      where: { organisationId: currentOrg },
+      where: { 
+        organisationId: currentOrg,
+        status: "Active" // Only fetch users with Active status in the organization
+      },
       include: [
         {
           model: User,

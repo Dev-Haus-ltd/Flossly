@@ -5,8 +5,6 @@
       <v-tab class="tab-text" value="active"> Active Rotas </v-tab>
 
       <v-tab class="tab-text" value="old"> Old Rotas </v-tab>
-
-      <v-tab class="tab-text" value="shifts"> Shifts </v-tab>
     </v-tabs>
 
     <!-- Tab Content -->
@@ -436,16 +434,227 @@
       </v-tabs-window-item>
 
       <v-tabs-window-item value="old">
-        <div class="pa-4">
-          <h3 class="tab-content-title">Old Rotas Content</h3>
-          <p>Here goes the hardcoded content for Old Rotas.</p>
-        </div>
-      </v-tabs-window-item>
+        <div>
+          <!-- Toolbar: left = date range + search -->
+          <div class="d-flex align-center justify-space-between my-4">
+            <div class="d-flex align-center" style="gap: 12px">
+              <v-menu
+                v-model="menuDateOld"
+                max-width="420"
+                offset-y
+                :close-on-content-click="false"
+              >
+                <template #activator="{ props }">
+                  <v-text-field
+                    v-bind="props"
+                    readonly
+                    variant="solo"
+                    density="compact"
+                    hide-details
+                    class="date-activator rounded-lg input-bordered"
+                    width="200"
+                    :placeholder="dateRangeTextOld || 'Select date range'"
+                    :value="dateRangeTextOld"
+                    append-inner-icon="mdi-calendar-range"
+                    flat
+                  />
+                </template>
 
-      <v-tabs-window-item value="shifts">
-        <div class="pa-4">
-          <h3 class="tab-content-title">Shifts Content</h3>
-          <p>Here goes the hardcoded content for Shifts.</p>
+                <v-card>
+                  <v-date-picker
+                    v-model="tempRangeOld"
+                    range
+                    color="primary"
+                    locale="en-GB"
+                  />
+                  <v-card-actions class="px-3">
+                    <v-spacer />
+                    <v-btn text @click="clearDateOld">Clear</v-btn>
+                    <v-btn color="primary" variant="text" @click="applyDateOld"
+                      >Apply</v-btn
+                    >
+                  </v-card-actions>
+                </v-card>
+              </v-menu>
+
+              <!-- Search -->
+              <v-text-field
+                v-model="searchOld"
+                placeholder="Search "
+                density="compact"
+                hide-details
+                append-inner-icon="mdi-magnify"
+                class="rounded-lg input-bordered"
+                width="200"
+                variant="solo"
+                flat
+              />
+            </div>
+          </div>
+
+          <!-- Expansion panels for Old Rotas -->
+          <v-expansion-panels v-model="openedPanelsOld" multiple flat>
+            <!-- Expired Rotas -->
+            <v-expansion-panel class="border-sm">
+              <v-expansion-panel-title>
+                <div class="d-flex align-center">
+                  <v-chip
+                    class="rounded-lg mr-2"
+                    size="large"
+                    color="#D32F2F"
+                    prepend-icon="mdi-clock-alert-outline"
+                  >
+                    Expired
+                  </v-chip>
+                  <v-chip class="rounded-lg" size="large" color="#D32F2F">
+                    {{ filteredExpired.length }}
+                  </v-chip>
+                </div>
+              </v-expansion-panel-title>
+
+              <v-expansion-panel-text>
+                <v-data-table
+                  :headers="headers"
+                  :items="filteredExpired"
+                  item-value="id"
+                  show-select
+                  hover
+                  class="rota-table"
+                  v-model="selectedExpired"
+                  :item-selectable="() => true"
+                  @update:modelValue="onSelectionChangeExpired"
+                  return-object
+                >
+                <template
+              v-slot:[`item.data-table-select`]="{
+                internalItem,
+                isSelected,
+                toggleSelect,
+              }"
+            >
+            <div class="text-center">
+
+              <input
+                type="checkbox"
+                :checked="isSelected(internalItem)"
+                @change="() => toggleSelect(internalItem)"
+                class="cust-checkbox"
+              />
+            </div>
+            </template>
+                  <!-- Header slot -->
+                  <template
+                    v-slot:headers="{
+                      columns,
+                      getSortIcon,
+                      toggleSort,
+                      allSelected,
+                      someSelected,
+                    }"
+                  >
+                    <tr>
+                      <template
+                        v-for="(column, i) in columns"
+                        :key="column.key"
+                      >
+                        <th
+                          :style="{
+                            width: i === 0 ? '50px' : '',
+                            padding: '6px 8px',
+                            backgroundColor: '#F6F6F6',
+                            fontSize: '14px',
+                          }"
+                        >
+                          <div
+                            v-if="i !== 0"
+                            class="d-flex align-center justify-space-between"
+                          >
+                            <span>{{ column.title }}</span>
+                            <v-icon
+                              v-if="column.sortable"
+                              size="14"
+                              class="ml-1"
+                              @click="toggleSort(column)"
+                            >
+                              {{ getSortIcon(column) }}
+                            </v-icon>
+                          </div>
+
+                         
+                            <div
+                         v-else
+                      class="d-flex align-center justify-center"
+                    >
+                      <input
+                        type="checkbox"
+                        class="cust-checkbox"
+                        style="margin-left: 2px;"
+                        :checked="allSelected"
+                        :indeterminate.prop="someSelected && !allSelected"
+                        @change="toggleAll('expired')"
+                      />
+                    </div>
+                      
+                        </th>
+                      </template>
+                    </tr>
+                  </template>
+
+                  <!-- Cells -->
+                  <template v-slot:[`item.name`]="{ item }">
+                    <div class="px-2">{{ item.name }}</div>
+                  </template>
+
+                  <template v-slot:[`item.startDate`]="{ item }">
+                    <div class="px-2">
+                      {{ parsedDate(item.startDate) }}
+                    </div>
+                  </template>
+
+                  <template v-slot:[`item.employees`]="{ item }">
+                    <div class="px-2">
+                      {{ item.userCount ?? 0 }}
+                    </div>
+                  </template>
+                  <template v-slot:[`item.duration`]="{ item }">
+                    <div class="px-2">
+                      {{ item?.duration + " days" }}
+                    </div>
+                  </template>
+
+                  <template v-slot:[`item.status`]="{ item }">
+                    <div class="px-2">
+                      <v-chip
+                        :color="getRotaStatusColor(getRotaStatus(item))"
+                        label
+                      >
+                        {{ getRotaStatus(item) }}
+                      </v-chip>
+                    </div>
+                  </template>
+
+                  <template v-slot:[`item.actions`]="{ item }">
+                    <div class="px-4 d-flex align-center">
+                      <img
+                        src="@/assets/icons/teamfloss/userDetails/view.svg"
+                        alt="View"
+                        class="action-icon"
+                        @click.stop="onView(item)"
+                      />
+
+                        <img
+                        v-if="isManager"
+                        src="@/assets/icons/teamfloss/userDetails/export.svg"
+                        alt="Export"
+                        class="action-icon ml-3"
+                        @click.stop="onExport(item)"
+                      />
+                    </div>
+                  </template>
+                </v-data-table>
+              </v-expansion-panel-text>
+            </v-expansion-panel>
+          </v-expansion-panels>
         </div>
       </v-tabs-window-item>
     </v-tabs-window>
@@ -467,13 +676,33 @@ const tempRange = ref([]); // temporary picker selection (array: [start, end])
 const dateRangeModel = ref([]); // applied range
 const search = ref("");
 const openedPanels = ref([0]);
+
+// Old Rotas tab state
+const menuDateOld = ref(false);
+const tempRangeOld = ref([]);
+const dateRangeModelOld = ref([]);
+const searchOld = ref("");
+const openedPanelsOld = ref([0]);
+
 const published = computed(() => rotaList.filter((r) => r.isPublished));
 const unpublished = computed(() => rotaList.filter((r) => !r.isPublished));
+
+// Expired rotas - where current date is past the end date
+const expired = computed(() => {
+  const now = new Date();
+  return rotaList.filter((r) => {
+    const end = new Date(r.endDate);
+    return now > end;
+  });
+});
+
 // Selection models
 const selectedPublished = ref([]);
 const selectedUnpublished = ref([]);
+const selectedExpired = ref([]);
 const isAllPublishedSelected=ref(false);
 const isAllUnPublishedSelected=ref(false);
+const isAllExpiredSelected=ref(false);
 
 const headers = [
   { title: "Rota Name", key: "name", sortable: true },
@@ -494,10 +723,32 @@ const matchesSearch = (item) => {
   );
 };
 
+const matchesSearchOld = (item) => {
+  if (!searchOld.value) return true;
+  const q = searchOld.value.toLowerCase();
+  return (
+    (item.name && item.name.toLowerCase().includes(q)) ||
+    String(item.userCount ?? 0).includes(q) ||
+    (item.status && item.status.toLowerCase().includes(q))
+  );
+};
+
 const inDateRange = (item) => {
   if (!dateRangeModel.value || dateRangeModel.value.length !== 2) return true;
   if (!item.startDate) return false;
   const [sRaw, eRaw] = dateRangeModel.value;
+  const s = new Date(sRaw);
+  s.setHours(0, 0, 0, 0);
+  const e = new Date(eRaw);
+  e.setHours(23, 59, 59, 999);
+  const d = new Date(item.startDate);
+  return d >= s && d <= e;
+};
+
+const inDateRangeOld = (item) => {
+  if (!dateRangeModelOld.value || dateRangeModelOld.value.length !== 2) return true;
+  if (!item.startDate) return false;
+  const [sRaw, eRaw] = dateRangeModelOld.value;
   const s = new Date(sRaw);
   s.setHours(0, 0, 0, 0);
   const e = new Date(eRaw);
@@ -511,6 +762,9 @@ const filteredPublished = computed(() =>
 );
 const filteredUnpublished = computed(() =>
   unpublished.value.filter((it) => matchesSearch(it) && inDateRange(it))
+);
+const filteredExpired = computed(() =>
+  expired.value.filter((it) => matchesSearchOld(it) && inDateRangeOld(it))
 );
 
 const toggleAll = (which) => {
@@ -545,6 +799,21 @@ const toggleAll = (which) => {
       isAllUnPublishedSelected.value = true;
     }
      console.log(selectedUnpublished.value)
+  } else if(which === "expired"){
+    if (isAllExpiredSelected.value) {
+      isAllExpiredSelected.value = false;
+      selectedExpired.value = [];
+    } else {
+      const selected = [];
+      filteredExpired.value.forEach((r) => {
+        
+          selected.push(r);
+      
+      });
+      selectedExpired.value = selected;
+      isAllExpiredSelected.value = true;
+    }
+     console.log(selectedExpired.value)
   }
 };
 const onSelectionChangePublished=(newSelected) => {
@@ -552,6 +821,9 @@ const onSelectionChangePublished=(newSelected) => {
 };
 const onSelectionChangeUnPublished=(newSelected) => {
   console.log( selectedUnpublished.value);
+};
+const onSelectionChangeExpired=(newSelected) => {
+  console.log( selectedExpired.value);
 };
 function applyDate() {
   dateRangeModel.value = tempRange.value ? [...tempRange.value] : [];
@@ -562,11 +834,27 @@ function clearDate() {
   dateRangeModel.value = [];
 }
 
+function applyDateOld() {
+  dateRangeModelOld.value = tempRangeOld.value ? [...tempRangeOld.value] : [];
+  menuDateOld.value = false;
+}
+function clearDateOld() {
+  tempRangeOld.value = [];
+  dateRangeModelOld.value = [];
+}
+
 // date-range display text
 const dateRangeText = computed(() => {
   if (!dateRangeModel.value || dateRangeModel.value.length !== 2) return "";
   return `${parsedDate(dateRangeModel.value[0])} - ${parsedDate(
     dateRangeModel.value[1]
+  )}`;
+});
+
+const dateRangeTextOld = computed(() => {
+  if (!dateRangeModelOld.value || dateRangeModelOld.value.length !== 2) return "";
+  return `${parsedDate(dateRangeModelOld.value[0])} - ${parsedDate(
+    dateRangeModelOld.value[1]
   )}`;
 });
 const changeRotaStatus = (type, item) => {

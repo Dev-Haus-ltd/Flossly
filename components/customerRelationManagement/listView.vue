@@ -98,30 +98,35 @@
             >
               <!-- Name column with expand icon and inline edit -->
               <template v-if="col.key === 'name'">
-                <div class="pa-1 d-flex justify-space-between align-center">
-                  <input
-                    v-if="editingCell.id === item.id && editingCell.field === 'name'"
-                    v-model="editingCell.value"
-                    @blur="saveEdit(item, 'name')"
-                    @keyup.enter="saveEdit(item, 'name')"
-                    @keyup.esc="cancelEdit"
-                    class="inline-edit-input"
-                    ref="editInput"
-                    autofocus
-                  />
-                  <p 
-                    v-else 
-                    class="ml-2 mb-0 editable-field" 
-                    @click="startEdit(item, 'name')"
-                  >
-                    {{ item.name || 'Click to edit' }}
-                  </p>
-                  <img
-                    src="@/assets/dashboard/expandIcon.svg"
-                    alt="Expand"
-                    class="ml-2 cursor-pointer"
-                    @click="openLeadDialog(item)"
-                  />
+                <div class="lead-name-cell-container">
+                  <div class="d-flex justify-space-between align-center lead-name-cell">
+                    <div class="lead-name-field-wrapper">
+                      <input
+                        v-if="editingCell.id === item.id && editingCell.field === 'name'"
+                        v-model="editingCell.value"
+                        @blur="saveEdit(item, 'name')"
+                        @keyup.enter="saveEdit(item, 'name')"
+                        @keyup.esc="cancelEdit"
+                        class="inline-edit-input"
+                        ref="editInput"
+                        autofocus
+                      />
+                      <p 
+                        v-else 
+                        class="ml-2 mb-0 editable-field" 
+                        @click="startEdit(item, 'name')"
+                      >
+                        {{ item.name || 'Click to edit' }}
+                      </p>
+                    </div>
+                    <img
+                      src="@/assets/dashboard/expandIcon.svg"
+                      alt="Expand"
+                      class="ml-2 mr-2 cursor-pointer"
+                      @click="openLeadDialog(item)"
+                    />
+                  </div>
+                  <div class="lead-name-border"></div>
                 </div>
               </template>
 
@@ -923,10 +928,8 @@ async function sendCompose() {
   } finally { composeLoading.value = false }
 }
 const getLeadUsers = (lead) => {
-  // if (props.users.length) {
-  //   return props.users.filter((x) => x.roleId !== task.taskDetails.roleId);
-  // } else return [];
-  return props.users.filter((x) => x.status === "Active");
+  // Filter to show only active users (not invited, disabled, or expired)
+  return props.users.filter((x) => x.orgStatus === "Active" && !x.isAccountDeactivated);
 };
 const unAssign = async (lead, user) => {
   try {
@@ -1269,4 +1272,32 @@ const convertSelected = async () => {
   background: #fff;
 }
 .action-item:hover { background-color: #f5f5f5; }
+
+.lead-name-cell-container {
+  position: relative;
+  height: 100%;
+}
+
+.lead-name-cell {
+  padding: 4px;
+  height: 100%;
+}
+
+.lead-name-field-wrapper {
+  flex: 1;
+  padding-right: 8px;
+  margin-right: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.lead-name-border {
+  position: absolute;
+  right: 50px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: rgba(var(--v-border-color), var(--v-border-opacity));
+  pointer-events: none;
+}
 </style>
