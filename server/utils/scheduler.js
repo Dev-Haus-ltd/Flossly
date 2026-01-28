@@ -15,11 +15,9 @@ import {
   UserPreference,
   OnboardingEvent,
 } from "../models/index.js";
-import {
-  ONBOARDING_EMAIL_TEMPLATES,
-  buildOnboardingContext,
-  sendOnboardingEmail,
-} from "./onboardingCampaign.js";
+import { ONBOARDING_EMAIL_TEMPLATES } from "@shared/defaults/onboardingCampaign.js";
+import { buildOnboardingContext, sendOnboardingEmail } from "./onboardingCampaign.js";
+import { renderPatientTokens } from "./templateTokens.js";
 import {
   ensureOnboardingEventsTable,
   getDiffDaysFromStart,
@@ -197,25 +195,6 @@ const extractSubjectAndBody = (template) => {
   return { subject, body }
 }
 
-const renderPatientTokens = (text, ctx) => {
-  if (!text) return ''
-  const tokens = {
-    'First Name': ctx.firstName || 'there',
-    'Practice Name': ctx.practiceName || 'your practice',
-    'Practice Phone': ctx.practicePhone || '',
-    'Practice Address': ctx.practiceAddress || '',
-    'Date/Time': ctx.dateTime || '',
-    'Appointment Date': ctx.appointmentDate || '',
-    'Appointment Time': ctx.appointmentTime || '',
-  }
-  let out = String(text)
-  Object.entries(tokens).forEach(([key, value]) => {
-    const safe = value || ''
-    const re = new RegExp(`\\[${key.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\]`, 'gi')
-    out = out.replace(re, safe)
-  })
-  return out
-}
 
 const matchesTreatment = (appointment, keywords = []) => {
   const hay = `${appointment?.treatmentName || ''} ${appointment?.notes || ''}`.toLowerCase()

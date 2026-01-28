@@ -7,7 +7,7 @@ import {
   PatientAutomationTemplate,
   OnboardingEvent,
 } from "../models/index.js";
-import { ONBOARDING_EMAIL_TEMPLATES } from "./onboardingCampaign.js";
+import { ONBOARDING_EMAIL_TEMPLATES } from "@shared/defaults/onboardingCampaign.js";
 
 const CLIENT_ONBOARDING_KEYS = new Set([
   "welcome_quiz_done",

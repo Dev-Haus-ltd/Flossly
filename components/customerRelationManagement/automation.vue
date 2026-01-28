@@ -1,31 +1,30 @@
 <template>
   <div>
     <template v-if="!activeAutomation || displayMode === 'modal'">
-      <v-row dense>
-        <v-col
+      <div class="automation-card-grid">
+        <div
           v-for="card in automationCards"
           :key="card.key"
-          cols="12"
-          sm="6"
-          md="3"
+          class="automation-card-cell"
         >
           <AutomationCard
             :title="card.title"
             :description="card.description"
             :count="card.itemCount"
             :enabled="card.enabled"
+            :author="card.author"
             :selected="activeAutomation?.key === card.key"
             @select="selectAutomation(card)"
             @toggle="(val) => toggleAutomationGroup(card, val)"
           />
-        </v-col>
-      </v-row>
-      <div v-if="!automationCards.length" class="text-center py-8">
-        <v-icon size="64" color="grey-lighten-1">mdi-email-off-outline</v-icon>
-        <p class="text-h6 mt-4 mb-2">No automation groups found</p>
-        <p class="text-body-2 text-medium-emphasis">
-          Create a group to start organizing your automations
-        </p>
+        </div>
+      </div>
+      <div v-if="!automationCards.length" class="automation-empty">
+        <div class="automation-empty__icon">
+          <img :src="addFolderIcon" alt="Add automation group" />
+        </div>
+        <div class="automation-empty__title">Add your Automation group</div>
+        <div class="automation-empty__subtitle">No Automation</div>
       </div>
     </template>
 
@@ -490,13 +489,17 @@
 <script setup>
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 import AutomationCard from '@/components/patients/automationCard.vue'
-import { crmAutomationDefaults, crmAutomationGroups } from '@/lib/crmAutomationDefaults'
+import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults'
+import addFolderIcon from '@/assets/icons/crm/add-folder.svg'
+import { getCurrentUserName } from '@/lib/helpers/storage'
+import { isDefaultAutomationGroup, resolveAutomationGroupAuthor } from '@/lib/crm/automation'
 
 const props = defineProps({
   leadId: { type: [Number, String], default: null },
   displayMode: { type: String, default: 'inline' },
   groups: { type: Array, default: null },
   useGroupsApi: { type: Boolean, default: true },
+  includeDefaults: { type: Boolean, default: false },
 })
 const crmStore = useCrmStore()
 const orgStore = useOrgStore()
@@ -511,6 +514,8 @@ const saving = ref(false)
 const activeAutomation = ref(null)
 const showGroupDialog = ref(false)
 const groupRows = ref([])
+const defaultAutomationKeySet = new Set(crmAutomationDefaults.map(item => item.key))
+const defaultGroupKeySet = new Set(crmAutomationGroups.map(group => group.key))
 
 const tableHeaders = [
   { title: 'Type', key: 'type', sortable: false },
@@ -553,8 +558,22 @@ const resolvedGroups = computed(() => {
   return crmAutomationGroups
 })
 
+const isDefaultGroup = (group) =>
+  isDefaultAutomationGroup(group, defaultGroupKeySet, defaultAutomationKeySet)
+
+const visibleGroups = computed(() => {
+  if (props.includeDefaults) return resolvedGroups.value
+  return resolvedGroups.value.filter(group => !isDefaultGroup(group))
+})
+
+const resolveGroupAuthor = (group) =>
+  resolveAutomationGroupAuthor(group, {
+    isDefaultGroup,
+    fallbackName: getCurrentUserName(),
+  })
+
 const automationCards = computed(() => {
-  return resolvedGroups.value.map((group) => {
+  return visibleGroups.value.map((group) => {
     const keys = group.templateKeys || []
     const groupRows = keys.length
       ? rows.filter(r => keys.includes(r.key))
@@ -563,6 +582,7 @@ const automationCards = computed(() => {
       ...group,
       itemCount: groupRows.length,
       enabled: groupRows.some(r => r.enabled),
+      author: resolveGroupAuthor(group),
     }
   })
 })
@@ -615,13 +635,18 @@ const toggleAutomationGroup = async (card, val) => {
   }
 }
 
-const loadRows = async () => {
+  const loadRows = async () => {
   try {
     const res = await crmStore.listAutomation(resolvedLeadId.value || undefined)
-    const items = (res?.data && res.data.length)
-      ? res.data
-      : crmAutomationDefaults.map((item) => ({ ...item }))
-    rows.splice(0, rows.length, ...items)
+    const apiItems = Array.isArray(res?.data) ? res.data : []
+    const fallbackItems = props.includeDefaults
+      ? crmAutomationDefaults.map((item) => ({ ...item }))
+      : []
+    const items = apiItems.length ? apiItems : fallbackItems
+    const filteredItems = props.includeDefaults
+      ? items
+      : items.filter(item => !defaultAutomationKeySet.has(item.key))
+    rows.splice(0, rows.length, ...filteredItems)
   } catch {}
 }
 
@@ -648,6 +673,7 @@ watch(resolvedLeadId, () => {
   clearAutomationSelection()
   refresh()
 })
+
 
 // Preview dialog state
 const show = ref(false)
@@ -918,6 +944,7 @@ const practiceLogo = computed(() => {
   return details?.logo || orgStore.logo || null
 })
 
+
 const resolveDefault = (row) => crmAutomationDefaults.find(d => d.key === row?.key) || {}
 
 const applyPlaceholders = (text) => {
@@ -1016,6 +1043,52 @@ watch(showGroupDialog, (v) => {
 <style scoped>
 .gap-2 {
   gap: 8px;
+}
+
+.automation-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.automation-card-cell {
+  min-width: 0;
+}
+
+.automation-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 64px 16px 72px;
+}
+
+.automation-empty__icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  background: #eaf1ff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.automation-empty__icon img {
+  width: 32px;
+  height: 32px;
+}
+
+.automation-empty__title {
+  font-weight: 600;
+  font-size: 16px;
+  color: #111827;
+}
+
+.automation-empty__subtitle {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #9ca3af;
 }
 
 .field-label {

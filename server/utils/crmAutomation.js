@@ -1,4 +1,4 @@
-import { crmAutomationDefaults } from "~/lib/crmAutomationDefaults";
+import { crmAutomationDefaults } from "@shared/defaults/crmAutomationDefaults.js";
 import { formatYmd, parseDayOffsetFromText } from "~/lib/misc";
 import { template as EMAIL_TEMPLATE } from "./emailTemplate.js";
 import { transporter } from "./nodeMailer.js";

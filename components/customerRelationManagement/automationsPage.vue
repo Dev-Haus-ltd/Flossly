@@ -5,17 +5,22 @@
     </div>
 
     <div class="mt-5 px-5">
-      <div class="d-flex align-center justify-space-between flex-wrap gap-3">
-        <div>
-          <div class="page-title">Automation</div>
-          <div class="page-subtitle">Manage your CRM automation groups and templates.</div>
-        </div>
-        <div class="d-flex flex-wrap gap-2">
+      <div class="automation-header">
+        <CommonFeatureCard
+          v-if="showInfoBanner"
+          mode="info"
+          heading="My Automations"
+          subheading="Create and manage your own automation"
+          :image-src="automationFeatureCardIcon"
+          class="automation-info-banner mt-4"
+          @close="showInfoBanner = false"
+        />
+        <div class="automation-actions d-flex flex-wrap gap-0">
           <v-btn
             color="secondary"
             variant="flat"
             rounded="lg"
-            class="add-task-btn"
+            class="add-task-btn automation-btn automation-btn--group"
             @click="showGroupDrawer = true"
           >
             <template #prepend>
@@ -28,7 +33,7 @@
             color="primary"
             variant="flat"
             rounded="lg"
-            class="add-task-btn"
+            class="add-task-btn automation-btn automation-btn--primary"
             @click="showAutomationDrawer = true"
           >
             <template #prepend>
@@ -39,14 +44,18 @@
         </div>
       </div>
 
-      <div class="mt-5">
-        <CustomerRelationManagementAutomation
-          ref="automationRef"
-          display-mode="modal"
-          :groups="automationGroups"
-          :use-groups-api="false"
-        />
-      </div>
+      <v-card class="automation-library-card" elevation="0">
+        <div class="library-header">Automation Library</div>
+        <div class="library-body">
+          <CustomerRelationManagementAutomation
+            ref="automationRef"
+            display-mode="modal"
+            :groups="automationGroups"
+            :use-groups-api="false"
+            :include-defaults="false"
+          />
+        </div>
+      </v-card>
     </div>
 
     <ClientOnly>
@@ -69,6 +78,8 @@ import { useMainStore } from '@/stores/index'
 import CustomerRelationManagementAutomation from '@/components/customerRelationManagement/automation.vue'
 import CustomerRelationManagementAddAutomationGroup from '@/components/customerRelationManagement/addAutomationGroup.vue'
 import CustomerRelationManagementAddAutomation from '@/components/customerRelationManagement/addAutomation.vue'
+import CommonFeatureCard from '@/components/Common/featureCard.vue'
+import automationFeatureCardIcon from '@/assets/icons/crm/automation-feature-card.svg'
 
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
@@ -79,6 +90,7 @@ const automationGroups = ref([])
 const automationRef = ref(null)
 const showGroupDrawer = ref(false)
 const showAutomationDrawer = ref(false)
+const showInfoBanner = ref(true)
 
 const isPrivileged = computed(() => [1, 8].includes(Number(user.value?.roleId)))
 
@@ -136,5 +148,63 @@ onMounted(async () => {
   font-size: 13px;
   color: #6b7280;
   margin-top: 4px;
+}
+
+.automation-info-banner {
+  width: 100%;
+}
+
+.automation-actions {
+  margin-top: 16px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.automation-btn {
+  width: 209px;
+  height: 46px;
+  text-transform: none;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: #ffffff !important;
+}
+
+.automation-btn :deep(.v-icon) {
+  color: #ffffff;
+}
+
+.automation-btn--group {
+  background: #7d77ff !important;
+}
+
+.automation-btn--primary {
+  background: #0061ff !important;
+}
+
+.automation-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.automation-library-card {
+  margin-top: 24px;
+  border: 1px solid #e3e3e3;
+  border-radius: 14px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.library-header {
+  padding: 16px 20px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #1f2937;
+  border-bottom: 1px solid #efefef;
+  background: #fafafa;
+}
+
+.library-body {
+  padding: 16px;
 }
 </style>

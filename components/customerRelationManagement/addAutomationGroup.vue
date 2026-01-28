@@ -29,7 +29,7 @@
         <v-form ref="formRef" @submit.prevent="onSubmit">
           <v-row>
             <v-col cols="12">
-              <label class="mb-1 fld-lbl">Group Name <span class="req">*</span></label>
+              <label class="mb-1 fld-lbl">Automation Group Name <span class="req">*</span></label>
               <v-text-field
                 v-model="form.title"
                 variant="solo"
@@ -52,10 +52,6 @@
               />
             </v-col>
 
-            <v-col cols="12">
-              <label class="mb-1 fld-lbl">Enabled</label>
-              <v-switch v-model="form.enabled" inset color="success" hide-details />
-            </v-col>
           </v-row>
         </v-form>
       </v-card>
@@ -108,11 +104,10 @@ const requiredRule = [(v) => !!v || 'This field is required']
 const form = ref({
   title: '',
   description: '',
-  enabled: false,
 })
 
 const resetForm = () => {
-  form.value = { title: '', description: '', enabled: false }
+  form.value = { title: '', description: '' }
   if (formRef.value) formRef.value.resetValidation()
 }
 
@@ -139,7 +134,6 @@ const onSubmit = async () => {
     const res = await crmStore.saveAutomationGroup({
       title: form.value.title,
       description: form.value.description,
-      enabled: form.value.enabled,
     })
     if (res?.code === 0) {
       mainStore.setSnackbar({ title: 'Automation group created', type: 'success' })
