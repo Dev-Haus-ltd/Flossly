@@ -46,7 +46,7 @@ import {
   buildOnboardingContext,
   buildOnboardingInAppMessages,
   sendOnboardingEmail,
-} from "../utils/onboardingCampaign";
+} from "../utils/onboardingCampaign.js";
 import {
   CLIENT_ONBOARDING_KEYS,
   ensureOnboardingStartEvent,

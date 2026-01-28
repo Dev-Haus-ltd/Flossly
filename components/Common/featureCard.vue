@@ -1,169 +1,199 @@
 <template>
-    <div>
-      <!-- Feature Card with debounced hover -->
-      <div 
-        class="card-container"
-        @mouseenter="handleMouseEnter"
-        @mouseleave="handleMouseLeave"
-        @mousemove="handleMouseMove"
+  <div>
+    <!-- Feature Card with debounced hover -->
+    <div
+      class="card-container"
+      @mouseenter="handleMouseEnter"
+      @mouseleave="handleMouseLeave"
+      @mousemove="handleMouseMove"
+    >
+      <v-card
+        class="feature-card d-flex align-center pa-4"
+        :class="{ 'card-expanded': isHovered && !isInfo, 'feature-card--info': isInfo }"
+        elevation="0"
+        bg-color="#171952"
+        ref="cardRef"
       >
-        <v-card
-          class="feature-card d-flex align-center pa-4"
-          :class="{ 'card-expanded': isHovered }"
-          elevation="0"
-          bg-color="#171952"
-          ref="cardRef"
-        >
-          <div class="content-wrapper">
-            <img
-              src="@/assets/dashboard/demo-video-thumbnail.svg"
-              alt="thumbnail"
-              class="feature-img"
-              :class="{ 'img-hidden': isHovered }"
-            />
+        <div class="content-wrapper" :class="{ 'content-wrapper--info': isInfo }">
+          <img
+            :src="resolvedImage"
+            alt="thumbnail"
+            class="feature-img"
+            :class="{ 'img-hidden': isHovered && !isInfo, 'feature-img--info': isInfo }"
+          />
 
-            <div class="sub-heading" :class="{ 'text-expanded': isHovered }">
+          <div class="text-stack" :class="{ 'text-stack--info': isInfo }">
+            <div v-if="heading" class="heading-text">{{ heading }}</div>
+            <div class="sub-heading" :class="{ 'text-expanded': isHovered && !isInfo }">
               {{ subheading }}
             </div>
-
-            <div v-if="isHovered" class="play-button-container">
-              <img 
-                src="@/assets/dashboard/play-button.svg"
-                alt="play"
-                class="play-button"
-                @click="openModal"
-              />
-            </div>
+            <div v-if="description" class="sub-text">{{ description }}</div>
           </div>
 
-          <v-icon 
-            class="close-icon"
-            :class="{ 'close-icon-expanded': isHovered }"
-            @click="$emit('close')"
+          <div v-if="isHovered && !isInfo" class="play-button-container">
+            <img
+              :src="playButtonImage"
+              alt="play"
+              class="play-button"
+              @click="openModal"
+            />
+          </div>
+        </div>
+
+        <v-icon
+          class="close-icon"
+          :class="{ 'close-icon-expanded': isHovered && !isInfo, 'close-icon--info': isInfo }"
+          @click="$emit('close')"
+        >
+          mdi-close
+        </v-icon>
+
+        <div v-if="isHovered && !isInfo" class="expanded-inner-layer"></div>
+      </v-card>
+    </div>
+
+    <!-- Modal Dialog -->
+    <v-dialog
+      v-if="!isInfo"
+      v-model="showModal"
+      max-width="900"
+      persistent
+    >
+      <v-card class="modal-card" elevation="0">
+        <!-- Modal gradient border -->
+        <div class="modal-gradient-bg"></div>
+
+        <!-- Modal content -->
+        <div class="modal-content">
+          <!-- Close button -->
+          <v-icon
+            class="modal-close-btn"
+            @click="closeModal"
           >
             mdi-close
           </v-icon>
 
-          <div v-if="isHovered" class="expanded-inner-layer"></div>
-        </v-card>
-      </div>
-
-      <!-- Modal Dialog -->
-      <v-dialog 
-        v-model="showModal" 
-        max-width="900"
-        persistent
-      >
-        <v-card class="modal-card" elevation="0">
-          <!-- Modal gradient border -->
-          <div class="modal-gradient-bg"></div>
-
-          <!-- Modal content -->
-          <div class="modal-content">
-            <!-- Close button -->
-            <v-icon 
-              class="modal-close-btn"
-              @click="closeModal"
-            >
-              mdi-close
-            </v-icon>
-
-            <!-- YouTube embed - shows immediately on modal open -->
-            <div class="video-container">
-              <iframe
-                width="100%"
-                height="500"
-                :src="`https://www.youtube.com/embed/gEuICxXisnw?autoplay=1`"
-                frameborder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowfullscreen
-              ></iframe>
-            </div>
+          <!-- YouTube embed - shows immediately on modal open -->
+          <div class="video-container">
+            <iframe
+              width="100%"
+              height="500"
+              :src="`https://www.youtube.com/embed/gEuICxXisnw?autoplay=1`"
+              frameborder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowfullscreen
+            ></iframe>
           </div>
-        </v-card>
-      </v-dialog>
-    </div>
-  </template>
+        </div>
+      </v-card>
+    </v-dialog>
+  </div>
+</template>
   
-  <script setup>
-  import { ref } from 'vue';
+<script setup>
+import { ref, computed } from 'vue';
+import defaultImage from '@/assets/dashboard/demo-video-thumbnail.svg';
+import playButtonImage from '@/assets/dashboard/play-button.svg';
 
-  defineProps({
-    subheading: {
-      type: String,
-      required: true
-    }
-  });
+const props = defineProps({
+  subheading: {
+    type: String,
+    required: true
+  },
+  heading: {
+    type: String,
+    default: ''
+  },
+  description: {
+    type: String,
+    default: ''
+  },
+  imageSrc: {
+    type: String,
+    default: ''
+  },
+  mode: {
+    type: String,
+    default: 'video'
+  }
+});
+
+defineEmits(['close']);
+
+const isHovered = ref(false);
+const showModal = ref(false);
+const cardRef = ref(null);
+let hoverTimeout = null;
+let leaveTimeout = null;
+
+const isInfo = computed(() => props.mode === 'info');
+const resolvedImage = computed(() => props.imageSrc || defaultImage);
+
+const handleMouseEnter = () => {
+  if (isInfo.value) return;
+  // Clear any pending leave timeout
+  if (leaveTimeout) {
+    clearTimeout(leaveTimeout);
+    leaveTimeout = null;
+  }
   
-  defineEmits(['close']);
-
-  const isHovered = ref(false);
-  const showModal = ref(false);
-  const cardRef = ref(null);
-  let hoverTimeout = null;
-  let leaveTimeout = null;
-
-  const handleMouseEnter = () => {
-    // Clear any pending leave timeout
-    if (leaveTimeout) {
-      clearTimeout(leaveTimeout);
-      leaveTimeout = null;
-    }
-    
-    // Debounce enter with small delay to prevent rapid toggles
-    if (hoverTimeout) {
-      clearTimeout(hoverTimeout);
-    }
-    
-    hoverTimeout = setTimeout(() => {
-      isHovered.value = true;
-      hoverTimeout = null;
-    }, 50);
-  };
-
-  const handleMouseLeave = () => {
-    // Clear any pending enter timeout
-    if (hoverTimeout) {
-      clearTimeout(hoverTimeout);
-      hoverTimeout = null;
-    }
-    
-    // Debounce leave with delay to prevent rapid toggles at edges
-    if (leaveTimeout) {
-      clearTimeout(leaveTimeout);
-    }
-    
-    leaveTimeout = setTimeout(() => {
-      isHovered.value = false;
-      leaveTimeout = null;
-    }, 100);
-  };
-
-  const handleMouseMove = (e) => {
-    // If the card is expanded and cursor is still within container, keep hover state
-    if (isHovered.value && cardRef.value) {
-      const rect = cardRef.value.$el.getBoundingClientRect();
-      const x = e.clientX;
-      const y = e.clientY;
-      
-      // Add 10px buffer zone beyond card bounds
-      if (x < rect.left - 10 || x > rect.right + 10 || 
-          y < rect.top - 10 || y > rect.bottom + 10) {
-        handleMouseLeave();
-      }
-    }
-  };
-
-  const openModal = () => {
-    showModal.value = true;
-  };
-
-  const closeModal = () => {
-    showModal.value = false;
-  };
-  </script>
+  // Debounce enter with small delay to prevent rapid toggles
+  if (hoverTimeout) {
+    clearTimeout(hoverTimeout);
+  }
   
-  <style scoped>
+  hoverTimeout = setTimeout(() => {
+    isHovered.value = true;
+    hoverTimeout = null;
+  }, 50);
+};
+
+const handleMouseLeave = () => {
+  if (isInfo.value) return;
+  // Clear any pending enter timeout
+  if (hoverTimeout) {
+    clearTimeout(hoverTimeout);
+    hoverTimeout = null;
+  }
+  
+  // Debounce leave with delay to prevent rapid toggles at edges
+  if (leaveTimeout) {
+    clearTimeout(leaveTimeout);
+  }
+  
+  leaveTimeout = setTimeout(() => {
+    isHovered.value = false;
+    leaveTimeout = null;
+  }, 100);
+};
+
+const handleMouseMove = (e) => {
+  if (isInfo.value) return;
+  // If the card is expanded and cursor is still within container, keep hover state
+  if (isHovered.value && cardRef.value) {
+    const rect = cardRef.value.$el.getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    
+    // Add 10px buffer zone beyond card bounds
+    if (x < rect.left - 10 || x > rect.right + 10 || 
+        y < rect.top - 10 || y > rect.bottom + 10) {
+      handleMouseLeave();
+    }
+  }
+};
+
+const openModal = () => {
+  if (isInfo.value) return;
+  showModal.value = true;
+};
+
+const closeModal = () => {
+  showModal.value = false;
+};
+</script>
+  
+<style scoped>
   .card-container {
     position: relative;
   }
@@ -280,6 +310,19 @@
     padding: 0;
     justify-content: center;
   }
+
+  .feature-card--info {
+    cursor: default;
+    min-height: 72px;
+    padding: 4px;
+  }
+
+  .content-wrapper--info {
+    justify-content: flex-start;
+    gap: 16px;
+    padding-left: 12px;
+    padding-right: 40px;
+  }
   
   /* Left image */
   .feature-img {
@@ -332,6 +375,38 @@
   .feature-img.img-hidden {
     display: none;
   }
+
+  .feature-img--info {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    object-fit: contain;
+  }
+
+  .text-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: center;
+    align-items: center;
+  }
+
+  .text-stack--info {
+    text-align: left;
+    align-items: flex-start;
+  }
+
+  .heading-text {
+    font-weight: 700;
+    font-size: 14px;
+    color: #ffffff;
+  }
+
+  .sub-text {
+    font-weight: 400;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.8);
+  }
   
   /* Text styles */
   .sub-heading {
@@ -342,6 +417,12 @@
     position: relative;
     z-index: 3;
     white-space: nowrap;
+  }
+
+  .feature-card--info .sub-heading {
+    font-size: 13px;
+    font-weight: 500;
+    white-space: normal;
   }
 
   .sub-heading.text-expanded {
@@ -393,6 +474,14 @@
     position: absolute;
     top: 8px;
     right: 12px;
+    z-index: 6;
+  }
+
+  .close-icon--info {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
     z-index: 6;
   }
 

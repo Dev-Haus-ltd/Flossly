@@ -116,7 +116,7 @@
                         class="ml-2 mb-0 editable-field" 
                         @click="startEdit(item, 'name')"
                       >
-                        {{ item.name || 'Click to edit' }}
+                        {{ resolveLeadName(item) || 'Click to edit' }}
                       </p>
                     </div>
                     <img
@@ -457,7 +457,7 @@
             >
               <template v-if="col.key === 'name'">
                 <div class="pa-1 d-flex justify-space-between align-center">
-                  <p class="ml-2 mb-0 font-weight-medium">{{ item.name }}</p>
+                  <p class="ml-2 mb-0 font-weight-medium">{{ resolveLeadName(item) }}</p>
                 </div>
               </template>
               <template v-else-if="col.key === 'inquiryDate' || col.key === 'followUpDate'">
@@ -564,6 +564,7 @@ import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 import { buildRecipientContext, renderWithContext } from '@/lib/templateTokens'
 import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
 import { formatAssignedUsers, formatTreatmentValue } from "@/lib/misc";
+import { getLeadDisplayName } from "@/lib/normalizers/lead";
 import callIcon from '@/assets/crm/call.svg'
 import sendMailIcon from '@/assets/crm/sendMail.svg'
 import whatsappIcon from '@/assets/crm/whatsapp.svg'
@@ -725,6 +726,8 @@ const onActionClick = (key) => {
 const formatDate = (d) => {
   return formatDateDDMMYYYY(d);
 };
+
+const resolveLeadName = (lead) => getLeadDisplayName(lead);
 
 const updateFollowUpDate = async (item, value) => {
   if (!value) return;

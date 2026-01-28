@@ -55,6 +55,16 @@
               />
               Flossly Automation
             </v-tab>
+
+            <v-tab value="my-automations" class="tab-text">
+              <img
+                src="@/assets/icons/crm/settings.svg"
+                width="18"
+                height="18"
+                class="mr-2"
+              />
+              My Automations
+            </v-tab>
           </v-tabs>
 
           <v-tabs-window v-model="tab">
@@ -75,7 +85,7 @@
                     </div>
                   </v-col>
                   <v-col cols="12" md="5">
-                    <span class="value-text">{{ selectedLead.name }}</span>
+                    <span class="value-text">{{ displayLeadName }}</span>
                   </v-col>
 
                   <!-- Email -->
@@ -355,7 +365,19 @@
 
             <v-tabs-window-item value="automation">
               <div class="pa-6">
-                <CustomerRelationManagementAutomation :lead-id="selectedLead?.id" />
+                <CustomerRelationManagementAutomation
+                  :lead-id="selectedLead?.id"
+                  :include-defaults="true"
+                />
+              </div>
+            </v-tabs-window-item>
+
+            <v-tabs-window-item value="my-automations">
+              <div class="pa-6">
+                <CustomerRelationManagementAutomation
+                  :lead-id="selectedLead?.id"
+                  :include-defaults="false"
+                />
               </div>
             </v-tabs-window-item>
           </v-tabs-window>
@@ -367,6 +389,7 @@
 
 <script setup>
 import { formatDateOnly } from "@/lib/dateFormatter";
+import { getLeadDisplayName } from "@/lib/normalizers/lead";
 
 const props = defineProps({
   modelValue: Boolean,
@@ -377,7 +400,7 @@ const onClose = () => { emit('update:modelValue', false); emit('close') }
 const tab = ref("lead-info");
 const leadTitle = computed(() => {
   const lead = props.selectedLead || {};
-  const name = String(lead.name || '').trim();
+  const name = String(displayLeadName.value || '').trim();
   if (name) return `${name}'s profile`;
   const email = String(lead.email || '').trim();
   if (email) return `${email}'s profile`;
@@ -396,6 +419,10 @@ const humanizeFieldLabel = (key) => {
     .replace(/\s+/g, ' ')
     .trim()
 }
+const displayLeadName = computed(() => {
+  const name = getLeadDisplayName(props.selectedLead || {})
+  return name || 'N/A'
+})
 const showMetaExtras = computed(() => {
   const source = props.selectedLead?.leadSource
   const name = typeof source === 'string' ? source : source?.name

@@ -1,6 +1,6 @@
 import { DiaryPatient, PatientAutomationDictionary, PatientAutomationTemplate } from '../models'
 import { success, error } from '../utils/response'
-import { defaultTemplatesByGroup, defaultAutomationGroups, legacyAutomationGroupKeys } from '../constants/patientJourneyDefaults'
+import { defaultTemplatesByGroup, defaultAutomationGroups, legacyAutomationGroupKeys } from '@shared/defaults/patientJourneyDefaults.js'
 
 const ensureDictionarySeed = async () => {
   await PatientAutomationDictionary.sync()

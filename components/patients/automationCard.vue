@@ -9,7 +9,7 @@
       <img src="@/assets/images/taskpool/operational.svg" alt="automation" class="illustration-img" />
     </div>
     <div class="automation-title clamp-2">{{ title }}</div>
-    <span class="automation-sub mb-1 d-block">by flossly</span>
+    <span class="automation-sub mb-1 d-block">by {{ authorLabel }}</span>
     <div class="automation-desc clamp-2">{{ description }}</div>
     <div class="d-flex align-center justify-space-between mt-3">
       <div class="d-flex align-center text-grey">
@@ -29,15 +29,26 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   title: String,
   description: String,
   count: [Number, String],
   enabled: Boolean,
   selected: Boolean,
+  author: {
+    type: String,
+    default: '',
+  },
 })
 
 defineEmits(['select', 'toggle'])
+
+const authorLabel = computed(() => {
+  const raw = typeof props.author === 'string' ? props.author.trim() : ''
+  return raw || 'Flossly'
+})
 </script>
 
 <style scoped>
