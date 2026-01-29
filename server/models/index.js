@@ -53,6 +53,7 @@ import { OrganisationScript } from "./organisations/organisationScripts";
 import { MetaPage } from "./crm/metaPages";
 import { CrmLead } from "./crm/leads";
 import { MetaUserToken } from "./crm/metaUserTokens";
+import { MetaWhatsAppConfig } from "./crm/metaWhatsAppConfigs";
 import { ChatbotConfig } from "./crm/chatbotConfig";
 // Diary
 import { DiaryTreatment } from "./diary/treatments";
@@ -310,6 +311,10 @@ MetaUserToken.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organ
 MetaUserToken.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', hooks: true });
 Organisation.hasMany(MetaUserToken, { foreignKey: 'organisationId', as: 'metaUserTokens', onDelete: 'CASCADE', hooks: true });
 
+MetaWhatsAppConfig.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+MetaWhatsAppConfig.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', hooks: true });
+Organisation.hasMany(MetaWhatsAppConfig, { foreignKey: 'organisationId', as: 'metaWhatsAppConfigs', onDelete: 'CASCADE', hooks: true });
+
 CrmLead.hasOne(CrmLeadTreatment, { foreignKey: 'leadId', as: 'treatmentInfo' });
 CrmLeadTreatment.belongsTo(CrmLead, { foreignKey: 'leadId', as: 'lead', onDelete: 'CASCADE', hooks: true });
 
@@ -434,6 +439,7 @@ export {
   CrmAutomationGroup,
   CrmAutomationGroupTemplate,
   MetaUserToken,
+  MetaWhatsAppConfig,
   ChatbotConfig,
   // Diary
   DiaryTreatment,

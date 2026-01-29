@@ -1,10 +1,11 @@
 import { Op } from 'sequelize'
-import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, MetaPage, User, UserOrganisation } from '../models'
+import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, MetaPage, MetaWhatsAppConfig, User, UserOrganisation } from '../models'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults.js'
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
 import { success, error } from '../utils/response'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
 import { sendImmediateCrmAutomationsForLead } from '../utils/crmAutomation.js'
+import { decrypt } from '../utils/crypto'
 import DB from '../utils/db'
 
 const parseDateValue = (value) => {
@@ -22,6 +23,60 @@ const slugifyKey = (value) => {
     .replace(/_+/g, '_')
     .replace(/^-|-$|^_+|_+$/g, '')
   return base || 'automation_group'
+}
+
+const normalizeWhatsAppNumber = (value) => {
+  const raw = String(value || '').trim()
+  if (!raw) return null
+  const digits = raw.replace(/\D/g, '')
+  if (digits.length < 8) return null
+  return digits
+}
+
+const resolveWhatsAppConfig = async (orgId) => {
+  const config = useRuntimeConfig()
+  const envPhoneNumberId =
+    config.META_WA_PHONE_NUMBER_ID ||
+    config.WHATSAPP_PHONE_NUMBER_ID ||
+    process.env.META_WA_PHONE_NUMBER_ID ||
+    process.env.WHATSAPP_PHONE_NUMBER_ID ||
+    ''
+  const envToken =
+    config.META_WA_ACCESS_TOKEN ||
+    config.WHATSAPP_ACCESS_TOKEN ||
+    process.env.META_WA_ACCESS_TOKEN ||
+    process.env.WHATSAPP_ACCESS_TOKEN ||
+    ''
+  const envWabaId =
+    config.META_WA_WABA_ID ||
+    config.WHATSAPP_WABA_ID ||
+    process.env.META_WA_WABA_ID ||
+    process.env.WHATSAPP_WABA_ID ||
+    ''
+
+  let row = null
+  try { await MetaWhatsAppConfig.sync() } catch {}
+  row = await MetaWhatsAppConfig.findOne({ where: { organisationId: Number(orgId) } })
+
+  if (row) {
+    return {
+      phoneNumberId: row.phoneNumberId,
+      accessToken: decrypt(row.accessTokenEnc),
+      wabaId: row.wabaId || null,
+      source: 'db',
+    }
+  }
+
+  if (envPhoneNumberId && envToken) {
+    return {
+      phoneNumberId: String(envPhoneNumberId).trim(),
+      accessToken: String(envToken).trim(),
+      wabaId: envWabaId ? String(envWabaId).trim() : null,
+      source: 'env',
+    }
+  }
+
+  return null
 }
 
 const ensureUniqueGroupKey = async ({ orgId, key, excludeId = null }) => {
@@ -984,6 +1039,77 @@ export const sendLeadMail = async (event) => {
     const leads = await CrmLead.findAll({ where: { id: { [Op.in]: leadIds }, organisationId: Number(orgId), softDeleted: false } })
     const result = await sendLeadBulkEmail({ leads, subject, html, senderName: fullName })
     return success({ sent: result.sent })
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+// Send WhatsApp message to selected leads
+export const sendLeadWhatsApp = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const { leadIds = [], message, template } = payload || {}
+    if (!Array.isArray(leadIds) || !leadIds.length) return error(400, 'leadIds required')
+
+    const hasTemplate = !!template
+    if (!hasTemplate && !message) return error(400, 'message or template required')
+
+    const waConfig = await resolveWhatsAppConfig(orgId)
+    if (!waConfig?.phoneNumberId || !waConfig?.accessToken) {
+      return error(400, 'WhatsApp is not configured')
+    }
+
+    const leads = await CrmLead.findAll({
+      where: { id: { [Op.in]: leadIds }, organisationId: Number(orgId), softDeleted: false },
+    })
+    if (!leads.length) return error(404, 'No leads found')
+
+    const url = `https://graph.facebook.com/v24.0/${waConfig.phoneNumberId}/messages`
+    let sent = 0
+    let failed = 0
+    let skipped = 0
+    const failures = []
+
+    for (const lead of leads) {
+      const to = normalizeWhatsAppNumber(lead.telephone)
+      if (!to) {
+        skipped += 1
+        failures.push({ leadId: lead.id, error: 'Missing or invalid phone number' })
+        continue
+      }
+
+      const bodyPayload = {
+        messaging_product: 'whatsapp',
+        to,
+        type: hasTemplate ? 'template' : 'text',
+        ...(hasTemplate
+          ? { template }
+          : { text: { body: String(message) } }),
+      }
+
+      try {
+        await $fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${waConfig.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: bodyPayload,
+        })
+        sent += 1
+      } catch (e) {
+        failed += 1
+        failures.push({
+          leadId: lead.id,
+          error: e?.data?.error?.message || e?.message || 'Failed to send',
+        })
+      }
+    }
+
+    return success({ sent, failed, skipped, failures })
   } catch (e) {
     return error(500, e.message)
   }

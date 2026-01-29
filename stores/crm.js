@@ -58,5 +58,6 @@ export const useCrmStore = defineStore("crmStore", {
 
     // Mail
     sendLeadMail(payload) { return this._wrap(() => crmService.sendLeadMail(payload)); },
+    sendLeadWhatsApp(payload) { return this._wrap(() => crmService.sendLeadWhatsApp(payload)); },
   },
 });

@@ -67,8 +67,8 @@
               />
             </v-col>
 
-            <v-col cols="12" md="6">
-              <label class="mb-1 fld-lbl">Automation Email Subject</label>
+            <v-col cols="12" md="6" v-if="form.type === 'Email'">
+              <label class="mb-1 fld-lbl">Automation Subject</label>
               <v-text-field
                 v-model="form.subject"
                 variant="solo"
@@ -185,7 +185,7 @@
             </v-col>
 
             <v-col cols="12">
-              <label class="mb-1 fld-lbl">Email Content</label>
+              <label class="mb-1 fld-lbl">{{ form.type === 'WhatsApp' ? 'WhatsApp Message' : 'Email Content' }}</label>
               <div ref="editorEl" class="editor"></div>
             </v-col>
           </v-row>
@@ -239,7 +239,7 @@ const mainStore = useMainStore()
 const formRef = ref(null)
 const saving = ref(false)
 const requiredRule = [(v) => !!v || 'This field is required']
-const types = ['Email']
+const types = ['Email', 'WhatsApp']
 const triggerTypes = [
   { label: 'After enquiry', value: 'inquiry_days' },
   { label: 'Birthday offset', value: 'birthday_offset' },
@@ -425,7 +425,7 @@ const onSubmit = async () => {
       groupKey: form.value.groupKey,
       type: form.value.type || 'Email',
       name: form.value.name,
-      subject: form.value.subject || form.value.name,
+      subject: form.value.type === 'Email' ? (form.value.subject || form.value.name) : '',
       sending: formatCrmTriggerPreview(trigger),
       enabled: false,
       template: form.value.template,

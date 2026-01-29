@@ -229,4 +229,11 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  sendLeadWhatsApp(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/whatsappSend', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
 };
