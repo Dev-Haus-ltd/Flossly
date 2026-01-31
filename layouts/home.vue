@@ -121,7 +121,7 @@
           </div>
         </v-card-text>
         <v-card-actions class="trial-expired-actions">
-          <v-btn color="primary" variant="flat" @click="goToSubscription">Upgrade now</v-btn>
+          <v-btn color="primary" variant="flat" @click="openPricingModal">Upgrade now</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -241,11 +241,6 @@ const closePricingModal = () => {
   if (pricingModalRef.value?.resetModal) {
     pricingModalRef.value.resetModal();
   }
-};
-
-const goToSubscription = () => {
-  trialExpiredDialog.value = false;
-  router.push("/subscription");
 };
 
 const handleOrgSwitch = async (org) => {
