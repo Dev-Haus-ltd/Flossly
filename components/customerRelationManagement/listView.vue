@@ -149,7 +149,7 @@
                     class="ml-2 mb-0 editable-field" 
                     @click="startEdit(item, 'email')"
                   >
-                    {{ item.email || 'Click to edit' }}
+                    {{ resolveLeadEmail(item) || 'Click to edit' }}
                   </p>
                 </div>
               </template>
@@ -173,7 +173,7 @@
                     class="ml-2 mb-0 editable-field" 
                     @click="startEdit(item, 'telephone')"
                   >
-                    {{ item.telephone || 'Click to edit' }}
+                    {{ resolveLeadPhone(item) || 'Click to edit' }}
                   </p>
                 </div>
               </template>
@@ -471,6 +471,12 @@
                   {{ item.leadStatus || 'Archived' }}
                 </v-chip>
               </template>
+              <template v-else-if="col.key === 'email'">
+                <p class="ml-2 mb-0">{{ resolveLeadEmail(item) }}</p>
+              </template>
+              <template v-else-if="col.key === 'telephone'">
+                <p class="ml-2 mb-0">{{ resolveLeadPhone(item) }}</p>
+              </template>
               <template v-else-if="col.key === 'alert'">
                 <DataTableColumnsAlerts :selected="item" />
               </template>
@@ -564,7 +570,7 @@ import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 import { buildRecipientContext, renderWithContext } from '@/lib/templateTokens'
 import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
 import { formatAssignedUsers, formatTreatmentValue } from "@/lib/misc";
-import { getLeadDisplayName } from "@/lib/normalizers/lead";
+import { getLeadDisplayName, getLeadEmail, getLeadPhone } from "@/lib/normalizers/lead";
 import callIcon from '@/assets/crm/call.svg'
 import sendMailIcon from '@/assets/crm/sendMail.svg'
 import whatsappIcon from '@/assets/crm/whatsapp.svg'
@@ -575,6 +581,7 @@ import shareLocationIcon from '@/assets/crm/shareLocation.svg'
 import convertIcon from '@/assets/crm/convert.svg'
 import archiveIcon from '@/assets/crm/archive.svg'
 import deleteIcon from '@/assets/crm/delete.svg'
+import exportIcon from '@/assets/crm/export.svg'
 const crmStore = useCrmStore();
 const { user } = useUser();
 const emit = defineEmits(['select','openLead','delete','book']);
@@ -639,6 +646,7 @@ const actions = [
   { key: "convert", label: "Convert", icon: convertIcon },
   { key: "archive", label: "Archive", icon: archiveIcon },
   { key: "delete", label: "Delete", icon: deleteIcon },
+  { key: "export", label: "Export", icon: exportIcon },
 ];
 const confirmDelete = ref(false);
 const deleting = ref(false);
@@ -648,12 +656,24 @@ const converting = ref(false);
 const addStaffDrawer = ref(false);
 const rolesList = ref([]);
 
+const resolveLeadName = (lead) => getLeadDisplayName(lead);
+const resolveLeadEmail = (lead) => getLeadEmail(lead);
+const resolveLeadPhone = (lead) => getLeadPhone(lead);
+
+const getEditableFieldValue = (item, field) => {
+  if (field === 'name') return resolveLeadName(item);
+  if (field === 'email') return resolveLeadEmail(item);
+  if (field === 'telephone') return resolveLeadPhone(item);
+  return item?.[field] || '';
+};
+
 // Inline editing functions
 const startEdit = (item, field) => {
   editingCell.id = item.id;
   editingCell.field = field;
-  editingCell.value = item[field] || '';
-  editingCell.originalValue = item[field] || '';
+  const initial = getEditableFieldValue(item, field);
+  editingCell.value = initial;
+  editingCell.originalValue = initial;
   
   if (field === 'comments') {
     commentMenus[item.id] = true;
@@ -720,6 +740,7 @@ const onActionClick = (key) => {
   else if (key === 'delete') confirmDelete.value = true;
   else if (key === 'archive') confirmArchive.value = true;
   else if (key === 'convert') convertSelected();
+  else if (key === 'export') exportSelectedLeads();
   else if (['mail','sendPrice','sendForm','shareLocation'].includes(key)) openCompose(key)
 };
 
@@ -727,7 +748,55 @@ const formatDate = (d) => {
   return formatDateDDMMYYYY(d);
 };
 
-const resolveLeadName = (lead) => getLeadDisplayName(lead);
+const resolveLeadValue = (lead, key) => {
+  if (key === 'name') return resolveLeadName(lead);
+  if (key === 'email') return resolveLeadEmail(lead);
+  if (key === 'telephone') return resolveLeadPhone(lead);
+  if (key === 'leadSource') return lead?.leadSource?.name || lead?.leadSource || '';
+  if (key === 'treatment') return formatTreatmentValue(lead?.treatment);
+  if (key === 'assigned') return formatAssignedUsers(lead?.assigned || []);
+  if (key === 'inquiryDate' || key === 'followUpDate') return formatDate(lead?.[key]);
+  if (key === 'metaPage') return lead?.metaPage || lead?.pageName || '';
+  if (key === 'pageName') return lead?.pageName || lead?.metaPage || '';
+  if (key === 'pageId') return lead?.pageId || '';
+  if (key === 'formId') return lead?.formId || '';
+  if (key === 'leadId') return lead?.leadId || '';
+  if (key === 'comments') return lead?.comments || '';
+  if (key === 'alert') return lead?.alert || '';
+  const value = lead?.[key];
+  if (value && typeof value === 'object') return value?.name || JSON.stringify(value);
+  return value ?? '';
+};
+
+const buildCsvValue = (value) => {
+  const text = value == null ? '' : String(value);
+  if (/[\",\\n]/.test(text)) return `\"${text.replace(/\"/g, '\"\"')}\"`;
+  return text;
+};
+
+const exportSelectedLeads = () => {
+  if (typeof window === 'undefined') return;
+  const columns = (props.headers || [])
+    .filter((h) => h?.key && h.key !== 'data-table-select' && h.key !== 'actions')
+    .map((h) => ({ key: h.key, title: h.title || h.key }));
+  if (!columns.length) return;
+
+  const rows = selectedLeads.value.map((lead) =>
+    columns.map((col) => buildCsvValue(resolveLeadValue(lead, col.key))).join(',')
+  );
+  const header = columns.map((col) => buildCsvValue(col.title)).join(',');
+  const csv = [header, ...rows].join('\\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const stamp = new Date().toISOString().slice(0, 10);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `leads-export-${stamp}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
 
 const updateFollowUpDate = async (item, value) => {
   if (!value) return;

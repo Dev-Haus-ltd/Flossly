@@ -15,7 +15,7 @@
           class="automation-info-banner mt-4"
           @close="showInfoBanner = false"
         />
-        <div class="automation-actions d-flex flex-wrap gap-0">
+        <div class="automation-actions d-flex flex-wrap gap-4">
           <v-btn
             color="secondary"
             variant="flat"
@@ -26,7 +26,7 @@
             <template #prepend>
               <v-icon size="18">mdi-folder-plus-outline</v-icon>
             </template>
-            Add Automation Group
+            Create Automation Category
           </v-btn>
 
           <v-btn
@@ -158,10 +158,10 @@ onMounted(async () => {
   margin-top: 16px;
   align-items: center;
   justify-content: flex-end;
+  gap: 10px;
 }
 
 .automation-btn {
-  width: 209px;
   height: 46px;
   text-transform: none;
   font-weight: 500;

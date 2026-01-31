@@ -7,7 +7,7 @@
     :width="520"
   >
     <v-toolbar flat color="white">
-      <v-toolbar-title class="title-text">Add Automation Group</v-toolbar-title>
+      <v-toolbar-title class="title-text">Add Automation Title</v-toolbar-title>
       <v-spacer />
       <v-btn
         icon
@@ -29,7 +29,7 @@
         <v-form ref="formRef" @submit.prevent="onSubmit">
           <v-row>
             <v-col cols="12">
-              <label class="mb-1 fld-lbl">Automation Group Name <span class="req">*</span></label>
+              <label class="mb-1 fld-lbl">Automation Title <span class="req">*</span></label>
               <v-text-field
                 v-model="form.title"
                 variant="solo"
