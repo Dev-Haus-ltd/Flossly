@@ -302,6 +302,7 @@
             :page="page"
             item-value="id"
             class="resizable-table"
+            :cell-props="getCellProps"
             density="compact"
             :item-selectable="() => true"
             @update:modelValue="onSelectionChange"
@@ -352,7 +353,9 @@
                       padding: i === 0 ? '0px' : '0px 7px',
                       backgroundColor: '#F6F6F6',
                       fontSize: '14px',
-                      position: 'relative',
+                      position: column.key === 'title' ? 'sticky' : 'relative',
+                      left: column.key === 'title' ? '0px' : undefined,
+                      zIndex: column.key === 'title' ? 3 : 1,
                     }"
                     @mouseover="showHandles(column.key, index)"
                     @mouseleave="hideHandles(column.key, index)"
@@ -405,6 +408,7 @@
                           mdi-close
                         </v-icon>
                         <v-icon
+                          v-if="column.key !== 'title'"
                           size="14"
                           color="black"
                           style="cursor: pointer"
@@ -1581,10 +1585,17 @@ const getRoles = () => {
 };
 onMounted(() => {
   getRoles();
-  selectedHeaders.value = sortHeaders(headers);
+  user.value = JSON.parse(localStorage.getItem("user"));
+  const savedColumns =
+    user.value?.preferences?.[0]?.taskTableColumns;
+
+  if (Array.isArray(savedColumns) && savedColumns.length) {
+    selectedHeaders.value = sortHeaders(savedColumns);
+  } else {
+    selectedHeaders.value = sortHeaders(headers);
+  }
   statuses.value = orgStatuses;
   priorityStatuses.value = priorities;
-  user.value = JSON.parse(localStorage.getItem("user"));
   // Add keyboard shortcut listener
   window.addEventListener("keydown", handleKeyboardShortcut);
 });
@@ -1607,6 +1618,11 @@ watch(
   () => headers,
   (newVal, oldVal) => {
     if (!newVal || newVal.length === 0) return;
+    // ✅ If user has saved preferences, do NOT overwrite
+    const hasUserPrefs =
+      user.value?.preferences?.[0]?.taskTableColumns?.length;
+
+    if (hasUserPrefs) return;
     
     // Only update if this is the initial load (oldVal is undefined/empty)
     // OR if custom columns have been added/removed (different lengths or keys)
@@ -1741,11 +1757,31 @@ const setFocus = (id, key, state) => {
   focusedField.value[`${id}-${key}`] = state;
 };
 const removeHeaderFromSeleted = async (column) => {
+  // Guard: do not allow removing the title column
+  if (column.key === 'title') return;
+
   selectedHeaders.value = selectedHeaders.value.filter(
     (x) => x.key !== column.key
   );
   await updateUserPreferences();
 };
+
+const getCellProps = ({ column }) => {
+  if (column.key === 'title') {
+    return {
+      style: {
+        position: 'sticky',
+        left: '0px',
+        background: 'white',
+        zIndex: 2,
+      },
+    };
+  }
+
+  return {};
+};
+
+
 const unAssign = async (task, user) => {
   try {
     if (Array.isArray(task.assignedUsers) && task.assignedUsers.length) {
@@ -2505,4 +2541,12 @@ th {
   align-items: center;
   gap: 12px; /* consistent spacing between all items */
 }
+
+.sticky-title-cell {
+  position: sticky;
+  left: 0;
+  background: white;
+  z-index: 2;
+}
+
 </style>

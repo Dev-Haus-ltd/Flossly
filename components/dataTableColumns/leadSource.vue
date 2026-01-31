@@ -6,7 +6,7 @@
         offset-y
       >
         <template #activator="{ props }">
-          <p v-bind="props" class="px-2" style="width: 100%;">
+          <p v-bind="props" class="mb-0 ml-2" style="width: 100%;">
             {{ displayLeadSource }}
           </p>
         </template>

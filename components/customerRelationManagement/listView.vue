@@ -146,7 +146,7 @@
                   />
                   <p 
                     v-else 
-                    class="ml-2 mb-0 editable-field" 
+                    class="ml-2 mb-0 editable-field break-email" 
                     @click="startEdit(item, 'email')"
                   >
                     {{ item.email || 'Click to edit' }}
@@ -306,7 +306,7 @@
               <!-- Default renderer for other columns -->
               <template v-else-if="col.key === 'inquiryDate'">
                 <div class="pa-1">
-                  <p class="mb-0 text-center">{{ formatDate(item[col.key]) }}</p>
+                  <p class="mb-0 ml-2">{{ formatDate(item[col.key]) }}</p>
                 </div>
               </template>
               <template v-else-if="col.key === 'followUpDate'">
@@ -1174,6 +1174,13 @@ const convertSelected = async () => {
   min-height: 24px;
 }
 
+.break-email {
+  word-break: break-all;        /* breaks very long strings */
+  overflow-wrap: anywhere;      /* modern & safer wrapping */
+  white-space: normal;
+}
+
+
 .editable-field:hover {
   background-color: rgba(0, 0, 0, 0.04);
 }
@@ -1221,7 +1228,7 @@ const convertSelected = async () => {
   max-height: 40px;
   padding: 2px 4px;
   word-wrap: break-word;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.4;
   color: rgba(0, 0, 0, 0.87);
 }

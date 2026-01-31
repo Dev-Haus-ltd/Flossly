@@ -35,6 +35,7 @@
             />
             <label class="lbl">Confirm Password</label>
             <v-text-field
+              ref="confirmPasswordRef"
               v-model="credentials.confirmPassword"
               :type="showConfirmPassword ? 'text' : 'password'"
               :rules="confirmPasswordRules"
@@ -109,6 +110,7 @@ const credentials = ref({
 });
 const showPassword = ref(false);
 const showConfirmPassword = ref(false);
+const confirmPasswordRef = ref(null);
 const form = ref(null);
 const router = useRouter();
 const authStore = useAuthStore();
@@ -193,6 +195,16 @@ const getProfile = () => {
       });
     });
 };
+
+watch(
+  () => credentials.value.password,
+  () => {
+    if (credentials.value.confirmPassword) {
+      confirmPasswordRef.value?.validate();
+    }
+  }
+);
+
 </script>
 
 <style scoped>
