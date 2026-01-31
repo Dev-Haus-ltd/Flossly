@@ -32,11 +32,10 @@
           </v-btn>
         </v-btn-toggle>
         <!-- Search Field -->
-        <div style="width: 150px">
+        <div style="width: 120px">
           <v-text-field
             v-model="searchInput"
             placeholder="Search"
-            append-inner-icon="mdi-magnify"
             clearable
             @click:clear="clearSearch"
             variant="solo"
@@ -46,7 +45,16 @@
             bg-color="#F3F4F6"
             flat
             class="custom-search"
-          />
+          >
+            <template #append-inner>
+              <img
+                :src="searchicon"
+                alt="search icon"
+                width="14"
+                height="14"
+              />
+            </template>
+          </v-text-field>
         </div>
 
         <!-- Filter Button + Menu -->
@@ -1025,6 +1033,7 @@ import { describeTextContent } from "@/lib/misc";
 import draggable from "vuedraggable";
 import listicon from "@/assets/icons/listView/listicon.svg";
 import calendericon from "@/assets/icons/listView/calendericon.svg";
+import searchicon from "@/assets/icons/listView/serach-icon.svg";
 const {
   headers,
   availableHeaders,
@@ -2360,17 +2369,18 @@ th {
 .custom-toggle {
   height: 46px;
   display: flex;
-  align-items: center; /* 🔥 this is what was missing */
+  align-items: center;
   background-color: #f3f6fa;
   gap: 4px;
   padding: 4px 4px 4px 4px !important;
+  border-radius: 8px;
 }
 
 .toggle-btn {
   background-color: #f3f6fa !important;
   text-transform: none;
   font-size: 14px;
-  color: #1E1E1E;
+  color: #737373;
   transition: all 0.2s ease-in-out;
   height: 38px;
   min-height: 38px;
@@ -2385,6 +2395,7 @@ th {
   box-shadow: 0px 6px 12px rgba(0, 0, 0, 0.15);
   border-radius: 6px;
   box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.08); /* subtle shadow under */
+  color: #1E1E1E;
 }
 .custom-search,
 .tbl-top-btn {
@@ -2398,6 +2409,13 @@ th {
   margin-left: 16px !important;
   align-items: center;
 }
+
+.custom-search :deep(input::placeholder) {
+  color: #737373;
+  opacity: 1;
+}
+
+
 .resizable-table :deep(.v-table__wrapper table) {
   width: 100%;
   table-layout: fixed;

@@ -3,7 +3,7 @@
     <!-- Header -->
     <div
       style="border-bottom: 1px solid #dbdbdb"
-      class="d-flex align-center justify-space-between px-4 py-2"
+      class="d-flex align-center justify-space-between px-4 py-2 files-card"
     >
       <h3
         style="
@@ -22,19 +22,18 @@
           placeholder="Search files"
           hide-details
           variant="solo"
-          style="max-width: 200px"
           class="input-bordered"
           flat
           append-inner-icon="mdi-magnify"
         />
         <v-btn
           v-if="!hideAddFileButton"
-          class="py-2 ml-2"
+          class="py-2 ml-2 file-btn"
           color="primary"
           flat
           @click="$emit('addFileHandle')"
         >
-          <v-icon start>mdi-plus</v-icon>
+          <v-icon start>mdi-plus-circle-outline</v-icon>
           Add File
         </v-btn>
       </div>
@@ -241,9 +240,12 @@ const copyLink = async (file) => {
 
 .custom-table th,
 .custom-table td {
-  
+  height: 48px;
   font-weight: 400;
-  font-size: 13px;
+  font-size: 14px;
+  font-style: normal;
+  line-height: 100%;
+  color: #1E1E1E;
   padding: 8px 12px; /* same for both */
   border: 1px solid #dbdbdb;
   text-align: left;
@@ -278,16 +280,38 @@ const copyLink = async (file) => {
   border-bottom: none;
 }
 .input-bordered :deep(.v-field) {
-  border: 1px solid #dfdfdf !important;
+  border: 1px solid #FAFAFA !important;
   border-radius: 8px !important;
-  background-color: white !important;
-  min-height: 40px;
+  min-height: 46px;
   font-size: 14px;
-  
-  width: 200px;
+  font-weight: 400;
+  line-height: 130%;
+  color: #737373;
+  font-style: normal;
+  width: 105px;
 }
 ::v-deep(.small-input input) {
   font-size: 14px !important;
   
+}
+.files-card {
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.file-btn {
+  font-weight: 400;
+  font-size: 14px;
+  color: #1E1E1E;
+  font-style: normal;
+  font-family: Inter, sans-serif;
+  line-height: 130%;
+  align-items: center;
+  border-radius: 8px;
+  height: 46px;
+  min-height: 46px;
+  width: 135px;
 }
 </style>

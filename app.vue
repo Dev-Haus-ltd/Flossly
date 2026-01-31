@@ -9,11 +9,11 @@
         @create-task="handleCreateTask"
         @add-staff="handleAddStaff"
       />
-      <FloatingButtonsCustomerSupport
+      <!-- <FloatingButtonsCustomerSupport
         @chat-support="openChat"
         @call-support="openCall"
         @email-support="openEmail"
-      />
+      /> -->
     </div>
     <TasksAddTask
     v-if="loggedIn"
