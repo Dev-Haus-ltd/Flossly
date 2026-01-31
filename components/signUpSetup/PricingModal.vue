@@ -1,9 +1,9 @@
 <template>
-  <div v-if="prices && !selectedPriceId" class="pricing-shell">
+  <div v-if="!isPlansLoading && prices && !selectedPriceId" class="pricing-shell">
     <div class="pricing-header">
       <div class="pricing-title">Pricing Plan</div>
       <div class="pricing-subtitle">
-        Enhance your team's collaboration and efficiency by inviting new members to Flossly.
+        Unlock seamless collaboration across your organisation with Flossly.
       </div>
     </div>
     <div class="pricing-grid">
@@ -69,7 +69,7 @@
       >
         Back
       </v-btn>
-      <v-btn @click="confirmPayment" flat color="primary"> Checkout </v-btn>
+      <v-btn @click="confirmPayment" flat color="primary" :disabled="loading"> Checkout </v-btn>
     </div>
   </v-card>
   <v-card
@@ -86,7 +86,7 @@
     </p>
   </v-card>
   <v-overlay
-    v-model="loading"
+    :model-value="isPlansLoading || loading"
     contained
     class="justify-center align-center full-page"
   >
@@ -124,6 +124,9 @@ const {
   formatPrice,
   handleSubscribe,
 } = useStripe();
+
+const isPlansLoading = ref(true);
+
 
 const features = ref([
   {
@@ -276,7 +279,15 @@ watch(displayPlans, (list) => {
   }
 });
 
-onMounted(fetchPrices);
+onMounted(async () => {
+  isPlansLoading.value = true;
+  try {
+    await fetchPrices();
+  } finally {
+    isPlansLoading.value = false;
+  }
+});
+
 
 // Expose helpers for parent
 const isPaymentOpen = computed(() => {

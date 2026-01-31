@@ -224,6 +224,8 @@ onMounted(() => {
 });
 
 const login = async () => {
+  store.setLoginSkipSplash(true);
+  initialPage.value = false;
   const formValidation = await form.value.validate();
   if (formValidation.valid) {
     loginError.value = null;

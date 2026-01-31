@@ -29,7 +29,7 @@
         <v-form ref="formRef" @submit.prevent="onSubmit">
           <v-row>
             <v-col cols="12" md="6">
-              <label class="mb-1 fld-lbl">Group <span class="req">*</span></label>
+              <label class="mb-1 fld-lbl">Automation Group <span class="req">*</span></label>
               <v-select
                 v-model="form.groupKey"
                 :items="groups"
@@ -44,7 +44,7 @@
             </v-col>
 
             <v-col cols="12" md="6">
-              <label class="mb-1 fld-lbl">Type</label>
+              <label class="mb-1 fld-lbl">Automation Type</label>
               <v-select
                 v-model="form.type"
                 :items="types"
@@ -68,7 +68,7 @@
             </v-col>
 
             <v-col cols="12" md="6">
-              <label class="mb-1 fld-lbl">Email Subject</label>
+              <label class="mb-1 fld-lbl">Automation Email Subject</label>
               <v-text-field
                 v-model="form.subject"
                 variant="solo"
@@ -79,7 +79,7 @@
             </v-col>
 
             <v-col cols="12" md="6">
-              <label class="mb-1 fld-lbl">Trigger Type</label>
+              <label class="mb-1 fld-lbl">Automation Trigger Type</label>
               <v-select
                 v-model="form.triggerType"
                 :items="triggerTypes"
@@ -184,11 +184,6 @@
               </div>
             </v-col>
 
-            <v-col cols="12" md="6">
-              <label class="mb-1 fld-lbl">Enabled</label>
-              <v-switch v-model="form.enabled" inset color="success" hide-details />
-            </v-col>
-
             <v-col cols="12">
               <label class="mb-1 fld-lbl">Email Content</label>
               <div ref="editorEl" class="editor"></div>
@@ -277,7 +272,6 @@ const form = ref({
   type: 'Email',
   name: '',
   subject: '',
-  enabled: false,
   template: '',
   triggerType: 'inquiry_days',
   triggerDays: 0,
@@ -300,7 +294,6 @@ const resetForm = () => {
     type: 'Email',
     name: '',
     subject: '',
-    enabled: false,
     template: '',
     triggerType: 'inquiry_days',
     triggerDays: 0,
@@ -434,7 +427,7 @@ const onSubmit = async () => {
       name: form.value.name,
       subject: form.value.subject || form.value.name,
       sending: formatCrmTriggerPreview(trigger),
-      enabled: form.value.enabled,
+      enabled: false,
       template: form.value.template,
       trigger,
     }

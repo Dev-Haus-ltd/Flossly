@@ -233,6 +233,7 @@
           <RecommendPracticeDialog v-model="recommendDialog" />
           <CommonConfirmDialog
             v-model="showDeleteConfirm"
+            icon="mdi-information-outline"
             title="Delete tasks?"
             message="Are you sure you want to delete the selected tasks?"
             confirm-text="Delete"

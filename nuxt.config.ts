@@ -1,6 +1,10 @@
+import { resolve } from "pathe";
 import vuetify from "vite-plugin-vuetify";
 
 export default defineNuxtConfig({
+  alias: {
+    "@shared": resolve(__dirname, "shared"),
+  },
   // @ts-ignore
   serverMiddleware: [
     { path: "/api", handler: "@/server/api.js" },

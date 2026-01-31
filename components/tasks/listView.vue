@@ -32,11 +32,10 @@
           </v-btn>
         </v-btn-toggle>
         <!-- Search Field -->
-        <div style="width: 150px">
+        <div style="width: 120px">
           <v-text-field
             v-model="searchInput"
             placeholder="Search"
-            append-inner-icon="mdi-magnify"
             clearable
             @click:clear="clearSearch"
             variant="solo"
@@ -46,7 +45,16 @@
             bg-color="#F3F4F6"
             flat
             class="custom-search"
-          />
+          >
+            <template #append-inner>
+              <img
+                :src="searchicon"
+                alt="search icon"
+                width="14"
+                height="14"
+              />
+            </template>
+          </v-text-field>
         </div>
 
         <!-- Filter Button + Menu -->
@@ -302,6 +310,7 @@
             :page="page"
             item-value="id"
             class="resizable-table"
+            :cell-props="getCellProps"
             density="compact"
             :item-selectable="() => true"
             @update:modelValue="onSelectionChange"
@@ -352,7 +361,9 @@
                       padding: i === 0 ? '0px' : '0px 7px',
                       backgroundColor: '#F6F6F6',
                       fontSize: '14px',
-                      position: 'relative',
+                      position: column.key === 'title' ? 'sticky' : 'relative',
+                      left: column.key === 'title' ? '0px' : undefined,
+                      zIndex: column.key === 'title' ? 3 : 1,
                     }"
                     @mouseover="showHandles(column.key, index)"
                     @mouseleave="hideHandles(column.key, index)"
@@ -405,6 +416,7 @@
                           mdi-close
                         </v-icon>
                         <v-icon
+                          v-if="column.key !== 'title'"
                           size="14"
                           color="black"
                           style="cursor: pointer"
@@ -1025,6 +1037,7 @@ import { describeTextContent } from "@/lib/misc";
 import draggable from "vuedraggable";
 import listicon from "@/assets/icons/listView/listicon.svg";
 import calendericon from "@/assets/icons/listView/calendericon.svg";
+import searchicon from "@/assets/icons/listView/serach-icon.svg";
 const {
   headers,
   availableHeaders,
@@ -1581,10 +1594,17 @@ const getRoles = () => {
 };
 onMounted(() => {
   getRoles();
-  selectedHeaders.value = sortHeaders(headers);
+  user.value = JSON.parse(localStorage.getItem("user"));
+  const savedColumns =
+    user.value?.preferences?.[0]?.taskTableColumns;
+
+  if (Array.isArray(savedColumns) && savedColumns.length) {
+    selectedHeaders.value = sortHeaders(savedColumns);
+  } else {
+    selectedHeaders.value = sortHeaders(headers);
+  }
   statuses.value = orgStatuses;
   priorityStatuses.value = priorities;
-  user.value = JSON.parse(localStorage.getItem("user"));
   // Add keyboard shortcut listener
   window.addEventListener("keydown", handleKeyboardShortcut);
 });
@@ -1607,6 +1627,11 @@ watch(
   () => headers,
   (newVal, oldVal) => {
     if (!newVal || newVal.length === 0) return;
+    // ✅ If user has saved preferences, do NOT overwrite
+    const hasUserPrefs =
+      user.value?.preferences?.[0]?.taskTableColumns?.length;
+
+    if (hasUserPrefs) return;
     
     // Only update if this is the initial load (oldVal is undefined/empty)
     // OR if custom columns have been added/removed (different lengths or keys)
@@ -1741,11 +1766,31 @@ const setFocus = (id, key, state) => {
   focusedField.value[`${id}-${key}`] = state;
 };
 const removeHeaderFromSeleted = async (column) => {
+  // Guard: do not allow removing the title column
+  if (column.key === 'title') return;
+
   selectedHeaders.value = selectedHeaders.value.filter(
     (x) => x.key !== column.key
   );
   await updateUserPreferences();
 };
+
+const getCellProps = ({ column }) => {
+  if (column.key === 'title') {
+    return {
+      style: {
+        position: 'sticky',
+        left: '0px',
+        background: 'white',
+        zIndex: 2,
+      },
+    };
+  }
+
+  return {};
+};
+
+
 const unAssign = async (task, user) => {
   try {
     if (Array.isArray(task.assignedUsers) && task.assignedUsers.length) {
@@ -2360,17 +2405,18 @@ th {
 .custom-toggle {
   height: 46px;
   display: flex;
-  align-items: center; /* 🔥 this is what was missing */
+  align-items: center;
   background-color: #f3f6fa;
   gap: 4px;
   padding: 4px 4px 4px 4px !important;
+  border-radius: 8px;
 }
 
 .toggle-btn {
   background-color: #f3f6fa !important;
   text-transform: none;
   font-size: 14px;
-  color: #1E1E1E;
+  color: #737373;
   transition: all 0.2s ease-in-out;
   height: 38px;
   min-height: 38px;
@@ -2385,6 +2431,7 @@ th {
   box-shadow: 0px 6px 12px rgba(0, 0, 0, 0.15);
   border-radius: 6px;
   box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.08); /* subtle shadow under */
+  color: #1E1E1E;
 }
 .custom-search,
 .tbl-top-btn {
@@ -2398,6 +2445,13 @@ th {
   margin-left: 16px !important;
   align-items: center;
 }
+
+.custom-search :deep(input::placeholder) {
+  color: #737373;
+  opacity: 1;
+}
+
+
 .resizable-table :deep(.v-table__wrapper table) {
   width: 100%;
   table-layout: fixed;
@@ -2505,4 +2559,12 @@ th {
   align-items: center;
   gap: 12px; /* consistent spacing between all items */
 }
+
+.sticky-title-cell {
+  position: sticky;
+  left: 0;
+  background: white;
+  z-index: 2;
+}
+
 </style>
