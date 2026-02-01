@@ -44,7 +44,27 @@
                 >Watch Demo</v-btn
               >
             </div>
-
+            <!-- NEW ROW (logout button) -->
+            <div class="d-flex justify-center">
+              <v-btn
+                class="watch-demo-btn"
+                @click="handleLogout"
+                color="#FFFFFF"
+                rounded="lg"
+                size="x-large"
+                variant="text"
+              >
+                <template #prepend>
+                  <img
+                    src="@/assets/icons/logout.svg"
+                    alt="logout"
+                    width="20"
+                    height="20"
+                  />
+                </template>
+                Logout
+              </v-btn>
+            </div>
             <h2 class="init-info text-h4 text-md-h4 text-sm-h6">
               This setup takes 4-5 mins and gives your
               <br />
@@ -64,6 +84,13 @@ const emit = defineEmits(["handle-init-screen"]);
 const handleScreen = () => {
   emit("handle-init-screen");
 };
+
+const router = useRouter();
+
+const handleLogout = () => {
+  router.push("/logout");
+};
+
 </script>
 
 <style scoped>
