@@ -23,6 +23,7 @@ import {
   getDiffDaysFromStart,
   getOnboardingMetrics,
   recordOnboardingEvent,
+  isOnboardingRecipientRole,
 } from "./onboardingService.js";
 
 const frequencyMap = {
@@ -545,7 +546,7 @@ export const startOnboardingScheduler = () => {
       const [users, organisations, preferences] = await Promise.all([
         User.findAll({
           where: { id: userIds },
-          attributes: ["id", "fullName", "email", "status"],
+          attributes: ["id", "fullName", "email", "status", "roleId"],
         }),
         Organisation.findAll({ where: { id: orgIds } }),
         UserPreference.findAll({ where: { userId: userIds, organisationId: orgIds } }),
@@ -577,6 +578,7 @@ export const startOnboardingScheduler = () => {
         const user = usersById.get(Number(evt.userId));
         if (!user?.email) continue;
         if (user.status && user.status !== "Active") continue;
+        if (!isOnboardingRecipientRole(user.roleId)) continue;
         const org = orgById.get(Number(evt.organisationId));
         const pref = prefByKey.get(`${evt.userId}:${evt.organisationId}`);
 

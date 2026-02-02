@@ -21,6 +21,10 @@ const CLIENT_ONBOARDING_KEYS = new Set([
   "onboarding_inapp_day13_trial",
 ]);
 
+const ONBOARDING_PRIVILEGED_ROLE_IDS = [1, 8];
+export const isOnboardingRecipientRole = (roleId) =>
+  ONBOARDING_PRIVILEGED_ROLE_IDS.includes(Number(roleId));
+
 let onboardingEventsSynced = false;
 
 export const ensureOnboardingEventsTable = async () => {
@@ -127,4 +131,4 @@ export const getDiffDaysFromStart = (startAt, now = new Date()) => {
   return Math.floor((today - startDay) / (24 * 60 * 60 * 1000));
 };
 
-export { CLIENT_ONBOARDING_KEYS };
+export { CLIENT_ONBOARDING_KEYS, ONBOARDING_PRIVILEGED_ROLE_IDS };
