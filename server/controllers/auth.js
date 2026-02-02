@@ -54,6 +54,7 @@ import {
   getOnboardingEventMap,
   getOnboardingKeys,
   getOnboardingMetrics,
+  isOnboardingRecipientRole,
   recordOnboardingEvent as recordOnboardingEventInternal,
 } from "../utils/onboardingService";
 
@@ -474,7 +475,7 @@ export const profile = async (event) => {
         inAppMessages,
       };
 
-      if (created && userObj?.email) {
+      if (created && userObj?.email && isOnboardingRecipientRole(userObj.roleId)) {
         if (!eventMap.has("onboarding_email_day0")) {
           try {
             await sendOnboardingEmail({
