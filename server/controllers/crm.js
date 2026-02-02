@@ -6,6 +6,7 @@ import { success, error } from '../utils/response'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
 import { sendImmediateCrmAutomationsForLead } from '../utils/crmAutomation.js'
 import { decrypt } from '../utils/crypto'
+import { normalizeWhatsAppNumber, hasActiveWhatsAppWindow, markWhatsAppOutbound } from '../utils/whatsapp'
 import DB from '../utils/db'
 
 const parseDateValue = (value) => {
@@ -23,14 +24,6 @@ const slugifyKey = (value) => {
     .replace(/_+/g, '_')
     .replace(/^-|-$|^_+|_+$/g, '')
   return base || 'automation_group'
-}
-
-const normalizeWhatsAppNumber = (value) => {
-  const raw = String(value || '').trim()
-  if (!raw) return null
-  const digits = raw.replace(/\D/g, '')
-  if (digits.length < 8) return null
-  return digits
 }
 
 const resolveWhatsAppConfig = async (orgId) => {
@@ -1099,6 +1092,7 @@ export const sendLeadWhatsApp = async (event) => {
           },
           body: bodyPayload,
         })
+        await markWhatsAppOutbound(lead, to)
         sent += 1
       } catch (e) {
         failed += 1

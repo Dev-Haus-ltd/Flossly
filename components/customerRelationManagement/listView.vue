@@ -556,7 +556,6 @@
           >
             {{ whatsappCompose.missing.length }} lead(s) have no valid phone number and will be skipped.
           </v-alert>
-
           <v-textarea
             v-model="whatsappCompose.message"
             label="Message"
@@ -571,7 +570,9 @@
           <div class="text-caption text-medium-emphasis">
             Use tokens like [Patient Name] or [Your Name]
           </div>
-          <v-btn :loading="whatsappLoading" flat color="success" @click="sendWhatsAppCompose">Send</v-btn>
+          <v-btn :loading="whatsappLoading" flat color="success" @click="sendWhatsAppCompose">
+            Send
+          </v-btn>
         </div>
       </v-card>
     </v-dialog>

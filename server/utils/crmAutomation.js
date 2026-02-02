@@ -5,6 +5,7 @@ import { transporter } from "./nodeMailer.js";
 import { buildLeadContext, renderTokens } from "./tokenRenderer.js";
 import { CrmAutomationTemplate, MetaWhatsAppConfig } from "../models/index.js";
 import { decrypt } from "./crypto.js";
+import { normalizeWhatsAppNumber, hasActiveWhatsAppWindow, markWhatsAppOutbound } from "./whatsapp.js";
 
 const crmTriggersByKey = new Map(
   crmAutomationDefaults
@@ -75,14 +76,6 @@ const stripHtmlToText = (html = "") => {
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-};
-
-const normalizeWhatsAppNumber = (value) => {
-  const raw = String(value || "").trim();
-  if (!raw) return null;
-  const digits = raw.replace(/\D/g, "");
-  if (digits.length < 8) return null;
-  return digits;
 };
 
 const resolveWhatsAppConfig = async (orgId) => {
@@ -175,6 +168,7 @@ export const sendCrmAutomationWhatsApp = async (lead, message) => {
       text: { body: message || "" },
     },
   });
+  await markWhatsAppOutbound(lead, to);
 };
 
 export const hasCrmSent = (raw, key) =>

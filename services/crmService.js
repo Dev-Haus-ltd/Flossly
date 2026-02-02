@@ -50,6 +50,27 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  completeWhatsAppEmbedded(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/meta/whatsappEmbedded", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getWhatsAppConfig() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/whatsappConfig")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  saveWhatsAppConfig(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/meta/whatsappConfig", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   // Leads (app-managed)
   listLeads(filters = {}) {
     const params = new URLSearchParams();
