@@ -540,6 +540,48 @@
         </div>
       </v-card>
     </v-dialog>
+    <v-dialog v-model="showWhatsAppCompose" max-width="640px">
+      <v-card class="rounded-lg">
+        <div class="d-flex justify-space-between align-center px-4 py-3">
+          <div>
+            <h5 class="mb-1 modal-title">Compose WhatsApp</h5>
+            <div class="text-caption text-medium-emphasis">
+              {{ whatsappCompose.recipients.length }} recipient(s)
+            </div>
+          </div>
+          <v-btn icon @click="showWhatsAppCompose = false" flat><v-icon>mdi-close</v-icon></v-btn>
+        </div>
+        <v-divider />
+
+        <div class="px-4 pt-4">
+          <v-alert
+            v-if="whatsappCompose.missing.length"
+            type="warning"
+            variant="tonal"
+            class="mb-3"
+          >
+            {{ whatsappCompose.missing.length }} lead(s) have no valid phone number and will be skipped.
+          </v-alert>
+          <v-textarea
+            v-model="whatsappCompose.message"
+            label="Message"
+            rows="5"
+            auto-grow
+            variant="outlined"
+            hide-details
+          />
+        </div>
+
+        <div class="px-4 pb-4 d-flex justify-space-between align-center">
+          <div class="text-caption text-medium-emphasis">
+            Use tokens like [Patient Name] or [Your Name]
+          </div>
+          <v-btn :loading="whatsappLoading" flat color="success" @click="sendWhatsAppCompose">
+            Send
+          </v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
     <CommonConfirmDialog
       v-model="confirmArchive"
       title="Archive leads?"
@@ -740,6 +782,7 @@ const onActionClick = (key) => {
   else if (key === 'delete') confirmDelete.value = true;
   else if (key === 'archive') confirmArchive.value = true;
   else if (key === 'convert') convertSelected();
+  else if (key === 'whatsapp') openWhatsAppCompose()
   else if (key === 'export') exportSelectedLeads();
   else if (['mail','sendPrice','sendForm','shareLocation'].includes(key)) openCompose(key)
 };
@@ -907,6 +950,11 @@ let EditorCtor = null
 let Header = null
 let List = null
 const compose = reactive({ key: 'mail', subject: '', recipients: [], html: '' })
+const showWhatsAppCompose = ref(false)
+const whatsappLoading = ref(false)
+const whatsappCompose = reactive({ message: '', recipients: [], missing: [] })
+const defaultWhatsAppMessage =
+  'Hi [Patient Name], thanks for reaching out to [Practice Name]. How can we help you today?'
 
 const defaultTemplates = {
   sendPrice: {
@@ -971,6 +1019,36 @@ async function openCompose(actionKey) {
 
 watch(() => showCompose.value, (v) => { if (!v && composeEditor) { composeEditor.destroy(); composeEditor = null } })
 
+const buildWhatsAppRecipients = () => {
+  const recipients = []
+  const missing = []
+  ;(selectedLeads.value || []).forEach((lead) => {
+    const phone = String(lead?.telephone || '').trim()
+    if (!phone) {
+      missing.push(lead?.name || lead?.email || `Lead ${lead?.id}`)
+      return
+    }
+    recipients.push(phone)
+  })
+  whatsappCompose.recipients = [...new Set(recipients)]
+  whatsappCompose.missing = missing
+}
+
+const openWhatsAppCompose = () => {
+  buildWhatsAppRecipients()
+  if (!whatsappCompose.recipients.length) {
+    if (mainStore?.setSnackbar) {
+      mainStore.setSnackbar({ title: 'No valid phone numbers found', type: 'error' })
+    }
+    return
+  }
+  const many = (selectedLeads.value || []).length !== 1
+  const lead = many ? null : (selectedLeads.value || [])[0]
+  const ctx = buildRecipientContext({ lead, user, many })
+  whatsappCompose.message = renderWithContext(defaultWhatsAppMessage, ctx)
+  showWhatsAppCompose.value = true
+}
+
 const mainStore = useMainStore?.() || null
 const openAddStaff = async () => {
   addStaffDrawer.value = true;
@@ -998,6 +1076,35 @@ async function sendCompose() {
       showCompose.value = false
     }
   } finally { composeLoading.value = false }
+}
+async function sendWhatsAppCompose() {
+  if (!whatsappCompose.message?.trim()) {
+    if (mainStore?.setSnackbar) {
+      mainStore.setSnackbar({ title: 'Message is required', type: 'error' })
+    }
+    return
+  }
+  try {
+    whatsappLoading.value = true
+    const leadIds = selectedLeads.value.map(l => l.id)
+    const many = (selectedLeads.value || []).length !== 1
+    const lead = many ? null : (selectedLeads.value || [])[0]
+    const ctx = buildRecipientContext({ lead, user, many })
+    const resolvedMessage = renderWithContext(whatsappCompose.message, ctx)
+    const res = await crmStore.sendLeadWhatsApp({ leadIds, message: resolvedMessage })
+    if (res && res.code === 0) {
+      const sent = res.data?.sent ?? 0
+      const skipped = res.data?.skipped ?? 0
+      const failed = res.data?.failed ?? 0
+      if (mainStore && mainStore.setSnackbar) {
+        mainStore.setSnackbar({
+          title: `WhatsApp sent: ${sent}, skipped: ${skipped}, failed: ${failed}`,
+          type: failed ? 'warning' : 'success',
+        })
+      }
+      showWhatsAppCompose.value = false
+    }
+  } finally { whatsappLoading.value = false }
 }
 const getLeadUsers = (lead) => {
   // Filter to show only active users (not invited, disabled, or expired)

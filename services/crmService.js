@@ -65,6 +65,27 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  completeWhatsAppEmbedded(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/meta/whatsappEmbedded", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getWhatsAppConfig() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/whatsappConfig")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  saveWhatsAppConfig(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/meta/whatsappConfig", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   // Leads (app-managed)
   listLeads(filters = {}) {
     const params = new URLSearchParams();
@@ -240,6 +261,20 @@ export default {
   sendLeadMail(payload) {
     return new Promise((resolve, reject) => {
       Post('/lead/mailSend', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  sendLeadWhatsApp(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/whatsappSend', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getWhatsAppUsage() {
+    return new Promise((resolve, reject) => {
+      Get('/lead/whatsappUsage')
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });

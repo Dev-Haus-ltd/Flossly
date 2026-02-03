@@ -13,8 +13,4 @@ services:
       - .env.prod
     restart: unless-stopped
     volumes:
-      - ./public/uploads:/app/public/uploads
-      - ./public/documents:/app/public/documents
-      - ./public/leave-documents:/app/public/leave-documents
-      - ./public/systemDocs:/app/public/systemDocs
-      - ./public/images:/app/public/images
+      - /var/www/flossly/public:/app/public
