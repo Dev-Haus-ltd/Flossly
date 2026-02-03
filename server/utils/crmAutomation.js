@@ -5,7 +5,7 @@ import { transporter } from "./nodeMailer.js";
 import { buildLeadContext, renderTokens } from "./tokenRenderer.js";
 import { CrmAutomationTemplate, MetaWhatsAppConfig } from "../models/index.js";
 import { decrypt } from "./crypto.js";
-import { normalizeWhatsAppNumber, hasActiveWhatsAppWindow, markWhatsAppOutbound } from "./whatsapp.js";
+import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from "./whatsapp.js";
 
 const crmTriggersByKey = new Map(
   crmAutomationDefaults
@@ -154,21 +154,46 @@ export const sendCrmAutomationWhatsApp = async (lead, message) => {
   if (!waConfig?.phoneNumberId || !waConfig?.accessToken) {
     throw new Error("WhatsApp is not configured");
   }
+  const limitStatus = await isWhatsAppLimitExceeded(lead.organisationId);
+  if (limitStatus.exceeded) {
+    throw new Error(`WhatsApp monthly limit reached (${limitStatus.count}/${limitStatus.limit})`);
+  }
   const url = `https://graph.facebook.com/v24.0/${waConfig.phoneNumberId}/messages`;
-  await $fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${waConfig.accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: {
-      messaging_product: "whatsapp",
+  try {
+    const resp = await $fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${waConfig.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: {
+        messaging_product: "whatsapp",
+        to,
+        type: "text",
+        text: { body: message || "" },
+      },
+    });
+    const providerMessageId = resp?.messages?.[0]?.id || null;
+    await markWhatsAppOutbound(lead, to);
+    await logWhatsAppMessage({
+      organisationId: lead.organisationId,
+      leadId: lead.id,
       to,
       type: "text",
-      text: { body: message || "" },
-    },
-  });
-  await markWhatsAppOutbound(lead, to);
+      status: "sent",
+      providerMessageId,
+    });
+  } catch (e) {
+    await logWhatsAppMessage({
+      organisationId: lead.organisationId,
+      leadId: lead.id,
+      to,
+      type: "text",
+      status: "failed",
+      error: e?.data?.error?.message || e?.message || "Failed to send",
+    });
+    throw e;
+  }
 };
 
 export const hasCrmSent = (raw, key) =>

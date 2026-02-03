@@ -257,4 +257,11 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  getWhatsAppUsage() {
+    return new Promise((resolve, reject) => {
+      Get('/lead/whatsappUsage')
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
 };

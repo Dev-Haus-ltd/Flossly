@@ -1,3 +1,24 @@
+import { Op } from "sequelize";
+import { CrmWhatsAppMessageLog } from "../models/index.js";
+import { UserPreference, UserSubscription } from "../models/index.js";
+
+const WHATSAPP_LIMITS_BY_PLAN = {
+  drift: 250,
+  glide: 750,
+  soar: 1500,
+  trial: 250,
+};
+
+const normalizePlanKey = (value) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return null;
+  if (raw.includes("soar")) return "soar";
+  if (raw.includes("glide")) return "glide";
+  if (raw.includes("drift")) return "drift";
+  if (raw.includes("trial")) return "trial";
+  return null;
+};
+
 export const normalizeWhatsAppNumber = (value) => {
   const raw = String(value || '').trim()
   if (!raw) return null
@@ -28,3 +49,82 @@ export const markWhatsAppOutbound = async (lead, to) => {
   }
   await lead.save()
 }
+
+export const logWhatsAppMessage = async ({
+  organisationId,
+  leadId = null,
+  to = null,
+  direction = "outbound",
+  type = "text",
+  templateName = null,
+  status = "sent",
+  providerMessageId = null,
+  error = null,
+}) => {
+  try {
+    await CrmWhatsAppMessageLog.sync();
+    await CrmWhatsAppMessageLog.create({
+      organisationId: Number(organisationId),
+      leadId: leadId ? Number(leadId) : null,
+      to: to ? String(to) : null,
+      direction,
+      type,
+      templateName,
+      status,
+      providerMessageId,
+      error,
+    });
+  } catch {
+    // avoid blocking core flow if logging fails
+  }
+};
+
+export const getMonthlyWhatsAppUsage = async (organisationId, atDate = new Date()) => {
+  if (!organisationId) return { count: 0, start: null, end: null };
+  const start = new Date(atDate.getFullYear(), atDate.getMonth(), 1, 0, 0, 0, 0);
+  const end = new Date(atDate.getFullYear(), atDate.getMonth() + 1, 1, 0, 0, 0, 0);
+  try {
+    await CrmWhatsAppMessageLog.sync();
+    const count = await CrmWhatsAppMessageLog.count({
+      where: {
+        organisationId: Number(organisationId),
+        direction: "outbound",
+        status: "sent",
+        createdAt: { [Op.gte]: start, [Op.lt]: end },
+      },
+    });
+    return { count: Number(count || 0), start, end };
+  } catch {
+    return { count: 0, start, end };
+  }
+};
+
+export const getOrganisationWhatsAppLimit = async (organisationId, userId = null) => {
+  let licenseType = null;
+  try {
+    if (userId) {
+      const pref = await UserPreference.findOne({
+        where: { organisationId: Number(organisationId), userId: Number(userId) },
+      });
+      licenseType = pref?.licenseType || null;
+    }
+    if (!licenseType) {
+      const sub = await UserSubscription.findOne({
+        where: { organisationId: Number(organisationId) },
+      });
+      licenseType = sub?.licenseType || sub?.stripeSubscriptionStatus || null;
+    }
+  } catch {
+    licenseType = null;
+  }
+  const planKey = normalizePlanKey(licenseType) || "trial";
+  return WHATSAPP_LIMITS_BY_PLAN[planKey] || WHATSAPP_LIMITS_BY_PLAN.trial;
+};
+
+export const isWhatsAppLimitExceeded = async (organisationId, userId = null) => {
+  const [{ count }, limit] = await Promise.all([
+    getMonthlyWhatsAppUsage(organisationId),
+    getOrganisationWhatsAppLimit(organisationId, userId),
+  ]);
+  return { exceeded: count >= limit, count, limit };
+};

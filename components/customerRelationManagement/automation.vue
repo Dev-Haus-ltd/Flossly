@@ -200,7 +200,7 @@
     </template>
 
     <v-dialog
-      v-if="displayMode === 'modal'"
+      v-if="displayMode === 'modal' && activeAutomation"
       v-model="showGroupDialog"
       max-width="1200px"
       scrollable
@@ -223,7 +223,7 @@
 
         <v-divider />
 
-        <div class="pa-4">
+        <div class="pa-4" v-if="activeAutomation">
           <div class="d-flex flex-wrap justify-space-between align-center mb-3 automation-toolbar">
             <div class="d-flex align-center gap-2">
               <v-text-field
@@ -956,7 +956,8 @@ const practiceLogo = computed(() => {
 })
 
 
-const resolveDefault = (row) => crmAutomationDefaults.find(d => d.key === row?.key) || {}
+const resolveDefault = (row) =>
+  crmAutomationDefaults.find(d => d && d.key === row?.key) || {}
 
 const applyPlaceholders = (text) => {
   if (!text) return ''

@@ -6,7 +6,7 @@ import { success, error } from '../utils/response'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
 import { sendImmediateCrmAutomationsForLead } from '../utils/crmAutomation.js'
 import { decrypt } from '../utils/crypto'
-import { normalizeWhatsAppNumber, hasActiveWhatsAppWindow, markWhatsAppOutbound } from '../utils/whatsapp'
+import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from '../utils/whatsapp'
 import DB from '../utils/db'
 
 const parseDateValue = (value) => {
@@ -1055,6 +1055,11 @@ export const sendLeadWhatsApp = async (event) => {
       return error(400, 'WhatsApp is not configured')
     }
 
+    const limitStatus = await isWhatsAppLimitExceeded(orgId, event.context.user?.userId)
+    if (limitStatus.exceeded) {
+      return error(402, `WhatsApp monthly limit reached (${limitStatus.count}/${limitStatus.limit})`)
+    }
+
     const leads = await CrmLead.findAll({
       where: { id: { [Op.in]: leadIds }, organisationId: Number(orgId), softDeleted: false },
     })
@@ -1070,6 +1075,15 @@ export const sendLeadWhatsApp = async (event) => {
       const to = normalizeWhatsAppNumber(lead.telephone)
       if (!to) {
         skipped += 1
+        await logWhatsAppMessage({
+          organisationId: orgId,
+          leadId: lead.id,
+          to: lead.telephone || null,
+          type: hasTemplate ? 'template' : 'text',
+          templateName: hasTemplate ? (template?.name || template?.namespace || null) : null,
+          status: 'skipped',
+          error: 'Missing or invalid phone number',
+        })
         failures.push({ leadId: lead.id, error: 'Missing or invalid phone number' })
         continue
       }
@@ -1084,7 +1098,7 @@ export const sendLeadWhatsApp = async (event) => {
       }
 
       try {
-        await $fetch(url, {
+        const resp = await $fetch(url, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${waConfig.accessToken}`,
@@ -1092,10 +1106,29 @@ export const sendLeadWhatsApp = async (event) => {
           },
           body: bodyPayload,
         })
+        const providerMessageId = resp?.messages?.[0]?.id || null
         await markWhatsAppOutbound(lead, to)
+        await logWhatsAppMessage({
+          organisationId: orgId,
+          leadId: lead.id,
+          to,
+          type: hasTemplate ? 'template' : 'text',
+          templateName: hasTemplate ? (template?.name || template?.namespace || null) : null,
+          status: 'sent',
+          providerMessageId,
+        })
         sent += 1
       } catch (e) {
         failed += 1
+        await logWhatsAppMessage({
+          organisationId: orgId,
+          leadId: lead.id,
+          to,
+          type: hasTemplate ? 'template' : 'text',
+          templateName: hasTemplate ? (template?.name || template?.namespace || null) : null,
+          status: 'failed',
+          error: e?.data?.error?.message || e?.message || 'Failed to send',
+        })
         failures.push({
           leadId: lead.id,
           error: e?.data?.error?.message || e?.message || 'Failed to send',
@@ -1104,6 +1137,17 @@ export const sendLeadWhatsApp = async (event) => {
     }
 
     return success({ sent, failed, skipped, failures })
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const getWhatsAppUsage = async (event) => {
+  try {
+    const { orgId, userId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const usage = await isWhatsAppLimitExceeded(orgId, userId)
+    return success({ count: usage.count, limit: usage.limit })
   } catch (e) {
     return error(500, e.message)
   }

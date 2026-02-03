@@ -1,4 +1,4 @@
-import { createLead, deleteLeads, listLeads, updateLead, getLeadTreatment, saveLeadTreatment, deleteLeadTreatment, listLeadNotes, addLeadNote, deleteLeadNote, listOptions, addOption, deleteOption, getLeadCommunication, saveLeadCommunication, listAutomation, saveAutomation, sendLeadMail, sendLeadWhatsApp, bulkUploadLeads, listAutomationGroups, saveAutomationGroup, deleteAutomationGroup } from '~/server/controllers/crm'
+import { createLead, deleteLeads, listLeads, updateLead, getLeadTreatment, saveLeadTreatment, deleteLeadTreatment, listLeadNotes, addLeadNote, deleteLeadNote, listOptions, addOption, deleteOption, getLeadCommunication, saveLeadCommunication, listAutomation, saveAutomation, sendLeadMail, sendLeadWhatsApp, bulkUploadLeads, listAutomationGroups, saveAutomationGroup, deleteAutomationGroup, getWhatsAppUsage } from '~/server/controllers/crm'
 
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, 'name')
@@ -49,6 +49,8 @@ export default defineEventHandler(async (event) => {
       return await sendLeadMail(event)
     case 'whatsappSend':
       return await sendLeadWhatsApp(event)
+    case 'whatsappUsage':
+      return await getWhatsAppUsage(event)
     default:
       return { code: 1, message: 'Not found' }
   }

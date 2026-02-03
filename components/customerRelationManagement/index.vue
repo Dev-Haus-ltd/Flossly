@@ -53,12 +53,18 @@
             :variant="isWhatsAppConnected ? 'tonal' : 'flat'"
             rounded="lg"
             class="add-task-btn"
-            @click="openWhatsAppDialog"
+            :loading="whatsAppSaving"
+            @click="connectWhatsAppEmbedded"
           >
             <template #prepend>
               <v-icon size="18">mdi-whatsapp</v-icon>
             </template>
-            {{ isWhatsAppConnected ? 'WhatsApp Connected' : 'Connect WhatsApp' }}
+            <span v-if="isWhatsAppConnected && whatsAppUsage.limit">
+              WhatsApp {{ whatsAppUsage.count }}/{{ whatsAppUsage.limit }}
+            </span>
+            <span v-else>
+              {{ isWhatsAppConnected ? 'WhatsApp Connected' : 'Connect WhatsApp' }}
+            </span>
           </v-btn>
 
           <v-menu
@@ -262,14 +268,10 @@
       <v-dialog v-model="whatsAppDialog" max-width="640">
         <v-card class="pa-4">
           <v-card-title class="text-subtitle-1 pa-0 mb-2 d-flex justify-space-between align-center">
-            <span>Connect WhatsApp</span>
+            <span>WhatsApp Connection</span>
             <v-chip v-if="isWhatsAppConnected" color="success" size="small" label>Connected</v-chip>
           </v-card-title>
           <v-card-text class="pa-0">
-            <p class="text-caption mb-4">
-              Connect your WhatsApp Business account via Meta embedded signup.
-              This will link your WABA and phone number to this organisation.
-            </p>
             <v-alert
               v-if="whatsAppStatus.phoneNumberId"
               type="info"
@@ -279,13 +281,11 @@
               Connected phone: {{ whatsAppStatus.displayPhoneNumber || whatsAppStatus.phoneNumberId }}
               <span v-if="whatsAppStatus.verifiedName"> ({{ whatsAppStatus.verifiedName }})</span>
             </v-alert>
+            <p class="text-caption mb-0">Use the button above to connect via Meta embedded signup.</p>
           </v-card-text>
           <v-card-actions class="pa-0 mt-4">
             <v-spacer />
-            <v-btn variant="text" @click="whatsAppDialog = false">Cancel</v-btn>
-            <v-btn color="primary" variant="flat" :loading="whatsAppSaving" @click="connectWhatsAppEmbedded">
-              Connect via Meta
-            </v-btn>
+            <v-btn variant="text" @click="whatsAppDialog = false">Close</v-btn>
           </v-card-actions>
         </v-card>
       </v-dialog>
@@ -330,6 +330,7 @@ const whatsAppStatus = reactive({
   displayPhoneNumber: '',
   verifiedName: '',
 });
+const whatsAppUsage = reactive({ count: 0, limit: 0 });
 const isLoading = ref(false);
 const showBookingDrawer = ref(false);
 const bookingLead = ref(null);
@@ -429,10 +430,6 @@ const onLeadsFilterUpdate = async (filters) => {
   await fetchLeads(activeFilters.value)
 };
 
-const openWhatsAppDialog = () => {
-  whatsAppDialog.value = true;
-};
-
 const loadWhatsAppConfig = async () => {
   try {
     const res = await crmStore.getWhatsAppConfig();
@@ -457,6 +454,16 @@ const loadWhatsAppConfig = async () => {
     whatsAppStatus.verifiedName = '';
     isWhatsAppConnected.value = false;
   }
+};
+
+const loadWhatsAppUsage = async () => {
+  try {
+    const res = await crmStore.getWhatsAppUsage();
+    if (res?.code === 0 && res.data) {
+      whatsAppUsage.count = Number(res.data.count || 0);
+      whatsAppUsage.limit = Number(res.data.limit || 0);
+    }
+  } catch {}
 };
 
 const loadFacebookSdk = () => {
@@ -511,7 +518,7 @@ const connectWhatsAppEmbedded = async () => {
     }
     window.addEventListener('message', onMessage)
 
-    fb.login(async (response) => {
+    const handleLogin = async (response) => {
       window.removeEventListener('message', onMessage)
       if (!response?.authResponse) {
         mainStore?.setSnackbar?.({ title: 'Meta login cancelled', type: 'error' })
@@ -530,13 +537,15 @@ const connectWhatsAppEmbedded = async () => {
       const res = await crmStore.completeWhatsAppEmbedded(payload)
       if (res?.code === 0) {
         await loadWhatsAppConfig()
-        whatsAppDialog.value = false
+        await loadWhatsAppUsage()
         mainStore?.setSnackbar?.({ title: 'WhatsApp connected', type: 'success' })
       } else {
         const msg = res?.error || res?.message || 'Failed to connect WhatsApp'
         mainStore?.setSnackbar?.({ title: msg, type: 'error' })
       }
-    }, {
+    }
+
+    fb.login((response) => { handleLogin(response) }, {
       config_id: configId,
       response_type: 'code',
       override_default_response_type: true,
@@ -592,6 +601,7 @@ onMounted(() => {
   initLeads(metaConnected);
   checkConnection();
   loadWhatsAppConfig();
+  loadWhatsAppUsage();
   initOptions();
   loadBookingDentists();
   loadBookingPatients();

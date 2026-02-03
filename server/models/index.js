@@ -54,6 +54,7 @@ import { MetaPage } from "./crm/metaPages";
 import { CrmLead } from "./crm/leads";
 import { MetaUserToken } from "./crm/metaUserTokens";
 import { MetaWhatsAppConfig } from "./crm/metaWhatsAppConfigs";
+import { CrmWhatsAppMessageLog } from "./crm/whatsappMessageLogs";
 import { ChatbotConfig } from "./crm/chatbotConfig";
 // Diary
 import { DiaryTreatment } from "./diary/treatments";
@@ -314,6 +315,10 @@ Organisation.hasMany(MetaUserToken, { foreignKey: 'organisationId', as: 'metaUse
 MetaWhatsAppConfig.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 MetaWhatsAppConfig.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', hooks: true });
 Organisation.hasMany(MetaWhatsAppConfig, { foreignKey: 'organisationId', as: 'metaWhatsAppConfigs', onDelete: 'CASCADE', hooks: true });
+CrmWhatsAppMessageLog.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+Organisation.hasMany(CrmWhatsAppMessageLog, { foreignKey: 'organisationId', as: 'whatsappMessageLogs', onDelete: 'CASCADE', hooks: true });
+CrmWhatsAppMessageLog.belongsTo(CrmLead, { foreignKey: 'leadId', as: 'lead', onDelete: 'SET NULL', hooks: true });
+CrmLead.hasMany(CrmWhatsAppMessageLog, { foreignKey: 'leadId', as: 'whatsappMessageLogs', onDelete: 'SET NULL', hooks: true });
 
 CrmLead.hasOne(CrmLeadTreatment, { foreignKey: 'leadId', as: 'treatmentInfo' });
 CrmLeadTreatment.belongsTo(CrmLead, { foreignKey: 'leadId', as: 'lead', onDelete: 'CASCADE', hooks: true });
@@ -438,6 +443,7 @@ export {
   CrmAutomationTemplate,
   CrmAutomationGroup,
   CrmAutomationGroupTemplate,
+  CrmWhatsAppMessageLog,
   MetaUserToken,
   MetaWhatsAppConfig,
   ChatbotConfig,
