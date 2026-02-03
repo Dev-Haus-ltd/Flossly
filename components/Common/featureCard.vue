@@ -78,7 +78,7 @@
             <iframe
               width="100%"
               height="500"
-              :src="`https://www.youtube.com/embed/gEuICxXisnw?autoplay=1`"
+              :src="`https://www.youtube.com/embed/my_5J6E-4RU?autoplay=1`"
               frameborder="0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowfullscreen
@@ -92,7 +92,7 @@
   
 <script setup>
 import { ref, computed } from 'vue';
-import defaultImage from '@/assets/dashboard/demo-video-thumbnail.svg';
+const DEFAULT_IMAGE_URL = 'https://img.youtube.com/vi/my_5J6E-4RU/hqdefault.jpg';
 import playButtonImage from '@/assets/dashboard/play-button.svg';
 
 const props = defineProps({
@@ -127,7 +127,7 @@ let hoverTimeout = null;
 let leaveTimeout = null;
 
 const isInfo = computed(() => props.mode === 'info');
-const resolvedImage = computed(() => props.imageSrc || defaultImage);
+const resolvedImage = computed(() => props.imageSrc || DEFAULT_IMAGE_URL);
 
 const handleMouseEnter = () => {
   if (isInfo.value) return;
@@ -272,7 +272,7 @@ const closeModal = () => {
     right: 4px;
     bottom: 4px;
     background-image: 
-      url("@/assets/dashboard/demo-video-thumbnail-expanded.png"),
+      url("https://img.youtube.com/vi/my_5J6E-4RU/maxresdefault.jpg"),
       linear-gradient(180deg, #263388 0%, rgba(173, 124, 243, 0.08) 100%);
     background-size: contain;
     background-position: center;
