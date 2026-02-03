@@ -177,7 +177,8 @@ const getProfile = () => {
         localStorage.setItem("user", JSON.stringify(user));
         if (
           user.profileCompletion === 1 &&
-          (user.roleId === 1 || user.roleId === 8)
+          (user.roleId === 1 || user.roleId === 8) &&
+          user.isOrganisationCreator
         ) {
           // Force a full page refresh when redirecting to onboarding
           window.location.href = "/onboarding";
