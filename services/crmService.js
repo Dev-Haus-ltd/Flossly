@@ -29,6 +29,21 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  fetchMetaStructure() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/syncStructure")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  // Fetch daily Meta analytics (insights)
+  fetchMetaInsights() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/syncInsights")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   subscribePages() {
     return new Promise((resolve, reject) => {
       Get("/meta/subscribe")

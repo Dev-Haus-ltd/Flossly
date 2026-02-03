@@ -1,4 +1,4 @@
-import { authStart, authCallback, listLeads, fetchLeadsNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck, stream } from "../../controllers/meta";
+import { authStart, authCallback, listLeads, fetchLeadsNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck, stream, fetchMetaStructureAndBudgets, fetchDailyMetaInsights } from "../../controllers/meta";
 
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, 'name')
@@ -23,6 +23,10 @@ export default defineEventHandler(async (event) => {
       return await stream(event)
     case 'webhook':
       return await webhook(event)
+    case 'syncStructure':
+      return await fetchMetaStructureAndBudgets(event)
+    case 'syncInsights':
+      return await fetchDailyMetaInsights(event)
     default:
       return { code: 0, error: 'Not found' }
   }
