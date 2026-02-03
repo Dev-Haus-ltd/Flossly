@@ -1,5 +1,5 @@
 import { Op, fn, col } from 'sequelize'
-import { CrmLead, MetaPage, Organisation, User, MetaUserToken } from '../models'
+import { CrmLead, MetaPage, Organisation, User, MetaUserToken, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight } from '../models'
 import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
 import { addMetaClient, broadcastMetaEvent } from '../utils/metaStream'
@@ -320,7 +320,7 @@ export const fetchLeadsNow = async (event) => {
       const forms = Array.isArray(formsResp?.data) ? formsResp.data : []
       
       for (const form of forms) {
-        const leadsUrl = `https://graph.facebook.com/${META_VERSION}/${form.id}/leads?fields=created_time,field_data&limit=100&access_token=${encodeURIComponent(pageToken)}`
+        const leadsUrl = `https://graph.facebook.com/${META_VERSION}/${form.id}/leads?fields=created_time,field_data,ad_id,adset_id,campaign_id&limit=100&access_token=${encodeURIComponent(pageToken)}`
         const leadsResp = await $fetch(leadsUrl, { method: 'GET' })
         const items = Array.isArray(leadsResp?.data) ? leadsResp.data : []
         
@@ -334,6 +334,9 @@ export const fetchLeadsNow = async (event) => {
           const email = fld.email || fld.email_address || ''
           const phone = fld.phone_number || fld.phone || ''
           const on = new Date(le.created_time)
+          const campaignId = le.campaign_id || null
+          const adSetId = le.adset_id || null
+          const adId = le.ad_id || null
           
           const existing = await CrmLead.findOne({ 
             where: { organisationId: orgId, leadId: le.id } 
@@ -345,6 +348,9 @@ export const fetchLeadsNow = async (event) => {
             existing.telephone = existing.telephone || phone
             existing.inquiryDate = existing.inquiryDate || on
             existing.rawData = existing.rawData || le
+            existing.campaignId = existing.campaignId || campaignId
+            existing.adSetId = existing.adSetId || adSetId
+            existing.adId = existing.adId || adId
             await existing.save()
             broadcastMetaEvent('lead', { orgId, leadId: le.id, pageId, formId: form.id })
           } else {
@@ -353,6 +359,9 @@ export const fetchLeadsNow = async (event) => {
               pageId,
               formId: form.id,
               leadId: le.id,
+              campaignId,
+              adSetId,
+              adId,
               name: fullName,
               email,
               telephone: phone,
@@ -581,7 +590,7 @@ export const webhook = async (event) => {
           const pageToken = decrypt(mp.accessTokenEnc)
           if (!pageToken) continue
           
-          const url = `https://graph.facebook.com/${META_VERSION}/${leadId}?fields=created_time,field_data&access_token=${encodeURIComponent(pageToken)}`
+          const url = `https://graph.facebook.com/${META_VERSION}/${leadId}?fields=created_time,field_data,ad_id,adset_id,campaign_id&access_token=${encodeURIComponent(pageToken)}`
           const leadData = await $fetch(url, { method: 'GET' })
           
           const fld = (leadData?.field_data || []).reduce((acc, f) => {
@@ -593,6 +602,9 @@ export const webhook = async (event) => {
           const email = fld.email || fld.email_address || ''
           const phone = fld.phone_number || fld.phone || ''
           const on = leadData?.created_time ? new Date(leadData.created_time) : new Date()
+          const campaignId = leadData.campaign_id || null
+          const adSetId = leadData.adset_id || null
+          const adId = leadData.ad_id || null
 
           const existing = await CrmLead.findOne({ where: { leadId } })
           if (existing) {
@@ -601,6 +613,9 @@ export const webhook = async (event) => {
             existing.telephone = existing.telephone || phone
             existing.inquiryDate = existing.inquiryDate || on
             existing.rawData = existing.rawData || leadData
+            existing.campaignId = existing.campaignId || campaignId
+            existing.adSetId = existing.adSetId || adSetId
+            existing.adId = existing.adId || adId
             await existing.save()
             broadcastMetaEvent('lead', { orgId: mp.organisationId, leadId, pageId, formId })
           } else {
@@ -609,6 +624,9 @@ export const webhook = async (event) => {
               pageId,
               formId: formId || null,
               leadId,
+              campaignId,
+              adSetId,
+              adId,
               name: fullName,
               email,
               telephone: phone,
@@ -631,3 +649,165 @@ export const webhook = async (event) => {
   return success('ok')
 }
 
+export const fetchMetaStructureAndBudgets = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const tokenRow = await MetaUserToken.findOne({ where: { organisationId: orgId } })
+  if (!tokenRow) return error(400, 'Meta not connected')
+
+  const userToken = decrypt(tokenRow.userTokenEnc)
+
+  // 1️⃣ Fetch ad accounts
+  const adAccountsResp = await $fetch(
+    `https://graph.facebook.com/${META_VERSION}/me/adaccounts?fields=id,name,currency,timezone_name&access_token=${userToken}`
+  )
+
+  for (const acc of adAccountsResp.data || []) {
+    await MetaAdAccount.upsert({
+      organisationId: orgId,
+      adAccountId: acc.id,
+      name: acc.name,
+      currency: acc.currency,
+      timezone: acc.timezone_name,
+    })
+
+    // 2️⃣ Campaigns
+    const campaignsResp = await $fetch(
+      `https://graph.facebook.com/${META_VERSION}/${acc.id}/campaigns?fields=id,name,status,daily_budget,lifetime_budget&access_token=${userToken}`
+    )
+
+    for (const c of campaignsResp.data || []) {
+      await MetaCampaign.upsert({
+        organisationId: orgId,
+        adAccountId: acc.id,
+        campaignId: c.id,
+        name: c.name,
+        status: c.status,
+        dailyBudget: c.daily_budget || null,
+        lifetimeBudget: c.lifetime_budget || null,
+      })
+
+      // 3️⃣ Ad Sets
+      const adSetsResp = await $fetch(
+        `https://graph.facebook.com/${META_VERSION}/${c.id}/adsets?fields=id,name,daily_budget,lifetime_budget,optimization_goal&access_token=${userToken}`
+      )
+
+      for (const s of adSetsResp.data || []) {
+        await MetaAdSet.upsert({
+          organisationId: orgId,
+          adSetId: s.id,
+          campaignId: c.id,
+          name: s.name,
+          dailyBudget: s.daily_budget || null,
+          lifetimeBudget: s.lifetime_budget || null,
+          optimizationGoal: s.optimization_goal || null,
+        })
+
+        // 4️⃣ Ads
+        const adsResp = await $fetch(
+          `https://graph.facebook.com/${META_VERSION}/${s.id}/ads?fields=id,name,status,creative{id}&access_token=${userToken}`
+        )
+
+        for (const ad of adsResp.data || []) {
+          await MetaAd.upsert({
+            organisationId: orgId,
+            adId: ad.id,
+            adSetId: s.id,
+            name: ad.name,
+            status: ad.status,
+            creativeId: ad.creative?.id || null,
+          })
+        }
+      }
+    }
+  }
+
+  return success({ synced: true })
+}
+
+
+export const fetchDailyMetaInsights = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const tokenRow = await MetaUserToken.findOne({ where: { organisationId: orgId } })
+  if (!tokenRow) return error(400, 'Meta not connected')
+
+  const token = decrypt(tokenRow.userTokenEnc)
+
+  const date =
+    event.context?.date ||
+    new Date(Date.now() - 86400000).toISOString().slice(0, 10) // yesterday
+
+  const fetchInsights = async (entityType, entityId) => {
+    const url = `https://graph.facebook.com/${META_VERSION}/${entityId}/insights?fields=impressions,clicks,spend,actions,ctr,cpc,cpm&time_range[since]=${date}&time_range[until]=${date}&access_token=${token}`
+    const resp = await $fetch(url)
+    return resp.data?.[0]
+  }
+
+  // Campaigns
+  const campaigns = await MetaCampaign.findAll({ where: { organisationId: orgId } })
+  for (const c of campaigns) {
+    const i = await fetchInsights('campaign', c.campaignId)
+    if (!i) continue
+
+    await MetaInsight.upsert({
+      organisationId: orgId,
+      entityType: 'campaign',
+      entityId: c.campaignId,
+      date,
+      impressions: i.impressions,
+      clicks: i.clicks,
+      spend: Math.round(Number(i.spend || 0) * 100),
+      leads: i.actions?.find(a => a.action_type === 'lead')?.value || 0,
+      cpc: i.cpc,
+      ctr: i.ctr,
+      cpm: i.cpm,
+    })
+  }
+
+  // Ad sets
+  const adSets = await MetaAdSet.findAll({ where: { organisationId: orgId } })
+  for (const s of adSets) {
+    const i = await fetchInsights('adset', s.adSetId)
+    if (!i) continue
+
+    await MetaInsight.upsert({
+      organisationId: orgId,
+      entityType: 'adset',
+      entityId: s.adSetId,
+      date,
+      impressions: i.impressions,
+      clicks: i.clicks,
+      spend: Math.round(Number(i.spend || 0) * 100),
+      leads: i.actions?.find(a => a.action_type === 'lead')?.value || 0,
+      cpc: i.cpc,
+      ctr: i.ctr,
+      cpm: i.cpm,
+    })
+  }
+
+  // Ads
+  const ads = await MetaAd.findAll({ where: { organisationId: orgId } })
+  for (const a of ads) {
+    const i = await fetchInsights('ad', a.adId)
+    if (!i) continue
+
+    await MetaInsight.upsert({
+      organisationId: orgId,
+      entityType: 'ad',
+      entityId: a.adId,
+      date,
+      impressions: i.impressions,
+      clicks: i.clicks,
+      spend: Math.round(Number(i.spend || 0) * 100),
+      leads: i.actions?.find(a => a.action_type === 'lead')?.value || 0,
+      cpc: i.cpc,
+      ctr: i.ctr,
+      cpm: i.cpm,
+    })
+  }
+
+  return success({ date, synced: true })
+}

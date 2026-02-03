@@ -669,8 +669,15 @@ const fetchLeads = async (filters = {}) => {
 const initLeads = async (metaConnected = false) => {
   if (metaConnected) {
     try {
+      // 1️⃣ Sync Meta structure + budgets
+      await crmStore.fetchMetaStructure();
+      // 2️⃣ Sync Meta analytics (daily insights / backfill)
+      await crmStore.fetchMetaInsights();
+      // 3️⃣ Fetch leads (existing behavior)
       await crmStore.fetchLeadsNow();
-    } catch (e) {}
+    } catch (e) {
+      console.error('[CRM] Meta post-connect sync failed', e);
+    }
   }
   await fetchLeads()
 };
