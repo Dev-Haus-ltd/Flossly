@@ -54,6 +54,12 @@ import { MetaPage } from "./crm/metaPages";
 import { CrmLead } from "./crm/leads";
 import { MetaUserToken } from "./crm/metaUserTokens";
 import { ChatbotConfig } from "./crm/chatbotConfig";
+import { MetaAdAccount } from "./crm/MetaAdAccount";
+import { MetaCampaign } from "./crm/MetaCampaign";
+import { MetaAdSet } from "./crm/MetaAdSet";
+import { MetaAd } from "./crm/MetaAd";
+import { MetaInsight } from "./crm/MetaInsights";
+
 // Diary
 import { DiaryTreatment } from "./diary/treatments";
 import { DiaryPatient } from "./diary/patients";
@@ -342,6 +348,87 @@ ChatbotConfig.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CAS
 Organisation.hasOne(ChatbotConfig, { foreignKey: 'organizationId', as: 'chatbotConfig', onDelete: 'CASCADE', hooks: true });
 User.hasMany(ChatbotConfig, { foreignKey: 'userId', as: 'chatbotConfigs', onDelete: 'CASCADE', hooks: true });
 
+//Organisation-level
+Organisation.hasMany(MetaAdAccount, { foreignKey: 'organisationId' })
+MetaAdAccount.belongsTo(Organisation, { foreignKey: 'organisationId' })
+
+Organisation.hasMany(MetaCampaign, { foreignKey: 'organisationId' })
+Organisation.hasMany(MetaAdSet, { foreignKey: 'organisationId' })
+Organisation.hasMany(MetaAd, { foreignKey: 'organisationId' })
+Organisation.hasMany(MetaInsight, { foreignKey: 'organisationId' })
+
+//Ad Account → Campaign
+MetaAdAccount.hasMany(MetaCampaign, {
+  foreignKey: 'adAccountId',
+  sourceKey: 'adAccountId',
+})
+
+MetaCampaign.belongsTo(MetaAdAccount, {
+  foreignKey: 'adAccountId',
+  targetKey: 'adAccountId',
+})
+
+//Campaign → Ad Set
+MetaCampaign.hasMany(MetaAdSet, {
+  foreignKey: 'campaignId',
+  sourceKey: 'campaignId',
+})
+
+MetaAdSet.belongsTo(MetaCampaign, {
+  foreignKey: 'campaignId',
+  targetKey: 'campaignId',
+})
+
+//Ad Set → Ad
+MetaAdSet.hasMany(MetaAd, {
+  foreignKey: 'adSetId',
+  sourceKey: 'adSetId',
+})
+
+MetaAd.belongsTo(MetaAdSet, {
+  foreignKey: 'adSetId',
+  targetKey: 'adSetId',
+})
+
+//Leads Attribution
+CrmLead.belongsTo(MetaCampaign, {
+  foreignKey: 'campaignId',
+  targetKey: 'campaignId',
+})
+
+CrmLead.belongsTo(MetaAdSet, {
+  foreignKey: 'adSetId',
+  targetKey: 'adSetId',
+})
+
+CrmLead.belongsTo(MetaAd, {
+  foreignKey: 'adId',
+  targetKey: 'adId',
+})
+
+//Insights (Polymorphic-style, no FK constraints)
+MetaCampaign.hasMany(MetaInsight, {
+  foreignKey: 'entityId',
+  sourceKey: 'campaignId',
+  constraints: false,
+  scope: { entityType: 'campaign' },
+})
+
+MetaAdSet.hasMany(MetaInsight, {
+  foreignKey: 'entityId',
+  sourceKey: 'adSetId',
+  constraints: false,
+  scope: { entityType: 'adset' },
+})
+
+MetaAd.hasMany(MetaInsight, {
+  foreignKey: 'entityId',
+  sourceKey: 'adId',
+  constraints: false,
+  scope: { entityType: 'ad' },
+})
+
+
 // CPD Associations
 Course.hasMany(CourseQuestionaire, { foreignKey: "courseId", as: "questions" });
 CourseQuestionaire.belongsTo(Course, { foreignKey: "courseId", as: "course", onDelete: 'CASCADE', hooks: true });
@@ -435,6 +522,11 @@ export {
   CrmAutomationGroupTemplate,
   MetaUserToken,
   ChatbotConfig,
+  MetaAdAccount,
+  MetaCampaign,
+  MetaAdSet,
+  MetaAd,
+  MetaInsight,
   // Diary
   DiaryTreatment,
   DiaryPatient,
