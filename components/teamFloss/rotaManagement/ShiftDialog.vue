@@ -360,7 +360,8 @@ const form = ref({
   label: "",
   userId: null,
   isLocumShift: false,
-  locumUserId: null
+  locumUserId: null,
+  isTemplate: true // Always create as template by default
 });
 
 const surgries = ref([]);
@@ -463,28 +464,10 @@ const nurseOptions = computed(() => {
 
 // Build a unique list of shift templates for the current library selector
 const libraryTemplates = computed(() => {
-  const seen = new Set();
-  const items = [];
   const list = props?.shifts || [];
-  for (const s of list) {
-    const key = [
-      s.label ?? "",
-      toLocalTimeString(s.startDate) ?? "",
-      toLocalTimeString(s.endDate) ?? "",
-      s.surgeryId ?? "",
-      s.dentistId ?? "",
-      s.nurseId ?? "",
-      s.breakTime ?? "",
-      s.color ?? "",
-    ].join("|");
-
-    if (!seen.has(key)) {
-      seen.add(key);
-      // Keep id and label for the select; id is used to fetch the full template on selection
-      items.push({ id: s.id, label: s.label });
-    }
-  }
-  return items;
+  // Only show shifts marked as templates
+  const templates = list.filter(s => s.isTemplate === true);
+  return templates.map(s => ({ id: s.id, label: s.label }));
 });
 
 const handleShiftData = () => {
@@ -529,7 +512,7 @@ const prefillForm = (id) => {
   form.value = {
     ...preserved,
     shiftLibrary: id,
-    label: "", // Don't copy the label from template - user must provide unique name
+    label: template.label ?? "", // Copy the label from template
     surgeryId: template.surgeryId ?? null,
     dentistId: template.dentistId ?? null,
     nurseId: template.nurseId ?? null,
@@ -538,6 +521,7 @@ const prefillForm = (id) => {
     breakTime: template.breakTime ?? 0,
     notes: template.notes ?? "",
     color: template.color ?? "",
+    isTemplate: false, // Create as regular shift when using a template (not a template itself)
   };
 };
 const getSurgeries = () => {
@@ -566,6 +550,7 @@ const resetForm = () => {
     locumUserId: null,
     isLocumShift: false,
     userId: null,
+    isTemplate: true, // Always create as template by default
   };
   breakHrs.value = "";
   breakMins.value = "";

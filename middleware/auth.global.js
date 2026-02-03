@@ -18,9 +18,12 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
       }
     }
 
+    // Only redirect to onboarding if user is the organisation creator
+    const user = authStore?.loggedUser;
     if (
       profileCompletion() <= 1 &&
       (userRole() === 8 || userRole() === 1) &&
+      user?.isOrganisationCreator &&
       to.path !== "/onboarding"
     ) {
       if (from.path === "/login" || from.path === "/signup") {

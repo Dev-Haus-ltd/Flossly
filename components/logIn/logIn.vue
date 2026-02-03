@@ -283,7 +283,8 @@ const getProfile = () => {
         });
         if (
           (user.roleId === 8 || user.roleId === 1) &&
-          user.profileCompletion <= 1
+          user.profileCompletion <= 1 &&
+          user.isOrganisationCreator
         ) {
           // Force a full page refresh when redirecting to onboarding
           window.location.href = "/onboarding";

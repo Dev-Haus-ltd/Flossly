@@ -280,6 +280,7 @@ const props = defineProps({
   modelValue: Boolean,
   user: Object,
   origin: String,
+  initialDate: String,
 });
 const emit = defineEmits(["close", "success", "update:modelValue"]);
 const formRef = ref(null);
@@ -304,6 +305,11 @@ watch(
         setUsers();
       } else {
         form.value.userId = user.value.id;
+      }
+      // Set initial date if provided
+      if (props.initialDate) {
+        form.value.startDate = props.initialDate;
+        form.value.endDate = props.initialDate;
       }
     }
   },

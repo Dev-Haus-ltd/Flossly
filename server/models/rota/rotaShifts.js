@@ -68,6 +68,7 @@ export const RotaShift = sequelize.define(
     breakTime: { type: DataTypes.INTEGER, allowNull: true },
     notes: { type: DataTypes.TEXT },
     isDeleted: { type: DataTypes.BOOLEAN, defaultValue: false },
+    isTemplate: { type: DataTypes.BOOLEAN, defaultValue: false },
     startedAt: { type: DataTypes.DATE, allowNull: true },
     completedAt: { type: DataTypes.DATE, allowNull: true },
   },

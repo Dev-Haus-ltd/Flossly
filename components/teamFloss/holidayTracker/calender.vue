@@ -47,7 +47,7 @@
       </v-toolbar>
     </v-sheet>
       <v-calendar
-        v-model="selectedLeave"
+        v-model="selectedDate"
         ref="calender"
         :events="events"
         :event-color="getEventColor"
@@ -57,6 +57,13 @@
         :event-more="false"
         class="team-holidays-calender"
       >
+      <template v-slot:day="{ date }">
+        <div 
+          @click="onDayClick({ date })" 
+          style="width: 100%; height: 100%; position: absolute; top: 0; left: 0; cursor: pointer;"
+        >
+        </div>
+      </template>
       <template v-slot:event="{ event }">
         <v-menu open-on-hover location="right">
           <template v-slot:activator="{ props }">
@@ -90,9 +97,6 @@
         </v-card>
       </v-menu>
     </template>
-        <template v-slot:day-title="{ title }">
-          <span style="font-size: 12px">{{ title }}</span>
-        </template>
       </v-calendar>
     </v-card>
     
@@ -102,6 +106,7 @@
         <TeamFlossUserDetailsLeaveManagementHolidayRequestDrawer
           v-model="addLeaveDrawer"
           origin="holidays"
+          :initial-date="selectedDate"
           @close="addLeaveDrawer = false"
           @success="handleSuccess"
         />
@@ -119,11 +124,21 @@ const { events } = defineProps({
   events: Array,
 });
 const emit = defineEmits(["onUpdate"]);
-const selectedLeave = ref(null);
 const calender = ref(null)
 const addLeaveDrawer = ref(false)
+const selectedDate = ref(null)
+const focus = ref('')
+
 const onFiltersUpdated = (filters) => {
   emit("onUpdate", filters);
+};
+
+const onDayClick = (day) => {
+  console.log('Day clicked:', day);
+  console.log('Date value:', day.date);
+  selectedDate.value = day.date;
+  console.log('selectedDate after set:', selectedDate.value);
+  addLeaveDrawer.value = true;
 };
 
 const formatDate = (date) => {
@@ -173,5 +188,19 @@ const getEventColor = (event) => {
 
 .tooltip-wrapper:hover .tooltip-content {
   display: block;
+}
+
+:deep(.v-calendar-day) {
+  position: relative;
+}
+
+:deep(.v-calendar-weekly__day-content) {
+  position: relative;
+  z-index: 2;
+}
+
+:deep(.v-calendar-event) {
+  position: relative;
+  z-index: 2;
 }
 </style>

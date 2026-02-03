@@ -224,7 +224,8 @@ const getProfile = () => {
         // Redirect based on profile completion
         if (
           (user.roleId === 8 || user.roleId === 1) &&
-          user.profileCompletion <= 1
+          user.profileCompletion <= 1 &&
+          user.isOrganisationCreator
         ) {
           // Force a full page refresh when redirecting to onboarding
           window.location.href = "/onboarding";
