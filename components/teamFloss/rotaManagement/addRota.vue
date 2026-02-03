@@ -203,7 +203,7 @@
 
               <!-- Rota Duration -->
               <label class="field-label">
-                Rota duration<span class="required">*</span>
+                Rota duration (days)<span class="required">*</span>
               </label>
               <v-text-field
                 v-model="form.duration"
@@ -211,8 +211,10 @@
                 flat
                 density="compact"
                 class="input-bordered"
-                :disabled="form.endDate"
-                :rules="[rules.required]"
+                type="number"
+                min="1"
+                :rules="[rules.required, rules.positiveNumber]"
+                @update:model-value="updateEndDateFromDuration"
               />
 
               <!-- Employees -->
@@ -312,15 +314,17 @@
                            </v-menu>
               
                            
-                           <label class="field-label">Rota duration<span class="required">*</span></label>
+                           <label class="field-label">Rota duration (days)<span class="required">*</span></label>
                            <v-text-field
                              v-model="form.duration"
                              variant="solo"
                              flat
                              density="compact"
                              class="input-bordered"
-                             :disabled="form.endDate"
-                             :rules="[rules.required]"
+                             type="number"
+                             min="1"
+                             :rules="[rules.required, rules.positiveNumber]"
+                             @update:model-value="updateEndDateFromDuration"
                            />
               
                            
@@ -338,7 +342,7 @@
               </template>
               
               <script setup>
-              import { formatDateDDMMYYYY } from "~/lib/dateFormatter";
+              import { formatDateDDMMYYYY, dateToLocalYMD } from "~/lib/dateFormatter";
               import { differenceInDays, differenceInCalendarDays, addDays } from "date-fns";
               const props = defineProps({
                 rotaToEdit: {
@@ -372,6 +376,10 @@
               const rules = { 
                 required: (v) =>
                   (Array.isArray(v) ? v.length > 0 : !!v) || "This field is required",
+                positiveNumber: (v) => {
+                  const num = parseInt(v);
+                  return (num && num > 0) || "Duration must be a positive number";
+                }
               };
               const employees = ref([]);
               
@@ -430,6 +438,17 @@
                 }
               );
               
+              // Function to update end date when duration is manually changed
+              const updateEndDateFromDuration = () => {
+                if (form.value.startDate && form.value.duration) {
+                  const duration = parseInt(form.value.duration);
+                  if (duration > 0) {
+                    const end = addDays(new Date(form.value.startDate), duration - 1);
+                    form.value.endDate = end;
+                  }
+                }
+              };
+
               watch(
                 () => [form.value.startDate, form.value.duration],
                 ([start, duration]) => {
@@ -495,7 +514,13 @@
               
                 if (isEditMode.value) {
                   try {
-                    const res = await rotaStore.updateRota(form.value);
+                    // Convert Date objects to YYYY-MM-DD format to avoid timezone issues
+                    const rotaData = {
+                      ...form.value,
+                      startDate: dateToLocalYMD(form.value.startDate),
+                      endDate: dateToLocalYMD(form.value.endDate),
+                    };
+                    const res = await rotaStore.updateRota(rotaData);
                     if (res.code === 0) {
                       // Update rota users
                       try {
@@ -526,7 +551,13 @@
                   }
                 } else {
                   try {
-                    const res = await rotaStore.addRota(form.value);
+                    // Convert Date objects to YYYY-MM-DD format to avoid timezone issues
+                    const rotaData = {
+                      ...form.value,
+                      startDate: dateToLocalYMD(form.value.startDate),
+                      endDate: dateToLocalYMD(form.value.endDate),
+                    };
+                    const res = await rotaStore.addRota(rotaData);
                     if (res.code === 0) {
                       handleAddRotaUser(res.data, form.value.employees);
                     } else{
@@ -589,12 +620,12 @@
                   return;
                 }
                 try {
-                
+                  // Convert Date objects to YYYY-MM-DD format to avoid timezone issues
                   const res = await rotaStore.addRota({
                     orgId: form.value.orgId,
                     name: form.value.name,
-                    startDate: form.value.startDate,
-                    endDate: form.value.endDate,
+                    startDate: dateToLocalYMD(form.value.startDate),
+                    endDate: dateToLocalYMD(form.value.endDate),
                     duration: form.value.duration,
                     notes: copyForm.value.copyNotes ? undefined : "",
                   });
@@ -608,6 +639,7 @@
                  
                   const selected = existingRotas.value.find(r => r.id === copyForm.value.selectedRotaId);
               
+                  // Copy users from the selected rota
                   try {
                     const usersRes = await rotaStore.getRotaUsers({ rotaId: selected.id });
                     if (usersRes.code === 0) {
@@ -618,17 +650,31 @@
                         await rotaStore.addRotaUsers({ rotaId: newRota.id, users: cleanUsers });
                       }
                     }
-                  } catch (_) {}
+                  } catch (userErr) {
+                    console.error("Error copying rota users:", userErr);
+                    // Continue even if user copying fails
+                  }
               
-              
+                  // Copy shifts from the selected rota
                   try {
                     const shiftsRes = await rotaStore.getAllShifts({ rotaId: selected.id });
+                    console.log('Shifts response:', shiftsRes); // Debug log
+                    
                     if (shiftsRes.code === 0) {
                       const shifts = shiftsRes.data || [];
+                      console.log(`Copying ${shifts.length} shifts...`); // Debug log
+                      
+                      if (shifts.length === 0) {
+                        console.warn('No shifts found in the selected rota');
+                      }
+                      
                       for (const s of shifts) {
                         const offsetDays = differenceInCalendarDays(new Date(form.value.startDate), new Date(selected.startDate));
                         const shiftedStart = addDays(new Date(s.startDate), offsetDays);
                         const shiftedEnd = addDays(new Date(s.endDate), offsetDays);
+                        
+                        console.log(`Copying shift: ${s.label}, original: ${s.startDate} -> ${s.endDate}, new: ${shiftedStart} -> ${shiftedEnd}`); // Debug log
+                        
                         await rotaStore.addRotaShift({
                           rotaId: newRota.id,
                           label: s.label,
@@ -643,10 +689,21 @@
                           surgeryId: s.surgeryId,
                           isLocumShift: s.isLocumShift,
                           locumUserId: s.locumUserId,
+                          forceCreate: true, // Bypass overlap checks when copying rota
+                          isTemplate: false, // This is a copied shift from template, not manually created
                         });
                       }
+                      console.log('All shifts copied successfully'); // Debug log
+                    } else {
+                      console.error('Failed to get shifts:', shiftsRes);
                     }
-                  } catch (_) {}
+                  } catch (shiftErr) {
+                    console.error("Error copying rota shifts:", shiftErr);
+                    mainStore.setSnackbar({
+                      type: "warning",
+                      title: "Rota created but shifts could not be copied: " + (shiftErr?.message || "Unknown error"),
+                    });
+                  }
               
                   mainStore.setSnackbar({ type: 'success', title: 'Rota copied successfully' });
                   resetForm();

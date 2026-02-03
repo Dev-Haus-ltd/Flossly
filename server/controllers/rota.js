@@ -307,7 +307,7 @@ const checkCrossOrgShiftConflicts = async (staffIds, startDate, endDate, exclude
 export const addRotaShift = async (event) => {
   try {
     const body = await readBody(event);
-    const {
+    let {
       rotaId,
       dentistId,
       nurseId,
@@ -322,13 +322,9 @@ export const addRotaShift = async (event) => {
       locumUserId,
       notes,
       forceCreate,
+      isTemplate,
     } = JSON.parse(body);
-
-    // For surgery view, we need surgeryId. For user view, we need userId or locumUserId
-    const hasUser = userId || locumUserId;
-    const hasSurgery = surgeryId;
-    
-    if (!rotaId || (!hasUser && !hasSurgery) || !label || !startDate || !endDate) {
+    if (!rotaId || !label || !startDate || !endDate) {
       throw createError({ message: "Required fields missing" });
     }
 
@@ -337,20 +333,80 @@ export const addRotaShift = async (event) => {
       throw createError({ message: "Rota not found" });
     }
 
-    // Check for duplicate shift name in the same rota
-    const duplicateShift = await RotaShift.findOne({
-      where: {
-        rotaId,
-        label,
-        isDeleted: false,
-      },
-    });
+    const hasUser = userId || locumUserId;
+    const hasSurgery = surgeryId;
+    
+    if (!hasUser && !hasSurgery) {
+      throw createError({ message: "User or surgery is required" });
+    }
 
-    if (duplicateShift) {
-      throw createError({
-        statusCode: 400,
-        message: "A shift with this name already exists in this rota. Please use a unique name.",
+
+    if (isTemplate) {
+      const normalizedLabel = label.trim().toLowerCase();
+      
+      const templateShifts = await RotaShift.findAll({
+        where: {
+          isTemplate: true,
+          isDeleted: false
+        },
+        include: [{
+          model: Rota,
+          as: 'rota',
+          where: { organisationId: currentRota.organisationId },
+          attributes: ['organisationId']
+        }],
+        attributes: ['label']
       });
+
+      
+      const matchingTemplate = templateShifts.find(
+        template => template.label.trim().toLowerCase() === normalizedLabel
+      );
+
+      if (matchingTemplate) {
+        
+        const allShiftsWithSameName = await RotaShift.findAll({
+          where: {
+            isDeleted: false
+          },
+          include: [{
+            model: Rota,
+            as: 'rota',
+            where: { organisationId: currentRota.organisationId },
+            attributes: ['organisationId']
+          }],
+          attributes: ['label']
+        });
+
+        
+        let maxCopyNumber = 0;
+        const baseLabelPattern = new RegExp(`^${normalizedLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(-copy( \\d+)?)?$`, 'i');
+        
+        allShiftsWithSameName.forEach(shift => {
+          const shiftLabel = shift.label.trim().toLowerCase();
+          const match = shiftLabel.match(baseLabelPattern);
+          
+          if (match) {
+            if (shiftLabel === normalizedLabel) {
+              maxCopyNumber = Math.max(maxCopyNumber, 0);
+            } else if (shiftLabel === `${normalizedLabel}-copy`) {
+              maxCopyNumber = Math.max(maxCopyNumber, 1);
+            } else {
+              const copyMatch = shiftLabel.match(/-copy (\d+)$/);
+              if (copyMatch) {
+                maxCopyNumber = Math.max(maxCopyNumber, parseInt(copyMatch[1]));
+              }
+            }
+          }
+        });
+
+        
+        if (maxCopyNumber === 0) {
+          label = `${label.trim()}-copy`;
+        } else {
+          label = `${label.trim()}-copy ${maxCopyNumber + 1}`;
+        }
+      }
     }
 
     const staffIds = [userId, dentistId, nurseId, locumUserId].filter(Boolean);
@@ -424,6 +480,7 @@ export const addRotaShift = async (event) => {
       isLocumShift,
       locumUserId,
       notes,
+      isTemplate: isTemplate || false,
     });
 
     return success(shift);
@@ -468,25 +525,6 @@ export const updateShift = async (event) => {
     });
     
     if (!shift) throw createError({ message: "shift not found" });
-
-    // Check for duplicate shift name if label is being updated
-    if (label && label !== shift.label) {
-      const duplicateShift = await RotaShift.findOne({
-        where: {
-          rotaId: shift.rotaId,
-          label,
-          isDeleted: false,
-          id: { [Op.ne]: id }, // Exclude current shift
-        },
-      });
-
-      if (duplicateShift) {
-        throw createError({
-          statusCode: 400,
-          message: "A shift with this name already exists in this rota. Please use a unique name.",
-        });
-      }
-    }
 
     const finalStartDate = startDate ? new Date(startDate) : shift.startDate;
     const finalEndDate = endDate ? new Date(endDate) : shift.endDate;

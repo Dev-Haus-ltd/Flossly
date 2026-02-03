@@ -414,6 +414,10 @@ export const profile = async (event) => {
         userObj.suggestedOrgId = activeOrg.organisationId || activeOrg.organisation?.id;
       }
     }
+
+    // Check if user is the organisation creator (managerId)
+    const currentOrganisation = await Organisation.findByPk(loggedUser.orgId);
+    userObj.isOrganisationCreator = currentOrganisation && currentOrganisation.managerId === loggedUser.userId;
     
     if (
       userObj.preferences &&
