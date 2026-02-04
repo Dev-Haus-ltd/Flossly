@@ -134,6 +134,40 @@ export const buildCrmWhatsAppMessage = (lead, tpl) => {
   return stripHtmlToText(rendered);
 };
 
+const extractWhatsAppParams = (templateText = "", ctx = {}) => {
+  const tokenMap = {
+    "[Patient Name]": ctx.name || "",
+    "[Name]": ctx.name || "",
+    "[First Name]": ctx.firstName || "",
+    "[Email]": ctx.email || "",
+    "[Your Name]": ctx.yourName || "",
+    "[Patient Info]": ctx.info || "",
+    "{{name}}": ctx.name || "",
+    "{{firstName}}": ctx.firstName || "",
+    "{{email}}": ctx.email || "",
+    "{{yourName}}": ctx.yourName || "",
+    "{{info}}": ctx.info || "",
+  };
+  const pattern = /\[Patient Name\]|\[Name\]|\[First Name\]|\[Email\]|\[Your Name\]|\[Patient Info\]|\{\{name\}\}|\{\{firstName\}\}|\{\{email\}\}|\{\{yourName\}\}|\{\{info\}\}/g;
+  const matches = String(templateText || "").match(pattern) || [];
+  return matches.map((m) => tokenMap[m] ?? "");
+};
+
+export const buildCrmWhatsAppTemplatePayload = (lead, tpl) => {
+  const name = String(tpl?.whatsappTemplateName || "").trim();
+  if (!name) return null;
+  const language = String(tpl?.whatsappTemplateLanguage || "en_US").trim() || "en_US";
+  const ctx = buildLeadContext({ lead, userName: "Team" });
+  const params = extractWhatsAppParams(tpl?.template || "", ctx);
+  const bodyParams = params.map((text) => ({ type: "text", text: String(text ?? "") }));
+  const components = bodyParams.length ? [{ type: "body", parameters: bodyParams }] : [];
+  return {
+    name,
+    language: { code: language },
+    ...(components.length ? { components } : {}),
+  };
+};
+
 export const sendCrmAutomationEmail = async (lead, subject, html) => {
   const wrapped = EMAIL_TEMPLATE.replaceAll("{subject}", subject).replace(
     "{content}",
@@ -147,7 +181,7 @@ export const sendCrmAutomationEmail = async (lead, subject, html) => {
   });
 };
 
-export const sendCrmAutomationWhatsApp = async (lead, message) => {
+export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload = null) => {
   const to = normalizeWhatsAppNumber(lead?.telephone);
   if (!to) throw new Error("Missing or invalid phone number");
   const waConfig = await resolveWhatsAppConfig(lead.organisationId);
@@ -160,18 +194,17 @@ export const sendCrmAutomationWhatsApp = async (lead, message) => {
   }
   const url = `https://graph.facebook.com/v24.0/${waConfig.phoneNumberId}/messages`;
   try {
+    const body =
+      templatePayload
+        ? { messaging_product: "whatsapp", to, type: "template", template: templatePayload }
+        : { messaging_product: "whatsapp", to, type: "text", text: { body: message || "" } };
     const resp = await $fetch(url, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${waConfig.accessToken}`,
         "Content-Type": "application/json",
       },
-      body: {
-        messaging_product: "whatsapp",
-        to,
-        type: "text",
-        text: { body: message || "" },
-      },
+      body,
     });
     const providerMessageId = resp?.messages?.[0]?.id || null;
     await markWhatsAppOutbound(lead, to);
@@ -179,7 +212,8 @@ export const sendCrmAutomationWhatsApp = async (lead, message) => {
       organisationId: lead.organisationId,
       leadId: lead.id,
       to,
-      type: "text",
+      type: templatePayload ? "template" : "text",
+      templateName: templatePayload?.name || null,
       status: "sent",
       providerMessageId,
     });
@@ -188,7 +222,8 @@ export const sendCrmAutomationWhatsApp = async (lead, message) => {
       organisationId: lead.organisationId,
       leadId: lead.id,
       to,
-      type: "text",
+      type: templatePayload ? "template" : "text",
+      templateName: templatePayload?.name || null,
       status: "failed",
       error: e?.data?.error?.message || e?.message || "Failed to send",
     });
@@ -326,8 +361,12 @@ export const sendImmediateCrmAutomationsForLead = async (lead) => {
     if (!due || hasCrmSent(raw, sentKey)) continue;
     if (String(tpl?.type || "Email").toLowerCase() === "whatsapp") {
       if (!lead?.telephone) continue;
+      const templatePayload = buildCrmWhatsAppTemplatePayload(lead, tpl);
+      if (!templatePayload) {
+        throw new Error("WhatsApp template name is required for automation");
+      }
       const message = buildCrmWhatsAppMessage(lead, tpl);
-      await sendCrmAutomationWhatsApp(lead, message);
+      await sendCrmAutomationWhatsApp(lead, message, templatePayload);
       await markCrmSent(lead, raw, sentKey);
     } else {
       if (!lead?.email) continue;
