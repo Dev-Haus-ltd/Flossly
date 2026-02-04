@@ -490,7 +490,7 @@ const loadFacebookSdk = () => {
 const connectWhatsAppEmbedded = async () => {
   const config = useRuntimeConfig()
   const appId = config.public?.META_APP_ID || config.public?.META_APPID || ''
-  const configId = config.public?.META_WA_EMBEDDED_CONFIG_ID || ''
+  const configId = 913675551081181
 
   if (!appId || !configId) {
     mainStore?.setSnackbar?.({ title: 'Meta app config is missing', type: 'error' })
