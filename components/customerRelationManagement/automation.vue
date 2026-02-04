@@ -472,6 +472,34 @@
                 placeholder="Subject line for this email"
               />
             </div>
+            <div class="mb-4" v-else>
+              <div class="text-subtitle-2 font-weight-bold text-grey-darken-2 mb-2">
+                <v-icon size="18" class="mr-2">mdi-whatsapp</v-icon>
+                WhatsApp Template
+              </div>
+              <v-text-field
+                v-model="active.whatsappTemplateName"
+                variant="solo"
+                density="compact"
+                hide-details
+                bg-color="#FFFFFF"
+                flat
+                placeholder="Approved template name (e.g. hello_world)"
+                class="mb-2"
+              />
+              <v-text-field
+                v-model="active.whatsappTemplateLanguage"
+                variant="solo"
+                density="compact"
+                hide-details
+                bg-color="#FFFFFF"
+                flat
+                placeholder="Language code (e.g. en_US)"
+              />
+              <div class="text-caption text-medium-emphasis mt-2">
+                Templates must be approved in Meta. The message body below is for preview and variable mapping only.
+              </div>
+            </div>
             <div ref="editorEl" class="editor"></div>
           </div>
         </div>
@@ -628,6 +656,8 @@ const buildPayload = (row) => {
     sending: row.sending,
     enabled: !!row.enabled,
     template: row.template,
+    whatsappTemplateName: row.whatsappTemplateName,
+    whatsappTemplateLanguage: row.whatsappTemplateLanguage,
   }
   if (row.groupKey || activeAutomation.value?.key) {
     payload.groupKey = row.groupKey || activeAutomation.value?.key

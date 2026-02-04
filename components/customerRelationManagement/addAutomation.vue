@@ -77,6 +77,32 @@
                 flat
               />
             </v-col>
+            <v-col cols="12" md="6" v-else>
+              <label class="mb-1 fld-lbl">WhatsApp Template Name</label>
+              <v-text-field
+                v-model="form.whatsappTemplateName"
+                variant="solo"
+                density="compact"
+                class="mb-1 input-bordered"
+                flat
+                placeholder="Approved template name (e.g. hello_world)"
+                :rules="requiredRule"
+              />
+            </v-col>
+            <v-col cols="12" md="6" v-if="form.type === 'WhatsApp'">
+              <label class="mb-1 fld-lbl">WhatsApp Template Language</label>
+              <v-text-field
+                v-model="form.whatsappTemplateLanguage"
+                variant="solo"
+                density="compact"
+                class="mb-1 input-bordered"
+                flat
+                placeholder="en_US"
+              />
+              <div class="text-caption text-medium-emphasis mt-1">
+                Templates must be approved in Meta. The message body below is for preview/variables only.
+              </div>
+            </v-col>
 
             <v-col cols="12" md="6">
               <label class="mb-1 fld-lbl">Automation Trigger Type</label>
@@ -273,6 +299,8 @@ const form = ref({
   name: '',
   subject: '',
   template: '',
+  whatsappTemplateName: '',
+  whatsappTemplateLanguage: 'en_US',
   triggerType: 'inquiry_days',
   triggerDays: 0,
   triggerOffsetDays: 0,
@@ -295,6 +323,8 @@ const resetForm = () => {
     name: '',
     subject: '',
     template: '',
+    whatsappTemplateName: '',
+    whatsappTemplateLanguage: 'en_US',
     triggerType: 'inquiry_days',
     triggerDays: 0,
     triggerOffsetDays: 0,
@@ -429,6 +459,8 @@ const onSubmit = async () => {
       sending: formatCrmTriggerPreview(trigger),
       enabled: false,
       template: form.value.template,
+      whatsappTemplateName: form.value.type === 'WhatsApp' ? (form.value.whatsappTemplateName || '') : '',
+      whatsappTemplateLanguage: form.value.type === 'WhatsApp' ? (form.value.whatsappTemplateLanguage || 'en_US') : '',
       trigger,
     }
     const res = await crmStore.saveAutomation(payload)

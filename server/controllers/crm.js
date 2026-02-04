@@ -929,7 +929,7 @@ export const saveAutomation = async (event) => {
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
     const payload = typeof body === 'string' ? JSON.parse(body) : body
-    const { key, type = 'Email', name, subject, sending, enabled, template, leadId, groupKey, trigger } = payload || {}
+    const { key, type = 'Email', name, subject, sending, enabled, template, leadId, groupKey, trigger, whatsappTemplateName, whatsappTemplateLanguage } = payload || {}
     if (!key) return error(400, 'key required')
     if (leadId) {
       const lead = await CrmLead.findOne({ where: { organisationId: Number(orgId), id: Number(leadId) } })
@@ -944,6 +944,8 @@ export const saveAutomation = async (event) => {
         sending: sending || '',
         enabled: !!enabled,
         template: template || '',
+        whatsappTemplateName: whatsappTemplateName || '',
+        whatsappTemplateLanguage: whatsappTemplateLanguage || '',
         trigger: trigger ?? null,
       }
       lead.rawData = { ...raw, crmAutomationOverrides: overrides }
@@ -974,6 +976,8 @@ export const saveAutomation = async (event) => {
       if (type !== undefined) exists.type = type
       if (template !== undefined) exists.template = template
       if (subject !== undefined) exists.subject = subject
+      if (whatsappTemplateName !== undefined) exists.whatsappTemplateName = whatsappTemplateName || null
+      if (whatsappTemplateLanguage !== undefined) exists.whatsappTemplateLanguage = whatsappTemplateLanguage || null
       if (trigger !== undefined) exists.trigger = trigger
       await exists.save()
       return success(exists)
@@ -987,6 +991,8 @@ export const saveAutomation = async (event) => {
       sending: sending || '',
       enabled: !!enabled,
       template: template || null,
+      whatsappTemplateName: whatsappTemplateName || null,
+      whatsappTemplateLanguage: whatsappTemplateLanguage || null,
       trigger: trigger ?? null
     })
     return success(created)

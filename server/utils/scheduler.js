@@ -107,6 +107,7 @@ import {
   buildEffectiveCrmTemplates,
   buildCrmEmail,
   buildCrmWhatsAppMessage,
+  buildCrmWhatsAppTemplatePayload,
   sendCrmAutomationEmail,
   sendCrmAutomationWhatsApp,
   resolveCrmTrigger,
@@ -149,8 +150,12 @@ export const startLeadAutomationScheduler = () => {
               const type = String(tpl?.type || 'Email').toLowerCase()
               if (type === 'whatsapp') {
                 if (!lead?.telephone) continue
+                const templatePayload = buildCrmWhatsAppTemplatePayload(lead, tpl)
+                if (!templatePayload) {
+                  throw new Error('WhatsApp template name is required for automation')
+                }
                 const message = buildCrmWhatsAppMessage(lead, tpl)
-                await sendCrmAutomationWhatsApp(lead, message)
+                await sendCrmAutomationWhatsApp(lead, message, templatePayload)
                 await markCrmSent(lead, raw, sentKey)
               } else {
                 if (!lead?.email) continue
