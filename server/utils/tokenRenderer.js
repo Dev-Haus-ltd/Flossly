@@ -25,7 +25,6 @@ export function renderTokens(input, ctx = {}) {
     .replaceAll('{{yourName}}', ctx.yourName || '')
     .replaceAll('{{info}}', ctx.info || '')
     .replaceAll('[Patient Name]', ctx.name || '')
-    .replaceAll('[Name]', ctx.name || '')
     .replaceAll('[First Name]', ctx.firstName || '')
     .replaceAll('[Email]', ctx.email || '')
     .replaceAll('[Your Name]', ctx.yourName || '')

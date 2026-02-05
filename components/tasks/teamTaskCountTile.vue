@@ -1,5 +1,5 @@
 <template>
-  <v-card class="pa-4 d-flex flex-column justify-space-around user-card" flat @click="$emit('openUserDialog', userStat)" style="cursor: pointer;">
+  <v-card class="pa-4 d-flex flex-column justify-space-around user-card" flat>
     <div v-if="userStat.user.photo" class="mx-auto">
       <img :src="userStat.user.photo" alt="User" class="user-photo" />
     </div>
@@ -46,7 +46,6 @@
 
 <script setup>
 const { userStat } = defineProps(["userStat"]);
-defineEmits(["openUserDialog"]);
 </script>
 
 <style scoped lang="scss">

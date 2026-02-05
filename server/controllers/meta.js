@@ -1,5 +1,5 @@
 import { Op, fn, col } from 'sequelize'
-import { CrmLead, MetaPage, Organisation, User, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight } from '../models'
+import { CrmLead, MetaPage, Organisation, User, MetaUserToken, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight } from '../models'
 import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
 import { addMetaClient, broadcastMetaEvent } from '../utils/metaStream'
@@ -47,7 +47,6 @@ export const authStart = async (event) => {
     'pages_read_engagement',
     'pages_manage_metadata',
     'leads_retrieval',
-    'ads_read',
   ].join(',')
 
   // ✅ FIX: Add auth_type=rerequest to force fresh login
@@ -261,9 +260,6 @@ export const disconnect = async (event) => {
   try {
     // Remove all user tokens for the org
     await MetaUserToken.destroy({ where: { organisationId: orgId } })
-
-    // Remove WhatsApp config for the org
-    await MetaWhatsAppConfig.destroy({ where: { organisationId: orgId } })
     
     // Deactivate pages for the org
     await MetaPage.update(
@@ -275,181 +271,6 @@ export const disconnect = async (event) => {
   } catch (e) {
     return error(500, 'Failed to disconnect')
   }
-}
-
-const normalizeWaConfigValue = (value) => {
-  const raw = String(value || '').trim()
-  return raw || null
-}
-
-const resolvePhoneNumberFromWaba = async (accessToken, wabaId) => {
-  if (!accessToken || !wabaId) return null
-  try {
-    const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(wabaId)}/phone_numbers?fields=id,display_phone_number,verified_name`
-    const resp = await $fetch(url, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
-    const list = Array.isArray(resp?.data) ? resp.data : []
-    if (!list.length) return null
-    return list[0]
-  } catch {
-    return null
-  }
-}
-
-const exchangeCodeForAccessToken = async ({ code, redirectUri, appId, appSecret }) => {
-  if (!code || !appId || !appSecret) return null
-  const url = `https://graph.facebook.com/${META_VERSION}/oauth/access_token?client_id=${encodeURIComponent(
-    appId
-  )}&client_secret=${encodeURIComponent(appSecret)}&code=${encodeURIComponent(code)}${
-    redirectUri ? `&redirect_uri=${encodeURIComponent(redirectUri)}` : ''
-  }`
-  const resp = await $fetch(url, { method: 'GET' })
-  return resp?.access_token || null
-}
-
-export const getWhatsAppConfig = async (event) => {
-  const { orgId } = event.context.user || {}
-  if (!orgId) return error(401, 'Unauthenticated')
-
-  try { await MetaWhatsAppConfig.sync() } catch {}
-  const row = await MetaWhatsAppConfig.findOne({ where: { organisationId: orgId } })
-  if (!row) return success(null)
-
-  return success({
-    id: row.id,
-    organisationId: row.organisationId,
-    userId: row.userId,
-    phoneNumberId: row.phoneNumberId,
-    wabaId: row.wabaId || null,
-    displayPhoneNumber: row.displayPhoneNumber || null,
-    verifiedName: row.verifiedName || null,
-    hasToken: !!row.accessTokenEnc,
-    hasVerifyToken: !!row.verifyTokenEnc,
-    tokenExpiresAt: row.tokenExpiresAt || null,
-    status: row.status || 'Active',
-  })
-}
-
-export const saveWhatsAppConfig = async (event) => {
-  const { orgId, userId } = event.context.user || {}
-  if (!orgId || !userId) return error(401, 'Unauthenticated')
-
-  const body = await readBody(event)
-  const payload = typeof body === 'string' ? JSON.parse(body) : body
-  const phoneNumberId = normalizeWaConfigValue(payload?.phoneNumberId)
-  const wabaId = normalizeWaConfigValue(payload?.wabaId)
-  const displayPhoneNumber = normalizeWaConfigValue(payload?.displayPhoneNumber)
-  const verifiedName = normalizeWaConfigValue(payload?.verifiedName)
-  const accessToken = normalizeWaConfigValue(payload?.accessToken)
-  const verifyToken = normalizeWaConfigValue(payload?.verifyToken)
-  const tokenExpiresAt = payload?.tokenExpiresAt ? new Date(payload.tokenExpiresAt) : null
-
-  if (!phoneNumberId) return error(400, 'phoneNumberId required')
-  if (!accessToken) return error(400, 'accessToken required')
-
-  try { await MetaWhatsAppConfig.sync() } catch {}
-
-  const encAccessToken = encrypt(accessToken)
-  const encVerifyToken = verifyToken ? encrypt(verifyToken) : null
-  const existing = await MetaWhatsAppConfig.findOne({ where: { organisationId: orgId } })
-
-  if (existing) {
-    existing.phoneNumberId = phoneNumberId
-    existing.wabaId = wabaId
-    existing.displayPhoneNumber = displayPhoneNumber
-    existing.verifiedName = verifiedName
-    existing.accessTokenEnc = encAccessToken
-    existing.verifyTokenEnc = encVerifyToken
-    existing.tokenExpiresAt = tokenExpiresAt
-    existing.status = 'Active'
-    existing.userId = userId
-    existing.connectedByUserId = userId
-    await existing.save()
-    return success({ updated: true })
-  }
-
-  await MetaWhatsAppConfig.create({
-    organisationId: Number(orgId),
-    userId: Number(userId),
-    phoneNumberId,
-    wabaId,
-    displayPhoneNumber,
-    verifiedName,
-    accessTokenEnc: encAccessToken,
-    verifyTokenEnc: encVerifyToken,
-    tokenExpiresAt,
-    status: 'Active',
-    connectedByUserId: Number(userId),
-  })
-  return success({ created: true })
-}
-
-export const whatsappEmbeddedComplete = async (event) => {
-  const { orgId, userId } = event.context.user || {}
-  if (!orgId || !userId) return error(401, 'Unauthenticated')
-
-  const config = useRuntimeConfig()
-  const appId = config.META_APP_ID
-  const appSecret = config.META_APP_SECRET
-  const redirectUri = getRedirectUri(config)
-
-  const body = await readBody(event)
-  const payload = typeof body === 'string' ? JSON.parse(body) : body
-  const code = normalizeWaConfigValue(payload?.code)
-  const accessToken = normalizeWaConfigValue(payload?.accessToken)
-  let token = accessToken
-
-  if (!token && code) {
-    token = await exchangeCodeForAccessToken({ code, redirectUri, appId, appSecret })
-  }
-  if (!token) return error(400, 'accessToken or code required')
-
-  let phoneNumberId = normalizeWaConfigValue(payload?.phoneNumberId)
-  let wabaId = normalizeWaConfigValue(payload?.wabaId)
-  let displayPhoneNumber = normalizeWaConfigValue(payload?.displayPhoneNumber)
-  let verifiedName = normalizeWaConfigValue(payload?.verifiedName)
-
-  if (!phoneNumberId && wabaId) {
-    const phone = await resolvePhoneNumberFromWaba(token, wabaId)
-    if (phone?.id) phoneNumberId = String(phone.id)
-    if (!displayPhoneNumber && phone?.display_phone_number) displayPhoneNumber = phone.display_phone_number
-    if (!verifiedName && phone?.verified_name) verifiedName = phone.verified_name
-  }
-
-  if (!phoneNumberId) return error(400, 'phoneNumberId required')
-
-  try { await MetaWhatsAppConfig.sync() } catch {}
-
-  const encAccessToken = encrypt(token)
-  const existing = await MetaWhatsAppConfig.findOne({ where: { organisationId: orgId } })
-  if (existing) {
-    existing.phoneNumberId = phoneNumberId
-    existing.wabaId = wabaId
-    existing.displayPhoneNumber = displayPhoneNumber
-    existing.verifiedName = verifiedName
-    existing.accessTokenEnc = encAccessToken
-    existing.status = 'Active'
-    existing.userId = userId
-    existing.connectedByUserId = userId
-    await existing.save()
-    return success({ updated: true })
-  }
-
-  await MetaWhatsAppConfig.create({
-    organisationId: Number(orgId),
-    userId: Number(userId),
-    phoneNumberId,
-    wabaId,
-    displayPhoneNumber,
-    verifiedName,
-    accessTokenEnc: encAccessToken,
-    status: 'Active',
-    connectedByUserId: Number(userId),
-  })
-
-  return success({ created: true })
 }
 
 // Rest of your functions remain the same...

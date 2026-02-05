@@ -21,8 +21,6 @@ export default defineNuxtConfig({
     public: {
       BASE_URL: process.env.NUXT_PUBLIC_BASE_URL || process.env.BASE_URL,
       CHATBOT_URL: process.env.NUXT_PUBLIC_CHATBOT_URL || process.env.CHATBOT_URL,
-      META_APP_ID: process.env.NUXT_PUBLIC_META_APP_ID || process.env.META_APP_ID,
-      META_WA_EMBEDDED_CONFIG_ID: process.env.NUXT_PUBLIC_META_WA_EMBEDDED_CONFIG_ID || process.env.META_WA_EMBEDDED_CONFIG_ID,
       ONBOARDING_WELCOME_VIDEO_URL: process.env.ONBOARDING_WELCOME_VIDEO_URL || "https://youtu.be/gEuICxXisnw?si=1L-7jdiwwnr_VpDC",
       ONBOARDING_FOUNDER_NAME: process.env.ONBOARDING_FOUNDER_NAME || "Saba",
       ONBOARDING_SUCCESS_MANAGER_NAME: process.env.ONBOARDING_SUCCESS_MANAGER_NAME || "FlosslyOS Team",

@@ -122,9 +122,7 @@
           <!-- Type Column -->
           <template #item.type="{ item }">
             <v-chip size="small" variant="tonal" color="primary" class="font-weight-medium">
-              <v-icon size="14" class="mr-1">
-                {{ String(item.type || 'Email').toLowerCase() === 'whatsapp' ? 'mdi-whatsapp' : 'mdi-email-outline' }}
-              </v-icon>
+              <v-icon size="14" class="mr-1">mdi-email-outline</v-icon>
               {{ item.type }}
             </v-chip>
           </template>
@@ -147,16 +145,16 @@
           <!-- Actions Column -->
           <template #item.actions="{ item }">
             <div class="d-flex align-center justify-center gap-2">
-                <v-btn
-                  icon
-                  variant="text"
-                  size="small"
-                  class="action-icon-btn"
-                  aria-label="Preview email"
-                  @click="openPreview(item)"
-                >
-                  <v-icon size="18">mdi-eye-outline</v-icon>
-                </v-btn>
+              <v-btn
+                icon
+                variant="text"
+                size="small"
+                class="action-icon-btn"
+                aria-label="Preview email"
+                @click="openEmailPreview(item)"
+              >
+                <v-icon size="18">mdi-eye-outline</v-icon>
+              </v-btn>
               <v-btn
                 icon
                 variant="text"
@@ -200,7 +198,7 @@
     </template>
 
     <v-dialog
-      v-if="displayMode === 'modal' && activeAutomation"
+      v-if="displayMode === 'modal'"
       v-model="showGroupDialog"
       max-width="1200px"
       scrollable
@@ -223,7 +221,7 @@
 
         <v-divider />
 
-        <div class="pa-4" v-if="activeAutomation">
+        <div class="pa-4">
           <div class="d-flex flex-wrap justify-space-between align-center mb-3 automation-toolbar">
             <div class="d-flex align-center gap-2">
               <v-text-field
@@ -303,9 +301,7 @@
             >
               <template #item.type="{ item }">
                 <v-chip size="small" variant="tonal" color="primary" class="font-weight-medium">
-                  <v-icon size="14" class="mr-1">
-                    {{ String(item.type || 'Email').toLowerCase() === 'whatsapp' ? 'mdi-whatsapp' : 'mdi-email-outline' }}
-                  </v-icon>
+                  <v-icon size="14" class="mr-1">mdi-email-outline</v-icon>
                   {{ item.type }}
                 </v-chip>
               </template>
@@ -331,7 +327,7 @@
                     size="small"
                     class="action-icon-btn"
                     aria-label="Preview email"
-                    @click="openPreview(item)"
+                    @click="openEmailPreview(item)"
                   >
                     <v-icon size="18">mdi-eye-outline</v-icon>
                   </v-btn>
@@ -381,9 +377,7 @@
     <v-dialog v-model="showPreview" max-width="980px">
       <v-card class="rounded-lg elevation-8">
         <div class="modal-header preview-modal-header">
-          <div class="text-subtitle-2 font-weight-bold">
-            {{ previewIsWhatsApp ? 'WhatsApp Preview' : 'Email Preview' }}
-          </div>
+          <div class="text-subtitle-2 font-weight-bold">Email Preview</div>
           <v-btn icon variant="text" @click="showPreview = false">
             <v-icon>mdi-close</v-icon>
           </v-btn>
@@ -392,10 +386,7 @@
         <v-divider />
 
         <div class="modal-body preview-modal-body">
-          <div v-if="previewIsWhatsApp" class="whatsapp-preview">
-            <div class="whatsapp-preview__bubble">{{ previewWhatsAppText }}</div>
-          </div>
-          <div v-else class="email-preview-frame">
+          <div class="email-preview-frame">
             <iframe
               title="Email preview"
               :srcdoc="emailPreviewHtml"
@@ -414,9 +405,7 @@
             <h5 class="modal-title">{{ active?.name }}</h5>
             <div class="d-flex align-center gap-2 mt-2">
               <v-chip size="x-small" variant="tonal" color="primary">
-                <v-icon size="12" class="mr-1">
-                  {{ String(active?.type || 'Email').toLowerCase() === 'whatsapp' ? 'mdi-whatsapp' : 'mdi-email-outline' }}
-                </v-icon>
+                <v-icon size="12" class="mr-1">mdi-email-outline</v-icon>
                 {{ active?.type }}
               </v-chip>
               <v-chip size="x-small" variant="tonal" color="grey">
@@ -451,13 +440,13 @@
             <div class="d-flex align-center justify-space-between mb-3">
               <div class="text-subtitle-2 font-weight-bold text-grey-darken-2">
                 <v-icon size="18" class="mr-2">mdi-email-edit-outline</v-icon>
-                {{ String(active?.type || 'Email').toLowerCase() === 'whatsapp' ? 'WhatsApp Message' : 'Email Content' }}
+                Email Content
               </div>
               <v-chip size="x-small" variant="tonal" color="info">
                 Use [First Name] for personalization
               </v-chip>
             </div>
-            <div class="mb-4" v-if="String(active?.type || 'Email').toLowerCase() !== 'whatsapp'">
+            <div class="mb-4">
               <div class="text-subtitle-2 font-weight-bold text-grey-darken-2 mb-2">
                 <v-icon size="18" class="mr-2">mdi-email-outline</v-icon>
                 Email Subject
@@ -471,34 +460,6 @@
                 flat
                 placeholder="Subject line for this email"
               />
-            </div>
-            <div class="mb-4" v-else>
-              <div class="text-subtitle-2 font-weight-bold text-grey-darken-2 mb-2">
-                <v-icon size="18" class="mr-2">mdi-whatsapp</v-icon>
-                WhatsApp Template
-              </div>
-              <v-text-field
-                v-model="active.whatsappTemplateName"
-                variant="solo"
-                density="compact"
-                hide-details
-                bg-color="#FFFFFF"
-                flat
-                placeholder="Approved template name (e.g. hello_world)"
-                class="mb-2"
-              />
-              <v-text-field
-                v-model="active.whatsappTemplateLanguage"
-                variant="solo"
-                density="compact"
-                hide-details
-                bg-color="#FFFFFF"
-                flat
-                placeholder="Language code (e.g. en_US)"
-              />
-              <div class="text-caption text-medium-emphasis mt-2">
-                Templates must be approved in Meta. The message body below is for preview and variable mapping only.
-              </div>
             </div>
             <div ref="editorEl" class="editor"></div>
           </div>
@@ -656,8 +617,6 @@ const buildPayload = (row) => {
     sending: row.sending,
     enabled: !!row.enabled,
     template: row.template,
-    whatsappTemplateName: row.whatsappTemplateName,
-    whatsappTemplateLanguage: row.whatsappTemplateLanguage,
   }
   if (row.groupKey || activeAutomation.value?.key) {
     payload.groupKey = row.groupKey || activeAutomation.value?.key
@@ -928,7 +887,7 @@ const openEdit = async (row) => {
   })
 }
 
-const openPreview = (row) => {
+const openEmailPreview = (row) => {
   previewItem.value = row
   showPreview.value = true
 }
@@ -986,8 +945,7 @@ const practiceLogo = computed(() => {
 })
 
 
-const resolveDefault = (row) =>
-  crmAutomationDefaults.find(d => d && d.key === row?.key) || {}
+const resolveDefault = (row) => crmAutomationDefaults.find(d => d.key === row?.key) || {}
 
 const applyPlaceholders = (text) => {
   if (!text) return ''
@@ -995,8 +953,6 @@ const applyPlaceholders = (text) => {
   const firstName = sampleRecipient.name.split(' ')[0] || sampleRecipient.name
   return text
     .replace(/\[?\s*practice\s*name\s*\]?/gi, practice)
-    .replace(/\[?\s*patient\s*name\s*\]?/gi, sampleRecipient.name)
-    .replace(/\[?\s*name\s*\]?/gi, sampleRecipient.name)
     .replace(/\[?\s*first\s*name\s*\]?/gi, firstName)
 }
 
@@ -1014,32 +970,6 @@ const previewHtml = computed(() => {
   const def = resolveDefault(row)
   const rawTemplate = row.template && row.template.trim() ? row.template : def.template || ''
   return applyPlaceholders(rawTemplate)
-})
-
-const stripHtmlToText = (html = '') => {
-  return String(html || '')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>\s*/gi, '\n\n')
-    .replace(/<\/li>\s*/gi, '\n')
-    .replace(/<li>\s*/gi, '• ')
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-}
-
-const previewIsWhatsApp = computed(() =>
-  String(previewItem.value?.type || 'Email').toLowerCase() === 'whatsapp'
-)
-
-const previewWhatsAppText = computed(() => {
-  if (!previewItem.value) return ''
-  const text = previewHtml.value || ''
-  return stripHtmlToText(text)
 })
 
 const emailPreviewHtml = computed(() => {
@@ -1394,28 +1324,6 @@ watch(showGroupDialog, (v) => {
   border: 0;
   border-radius: 10px;
   background: #f8f9fb;
-}
-
-.whatsapp-preview {
-  background: #e5ddd5;
-  border-radius: 12px;
-  padding: 20px;
-  min-height: 220px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-}
-
-.whatsapp-preview__bubble {
-  background: #dcf8c6;
-  border-radius: 10px;
-  padding: 12px 14px;
-  max-width: 520px;
-  white-space: pre-wrap;
-  line-height: 1.5;
-  font-size: 14px;
-  color: #111827;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 </style>
 

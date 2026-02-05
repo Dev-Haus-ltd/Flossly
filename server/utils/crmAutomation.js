@@ -3,9 +3,7 @@ import { formatYmd, parseDayOffsetFromText } from "~/lib/misc";
 import { template as EMAIL_TEMPLATE } from "./emailTemplate.js";
 import { transporter } from "./nodeMailer.js";
 import { buildLeadContext, renderTokens } from "./tokenRenderer.js";
-import { CrmAutomationTemplate, MetaWhatsAppConfig } from "../models/index.js";
-import { decrypt } from "./crypto.js";
-import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from "./whatsapp.js";
+import { CrmAutomationTemplate } from "../models/index.js";
 
 const crmTriggersByKey = new Map(
   crmAutomationDefaults
@@ -61,113 +59,6 @@ export const buildCrmEmail = (lead, tpl) => {
   return { subject, html };
 };
 
-const stripHtmlToText = (html = "") => {
-  if (!html) return "";
-  return String(html)
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>\s*/gi, "\n\n")
-    .replace(/<\/li>\s*/gi, "\n")
-    .replace(/<li>\s*/gi, "• ")
-    .replace(/<[^>]*>/g, "")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-};
-
-const resolveWhatsAppConfig = async (orgId) => {
-  const config = useRuntimeConfig();
-  const envPhoneNumberId =
-    config.META_WA_PHONE_NUMBER_ID ||
-    config.WHATSAPP_PHONE_NUMBER_ID ||
-    process.env.META_WA_PHONE_NUMBER_ID ||
-    process.env.WHATSAPP_PHONE_NUMBER_ID ||
-    "";
-  const envToken =
-    config.META_WA_ACCESS_TOKEN ||
-    config.WHATSAPP_ACCESS_TOKEN ||
-    process.env.META_WA_ACCESS_TOKEN ||
-    process.env.WHATSAPP_ACCESS_TOKEN ||
-    "";
-  const envWabaId =
-    config.META_WA_WABA_ID ||
-    config.WHATSAPP_WABA_ID ||
-    process.env.META_WA_WABA_ID ||
-    process.env.WHATSAPP_WABA_ID ||
-    "";
-
-  try {
-    await MetaWhatsAppConfig.sync();
-  } catch {}
-
-  const row = await MetaWhatsAppConfig.findOne({
-    where: { organisationId: Number(orgId) },
-  });
-  if (row) {
-    return {
-      phoneNumberId: row.phoneNumberId,
-      accessToken: decrypt(row.accessTokenEnc),
-      wabaId: row.wabaId || null,
-      source: "db",
-    };
-  }
-
-  if (envPhoneNumberId && envToken) {
-    return {
-      phoneNumberId: String(envPhoneNumberId).trim(),
-      accessToken: String(envToken).trim(),
-      wabaId: envWabaId ? String(envWabaId).trim() : null,
-      source: "env",
-    };
-  }
-
-  return null;
-};
-
-export const buildCrmWhatsAppMessage = (lead, tpl) => {
-  const ctx = buildLeadContext({ lead, userName: "Team" });
-  const rawTemplate = tpl?.template || "";
-  const rendered = renderTokens(rawTemplate, ctx);
-  return stripHtmlToText(rendered);
-};
-
-const extractWhatsAppParams = (templateText = "", ctx = {}) => {
-  const tokenMap = {
-    "[Patient Name]": ctx.name || "",
-    "[Name]": ctx.name || "",
-    "[First Name]": ctx.firstName || "",
-    "[Email]": ctx.email || "",
-    "[Your Name]": ctx.yourName || "",
-    "[Patient Info]": ctx.info || "",
-    "{{name}}": ctx.name || "",
-    "{{firstName}}": ctx.firstName || "",
-    "{{email}}": ctx.email || "",
-    "{{yourName}}": ctx.yourName || "",
-    "{{info}}": ctx.info || "",
-  };
-  const pattern = /\[Patient Name\]|\[Name\]|\[First Name\]|\[Email\]|\[Your Name\]|\[Patient Info\]|\{\{name\}\}|\{\{firstName\}\}|\{\{email\}\}|\{\{yourName\}\}|\{\{info\}\}/g;
-  const matches = String(templateText || "").match(pattern) || [];
-  return matches.map((m) => tokenMap[m] ?? "");
-};
-
-export const buildCrmWhatsAppTemplatePayload = (lead, tpl) => {
-  const name = String(tpl?.whatsappTemplateName || "").trim();
-  if (!name) return null;
-  const language = String(tpl?.whatsappTemplateLanguage || "en_US").trim() || "en_US";
-  const ctx = buildLeadContext({ lead, userName: "Team" });
-  const params = extractWhatsAppParams(tpl?.template || "", ctx);
-  const bodyParams = params.map((text) => ({ type: "text", text: String(text ?? "") }));
-  const components = bodyParams.length ? [{ type: "body", parameters: bodyParams }] : [];
-  return {
-    name,
-    language: { code: language },
-    ...(components.length ? { components } : {}),
-  };
-};
-
 export const sendCrmAutomationEmail = async (lead, subject, html) => {
   const wrapped = EMAIL_TEMPLATE.replaceAll("{subject}", subject).replace(
     "{content}",
@@ -179,56 +70,6 @@ export const sendCrmAutomationEmail = async (lead, subject, html) => {
     subject,
     html: wrapped,
   });
-};
-
-export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload = null) => {
-  const to = normalizeWhatsAppNumber(lead?.telephone);
-  if (!to) throw new Error("Missing or invalid phone number");
-  const waConfig = await resolveWhatsAppConfig(lead.organisationId);
-  if (!waConfig?.phoneNumberId || !waConfig?.accessToken) {
-    throw new Error("WhatsApp is not configured");
-  }
-  const limitStatus = await isWhatsAppLimitExceeded(lead.organisationId);
-  if (limitStatus.exceeded) {
-    throw new Error(`WhatsApp monthly limit reached (${limitStatus.count}/${limitStatus.limit})`);
-  }
-  const url = `https://graph.facebook.com/v24.0/${waConfig.phoneNumberId}/messages`;
-  try {
-    const body =
-      templatePayload
-        ? { messaging_product: "whatsapp", to, type: "template", template: templatePayload }
-        : { messaging_product: "whatsapp", to, type: "text", text: { body: message || "" } };
-    const resp = await $fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${waConfig.accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body,
-    });
-    const providerMessageId = resp?.messages?.[0]?.id || null;
-    await markWhatsAppOutbound(lead, to);
-    await logWhatsAppMessage({
-      organisationId: lead.organisationId,
-      leadId: lead.id,
-      to,
-      type: templatePayload ? "template" : "text",
-      templateName: templatePayload?.name || null,
-      status: "sent",
-      providerMessageId,
-    });
-  } catch (e) {
-    await logWhatsAppMessage({
-      organisationId: lead.organisationId,
-      leadId: lead.id,
-      to,
-      type: templatePayload ? "template" : "text",
-      templateName: templatePayload?.name || null,
-      status: "failed",
-      error: e?.data?.error?.message || e?.message || "Failed to send",
-    });
-    throw e;
-  }
 };
 
 export const hasCrmSent = (raw, key) =>
@@ -345,6 +186,7 @@ export const getBlackFriday = (year) => {
 };
 
 export const sendImmediateCrmAutomationsForLead = async (lead) => {
+  if (!lead?.email) return;
   const templates = await CrmAutomationTemplate.findAll({
     where: { organisationId: Number(lead.organisationId) },
   });
@@ -359,20 +201,8 @@ export const sendImmediateCrmAutomationsForLead = async (lead) => {
     if (!trigger || trigger.type !== "inquiry_days" || trigger.days !== 0) continue;
     const { due, sentKey } = shouldSendCrmTemplate({ lead, tpl, trigger, today });
     if (!due || hasCrmSent(raw, sentKey)) continue;
-    if (String(tpl?.type || "Email").toLowerCase() === "whatsapp") {
-      if (!lead?.telephone) continue;
-      const templatePayload = buildCrmWhatsAppTemplatePayload(lead, tpl);
-      if (!templatePayload) {
-        throw new Error("WhatsApp template name is required for automation");
-      }
-      const message = buildCrmWhatsAppMessage(lead, tpl);
-      await sendCrmAutomationWhatsApp(lead, message, templatePayload);
-      await markCrmSent(lead, raw, sentKey);
-    } else {
-      if (!lead?.email) continue;
-      const { subject, html } = buildCrmEmail(lead, tpl);
-      await sendCrmAutomationEmail(lead, subject, html);
-      await markCrmSent(lead, raw, sentKey);
-    }
+    const { subject, html } = buildCrmEmail(lead, tpl);
+    await sendCrmAutomationEmail(lead, subject, html);
+    await markCrmSent(lead, raw, sentKey);
   }
 };
