@@ -24,6 +24,9 @@ export const useCrmStore = defineStore("crmStore", {
     subscribePages() { return this._wrap(() => crmService.subscribePages()); },
     disconnectMeta() { return this._wrap(() => crmService.disconnectMeta()); },
     metaHealth() { return this._wrap(() => crmService.metaHealth()); },
+    completeWhatsAppEmbedded(payload) { return this._wrap(() => crmService.completeWhatsAppEmbedded(payload)); },
+    getWhatsAppConfig() { return this._wrap(() => crmService.getWhatsAppConfig()); },
+    saveWhatsAppConfig(payload) { return this._wrap(() => crmService.saveWhatsAppConfig(payload)); },
 
     // Leads
     listLeads(filters = {}) { return this._wrap(() => crmService.listLeads(filters)); },
@@ -60,5 +63,7 @@ export const useCrmStore = defineStore("crmStore", {
 
     // Mail
     sendLeadMail(payload) { return this._wrap(() => crmService.sendLeadMail(payload)); },
+    sendLeadWhatsApp(payload) { return this._wrap(() => crmService.sendLeadWhatsApp(payload)); },
+    getWhatsAppUsage() { return this._wrap(() => crmService.getWhatsAppUsage()); },
   },
 });

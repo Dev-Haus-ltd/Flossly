@@ -59,7 +59,7 @@
             v-for="(userStat, index) in teamTaskStats"
             :key="index"
           >
-            <TasksTeamTaskCountTile :userStat="userStat" />
+            <TasksTeamTaskCountTile :userStat="userStat" @openUserDialog="openUserTaskDialog" />
           </v-col>
         </v-row>
       </div>
@@ -89,11 +89,24 @@ onMounted(() => {
 const getTeamTasksStats = () => {
   taskStore.getMyTeamTaskStats().then((res) => {
     if (res.code === 0) {
-      teamTaskStats.value = res.data;
-      myTaskCounts.value = res.data.find(
-        (x) => x.user.id === user.value.id
-      ).taskStats;
+      // Filter out dummy dentist users
+      const filteredData = res.data.filter((userStat) => {
+        const email = userStat.user?.email || '';
+        return !(email.includes('dummy-dentist') && email.includes('@flossly.local'));
+      });
+      
+      teamTaskStats.value = filteredData;
+      const myStats = filteredData.find((x) => x.user.id === user.value.id);
+      myTaskCounts.value = myStats ? myStats.taskStats : {};
     }
+  });
+};
+
+const openUserTaskDialog = (userStat) => {
+  // Navigate to the user task page with user name in query params
+  navigateTo({
+    path: `/tasks/${userStat.user.id}`,
+    query: { name: userStat.user.fullName }
   });
 };
 const taskStatsConfig = computed(() => [
@@ -137,5 +150,7 @@ const taskStatsConfig = computed(() => [
     color: #c3c3c3;
   }
 }
+
+/* No additional styling - let components display as-is */
 
 </style>

@@ -106,7 +106,10 @@ import {
   buildCrmTemplatesByOrg,
   buildEffectiveCrmTemplates,
   buildCrmEmail,
+  buildCrmWhatsAppMessage,
+  buildCrmWhatsAppTemplatePayload,
   sendCrmAutomationEmail,
+  sendCrmAutomationWhatsApp,
   resolveCrmTrigger,
   shouldSendCrmTemplate,
   hasCrmSent,
@@ -135,21 +138,33 @@ export const startLeadAutomationScheduler = () => {
         })
         if (!leads.length) break
         for (const lead of leads) {
-          if (!lead?.email) continue
           const raw = lead.rawData || {}
           const effectiveTemplates = buildEffectiveCrmTemplates(lead, templatesByOrg)
           for (const tpl of effectiveTemplates) {
             if (!tpl?.enabled) continue
             const trigger = resolveCrmTrigger(tpl)
             if (!trigger) continue
-            const { subject, html } = buildCrmEmail(lead, tpl)
             try {
               const { due, sentKey } = shouldSendCrmTemplate({ lead, tpl, trigger, today })
               if (!due || !sentKey || hasCrmSent(raw, sentKey)) continue
-              await sendCrmAutomationEmail(lead, subject, html)
-              await markCrmSent(lead, raw, sentKey)
+              const type = String(tpl?.type || 'Email').toLowerCase()
+              if (type === 'whatsapp') {
+                if (!lead?.telephone) continue
+                const templatePayload = buildCrmWhatsAppTemplatePayload(lead, tpl)
+                if (!templatePayload) {
+                  throw new Error('WhatsApp template name is required for automation')
+                }
+                const message = buildCrmWhatsAppMessage(lead, tpl)
+                await sendCrmAutomationWhatsApp(lead, message, templatePayload)
+                await markCrmSent(lead, raw, sentKey)
+              } else {
+                if (!lead?.email) continue
+                const { subject, html } = buildCrmEmail(lead, tpl)
+                await sendCrmAutomationEmail(lead, subject, html)
+                await markCrmSent(lead, raw, sentKey)
+              }
             } catch (e) {
-              console.error('[CRM] automation email failed', e?.message)
+              console.error('[CRM] automation send failed', e?.message)
             }
           }
         }
