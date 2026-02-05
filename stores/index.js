@@ -122,15 +122,16 @@ export const useMainStore = defineStore("mainStore", {
           title: "Flossly Tasks",
           imgPath: tasksIcon,
           value: "tasks-group",
-          to: "/tasks/mytasks",
+          to: "/tasks/",
           featureKey: "tasks",
           children: [
-            // {
-            //   title: "My Tasks",
-            //   value: "myTasks",
-            //   imgPath: tasksIcon,
-            //   to: "/tasks/mytasks",
-            // },
+            {
+              title: "My Tasks",
+              value: "myTasks",
+              imgPath: tasksIcon,
+              to: "/tasks/mytasks",
+              featureKey: "tasks",
+            },
             {
               title: "My Team Tasks",
               value: "myTeamTasks",
