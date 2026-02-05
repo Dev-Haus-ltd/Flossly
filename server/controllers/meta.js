@@ -452,6 +452,37 @@ export const whatsappEmbeddedComplete = async (event) => {
   return success({ created: true })
 }
 
+export const fetchWhatsAppTemplates = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  try { await MetaWhatsAppConfig.sync() } catch {}
+  const row = await MetaWhatsAppConfig.findOne({ where: { organisationId: orgId } })
+  if (!row) return error(400, 'WhatsApp is not configured')
+
+  const accessToken = decrypt(row.accessTokenEnc)
+  const wabaId = row.wabaId
+  if (!accessToken) return error(400, 'WhatsApp token missing')
+  if (!wabaId) return error(400, 'wabaId is required to fetch templates')
+
+  const templates = []
+  let nextUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(wabaId)}/message_templates?fields=name,language,category,components,status,quality_score,parameter_format&limit=200`
+  while (nextUrl) {
+    const resp = await $fetch(nextUrl, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    const data = Array.isArray(resp?.data) ? resp.data : []
+    templates.push(...data)
+    nextUrl = resp?.paging?.next || null
+  }
+
+  return success({
+    count: templates.length,
+    templates,
+  })
+}
+
 // Rest of your functions remain the same...
 export const listLeads = async (event) => {
   const { orgId } = event.context.user || {}

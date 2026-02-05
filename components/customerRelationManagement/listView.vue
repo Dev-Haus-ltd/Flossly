@@ -563,51 +563,76 @@
             {{ whatsappCompose.missing.length }} lead(s) have no valid phone number and will be skipped.
           </v-alert>
           <v-alert
-            v-if="whatsappCompose.requiresTemplate"
             type="info"
             variant="tonal"
             class="mb-3"
           >
-            Template required. At least one lead has not messaged you in the last 24 hours.
+            WhatsApp outbound is template-only. Templates must be approved in Meta.
           </v-alert>
-          <v-radio-group v-model="whatsappCompose.mode" class="mb-3" inline>
-            <v-radio label="Free Text" value="free" :disabled="whatsappCompose.requiresTemplate" />
-            <v-radio label="Template" value="template" />
-          </v-radio-group>
-          <div v-if="whatsappCompose.mode === 'template'">
-            <v-text-field
+          <div>
+            <div class="d-flex align-center justify-space-between mb-2">
+              <div class="text-subtitle-2 text-grey-darken-1">Template</div>
+              <v-btn
+                size="x-small"
+                variant="text"
+                :loading="whatsappTemplatesLoading"
+                @click="loadWhatsAppTemplates"
+              >
+                Refresh
+              </v-btn>
+            </div>
+            <v-combobox
               v-model="whatsappCompose.templateName"
+              :items="whatsappTemplateNameOptions"
               label="Template name"
               variant="outlined"
               density="compact"
               hide-details
               class="mb-3"
+              clearable
             />
-            <v-text-field
+            <v-combobox
               v-model="whatsappCompose.templateLanguage"
+              :items="whatsappTemplateLanguageOptions"
               label="Template language (e.g. en_US)"
               variant="outlined"
               density="compact"
               hide-details
+              clearable
             />
-            <div class="text-caption text-medium-emphasis mt-2">
-              Template names must match Meta exactly and be approved.
+          <div v-if="whatsappTemplateParamCount" class="mt-3">
+            <div class="text-subtitle-2 text-grey-darken-1 mb-2">Template parameters</div>
+            <v-text-field
+              v-for="idx in whatsappTemplateParamCount"
+              :key="`wa-param-${idx}`"
+              v-model="whatsappCompose.templateParams[idx - 1]"
+              :label="`Parameter {{${idx}}}`"
+              variant="outlined"
+              density="compact"
+              hide-details
+              class="mb-2"
+              :placeholder="whatsappTemplateParamExample(idx)"
+            />
+          </div>
+          <div v-if="whatsappTemplatePreview" class="mt-4">
+            <div class="text-subtitle-2 text-grey-darken-1 mb-2">Preview</div>
+            <div class="whatsapp-preview">
+              <div class="whatsapp-preview__bubble">
+                <div v-for="(line, i) in whatsappTemplatePreview" :key="`wa-prev-${i}`">
+                  {{ line }}
+                </div>
+              </div>
             </div>
           </div>
-          <v-textarea
-            v-else
-            v-model="whatsappCompose.message"
-            label="Message"
-            rows="5"
-            auto-grow
-            variant="outlined"
-            hide-details
-          />
+          <div class="text-caption text-medium-emphasis mt-2">
+            Use parameter inputs to fill {{1}}, {{2}} etc for the selected template.
+          </div>
+        </div>
         </div>
 
         <div class="px-4 pb-4 d-flex justify-space-between align-center">
           <div class="text-caption text-medium-emphasis">
-            Use tokens like [Patient Name] or [Your Name]
+            Fill parameters to match template placeholders ({{1}}, {{2}}).
           </div>
           <v-btn :loading="whatsappLoading" flat color="success" @click="sendWhatsAppCompose">
             Send
@@ -643,6 +668,7 @@
 <script setup>
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 import { buildRecipientContext, renderWithContext } from '@/lib/templateTokens'
+import { getTemplateParamCount, getTemplateParamExamples, buildTemplatePreviewLines } from '@/lib/whatsappTemplatePreview'
 import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
 import { formatAssignedUsers, formatTreatmentValue } from "@/lib/misc";
 import { getLeadDisplayName, getLeadEmail, getLeadPhone } from "@/lib/normalizers/lead";
@@ -985,18 +1011,15 @@ let List = null
 const compose = reactive({ key: 'mail', subject: '', recipients: [], html: '' })
 const showWhatsAppCompose = ref(false)
 const whatsappLoading = ref(false)
+const whatsappTemplates = ref([])
+const whatsappTemplatesLoading = ref(false)
 const whatsappCompose = reactive({
-  message: '',
   recipients: [],
   missing: [],
-  mode: 'free',
   templateName: '',
   templateLanguage: 'en_US',
-  requiresTemplate: false,
+  templateParams: [],
 })
-const defaultWhatsAppMessage =
-  'Hi [Patient Name], thanks for reaching out to [Practice Name]. How can we help you today?'
-const WHATSAPP_WINDOW_HOURS = 24
 
 const defaultTemplates = {
   sendPrice: {
@@ -1061,40 +1084,94 @@ async function openCompose(actionKey) {
 
 watch(() => showCompose.value, (v) => { if (!v && composeEditor) { composeEditor.destroy(); composeEditor = null } })
 
-const getLeadLastInboundAt = (lead) =>
-  lead?.rawData?.whatsapp?.lastInboundAt || lead?.rawData?.whatsapp?.lastMessageAt || null
+const whatsappTemplateNameOptions = computed(() => {
+  const set = new Set()
+  ;(whatsappTemplates.value || []).forEach((t) => {
+    if (t?.name) set.add(String(t.name))
+  })
+  return Array.from(set)
+})
 
-const isWithinWhatsAppWindow = (lead) => {
-  const last = getLeadLastInboundAt(lead)
-  if (!last) return false
-  const ts = Date.parse(last)
-  if (Number.isNaN(ts)) return false
-  const windowMs = WHATSAPP_WINDOW_HOURS * 60 * 60 * 1000
-  return Date.now() - ts <= windowMs
+const whatsappTemplateLanguageOptions = computed(() => {
+  const name = String(whatsappCompose.templateName || '').trim()
+  if (!name) return []
+  const langs = (whatsappTemplates.value || [])
+    .filter((t) => String(t?.name || '') === name)
+    .map((t) => t?.language || t?.language?.code || t?.language_code)
+    .filter(Boolean)
+  return Array.from(new Set(langs))
+})
+
+const resolveSelectedTemplate = () => {
+  const name = String(whatsappCompose.templateName || '').trim()
+  if (!name) return null
+  const lang = String(whatsappCompose.templateLanguage || '').trim()
+  const list = whatsappTemplates.value || []
+  if (lang) {
+    const matched = list.find((t) => String(t?.name || '') === name && String(t?.language || t?.language?.code || t?.language_code || '') === lang)
+    if (matched) return matched
+  }
+  return list.find((t) => String(t?.name || '') === name) || null
 }
+
+const whatsappTemplateParamCount = computed(() => getTemplateParamCount(resolveSelectedTemplate()))
+const whatsappTemplateParamExample = (idx) => {
+  const template = resolveSelectedTemplate()
+  if (!template) return ''
+  const examples = getTemplateParamExamples(template)
+  return String(examples[idx - 1] || '')
+}
+const whatsappTemplatePreview = computed(() => {
+  const template = resolveSelectedTemplate()
+  if (!template) return null
+  const params = (whatsappCompose.templateParams || []).map((v, i) =>
+    String(v || whatsappTemplateParamExample(i + 1) || `{{${i + 1}}}`)
+  )
+  return buildTemplatePreviewLines(template, params)
+})
+watch(
+  () => [whatsappCompose.templateName, whatsappCompose.templateLanguage, whatsappTemplateParamCount.value],
+  () => {
+    const count = whatsappTemplateParamCount.value || 0
+    const next = Array.from({ length: count }, (_, i) => whatsappCompose.templateParams[i] || '')
+    whatsappCompose.templateParams = next
+    if (!whatsappCompose.templateLanguage && whatsappTemplateLanguageOptions.value.length) {
+      whatsappCompose.templateLanguage = whatsappTemplateLanguageOptions.value[0]
+    }
+  }
+)
 
 const buildWhatsAppRecipients = () => {
   const recipients = []
   const missing = []
-  let allWithinWindow = true
   ;(selectedLeads.value || []).forEach((lead) => {
     const phone = String(lead?.telephone || '').trim()
     if (!phone) {
       missing.push(lead?.name || lead?.email || `Lead ${lead?.id}`)
       return
     }
-    if (!isWithinWhatsAppWindow(lead)) allWithinWindow = false
     recipients.push(phone)
   })
   whatsappCompose.recipients = [...new Set(recipients)]
   whatsappCompose.missing = missing
-  whatsappCompose.requiresTemplate = !allWithinWindow
-  if (whatsappCompose.requiresTemplate) {
-    whatsappCompose.mode = 'template'
+}
+
+const loadWhatsAppTemplates = async () => {
+  if (whatsappTemplatesLoading.value) return
+  try {
+    whatsappTemplatesLoading.value = true
+    const res = await crmStore.getWhatsAppTemplates()
+    if (res?.code === 0 && res.data?.templates) {
+      whatsappTemplates.value = res.data.templates
+    }
+  } catch (e) {
+    // ignore if WhatsApp is not configured
+  } finally {
+    whatsappTemplatesLoading.value = false
   }
 }
 
-const openWhatsAppCompose = () => {
+const openWhatsAppCompose = async () => {
   buildWhatsAppRecipients()
   if (!whatsappCompose.recipients.length) {
     if (mainStore?.setSnackbar) {
@@ -1102,11 +1179,13 @@ const openWhatsAppCompose = () => {
     }
     return
   }
-  const many = (selectedLeads.value || []).length !== 1
-  const lead = many ? null : (selectedLeads.value || [])[0]
-  const ctx = buildRecipientContext({ lead, user, many })
-  whatsappCompose.message = renderWithContext(defaultWhatsAppMessage, ctx)
-  if (!whatsappCompose.templateName) whatsappCompose.templateName = 'hello_world'
+  await loadWhatsAppTemplates()
+  if (!whatsappCompose.templateName && whatsappTemplateNameOptions.value.length) {
+    whatsappCompose.templateName = whatsappTemplateNameOptions.value[0]
+  }
+  if (!whatsappCompose.templateLanguage && whatsappTemplateLanguageOptions.value.length) {
+    whatsappCompose.templateLanguage = whatsappTemplateLanguageOptions.value[0]
+  }
   showWhatsAppCompose.value = true
 }
 
@@ -1139,43 +1218,26 @@ async function sendCompose() {
   } finally { composeLoading.value = false }
 }
 async function sendWhatsAppCompose() {
-  if (whatsappCompose.mode === 'free' && whatsappCompose.requiresTemplate) {
-    if (mainStore?.setSnackbar) {
-      mainStore.setSnackbar({ title: 'Template required for at least one lead', type: 'error' })
-    }
-    return
-  }
-  if (whatsappCompose.mode === 'template' && !whatsappCompose.templateName?.trim()) {
+  if (!whatsappCompose.templateName?.trim()) {
     if (mainStore?.setSnackbar) {
       mainStore.setSnackbar({ title: 'Template name is required', type: 'error' })
-    }
-    return
-  }
-  if (whatsappCompose.mode === 'free' && !whatsappCompose.message?.trim()) {
-    if (mainStore?.setSnackbar) {
-      mainStore.setSnackbar({ title: 'Message is required', type: 'error' })
     }
     return
   }
   try {
     whatsappLoading.value = true
     const leadIds = selectedLeads.value.map(l => l.id)
-    let res = null
-    if (whatsappCompose.mode === 'template') {
-      res = await crmStore.sendLeadWhatsApp({
-        leadIds,
-        template: {
-          name: whatsappCompose.templateName.trim(),
-          language: { code: whatsappCompose.templateLanguage?.trim() || 'en_US' },
-        },
-      })
-    } else {
-      const many = (selectedLeads.value || []).length !== 1
-      const lead = many ? null : (selectedLeads.value || [])[0]
-      const ctx = buildRecipientContext({ lead, user, many })
-      const resolvedMessage = renderWithContext(whatsappCompose.message, ctx)
-      res = await crmStore.sendLeadWhatsApp({ leadIds, message: resolvedMessage })
+    const params = (whatsappCompose.templateParams || []).map((val) => ({
+      type: 'text',
+      text: String(val || ''),
+    }))
+    const components = params.length ? [{ type: 'body', parameters: params }] : undefined
+    const template = {
+      name: whatsappCompose.templateName.trim(),
+      language: { code: whatsappCompose.templateLanguage?.trim() || 'en_US' },
+      ...(components ? { components } : {}),
     }
+    const res = await crmStore.sendLeadWhatsApp({ leadIds, template })
     if (res && res.code === 0) {
       const sent = res.data?.sent ?? 0
       const skipped = res.data?.skipped ?? 0
@@ -1340,6 +1402,28 @@ const convertSelected = async () => {
   display: inline-block;
   width: 5px;
   cursor: col-resize;
+}
+
+.whatsapp-preview {
+  background: #e5ddd5;
+  border-radius: 12px;
+  padding: 16px;
+  min-height: 160px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.whatsapp-preview__bubble {
+  background: #dcf8c6;
+  border-radius: 10px;
+  padding: 12px 14px;
+  max-width: 520px;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  font-size: 14px;
+  color: #111827;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 .cust-checkbox {
   width: 18px;

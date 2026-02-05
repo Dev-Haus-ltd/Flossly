@@ -27,6 +27,7 @@ export const useCrmStore = defineStore("crmStore", {
     completeWhatsAppEmbedded(payload) { return this._wrap(() => crmService.completeWhatsAppEmbedded(payload)); },
     getWhatsAppConfig() { return this._wrap(() => crmService.getWhatsAppConfig()); },
     saveWhatsAppConfig(payload) { return this._wrap(() => crmService.saveWhatsAppConfig(payload)); },
+    getWhatsAppTemplates() { return this._wrap(() => crmService.getWhatsAppTemplates()); },
 
     // Leads
     listLeads(filters = {}) { return this._wrap(() => crmService.listLeads(filters)); },

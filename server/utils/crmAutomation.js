@@ -3,9 +3,9 @@ import { formatYmd, parseDayOffsetFromText } from "~/lib/misc";
 import { template as EMAIL_TEMPLATE } from "./emailTemplate.js";
 import { transporter } from "./nodeMailer.js";
 import { buildLeadContext, renderTokens } from "./tokenRenderer.js";
-import { CrmAutomationTemplate, MetaWhatsAppConfig } from "../models/index.js";
-import { decrypt } from "./crypto.js";
+import { CrmAutomationTemplate } from "../models/index.js";
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from "./whatsapp.js";
+import { resolveWhatsAppConfig } from "./whatsappConfig.js";
 
 const crmTriggersByKey = new Map(
   crmAutomationDefaults
@@ -78,54 +78,6 @@ const stripHtmlToText = (html = "") => {
     .trim();
 };
 
-const resolveWhatsAppConfig = async (orgId) => {
-  const config = useRuntimeConfig();
-  const envPhoneNumberId =
-    config.META_WA_PHONE_NUMBER_ID ||
-    config.WHATSAPP_PHONE_NUMBER_ID ||
-    process.env.META_WA_PHONE_NUMBER_ID ||
-    process.env.WHATSAPP_PHONE_NUMBER_ID ||
-    "";
-  const envToken =
-    config.META_WA_ACCESS_TOKEN ||
-    config.WHATSAPP_ACCESS_TOKEN ||
-    process.env.META_WA_ACCESS_TOKEN ||
-    process.env.WHATSAPP_ACCESS_TOKEN ||
-    "";
-  const envWabaId =
-    config.META_WA_WABA_ID ||
-    config.WHATSAPP_WABA_ID ||
-    process.env.META_WA_WABA_ID ||
-    process.env.WHATSAPP_WABA_ID ||
-    "";
-
-  try {
-    await MetaWhatsAppConfig.sync();
-  } catch {}
-
-  const row = await MetaWhatsAppConfig.findOne({
-    where: { organisationId: Number(orgId) },
-  });
-  if (row) {
-    return {
-      phoneNumberId: row.phoneNumberId,
-      accessToken: decrypt(row.accessTokenEnc),
-      wabaId: row.wabaId || null,
-      source: "db",
-    };
-  }
-
-  if (envPhoneNumberId && envToken) {
-    return {
-      phoneNumberId: String(envPhoneNumberId).trim(),
-      accessToken: String(envToken).trim(),
-      wabaId: envWabaId ? String(envWabaId).trim() : null,
-      source: "env",
-    };
-  }
-
-  return null;
-};
 
 export const buildCrmWhatsAppMessage = (lead, tpl) => {
   const ctx = buildLeadContext({ lead, userName: "Team" });
@@ -188,16 +140,16 @@ export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload =
   if (!waConfig?.phoneNumberId || !waConfig?.accessToken) {
     throw new Error("WhatsApp is not configured");
   }
+  if (!templatePayload) {
+    throw new Error("WhatsApp template payload is required");
+  }
   const limitStatus = await isWhatsAppLimitExceeded(lead.organisationId);
   if (limitStatus.exceeded) {
     throw new Error(`WhatsApp monthly limit reached (${limitStatus.count}/${limitStatus.limit})`);
   }
   const url = `https://graph.facebook.com/v24.0/${waConfig.phoneNumberId}/messages`;
   try {
-    const body =
-      templatePayload
-        ? { messaging_product: "whatsapp", to, type: "template", template: templatePayload }
-        : { messaging_product: "whatsapp", to, type: "text", text: { body: message || "" } };
+    const body = { messaging_product: "whatsapp", to, type: "template", template: templatePayload };
     const resp = await $fetch(url, {
       method: "POST",
       headers: {

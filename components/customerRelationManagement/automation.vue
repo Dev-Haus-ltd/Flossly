@@ -477,8 +477,9 @@
                 <v-icon size="18" class="mr-2">mdi-whatsapp</v-icon>
                 WhatsApp Template
               </div>
-              <v-text-field
+              <v-combobox
                 v-model="active.whatsappTemplateName"
+                :items="whatsappTemplateNameOptions"
                 variant="solo"
                 density="compact"
                 hide-details
@@ -486,18 +487,33 @@
                 flat
                 placeholder="Approved template name (e.g. hello_world)"
                 class="mb-2"
+                clearable
               />
-              <v-text-field
+              <v-combobox
                 v-model="active.whatsappTemplateLanguage"
+                :items="whatsappTemplateLanguageOptions"
                 variant="solo"
                 density="compact"
                 hide-details
                 bg-color="#FFFFFF"
                 flat
                 placeholder="Language code (e.g. en_US)"
+                clearable
               />
               <div class="text-caption text-medium-emphasis mt-2">
                 Templates must be approved in Meta. The message body below is for preview and variable mapping only.
+              </div>
+              <div v-if="whatsappTemplatePreviewLines" class="mt-3">
+                <div class="text-subtitle-2 text-grey-darken-2 mb-2">
+                  Template Preview
+                </div>
+                <div class="whatsapp-preview">
+                  <div class="whatsapp-preview__bubble">
+                    <div v-for="(line, i) in whatsappTemplatePreviewLines" :key="`wa-tpl-prev-${i}`">
+                      {{ line }}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
             <div ref="editorEl" class="editor"></div>
@@ -528,6 +544,7 @@
 <script setup>
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 import AutomationCard from '@/components/patients/automationCard.vue'
+import { getTemplateParamExamples, buildTemplatePreviewLines } from '@/lib/whatsappTemplatePreview'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults'
 import addFolderIcon from '@/assets/icons/crm/add-folder.svg'
 import { getCurrentUserName } from '@/lib/helpers/storage'
@@ -555,6 +572,9 @@ const showGroupDialog = ref(false)
 const groupRows = ref([])
 const defaultAutomationKeySet = new Set(crmAutomationDefaults.map(item => item.key))
 const defaultGroupKeySet = new Set(crmAutomationGroups.map(group => group.key))
+
+const whatsappTemplates = ref([])
+const whatsappTemplatesLoading = ref(false)
 
 const tableHeaders = [
   { title: 'Type', key: 'type', sortable: false },
@@ -708,7 +728,10 @@ const refresh = async () => {
 
 defineExpose({ refresh })
 
-onMounted(refresh)
+onMounted(async () => {
+  await loadWhatsAppTemplates()
+  await refresh()
+})
 
 watch(resolvedLeadId, () => {
   clearAutomationSelection()
@@ -720,6 +743,67 @@ watch(resolvedLeadId, () => {
 const show = ref(false)
 const showPreview = ref(false)
 const active = ref(null)
+const whatsappTemplateNameOptions = computed(() => {
+  const set = new Set()
+  ;(whatsappTemplates.value || []).forEach((t) => {
+    if (t?.name) set.add(String(t.name))
+  })
+  return Array.from(set)
+})
+
+const whatsappTemplateLanguageOptions = computed(() => {
+  const name = String(active.value?.whatsappTemplateName || '').trim()
+  if (!name) return []
+  const langs = (whatsappTemplates.value || [])
+    .filter((t) => String(t?.name || '') === name)
+    .map((t) => t?.language || t?.language?.code || t?.language_code)
+    .filter(Boolean)
+  return Array.from(new Set(langs))
+})
+
+const resolveSelectedTemplate = () => {
+  const name = String(active.value?.whatsappTemplateName || '').trim()
+  if (!name) return null
+  const lang = String(active.value?.whatsappTemplateLanguage || '').trim()
+  const list = whatsappTemplates.value || []
+  if (lang) {
+    const matched = list.find((t) => String(t?.name || '') === name && String(t?.language || t?.language?.code || t?.language_code || '') === lang)
+    if (matched) return matched
+  }
+  return list.find((t) => String(t?.name || '') === name) || null
+}
+
+const whatsappTemplatePreviewLines = computed(() => {
+  const template = resolveSelectedTemplate()
+  if (!template) return null
+  const params = getTemplateParamExamples(template).map((v, i) => String(v || `{{${i + 1}}}`))
+  return buildTemplatePreviewLines(template, params)
+})
+
+const loadWhatsAppTemplates = async () => {
+  if (whatsappTemplatesLoading.value) return
+  try {
+    whatsappTemplatesLoading.value = true
+    const res = await crmStore.getWhatsAppTemplates()
+    if (res?.code === 0 && res.data?.templates) {
+      whatsappTemplates.value = res.data.templates
+    }
+  } catch (e) {
+    // ignore if WhatsApp is not configured
+  } finally {
+    whatsappTemplatesLoading.value = false
+  }
+}
+
+watch(
+  () => [active.value?.whatsappTemplateName, whatsappTemplateLanguageOptions.value.length],
+  () => {
+    if (!active.value) return
+    if (!active.value.whatsappTemplateLanguage && whatsappTemplateLanguageOptions.value.length) {
+      active.value.whatsappTemplateLanguage = whatsappTemplateLanguageOptions.value[0]
+    }
+  }
+)
 const previewItem = ref(null)
 let ej = null
 let EditorCtor = null
