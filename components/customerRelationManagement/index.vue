@@ -48,6 +48,7 @@
 
         <!-- Right: Connection Controls -->
         <div class="d-inline-flex ml-auto" style="flex-wrap: nowrap; gap: 12px;">
+          <!-- WhatsApp connect UI (temporarily hidden until complete)
           <v-btn
             :color="isWhatsAppConnected ? 'success' : 'primary'"
             :variant="isWhatsAppConnected ? 'tonal' : 'flat'"
@@ -66,6 +67,7 @@
               {{ isWhatsAppConnected ? 'WhatsApp Connected' : 'Connect WhatsApp' }}
             </span>
           </v-btn>
+          -->
 
           <v-menu
             v-if="isConnected"
@@ -265,6 +267,7 @@
         :data="metaHealthData"
       />
 
+      <!-- WhatsApp connect dialog (temporarily hidden until complete)
       <v-dialog v-model="whatsAppDialog" max-width="640">
         <v-card class="pa-4">
           <v-card-title class="text-subtitle-1 pa-0 mb-2 d-flex justify-space-between align-center">
@@ -289,6 +292,7 @@
           </v-card-actions>
         </v-card>
       </v-dialog>
+      -->
     </div>
   </v-sheet>
 </template>
