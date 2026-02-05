@@ -271,6 +271,14 @@ import {
 } from "~/lib/misc";
 import draggable from "vuedraggable";
 
+// Props
+const props = defineProps({
+  specificUserId: {
+    type: Number,
+    default: null
+  }
+});
+
 const bus = useBus();
 const { xs } = useDisplay();
 
@@ -773,7 +781,9 @@ const handleCategorySuccess = () => {
 };
 const getTeamStats = async () => {
   try {
-    const res = await taskStore.getTeamTaskStatsByCategory();
+    // Add specific user filter if prop is provided
+    const params = props.specificUserId ? { userId: props.specificUserId } : {};
+    const res = await taskStore.getTeamTaskStatsByCategory(params);
     if (res.code === 0) {
       setTaskStats(res.data || []);
       if (!currentTab.value && orderedTaskStats.value.length) {
@@ -889,6 +899,11 @@ const loadTasks = (filters = {}, resetPage = false) => {
     page: page.value,
     pageSize: pageSize.value,
   };
+
+  // Add specific user filter if prop is provided
+  if (props.specificUserId) {
+    request.assignedUserId = props.specificUserId;
+  }
 
   activeFilters.value = request;
 

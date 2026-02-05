@@ -67,8 +67,8 @@
               />
             </v-col>
 
-            <v-col cols="12" md="6">
-              <label class="mb-1 fld-lbl">Automation Email Subject</label>
+            <v-col cols="12" md="6" v-if="form.type === 'Email'">
+              <label class="mb-1 fld-lbl">Automation Subject</label>
               <v-text-field
                 v-model="form.subject"
                 variant="solo"
@@ -76,6 +76,32 @@
                 class="mb-1 input-bordered"
                 flat
               />
+            </v-col>
+            <v-col cols="12" md="6" v-else>
+              <label class="mb-1 fld-lbl">WhatsApp Template Name</label>
+              <v-text-field
+                v-model="form.whatsappTemplateName"
+                variant="solo"
+                density="compact"
+                class="mb-1 input-bordered"
+                flat
+                placeholder="Approved template name (e.g. hello_world)"
+                :rules="requiredRule"
+              />
+            </v-col>
+            <v-col cols="12" md="6" v-if="form.type === 'WhatsApp'">
+              <label class="mb-1 fld-lbl">WhatsApp Template Language</label>
+              <v-text-field
+                v-model="form.whatsappTemplateLanguage"
+                variant="solo"
+                density="compact"
+                class="mb-1 input-bordered"
+                flat
+                placeholder="en_US"
+              />
+              <div class="text-caption text-medium-emphasis mt-1">
+                Templates must be approved in Meta. The message body below is for preview/variables only.
+              </div>
             </v-col>
 
             <v-col cols="12" md="6">
@@ -185,7 +211,7 @@
             </v-col>
 
             <v-col cols="12">
-              <label class="mb-1 fld-lbl">Email Content</label>
+              <label class="mb-1 fld-lbl">{{ form.type === 'WhatsApp' ? 'WhatsApp Message' : 'Email Content' }}</label>
               <div ref="editorEl" class="editor"></div>
             </v-col>
           </v-row>
@@ -239,7 +265,7 @@ const mainStore = useMainStore()
 const formRef = ref(null)
 const saving = ref(false)
 const requiredRule = [(v) => !!v || 'This field is required']
-const types = ['Email']
+const types = ['Email', 'WhatsApp']
 const triggerTypes = [
   { label: 'After enquiry', value: 'inquiry_days' },
   { label: 'Birthday offset', value: 'birthday_offset' },
@@ -273,6 +299,8 @@ const form = ref({
   name: '',
   subject: '',
   template: '',
+  whatsappTemplateName: '',
+  whatsappTemplateLanguage: 'en_US',
   triggerType: 'inquiry_days',
   triggerDays: 0,
   triggerOffsetDays: 0,
@@ -295,6 +323,8 @@ const resetForm = () => {
     name: '',
     subject: '',
     template: '',
+    whatsappTemplateName: '',
+    whatsappTemplateLanguage: 'en_US',
     triggerType: 'inquiry_days',
     triggerDays: 0,
     triggerOffsetDays: 0,
@@ -425,10 +455,12 @@ const onSubmit = async () => {
       groupKey: form.value.groupKey,
       type: form.value.type || 'Email',
       name: form.value.name,
-      subject: form.value.subject || form.value.name,
+      subject: form.value.type === 'Email' ? (form.value.subject || form.value.name) : '',
       sending: formatCrmTriggerPreview(trigger),
       enabled: false,
       template: form.value.template,
+      whatsappTemplateName: form.value.type === 'WhatsApp' ? (form.value.whatsappTemplateName || '') : '',
+      whatsappTemplateLanguage: form.value.type === 'WhatsApp' ? (form.value.whatsappTemplateLanguage || 'en_US') : '',
       trigger,
     }
     const res = await crmStore.saveAutomation(payload)
