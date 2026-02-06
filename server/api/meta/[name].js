@@ -1,4 +1,4 @@
-import { authStart, authCallback, listLeads, fetchLeadsNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck, stream, getWhatsAppConfig, saveWhatsAppConfig, whatsappEmbeddedComplete, fetchWhatsAppTemplates, fetchMetaStructureAndBudgets, fetchDailyMetaInsights, listBusinessPortfolios, connectBusinessPages } from "../../controllers/meta";
+import { authStart, authCallback, listLeads, fetchLeadsNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck, stream, getWhatsAppConfig, saveWhatsAppConfig, whatsappEmbeddedComplete, fetchWhatsAppTemplates, fetchMetaStructureAndBudgets, fetchDailyMetaInsights, listBusinessPortfolios, connectBusinessPages, debugMetaStatus, listMetaPermissions } from "../../controllers/meta";
 
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, 'name')
@@ -38,6 +38,10 @@ export default defineEventHandler(async (event) => {
       return await listBusinessPortfolios(event)
     case 'connectPages':
       return await connectBusinessPages(event)
+    case 'debug':
+      return await debugMetaStatus(event)
+    case 'permissions':
+      return await listMetaPermissions(event)
     default:
       return { code: 0, error: 'Not found' }
   }

@@ -1055,61 +1055,67 @@ export const listBusinessPortfolios = async (event) => {
   const { orgId } = event.context.user || {}
   if (!orgId) return error(401, 'Unauthenticated')
 
-  const tokenRow = await MetaUserToken.findOne({ where: { organisationId: orgId } })
-  if (!tokenRow) return error(400, 'Meta not connected')
+  try {
+    const tokenRow = await MetaUserToken.findOne({ where: { organisationId: orgId } })
+    if (!tokenRow) return error(400, 'Meta not connected')
 
-  const userToken = decrypt(tokenRow.userTokenEnc)
-  if (!userToken) return error(400, 'Meta token missing')
+    const userToken = decrypt(tokenRow.userTokenEnc)
+    if (!userToken) return error(400, 'Meta token missing')
 
-  const { byOrg, elsewhere } = await buildMetaPageConflictMap(orgId)
+    const { byOrg, elsewhere } = await buildMetaPageConflictMap(orgId)
 
-  const businesses = await fetchAllMetaPages(
-    `https://graph.facebook.com/${META_VERSION}/me/businesses?fields=id,name&limit=200`,
-    userToken
-  )
+    const businesses = await fetchAllMetaPages(
+      `https://graph.facebook.com/${META_VERSION}/me/businesses?fields=id,name&limit=200`,
+      userToken
+    )
 
-  const mapped = []
-  for (const biz of businesses) {
-    if (!biz?.id) continue
-    let ownedPages = []
-    let clientPages = []
-    try {
-      ownedPages = await fetchAllMetaPages(
-        `https://graph.facebook.com/${META_VERSION}/${biz.id}/owned_pages?fields=id,name&limit=200`,
-        userToken
-      )
-    } catch (e) {
-      console.error(`[META] Failed to load owned pages for business ${biz.id}:`, e)
+    const mapped = []
+    for (const biz of businesses) {
+      if (!biz?.id) continue
+      let ownedPages = []
+      let clientPages = []
+      try {
+        ownedPages = await fetchAllMetaPages(
+          `https://graph.facebook.com/${META_VERSION}/${biz.id}/owned_pages?fields=id,name&limit=200`,
+          userToken
+        )
+      } catch (e) {
+        console.error(`[META] Failed to load owned pages for business ${biz.id}:`, e)
+      }
+      try {
+        clientPages = await fetchAllMetaPages(
+          `https://graph.facebook.com/${META_VERSION}/${biz.id}/client_pages?fields=id,name&limit=200`,
+          userToken
+        )
+      } catch (e) {
+        console.error(`[META] Failed to load client pages for business ${biz.id}:`, e)
+      }
+
+      const mapPages = (pages, source) =>
+        (pages || [])
+          .filter((p) => p?.id)
+          .map((p) => ({
+            id: String(p.id),
+            name: p.name || '',
+            source,
+            connectedToOrg: byOrg.has(String(p.id)),
+            connectedElsewhere: elsewhere.has(String(p.id)),
+          }))
+
+      mapped.push({
+        id: String(biz.id),
+        name: biz.name || '',
+        ownedPages: mapPages(ownedPages, 'owned'),
+        clientPages: mapPages(clientPages, 'client'),
+      })
     }
-    try {
-      clientPages = await fetchAllMetaPages(
-        `https://graph.facebook.com/${META_VERSION}/${biz.id}/client_pages?fields=id,name&limit=200`,
-        userToken
-      )
-    } catch (e) {
-      console.error(`[META] Failed to load client pages for business ${biz.id}:`, e)
-    }
 
-    const mapPages = (pages, source) =>
-      (pages || [])
-        .filter((p) => p?.id)
-        .map((p) => ({
-          id: String(p.id),
-          name: p.name || '',
-          source,
-          connectedToOrg: byOrg.has(String(p.id)),
-          connectedElsewhere: elsewhere.has(String(p.id)),
-        }))
-
-    mapped.push({
-      id: String(biz.id),
-      name: biz.name || '',
-      ownedPages: mapPages(ownedPages, 'owned'),
-      clientPages: mapPages(clientPages, 'client'),
-    })
+    return success({ businesses: mapped })
+  } catch (e) {
+    console.error('[META] Failed to list business portfolios:', e)
+    const msg = e?.data?.error?.message || e?.message || 'Failed to load business portfolios'
+    return error(400, msg)
   }
-
-  return success({ businesses: mapped })
 }
 
 export const connectBusinessPages = async (event) => {
@@ -1196,4 +1202,39 @@ export const connectBusinessPages = async (event) => {
   }
 
   return success({ connected })
+}
+
+export const debugMetaStatus = async (event) => {
+  const { orgId, userId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const tokenRow = await MetaUserToken.findOne({ where: { organisationId: orgId } })
+  return success({
+    orgId,
+    userId: userId || null,
+    hasUserToken: !!tokenRow,
+    fbUserId: tokenRow?.fbUserId || null,
+    fbUserName: tokenRow?.fbUserName || null,
+    tokenExpiresAt: tokenRow?.expiresAt || null,
+  })
+}
+
+export const listMetaPermissions = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const tokenRow = await MetaUserToken.findOne({ where: { organisationId: orgId } })
+  if (!tokenRow) return error(400, 'Meta not connected')
+
+  const userToken = decrypt(tokenRow.userTokenEnc)
+  if (!userToken) return error(400, 'Meta token missing')
+
+  try {
+    const url = `https://graph.facebook.com/${META_VERSION}/me/permissions?access_token=${encodeURIComponent(userToken)}`
+    const resp = await $fetch(url, { method: 'GET' })
+    return success(resp)
+  } catch (e) {
+    const msg = e?.data?.error?.message || e?.message || 'Failed to fetch permissions'
+    return error(400, msg)
+  }
 }
