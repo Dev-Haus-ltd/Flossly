@@ -65,6 +65,20 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  listMetaBusinesses() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/businesses")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  connectMetaPages(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/meta/connectPages", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   completeWhatsAppEmbedded(payload) {
     return new Promise((resolve, reject) => {
       Post("/meta/whatsappEmbedded", payload)

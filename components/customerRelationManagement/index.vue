@@ -91,6 +91,9 @@
               <v-list-item @click="onReconnectMeta">
                 <v-list-item-title>Reconnect Meta</v-list-item-title>
               </v-list-item>
+              <v-list-item @click="openBusinessPortfolios">
+                <v-list-item-title>Add Business Pages</v-list-item-title>
+              </v-list-item>
               <v-list-item @click="confirmDisconnect = true">
                 <v-list-item-title>Disconnect Meta</v-list-item-title>
               </v-list-item>
@@ -121,6 +124,17 @@
               <v-icon size="18">mdi-heart-pulse</v-icon>
             </template>
             Meta Health
+          </v-btn>
+          <v-btn
+            :disabled="!isConnected"
+            variant="text"
+            class="add-task-btn"
+            @click="openBusinessPortfolios"
+          >
+            <template #prepend>
+              <v-icon size="18">mdi-briefcase-outline</v-icon>
+            </template>
+            Business Portfolios
           </v-btn>
           <v-btn
             color="primary"
@@ -265,6 +279,97 @@
         :data="metaHealthData"
       />
 
+      <v-dialog v-model="businessDialog" max-width="820">
+        <v-card class="pa-4">
+          <v-card-title class="text-subtitle-1 pa-0 mb-2">
+            Select Business Portfolio Pages
+          </v-card-title>
+          <v-card-text class="pa-0">
+            <v-alert
+              v-if="businessError"
+              type="error"
+              variant="tonal"
+              class="mb-3"
+            >
+              {{ businessError }}
+            </v-alert>
+
+            <v-select
+              v-model="selectedBusinessId"
+              :items="businessOptions"
+              item-title="name"
+              item-value="id"
+              label="Business Portfolio"
+              variant="solo"
+              density="compact"
+              :loading="businessLoading"
+              hide-details
+              class="mb-3"
+            />
+
+            <v-text-field
+              v-model="businessPageSearch"
+              placeholder="Search pages"
+              append-inner-icon="mdi-magnify"
+              clearable
+              variant="solo"
+              :elevation="0"
+              density="compact"
+              hide-details
+              bg-color="#FAFAFA"
+              flat
+              class="mb-3"
+            />
+
+            <div v-if="businessPagesFiltered.length" class="business-page-list">
+              <v-list density="compact">
+                <v-list-item
+                  v-for="page in businessPagesFiltered"
+                  :key="page.id"
+                >
+                  <template #prepend>
+                    <v-checkbox-btn
+                      :model-value="selectedPageIds.includes(page.id)"
+                      :disabled="page.connectedElsewhere || page.connectedToOrg"
+                      @click.stop="toggleBusinessPage(page)"
+                    />
+                  </template>
+                  <v-list-item-title>{{ page.name || page.id }}</v-list-item-title>
+                  <v-list-item-subtitle>
+                    {{ page.statusLabel }}
+                  </v-list-item-subtitle>
+                </v-list-item>
+              </v-list>
+            </div>
+            <div v-else class="text-caption text-medium-emphasis">
+              No pages found for this portfolio.
+            </div>
+          </v-card-text>
+          <v-card-actions class="pa-0 mt-4">
+            <v-btn variant="text" @click="businessDialog = false">
+              Close
+            </v-btn>
+            <v-spacer />
+            <v-btn
+              variant="text"
+              :disabled="!businessPagesSelectable.length"
+              @click="selectAllBusinessPages"
+            >
+              Select All
+            </v-btn>
+            <v-btn
+              color="primary"
+              variant="flat"
+              :loading="businessSaving"
+              :disabled="!selectedPageIds.length"
+              @click="connectSelectedBusinessPages"
+            >
+              Connect Selected
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
       <v-dialog v-model="whatsAppDialog" max-width="640">
         <v-card class="pa-4">
           <v-card-title class="text-subtitle-1 pa-0 mb-2 d-flex justify-space-between align-center">
@@ -321,6 +426,14 @@ const metaErrorMessage = ref('');
 const metaHealthDialog = ref(false);
 const metaHealthLoading = ref(false);
 const metaHealthData = ref(null);
+const businessDialog = ref(false);
+const businessLoading = ref(false);
+const businessSaving = ref(false);
+const businessError = ref('');
+const businessPortfolios = ref([]);
+const selectedBusinessId = ref(null);
+const selectedPageIds = ref([]);
+const businessPageSearch = ref('');
 const whatsAppDialog = ref(false);
 const whatsAppSaving = ref(false);
 const isWhatsAppConnected = ref(false);
@@ -577,7 +690,7 @@ const clearMetaQuery = () => {
   delete nextQuery.warning;
   router.replace({ query: nextQuery });
 };
-const handleMetaQuery = (metaConnected, metaError) => {
+const handleMetaQuery = async (metaConnected, metaError) => {
   if (metaError) {
     metaErrorMessage.value =
       normalizeMetaMessage(metaError) || 'Meta connection failed. Please try again.';
@@ -586,6 +699,126 @@ const handleMetaQuery = (metaConnected, metaError) => {
     mainStore.setSnackbar({ title: 'Meta connected successfully', type: 'success' });
   }
   if (metaConnected || metaError) clearMetaQuery();
+  if (metaConnected) await loadBusinessPortfolios(true);
+};
+
+const businessOptions = computed(() =>
+  (businessPortfolios.value || []).map((b) => ({
+    id: b.id,
+    name: b.name || `Business ${b.id}`,
+  }))
+);
+
+const selectedBusiness = computed(() =>
+  businessPortfolios.value.find((b) => b.id === selectedBusinessId.value) || null
+);
+
+const businessPages = computed(() => {
+  const biz = selectedBusiness.value;
+  if (!biz) return [];
+  const raw = [
+    ...(biz.ownedPages || []),
+    ...(biz.clientPages || []),
+  ];
+  const seen = new Set();
+  return raw
+    .filter((p) => p?.id)
+    .filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    })
+    .map((p) => {
+      let statusLabel = p.source === 'owned' ? 'Owned page' : 'Client page';
+      if (p.connectedToOrg) statusLabel = 'Already connected';
+      if (p.connectedElsewhere) statusLabel = 'Connected to another organisation';
+      return {
+        ...p,
+        statusLabel,
+      };
+    });
+});
+
+const businessPagesSelectable = computed(() =>
+  businessPages.value.filter((p) => !p.connectedElsewhere && !p.connectedToOrg)
+);
+
+const businessPagesFiltered = computed(() => {
+  const term = (businessPageSearch.value || '').trim().toLowerCase();
+  if (!term) return businessPages.value;
+  return businessPages.value.filter((p) => {
+    const name = (p.name || '').toLowerCase();
+    return name.includes(term) || String(p.id).includes(term);
+  });
+});
+
+const loadBusinessPortfolios = async (openDialog = false) => {
+  businessLoading.value = true;
+  businessError.value = '';
+  try {
+    const res = await crmStore.listMetaBusinesses();
+    if (res?.code === 0 && res.data) {
+      businessPortfolios.value = res.data.businesses || [];
+      if (businessPortfolios.value.length && !selectedBusinessId.value) {
+        selectedBusinessId.value = businessPortfolios.value[0].id;
+      }
+      if (openDialog && businessPortfolios.value.length) {
+        businessDialog.value = true;
+      } else if (openDialog && !businessPortfolios.value.length) {
+        mainStore?.setSnackbar?.({ title: 'No business portfolios found', type: 'info' });
+      }
+    } else {
+      businessError.value = res?.error || res?.message || 'Failed to load business portfolios';
+      if (openDialog) businessDialog.value = true;
+    }
+  } catch (e) {
+    businessError.value = e?.data?.message || e?.message || 'Failed to load business portfolios';
+    if (openDialog) businessDialog.value = true;
+  } finally {
+    businessLoading.value = false;
+  }
+};
+
+const openBusinessPortfolios = async () => {
+  await loadBusinessPortfolios(true);
+};
+
+const toggleBusinessPage = (page) => {
+  if (!page || page.connectedElsewhere || page.connectedToOrg) return;
+  const id = String(page.id);
+  const idx = selectedPageIds.value.indexOf(id);
+  if (idx >= 0) selectedPageIds.value.splice(idx, 1);
+  else selectedPageIds.value.push(id);
+};
+
+const selectAllBusinessPages = () => {
+  selectedPageIds.value = businessPagesSelectable.value.map((p) => String(p.id));
+};
+
+const connectSelectedBusinessPages = async () => {
+  if (!selectedPageIds.value.length) return;
+  try {
+    businessSaving.value = true;
+    const res = await crmStore.connectMetaPages({ pageIds: selectedPageIds.value });
+    if (res?.code === 0) {
+      mainStore?.setSnackbar?.({
+        title: `Connected ${res?.data?.connected || selectedPageIds.value.length} page(s)`,
+        type: 'success',
+      });
+      businessDialog.value = false;
+      selectedPageIds.value = [];
+      await checkConnection();
+      await fetchLeads(activeFilters.value);
+    } else {
+      const msg = res?.error || res?.message || 'Failed to connect pages';
+      mainStore?.setSnackbar?.({ title: msg, type: 'error' });
+    }
+  } catch (e) {
+    const msg = e?.data?.message || e?.message || 'Failed to connect pages';
+    mainStore?.setSnackbar?.({ title: msg, type: 'error' });
+  } finally {
+    businessSaving.value = false;
+  }
 };
 
 const onSelect = (selection) => {
@@ -974,6 +1207,11 @@ watch(search, async () => {
   await fetchLeads(activeFilters.value)
 })
 
+watch(selectedBusinessId, () => {
+  selectedPageIds.value = [];
+  businessPageSearch.value = '';
+})
+
 const onDeleteSelected = async (ids) => {
   try {
     const res = await crmStore.deleteLeads(ids)
@@ -1033,6 +1271,13 @@ watch(isConnected, (val) => {
 .loading-blank {
   min-height: 400px;
   /* Just empty space while loading */
+}
+
+.business-page-list {
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid #e6e6e6;
+  border-radius: 8px;
 }
 
 </style>
