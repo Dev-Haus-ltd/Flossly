@@ -178,6 +178,61 @@
                     </v-chip>
                   </v-col>
 
+                  <!-- Automation -->
+                  <v-col cols="12" md="4">
+                    <div class="d-flex align-center">
+                      <img
+                        src="@/assets/icons/crm/settings.svg"
+                        width="20"
+                        class="mr-2"
+                      />
+                      <span class="key-text">Automation</span>
+                    </div>
+                  </v-col>
+                  <v-col cols="12" md="5">
+                    <div class="automation-pill-row">
+                      <template v-if="automationItemNames.length">
+                        <v-chip
+                          v-for="name in automationItemDisplay.visible"
+                          :key="name"
+                          size="x-small"
+                          color="primary"
+                          variant="outlined"
+                          class="automation-pill"
+                          :title="name"
+                        >
+                          {{ truncateAutomationName(name) }}
+                        </v-chip>
+                        <v-tooltip
+                          v-if="automationItemDisplay.overflow.length"
+                          location="top"
+                          content-class="automation-tooltip-content"
+                        >
+                          <template #activator="{ props: tooltipProps }">
+                            <v-chip
+                              v-bind="tooltipProps"
+                              size="x-small"
+                              color="primary"
+                              variant="tonal"
+                              class="automation-pill automation-pill--overflow"
+                            >
+                              +{{ automationItemDisplay.overflow.length }}
+                            </v-chip>
+                          </template>
+                          <div class="automation-tooltip">
+                            <div
+                              v-for="name in automationItemDisplay.overflow"
+                              :key="name"
+                            >
+                              {{ name }}
+                            </div>
+                          </div>
+                        </v-tooltip>
+                      </template>
+                      <span v-else class="automation-placeholder">None</span>
+                    </div>
+                  </v-col>
+
                   <!-- Preferred Contact Method -->
                   <v-col cols="12" md="4">
                     <div class="d-flex align-center">
@@ -390,6 +445,7 @@
 <script setup>
 import { formatDateOnly } from "@/lib/dateFormatter";
 import { getLeadDisplayName } from "@/lib/normalizers/lead";
+import { crmAutomationDefaults } from '@shared/defaults/crmAutomationDefaults'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -469,6 +525,58 @@ const assignedUsers = computed(() => {
     })
     .filter(Boolean);
 });
+
+const automationRows = ref([])
+const automationLoading = ref(false)
+const defaultAutomationMap = new Map(
+  (crmAutomationDefaults || [])
+    .filter((item) => item && item.key)
+    .map((item) => [item.key, { ...item }])
+)
+
+const mergeDefaultAutomations = (rows) => {
+  const map = new Map((rows || []).map((row) => [row.key, { ...row }]))
+  for (const [key, def] of defaultAutomationMap.entries()) {
+    if (!map.has(key)) map.set(key, { ...def })
+  }
+  return Array.from(map.values())
+}
+
+const loadLeadAutomations = async (leadId) => {
+  if (!leadId || automationLoading.value) return
+  automationLoading.value = true
+  try {
+    const res = await crmStore.listAutomation(leadId)
+    const apiItems = Array.isArray(res?.data) ? res.data : []
+    const rows = apiItems.length
+      ? mergeDefaultAutomations(apiItems)
+      : mergeDefaultAutomations(crmAutomationDefaults)
+    automationRows.value = rows
+  } catch (e) {
+    automationRows.value = mergeDefaultAutomations(crmAutomationDefaults)
+  } finally {
+    automationLoading.value = false
+  }
+}
+
+const automationItemNames = computed(() =>
+  (automationRows.value || [])
+    .filter((row) => row?.enabled)
+    .map((row) => row?.name || row?.key || 'Automation')
+)
+
+const automationItemDisplay = computed(() => ({
+  visible: automationItemNames.value.slice(0, 3),
+  overflow: automationItemNames.value.slice(3),
+}))
+
+const truncateAutomationName = (name, max = 20) => {
+  const safe = String(name || '').trim()
+  if (!safe) return ''
+  if (safe.length <= max) return safe
+  return `${safe.slice(0, Math.max(0, max - 3))}...`
+}
+
 const crmStore = useCrmStore();
 watch(
   () => props.selectedLead,
@@ -481,6 +589,9 @@ watch(
     try {
       const comm = await crmStore.getLeadCommunication(lead.id)
       if (comm && comm.code === 0) commPrefs.value = comm.data || {}
+    } catch (e) {}
+    try {
+      await loadLeadAutomations(lead.id)
     } catch (e) {}
   },
   { immediate: true }
@@ -590,5 +701,47 @@ const savePreferences = async () => {
 }
 .assigned-avatar:first-child {
   margin-left: 0;
+}
+
+.automation-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  min-height: 22px;
+}
+
+.automation-pill {
+  max-width: 160px;
+  background-color: #E4EEFF;
+  border-color: #0061FB;
+  color: #0061FB;
+}
+
+.automation-pill :deep(.v-chip__content) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automation-pill--overflow {
+  font-weight: 600;
+}
+
+.automation-placeholder {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.automation-tooltip {
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(0, 0, 0, 0.87);
+}
+
+:deep(.automation-tooltip-content) {
+  background: #ffffff !important;
+  color: rgba(0, 0, 0, 0.87) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
 }
 </style>

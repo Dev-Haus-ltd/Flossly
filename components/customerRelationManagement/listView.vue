@@ -274,6 +274,138 @@
                   </v-menu>
                 </div>
               </template>
+              <template v-else-if="col.key === 'automation'">
+                <div class="pa-1 automation-cell">
+                  <v-menu
+                    v-model="automationMenus[item.id]"
+                    :close-on-content-click="false"
+                    offset-y
+                    @update:model-value="(val) => onAutomationMenuChange(item, val)"
+                  >
+                    <template #activator="{ props }">
+                      <div v-bind="props" class="automation-activator">
+                        <div class="automation-pill-wrap">
+                          <template v-if="getLeadAutomationItemNames(item).length">
+                        <div class="automation-pill-row">
+                          <v-chip
+                            v-for="row in getLeadAutomationItemDisplay(item).visible"
+                            :key="row.key"
+                            size="x-small"
+                            variant="outlined"
+                            class="automation-pill"
+                            :title="row.name || row.key"
+                            closable
+                            @click:close.stop="removeAutomationItem(item, row)"
+                          >
+                            {{ truncateAutomationName(row.name || row.key) }}
+                          </v-chip>
+                          <v-tooltip
+                            v-if="getLeadAutomationItemDisplay(item).overflow.length"
+                            location="top"
+                            content-class="automation-tooltip-content"
+                          >
+                            <template #activator="{ props: tooltipProps }">
+                              <v-chip
+                                v-bind="tooltipProps"
+                                size="x-small"
+                                variant="outlined"
+                                class="automation-pill automation-pill--overflow"
+                              >
+                                +{{ getLeadAutomationItemDisplay(item).overflow.length }}
+                              </v-chip>
+                            </template>
+                            <div class="automation-tooltip">
+                              <v-chip
+                                v-for="row in getLeadAutomationItemDisplay(item).overflow"
+                                :key="row.key"
+                                size="x-small"
+                                variant="outlined"
+                                class="automation-pill"
+                                :title="row.name || row.key"
+                                closable
+                                @click:close.stop="removeAutomationItem(item, row)"
+                              >
+                                {{ truncateAutomationName(row.name || row.key) }}
+                              </v-chip>
+                            </div>
+                          </v-tooltip>
+                        </div>
+                          </template>
+                          <span v-else class="automation-placeholder">None</span>
+                        </div>
+                        <div class="plus-trigger d-flex align-center justify-center">
+                          <div class="circle-add">
+                            <v-icon size="12" color="white">mdi-plus</v-icon>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
+
+                    <v-card width="320" class="pa-4 automation-menu">
+                      <v-text-field
+                        v-model="automationSearch[item.id]"
+                        placeholder="Search Automation"
+                        prepend-inner-icon="mdi-magnify"
+                        variant="solo"
+                        :elevation="0"
+                        density="compact"
+                        hide-details
+                        bg-color="#FFFFFF"
+                        flat
+                        class="automation-search"
+                      />
+                      <div class="text-caption text-medium-emphasis mb-2">
+                        Automations
+                      </div>
+                      <div class="automation-list">
+                        <div
+                          v-for="row in filteredAutomationItems(item)"
+                          :key="row.key"
+                          class="automation-option"
+                        >
+                          <v-checkbox
+                            :model-value="isDraftAutomationSelected(item, row)"
+                            density="compact"
+                            hide-details
+                            class="automation-checkbox"
+                            @update:modelValue="(val) => toggleDraftAutomation(item, row, val)"
+                          />
+                          <CommonTruncatedText
+                            :text="row.name || row.key"
+                            :max-width="200"
+                            text-class="automation-option-label"
+                          />
+                        </div>
+                        <div
+                          v-if="!filteredAutomationItems(item).length"
+                          class="text-caption text-medium-emphasis py-2"
+                        >
+                          No automations found.
+                        </div>
+                      </div>
+                      <div class="automation-actions">
+                        <v-spacer />
+                        <v-btn
+                          variant="text"
+                          size="small"
+                          @click="initAutomationDraft(item.id); automationMenus[item.id] = false"
+                        >
+                          Cancel
+                        </v-btn>
+                        <v-btn
+                          color="primary"
+                          variant="flat"
+                          size="small"
+                          :loading="automationSaving[item.id]"
+                          @click="saveAutomationDraft(item)"
+                        >
+                          Save
+                        </v-btn>
+                      </div>
+                    </v-card>
+                  </v-menu>
+                </div>
+              </template>
               <template v-else-if="col.key === 'leadSource'">
                 <DataTableColumnsLeadSource
                   :leadSources="leadSources"
@@ -471,6 +603,62 @@
                   {{ item.leadStatus || 'Archived' }}
                 </v-chip>
               </template>
+              <template v-else-if="col.key === 'automation'">
+                <div class="pa-1">
+                  <div class="automation-activator">
+                    <div class="automation-pill-wrap">
+                      <template v-if="getLeadAutomationItemNames(item).length">
+                        <div class="automation-pill-row">
+                          <v-chip
+                            v-for="row in getLeadAutomationItemDisplay(item).visible"
+                            :key="row.key"
+                            size="x-small"
+                            variant="outlined"
+                            class="automation-pill"
+                            :title="row.name || row.key"
+                          >
+                            {{ truncateAutomationName(row.name || row.key) }}
+                          </v-chip>
+                          <v-tooltip
+                            v-if="getLeadAutomationItemDisplay(item).overflow.length"
+                            location="top"
+                            content-class="automation-tooltip-content"
+                          >
+                            <template #activator="{ props: tooltipProps }">
+                              <v-chip
+                                v-bind="tooltipProps"
+                                size="x-small"
+                                variant="outlined"
+                                class="automation-pill automation-pill--overflow"
+                              >
+                                +{{ getLeadAutomationItemDisplay(item).overflow.length }}
+                              </v-chip>
+                            </template>
+                          <div class="automation-tooltip">
+                            <v-chip
+                              v-for="row in getLeadAutomationItemDisplay(item).overflow"
+                              :key="row.key"
+                              size="x-small"
+                              variant="outlined"
+                              class="automation-pill"
+                              :title="row.name || row.key"
+                            >
+                              {{ truncateAutomationName(row.name || row.key) }}
+                            </v-chip>
+                          </div>
+                        </v-tooltip>
+                        </div>
+                      </template>
+                      <span v-else class="automation-placeholder">None</span>
+                    </div>
+                    <div class="plus-trigger d-flex align-center justify-center">
+                      <div class="circle-add">
+                        <v-icon size="12" color="white">mdi-plus</v-icon>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </template>
               <template v-else-if="col.key === 'email'">
                 <p class="ml-2 mb-0">{{ resolveLeadEmail(item) }}</p>
               </template>
@@ -646,6 +834,7 @@ import { buildRecipientContext, renderWithContext } from '@/lib/templateTokens'
 import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
 import { formatAssignedUsers, formatTreatmentValue } from "@/lib/misc";
 import { getLeadDisplayName, getLeadEmail, getLeadPhone } from "@/lib/normalizers/lead";
+import { crmAutomationDefaults } from '@shared/defaults/crmAutomationDefaults'
 import callIcon from '@/assets/crm/call.svg'
 import sendMailIcon from '@/assets/crm/sendMail.svg'
 import whatsappIcon from '@/assets/crm/whatsapp.svg'
@@ -730,10 +919,205 @@ const archiving = ref(false);
 const converting = ref(false);
 const addStaffDrawer = ref(false);
 const rolesList = ref([]);
+const automationMenus = reactive({});
+const automationSearch = reactive({});
+const automationRowsCache = reactive({});
+const automationLoading = reactive({});
+const automationDraft = reactive({});
+const automationSaving = reactive({});
+const defaultAutomationMap = new Map(
+  (crmAutomationDefaults || [])
+    .filter((item) => item && item.key)
+    .map((item) => [item.key, { ...item }])
+);
 
 const resolveLeadName = (lead) => getLeadDisplayName(lead);
 const resolveLeadEmail = (lead) => getLeadEmail(lead);
 const resolveLeadPhone = (lead) => getLeadPhone(lead);
+
+const mergeDefaultAutomations = (rows) => {
+  const map = new Map((rows || []).map((row) => [row.key, { ...row }]));
+  for (const [key, def] of defaultAutomationMap.entries()) {
+    if (!map.has(key)) map.set(key, { ...def });
+  }
+  return Array.from(map.values());
+};
+
+const loadLeadAutomations = async (leadId) => {
+  if (!leadId || automationRowsCache[leadId] || automationLoading[leadId]) return;
+  automationLoading[leadId] = true;
+  try {
+    const res = await crmStore.listAutomation(leadId);
+    const apiItems = Array.isArray(res?.data) ? res.data : [];
+    const rows = apiItems.length
+      ? mergeDefaultAutomations(apiItems)
+      : mergeDefaultAutomations(crmAutomationDefaults);
+    automationRowsCache[leadId] = rows;
+  } catch (e) {
+    automationRowsCache[leadId] = mergeDefaultAutomations(crmAutomationDefaults);
+  } finally {
+    automationLoading[leadId] = false;
+  }
+};
+
+const initAutomationDraft = (leadId) => {
+  const rows = automationRowsCache[leadId] || [];
+  const enabledKeys = rows.filter((row) => row?.enabled).map((row) => row.key);
+  automationDraft[leadId] = [...new Set(enabledKeys)];
+};
+
+const onAutomationMenuChange = async (lead, isOpen) => {
+  if (!isOpen || !lead?.id) return;
+  await loadLeadAutomations(lead.id);
+  initAutomationDraft(lead.id);
+};
+
+const prefetchLeadAutomations = async (leads) => {
+  const ids = (leads || [])
+    .map((lead) => lead?.id)
+    .filter((id) => id && !automationRowsCache[id] && !automationLoading[id]);
+  if (!ids.length) return;
+  const batchSize = 3;
+  for (let i = 0; i < ids.length; i += batchSize) {
+    const batch = ids.slice(i, i + batchSize);
+    await Promise.all(batch.map((id) => loadLeadAutomations(id)));
+  }
+};
+
+watch(
+  () => activeLeads.value,
+  (leads) => {
+    prefetchLeadAutomations(leads);
+  },
+  { immediate: true }
+);
+
+const getLeadAutomationItems = (lead) => {
+  const rows = automationRowsCache[lead?.id] || [];
+  return rows.filter((row) => row?.enabled);
+};
+
+const getLeadAutomationItemNames = (lead) =>
+  getLeadAutomationItems(lead).map((row) => row?.name || row?.key || 'Automation');
+
+const getLeadAutomationItemDisplay = (lead) => {
+  const rows = getLeadAutomationItems(lead);
+  return {
+    visible: rows.slice(0, 3),
+    overflow: rows.slice(3),
+  };
+};
+
+const truncateAutomationName = (name, max = 20) => {
+  const safe = String(name || '').trim();
+  if (!safe) return '';
+  if (safe.length <= max) return safe;
+  return `${safe.slice(0, Math.max(0, max - 3))}...`;
+};
+
+const filteredAutomationItems = (lead) => {
+  const query = String(automationSearch[lead?.id] || '').trim().toLowerCase();
+  const rows = automationRowsCache[lead?.id] || [];
+  if (!query) return rows;
+  return rows.filter((row) =>
+    String(row?.name || row?.key || '')
+      .toLowerCase()
+      .includes(query)
+  );
+};
+
+const isDraftAutomationSelected = (lead, row) => {
+  const keys = automationDraft[lead?.id] || [];
+  return keys.includes(row?.key);
+};
+
+const toggleDraftAutomation = (lead, row, enabled) => {
+  const leadId = lead?.id;
+  if (!leadId || !row?.key) return;
+  const keys = automationDraft[leadId] ? [...automationDraft[leadId]] : [];
+  const idx = keys.indexOf(row.key);
+  if (enabled && idx === -1) keys.push(row.key);
+  if (!enabled && idx !== -1) keys.splice(idx, 1);
+  automationDraft[leadId] = keys;
+};
+
+const buildAutomationPayload = (row, leadId, groupKey) => {
+  const def = defaultAutomationMap.get(row?.key) || {};
+  const payload = {
+    key: row?.key,
+    type: row?.type || def.type || 'Email',
+    name: row?.name || def.name || row?.key,
+    subject: row?.subject || def.subject || def.name || '',
+    sending: row?.sending || def.sending || '',
+    enabled: !!row?.enabled,
+    template:
+      row?.template && String(row.template).trim()
+        ? row.template
+        : def.template || '',
+    whatsappTemplateName:
+      row?.whatsappTemplateName || def.whatsappTemplateName || undefined,
+    whatsappTemplateLanguage:
+      row?.whatsappTemplateLanguage || def.whatsappTemplateLanguage || undefined,
+  };
+  const resolvedGroupKey = row?.groupKey || groupKey;
+  if (resolvedGroupKey) payload.groupKey = resolvedGroupKey;
+  if (leadId) payload.leadId = leadId;
+  return payload;
+};
+
+const saveAutomationDraft = async (lead) => {
+  const leadId = lead?.id;
+  if (!leadId) return;
+  const rows = automationRowsCache[leadId] || [];
+  const desired = new Set(automationDraft[leadId] || []);
+  const updates = [];
+  rows.forEach((row) => {
+    const nextEnabled = desired.has(row?.key);
+    if (!!row?.enabled !== nextEnabled) {
+      row.enabled = nextEnabled;
+      updates.push(buildAutomationPayload(row, leadId, row?.groupKey));
+    }
+  });
+  if (!updates.length) {
+    automationMenus[leadId] = false;
+    return;
+  }
+  automationSaving[leadId] = true;
+  try {
+    await Promise.all(updates.map((payload) => crmStore.saveAutomation(payload)));
+    automationMenus[leadId] = false;
+  } catch (e) {
+    if (mainStore?.setSnackbar) {
+      mainStore.setSnackbar({
+        title: 'Failed to update automations',
+        type: 'error',
+      });
+    }
+  } finally {
+    automationSaving[leadId] = false;
+  }
+};
+
+const removeAutomationItem = async (lead, row) => {
+  if (!lead?.id || !row?.key) return;
+  await loadLeadAutomations(lead.id);
+  const rows = automationRowsCache[lead.id] || [];
+  const rowMap = new Map(rows.map((r) => [r.key, r]));
+  const existing = rowMap.get(row.key) || row;
+  existing.enabled = false;
+  if (!rowMap.get(existing.key)) rows.push(existing);
+  automationDraft[lead.id] = (automationDraft[lead.id] || []).filter((k) => k !== row.key);
+  try {
+    await crmStore.saveAutomation(buildAutomationPayload(existing, lead.id, row?.groupKey));
+  } catch (e) {
+    if (mainStore?.setSnackbar) {
+      mainStore.setSnackbar({
+        title: 'Failed to remove automation',
+        type: 'error',
+      });
+    }
+  }
+};
 
 const getEditableFieldValue = (item, field) => {
   if (field === 'name') return resolveLeadName(item);
@@ -837,6 +1221,7 @@ const resolveLeadValue = (lead, key) => {
   if (key === 'pageId') return lead?.pageId || '';
   if (key === 'formId') return lead?.formId || '';
   if (key === 'leadId') return lead?.leadId || '';
+  if (key === 'automation') return getLeadAutomationItemNames(lead).join(', ');
   if (key === 'comments') return lead?.comments || '';
   if (key === 'alert') return lead?.alert || '';
   const value = lead?.[key];
@@ -1569,5 +1954,143 @@ const convertSelected = async () => {
   width: 1px;
   background-color: rgba(var(--v-border-color), var(--v-border-opacity));
   pointer-events: none;
+}
+
+.automation-cell {
+  display: flex;
+  align-items: center;
+}
+
+.automation-activator {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.automation-pill-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  min-height: 22px;
+}
+
+.automation-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  min-height: 22px;
+}
+
+.automation-placeholder {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.automation-pill {
+  max-width: 140px;
+  background-color: #E4EEFF;
+  border-color: #0061FB;
+  color: #0061FB;
+}
+
+.automation-pill :deep(.v-chip__content) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automation-pill :deep(.v-chip__close) {
+  color: #0061FB;
+  border-radius: 50%;
+  padding: 2px;
+}
+
+.automation-pill :deep(.v-chip__close:hover) {
+  background-color: #d6e5ff;
+}
+
+.automation-pill--overflow {
+  font-weight: 600;
+}
+
+.plus-trigger {
+  padding: 2px;
+}
+
+.circle-add {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: hsla(183, 24%, 17%, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+.automation-menu .v-input {
+  margin-bottom: 8px;
+}
+
+.automation-list {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.automation-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.automation-checkbox {
+  flex: 0 0 auto;
+}
+
+.automation-checkbox :deep(.v-selection-control) {
+  margin: 0;
+}
+
+.automation-checkbox :deep(.v-selection-control__input) {
+  margin: 0;
+  border-radius: 6px;
+}
+
+.automation-checkbox :deep(.v-icon) {
+  border-radius: 6px;
+}
+
+.automation-option-label {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.87);
+}
+
+.automation-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.automation-tooltip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(0, 0, 0, 0.87);
+}
+
+:deep(.automation-tooltip-content) {
+  background: #ffffff !important;
+  color: rgba(0, 0, 0, 0.87) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  pointer-events: auto !important;
 }
 </style>

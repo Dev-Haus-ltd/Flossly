@@ -676,7 +676,19 @@ const toggleAutomationGroup = async (card, val) => {
   }
 }
 
-  const loadRows = async () => {
+const isWhatsAppItem = (item) => {
+  const type = String(item?.type || '').toLowerCase()
+  const key = String(item?.key || '').toLowerCase()
+  return type === 'whatsapp' || key.includes('whatsapp')
+}
+
+const isWhatsAppGroup = (group) => {
+  const key = String(group?.key || '').toLowerCase()
+  const title = String(group?.title || '').toLowerCase()
+  return key.includes('whatsapp') || title.includes('whatsapp')
+}
+
+const loadRows = async () => {
   try {
     const res = await crmStore.listAutomation(resolvedLeadId.value || undefined)
     const apiItems = Array.isArray(res?.data) ? res.data : []
@@ -687,7 +699,8 @@ const toggleAutomationGroup = async (card, val) => {
     const filteredItems = props.includeDefaults
       ? items
       : items.filter(item => !defaultAutomationKeySet.has(item.key))
-    rows.splice(0, rows.length, ...filteredItems)
+    const nonWhatsappItems = filteredItems.filter((item) => !isWhatsAppItem(item))
+    rows.splice(0, rows.length, ...nonWhatsappItems)
   } catch {}
 }
 
@@ -696,7 +709,7 @@ const loadGroups = async () => {
   try {
     const res = await crmStore.listAutomationGroups()
     if (res?.code === 0 && Array.isArray(res.data)) {
-      groupRows.value = res.data
+      groupRows.value = res.data.filter((group) => !isWhatsAppGroup(group))
     }
   } finally {
   }

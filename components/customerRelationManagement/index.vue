@@ -419,6 +419,7 @@ const headers = [
   { key: "inquiryDate", title: "Inquiry Date", width: 160 },
   { key: "leadSource", title: "Lead Source", width: 160 },
   { key: "leadStatus", title: "Lead Status", width: 160 },
+  { key: "automation", title: "Automation", width: 200 },
   { key: "treatment", title: "Treatment", width: 160 },
   { key: "assigned", title: "Assigned", width: 160 },
   { key: "followUpDate", title: "Follow-up Date", width: 160 },
