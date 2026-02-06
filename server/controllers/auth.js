@@ -35,6 +35,7 @@ import {
   accountCreationNotification,
   sendOtpForPasswordReset,
 } from "../utils/emailNotifications";
+import { getCurrentEnvironment } from "../utils/environment";
 import requestIp from "request-ip";
 import { HrDocument } from "../models/hrDocuments";
 import path from "path";
@@ -130,7 +131,7 @@ export const login = async (event) => {
       orgId = orgIds[0];
     }
     const token = jwt.sign(
-      { userId: user.id, orgId, roleId: user.roleId, purpose: "login" },
+      { userId: user.id, orgId, roleId: user.roleId, purpose: "login", environment: getCurrentEnvironment() },
       config.JWT_SECRET
     );
     user.lastLoginDate = new Date()
@@ -161,6 +162,7 @@ export const createShortLivedToken = async (event) => {
         orgId: loggedUser.orgId,
         roleId: loggedUser.roleId,
         purpose: "third_party_redirect",
+        environment: getCurrentEnvironment(),
       },
       config.JWT_SECRET,
       { expiresIn: "60s" }
@@ -188,6 +190,9 @@ export const exchangeShortLivedToken = async (event) => {
         orgId: payload.orgId,
         roleId: payload.roleId,
         purpose: "login",
+        // IMPORTANT: carry environment through from the short token so downstream services
+        // (e.g. /auth/profile, chatbot builder) don't default to the wrong environment.
+        environment: payload.environment || getCurrentEnvironment(),
       },
       config.JWT_SECRET
     );
@@ -776,7 +781,14 @@ export const switchOrgnanisation = async (event) => {
       return error(403, "Your account is deactivated");
     }
     const newToken = jwt.sign(
-      { userId: user.userId, roleId: user.roleId, orgId, purpose: "login" },
+      {
+        userId: user.userId,
+        roleId: user.roleId,
+        orgId,
+        purpose: "login",
+        // Preserve environment from existing access token when switching orgs.
+        environment: user.environment || getCurrentEnvironment(),
+      },
       config.JWT_SECRET
     );
 
@@ -986,6 +998,7 @@ export const inviteMembers = async (event) => {
               orgId: currentOrg,
               purpose: "org_invitation",
               invitedBy: loggedUser.userId,
+              environment: getCurrentEnvironment(),
             },
             config.JWT_SECRET,
             { expiresIn: "7d" } // 7 days to respond
@@ -1145,6 +1158,7 @@ export const acceptInvitation = async (event) => {
         orgId: userOrg.organisationId,
         roleId: user.roleId,
         purpose: "login",
+        environment: getCurrentEnvironment(),
       },
       config.JWT_SECRET
     );
@@ -1301,6 +1315,7 @@ export const acceptOrganisationInvitation = async (event) => {
           orgId: orgId,
           roleId: user.roleId,
           purpose: "login",
+          environment: getCurrentEnvironment(),
         },
         config.JWT_SECRET
       );
@@ -1506,6 +1521,7 @@ export const resendOrganisationInvitation = async (event) => {
             orgId: orgId,
             purpose: "org_invitation",
             invitedBy: loggedUser.userId,
+            environment: getCurrentEnvironment(),
           },
           config.JWT_SECRET,
           { expiresIn: "7d" }
