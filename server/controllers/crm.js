@@ -1,12 +1,12 @@
 import { Op } from 'sequelize'
-import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, MetaPage, MetaWhatsAppConfig, User, UserOrganisation } from '../models'
+import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, MetaPage, User, UserOrganisation } from '../models'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults.js'
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
 import { success, error } from '../utils/response'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
 import { sendImmediateCrmAutomationsForLead } from '../utils/crmAutomation.js'
-import { decrypt } from '../utils/crypto'
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from '../utils/whatsapp'
+import { resolveWhatsAppProviderConfig } from '../utils/whatsappProvider'
 import DB from '../utils/db'
 
 const parseDateValue = (value) => {
@@ -26,51 +26,6 @@ const slugifyKey = (value) => {
   return base || 'automation_group'
 }
 
-const resolveWhatsAppConfig = async (orgId) => {
-  const config = useRuntimeConfig()
-  const envPhoneNumberId =
-    config.META_WA_PHONE_NUMBER_ID ||
-    config.WHATSAPP_PHONE_NUMBER_ID ||
-    process.env.META_WA_PHONE_NUMBER_ID ||
-    process.env.WHATSAPP_PHONE_NUMBER_ID ||
-    ''
-  const envToken =
-    config.META_WA_ACCESS_TOKEN ||
-    config.WHATSAPP_ACCESS_TOKEN ||
-    process.env.META_WA_ACCESS_TOKEN ||
-    process.env.WHATSAPP_ACCESS_TOKEN ||
-    ''
-  const envWabaId =
-    config.META_WA_WABA_ID ||
-    config.WHATSAPP_WABA_ID ||
-    process.env.META_WA_WABA_ID ||
-    process.env.WHATSAPP_WABA_ID ||
-    ''
-
-  let row = null
-  try { await MetaWhatsAppConfig.sync() } catch {}
-  row = await MetaWhatsAppConfig.findOne({ where: { organisationId: Number(orgId) } })
-
-  if (row) {
-    return {
-      phoneNumberId: row.phoneNumberId,
-      accessToken: decrypt(row.accessTokenEnc),
-      wabaId: row.wabaId || null,
-      source: 'db',
-    }
-  }
-
-  if (envPhoneNumberId && envToken) {
-    return {
-      phoneNumberId: String(envPhoneNumberId).trim(),
-      accessToken: String(envToken).trim(),
-      wabaId: envWabaId ? String(envWabaId).trim() : null,
-      source: 'env',
-    }
-  }
-
-  return null
-}
 
 const ensureUniqueGroupKey = async ({ orgId, key, excludeId = null }) => {
   let candidate = slugifyKey(key)
@@ -1056,9 +1011,15 @@ export const sendLeadWhatsApp = async (event) => {
     const hasTemplate = !!template
     if (!hasTemplate && !message) return error(400, 'message or template required')
 
-    const waConfig = await resolveWhatsAppConfig(orgId)
-    if (!waConfig?.phoneNumberId || !waConfig?.accessToken) {
+    const waConfig = await resolveWhatsAppProviderConfig(orgId)
+    if (!waConfig?.provider) {
+      return error(400, 'WhatsApp provider not configured')
+    }
+    if (waConfig.provider === 'meta' && (!waConfig.phoneNumberId || !waConfig.accessToken)) {
       return error(400, 'WhatsApp is not configured')
+    }
+    if (waConfig.provider === 'whapi' && !waConfig.token) {
+      return error(400, 'Whapi token is missing')
     }
 
     const limitStatus = await isWhatsAppLimitExceeded(orgId, event.context.user?.userId)
@@ -1071,7 +1032,12 @@ export const sendLeadWhatsApp = async (event) => {
     })
     if (!leads.length) return error(404, 'No leads found')
 
-    const url = `https://graph.facebook.com/v24.0/${waConfig.phoneNumberId}/messages`
+    const metaUrl = waConfig.provider === 'meta'
+      ? `https://graph.facebook.com/v24.0/${waConfig.phoneNumberId}/messages`
+      : null
+    const whapiUrl = waConfig.provider === 'whapi'
+      ? `${String(waConfig.baseUrl || '').replace(/\/+$/, '')}/messages/text`
+      : null
     let sent = 0
     let failed = 0
     let skipped = 0
@@ -1094,32 +1060,60 @@ export const sendLeadWhatsApp = async (event) => {
         continue
       }
 
-      const bodyPayload = {
-        messaging_product: 'whatsapp',
-        to,
-        type: hasTemplate ? 'template' : 'text',
-        ...(hasTemplate
-          ? { template }
-          : { text: { body: String(message) } }),
+      if (waConfig.provider === 'whapi' && hasTemplate && !message) {
+        failed += 1
+        await logWhatsAppMessage({
+          organisationId: orgId,
+          leadId: lead.id,
+          to,
+          type: 'text',
+          status: 'failed',
+          error: 'Whapi does not support template-only sends',
+        })
+        failures.push({
+          leadId: lead.id,
+          error: 'Whapi does not support template-only sends',
+        })
+        continue
       }
 
+      const bodyPayload = waConfig.provider === 'meta'
+        ? {
+            messaging_product: 'whatsapp',
+            to,
+            type: hasTemplate ? 'template' : 'text',
+            ...(hasTemplate
+              ? { template }
+              : { text: { body: String(message) } }),
+          }
+        : { to, body: String(message || '') }
+
       try {
-        const resp = await $fetch(url, {
+        const resp = await $fetch(waConfig.provider === 'meta' ? metaUrl : whapiUrl, {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${waConfig.accessToken}`,
-            'Content-Type': 'application/json',
-          },
+          headers: waConfig.provider === 'meta'
+            ? {
+                Authorization: `Bearer ${waConfig.accessToken}`,
+                'Content-Type': 'application/json',
+              }
+            : {
+                Authorization: `Bearer ${waConfig.token}`,
+                'Content-Type': 'application/json',
+              },
           body: bodyPayload,
         })
-        const providerMessageId = resp?.messages?.[0]?.id || null
+        const providerMessageId =
+          resp?.messages?.[0]?.id ||
+          resp?.message?.id ||
+          resp?.id ||
+          null
         await markWhatsAppOutbound(lead, to)
         await logWhatsAppMessage({
           organisationId: orgId,
           leadId: lead.id,
           to,
-          type: hasTemplate ? 'template' : 'text',
-          templateName: hasTemplate ? (template?.name || template?.namespace || null) : null,
+          type: waConfig.provider === 'meta' && hasTemplate ? 'template' : 'text',
+          templateName: waConfig.provider === 'meta' && hasTemplate ? (template?.name || template?.namespace || null) : null,
           status: 'sent',
           providerMessageId,
         })

@@ -3,6 +3,7 @@ import { CrmLead, MetaPage, Organisation, User, MetaUserToken, MetaWhatsAppConfi
 import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
 import { addMetaClient, broadcastMetaEvent } from '../utils/metaStream'
+import { getWhatsAppProviderKey, getWhapiEnvConfig, resolveWhapiConfig } from '../utils/whatsappProvider'
 
 const META_VERSION = 'v24.0'
 
@@ -313,9 +314,29 @@ export const getWhatsAppConfig = async (event) => {
   const { orgId } = event.context.user || {}
   if (!orgId) return error(401, 'Unauthenticated')
 
+  const provider = getWhatsAppProviderKey()
+  if (provider === 'whapi') {
+    const whapi = await resolveWhapiConfig(orgId)
+    return success({
+      provider: 'whapi',
+      hasToken: !!whapi?.token,
+      supportsTemplates: false,
+      requiresTemplateOutside24h: false,
+      baseUrl: whapi?.baseUrl || getWhapiEnvConfig().baseUrl,
+      channelId: whapi?.channelId || null,
+    })
+  }
+
   try { await MetaWhatsAppConfig.sync() } catch {}
   const row = await MetaWhatsAppConfig.findOne({ where: { organisationId: orgId } })
-  if (!row) return success(null)
+  if (!row) {
+    return success({
+      provider: 'meta',
+      hasToken: false,
+      supportsTemplates: true,
+      requiresTemplateOutside24h: true,
+    })
+  }
 
   return success({
     id: row.id,
@@ -329,6 +350,9 @@ export const getWhatsAppConfig = async (event) => {
     hasVerifyToken: !!row.verifyTokenEnc,
     tokenExpiresAt: row.tokenExpiresAt || null,
     status: row.status || 'Active',
+    provider: 'meta',
+    supportsTemplates: true,
+    requiresTemplateOutside24h: true,
   })
 }
 

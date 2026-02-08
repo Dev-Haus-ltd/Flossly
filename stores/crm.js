@@ -27,6 +27,9 @@ export const useCrmStore = defineStore("crmStore", {
     completeWhatsAppEmbedded(payload) { return this._wrap(() => crmService.completeWhatsAppEmbedded(payload)); },
     getWhatsAppConfig() { return this._wrap(() => crmService.getWhatsAppConfig()); },
     saveWhatsAppConfig(payload) { return this._wrap(() => crmService.saveWhatsAppConfig(payload)); },
+    startWhapiConnect() { return this._wrap(() => crmService.startWhapiConnect()); },
+    getWhapiQr() { return this._wrap(() => crmService.getWhapiQr()); },
+    getWhapiStatus() { return this._wrap(() => crmService.getWhapiStatus()); },
 
     // Leads
     listLeads(filters = {}) { return this._wrap(() => crmService.listLeads(filters)); },

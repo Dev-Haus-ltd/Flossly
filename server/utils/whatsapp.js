@@ -8,6 +8,8 @@ const WHATSAPP_LIMITS_BY_PLAN = {
   soar: 1500,
   trial: 250,
 };
+const TRIAL_TOTAL_LIMIT = 250;
+const TRIAL_WINDOW_DAYS = 15;
 
 const normalizePlanKey = (value) => {
   const raw = String(value || "").trim().toLowerCase();
@@ -83,6 +85,11 @@ export const getMonthlyWhatsAppUsage = async (organisationId, atDate = new Date(
   if (!organisationId) return { count: 0, start: null, end: null };
   const start = new Date(atDate.getFullYear(), atDate.getMonth(), 1, 0, 0, 0, 0);
   const end = new Date(atDate.getFullYear(), atDate.getMonth() + 1, 1, 0, 0, 0, 0);
+  return await getWhatsAppUsageInWindow(organisationId, start, end);
+};
+
+export const getWhatsAppUsageInWindow = async (organisationId, start, end) => {
+  if (!organisationId || !start || !end) return { count: 0, start, end };
   try {
     await CrmWhatsAppMessageLog.sync();
     const count = await CrmWhatsAppMessageLog.count({
@@ -96,6 +103,25 @@ export const getMonthlyWhatsAppUsage = async (organisationId, atDate = new Date(
     return { count: Number(count || 0), start, end };
   } catch {
     return { count: 0, start, end };
+  }
+};
+
+const getTrialWindowForOrg = async (organisationId) => {
+  if (!organisationId) return null;
+  try {
+    const pref = await UserPreference.findOne({
+      where: { organisationId: Number(organisationId), licenseType: "Trial" },
+      order: [["createdAt", "DESC"]],
+    });
+    if (!pref) return null;
+    const end = pref.licenseRenewalDate ? new Date(pref.licenseRenewalDate) : null;
+    if (!end) return null;
+    const start = pref.createdAt ? new Date(pref.createdAt) : new Date(end.getTime() - TRIAL_WINDOW_DAYS * 86400000);
+    const now = new Date();
+    if (now > end) return null;
+    return { start, end };
+  } catch {
+    return null;
   }
 };
 
@@ -122,9 +148,15 @@ export const getOrganisationWhatsAppLimit = async (organisationId, userId = null
 };
 
 export const isWhatsAppLimitExceeded = async (organisationId, userId = null) => {
+  const trialWindow = await getTrialWindowForOrg(organisationId);
+  if (trialWindow) {
+    const { count } = await getWhatsAppUsageInWindow(organisationId, trialWindow.start, trialWindow.end);
+    return { exceeded: count >= TRIAL_TOTAL_LIMIT, count, limit: TRIAL_TOTAL_LIMIT, window: trialWindow, isTrial: true };
+  }
+
   const [{ count }, limit] = await Promise.all([
     getMonthlyWhatsAppUsage(organisationId),
     getOrganisationWhatsAppLimit(organisationId, userId),
   ]);
-  return { exceeded: count >= limit, count, limit };
+  return { exceeded: count >= limit, count, limit, isTrial: false };
 };

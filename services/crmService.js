@@ -86,6 +86,27 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  startWhapiConnect() {
+    return new Promise((resolve, reject) => {
+      Post("/whapi/connect", {})
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getWhapiQr() {
+    return new Promise((resolve, reject) => {
+      Get("/whapi/qr")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getWhapiStatus() {
+    return new Promise((resolve, reject) => {
+      Get("/whapi/status")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   // Leads (app-managed)
   listLeads(filters = {}) {
     const params = new URLSearchParams();

@@ -758,11 +758,19 @@
           >
             Template required. At least one lead has not messaged you in the last 24 hours.
           </v-alert>
-          <v-radio-group v-model="whatsappCompose.mode" class="mb-3" inline>
+          <v-radio-group
+            v-if="whatsappProvider.supportsTemplates"
+            v-model="whatsappCompose.mode"
+            class="mb-3"
+            inline
+          >
             <v-radio label="Free Text" value="free" :disabled="whatsappCompose.requiresTemplate" />
             <v-radio label="Template" value="template" />
           </v-radio-group>
-          <div v-if="whatsappCompose.mode === 'template'">
+          <div v-else class="text-caption text-medium-emphasis mb-3">
+            Templates are disabled for the current WhatsApp provider. Free text only.
+          </div>
+          <div v-if="whatsappProvider.supportsTemplates && whatsappCompose.mode === 'template'">
             <v-text-field
               v-model="whatsappCompose.templateName"
               label="Template name"
@@ -1370,6 +1378,11 @@ let List = null
 const compose = reactive({ key: 'mail', subject: '', recipients: [], html: '' })
 const showWhatsAppCompose = ref(false)
 const whatsappLoading = ref(false)
+const whatsappProvider = reactive({
+  provider: 'meta',
+  supportsTemplates: true,
+  requiresTemplateOutside24h: true,
+})
 const whatsappCompose = reactive({
   message: '',
   recipients: [],
@@ -1382,6 +1395,26 @@ const whatsappCompose = reactive({
 const defaultWhatsAppMessage =
   'Hi [Patient Name], thanks for reaching out to [Practice Name]. How can we help you today?'
 const WHATSAPP_WINDOW_HOURS = 24
+
+const loadWhatsAppProvider = async () => {
+  try {
+    const res = await crmStore.getWhatsAppConfig()
+    const data = res?.data || null
+    if (data?.provider) {
+      whatsappProvider.provider = data.provider
+      whatsappProvider.supportsTemplates = data.supportsTemplates !== false
+      whatsappProvider.requiresTemplateOutside24h = data.requiresTemplateOutside24h !== false
+    } else {
+      whatsappProvider.provider = 'meta'
+      whatsappProvider.supportsTemplates = true
+      whatsappProvider.requiresTemplateOutside24h = true
+    }
+  } catch {
+    whatsappProvider.provider = 'meta'
+    whatsappProvider.supportsTemplates = true
+    whatsappProvider.requiresTemplateOutside24h = true
+  }
+}
 
 const defaultTemplates = {
   sendPrice: {
@@ -1408,6 +1441,10 @@ const defaultTemplates = {
   book: { subject: 'Appointment Booking', html: `<p>Dear [Patient Name],</p><p>We'd love to arrange your appointment. Please reply with your preferred date/time, or book via our online portal.</p><p>Thank you,<br/>[Your Name]</p>` },
   mail: { subject: 'Message from our practice', html: `<p>Dear [Patient Name],</p><p>Write your message here.</p><p>Regards,<br/>[Your Name]</p>` },
 }
+
+onMounted(() => {
+  loadWhatsAppProvider()
+})
 
 
 async function openCompose(actionKey) {
@@ -1473,7 +1510,14 @@ const buildWhatsAppRecipients = () => {
   })
   whatsappCompose.recipients = [...new Set(recipients)]
   whatsappCompose.missing = missing
-  whatsappCompose.requiresTemplate = !allWithinWindow
+  const requiresTemplate =
+    whatsappProvider.requiresTemplateOutside24h && !allWithinWindow
+  whatsappCompose.requiresTemplate = requiresTemplate
+  if (!whatsappProvider.supportsTemplates) {
+    whatsappCompose.mode = 'free'
+    whatsappCompose.requiresTemplate = false
+    return
+  }
   if (whatsappCompose.requiresTemplate) {
     whatsappCompose.mode = 'template'
   }
@@ -1492,6 +1536,9 @@ const openWhatsAppCompose = () => {
   const ctx = buildRecipientContext({ lead, user, many })
   whatsappCompose.message = renderWithContext(defaultWhatsAppMessage, ctx)
   if (!whatsappCompose.templateName) whatsappCompose.templateName = 'hello_world'
+  if (!whatsappProvider.supportsTemplates) {
+    whatsappCompose.mode = 'free'
+  }
   showWhatsAppCompose.value = true
 }
 
@@ -1524,6 +1571,12 @@ async function sendCompose() {
   } finally { composeLoading.value = false }
 }
 async function sendWhatsAppCompose() {
+  if (!whatsappProvider.supportsTemplates && whatsappCompose.mode === 'template') {
+    if (mainStore?.setSnackbar) {
+      mainStore.setSnackbar({ title: 'Templates are not supported by the current WhatsApp provider', type: 'error' })
+    }
+    return
+  }
   if (whatsappCompose.mode === 'free' && whatsappCompose.requiresTemplate) {
     if (mainStore?.setSnackbar) {
       mainStore.setSnackbar({ title: 'Template required for at least one lead', type: 'error' })

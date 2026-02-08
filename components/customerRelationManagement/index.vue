@@ -48,6 +48,25 @@
 
         <!-- Right: Connection Controls -->
         <div class="d-inline-flex ml-auto" style="flex-wrap: nowrap; gap: 12px;">
+          <v-btn
+            v-if="whatsappProvider.provider === 'whapi'"
+            :color="whapiStatus.connected ? 'success' : 'primary'"
+            :variant="whapiStatus.connected ? 'tonal' : 'flat'"
+            rounded="lg"
+            class="add-task-btn"
+            :loading="whapiLoading"
+            @click="connectWhapi"
+          >
+            <template #prepend>
+              <v-icon size="18">mdi-whatsapp</v-icon>
+            </template>
+            <span v-if="whapiStatus.connected && whatsAppUsage.limit">
+              WhatsApp {{ whatsAppUsage.count }}/{{ whatsAppUsage.limit }}
+            </span>
+            <span v-else>
+              {{ whapiStatus.connected ? 'WhatsApp Connected' : 'Connect WhatsApp' }}
+            </span>
+          </v-btn>
           <!-- WhatsApp connect UI (temporarily hidden until complete)
           <v-btn
             :color="isWhatsAppConnected ? 'success' : 'primary'"
@@ -70,7 +89,7 @@
           -->
 
           <v-menu
-            v-if="isConnected"
+            v-if="whatsappProvider.provider !== 'whapi' && isConnected"
             v-model="metaMenu"
             location="bottom end"
           >
@@ -100,7 +119,7 @@
           </v-menu>
 
           <v-btn
-            v-else
+            v-else-if="whatsappProvider.provider !== 'whapi'"
             color="primary"
             variant="flat"
             rounded="lg"
@@ -114,6 +133,7 @@
           </v-btn>
 
           <v-btn
+            v-if="whatsappProvider.provider !== 'whapi'"
             :color="isConnected ? 'success' : undefined"
             :variant="isConnected ? 'tonal' : 'text'"
             class="add-task-btn"
@@ -267,6 +287,33 @@
         :data="metaHealthData"
       />
 
+      <v-dialog v-model="whapiDialog" max-width="520">
+        <v-card class="pa-4">
+          <v-card-title class="text-subtitle-1 pa-0 mb-2 d-flex justify-space-between align-center">
+            <span>Connect WhatsApp</span>
+            <v-chip v-if="whapiStatus.connected" color="success" size="small" label>Connected</v-chip>
+          </v-card-title>
+          <v-card-text class="pa-0">
+            <div v-if="whapiQr" class="d-flex flex-column align-center gap-2">
+              <img :src="whapiQr" alt="WhatsApp QR" style="max-width: 260px;" />
+              <div class="text-caption text-medium-emphasis">
+                Scan this QR code using WhatsApp on the phone you want to connect.
+              </div>
+            </div>
+            <v-alert v-else type="info" variant="tonal" class="mb-2">
+              QR code not ready yet. Click refresh in a moment.
+            </v-alert>
+          </v-card-text>
+          <v-card-actions class="pa-0 mt-4">
+            <v-btn variant="text" @click="whapiDialog = false">Close</v-btn>
+            <v-spacer />
+            <v-btn :loading="whapiLoading" variant="flat" color="primary" @click="refreshWhapiQr">
+              Refresh QR
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
       <!-- WhatsApp connect dialog (temporarily hidden until complete)
       <v-dialog v-model="whatsAppDialog" max-width="640">
         <v-card class="pa-4">
@@ -328,6 +375,21 @@ const metaHealthData = ref(null);
 const whatsAppDialog = ref(false);
 const whatsAppSaving = ref(false);
 const isWhatsAppConnected = ref(false);
+const whatsappProvider = reactive({
+  provider: 'meta',
+  supportsTemplates: true,
+  requiresTemplateOutside24h: true,
+});
+const whapiDialog = ref(false);
+const whapiQr = ref('');
+const whapiLoading = ref(false);
+const whapiStatus = reactive({
+  connected: false,
+  channelId: '',
+  phoneNumber: '',
+  displayName: '',
+  status: '',
+});
 const whatsAppStatus = reactive({
   phoneNumberId: '',
   wabaId: '',
@@ -440,24 +502,84 @@ const loadWhatsAppConfig = async () => {
     const res = await crmStore.getWhatsAppConfig();
     if (res?.code === 0 && res.data) {
       const data = res.data;
-      whatsAppStatus.phoneNumberId = data.phoneNumberId || '';
-      whatsAppStatus.wabaId = data.wabaId || '';
-      whatsAppStatus.displayPhoneNumber = data.displayPhoneNumber || '';
-      whatsAppStatus.verifiedName = data.verifiedName || '';
-      isWhatsAppConnected.value = !!data.hasToken;
+      whatsappProvider.provider = data.provider || 'meta';
+      whatsappProvider.supportsTemplates = data.supportsTemplates !== false;
+      whatsappProvider.requiresTemplateOutside24h = data.requiresTemplateOutside24h !== false;
+
+      if (whatsappProvider.provider === 'whapi') {
+        whapiStatus.connected = !!data.hasToken;
+        whapiStatus.channelId = data.channelId || '';
+      } else {
+        whatsAppStatus.phoneNumberId = data.phoneNumberId || '';
+        whatsAppStatus.wabaId = data.wabaId || '';
+        whatsAppStatus.displayPhoneNumber = data.displayPhoneNumber || '';
+        whatsAppStatus.verifiedName = data.verifiedName || '';
+        isWhatsAppConnected.value = !!data.hasToken;
+      }
     } else {
+      whatsappProvider.provider = 'meta';
       whatsAppStatus.phoneNumberId = '';
       whatsAppStatus.wabaId = '';
       whatsAppStatus.displayPhoneNumber = '';
       whatsAppStatus.verifiedName = '';
       isWhatsAppConnected.value = false;
+      whapiStatus.connected = false;
     }
   } catch (e) {
+    whatsappProvider.provider = 'meta';
     whatsAppStatus.phoneNumberId = '';
     whatsAppStatus.wabaId = '';
     whatsAppStatus.displayPhoneNumber = '';
     whatsAppStatus.verifiedName = '';
     isWhatsAppConnected.value = false;
+    whapiStatus.connected = false;
+  }
+};
+
+const loadWhapiStatus = async () => {
+  try {
+    const res = await crmStore.getWhapiStatus();
+    if (res?.code === 0 && res.data) {
+      whapiStatus.connected = !!res.data.connected;
+      whapiStatus.channelId = res.data.channelId || '';
+      whapiStatus.phoneNumber = res.data.phoneNumber || '';
+      whapiStatus.displayName = res.data.displayName || '';
+      whapiStatus.status = res.data.status || '';
+    } else {
+      whapiStatus.connected = false;
+    }
+  } catch {
+    whapiStatus.connected = false;
+  }
+};
+
+const connectWhapi = async () => {
+  try {
+    whapiLoading.value = true;
+    const res = await crmStore.startWhapiConnect();
+    if (res?.code === 0 && res.data) {
+      whapiQr.value = res.data.qr || '';
+      whapiStatus.connected = !!res.data.qr ? false : whapiStatus.connected;
+      whapiStatus.channelId = res.data.channelId || whapiStatus.channelId;
+      whapiDialog.value = true;
+      await loadWhapiStatus();
+    } else if (mainStore?.setSnackbar) {
+      mainStore.setSnackbar({ title: res?.message || res?.error || 'Failed to connect WhatsApp', type: 'error' });
+    }
+  } finally {
+    whapiLoading.value = false;
+  }
+};
+
+const refreshWhapiQr = async () => {
+  try {
+    whapiLoading.value = true;
+    const res = await crmStore.getWhapiQr();
+    if (res?.code === 0 && res.data) {
+      whapiQr.value = res.data.qr || '';
+    }
+  } finally {
+    whapiLoading.value = false;
   }
 };
 
@@ -607,6 +729,7 @@ onMounted(() => {
   checkConnection();
   loadWhatsAppConfig();
   loadWhatsAppUsage();
+  loadWhapiStatus();
   initOptions();
   loadBookingDentists();
   loadBookingPatients();
