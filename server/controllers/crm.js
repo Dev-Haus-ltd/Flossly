@@ -26,7 +26,6 @@ const slugifyKey = (value) => {
   return base || 'automation_group'
 }
 
-
 const ensureUniqueGroupKey = async ({ orgId, key, excludeId = null }) => {
   let candidate = slugifyKey(key)
   let suffix = 1
@@ -1026,11 +1025,11 @@ export const sendLeadWhatsApp = async (event) => {
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
     const payload = typeof body === 'string' ? JSON.parse(body) : body
-    const { leadIds = [], message, template } = payload || {}
+    const { leadIds = [], template, message } = payload || {}
     if (!Array.isArray(leadIds) || !leadIds.length) return error(400, 'leadIds required')
-
+    const messageText = String(message || '').trim()
     const hasTemplate = !!template
-    if (!hasTemplate && !message) return error(400, 'message or template required')
+    if (!hasTemplate && !messageText) return error(400, 'template or message required for WhatsApp outbound')
 
     const waConfig = await resolveWhatsAppProviderConfig(orgId)
     if (!waConfig?.provider) {
@@ -1047,6 +1046,8 @@ export const sendLeadWhatsApp = async (event) => {
     if (limitStatus.exceeded) {
       return error(402, `WhatsApp monthly limit reached (${limitStatus.count}/${limitStatus.limit})`)
     }
+
+    const useTemplate = waConfig.provider === 'meta' && hasTemplate
 
     const leads = await CrmLead.findAll({
       where: { id: { [Op.in]: leadIds }, organisationId: Number(orgId), softDeleted: false },
@@ -1072,8 +1073,8 @@ export const sendLeadWhatsApp = async (event) => {
           organisationId: orgId,
           leadId: lead.id,
           to: lead.telephone || null,
-          type: hasTemplate ? 'template' : 'text',
-          templateName: hasTemplate ? (template?.name || template?.namespace || null) : null,
+          type: useTemplate ? 'template' : 'text',
+          templateName: useTemplate ? (template?.name || template?.namespace || null) : null,
           status: 'skipped',
           error: 'Missing or invalid phone number',
         })
@@ -1081,7 +1082,7 @@ export const sendLeadWhatsApp = async (event) => {
         continue
       }
 
-      if (waConfig.provider === 'whapi' && hasTemplate && !message) {
+      if (waConfig.provider === 'whapi' && !messageText) {
         failed += 1
         await logWhatsAppMessage({
           organisationId: orgId,
@@ -1089,11 +1090,11 @@ export const sendLeadWhatsApp = async (event) => {
           to,
           type: 'text',
           status: 'failed',
-          error: 'Whapi does not support template-only sends',
+          error: 'Whapi requires a text message',
         })
         failures.push({
           leadId: lead.id,
-          error: 'Whapi does not support template-only sends',
+          error: 'Whapi requires a text message',
         })
         continue
       }
@@ -1102,12 +1103,12 @@ export const sendLeadWhatsApp = async (event) => {
         ? {
             messaging_product: 'whatsapp',
             to,
-            type: hasTemplate ? 'template' : 'text',
-            ...(hasTemplate
+            type: useTemplate ? 'template' : 'text',
+            ...(useTemplate
               ? { template }
-              : { text: { body: String(message) } }),
+              : { text: { body: String(messageText || '') } }),
           }
-        : { to, body: String(message || '') }
+        : { to, body: String(messageText || '') }
 
       try {
         const resp = await $fetch(waConfig.provider === 'meta' ? metaUrl : whapiUrl, {
@@ -1133,11 +1134,11 @@ export const sendLeadWhatsApp = async (event) => {
           organisationId: orgId,
           leadId: lead.id,
           to,
-          type: waConfig.provider === 'meta' && hasTemplate ? 'template' : 'text',
-          templateName: waConfig.provider === 'meta' && hasTemplate ? (template?.name || template?.namespace || null) : null,
+          type: useTemplate ? 'template' : 'text',
+          templateName: useTemplate ? (template?.name || template?.namespace || null) : null,
           status: 'sent',
           providerMessageId,
-          content: waConfig.provider === 'meta' && hasTemplate ? null : String(message || ''),
+          content: useTemplate ? null : String(messageText || ''),
         })
         sent += 1
       } catch (e) {
@@ -1146,8 +1147,8 @@ export const sendLeadWhatsApp = async (event) => {
           organisationId: orgId,
           leadId: lead.id,
           to,
-          type: hasTemplate ? 'template' : 'text',
-          templateName: hasTemplate ? (template?.name || template?.namespace || null) : null,
+          type: useTemplate ? 'template' : 'text',
+          templateName: useTemplate ? (template?.name || template?.namespace || null) : null,
           status: 'failed',
           error: e?.data?.error?.message || e?.message || 'Failed to send',
         })

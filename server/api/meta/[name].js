@@ -1,4 +1,4 @@
-import { authStart, authCallback, listLeads, fetchLeadsNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck, stream, getWhatsAppConfig, saveWhatsAppConfig, whatsappEmbeddedComplete, fetchMetaStructureAndBudgets, fetchDailyMetaInsights } from "../../controllers/meta";
+import { authStart, authCallback, listLeads, fetchLeadsNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck, stream, getWhatsAppConfig, saveWhatsAppConfig, whatsappEmbeddedComplete, fetchWhatsAppTemplates, fetchMetaStructureAndBudgets, fetchDailyMetaInsights, listBusinessPortfolios, connectBusinessPages } from "../../controllers/meta";
 
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, 'name')
@@ -24,6 +24,8 @@ export default defineEventHandler(async (event) => {
       return await saveWhatsAppConfig(event)
     case 'whatsappEmbedded':
       return await whatsappEmbeddedComplete(event)
+    case 'whatsappTemplates':
+      return await fetchWhatsAppTemplates(event)
     case 'stream':
       return await stream(event)
     case 'webhook':
@@ -32,6 +34,10 @@ export default defineEventHandler(async (event) => {
       return await fetchMetaStructureAndBudgets(event)
     case 'syncInsights':
       return await fetchDailyMetaInsights(event)
+    case 'businesses':
+      return await listBusinessPortfolios(event)
+    case 'connectPages':
+      return await connectBusinessPages(event)
     default:
       return { code: 0, error: 'Not found' }
   }
