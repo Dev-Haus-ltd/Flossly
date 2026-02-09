@@ -1,5 +1,5 @@
 import { Op } from 'sequelize'
-import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, MetaPage, User, UserOrganisation } from '../models'
+import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, MetaPage, User, UserOrganisation, CrmWhatsAppMessageLog } from '../models'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults.js'
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
 import { success, error } from '../utils/response'
@@ -656,6 +656,27 @@ export const listLeadNotes = async (event) => {
   }
 }
 
+export const listLeadWhatsAppLogs = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    const body = await readBody(event)
+    const { leadId, limit = 100 } = typeof body === 'string' ? JSON.parse(body) : body
+    if (!orgId) return error(401, 'Unauthenticated')
+    if (!leadId) return error(400, 'leadId required')
+    const rows = await CrmWhatsAppMessageLog.findAll({
+      where: {
+        organisationId: Number(orgId),
+        leadId: Number(leadId),
+      },
+      order: [['createdAt', 'DESC']],
+      limit: Math.min(Math.max(Number(limit) || 100, 1), 500),
+    })
+    return success(rows)
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
 export const addLeadNote = async (event) => {
   try {
     const { orgId } = event.context.user || {}
@@ -1116,6 +1137,7 @@ export const sendLeadWhatsApp = async (event) => {
           templateName: waConfig.provider === 'meta' && hasTemplate ? (template?.name || template?.namespace || null) : null,
           status: 'sent',
           providerMessageId,
+          content: waConfig.provider === 'meta' && hasTemplate ? null : String(message || ''),
         })
         sent += 1
       } catch (e) {

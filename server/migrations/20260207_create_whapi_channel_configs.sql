@@ -1,7 +1,7 @@
-CREATE TABLE IF NOT EXISTS "WhapiChannelConfigs" (
+CREATE TABLE IF NOT EXISTS dev."WhapiChannelConfigs" (
   "id" SERIAL PRIMARY KEY,
-  "organisationId" INTEGER NOT NULL REFERENCES "Organisations" ("id") ON DELETE CASCADE,
-  "userId" INTEGER NOT NULL REFERENCES "Users" ("id") ON DELETE CASCADE,
+  "organisationId" INTEGER NOT NULL REFERENCES dev."Organisations" ("id") ON DELETE CASCADE,
+  "userId" INTEGER NOT NULL REFERENCES dev."Users" ("id") ON DELETE CASCADE,
   "channelId" VARCHAR(64) NOT NULL,
   "tokenEnc" TEXT NOT NULL,
   "status" VARCHAR(32) NOT NULL DEFAULT 'Active',
@@ -15,5 +15,8 @@ CREATE TABLE IF NOT EXISTS "WhapiChannelConfigs" (
   "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS "idx_whapi_channel_org" ON "WhapiChannelConfigs" ("organisationId");
-CREATE UNIQUE INDEX IF NOT EXISTS "idx_whapi_channel_id" ON "WhapiChannelConfigs" ("channelId");
+CREATE INDEX IF NOT EXISTS "idx_whapi_channel_org"
+  ON dev."WhapiChannelConfigs" ("organisationId");
+
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_whapi_channel_id"
+  ON dev."WhapiChannelConfigs" ("channelId");

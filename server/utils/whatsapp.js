@@ -61,6 +61,7 @@ export const logWhatsAppMessage = async ({
   templateName = null,
   status = "sent",
   providerMessageId = null,
+  content = null,
   error = null,
 }) => {
   try {
@@ -74,6 +75,7 @@ export const logWhatsAppMessage = async ({
       templateName,
       status,
       providerMessageId,
+      content: content != null ? String(content) : null,
       error,
     });
   } catch {

@@ -51,6 +51,7 @@ export const useCrmStore = defineStore("crmStore", {
     getLeadNotes(leadId) { return this._wrap(() => crmService.getLeadNotes(leadId)); },
     addLeadNote(payload) { return this._wrap(() => crmService.addLeadNote(payload)); },
     deleteLeadNote(id) { return this._wrap(() => crmService.deleteLeadNote(id)); },
+    getLeadWhatsAppLogs(leadId, limit = 100) { return this._wrap(() => crmService.getLeadWhatsAppLogs(leadId, limit)); },
 
     // Treatment (used in details dialog)
     getLeadTreatment(leadId) { return this._wrap(() => crmService.getLeadTreatment(leadId)); },

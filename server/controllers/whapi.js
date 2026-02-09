@@ -1,6 +1,6 @@
 import { Op } from "sequelize";
 import { CrmLead, WhapiChannelConfig } from "../models";
-import { normalizeWhatsAppNumber } from "../utils/whatsapp";
+import { normalizeWhatsAppNumber, logWhatsAppMessage } from "../utils/whatsapp";
 import { success, error } from "../utils/response";
 import { encrypt, decrypt } from "../utils/crypto";
 import { getWhapiEnvConfig, getWhapiPartnerConfig } from "../utils/whatsappProvider";
@@ -62,6 +62,22 @@ const collectMessages = (body) => {
     });
   }
   return out.filter(Boolean);
+};
+
+const getMessageContent = (msg) => {
+  if (!msg || typeof msg !== "object") return "";
+  const direct =
+    msg?.text ||
+    msg?.body ||
+    msg?.message ||
+    msg?.caption ||
+    msg?.data?.text ||
+    "";
+  if (typeof direct === "string") return direct;
+  if (typeof msg?.text?.body === "string") return msg.text.body;
+  if (typeof msg?.message?.body === "string") return msg.message.body;
+  if (typeof msg?.content === "string") return msg.content;
+  return "";
 };
 
 const resolveWebhookUrl = () => {
@@ -290,10 +306,21 @@ export const webhook = async (event) => {
       if (!fromDigits) continue;
       const lead = await findLeadByPhone(fromDigits, orgId);
       if (!lead) continue;
+      const content = getMessageContent(msg);
       await updateLeadWhatsAppMeta(lead, {
         lastInboundAt: new Date(extractTimestamp(msg?.timestamp || msg?.time || msg?.sent)).toISOString(),
         lastInboundFrom: fromDigits,
         lastMessageAt: new Date().toISOString(),
+      });
+      await logWhatsAppMessage({
+        organisationId: lead.organisationId,
+        leadId: lead.id,
+        to: fromDigits,
+        direction: "inbound",
+        type: "text",
+        status: "received",
+        providerMessageId: msg?.id || msg?.message_id || msg?.messageId || null,
+        content,
       });
     }
 

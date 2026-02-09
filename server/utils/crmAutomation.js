@@ -187,6 +187,7 @@ export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload =
       templateName: waConfig.provider === "meta" ? (templatePayload?.name || null) : null,
       status: "sent",
       providerMessageId,
+      content: waConfig.provider === "meta" && templatePayload ? null : String(message || ""),
     });
   } catch (e) {
     await logWhatsAppMessage({

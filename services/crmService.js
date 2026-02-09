@@ -204,6 +204,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  getLeadWhatsAppLogs(leadId, limit = 100) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/whatsappLogs", { leadId, limit })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   // CRM options
   listOptions(category) {
     return new Promise((resolve, reject) => {
