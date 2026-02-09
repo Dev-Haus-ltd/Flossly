@@ -8,7 +8,9 @@ import DB from "../utils/db";
 import { fn, col, Op } from "sequelize";
 import formidable from "formidable";
 import path from "path";
-import fs from "fs";
+import os from "os";
+import { sendS3Object } from "../utils/s3";
+import { uploadTempFile, deleteLink } from "../utils/storage";
 
 export const createFolder = async (event) => {
   const body = await readBody(event);
@@ -98,6 +100,15 @@ export const deleteFolder = async (event) => {
     await collectNestedFolderIds([id]);
 
     // Delete all documents in all collected folders (deepest first doesn't matter for docs)
+    const documentsToDelete = await UserDocument.findAll({
+      where: { folderId: allFolderIds },
+      attributes: ["link"],
+      transaction,
+    });
+    for (const doc of documentsToDelete) {
+      await deleteLink(doc?.link);
+    }
+
     await UserDocument.destroy({
       where: { folderId: allFolderIds },
       transaction,
@@ -349,7 +360,7 @@ export const addDocument = async (event) => {
   try {
     const form = formidable({
       multiples: true,
-      uploadDir: path.join(process.cwd(), "public/documents"),
+      uploadDir: os.tmpdir(),
       keepExtensions: true,
     });
 
@@ -364,7 +375,12 @@ export const addDocument = async (event) => {
     const createdDocuments = [];
     for (const file of uploadedFiles) {
       const type = getFileType(file.originalFilename);
-      const filePath = `documents/${path.basename(file.filepath)}`;
+      const filePath = await uploadTempFile({
+        filepath: file.filepath,
+        filename: path.basename(file.filepath),
+        contentType: file.mimetype || file.type,
+        baseDir: "documents",
+      });
       const document = await UserDocument.create({
         userId: loggedUser.userId,
         organisationId: loggedUser.orgId,
@@ -387,7 +403,7 @@ export const addSystemDocument = async (event) => {
   try {
     const form = formidable({
       multiples: true,
-      uploadDir: path.join(process.cwd(), "public/systemDocs"),
+      uploadDir: os.tmpdir(),
       keepExtensions: true,
     });
 
@@ -402,7 +418,12 @@ export const addSystemDocument = async (event) => {
     const createdDocuments = [];
     for (const file of uploadedFiles) {
       const type = getFileType(file.originalFilename);
-      const filePath = `/systemDocs/${path.basename(file.filepath)}`;
+      const filePath = await uploadTempFile({
+        filepath: file.filepath,
+        filename: path.basename(file.filepath),
+        contentType: file.mimetype || file.type,
+        baseDir: "systemDocs",
+      });
       const document = await SystemDocument.create({
         name: file.originalFilename,
         type,
@@ -431,6 +452,7 @@ export const deleteDocument = async (event) => {
   try {
     const doc = await UserDocument.findByPk(id);
     if (!doc) throw createError({ message: "Document not found" });
+    await deleteLink(doc.link);
     await doc.destroy();
     return success("Document deleted successfully");
   } catch (err) {
@@ -457,36 +479,19 @@ export const updateDocument = async (event) => {
     }
     
 
-    const oldFullPath = path.join(process.cwd(), "public", userDoc.link);
     try {
-      if (fs.existsSync(oldFullPath)) {
-        fs.unlinkSync(oldFullPath);
-      }
-    } catch (e) {
-      // ignore unlink errors
-    }
+      await deleteLink(userDoc.link);
+    } catch (_) {}
 
-
-    const documentsDir = path.join(process.cwd(), "public", "documents");
-    if (!fs.existsSync(documentsDir)) {
-      fs.mkdirSync(documentsDir, { recursive: true });
-    }
-    const newBaseName = path.basename(newFile.filepath);
-    const newRelPath = `documents/${newBaseName}`;
-    const newFullPath = path.join(process.cwd(), "public", newRelPath);
-
- 
-    try {
-      fs.renameSync(newFile.filepath, newFullPath);
-    } catch (e) {
-
-      const fileBuffer = fs.readFileSync(newFile.filepath);
-      fs.writeFileSync(newFullPath, fileBuffer);
-      try { fs.unlinkSync(newFile.filepath); } catch (_) {}
-    }
+    const newLink = await uploadTempFile({
+      filepath: newFile.filepath,
+      filename: path.basename(newFile.filepath),
+      contentType: newFile.mimetype || newFile.type,
+      baseDir: "documents",
+    });
 
     // Update document link and touch updatedAt
-    await userDoc.update({ link: newRelPath, updatedAt: new Date() });
+    await userDoc.update({ link: newLink, updatedAt: new Date() });
 
     return success(userDoc);
   } catch (err) {
@@ -532,20 +537,8 @@ export const viewDocument = async (event) => {
   try {
     const doc = await UserDocument.findByPk(id);
     if (!doc) throw createError({ message: "Document not found" });
-    const filePath = path.join(process.cwd(), "public", `${doc.link}`);
-    if (!fs.existsSync(filePath)) {
-      throw createError({ statusCode: 404, statusMessage: "File not found" });
-    }
     await doc.update({ lastViewedOn: new Date() });
-    const fileBuffer = fs.readFileSync(filePath);
-    event.node.res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    );
-    event.node.res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-    event.node.res.setHeader("Pragma", "no-cache");
-    event.node.res.setHeader("Expires", "0");
-    return fileBuffer;
+    return await sendS3Object(event, doc.link);
   } catch (err) {
     return error(500, err.message);
   }
@@ -557,20 +550,8 @@ export const viewSystemDocument = async (event) => {
   try {
     const doc = await SystemDocument.findByPk(id);
     if (!doc) throw createError({ message: "Document not found" });
-    const filePath = path.join(process.cwd(), "public", `${doc.link}`);
-    if (!fs.existsSync(filePath)) {
-      throw createError({ statusCode: 404, statusMessage: "File not found" });
-    }
     await doc.update({ lastViewedOn: new Date() });
-    const fileBuffer = fs.readFileSync(filePath);
-    event.node.res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    );
-    event.node.res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-    event.node.res.setHeader("Pragma", "no-cache");
-    event.node.res.setHeader("Expires", "0");
-    return fileBuffer;
+    return await sendS3Object(event, doc.link);
   } catch (err) {
     return error(500, err.message);
   }

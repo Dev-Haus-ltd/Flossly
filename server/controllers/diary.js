@@ -4,7 +4,8 @@ import { success, error } from '../utils/response'
 import { readBody, getQuery, createError } from 'h3'
 import formidable from 'formidable'
 import path from 'path'
-import fs from 'fs'
+import os from "os";
+import { uploadTempFile } from "../utils/storage";
 
 const pad2 = (n) => String(n).padStart(2, '0')
 const resolveTimeMode = () => {
@@ -1187,16 +1188,10 @@ export const savePatientSurvey = async (event) => {
 export const uploadSurveyPhotos = async (event) => {
   try {
     const { orgId } = event.context.user
-    const uploadDir = path.join(process.cwd(), 'public/uploads/survey')
-    
-    // Ensure directory exists
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true })
-    }
 
     const form = formidable({
       multiples: true,
-      uploadDir,
+      uploadDir: os.tmpdir(),
       keepExtensions: true,
       filename: (name, ext, part) => {
         const timestamp = Date.now()
@@ -1232,7 +1227,18 @@ export const uploadSurveyPhotos = async (event) => {
     })
 
     const uploadedFiles = Array.isArray(files.photos) ? files.photos : [files.photos]
-    const filePaths = uploadedFiles.map((file) => `/uploads/survey/${path.basename(file.filepath)}`)
+    const filePaths = []
+
+    for (const file of uploadedFiles) {
+      const baseName = path.basename(file.filepath)
+      const link = await uploadTempFile({
+        filepath: file.filepath,
+        filename: baseName,
+        contentType: file.mimetype || file.type,
+        baseDir: "uploads/survey",
+      })
+      filePaths.push(link)
+    }
 
     const existingPhotos = survey?.uploadedPhotos || []
     const updatedPhotos = [...existingPhotos, ...filePaths]

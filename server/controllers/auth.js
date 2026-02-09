@@ -39,8 +39,7 @@ import { getCurrentEnvironment } from "../utils/environment";
 import requestIp from "request-ip";
 import { HrDocument } from "../models/hrDocuments";
 import path from "path";
-import fs from "fs";
-import fsPromises from "fs/promises";
+import { uploadBufferFile, deleteLink } from "../utils/storage";
 import { createError, setCookie } from "h3";
 import { success, error } from "../utils/response";
 import {
@@ -611,15 +610,16 @@ export const updateProfile = async (event) => {
     }
 
     if (fileItem) {
-      const uploadDir = path.resolve('public/uploads/avatars');
-      await fsPromises.mkdir(uploadDir, { recursive: true });
-      const originalName = fileItem.filename || 'avatar';
-      const fileExt = path.extname(originalName) || '';
+      const originalName = fileItem.filename || "avatar";
+      const fileExt = path.extname(originalName) || "";
       const filename = `user-${id}-${Date.now()}${fileExt}`;
-      const filepath = path.join(uploadDir, filename);
-    
-      await fsPromises.writeFile(filepath, fileItem.data);
-      user.photo = `/uploads/avatars/${filename}`;
+      const link = await uploadBufferFile({
+        data: fileItem.data,
+        filename,
+        contentType: fileItem.type || fileItem.mimetype,
+        baseDir: "uploads/avatars",
+      });
+      user.photo = link;
     }
 
     await user.save();
@@ -1732,14 +1732,13 @@ export const addUserHrDoc = async (event) => {
   try {
     let documentPath = null;
     if (documentFile) {
-      const uploadDir = path.join(process.cwd(), "public", "hr-documents");
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
       const fileName = `${Date.now()}-${documentFile.filename}`;
-      const filePath = path.join(uploadDir, fileName);
-      fs.writeFileSync(filePath, documentFile.data);
-      documentPath = `/hr-documents/${fileName}`;
+      documentPath = await uploadBufferFile({
+        data: documentFile.data,
+        filename: fileName,
+        contentType: documentFile.type || documentFile.mimetype,
+        baseDir: "hr-documents",
+      });
     }
     const userDoc = await UserHrDocument.findOne({
       where: { userId, type, name },
@@ -1784,10 +1783,7 @@ export const removeUserDoc = async (event) => {
   try {
     const userDoc = await UserHrDocument.findByPk(id);
     if (!userDoc) throw createError({ message: "Document not found for user" });
-    const prevLink = path.join(process.cwd(), "public", userDoc.link);
-    if (prevLink && fs.existsSync(prevLink)) {
-      fs.unlinkSync(prevLink);
-    }
+    await deleteLink(userDoc.link);
     userDoc.link = "";
     userDoc.uploadedDate = null;
     userDoc.status = "Pending";
