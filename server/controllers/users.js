@@ -11,8 +11,7 @@ import {
 } from "../models";
 import { Op } from "sequelize";
 import DB from "../utils/db";
-import fs from "fs";
-import path from "path";
+import { uploadBufferFile } from "../utils/storage";
 export const usersList = async (event) => {
   const loggedUser = event.context.user;
   let currentOrg = loggedUser.orgId;
@@ -374,15 +373,13 @@ export const applyLeave = async (event) => {
     // Save file if uploaded
     let documentPath = null;
     if (documentFile) {
-      const uploadDir = path.join(process.cwd(), "public", "leave-documents");
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
-
       const fileName = `${Date.now()}-${documentFile.filename}`;
-      const filePath = path.join(uploadDir, fileName);
-      fs.writeFileSync(filePath, documentFile.data);
-      documentPath = `/leave-documents/${fileName}`;
+      documentPath = await uploadBufferFile({
+        data: documentFile.data,
+        filename: fileName,
+        contentType: documentFile.type || documentFile.mimetype,
+        baseDir: "leave-documents",
+      });
     }
 
     let entitlement = await UserLeaveEntitlement.findOne({

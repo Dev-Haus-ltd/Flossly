@@ -1,6 +1,8 @@
 import { Op, fn, col } from "sequelize";
 import formidable from "formidable";
+import os from "os";
 import fs from "fs";
+import { uploadTempFile, deleteLink } from "../utils/storage";
 import path from "path";
 import { parse } from "csv-parse";
 import { readBody, createError, getQuery } from "h3";
@@ -1197,7 +1199,7 @@ export const addAttachments = async (event) => {
   try {
     const form = formidable({
       multiples: true,
-      uploadDir: path.join(process.cwd(), "public/uploads"),
+      uploadDir: os.tmpdir(),
       keepExtensions: true,
       filename: (name, ext, part) => {
         const timestamp = Date.now();
@@ -1219,8 +1221,14 @@ export const addAttachments = async (event) => {
       ? files.files
       : [files.files];
     await Promise.all(
-      uploadedFiles.map((file) => {
-        const link = `/uploads/${path.basename(file.filepath)}`;
+      uploadedFiles.map(async (file) => {
+        const link = await uploadTempFile({
+          filepath: file.filepath,
+          filename: path.basename(file.filepath),
+          contentType: file.mimetype || file.type,
+          baseDir: "uploads",
+        });
+
         return UserTaskAttachment.create({
           userTaskId,
           title: file.originalFilename,
@@ -1281,13 +1289,7 @@ export const deleteAttachment = async (event) => {
       throw createError({ message: "Attachment not found" });
     }
 
-    const filePath = path.join(process.cwd(), "public", attachment.link);
-    if (fs.existsSync(filePath)) {
-      try {
-        fs.unlinkSync(filePath);
-      } catch (unlinkErr) {
-      }
-    }
+    await deleteLink(attachment.link);
 
     await attachment.destroy();
     return success("File removed from task");
