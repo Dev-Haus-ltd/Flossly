@@ -359,9 +359,9 @@ import {
   extractExtension,
   formatFileSize as formatFileSizeUtil,
   getFileIcon as getFileIconUtil,
-  normalizeHeaderKey,
+  cleanQuotedValue,
   normalizeLeadColumnHeader,
-  LEAD_COLUMN_ALIASES,
+  normalizePhoneValue,
   parseCSV as parseCSVUtil,
   validateFileBasics,
 } from "~/lib/fileImportUtils";
@@ -482,7 +482,35 @@ const processFile = async (file) => {
           return;
         }
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+        const sheetRows = XLSX.utils.sheet_to_json(sheet, {
+          header: 1,
+          defval: "",
+          raw: false,
+        });
+
+        if (!sheetRows.length) {
+          excelError.value = "No rows found in the file.";
+          isProcessing.value = false;
+          return;
+        }
+
+        const headers = (sheetRows[0] || []).map((h) =>
+          String(h || "").trim()
+        );
+        if (!headers.some((h) => h)) {
+          excelError.value = "Invalid file - header row is empty.";
+          isProcessing.value = false;
+          return;
+        }
+
+        json = sheetRows.slice(1).map((row) => {
+          const obj = {};
+          headers.forEach((header, index) => {
+            if (!header) return;
+            obj[header] = row?.[index] ?? "";
+          });
+          return obj;
+        });
       }
 
       if (!json.length) {
@@ -532,16 +560,27 @@ const normalizeRow = (row) => {
     normalized[normalizeLeadColumnHeader(key)] = value ?? "";
   });
 
-  const cleanQuoted = (val) =>
-    typeof val === "string"
-      ? val.trim().replace(/^['"]+|['"]+$/g, "")
-      : val || "";
+  const cleanQuoted = (val) => cleanQuotedValue(val);
 
   const leadSourceName = normalized["leadsource"] || "";
   const treatmentName = normalized["treatment"] || "";
   const assignedUser = normalized["assigned"] || "";
   const cleanedEmail = cleanQuoted(normalized["email"]);
-  const cleanedTelephone = cleanQuoted(normalized["telephone"]);
+  let cleanedTelephone = normalizePhoneValue(normalized["telephone"]);
+  if (!cleanedTelephone) {
+    const fallbackKey = Object.keys(row || {}).find((key) => {
+      const normalizedKey = normalizeLeadColumnHeader(key);
+      return (
+        normalizedKey === "telephone" ||
+        ["phone", "mobile", "telephone", "tel", "whatsapp", "cell"].some((k) =>
+          normalizedKey.includes(k)
+        )
+      );
+    });
+    if (fallbackKey) {
+      cleanedTelephone = normalizePhoneValue(row[fallbackKey]);
+    }
+  }
 
   return {
     name: normalized["name"] || "",
@@ -613,10 +652,7 @@ const validateLead = (index, existingLead) => {
       ? lead.email.trim().replace(/^['"]+|['"]+$/g, "")
       : "";
     lead.email = cleanedEmail;
-  const cleanedTelephone =
-    typeof lead.telephone === "string"
-      ? lead.telephone.trim().replace(/^['"]+|['"]+$/g, "")
-      : "";
+  const cleanedTelephone = normalizePhoneValue(lead.telephone);
   lead.telephone = cleanedTelephone;
 
   if (!lead.name?.trim()) {

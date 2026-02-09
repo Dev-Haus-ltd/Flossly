@@ -94,10 +94,16 @@ const showInfoBanner = ref(true)
 
 const isPrivileged = computed(() => [1, 8].includes(Number(user.value?.roleId)))
 
+const isWhatsAppGroup = (group) => {
+  const key = String(group?.key || '').toLowerCase()
+  const title = String(group?.title || '').toLowerCase()
+  return key.includes('whatsapp') || title.includes('whatsapp')
+}
+
 const loadGroups = async () => {
   const res = await crmStore.listAutomationGroups()
   if (res?.code === 0 && Array.isArray(res.data)) {
-    automationGroups.value = res.data
+    automationGroups.value = res.data.filter((group) => !isWhatsAppGroup(group))
   }
 }
 

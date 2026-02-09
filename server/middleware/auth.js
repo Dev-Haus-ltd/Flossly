@@ -50,6 +50,7 @@ const isPublicPath = (path) => {
     "/api/meta/callback",
     "/api/meta/webhook",
     "/api/whatsapp/webhook",
+    "/api/whapi/webhook",
     "/api/chatbot/createAppointment",
     "/api/chatbot/createLead",
   ];

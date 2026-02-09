@@ -5,7 +5,7 @@ import { transporter } from "./nodeMailer.js";
 import { buildLeadContext, renderTokens } from "./tokenRenderer.js";
 import { CrmAutomationTemplate } from "../models/index.js";
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from "./whatsapp.js";
-import { resolveWhatsAppConfig } from "./whatsappConfig.js";
+import { resolveWhatsAppProviderConfig } from "./whatsappProvider.js";
 
 const crmTriggersByKey = new Map(
   crmAutomationDefaults
@@ -136,46 +136,66 @@ export const sendCrmAutomationEmail = async (lead, subject, html) => {
 export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload = null) => {
   const to = normalizeWhatsAppNumber(lead?.telephone);
   if (!to) throw new Error("Missing or invalid phone number");
-  const waConfig = await resolveWhatsAppConfig(lead.organisationId);
-  if (!waConfig?.phoneNumberId || !waConfig?.accessToken) {
+  const waConfig = await resolveWhatsAppProviderConfig(lead.organisationId);
+  if (!waConfig?.provider) throw new Error("WhatsApp provider not configured");
+  if (waConfig.provider === "meta" && (!waConfig?.phoneNumberId || !waConfig?.accessToken)) {
     throw new Error("WhatsApp is not configured");
   }
-  if (!templatePayload) {
-    throw new Error("WhatsApp template payload is required");
+  if (waConfig.provider === "whapi" && !waConfig?.token) {
+    throw new Error("Whapi token is missing");
   }
   const limitStatus = await isWhatsAppLimitExceeded(lead.organisationId);
   if (limitStatus.exceeded) {
     throw new Error(`WhatsApp monthly limit reached (${limitStatus.count}/${limitStatus.limit})`);
   }
-  const url = `https://graph.facebook.com/v24.0/${waConfig.phoneNumberId}/messages`;
+  const metaUrl = waConfig.provider === "meta"
+    ? `https://graph.facebook.com/v24.0/${waConfig.phoneNumberId}/messages`
+    : null;
+  const whapiUrl = waConfig.provider === "whapi"
+    ? `${String(waConfig.baseUrl || "").replace(/\/+$/, "")}/messages/text`
+    : null;
   try {
-    const body = { messaging_product: "whatsapp", to, type: "template", template: templatePayload };
-    const resp = await $fetch(url, {
+    const body =
+      waConfig.provider === "meta"
+        ? (
+          templatePayload
+            ? { messaging_product: "whatsapp", to, type: "template", template: templatePayload }
+            : { messaging_product: "whatsapp", to, type: "text", text: { body: message || "" } }
+        )
+        : { to, body: String(message || "") };
+    const resp = await $fetch(waConfig.provider === "meta" ? metaUrl : whapiUrl, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${waConfig.accessToken}`,
-        "Content-Type": "application/json",
-      },
+      headers: waConfig.provider === "meta"
+        ? {
+            Authorization: `Bearer ${waConfig.accessToken}`,
+            "Content-Type": "application/json",
+          }
+        : {
+            Authorization: `Bearer ${waConfig.token}`,
+            "Content-Type": "application/json",
+          },
       body,
     });
-    const providerMessageId = resp?.messages?.[0]?.id || null;
+    const providerMessageId =
+      resp?.messages?.[0]?.id || resp?.message?.id || resp?.id || null;
     await markWhatsAppOutbound(lead, to);
     await logWhatsAppMessage({
       organisationId: lead.organisationId,
       leadId: lead.id,
       to,
-      type: templatePayload ? "template" : "text",
-      templateName: templatePayload?.name || null,
+      type: waConfig.provider === "meta" && templatePayload ? "template" : "text",
+      templateName: waConfig.provider === "meta" ? (templatePayload?.name || null) : null,
       status: "sent",
       providerMessageId,
+      content: waConfig.provider === "meta" && templatePayload ? null : String(message || ""),
     });
   } catch (e) {
     await logWhatsAppMessage({
       organisationId: lead.organisationId,
       leadId: lead.id,
       to,
-      type: templatePayload ? "template" : "text",
-      templateName: templatePayload?.name || null,
+      type: waConfig.provider === "meta" && templatePayload ? "template" : "text",
+      templateName: waConfig.provider === "meta" ? (templatePayload?.name || null) : null,
       status: "failed",
       error: e?.data?.error?.message || e?.message || "Failed to send",
     });
