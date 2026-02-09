@@ -2,7 +2,7 @@
   <v-container fluid class="pa-4 bg-white">
     <!-- Dashboard Content -->
     <div>
-      <CommonFeatureCard
+      <CommonEventCard
         subheading="Watch the Flossly Demo Video"
         @close="showCard = false"
         v-if="showCard"
