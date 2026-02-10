@@ -179,7 +179,7 @@
                   </v-col>
 
                   <!-- Automation -->
-                  <v-col cols="12" md="4">
+                  <!-- <v-col cols="12" md="4">
                     <div class="d-flex align-center">
                       <img
                         src="@/assets/icons/crm/settings.svg"
@@ -231,7 +231,7 @@
                       </template>
                       <span v-else class="automation-placeholder">None</span>
                     </div>
-                  </v-col>
+                  </v-col> -->
 
                   <!-- Preferred Contact Method -->
                   <v-col cols="12" md="4">
