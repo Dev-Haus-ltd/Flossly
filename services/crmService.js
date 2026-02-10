@@ -236,6 +236,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  saveAutomationBatch(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/automationSaveBatch', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   listAutomationGroups() {
     return new Promise((resolve, reject) => {
       Get('/lead/automationGroups')
