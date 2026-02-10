@@ -89,7 +89,7 @@
           -->
 
           <v-menu
-            v-if="whatsappProvider.provider !== 'whapi' && isConnected"
+            v-if="isConnected"
             v-model="metaMenu"
             location="bottom end"
           >
@@ -122,7 +122,7 @@
           </v-menu>
 
           <v-btn
-            v-else-if="whatsappProvider.provider !== 'whapi'"
+            v-else
             color="primary"
             variant="flat"
             rounded="lg"
@@ -136,7 +136,6 @@
           </v-btn>
 
           <v-btn
-            v-if="whatsappProvider.provider !== 'whapi'"
             :color="isConnected ? 'success' : undefined"
             :variant="isConnected ? 'tonal' : 'text'"
             class="add-task-btn"
