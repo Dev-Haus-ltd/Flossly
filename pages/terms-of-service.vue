@@ -1,10 +1,10 @@
 <template>
-  <PrivacyPolicy />
+  <TermsOfService />
 </template>
 
 <script setup>
 useHead({
-  title: "Privacy Policy | Flossly",
+  title: "Terms of Service | Flossly",
   meta: [{ name: "robots", content: "noindex" }],
 });
 </script>
