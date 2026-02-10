@@ -687,13 +687,22 @@ const buildPayload = (row) => {
 }
 
 const toggleAutomationGroup = async (card, val) => {
-  const groupRows = rows.filter(r => (card.templateKeys || []).includes(r.key))
-  for (const row of groupRows) {
-    row.enabled = !!val
-    try {
-      await crmStore.saveAutomation(buildPayload(row))
-    } catch (e) {}
-  }
+  const keys = card?.templateKeys || []
+  const groupRows = keys.length
+    ? rows.filter(r => keys.includes(r.key))
+    : rows.filter(r => r.groupKey === card?.key)
+  const updates = []
+  groupRows.forEach((row) => {
+    const nextEnabled = !!val
+    if (!!row.enabled !== nextEnabled) {
+      row.enabled = nextEnabled
+      updates.push(buildPayload(row))
+    }
+  })
+  if (!updates.length) return
+  try {
+    await crmStore.saveAutomationBatch({ items: updates })
+  } catch (e) {}
 }
 
 const isWhatsAppItem = (item) => {
