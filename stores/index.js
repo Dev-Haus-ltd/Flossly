@@ -22,6 +22,7 @@ const LICENSE_FEATURES = {
     "docs",
     "team",
     "crm",
+    "diary"
   ]),
   [LICENSE_TYPES.DRIFT]: new Set(["dashboard", "tasks", "docs"]),
   [LICENSE_TYPES.GLIDE]: new Set(["dashboard", "tasks", "docs", "team", "crm"]),
@@ -212,10 +213,17 @@ export const useMainStore = defineStore("mainStore", {
               featureKey: "crm",
             },
             {
-              title: "Analytics",
+              title: "Meta Analytics",
               value: "crmAnalytics",
               imgPath: crmIcon,
               to: "/crm/analytics",
+              featureKey: "crm",
+            },
+            {
+              title: "Google Analytics",
+              value: "crm Google Analytics",
+              imgPath: crmIcon,
+              to: "/crm/google_analytics",
               featureKey: "crm",
             },
           ],

@@ -65,6 +65,20 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  listMetaBusinesses() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/businesses")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  connectMetaPages(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/meta/connectPages", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   completeWhatsAppEmbedded(payload) {
     return new Promise((resolve, reject) => {
       Post("/meta/whatsappEmbedded", payload)
@@ -82,6 +96,34 @@ export default {
   saveWhatsAppConfig(payload) {
     return new Promise((resolve, reject) => {
       Post("/meta/whatsappConfig", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  startWhapiConnect() {
+    return new Promise((resolve, reject) => {
+      Post("/whapi/connect", {})
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getWhapiQr() {
+    return new Promise((resolve, reject) => {
+      Get("/whapi/qr")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getWhapiStatus() {
+    return new Promise((resolve, reject) => {
+      Get("/whapi/status")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getWhatsAppTemplates() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/whatsappTemplates")
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -179,6 +221,13 @@ export default {
   deleteLeadNote(id) {
     return new Promise((resolve, reject) => {
       Post("/lead/notesDelete", { id })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getLeadWhatsAppLogs(leadId, limit = 100) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/whatsappLogs", { leadId, limit })
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });

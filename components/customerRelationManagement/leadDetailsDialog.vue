@@ -46,6 +46,11 @@
               Communication Tracking / Log
             </v-tab>
 
+            <v-tab value="whatsapp" class="tab-text">
+              <v-icon size="18" class="mr-2">mdi-whatsapp</v-icon>
+              WhatsApp Timeline
+            </v-tab>
+
             <v-tab value="automation" class="tab-text">
               <img
                 src="@/assets/icons/crm/settings.svg"
@@ -418,6 +423,12 @@
               </div>
             </v-tabs-window-item>
 
+            <v-tabs-window-item value="whatsapp">
+              <div class="pa-6">
+                <CustomerRelationManagementChatTimeline :lead-id="selectedLead?.id" />
+              </div>
+            </v-tabs-window-item>
+
             <v-tabs-window-item value="automation">
               <div class="pa-6">
                 <CustomerRelationManagementAutomation
@@ -446,6 +457,7 @@
 import { formatDateOnly } from "@/lib/dateFormatter";
 import { getLeadDisplayName } from "@/lib/normalizers/lead";
 import { crmAutomationDefaults } from '@shared/defaults/crmAutomationDefaults'
+import CustomerRelationManagementChatTimeline from "@/components/customerRelationManagement/chatTimeline.vue";
 
 const props = defineProps({
   modelValue: Boolean,
@@ -510,7 +522,7 @@ const extraAnswers = computed(() => {
       return {
         key: String(key),
         label: humanizeFieldLabel(key),
-        value: value || '—',
+        value: value || '--',
       }
     })
     .filter((item) => item.key && !skip.has(item.key))
@@ -606,12 +618,9 @@ const onTreatmentSave = async (updatedTreatment) => {
   } catch (e) {}
 };
 const onPreferencesUpdated = (newPreferences) => {
-  console.log("Updated communication preferences:", newPreferences);
   pendingPrefs.value = newPreferences
 };
-const onCommunicationSave = (updatedNotes) => {
-  console.log("Updated Communication Logs:", updatedNotes);
-};
+const onCommunicationSave = () => {};
 
 const savingComment = ref(false)
 const saveComment = async () => {

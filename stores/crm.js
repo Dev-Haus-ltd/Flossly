@@ -24,9 +24,15 @@ export const useCrmStore = defineStore("crmStore", {
     subscribePages() { return this._wrap(() => crmService.subscribePages()); },
     disconnectMeta() { return this._wrap(() => crmService.disconnectMeta()); },
     metaHealth() { return this._wrap(() => crmService.metaHealth()); },
+    listMetaBusinesses() { return this._wrap(() => crmService.listMetaBusinesses()); },
+    connectMetaPages(payload) { return this._wrap(() => crmService.connectMetaPages(payload)); },
     completeWhatsAppEmbedded(payload) { return this._wrap(() => crmService.completeWhatsAppEmbedded(payload)); },
     getWhatsAppConfig() { return this._wrap(() => crmService.getWhatsAppConfig()); },
     saveWhatsAppConfig(payload) { return this._wrap(() => crmService.saveWhatsAppConfig(payload)); },
+    getWhatsAppTemplates() { return this._wrap(() => crmService.getWhatsAppTemplates()); },
+    startWhapiConnect() { return this._wrap(() => crmService.startWhapiConnect()); },
+    getWhapiQr() { return this._wrap(() => crmService.getWhapiQr()); },
+    getWhapiStatus() { return this._wrap(() => crmService.getWhapiStatus()); },
 
     // Leads
     listLeads(filters = {}) { return this._wrap(() => crmService.listLeads(filters)); },
@@ -48,6 +54,7 @@ export const useCrmStore = defineStore("crmStore", {
     getLeadNotes(leadId) { return this._wrap(() => crmService.getLeadNotes(leadId)); },
     addLeadNote(payload) { return this._wrap(() => crmService.addLeadNote(payload)); },
     deleteLeadNote(id) { return this._wrap(() => crmService.deleteLeadNote(id)); },
+    getLeadWhatsAppLogs(leadId, limit = 100) { return this._wrap(() => crmService.getLeadWhatsAppLogs(leadId, limit)); },
 
     // Treatment (used in details dialog)
     getLeadTreatment(leadId) { return this._wrap(() => crmService.getLeadTreatment(leadId)); },
