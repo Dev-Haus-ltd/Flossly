@@ -22,6 +22,7 @@ const LICENSE_FEATURES = {
     "docs",
     "team",
     "crm",
+    diary
   ]),
   [LICENSE_TYPES.DRIFT]: new Set(["dashboard", "tasks", "docs"]),
   [LICENSE_TYPES.GLIDE]: new Set(["dashboard", "tasks", "docs", "team", "crm"]),
