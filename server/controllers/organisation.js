@@ -30,6 +30,7 @@ import { readBody, createError } from "h3";
 import {
   sendTrialActivatedEmail,
   sendOrganisationReferralEmail,
+  sendOrganisationCreatedInternalNotification,
 } from "../utils/emailNotifications";
 import bcrypt from "bcrypt";
 import { Op } from "sequelize";
@@ -1152,6 +1153,23 @@ export const createOrganisationForUser = async (event) => {
     } catch (emailErr) {
       console.error("Trial email failed:", emailErr);
     }
+  }
+
+  try {
+    await sendOrganisationCreatedInternalNotification({
+      organisationName: org.name,
+      organisationId: org.id,
+      creatorName: user?.fullName,
+      creatorEmail: user?.email,
+      licenseType: "Trial",
+      trialEndsOn: trialEndDate,
+      origin: "add_practice",
+    });
+  } catch (notifyErr) {
+    console.error("Internal org-created notification failed", {
+      organisationId: org?.id,
+      error: notifyErr?.message || notifyErr,
+    });
   }
 
   return success({
