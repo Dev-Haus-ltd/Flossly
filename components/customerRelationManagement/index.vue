@@ -583,9 +583,14 @@ const clearMetaQuery = () => {
   router.replace({ query: nextQuery });
 };
 const handleMetaQuery = (metaConnected, metaError) => {
+  const pagesCount = Number(route.query.pages || 0);
   if (metaError) {
     metaErrorMessage.value =
       normalizeMetaMessage(metaError) || 'Meta connection failed. Please try again.';
+    metaErrorDialog.value = true;
+  } else if (metaConnected && pagesCount === 0) {
+    metaErrorMessage.value =
+      'Meta could not be connected. You need full access to the page you are trying to connect.';
     metaErrorDialog.value = true;
   } else if (metaConnected && mainStore?.setSnackbar) {
     mainStore.setSnackbar({ title: 'Meta connected successfully', type: 'success' });
