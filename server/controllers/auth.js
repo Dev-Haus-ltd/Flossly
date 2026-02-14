@@ -34,6 +34,7 @@ import {
   portalReadyTrainingInvite,
   accountCreationNotification,
   sendOtpForPasswordReset,
+  sendOrganisationCreatedInternalNotification,
 } from "../utils/emailNotifications";
 import { getCurrentEnvironment } from "../utils/environment";
 import requestIp from "request-ip";
@@ -339,6 +340,23 @@ export const signupRequest = async (event) => {
       console.error("Verification email failed to send", {
         to: email,
         error: emailErr?.message || emailErr,
+      });
+    }
+
+    try {
+      await sendOrganisationCreatedInternalNotification({
+        organisationName: org.name,
+        organisationId: org.id,
+        creatorName: trimmedFullName,
+        creatorEmail: email,
+        licenseType: "Trial",
+        trialEndsOn: trialEndDate,
+        origin: "signup",
+      });
+    } catch (notifyErr) {
+      console.error("Internal org-created notification failed", {
+        organisationId: org?.id,
+        error: notifyErr?.message || notifyErr,
       });
     }
 

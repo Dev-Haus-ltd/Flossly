@@ -93,7 +93,7 @@
                 />
                 <div class="agreement-text">
                   I agree to the 
-                  <a href="/terms-of-use" target="_blank">Terms and Conditions</a>
+                  <a href="/terms-of-service" target="_blank">Terms and Conditions</a>
                 </div>
               </div>
 

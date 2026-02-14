@@ -66,7 +66,20 @@ export const buildOnboardingInAppMessages = ({
   const diffDays = Math.floor((today - startDay) / (24 * 60 * 60 * 1000));
   if (!Number.isFinite(diffDays)) return [];
 
+  const isTrialPlan = String(ctx?.planName || "").toLowerCase() === "trial";
+  const trialDaysRemaining = Number(ctx?.trialDaysRemaining || 0);
+  const trialOnlyKeys = new Set([
+    "onboarding_inapp_day7_trial",
+    "onboarding_inapp_day13_trial",
+  ]);
+
   return ONBOARDING_INAPP_MESSAGES.filter((msg) => msg.offsetDays === diffDays)
+    .filter((msg) => {
+      if (!trialOnlyKeys.has(msg.key)) return true;
+      if (!isTrialPlan) return false;
+      if (!Number.isFinite(trialDaysRemaining) || trialDaysRemaining <= 0) return false;
+      return true;
+    })
     .filter((msg) => !seenKeys.has(msg.key))
     .map((msg) => ({
       ...msg,

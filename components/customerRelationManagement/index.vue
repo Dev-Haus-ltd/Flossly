@@ -814,18 +814,33 @@ const clearMetaQuery = () => {
   delete nextQuery.user;
   delete nextQuery.error;
   delete nextQuery.warning;
+  delete nextQuery.tokenOnly;
   router.replace({ query: nextQuery });
 };
 const handleMetaQuery = async (metaConnected, metaError) => {
+  const pagesCount = Number(route.query.pages || 0);
+  const tokenOnly =
+    route.query.tokenOnly === '1' ||
+    route.query.tokenOnly === 'true' ||
+    route.query.tokenOnly === 1;
   if (metaError) {
     metaErrorMessage.value =
       normalizeMetaMessage(metaError) || 'Meta connection failed. Please try again.';
     metaErrorDialog.value = true;
+  } else if (metaConnected && pagesCount === 0 && !tokenOnly) {
+    metaErrorMessage.value =
+      'Meta could not be connected. You need full access to the page you are trying to connect.';
+    metaErrorDialog.value = true;
+  } else if (metaConnected && tokenOnly && mainStore?.setSnackbar) {
+    mainStore.setSnackbar({
+      title: 'Meta connected. Select pages to finish setup.',
+      type: 'info',
+    });
   } else if (metaConnected && mainStore?.setSnackbar) {
     mainStore.setSnackbar({ title: 'Meta connected successfully', type: 'success' });
   }
   if (metaConnected || metaError) clearMetaQuery();
-  if (metaConnected) await loadBusinessPortfolios(true);
+  if (metaConnected && (pagesCount > 0 || tokenOnly)) await loadBusinessPortfolios(true);
 };
 
 const businessOptions = computed(() =>
@@ -934,6 +949,9 @@ const connectSelectedBusinessPages = async () => {
       businessDialog.value = false;
       selectedPageIds.value = [];
       await checkConnection();
+      try {
+        await crmStore.fetchLeadsNow();
+      } catch (e) {}
       await fetchLeads(activeFilters.value);
     } else {
       const msg = res?.error || res?.message || 'Failed to connect pages';

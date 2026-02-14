@@ -149,6 +149,7 @@ export const authCallback = async (event) => {
 
     // Enforce one active org per page to avoid lead routing ambiguity
     const pageIds = pages.map((p) => p?.id).filter(Boolean)
+    let conflictsById = new Set()
     if (pageIds.length) {
       const conflicts = await MetaPage.findAll({
         where: {
@@ -158,16 +159,28 @@ export const authCallback = async (event) => {
         },
       })
       if (conflicts.length) {
-        const names = conflicts.map((c) => c.pageName || c.pageId).join(', ')
-        setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
-        return sendRedirect(
-          event,
-          `/crm?error=${encodeURIComponent(
-            `Meta connection failed. The following page(s) are already connected to another organisation: ${names}`
-          )}`
-        )
+        conflictsById = new Set(conflicts.map((c) => String(c.pageId)))
       }
     }
+
+    const pagesToConnect = pages.filter(
+      (p) => p?.id && p?.access_token && !conflictsById.has(String(p.id))
+    )
+
+    if (!pagesToConnect.length) {
+      const conflictNames = pages
+        .filter((p) => p?.id && conflictsById.has(String(p.id)))
+        .map((p) => p.name || p.id)
+        .join(', ')
+      setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
+      return sendRedirect(
+        event,
+        `/crm?error=${encodeURIComponent(
+          `Meta connection failed. The following page(s) are already connected to another organisation: ${conflictNames}`
+        )}`
+      )
+    }
+
     // ✅ FIX: Store user token with Facebook user ID for tracking
     const encUser = encrypt(userToken)
     const expiresIn = Number(longResp?.expires_in || 0)
@@ -195,9 +208,7 @@ export const authCallback = async (event) => {
     }
 
     // Upsert pages
-    for (const p of pages) {
-      if (!p?.id || !p?.access_token) continue
-      
+    for (const p of pagesToConnect) {
       const existing = await MetaPage.findOne({ 
         where: { organisationId: orgId, pageId: p.id } 
       })
@@ -224,8 +235,7 @@ export const authCallback = async (event) => {
     }
 
     // Auto-subscribe pages to leadgen webhooks
-    for (const p of pages) {
-      if (!p?.id || !p?.access_token) continue
+    for (const p of pagesToConnect) {
       try {
         const subscribeUrl = `https://graph.facebook.com/${META_VERSION}/${p.id}/subscribed_apps`
         await $fetch(subscribeUrl, {
@@ -245,7 +255,7 @@ export const authCallback = async (event) => {
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
     
     // ✅ FIX: Better success redirect with details
-    return sendRedirect(event, `/crm?meta=connected&pages=${pages.length}&user=${encodeURIComponent(fbUserName)}`)
+    return sendRedirect(event, `/crm?meta=connected&pages=${pagesToConnect.length}&user=${encodeURIComponent(fbUserName)}`)
 
   } catch (e) {
     console.error('[META][AUTH] Callback error:', e)
