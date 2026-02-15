@@ -30,19 +30,6 @@
           </v-btn>
 
           <v-btn
-            color="secondary"
-            variant="flat"
-            rounded="lg"
-            class="add-task-btn automation-btn automation-btn--group"
-            @click="showBulkUploadDialog = true"
-          >
-            <template #prepend>
-              <v-icon size="18">mdi-upload</v-icon>
-            </template>
-            Bulk Upload
-          </v-btn>
-
-          <v-btn
             color="primary"
             variant="flat"
             rounded="lg"
@@ -81,10 +68,6 @@
         :groups="automationGroups"
         @success="handleAutomationSaved"
       />
-      <CustomerRelationManagementBulkAutomationUploadDialog
-        v-model="showBulkUploadDialog"
-        @onUpdate="refreshAll"
-      />
     </ClientOnly>
   </v-sheet>
 </template>
@@ -95,7 +78,6 @@ import { useMainStore } from '@/stores/index'
 import CustomerRelationManagementAutomation from '@/components/customerRelationManagement/automation.vue'
 import CustomerRelationManagementAddAutomationGroup from '@/components/customerRelationManagement/addAutomationGroup.vue'
 import CustomerRelationManagementAddAutomation from '@/components/customerRelationManagement/addAutomation.vue'
-import CustomerRelationManagementBulkAutomationUploadDialog from '@/components/customerRelationManagement/bulkAutomationUploadDialog.vue'
 import CommonFeatureCard from '@/components/Common/featureCard.vue'
 import automationFeatureCardIcon from '@/assets/icons/crm/automation-feature-card.svg'
 
@@ -108,7 +90,6 @@ const automationGroups = ref([])
 const automationRef = ref(null)
 const showGroupDrawer = ref(false)
 const showAutomationDrawer = ref(false)
-const showBulkUploadDialog = ref(false)
 const showInfoBanner = ref(true)
 
 const isPrivileged = computed(() => [1, 8].includes(Number(user.value?.roleId)))

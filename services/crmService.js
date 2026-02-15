@@ -243,13 +243,6 @@ export default {
         .catch((err) => reject(err));
     });
   },
-  bulkUploadAutomations(payload) {
-    return new Promise((resolve, reject) => {
-      Post('/lead/automationBulkUpload', payload)
-        .then((res) => resolve(res))
-        .catch((err) => reject(err));
-    });
-  },
   listAutomationGroups() {
     return new Promise((resolve, reject) => {
       Get('/lead/automationGroups')
