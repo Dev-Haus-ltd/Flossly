@@ -2,6 +2,7 @@ import { Op } from 'sequelize'
 import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, MetaPage, MetaWhatsAppConfig, User, UserOrganisation } from '../models'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults.js'
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
+import { formatCrmTriggerPreview } from '~/lib/misc'
 import { success, error } from '../utils/response'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
 import { sendImmediateCrmAutomationsForLead } from '../utils/crmAutomation.js'
@@ -72,7 +73,7 @@ const resolveWhatsAppConfig = async (orgId) => {
   return null
 }
 
-const ensureUniqueGroupKey = async ({ orgId, key, excludeId = null }) => {
+const ensureUniqueGroupKey = async ({ orgId, key, excludeId = null, transaction = null }) => {
   let candidate = slugifyKey(key)
   let suffix = 1
   while (true) {
@@ -82,11 +83,57 @@ const ensureUniqueGroupKey = async ({ orgId, key, excludeId = null }) => {
         key: candidate,
         ...(excludeId ? { id: { [Op.ne]: excludeId } } : {}),
       },
+      transaction,
     })
     if (!existing) return candidate
     candidate = `${slugifyKey(key)}_${suffix}`
     suffix += 1
   }
+}
+
+const slugifyAutomationKey = (value, maxLen = 50) => {
+  const base = slugifyKey(value)
+  return base.length > maxLen ? base.slice(0, maxLen) : base
+}
+
+const ensureUniqueTemplateKey = ({ base, existingKeys, reservedKeys, usedKeys }) => {
+  const safeBase = slugifyAutomationKey(base || 'automation', 45)
+  let candidate = safeBase
+  let suffix = 1
+  const isUsed = (key) =>
+    (existingKeys && existingKeys.has(key)) ||
+    (reservedKeys && reservedKeys.has(key)) ||
+    (usedKeys && usedKeys.has(key))
+  while (isUsed(candidate)) {
+    candidate = `${safeBase}_${suffix}`
+    if (candidate.length > 50) {
+      candidate = `${safeBase.slice(0, Math.max(1, 50 - String(suffix).length - 1))}_${suffix}`
+    }
+    suffix += 1
+  }
+  if (usedKeys) usedKeys.add(candidate)
+  if (existingKeys) existingKeys.add(candidate)
+  return candidate
+}
+
+const escapeHtml = (value) =>
+  String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+
+const plainTextToHtml = (value) => {
+  const text = String(value || '').replace(/\r\n/g, '\n').trim()
+  if (!text) return ''
+  const escaped = escapeHtml(text).replace(/\n/g, '<br/>')
+  return `<p>${escaped}</p>`
+}
+
+const normalizeAutomationType = (value) => {
+  const raw = String(value || '').trim().toLowerCase()
+  if (!raw) return 'Email'
+  if (raw.includes('whatsapp') || raw === 'wa' || raw === 'whats app') return 'WhatsApp'
+  return 'Email'
 }
 
 const seedAutomationGroups = async (orgId) => {
@@ -511,6 +558,158 @@ export const bulkUploadLeads = async (event) => {
     const failCount = results.length - successCount
     return success({
       message: `${successCount} leads added successfully, ${failCount} failed`,
+      results,
+    })
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const bulkUploadAutomations = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const items = Array.isArray(payload?.items) ? payload.items : []
+    if (!orgId) return error(401, 'Unauthenticated')
+    if (!items.length) return error(400, 'items required')
+
+    const organisationId = Number(orgId)
+    const results = []
+    const defaultKeySet = new Set((crmAutomationDefaults || []).map((d) => d.key))
+
+    try { await CrmAutomationGroup.sync() } catch {}
+    try { await CrmAutomationTemplate.sync() } catch {}
+    try { await CrmAutomationGroupTemplate.sync() } catch {}
+
+    const existingTemplates = await CrmAutomationTemplate.findAll({
+      where: { organisationId },
+      attributes: ['key'],
+    })
+    const existingKeySet = new Set(existingTemplates.map((row) => row.key))
+    const usedKeys = new Set()
+
+    const existingGroups = await CrmAutomationGroup.findAll({
+      where: { organisationId },
+      order: [['ordering', 'ASC'], ['createdAt', 'ASC']],
+    })
+    const groupByLowerTitle = new Map()
+    const groupByLowerKey = new Map()
+    existingGroups.forEach((g) => {
+      const title = String(g.title || '').trim().toLowerCase()
+      const key = String(g.key || '').trim().toLowerCase()
+      if (title) groupByLowerTitle.set(title, g)
+      if (key) groupByLowerKey.set(key, g)
+    })
+
+    const transaction = await DB.transaction()
+    try {
+      for (let index = 0; index < items.length; index += 1) {
+        const raw = items[index] || {}
+        const errors = []
+        const groupName = String(raw.groupName || raw.group_name || '').trim()
+        const type = normalizeAutomationType(raw.type)
+        const name = String(raw.name || '').trim()
+        const subjectRaw = String(raw.subject || '').trim()
+        const contentRaw = String(raw.content || '').trim()
+
+        if (!groupName) errors.push('Group name is required')
+        if (!name) errors.push('Name is required')
+        if (!contentRaw) errors.push('Content is required')
+
+        if (errors.length) {
+          results.push({
+            index,
+            name,
+            status: 'failed',
+            message: errors.join('; '),
+          })
+          continue
+        }
+
+        let group = null
+        const groupKeyLookup = groupName.toLowerCase()
+        if (groupByLowerTitle.has(groupKeyLookup)) {
+          group = groupByLowerTitle.get(groupKeyLookup)
+        } else if (groupByLowerKey.has(groupKeyLookup)) {
+          group = groupByLowerKey.get(groupKeyLookup)
+        }
+
+        if (!group) {
+          const safeKey = await ensureUniqueGroupKey({
+            orgId: organisationId,
+            key: groupName,
+            transaction,
+          })
+          const nextOrder = (await CrmAutomationGroup.count({
+            where: { organisationId },
+            transaction,
+          })) || 0
+          group = await CrmAutomationGroup.create({
+            organisationId,
+            key: safeKey,
+            title: groupName,
+            description: null,
+            enabled: false,
+            ordering: nextOrder,
+          }, { transaction })
+          groupByLowerTitle.set(groupName.toLowerCase(), group)
+          groupByLowerKey.set(String(group.key || '').toLowerCase(), group)
+        }
+
+        const key = ensureUniqueTemplateKey({
+          base: name,
+          existingKeys: existingKeySet,
+          reservedKeys: defaultKeySet,
+          usedKeys,
+        })
+
+        const trigger = { type: 'inquiry_days', days: 0 }
+        const sending = formatCrmTriggerPreview(trigger)
+        const subject = type === 'Email' ? (subjectRaw || name) : ''
+        const template = plainTextToHtml(contentRaw)
+
+        const payload = {
+          key,
+          groupKey: group.key,
+          type,
+          name,
+          subject,
+          sending,
+          enabled: false,
+          template,
+          trigger,
+        }
+
+        try {
+          await applyAutomationSave({ orgId: organisationId, payload, transaction })
+          results.push({
+            index,
+            name,
+            status: 'success',
+            key,
+            groupKey: group.key,
+          })
+        } catch (e) {
+          results.push({
+            index,
+            name,
+            status: 'failed',
+            message: e.message,
+          })
+        }
+      }
+
+      await transaction.commit()
+    } catch (err) {
+      await transaction.rollback()
+      return error(500, err.message)
+    }
+
+    const successCount = results.filter((r) => r.status === 'success').length
+    const failCount = results.length - successCount
+    return success({
+      message: `${successCount} automations added successfully, ${failCount} failed`,
       results,
     })
   } catch (e) {

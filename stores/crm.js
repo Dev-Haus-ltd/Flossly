@@ -58,6 +58,7 @@ export const useCrmStore = defineStore("crmStore", {
     listAutomation(leadId) { return this._wrap(() => crmService.listAutomation(leadId)); },
     saveAutomation(payload) { return this._wrap(() => crmService.saveAutomation(payload)); },
     saveAutomationBatch(payload) { return this._wrap(() => crmService.saveAutomationBatch(payload)); },
+    bulkUploadAutomations(payload) { return this._wrap(() => crmService.bulkUploadAutomations(payload)); },
     listAutomationGroups() { return this._wrap(() => crmService.listAutomationGroups()); },
     async saveAutomationGroup(payload) {
       const res = await this._wrap(() => crmService.saveAutomationGroup(payload));
