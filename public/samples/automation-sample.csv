@@ -1,0 +1,6 @@
+﻿group_name,type,name,subject,content
+"Post Treatment",Email,"Follow-up 3 Days","How are you feeling?","Hi {{name}}, checking in after your treatment."
+"Birthdays",Email,"Birthday Wish","Happy Birthday!","Happy birthday {{name}}! We hope you have a great day."
+"Reminders",WhatsApp,"Appointment Reminder",,"Hi {{name}}, this is a reminder for your appointment."
+"Seasonal",Email,"Black Friday Offer","Special Offer","Black Friday offer just for you."
+"Seasonal",Email,"Monthly Check-in","Quick check-in","Hi {{name}}, checking in this month."
