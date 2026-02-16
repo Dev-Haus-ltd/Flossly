@@ -16,14 +16,14 @@
                 My Leads
               </v-chip>
               <v-chip class="ml-2" color="primary" label>
-                {{ activeLeads.length }}
+                {{ props.activeTotal || activeLeads.length }}
               </v-chip>
             </div>
           </div>
         </v-expansion-panel-title>
 
         <v-expansion-panel-text class="pt-0">
-          <v-data-table
+          <v-data-table-server
             v-model="selectedLeads"
             :headers="headers"
             :items="activeLeads"
@@ -32,8 +32,14 @@
             hover
             class="resizable-table"
             density="compact"
+            :items-length="props.activeTotal || activeLeads.length"
+            :page="props.activePage"
+            :items-per-page="props.itemsPerPage"
+            :items-per-page-options="[10, 25, 50, 100]"
             :item-selectable="() => true"
             @update:model-value="onSelect"
+            @update:page="(val) => emit('update:activePage', val)"
+            @update:items-per-page="(val) => emit('update:itemsPerPage', val)"
             return-object
           >
             <template
@@ -333,7 +339,7 @@
                 <p class="ml-2 mb-0">{{ item[col.key] }}</p>
               </template>
             </template>
-          </v-data-table>
+          </v-data-table-server>
           <v-card
             v-if="selectedLeads.length"
             class="action-bar py-4 d-flex justify-center align-center rounded-lg"
@@ -384,7 +390,7 @@
                 Archived Leads
               </v-chip>
               <v-chip class="ml-2" color="#9E9E9E" label>
-                {{ archivedLeads.length }}
+                {{ props.archivedTotal || archivedLeads.length }}
               </v-chip>
             </div>
             <span class="text-caption text-medium-emphasis">Visible to Owner & Manager</span>
@@ -399,7 +405,7 @@
           >
             No archived records yet.
           </v-alert>
-          <v-data-table
+          <v-data-table-server
             v-else
             v-model="selectedArchivedLeads"
             :headers="headers"
@@ -409,8 +415,14 @@
             class="resizable-table"
             density="compact"
             show-select
+            :items-length="props.archivedTotal || archivedLeads.length"
+            :page="props.archivedPage"
+            :items-per-page="props.itemsPerPage"
+            :items-per-page-options="[10, 25, 50, 100]"
             :item-selectable="() => false"
             @update:model-value="onArchivedSelectionChange"
+            @update:page="(val) => emit('update:archivedPage', val)"
+            @update:items-per-page="(val) => emit('update:itemsPerPage', val)"
             return-object
           >
             <template
@@ -521,7 +533,7 @@
                 <p class="ml-2 mb-0">{{ item[col.key]?.name || item[col.key] }}</p>
               </template>
             </template>
-          </v-data-table>
+          </v-data-table-server>
         </v-expansion-panel-text>
       </v-expansion-panel>
     </v-expansion-panels>
@@ -686,9 +698,24 @@ import deleteIcon from '@/assets/crm/delete.svg'
 import exportIcon from '@/assets/crm/export.svg'
 const crmStore = useCrmStore();
 const { user } = useUser();
-const emit = defineEmits(['select','openLead','delete','book']);
+const emit = defineEmits([
+  'select',
+  'openLead',
+  'delete',
+  'book',
+  'update:activePage',
+  'update:archivedPage',
+  'update:itemsPerPage',
+]);
 const props = defineProps({
-  leads: { type: Array, required: true },
+  leads: { type: Array, default: () => [] },
+  activeLeads: { type: Array, default: null },
+  archivedLeads: { type: Array, default: null },
+  activeTotal: { type: Number, default: 0 },
+  archivedTotal: { type: Number, default: 0 },
+  activePage: { type: Number, default: 1 },
+  archivedPage: { type: Number, default: 1 },
+  itemsPerPage: { type: Number, default: 25 },
   headers: { type: Array, required: true },
   search: { type: String, default: '' },
   leadSources: { type: Array, required: true },
@@ -722,10 +749,14 @@ const isArchivedLead = (lead) => {
   return !!lead?.softDeleted || status === 'archived';
 };
 const activeLeads = computed(() =>
-  (props.leads || []).filter((l) => !isArchivedLead(l))
+  Array.isArray(props.activeLeads)
+    ? props.activeLeads
+    : (props.leads || []).filter((l) => !isArchivedLead(l))
 );
 const archivedLeads = computed(() =>
-  (props.leads || []).filter((l) => isArchivedLead(l))
+  Array.isArray(props.archivedLeads)
+    ? props.archivedLeads
+    : (props.leads || []).filter((l) => isArchivedLead(l))
 );
 const canViewArchive = computed(() => [1, 8].includes(user.value?.roleId));
 
@@ -836,26 +867,7 @@ const onAutomationMenuOpen = async (lead) => {
   automationGroupsDirty.value = false;
 };
 
-const prefetchLeadAutomations = async (leads) => {
-  const ids = (leads || [])
-    .map((lead) => lead?.id)
-    .filter((id) => id && !automationRowsCache[id] && !automationLoading[id]);
-  if (!ids.length) return;
-  const batchSize = 3;
-  for (let i = 0; i < ids.length; i += batchSize) {
-    const batch = ids.slice(i, i + batchSize);
-    await Promise.all(batch.map((id) => loadLeadAutomations(id)));
-  }
-};
-
-watch(
-  () => activeLeads.value,
-  (leads) => {
-    loadAutomationGroups();
-    prefetchLeadAutomations(leads);
-  },
-  { immediate: true }
-);
+// Note: automation rows are loaded lazily per-lead when the menu opens.
 
 const markAutomationGroupsDirty = () => {
   automationGroupsDirty.value = true;
@@ -863,6 +875,7 @@ const markAutomationGroupsDirty = () => {
 
 onMounted(() => {
   if (typeof window === 'undefined') return;
+  loadAutomationGroups();
   window.addEventListener('crm-automation-groups-updated', markAutomationGroupsDirty);
 });
 

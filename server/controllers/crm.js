@@ -209,7 +209,26 @@ export const listLeads = async (event) => {
         where.inquiryDate = { [Op.between]: [start, end] }
       }
     }
-    const rows = await CrmLead.findAll({
+    const page = Number(q.page || 0)
+    const pageSize = Number(q.pageSize || 0)
+    const usePagination = Number.isFinite(page) && page > 0 && Number.isFinite(pageSize) && pageSize > 0
+    const sortBy = String(q.sortBy || 'createdAt')
+    const sortDirRaw = String(q.sortDir || 'DESC').toUpperCase()
+    const sortDir = sortDirRaw === 'ASC' ? 'ASC' : 'DESC'
+    const sortable = new Set([
+      'createdAt',
+      'updatedAt',
+      'name',
+      'email',
+      'telephone',
+      'leadStatus',
+      'leadSource',
+      'inquiryDate',
+      'followUpDate',
+    ])
+    const orderKey = sortable.has(sortBy) ? sortBy : 'createdAt'
+
+    const queryOptions = {
       where,
       include: [
         {
@@ -218,8 +237,22 @@ export const listLeads = async (event) => {
           include: [{ model: User, as: 'user', attributes: ['id', 'fullName', 'email'] }],
         },
       ],
-      order: [['createdAt', 'DESC']],
-    })
+      order: [[orderKey, sortDir]],
+    }
+
+    let rows = []
+    let total = null
+    if (usePagination) {
+      const result = await CrmLead.findAndCountAll({
+        ...queryOptions,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+      })
+      rows = result.rows || []
+      total = result.count || 0
+    } else {
+      rows = await CrmLead.findAll(queryOptions)
+    }
     const pageIds = [...new Set(rows.map((l) => l.pageId).filter(Boolean))]
     let pageNameById = new Map()
     if (pageIds.length) {
@@ -246,7 +279,26 @@ export const listLeads = async (event) => {
       // do not expose raw assignees relation by default
       return l
     })
-    return success(shaped)
+    if (!usePagination) return success(shaped)
+
+    let stats = null
+    if (String(q.includeStats || '').toLowerCase() === 'true') {
+      const counts = await CrmLead.findAll({
+        where,
+        attributes: ['leadStatus', [DB.fn('COUNT', DB.col('id')), 'count']],
+        group: ['leadStatus'],
+      })
+      const byStatus = {}
+      counts.forEach((row) => {
+        const status = row.get('leadStatus') || 'Unknown'
+        const count = Number(row.get('count') || 0)
+        byStatus[status] = count
+      })
+      const totalCount = await CrmLead.count({ where })
+      stats = { total: totalCount, byStatus }
+    }
+
+    return success({ rows: shaped, total: total || 0, stats })
   } catch (e) {
     return error(500, e.message)
   }

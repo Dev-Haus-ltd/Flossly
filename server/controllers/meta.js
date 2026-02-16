@@ -482,6 +482,13 @@ export const fetchLeadsNow = async (event) => {
   const { orgId } = event.context.user || {}
   if (!orgId) return error(401, 'Unauthenticated')
   try { await CrmLead.sync() } catch (_) {}
+
+  const q = getQuery(event) || {}
+  const days = Number(q.days || 0)
+  const maxPerForm = Number(q.maxPerForm || 1000)
+  const sinceDate = Number.isFinite(days) && days > 0
+    ? new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+    : null
   
   const pages = await MetaPage.findAll({ 
     where: { organisationId: orgId, status: 'Active' } 
@@ -499,59 +506,75 @@ export const fetchLeadsNow = async (event) => {
       const forms = Array.isArray(formsResp?.data) ? formsResp.data : []
       
       for (const form of forms) {
-        const leadsUrl = `https://graph.facebook.com/${META_VERSION}/${form.id}/leads?fields=created_time,field_data,ad_id,adset_id,campaign_id&limit=100&access_token=${encodeURIComponent(pageToken)}`
-        const leadsResp = await $fetch(leadsUrl, { method: 'GET' })
-        const items = Array.isArray(leadsResp?.data) ? leadsResp.data : []
-        
-        for (const le of items) {
-          const fld = (le.field_data || []).reduce((acc, f) => {
-            acc[f.name] = Array.isArray(f.values) ? f.values[0] : f.values
-            return acc
-          }, {})
-          
-          const fullName = fld.full_name || fld.name || ''
-          const email = fld.email || fld.email_address || ''
-          const phone = fld.phone_number || fld.phone || ''
-          const on = new Date(le.created_time)
-          const campaignId = le.campaign_id || null
-          const adSetId = le.adset_id || null
-          const adId = le.ad_id || null
-          
-          const existing = await CrmLead.findOne({ 
-            where: { organisationId: orgId, leadId: le.id } 
-          })
-          
-          if (existing) {
-            existing.name = existing.name || fullName
-            existing.email = existing.email || email
-            existing.telephone = existing.telephone || phone
-            existing.inquiryDate = existing.inquiryDate || on
-            existing.rawData = existing.rawData || le
-            existing.campaignId = existing.campaignId || campaignId
-            existing.adSetId = existing.adSetId || adSetId
-            existing.adId = existing.adId || adId
-            await existing.save()
-            broadcastMetaEvent('lead', { orgId, leadId: le.id, pageId, formId: form.id })
-          } else {
-            await CrmLead.create({
-              organisationId: orgId,
-              pageId,
-              formId: form.id,
-              leadId: le.id,
-              campaignId,
-              adSetId,
-              adId,
-              name: fullName,
-              email,
-              telephone: phone,
-              inquiryDate: on,
-              rawData: le,
-              leadSource: 'Meta Leadgen',
-              leadStatus: 'New',
+        const sinceParam = sinceDate ? `&since=${Math.floor(sinceDate.getTime() / 1000)}` : ''
+        let leadsUrl = `https://graph.facebook.com/${META_VERSION}/${form.id}/leads?fields=created_time,field_data,ad_id,adset_id,campaign_id&limit=100${sinceParam}&access_token=${encodeURIComponent(pageToken)}`
+        let fetchedForForm = 0
+
+        while (leadsUrl && fetchedForForm < maxPerForm) {
+          const leadsResp = await $fetch(leadsUrl, { method: 'GET' })
+          const items = Array.isArray(leadsResp?.data) ? leadsResp.data : []
+          if (!items.length) break
+
+          for (const le of items) {
+            if (sinceDate) {
+              const createdAt = new Date(le.created_time)
+              if (!Number.isNaN(createdAt.getTime()) && createdAt < sinceDate) {
+                continue
+              }
+            }
+            const fld = (le.field_data || []).reduce((acc, f) => {
+              acc[f.name] = Array.isArray(f.values) ? f.values[0] : f.values
+              return acc
+            }, {})
+
+            const fullName = fld.full_name || fld.name || ''
+            const email = fld.email || fld.email_address || ''
+            const phone = fld.phone_number || fld.phone || ''
+            const on = new Date(le.created_time)
+            const campaignId = le.campaign_id || null
+            const adSetId = le.adset_id || null
+            const adId = le.ad_id || null
+
+            const existing = await CrmLead.findOne({
+              where: { organisationId: orgId, leadId: le.id }
             })
-            imported++
-            broadcastMetaEvent('lead', { orgId, leadId: le.id, pageId, formId: form.id })
+
+            if (existing) {
+              existing.name = existing.name || fullName
+              existing.email = existing.email || email
+              existing.telephone = existing.telephone || phone
+              existing.inquiryDate = existing.inquiryDate || on
+              existing.rawData = existing.rawData || le
+              existing.campaignId = existing.campaignId || campaignId
+              existing.adSetId = existing.adSetId || adSetId
+              existing.adId = existing.adId || adId
+              await existing.save()
+              broadcastMetaEvent('lead', { orgId, leadId: le.id, pageId, formId: form.id })
+            } else {
+              await CrmLead.create({
+                organisationId: orgId,
+                pageId,
+                formId: form.id,
+                leadId: le.id,
+                campaignId,
+                adSetId,
+                adId,
+                name: fullName,
+                email,
+                telephone: phone,
+                inquiryDate: on,
+                rawData: le,
+                leadSource: 'Meta Leadgen',
+                leadStatus: 'New',
+              })
+              imported++
+              broadcastMetaEvent('lead', { orgId, leadId: le.id, pageId, formId: form.id })
+            }
+            fetchedForForm++
+            if (fetchedForForm >= maxPerForm) break
           }
+
+          leadsUrl = leadsResp?.paging?.next || null
         }
       }
     } catch (e) {

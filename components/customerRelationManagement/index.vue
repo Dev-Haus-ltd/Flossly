@@ -26,7 +26,7 @@
         <div class="d-inline-flex align-center py-1" style="flex-wrap: nowrap; gap: 8px;">
           <div style="width: 150px">
             <v-text-field
-              v-model="search"
+            v-model="searchInput"
               placeholder="Search"
               append-inner-icon="mdi-magnify"
               clearable
@@ -92,6 +92,14 @@
             <v-list density="compact">
               <v-list-item @click="onReconnectMeta">
                 <v-list-item-title>Reconnect Meta</v-list-item-title>
+              </v-list-item>
+              <v-list-item
+                :disabled="metaBackfillLoading"
+                @click="backfillMetaLeads"
+              >
+                <v-list-item-title>
+                  {{ metaBackfillLoading ? 'Backfilling 30 days...' : 'Backfill last 30 days' }}
+                </v-list-item-title>
               </v-list-item>
               <v-list-item @click="confirmDisconnect = true">
                 <v-list-item-title>Disconnect Meta</v-list-item-title>
@@ -168,8 +176,14 @@
 
       <!-- List View (child) -->
       <CustomerRelationManagementListView
-        v-if="!isLoading && leads.length"
-        :leads="filteredLeads"
+        v-if="!isLoading && (activeLeads.length || archivedLeads.length)"
+        :active-leads="activeLeads"
+        :archived-leads="archivedLeads"
+        :active-total="activeTotal"
+        :archived-total="archivedTotal"
+        :active-page="activePage"
+        :archived-page="archivedPage"
+        :items-per-page="itemsPerPage"
         :headers="headers"
         :search="search"
         :leadSources="leadSources"
@@ -178,9 +192,12 @@
         @select="onSelect"
         @delete="onDeleteSelected"
         @book="onBookLeads"
+        @update:activePage="onActivePageChange"
+        @update:archivedPage="onArchivedPageChange"
+        @update:itemsPerPage="onItemsPerPageChange"
       />
 
-      <div v-else-if="!isLoading && !leads.length" class="d-flex justify-center mt-5">
+      <div v-else-if="!isLoading && !activeLeads.length && !archivedLeads.length" class="d-flex justify-center mt-5">
         <p class="mt-7">No leads found.</p>
       </div>
 
@@ -320,6 +337,7 @@ const bulkLeadUploadDialog = ref(false);
 const metaMenu = ref(false);
 const confirmDisconnect = ref(false);
 const disconnecting = ref(false);
+const metaBackfillLoading = ref(false);
 const metaErrorDialog = ref(false);
 const metaErrorMessage = ref('');
 const metaHealthDialog = ref(false);
@@ -369,47 +387,53 @@ watch(bookingPractitionerOptions, (opts) => {
 });
 
 
+const leadStatsData = ref({ total: 0, byStatus: {} });
 const leadStats = computed(() => {
-  const activeLeads = leads.value.filter((l) => !l.softDeleted);
-  const total = activeLeads.length;
-  const byStatus = (s) =>
-    activeLeads.filter((l) => (l.leadStatus || "").toLowerCase() === s).length;
+  const byStatus = (status) => Number(leadStatsData.value.byStatus?.[status] || 0);
   return [
     {
       icon: "https://cdn.lordicon.com/asyunleq.json",
       label: "Total Lead",
-      value: total,
+      value: Number(leadStatsData.value.total || 0),
       valueColor: 'on-surface'
     },
     {
       icon: "https://cdn.lordicon.com/kphwxuxr.json",
       label: "New",
-      value: byStatus("new"),
+      value: byStatus("New"),
       valueColor: 'success'
     },
     {
       icon: "https://cdn.lordicon.com/qlpudrww.json",
       label: "Converted",
-      value: byStatus("converted"),
+      value: byStatus("Converted"),
       valueColor: 'primary'
     },
     {
       icon: "https://cdn.lordicon.com/excswhey.json",
       label: "Contacted",
-      value: byStatus("contacted"),
+      value: byStatus("Contacted"),
       valueColor: 'warning'
     },
     {
       icon: "https://cdn.lordicon.com/tzynxkwl.json",
       label: "Lost",
-      value: byStatus("lost"),
+      value: byStatus("Lost"),
       valueColor: 'error'
     },
   ];
 });
+const searchInput = ref("");
 const search = ref("");
+let searchTimeout = null;
 
-const leads = ref([]);
+const activeLeads = ref([]);
+const archivedLeads = ref([]);
+const activeTotal = ref(0);
+const archivedTotal = ref(0);
+const activePage = ref(1);
+const archivedPage = ref(1);
+const itemsPerPage = ref(25);
 
 const headers = [
   { key: "alert", title: "Alert", width: 70 },
@@ -427,11 +451,11 @@ const headers = [
 ];
 const leadSources = ref([]);
 const treatmentSources = ref([]);
-const filteredLeads = computed(() => leads.value)
-
 const activeFilters = ref({});
 const onLeadsFilterUpdate = async (filters) => {
   activeFilters.value = filters || {};
+  activePage.value = 1;
+  archivedPage.value = 1;
   await fetchLeads(activeFilters.value)
 };
 
@@ -739,7 +763,7 @@ const onSaveBookedAppointment = async (appt) => {
     if (res?.code === 0) {
       try {
         await crmStore.updateLead({ id: bookingLead.value.id, leadStatus: 'Converted' });
-        const existing = leads.value.find((l) => l.id === bookingLead.value.id);
+        const existing = activeLeads.value.find((l) => l.id === bookingLead.value.id);
         if (existing) existing.leadStatus = 'Converted';
       } catch (e) {}
       mainStore?.setSnackbar?.({ title: 'Appointment booked and lead converted', type: 'success' });
@@ -766,8 +790,8 @@ const onConnectChatbot = async () => {
   });
 };
 
-const updateLeads = (newLead) => {
-  leads.value.push(newLead);
+const updateLeads = async () => {
+  await fetchLeads(activeFilters.value);
 };
 
 const handleAddLeadClick = () => {
@@ -799,67 +823,98 @@ const resolveLeadSource = (source) => {
   return { id: 99, name: "Meta Leadgen" };
 };
 
-const handleSuccess = (newLead) => {
+const handleSuccess = async () => {
   addLeadDrawer.value = false;
-  const mapped = {
-    id: newLead.id,
-    alert: newLead.alert || '',
-    name: newLead.name,
-    email: newLead.email,
-    telephone: newLead.telephone,
-    inquiryDate: newLead.inquiryDate,
-    rawData: newLead.rawData || null,
-    dob: newLead.dob || null,
-    occupation: newLead.occupation || "",
-    location: newLead.location || "",
-    leadSource: resolveLeadSource(newLead.leadSource ?? newLead.leadSourceId),
-    metaPage: newLead.pageName || newLead.pageId || '',
-    leadStatus: newLead.leadStatus || 'New',
-    treatment: newLead.treatment || { id: null, name: '' },
-    assigned: newLead.assigned || [],
-    followUpDate: newLead.followUpDate || '',
-    comments: newLead.comments || '',
-    softDeleted: false,
-  };
-  leads.value.unshift(mapped);
+  await fetchLeads(activeFilters.value);
 };
 const handleBulkUploadComplete = async () => {
   bulkLeadUploadDialog.value = false;
   await fetchLeads(activeFilters.value);
 };
 
-const fetchLeads = async (filters = {}) => {
-  isLoading.value = true
-  try {
-    const payload = { ...filters, search: search.value || '', includeArchived: true }
-    const res = await crmStore.listLeads(payload)
-    if (res && res.code === 0) {
-      const mapped = (res.data || []).map((l) => ({
-        alert: l.alert || "",
-        name: l.name || "",
-        email: l.email || "",
-        telephone: l.telephone || "",
-        inquiryDate: l.inquiryDate || "",
-        rawData: l.rawData || null,
-        dob: l.dob || null,
-        occupation: l.occupation || "",
-        location: l.location || "",
-        leadSource: l.leadSource?.name ? l.leadSource : { id: 99, name: l.leadSource || "Meta Leadgen" },
-        metaPage: l.pageName || l.pageId || "",
-        leadStatus: l.leadStatus || "New",
-        treatment: l.treatment || { id: null, name: "" },
-        assigned: l.assigned || [],
-        followUpDate: l.followUpDate || "",
-        comments: l.comments || "",
-        id: l.id,
-        softDeleted: !!l.softDeleted,
-      }))
-      leads.value = mapped;
-    }
-  } finally {
-    isLoading.value = false
+const mapLeadRow = (l) => ({
+  alert: l.alert || "",
+  name: l.name || "",
+  email: l.email || "",
+  telephone: l.telephone || "",
+  inquiryDate: l.inquiryDate || "",
+  rawData: l.rawData || null,
+  dob: l.dob || null,
+  occupation: l.occupation || "",
+  location: l.location || "",
+  leadSource: l.leadSource?.name ? l.leadSource : { id: 99, name: l.leadSource || "Meta Leadgen" },
+  metaPage: l.pageName || l.pageId || "",
+  leadStatus: l.leadStatus || "New",
+  treatment: l.treatment || { id: null, name: "" },
+  assigned: l.assigned || [],
+  followUpDate: l.followUpDate || "",
+  comments: l.comments || "",
+  id: l.id,
+  softDeleted: !!l.softDeleted,
+});
+
+const fetchActiveLeads = async (filters = {}) => {
+  const payload = {
+    ...filters,
+    search: search.value || '',
+    page: activePage.value,
+    pageSize: itemsPerPage.value,
+    includeStats: true,
+  };
+  const res = await crmStore.listLeads(payload);
+  if (res && res.code === 0) {
+    const rows = Array.isArray(res.data?.rows) ? res.data.rows : (res.data || []);
+    activeLeads.value = rows.map(mapLeadRow);
+    activeTotal.value = Number(res.data?.total ?? activeLeads.value.length);
+    if (res.data?.stats) leadStatsData.value = res.data.stats;
   }
-}
+};
+
+const fetchArchivedLeads = async (filters = {}) => {
+  const payload = {
+    ...filters,
+    search: search.value || '',
+    page: archivedPage.value,
+    pageSize: itemsPerPage.value,
+    archivedOnly: true,
+    includeArchived: true,
+  };
+  const res = await crmStore.listLeads(payload);
+  if (res && res.code === 0) {
+    const rows = Array.isArray(res.data?.rows) ? res.data.rows : (res.data || []);
+    archivedLeads.value = rows.map(mapLeadRow);
+    archivedTotal.value = Number(res.data?.total ?? archivedLeads.value.length);
+  }
+};
+
+const fetchLeads = async (filters = {}) => {
+  isLoading.value = true;
+  try {
+    await Promise.all([fetchActiveLeads(filters), fetchArchivedLeads(filters)]);
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const onActivePageChange = async (val) => {
+  if (activePage.value === val) return;
+  activePage.value = val;
+  await fetchActiveLeads(activeFilters.value);
+};
+
+const onArchivedPageChange = async (val) => {
+  if (archivedPage.value === val) return;
+  archivedPage.value = val;
+  await fetchArchivedLeads(activeFilters.value);
+};
+
+const onItemsPerPageChange = async (val) => {
+  if (itemsPerPage.value === val) return;
+  itemsPerPage.value = val;
+  activePage.value = 1;
+  archivedPage.value = 1;
+  await fetchLeads(activeFilters.value);
+};
 
 const initLeads = async (metaConnected = false) => {
   if (metaConnected) {
@@ -868,8 +923,8 @@ const initLeads = async (metaConnected = false) => {
       await crmStore.fetchMetaStructure();
       // 2️⃣ Sync Meta analytics (daily insights / backfill)
       await crmStore.fetchMetaInsights();
-      // 3️⃣ Fetch leads (existing behavior)
-      await crmStore.fetchLeadsNow();
+      // 3️⃣ Fetch last 30 days leads on first connect
+      await crmStore.fetchLeadsNow({ days: 30 });
     } catch (e) {
       console.error('[CRM] Meta post-connect sync failed', e);
     }
@@ -980,15 +1035,47 @@ const disconnectMeta = async () => {
   }
 };
 
-watch(search, async () => {
-  await fetchLeads(activeFilters.value)
-})
+const backfillMetaLeads = async () => {
+  if (metaBackfillLoading.value) return;
+  metaBackfillLoading.value = true;
+  metaMenu.value = false;
+  try {
+    const res = await crmStore.fetchLeadsNow({ days: 30 });
+    if (res?.code === 0) {
+      await fetchLeads(activeFilters.value);
+      mainStore?.setSnackbar?.({
+        title: res?.data?.imported
+          ? `Backfill complete: ${res.data.imported} lead(s) imported`
+          : 'Backfill complete',
+        type: 'success',
+      });
+      return;
+    }
+    const msg = res?.error || res?.message || 'Backfill failed';
+    mainStore?.setSnackbar?.({ title: msg, type: 'error' });
+  } catch (e) {
+    const msg = e?.data?.message || e?.message || 'Backfill failed';
+    mainStore?.setSnackbar?.({ title: msg, type: 'error' });
+  } finally {
+    metaBackfillLoading.value = false;
+  }
+};
+
+watch(searchInput, (val) => {
+  if (searchTimeout) clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(async () => {
+    search.value = String(val || '').trim();
+    activePage.value = 1;
+    archivedPage.value = 1;
+    await fetchLeads(activeFilters.value);
+  }, 250);
+});
 
 const onDeleteSelected = async (ids) => {
   try {
     const res = await crmStore.deleteLeads(ids)
     if (res && res.code === 0) {
-      leads.value = leads.value.filter(l => !ids.includes(l.id))
+      await fetchLeads(activeFilters.value)
     }
   } catch (e) {}
 }

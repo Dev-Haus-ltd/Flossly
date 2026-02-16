@@ -18,7 +18,7 @@ export const useCrmStore = defineStore("crmStore", {
     // Meta connections
     startMetaAuth() { return this._wrap(() => crmService.startMetaAuth()); },
     connectionStatus() { return this._wrap(() => crmService.connectionStatus()); },
-    fetchLeadsNow() { return this._wrap(() => crmService.fetchLeadsNow()); },
+    fetchLeadsNow(params = {}) { return this._wrap(() => crmService.fetchLeadsNow(params)); },
     fetchMetaStructure() { return this._wrap(() => crmService.fetchMetaStructure()); },
     fetchMetaInsights() { return this._wrap(() => crmService.fetchMetaInsights()); },
     subscribePages() { return this._wrap(() => crmService.subscribePages()); },
