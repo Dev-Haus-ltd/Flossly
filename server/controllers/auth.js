@@ -70,6 +70,11 @@ export const login = async (event) => {
     const body = await readBody(event);
     const { email, password } = JSON.parse(body);
     const normalizedEmail = normalizeEmail(email);
+    console.log("[auth.login] email:", {
+      raw: email,
+      normalized: normalizedEmail,
+      schema: config.DB_SCHEMA,
+    });
     if (!normalizedEmail || !password) return error(400, "Missing credentials");
     const user = await User.findOne({
       where: {
@@ -77,6 +82,11 @@ export const login = async (event) => {
           [Op.iLike]: normalizedEmail,
         },
       },
+    });
+    console.log("[auth.login] user lookup:", {
+      found: Boolean(user),
+      userId: user?.id,
+      email: user?.email,
     });
     if (!user) {
       return error(401, "Invalid credentials");
@@ -735,6 +745,11 @@ export const forgetPasswordRequest = async (event) => {
     typeof body === "string" ? JSON.parse(body || "{}") : body || {};
   const { email } = parsed;
   const normalizedEmail = normalizeEmail(email);
+  console.log("[auth.forgetPasswordRequest] email:", {
+    raw: email,
+    normalized: normalizedEmail,
+    schema: config.DB_SCHEMA,
+  });
 
   if (!normalizedEmail) return error(403, "Email required");
 
@@ -745,6 +760,11 @@ export const forgetPasswordRequest = async (event) => {
           [Op.iLike]: normalizedEmail,
         },
       },
+    });
+    console.log("[auth.forgetPasswordRequest] user lookup:", {
+      found: Boolean(user),
+      userId: user?.id,
+      email: user?.email,
     });
     if (!user) {
       throw createError({
