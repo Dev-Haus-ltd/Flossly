@@ -486,19 +486,31 @@ export const fetchLeadsNow = async (event) => {
   const q = getQuery(event) || {}
   const days = Number(q.days || 0)
   const maxPerForm = Number(q.maxPerForm || 1000)
+  const debugEnabled = String(q.debug || '').toLowerCase() === 'true'
   const sinceDate = Number.isFinite(days) && days > 0
     ? new Date(Date.now() - days * 24 * 60 * 60 * 1000)
     : null
-  
+
   const pages = await MetaPage.findAll({ 
     where: { organisationId: orgId, status: 'Active' } 
   })
+  const debug = {
+    orgId: Number(orgId),
+    pagesProcessed: 0,
+    formsProcessed: 0,
+    leadsScanned: 0,
+    imported: 0,
+    since: sinceDate ? sinceDate.toISOString() : null,
+    maxPerForm,
+    errors: [],
+  }
   
   let imported = 0
   for (const mp of pages) {
     const pageId = mp.pageId
     const pageToken = decrypt(mp.accessTokenEnc)
     if (!pageToken) continue
+    debug.pagesProcessed += 1
 
     try {
       const formsUrl = `https://graph.facebook.com/${META_VERSION}/${pageId}/leadgen_forms?fields=id,name&access_token=${encodeURIComponent(pageToken)}`
@@ -506,6 +518,7 @@ export const fetchLeadsNow = async (event) => {
       const forms = Array.isArray(formsResp?.data) ? formsResp.data : []
       
       for (const form of forms) {
+        debug.formsProcessed += 1
         const sinceParam = sinceDate ? `&since=${Math.floor(sinceDate.getTime() / 1000)}` : ''
         let leadsUrl = `https://graph.facebook.com/${META_VERSION}/${form.id}/leads?fields=created_time,field_data,ad_id,adset_id,campaign_id&limit=100${sinceParam}&access_token=${encodeURIComponent(pageToken)}`
         let fetchedForForm = 0
@@ -516,6 +529,7 @@ export const fetchLeadsNow = async (event) => {
           if (!items.length) break
 
           for (const le of items) {
+            debug.leadsScanned += 1
             if (sinceDate) {
               const createdAt = new Date(le.created_time)
               if (!Number.isNaN(createdAt.getTime()) && createdAt < sinceDate) {
@@ -568,6 +582,7 @@ export const fetchLeadsNow = async (event) => {
                 leadStatus: 'New',
               })
               imported++
+              debug.imported += 1
               broadcastMetaEvent('lead', { orgId, leadId: le.id, pageId, formId: form.id })
             }
             fetchedForForm++
@@ -579,8 +594,13 @@ export const fetchLeadsNow = async (event) => {
       }
     } catch (e) {
       console.error(`[META] Error fetching leads for page ${pageId}:`, e)
+      debug.errors.push({
+        pageId,
+        message: e?.data?.error?.message || e?.message || 'Unknown error',
+      })
     }
   }
+  if (debugEnabled) return success(debug)
   return success({ imported })
 }
 
