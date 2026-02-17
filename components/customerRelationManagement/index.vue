@@ -60,37 +60,30 @@
             <template #prepend>
               <v-icon size="18">mdi-whatsapp</v-icon>
             </template>
-            <span v-if="whapiStatus.connected && whatsAppUsage.limit">
-              WhatsApp {{ whatsAppUsage.count }}/{{ whatsAppUsage.limit }}
-            </span>
-            <span v-else>
+            <span>
               {{ whapiStatus.connected ? 'WhatsApp Connected' : 'Connect WhatsApp' }}
             </span>
           </v-btn>
-          <v-chip
-            v-if="whatsappProvider.provider === 'whapi' && whapiStatus.connected"
-            color="success"
-            size="small"
-            label
+          <v-tooltip
+            v-if="whapiStatus.connected && (whapiStatus.phoneNumber || whapiStatus.displayName)"
+            location="bottom"
           >
-            Channel Active
-          </v-chip>
-          <v-chip
-            v-else-if="whatsappProvider.provider === 'whapi' && showWhapiPaymentAlert"
-            color="warning"
-            size="small"
-            label
-          >
-            Channel Needs Payment
-          </v-chip>
-          <v-chip
-            v-else-if="whatsappProvider.provider === 'whapi' && whapiStatus.status && !isPaidPlan"
-            color="grey"
-            size="small"
-            label
-          >
-            Channel {{ whapiStatus.status }}
-          </v-chip>
+            <template #activator="{ props }">
+              <v-btn
+                v-bind="props"
+                icon
+                variant="text"
+                class="add-task-btn"
+                aria-label="Connected WhatsApp number"
+              >
+                <v-icon size="18">mdi-information-outline</v-icon>
+              </v-btn>
+            </template>
+            <span>
+              Connected phone:
+              {{ whapiStatus.displayName ? `${whapiStatus.displayName} (${whapiStatus.phoneNumber})` : whapiStatus.phoneNumber }}
+            </span>
+          </v-tooltip>
           <!--  WhatsApp connect UI (temporarily hidden until complete) 
           <v-btn
             :color="isWhatsAppConnected ? 'success' : 'primary'"
@@ -351,6 +344,15 @@
                 Scan this QR code using WhatsApp on the phone you want to connect.
               </div>
             </div>
+            <v-alert
+              v-else-if="whapiStatus.phoneNumber || whapiStatus.displayName"
+              type="info"
+              variant="tonal"
+              class="mb-2"
+            >
+              Connected phone:
+              {{ whapiStatus.displayName ? `${whapiStatus.displayName} (${whapiStatus.phoneNumber})` : whapiStatus.phoneNumber }}
+            </v-alert>
             <v-alert v-else type="info" variant="tonal" class="mb-2">
               QR code not ready yet. Click refresh in a moment.
             </v-alert>
@@ -619,25 +621,6 @@ const leadStats = computed(() => {
   ];
 });
 
-const loggedUser = computed(() => authStore.getLoggedUser || authStore.loggedUser || null);
-const currentLicenseType = computed(() => {
-  const pref = loggedUser.value?.preferences?.[0] || loggedUser.value?.preferences || null;
-  return pref?.licenseType || null;
-});
-const isPaidPlan = computed(() => {
-  const raw = String(currentLicenseType.value || '').toLowerCase();
-  if (!raw) return false;
-  if (raw.includes('trial')) return false;
-  if (raw.includes('system')) return false;
-  return true;
-});
-const whapiStatusKey = computed(() => String(whapiStatus.status || '').toLowerCase());
-const whapiNeedsPayment = computed(() =>
-  whapiStatusKey.value === 'stopped' || whapiStatusKey.value === 'blocked'
-);
-const showWhapiPaymentAlert = computed(() =>
-  whatsappProvider.provider === 'whapi' && whapiNeedsPayment.value && !isPaidPlan.value
-);
 const searchInput = ref("");
 const search = ref("");
 let searchTimeout = null;
