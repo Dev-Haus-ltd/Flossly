@@ -239,6 +239,7 @@ const isParentActive = (item) =>
 
 const openGroups = reactive({});
 const syncOpenGroups = () => {
+  if (!menuItems.value || !Array.isArray(menuItems.value)) return;
   menuItems.value.forEach((item) => {
     if (item.children && item.value) {
       openGroups[item.value] = isParentActive(item);

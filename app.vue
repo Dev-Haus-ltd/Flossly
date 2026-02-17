@@ -9,6 +9,7 @@
         @create-task="handleCreateTask"
         @add-staff="handleAddStaff"
       />
+      <FloatingButtonsChatbot v-if="showChatbot" />
       <!-- <FloatingButtonsCustomerSupport
         @chat-support="openChat"
         @call-support="openCall"
@@ -494,6 +495,10 @@ const handleInAppDialogToggle = (val) => {
 const showFloatingButtons = computed(() => {
   const excludedRoutes = ["onboarding", "login", "signup"];
   return loggedIn.value && !excludedRoutes.includes(route.name);
+});
+
+const showChatbot = computed(() => {
+  return loggedIn.value && (route.name === "index" || route.path === "/");
 });
 
 const handleCreateTask = () => {
