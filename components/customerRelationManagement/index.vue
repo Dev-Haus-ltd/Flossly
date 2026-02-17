@@ -93,6 +93,8 @@
               <v-list-item @click="onReconnectMeta">
                 <v-list-item-title>Reconnect Meta</v-list-item-title>
               </v-list-item>
+              <!-- Backfill last 30 days (hidden until permissions are approved) -->
+              <!--
               <v-list-item
                 :disabled="metaBackfillLoading"
                 @click="backfillMetaLeads"
@@ -101,6 +103,7 @@
                   {{ metaBackfillLoading ? 'Backfilling 30 days...' : 'Backfill last 30 days' }}
                 </v-list-item-title>
               </v-list-item>
+              -->
               <v-list-item @click="confirmDisconnect = true">
                 <v-list-item-title>Disconnect Meta</v-list-item-title>
               </v-list-item>
