@@ -556,6 +556,7 @@ const props = defineProps({
   groups: { type: Array, default: null },
   useGroupsApi: { type: Boolean, default: true },
   includeDefaults: { type: Boolean, default: false },
+  whatsappEnabled: { type: Boolean, default: true },
 })
 const crmStore = useCrmStore()
 const orgStore = useOrgStore()
@@ -612,7 +613,11 @@ const clearFilters = () => {
 }
 
 const resolvedGroups = computed(() => {
-  if (Array.isArray(props.groups) && props.groups.length) return props.groups
+  if (Array.isArray(props.groups) && props.groups.length) {
+    return props.whatsappEnabled
+      ? props.groups
+      : props.groups.filter((group) => !isWhatsAppGroup(group))
+  }
   if (groupRows.value.length) return groupRows.value
   return crmAutomationGroups
 })
@@ -728,8 +733,10 @@ const loadRows = async () => {
     const filteredItems = props.includeDefaults
       ? items
       : items.filter(item => !defaultAutomationKeySet.has(item.key))
-    const nonWhatsappItems = filteredItems.filter((item) => !isWhatsAppItem(item))
-    rows.splice(0, rows.length, ...nonWhatsappItems)
+    const nextItems = props.whatsappEnabled
+      ? filteredItems
+      : filteredItems.filter((item) => !isWhatsAppItem(item))
+    rows.splice(0, rows.length, ...nextItems)
   } catch {}
 }
 
@@ -738,7 +745,9 @@ const loadGroups = async () => {
   try {
     const res = await crmStore.listAutomationGroups()
     if (res?.code === 0 && Array.isArray(res.data)) {
-      groupRows.value = res.data.filter((group) => !isWhatsAppGroup(group))
+      groupRows.value = props.whatsappEnabled
+        ? res.data
+        : res.data.filter((group) => !isWhatsAppGroup(group))
     }
   } finally {
   }

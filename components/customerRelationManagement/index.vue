@@ -67,7 +67,31 @@
               {{ whapiStatus.connected ? 'WhatsApp Connected' : 'Connect WhatsApp' }}
             </span>
           </v-btn>
-          <!-- <!-- WhatsApp connect UI (temporarily hidden until complete) -->
+          <v-chip
+            v-if="whatsappProvider.provider === 'whapi' && whapiStatus.connected"
+            color="success"
+            size="small"
+            label
+          >
+            Channel Active
+          </v-chip>
+          <v-chip
+            v-else-if="whatsappProvider.provider === 'whapi' && showWhapiPaymentAlert"
+            color="warning"
+            size="small"
+            label
+          >
+            Channel Needs Payment
+          </v-chip>
+          <v-chip
+            v-else-if="whatsappProvider.provider === 'whapi' && whapiStatus.status && !isPaidPlan"
+            color="grey"
+            size="small"
+            label
+          >
+            Channel {{ whapiStatus.status }}
+          </v-chip>
+          <!--  WhatsApp connect UI (temporarily hidden until complete) 
           <v-btn
             :color="isWhatsAppConnected ? 'success' : 'primary'"
             :variant="isWhatsAppConnected ? 'tonal' : 'flat'"
@@ -87,7 +111,7 @@
             </span>
           </v-btn>
           
-
+        -->
           <v-menu
             v-if="isConnected"
             v-model="metaMenu"
@@ -594,6 +618,26 @@ const leadStats = computed(() => {
     },
   ];
 });
+
+const loggedUser = computed(() => authStore.getLoggedUser || authStore.loggedUser || null);
+const currentLicenseType = computed(() => {
+  const pref = loggedUser.value?.preferences?.[0] || loggedUser.value?.preferences || null;
+  return pref?.licenseType || null;
+});
+const isPaidPlan = computed(() => {
+  const raw = String(currentLicenseType.value || '').toLowerCase();
+  if (!raw) return false;
+  if (raw.includes('trial')) return false;
+  if (raw.includes('system')) return false;
+  return true;
+});
+const whapiStatusKey = computed(() => String(whapiStatus.status || '').toLowerCase());
+const whapiNeedsPayment = computed(() =>
+  whapiStatusKey.value === 'stopped' || whapiStatusKey.value === 'blocked'
+);
+const showWhapiPaymentAlert = computed(() =>
+  whatsappProvider.provider === 'whapi' && whapiNeedsPayment.value && !isPaidPlan.value
+);
 const searchInput = ref("");
 const search = ref("");
 let searchTimeout = null;

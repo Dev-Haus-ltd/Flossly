@@ -66,6 +66,7 @@
             :groups="automationGroups"
             :use-groups-api="false"
             :include-defaults="false"
+            :whatsapp-enabled="whatsappEnabled"
           />
         </div>
       </v-card>
@@ -110,6 +111,7 @@ const showGroupDrawer = ref(false)
 const showAutomationDrawer = ref(false)
 const showBulkUploadDialog = ref(false)
 const showInfoBanner = ref(true)
+const whatsappEnabled = ref(false)
 
 const isPrivileged = computed(() => [1, 8].includes(Number(user.value?.roleId)))
 
@@ -122,11 +124,36 @@ const isWhatsAppGroup = (group) => {
 const loadGroups = async () => {
   const res = await crmStore.listAutomationGroups()
   if (res?.code === 0 && Array.isArray(res.data)) {
-    automationGroups.value = res.data.filter((group) => !isWhatsAppGroup(group))
+    automationGroups.value = whatsappEnabled.value
+      ? res.data
+      : res.data.filter((group) => !isWhatsAppGroup(group))
   }
 }
 
+const loadWhatsAppAvailability = async () => {
+  try {
+    const res = await crmStore.getWhatsAppConfig()
+    if (res?.code === 0 && res.data) {
+      const provider = String(res.data.provider || '').toLowerCase()
+      const hasToken = Boolean(res.data.hasToken)
+      if (provider === 'whapi') {
+        const statusRes = await crmStore.getWhapiStatus()
+        const statusRaw = String(statusRes?.data?.status || '').toLowerCase()
+        const stopped = statusRaw === 'stopped' || statusRaw === 'blocked'
+        whatsappEnabled.value = Boolean(statusRes?.data?.connected) && !stopped
+        return
+      }
+      if (provider === 'meta') {
+        whatsappEnabled.value = hasToken
+        return
+      }
+    }
+  } catch {}
+  whatsappEnabled.value = false
+}
+
 const refreshAll = async () => {
+  await loadWhatsAppAvailability()
   await loadGroups()
   if (automationRef.value?.refresh) {
     await automationRef.value.refresh()
