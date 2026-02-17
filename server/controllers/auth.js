@@ -60,6 +60,7 @@ import {
 } from "../utils/onboardingService";
 
 const config = useRuntimeConfig();
+const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
 
 export const login = async (event) => {
   try {
@@ -68,8 +69,15 @@ export const login = async (event) => {
     browserAgent = browserAgent + ",ipAddress:" + ip;
     const body = await readBody(event);
     const { email, password } = JSON.parse(body);
-    if (!email || !password) return error(400, "Missing credentials");
-    const user = await User.findOne({ where: { email } });
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail || !password) return error(400, "Missing credentials");
+    const user = await User.findOne({
+      where: {
+        email: {
+          [Op.iLike]: normalizedEmail,
+        },
+      },
+    });
     if (!user) {
       return error(401, "Invalid credentials");
     }
@@ -208,11 +216,18 @@ export const resendVerificationEmail = async (event) => {
   const parsed =
     typeof body === "string" ? JSON.parse(body || "{}") : body || {};
   const { email } = parsed;
+  const normalizedEmail = normalizeEmail(email);
 
-  if (!email) return error(400, "Email required");
+  if (!normalizedEmail) return error(400, "Email required");
 
   try {
-    const user = await User.findOne({ where: { email } });
+    const user = await User.findOne({
+      where: {
+        email: {
+          [Op.iLike]: normalizedEmail,
+        },
+      },
+    });
     if (!user) {
       return error(404, "User not found");
     }
@@ -226,8 +241,16 @@ export const resendVerificationEmail = async (event) => {
 
     // Create new verification link
     const link = generateVerificationLink();
-    await EmailVerification.create({ email, link, userId: user.id });
-    await sendEmailVerificationEmail({ email, fullName: user.fullName, link });
+    await EmailVerification.create({
+      email: normalizedEmail,
+      link,
+      userId: user.id,
+    });
+    await sendEmailVerificationEmail({
+      email: normalizedEmail,
+      fullName: user.fullName,
+      link,
+    });
 
     return success("Verification email sent");
   } catch (err) {
@@ -240,10 +263,11 @@ export const signupRequest = async (event) => {
   const parsed =
     typeof body === "string" ? JSON.parse(body || "{}") : body || {};
   const { fullName, email, password, organisationName, roleId } = parsed;
+  const normalizedEmail = normalizeEmail(email);
 
   // Trim and validate fullName
   const trimmedFullName = fullName ? fullName.trim() : "";
-  if (!trimmedFullName || !email || !password || !organisationName) {
+  if (!trimmedFullName || !normalizedEmail || !password || !organisationName) {
     return error(400, "Missing required fields");
   }
 
@@ -262,7 +286,13 @@ export const signupRequest = async (event) => {
   }
 
   // Check if user already exists
-  let user = await User.findOne({ where: { email } });
+  let user = await User.findOne({
+    where: {
+      email: {
+        [Op.iLike]: normalizedEmail,
+      },
+    },
+  });
   if (user) {
     return error(
       409,
@@ -285,7 +315,7 @@ export const signupRequest = async (event) => {
     user = await User.create(
       {
         fullName: trimmedFullName,
-        email,
+        email: normalizedEmail,
         password: hashed,
         profileCompletion: 0,
         roleId,
@@ -325,14 +355,14 @@ export const signupRequest = async (event) => {
     );
     const link = generateVerificationLink();
     await EmailVerification.create(
-      { email, link, userId: user.id },
+      { email: normalizedEmail, link, userId: user.id },
       { transaction }
     );
     await transaction.commit();
 
     try {
       await sendEmailVerificationEmail({
-        email,
+        email: normalizedEmail,
         fullName: trimmedFullName,
         link,
       });
@@ -348,7 +378,7 @@ export const signupRequest = async (event) => {
         organisationName: org.name,
         organisationId: org.id,
         creatorName: trimmedFullName,
-        creatorEmail: email,
+        creatorEmail: normalizedEmail,
         licenseType: "Trial",
         trialEndsOn: trialEndDate,
         origin: "signup",
@@ -704,11 +734,18 @@ export const forgetPasswordRequest = async (event) => {
   const parsed =
     typeof body === "string" ? JSON.parse(body || "{}") : body || {};
   const { email } = parsed;
+  const normalizedEmail = normalizeEmail(email);
 
-  if (!email) return error(403, "Email required");
+  if (!normalizedEmail) return error(403, "Email required");
 
   try {
-    const user = await User.findOne({ where: { email } });
+    const user = await User.findOne({
+      where: {
+        email: {
+          [Op.iLike]: normalizedEmail,
+        },
+      },
+    });
     if (!user) {
       throw createError({
         statusCode: 403,
@@ -722,8 +759,12 @@ export const forgetPasswordRequest = async (event) => {
     }
     const otp = generateOTP();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-    await Verification.upsert({ email, otp, expiresAt });
-    await sendOtpForPasswordReset({ email, otp, name: user.fullName });
+    await Verification.upsert({ email: normalizedEmail, otp, expiresAt });
+    await sendOtpForPasswordReset({
+      email: normalizedEmail,
+      otp,
+      name: user.fullName,
+    });
     return success("OTP sent");
   } catch (err) {
     if (err.statusCode) {
@@ -736,17 +777,32 @@ export const forgetPasswordRequest = async (event) => {
 export const resetPassword = async (event) => {
   const body = await readBody(event);
   const { email, otp, newPassword } = JSON.parse(body);
+  const normalizedEmail = normalizeEmail(email);
   try {
-    if (!email || !otp || !newPassword)
+    if (!normalizedEmail || !otp || !newPassword)
       return error(402, "Missing required fields");
     const record = await Verification.findOne({
-      where: { email, otp: otp + "" },
+      where: {
+        email: {
+          [Op.iLike]: normalizedEmail,
+        },
+        otp: otp + "",
+      },
     });
     if (!record || record.expiresAt < new Date()) {
       return error(400, "Invalid/Expired OTP");
     }
     const hashed = await bcrypt.hash(newPassword, 10);
-    await User.update({ password: hashed }, { where: { email } });
+    await User.update(
+      { password: hashed },
+      {
+        where: {
+          email: {
+            [Op.iLike]: normalizedEmail,
+          },
+        },
+      }
+    );
     await record.destroy();
     return success("Password updated");
   } catch (err) {
@@ -931,20 +987,34 @@ export const inviteMembers = async (event) => {
     if (!Array.isArray(users) || !users.length) {
       return error(400, "Invitee list is required");
     }
+    const normalizedUsers = users.map((user) => ({
+      ...user,
+      email: normalizeEmail(user.email),
+    }));
+    if (normalizedUsers.some((u) => !u.email)) {
+      return error(400, "All invitees must have a valid email");
+    }
 
     const currentUser = await User.findByPk(loggedUser.userId);
-    const currentUserEmail = currentUser?.email?.toLowerCase();
+    const currentUserEmail = normalizeEmail(currentUser?.email);
     if (currentUserEmail) {
-      const selfInviteAttempt = users.some(
-        (user) => user.email?.toLowerCase() === currentUserEmail
+      const selfInviteAttempt = normalizedUsers.some(
+        (user) => user.email === currentUserEmail
       );
       if (selfInviteAttempt) {
         return error(400, "You cannot invite yourself");
       }
     }
 
+    const normalizedEmails = normalizedUsers.map((i) => i.email);
     const existingUsers = await User.findAll({
-      where: { email: users.map((i) => i.email) },
+      where: {
+        [Op.or]: normalizedEmails.map((email) => ({
+          email: {
+            [Op.iLike]: email,
+          },
+        })),
+      },
       attributes: ["id", "email"],
     });
     const currentOrganisation = await Organisation.findByPk(currentOrg);
@@ -1036,13 +1106,15 @@ export const inviteMembers = async (event) => {
 
         // Don't return here - let transaction commit below
       } else {
-        const existingUsersEmails = existingUsers.map((u) => u.email);
-        const newUsers = users.filter(
+        const existingUsersEmails = existingUsers.map((u) =>
+          normalizeEmail(u.email)
+        );
+        const newUsers = normalizedUsers.filter(
           (x) => !existingUsersEmails.includes(x.email)
         );
         if (newUsers.length) {
           await inviteNewUsers(
-            users,
+            normalizedUsers,
             existingUsers,
             transaction,
             currentOrg,
@@ -1055,7 +1127,7 @@ export const inviteMembers = async (event) => {
       }
     } else {
       await inviteNewUsers(
-        users,
+        normalizedUsers,
         existingUsers,
         transaction,
         currentOrg,
@@ -1084,7 +1156,7 @@ const inviteNewUsers = async (
   currentOrganisation,
   currentUser
 ) => {
-  const existingEmails = existingUsers.map((u) => u.email);
+  const existingEmails = existingUsers.map((u) => normalizeEmail(u.email));
   const newUsersData = users
     .filter((i) => !existingEmails.includes(i.email))
     .map((i) => ({

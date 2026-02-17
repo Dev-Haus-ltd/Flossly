@@ -230,7 +230,7 @@ const login = async () => {
   if (formValidation.valid) {
     loginError.value = null;
     showResendButton.value = false;
-    credentials.value.email = credentials.value.email.toLowerCase()
+    credentials.value.email = credentials.value.email.trim()
     authStore
       .login(credentials.value)
       .then((res) => {
