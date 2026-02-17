@@ -127,6 +127,20 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  disconnectWhapi() {
+    return new Promise((resolve, reject) => {
+      Post("/whapi/disconnect", {})
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteWhapiChannel() {
+    return new Promise((resolve, reject) => {
+      Post("/whapi/delete", {})
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   getWhatsAppTemplates() {
     return new Promise((resolve, reject) => {
       Get("/meta/whatsappTemplates")

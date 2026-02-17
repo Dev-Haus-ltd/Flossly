@@ -33,6 +33,8 @@ export const useCrmStore = defineStore("crmStore", {
     startWhapiConnect() { return this._wrap(() => crmService.startWhapiConnect()); },
     getWhapiQr() { return this._wrap(() => crmService.getWhapiQr()); },
     getWhapiStatus() { return this._wrap(() => crmService.getWhapiStatus()); },
+    disconnectWhapi() { return this._wrap(() => crmService.disconnectWhapi()); },
+    deleteWhapiChannel() { return this._wrap(() => crmService.deleteWhapiChannel()); },
 
     // Leads
     listLeads(filters = {}) { return this._wrap(() => crmService.listLeads(filters)); },

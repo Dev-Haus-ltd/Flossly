@@ -176,6 +176,39 @@ const updateWebhook = async (token, webhookUrl) => {
   }
 };
 
+const logoutChannel = async (token) => {
+  if (!token) return null;
+  const env = getWhapiEnvConfig();
+  const base = String(env.baseUrl || "").replace(/\/+$/, "");
+  try {
+    return await $fetch(`${base}/users/logout`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    return null;
+  }
+};
+
+const deletePartnerChannel = async (channelId) => {
+  const partner = getWhapiPartnerConfig();
+  if (!partner.partnerToken || !partner.projectId) {
+    throw new Error("Whapi partner token or project id is missing");
+  }
+  if (!channelId) {
+    throw new Error("Whapi channel id is missing");
+  }
+  const base = String(partner.managerBaseUrl || "").replace(/\/+$/, "");
+  const url = `${base}/channels/${encodeURIComponent(String(channelId))}`;
+  return await $fetch(url, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${partner.partnerToken}`,
+      "Project-Id": partner.projectId,
+    },
+  });
+};
+
 export const connect = async (event) => {
   const { orgId, userId } = event.context.user || {};
   if (!orgId || !userId) return error(401, "Unauthenticated");
@@ -229,6 +262,40 @@ export const connect = async (event) => {
   });
 };
 
+export const disconnect = async (event) => {
+  const { orgId } = event.context.user || {};
+  if (!orgId) return error(401, "Unauthenticated");
+  const existing = await findOrgChannel(orgId);
+  if (!existing) return error(404, "Whapi channel not connected");
+  const token = decrypt(existing.tokenEnc);
+  const resp = await logoutChannel(token);
+  existing.status = "LoggedOut";
+  existing.phoneNumber = null;
+  existing.displayName = null;
+  existing.connectedAt = null;
+  await existing.save();
+  return success({
+    disconnected: true,
+    channelId: existing.channelId,
+    response: resp || null,
+  });
+};
+
+export const deleteChannel = async (event) => {
+  const { orgId } = event.context.user || {};
+  if (!orgId) return error(401, "Unauthenticated");
+  const existing = await findOrgChannel(orgId);
+  if (!existing) return error(404, "Whapi channel not connected");
+
+  const resp = await deletePartnerChannel(existing.channelId);
+  await existing.destroy();
+  return success({
+    deleted: true,
+    channelId: existing.channelId,
+    response: resp || null,
+  });
+};
+
 export const qr = async (event) => {
   const { orgId } = event.context.user || {};
   if (!orgId) return error(401, "Unauthenticated");
@@ -248,8 +315,10 @@ export const status = async (event) => {
   if (!orgId) return error(401, "Unauthenticated");
   const existing = await findOrgChannel(orgId);
   if (!existing) return success({ connected: false });
+  const rawStatus = String(existing.status || "").toLowerCase();
+  const connected = rawStatus !== "loggedout" && rawStatus !== "disconnected";
   return success({
-    connected: true,
+    connected,
     channelId: existing.channelId,
     status: existing.status,
     phoneNumber: existing.phoneNumber || null,

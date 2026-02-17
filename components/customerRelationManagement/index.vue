@@ -84,6 +84,34 @@
               {{ whapiStatus.displayName ? `${whapiStatus.displayName} (${whapiStatus.phoneNumber})` : whapiStatus.phoneNumber }}
             </span>
           </v-tooltip>
+          <v-menu
+            v-if="whatsappProvider.provider === 'whapi' && whapiStatus.connected"
+            v-model="whapiMenu"
+            location="bottom end"
+          >
+            <template #activator="{ props }">
+              <v-btn
+                v-bind="props"
+                icon
+                variant="text"
+                class="add-task-btn"
+                aria-label="Whapi actions"
+              >
+                <v-icon size="18">mdi-dots-vertical</v-icon>
+              </v-btn>
+            </template>
+            <v-list density="compact">
+              <v-list-item @click="connectWhapi">
+                <v-list-item-title>Show QR / Change Number</v-list-item-title>
+              </v-list-item>
+              <v-list-item @click="confirmWhapiDisconnect = true">
+                <v-list-item-title>Disconnect (Logout)</v-list-item-title>
+              </v-list-item>
+              <v-list-item @click="confirmWhapiDelete = true">
+                <v-list-item-title>Delete Channel</v-list-item-title>
+              </v-list-item>
+            </v-list>
+          </v-menu>
           <!--  WhatsApp connect UI (temporarily hidden until complete) 
           <v-btn
             :color="isWhatsAppConnected ? 'success' : 'primary'"
@@ -341,7 +369,7 @@
             <div v-if="whapiQr" class="d-flex flex-column align-center gap-2">
               <img :src="whapiQr" alt="WhatsApp QR" style="max-width: 260px;" />
               <div class="text-caption text-medium-emphasis">
-                Scan this QR code using WhatsApp on the phone you want to connect.
+                Scan this QR code using WhatsApp on the phone you want to connect or switch to.
               </div>
             </div>
             <v-alert
@@ -362,6 +390,38 @@
             <v-spacer />
             <v-btn :loading="whapiLoading" variant="flat" color="primary" @click="refreshWhapiQr">
               Refresh QR
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
+      <v-dialog v-model="confirmWhapiDisconnect" max-width="520">
+        <v-card class="pa-4">
+          <v-card-title class="text-subtitle-1 pa-0 mb-2">Disconnect WhatsApp</v-card-title>
+          <v-card-text class="pa-0">
+            This will log out the current device but keep the channel so you can scan a new QR to change numbers.
+          </v-card-text>
+          <v-card-actions class="pa-0 mt-4">
+            <v-spacer />
+            <v-btn variant="text" @click="confirmWhapiDisconnect = false">Cancel</v-btn>
+            <v-btn color="error" variant="flat" :loading="whapiDisconnecting" @click="disconnectWhapi">
+              Disconnect
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
+      <v-dialog v-model="confirmWhapiDelete" max-width="520">
+        <v-card class="pa-4">
+          <v-card-title class="text-subtitle-1 pa-0 mb-2">Delete WhatsApp Channel</v-card-title>
+          <v-card-text class="pa-0">
+            This will permanently delete the channel. To reconnect, a new channel will be created.
+          </v-card-text>
+          <v-card-actions class="pa-0 mt-4">
+            <v-spacer />
+            <v-btn variant="text" @click="confirmWhapiDelete = false">Cancel</v-btn>
+            <v-btn color="error" variant="flat" :loading="whapiDeleting" @click="deleteWhapiChannel">
+              Delete Channel
             </v-btn>
           </v-card-actions>
         </v-card>
@@ -534,8 +594,13 @@ const whatsappProvider = reactive({
   requiresTemplateOutside24h: true,
 });
 const whapiDialog = ref(false);
+const whapiMenu = ref(false);
+const confirmWhapiDisconnect = ref(false);
+const confirmWhapiDelete = ref(false);
 const whapiQr = ref('');
 const whapiLoading = ref(false);
+const whapiDisconnecting = ref(false);
+const whapiDeleting = ref(false);
 const whapiStatus = reactive({
   connected: false,
   channelId: '',
@@ -740,6 +805,61 @@ const refreshWhapiQr = async () => {
     }
   } finally {
     whapiLoading.value = false;
+  }
+};
+
+const disconnectWhapi = async () => {
+  if (whapiDisconnecting.value) return;
+  try {
+    whapiDisconnecting.value = true;
+    const res = await crmStore.disconnectWhapi();
+    if (res?.code === 0) {
+      mainStore?.setSnackbar?.({ title: 'WhatsApp disconnected', type: 'success' });
+      whapiStatus.connected = false;
+      whapiStatus.status = 'LoggedOut';
+      whapiStatus.phoneNumber = '';
+      whapiStatus.displayName = '';
+      whapiQr.value = '';
+      await loadWhapiStatus();
+    } else {
+      const msg = res?.message || res?.error || 'Failed to disconnect WhatsApp';
+      mainStore?.setSnackbar?.({ title: msg, type: 'error' });
+    }
+  } catch (e) {
+    const msg = e?.data?.message || e?.message || 'Failed to disconnect WhatsApp';
+    mainStore?.setSnackbar?.({ title: msg, type: 'error' });
+  } finally {
+    whapiDisconnecting.value = false;
+    confirmWhapiDisconnect.value = false;
+    whapiMenu.value = false;
+  }
+};
+
+const deleteWhapiChannel = async () => {
+  if (whapiDeleting.value) return;
+  try {
+    whapiDeleting.value = true;
+    const res = await crmStore.deleteWhapiChannel();
+    if (res?.code === 0) {
+      mainStore?.setSnackbar?.({ title: 'WhatsApp channel deleted', type: 'success' });
+      whapiStatus.connected = false;
+      whapiStatus.channelId = '';
+      whapiStatus.status = '';
+      whapiStatus.phoneNumber = '';
+      whapiStatus.displayName = '';
+      whapiQr.value = '';
+      await loadWhapiStatus();
+    } else {
+      const msg = res?.message || res?.error || 'Failed to delete WhatsApp channel';
+      mainStore?.setSnackbar?.({ title: msg, type: 'error' });
+    }
+  } catch (e) {
+    const msg = e?.data?.message || e?.message || 'Failed to delete WhatsApp channel';
+    mainStore?.setSnackbar?.({ title: msg, type: 'error' });
+  } finally {
+    whapiDeleting.value = false;
+    confirmWhapiDelete.value = false;
+    whapiMenu.value = false;
   }
 };
 
