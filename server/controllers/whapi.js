@@ -479,6 +479,9 @@ export const webhook = async (event) => {
 
   if (getMethod(event) === "POST") {
     const body = await readBody(event);
+    try {
+      console.log("[WHAPI webhook] payload", JSON.stringify(body));
+    } catch {}
     const channelId =
       body?.channel_id ||
       body?.channelId ||
