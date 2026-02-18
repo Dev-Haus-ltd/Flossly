@@ -872,6 +872,7 @@ const loadWhapiStatus = async () => {
         whapiActivationPending.value = false;
         whapiActivationMessage.value = '';
         clearWhapiCooldown();
+        if (whapiDialog.value) whapiDialog.value = false;
       }
     } else {
       whapiStatus.connected = false;

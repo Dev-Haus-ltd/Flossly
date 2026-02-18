@@ -61,7 +61,13 @@ const chatItems = computed(() => {
     .reverse()
     .map((row) => {
       const isOutbound = String(row?.direction || "").toLowerCase() === "outbound";
-      const message = String(row?.content || "").trim();
+      const content = String(row?.content || "").trim();
+      const templateName = String(row?.templateName || "").trim();
+      const type = String(row?.type || "").trim();
+      const message =
+        content ||
+        (templateName ? `Template: ${templateName}` : "") ||
+        (type ? `${type} message` : "");
       if (!message) return null;
       const statusRaw = String(row?.status || "").trim();
       const statusLabel = statusRaw ? `${statusRaw.charAt(0).toUpperCase()}${statusRaw.slice(1)}` : "";

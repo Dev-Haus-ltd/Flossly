@@ -600,16 +600,12 @@
             {{ whatsappCompose.missing.length }} lead(s) have no valid phone number and will be skipped.
           </v-alert>
           <v-alert
+            v-if="whatsappProvider.supportsTemplates"
             type="info"
             variant="tonal"
             class="mb-3"
           >
-            <span v-if="whatsappProvider.supportsTemplates">
-              WhatsApp outbound supports templates. Templates must be approved in Meta.
-            </span>
-            <span v-else>
-              Templates are disabled for the current WhatsApp provider. Free text only.
-            </span>
+            WhatsApp outbound supports templates. Templates must be approved in Meta.
           </v-alert>
           <v-radio-group
             v-if="whatsappProvider.supportsTemplates"

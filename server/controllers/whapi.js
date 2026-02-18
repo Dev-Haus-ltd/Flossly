@@ -305,6 +305,8 @@ export const connect = async (event) => {
   const existing = await findOrgChannel(orgId);
   if (existing) {
     const token = decrypt(existing.tokenEnc);
+    const webhookUrl = resolveWebhookUrl();
+    const webhookResp = await updateWebhook(token, webhookUrl);
     const qr = await fetchQrWithRetry(token);
     if (qr) {
       existing.lastQrAt = new Date();
@@ -315,6 +317,7 @@ export const connect = async (event) => {
       status: existing.status,
       qr,
       qrReady: Boolean(qr),
+      webhookUpdated: !!webhookResp,
       canActivate: isWhapiActivationBlocked(existing.status),
       warning: qr
         ? null
@@ -348,7 +351,7 @@ export const connect = async (event) => {
     webhookUrl: webhookUrl || null,
   });
 
-  await updateWebhook(created.token, webhookUrl);
+  const webhookResp = await updateWebhook(created.token, webhookUrl);
   const qr = await fetchQrWithRetry(created.token);
   if (qr) {
     row.lastQrAt = new Date();
@@ -371,6 +374,7 @@ export const connect = async (event) => {
       : "QR not ready. If the channel is Stopped/Overdue, activate it with at least 1 day, wait ~1 minute, then refresh.",
     mode: requestedMode,
     modeUpdated: !!modeResp,
+    webhookUpdated: !!webhookResp,
     extended: !!extendResp,
     extendedDays: extendDays,
   });
