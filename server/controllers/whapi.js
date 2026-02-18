@@ -106,14 +106,23 @@ const findOrgChannel = async (orgId) => {
   });
 };
 
-const isWhapiConnected = (status, phoneNumber) => {
+const isWhapiConnected = (status, phoneNumber, displayName) => {
   const raw = String(status || "").trim().toLowerCase();
-  if (!phoneNumber) return false;
+  const hasIdentity = !!(phoneNumber || displayName);
+  if (!hasIdentity) return false;
   if (!raw) return false;
   if (raw.includes("loggedout") || raw.includes("disconnected")) return false;
   if (raw.includes("stopped") || raw.includes("overdue")) return false;
   if (raw.includes("pending") || raw.includes("created")) return false;
-  return raw.includes("active") || raw.includes("live") || raw.includes("trial") || raw.includes("launched");
+  return (
+    raw.includes("active") ||
+    raw.includes("live") ||
+    raw.includes("trial") ||
+    raw.includes("launched") ||
+    raw.includes("auth") ||
+    raw.includes("authorized") ||
+    raw.includes("qr")
+  );
 };
 
 const isWhapiActivationBlocked = (status) => {
@@ -461,7 +470,7 @@ export const status = async (event) => {
   if (!orgId) return error(401, "Unauthenticated");
   const existing = await findOrgChannel(orgId);
   if (!existing) return success({ connected: false });
-  const connected = isWhapiConnected(existing.status, existing.phoneNumber);
+  const connected = isWhapiConnected(existing.status, existing.phoneNumber, existing.displayName);
   return success({
     connected,
     channelId: existing.channelId,
@@ -503,14 +512,14 @@ export const webhook = async (event) => {
           if (phone) cfg.phoneNumber = String(phone);
           else if (userId) cfg.phoneNumber = String(userId);
           cfg.status = channelInfo?.status || cfg.status;
-          if (isWhapiConnected(cfg.status, cfg.phoneNumber) && !cfg.connectedAt) {
+          if (isWhapiConnected(cfg.status, cfg.phoneNumber, cfg.displayName) && !cfg.connectedAt) {
             cfg.connectedAt = new Date();
           }
         }
         const healthStatus = body?.health?.status?.text || null;
         if (healthStatus) {
           cfg.status = String(healthStatus);
-          if (isWhapiConnected(cfg.status, cfg.phoneNumber) && !cfg.connectedAt) {
+          if (isWhapiConnected(cfg.status, cfg.phoneNumber, cfg.displayName) && !cfg.connectedAt) {
             cfg.connectedAt = new Date();
           }
         }

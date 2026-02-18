@@ -651,6 +651,7 @@ const whapiStatusLabel = computed(() => {
     if (raw.includes('logout')) return 'Logged Out';
     if (raw.includes('activating')) return 'Activating';
     if (raw.includes('pending') || raw.includes('created')) return 'Pending';
+    if (raw.includes('auth')) return 'Authorized';
     if (raw.includes('active') || raw.includes('live') || raw.includes('trial')) return 'Pending';
     if (raw) return raw.charAt(0).toUpperCase() + raw.slice(1);
     return 'Disconnected';
@@ -661,6 +662,7 @@ const whapiStatusLabel = computed(() => {
     if (raw.includes('logout')) return 'Logged Out';
     if (raw.includes('activating')) return 'Activating';
     if (raw.includes('pending') || raw.includes('created')) return 'Pending';
+    if (raw.includes('auth')) return 'Authorized';
     if (raw.includes('active')) return 'Active';
     if (raw.includes('live')) return 'Live';
     if (raw.includes('trial')) return 'Trial';
@@ -671,7 +673,7 @@ const whapiStatusLabel = computed(() => {
 
 const whapiStatusColor = computed(() => {
   const label = String(whapiStatusLabel.value || '').toLowerCase();
-  if (label.includes('active') || label.includes('live') || label.includes('trial')) return 'success';
+  if (label.includes('active') || label.includes('live') || label.includes('trial') || label.includes('authoriz')) return 'success';
   if (label.includes('activating')) return 'warning';
   if (label.includes('pending')) return 'warning';
   if (label.includes('stopped') || label.includes('overdue')) return 'error';

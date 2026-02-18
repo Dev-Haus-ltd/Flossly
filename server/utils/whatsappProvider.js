@@ -76,9 +76,9 @@ export const resolveWhapiConfig = async (orgId) => {
   if (row) {
     const token = decrypt(row.tokenEnc);
     const status = String(row.status || "").trim().toLowerCase();
-    const hasPhone = !!row.phoneNumber;
+    const hasIdentity = !!(row.phoneNumber || row.displayName);
     const connected =
-      hasPhone &&
+      hasIdentity &&
       status &&
       !status.includes("loggedout") &&
       !status.includes("disconnected") &&
@@ -86,7 +86,13 @@ export const resolveWhapiConfig = async (orgId) => {
       !status.includes("overdue") &&
       !status.includes("pending") &&
       !status.includes("created") &&
-      (status.includes("active") || status.includes("live") || status.includes("trial") || status.includes("launched"));
+      (status.includes("active") ||
+        status.includes("live") ||
+        status.includes("trial") ||
+        status.includes("launched") ||
+        status.includes("auth") ||
+        status.includes("authorized") ||
+        status.includes("qr"));
     const env = getWhapiEnvConfig();
     return {
       channelId: row.channelId,
