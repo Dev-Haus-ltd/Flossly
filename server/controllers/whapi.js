@@ -543,6 +543,12 @@ export const webhook = async (event) => {
       const lead = await findLeadByPhone(fromDigits, orgId);
       if (!lead) continue;
       const content = getMessageContent(msg);
+      const msgType =
+        msg?.type ||
+        msg?.message_type ||
+        msg?.messageType ||
+        (msg?.text ? "text" : null) ||
+        "text";
       await updateLeadWhatsAppMeta(lead, {
         lastInboundAt: new Date(extractTimestamp(msg?.timestamp || msg?.time || msg?.sent)).toISOString(),
         lastInboundFrom: fromDigits,
@@ -553,7 +559,7 @@ export const webhook = async (event) => {
         leadId: lead.id,
         to: fromDigits,
         direction: "inbound",
-        type: "text",
+        type: String(msgType || "text"),
         status: "received",
         providerMessageId: msg?.id || msg?.message_id || msg?.messageId || null,
         content,

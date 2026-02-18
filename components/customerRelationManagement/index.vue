@@ -907,7 +907,7 @@ const connectWhapi = async () => {
       } else if (res.data.canActivate && !res.data.qr) {
         whapiActivationMessage.value = 'Channel is stopped. Activate it for at least 1 day to enable QR.';
       }
-      if (!res.data.qr && res.data.warning && mainStore?.setSnackbar) {
+      if (!res.data.qr && res.data.warning && !whapiStatus.connected && mainStore?.setSnackbar) {
         mainStore.setSnackbar({ title: res.data.warning, type: 'warning' });
       }
     } else if (mainStore?.setSnackbar) {
@@ -928,7 +928,7 @@ const refreshWhapiQr = async () => {
         whapiActivationPending.value = false;
         whapiActivationMessage.value = '';
       }
-      if (!res.data.qr && res.data.warning && mainStore?.setSnackbar) {
+      if (!res.data.qr && res.data.warning && !whapiStatus.connected && mainStore?.setSnackbar) {
         mainStore.setSnackbar({ title: res.data.warning, type: 'warning' });
       }
     }

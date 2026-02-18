@@ -648,43 +648,48 @@
                 <v-icon size="18" class="mr-2">mdi-whatsapp</v-icon>
                 WhatsApp Template
               </div>
-              <v-combobox
-                v-model="active.whatsappTemplateName"
-                :items="whatsappTemplateNameOptions"
-                variant="solo"
-                density="compact"
-                hide-details
-                bg-color="#FFFFFF"
-                flat
-                placeholder="Approved template name (e.g. hello_world)"
-                class="mb-2"
-                clearable
-              />
-              <v-combobox
-                v-model="active.whatsappTemplateLanguage"
-                :items="whatsappTemplateLanguageOptions"
-                variant="solo"
-                density="compact"
-                hide-details
-                bg-color="#FFFFFF"
-                flat
-                placeholder="Language code (e.g. en_US)"
-                clearable
-              />
-              <div class="text-caption text-medium-emphasis mt-2">
-                Templates must be approved in Meta. The message body below is for preview and variable mapping only.
-              </div>
-              <div v-if="whatsappTemplatePreviewLines" class="mt-3">
-                <div class="text-subtitle-2 text-grey-darken-2 mb-2">
-                  Template Preview
+              <template v-if="props.whatsappRequiresTemplates">
+                <v-combobox
+                  v-model="active.whatsappTemplateName"
+                  :items="whatsappTemplateNameOptions"
+                  variant="solo"
+                  density="compact"
+                  hide-details
+                  bg-color="#FFFFFF"
+                  flat
+                  placeholder="Approved template name (e.g. hello_world)"
+                  class="mb-2"
+                  clearable
+                />
+                <v-combobox
+                  v-model="active.whatsappTemplateLanguage"
+                  :items="whatsappTemplateLanguageOptions"
+                  variant="solo"
+                  density="compact"
+                  hide-details
+                  bg-color="#FFFFFF"
+                  flat
+                  placeholder="Language code (e.g. en_US)"
+                  clearable
+                />
+                <div class="text-caption text-medium-emphasis mt-2">
+                  Templates must be approved in Meta. The message body below is for preview and variable mapping only.
                 </div>
-                <div class="whatsapp-preview">
-                  <div class="whatsapp-preview__bubble">
-                    <div v-for="(line, i) in whatsappTemplatePreviewLines" :key="`wa-tpl-prev-${i}`">
-                      {{ line }}
+                <div v-if="whatsappTemplatePreviewLines" class="mt-3">
+                  <div class="text-subtitle-2 text-grey-darken-2 mb-2">
+                    Template Preview
+                  </div>
+                  <div class="whatsapp-preview">
+                    <div class="whatsapp-preview__bubble">
+                      <div v-for="(line, i) in whatsappTemplatePreviewLines" :key="`wa-tpl-prev-${i}`">
+                        {{ line }}
+                      </div>
                     </div>
                   </div>
                 </div>
+              </template>
+              <div v-else class="text-caption text-medium-emphasis mt-2">
+                Templates are not required for Whapi. The message body below will be sent as free text.
               </div>
             </div>
             <div ref="editorEl" class="editor"></div>
@@ -731,6 +736,7 @@ const props = defineProps({
   useGroupsApi: { type: Boolean, default: true },
   includeDefaults: { type: Boolean, default: false },
   whatsappEnabled: { type: Boolean, default: true },
+  whatsappRequiresTemplates: { type: Boolean, default: true },
   showCardToggle: { type: Boolean, default: true },
 })
 const crmStore = useCrmStore()
@@ -1076,6 +1082,7 @@ const resolveSelectedTemplate = () => {
 }
 
 const whatsappTemplatePreviewLines = computed(() => {
+  if (!props.whatsappRequiresTemplates) return null
   const template = resolveSelectedTemplate()
   if (!template) return null
   const params = getTemplateParamExamples(template).map((v, i) => String(v || `{{${i + 1}}}`))
@@ -1083,6 +1090,10 @@ const whatsappTemplatePreviewLines = computed(() => {
 })
 
 const loadWhatsAppTemplates = async () => {
+  if (!props.whatsappRequiresTemplates) {
+    whatsappTemplates.value = []
+    return
+  }
   if (whatsappTemplatesLoading.value) return
   try {
     whatsappTemplatesLoading.value = true

@@ -67,6 +67,7 @@
             :use-groups-api="false"
             :include-defaults="false"
             :whatsapp-enabled="whatsappEnabled"
+            :whatsapp-requires-templates="whatsappRequiresTemplates"
             :show-card-toggle="false"
           />
         </div>
@@ -113,6 +114,8 @@ const showAutomationDrawer = ref(false)
 const showBulkUploadDialog = ref(false)
 const showInfoBanner = ref(true)
 const whatsappEnabled = ref(false)
+const whatsappProvider = ref('meta')
+const whatsappRequiresTemplates = ref(true)
 
 const isPrivileged = computed(() => [1, 8].includes(Number(user.value?.roleId)))
 
@@ -142,15 +145,21 @@ const loadWhatsAppAvailability = async () => {
         const statusRaw = String(statusRes?.data?.status || '').toLowerCase()
         const stopped = statusRaw === 'stopped' || statusRaw === 'blocked'
         whatsappEnabled.value = Boolean(statusRes?.data?.connected) && !stopped
+        whatsappProvider.value = 'whapi'
+        whatsappRequiresTemplates.value = false
         return
       }
       if (provider === 'meta') {
         whatsappEnabled.value = hasToken
+        whatsappProvider.value = 'meta'
+        whatsappRequiresTemplates.value = true
         return
       }
     }
   } catch {}
   whatsappEnabled.value = false
+  whatsappProvider.value = 'meta'
+  whatsappRequiresTemplates.value = true
 }
 
 const refreshAll = async () => {

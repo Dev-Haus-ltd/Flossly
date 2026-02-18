@@ -324,6 +324,7 @@ export const sendImmediateCrmAutomationsForLead = async (lead) => {
     where: { organisationId: Number(lead.organisationId) },
   });
   if (!templates.length) return;
+  const waConfig = await resolveWhatsAppProviderConfig(lead.organisationId);
   const templatesByOrg = buildCrmTemplatesByOrg(templates);
   const effectiveTemplates = buildEffectiveCrmTemplates(lead, templatesByOrg);
   const today = new Date();
@@ -336,11 +337,14 @@ export const sendImmediateCrmAutomationsForLead = async (lead) => {
     if (!due || hasCrmSent(raw, sentKey)) continue;
     if (String(tpl?.type || "Email").toLowerCase() === "whatsapp") {
       if (!lead?.telephone) continue;
-      const templatePayload = buildCrmWhatsAppTemplatePayload(lead, tpl);
-      if (!templatePayload) {
+      const message = buildCrmWhatsAppMessage(lead, tpl);
+      const templatePayload =
+        waConfig?.provider === "meta"
+          ? buildCrmWhatsAppTemplatePayload(lead, tpl)
+          : null;
+      if (waConfig?.provider === "meta" && !templatePayload) {
         throw new Error("WhatsApp template name is required for automation");
       }
-      const message = buildCrmWhatsAppMessage(lead, tpl);
       await sendCrmAutomationWhatsApp(lead, message, templatePayload);
       await markCrmSent(lead, raw, sentKey);
     } else {
