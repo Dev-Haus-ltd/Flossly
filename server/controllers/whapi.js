@@ -479,9 +479,6 @@ export const webhook = async (event) => {
 
   if (getMethod(event) === "POST") {
     const body = await readBody(event);
-    try {
-      console.log("[WHAPI webhook] payload", JSON.stringify(body));
-    } catch {}
     const channelId =
       body?.channel_id ||
       body?.channelId ||
@@ -502,8 +499,17 @@ export const webhook = async (event) => {
         if (channelInfo) {
           cfg.displayName = channelInfo?.name || channelInfo?.pushname || cfg.displayName || null;
           const phone = channelInfo?.phone || channelInfo?.phone_number || channelInfo?.phoneNumber || null;
+          const userId = channelInfo?.id || null;
           if (phone) cfg.phoneNumber = String(phone);
+          else if (userId) cfg.phoneNumber = String(userId);
           cfg.status = channelInfo?.status || cfg.status;
+          if (isWhapiConnected(cfg.status, cfg.phoneNumber) && !cfg.connectedAt) {
+            cfg.connectedAt = new Date();
+          }
+        }
+        const healthStatus = body?.health?.status?.text || null;
+        if (healthStatus) {
+          cfg.status = String(healthStatus);
           if (isWhapiConnected(cfg.status, cfg.phoneNumber) && !cfg.connectedAt) {
             cfg.connectedAt = new Date();
           }
