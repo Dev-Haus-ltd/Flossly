@@ -144,6 +144,9 @@ export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload =
   if (waConfig.provider === "whapi" && !waConfig?.token) {
     throw new Error("Whapi token is missing");
   }
+  if (waConfig.provider === "whapi" && !waConfig?.connected) {
+    throw new Error("Whapi channel is not connected");
+  }
   const limitStatus = await isWhatsAppLimitExceeded(lead.organisationId);
   if (limitStatus.exceeded) {
     throw new Error(`WhatsApp monthly limit reached (${limitStatus.count}/${limitStatus.limit})`);

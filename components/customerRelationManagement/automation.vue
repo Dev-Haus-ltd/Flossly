@@ -13,6 +13,7 @@
             :count="card.itemCount"
             :enabled="card.enabled"
             :author="card.author"
+            :show-toggle="props.showCardToggle"
             :selected="activeAutomation?.key === card.key"
             @select="selectAutomation(card)"
             @toggle="(val) => toggleAutomationGroup(card, val)"
@@ -40,6 +41,14 @@
           </div>
         </div>
       </div>
+      <v-alert
+        type="info"
+        variant="tonal"
+        class="mb-3"
+        density="compact"
+      >
+        Please review and tailor automation content (placeholders, pricing, dates, and policies) before enabling. You are responsible for the final message details.
+      </v-alert>
       <!-- Header Toolbar -->
       <div class="d-flex flex-wrap justify-space-between align-center mb-3 automation-toolbar">
         <div class="d-flex align-center gap-2">
@@ -138,9 +147,21 @@
 
           <!-- Sending/Trigger Column -->
           <template #item.sending="{ item }">
-            <div class="d-flex align-center">
-              <v-icon size="16" color="grey-darken-1" class="mr-2">mdi-clock-outline</v-icon>
-              <span class="text-body-2 text-medium-emphasis">{{ item.sending }}</span>
+            <div class="d-flex align-center justify-space-between trigger-cell">
+              <div class="d-flex align-center">
+                <v-icon size="16" color="grey-darken-1" class="mr-2">mdi-clock-outline</v-icon>
+                <span class="text-body-2 text-medium-emphasis">{{ item.sending }}</span>
+              </div>
+              <v-btn
+                icon
+                variant="text"
+                size="x-small"
+                class="action-icon-btn"
+                aria-label="Edit trigger"
+                @click="openTriggerEditor(item)"
+              >
+                <v-icon size="16">mdi-pencil-outline</v-icon>
+              </v-btn>
             </div>
           </template>
 
@@ -287,6 +308,14 @@
               </v-menu>
             </div>
           </div>
+          <v-alert
+            type="info"
+            variant="tonal"
+            class="mb-3"
+            density="compact"
+          >
+            Please review and tailor automation content (placeholders, pricing, dates, and policies) before enabling. You are responsible for the final message details.
+          </v-alert>
 
           <v-card class="with-border rounded-lg elevation-0">
             <v-divider />
@@ -317,9 +346,21 @@
               </template>
 
               <template #item.sending="{ item }">
-                <div class="d-flex align-center">
-                  <v-icon size="16" color="grey-darken-1" class="mr-2">mdi-clock-outline</v-icon>
-                  <span class="text-body-2 text-medium-emphasis">{{ item.sending }}</span>
+                <div class="d-flex align-center justify-space-between trigger-cell">
+                  <div class="d-flex align-center">
+                    <v-icon size="16" color="grey-darken-1" class="mr-2">mdi-clock-outline</v-icon>
+                    <span class="text-body-2 text-medium-emphasis">{{ item.sending }}</span>
+                  </div>
+                  <v-btn
+                    icon
+                    variant="text"
+                    size="x-small"
+                    class="action-icon-btn"
+                    aria-label="Edit trigger"
+                    @click="openTriggerEditor(item)"
+                  >
+                    <v-icon size="16">mdi-pencil-outline</v-icon>
+                  </v-btn>
                 </div>
               </template>
 
@@ -378,7 +419,7 @@
     </v-dialog>
 
     <!-- Email Preview Modal -->
-    <v-dialog v-model="showPreview" max-width="980px">
+    <v-dialog v-model="showPreview" max-width="980px" :retain-focus="false">
       <v-card class="rounded-lg elevation-8">
         <div class="modal-header preview-modal-header">
           <div class="text-subtitle-2 font-weight-bold">
@@ -402,6 +443,136 @@
               class="email-preview-iframe"
             ></iframe>
           </div>
+        </div>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="showTriggerDialog" max-width="720px">
+      <v-card class="rounded-lg elevation-8">
+        <div class="modal-header">
+          <div>
+            <h5 class="modal-title">Edit Trigger</h5>
+            <div class="text-caption text-medium-emphasis">
+              {{ triggerPreviewText }}
+            </div>
+          </div>
+          <v-btn icon variant="text" @click="closeTriggerDialog">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </div>
+
+        <v-divider />
+
+        <div class="modal-body">
+          <v-row>
+            <v-col cols="12" md="6">
+              <label class="mb-1 fld-lbl">Trigger Type</label>
+              <v-select
+                v-model="triggerForm.triggerType"
+                :items="triggerTypes"
+                item-title="label"
+                item-value="value"
+                variant="solo"
+                density="compact"
+                class="mb-1 input-bordered"
+                flat
+              />
+            </v-col>
+
+            <v-col
+              cols="12"
+              md="6"
+              v-if="triggerForm.triggerType !== 'black_friday' && triggerForm.triggerType !== 'month_day' && triggerForm.triggerType !== 'weekday_of_month'"
+            >
+              <label class="mb-1 fld-lbl">Days Offset</label>
+              <v-text-field
+                v-model="triggerForm.triggerDays"
+                type="number"
+                min="0"
+                variant="solo"
+                density="compact"
+                class="mb-1 input-bordered"
+                flat
+              />
+            </v-col>
+
+            <v-col cols="12" md="6" v-if="triggerForm.triggerType === 'black_friday' || triggerForm.triggerType === 'month_day' || triggerForm.triggerType === 'weekday_of_month'">
+              <label class="mb-1 fld-lbl">Offset Days (before/after)</label>
+              <v-text-field
+                v-model="triggerForm.triggerOffsetDays"
+                type="number"
+                variant="solo"
+                density="compact"
+                class="mb-1 input-bordered"
+                flat
+              />
+            </v-col>
+
+            <v-col cols="12" md="6" v-if="triggerForm.triggerType === 'month_day' || triggerForm.triggerType === 'weekday_of_month'">
+              <label class="mb-1 fld-lbl">Month (1-12)</label>
+              <v-text-field
+                v-model="triggerForm.triggerMonth"
+                type="number"
+                min="1"
+                max="12"
+                variant="solo"
+                density="compact"
+                class="mb-1 input-bordered"
+                flat
+              />
+            </v-col>
+
+            <v-col cols="12" md="6" v-if="triggerForm.triggerType === 'month_day'">
+              <label class="mb-1 fld-lbl">Day of Month</label>
+              <v-text-field
+                v-model="triggerForm.triggerDay"
+                type="number"
+                min="1"
+                max="31"
+                variant="solo"
+                density="compact"
+                class="mb-1 input-bordered"
+                flat
+              />
+            </v-col>
+
+            <v-col cols="12" md="6" v-if="triggerForm.triggerType === 'weekday_of_month'">
+              <label class="mb-1 fld-lbl">Weekday</label>
+              <v-select
+                v-model="triggerForm.triggerWeekday"
+                :items="weekdayOptions"
+                item-title="label"
+                item-value="value"
+                variant="solo"
+                density="compact"
+                class="mb-1 input-bordered"
+                flat
+              />
+            </v-col>
+
+            <v-col cols="12" md="6" v-if="triggerForm.triggerType === 'weekday_of_month'">
+              <label class="mb-1 fld-lbl">Week in Month</label>
+              <v-select
+                v-model="triggerForm.triggerWeekIndex"
+                :items="weekIndexOptions"
+                item-title="label"
+                item-value="value"
+                variant="solo"
+                density="compact"
+                class="mb-1 input-bordered"
+                flat
+              />
+            </v-col>
+          </v-row>
+        </div>
+
+        <v-divider />
+
+        <div class="modal-footer">
+          <v-btn variant="text" @click="closeTriggerDialog">Cancel</v-btn>
+          <v-btn color="primary" variant="flat" :loading="triggerSaving" @click="saveTrigger">
+            Save Trigger
+          </v-btn>
         </div>
       </v-card>
     </v-dialog>
@@ -543,6 +714,8 @@
 
 <script setup>
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
+import { formatCrmTriggerPreview } from '@/lib/misc'
+import emailLogo from '@/assets/emails/email-logo.png'
 import AutomationCard from '@/components/patients/automationCard.vue'
 import { getTemplateParamExamples, buildTemplatePreviewLines } from '@/lib/whatsappTemplatePreview'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults'
@@ -552,11 +725,13 @@ import { isDefaultAutomationGroup, resolveAutomationGroupAuthor } from '@/lib/cr
 
 const props = defineProps({
   leadId: { type: [Number, String], default: null },
+  lead: { type: Object, default: null },
   displayMode: { type: String, default: 'inline' },
   groups: { type: Array, default: null },
   useGroupsApi: { type: Boolean, default: true },
   includeDefaults: { type: Boolean, default: false },
   whatsappEnabled: { type: Boolean, default: true },
+  showCardToggle: { type: Boolean, default: true },
 })
 const crmStore = useCrmStore()
 const orgStore = useOrgStore()
@@ -583,6 +758,32 @@ const tableHeaders = [
   { title: 'Trigger', key: 'sending', sortable: false },
   { title: 'Actions', key: 'actions', sortable: false, align: 'center' },
   { title: 'Status', key: 'enabled', sortable: false, align: 'center' },
+]
+
+const triggerTypes = [
+  { label: 'After enquiry', value: 'inquiry_days' },
+  { label: 'Birthday offset', value: 'birthday_offset' },
+  { label: 'Black Friday', value: 'black_friday' },
+  { label: 'Fixed date (annual)', value: 'month_day' },
+  { label: 'Nth weekday (annual)', value: 'weekday_of_month' },
+]
+
+const weekdayOptions = [
+  { label: 'Sunday', value: 0 },
+  { label: 'Monday', value: 1 },
+  { label: 'Tuesday', value: 2 },
+  { label: 'Wednesday', value: 3 },
+  { label: 'Thursday', value: 4 },
+  { label: 'Friday', value: 5 },
+  { label: 'Saturday', value: 6 },
+]
+
+const weekIndexOptions = [
+  { label: '1st', value: 1 },
+  { label: '2nd', value: 2 },
+  { label: '3rd', value: 3 },
+  { label: '4th', value: 4 },
+  { label: '5th', value: 5 },
 ]
 
 const activeFilters = computed(() => {
@@ -667,6 +868,75 @@ const clearAutomationSelection = () => {
   showGroupDialog.value = false
 }
 
+const showTriggerDialog = ref(false)
+const triggerSaving = ref(false)
+const triggerEditingRow = ref(null)
+const triggerForm = reactive({
+  triggerType: 'inquiry_days',
+  triggerDays: 0,
+  triggerOffsetDays: 0,
+  triggerMonth: 1,
+  triggerDay: 1,
+  triggerWeekday: 1,
+  triggerWeekIndex: 1,
+})
+
+const sanitizeNumber = (value, fallback = 0) => {
+  const num = Number(value)
+  return Number.isFinite(num) ? num : fallback
+}
+
+const buildTriggerFromForm = () => {
+  const triggerType = triggerForm.triggerType
+  if (triggerType === 'black_friday') {
+    return { type: 'black_friday', offsetDays: sanitizeNumber(triggerForm.triggerOffsetDays, 0) }
+  }
+  if (triggerType === 'month_day') {
+    return {
+      type: 'month_day',
+      month: sanitizeNumber(triggerForm.triggerMonth, 1),
+      day: sanitizeNumber(triggerForm.triggerDay, 1),
+      offsetDays: sanitizeNumber(triggerForm.triggerOffsetDays, 0),
+    }
+  }
+  if (triggerType === 'weekday_of_month') {
+    return {
+      type: 'weekday_of_month',
+      month: sanitizeNumber(triggerForm.triggerMonth, 1),
+      weekday: sanitizeNumber(triggerForm.triggerWeekday, 1),
+      weekIndex: sanitizeNumber(triggerForm.triggerWeekIndex, 1),
+      offsetDays: sanitizeNumber(triggerForm.triggerOffsetDays, 0),
+    }
+  }
+  return { type: triggerType, days: sanitizeNumber(triggerForm.triggerDays, 0) }
+}
+
+const triggerPreviewText = computed(() =>
+  formatCrmTriggerPreview(buildTriggerFromForm())
+)
+
+const hydrateTriggerForm = (trigger = {}) => {
+  const type = String(trigger?.type || 'inquiry_days')
+  triggerForm.triggerType = type
+  triggerForm.triggerDays = sanitizeNumber(trigger?.days, 0)
+  triggerForm.triggerOffsetDays = sanitizeNumber(trigger?.offsetDays, 0)
+  triggerForm.triggerMonth = sanitizeNumber(trigger?.month, 1)
+  triggerForm.triggerDay = sanitizeNumber(trigger?.day, 1)
+  triggerForm.triggerWeekday = sanitizeNumber(trigger?.weekday, 1)
+  triggerForm.triggerWeekIndex = sanitizeNumber(trigger?.weekIndex, 1)
+}
+
+const openTriggerEditor = (row) => {
+  triggerEditingRow.value = row
+  hydrateTriggerForm(row?.trigger || {})
+  showTriggerDialog.value = true
+}
+
+const closeTriggerDialog = () => {
+  showTriggerDialog.value = false
+  triggerEditingRow.value = null
+}
+
 const resolvedLeadId = computed(() => {
   const id = props.leadId
   return id ? Number(id) : null
@@ -684,6 +954,7 @@ const buildPayload = (row) => {
     whatsappTemplateName: row.whatsappTemplateName,
     whatsappTemplateLanguage: row.whatsappTemplateLanguage,
   }
+  if (row.trigger) payload.trigger = row.trigger
   if (row.groupKey || activeAutomation.value?.key) {
     payload.groupKey = row.groupKey || activeAutomation.value?.key
   }
@@ -842,7 +1113,23 @@ let Header = null
 let List = null
 const editorEl = ref(null)
 
-const sampleRecipient = reactive({ name: 'John Doe', email: 'john@example.com' })
+const resolveLeadName = (lead = {}) => {
+  const direct = String(lead.name || '').trim()
+  if (direct) return direct
+  const first = String(lead.firstName || lead.first_name || '').trim()
+  const last = String(lead.lastName || lead.last_name || '').trim()
+  const combined = `${first} ${last}`.trim()
+  if (combined) return combined
+  const email = String(lead.email || '').trim()
+  return email || ''
+}
+
+const previewRecipient = computed(() => {
+  const lead = props.lead || {}
+  const name = resolveLeadName(lead) || 'John Doe'
+  const email = String(lead.email || '').trim() || 'john@example.com'
+  return { name, email }
+})
 const EMAIL_TEMPLATE = `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -1007,7 +1294,7 @@ const EMAIL_TEMPLATE = `<!DOCTYPE html>
                 <div class="content">{content}</div>
 
                 <!-- Footer -->
-                <div class="footer">Ac 2025 Flossly</div>
+                <div class="footer">Ac 2026 Flossly</div>
               </div>
             </div>
           </td>
@@ -1031,7 +1318,14 @@ const openEdit = async (row) => {
     ])
     EditorCtor = E; Header = H; List = L
   }
-  if (ej) { ej.destroy(); ej = null }
+  if (ej) {
+    if (typeof ej.destroy === 'function') ej.destroy()
+    ej = null
+  }
+  if (!editorEl.value) {
+    await nextTick()
+  }
+  if (!editorEl.value) return
   ej = new EditorCtor({
     holder: editorEl.value,
     tools: { header: Header, list: List },
@@ -1106,13 +1400,77 @@ const resolveDefault = (row) =>
 
 const applyPlaceholders = (text) => {
   if (!text) return ''
+  const recipient = previewRecipient.value || { name: 'John Doe', email: 'john@example.com' }
   const practice = practiceName.value || '[Practice Name]'
-  const firstName = sampleRecipient.name.split(' ')[0] || sampleRecipient.name
+  const firstName = recipient.name.split(' ')[0] || recipient.name
+  const storedOrg = getStoredOrg() || {}
+  const details =
+    orgStore.getOrgDetails ||
+    orgStore.organisation ||
+    orgStore.organization ||
+    orgStore.org ||
+    orgStore.orgDetails ||
+    {}
+  const org = storedOrg || details || {}
+  const phone =
+    org.phone ||
+    org.phoneNumber ||
+    org.telephone ||
+    org.contactPhone ||
+    '[Phone Number]'
+  const website =
+    org.website ||
+    org.site ||
+    org.web ||
+    '[Website]'
+  const email =
+    org.email ||
+    org.contactEmail ||
+    '[Email]'
+  const address =
+    org.address ||
+    org.location ||
+    '[Address]'
+  const street =
+    org.streetAddress ||
+    org.addressLine1 ||
+    '[Street Address]'
+  const cityStateZip =
+    org.cityStateZip ||
+    org.city ||
+    '[City, State ZIP Code]'
+  const officeHours =
+    org.officeHours ||
+    org.hours ||
+    '[Days and Times]'
+  const coordinator =
+    org.treatmentCoordinator ||
+    org.coordinatorName ||
+    org.ownerName ||
+    '[Treatment Coordinator Name]'
+  const yourName =
+    org.ownerName ||
+    org.contactName ||
+    '[Your Name]'
+  const location =
+    org.city ||
+    org.location ||
+    '[Location]'
   return text
     .replace(/\[?\s*practice\s*name\s*\]?/gi, practice)
-    .replace(/\[?\s*patient\s*name\s*\]?/gi, sampleRecipient.name)
-    .replace(/\[?\s*name\s*\]?/gi, sampleRecipient.name)
+    .replace(/\[?\s*patient\s*name\s*\]?/gi, recipient.name)
+    .replace(/\[?\s*name\s*\]?/gi, recipient.name)
     .replace(/\[?\s*first\s*name\s*\]?/gi, firstName)
+    .replace(/\[?\s*phone\s*number\s*\]?/gi, phone)
+    .replace(/\[?\s*website\s*\]?/gi, website)
+    .replace(/\[?\s*email\s*\]?/gi, recipient.email || email)
+    .replace(/\[?\s*address\s*\]?/gi, address)
+    .replace(/\[?\s*street\s*address\s*\]?/gi, street)
+    .replace(/\[?\s*city\s*,?\s*state\s*zip\s*code\s*\]?/gi, cityStateZip)
+    .replace(/\[?\s*days\s*and\s*times\s*\]?/gi, officeHours)
+    .replace(/\[?\s*treatment\s*coordinator\s*name\s*\]?/gi, coordinator)
+    .replace(/\[?\s*your\s*name\s*\]?/gi, yourName)
+    .replace(/\[?\s*location\s*\]?/gi, location)
 }
 
 const previewSubject = computed(() => {
@@ -1167,17 +1525,26 @@ const emailPreviewHtml = computed(() => {
     .replace('{content}', content)
     .replace(/By flossly Team/gi, `By ${orgName}`)
 
+  const osRegex = /<img[^>]*src="https:\/\/dev\.flossly\.ai\/emails\/email-logo\.png"[^>]*>/i
+  const headerRegex = /<img[^>]*src="https:\/\/dev\.flossly\.ai\/emails\/logo\.png"[^>]*>/i
+  const initialsCss = `.org-initials{width:36px;height:36px;border-radius:50%;background:#e8f0fe;color:#1d4ed8;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;letter-spacing:0.5px}.org-initials--os{margin:0}.org-initials--header{margin:0 auto 8px}`
+
+  const osLogoHtml = emailLogo
+    ? `<img src="${emailLogo}" alt="Flossly" width="36" height="36" style="display:block" />`
+    : `<div class="org-initials org-initials--os">${practiceInitials.value}</div>`
+
+  html = html.replace(osRegex, osLogoHtml)
+
   if (practiceLogo.value) {
-    html = html
-      .replaceAll('https://dev.flossly.ai/emails/email-logo.png', practiceLogo.value)
-      .replaceAll('https://dev.flossly.ai/emails/logo.png', practiceLogo.value)
+    html = html.replaceAll('https://dev.flossly.ai/emails/logo.png', practiceLogo.value)
   } else {
-    const osLogo = `<div class="org-initials org-initials--os">${practiceInitials.value}</div>`
     const headerLogo = `<div class="org-initials org-initials--header">${practiceInitials.value}</div>`
-    const osRegex = /<img[\s\S]*?email-logo\.png[\s\S]*?>/i
-    const headerRegex = /<img[\s\S]*?logo\.png[\s\S]*?>/i
-    html = html.replace(osRegex, osLogo).replace(headerRegex, headerLogo)
-    html = html.replace('</style>', `.org-initials{width:36px;height:36px;border-radius:50%;background:#e8f0fe;color:#1d4ed8;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;letter-spacing:0.5px}.org-initials--os{margin:0}.org-initials--header{margin:0 auto 8px}</style>`)
+    html = html.replace(headerRegex, headerLogo)
+  }
+
+  const needsInitials = !practiceLogo.value || !emailLogo
+  if (needsInitials) {
+    html = html.replace('</style>', `${initialsCss}</style>`)
   }
 
   return html
@@ -1215,11 +1582,31 @@ const onToggleEnabled = async (row, val) => {
   try { await crmStore.saveAutomation(payload) } catch (e) {}
 }
 
+const saveTrigger = async () => {
+  if (!triggerEditingRow.value) return
+  try {
+    triggerSaving.value = true
+    const nextTrigger = buildTriggerFromForm()
+    triggerEditingRow.value.trigger = nextTrigger
+    triggerEditingRow.value.sending = formatCrmTriggerPreview(nextTrigger)
+    const payload = buildPayload(triggerEditingRow.value)
+    await crmStore.saveAutomation(payload)
+    closeTriggerDialog()
+  } finally {
+    triggerSaving.value = false
+  }
+}
+
 const onNameUpdate = async (item) => {
   // Optional: auto-save name changes
 }
 
-watch(show, (v) => { if (!v && ej) { ej.destroy(); ej = null } })
+watch(show, (v) => {
+  if (!v && ej) {
+    if (typeof ej.destroy === 'function') ej.destroy()
+    ej = null
+  }
+})
 watch(showGroupDialog, (v) => {
   if (!v && props.displayMode === 'modal') clearAutomationSelection()
 })
@@ -1232,12 +1619,14 @@ watch(showGroupDialog, (v) => {
 
 .automation-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, 240px);
   gap: 16px;
+  justify-content: flex-start;
 }
 
 .automation-card-cell {
-  min-width: 0;
+  width: 240px;
+  max-width: 240px;
 }
 
 .automation-empty {
@@ -1415,6 +1804,9 @@ watch(showGroupDialog, (v) => {
 
 .action-icon-btn:hover {
   color: #111827;
+}
+.trigger-cell {
+  gap: 8px;
 }
 
 /* Modal Styles */

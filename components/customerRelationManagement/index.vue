@@ -50,18 +50,19 @@
         <div class="d-inline-flex ml-auto" style="flex-wrap: nowrap; gap: 12px;">
           <v-btn
             v-if="whatsappProvider.provider === 'whapi'"
-            :color="whapiStatus.connected ? 'success' : 'primary'"
+            :color="whapiStatusColor"
             :variant="whapiStatus.connected ? 'tonal' : 'flat'"
             rounded="lg"
             class="add-task-btn"
             :loading="whapiLoading"
+            :disabled="whapiActivationPending"
             @click="connectWhapi"
           >
             <template #prepend>
               <v-icon size="18">mdi-whatsapp</v-icon>
             </template>
             <span>
-              {{ whapiStatus.connected ? 'WhatsApp Connected' : 'Connect WhatsApp' }}
+              {{ whapiButtonLabel }}
             </span>
           </v-btn>
           <v-tooltip
@@ -80,7 +81,7 @@
               </v-btn>
             </template>
             <span>
-              Connected phone:
+              Status: {{ whapiStatusLabel || 'Unknown' }} ·
               {{ whapiStatus.displayName ? `${whapiStatus.displayName} (${whapiStatus.phoneNumber})` : whapiStatus.phoneNumber }}
             </span>
           </v-tooltip>
@@ -363,9 +364,22 @@
         <v-card class="pa-4">
           <v-card-title class="text-subtitle-1 pa-0 mb-2 d-flex justify-space-between align-center">
             <span>Connect WhatsApp</span>
-            <v-chip v-if="whapiStatus.connected" color="success" size="small" label>Connected</v-chip>
+            <v-chip v-if="whapiStatusLabel" :color="whapiStatusColor" size="small" label>
+              {{ whapiStatusLabel }}
+            </v-chip>
           </v-card-title>
           <v-card-text class="pa-0">
+            <v-alert
+              v-if="whapiActivationMessage"
+              type="info"
+              variant="tonal"
+              class="mb-2"
+            >
+              {{ whapiActivationMessage }}
+              <div v-if="whapiCooldown" class="text-caption text-medium-emphasis mt-1">
+                Refresh available in {{ whapiCooldown }}s
+              </div>
+            </v-alert>
             <div v-if="whapiQr" class="d-flex flex-column align-center gap-2">
               <img :src="whapiQr" alt="WhatsApp QR" style="max-width: 260px;" />
               <div class="text-caption text-medium-emphasis">
@@ -382,13 +396,28 @@
               {{ whapiStatus.displayName ? `${whapiStatus.displayName} (${whapiStatus.phoneNumber})` : whapiStatus.phoneNumber }}
             </v-alert>
             <v-alert v-else type="info" variant="tonal" class="mb-2">
-              QR code not ready yet. Click refresh in a moment.
+              QR code not ready yet. If the channel is Stopped/Overdue, activate it first and then refresh after about a minute.
             </v-alert>
           </v-card-text>
           <v-card-actions class="pa-0 mt-4">
             <v-btn variant="text" @click="whapiDialog = false">Close</v-btn>
             <v-spacer />
-            <v-btn :loading="whapiLoading" variant="flat" color="primary" @click="refreshWhapiQr">
+            <v-btn
+              v-if="whapiCanActivate && !whapiQr"
+              :loading="whapiLoading"
+              variant="flat"
+              color="warning"
+              @click="activateWhapiChannel"
+            >
+              Activate (1 day)
+            </v-btn>
+            <v-btn
+              :loading="whapiLoading"
+              :disabled="whapiCooldown > 0"
+              variant="flat"
+              color="primary"
+              @click="refreshWhapiQr"
+            >
               Refresh QR
             </v-btn>
           </v-card-actions>
@@ -608,6 +637,74 @@ const whapiStatus = reactive({
   displayName: '',
   status: '',
 });
+const whapiCanActivate = ref(false);
+const whapiActivationPending = ref(false);
+const whapiActivationMessage = ref('');
+const whapiCooldown = ref(0);
+let whapiCooldownTimer = null;
+const whapiStatusLabel = computed(() => {
+  const raw = String(whapiStatus.status || '').trim().toLowerCase();
+  const hasPhone = !!(whapiStatus.phoneNumber || whapiStatus.displayName);
+  if (!hasPhone) {
+    if (raw.includes('overdue')) return 'Overdue';
+    if (raw.includes('stopped')) return 'Stopped';
+    if (raw.includes('logout')) return 'Logged Out';
+    if (raw.includes('activating')) return 'Activating';
+    if (raw.includes('pending') || raw.includes('created')) return 'Pending';
+    if (raw.includes('active') || raw.includes('live') || raw.includes('trial')) return 'Pending';
+    if (raw) return raw.charAt(0).toUpperCase() + raw.slice(1);
+    return 'Disconnected';
+  }
+  if (raw) {
+    if (raw.includes('overdue')) return 'Overdue';
+    if (raw.includes('stopped')) return 'Stopped';
+    if (raw.includes('logout')) return 'Logged Out';
+    if (raw.includes('activating')) return 'Activating';
+    if (raw.includes('pending') || raw.includes('created')) return 'Pending';
+    if (raw.includes('active')) return 'Active';
+    if (raw.includes('live')) return 'Live';
+    if (raw.includes('trial')) return 'Trial';
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  }
+  return whapiStatus.connected ? 'Active' : 'Disconnected';
+});
+
+const whapiStatusColor = computed(() => {
+  const label = String(whapiStatusLabel.value || '').toLowerCase();
+  if (label.includes('active') || label.includes('live') || label.includes('trial')) return 'success';
+  if (label.includes('activating')) return 'warning';
+  if (label.includes('pending')) return 'warning';
+  if (label.includes('stopped') || label.includes('overdue')) return 'error';
+  if (label.includes('logged') || label.includes('disconnected')) return 'warning';
+  return 'primary';
+});
+
+const whapiButtonLabel = computed(() => {
+  if (whapiActivationPending.value) return 'WhatsApp Activating';
+  if (!whapiStatusLabel.value) return 'Connect WhatsApp';
+  return `WhatsApp ${whapiStatusLabel.value}`;
+});
+const clearWhapiCooldown = () => {
+  if (whapiCooldownTimer) {
+    clearInterval(whapiCooldownTimer);
+    whapiCooldownTimer = null;
+  }
+  whapiCooldown.value = 0;
+};
+const startWhapiCooldown = (seconds = 60) => {
+  clearWhapiCooldown();
+  whapiCooldown.value = Math.max(0, Number(seconds) || 0);
+  if (!whapiCooldown.value) return;
+  whapiCooldownTimer = setInterval(() => {
+    whapiCooldown.value = Math.max(0, whapiCooldown.value - 1);
+    if (whapiCooldown.value <= 0) clearWhapiCooldown();
+  }, 1000);
+};
+const queueWhapiQrRefresh = async (delayMs = 60000) => {
+  startWhapiCooldown(Math.ceil(delayMs / 1000));
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+  if (whapiDialog.value) await refreshWhapiQr();
+};
 const whatsAppStatus = reactive({
   phoneNumberId: '',
   wabaId: '',
@@ -770,24 +867,46 @@ const loadWhapiStatus = async () => {
       whapiStatus.phoneNumber = res.data.phoneNumber || '';
       whapiStatus.displayName = res.data.displayName || '';
       whapiStatus.status = res.data.status || '';
+      whapiCanActivate.value = !!res.data.canActivate;
+      if (whapiStatus.connected) {
+        whapiActivationPending.value = false;
+        whapiActivationMessage.value = '';
+        clearWhapiCooldown();
+      }
     } else {
       whapiStatus.connected = false;
+      whapiCanActivate.value = false;
     }
   } catch {
     whapiStatus.connected = false;
+    whapiCanActivate.value = false;
   }
 };
 
 const connectWhapi = async () => {
   try {
     whapiLoading.value = true;
+    whapiActivationPending.value = false;
+    whapiActivationMessage.value = '';
     const res = await crmStore.startWhapiConnect();
     if (res?.code === 0 && res.data) {
       whapiQr.value = res.data.qr || '';
       whapiStatus.connected = !!res.data.qr ? false : whapiStatus.connected;
       whapiStatus.channelId = res.data.channelId || whapiStatus.channelId;
+      whapiCanActivate.value = !!res.data.canActivate;
       whapiDialog.value = true;
       await loadWhapiStatus();
+      if (res.data.extended) {
+        const days = res.data.extendedDays || 1;
+        whapiActivationPending.value = true;
+        whapiActivationMessage.value = `Channel activated for ${days} day(s). QR should be ready in about a minute.`;
+        queueWhapiQrRefresh(60000);
+      } else if (res.data.canActivate && !res.data.qr) {
+        whapiActivationMessage.value = 'Channel is stopped. Activate it for at least 1 day to enable QR.';
+      }
+      if (!res.data.qr && res.data.warning && mainStore?.setSnackbar) {
+        mainStore.setSnackbar({ title: res.data.warning, type: 'warning' });
+      }
     } else if (mainStore?.setSnackbar) {
       mainStore.setSnackbar({ title: res?.message || res?.error || 'Failed to connect WhatsApp', type: 'error' });
     }
@@ -802,6 +921,34 @@ const refreshWhapiQr = async () => {
     const res = await crmStore.getWhapiQr();
     if (res?.code === 0 && res.data) {
       whapiQr.value = res.data.qr || '';
+      if (res.data.qr) {
+        whapiActivationPending.value = false;
+        whapiActivationMessage.value = '';
+      }
+      if (!res.data.qr && res.data.warning && mainStore?.setSnackbar) {
+        mainStore.setSnackbar({ title: res.data.warning, type: 'warning' });
+      }
+    }
+  } finally {
+    whapiLoading.value = false;
+  }
+};
+
+const activateWhapiChannel = async () => {
+  if (whapiLoading.value || whapiActivationPending.value) return;
+  try {
+    whapiLoading.value = true;
+    const res = await crmStore.extendWhapiChannel();
+    if (res?.code === 0 && res.data) {
+      const days = res.data.days || 1;
+      whapiActivationPending.value = true;
+      whapiActivationMessage.value = `Channel activated for ${days} day(s). QR should be ready in about a minute.`;
+      whapiCanActivate.value = false;
+      await loadWhapiStatus();
+      queueWhapiQrRefresh(60000);
+      mainStore?.setSnackbar?.({ title: 'Channel activated. Waiting for QR...', type: 'success' });
+    } else {
+      mainStore?.setSnackbar?.({ title: res?.message || res?.error || 'Failed to activate channel', type: 'error' });
     }
   } finally {
     whapiLoading.value = false;
@@ -820,6 +967,10 @@ const disconnectWhapi = async () => {
       whapiStatus.phoneNumber = '';
       whapiStatus.displayName = '';
       whapiQr.value = '';
+      whapiActivationPending.value = false;
+      whapiActivationMessage.value = '';
+      whapiCanActivate.value = false;
+      clearWhapiCooldown();
       await loadWhapiStatus();
     } else {
       const msg = res?.message || res?.error || 'Failed to disconnect WhatsApp';
@@ -848,6 +999,10 @@ const deleteWhapiChannel = async () => {
       whapiStatus.phoneNumber = '';
       whapiStatus.displayName = '';
       whapiQr.value = '';
+      whapiActivationPending.value = false;
+      whapiActivationMessage.value = '';
+      whapiCanActivate.value = false;
+      clearWhapiCooldown();
       await loadWhapiStatus();
     } else {
       const msg = res?.message || res?.error || 'Failed to delete WhatsApp channel';
@@ -1581,6 +1736,12 @@ watch(searchInput, (val) => {
     archivedPage.value = 1;
     await fetchLeads(activeFilters.value);
   }, 250);
+});
+
+watch(whapiDialog, (open) => {
+  if (!open) {
+    clearWhapiCooldown();
+  }
 });
 
 watch(selectedBusinessId, () => {

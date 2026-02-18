@@ -141,6 +141,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  extendWhapiChannel(payload = {}) {
+    return new Promise((resolve, reject) => {
+      Post("/whapi/extend", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   getWhatsAppTemplates() {
     return new Promise((resolve, reject) => {
       Get("/meta/whatsappTemplates")

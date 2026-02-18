@@ -35,6 +35,7 @@ export const useCrmStore = defineStore("crmStore", {
     getWhapiStatus() { return this._wrap(() => crmService.getWhapiStatus()); },
     disconnectWhapi() { return this._wrap(() => crmService.disconnectWhapi()); },
     deleteWhapiChannel() { return this._wrap(() => crmService.deleteWhapiChannel()); },
+    extendWhapiChannel(payload) { return this._wrap(() => crmService.extendWhapiChannel(payload)); },
 
     // Leads
     listLeads(filters = {}) { return this._wrap(() => crmService.listLeads(filters)); },

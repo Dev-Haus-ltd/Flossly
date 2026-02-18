@@ -17,6 +17,7 @@
         <span class="count">{{ count }}</span>
       </div>
       <v-switch
+        v-if="showToggle"
         density="compact"
         inset
         hide-details
@@ -40,6 +41,10 @@ const props = defineProps({
   author: {
     type: String,
     default: '',
+  },
+  showToggle: {
+    type: Boolean,
+    default: true,
   },
 })
 

@@ -433,6 +433,7 @@
               <div class="pa-6">
                 <CustomerRelationManagementAutomation
                   :lead-id="selectedLead?.id"
+                  :lead="selectedLead"
                   :include-defaults="true"
                 />
               </div>
@@ -442,6 +443,7 @@
               <div class="pa-6">
                 <CustomerRelationManagementAutomation
                   :lead-id="selectedLead?.id"
+                  :lead="selectedLead"
                   :include-defaults="false"
                 />
               </div>

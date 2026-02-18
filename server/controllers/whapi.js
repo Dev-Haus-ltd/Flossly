@@ -101,9 +101,28 @@ const syncWhapiConfig = async () => {
 const findOrgChannel = async (orgId) => {
   await syncWhapiConfig();
   return await WhapiChannelConfig.findOne({
-    where: { organisationId: Number(orgId), status: "Active" },
+    where: { organisationId: Number(orgId) },
     order: [["updatedAt", "DESC"]],
   });
+};
+
+const isWhapiConnected = (status, phoneNumber) => {
+  const raw = String(status || "").trim().toLowerCase();
+  if (!phoneNumber) return false;
+  if (!raw) return false;
+  if (raw.includes("loggedout") || raw.includes("disconnected")) return false;
+  if (raw.includes("stopped") || raw.includes("overdue")) return false;
+  if (raw.includes("pending") || raw.includes("created")) return false;
+  return raw.includes("active") || raw.includes("live") || raw.includes("trial") || raw.includes("launched");
+};
+
+const isWhapiActivationBlocked = (status) => {
+  const raw = String(status || "").trim().toLowerCase();
+  if (!raw) return true;
+  if (raw.includes("activating")) return false;
+  if (raw.includes("stopped") || raw.includes("overdue")) return true;
+  if (raw.includes("pending") || raw.includes("created")) return true;
+  return false;
 };
 
 const createPartnerChannel = async ({ name, webhookUrl }) => {
@@ -134,17 +153,87 @@ const createPartnerChannel = async ({ name, webhookUrl }) => {
   };
 };
 
+const setPartnerChannelMode = async (channelId, mode) => {
+  const partner = getWhapiPartnerConfig();
+  if (!partner.partnerToken || !partner.projectId) {
+    throw new Error("Whapi partner token or project id is missing");
+  }
+  if (!channelId) {
+    throw new Error("Whapi channel id is missing");
+  }
+  const base = String(partner.managerBaseUrl || "").replace(/\/+$/, "");
+  const url = `${base}/channels/${encodeURIComponent(String(channelId))}/mode`;
+  try {
+    return await $fetch(url, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${partner.partnerToken}`,
+        "Content-Type": "application/json",
+        "Project-Id": partner.projectId,
+      },
+      body: { mode: mode || partner.channelMode || "trial" },
+    });
+  } catch {
+    return null;
+  }
+};
+
+const extendPartnerChannel = async (channelId, days, comment) => {
+  const partner = getWhapiPartnerConfig();
+  if (!partner.partnerToken || !partner.projectId) {
+    throw new Error("Whapi partner token or project id is missing");
+  }
+  if (!channelId) {
+    throw new Error("Whapi channel id is missing");
+  }
+  const base = String(partner.managerBaseUrl || "").replace(/\/+$/, "");
+  const url = `${base}/channels/${encodeURIComponent(String(channelId))}/extend`;
+  try {
+    return await $fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${partner.partnerToken}`,
+        "Content-Type": "application/json",
+        "Project-Id": partner.projectId,
+      },
+      body: {
+        days: Number(days || 1),
+        comment: String(comment || "Auto extend"),
+      },
+    });
+  } catch {
+    return null;
+  }
+};
+
 const fetchQrBase64 = async (token) => {
   if (!token) return null;
   const env = getWhapiEnvConfig();
   const base = String(env.baseUrl || "").replace(/\/+$/, "");
-  const resp = await $fetch(`${base}/users/login`, {
-    method: "GET",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const b64 = resp?.qr_code?.base64 || resp?.qr_base64 || resp?.base64 || null;
-  if (!b64) return null;
-  return b64.startsWith("data:") ? b64 : `data:image/png;base64,${b64}`;
+  try {
+    const resp = await $fetch(`${base}/users/login`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const b64 = resp?.qr_code?.base64 || resp?.qr_base64 || resp?.base64 || null;
+    if (!b64) return null;
+    return b64.startsWith("data:") ? b64 : `data:image/png;base64,${b64}`;
+  } catch (err) {
+    if (err?.statusCode === 404) return null;
+    return null;
+  }
+};
+
+const fetchQrWithRetry = async (token, attempts = 2, delayMs = 1200) => {
+  let last = null;
+  for (let i = 0; i < attempts; i += 1) {
+    last = await fetchQrBase64(token);
+    if (last) return last;
+    if (i < attempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  return last;
 };
 
 const updateWebhook = async (token, webhookUrl) => {
@@ -216,7 +305,7 @@ export const connect = async (event) => {
   const existing = await findOrgChannel(orgId);
   if (existing) {
     const token = decrypt(existing.tokenEnc);
-    const qr = await fetchQrBase64(token);
+    const qr = await fetchQrWithRetry(token);
     if (qr) {
       existing.lastQrAt = new Date();
       await existing.save();
@@ -225,6 +314,11 @@ export const connect = async (event) => {
       channelId: existing.channelId,
       status: existing.status,
       qr,
+      qrReady: Boolean(qr),
+      canActivate: isWhapiActivationBlocked(existing.status),
+      warning: qr
+        ? null
+        : "QR not ready. If the channel is Stopped/Overdue, activate it with at least 1 day, wait ~1 minute, then refresh.",
     });
   }
 
@@ -237,21 +331,31 @@ export const connect = async (event) => {
     return error(500, "Failed to create Whapi channel");
   }
 
+  const requestedMode = getWhapiPartnerConfig().channelMode || "trial";
+  const modeResp = await setPartnerChannelMode(created.channelId, requestedMode);
+  const extendDays = 1;
+  const extendComment = "Auto extend";
+  const extendResp = await extendPartnerChannel(created.channelId, extendDays, extendComment);
+
   await syncWhapiConfig();
   const row = await WhapiChannelConfig.create({
     organisationId: Number(orgId),
     userId: Number(userId),
     channelId: created.channelId,
     tokenEnc: encrypt(created.token),
-    status: "Active",
-    connectedAt: new Date(),
+    status: "Pending",
+    connectedAt: null,
     webhookUrl: webhookUrl || null,
   });
 
   await updateWebhook(created.token, webhookUrl);
-  const qr = await fetchQrBase64(created.token);
+  const qr = await fetchQrWithRetry(created.token);
   if (qr) {
     row.lastQrAt = new Date();
+    await row.save();
+  }
+  if (extendResp && !qr) {
+    row.status = "Activating";
     await row.save();
   }
 
@@ -259,6 +363,37 @@ export const connect = async (event) => {
     channelId: row.channelId,
     status: row.status,
     qr,
+    qrReady: Boolean(qr),
+    canActivate: !extendResp,
+    activationPending: !!extendResp,
+    warning: qr
+      ? null
+      : "QR not ready. If the channel is Stopped/Overdue, activate it with at least 1 day, wait ~1 minute, then refresh.",
+    mode: requestedMode,
+    modeUpdated: !!modeResp,
+    extended: !!extendResp,
+    extendedDays: extendDays,
+  });
+};
+
+export const extendChannel = async (event) => {
+  const { orgId } = event.context.user || {};
+  if (!orgId) return error(401, "Unauthenticated");
+  const existing = await findOrgChannel(orgId);
+  if (!existing) return error(404, "Whapi channel not connected");
+  const body = await readBody(event);
+  const partner = getWhapiPartnerConfig();
+  const days = Number(body?.days || 1);
+  const comment = String(body?.comment || "Auto extend");
+  const resp = await extendPartnerChannel(existing.channelId, days, comment);
+  if (!resp) return error(502, "Failed to extend Whapi channel");
+  existing.status = "Activating";
+  await existing.save();
+  return success({
+    channelId: existing.channelId,
+    extended: true,
+    days,
+    response: resp,
   });
 };
 
@@ -302,12 +437,19 @@ export const qr = async (event) => {
   const existing = await findOrgChannel(orgId);
   if (!existing) return error(404, "Whapi channel not connected");
   const token = decrypt(existing.tokenEnc);
-  const qr = await fetchQrBase64(token);
+  const qr = await fetchQrWithRetry(token);
   if (qr) {
     existing.lastQrAt = new Date();
     await existing.save();
   }
-  return success({ channelId: existing.channelId, qr });
+  return success({
+    channelId: existing.channelId,
+    qr,
+    qrReady: Boolean(qr),
+    warning: qr
+      ? null
+      : "QR not ready. If the channel is Stopped/Overdue, activate it with at least 1 day, wait ~1 minute, then refresh.",
+  });
 };
 
 export const status = async (event) => {
@@ -315,8 +457,7 @@ export const status = async (event) => {
   if (!orgId) return error(401, "Unauthenticated");
   const existing = await findOrgChannel(orgId);
   if (!existing) return success({ connected: false });
-  const rawStatus = String(existing.status || "").toLowerCase();
-  const connected = rawStatus !== "loggedout" && rawStatus !== "disconnected";
+  const connected = isWhapiConnected(existing.status, existing.phoneNumber);
   return success({
     connected,
     channelId: existing.channelId,
@@ -324,6 +465,7 @@ export const status = async (event) => {
     phoneNumber: existing.phoneNumber || null,
     displayName: existing.displayName || null,
     connectedAt: existing.connectedAt || null,
+    canActivate: isWhapiActivationBlocked(existing.status),
   });
 };
 
@@ -355,6 +497,9 @@ export const webhook = async (event) => {
           const phone = channelInfo?.phone || channelInfo?.phone_number || channelInfo?.phoneNumber || null;
           if (phone) cfg.phoneNumber = String(phone);
           cfg.status = channelInfo?.status || cfg.status;
+          if (isWhapiConnected(cfg.status, cfg.phoneNumber) && !cfg.connectedAt) {
+            cfg.connectedAt = new Date();
+          }
         }
         await cfg.save();
       }

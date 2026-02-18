@@ -67,6 +67,7 @@
             :use-groups-api="false"
             :include-defaults="false"
             :whatsapp-enabled="whatsappEnabled"
+            :show-card-toggle="false"
           />
         </div>
       </v-card>
