@@ -347,7 +347,8 @@ const menuItems = computed(() => {
   // Read license type to refresh menu when preferences change.
   const licenseType = user.value?.preferences?.licenseType;
   if (!user.value) return [];
-  return isManager.value ? mainStore.getManagerOptions : mainStore.getuserOptions;
+  const items = isManager.value ? mainStore.getManagerOptions : mainStore.getuserOptions;
+  return items || [];
 });
 const preloadUsers = async () => {
   try {

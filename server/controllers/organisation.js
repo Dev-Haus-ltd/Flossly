@@ -23,7 +23,6 @@ import {
 } from "../models";
 import { HrDocument } from "../models/hrDocuments";
 import formidable from "formidable";
-import fs from "fs/promises";
 import path from "path";
 import DB from "../utils/db";
 import { success, error } from "../utils/response";
@@ -31,9 +30,11 @@ import { readBody, createError } from "h3";
 import {
   sendTrialActivatedEmail,
   sendOrganisationReferralEmail,
+  sendOrganisationCreatedInternalNotification,
 } from "../utils/emailNotifications";
 import bcrypt from "bcrypt";
 import { Op } from "sequelize";
+import { uploadTempFile } from "../utils/storage";
 
 // Role constants for access control
 // Role ID 1 = Practice Manager, Role ID 8 = Principal Dentist / Practice Owner
@@ -163,15 +164,16 @@ export const updateOrganisationDetails = async (event) => {
     // Handle logo upload (if provided)
     if (files && files.logo) {
       const logoFile = Array.isArray(files.logo) ? files.logo[0] : files.logo;
-      const uploadDir = path.resolve("public/uploads/logos");
-      await fs.mkdir(uploadDir, { recursive: true });
       const fileExt = path.extname(logoFile.originalFilename || logoFile.newFilename || "");
       const filename = `org-${orgId}-${Date.now()}${fileExt}`;
-      const filepath = path.join(uploadDir, filename);
-      // formidable on some setups gives .filepath or .path
       const sourcePath = logoFile.filepath || logoFile.path;
-      await fs.copyFile(sourcePath, filepath);
-      organisation.logo = `/uploads/logos/${filename}`;
+      const link = await uploadTempFile({
+        filepath: sourcePath,
+        filename,
+        contentType: logoFile.mimetype || logoFile.type,
+        baseDir: "uploads/logos",
+      });
+      organisation.logo = link;
     }
 
     if (firstNonEmpty(fields, 'origin') === "onboarding") {
@@ -967,14 +969,16 @@ export const createOrganisationForUser = async (event) => {
     // Handle logo upload if provided
     if (files && files.logo) {
       const logoFile = Array.isArray(files.logo) ? files.logo[0] : files.logo;
-      const uploadDir = path.resolve("public/uploads/logos");
-      await fs.mkdir(uploadDir, { recursive: true });
       const fileExt = path.extname(logoFile.originalFilename || logoFile.newFilename || "");
       const filename = `org-${org.id}-${Date.now()}${fileExt}`;
-      const filepath = path.join(uploadDir, filename);
       const sourcePath = logoFile.filepath || logoFile.path;
-      await fs.copyFile(sourcePath, filepath);
-      org.logo = `/uploads/logos/${filename}`;
+      const link = await uploadTempFile({
+        filepath: sourcePath,
+        filename,
+        contentType: logoFile.mimetype || logoFile.type,
+        baseDir: "uploads/logos",
+      });
+      org.logo = link;
       await org.save({ transaction });
     }
 
@@ -1149,6 +1153,23 @@ export const createOrganisationForUser = async (event) => {
     } catch (emailErr) {
       console.error("Trial email failed:", emailErr);
     }
+  }
+
+  try {
+    await sendOrganisationCreatedInternalNotification({
+      organisationName: org.name,
+      organisationId: org.id,
+      creatorName: user?.fullName,
+      creatorEmail: user?.email,
+      licenseType: "Trial",
+      trialEndsOn: trialEndDate,
+      origin: "add_practice",
+    });
+  } catch (notifyErr) {
+    console.error("Internal org-created notification failed", {
+      organisationId: org?.id,
+      error: notifyErr?.message || notifyErr,
+    });
   }
 
   return success({

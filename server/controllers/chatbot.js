@@ -110,7 +110,8 @@ export const saveChatbotConfig = async (event) => {
       calendarStatus,
       appointmentFlow,
       treatmentFlow,
-      callbackFlow
+      callbackFlow,
+      environment
     } = body;
 
     // Validate required fields
@@ -153,7 +154,8 @@ export const saveChatbotConfig = async (event) => {
         calendarStatus: calendarStatus || existingConfig.calendarStatus,
         appointmentFlow: appointmentFlow || existingConfig.appointmentFlow,
         treatmentFlow: treatmentFlow || existingConfig.treatmentFlow,
-        callbackFlow: callbackFlow || existingConfig.callbackFlow
+        callbackFlow: callbackFlow || existingConfig.callbackFlow,
+        environment: environment || existingConfig.environment
       });
       chatbotConfig = existingConfig;
     } else {
@@ -184,7 +186,8 @@ export const saveChatbotConfig = async (event) => {
         calendarStatus: calendarStatus || null,
         appointmentFlow: appointmentFlow || null,
         treatmentFlow: treatmentFlow || null,
-        callbackFlow: callbackFlow || null
+        callbackFlow: callbackFlow || null,
+        environment: environment || 'development'
       });
     }
 

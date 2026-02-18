@@ -26,7 +26,7 @@
         <div class="d-inline-flex align-center py-1" style="flex-wrap: nowrap; gap: 8px;">
           <div style="width: 150px">
             <v-text-field
-              v-model="search"
+            v-model="searchInput"
               placeholder="Search"
               append-inner-icon="mdi-magnify"
               clearable
@@ -48,6 +48,7 @@
 
         <!-- Right: Connection Controls -->
         <div class="d-inline-flex ml-auto" style="flex-wrap: nowrap; gap: 12px;">
+          <!-- WhatsApp connect UI (temporarily hidden until complete)
           <v-btn
             :color="isWhatsAppConnected ? 'success' : 'primary'"
             :variant="isWhatsAppConnected ? 'tonal' : 'flat'"
@@ -66,6 +67,7 @@
               {{ isWhatsAppConnected ? 'WhatsApp Connected' : 'Connect WhatsApp' }}
             </span>
           </v-btn>
+          -->
 
           <v-menu
             v-if="isConnected"
@@ -91,9 +93,17 @@
               <v-list-item @click="onReconnectMeta">
                 <v-list-item-title>Reconnect Meta</v-list-item-title>
               </v-list-item>
-              <v-list-item @click="openBusinessPortfolios">
-                <v-list-item-title>Add Business Pages</v-list-item-title>
+              <!-- Backfill last 30 days (hidden until permissions are approved) -->
+              <!--
+              <v-list-item
+                :disabled="metaBackfillLoading"
+                @click="backfillMetaLeads"
+              >
+                <v-list-item-title>
+                  {{ metaBackfillLoading ? 'Backfilling 30 days...' : 'Backfill last 30 days' }}
+                </v-list-item-title>
               </v-list-item>
+              -->
               <v-list-item @click="confirmDisconnect = true">
                 <v-list-item-title>Disconnect Meta</v-list-item-title>
               </v-list-item>
@@ -180,8 +190,14 @@
 
       <!-- List View (child) -->
       <CustomerRelationManagementListView
-        v-if="!isLoading && leads.length"
-        :leads="filteredLeads"
+        v-if="!isLoading && (activeLeads.length || archivedLeads.length)"
+        :active-leads="activeLeads"
+        :archived-leads="archivedLeads"
+        :active-total="activeTotal"
+        :archived-total="archivedTotal"
+        :active-page="activePage"
+        :archived-page="archivedPage"
+        :items-per-page="itemsPerPage"
         :headers="headers"
         :search="search"
         :leadSources="leadSources"
@@ -190,9 +206,12 @@
         @select="onSelect"
         @delete="onDeleteSelected"
         @book="onBookLeads"
+        @update:activePage="onActivePageChange"
+        @update:archivedPage="onArchivedPageChange"
+        @update:itemsPerPage="onItemsPerPageChange"
       />
 
-      <div v-else-if="!isLoading && !leads.length" class="d-flex justify-center mt-5">
+      <div v-else-if="!isLoading && !activeLeads.length && !archivedLeads.length" class="d-flex justify-center mt-5">
         <p class="mt-7">No leads found.</p>
       </div>
 
@@ -279,97 +298,7 @@
         :data="metaHealthData"
       />
 
-      <v-dialog v-model="businessDialog" max-width="820">
-        <v-card class="pa-4">
-          <v-card-title class="text-subtitle-1 pa-0 mb-2">
-            Select Business Portfolio Pages
-          </v-card-title>
-          <v-card-text class="pa-0">
-            <v-alert
-              v-if="businessError"
-              type="error"
-              variant="tonal"
-              class="mb-3"
-            >
-              {{ businessError }}
-            </v-alert>
-
-            <v-select
-              v-model="selectedBusinessId"
-              :items="businessOptions"
-              item-title="name"
-              item-value="id"
-              label="Business Portfolio"
-              variant="solo"
-              density="compact"
-              :loading="businessLoading"
-              hide-details
-              class="mb-3"
-            />
-
-            <v-text-field
-              v-model="businessPageSearch"
-              placeholder="Search pages"
-              append-inner-icon="mdi-magnify"
-              clearable
-              variant="solo"
-              :elevation="0"
-              density="compact"
-              hide-details
-              bg-color="#FAFAFA"
-              flat
-              class="mb-3"
-            />
-
-            <div v-if="businessPagesFiltered.length" class="business-page-list">
-              <v-list density="compact">
-                <v-list-item
-                  v-for="page in businessPagesFiltered"
-                  :key="page.id"
-                >
-                  <template #prepend>
-                    <v-checkbox-btn
-                      :model-value="selectedPageIds.includes(page.id)"
-                      :disabled="page.connectedElsewhere || page.connectedToOrg"
-                      @click.stop="toggleBusinessPage(page)"
-                    />
-                  </template>
-                  <v-list-item-title>{{ page.name || page.id }}</v-list-item-title>
-                  <v-list-item-subtitle>
-                    {{ page.statusLabel }}
-                  </v-list-item-subtitle>
-                </v-list-item>
-              </v-list>
-            </div>
-            <div v-else class="text-caption text-medium-emphasis">
-              No pages found for this portfolio.
-            </div>
-          </v-card-text>
-          <v-card-actions class="pa-0 mt-4">
-            <v-btn variant="text" @click="businessDialog = false">
-              Close
-            </v-btn>
-            <v-spacer />
-            <v-btn
-              variant="text"
-              :disabled="!businessPagesSelectable.length"
-              @click="selectAllBusinessPages"
-            >
-              Select All
-            </v-btn>
-            <v-btn
-              color="primary"
-              variant="flat"
-              :loading="businessSaving"
-              :disabled="!selectedPageIds.length"
-              @click="connectSelectedBusinessPages"
-            >
-              Connect Selected
-            </v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
-
+      <!-- WhatsApp connect dialog (temporarily hidden until complete)
       <v-dialog v-model="whatsAppDialog" max-width="640">
         <v-card class="pa-4">
           <v-card-title class="text-subtitle-1 pa-0 mb-2 d-flex justify-space-between align-center">
@@ -394,6 +323,7 @@
           </v-card-actions>
         </v-card>
       </v-dialog>
+      -->
     </div>
   </v-sheet>
 </template>
@@ -421,6 +351,7 @@ const bulkLeadUploadDialog = ref(false);
 const metaMenu = ref(false);
 const confirmDisconnect = ref(false);
 const disconnecting = ref(false);
+const metaBackfillLoading = ref(false);
 const metaErrorDialog = ref(false);
 const metaErrorMessage = ref('');
 const metaHealthDialog = ref(false);
@@ -478,47 +409,53 @@ watch(bookingPractitionerOptions, (opts) => {
 });
 
 
+const leadStatsData = ref({ total: 0, byStatus: {} });
 const leadStats = computed(() => {
-  const activeLeads = leads.value.filter((l) => !l.softDeleted);
-  const total = activeLeads.length;
-  const byStatus = (s) =>
-    activeLeads.filter((l) => (l.leadStatus || "").toLowerCase() === s).length;
+  const byStatus = (status) => Number(leadStatsData.value.byStatus?.[status] || 0);
   return [
     {
       icon: "https://cdn.lordicon.com/asyunleq.json",
       label: "Total Lead",
-      value: total,
+      value: Number(leadStatsData.value.total || 0),
       valueColor: 'on-surface'
     },
     {
       icon: "https://cdn.lordicon.com/kphwxuxr.json",
       label: "New",
-      value: byStatus("new"),
+      value: byStatus("New"),
       valueColor: 'success'
     },
     {
       icon: "https://cdn.lordicon.com/qlpudrww.json",
       label: "Converted",
-      value: byStatus("converted"),
+      value: byStatus("Converted"),
       valueColor: 'primary'
     },
     {
       icon: "https://cdn.lordicon.com/excswhey.json",
       label: "Contacted",
-      value: byStatus("contacted"),
+      value: byStatus("Contacted"),
       valueColor: 'warning'
     },
     {
       icon: "https://cdn.lordicon.com/tzynxkwl.json",
       label: "Lost",
-      value: byStatus("lost"),
+      value: byStatus("Lost"),
       valueColor: 'error'
     },
   ];
 });
+const searchInput = ref("");
 const search = ref("");
+let searchTimeout = null;
 
-const leads = ref([]);
+const activeLeads = ref([]);
+const archivedLeads = ref([]);
+const activeTotal = ref(0);
+const archivedTotal = ref(0);
+const activePage = ref(1);
+const archivedPage = ref(1);
+const itemsPerPage = ref(25);
 
 const headers = [
   { key: "alert", title: "Alert", width: 70 },
@@ -528,6 +465,7 @@ const headers = [
   { key: "inquiryDate", title: "Inquiry Date", width: 160 },
   { key: "leadSource", title: "Lead Source", width: 160 },
   { key: "leadStatus", title: "Lead Status", width: 160 },
+  { key: "automation", title: "Automation", width: 200 },
   { key: "treatment", title: "Treatment", width: 160 },
   { key: "assigned", title: "Assigned", width: 160 },
   { key: "followUpDate", title: "Follow-up Date", width: 160 },
@@ -535,11 +473,11 @@ const headers = [
 ];
 const leadSources = ref([]);
 const treatmentSources = ref([]);
-const filteredLeads = computed(() => leads.value)
-
 const activeFilters = ref({});
 const onLeadsFilterUpdate = async (filters) => {
   activeFilters.value = filters || {};
+  activePage.value = 1;
+  archivedPage.value = 1;
   await fetchLeads(activeFilters.value)
 };
 
@@ -690,10 +628,15 @@ const clearMetaQuery = () => {
   delete nextQuery.warning;
   router.replace({ query: nextQuery });
 };
-const handleMetaQuery = async (metaConnected, metaError) => {
+const handleMetaQuery = (metaConnected, metaError) => {
+  const pagesCount = Number(route.query.pages || 0);
   if (metaError) {
     metaErrorMessage.value =
       normalizeMetaMessage(metaError) || 'Meta connection failed. Please try again.';
+    metaErrorDialog.value = true;
+  } else if (metaConnected && pagesCount === 0) {
+    metaErrorMessage.value =
+      'Meta could not be connected. You need full access to the page you are trying to connect.';
     metaErrorDialog.value = true;
   } else if (metaConnected && mainStore?.setSnackbar) {
     mainStore.setSnackbar({ title: 'Meta connected successfully', type: 'success' });
@@ -962,7 +905,7 @@ const onSaveBookedAppointment = async (appt) => {
     if (res?.code === 0) {
       try {
         await crmStore.updateLead({ id: bookingLead.value.id, leadStatus: 'Converted' });
-        const existing = leads.value.find((l) => l.id === bookingLead.value.id);
+        const existing = activeLeads.value.find((l) => l.id === bookingLead.value.id);
         if (existing) existing.leadStatus = 'Converted';
       } catch (e) {}
       mainStore?.setSnackbar?.({ title: 'Appointment booked and lead converted', type: 'success' });
@@ -989,8 +932,8 @@ const onConnectChatbot = async () => {
   });
 };
 
-const updateLeads = (newLead) => {
-  leads.value.push(newLead);
+const updateLeads = async () => {
+  await fetchLeads(activeFilters.value);
 };
 
 const handleAddLeadClick = () => {
@@ -1022,67 +965,98 @@ const resolveLeadSource = (source) => {
   return { id: 99, name: "Meta Leadgen" };
 };
 
-const handleSuccess = (newLead) => {
+const handleSuccess = async () => {
   addLeadDrawer.value = false;
-  const mapped = {
-    id: newLead.id,
-    alert: newLead.alert || '',
-    name: newLead.name,
-    email: newLead.email,
-    telephone: newLead.telephone,
-    inquiryDate: newLead.inquiryDate,
-    rawData: newLead.rawData || null,
-    dob: newLead.dob || null,
-    occupation: newLead.occupation || "",
-    location: newLead.location || "",
-    leadSource: resolveLeadSource(newLead.leadSource ?? newLead.leadSourceId),
-    metaPage: newLead.pageName || newLead.pageId || '',
-    leadStatus: newLead.leadStatus || 'New',
-    treatment: newLead.treatment || { id: null, name: '' },
-    assigned: newLead.assigned || [],
-    followUpDate: newLead.followUpDate || '',
-    comments: newLead.comments || '',
-    softDeleted: false,
-  };
-  leads.value.unshift(mapped);
+  await fetchLeads(activeFilters.value);
 };
 const handleBulkUploadComplete = async () => {
   bulkLeadUploadDialog.value = false;
   await fetchLeads(activeFilters.value);
 };
 
-const fetchLeads = async (filters = {}) => {
-  isLoading.value = true
-  try {
-    const payload = { ...filters, search: search.value || '', includeArchived: true }
-    const res = await crmStore.listLeads(payload)
-    if (res && res.code === 0) {
-      const mapped = (res.data || []).map((l) => ({
-        alert: l.alert || "",
-        name: l.name || "",
-        email: l.email || "",
-        telephone: l.telephone || "",
-        inquiryDate: l.inquiryDate || "",
-        rawData: l.rawData || null,
-        dob: l.dob || null,
-        occupation: l.occupation || "",
-        location: l.location || "",
-        leadSource: l.leadSource?.name ? l.leadSource : { id: 99, name: l.leadSource || "Meta Leadgen" },
-        metaPage: l.pageName || l.pageId || "",
-        leadStatus: l.leadStatus || "New",
-        treatment: l.treatment || { id: null, name: "" },
-        assigned: l.assigned || [],
-        followUpDate: l.followUpDate || "",
-        comments: l.comments || "",
-        id: l.id,
-        softDeleted: !!l.softDeleted,
-      }))
-      leads.value = mapped;
-    }
-  } finally {
-    isLoading.value = false
+const mapLeadRow = (l) => ({
+  alert: l.alert || "",
+  name: l.name || "",
+  email: l.email || "",
+  telephone: l.telephone || "",
+  inquiryDate: l.inquiryDate || "",
+  rawData: l.rawData || null,
+  dob: l.dob || null,
+  occupation: l.occupation || "",
+  location: l.location || "",
+  leadSource: l.leadSource?.name ? l.leadSource : { id: 99, name: l.leadSource || "Meta Leadgen" },
+  metaPage: l.pageName || l.pageId || "",
+  leadStatus: l.leadStatus || "New",
+  treatment: l.treatment || { id: null, name: "" },
+  assigned: l.assigned || [],
+  followUpDate: l.followUpDate || "",
+  comments: l.comments || "",
+  id: l.id,
+  softDeleted: !!l.softDeleted,
+});
+
+const fetchActiveLeads = async (filters = {}) => {
+  const payload = {
+    ...filters,
+    search: search.value || '',
+    page: activePage.value,
+    pageSize: itemsPerPage.value,
+    includeStats: true,
+  };
+  const res = await crmStore.listLeads(payload);
+  if (res && res.code === 0) {
+    const rows = Array.isArray(res.data?.rows) ? res.data.rows : (res.data || []);
+    activeLeads.value = rows.map(mapLeadRow);
+    activeTotal.value = Number(res.data?.total ?? activeLeads.value.length);
+    if (res.data?.stats) leadStatsData.value = res.data.stats;
   }
-}
+};
+
+const fetchArchivedLeads = async (filters = {}) => {
+  const payload = {
+    ...filters,
+    search: search.value || '',
+    page: archivedPage.value,
+    pageSize: itemsPerPage.value,
+    archivedOnly: true,
+    includeArchived: true,
+  };
+  const res = await crmStore.listLeads(payload);
+  if (res && res.code === 0) {
+    const rows = Array.isArray(res.data?.rows) ? res.data.rows : (res.data || []);
+    archivedLeads.value = rows.map(mapLeadRow);
+    archivedTotal.value = Number(res.data?.total ?? archivedLeads.value.length);
+  }
+};
+
+const fetchLeads = async (filters = {}) => {
+  isLoading.value = true;
+  try {
+    await Promise.all([fetchActiveLeads(filters), fetchArchivedLeads(filters)]);
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const onActivePageChange = async (val) => {
+  if (activePage.value === val) return;
+  activePage.value = val;
+  await fetchActiveLeads(activeFilters.value);
+};
+
+const onArchivedPageChange = async (val) => {
+  if (archivedPage.value === val) return;
+  archivedPage.value = val;
+  await fetchArchivedLeads(activeFilters.value);
+};
+
+const onItemsPerPageChange = async (val) => {
+  if (itemsPerPage.value === val) return;
+  itemsPerPage.value = val;
+  activePage.value = 1;
+  archivedPage.value = 1;
+  await fetchLeads(activeFilters.value);
+};
 
 const initLeads = async (metaConnected = false) => {
   if (metaConnected) {
@@ -1091,8 +1065,8 @@ const initLeads = async (metaConnected = false) => {
       await crmStore.fetchMetaStructure();
       // 2️⃣ Sync Meta analytics (daily insights / backfill)
       await crmStore.fetchMetaInsights();
-      // 3️⃣ Fetch leads (existing behavior)
-      await crmStore.fetchLeadsNow();
+      // 3️⃣ Fetch last 30 days leads on first connect
+      await crmStore.fetchLeadsNow({ days: 30 });
     } catch (e) {
       console.error('[CRM] Meta post-connect sync failed', e);
     }
@@ -1203,20 +1177,47 @@ const disconnectMeta = async () => {
   }
 };
 
-watch(search, async () => {
-  await fetchLeads(activeFilters.value)
-})
+const backfillMetaLeads = async () => {
+  if (metaBackfillLoading.value) return;
+  metaBackfillLoading.value = true;
+  metaMenu.value = false;
+  try {
+    const res = await crmStore.fetchLeadsNow({ days: 30 });
+    if (res?.code === 0) {
+      await fetchLeads(activeFilters.value);
+      mainStore?.setSnackbar?.({
+        title: res?.data?.imported
+          ? `Backfill complete: ${res.data.imported} lead(s) imported`
+          : 'Backfill complete',
+        type: 'success',
+      });
+      return;
+    }
+    const msg = res?.error || res?.message || 'Backfill failed';
+    mainStore?.setSnackbar?.({ title: msg, type: 'error' });
+  } catch (e) {
+    const msg = e?.data?.message || e?.message || 'Backfill failed';
+    mainStore?.setSnackbar?.({ title: msg, type: 'error' });
+  } finally {
+    metaBackfillLoading.value = false;
+  }
+};
 
-watch(selectedBusinessId, () => {
-  selectedPageIds.value = [];
-  businessPageSearch.value = '';
-})
+watch(searchInput, (val) => {
+  if (searchTimeout) clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(async () => {
+    search.value = String(val || '').trim();
+    activePage.value = 1;
+    archivedPage.value = 1;
+    await fetchLeads(activeFilters.value);
+  }, 250);
+});
 
 const onDeleteSelected = async (ids) => {
   try {
     const res = await crmStore.deleteLeads(ids)
     if (res && res.code === 0) {
-      leads.value = leads.value.filter(l => !ids.includes(l.id))
+      await fetchLeads(activeFilters.value)
     }
   } catch (e) {}
 }

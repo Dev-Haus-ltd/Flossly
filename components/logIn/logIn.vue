@@ -111,7 +111,7 @@
             </v-btn>
             <div class="agreement-text mt-5">
               By signing up you agree to Flossly&nbsp;
-              <a href="/terms-of-use" target="_blank">Terms</a>,&nbsp;
+              <a href="/terms-of-service" target="_blank">Terms</a>,&nbsp;
               <a href="/privacy-policy" target="_blank">Privacy Policy</a
               >&nbsp;and&nbsp;
               <a href="/security-policy" target="_blank">Security Policy</a>.
@@ -230,7 +230,7 @@ const login = async () => {
   if (formValidation.valid) {
     loginError.value = null;
     showResendButton.value = false;
-    credentials.value.email = credentials.value.email.toLowerCase()
+    credentials.value.email = credentials.value.email.trim()
     authStore
       .login(credentials.value)
       .then((res) => {

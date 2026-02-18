@@ -120,6 +120,14 @@ export const ChatbotConfig = sequelize.define(
     callbackFlow: { 
       type: DataTypes.JSONB, 
       allowNull: true 
+    },
+    environment: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'development',
+      validate: {
+        isIn: [['production', 'development']]
+      }
     }
   },
   { 

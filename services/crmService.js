@@ -22,9 +22,15 @@ export default {
         .catch((err) => reject(err));
     });
   },
-  fetchLeadsNow() {
+  fetchLeadsNow(params = {}) {
+    const q = new URLSearchParams();
+    Object.entries(params || {}).forEach(([k, v]) => {
+      if (v === undefined || v === null || v === "") return;
+      q.append(k, v);
+    });
+    const qs = q.toString();
     return new Promise((resolve, reject) => {
-      Get("/meta/fetchLeads")
+      Get(`/meta/fetchLeads${qs ? `?${qs}` : ""}`)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -253,6 +259,13 @@ export default {
   saveAutomation(payload) {
     return new Promise((resolve, reject) => {
       Post('/lead/automationSave', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  saveAutomationBatch(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/automationSaveBatch', payload)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });

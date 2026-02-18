@@ -170,7 +170,7 @@ const submitEmail = async () => {
   if (!valid) return;
 
   try {
-    const res = await authStore.requestReset({ email: email.value.toLowerCase() });
+    const res = await authStore.requestReset({ email: email.value.trim() });
     if (res.code === 0) {
       step.value = 2;
       store.setSnackbar({
@@ -208,7 +208,7 @@ const submitReset = async () => {
 
   try {
     const res = await authStore.resetPassword({
-      email: email.value,
+      email: email.value.trim(),
       otp: otp.value,
       newPassword: newPassword.value,
     });

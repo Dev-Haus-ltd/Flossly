@@ -1108,6 +1108,46 @@ export const sendTrialActivatedEmail = async (data) => {
   });
 };
 
+export const sendOrganisationCreatedInternalNotification = async (data) => {
+  const subject = "New Organisation Created";
+
+  const trialEndDateFormatted = data.trialEndsOn
+    ? new Date(data.trialEndsOn).toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      })
+    : null;
+
+  const content = `
+    <p>Hello Team,</p>
+
+    <p>A new organisation has been created.</p>
+
+    <p><strong>Organisation Name:</strong> ${data.organisationName}</p>
+    ${data.organisationId ? `<p><strong>Organisation ID:</strong> ${data.organisationId}</p>` : ""}
+    ${data.creatorName ? `<p><strong>Creator Name:</strong> ${data.creatorName}</p>` : ""}
+    ${data.creatorEmail ? `<p><strong>Creator Email:</strong> ${data.creatorEmail}</p>` : ""}
+    ${data.licenseType ? `<p><strong>License Type:</strong> ${data.licenseType}</p>` : ""}
+    ${trialEndDateFormatted ? `<p><strong>Trial Ends On:</strong> ${trialEndDateFormatted}</p>` : ""}
+    ${data.origin ? `<p><strong>Origin:</strong> ${data.origin}</p>` : ""}
+
+    <br/>
+    <p>Best regards,<br/>Flossly System</p>
+  `;
+
+  const html = template
+    .replaceAll("{subject}", subject)
+    .replace("{content}", content);
+
+  await transporter.sendMail({
+    from: "Flossly <helloflossly@gmail.com>",
+    to: ["helloflossly@gmail.com"],
+    subject,
+    html,
+  });
+};
+
 export const sendOrganisationReferralEmail = async (data) => {
   const {
     orgName,

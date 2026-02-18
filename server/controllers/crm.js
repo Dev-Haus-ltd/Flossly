@@ -163,7 +163,26 @@ export const listLeads = async (event) => {
         where.inquiryDate = { [Op.between]: [start, end] }
       }
     }
-    const rows = await CrmLead.findAll({
+    const page = Number(q.page || 0)
+    const pageSize = Number(q.pageSize || 0)
+    const usePagination = Number.isFinite(page) && page > 0 && Number.isFinite(pageSize) && pageSize > 0
+    const sortBy = String(q.sortBy || 'createdAt')
+    const sortDirRaw = String(q.sortDir || 'DESC').toUpperCase()
+    const sortDir = sortDirRaw === 'ASC' ? 'ASC' : 'DESC'
+    const sortable = new Set([
+      'createdAt',
+      'updatedAt',
+      'name',
+      'email',
+      'telephone',
+      'leadStatus',
+      'leadSource',
+      'inquiryDate',
+      'followUpDate',
+    ])
+    const orderKey = sortable.has(sortBy) ? sortBy : 'createdAt'
+
+    const queryOptions = {
       where,
       include: [
         {
@@ -172,8 +191,22 @@ export const listLeads = async (event) => {
           include: [{ model: User, as: 'user', attributes: ['id', 'fullName', 'email'] }],
         },
       ],
-      order: [['createdAt', 'DESC']],
-    })
+      order: [[orderKey, sortDir]],
+    }
+
+    let rows = []
+    let total = null
+    if (usePagination) {
+      const result = await CrmLead.findAndCountAll({
+        ...queryOptions,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+      })
+      rows = result.rows || []
+      total = result.count || 0
+    } else {
+      rows = await CrmLead.findAll(queryOptions)
+    }
     const pageIds = [...new Set(rows.map((l) => l.pageId).filter(Boolean))]
     let pageNameById = new Map()
     if (pageIds.length) {
@@ -200,7 +233,26 @@ export const listLeads = async (event) => {
       // do not expose raw assignees relation by default
       return l
     })
-    return success(shaped)
+    if (!usePagination) return success(shaped)
+
+    let stats = null
+    if (String(q.includeStats || '').toLowerCase() === 'true') {
+      const counts = await CrmLead.findAll({
+        where,
+        attributes: ['leadStatus', [DB.fn('COUNT', DB.col('id')), 'count']],
+        group: ['leadStatus'],
+      })
+      const byStatus = {}
+      counts.forEach((row) => {
+        const status = row.get('leadStatus') || 'Unknown'
+        const count = Number(row.get('count') || 0)
+        byStatus[status] = count
+      })
+      const totalCount = await CrmLead.count({ where })
+      stats = { total: totalCount, byStatus }
+    }
+
+    return success({ rows: shaped, total: total || 0, stats })
   } catch (e) {
     return error(500, e.message)
   }
@@ -877,79 +929,135 @@ export const listAutomation = async (event) => {
   }
 }
 
+const applyAutomationSave = async ({ orgId, payload, transaction }) => {
+  const {
+    key,
+    type = 'Email',
+    name,
+    subject,
+    sending,
+    enabled,
+    template,
+    leadId,
+    groupKey,
+    trigger,
+    whatsappTemplateName,
+    whatsappTemplateLanguage,
+  } = payload || {}
+  if (!key) throw new Error('key required')
+
+  if (leadId) {
+    const lead = await CrmLead.findOne({
+      where: { organisationId: Number(orgId), id: Number(leadId) },
+      transaction,
+    })
+    if (!lead) throw new Error('Lead not found')
+    const raw = lead.rawData || {}
+    const overrides = { ...(raw.crmAutomationOverrides || {}) }
+    overrides[key] = {
+      key,
+      type,
+      name: name || key,
+      subject: subject || '',
+      sending: sending || '',
+      enabled: !!enabled,
+      template: template || '',
+      whatsappTemplateName: whatsappTemplateName || '',
+      whatsappTemplateLanguage: whatsappTemplateLanguage || '',
+      trigger: trigger ?? null,
+    }
+    lead.rawData = { ...raw, crmAutomationOverrides: overrides }
+    await lead.save({ transaction })
+    return overrides[key]
+  }
+
+  if (groupKey) {
+    try { await CrmAutomationGroup.sync() } catch {}
+    try { await CrmAutomationGroupTemplate.sync() } catch {}
+    const group = await CrmAutomationGroup.findOne({
+      where: { organisationId: Number(orgId), key: String(groupKey) },
+      transaction,
+    })
+    if (!group) throw new Error('Invalid group key')
+    await CrmAutomationGroupTemplate.destroy({
+      where: { organisationId: Number(orgId), templateKey: String(key) },
+      transaction,
+    })
+    await CrmAutomationGroupTemplate.create({
+      organisationId: Number(orgId),
+      groupId: group.id,
+      templateKey: String(key),
+      ordering: 0,
+    }, { transaction })
+  }
+
+  const where = { organisationId: Number(orgId), key }
+  const exists = await CrmAutomationTemplate.findOne({ where, transaction })
+  if (exists) {
+    if (name !== undefined) exists.name = name
+    if (sending !== undefined) exists.sending = sending
+    if (enabled !== undefined) exists.enabled = !!enabled
+    if (type !== undefined) exists.type = type
+    if (template !== undefined) exists.template = template
+    if (subject !== undefined) exists.subject = subject
+    if (whatsappTemplateName !== undefined) exists.whatsappTemplateName = whatsappTemplateName || null
+    if (whatsappTemplateLanguage !== undefined) exists.whatsappTemplateLanguage = whatsappTemplateLanguage || null
+    if (trigger !== undefined) exists.trigger = trigger
+    await exists.save({ transaction })
+    return exists
+  }
+
+  const created = await CrmAutomationTemplate.create({
+    organisationId: Number(orgId),
+    key,
+    type,
+    name: name || key,
+    subject: subject || null,
+    sending: sending || '',
+    enabled: !!enabled,
+    template: template || null,
+    whatsappTemplateName: whatsappTemplateName || null,
+    whatsappTemplateLanguage: whatsappTemplateLanguage || null,
+    trigger: trigger ?? null,
+  }, { transaction })
+  return created
+}
+
 export const saveAutomation = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
     const payload = typeof body === 'string' ? JSON.parse(body) : body
-    const { key, type = 'Email', name, subject, sending, enabled, template, leadId, groupKey, trigger, whatsappTemplateName, whatsappTemplateLanguage } = payload || {}
-    if (!key) return error(400, 'key required')
-    if (leadId) {
-      const lead = await CrmLead.findOne({ where: { organisationId: Number(orgId), id: Number(leadId) } })
-      if (!lead) return error(404, 'Lead not found')
-      const raw = lead.rawData || {}
-      const overrides = { ...(raw.crmAutomationOverrides || {}) }
-      overrides[key] = {
-        key,
-        type,
-        name: name || key,
-        subject: subject || '',
-        sending: sending || '',
-        enabled: !!enabled,
-        template: template || '',
-        whatsappTemplateName: whatsappTemplateName || '',
-        whatsappTemplateLanguage: whatsappTemplateLanguage || '',
-        trigger: trigger ?? null,
+    const result = await applyAutomationSave({ orgId, payload })
+    return success(result)
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const saveAutomationBatch = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const items = Array.isArray(payload?.items) ? payload.items : []
+    if (!items.length) return error(400, 'items required')
+
+    const transaction = await DB.transaction()
+    try {
+      const results = []
+      for (const item of items) {
+        const res = await applyAutomationSave({ orgId, payload: item, transaction })
+        results.push(res)
       }
-      lead.rawData = { ...raw, crmAutomationOverrides: overrides }
-      await lead.save()
-      return success(overrides[key])
+      await transaction.commit()
+      return success({ items: results, updated: results.length })
+    } catch (e) {
+      await transaction.rollback()
+      return error(500, e.message)
     }
-    if (groupKey) {
-      try { await CrmAutomationGroup.sync() } catch {}
-      try { await CrmAutomationGroupTemplate.sync() } catch {}
-      const group = await CrmAutomationGroup.findOne({ where: { organisationId: Number(orgId), key: String(groupKey) } })
-      if (!group) return error(400, 'Invalid group key')
-      await CrmAutomationGroupTemplate.destroy({
-        where: { organisationId: Number(orgId), templateKey: String(key) },
-      })
-      await CrmAutomationGroupTemplate.create({
-        organisationId: Number(orgId),
-        groupId: group.id,
-        templateKey: String(key),
-        ordering: 0,
-      })
-    }
-    const where = { organisationId: Number(orgId), key }
-    const exists = await CrmAutomationTemplate.findOne({ where })
-    if (exists) {
-      if (name !== undefined) exists.name = name
-      if (sending !== undefined) exists.sending = sending
-      if (enabled !== undefined) exists.enabled = !!enabled
-      if (type !== undefined) exists.type = type
-      if (template !== undefined) exists.template = template
-      if (subject !== undefined) exists.subject = subject
-      if (whatsappTemplateName !== undefined) exists.whatsappTemplateName = whatsappTemplateName || null
-      if (whatsappTemplateLanguage !== undefined) exists.whatsappTemplateLanguage = whatsappTemplateLanguage || null
-      if (trigger !== undefined) exists.trigger = trigger
-      await exists.save()
-      return success(exists)
-    }
-    const created = await CrmAutomationTemplate.create({
-      organisationId: Number(orgId),
-      key,
-      type,
-      name: name || key,
-      subject: subject || null,
-      sending: sending || '',
-      enabled: !!enabled,
-      template: template || null,
-      whatsappTemplateName: whatsappTemplateName || null,
-      whatsappTemplateLanguage: whatsappTemplateLanguage || null,
-      trigger: trigger ?? null
-    })
-    return success(created)
   } catch (e) {
     return error(500, e.message)
   }

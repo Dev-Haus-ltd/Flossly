@@ -16,14 +16,14 @@
                 My Leads
               </v-chip>
               <v-chip class="ml-2" color="primary" label>
-                {{ activeLeads.length }}
+                {{ props.activeTotal || activeLeads.length }}
               </v-chip>
             </div>
           </div>
         </v-expansion-panel-title>
 
         <v-expansion-panel-text class="pt-0">
-          <v-data-table
+          <v-data-table-server
             v-model="selectedLeads"
             :headers="headers"
             :items="activeLeads"
@@ -32,8 +32,14 @@
             hover
             class="resizable-table"
             density="compact"
+            :items-length="props.activeTotal || activeLeads.length"
+            :page="props.activePage"
+            :items-per-page="props.itemsPerPage"
+            :items-per-page-options="[10, 25, 50, 100]"
             :item-selectable="() => true"
             @update:model-value="onSelect"
+            @update:page="(val) => emit('update:activePage', val)"
+            @update:items-per-page="(val) => emit('update:itemsPerPage', val)"
             return-object
           >
             <template
@@ -274,6 +280,18 @@
                   </v-menu>
                 </div>
               </template>
+              <template v-else-if="col.key === 'automation'">
+                <DataTableColumnsAutomationGroups
+                  :lead="item"
+                  :groups="resolvedAutomationGroups"
+                  :get-display="getLeadAutomationGroupDisplay"
+                  :is-group-enabled="isLeadGroupEnabled"
+                  :toggle-group="toggleLeadGroup"
+                  :on-open-menu="onAutomationMenuOpen"
+                  :saving="!!automationSaving[item.id]"
+                  :groups-loading="automationGroupsLoading"
+                />
+              </template>
               <template v-else-if="col.key === 'leadSource'">
                 <DataTableColumnsLeadSource
                   :leadSources="leadSources"
@@ -321,7 +339,7 @@
                 <p class="ml-2 mb-0">{{ item[col.key] }}</p>
               </template>
             </template>
-          </v-data-table>
+          </v-data-table-server>
           <v-card
             v-if="selectedLeads.length"
             class="action-bar py-4 d-flex justify-center align-center rounded-lg"
@@ -372,7 +390,7 @@
                 Archived Leads
               </v-chip>
               <v-chip class="ml-2" color="#9E9E9E" label>
-                {{ archivedLeads.length }}
+                {{ props.archivedTotal || archivedLeads.length }}
               </v-chip>
             </div>
             <span class="text-caption text-medium-emphasis">Visible to Owner & Manager</span>
@@ -387,7 +405,7 @@
           >
             No archived records yet.
           </v-alert>
-          <v-data-table
+          <v-data-table-server
             v-else
             v-model="selectedArchivedLeads"
             :headers="headers"
@@ -397,8 +415,14 @@
             class="resizable-table"
             density="compact"
             show-select
+            :items-length="props.archivedTotal || archivedLeads.length"
+            :page="props.archivedPage"
+            :items-per-page="props.itemsPerPage"
+            :items-per-page-options="[10, 25, 50, 100]"
             :item-selectable="() => false"
             @update:model-value="onArchivedSelectionChange"
+            @update:page="(val) => emit('update:archivedPage', val)"
+            @update:items-per-page="(val) => emit('update:itemsPerPage', val)"
             return-object
           >
             <template
@@ -471,6 +495,19 @@
                   {{ item.leadStatus || 'Archived' }}
                 </v-chip>
               </template>
+              <template v-else-if="col.key === 'automation'">
+                <DataTableColumnsAutomationGroups
+                  :lead="item"
+                  :groups="resolvedAutomationGroups"
+                  :get-display="getLeadAutomationGroupDisplay"
+                  :is-group-enabled="isLeadGroupEnabled"
+                  :toggle-group="toggleLeadGroup"
+                  :on-open-menu="onAutomationMenuOpen"
+                  :saving="!!automationSaving[item.id]"
+                  :groups-loading="automationGroupsLoading"
+                  readonly
+                />
+              </template>
               <template v-else-if="col.key === 'email'">
                 <p class="ml-2 mb-0">{{ resolveLeadEmail(item) }}</p>
               </template>
@@ -496,7 +533,7 @@
                 <p class="ml-2 mb-0">{{ item[col.key]?.name || item[col.key] }}</p>
               </template>
             </template>
-          </v-data-table>
+          </v-data-table-server>
         </v-expansion-panel-text>
       </v-expansion-panel>
     </v-expansion-panels>
@@ -672,6 +709,8 @@ import { getTemplateParamCount, getTemplateParamExamples, buildTemplatePreviewLi
 import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
 import { formatAssignedUsers, formatTreatmentValue } from "@/lib/misc";
 import { getLeadDisplayName, getLeadEmail, getLeadPhone } from "@/lib/normalizers/lead";
+import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults'
+import DataTableColumnsAutomationGroups from '@/components/dataTableColumns/automationGroups.vue'
 import callIcon from '@/assets/crm/call.svg'
 import sendMailIcon from '@/assets/crm/sendMail.svg'
 import whatsappIcon from '@/assets/crm/whatsapp.svg'
@@ -685,9 +724,24 @@ import deleteIcon from '@/assets/crm/delete.svg'
 import exportIcon from '@/assets/crm/export.svg'
 const crmStore = useCrmStore();
 const { user } = useUser();
-const emit = defineEmits(['select','openLead','delete','book']);
+const emit = defineEmits([
+  'select',
+  'openLead',
+  'delete',
+  'book',
+  'update:activePage',
+  'update:archivedPage',
+  'update:itemsPerPage',
+]);
 const props = defineProps({
-  leads: { type: Array, required: true },
+  leads: { type: Array, default: () => [] },
+  activeLeads: { type: Array, default: null },
+  archivedLeads: { type: Array, default: null },
+  activeTotal: { type: Number, default: 0 },
+  archivedTotal: { type: Number, default: 0 },
+  activePage: { type: Number, default: 1 },
+  archivedPage: { type: Number, default: 1 },
+  itemsPerPage: { type: Number, default: 25 },
   headers: { type: Array, required: true },
   search: { type: String, default: '' },
   leadSources: { type: Array, required: true },
@@ -721,10 +775,14 @@ const isArchivedLead = (lead) => {
   return !!lead?.softDeleted || status === 'archived';
 };
 const activeLeads = computed(() =>
-  (props.leads || []).filter((l) => !isArchivedLead(l))
+  Array.isArray(props.activeLeads)
+    ? props.activeLeads
+    : (props.leads || []).filter((l) => !isArchivedLead(l))
 );
 const archivedLeads = computed(() =>
-  (props.leads || []).filter((l) => isArchivedLead(l))
+  Array.isArray(props.archivedLeads)
+    ? props.archivedLeads
+    : (props.leads || []).filter((l) => isArchivedLead(l))
 );
 const canViewArchive = computed(() => [1, 8].includes(user.value?.roleId));
 
@@ -756,10 +814,221 @@ const archiving = ref(false);
 const converting = ref(false);
 const addStaffDrawer = ref(false);
 const rolesList = ref([]);
+const automationRowsCache = reactive({});
+const automationLoading = reactive({});
+const automationSaving = reactive({});
+const automationGroupRows = ref([]);
+const automationGroupsLoading = ref(false);
+const automationGroupsDirty = ref(false);
+const defaultAutomationMap = new Map(
+  (crmAutomationDefaults || [])
+    .filter((item) => item && item.key)
+    .map((item) => [item.key, { ...item }])
+);
 
 const resolveLeadName = (lead) => getLeadDisplayName(lead);
 const resolveLeadEmail = (lead) => getLeadEmail(lead);
 const resolveLeadPhone = (lead) => getLeadPhone(lead);
+
+const mergeDefaultAutomations = (rows) => {
+  const map = new Map((rows || []).map((row) => [row.key, { ...row }]));
+  for (const [key, def] of defaultAutomationMap.entries()) {
+    if (!map.has(key)) map.set(key, { ...def });
+  }
+  return Array.from(map.values());
+};
+
+const isWhatsAppItem = (item) => {
+  const type = String(item?.type || '').toLowerCase();
+  const key = String(item?.key || '').toLowerCase();
+  return type === 'whatsapp' || key.includes('whatsapp');
+};
+
+const isWhatsAppGroup = (group) => {
+  const key = String(group?.key || '').toLowerCase();
+  const title = String(group?.title || '').toLowerCase();
+  return key.includes('whatsapp') || title.includes('whatsapp');
+};
+
+const loadAutomationGroups = async ({ force = false } = {}) => {
+  if (!force && (automationGroupRows.value.length || automationGroupsLoading.value)) return;
+  automationGroupsLoading.value = true;
+  try {
+    const res = await crmStore.listAutomationGroups();
+    if (res?.code === 0 && Array.isArray(res.data)) {
+      automationGroupRows.value = res.data.filter((group) => !isWhatsAppGroup(group));
+    }
+  } finally {
+    automationGroupsLoading.value = false;
+  }
+};
+
+const resolvedAutomationGroups = computed(() => {
+  const groups = automationGroupRows.value.length ? automationGroupRows.value : crmAutomationGroups;
+  return groups.filter((group) => !isWhatsAppGroup(group));
+});
+
+const loadLeadAutomations = async (leadId) => {
+  if (!leadId || automationRowsCache[leadId] || automationLoading[leadId]) return;
+  automationLoading[leadId] = true;
+  try {
+    const res = await crmStore.listAutomation(leadId);
+    const apiItems = Array.isArray(res?.data) ? res.data : [];
+    const rows = apiItems.length
+      ? mergeDefaultAutomations(apiItems)
+      : mergeDefaultAutomations(crmAutomationDefaults);
+    const nonWhatsAppRows = rows.filter((item) => !isWhatsAppItem(item));
+    automationRowsCache[leadId] = nonWhatsAppRows;
+  } catch (e) {
+    automationRowsCache[leadId] = mergeDefaultAutomations(crmAutomationDefaults);
+  } finally {
+    automationLoading[leadId] = false;
+  }
+};
+
+const onAutomationMenuOpen = async (lead) => {
+  if (!lead?.id) return;
+  const force = automationGroupsDirty.value || !automationGroupRows.value.length;
+  await Promise.all([loadAutomationGroups({ force }), loadLeadAutomations(lead.id)]);
+  automationGroupsDirty.value = false;
+};
+
+// Note: automation rows are loaded lazily per-lead when the menu opens.
+
+const markAutomationGroupsDirty = () => {
+  automationGroupsDirty.value = true;
+};
+
+onMounted(() => {
+  if (typeof window === 'undefined') return;
+  loadAutomationGroups();
+  window.addEventListener('crm-automation-groups-updated', markAutomationGroupsDirty);
+});
+
+onBeforeUnmount(() => {
+  if (typeof window === 'undefined') return;
+  window.removeEventListener('crm-automation-groups-updated', markAutomationGroupsDirty);
+});
+
+const getLeadGroupRows = (lead, group) => {
+  const rows = automationRowsCache[lead?.id] || [];
+  const keys = group?.templateKeys || [];
+  if (keys.length) {
+    const keySet = new Set(keys);
+    return rows.filter((row) => keySet.has(row?.key));
+  }
+  return rows.filter((row) => row?.groupKey === group?.key);
+};
+
+const isLeadGroupEnabled = (lead, group) =>
+  getLeadGroupRows(lead, group).some((row) => row?.enabled);
+
+const getLeadAutomationGroups = (lead) =>
+  resolvedAutomationGroups.value.filter((group) => isLeadGroupEnabled(lead, group));
+
+const getLeadAutomationGroupNames = (lead) =>
+  getLeadAutomationGroups(lead).map((group) => group?.title || group?.key || 'Automation Group');
+
+const getLeadAutomationGroupDisplay = (lead) => {
+  const groups = getLeadAutomationGroups(lead);
+  return {
+    visible: groups.slice(0, 3),
+    overflow: groups.slice(3),
+  };
+};
+
+const truncateAutomationName = (name, max = 20) => {
+  const safe = String(name || '').trim();
+  if (!safe) return '';
+  if (safe.length <= max) return safe;
+  return `${safe.slice(0, Math.max(0, max - 3))}...`;
+};
+
+
+const buildAutomationPayload = (row, leadId, groupKey) => {
+  const def = defaultAutomationMap.get(row?.key) || {};
+  const payload = {
+    key: row?.key,
+    type: row?.type || def.type || 'Email',
+    name: row?.name || def.name || row?.key,
+    subject: row?.subject || def.subject || def.name || '',
+    sending: row?.sending || def.sending || '',
+    enabled: !!row?.enabled,
+    template:
+      row?.template && String(row.template).trim()
+        ? row.template
+        : def.template || '',
+    whatsappTemplateName:
+      row?.whatsappTemplateName || def.whatsappTemplateName || undefined,
+    whatsappTemplateLanguage:
+      row?.whatsappTemplateLanguage || def.whatsappTemplateLanguage || undefined,
+  };
+  const resolvedGroupKey = row?.groupKey || groupKey;
+  if (resolvedGroupKey) payload.groupKey = resolvedGroupKey;
+  if (leadId) payload.leadId = leadId;
+  return payload;
+};
+
+const toggleLeadGroup = async (lead, group, enabled) => {
+  const leadId = lead?.id;
+  if (!leadId || !group) return;
+  await loadLeadAutomations(leadId);
+
+  const rows = automationRowsCache[leadId] || [];
+  const keys = group?.templateKeys || [];
+  let groupRows = [];
+
+  if (keys.length) {
+    const rowMap = new Map(rows.map((row) => [row?.key, row]));
+    groupRows = keys
+      .map((key) => {
+        if (rowMap.has(key)) return rowMap.get(key);
+        const def = defaultAutomationMap.get(key);
+        if (!def) return null;
+        const nextRow = { ...def };
+        rows.push(nextRow);
+        rowMap.set(key, nextRow);
+        return nextRow;
+      })
+      .filter(Boolean);
+  } else {
+    groupRows = rows.filter((row) => row?.groupKey === group.key);
+  }
+
+  if (!groupRows.length) return;
+
+  const updates = [];
+  const previous = new Map();
+  groupRows.forEach((row) => {
+    previous.set(row.key, !!row.enabled);
+    const nextEnabled = !!enabled;
+    if (!!row.enabled !== nextEnabled) {
+      row.enabled = nextEnabled;
+      updates.push(buildAutomationPayload(row, leadId, group.key));
+    }
+  });
+
+  if (!updates.length) return;
+
+  automationSaving[leadId] = true;
+  try {
+    await crmStore.saveAutomationBatch({ items: updates });
+  } catch (e) {
+    groupRows.forEach((row) => {
+      if (previous.has(row.key)) row.enabled = previous.get(row.key);
+    });
+    if (mainStore?.setSnackbar) {
+      mainStore.setSnackbar({
+        title: 'Failed to update automation group',
+        type: 'error',
+      });
+    }
+  } finally {
+    automationSaving[leadId] = false;
+  }
+};
+
+const disableAutomationGroup = (lead, group) => toggleLeadGroup(lead, group, false);
 
 const getEditableFieldValue = (item, field) => {
   if (field === 'name') return resolveLeadName(item);
@@ -863,6 +1132,7 @@ const resolveLeadValue = (lead, key) => {
   if (key === 'pageId') return lead?.pageId || '';
   if (key === 'formId') return lead?.formId || '';
   if (key === 'leadId') return lead?.leadId || '';
+  if (key === 'automation') return getLeadAutomationGroupNames(lead).join(', ');
   if (key === 'comments') return lead?.comments || '';
   if (key === 'alert') return lead?.alert || '';
   const value = lead?.[key];
@@ -1654,4 +1924,11 @@ const convertSelected = async () => {
   background-color: rgba(var(--v-border-color), var(--v-border-opacity));
   pointer-events: none;
 }
+
+.automation-cell {
+  display: flex;
+  align-items: center;
+}
+
 </style>
+

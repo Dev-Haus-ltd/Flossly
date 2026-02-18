@@ -34,12 +34,13 @@ import {
   portalReadyTrainingInvite,
   accountCreationNotification,
   sendOtpForPasswordReset,
+  sendOrganisationCreatedInternalNotification,
 } from "../utils/emailNotifications";
+import { getCurrentEnvironment } from "../utils/environment";
 import requestIp from "request-ip";
 import { HrDocument } from "../models/hrDocuments";
 import path from "path";
-import fs from "fs";
-import fsPromises from "fs/promises";
+import { uploadBufferFile, deleteLink } from "../utils/storage";
 import { createError, setCookie } from "h3";
 import { success, error } from "../utils/response";
 import {
@@ -59,6 +60,7 @@ import {
 } from "../utils/onboardingService";
 
 const config = useRuntimeConfig();
+const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
 
 export const login = async (event) => {
   try {
@@ -67,8 +69,25 @@ export const login = async (event) => {
     browserAgent = browserAgent + ",ipAddress:" + ip;
     const body = await readBody(event);
     const { email, password } = JSON.parse(body);
-    if (!email || !password) return error(400, "Missing credentials");
-    const user = await User.findOne({ where: { email } });
+    const normalizedEmail = normalizeEmail(email);
+    console.log("[auth.login] email:", {
+      raw: email,
+      normalized: normalizedEmail,
+      schema: config.DB_SCHEMA,
+    });
+    if (!normalizedEmail || !password) return error(400, "Missing credentials");
+    const user = await User.findOne({
+      where: {
+        email: {
+          [Op.iLike]: normalizedEmail,
+        },
+      },
+    });
+    console.log("[auth.login] user lookup:", {
+      found: Boolean(user),
+      userId: user?.id,
+      email: user?.email,
+    });
     if (!user) {
       return error(401, "Invalid credentials");
     }
@@ -130,7 +149,7 @@ export const login = async (event) => {
       orgId = orgIds[0];
     }
     const token = jwt.sign(
-      { userId: user.id, orgId, roleId: user.roleId, purpose: "login" },
+      { userId: user.id, orgId, roleId: user.roleId, purpose: "login", environment: getCurrentEnvironment() },
       config.JWT_SECRET
     );
     user.lastLoginDate = new Date()
@@ -161,6 +180,7 @@ export const createShortLivedToken = async (event) => {
         orgId: loggedUser.orgId,
         roleId: loggedUser.roleId,
         purpose: "third_party_redirect",
+        environment: getCurrentEnvironment(),
       },
       config.JWT_SECRET,
       { expiresIn: "60s" }
@@ -188,6 +208,9 @@ export const exchangeShortLivedToken = async (event) => {
         orgId: payload.orgId,
         roleId: payload.roleId,
         purpose: "login",
+        // IMPORTANT: carry environment through from the short token so downstream services
+        // (e.g. /auth/profile, chatbot builder) don't default to the wrong environment.
+        environment: payload.environment || getCurrentEnvironment(),
       },
       config.JWT_SECRET
     );
@@ -203,11 +226,18 @@ export const resendVerificationEmail = async (event) => {
   const parsed =
     typeof body === "string" ? JSON.parse(body || "{}") : body || {};
   const { email } = parsed;
+  const normalizedEmail = normalizeEmail(email);
 
-  if (!email) return error(400, "Email required");
+  if (!normalizedEmail) return error(400, "Email required");
 
   try {
-    const user = await User.findOne({ where: { email } });
+    const user = await User.findOne({
+      where: {
+        email: {
+          [Op.iLike]: normalizedEmail,
+        },
+      },
+    });
     if (!user) {
       return error(404, "User not found");
     }
@@ -221,8 +251,16 @@ export const resendVerificationEmail = async (event) => {
 
     // Create new verification link
     const link = generateVerificationLink();
-    await EmailVerification.create({ email, link, userId: user.id });
-    await sendEmailVerificationEmail({ email, fullName: user.fullName, link });
+    await EmailVerification.create({
+      email: normalizedEmail,
+      link,
+      userId: user.id,
+    });
+    await sendEmailVerificationEmail({
+      email: normalizedEmail,
+      fullName: user.fullName,
+      link,
+    });
 
     return success("Verification email sent");
   } catch (err) {
@@ -235,10 +273,11 @@ export const signupRequest = async (event) => {
   const parsed =
     typeof body === "string" ? JSON.parse(body || "{}") : body || {};
   const { fullName, email, password, organisationName, roleId } = parsed;
+  const normalizedEmail = normalizeEmail(email);
 
   // Trim and validate fullName
   const trimmedFullName = fullName ? fullName.trim() : "";
-  if (!trimmedFullName || !email || !password || !organisationName) {
+  if (!trimmedFullName || !normalizedEmail || !password || !organisationName) {
     return error(400, "Missing required fields");
   }
 
@@ -257,7 +296,13 @@ export const signupRequest = async (event) => {
   }
 
   // Check if user already exists
-  let user = await User.findOne({ where: { email } });
+  let user = await User.findOne({
+    where: {
+      email: {
+        [Op.iLike]: normalizedEmail,
+      },
+    },
+  });
   if (user) {
     return error(
       409,
@@ -280,7 +325,7 @@ export const signupRequest = async (event) => {
     user = await User.create(
       {
         fullName: trimmedFullName,
-        email,
+        email: normalizedEmail,
         password: hashed,
         profileCompletion: 0,
         roleId,
@@ -320,14 +365,14 @@ export const signupRequest = async (event) => {
     );
     const link = generateVerificationLink();
     await EmailVerification.create(
-      { email, link, userId: user.id },
+      { email: normalizedEmail, link, userId: user.id },
       { transaction }
     );
     await transaction.commit();
 
     try {
       await sendEmailVerificationEmail({
-        email,
+        email: normalizedEmail,
         fullName: trimmedFullName,
         link,
       });
@@ -335,6 +380,23 @@ export const signupRequest = async (event) => {
       console.error("Verification email failed to send", {
         to: email,
         error: emailErr?.message || emailErr,
+      });
+    }
+
+    try {
+      await sendOrganisationCreatedInternalNotification({
+        organisationName: org.name,
+        organisationId: org.id,
+        creatorName: trimmedFullName,
+        creatorEmail: normalizedEmail,
+        licenseType: "Trial",
+        trialEndsOn: trialEndDate,
+        origin: "signup",
+      });
+    } catch (notifyErr) {
+      console.error("Internal org-created notification failed", {
+        organisationId: org?.id,
+        error: notifyErr?.message || notifyErr,
       });
     }
 
@@ -606,15 +668,16 @@ export const updateProfile = async (event) => {
     }
 
     if (fileItem) {
-      const uploadDir = path.resolve('public/uploads/avatars');
-      await fsPromises.mkdir(uploadDir, { recursive: true });
-      const originalName = fileItem.filename || 'avatar';
-      const fileExt = path.extname(originalName) || '';
+      const originalName = fileItem.filename || "avatar";
+      const fileExt = path.extname(originalName) || "";
       const filename = `user-${id}-${Date.now()}${fileExt}`;
-      const filepath = path.join(uploadDir, filename);
-    
-      await fsPromises.writeFile(filepath, fileItem.data);
-      user.photo = `/uploads/avatars/${filename}`;
+      const link = await uploadBufferFile({
+        data: fileItem.data,
+        filename,
+        contentType: fileItem.type || fileItem.mimetype,
+        baseDir: "uploads/avatars",
+      });
+      user.photo = link;
     }
 
     await user.save();
@@ -681,11 +744,28 @@ export const forgetPasswordRequest = async (event) => {
   const parsed =
     typeof body === "string" ? JSON.parse(body || "{}") : body || {};
   const { email } = parsed;
+  const normalizedEmail = normalizeEmail(email);
+  console.log("[auth.forgetPasswordRequest] email:", {
+    raw: email,
+    normalized: normalizedEmail,
+    schema: config.DB_SCHEMA,
+  });
 
-  if (!email) return error(403, "Email required");
+  if (!normalizedEmail) return error(403, "Email required");
 
   try {
-    const user = await User.findOne({ where: { email } });
+    const user = await User.findOne({
+      where: {
+        email: {
+          [Op.iLike]: normalizedEmail,
+        },
+      },
+    });
+    console.log("[auth.forgetPasswordRequest] user lookup:", {
+      found: Boolean(user),
+      userId: user?.id,
+      email: user?.email,
+    });
     if (!user) {
       throw createError({
         statusCode: 403,
@@ -699,8 +779,12 @@ export const forgetPasswordRequest = async (event) => {
     }
     const otp = generateOTP();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-    await Verification.upsert({ email, otp, expiresAt });
-    await sendOtpForPasswordReset({ email, otp, name: user.fullName });
+    await Verification.upsert({ email: normalizedEmail, otp, expiresAt });
+    await sendOtpForPasswordReset({
+      email: normalizedEmail,
+      otp,
+      name: user.fullName,
+    });
     return success("OTP sent");
   } catch (err) {
     if (err.statusCode) {
@@ -713,17 +797,32 @@ export const forgetPasswordRequest = async (event) => {
 export const resetPassword = async (event) => {
   const body = await readBody(event);
   const { email, otp, newPassword } = JSON.parse(body);
+  const normalizedEmail = normalizeEmail(email);
   try {
-    if (!email || !otp || !newPassword)
+    if (!normalizedEmail || !otp || !newPassword)
       return error(402, "Missing required fields");
     const record = await Verification.findOne({
-      where: { email, otp: otp + "" },
+      where: {
+        email: {
+          [Op.iLike]: normalizedEmail,
+        },
+        otp: otp + "",
+      },
     });
     if (!record || record.expiresAt < new Date()) {
       return error(400, "Invalid/Expired OTP");
     }
     const hashed = await bcrypt.hash(newPassword, 10);
-    await User.update({ password: hashed }, { where: { email } });
+    await User.update(
+      { password: hashed },
+      {
+        where: {
+          email: {
+            [Op.iLike]: normalizedEmail,
+          },
+        },
+      }
+    );
     await record.destroy();
     return success("Password updated");
   } catch (err) {
@@ -776,7 +875,14 @@ export const switchOrgnanisation = async (event) => {
       return error(403, "Your account is deactivated");
     }
     const newToken = jwt.sign(
-      { userId: user.userId, roleId: user.roleId, orgId, purpose: "login" },
+      {
+        userId: user.userId,
+        roleId: user.roleId,
+        orgId,
+        purpose: "login",
+        // Preserve environment from existing access token when switching orgs.
+        environment: user.environment || getCurrentEnvironment(),
+      },
       config.JWT_SECRET
     );
 
@@ -901,20 +1007,34 @@ export const inviteMembers = async (event) => {
     if (!Array.isArray(users) || !users.length) {
       return error(400, "Invitee list is required");
     }
+    const normalizedUsers = users.map((user) => ({
+      ...user,
+      email: normalizeEmail(user.email),
+    }));
+    if (normalizedUsers.some((u) => !u.email)) {
+      return error(400, "All invitees must have a valid email");
+    }
 
     const currentUser = await User.findByPk(loggedUser.userId);
-    const currentUserEmail = currentUser?.email?.toLowerCase();
+    const currentUserEmail = normalizeEmail(currentUser?.email);
     if (currentUserEmail) {
-      const selfInviteAttempt = users.some(
-        (user) => user.email?.toLowerCase() === currentUserEmail
+      const selfInviteAttempt = normalizedUsers.some(
+        (user) => user.email === currentUserEmail
       );
       if (selfInviteAttempt) {
         return error(400, "You cannot invite yourself");
       }
     }
 
+    const normalizedEmails = normalizedUsers.map((i) => i.email);
     const existingUsers = await User.findAll({
-      where: { email: users.map((i) => i.email) },
+      where: {
+        [Op.or]: normalizedEmails.map((email) => ({
+          email: {
+            [Op.iLike]: email,
+          },
+        })),
+      },
       attributes: ["id", "email"],
     });
     const currentOrganisation = await Organisation.findByPk(currentOrg);
@@ -986,6 +1106,7 @@ export const inviteMembers = async (event) => {
               orgId: currentOrg,
               purpose: "org_invitation",
               invitedBy: loggedUser.userId,
+              environment: getCurrentEnvironment(),
             },
             config.JWT_SECRET,
             { expiresIn: "7d" } // 7 days to respond
@@ -1005,13 +1126,15 @@ export const inviteMembers = async (event) => {
 
         // Don't return here - let transaction commit below
       } else {
-        const existingUsersEmails = existingUsers.map((u) => u.email);
-        const newUsers = users.filter(
+        const existingUsersEmails = existingUsers.map((u) =>
+          normalizeEmail(u.email)
+        );
+        const newUsers = normalizedUsers.filter(
           (x) => !existingUsersEmails.includes(x.email)
         );
         if (newUsers.length) {
           await inviteNewUsers(
-            users,
+            normalizedUsers,
             existingUsers,
             transaction,
             currentOrg,
@@ -1024,7 +1147,7 @@ export const inviteMembers = async (event) => {
       }
     } else {
       await inviteNewUsers(
-        users,
+        normalizedUsers,
         existingUsers,
         transaction,
         currentOrg,
@@ -1053,7 +1176,7 @@ const inviteNewUsers = async (
   currentOrganisation,
   currentUser
 ) => {
-  const existingEmails = existingUsers.map((u) => u.email);
+  const existingEmails = existingUsers.map((u) => normalizeEmail(u.email));
   const newUsersData = users
     .filter((i) => !existingEmails.includes(i.email))
     .map((i) => ({
@@ -1145,6 +1268,7 @@ export const acceptInvitation = async (event) => {
         orgId: userOrg.organisationId,
         roleId: user.roleId,
         purpose: "login",
+        environment: getCurrentEnvironment(),
       },
       config.JWT_SECRET
     );
@@ -1301,6 +1425,7 @@ export const acceptOrganisationInvitation = async (event) => {
           orgId: orgId,
           roleId: user.roleId,
           purpose: "login",
+          environment: getCurrentEnvironment(),
         },
         config.JWT_SECRET
       );
@@ -1506,6 +1631,7 @@ export const resendOrganisationInvitation = async (event) => {
             orgId: orgId,
             purpose: "org_invitation",
             invitedBy: loggedUser.userId,
+            environment: getCurrentEnvironment(),
           },
           config.JWT_SECRET,
           { expiresIn: "7d" }
@@ -1716,14 +1842,13 @@ export const addUserHrDoc = async (event) => {
   try {
     let documentPath = null;
     if (documentFile) {
-      const uploadDir = path.join(process.cwd(), "public", "hr-documents");
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
       const fileName = `${Date.now()}-${documentFile.filename}`;
-      const filePath = path.join(uploadDir, fileName);
-      fs.writeFileSync(filePath, documentFile.data);
-      documentPath = `/hr-documents/${fileName}`;
+      documentPath = await uploadBufferFile({
+        data: documentFile.data,
+        filename: fileName,
+        contentType: documentFile.type || documentFile.mimetype,
+        baseDir: "hr-documents",
+      });
     }
     const userDoc = await UserHrDocument.findOne({
       where: { userId, type, name },
@@ -1768,10 +1893,7 @@ export const removeUserDoc = async (event) => {
   try {
     const userDoc = await UserHrDocument.findByPk(id);
     if (!userDoc) throw createError({ message: "Document not found for user" });
-    const prevLink = path.join(process.cwd(), "public", userDoc.link);
-    if (prevLink && fs.existsSync(prevLink)) {
-      fs.unlinkSync(prevLink);
-    }
+    await deleteLink(userDoc.link);
     userDoc.link = "";
     userDoc.uploadedDate = null;
     userDoc.status = "Pending";

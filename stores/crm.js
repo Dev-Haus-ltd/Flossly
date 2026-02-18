@@ -18,7 +18,7 @@ export const useCrmStore = defineStore("crmStore", {
     // Meta connections
     startMetaAuth() { return this._wrap(() => crmService.startMetaAuth()); },
     connectionStatus() { return this._wrap(() => crmService.connectionStatus()); },
-    fetchLeadsNow() { return this._wrap(() => crmService.fetchLeadsNow()); },
+    fetchLeadsNow(params = {}) { return this._wrap(() => crmService.fetchLeadsNow(params)); },
     fetchMetaStructure() { return this._wrap(() => crmService.fetchMetaStructure()); },
     fetchMetaInsights() { return this._wrap(() => crmService.fetchMetaInsights()); },
     subscribePages() { return this._wrap(() => crmService.subscribePages()); },
@@ -60,9 +60,22 @@ export const useCrmStore = defineStore("crmStore", {
     // Automation
     listAutomation(leadId) { return this._wrap(() => crmService.listAutomation(leadId)); },
     saveAutomation(payload) { return this._wrap(() => crmService.saveAutomation(payload)); },
+    saveAutomationBatch(payload) { return this._wrap(() => crmService.saveAutomationBatch(payload)); },
     listAutomationGroups() { return this._wrap(() => crmService.listAutomationGroups()); },
-    saveAutomationGroup(payload) { return this._wrap(() => crmService.saveAutomationGroup(payload)); },
-    deleteAutomationGroup(payload) { return this._wrap(() => crmService.deleteAutomationGroup(payload)); },
+    async saveAutomationGroup(payload) {
+      const res = await this._wrap(() => crmService.saveAutomationGroup(payload));
+      if (res?.code === 0 && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('crm-automation-groups-updated'));
+      }
+      return res;
+    },
+    async deleteAutomationGroup(payload) {
+      const res = await this._wrap(() => crmService.deleteAutomationGroup(payload));
+      if (res?.code === 0 && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('crm-automation-groups-updated'));
+      }
+      return res;
+    },
 
     // Mail
     sendLeadMail(payload) { return this._wrap(() => crmService.sendLeadMail(payload)); },

@@ -1,4 +1,4 @@
-export const crmAutomationDefaults = [
+const crmAutomationDefaultsAll = [
   {
     key: 'new_patient_enquiry_immediate',
     type: 'Email',
@@ -1336,7 +1336,7 @@ Long-term solutions:
   },
 ]
 
-export const crmAutomationGroups = [
+const crmAutomationGroupsAll = [
   {
     key: 'manual_responses',
     title: 'Manual Responses',
@@ -1558,4 +1558,16 @@ export const crmAutomationGroups = [
     ],
   },
 ]
+
+const crmAutomationDefaults = crmAutomationDefaultsAll.filter(
+  (item) => String(item?.type || '').toLowerCase() !== 'whatsapp'
+)
+
+const crmAutomationGroups = crmAutomationGroupsAll.filter((group) => {
+  const key = String(group?.key || '').toLowerCase()
+  const title = String(group?.title || '').toLowerCase()
+  return !key.includes('whatsapp') && !title.includes('whatsapp')
+})
+
+export { crmAutomationDefaults, crmAutomationGroups }
 
