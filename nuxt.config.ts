@@ -5,11 +5,6 @@ export default defineNuxtConfig({
   alias: {
     "@shared": resolve(__dirname, "shared"),
   },
-  // @ts-ignore
-  serverMiddleware: [
-    { path: "/api", handler: "@/server/api.js" },
-    { path: "/api/**", handler: "@/server/api.js" },
-  ],
   router: {
     prefetchLinks: true,
   },

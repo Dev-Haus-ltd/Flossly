@@ -1,4 +1,5 @@
 import authService from "../services/authService";
+import { DEVELOPER_EMAILS } from '@/composables/useDeveloperAccess';
 
 export const useAuthStore = defineStore("authStore", {
   state: () => ({
@@ -6,11 +7,15 @@ export const useAuthStore = defineStore("authStore", {
     organisationDetails: null,
     userPreferences: null,
     isLoading: false,
+    isDeveloper: false,
   }),
 
   getters: {
     getLoggedUser(state) {
       return state.loggedUser;
+    },
+    getIsDeveloper(state) {
+      return state.isDeveloper;
     },
   },
 
@@ -113,6 +118,9 @@ export const useAuthStore = defineStore("authStore", {
           .then((res) => {
             this.loggedUser = res.data;
             this.isLoading = false;
+            
+            const userEmail = res.data?.email || '';
+            this.isDeveloper = DEVELOPER_EMAILS.includes(userEmail);
             
             // Update user state with profile data
             if (res.data && process.client) {

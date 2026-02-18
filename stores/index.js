@@ -6,6 +6,7 @@ import teamIcon from "@/assets/icons/mainDrawerIcons/team.svg";
 import flosslyDocs from '@/assets/icons/mainDrawerIcons/docs.svg'
 import crmIcon from '@/assets/icons/mainDrawerIcons/crm.svg'
 import academyIcon from '@/assets/icons/mainDrawerIcons/academy.svg'
+import { DEVELOPER_EMAILS } from '@/composables/useDeveloperAccess';
 
 const LICENSE_TYPES = {
   SYSTEM: "System",
@@ -110,6 +111,10 @@ export const useMainStore = defineStore("mainStore", {
     },
     getManagerOptions() {
       const licenseType = getLicenseTypeFromStorage();
+      const authStore = useAuthStore();
+      
+      const isDeveloper = authStore.getIsDeveloper;
+      
       const menuItems = [
         {
           title: "DashBoard",
@@ -292,7 +297,19 @@ export const useMainStore = defineStore("mainStore", {
         // },
       ];
 
-      return filterMenuByLicense(menuItems, licenseType);
+      // Add Support Chat menu item only for developers
+      if (isDeveloper) {
+        menuItems.push({
+          title: "Support Chat",
+          imgPath: teamIcon, // Using team icon temporarily, can be replaced with chat icon
+          value: "supportChat",
+          to: "/support-chat",
+          featureKey: "dashboard", // Use dashboard feature key so it's always visible
+        });
+      } 
+
+      const filtered = filterMenuByLicense(menuItems, licenseType);
+      return filtered;
     },
     getuserOptions() {
       const licenseType = getLicenseTypeFromStorage();

@@ -63,6 +63,11 @@ import { MetaAdSet } from "./crm/MetaAdSet";
 import { MetaAd } from "./crm/MetaAd";
 import { MetaInsight } from "./crm/MetaInsights";
 
+// Chatbot Support
+import { ChatbotConversation } from "./chatbot/chatbotConversations";
+import { ChatbotMessage } from "./chatbot/chatbotMessages";
+import { ChatbotMessageAttachment } from "./chatbot/chatbotMessageAttachments";
+
 // Diary
 import { DiaryTreatment } from "./diary/treatments";
 import { DiaryPatient } from "./diary/patients";
@@ -544,6 +549,10 @@ export {
   MetaAdSet,
   MetaAd,
   MetaInsight,
+  // Chatbot Support
+  ChatbotConversation,
+  ChatbotMessage,
+  ChatbotMessageAttachment,
   // Diary
   DiaryTreatment,
   DiaryPatient,
@@ -558,3 +567,26 @@ export {
   PatientAutomationDictionary,
   PatientAutomationTemplate
 };
+
+// --------------------------
+// Chatbot Support Associations
+// --------------------------
+// ChatbotConversation -> User, Organisation
+ChatbotConversation.belongsTo(User, { foreignKey: "userId", as: "user", onDelete: "CASCADE", hooks: true });
+ChatbotConversation.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", onDelete: "CASCADE", hooks: true });
+ChatbotConversation.belongsTo(User, { foreignKey: "resolvedBy", as: "resolver", onDelete: "SET NULL" });
+
+// ChatbotConversation -> ChatbotMessages
+ChatbotConversation.hasMany(ChatbotMessage, { foreignKey: "conversationId", as: "messages" });
+ChatbotMessage.belongsTo(ChatbotConversation, { foreignKey: "conversationId", as: "conversation", onDelete: "CASCADE", hooks: true });
+
+// ChatbotMessage -> User
+ChatbotMessage.belongsTo(User, { foreignKey: "senderId", as: "sender", onDelete: "SET NULL" });
+
+// ChatbotMessage -> Attachments
+ChatbotMessage.hasMany(ChatbotMessageAttachment, { foreignKey: "messageId", as: "attachments" });
+ChatbotMessageAttachment.belongsTo(ChatbotMessage, { foreignKey: "messageId", as: "message", onDelete: "CASCADE", hooks: true });
+ChatbotMessageAttachment.belongsTo(ChatbotConversation, { foreignKey: "conversationId", as: "conversation", onDelete: "CASCADE", hooks: true });
+ChatbotMessageAttachment.belongsTo(User, { foreignKey: "uploadedBy", as: "uploader", onDelete: "SET NULL" });
+
+// Bug reports and feature requests removed - using conversation metadata instead
