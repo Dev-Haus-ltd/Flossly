@@ -58,6 +58,12 @@ export default defineNuxtConfig({
     META_APP_SECRET: process.env.META_APP_SECRET,
     META_REDIRECT_URI: process.env.META_REDIRECT_URI,
     META_VERIFY_TOKEN: process.env.META_VERIFY_TOKEN,
+    // GSC and Buisness (Analytics)
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+    GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI,
+
+
     //file size
     MAX_FILE_SIZE_FOR_TASK_SHEET: process.env.MAX_FILE_SIZE_FOR_TASK_SHEET,
     MAX_FILE_SIZE_FOR_LOGO: process.env.MAX_FILE_SIZE_FOR_LOGO || 5 * 1024 * 1024, // Default 5MB in bytes

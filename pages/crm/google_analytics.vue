@@ -1,9 +1,9 @@
 <template>
-  <CustomerRelationManagementGoogleanalytics/>
+  <CustomerRelationManagementGoogleAnalytics/>
 </template>
 
 <script setup>
-import CustomerRelationManagementGoogleanalytics from '@/components/customerRelationManagement/googleanalytics/index.vue'
+import CustomerRelationManagementGoogleAnalytics from '@/components/customerRelationManagement/googleAnalytics/index.vue'
 
 definePageMeta({
   layout: 'home',

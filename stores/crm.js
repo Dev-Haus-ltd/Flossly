@@ -4,6 +4,14 @@ export const useCrmStore = defineStore("crmStore", {
   state: () => ({
     isLoading: false,
     _pending: 0,
+    // Google Search Console state
+    googleConnection: null,
+    googleSites: [],
+    selectedGoogleSite: null,
+    googleSitePages: [],
+    googleSitePagesPagination: null,
+    googleSitePagesLoading: false,
+    googleSitePagesError: null,
   }),
   actions: {
     _start() { this._pending++; this.isLoading = true; },
@@ -88,5 +96,154 @@ export const useCrmStore = defineStore("crmStore", {
     sendLeadMail(payload) { return this._wrap(() => crmService.sendLeadMail(payload)); },
     sendLeadWhatsApp(payload) { return this._wrap(() => crmService.sendLeadWhatsApp(payload)); },
     getWhatsAppUsage() { return this._wrap(() => crmService.getWhatsAppUsage()); },
+
+    // =====================================================
+    // GOOGLE SEARCH CONSOLE
+    // =====================================================
+
+    // Start Google OAuth flow
+    startGoogleAuth() { return this._wrap(() => crmService.startGoogleAuth()); },
+
+    // Get Google connection status
+    async googleConnectionStatus() {
+      const result = await this._wrap(() => crmService.googleConnectionStatus());
+      if (result?.code === 0 && result?.data) {
+        this.googleConnection = result.data;
+      }
+      return result;
+    },
+
+    // Disconnect Google account
+    async disconnectGoogle(tokenId = null) {
+      const result = await this._wrap(() => crmService.disconnectGoogle(tokenId));
+      if (result?.code === 0) {
+        this.googleConnection = null;
+        this.googleSites = [];
+        this.selectedGoogleSite = null;
+        this.googleSitePages = [];
+        this.googleSitePagesPagination = null;
+      }
+      return result;
+    },
+
+    // Fetch available GSC sites
+    async fetchGoogleSites() {
+      const result = await this._wrap(() => crmService.fetchGoogleSites());
+      if (result?.code === 0 && result?.data?.sites) {
+        this.googleSites = result.data.sites;
+        // Store tokenId and accountEmail from the response for later use
+        if (result.data.tokenId) {
+          this.googleConnection = {
+            ...(this.googleConnection || {}),
+            tokenId: result.data.tokenId,
+            accountEmail: result.data.accountEmail
+          };
+        }
+      }
+      return result;
+    },
+
+    // Select/activate a GSC site for tracking
+    async selectGoogleSite(
+      siteUrl,
+      tokenId = null,
+      startDate,
+      endDate,
+      country,
+      device
+    ) {
+      const result = await this._wrap(() =>
+        crmService.selectGoogleSite(
+          siteUrl,
+          tokenId,
+          startDate,
+          endDate,
+          country,
+          device
+        )
+      )
+
+      if (result?.code === 0 && result?.data?.site) {
+        this.selectedGoogleSite = result.data.site
+      }
+
+      return result
+    },
+
+    // Trigger page fetching for a site (manual resync)
+    fetchGoogleSitePages(
+      siteId,
+      startDate,
+      endDate,
+      country,
+      device
+    ) {
+      return this._wrap(() =>
+        crmService.fetchGoogleSitePages(
+          siteId,
+          startDate,
+          endDate,
+          country,
+          device
+        )
+      );
+    },
+
+    // Fetch analytics for a specific page
+    // fetchGooglePageAnalytics(payload) {
+    //   return this._wrap(() => crmService.fetchGooglePageAnalytics(payload));
+    // },
+
+    // Get site pages with analytics (paginated)
+    async getGoogleSitePages(siteId, page = 1, limit = 50) {
+      this.googleSitePagesLoading = true;
+      this.googleSitePagesError = null;
+      try {
+        const result = await this._wrap(() => crmService.getGoogleSitePages(siteId, page, limit));
+        if (result?.code === 0 && result?.data) {
+          this.googleSitePages = result.data.pages || [];
+          this.googleSitePagesPagination = result.data.pagination || null;
+          if (result.data.site) {
+            this.selectedGoogleSite = result.data.site;
+          }
+        } else {
+          this.googleSitePagesError = result?.error || 'Failed to fetch pages';
+        }
+        return result;
+      } catch (e) {
+        this.googleSitePagesError = e?.message || 'Failed to fetch pages';
+        throw e;
+      } finally {
+        this.googleSitePagesLoading = false;
+      }
+    },
+
+    // Search site pages with analytics (paginated)
+    async searchGoogleSitePages(siteId, searchQuery, page = 1, limit = 50) {
+      this.googleSitePagesLoading = true;
+      this.googleSitePagesError = null;
+      try {
+        const result = await this._wrap(() => crmService.searchGoogleSitePages(siteId, searchQuery, page, limit));
+        if (result?.code === 0 && result?.data) {
+          this.googleSitePages = result.data.pages || [];
+          this.googleSitePagesPagination = result.data.pagination || null;
+        } else {
+          this.googleSitePagesError = result?.error || 'Failed to search pages';
+        }
+        return result;
+      } catch (e) {
+        this.googleSitePagesError = e?.message || 'Failed to search pages';
+        throw e;
+      } finally {
+        this.googleSitePagesLoading = false;
+      }
+    },
+
+    // Clear Google site pages state
+    clearGoogleSitePages() {
+      this.googleSitePages = [];
+      this.googleSitePagesPagination = null;
+      this.googleSitePagesError = null;
+    },
   },
 });
