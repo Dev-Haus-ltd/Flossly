@@ -167,6 +167,22 @@ export const authCallback = async (event) => {
       (p) => p?.id && p?.access_token && !conflictsById.has(String(p.id))
     )
 
+    // Diagnostics: log exclusions to help debug "selected vs connected" mismatch
+    const missingToken = pages
+      .filter((p) => p?.id && !p?.access_token)
+      .map((p) => ({ id: String(p.id), name: p.name || '' }))
+    const conflicted = pages
+      .filter((p) => p?.id && conflictsById.has(String(p.id)))
+      .map((p) => ({ id: String(p.id), name: p.name || '' }))
+    if (missingToken.length || conflicted.length) {
+      console.warn('[META][AUTH] Pages excluded from connection', {
+        totalReturned: pages.length,
+        toConnect: pagesToConnect.length,
+        missingToken,
+        conflicted,
+      })
+    }
+
     if (!pagesToConnect.length) {
       const conflictNames = pages
         .filter((p) => p?.id && conflictsById.has(String(p.id)))

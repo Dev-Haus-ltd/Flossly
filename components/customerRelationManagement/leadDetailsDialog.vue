@@ -628,7 +628,6 @@ const truncateAutomationName = (name, max = 20) => {
   return `${safe.slice(0, Math.max(0, max - 3))}...`
 }
 
-const crmStore = useCrmStore();
 watch(
   () => props.selectedLead,
   async (lead) => {
