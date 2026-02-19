@@ -2,11 +2,10 @@
   <v-container fluid class="pa-4 bg-white">
     <!-- Dashboard Content -->
     <div>
-      <CommonFeatureCard
-        subheading="Watch the Flossly Demo Video"
-        @close="showCard = false"
+      <CommonEventCard
         v-if="showCard"
         class="my-4"
+        @close="showCard = false"
       />
 
       <!-- Flossly Products Row -->
