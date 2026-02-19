@@ -71,6 +71,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  metaPermissions() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/permissions")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   listMetaBusinesses() {
     return new Promise((resolve, reject) => {
       Get("/meta/businesses")

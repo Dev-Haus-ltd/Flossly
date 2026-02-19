@@ -1618,11 +1618,24 @@ const openMetaHealth = async () => {
   metaHealthDialog.value = true;
   metaHealthLoading.value = true;
   try {
-    const res = await crmStore.metaHealth();
-    if (res?.code === 0) {
-      metaHealthData.value = res.data || null;
+    const [healthRes, permsRes] = await Promise.all([
+      crmStore.metaHealth(),
+      crmStore.metaPermissions(),
+    ]);
+    if (healthRes?.code === 0) {
+      const permsPayload = permsRes?.code === 0 ? (permsRes.data || null) : null;
+      const permsList = Array.isArray(permsPayload?.data)
+        ? permsPayload.data
+        : Array.isArray(permsPayload)
+          ? permsPayload
+          : null;
+      metaHealthData.value = {
+        ...(healthRes.data || {}),
+        permissions: permsList,
+        permissionsError: permsRes?.code === 0 ? null : (permsRes?.error || permsRes?.message || 'Failed to load permissions'),
+      };
     } else {
-      metaHealthData.value = { error: res?.error || res?.message || 'Failed to load health status' };
+      metaHealthData.value = { error: healthRes?.error || healthRes?.message || 'Failed to load health status' };
     }
   } catch (e) {
     metaHealthData.value = { error: e?.data?.message || e?.message || 'Failed to load health status' };

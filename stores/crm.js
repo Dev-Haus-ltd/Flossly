@@ -24,6 +24,7 @@ export const useCrmStore = defineStore("crmStore", {
     subscribePages() { return this._wrap(() => crmService.subscribePages()); },
     disconnectMeta() { return this._wrap(() => crmService.disconnectMeta()); },
     metaHealth() { return this._wrap(() => crmService.metaHealth()); },
+    metaPermissions() { return this._wrap(() => crmService.metaPermissions()); },
     listMetaBusinesses() { return this._wrap(() => crmService.listMetaBusinesses()); },
     connectMetaPages(payload) { return this._wrap(() => crmService.connectMetaPages(payload)); },
     completeWhatsAppEmbedded(payload) { return this._wrap(() => crmService.completeWhatsAppEmbedded(payload)); },
