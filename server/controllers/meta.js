@@ -67,7 +67,9 @@ export const authCallback = async (event) => {
   const appId = config.META_APP_ID
   const appSecret = config.META_APP_SECRET
   const redirectUri = getRedirectUri(config)
-  if (!appId || !appSecret || !redirectUri) return error(400, 'Meta App not configured')
+  if (!appId || !appSecret || !redirectUri) {
+    return sendRedirect(event, `/crm?error=${encodeURIComponent('Meta App not configured')}`)
+  }
 
   const q = getQuery(event)
   const { code, state, error: oauthError, error_description } = q
@@ -75,14 +77,18 @@ export const authCallback = async (event) => {
   // ✅ FIX: Handle OAuth errors gracefully
   if (oauthError) {
     console.error('[META][AUTH] OAuth error:', oauthError, error_description)
-    return sendRedirect(event, `/crm?error=${encodeURIComponent(oauthError)}`)
+    const msg = error_description ? `${oauthError}: ${error_description}` : oauthError
+    return sendRedirect(event, `/crm?error=${encodeURIComponent(msg)}`)
   }
 
-  if (!code) return error(400, 'Missing authorization code')
+  if (!code) {
+    return sendRedirect(event, `/crm?error=${encodeURIComponent('Missing authorization code')}`)
+  }
   
   const stateCookie = getCookie(event, 'meta_oauth_state')
   if (!state || !stateCookie || state !== stateCookie) {
-    return error(401, 'Invalid state - CSRF check failed')
+    setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
+    return sendRedirect(event, `/crm?error=${encodeURIComponent('Invalid state - CSRF check failed')}`)
   }
 
   // ✅ FIX: Extract user context from state
@@ -98,11 +104,13 @@ export const authCallback = async (event) => {
     }
   } catch (e) {
     console.error('[META][AUTH] Invalid state data:', e)
-    return error(401, 'Invalid state data')
+    setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
+    return sendRedirect(event, `/crm?error=${encodeURIComponent('Invalid state data')}`)
   }
 
   if (!userId || !orgId) {
-    return error(401, 'Missing user context in state')
+    setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
+    return sendRedirect(event, `/crm?error=${encodeURIComponent('Missing user context in state')}`)
   }
 
   try {
@@ -156,9 +164,16 @@ export const authCallback = async (event) => {
           organisationId: { [Op.ne]: orgId },
           status: 'Active',
         },
+        include: [{ model: Organisation, as: 'organisation', attributes: ['id', 'name'] }],
       })
       if (conflicts.length) {
-        const names = conflicts.map((c) => c.pageName || c.pageId).join(', ')
+        const names = conflicts
+          .map((c) => {
+            const pageName = c.pageName || c.pageId
+            const orgName = c.organisation?.name || `Org ${c.organisationId}`
+            return `${pageName} (Org: ${orgName})`
+          })
+          .join(', ')
         setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
         return sendRedirect(
           event,
@@ -248,7 +263,20 @@ export const authCallback = async (event) => {
     return sendRedirect(event, `/crm?meta=connected&pages=${pages.length}&user=${encodeURIComponent(fbUserName)}`)
 
   } catch (e) {
+    const errName = e?.name || 'Error'
     console.error('[META][AUTH] Callback error:', e)
+    if (errName === 'SequelizeValidationError' || errName === 'SequelizeUniqueConstraintError') {
+      const details = Array.isArray(e?.errors)
+        ? e.errors.map((er) => ({
+            message: er?.message,
+            path: er?.path,
+            value: er?.value,
+            validatorKey: er?.validatorKey,
+            type: er?.type,
+          }))
+        : []
+      console.error('[META][AUTH] Sequelize validation details:', details)
+    }
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
     const errorMsg = e?.data?.error?.message || e?.message || 'Connection failed'
     return sendRedirect(event, `/crm?error=${encodeURIComponent(errorMsg)}`)
