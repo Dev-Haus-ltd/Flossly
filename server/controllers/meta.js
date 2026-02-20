@@ -48,6 +48,8 @@ export const authStart = async (event) => {
     'pages_manage_metadata',
     'leads_retrieval',
     'ads_read',
+    'business_management',
+
   ].join(',')
 
   // ✅ FIX: Add auth_type=rerequest to force fresh login
