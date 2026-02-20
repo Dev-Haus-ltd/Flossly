@@ -425,7 +425,11 @@
 
             <v-tabs-window-item value="whatsapp">
               <div class="pa-6">
-                <CustomerRelationManagementChatTimeline :lead-id="selectedLead?.id" />
+                <CustomerRelationManagementChatTimeline
+                  :lead-id="selectedLead?.id"
+                  :lead-name="displayLeadName"
+                  :lead-avatar="selectedLead?.photo"
+                />
               </div>
             </v-tabs-window-item>
 

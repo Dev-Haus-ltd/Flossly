@@ -196,7 +196,7 @@ export const useMainStore = defineStore("mainStore", {
           title: "CRM",
           imgPath: crmIcon,
           value: "crm",
-          to:"/crm",
+          to:"/",
           children: [
             {
               title: "Leads",

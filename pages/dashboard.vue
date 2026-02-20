@@ -1,5 +1,5 @@
 <template>
-  <CustomerRelationManagementOverview />
+  <DashBoard />
 </template>
 
 <script setup>

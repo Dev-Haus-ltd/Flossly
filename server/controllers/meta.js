@@ -67,22 +67,25 @@ export const authCallback = async (event) => {
   const appId = config.META_APP_ID
   const appSecret = config.META_APP_SECRET
   const redirectUri = getRedirectUri(config)
-  if (!appId || !appSecret || !redirectUri) return error(400, 'Meta App not configured')
+  if (!appId || !appSecret || !redirectUri) {
+    return sendRedirect(event, `/?error=${encodeURIComponent('Meta App not configured')}`)
+  }
 
   const q = getQuery(event)
   const { code, state, error: oauthError, error_description } = q
   
   // ✅ FIX: Handle OAuth errors gracefully
   if (oauthError) {
-    console.error('[META][AUTH] OAuth error:', oauthError, error_description)
-    return sendRedirect(event, `/crm?error=${encodeURIComponent(oauthError)}`)
+    const msg = error_description ? `${oauthError}: ${error_description}` : oauthError
+    return sendRedirect(event, `/?error=${encodeURIComponent(msg)}`)
   }
 
-  if (!code) return error(400, 'Missing authorization code')
+  if (!code) return sendRedirect(event, `/?error=${encodeURIComponent('Missing authorization code')}`)
   
   const stateCookie = getCookie(event, 'meta_oauth_state')
   if (!state || !stateCookie || state !== stateCookie) {
-    return error(401, 'Invalid state - CSRF check failed')
+    setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
+    return sendRedirect(event, `/?error=${encodeURIComponent('Invalid state - CSRF check failed')}`)
   }
 
   // ✅ FIX: Extract user context from state
@@ -97,12 +100,13 @@ export const authCallback = async (event) => {
       throw new Error('State expired')
     }
   } catch (e) {
-    console.error('[META][AUTH] Invalid state data:', e)
-    return error(401, 'Invalid state data')
+    setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
+    return sendRedirect(event, `/?error=${encodeURIComponent('Invalid state data')}`)
   }
 
   if (!userId || !orgId) {
-    return error(401, 'Missing user context in state')
+    setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
+    return sendRedirect(event, `/?error=${encodeURIComponent('Missing user context in state')}`)
   }
 
   try {
@@ -131,8 +135,6 @@ export const authCallback = async (event) => {
     const fbUserId = meResp.id
     const fbUserName = meResp.name
 
-    console.log(`[META][AUTH] Connected Facebook user: ${fbUserName} (${fbUserId})`)
-
     // Fetch pages with page access tokens
     const pagesUrl = `https://graph.facebook.com/${META_VERSION}/me/accounts?fields=id,name,access_token&access_token=${encodeURIComponent(userToken)}`
     const pagesResp = await $fetch(pagesUrl, { method: 'GET' })
@@ -143,13 +145,12 @@ export const authCallback = async (event) => {
       await MetaPage.sync()
       await CrmLead.sync()
       await MetaUserToken.sync()
-    } catch (e) {
-      console.error('[META][AUTH] Table sync error:', e)
-    }
+    } catch (e) {}
 
     // Enforce one active org per page to avoid lead routing ambiguity
     const pageIds = pages.map((p) => p?.id).filter(Boolean)
     let conflictsById = new Set()
+    let conflictsByPage = new Map()
     if (pageIds.length) {
       const conflicts = await MetaPage.findAll({
         where: {
@@ -157,9 +158,14 @@ export const authCallback = async (event) => {
           organisationId: { [Op.ne]: orgId },
           status: 'Active',
         },
+        include: [{ model: Organisation, as: 'organisation', attributes: ['id', 'name'] }],
       })
       if (conflicts.length) {
         conflictsById = new Set(conflicts.map((c) => String(c.pageId)))
+        conflicts.forEach((c) => {
+          const orgName = c.organisation?.name || `Org ${c.organisationId}`
+          conflictsByPage.set(String(c.pageId), orgName)
+        })
       }
     }
 
@@ -171,12 +177,16 @@ export const authCallback = async (event) => {
     if (!pagesToConnect.length) {
       const conflictNames = pages
         .filter((p) => p?.id && conflictsById.has(String(p.id)))
-        .map((p) => p.name || p.id)
+        .map((p) => {
+          const orgName = conflictsByPage.get(String(p.id))
+          const pageName = p.name || p.id
+          return orgName ? `${pageName} (Org: ${orgName})` : pageName
+        })
         .join(', ')
       setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
       return sendRedirect(
         event,
-        `/crm?error=${encodeURIComponent(
+        `/?error=${encodeURIComponent(
           `Meta connection failed. The following page(s) are already connected to another organisation: ${conflictNames}`
         )}`
       )
@@ -247,22 +257,19 @@ export const authCallback = async (event) => {
           }).toString(),
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         })
-      } catch (e) {
-        console.error(`[META][AUTH] Failed to subscribe page ${p.id}:`, e)
-      }
+      } catch (e) {}
     }
 
     // Clear state cookie
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
     
     // ✅ FIX: Better success redirect with details
-    return sendRedirect(event, `/crm?meta=connected&pages=${pagesToConnect.length}&user=${encodeURIComponent(fbUserName)}`)
+    return sendRedirect(event, `/?meta=connected&pages=${pagesToConnect.length}&user=${encodeURIComponent(fbUserName)}`)
 
   } catch (e) {
-    console.error('[META][AUTH] Callback error:', e)
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
     const errorMsg = e?.data?.error?.message || e?.message || 'Connection failed'
-    return sendRedirect(event, `/crm?error=${encodeURIComponent(errorMsg)}`)
+    return sendRedirect(event, `/?error=${encodeURIComponent(errorMsg)}`)
   }
 }
 
@@ -660,7 +667,6 @@ export const fetchLeadsNow = async (event) => {
         }
       }
     } catch (e) {
-      console.error(`[META] Error fetching leads for page ${pageId}:`, e)
       debug.errors.push({
         pageId,
         message: e?.data?.error?.message || e?.message || 'Unknown error',
@@ -696,9 +702,7 @@ export const subscribePages = async (event) => {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       })
       subscribed++
-    } catch (e) {
-      console.error(`[META] Failed to subscribe page ${mp.pageId}:`, e)
-    }
+    } catch (e) {}
   }
   return success({ subscribed })
 }
@@ -828,7 +832,6 @@ export const webhook = async (event) => {
   const config = useRuntimeConfig()
   
   if (getMethod(event) === 'HEAD') {
-    console.log('[META][WEBHOOK][HEAD] ping')
     return send(event, 'ok')
   }
   
@@ -841,11 +844,6 @@ export const webhook = async (event) => {
       process.env.NUXT_META_VERIFY_TOKEN ||
       ''
     ).trim()
-    console.log('[META][WEBHOOK][VERIFY]', {
-      mode: q['hub.mode'],
-      hasToken: Boolean(verifyToken),
-    })
-    
     if (q['hub.mode'] === 'subscribe' && verifyToken && verifyToken === expectedToken) {
       return send(event, q['hub.challenge'] || '')
     }
@@ -854,8 +852,6 @@ export const webhook = async (event) => {
   
   if (getMethod(event) === 'POST') {
     const body = await readBody(event)
-    console.log('[META][WEBHOOK][EVENT]', JSON.stringify(body)?.slice(0, 500))
-    
     try {
       const entries = Array.isArray(body?.entry) ? body.entry : []
       for (const entry of entries) {
@@ -928,9 +924,7 @@ export const webhook = async (event) => {
           }
         }
       }
-    } catch (e) {
-      console.error('[META][WEBHOOK] Processing error:', e)
-    }
+    } catch (e) {}
     
     return success({ received: true })
   }
@@ -1157,17 +1151,13 @@ export const listBusinessPortfolios = async (event) => {
           `https://graph.facebook.com/${META_VERSION}/${biz.id}/owned_pages?fields=id,name&limit=200`,
           userToken
         )
-      } catch (e) {
-        console.error(`[META] Failed to load owned pages for business ${biz.id}:`, e)
-      }
+      } catch (e) {}
       try {
         clientPages = await fetchAllMetaPages(
           `https://graph.facebook.com/${META_VERSION}/${biz.id}/client_pages?fields=id,name&limit=200`,
           userToken
         )
-      } catch (e) {
-        console.error(`[META] Failed to load client pages for business ${biz.id}:`, e)
-      }
+      } catch (e) {}
 
       const mapPages = (pages, source) =>
         (pages || [])
@@ -1190,7 +1180,6 @@ export const listBusinessPortfolios = async (event) => {
 
     return success({ businesses: mapped })
   } catch (e) {
-    console.error('[META] Failed to list business portfolios:', e)
     const msg = e?.data?.error?.message || e?.message || 'Failed to load business portfolios'
     return error(400, msg)
   }
@@ -1269,14 +1258,10 @@ export const connectBusinessPages = async (event) => {
           }).toString(),
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         })
-      } catch (e) {
-        console.error(`[META][BUSINESS] Failed to subscribe page ${pageId}:`, e)
-      }
+      } catch (e) {}
 
       connected++
-    } catch (e) {
-      console.error(`[META][BUSINESS] Failed to connect page ${pageId}:`, e)
-    }
+    } catch (e) {}
   }
 
   return success({ connected })

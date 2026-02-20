@@ -577,129 +577,6 @@
         </div>
       </v-card>
     </v-dialog>
-    <v-dialog v-model="showWhatsAppCompose" max-width="640px">
-      <v-card class="rounded-lg">
-        <div class="d-flex justify-space-between align-center px-4 py-3">
-          <div>
-            <h5 class="mb-1 modal-title">Compose WhatsApp</h5>
-            <div class="text-caption text-medium-emphasis">
-              {{ whatsappCompose.recipients.length }} recipient(s)
-            </div>
-          </div>
-          <v-btn icon @click="showWhatsAppCompose = false" flat><v-icon>mdi-close</v-icon></v-btn>
-        </div>
-        <v-divider />
-
-        <div class="px-4 pt-4">
-          <v-alert
-            v-if="whatsappCompose.missing.length"
-            type="warning"
-            variant="tonal"
-            class="mb-3"
-          >
-            {{ whatsappCompose.missing.length }} lead(s) have no valid phone number and will be skipped.
-          </v-alert>
-          <v-alert
-            v-if="whatsappProvider.supportsTemplates"
-            type="info"
-            variant="tonal"
-            class="mb-3"
-          >
-            WhatsApp outbound supports templates. Templates must be approved in Meta.
-          </v-alert>
-          <v-radio-group
-            v-if="whatsappProvider.supportsTemplates"
-            v-model="whatsappCompose.mode"
-            class="mb-3"
-            inline
-          >
-            <v-radio label="Free Text" value="free" :disabled="whatsappCompose.requiresTemplate" />
-            <v-radio label="Template" value="template" />
-          </v-radio-group>
-
-          <div v-if="whatsappProvider.supportsTemplates && whatsappCompose.mode === 'template'">
-            <div class="d-flex align-center justify-space-between mb-2">
-              <div class="text-subtitle-2 text-grey-darken-1">Template</div>
-              <v-btn
-                size="x-small"
-                variant="text"
-                :loading="whatsappTemplatesLoading"
-                @click="loadWhatsAppTemplates"
-              >
-                Refresh
-              </v-btn>
-            </div>
-            <v-combobox
-              v-model="whatsappCompose.templateName"
-              :items="whatsappTemplateNameOptions"
-              label="Template name"
-              variant="outlined"
-              density="compact"
-              hide-details
-              class="mb-3"
-              clearable
-            />
-            <v-combobox
-              v-model="whatsappCompose.templateLanguage"
-              :items="whatsappTemplateLanguageOptions"
-              label="Template language (e.g. en_US)"
-              variant="outlined"
-              density="compact"
-              hide-details
-              clearable
-            />
-            <div v-if="whatsappTemplateParamCount" class="mt-3">
-              <div class="text-subtitle-2 text-grey-darken-1 mb-2">Template parameters</div>
-              <v-text-field
-                v-for="idx in whatsappTemplateParamCount"
-                :key="`wa-param-${idx}`"
-                v-model="whatsappCompose.templateParams[idx - 1]"
-                :label="`Parameter {{${idx}}}`"
-                variant="outlined"
-                density="compact"
-                hide-details
-                class="mb-2"
-                :placeholder="whatsappTemplateParamExample(idx)"
-              />
-            </div>
-            <div v-if="whatsappTemplatePreview" class="mt-4">
-              <div class="text-subtitle-2 text-grey-darken-1 mb-2">Preview</div>
-              <div class="whatsapp-preview">
-                <div class="whatsapp-preview__bubble">
-                  <div v-for="(line, i) in whatsappTemplatePreview" :key="`wa-prev-${i}`">
-                    {{ line }}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="text-caption text-medium-emphasis mt-2">
-              Use parameter inputs to fill {{1}}, {{2}} etc for the selected template.
-            </div>
-          </div>
-
-          <div v-else class="mt-2">
-            <v-textarea
-              v-model="whatsappCompose.message"
-              label="Message"
-              variant="outlined"
-              density="compact"
-              rows="4"
-              auto-grow
-              hide-details
-            />
-          </div>
-        </div>
-
-        <div class="px-4 pb-4 d-flex justify-space-between align-center">
-          <div v-if="whatsappProvider.supportsTemplates && whatsappCompose.mode === 'template'" class="text-caption text-medium-emphasis">
-            Fill parameters to match template placeholders ({{1}}, {{2}}).
-          </div>
-          <v-btn :loading="whatsappLoading" flat color="success" @click="sendWhatsAppCompose">
-            Send
-          </v-btn>
-        </div>
-      </v-card>
-    </v-dialog>
     <CommonConfirmDialog
       v-model="confirmArchive"
       title="Archive leads?"
@@ -728,7 +605,6 @@
 <script setup>
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 import { buildRecipientContext, renderWithContext } from '@/lib/templateTokens'
-import { getTemplateParamCount, getTemplateParamExamples, buildTemplatePreviewLines } from '@/lib/whatsappTemplatePreview'
 import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
 import { formatAssignedUsers, formatTreatmentValue } from "@/lib/misc";
 import { getLeadDisplayName, getLeadEmail, getLeadPhone } from "@/lib/normalizers/lead";
@@ -736,7 +612,6 @@ import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crm
 import DataTableColumnsAutomationGroups from '@/components/dataTableColumns/automationGroups.vue'
 import callIcon from '@/assets/crm/call.svg'
 import sendMailIcon from '@/assets/crm/sendMail.svg'
-import whatsappIcon from '@/assets/crm/whatsapp.svg'
 import bookIcon from '@/assets/crm/book.svg'
 import sendPriceIcon from '@/assets/crm/sendPrice.svg'
 import sendFormIcon from '@/assets/crm/sendForm.svg'
@@ -820,7 +695,6 @@ const editingCell = reactive({
 const actions = [
   // { key: "call", label: "Call", icon: callIcon },
   { key: "mail", label: "Send Mail", icon: sendMailIcon },
-  { key: "whatsapp", label: "WhatsApp", icon: whatsappIcon },
   { key: "book", label: "Book", icon: bookIcon },
   { key: "sendPrice", label: "Send Price", icon: sendPriceIcon },
   { key: "sendForm", label: "Send Form", icon: sendFormIcon },
@@ -1133,7 +1007,6 @@ const onActionClick = (key) => {
   else if (key === 'delete') confirmDelete.value = true;
   else if (key === 'archive') confirmArchive.value = true;
   else if (key === 'convert') convertSelected();
-  else if (key === 'whatsapp') openWhatsAppCompose()
   else if (key === 'export') exportSelectedLeads();
   else if (['mail','sendPrice','sendForm','shareLocation'].includes(key)) openCompose(key)
 };
@@ -1302,45 +1175,6 @@ let EditorCtor = null
 let Header = null
 let List = null
 const compose = reactive({ key: 'mail', subject: '', recipients: [], html: '' })
-const showWhatsAppCompose = ref(false)
-const whatsappLoading = ref(false)
-const whatsappProvider = reactive({
-  provider: 'meta',
-  supportsTemplates: true,
-  requiresTemplateOutside24h: true,
-})
-const whatsappTemplates = ref([])
-const whatsappTemplatesLoading = ref(false)
-const whatsappCompose = reactive({
-  recipients: [],
-  missing: [],
-  templateName: '',
-  templateLanguage: 'en_US',
-  templateParams: [],
-  mode: 'template',
-  requiresTemplate: false,
-  message: '',
-})
-
-const loadWhatsAppProvider = async () => {
-  try {
-    const res = await crmStore.getWhatsAppConfig()
-    const data = res?.data || null
-    if (data?.provider) {
-      whatsappProvider.provider = data.provider
-      whatsappProvider.supportsTemplates = data.supportsTemplates !== false
-      whatsappProvider.requiresTemplateOutside24h = data.requiresTemplateOutside24h !== false
-    } else {
-      whatsappProvider.provider = 'meta'
-      whatsappProvider.supportsTemplates = true
-      whatsappProvider.requiresTemplateOutside24h = true
-    }
-  } catch {
-    whatsappProvider.provider = 'meta'
-    whatsappProvider.supportsTemplates = true
-    whatsappProvider.requiresTemplateOutside24h = true
-  }
-}
 
 const defaultTemplates = {
   sendPrice: {
@@ -1367,12 +1201,6 @@ const defaultTemplates = {
   book: { subject: 'Appointment Booking', html: `<p>Dear [Patient Name],</p><p>We'd love to arrange your appointment. Please reply with your preferred date/time, or book via our online portal.</p><p>Thank you,<br/>[Your Name]</p>` },
   mail: { subject: 'Message from our practice', html: `<p>Dear [Patient Name],</p><p>Write your message here.</p><p>Regards,<br/>[Your Name]</p>` },
 }
-
-const defaultWhatsAppMessage = 'Hi [Patient Name], thanks for reaching out. How can we help you today?'
-
-onMounted(() => {
-  loadWhatsAppProvider()
-})
 
 
 async function openCompose(actionKey) {
@@ -1411,126 +1239,6 @@ async function openCompose(actionKey) {
 
 watch(() => showCompose.value, (v) => { if (!v && composeEditor) { composeEditor.destroy(); composeEditor = null } })
 
-const whatsappTemplateNameOptions = computed(() => {
-  const set = new Set()
-  ;(whatsappTemplates.value || []).forEach((t) => {
-    if (t?.name) set.add(String(t.name))
-  })
-  return Array.from(set)
-})
-
-const whatsappTemplateLanguageOptions = computed(() => {
-  const name = String(whatsappCompose.templateName || '').trim()
-  if (!name) return []
-  const langs = (whatsappTemplates.value || [])
-    .filter((t) => String(t?.name || '') === name)
-    .map((t) => t?.language || t?.language?.code || t?.language_code)
-    .filter(Boolean)
-  return Array.from(new Set(langs))
-})
-
-const resolveSelectedTemplate = () => {
-  const name = String(whatsappCompose.templateName || '').trim()
-  if (!name) return null
-  const lang = String(whatsappCompose.templateLanguage || '').trim()
-  const list = whatsappTemplates.value || []
-  if (lang) {
-    const matched = list.find((t) => String(t?.name || '') === name && String(t?.language || t?.language?.code || t?.language_code || '') === lang)
-    if (matched) return matched
-  }
-  return list.find((t) => String(t?.name || '') === name) || null
-}
-
-const whatsappTemplateParamCount = computed(() => getTemplateParamCount(resolveSelectedTemplate()))
-const whatsappTemplateParamExample = (idx) => {
-  const template = resolveSelectedTemplate()
-  if (!template) return ''
-  const examples = getTemplateParamExamples(template)
-  return String(examples[idx - 1] || '')
-}
-const whatsappTemplatePreview = computed(() => {
-  const template = resolveSelectedTemplate()
-  if (!template) return null
-  const params = (whatsappCompose.templateParams || []).map((v, i) =>
-    String(v || whatsappTemplateParamExample(i + 1) || `{{${i + 1}}}`)
-  )
-  return buildTemplatePreviewLines(template, params)
-})
-watch(
-  () => [whatsappCompose.templateName, whatsappCompose.templateLanguage, whatsappTemplateParamCount.value],
-  () => {
-    const count = whatsappTemplateParamCount.value || 0
-    const next = Array.from({ length: count }, (_, i) => whatsappCompose.templateParams[i] || '')
-    whatsappCompose.templateParams = next
-    if (!whatsappCompose.templateLanguage && whatsappTemplateLanguageOptions.value.length) {
-      whatsappCompose.templateLanguage = whatsappTemplateLanguageOptions.value[0]
-    }
-  }
-)
-
-const buildWhatsAppRecipients = () => {
-  const recipients = []
-  const missing = []
-  ;(selectedLeads.value || []).forEach((lead) => {
-    const phone = String(lead?.telephone || '').trim()
-    if (!phone) {
-      missing.push(lead?.name || lead?.email || `Lead ${lead?.id}`)
-      return
-    }
-    recipients.push(phone)
-  })
-  whatsappCompose.recipients = [...new Set(recipients)]
-  whatsappCompose.missing = missing
-  whatsappCompose.requiresTemplate = false
-  if (!whatsappProvider.supportsTemplates) {
-    whatsappCompose.mode = 'free'
-  } else if (!whatsappCompose.mode) {
-    whatsappCompose.mode = 'template'
-  }
-}
-
-const loadWhatsAppTemplates = async () => {
-  if (whatsappTemplatesLoading.value) return
-  try {
-    whatsappTemplatesLoading.value = true
-    const res = await crmStore.getWhatsAppTemplates()
-    if (res?.code === 0 && res.data?.templates) {
-      whatsappTemplates.value = res.data.templates
-    }
-  } catch (e) {
-    // ignore if WhatsApp is not configured
-  } finally {
-    whatsappTemplatesLoading.value = false
-  }
-}
-
-const openWhatsAppCompose = async () => {
-  buildWhatsAppRecipients()
-  if (!whatsappCompose.recipients.length) {
-    if (mainStore?.setSnackbar) {
-      mainStore.setSnackbar({ title: 'No valid phone numbers found', type: 'error' })
-    }
-    return
-  }
-  const many = (selectedLeads.value || []).length !== 1
-  const lead = many ? null : (selectedLeads.value || [])[0]
-  const ctx = buildRecipientContext({ lead, user, many })
-  whatsappCompose.message = renderWithContext(defaultWhatsAppMessage, ctx)
-  if (whatsappProvider.supportsTemplates) {
-    await loadWhatsAppTemplates()
-    if (!whatsappCompose.templateName && whatsappTemplateNameOptions.value.length) {
-      whatsappCompose.templateName = whatsappTemplateNameOptions.value[0]
-    }
-    if (!whatsappCompose.templateLanguage && whatsappTemplateLanguageOptions.value.length) {
-      whatsappCompose.templateLanguage = whatsappTemplateLanguageOptions.value[0]
-    }
-    if (!whatsappCompose.mode) whatsappCompose.mode = 'template'
-  } else {
-    whatsappCompose.mode = 'free'
-  }
-  showWhatsAppCompose.value = true
-}
-
 const mainStore = useMainStore?.() || null
 const openAddStaff = async () => {
   addStaffDrawer.value = true;
@@ -1558,53 +1266,6 @@ async function sendCompose() {
       showCompose.value = false
     }
   } finally { composeLoading.value = false }
-}
-async function sendWhatsAppCompose() {
-  const isTemplateMode = whatsappProvider.supportsTemplates && whatsappCompose.mode === 'template'
-  if (isTemplateMode && !whatsappCompose.templateName?.trim()) {
-    if (mainStore?.setSnackbar) {
-      mainStore.setSnackbar({ title: 'Template name is required', type: 'error' })
-    }
-    return
-  }
-  if (!isTemplateMode && !String(whatsappCompose.message || '').trim()) {
-    if (mainStore?.setSnackbar) {
-      mainStore.setSnackbar({ title: 'Message is required', type: 'error' })
-    }
-    return
-  }
-  try {
-    whatsappLoading.value = true
-    const leadIds = selectedLeads.value.map(l => l.id)
-    const payload = { leadIds }
-    if (isTemplateMode) {
-      const params = (whatsappCompose.templateParams || []).map((val) => ({
-        type: 'text',
-        text: String(val || ''),
-      }))
-      const components = params.length ? [{ type: 'body', parameters: params }] : undefined
-      payload.template = {
-        name: whatsappCompose.templateName.trim(),
-        language: { code: whatsappCompose.templateLanguage?.trim() || 'en_US' },
-        ...(components ? { components } : {}),
-      }
-    } else {
-      payload.message = String(whatsappCompose.message || '').trim()
-    }
-    const res = await crmStore.sendLeadWhatsApp(payload)
-    if (res && res.code === 0) {
-      const sent = res.data?.sent ?? 0
-      const skipped = res.data?.skipped ?? 0
-      const failed = res.data?.failed ?? 0
-      if (mainStore && mainStore.setSnackbar) {
-        mainStore.setSnackbar({
-          title: `WhatsApp sent: ${sent}, skipped: ${skipped}, failed: ${failed}`,
-          type: failed ? 'warning' : 'success',
-        })
-      }
-      showWhatsAppCompose.value = false
-    }
-  } finally { whatsappLoading.value = false }
 }
 const getLeadUsers = (lead) => {
   // Filter to show only active users (not invited, disabled, or expired)
@@ -1758,27 +1419,6 @@ const convertSelected = async () => {
   cursor: col-resize;
 }
 
-.whatsapp-preview {
-  background: #e5ddd5;
-  border-radius: 12px;
-  padding: 16px;
-  min-height: 160px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-}
-
-.whatsapp-preview__bubble {
-  background: #dcf8c6;
-  border-radius: 10px;
-  padding: 12px 14px;
-  max-width: 520px;
-  white-space: pre-wrap;
-  line-height: 1.5;
-  font-size: 14px;
-  color: #111827;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-}
 .cust-checkbox {
   width: 18px;
   height: 18px;
