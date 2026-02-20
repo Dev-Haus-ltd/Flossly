@@ -975,6 +975,30 @@ const normalizeMetaMessage = (message) => {
     return String(raw);
   }
 };
+const mapMetaErrorMessage = (rawMessage) => {
+  const msg = normalizeMetaMessage(rawMessage).trim();
+  if (!msg) return '';
+  const lower = msg.toLowerCase();
+  if (lower.includes('access_denied')) {
+    return 'Meta login was cancelled or permission was denied.';
+  }
+  if (lower.includes('invalid scope') || lower.includes('invalid_scope')) {
+    return 'Requested Meta permissions are invalid or not approved for this app.';
+  }
+  if (lower.includes('invalid state') || lower.includes('csrf')) {
+    return 'Login session expired or invalid. Please try connecting again.';
+  }
+  if (lower.includes('missing authorization code')) {
+    return 'Meta did not return an authorization code. Please try again.';
+  }
+  if (lower.includes('meta app not configured')) {
+    return 'Meta app is not configured. Please contact your administrator.';
+  }
+  if (lower === 'validation error') {
+    return 'Meta connection failed due to a validation error. If the page is already connected to another organisation, disconnect it there first.';
+  }
+  return msg;
+};
 const clearMetaQuery = () => {
   const nextQuery = { ...route.query };
   delete nextQuery.meta;
@@ -993,17 +1017,14 @@ const handleMetaQuery = async (metaConnected, metaError) => {
     route.query.tokenOnly === 1;
   if (metaError) {
     metaErrorMessage.value =
-      normalizeMetaMessage(metaError) || 'Meta connection failed. Please try again.';
+      mapMetaErrorMessage(metaError) || 'Meta connection failed. Please try again.';
     metaErrorDialog.value = true;
-  } else if (metaConnected && pagesCount === 0 && !tokenOnly) {
+    mainStore?.setSnackbar?.({ title: metaErrorMessage.value, type: 'error' });
+  } else if (metaConnected && pagesCount === 0) {
     metaErrorMessage.value =
       'Meta could not be connected. You need full access to the page you are trying to connect.';
     metaErrorDialog.value = true;
-  } else if (metaConnected && tokenOnly && mainStore?.setSnackbar) {
-    mainStore.setSnackbar({
-      title: 'Meta connected. Select pages to finish setup.',
-      type: 'info',
-    });
+    mainStore?.setSnackbar?.({ title: metaErrorMessage.value, type: 'error' });
   } else if (metaConnected && mainStore?.setSnackbar) {
     mainStore.setSnackbar({ title: 'Meta connected successfully', type: 'success' });
   }
