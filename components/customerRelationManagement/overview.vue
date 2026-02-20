@@ -45,10 +45,10 @@
               </v-btn>
               <v-btn
                 v-else
-                color="grey-darken-1"
-                variant="outlined"
+                color="primary"
+                variant="flat"
                 rounded="lg"
-                class="action-btn"
+                class="action-btn action-btn--primary"
                 @click="integrateMeta"
               >
                 Connect
@@ -81,7 +81,7 @@
                 color="primary"
                 variant="flat"
                 rounded="lg"
-                class="action-btn"
+                class="action-btn action-btn--primary"
                 :loading="whapiLoading"
                 @click="connectWhapi"
               >
@@ -93,7 +93,7 @@
                 color="primary"
                 variant="flat"
                 rounded="lg"
-                class="action-btn"
+                class="action-btn action-btn--primary"
                 @click="onConnectChatbot"
               >
                 Connect
@@ -718,6 +718,10 @@ onBeforeUnmount(() => {
 
 .action-btn {
   min-width: 110px;
+}
+
+.action-btn--primary {
+  color: #ffffff;
 }
 
 .conversion-grid {
