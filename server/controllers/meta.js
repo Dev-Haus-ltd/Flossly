@@ -76,7 +76,6 @@ export const authCallback = async (event) => {
   
   // ✅ FIX: Handle OAuth errors gracefully
   if (oauthError) {
-    console.error('[META][AUTH] OAuth error:', oauthError, error_description)
     const msg = error_description ? `${oauthError}: ${error_description}` : oauthError
     return sendRedirect(event, `/crm?error=${encodeURIComponent(msg)}`)
   }
@@ -103,7 +102,6 @@ export const authCallback = async (event) => {
       throw new Error('State expired')
     }
   } catch (e) {
-    console.error('[META][AUTH] Invalid state data:', e)
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
     return sendRedirect(event, `/crm?error=${encodeURIComponent('Invalid state data')}`)
   }
@@ -138,8 +136,6 @@ export const authCallback = async (event) => {
     const meResp = await $fetch(meUrl, { method: 'GET' })
     const fbUserId = meResp.id
     const fbUserName = meResp.name
-
-    console.log(`[META][AUTH] Connected Facebook user: ${fbUserName} (${fbUserId})`)
 
     // Fetch pages with page access tokens
     const pagesUrl = `https://graph.facebook.com/${META_VERSION}/me/accounts?fields=id,name,access_token&access_token=${encodeURIComponent(userToken)}`
@@ -263,20 +259,6 @@ export const authCallback = async (event) => {
     return sendRedirect(event, `/crm?meta=connected&pages=${pages.length}&user=${encodeURIComponent(fbUserName)}`)
 
   } catch (e) {
-    const errName = e?.name || 'Error'
-    console.error('[META][AUTH] Callback error:', e)
-    if (errName === 'SequelizeValidationError' || errName === 'SequelizeUniqueConstraintError') {
-      const details = Array.isArray(e?.errors)
-        ? e.errors.map((er) => ({
-            message: er?.message,
-            path: er?.path,
-            value: er?.value,
-            validatorKey: er?.validatorKey,
-            type: er?.type,
-          }))
-        : []
-      console.error('[META][AUTH] Sequelize validation details:', details)
-    }
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
     const errorMsg = e?.data?.error?.message || e?.message || 'Connection failed'
     return sendRedirect(event, `/crm?error=${encodeURIComponent(errorMsg)}`)
@@ -623,7 +605,6 @@ export const fetchLeadsNow = async (event) => {
         }
       }
     } catch (e) {
-      console.error(`[META] Error fetching leads for page ${pageId}:`, e)
       debug.errors.push({
         pageId,
         message: e?.data?.error?.message || e?.message || 'Unknown error',
@@ -791,7 +772,6 @@ export const webhook = async (event) => {
   const config = useRuntimeConfig()
   
   if (getMethod(event) === 'HEAD') {
-    console.log('[META][WEBHOOK][HEAD] ping')
     return send(event, 'ok')
   }
   
@@ -804,11 +784,6 @@ export const webhook = async (event) => {
       process.env.NUXT_META_VERIFY_TOKEN ||
       ''
     ).trim()
-    console.log('[META][WEBHOOK][VERIFY]', {
-      mode: q['hub.mode'],
-      hasToken: Boolean(verifyToken),
-    })
-    
     if (q['hub.mode'] === 'subscribe' && verifyToken && verifyToken === expectedToken) {
       return send(event, q['hub.challenge'] || '')
     }
@@ -817,8 +792,6 @@ export const webhook = async (event) => {
   
   if (getMethod(event) === 'POST') {
     const body = await readBody(event)
-    console.log('[META][WEBHOOK][EVENT]', JSON.stringify(body)?.slice(0, 500))
-    
     try {
       const entries = Array.isArray(body?.entry) ? body.entry : []
       for (const entry of entries) {
