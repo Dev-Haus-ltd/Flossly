@@ -97,6 +97,7 @@
                 <th>Follow-up Date</th>
                 <th>Comments</th>
                 <th>Status</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -302,6 +303,19 @@
                   <v-chip :color="lead.hasErrors ? 'error' : 'success'" size="small" variant="flat">
                     {{ lead.hasErrors ? "Invalid" : "Valid" }}
                   </v-chip>
+                </td>
+                <td>
+                  <v-btn
+                    v-if="lead.hasErrors"
+                    icon
+                    variant="text"
+                    color="error"
+                    size="small"
+                    @click="removeInvalidLead(index)"
+                    aria-label="Delete invalid lead"
+                  >
+                    <v-icon>mdi-delete</v-icon>
+                  </v-btn>
                 </td>
               </tr>
             </tbody>
@@ -742,6 +756,13 @@ const clearParsedData = () => {
   uploadedFiles.value = [];
   fileUploader.value?.clearFiles?.();
   excelError.value = null;
+};
+
+const removeInvalidLead = (index) => {
+  const lead = parsedLeads.value[index];
+  if (!lead || !lead.hasErrors) return;
+  parsedLeads.value.splice(index, 1);
+  parsedLeads.value.forEach((_, i) => validateLead(i));
 };
 
 const uploadLeads = async () => {
