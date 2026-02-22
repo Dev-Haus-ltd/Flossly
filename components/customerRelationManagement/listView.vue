@@ -1114,8 +1114,23 @@ const resolveLeadValue = (lead, key) => {
   return value ?? '';
 };
 
-const buildCsvValue = (value) => {
-  const text = value == null ? '' : String(value);
+const buildCsvValue = (value, key = '') => {
+  let text = value == null ? '' : String(value);
+  text = text.replace(/[\r\n]+/g, ' ').trim();
+  const lowerKey = String(key || '').toLowerCase();
+  const forceTextKeys = [
+    'telephone',
+    'phone',
+    'mobile',
+    'whatsapp',
+    'whatsappnumber',
+    'phonenumber',
+    'secondaryphone',
+  ];
+  const looksNumeric = /^\+?\d{7,}$/.test(text);
+  if ((forceTextKeys.some((k) => lowerKey.includes(k)) || looksNumeric) && text) {
+    text = `\t${text}`;
+  }
   if (/[\",\\n]/.test(text)) return `\"${text.replace(/\"/g, '\"\"')}\"`;
   return text;
 };
@@ -1128,10 +1143,10 @@ const exportSelectedLeads = () => {
   if (!columns.length) return;
 
   const rows = selectedLeads.value.map((lead) =>
-    columns.map((col) => buildCsvValue(resolveLeadValue(lead, col.key))).join(',')
+    columns.map((col) => buildCsvValue(resolveLeadValue(lead, col.key), col.key)).join(',')
   );
-  const header = columns.map((col) => buildCsvValue(col.title)).join(',');
-  const csv = [header, ...rows].join('\\n');
+  const header = columns.map((col) => buildCsvValue(col.title, col.key)).join(',');
+  const csv = '\uFEFF' + [header, ...rows].join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const stamp = new Date().toISOString().slice(0, 10);
