@@ -32,7 +32,6 @@ const LICENSE_FEATURES = {
     "docs",
     "team",
     "crm",
-    "diary",
   ]),
   [LICENSE_TYPES.SYSTEM]: new Set([
     "dashboard",
