@@ -796,6 +796,7 @@ export const webhook = async (event) => {
           updates.status = channelInfo?.status || null;
         }
         if (healthStatus) updates.status = String(healthStatus);
+        if (!updates.status) updates.status = channelRows[0]?.status || "Active";
         const connected = isWhapiConnected(
           updates.status || channelRows[0].status,
           updates.phoneNumber || channelRows[0].phoneNumber,
