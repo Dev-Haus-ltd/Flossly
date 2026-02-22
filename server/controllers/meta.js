@@ -813,6 +813,7 @@ export const healthCheck = async (event) => {
       tokenPresent,
       subscribed,
       appMatched,
+      connectedAt: page.connectedAt || page.updatedAt || page.createdAt || null,
       leadCount: leadStatsByPage.get(String(pageId))?.leadCount || 0,
       lastLeadAt: leadStatsByPage.get(String(pageId))?.lastLeadAt || null,
       error: errorMsg,

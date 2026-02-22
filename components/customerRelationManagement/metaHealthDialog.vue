@@ -107,6 +107,7 @@
                       <th>Token</th>
                       <th>Subscribed</th>
                       <th>App Match</th>
+                      <th>Connected At</th>
                       <th>Leads</th>
                       <th>Last Lead</th>
                       <th>Error</th>
@@ -139,12 +140,13 @@
                           {{ row.appMatched ? 'Yes' : 'No' }}
                         </v-chip>
                       </td>
+                      <td class="text-nowrap">{{ formatMetaLeadDate(row.connectedAt) }}</td>
                       <td class="text-center">{{ row.leadCount || 0 }}</td>
                       <td class="text-nowrap">{{ formatMetaLeadDate(row.lastLeadAt) }}</td>
                       <td class="error-cell">{{ row.error || '—' }}</td>
                     </tr>
                     <tr v-if="!(data?.pages || []).length">
-                      <td colspan="8" class="text-center py-6 text-medium-emphasis">No pages found.</td>
+                      <td colspan="9" class="text-center py-6 text-medium-emphasis">No pages found.</td>
                     </tr>
                   </tbody>
                 </v-table>

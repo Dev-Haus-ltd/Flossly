@@ -31,10 +31,11 @@ export const useCrmStore = defineStore("crmStore", {
     getWhatsAppConfig() { return this._wrap(() => crmService.getWhatsAppConfig()); },
     saveWhatsAppConfig(payload) { return this._wrap(() => crmService.saveWhatsAppConfig(payload)); },
     getWhatsAppTemplates() { return this._wrap(() => crmService.getWhatsAppTemplates()); },
-    startWhapiConnect() { return this._wrap(() => crmService.startWhapiConnect()); },
+    startWhapiConnect(payload = {}) { return this._wrap(() => crmService.startWhapiConnect(payload)); },
     getWhapiQr() { return this._wrap(() => crmService.getWhapiQr()); },
     getWhapiStatus() { return this._wrap(() => crmService.getWhapiStatus()); },
-    disconnectWhapi() { return this._wrap(() => crmService.disconnectWhapi()); },
+    getWhapiChannels() { return this._wrap(() => crmService.getWhapiChannels()); },
+    disconnectWhapi(payload = {}) { return this._wrap(() => crmService.disconnectWhapi(payload)); },
     deleteWhapiChannel() { return this._wrap(() => crmService.deleteWhapiChannel()); },
     extendWhapiChannel(payload) { return this._wrap(() => crmService.extendWhapiChannel(payload)); },
 

@@ -1,5 +1,5 @@
 import { Op } from "sequelize";
-import { CrmLead, WhapiChannelConfig } from "../models";
+import { CrmLead, WhapiChannelConfig, UserOrganisation, Organisation } from "../models";
 import { normalizeWhatsAppNumber, logWhatsAppMessage } from "../utils/whatsapp";
 import { success, error } from "../utils/response";
 import { encrypt, decrypt } from "../utils/crypto";
@@ -104,6 +104,32 @@ const findOrgChannel = async (orgId) => {
     where: { organisationId: Number(orgId) },
     order: [["updatedAt", "DESC"]],
   });
+};
+
+const findChannelRows = async (channelId) => {
+  await syncWhapiConfig();
+  if (!channelId) return [];
+  return await WhapiChannelConfig.findAll({
+    where: { channelId: String(channelId) },
+    order: [["updatedAt", "DESC"]],
+  });
+};
+
+const pickLatestChannel = (rows = []) => {
+  if (!rows.length) return null;
+  return rows[0];
+};
+
+const updateChannelRows = async (rows = [], updates = {}) => {
+  if (!rows.length) return;
+  await Promise.all(
+    rows.map((row) => {
+      Object.entries(updates || {}).forEach(([key, value]) => {
+        row[key] = value;
+      });
+      return row.save();
+    })
+  );
 };
 
 const isWhapiConnected = (status, phoneNumber, displayName) => {
@@ -307,27 +333,127 @@ const deletePartnerChannel = async (channelId) => {
   });
 };
 
+const fetchPartnerChannelStatus = async (channelId) => {
+  const partner = getWhapiPartnerConfig();
+  if (!partner.partnerToken || !partner.projectId) {
+    return null;
+  }
+  if (!channelId) return null;
+  const base = String(partner.managerBaseUrl || "").replace(/\/+$/, "");
+  const url = `${base}/channels/${encodeURIComponent(String(channelId))}`;
+  try {
+    const resp = await $fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${partner.partnerToken}`,
+        "Project-Id": partner.projectId,
+      },
+    });
+    const status =
+      resp?.status ||
+      resp?.state ||
+      resp?.health?.status?.text ||
+      resp?.health?.status ||
+      null;
+    const stopped =
+      typeof resp?.stopped === "boolean"
+        ? resp.stopped
+        : typeof resp?.channel?.stopped === "boolean"
+          ? resp.channel.stopped
+          : null;
+    return {
+      status: status ? String(status) : null,
+      stopped,
+      raw: resp,
+    };
+  } catch {
+    return null;
+  }
+};
+
 export const connect = async (event) => {
   const { orgId, userId } = event.context.user || {};
   if (!orgId || !userId) return error(401, "Unauthenticated");
 
-  const existing = await findOrgChannel(orgId);
-  if (existing) {
-    const token = decrypt(existing.tokenEnc);
+  const bodyRaw = await readBody(event);
+  let body = bodyRaw;
+  if (typeof bodyRaw === "string") {
+    try {
+      body = JSON.parse(bodyRaw);
+    } catch {
+      body = {};
+    }
+  }
+  const requestedChannelId = String(body?.channelId || "").trim() || null;
+
+  const existingOrg = await findOrgChannel(orgId);
+  if (existingOrg && !requestedChannelId) {
+    const token = decrypt(existingOrg.tokenEnc);
     const webhookUrl = resolveWebhookUrl();
     const webhookResp = await updateWebhook(token, webhookUrl);
     const qr = await fetchQrWithRetry(token);
     if (qr) {
-      existing.lastQrAt = new Date();
-      await existing.save();
+      existingOrg.lastQrAt = new Date();
+      await existingOrg.save();
     }
     return success({
-      channelId: existing.channelId,
-      status: existing.status,
+      channelId: existingOrg.channelId,
+      status: existingOrg.status,
       qr,
       qrReady: Boolean(qr),
       webhookUpdated: !!webhookResp,
-      canActivate: isWhapiActivationBlocked(existing.status),
+      canActivate: isWhapiActivationBlocked(existingOrg.status),
+      warning: qr
+        ? null
+        : "QR not ready. If the channel is Stopped/Overdue, activate it with at least 1 day, wait ~1 minute, then refresh.",
+    });
+  }
+
+  if (requestedChannelId) {
+    const channelRows = await findChannelRows(requestedChannelId);
+    const selected = pickLatestChannel(channelRows);
+    if (!selected) return error(404, "Whapi channel not found");
+    const token = decrypt(selected.tokenEnc);
+    const webhookUrl = resolveWebhookUrl();
+    const webhookResp = await updateWebhook(token, webhookUrl);
+    const qr = await fetchQrWithRetry(token);
+
+    let target = existingOrg;
+    if (!target) {
+      await syncWhapiConfig();
+      target = await WhapiChannelConfig.create({
+        organisationId: Number(orgId),
+        userId: Number(userId),
+        channelId: selected.channelId,
+        tokenEnc: selected.tokenEnc,
+        status: selected.status || "Active",
+        displayName: selected.displayName || null,
+        phoneNumber: selected.phoneNumber || null,
+        connectedAt: selected.connectedAt || null,
+        webhookUrl: selected.webhookUrl || webhookUrl || null,
+      });
+    } else {
+      target.channelId = selected.channelId;
+      target.tokenEnc = selected.tokenEnc;
+      target.status = selected.status || target.status;
+      target.displayName = selected.displayName || target.displayName;
+      target.phoneNumber = selected.phoneNumber || target.phoneNumber;
+      target.webhookUrl = selected.webhookUrl || webhookUrl || target.webhookUrl;
+      await target.save();
+    }
+
+    if (qr) {
+      target.lastQrAt = new Date();
+      await target.save();
+    }
+
+    return success({
+      channelId: target.channelId,
+      status: target.status,
+      qr,
+      qrReady: Boolean(qr),
+      webhookUpdated: !!webhookResp,
+      canActivate: isWhapiActivationBlocked(target.status),
       warning: qr
         ? null
         : "QR not ready. If the channel is Stopped/Overdue, activate it with at least 1 day, wait ~1 minute, then refresh.",
@@ -350,15 +476,24 @@ export const connect = async (event) => {
   const extendResp = await extendPartnerChannel(created.channelId, extendDays, extendComment);
 
   await syncWhapiConfig();
-  const row = await WhapiChannelConfig.create({
-    organisationId: Number(orgId),
-    userId: Number(userId),
-    channelId: created.channelId,
-    tokenEnc: encrypt(created.token),
-    status: "Pending",
-    connectedAt: null,
-    webhookUrl: webhookUrl || null,
-  });
+  const row = existingOrg
+    ? Object.assign(existingOrg, {
+        channelId: created.channelId,
+        tokenEnc: encrypt(created.token),
+        status: "Pending",
+        connectedAt: null,
+        webhookUrl: webhookUrl || null,
+      })
+    : await WhapiChannelConfig.create({
+        organisationId: Number(orgId),
+        userId: Number(userId),
+        channelId: created.channelId,
+        tokenEnc: encrypt(created.token),
+        status: "Pending",
+        connectedAt: null,
+        webhookUrl: webhookUrl || null,
+      });
+  if (existingOrg) await row.save();
 
   const webhookResp = await updateWebhook(created.token, webhookUrl);
   const qr = await fetchQrWithRetry(created.token);
@@ -401,7 +536,9 @@ export const extendChannel = async (event) => {
   const resp = await extendPartnerChannel(existing.channelId, days, comment);
   if (!resp) return error(502, "Failed to extend Whapi channel");
   existing.status = "Activating";
-  await existing.save();
+  await updateChannelRows(await findChannelRows(existing.channelId), {
+    status: "Activating",
+  });
   return success({
     channelId: existing.channelId,
     extended: true,
@@ -413,19 +550,43 @@ export const extendChannel = async (event) => {
 export const disconnect = async (event) => {
   const { orgId } = event.context.user || {};
   if (!orgId) return error(401, "Unauthenticated");
+  const bodyRaw = await readBody(event);
+  let body = bodyRaw;
+  if (typeof bodyRaw === "string") {
+    try {
+      body = JSON.parse(bodyRaw);
+    } catch {
+      body = {};
+    }
+  }
+  const forceLogout = !!body?.force;
   const existing = await findOrgChannel(orgId);
   if (!existing) return error(404, "Whapi channel not connected");
+  const channelRows = await findChannelRows(existing.channelId);
+  if (channelRows.length > 1 && !forceLogout) {
+    await existing.destroy();
+    return success({
+      disconnected: true,
+      channelId: existing.channelId,
+      response: null,
+      shared: true,
+    });
+  }
   const token = decrypt(existing.tokenEnc);
   const resp = await logoutChannel(token);
-  existing.status = "LoggedOut";
-  existing.phoneNumber = null;
-  existing.displayName = null;
-  existing.connectedAt = null;
-  await existing.save();
+  const rowsToUpdate = channelRows.length ? channelRows : [existing];
+  await updateChannelRows(rowsToUpdate, {
+    status: "LoggedOut",
+    phoneNumber: null,
+    displayName: null,
+    connectedAt: null,
+    lastSeenAt: new Date(),
+  });
   return success({
     disconnected: true,
     channelId: existing.channelId,
     response: resp || null,
+    forced: forceLogout,
   });
 };
 
@@ -435,6 +596,16 @@ export const deleteChannel = async (event) => {
   const existing = await findOrgChannel(orgId);
   if (!existing) return error(404, "Whapi channel not connected");
 
+  const channelRows = await findChannelRows(existing.channelId);
+  if (channelRows.length > 1) {
+    await existing.destroy();
+    return success({
+      deleted: true,
+      channelId: existing.channelId,
+      response: null,
+      shared: true,
+    });
+  }
   const resp = await deletePartnerChannel(existing.channelId);
   await existing.destroy();
   return success({
@@ -470,6 +641,19 @@ export const status = async (event) => {
   if (!orgId) return error(401, "Unauthenticated");
   const existing = await findOrgChannel(orgId);
   if (!existing) return success({ connected: false });
+  const channelRows = await findChannelRows(existing.channelId);
+  if (existing.channelId) {
+    const live = await fetchPartnerChannelStatus(existing.channelId);
+    if (live?.status || typeof live?.stopped === "boolean") {
+      const resolvedStatus =
+        live?.stopped === true ? "Stopped" : live?.status || existing.status;
+      await updateChannelRows(channelRows.length ? channelRows : [existing], {
+        status: resolvedStatus,
+        lastSeenAt: new Date(),
+      });
+      existing.status = resolvedStatus;
+    }
+  }
   const connected = isWhapiConnected(existing.status, existing.phoneNumber, existing.displayName);
   return success({
     connected,
@@ -480,6 +664,58 @@ export const status = async (event) => {
     connectedAt: existing.connectedAt || null,
     canActivate: isWhapiActivationBlocked(existing.status),
   });
+};
+
+export const listChannels = async (event) => {
+  const { orgId, userId } = event.context.user || {};
+  if (!orgId || !userId) return error(401, "Unauthenticated");
+  await syncWhapiConfig();
+
+  const memberships = await UserOrganisation.findAll({
+    where: { userId: Number(userId), status: "Active" },
+    include: [{ model: Organisation, as: "organisation", attributes: ["id", "name"] }],
+  });
+  const orgIds = memberships.map((row) => Number(row.organisationId)).filter(Boolean);
+  if (!orgIds.length) return success({ channels: [] });
+
+  const orgNameById = new Map(
+    memberships
+      .map((row) => [Number(row.organisationId), row.organisation?.name || null])
+      .filter((entry) => entry[0])
+  );
+
+  const rows = await WhapiChannelConfig.findAll({
+    where: { organisationId: { [Op.in]: orgIds } },
+    order: [["updatedAt", "DESC"]],
+  });
+
+  const map = new Map();
+  rows.forEach((row) => {
+    if (!map.has(row.channelId)) {
+      map.set(row.channelId, {
+        channelId: row.channelId,
+        status: row.status || null,
+        phoneNumber: row.phoneNumber || null,
+        displayName: row.displayName || null,
+        connected: isWhapiConnected(row.status, row.phoneNumber, row.displayName),
+        orgCount: 0,
+        linked: false,
+        orgNames: new Set(),
+      });
+    }
+    const item = map.get(row.channelId);
+    item.orgCount += 1;
+    const orgName = orgNameById.get(Number(row.organisationId));
+    if (orgName) item.orgNames.add(orgName);
+    if (row.organisationId === Number(orgId)) item.linked = true;
+  });
+
+  const channels = Array.from(map.values()).map((item) => ({
+    ...item,
+    orgNames: Array.from(item.orgNames || []),
+  }));
+
+  return success({ channels });
 };
 
 export const webhook = async (event) => {
@@ -495,35 +731,30 @@ export const webhook = async (event) => {
       body?.channel?.channelId ||
       body?.metadata?.channel_id ||
       null;
-    let orgId = null;
+    let channelRows = [];
     if (channelId) {
-      await syncWhapiConfig();
-      const cfg = await WhapiChannelConfig.findOne({
-        where: { channelId: String(channelId) },
-      });
-      if (cfg) {
-        orgId = cfg.organisationId;
-        cfg.lastSeenAt = new Date();
+      channelRows = await findChannelRows(String(channelId));
+      if (channelRows.length) {
         const channelInfo = body?.channel || body?.data?.channel || body?.user || body?.data?.user || null;
+        const healthStatus = body?.health?.status?.text || null;
+        const updates = {};
         if (channelInfo) {
-          cfg.displayName = channelInfo?.name || channelInfo?.pushname || cfg.displayName || null;
+          updates.displayName = channelInfo?.name || channelInfo?.pushname || null;
           const phone = channelInfo?.phone || channelInfo?.phone_number || channelInfo?.phoneNumber || null;
           const userId = channelInfo?.id || null;
-          if (phone) cfg.phoneNumber = String(phone);
-          else if (userId) cfg.phoneNumber = String(userId);
-          cfg.status = channelInfo?.status || cfg.status;
-          if (isWhapiConnected(cfg.status, cfg.phoneNumber, cfg.displayName) && !cfg.connectedAt) {
-            cfg.connectedAt = new Date();
-          }
+          if (phone) updates.phoneNumber = String(phone);
+          else if (userId) updates.phoneNumber = String(userId);
+          updates.status = channelInfo?.status || null;
         }
-        const healthStatus = body?.health?.status?.text || null;
-        if (healthStatus) {
-          cfg.status = String(healthStatus);
-          if (isWhapiConnected(cfg.status, cfg.phoneNumber, cfg.displayName) && !cfg.connectedAt) {
-            cfg.connectedAt = new Date();
-          }
-        }
-        await cfg.save();
+        if (healthStatus) updates.status = String(healthStatus);
+        const connected = isWhapiConnected(
+          updates.status || channelRows[0].status,
+          updates.phoneNumber || channelRows[0].phoneNumber,
+          updates.displayName || channelRows[0].displayName
+        );
+        if (connected) updates.connectedAt = new Date();
+        updates.lastSeenAt = new Date();
+        await updateChannelRows(channelRows, updates);
       }
     }
     const messages = collectMessages(body);
@@ -540,8 +771,31 @@ export const webhook = async (event) => {
         msg?.chat?.chatId;
       const fromDigits = normalizeWhatsAppNumber(fromRaw);
       if (!fromDigits) continue;
-      const lead = await findLeadByPhone(fromDigits, orgId);
-      if (!lead) continue;
+      let lead = null;
+      let orgId = null;
+      if (channelRows.length) {
+        const matches = [];
+        for (const cfg of channelRows) {
+          const found = await findLeadByPhone(fromDigits, cfg.organisationId);
+          if (found) matches.push({ cfg, lead: found });
+        }
+        if (matches.length === 1) {
+          lead = matches[0].lead;
+          orgId = matches[0].cfg.organisationId;
+        } else if (matches.length > 1) {
+          matches.sort((a, b) => {
+            const aMeta = a.lead?.rawData?.whatsapp || {};
+            const bMeta = b.lead?.rawData?.whatsapp || {};
+            const aTime = new Date(aMeta.lastInboundAt || aMeta.lastOutboundAt || 0).getTime();
+            const bTime = new Date(bMeta.lastInboundAt || bMeta.lastOutboundAt || 0).getTime();
+            if (aTime !== bTime) return bTime - aTime;
+            return new Date(b.cfg.updatedAt || 0).getTime() - new Date(a.cfg.updatedAt || 0).getTime();
+          });
+          lead = matches[0].lead;
+          orgId = matches[0].cfg.organisationId;
+        }
+      }
+      if (!lead || !orgId) continue;
       const content = getMessageContent(msg);
       const msgType =
         msg?.type ||

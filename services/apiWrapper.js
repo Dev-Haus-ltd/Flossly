@@ -14,7 +14,10 @@ export const Get = async (url) => {
 export const Post = async (url, body) => {
   const args = {
     method: "POST",
-        body: JSON.stringify(body),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
   };
   const response = await fetch(APIURL + url, args);
   const data = await response.json();

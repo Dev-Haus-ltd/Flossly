@@ -830,8 +830,16 @@ export const updatePassword = async (event) => {
 };
 
 export const switchOrgnanisation = async (event) => {
-  const body = await readBody(event);
-  const { orgId } = JSON.parse(body);
+  const bodyRaw = await readBody(event);
+  let body = bodyRaw;
+  if (typeof bodyRaw === "string") {
+    try {
+      body = JSON.parse(bodyRaw);
+    } catch {
+      body = {};
+    }
+  }
+  const orgId = Number(body?.orgId);
   const user = event.context.user;
   try {
     const record = await UserOrganisation.findOne({

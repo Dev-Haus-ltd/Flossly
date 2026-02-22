@@ -113,9 +113,16 @@ export default {
         .catch((err) => reject(err));
     });
   },
-  startWhapiConnect() {
+  startWhapiConnect(payload = {}) {
     return new Promise((resolve, reject) => {
-      Post("/whapi/connect", {})
+      Post("/whapi/connect", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getWhapiChannels() {
+    return new Promise((resolve, reject) => {
+      Get("/whapi/channels")
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -134,9 +141,9 @@ export default {
         .catch((err) => reject(err));
     });
   },
-  disconnectWhapi() {
+  disconnectWhapi(payload = {}) {
     return new Promise((resolve, reject) => {
-      Post("/whapi/disconnect", {})
+      Post("/whapi/disconnect", payload)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
