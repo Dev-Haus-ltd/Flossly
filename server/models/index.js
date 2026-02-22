@@ -55,6 +55,7 @@ import { CrmLead } from "./crm/leads";
 import { MetaUserToken } from "./crm/metaUserTokens";
 import { MetaWhatsAppConfig } from "./crm/metaWhatsAppConfigs";
 import { CrmWhatsAppMessageLog } from "./crm/whatsappMessageLogs";
+import { WhapiChannelConfig } from "./crm/whapiChannelConfigs";
 import { ChatbotConfig } from "./crm/chatbotConfig";
 import { MetaAdAccount } from "./crm/MetaAdAccount";
 import { MetaCampaign } from "./crm/MetaCampaign";
@@ -326,6 +327,9 @@ Organisation.hasMany(MetaUserToken, { foreignKey: 'organisationId', as: 'metaUse
 MetaWhatsAppConfig.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 MetaWhatsAppConfig.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', hooks: true });
 Organisation.hasMany(MetaWhatsAppConfig, { foreignKey: 'organisationId', as: 'metaWhatsAppConfigs', onDelete: 'CASCADE', hooks: true });
+WhapiChannelConfig.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+WhapiChannelConfig.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', hooks: true });
+Organisation.hasMany(WhapiChannelConfig, { foreignKey: 'organisationId', as: 'whapiChannelConfigs', onDelete: 'CASCADE', hooks: true });
 CrmWhatsAppMessageLog.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 Organisation.hasMany(CrmWhatsAppMessageLog, { foreignKey: 'organisationId', as: 'whatsappMessageLogs', onDelete: 'CASCADE', hooks: true });
 CrmWhatsAppMessageLog.belongsTo(CrmLead, { foreignKey: 'leadId', as: 'lead', onDelete: 'SET NULL', hooks: true });
@@ -538,6 +542,7 @@ export {
   CrmWhatsAppMessageLog,
   MetaUserToken,
   MetaWhatsAppConfig,
+  WhapiChannelConfig,
   ChatbotConfig,
   MetaAdAccount,
   MetaCampaign,

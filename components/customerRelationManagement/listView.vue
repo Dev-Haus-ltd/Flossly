@@ -577,76 +577,36 @@
         </div>
       </v-card>
     </v-dialog>
-    <v-dialog v-model="showWhatsAppCompose" max-width="640px">
+
+    <v-dialog v-model="showWhatsAppCompose" max-width="720px">
       <v-card class="rounded-lg">
         <div class="d-flex justify-space-between align-center px-4 py-3">
           <div>
-            <h5 class="mb-1 modal-title">Compose WhatsApp</h5>
-            <div class="text-caption text-medium-emphasis">
-              {{ whatsappCompose.recipients.length }} recipient(s)
-            </div>
+            <h5 class="mb-1 modal-title">Send WhatsApp</h5>
+            <div class="text-caption text-medium-emphasis">From connected number</div>
           </div>
           <v-btn icon @click="showWhatsAppCompose = false" flat><v-icon>mdi-close</v-icon></v-btn>
         </div>
         <v-divider />
 
-        <div class="px-4 pt-4">
-          <v-alert
-            v-if="whatsappCompose.missing.length"
-            type="warning"
-            variant="tonal"
-            class="mb-3"
-          >
-            {{ whatsappCompose.missing.length }} lead(s) have no valid phone number and will be skipped.
-          </v-alert>
-          <v-alert
-            v-if="whatsappCompose.requiresTemplate"
-            type="info"
-            variant="tonal"
-            class="mb-3"
-          >
-            Template required. At least one lead has not messaged you in the last 24 hours.
-          </v-alert>
-          <v-radio-group v-model="whatsappCompose.mode" class="mb-3" inline>
-            <v-radio label="Free Text" value="free" :disabled="whatsappCompose.requiresTemplate" />
-            <v-radio label="Template" value="template" />
-          </v-radio-group>
-          <div v-if="whatsappCompose.mode === 'template'">
-            <v-text-field
-              v-model="whatsappCompose.templateName"
-              label="Template name"
-              variant="outlined"
-              density="compact"
-              hide-details
-              class="mb-3"
-            />
-            <v-text-field
-              v-model="whatsappCompose.templateLanguage"
-              label="Template language (e.g. en_US)"
-              variant="outlined"
-              density="compact"
-              hide-details
-            />
-            <div class="text-caption text-medium-emphasis mt-2">
-              Template names must match Meta exactly and be approved.
-            </div>
-          </div>
+        <div class="px-4 pt-4 pb-2">
           <v-textarea
-            v-else
-            v-model="whatsappCompose.message"
+            v-model="whatsappMessage"
             label="Message"
-            rows="5"
-            auto-grow
+            density="compact"
             variant="outlined"
+            auto-grow
+            rows="4"
             hide-details
+            placeholder="Write your WhatsApp message..."
           />
+          <div v-if="!hasWhatsAppRecipients" class="text-caption text-medium-emphasis mt-2">
+            No WhatsApp numbers found for the selected lead(s).
+          </div>
         </div>
 
-        <div class="px-4 pb-4 d-flex justify-space-between align-center">
-          <div class="text-caption text-medium-emphasis">
-            Use tokens like [Patient Name] or [Your Name]
-          </div>
-          <v-btn :loading="whatsappLoading" flat color="success" @click="sendWhatsAppCompose">
+        <div class="px-4 pb-4 d-flex justify-end">
+          <v-btn :loading="whatsappSending" :disabled="!hasWhatsAppRecipients" flat color="primary" @click="sendWhatsAppMessage">
             Send
           </v-btn>
         </div>
@@ -687,11 +647,11 @@ import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crm
 import DataTableColumnsAutomationGroups from '@/components/dataTableColumns/automationGroups.vue'
 import callIcon from '@/assets/crm/call.svg'
 import sendMailIcon from '@/assets/crm/sendMail.svg'
-import whatsappIcon from '@/assets/crm/whatsapp.svg'
 import bookIcon from '@/assets/crm/book.svg'
 import sendPriceIcon from '@/assets/crm/sendPrice.svg'
 import sendFormIcon from '@/assets/crm/sendForm.svg'
 import shareLocationIcon from '@/assets/crm/shareLocation.svg'
+import whatsappIcon from '@/assets/crm/whatsapp-logo.svg'
 import convertIcon from '@/assets/crm/convert.svg'
 import archiveIcon from '@/assets/crm/archive.svg'
 import deleteIcon from '@/assets/crm/delete.svg'
@@ -787,6 +747,9 @@ const confirmArchive = ref(false);
 const archiving = ref(false);
 const converting = ref(false);
 const addStaffDrawer = ref(false);
+const showWhatsAppCompose = ref(false);
+const whatsappSending = ref(false);
+const whatsappMessage = ref('');
 const rolesList = ref([]);
 const automationRowsCache = reactive({});
 const automationLoading = reactive({});
@@ -803,6 +766,15 @@ const defaultAutomationMap = new Map(
 const resolveLeadName = (lead) => getLeadDisplayName(lead);
 const resolveLeadEmail = (lead) => getLeadEmail(lead);
 const resolveLeadPhone = (lead) => getLeadPhone(lead);
+
+const whatsappRecipients = computed(() => {
+  const nums = (selectedLeads.value || [])
+    .map((lead) => resolveLeadPhone(lead))
+    .filter(Boolean);
+  return [...new Set(nums)];
+});
+
+const hasWhatsAppRecipients = computed(() => whatsappRecipients.value.length > 0);
 
 const mergeDefaultAutomations = (rows) => {
   const map = new Map((rows || []).map((row) => [row.key, { ...row }]));
@@ -1084,8 +1056,8 @@ const onActionClick = (key) => {
   else if (key === 'delete') confirmDelete.value = true;
   else if (key === 'archive') confirmArchive.value = true;
   else if (key === 'convert') convertSelected();
-  else if (key === 'whatsapp') openWhatsAppCompose()
   else if (key === 'export') exportSelectedLeads();
+  else if (key === 'whatsapp') openWhatsAppCompose();
   else if (['mail','sendPrice','sendForm','shareLocation'].includes(key)) openCompose(key)
 };
 
@@ -1268,20 +1240,6 @@ let EditorCtor = null
 let Header = null
 let List = null
 const compose = reactive({ key: 'mail', subject: '', recipients: [], html: '' })
-const showWhatsAppCompose = ref(false)
-const whatsappLoading = ref(false)
-const whatsappCompose = reactive({
-  message: '',
-  recipients: [],
-  missing: [],
-  mode: 'free',
-  templateName: '',
-  templateLanguage: 'en_US',
-  requiresTemplate: false,
-})
-const defaultWhatsAppMessage =
-  'Hi [Patient Name], thanks for reaching out to [Practice Name]. How can we help you today?'
-const WHATSAPP_WINDOW_HOURS = 24
 
 const defaultTemplates = {
   sendPrice: {
@@ -1346,54 +1304,11 @@ async function openCompose(actionKey) {
 
 watch(() => showCompose.value, (v) => { if (!v && composeEditor) { composeEditor.destroy(); composeEditor = null } })
 
-const getLeadLastInboundAt = (lead) =>
-  lead?.rawData?.whatsapp?.lastInboundAt || lead?.rawData?.whatsapp?.lastMessageAt || null
-
-const isWithinWhatsAppWindow = (lead) => {
-  const last = getLeadLastInboundAt(lead)
-  if (!last) return false
-  const ts = Date.parse(last)
-  if (Number.isNaN(ts)) return false
-  const windowMs = WHATSAPP_WINDOW_HOURS * 60 * 60 * 1000
-  return Date.now() - ts <= windowMs
-}
-
-const buildWhatsAppRecipients = () => {
-  const recipients = []
-  const missing = []
-  let allWithinWindow = true
-  ;(selectedLeads.value || []).forEach((lead) => {
-    const phone = String(lead?.telephone || '').trim()
-    if (!phone) {
-      missing.push(lead?.name || lead?.email || `Lead ${lead?.id}`)
-      return
-    }
-    if (!isWithinWhatsAppWindow(lead)) allWithinWindow = false
-    recipients.push(phone)
-  })
-  whatsappCompose.recipients = [...new Set(recipients)]
-  whatsappCompose.missing = missing
-  whatsappCompose.requiresTemplate = !allWithinWindow
-  if (whatsappCompose.requiresTemplate) {
-    whatsappCompose.mode = 'template'
-  }
-}
-
 const openWhatsAppCompose = () => {
-  buildWhatsAppRecipients()
-  if (!whatsappCompose.recipients.length) {
-    if (mainStore?.setSnackbar) {
-      mainStore.setSnackbar({ title: 'No valid phone numbers found', type: 'error' })
-    }
-    return
-  }
-  const many = (selectedLeads.value || []).length !== 1
-  const lead = many ? null : (selectedLeads.value || [])[0]
-  const ctx = buildRecipientContext({ lead, user, many })
-  whatsappCompose.message = renderWithContext(defaultWhatsAppMessage, ctx)
-  if (!whatsappCompose.templateName) whatsappCompose.templateName = 'hello_world'
-  showWhatsAppCompose.value = true
-}
+  if (!selectedLeads.value.length) return;
+  whatsappMessage.value = '';
+  showWhatsAppCompose.value = true;
+};
 
 const mainStore = useMainStore?.() || null
 const openAddStaff = async () => {
@@ -1423,57 +1338,40 @@ async function sendCompose() {
     }
   } finally { composeLoading.value = false }
 }
-async function sendWhatsAppCompose() {
-  if (whatsappCompose.mode === 'free' && whatsappCompose.requiresTemplate) {
-    if (mainStore?.setSnackbar) {
-      mainStore.setSnackbar({ title: 'Template required for at least one lead', type: 'error' })
-    }
-    return
-  }
-  if (whatsappCompose.mode === 'template' && !whatsappCompose.templateName?.trim()) {
-    if (mainStore?.setSnackbar) {
-      mainStore.setSnackbar({ title: 'Template name is required', type: 'error' })
-    }
-    return
-  }
-  if (whatsappCompose.mode === 'free' && !whatsappCompose.message?.trim()) {
-    if (mainStore?.setSnackbar) {
-      mainStore.setSnackbar({ title: 'Message is required', type: 'error' })
-    }
-    return
+
+async function sendWhatsAppMessage() {
+  if (!selectedLeads.value.length) return;
+  const message = String(whatsappMessage.value || '').trim();
+  if (!message) return;
+  if (!hasWhatsAppRecipients.value) {
+    mainStore?.setSnackbar?.({ title: 'No WhatsApp numbers found for the selected lead(s)', type: 'error' });
+    return;
   }
   try {
-    whatsappLoading.value = true
-    const leadIds = selectedLeads.value.map(l => l.id)
-    let res = null
-    if (whatsappCompose.mode === 'template') {
-      res = await crmStore.sendLeadWhatsApp({
-        leadIds,
-        template: {
-          name: whatsappCompose.templateName.trim(),
-          language: { code: whatsappCompose.templateLanguage?.trim() || 'en_US' },
-        },
-      })
-    } else {
-      const many = (selectedLeads.value || []).length !== 1
-      const lead = many ? null : (selectedLeads.value || [])[0]
-      const ctx = buildRecipientContext({ lead, user, many })
-      const resolvedMessage = renderWithContext(whatsappCompose.message, ctx)
-      res = await crmStore.sendLeadWhatsApp({ leadIds, message: resolvedMessage })
-    }
-    if (res && res.code === 0) {
-      const sent = res.data?.sent ?? 0
-      const skipped = res.data?.skipped ?? 0
-      const failed = res.data?.failed ?? 0
-      if (mainStore && mainStore.setSnackbar) {
+    whatsappSending.value = true;
+    const leadIds = selectedLeads.value.map((lead) => lead.id);
+    const res = await crmStore.sendLeadWhatsApp({ leadIds, message });
+    if (res?.code === 0) {
+      const sent = res?.data?.sent ?? 0;
+      const failed = res?.data?.failed ?? 0;
+      const skipped = res?.data?.skipped ?? 0;
+      if (mainStore?.setSnackbar) {
+        const detail = [sent ? `${sent} sent` : null, failed ? `${failed} failed` : null, skipped ? `${skipped} skipped` : null]
+          .filter(Boolean)
+          .join(' - ');
         mainStore.setSnackbar({
-          title: `WhatsApp sent: ${sent}, skipped: ${skipped}, failed: ${failed}`,
+          title: detail || 'WhatsApp sent',
           type: failed ? 'warning' : 'success',
-        })
+        });
       }
-      showWhatsAppCompose.value = false
+      showWhatsAppCompose.value = false;
     }
-  } finally { whatsappLoading.value = false }
+  } catch (e) {
+    const msg = e?.data?.message || e?.message || 'Failed to send WhatsApp message';
+    mainStore?.setSnackbar?.({ title: msg, type: 'error' });
+  } finally {
+    whatsappSending.value = false;
+  }
 }
 const getLeadUsers = (lead) => {
   // Filter to show only active users (not invited, disabled, or expired)
@@ -1626,6 +1524,7 @@ const convertSelected = async () => {
   width: 5px;
   cursor: col-resize;
 }
+
 .cust-checkbox {
   width: 18px;
   height: 18px;
@@ -1862,4 +1761,5 @@ const convertSelected = async () => {
 }
 
 </style>
+
 

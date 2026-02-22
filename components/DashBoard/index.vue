@@ -5,6 +5,7 @@
       <CommonEventCard
         v-if="showCard"
         class="my-4"
+        subheading="Watch the Flossly Demo Video"
         @close="showCard = false"
       />
 

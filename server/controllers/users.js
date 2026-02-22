@@ -15,8 +15,16 @@ import { uploadBufferFile } from "../utils/storage";
 export const usersList = async (event) => {
   const loggedUser = event.context.user;
   let currentOrg = loggedUser.orgId;
-  const body = await readBody(event);
-  const { roleId, orgId } = JSON.parse(body);
+  const bodyRaw = await readBody(event);
+  let body = bodyRaw;
+  if (typeof bodyRaw === "string") {
+    try {
+      body = JSON.parse(bodyRaw);
+    } catch {
+      body = {};
+    }
+  }
+  const { roleId, orgId } = body || {};
   if (orgId) {
     currentOrg = orgId;
   }

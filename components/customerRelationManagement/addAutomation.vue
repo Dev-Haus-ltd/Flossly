@@ -79,28 +79,42 @@
             </v-col>
             <v-col cols="12" md="6" v-else>
               <label class="mb-1 fld-lbl">WhatsApp Template Name</label>
-              <v-text-field
+              <v-combobox
                 v-model="form.whatsappTemplateName"
+                :items="whatsappTemplateNameOptions"
                 variant="solo"
                 density="compact"
                 class="mb-1 input-bordered"
                 flat
                 placeholder="Approved template name (e.g. hello_world)"
                 :rules="requiredRule"
+                clearable
               />
             </v-col>
             <v-col cols="12" md="6" v-if="form.type === 'WhatsApp'">
               <label class="mb-1 fld-lbl">WhatsApp Template Language</label>
-              <v-text-field
+              <v-combobox
                 v-model="form.whatsappTemplateLanguage"
+                :items="whatsappTemplateLanguageOptions"
                 variant="solo"
                 density="compact"
                 class="mb-1 input-bordered"
                 flat
                 placeholder="en_US"
+                clearable
               />
               <div class="text-caption text-medium-emphasis mt-1">
                 Templates must be approved in Meta. The message body below is for preview/variables only.
+              </div>
+            </v-col>
+            <v-col cols="12" v-if="form.type === 'WhatsApp' && whatsappTemplatePreviewLines">
+              <label class="mb-1 fld-lbl">Template Preview</label>
+              <div class="whatsapp-preview">
+                <div class="whatsapp-preview__bubble">
+                  <div v-for="(line, i) in whatsappTemplatePreviewLines" :key="`wa-add-prev-${i}`">
+                    {{ line }}
+                  </div>
+                </div>
               </div>
             </v-col>
 
@@ -251,6 +265,7 @@
 <script setup>
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 import { formatCrmTriggerPreview } from '@/lib/misc'
+import { getTemplateParamExamples, buildTemplatePreviewLines } from '@/lib/whatsappTemplatePreview'
 import { useCrmStore } from '@/stores/crm'
 import { useMainStore } from '@/stores/index'
 
@@ -264,6 +279,8 @@ const crmStore = useCrmStore()
 const mainStore = useMainStore()
 const formRef = ref(null)
 const saving = ref(false)
+const whatsappTemplates = ref([])
+const whatsappTemplatesLoading = ref(false)
 const requiredRule = [(v) => !!v || 'This field is required']
 const types = ['Email', 'WhatsApp']
 const triggerTypes = [
@@ -292,7 +309,6 @@ const weekIndexOptions = [
   { label: '5th', value: 5 },
 ]
 
-
 const form = ref({
   groupKey: '',
   type: 'Email',
@@ -309,6 +325,67 @@ const form = ref({
   triggerWeekday: 1,
   triggerWeekIndex: 1,
 })
+
+const whatsappTemplateNameOptions = computed(() => {
+  const set = new Set()
+  ;(whatsappTemplates.value || []).forEach((t) => {
+    if (t?.name) set.add(String(t.name))
+  })
+  return Array.from(set)
+})
+
+const whatsappTemplateLanguageOptions = computed(() => {
+  const name = String(form.value.whatsappTemplateName || '').trim()
+  if (!name) return []
+  const langs = (whatsappTemplates.value || [])
+    .filter((t) => String(t?.name || '') === name)
+    .map((t) => t?.language || t?.language?.code || t?.language_code)
+    .filter(Boolean)
+  return Array.from(new Set(langs))
+})
+
+const resolveSelectedTemplate = () => {
+  const name = String(form.value.whatsappTemplateName || '').trim()
+  if (!name) return null
+  const lang = String(form.value.whatsappTemplateLanguage || '').trim()
+  const list = whatsappTemplates.value || []
+  if (lang) {
+    const matched = list.find((t) => String(t?.name || '') === name && String(t?.language || t?.language?.code || t?.language_code || '') === lang)
+    if (matched) return matched
+  }
+  return list.find((t) => String(t?.name || '') === name) || null
+}
+
+const whatsappTemplatePreviewLines = computed(() => {
+  const template = resolveSelectedTemplate()
+  if (!template) return null
+  const params = getTemplateParamExamples(template).map((v, i) => String(v || `{{${i + 1}}}`))
+  return buildTemplatePreviewLines(template, params)
+})
+
+const loadWhatsAppTemplates = async () => {
+  if (whatsappTemplatesLoading.value) return
+  try {
+    whatsappTemplatesLoading.value = true
+    const res = await crmStore.getWhatsAppTemplates()
+    if (res?.code === 0 && res.data?.templates) {
+      whatsappTemplates.value = res.data.templates
+    }
+  } catch (e) {
+    // ignore if WhatsApp is not configured
+  } finally {
+    whatsappTemplatesLoading.value = false
+  }
+}
+
+watch(
+  () => [form.value.whatsappTemplateName, whatsappTemplateLanguageOptions.value.length],
+  () => {
+    if (!form.value.whatsappTemplateLanguage && whatsappTemplateLanguageOptions.value.length) {
+      form.value.whatsappTemplateLanguage = whatsappTemplateLanguageOptions.value[0]
+    }
+  }
+)
 
 const editorEl = ref(null)
 let ej = null
@@ -372,6 +449,7 @@ const handleDrawerClose = async (newValue) => {
     resetForm()
     if (ej) { ej.destroy(); ej = null }
   } else {
+    await loadWhatsAppTemplates()
     await nextTick()
     await initEditor()
   }
@@ -515,5 +593,27 @@ const onSubmit = async () => {
 .trigger-label {
   font-weight: 600;
   margin-right: 6px;
+}
+
+.whatsapp-preview {
+  background: #e5ddd5;
+  border-radius: 12px;
+  padding: 16px;
+  min-height: 160px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.whatsapp-preview__bubble {
+  background: #dcf8c6;
+  border-radius: 10px;
+  padding: 12px 14px;
+  max-width: 520px;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  font-size: 14px;
+  color: #111827;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 </style>

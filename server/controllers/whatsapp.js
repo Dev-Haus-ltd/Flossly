@@ -1,7 +1,7 @@
 import { Op } from 'sequelize'
-import { CrmLead, MetaWhatsAppConfig } from '../models'
+import { CrmLead, MetaWhatsAppConfig, CrmWhatsAppMessageLog } from '../models'
 import { decrypt } from '../utils/crypto'
-import { normalizeWhatsAppNumber } from '../utils/whatsapp'
+import { normalizeWhatsAppNumber, logWhatsAppMessage } from '../utils/whatsapp'
 import { success, error } from '../utils/response'
 
 const resolveConfigByPhoneNumberId = async (phoneNumberId) => {
@@ -68,6 +68,30 @@ const updateLeadWhatsAppMeta = async (lead, updates = {}) => {
   await lead.save()
 }
 
+const getMessageContent = (msg) => {
+  if (!msg || typeof msg !== 'object') return ''
+  if (typeof msg?.text?.body === 'string') return msg.text.body
+  if (typeof msg?.text === 'string') return msg.text
+  if (typeof msg?.message?.body === 'string') return msg.message.body
+  if (typeof msg?.button?.text === 'string') return msg.button.text
+  if (typeof msg?.interactive?.button_reply?.title === 'string') return msg.interactive.button_reply.title
+  if (typeof msg?.interactive?.list_reply?.title === 'string') return msg.interactive.list_reply.title
+  return ''
+}
+
+const updateMessageStatus = async ({ providerMessageId, status }) => {
+  if (!providerMessageId) return
+  try {
+    await CrmWhatsAppMessageLog.sync()
+    await CrmWhatsAppMessageLog.update(
+      { status: String(status || '').toLowerCase() || 'sent' },
+      { where: { providerMessageId: String(providerMessageId) } }
+    )
+  } catch {
+    // ignore status update failures
+  }
+}
+
 const matchesVerifyToken = async (verifyToken) => {
   const config = useRuntimeConfig()
   const expectedEnv =
@@ -130,11 +154,22 @@ export const webhook = async (event) => {
           if (!fromDigits) continue
           const lead = await findLeadByPhone(orgId, fromDigits)
           if (!lead) continue
+          const content = getMessageContent(msg)
           await updateLeadWhatsAppMeta(lead, {
             lastInboundAt: new Date(Number(msg?.timestamp || Date.now()) * 1000 || Date.now()).toISOString(),
             lastInboundFrom: fromDigits,
             lastInboundMessageId: msg?.id || null,
             lastMessageAt: new Date().toISOString(),
+          })
+          await logWhatsAppMessage({
+            organisationId: orgId,
+            leadId: lead.id,
+            to: fromDigits,
+            direction: 'inbound',
+            type: 'text',
+            status: 'received',
+            providerMessageId: msg?.id || null,
+            content,
           })
         }
 
@@ -150,6 +185,7 @@ export const webhook = async (event) => {
             },
             lastMessageAt: new Date().toISOString(),
           })
+          await updateMessageStatus({ providerMessageId: st?.id, status: st?.status })
         }
       }
     }
