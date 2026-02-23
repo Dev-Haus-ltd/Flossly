@@ -261,6 +261,23 @@ export const authCallback = async (event) => {
       } catch (e) {}
     }
 
+    // Auto-backfill last 30 days of leads for newly connected pages
+    try {
+      const connectedPages = await MetaPage.findAll({
+        where: {
+          organisationId: orgId,
+          status: 'Active',
+          pageId: { [Op.in]: pagesToConnect.map((p) => String(p.id)) },
+        },
+      })
+      await fetchLeadsForPages({
+        orgId,
+        pages: connectedPages,
+        days: 30,
+        maxPerForm: 1000,
+      })
+    } catch (e) {}
+
     // Clear state cookie
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
     
@@ -553,22 +570,13 @@ export const listLeads = async (event) => {
   return success(mapped)
 }
 
-export const fetchLeadsNow = async (event) => {
-  const { orgId } = event.context.user || {}
-  if (!orgId) return error(401, 'Unauthenticated')
+const fetchLeadsForPages = async ({ orgId, pages, days, maxPerForm }) => {
   try { await CrmLead.sync() } catch (_) {}
 
-  const q = getQuery(event) || {}
-  const days = Number(q.days || 0)
-  const maxPerForm = Number(q.maxPerForm || 1000)
-  const debugEnabled = String(q.debug || '').toLowerCase() === 'true'
   const sinceDate = Number.isFinite(days) && days > 0
     ? new Date(Date.now() - days * 24 * 60 * 60 * 1000)
     : null
 
-  const pages = await MetaPage.findAll({ 
-    where: { organisationId: orgId, status: 'Active' } 
-  })
   const debug = {
     orgId: Number(orgId),
     pagesProcessed: 0,
@@ -579,8 +587,7 @@ export const fetchLeadsNow = async (event) => {
     maxPerForm,
     errors: [],
   }
-  
-  let imported = 0
+
   for (const mp of pages) {
     const pageId = mp.pageId
     const pageToken = decrypt(mp.accessTokenEnc)
@@ -656,7 +663,6 @@ export const fetchLeadsNow = async (event) => {
                 leadSource: 'Meta Leadgen',
                 leadStatus: 'New',
               })
-              imported++
               debug.imported += 1
               broadcastMetaEvent('lead', { orgId, leadId: le.id, pageId, formId: form.id })
             }
@@ -674,8 +680,25 @@ export const fetchLeadsNow = async (event) => {
       })
     }
   }
+
+  return debug
+}
+
+export const fetchLeadsNow = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const q = getQuery(event) || {}
+  const days = Number(q.days || 0)
+  const maxPerForm = Number(q.maxPerForm || 1000)
+  const debugEnabled = String(q.debug || '').toLowerCase() === 'true'
+
+  const pages = await MetaPage.findAll({ 
+    where: { organisationId: orgId, status: 'Active' } 
+  })
+  const debug = await fetchLeadsForPages({ orgId, pages, days, maxPerForm })
   if (debugEnabled) return success(debug)
-  return success({ imported })
+  return success({ imported: debug.imported })
 }
 
 
@@ -1265,6 +1288,23 @@ export const connectBusinessPages = async (event) => {
       connected++
     } catch (e) {}
   }
+
+  // Auto-backfill last 30 days of leads for newly connected pages
+  try {
+    const connectedPages = await MetaPage.findAll({
+      where: {
+        organisationId: orgId,
+        status: 'Active',
+        pageId: { [Op.in]: pageIds },
+      },
+    })
+    await fetchLeadsForPages({
+      orgId,
+      pages: connectedPages,
+      days: 30,
+      maxPerForm: 1000,
+    })
+  } catch (e) {}
 
   return success({ connected })
 }
