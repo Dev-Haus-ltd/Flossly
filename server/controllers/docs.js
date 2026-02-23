@@ -8,9 +8,12 @@ import DB from "../utils/db";
 import { fn, col, Op } from "sequelize";
 import formidable from "formidable";
 import path from "path";
+import fs from "fs/promises";
 import os from "os";
+import { readBody, createError, getQuery } from "h3";
 import { sendS3Object } from "../utils/s3";
-import { uploadTempFile, deleteLink } from "../utils/storage";
+import { uploadTempFile, uploadBufferFile, deleteLink } from "../utils/storage";
+import { convertDocToDocx } from "../utils/docConversion";
 import { parseJsonBody } from "../utils/body";
 
 export const createFolder = async (event) => {
@@ -375,17 +378,49 @@ export const addDocument = async (event) => {
     const uploadedFiles = Array.isArray(files.file) ? files.file : [files.file];
     const createdDocuments = [];
     for (const file of uploadedFiles) {
-      const type = getFileType(file.originalFilename);
-      const filePath = await uploadTempFile({
-        filepath: file.filepath,
-        filename: path.basename(file.filepath),
-        contentType: file.mimetype || file.type,
-        baseDir: "documents",
-      });
+      const originalName = file.originalFilename || "document";
+      const ext = path.extname(originalName).toLowerCase();
+      let storedName = originalName;
+      let filePath;
+
+      if (ext === ".doc") {
+        try {
+          const converted = await convertDocToDocx({
+            filepath: file.filepath,
+            originalName,
+          });
+          storedName = converted.filename;
+          const storageName = `${path.parse(file.filepath).name}.docx`;
+          filePath = await uploadBufferFile({
+            data: converted.buffer,
+            filename: storageName,
+            contentType:
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            baseDir: "documents",
+          });
+        } catch (err) {
+          throw new Error(
+            "DOC conversion failed. Please ensure LibreOffice is installed on the server."
+          );
+        } finally {
+          try {
+            await fs.unlink(file.filepath);
+          } catch (_) {}
+        }
+      } else {
+        filePath = await uploadTempFile({
+          filepath: file.filepath,
+          filename: path.basename(file.filepath),
+          contentType: file.mimetype || file.type,
+          baseDir: "documents",
+        });
+      }
+
+      const type = getFileType(storedName);
       const document = await UserDocument.create({
         userId: loggedUser.userId,
         organisationId: loggedUser.orgId,
-        name: file.originalFilename,
+        name: storedName,
         type: type && type.includes("doc") ? "editable" : "readonly",
         tags: fields.tags ? fields.tags[0] : null,
         link: filePath,
@@ -418,15 +453,47 @@ export const addSystemDocument = async (event) => {
     const uploadedFiles = Array.isArray(files.file) ? files.file : [files.file];
     const createdDocuments = [];
     for (const file of uploadedFiles) {
-      const type = getFileType(file.originalFilename);
-      const filePath = await uploadTempFile({
-        filepath: file.filepath,
-        filename: path.basename(file.filepath),
-        contentType: file.mimetype || file.type,
-        baseDir: "systemDocs",
-      });
+      const originalName = file.originalFilename || "document";
+      const ext = path.extname(originalName).toLowerCase();
+      let storedName = originalName;
+      let filePath;
+
+      if (ext === ".doc") {
+        try {
+          const converted = await convertDocToDocx({
+            filepath: file.filepath,
+            originalName,
+          });
+          storedName = converted.filename;
+          const storageName = `${path.parse(file.filepath).name}.docx`;
+          filePath = await uploadBufferFile({
+            data: converted.buffer,
+            filename: storageName,
+            contentType:
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            baseDir: "systemDocs",
+          });
+        } catch (err) {
+          throw new Error(
+            "DOC conversion failed. Please ensure LibreOffice is installed on the server."
+          );
+        } finally {
+          try {
+            await fs.unlink(file.filepath);
+          } catch (_) {}
+        }
+      } else {
+        filePath = await uploadTempFile({
+          filepath: file.filepath,
+          filename: path.basename(file.filepath),
+          contentType: file.mimetype || file.type,
+          baseDir: "systemDocs",
+        });
+      }
+
+      const type = getFileType(storedName);
       const document = await SystemDocument.create({
-        name: file.originalFilename,
+        name: storedName,
         type,
         tags: fields.tags ? fields.tags[0] : null,
         link: filePath,
@@ -484,15 +551,46 @@ export const updateDocument = async (event) => {
       await deleteLink(userDoc.link);
     } catch (_) {}
 
-    const newLink = await uploadTempFile({
-      filepath: newFile.filepath,
-      filename: path.basename(newFile.filepath),
-      contentType: newFile.mimetype || newFile.type,
-      baseDir: "documents",
-    });
+    const originalName = newFile.originalFilename || "document";
+    const ext = path.extname(originalName).toLowerCase();
+    let storedName = originalName;
+    let newLink;
+
+    if (ext === ".doc") {
+      try {
+        const converted = await convertDocToDocx({
+          filepath: newFile.filepath,
+          originalName,
+        });
+        storedName = converted.filename;
+        const storageName = `${path.parse(newFile.filepath).name}.docx`;
+        newLink = await uploadBufferFile({
+          data: converted.buffer,
+          filename: storageName,
+          contentType:
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          baseDir: "documents",
+        });
+      } catch (err) {
+        throw new Error(
+          "DOC conversion failed. Please ensure LibreOffice is installed on the server."
+        );
+      } finally {
+        try {
+          await fs.unlink(newFile.filepath);
+        } catch (_) {}
+      }
+    } else {
+      newLink = await uploadTempFile({
+        filepath: newFile.filepath,
+        filename: path.basename(newFile.filepath),
+        contentType: newFile.mimetype || newFile.type,
+        baseDir: "documents",
+      });
+    }
 
     // Update document link and touch updatedAt
-    await userDoc.update({ link: newLink, updatedAt: new Date() });
+    await userDoc.update({ link: newLink, name: storedName, updatedAt: new Date() });
 
     return success(userDoc);
   } catch (err) {
@@ -533,26 +631,30 @@ export const recentDocuments = async (event) => {
 };
 
 export const viewDocument = async (event) => {
-  const body = await readBody(event);
-  const { id } = parseJsonBody(body);
+  const method = event.node.req.method || "";
+  const payload = method === "GET" ? {} : parseJsonBody(await readBody(event));
+  const query = getQuery(event) || {};
+  const id = payload.id || query.id;
   try {
     const doc = await UserDocument.findByPk(id);
     if (!doc) throw createError({ message: "Document not found" });
     await doc.update({ lastViewedOn: new Date() });
-    return await sendS3Object(event, doc.link);
+    return await sendS3Object(event, doc.link, { filename: doc.name });
   } catch (err) {
     return error(500, err.message);
   }
 };
 
 export const viewSystemDocument = async (event) => {
-  const body = await readBody(event);
-  const { id } = parseJsonBody(body);
+  const method = event.node.req.method || "";
+  const payload = method === "GET" ? {} : parseJsonBody(await readBody(event));
+  const query = getQuery(event) || {};
+  const id = payload.id || query.id;
   try {
     const doc = await SystemDocument.findByPk(id);
     if (!doc) throw createError({ message: "Document not found" });
     await doc.update({ lastViewedOn: new Date() });
-    return await sendS3Object(event, doc.link);
+    return await sendS3Object(event, doc.link, { filename: doc.name });
   } catch (err) {
     return error(500, err.message);
   }
