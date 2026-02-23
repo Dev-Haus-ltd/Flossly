@@ -11,6 +11,7 @@ import { decrypt } from '../utils/crypto'
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from '../utils/whatsapp'
 import { resolveWhatsAppProviderConfig } from '../utils/whatsappProvider'
 import DB from '../utils/db'
+import { parseJsonBody } from "../utils/body";
 
 const parseDateValue = (value) => {
   if (!value) return null;
@@ -311,7 +312,7 @@ export const createLead = async (event) => {
   try {
     const logged = event.context.user
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const required = ['name', 'email', 'telephone']
     for (const k of required) if (!payload?.[k]) return error(400, `${k} is required`)
     const data = {
@@ -384,7 +385,7 @@ export const updateLead = async (event) => {
   try {
     const logged = event.context.user
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { id } = payload
     if (!id) return error(400, 'id required')
     const lead = await CrmLead.findOne({ where: { id, organisationId: Number(logged.orgId) } })
@@ -440,7 +441,7 @@ export const deleteLeads = async (event) => {
   try {
     const logged = event.context.user
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const ids = payload?.ids || []
     if (!ids.length) return error(400, 'ids required')
     await CrmLead.destroy({ where: { id: { [Op.in]: ids }, organisationId: Number(logged.orgId) } })
@@ -454,7 +455,7 @@ export const bulkUploadLeads = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const leads = payload?.leads || []
     if (!orgId) return error(401, 'Unauthenticated')
     if (!Array.isArray(leads) || !leads.length) return error(400, 'leads required')
@@ -610,7 +611,7 @@ export const bulkUploadAutomations = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const items = Array.isArray(payload?.items) ? payload.items : []
     if (!orgId) return error(401, 'Unauthenticated')
     if (!items.length) return error(400, 'items required')
@@ -795,7 +796,7 @@ export const addOption = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { category, name, color } = payload || {}
     if (!orgId) return error(401, 'Unauthenticated')
     if (!category || !name) return error(400, 'category and name required')
@@ -810,7 +811,7 @@ export const deleteOption = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { id } = payload || {}
     if (!orgId) return error(401, 'Unauthenticated')
     if (!id) return error(400, 'id required')
@@ -839,7 +840,7 @@ export const saveLeadCommunication = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { leadId } = payload || {}
     const preferredContactMethod = payload?.preferredContactMethod && CONTACT_METHODS.includes(payload.preferredContactMethod)
       ? payload.preferredContactMethod
@@ -877,7 +878,7 @@ export const getLeadTreatment = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const { leadId } = typeof body === 'string' ? JSON.parse(body) : body
+    const { leadId } = typeof body === 'string' ? parseJsonBody(body) : body
     if (!orgId) return error(401, 'Unauthenticated')
     if (!leadId) return error(400, 'leadId required')
     const row = await CrmLeadTreatment.findOne({ where: { organisationId: Number(orgId), leadId: Number(leadId) } })
@@ -891,7 +892,7 @@ export const saveLeadTreatment = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { leadId, data } = payload || {}
     if (!orgId) return error(401, 'Unauthenticated')
     if (!leadId) return error(400, 'leadId required')
@@ -917,7 +918,7 @@ export const deleteLeadTreatment = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const { leadId } = typeof body === 'string' ? JSON.parse(body) : body
+    const { leadId } = typeof body === 'string' ? parseJsonBody(body) : body
     if (!orgId) return error(401, 'Unauthenticated')
     if (!leadId) return error(400, 'leadId required')
     await CrmLeadTreatment.destroy({ where: { organisationId: Number(orgId), leadId: Number(leadId) } })
@@ -931,7 +932,7 @@ export const listLeadNotes = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const { leadId } = typeof body === 'string' ? JSON.parse(body) : body
+    const { leadId } = typeof body === 'string' ? parseJsonBody(body) : body
     if (!orgId) return error(401, 'Unauthenticated')
     if (!leadId) return error(400, 'leadId required')
     const rows = await CrmLeadNote.findAll({ where: { organisationId: Number(orgId), leadId: Number(leadId) }, order: [['createdAt', 'DESC']] })
@@ -945,7 +946,7 @@ export const listLeadWhatsAppLogs = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const { leadId, limit = 100 } = typeof body === 'string' ? JSON.parse(body) : body
+    const { leadId, limit = 100 } = typeof body === 'string' ? parseJsonBody(body) : body
     if (!orgId) return error(401, 'Unauthenticated')
     if (!leadId) return error(400, 'leadId required')
     const rows = await CrmWhatsAppMessageLog.findAll({
@@ -966,7 +967,7 @@ export const addLeadNote = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { leadId, title, date, time, channel, summary } = payload || {}
     if (!orgId) return error(401, 'Unauthenticated')
     for (const k of ['leadId', 'title', 'date', 'time', 'channel', 'summary']) if (!payload?.[k]) return error(400, `${k} is required`)
@@ -985,7 +986,7 @@ export const deleteLeadNote = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const { id } = typeof body === 'string' ? JSON.parse(body) : body
+    const { id } = typeof body === 'string' ? parseJsonBody(body) : body
     if (!orgId) return error(401, 'Unauthenticated')
     if (!id) return error(400, 'id required')
     await CrmLeadNote.destroy({ where: { id, organisationId: Number(orgId) } })
@@ -1035,7 +1036,7 @@ export const saveAutomationGroup = async (event) => {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { id, key, title, description, enabled } = payload || {}
 
     try { await CrmAutomationGroup.sync() } catch {}
@@ -1085,7 +1086,7 @@ export const deleteAutomationGroup = async (event) => {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { id, key } = payload || {}
     if (!id && !key) return error(400, 'id or key required')
 
@@ -1283,7 +1284,7 @@ export const saveAutomation = async (event) => {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const result = await applyAutomationSave({ orgId, payload })
     return success(result)
   } catch (e) {
@@ -1296,7 +1297,7 @@ export const saveAutomationBatch = async (event) => {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const items = Array.isArray(payload?.items) ? payload.items : []
     if (!items.length) return error(400, 'items required')
 
@@ -1323,7 +1324,7 @@ export const deleteAutomation = async (event) => {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const key = String(payload?.key || '').trim()
     if (!key) return error(400, 'Automation key required')
 
@@ -1354,7 +1355,7 @@ export const sendLeadMail = async (event) => {
     const { orgId, fullName } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { leadIds = [], subject, html, key } = payload || {}
     if (!subject || !html) return error(400, 'subject and html required')
     if (!Array.isArray(leadIds) || !leadIds.length) return error(400, 'leadIds required')
@@ -1396,7 +1397,7 @@ export const sendLeadWhatsApp = async (event) => {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { leadIds = [], template, message } = payload || {}
     if (!Array.isArray(leadIds) || !leadIds.length) return error(400, 'leadIds required')
     const messageText = String(message || '').trim()

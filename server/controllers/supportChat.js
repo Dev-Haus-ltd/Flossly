@@ -1,7 +1,4 @@
 import { Op } from "sequelize";
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
 import { readMultipartFormData } from 'h3';
 import { readBody, getQuery, setResponseStatus, readRawBody } from 'h3';
 import { $fetch } from 'ofetch';
@@ -16,16 +13,16 @@ import {
 import { isSupportAgent, getSupportAgentUserIds } from '../utils/supportAgents.js';
 import { sendNotificationToUser } from '../utils/fcmNotification.js';
 import { uploadBufferFile } from '../utils/storage.js';
+import { parseJsonBody } from '../utils/body';
 
 // Send FCM notification for new chatbot message
 const notifyNewMessage = async (conversationId, message, recipientUserId) => {
   try {
     if (!recipientUserId) return;
-    
-    // Determine notification title and body based on sender type
+
     let title = 'New Message';
     let body = message.message;
-    
+
     if (message.senderType === 'support' || message.senderType === 'admin') {
       title = 'Support Team replied';
       body = message.message?.substring(0, 100) || 'You have a new reply';
@@ -36,7 +33,7 @@ const notifyNewMessage = async (conversationId, message, recipientUserId) => {
       title = 'New User Message';
       body = message.message?.substring(0, 100) || 'New message received';
     }
-    
+
     await sendNotificationToUser({
       userId: recipientUserId,
       title,
@@ -60,17 +57,16 @@ const notifyNewMessage = async (conversationId, message, recipientUserId) => {
 const notifySupportAgents = async (conversationId, message, conversation) => {
   try {
     const supportAgentIds = await getSupportAgentUserIds();
-    
+
     if (!supportAgentIds || supportAgentIds.length === 0) {
       console.log('No support agents to notify');
       return;
     }
-    
+
     const userName = conversation.user?.fullName || 'A user';
     const title = `New Message from ${userName}`;
     const body = message.message?.substring(0, 100) || 'New message in support chat';
-    
-    // Send notification to each support agent
+
     for (const agentUserId of supportAgentIds) {
       await sendNotificationToUser({
         userId: agentUserId,
@@ -87,7 +83,7 @@ const notifySupportAgents = async (conversationId, message, conversation) => {
         priority: 'high'
       });
     }
-    
+
     console.log(`Notified ${supportAgentIds.length} support agents about new message`);
   } catch (error) {
     console.error('Error notifying support agents:', error);
@@ -98,16 +94,16 @@ const notifySupportAgents = async (conversationId, message, conversation) => {
 const notifyStatusUpdate = async (conversationId, status, recipientUserId) => {
   try {
     if (!recipientUserId) return;
-    
+
     const statusLabels = {
       'active': 'Submitted',
       'in-progress': 'In Progress',
       'resolved': 'Resolved',
       'closed': 'Closed'
     };
-    
+
     const statusLabel = statusLabels[status] || status;
-    
+
     await sendNotificationToUser({
       userId: recipientUserId,
       title: 'Conversation Status Updated',
@@ -332,7 +328,7 @@ export const updateConversationStatus = async (event) => {
     // If body is a string, parse it
     if (typeof body === 'string') {
       try {
-        body = JSON.parse(body);
+        body = parseJsonBody(body);
       } catch (e) {
         console.error('Failed to parse body:', e);
       }

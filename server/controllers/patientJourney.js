@@ -1,6 +1,7 @@
 import { DiaryPatient, PatientAutomationDictionary, PatientAutomationTemplate } from '../models'
 import { success, error } from '../utils/response'
 import { defaultTemplatesByGroup, defaultAutomationGroups, legacyAutomationGroupKeys } from '@shared/defaults/patientJourneyDefaults.js'
+import { parseJsonBody } from "../utils/body";
 
 const ensureDictionarySeed = async () => {
   await PatientAutomationDictionary.sync()
@@ -103,7 +104,7 @@ export const saveJourneyAutomationTemplate = async (event) => {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { key, groupKey, patientId, type = 'Email', name, sending, enabled, template, roleName } = payload || {}
     if (!key || !groupKey) return error(400, 'key and groupKey required')
     if (!patientId) return error(400, 'patientId required')
@@ -147,7 +148,7 @@ export const toggleJourneyAutomationGroup = async (event) => {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { groupKey, enabled, patientId } = payload || {}
     if (!groupKey || enabled === undefined) return error(400, 'groupKey and enabled required')
     if (!patientId) return error(400, 'patientId required')

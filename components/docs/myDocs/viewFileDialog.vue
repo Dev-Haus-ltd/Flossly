@@ -66,6 +66,10 @@ const isLoading = ref(false)
 const props = defineProps({
   modelValue: Boolean,
   doc: Object,
+  isSystem: {
+    type: Boolean,
+    default: false,
+  },
 })
 const emit = defineEmits(["update:modelValue", "onUpdate"])
 
@@ -82,9 +86,14 @@ watch(
     }
     isLoading.value = true
     const config = useRuntimeConfig()
-    
-    // For non-DOCX files, use iframe viewer
-    viewerUrl.value = buildAbsoluteLink(props.doc.link, config.public.BASE_URL)
+    const baseUrl = typeof window !== "undefined" && window.location?.origin
+      ? window.location.origin
+      : config.public?.BASE_URL
+    const path = props.isSystem
+      ? `/api/docs/viewSystemDoc?id=${props.doc?.id}`
+      : `/api/docs/view?id=${props.doc?.id}`
+    // For non-DOCX files, use iframe viewer via same-origin endpoint
+    viewerUrl.value = buildAbsoluteLink(path, baseUrl)
     isLoading.value = false
   }
 )

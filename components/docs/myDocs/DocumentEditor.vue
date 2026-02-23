@@ -28,6 +28,8 @@ const emit = defineEmits(['editor-ready', 'editor-error'])
 // Use ref to track the editor instance
 const editor = ref(null)
 const documentKey = ref(0)
+let pendingInit = null
+let isDestroyed = false
 
 // Method to export document as blob
 const exportDocument = async () => {
@@ -92,11 +94,29 @@ const destroyEditor = () => {
   }
 }
 
+const scheduleInit = (fn) => {
+  if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+    return window.requestIdleCallback(fn, { timeout: 1500 })
+  }
+  return window.setTimeout(fn, 0)
+}
+
+const cancelScheduledInit = () => {
+  if (!pendingInit) return
+  if (typeof window !== 'undefined' && typeof window.cancelIdleCallback === 'function') {
+    window.cancelIdleCallback(pendingInit)
+  } else {
+    clearTimeout(pendingInit)
+  }
+  pendingInit = null
+}
+
 // Function to initialize editor
 const initializeEditor = async () => {
   try {
     // Ensure cleanup of previous instance
     destroyEditor()
+    cancelScheduledInit()
     
     // Wait for next tick to ensure DOM is ready
     await nextTick()
@@ -105,25 +125,28 @@ const initializeEditor = async () => {
     if (!props.documentUrl) {
       return
     }
-    
+
     // Increment key to force re-render
     documentKey.value++
 
-    // Create new editor instance with document URL
-    editor.value = new SuperDoc({
-      selector: `#${editorId.value}`,
-      toolbar: `#${toolbarId.value}`,
-      document: props.documentUrl, // URL to the document file
-      documentMode: props.readOnly ? 'viewing' : 'editing',
-      pagination: true,
-      rulers: true,
-      onReady: (event) => {
-        console.log('SuperDoc is ready', event)
-        emit('editor-ready', editor.value)
-      },
-      onEditorCreate: (event) => {
-        console.log('Editor is created', event)
-      },
+    pendingInit = scheduleInit(() => {
+      if (isDestroyed) return
+      // Create new editor instance with document URL
+      editor.value = new SuperDoc({
+        selector: `#${editorId.value}`,
+        toolbar: `#${toolbarId.value}`,
+        document: props.documentUrl, // URL to the document file
+        documentMode: props.readOnly ? 'viewing' : 'editing',
+        pagination: false,
+        rulers: false,
+        onReady: (event) => {
+          console.log('SuperDoc is ready', event)
+          emit('editor-ready', editor.value)
+        },
+        onEditorCreate: (event) => {
+          console.log('Editor is created', event)
+        },
+      })
     })
   } catch (error) {
     console.error('Failed to initialize editor:', error)
@@ -153,10 +176,13 @@ watch(
 )
 
 onMounted(() => {
+  isDestroyed = false
   initializeEditor()
 })
 
 onUnmounted(() => {
+  isDestroyed = true
+  cancelScheduledInit()
   destroyEditor()
 })
 </script>

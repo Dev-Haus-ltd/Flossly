@@ -4,6 +4,7 @@ import { readBody } from "h3";
 import { createError } from "h3";
 import { Op } from "sequelize";
 import { success, error } from "../utils/response";
+import { parseJsonBody } from "../utils/body";
 
 // Keep the old success/error for existing functions
 const successOld = (data) => ({ code: 1, data });
@@ -228,7 +229,7 @@ export const getChatbotConfig = async (event) => {
 export const createAppointmentViaChatbot = async (event) => {
   try {
     const body = await readBody(event);
-    const payload = typeof body === 'string' ? JSON.parse(body) : body;
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body;
     
     // Validate botId
     const botValidation = await validateBotId(payload.botId);
@@ -492,7 +493,7 @@ export const createAppointmentViaChatbot = async (event) => {
 export const createLeadViaChatbot = async (event) => {
   try {
     const body = await readBody(event);
-    const payload = typeof body === 'string' ? JSON.parse(body) : body;
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body;
     
     // Validate botId
     const botValidation = await validateBotId(payload.botId);
