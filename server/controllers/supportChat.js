@@ -1,5 +1,7 @@
 import { Op } from "sequelize";
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { readMultipartFormData } from 'h3';
 import { readBody, getQuery, setResponseStatus, readRawBody } from 'h3';
 import { $fetch } from 'ofetch';
@@ -11,12 +13,118 @@ import {
   Organisation
 } from "../models/index.js";
 
-import { isSupportAgent } from '../utils/supportAgents.js';
+import { isSupportAgent, getSupportAgentUserIds } from '../utils/supportAgents.js';
+import { sendNotificationToUser } from '../utils/fcmNotification.js';
+import { uploadBufferFile } from '../utils/storage.js';
 
-const emitConversationMessage = (conversationId, payload) => {
-  const io = globalThis.__flossly_io__;
-  if (!io) return;
-  io.to(`conversation:${conversationId}`).emit('message:new', payload);
+// Send FCM notification for new chatbot message
+const notifyNewMessage = async (conversationId, message, recipientUserId) => {
+  try {
+    if (!recipientUserId) return;
+    
+    // Determine notification title and body based on sender type
+    let title = 'New Message';
+    let body = message.message;
+    
+    if (message.senderType === 'support' || message.senderType === 'admin') {
+      title = 'Support Team replied';
+      body = message.message?.substring(0, 100) || 'You have a new reply';
+    } else if (message.senderType === 'ai' || message.senderType === 'bot') {
+      title = 'Flossly Assistant';
+      body = message.message?.substring(0, 100) || 'You have a new response';
+    } else if (message.senderType === 'user') {
+      title = 'New User Message';
+      body = message.message?.substring(0, 100) || 'New message received';
+    }
+    
+    await sendNotificationToUser({
+      userId: recipientUserId,
+      title,
+      body,
+      type: 'chatbot_message',
+      referenceType: 'chatbot_conversation',
+      referenceId: conversationId,
+      data: {
+        conversationId: String(conversationId),
+        message: JSON.stringify(message),
+        url: '/support-chat'
+      },
+      priority: 'high'
+    });
+  } catch (error) {
+    console.error('Error sending chatbot message notification:', error);
+  }
+};
+
+// Send FCM notification to all support agents
+const notifySupportAgents = async (conversationId, message, conversation) => {
+  try {
+    const supportAgentIds = await getSupportAgentUserIds();
+    
+    if (!supportAgentIds || supportAgentIds.length === 0) {
+      console.log('No support agents to notify');
+      return;
+    }
+    
+    const userName = conversation.user?.fullName || 'A user';
+    const title = `New Message from ${userName}`;
+    const body = message.message?.substring(0, 100) || 'New message in support chat';
+    
+    // Send notification to each support agent
+    for (const agentUserId of supportAgentIds) {
+      await sendNotificationToUser({
+        userId: agentUserId,
+        title,
+        body,
+        type: 'chatbot_message',
+        referenceType: 'chatbot_conversation',
+        referenceId: conversationId,
+        data: {
+          conversationId: String(conversationId),
+          message: JSON.stringify(message),
+          url: '/support-chat'
+        },
+        priority: 'high'
+      });
+    }
+    
+    console.log(`Notified ${supportAgentIds.length} support agents about new message`);
+  } catch (error) {
+    console.error('Error notifying support agents:', error);
+  }
+};
+
+// Send FCM notification for conversation status update
+const notifyStatusUpdate = async (conversationId, status, recipientUserId) => {
+  try {
+    if (!recipientUserId) return;
+    
+    const statusLabels = {
+      'active': 'Submitted',
+      'in-progress': 'In Progress',
+      'resolved': 'Resolved',
+      'closed': 'Closed'
+    };
+    
+    const statusLabel = statusLabels[status] || status;
+    
+    await sendNotificationToUser({
+      userId: recipientUserId,
+      title: 'Conversation Status Updated',
+      body: `Your conversation status has been updated to: ${statusLabel}`,
+      type: 'chatbot_status_update',
+      referenceType: 'chatbot_conversation',
+      referenceId: conversationId,
+      data: {
+        conversationId: String(conversationId),
+        status: status,
+        url: '/support-chat'
+      },
+      priority: 'medium'
+    });
+  } catch (error) {
+    console.error('Error sending status update notification:', error);
+  }
 };
 
 // --------------------------
@@ -271,14 +379,8 @@ export const updateConversationStatus = async (event) => {
 
     await conversation.save();
 
-    // Emit socket event to notify user in real-time
-    const io = globalThis.__flossly_io__;
-    if (io) {
-      io.to(`conversation:${id}`).emit('conversation:status-updated', {
-        conversationId: id,
-        status: status
-      });
-    }
+    // Send FCM notification to user about status change
+    await notifyStatusUpdate(id, status, conversation.userId);
 
     return {
       success: true,
@@ -357,11 +459,15 @@ export const createMessage = async (event) => {
       isRead: false
     });
 
-    // Realtime push
-    emitConversationMessage(conversationId, {
-      conversationId,
-      message: newMessage.toJSON()
-    });
+    // Send FCM notification to the conversation participant
+    // If message is from support, notify the user. If from user, notify support agents.
+    if (senderType === 'support' || senderType === 'admin') {
+      // Notify the user who created the conversation
+      await notifyNewMessage(conversationId, newMessage.toJSON(), conversation.userId);
+    } else if (senderType === 'user') {
+      // Notify all support agents about the new user message
+      await notifySupportAgents(conversationId, newMessage.toJSON(), conversation);
+    }
 
     // Update conversation lastMessageAt
     conversation.lastMessageAt = new Date();
@@ -430,11 +536,8 @@ export const createMessage = async (event) => {
             isRead: false
           });
 
-          // Realtime push
-          emitConversationMessage(conversationId, {
-            conversationId,
-            message: botMessage.toJSON()
-          });
+          // Send FCM notification to user
+          await notifyNewMessage(conversationId, botMessage.toJSON(), conversation.userId);
 
           console.log('>>> Bot response message created:', botMessage.id);
           console.log('>>> Bot message text:', messageText);
@@ -453,11 +556,8 @@ export const createMessage = async (event) => {
           isRead: false
         });
 
-        // Realtime push
-        emitConversationMessage(conversationId, {
-          conversationId,
-          message: errMsg.toJSON()
-        });
+        // Send FCM notification to user
+        await notifyNewMessage(conversationId, errMsg.toJSON(), conversation.userId);
       }
     } else {
       console.log('>>> Webhook NOT triggered (condition not met)');
@@ -544,20 +644,10 @@ export const uploadAttachment = async (event) => {
       return { success: false, message: 'Message not found' };
     }
 
-    // Create uploads directory if it doesn't exist
-    const uploadsDir = 'public/chatbot-attachments';
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
-
     // Generate unique filename
     const originalName = fileData.filename || 'file';
     const fileExt = originalName.substring(originalName.lastIndexOf('.'));
     const uniqueFileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExt}`;
-    const filePath = `${uploadsDir}/${uniqueFileName}`;
-
-    // Write file to disk
-    fs.writeFileSync(filePath, fileData.data);
 
     // Determine file category
     const mimeType = fileData.type || 'application/octet-stream';
@@ -567,9 +657,13 @@ export const uploadAttachment = async (event) => {
     else if (mimeType.startsWith('audio/')) fileCategory = 'audio';
     else if (mimeType.includes('pdf') || mimeType.includes('document') || mimeType.includes('text')) fileCategory = 'document';
 
-    // Save to database
-    // Store path without 'public/' prefix since Nuxt serves public folder from root
-    const publicPath = `/${filePath.replace('public/', '')}`;
+    // Upload to S3 using the storage utility
+    const s3Path = await uploadBufferFile({
+      data: fileData.data,
+      filename: uniqueFileName,
+      contentType: mimeType,
+      baseDir: 'chatbot-attachments'
+    });
     
     const attachment = await ChatbotMessageAttachment.create({
       messageId: parseInt(messageId),
@@ -577,18 +671,25 @@ export const uploadAttachment = async (event) => {
       uploadedBy: user.userId,
       fileName: uniqueFileName,
       originalFileName: originalName,
-      filePath: publicPath,
+      filePath: s3Path,
       fileSize: fileData.data.length,
       mimeType: mimeType,
       fileExtension: fileExt,
       fileCategory: fileCategory
     });
 
-    // Emit socket event for real-time update
-    emitConversationMessage(conversationId, {
-      conversationId,
-      attachmentAdded: attachment.toJSON()
-    });
+    // Get conversation to notify user
+    const conversation = await ChatbotConversation.findByPk(conversationId);
+    if (conversation) {
+      // Send notification about new attachment
+      await notifyNewMessage(conversationId, {
+        id: attachment.id,
+        message: `📎 Attachment: ${attachment.originalFileName}`,
+        senderType: 'support',
+        createdAt: new Date(),
+        attachments: [attachment]
+      }, conversation.userId);
+    }
 
     setResponseStatus(event, 201);
     return {

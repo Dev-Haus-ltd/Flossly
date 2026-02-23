@@ -97,6 +97,8 @@
 <script setup>
 import { CommonLoader } from "#components";
 import { isAuthenticated } from "./lib/auth.js";
+import { useFCM } from '~/composables/useFCM';
+
 const authStore = useAuthStore();
 const { user, setUser } = useUser();
 const config = useRuntimeConfig();
@@ -105,11 +107,19 @@ const onboardingUiStorageKey = "flossly_onboarding_ui";
 const onboardingShownInSession = new Set();
 const DEFAULT_ONBOARDING_VIDEO_URL = "https://youtu.be/gEuICxXisnw?si=1L-7jdiwwnr_VpDC";
 
+// Initialize FCM for real-time notifications
+const { isSupported, isPermissionGranted, requestPermission } = useFCM();
 
-onMounted(() => {
+onMounted(async () => {
+  console.log('🔵 app.vue onMounted - client side');
   
   document.body.classList.add('app-loaded');
   
+  // Request notification permission on app load
+  if (process.client && isSupported.value && !isPermissionGranted.value) {
+    console.log('🔔 Requesting notification permission on app load');
+    await requestPermission();
+  }
   
   setTimeout(() => {
     const appLoader = document.getElementById('app-loader');
@@ -498,7 +508,8 @@ const showFloatingButtons = computed(() => {
 });
 
 const showChatbot = computed(() => {
-  return loggedIn.value && (route.name === "index" || route.path === "/");
+  const excludedRoutes = ["onboarding", "login", "signup"];
+  return loggedIn.value && !excludedRoutes.includes(route.name);
 });
 
 const handleCreateTask = () => {
