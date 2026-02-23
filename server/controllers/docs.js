@@ -11,11 +11,12 @@ import path from "path";
 import os from "os";
 import { sendS3Object } from "../utils/s3";
 import { uploadTempFile, deleteLink } from "../utils/storage";
+import { parseJsonBody } from "../utils/body";
 
 export const createFolder = async (event) => {
   const body = await readBody(event);
   const loggedUser = event.context.user;
-  const { name, color, description, parentId } = JSON.parse(body);
+  const { name, color, description, parentId } = parseJsonBody(body);
   if (!name) throw createError({ message: "Folder name required" });
   try {
     // If parentId is provided, validate depth (max 2 levels: root -> level 1 -> level 2)
@@ -44,7 +45,7 @@ export const createFolder = async (event) => {
 };
 export const createSystemFolder = async (event) => {
   const body = await readBody(event);
-  const { name, color, description } = JSON.parse(body);
+  const { name, color, description } = parseJsonBody(body);
   if (!name) throw createError({ message: "Folder name required" });
   try {
     const folder = await SystemDocumentFolder.create({
@@ -59,7 +60,7 @@ export const createSystemFolder = async (event) => {
 };
 export const updateFolder = async (event) => {
   const body = await readBody(event);
-  const { id, name, color, description } = JSON.parse(body);
+  const { id, name, color, description } = parseJsonBody(body);
   if (!id) throw createError({ message: "Folder id required" });
   try {
     const folder = await UserDocumentFolder.findByPk(id);
@@ -72,7 +73,7 @@ export const updateFolder = async (event) => {
 };
 export const deleteFolder = async (event) => {
   const body = await readBody(event);
-  const { id } = JSON.parse(body);
+  const { id } = parseJsonBody(body);
   const transaction = await DB.transaction();
   try {
     const folder = await UserDocumentFolder.findByPk(id);
@@ -180,7 +181,7 @@ export const listAllFolders = async (event) => {
 export const moveDocument = async (event) => {
   const body = await readBody(event);
   const loggedUser = event.context.user;
-  const { documentId, targetFolderId } = JSON.parse(body);
+  const { documentId, targetFolderId } = parseJsonBody(body);
 
   if (!documentId) {
     throw createError({ message: "Document ID is required" });
@@ -225,7 +226,7 @@ export const moveDocument = async (event) => {
 export const moveFolder = async (event) => {
   const body = await readBody(event);
   const loggedUser = event.context.user;
-  const { folderId, targetParentId } = JSON.parse(body);
+  const { folderId, targetParentId } = parseJsonBody(body);
 
   if (!folderId) {
     throw createError({ message: "Folder ID is required" });
@@ -291,7 +292,7 @@ export const moveFolder = async (event) => {
 export const listFolders = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);
-  const { parentId } = body ? JSON.parse(body) : {};
+  const { parentId } = body ? parseJsonBody(body) : {};
   try {
     const where = {
       userId: loggedUser.userId,
@@ -448,7 +449,7 @@ function getFileType(filename) {
 
 export const deleteDocument = async (event) => {
   const body = await readBody(event);
-  const { id } = JSON.parse(body);
+  const { id } = parseJsonBody(body);
   try {
     const doc = await UserDocument.findByPk(id);
     if (!doc) throw createError({ message: "Document not found" });
@@ -533,7 +534,7 @@ export const recentDocuments = async (event) => {
 
 export const viewDocument = async (event) => {
   const body = await readBody(event);
-  const { id } = JSON.parse(body);
+  const { id } = parseJsonBody(body);
   try {
     const doc = await UserDocument.findByPk(id);
     if (!doc) throw createError({ message: "Document not found" });
@@ -546,7 +547,7 @@ export const viewDocument = async (event) => {
 
 export const viewSystemDocument = async (event) => {
   const body = await readBody(event);
-  const { id } = JSON.parse(body);
+  const { id } = parseJsonBody(body);
   try {
     const doc = await SystemDocument.findByPk(id);
     if (!doc) throw createError({ message: "Document not found" });
@@ -560,7 +561,7 @@ export const viewSystemDocument = async (event) => {
 export const listDocuments = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);
-  const { folderId } = JSON.parse(body);
+  const { folderId } = parseJsonBody(body);
   const where = {
     organisationId: loggedUser.orgId,
     userId: loggedUser.userId,
@@ -589,7 +590,7 @@ export const listDocuments = async (event) => {
 
 export const listSystemDocuments = async (event) => {
   const body = await readBody(event);
-  const { folderId } = JSON.parse(body);
+  const { folderId } = parseJsonBody(body);
   const where = {};
   if (folderId) {
     where["folderId"] = folderId;

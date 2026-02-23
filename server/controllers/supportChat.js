@@ -12,6 +12,7 @@ import {
 } from "../models/index.js";
 
 import { isSupportAgent } from '../utils/supportAgents.js';
+import { parseJsonBody } from "../utils/body";
 
 const emitConversationMessage = (conversationId, payload) => {
   const io = globalThis.__flossly_io__;
@@ -224,7 +225,7 @@ export const updateConversationStatus = async (event) => {
     // If body is a string, parse it
     if (typeof body === 'string') {
       try {
-        body = JSON.parse(body);
+        body = parseJsonBody(body);
       } catch (e) {
         console.error('Failed to parse body:', e);
       }

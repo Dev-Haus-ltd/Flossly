@@ -12,6 +12,7 @@ import {
 import { Op } from "sequelize";
 import DB from "../utils/db";
 import { uploadBufferFile } from "../utils/storage";
+import { parseJsonBody } from "../utils/body";
 export const usersList = async (event) => {
   const loggedUser = event.context.user;
   let currentOrg = loggedUser.orgId;
@@ -183,7 +184,7 @@ export const userAcrossOrgs = async (event) => {
 export const updateUserPreferences = async (event) => {
   const body = await readBody(event);
 
-  const { userId, taskTableColumns } = JSON.parse(body);
+  const { userId, taskTableColumns } = parseJsonBody(body);
   if (!userId) {
     throw createError({ message: "userId required" });
   }
@@ -217,7 +218,7 @@ export const updateUserPreferences = async (event) => {
 
 export const userDetails = async (event) => {
   const body = await readBody(event);
-  const { id, organisationId } = JSON.parse(body);
+  const { id, organisationId } = parseJsonBody(body);
   const user = await User.findByPk(id);
   if (!user) throw createError({ message: "User not found" });
   try {
@@ -258,7 +259,7 @@ export const userDetails = async (event) => {
 export const updateContractDetails = async (event) => {
   const transaction = await DB.transaction();
   const body = await readBody(event);
-  const { details, userId, organisationId } = JSON.parse(body);
+  const { details, userId, organisationId } = parseJsonBody(body);
   try {
     if (!userId) {
       throw createError({
@@ -292,7 +293,7 @@ export const updateContractDetails = async (event) => {
 
 export const leaveHistory = async (event) => {
   const body = await readBody(event);
-  const { userId, organisationId } = JSON.parse(body);
+  const { userId, organisationId } = parseJsonBody(body);
   try {
     const entitlement = await UserLeaveEntitlement.findOne({
       where: { userId, organisationId },
@@ -326,7 +327,7 @@ export const leaveHistory = async (event) => {
 };
 export const updateBankDetails = async (event) => {
   const body = await readBody(event);
-  const { userId, account } = JSON.parse(body);
+  const { userId, account } = parseJsonBody(body);
   try {
     const bankDetails = await UserAccount.findOne({
       where: { userId },
@@ -475,7 +476,7 @@ export const applyLeave = async (event) => {
 export const updateLeaveStatus = async (event) => {
   const body = await readBody(event);
   try {
-    const { id, status } = JSON.parse(body);
+    const { id, status } = parseJsonBody(body);
     const leave = await UserLeaveHistory.findOne({ where: { id } });
     if (!leave) throw createError({ message: "No Leave found" });
     leave.status = status;
@@ -561,7 +562,7 @@ export const updateAllowedLeaves = async (event) => {
     allowedCompationateLeaves,
     allowedSickLeaves,
     allowedOtherLeaves,
-  } = JSON.parse(body);
+  } = parseJsonBody(body);
   try {
     let leaveEntitlement = await UserLeaveEntitlement.findOne({
       where: { userId, organisationId },
@@ -600,7 +601,7 @@ export const updateAllowedLeaves = async (event) => {
 
 export const deactivateUser = async (event) => {
   const body = await readBody(event);
-  const { userId, organisationId } = JSON.parse(body);
+  const { userId, organisationId } = parseJsonBody(body);
   const transaction = await DB.transaction();
   
   try {
@@ -637,7 +638,7 @@ export const deactivateUser = async (event) => {
 
 export const activateUser = async (event) => {
   const body = await readBody(event);
-  const { userId, organisationId } = JSON.parse(body);
+  const { userId, organisationId } = parseJsonBody(body);
   const transaction = await DB.transaction();
   
   try {
@@ -680,7 +681,7 @@ export const activateUser = async (event) => {
 
 export const deleteUser = async (event) => {
   const body = await readBody(event);
-  const { userId, organisationId } = JSON.parse(body);
+  const { userId, organisationId } = parseJsonBody(body);
   const transaction = await DB.transaction();
   
   try {

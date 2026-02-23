@@ -13,6 +13,7 @@ import {
 import DB from "../utils/db";
 import { sendFeedBack } from "../utils/emailNotifications";
 import bcrypt from "bcrypt";
+import { parseJsonBody } from "../utils/body";
 export const getPointHistory = async (event) => {
   try {
     const { userId } = event.context.user;
@@ -64,7 +65,7 @@ export const redeemLoyaltyPoints = async (event) => {
   try {
     const { userId } = event.context.user;
     const body = await readBody(event);
-    const { loyaltyPointId, deliveryDetails } = JSON.parse(body);
+    const { loyaltyPointId, deliveryDetails } = parseJsonBody(body);
 
     if (!deliveryDetails || !loyaltyPointId) {
       throw createError({
@@ -117,7 +118,7 @@ export const referPractice = async (event) => {
   const { userId } = event.context.user;
   const body = await readBody(event);
   const { practiceName, managerName, managerEmail, address, contact } =
-    JSON.parse(body);
+    parseJsonBody(body);
   
   // Trim and validate managerName
   const trimmedManagerName = managerName ? managerName.trim() : '';
@@ -240,7 +241,7 @@ export const referPractice = async (event) => {
 export const feedBack = async (event) => {
   const { userId } = event.context.user;
   const body = await readBody(event);
-  const { name, email, message } = JSON.parse(body);
+  const { name, email, message } = parseJsonBody(body);
   if (!message || !email || !name) {
     throw createError({ message: "Your message is required" });
   }
