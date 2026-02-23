@@ -50,10 +50,15 @@ export const getWhapiPartnerConfig = () => {
     config.WHAPI_PROJECT_ID ||
     process.env.WHAPI_PROJECT_ID ||
     "";
+  const channelMode =
+    config.WHAPI_CHANNEL_MODE ||
+    process.env.WHAPI_CHANNEL_MODE ||
+    "trial";
   return {
     managerBaseUrl: String(managerBaseUrl || "").trim() || "https://manager.whapi.cloud",
     partnerToken: String(partnerToken || "").trim() || null,
     projectId: String(projectId || "").trim() || null,
+    channelMode: String(channelMode || "").trim() || "trial",
   };
 };
 
@@ -64,17 +69,37 @@ export const resolveWhapiConfig = async (orgId) => {
   } catch {}
   if (orgId) {
     row = await WhapiChannelConfig.findOne({
-      where: { organisationId: Number(orgId), status: "Active" },
+      where: { organisationId: Number(orgId) },
       order: [["updatedAt", "DESC"]],
     });
   }
   if (row) {
     const token = decrypt(row.tokenEnc);
+    const status = String(row.status || "").trim().toLowerCase();
+    const hasIdentity = !!(row.phoneNumber || row.displayName);
+    const connected =
+      hasIdentity &&
+      status &&
+      !status.includes("loggedout") &&
+      !status.includes("disconnected") &&
+      !status.includes("stopped") &&
+      !status.includes("overdue") &&
+      !status.includes("pending") &&
+      !status.includes("created") &&
+      (status.includes("active") ||
+        status.includes("live") ||
+        status.includes("trial") ||
+        status.includes("launched") ||
+        status.includes("auth") ||
+        status.includes("authorized") ||
+        status.includes("qr"));
     const env = getWhapiEnvConfig();
     return {
       channelId: row.channelId,
       token,
       baseUrl: env.baseUrl,
+      status: row.status || null,
+      connected,
       source: "db",
       row,
     };
@@ -82,7 +107,15 @@ export const resolveWhapiConfig = async (orgId) => {
 
   const env = getWhapiEnvConfig();
   if (env.token) {
-    return { channelId: null, token: env.token, baseUrl: env.baseUrl, source: "env", row: null };
+    return {
+      channelId: null,
+      token: env.token,
+      baseUrl: env.baseUrl,
+      status: null,
+      connected: false,
+      source: "env",
+      row: null,
+    };
   }
 
   return null;
@@ -151,6 +184,8 @@ export const resolveWhatsAppProviderConfig = async (orgId) => {
       baseUrl: whapi?.baseUrl || "https://gate.whapi.cloud",
       token: whapi?.token || null,
       channelId: whapi?.channelId || null,
+      status: whapi?.status || null,
+      connected: !!whapi?.connected,
       supportsTemplates: false,
       requiresTemplateOutside24h: false,
     };

@@ -425,7 +425,11 @@
 
             <v-tabs-window-item value="whatsapp">
               <div class="pa-6">
-                <CustomerRelationManagementChatTimeline :lead-id="selectedLead?.id" />
+                <CustomerRelationManagementChatTimeline
+                  :lead-id="selectedLead?.id"
+                  :lead-name="displayLeadName"
+                  :lead-avatar="selectedLead?.photo"
+                />
               </div>
             </v-tabs-window-item>
 
@@ -433,7 +437,10 @@
               <div class="pa-6">
                 <CustomerRelationManagementAutomation
                   :lead-id="selectedLead?.id"
+                  :lead="selectedLead"
                   :include-defaults="true"
+                  :whatsapp-enabled="whatsappEnabled"
+                  :whatsapp-requires-templates="whatsappRequiresTemplates"
                 />
               </div>
             </v-tabs-window-item>
@@ -442,7 +449,10 @@
               <div class="pa-6">
                 <CustomerRelationManagementAutomation
                   :lead-id="selectedLead?.id"
+                  :lead="selectedLead"
                   :include-defaults="false"
+                  :whatsapp-enabled="whatsappEnabled"
+                  :whatsapp-requires-templates="whatsappRequiresTemplates"
                 />
               </div>
             </v-tabs-window-item>
@@ -457,6 +467,7 @@
 import { formatDateOnly } from "@/lib/dateFormatter";
 import { getLeadDisplayName } from "@/lib/normalizers/lead";
 import { crmAutomationDefaults } from '@shared/defaults/crmAutomationDefaults'
+import { useCrmStore } from '@/stores/crm'
 import CustomerRelationManagementChatTimeline from "@/components/customerRelationManagement/chatTimeline.vue";
 
 const props = defineProps({
@@ -466,6 +477,9 @@ const props = defineProps({
 const emit = defineEmits(['close','update:modelValue'])
 const onClose = () => { emit('update:modelValue', false); emit('close') }
 const tab = ref("lead-info");
+const crmStore = useCrmStore()
+const whatsappEnabled = ref(false)
+const whatsappRequiresTemplates = ref(true)
 const leadTitle = computed(() => {
   const lead = props.selectedLead || {};
   const name = String(displayLeadName.value || '').trim();
@@ -526,6 +540,35 @@ const extraAnswers = computed(() => {
       }
     })
     .filter((item) => item.key && !skip.has(item.key))
+})
+
+const loadWhatsAppAvailability = async () => {
+  try {
+    const res = await crmStore.getWhatsAppConfig()
+    if (res?.code === 0 && res.data) {
+      const provider = String(res.data.provider || '').toLowerCase()
+      const hasToken = Boolean(res.data.hasToken)
+      if (provider === 'whapi') {
+        const statusRes = await crmStore.getWhapiStatus()
+        const statusRaw = String(statusRes?.data?.status || '').toLowerCase()
+        const stopped = statusRaw === 'stopped' || statusRaw === 'blocked'
+        whatsappEnabled.value = Boolean(statusRes?.data?.connected) && !stopped
+        whatsappRequiresTemplates.value = false
+        return
+      }
+      if (provider === 'meta') {
+        whatsappEnabled.value = hasToken
+        whatsappRequiresTemplates.value = true
+        return
+      }
+    }
+  } catch {}
+  whatsappEnabled.value = false
+  whatsappRequiresTemplates.value = true
+}
+
+onMounted(() => {
+  loadWhatsAppAvailability()
 })
 const assignedUsers = computed(() => {
   const list = props.selectedLead?.assigned || [];
@@ -589,7 +632,6 @@ const truncateAutomationName = (name, max = 20) => {
   return `${safe.slice(0, Math.max(0, max - 3))}...`
 }
 
-const crmStore = useCrmStore();
 watch(
   () => props.selectedLead,
   async (lead) => {

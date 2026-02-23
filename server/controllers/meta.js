@@ -50,7 +50,6 @@ export const authStart = async (event) => {
     'leads_retrieval',
     'ads_read',
     'business_management',
-
   ].join(',')
 
   // ✅ FIX: Add auth_type=rerequest to force fresh login
@@ -81,9 +80,7 @@ export const authCallback = async (event) => {
     return sendRedirect(event, `/crm?error=${encodeURIComponent(msg)}`)
   }
 
-  if (!code) {
-    return sendRedirect(event, `/crm?error=${encodeURIComponent('Missing authorization code')}`)
-  }
+  if (!code) return sendRedirect(event, `/crm?error=${encodeURIComponent('Missing authorization code')}`)
   
   const stateCookie = getCookie(event, 'meta_oauth_state')
   if (!state || !stateCookie || state !== stateCookie) {
@@ -104,12 +101,12 @@ export const authCallback = async (event) => {
     }
   } catch (e) {
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
-    return sendRedirect(event, `/crm?error=${encodeURIComponent('Invalid state data')}`)
+    return sendRedirect(event, `/?error=${encodeURIComponent('Invalid state data')}`)
   }
 
   if (!userId || !orgId) {
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
-    return sendRedirect(event, `/crm?error=${encodeURIComponent('Missing user context in state')}`)
+    return sendRedirect(event, `/?error=${encodeURIComponent('Missing user context in state')}`)
   }
 
   try {
@@ -148,13 +145,12 @@ export const authCallback = async (event) => {
       await MetaPage.sync()
       await CrmLead.sync()
       await MetaUserToken.sync()
-    } catch (e) {
-      console.error('[META][AUTH] Table sync error:', e)
-    }
+    } catch (e) {}
 
     // Enforce one active org per page to avoid lead routing ambiguity
     const pageIds = pages.map((p) => p?.id).filter(Boolean)
     let conflictsById = new Set()
+    let conflictsByPage = new Map()
     if (pageIds.length) {
       const conflicts = await MetaPage.findAll({
         where: {
@@ -165,22 +161,37 @@ export const authCallback = async (event) => {
         include: [{ model: Organisation, as: 'organisation', attributes: ['id', 'name'] }],
       })
       if (conflicts.length) {
-        const names = conflicts
-          .map((c) => {
-            const pageName = c.pageName || c.pageId
-            const orgName = c.organisation?.name || `Org ${c.organisationId}`
-            return `${pageName} (Org: ${orgName})`
-          })
-          .join(', ')
-        setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
-        return sendRedirect(
-          event,
-          `/crm?error=${encodeURIComponent(
-            `Meta connection failed. The following page(s) are already connected to another organisation: ${names}`
-          )}`
-        )
+        conflictsById = new Set(conflicts.map((c) => String(c.pageId)))
+        conflicts.forEach((c) => {
+          const orgName = c.organisation?.name || `Org ${c.organisationId}`
+          conflictsByPage.set(String(c.pageId), orgName)
+        })
       }
     }
+
+    const pagesToConnect = pages.filter(
+      (p) => p?.id && p?.access_token && !conflictsById.has(String(p.id))
+    )
+
+
+    if (!pagesToConnect.length) {
+      const conflictNames = pages
+        .filter((p) => p?.id && conflictsById.has(String(p.id)))
+        .map((p) => {
+          const orgName = conflictsByPage.get(String(p.id))
+          const pageName = p.name || p.id
+          return orgName ? `${pageName} (Org: ${orgName})` : pageName
+        })
+        .join(', ')
+      setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
+      return sendRedirect(
+        event,
+        `/?error=${encodeURIComponent(
+          `Meta connection failed. The following page(s) are already connected to another organisation: ${conflictNames}`
+        )}`
+      )
+    }
+
     // ✅ FIX: Store user token with Facebook user ID for tracking
     const encUser = encrypt(userToken)
     const expiresIn = Number(longResp?.expires_in || 0)
@@ -246,21 +257,19 @@ export const authCallback = async (event) => {
           }).toString(),
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         })
-      } catch (e) {
-        console.error(`[META][AUTH] Failed to subscribe page ${p.id}:`, e)
-      }
+      } catch (e) {}
     }
 
     // Clear state cookie
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
     
     // ✅ FIX: Better success redirect with details
-    return sendRedirect(event, `/crm?meta=connected&pages=${pagesToConnect.length}&user=${encodeURIComponent(fbUserName)}`)
+    return sendRedirect(event, `/?meta=connected&pages=${pagesToConnect.length}&user=${encodeURIComponent(fbUserName)}`)
 
   } catch (e) {
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
     const errorMsg = e?.data?.error?.message || e?.message || 'Connection failed'
-    return sendRedirect(event, `/crm?error=${encodeURIComponent(errorMsg)}`)
+    return sendRedirect(event, `/?error=${encodeURIComponent(errorMsg)}`)
   }
 }
 
@@ -693,9 +702,7 @@ export const subscribePages = async (event) => {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       })
       subscribed++
-    } catch (e) {
-      console.error(`[META] Failed to subscribe page ${mp.pageId}:`, e)
-    }
+    } catch (e) {}
   }
   return success({ subscribed })
 }
@@ -806,6 +813,7 @@ export const healthCheck = async (event) => {
       tokenPresent,
       subscribed,
       appMatched,
+      connectedAt: page.connectedAt || page.updatedAt || page.createdAt || null,
       leadCount: leadStatsByPage.get(String(pageId))?.leadCount || 0,
       lastLeadAt: leadStatsByPage.get(String(pageId))?.lastLeadAt || null,
       error: errorMsg,
@@ -917,9 +925,7 @@ export const webhook = async (event) => {
           }
         }
       }
-    } catch (e) {
-      console.error('[META][WEBHOOK] Processing error:', e)
-    }
+    } catch (e) {}
     
     return success({ received: true })
   }
@@ -1146,17 +1152,13 @@ export const listBusinessPortfolios = async (event) => {
           `https://graph.facebook.com/${META_VERSION}/${biz.id}/owned_pages?fields=id,name&limit=200`,
           userToken
         )
-      } catch (e) {
-        console.error(`[META] Failed to load owned pages for business ${biz.id}:`, e)
-      }
+      } catch (e) {}
       try {
         clientPages = await fetchAllMetaPages(
           `https://graph.facebook.com/${META_VERSION}/${biz.id}/client_pages?fields=id,name&limit=200`,
           userToken
         )
-      } catch (e) {
-        console.error(`[META] Failed to load client pages for business ${biz.id}:`, e)
-      }
+      } catch (e) {}
 
       const mapPages = (pages, source) =>
         (pages || [])
@@ -1179,7 +1181,6 @@ export const listBusinessPortfolios = async (event) => {
 
     return success({ businesses: mapped })
   } catch (e) {
-    console.error('[META] Failed to list business portfolios:', e)
     const msg = e?.data?.error?.message || e?.message || 'Failed to load business portfolios'
     return error(400, msg)
   }
@@ -1258,14 +1259,10 @@ export const connectBusinessPages = async (event) => {
           }).toString(),
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         })
-      } catch (e) {
-        console.error(`[META][BUSINESS] Failed to subscribe page ${pageId}:`, e)
-      }
+      } catch (e) {}
 
       connected++
-    } catch (e) {
-      console.error(`[META][BUSINESS] Failed to connect page ${pageId}:`, e)
-    }
+    } catch (e) {}
   }
 
   return success({ connected })

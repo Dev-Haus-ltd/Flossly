@@ -62,6 +62,37 @@
               </div>
             </div>
 
+            <div class="meta-health-permissions">
+              <div class="meta-health-table-head">
+                <div class="table-title">Token Permissions</div>
+                <div class="table-hint">Granted or declined permissions for this Meta connection</div>
+              </div>
+              <v-alert
+                v-if="data?.permissionsError"
+                type="warning"
+                variant="tonal"
+                class="mb-3"
+              >
+                {{ data.permissionsError }}
+              </v-alert>
+              <div v-else-if="(data?.permissions || []).length" class="permission-chips">
+                <v-chip
+                  v-for="perm in data.permissions"
+                  :key="perm?.permission || perm?.name || perm?.key || perm?.id || perm"
+                  size="x-small"
+                  :color="(perm?.status || '').toLowerCase() === 'granted' ? 'success' : 'warning'"
+                  label
+                  variant="tonal"
+                >
+                  {{ perm?.permission || perm?.name || perm?.key || perm }}
+                  <span v-if="perm?.status">: {{ perm.status }}</span>
+                </v-chip>
+              </div>
+              <div v-else class="text-caption text-medium-emphasis">
+                No permissions data available.
+              </div>
+            </div>
+
             <div class="meta-health-table-wrap">
               <div class="meta-health-table-head">
                 <div class="table-title">Pages</div>
@@ -76,6 +107,7 @@
                       <th>Token</th>
                       <th>Subscribed</th>
                       <th>App Match</th>
+                      <th>Connected At</th>
                       <th>Leads</th>
                       <th>Last Lead</th>
                       <th>Error</th>
@@ -108,12 +140,13 @@
                           {{ row.appMatched ? 'Yes' : 'No' }}
                         </v-chip>
                       </td>
+                      <td class="text-nowrap">{{ formatMetaLeadDate(row.connectedAt) }}</td>
                       <td class="text-center">{{ row.leadCount || 0 }}</td>
                       <td class="text-nowrap">{{ formatMetaLeadDate(row.lastLeadAt) }}</td>
                       <td class="error-cell">{{ row.error || '—' }}</td>
                     </tr>
                     <tr v-if="!(data?.pages || []).length">
-                      <td colspan="8" class="text-center py-6 text-medium-emphasis">No pages found.</td>
+                      <td colspan="9" class="text-center py-6 text-medium-emphasis">No pages found.</td>
                     </tr>
                   </tbody>
                 </v-table>
@@ -254,6 +287,16 @@ const formatMetaLeadDate = (value) => {
   border-radius: 12px;
   overflow: hidden;
   background: #fff;
+}
+
+.meta-health-permissions {
+  margin-bottom: 16px;
+}
+
+.permission-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .meta-health-table-head {

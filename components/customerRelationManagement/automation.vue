@@ -13,9 +13,14 @@
             :count="card.itemCount"
             :enabled="card.enabled"
             :author="card.author"
+            :show-toggle="props.showCardToggle"
+            :show-actions="props.allowGroupEdit"
+            :disable-actions="card.isDefault"
             :selected="activeAutomation?.key === card.key"
             @select="selectAutomation(card)"
             @toggle="(val) => toggleAutomationGroup(card, val)"
+            @edit="() => emit('edit-group', card)"
+            @delete="() => emit('delete-group', card)"
           />
         </div>
       </div>
@@ -40,6 +45,14 @@
           </div>
         </div>
       </div>
+      <v-alert
+        type="info"
+        variant="tonal"
+        class="mb-3"
+        density="compact"
+      >
+        Please review and tailor automation content (placeholders, pricing, dates, and policies) before enabling. You are responsible for the final message details.
+      </v-alert>
       <!-- Header Toolbar -->
       <div class="d-flex flex-wrap justify-space-between align-center mb-3 automation-toolbar">
         <div class="d-flex align-center gap-2">
@@ -138,25 +151,38 @@
 
           <!-- Sending/Trigger Column -->
           <template #item.sending="{ item }">
-            <div class="d-flex align-center">
-              <v-icon size="16" color="grey-darken-1" class="mr-2">mdi-clock-outline</v-icon>
-              <span class="text-body-2 text-medium-emphasis">{{ item.sending }}</span>
+            <div class="d-flex align-center justify-space-between trigger-cell">
+              <div class="d-flex align-center">
+                <v-icon size="16" color="grey-darken-1" class="mr-2">mdi-clock-outline</v-icon>
+                <span class="text-body-2 text-medium-emphasis">{{ item.sending }}</span>
+              </div>
+              <v-btn
+                icon
+                variant="text"
+                size="x-small"
+                class="action-icon-btn"
+                aria-label="Edit trigger"
+                @click="openTriggerEditor(item)"
+              >
+                <v-icon size="16">mdi-pencil-outline</v-icon>
+              </v-btn>
             </div>
           </template>
 
           <!-- Actions Column -->
           <template #item.actions="{ item }">
             <div class="d-flex align-center justify-center gap-2">
-                <v-btn
-                  icon
-                  variant="text"
-                  size="small"
-                  class="action-icon-btn"
-                  aria-label="Preview email"
-                  @click="openPreview(item)"
-                >
-                  <v-icon size="18">mdi-eye-outline</v-icon>
-                </v-btn>
+              <v-btn
+                v-if="props.showPreviewAction"
+                icon
+                variant="text"
+                size="small"
+                class="action-icon-btn"
+                aria-label="Preview automation"
+                @click="openPreview(item)"
+              >
+                <v-icon size="18">mdi-eye-outline</v-icon>
+              </v-btn>
               <v-btn
                 icon
                 variant="text"
@@ -166,6 +192,17 @@
                 @click="openEdit(item)"
               >
                 <v-icon size="18">mdi-pencil-outline</v-icon>
+              </v-btn>
+              <v-btn
+                icon
+                variant="text"
+                size="small"
+                class="action-icon-btn"
+                aria-label="Delete automation"
+                :disabled="defaultAutomationKeySet.has(item.key)"
+                @click="confirmDeleteAutomation(item)"
+              >
+                <v-icon size="18">mdi-delete-outline</v-icon>
               </v-btn>
             </div>
           </template>
@@ -287,6 +324,14 @@
               </v-menu>
             </div>
           </div>
+          <v-alert
+            type="info"
+            variant="tonal"
+            class="mb-3"
+            density="compact"
+          >
+            Please review and tailor automation content (placeholders, pricing, dates, and policies) before enabling. You are responsible for the final message details.
+          </v-alert>
 
           <v-card class="with-border rounded-lg elevation-0">
             <v-divider />
@@ -317,20 +362,33 @@
               </template>
 
               <template #item.sending="{ item }">
-                <div class="d-flex align-center">
-                  <v-icon size="16" color="grey-darken-1" class="mr-2">mdi-clock-outline</v-icon>
-                  <span class="text-body-2 text-medium-emphasis">{{ item.sending }}</span>
+                <div class="d-flex align-center justify-space-between trigger-cell">
+                  <div class="d-flex align-center">
+                    <v-icon size="16" color="grey-darken-1" class="mr-2">mdi-clock-outline</v-icon>
+                    <span class="text-body-2 text-medium-emphasis">{{ item.sending }}</span>
+                  </div>
+                  <v-btn
+                    icon
+                    variant="text"
+                    size="x-small"
+                    class="action-icon-btn"
+                    aria-label="Edit trigger"
+                    @click="openTriggerEditor(item)"
+                  >
+                    <v-icon size="16">mdi-pencil-outline</v-icon>
+                  </v-btn>
                 </div>
               </template>
 
               <template #item.actions="{ item }">
                 <div class="d-flex align-center justify-center gap-2">
                   <v-btn
+                    v-if="props.showPreviewAction"
                     icon
                     variant="text"
                     size="small"
                     class="action-icon-btn"
-                    aria-label="Preview email"
+                    aria-label="Preview automation"
                     @click="openPreview(item)"
                   >
                     <v-icon size="18">mdi-eye-outline</v-icon>
@@ -344,6 +402,17 @@
                     @click="openEdit(item)"
                   >
                     <v-icon size="18">mdi-pencil-outline</v-icon>
+                  </v-btn>
+                  <v-btn
+                    icon
+                    variant="text"
+                    size="small"
+                    class="action-icon-btn"
+                    aria-label="Delete automation"
+                    :disabled="defaultAutomationKeySet.has(item.key)"
+                    @click="confirmDeleteAutomation(item)"
+                  >
+                    <v-icon size="18">mdi-delete-outline</v-icon>
                   </v-btn>
                 </div>
               </template>
@@ -377,12 +446,16 @@
       </v-card>
     </v-dialog>
 
-    <!-- Email Preview Modal -->
-    <v-dialog v-model="showPreview" max-width="980px">
-      <v-card class="rounded-lg elevation-8">
+    <v-dialog v-model="showPreview" max-width="980px" :retain-focus="false">
+      <v-card class="rounded-lg elevation-8 preview-card">
         <div class="modal-header preview-modal-header">
-          <div class="text-subtitle-2 font-weight-bold">
-            {{ previewIsWhatsApp ? 'WhatsApp Preview' : 'Email Preview' }}
+          <div>
+            <div class="text-subtitle-1 font-weight-bold">
+              {{ previewTitle || 'Preview' }}
+            </div>
+            <div class="text-caption text-medium-emphasis">
+              {{ previewIsWhatsApp ? 'WhatsApp Preview' : 'Email Preview' }}
+            </div>
           </div>
           <v-btn icon variant="text" @click="showPreview = false">
             <v-icon>mdi-close</v-icon>
@@ -396,12 +469,173 @@
             <div class="whatsapp-preview__bubble">{{ previewWhatsAppText }}</div>
           </div>
           <div v-else class="email-preview-frame">
+            <div class="email-preview-meta">
+              <div class="text-caption text-medium-emphasis">Subject</div>
+              <div class="text-body-1 font-weight-medium">{{ previewSubject }}</div>
+            </div>
             <iframe
               title="Email preview"
               :srcdoc="emailPreviewHtml"
               class="email-preview-iframe"
             ></iframe>
           </div>
+        </div>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="showDeleteAutomation" max-width="480px">
+      <v-card class="rounded-lg elevation-8 pa-4">
+        <div class="d-flex align-center justify-space-between mb-2">
+          <h5 class="modal-title">Delete Automation</h5>
+          <v-btn icon variant="text" @click="showDeleteAutomation = false">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </div>
+        <p class="text-body-2 mb-4">
+          Are you sure you want to delete
+          <strong>{{ deleteAutomationTarget?.name || 'this automation' }}</strong>?
+          This cannot be undone.
+        </p>
+        <div class="d-flex justify-end gap-2">
+          <v-btn variant="text" @click="showDeleteAutomation = false">Cancel</v-btn>
+          <v-btn
+            color="error"
+            variant="flat"
+            :loading="deletingAutomation"
+            @click="deleteAutomationNow"
+          >
+            Delete
+          </v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="showTriggerDialog" max-width="720px">
+      <v-card class="rounded-lg elevation-8">
+        <div class="modal-header">
+          <div>
+            <h5 class="modal-title">Edit Trigger</h5>
+            <div class="text-caption text-medium-emphasis">
+              {{ triggerPreviewText }}
+            </div>
+          </div>
+          <v-btn icon variant="text" @click="closeTriggerDialog">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </div>
+
+        <v-divider />
+
+        <div class="modal-body">
+          <v-row>
+            <v-col cols="12" md="6">
+              <label class="mb-1 fld-lbl">Trigger Type</label>
+              <v-select
+                v-model="triggerForm.triggerType"
+                :items="triggerTypes"
+                item-title="label"
+                item-value="value"
+                variant="solo"
+                density="compact"
+                class="mb-1 input-bordered"
+                flat
+              />
+            </v-col>
+
+            <v-col
+              cols="12"
+              md="6"
+              v-if="triggerForm.triggerType !== 'black_friday' && triggerForm.triggerType !== 'month_day' && triggerForm.triggerType !== 'weekday_of_month'"
+            >
+              <label class="mb-1 fld-lbl">Days Offset</label>
+              <v-text-field
+                v-model="triggerForm.triggerDays"
+                type="number"
+                min="0"
+                variant="solo"
+                density="compact"
+                class="mb-1 input-bordered"
+                flat
+              />
+            </v-col>
+
+            <v-col cols="12" md="6" v-if="triggerForm.triggerType === 'black_friday' || triggerForm.triggerType === 'month_day' || triggerForm.triggerType === 'weekday_of_month'">
+              <label class="mb-1 fld-lbl">Offset Days (before/after)</label>
+              <v-text-field
+                v-model="triggerForm.triggerOffsetDays"
+                type="number"
+                variant="solo"
+                density="compact"
+                class="mb-1 input-bordered"
+                flat
+              />
+            </v-col>
+
+            <v-col cols="12" md="6" v-if="triggerForm.triggerType === 'month_day' || triggerForm.triggerType === 'weekday_of_month'">
+              <label class="mb-1 fld-lbl">Month (1-12)</label>
+              <v-text-field
+                v-model="triggerForm.triggerMonth"
+                type="number"
+                min="1"
+                max="12"
+                variant="solo"
+                density="compact"
+                class="mb-1 input-bordered"
+                flat
+              />
+            </v-col>
+
+            <v-col cols="12" md="6" v-if="triggerForm.triggerType === 'month_day'">
+              <label class="mb-1 fld-lbl">Day of Month</label>
+              <v-text-field
+                v-model="triggerForm.triggerDay"
+                type="number"
+                min="1"
+                max="31"
+                variant="solo"
+                density="compact"
+                class="mb-1 input-bordered"
+                flat
+              />
+            </v-col>
+
+            <v-col cols="12" md="6" v-if="triggerForm.triggerType === 'weekday_of_month'">
+              <label class="mb-1 fld-lbl">Weekday</label>
+              <v-select
+                v-model="triggerForm.triggerWeekday"
+                :items="weekdayOptions"
+                item-title="label"
+                item-value="value"
+                variant="solo"
+                density="compact"
+                class="mb-1 input-bordered"
+                flat
+              />
+            </v-col>
+
+            <v-col cols="12" md="6" v-if="triggerForm.triggerType === 'weekday_of_month'">
+              <label class="mb-1 fld-lbl">Week in Month</label>
+              <v-select
+                v-model="triggerForm.triggerWeekIndex"
+                :items="weekIndexOptions"
+                item-title="label"
+                item-value="value"
+                variant="solo"
+                density="compact"
+                class="mb-1 input-bordered"
+                flat
+              />
+            </v-col>
+          </v-row>
+        </div>
+
+        <v-divider />
+
+        <div class="modal-footer">
+          <v-btn variant="text" @click="closeTriggerDialog">Cancel</v-btn>
+          <v-btn color="primary" variant="flat" :loading="triggerSaving" @click="saveTrigger">
+            Save Trigger
+          </v-btn>
         </div>
       </v-card>
     </v-dialog>
@@ -433,19 +667,6 @@
         <v-divider />
 
         <div class="modal-body">
-          <!-- Recipient Preview -->
-          <div class="recipient-section">
-            <div class="d-flex align-center justify-space-between mb-3">
-              <div class="text-subtitle-2 font-weight-bold text-grey-darken-2">
-                <v-icon size="18" class="mr-2">mdi-account-outline</v-icon>
-                Preview Recipient
-              </div>
-              <v-chip size="small" variant="outlined" class="font-mono">
-                {{ sampleRecipient.name }} &lt;{{ sampleRecipient.email }}&gt;
-              </v-chip>
-            </div>
-          </div>
-
           <!-- Editor Section -->
           <div class="editor-section">
             <div class="d-flex align-center justify-space-between mb-3">
@@ -477,43 +698,48 @@
                 <v-icon size="18" class="mr-2">mdi-whatsapp</v-icon>
                 WhatsApp Template
               </div>
-              <v-combobox
-                v-model="active.whatsappTemplateName"
-                :items="whatsappTemplateNameOptions"
-                variant="solo"
-                density="compact"
-                hide-details
-                bg-color="#FFFFFF"
-                flat
-                placeholder="Approved template name (e.g. hello_world)"
-                class="mb-2"
-                clearable
-              />
-              <v-combobox
-                v-model="active.whatsappTemplateLanguage"
-                :items="whatsappTemplateLanguageOptions"
-                variant="solo"
-                density="compact"
-                hide-details
-                bg-color="#FFFFFF"
-                flat
-                placeholder="Language code (e.g. en_US)"
-                clearable
-              />
-              <div class="text-caption text-medium-emphasis mt-2">
-                Templates must be approved in Meta. The message body below is for preview and variable mapping only.
-              </div>
-              <div v-if="whatsappTemplatePreviewLines" class="mt-3">
-                <div class="text-subtitle-2 text-grey-darken-2 mb-2">
-                  Template Preview
+              <template v-if="props.whatsappRequiresTemplates">
+                <v-combobox
+                  v-model="active.whatsappTemplateName"
+                  :items="whatsappTemplateNameOptions"
+                  variant="solo"
+                  density="compact"
+                  hide-details
+                  bg-color="#FFFFFF"
+                  flat
+                  placeholder="Approved template name (e.g. hello_world)"
+                  class="mb-2"
+                  clearable
+                />
+                <v-combobox
+                  v-model="active.whatsappTemplateLanguage"
+                  :items="whatsappTemplateLanguageOptions"
+                  variant="solo"
+                  density="compact"
+                  hide-details
+                  bg-color="#FFFFFF"
+                  flat
+                  placeholder="Language code (e.g. en_US)"
+                  clearable
+                />
+                <div class="text-caption text-medium-emphasis mt-2">
+                  Templates must be approved in Meta. The message body below is for preview and variable mapping only.
                 </div>
-                <div class="whatsapp-preview">
-                  <div class="whatsapp-preview__bubble">
-                    <div v-for="(line, i) in whatsappTemplatePreviewLines" :key="`wa-tpl-prev-${i}`">
-                      {{ line }}
+                <div v-if="whatsappTemplatePreviewLines" class="mt-3">
+                  <div class="text-subtitle-2 text-grey-darken-2 mb-2">
+                    Template Preview
+                  </div>
+                  <div class="whatsapp-preview">
+                    <div class="whatsapp-preview__bubble">
+                      <div v-for="(line, i) in whatsappTemplatePreviewLines" :key="`wa-tpl-prev-${i}`">
+                        {{ line }}
+                      </div>
                     </div>
                   </div>
                 </div>
+              </template>
+              <div v-else class="text-caption text-medium-emphasis mt-2">
+                Templates are not required for Whapi. The message body below will be sent as free text.
               </div>
             </div>
             <div ref="editorEl" class="editor"></div>
@@ -543,6 +769,8 @@
 
 <script setup>
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
+import { formatCrmTriggerPreview } from '@/lib/misc'
+import emailLogo from '@/assets/emails/email-logo.png'
 import AutomationCard from '@/components/patients/automationCard.vue'
 import { getTemplateParamExamples, buildTemplatePreviewLines } from '@/lib/whatsappTemplatePreview'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults'
@@ -552,15 +780,20 @@ import { isDefaultAutomationGroup, resolveAutomationGroupAuthor } from '@/lib/cr
 
 const props = defineProps({
   leadId: { type: [Number, String], default: null },
+  lead: { type: Object, default: null },
   displayMode: { type: String, default: 'inline' },
   groups: { type: Array, default: null },
   useGroupsApi: { type: Boolean, default: true },
   includeDefaults: { type: Boolean, default: false },
   whatsappEnabled: { type: Boolean, default: true },
+  whatsappRequiresTemplates: { type: Boolean, default: true },
+  showCardToggle: { type: Boolean, default: true },
+  allowGroupEdit: { type: Boolean, default: false },
+  showPreviewAction: { type: Boolean, default: true },
 })
 const crmStore = useCrmStore()
 const orgStore = useOrgStore()
-const emit = defineEmits(['update:rows','save'])
+const emit = defineEmits(['update:rows','save','edit-group','delete-group'])
 
 // Table state
 const rows = reactive([])
@@ -583,6 +816,32 @@ const tableHeaders = [
   { title: 'Trigger', key: 'sending', sortable: false },
   { title: 'Actions', key: 'actions', sortable: false, align: 'center' },
   { title: 'Status', key: 'enabled', sortable: false, align: 'center' },
+]
+
+const triggerTypes = [
+  { label: 'After enquiry', value: 'inquiry_days' },
+  { label: 'Birthday offset', value: 'birthday_offset' },
+  { label: 'Black Friday', value: 'black_friday' },
+  { label: 'Fixed date (annual)', value: 'month_day' },
+  { label: 'Nth weekday (annual)', value: 'weekday_of_month' },
+]
+
+const weekdayOptions = [
+  { label: 'Sunday', value: 0 },
+  { label: 'Monday', value: 1 },
+  { label: 'Tuesday', value: 2 },
+  { label: 'Wednesday', value: 3 },
+  { label: 'Thursday', value: 4 },
+  { label: 'Friday', value: 5 },
+  { label: 'Saturday', value: 6 },
+]
+
+const weekIndexOptions = [
+  { label: '1st', value: 1 },
+  { label: '2nd', value: 2 },
+  { label: '3rd', value: 3 },
+  { label: '4th', value: 4 },
+  { label: '5th', value: 5 },
 ]
 
 const activeFilters = computed(() => {
@@ -647,6 +906,7 @@ const automationCards = computed(() => {
       itemCount: groupRows.length,
       enabled: groupRows.some(r => r.enabled),
       author: resolveGroupAuthor(group),
+      isDefault: isDefaultGroup(group),
     }
   })
 })
@@ -667,6 +927,75 @@ const clearAutomationSelection = () => {
   showGroupDialog.value = false
 }
 
+const showTriggerDialog = ref(false)
+const triggerSaving = ref(false)
+const triggerEditingRow = ref(null)
+const triggerForm = reactive({
+  triggerType: 'inquiry_days',
+  triggerDays: 0,
+  triggerOffsetDays: 0,
+  triggerMonth: 1,
+  triggerDay: 1,
+  triggerWeekday: 1,
+  triggerWeekIndex: 1,
+})
+
+const sanitizeNumber = (value, fallback = 0) => {
+  const num = Number(value)
+  return Number.isFinite(num) ? num : fallback
+}
+
+const buildTriggerFromForm = () => {
+  const triggerType = triggerForm.triggerType
+  if (triggerType === 'black_friday') {
+    return { type: 'black_friday', offsetDays: sanitizeNumber(triggerForm.triggerOffsetDays, 0) }
+  }
+  if (triggerType === 'month_day') {
+    return {
+      type: 'month_day',
+      month: sanitizeNumber(triggerForm.triggerMonth, 1),
+      day: sanitizeNumber(triggerForm.triggerDay, 1),
+      offsetDays: sanitizeNumber(triggerForm.triggerOffsetDays, 0),
+    }
+  }
+  if (triggerType === 'weekday_of_month') {
+    return {
+      type: 'weekday_of_month',
+      month: sanitizeNumber(triggerForm.triggerMonth, 1),
+      weekday: sanitizeNumber(triggerForm.triggerWeekday, 1),
+      weekIndex: sanitizeNumber(triggerForm.triggerWeekIndex, 1),
+      offsetDays: sanitizeNumber(triggerForm.triggerOffsetDays, 0),
+    }
+  }
+  return { type: triggerType, days: sanitizeNumber(triggerForm.triggerDays, 0) }
+}
+
+const triggerPreviewText = computed(() =>
+  formatCrmTriggerPreview(buildTriggerFromForm())
+)
+
+const hydrateTriggerForm = (trigger = {}) => {
+  const type = String(trigger?.type || 'inquiry_days')
+  triggerForm.triggerType = type
+  triggerForm.triggerDays = sanitizeNumber(trigger?.days, 0)
+  triggerForm.triggerOffsetDays = sanitizeNumber(trigger?.offsetDays, 0)
+  triggerForm.triggerMonth = sanitizeNumber(trigger?.month, 1)
+  triggerForm.triggerDay = sanitizeNumber(trigger?.day, 1)
+  triggerForm.triggerWeekday = sanitizeNumber(trigger?.weekday, 1)
+  triggerForm.triggerWeekIndex = sanitizeNumber(trigger?.weekIndex, 1)
+}
+
+const openTriggerEditor = (row) => {
+  triggerEditingRow.value = row
+  hydrateTriggerForm(row?.trigger || {})
+  showTriggerDialog.value = true
+}
+
+const closeTriggerDialog = () => {
+  showTriggerDialog.value = false
+  triggerEditingRow.value = null
+}
+
 const resolvedLeadId = computed(() => {
   const id = props.leadId
   return id ? Number(id) : null
@@ -684,6 +1013,7 @@ const buildPayload = (row) => {
     whatsappTemplateName: row.whatsappTemplateName,
     whatsappTemplateLanguage: row.whatsappTemplateLanguage,
   }
+  if (row.trigger) payload.trigger = row.trigger
   if (row.groupKey || activeAutomation.value?.key) {
     payload.groupKey = row.groupKey || activeAutomation.value?.key
   }
@@ -774,6 +1104,9 @@ watch(resolvedLeadId, () => {
 const show = ref(false)
 const showPreview = ref(false)
 const active = ref(null)
+const showDeleteAutomation = ref(false)
+const deletingAutomation = ref(false)
+const deleteAutomationTarget = ref(null)
 const whatsappTemplateNameOptions = computed(() => {
   const set = new Set()
   ;(whatsappTemplates.value || []).forEach((t) => {
@@ -805,6 +1138,7 @@ const resolveSelectedTemplate = () => {
 }
 
 const whatsappTemplatePreviewLines = computed(() => {
+  if (!props.whatsappRequiresTemplates) return null
   const template = resolveSelectedTemplate()
   if (!template) return null
   const params = getTemplateParamExamples(template).map((v, i) => String(v || `{{${i + 1}}}`))
@@ -812,6 +1146,10 @@ const whatsappTemplatePreviewLines = computed(() => {
 })
 
 const loadWhatsAppTemplates = async () => {
+  if (!props.whatsappRequiresTemplates) {
+    whatsappTemplates.value = []
+    return
+  }
   if (whatsappTemplatesLoading.value) return
   try {
     whatsappTemplatesLoading.value = true
@@ -835,189 +1173,31 @@ watch(
     }
   }
 )
-const previewItem = ref(null)
 let ej = null
 let EditorCtor = null
 let Header = null
 let List = null
 const editorEl = ref(null)
 
-const sampleRecipient = reactive({ name: 'John Doe', email: 'john@example.com' })
-const EMAIL_TEMPLATE = `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-    <title>{subject}</title>
-    <style>
-      /* CLIENT RESET */
-      body,
-      table,
-      td,
-      a {
-        -webkit-text-size-adjust: 100%;
-        -ms-text-size-adjust: 100%;
-      }
-      table,
-      td {
-        mso-table-lspace: 0pt;
-        mso-table-rspace: 0pt;
-      }
-      img {
-        -ms-interpolation-mode: bicubic;
-      }
-      img {
-        border: 0;
-        height: auto;
-        line-height: 100%;
-        outline: none;
-        text-decoration: none;
-      }
-      table {
-        border-collapse: collapse !important;
-      }
-      body {
-        margin: 0;
-        padding: 0;
-        width: 100% !important;
-        height: 100% !important;
-        background-color: #f8f9fb;
-        font-family: Arial, Helvetica, sans-serif;
-      }
+const resolveLeadName = (lead = {}) => {
+  const direct = String(lead.name || '').trim()
+  if (direct) return direct
+  const first = String(lead.firstName || lead.first_name || '').trim()
+  const last = String(lead.lastName || lead.last_name || '').trim()
+  const combined = `${first} ${last}`.trim()
+  if (combined) return combined
+  const email = String(lead.email || '').trim()
+  return email || ''
+}
 
-      /* MAIN CARD */
-      .email-container {
-        max-width: 500px;
-        background: #ffffff;
-        margin-top: 10px;
-        border-radius: 10px;
-        border: 1px solid #e5e5e5;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        overflow: hidden;
-      }
-      .main-container {
-        max-width: 500px;
-        margin: 40px auto;
-        overflow: hidden;
-      }
-      .os {
-        margin-top: 40px;
-        display: inline;
-      }
+const previewItem = ref(null)
 
-      .header {
-        text-align: center;
-        padding: 30px 20px 10px;
-      }
-      .logo {
-        font-size: 22px;
-        font-weight: 700;
-        color: #111;
-      }
-      .title {
-        font-size: 18px;
-        font-weight: 600;
-        max-width: 250px;
-        margin: auto;
-        margin-top: 15px;
-        color: #000;
-      }
-
-      .subtitle {
-        font-size: 13px;
-        color: #777;
-        margin-top: 4px;
-        margin-bottom: 0;
-      }
-
-      .content {
-        padding: 25px 25px 35px;
-        background-color: #f3f8ff;
-        border-top: 1px solid #e5eaf0;
-      }
-      .content p {
-        margin: 0 0 15px;
-        font-size: 14px;
-        color: #333;
-        line-height: 1.6;
-      }
-      .btn {
-        display: inline-block;
-        background-color: #2563eb;
-        color: #fff !important;
-        padding: 10px 28px;
-        border-radius: 6px;
-        text-decoration: none;
-        font-weight: 600;
-        font-size: 14px;
-      }
-      .footer {
-        text-align: center;
-        font-size: 12px;
-        color: #999;
-        padding: 20px 10px;
-      }
-
-      @media only screen and (max-width: 600px) {
-        .email-container {
-          width: 95% !important;
-        }
-        .content {
-          padding: 20px;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <center>
-      <table
-        role="presentation"
-        cellspacing="0"
-        cellpadding="0"
-        border="0"
-        width="100%"
-      >
-        <tr>
-          <td>
-            <div class="main-container">
-              <div class="os">
-                <img
-                  src="https://dev.flossly.ai/emails/email-logo.png"
-                  alt="Flossly Logo"
-                  width="36"
-                  height="36"
-                  style="display: block"
-                />
-              </div>
-              <div class="email-container">
-                <!-- Header -->
-                <div class="header">
-                  <img
-                    src="https://dev.flossly.ai/emails/logo.png"
-                    alt="Flossly Logo"
-                    width="36"
-                    height="36"
-                    style="display: block; margin: 0 auto 8px"
-                  />
-                  <h2 class="title">{subject}</h2>
-                  <p class="subtitle">By flossly Team</p>
-                </div>
-
-                <!-- Content -->
-                <div class="content">{content}</div>
-
-                <!-- Footer -->
-                <div class="footer">Ac 2025 Flossly</div>
-              </div>
-            </div>
-          </td>
-        </tr>
-      </table>
-    </center>
-  </body>
-</html>
-`
-
+const previewRecipient = computed(() => {
+  const lead = props.lead || {}
+  const name = resolveLeadName(lead) || 'John Doe'
+  const email = String(lead.email || '').trim() || 'john@example.com'
+  return { name, email }
+})
 const openEdit = async (row) => {
   active.value = row
   show.value = true
@@ -1031,7 +1211,14 @@ const openEdit = async (row) => {
     ])
     EditorCtor = E; Header = H; List = L
   }
-  if (ej) { ej.destroy(); ej = null }
+  if (ej) {
+    if (typeof ej.destroy === 'function') ej.destroy()
+    ej = null
+  }
+  if (!editorEl.value) {
+    await nextTick()
+  }
+  if (!editorEl.value) return
   ej = new EditorCtor({
     holder: editorEl.value,
     tools: { header: Header, list: List },
@@ -1043,7 +1230,30 @@ const openEdit = async (row) => {
   })
 }
 
+const confirmDeleteAutomation = (row) => {
+  if (!row || defaultAutomationKeySet.has(row.key)) return
+  deleteAutomationTarget.value = row
+  showDeleteAutomation.value = true
+}
+
+const deleteAutomationNow = async () => {
+  if (!deleteAutomationTarget.value) return
+  try {
+    deletingAutomation.value = true
+    const res = await crmStore.deleteAutomation({ key: deleteAutomationTarget.value.key })
+    if (res?.code === 0) {
+      showDeleteAutomation.value = false
+      deleteAutomationTarget.value = null
+      await refresh()
+      return
+    }
+  } finally {
+    deletingAutomation.value = false
+  }
+}
+
 const openPreview = (row) => {
+  if (!row) return
   previewItem.value = row
   showPreview.value = true
 }
@@ -1100,20 +1310,88 @@ const practiceLogo = computed(() => {
   return details?.logo || orgStore.logo || null
 })
 
-
 const resolveDefault = (row) =>
   crmAutomationDefaults.find(d => d && d.key === row?.key) || {}
 
 const applyPlaceholders = (text) => {
   if (!text) return ''
+  const recipient = previewRecipient.value || { name: 'John Doe', email: 'john@example.com' }
   const practice = practiceName.value || '[Practice Name]'
-  const firstName = sampleRecipient.name.split(' ')[0] || sampleRecipient.name
+  const firstName = recipient.name.split(' ')[0] || recipient.name
+  const storedOrg = getStoredOrg() || {}
+  const details =
+    orgStore.getOrgDetails ||
+    orgStore.organisation ||
+    orgStore.organization ||
+    orgStore.org ||
+    orgStore.orgDetails ||
+    {}
+  const org = storedOrg || details || {}
+  const phone =
+    org.phone ||
+    org.phoneNumber ||
+    org.telephone ||
+    org.contactPhone ||
+    '[Phone Number]'
+  const website =
+    org.website ||
+    org.site ||
+    org.web ||
+    '[Website]'
+  const email =
+    org.email ||
+    org.contactEmail ||
+    '[Email]'
+  const address =
+    org.address ||
+    org.location ||
+    '[Address]'
+  const street =
+    org.streetAddress ||
+    org.addressLine1 ||
+    '[Street Address]'
+  const cityStateZip =
+    org.cityStateZip ||
+    org.city ||
+    '[City, State ZIP Code]'
+  const officeHours =
+    org.officeHours ||
+    org.hours ||
+    '[Days and Times]'
+  const coordinator =
+    org.treatmentCoordinator ||
+    org.coordinatorName ||
+    org.ownerName ||
+    '[Treatment Coordinator Name]'
+  const yourName =
+    org.ownerName ||
+    org.contactName ||
+    '[Your Name]'
+  const location =
+    org.city ||
+    org.location ||
+    '[Location]'
   return text
     .replace(/\[?\s*practice\s*name\s*\]?/gi, practice)
-    .replace(/\[?\s*patient\s*name\s*\]?/gi, sampleRecipient.name)
-    .replace(/\[?\s*name\s*\]?/gi, sampleRecipient.name)
+    .replace(/\[?\s*patient\s*name\s*\]?/gi, recipient.name)
+    .replace(/\[?\s*name\s*\]?/gi, recipient.name)
     .replace(/\[?\s*first\s*name\s*\]?/gi, firstName)
+    .replace(/\[?\s*phone\s*number\s*\]?/gi, phone)
+    .replace(/\[?\s*website\s*\]?/gi, website)
+    .replace(/\[?\s*email\s*\]?/gi, recipient.email || email)
+    .replace(/\[?\s*address\s*\]?/gi, address)
+    .replace(/\[?\s*street\s*address\s*\]?/gi, street)
+    .replace(/\[?\s*city\s*,?\s*state\s*zip\s*code\s*\]?/gi, cityStateZip)
+    .replace(/\[?\s*days\s*and\s*times\s*\]?/gi, officeHours)
+    .replace(/\[?\s*treatment\s*coordinator\s*name\s*\]?/gi, coordinator)
+    .replace(/\[?\s*your\s*name\s*\]?/gi, yourName)
+    .replace(/\[?\s*location\s*\]?/gi, location)
 }
+
+const previewTitle = computed(() => {
+  if (!previewItem.value) return ''
+  return previewItem.value?.name || previewItem.value?.key || 'Preview'
+})
 
 const previewSubject = computed(() => {
   const row = previewItem.value
@@ -1136,7 +1414,7 @@ const stripHtmlToText = (html = '') => {
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>\s*/gi, '\n\n')
     .replace(/<\/li>\s*/gi, '\n')
-    .replace(/<li>\s*/gi, '• ')
+    .replace(/<li>\s*/gi, '- ')
     .replace(/<[^>]*>/g, '')
     .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&')
@@ -1157,6 +1435,62 @@ const previewWhatsAppText = computed(() => {
   return stripHtmlToText(text)
 })
 
+const EMAIL_TEMPLATE = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>{subject}</title>
+    <style>
+      body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+      table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+      img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
+      table { border-collapse: collapse !important; }
+      body { margin: 0; padding: 0; width: 100% !important; height: 100% !important; background-color: #f8f9fb; font-family: Arial, Helvetica, sans-serif; }
+
+      .email-container { max-width: 520px; background: #ffffff; margin-top: 8px; border-radius: 12px; border: 1px solid #e5e5e5; box-shadow: 0 6px 20px rgba(17, 24, 39, 0.08); overflow: hidden; }
+      .main-container { max-width: 520px; margin: 28px auto 24px; overflow: hidden; }
+      .os { margin-top: 16px; display: inline; }
+      .header { text-align: center; padding: 28px 24px 12px; }
+      .title { font-size: 18px; font-weight: 600; max-width: 320px; margin: 12px auto 4px; color: #0f172a; }
+      .subtitle { font-size: 12px; color: #6b7280; margin: 0; }
+      .content { padding: 24px 24px 32px; background-color: #f3f6ff; border-top: 1px solid #e5eaf0; }
+      .content p { margin: 0 0 14px; font-size: 14px; color: #111827; line-height: 1.6; }
+      .footer { text-align: center; font-size: 12px; color: #9ca3af; padding: 18px 12px; }
+
+      @media only screen and (max-width: 600px) {
+        .email-container { width: 95% !important; }
+        .content { padding: 20px; }
+      }
+    </style>
+  </head>
+  <body>
+    <center>
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+          <td>
+            <div class="main-container">
+              <div class="os">
+                <img src="https://dev.flossly.ai/emails/email-logo.png" alt="Flossly Logo" width="36" height="36" style="display:block" />
+              </div>
+              <div class="email-container">
+                <div class="header">
+                  <img src="https://dev.flossly.ai/emails/logo.png" alt="Flossly Logo" width="36" height="36" style="display:block; margin: 0 auto 8px" />
+                  <h2 class="title">{subject}</h2>
+                  <p class="subtitle">By flossly Team</p>
+                </div>
+                <div class="content">{content}</div>
+                <div class="footer">Ac 2026 Flossly</div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      </table>
+    </center>
+  </body>
+</html>
+`
+
 const emailPreviewHtml = computed(() => {
   if (!previewItem.value) return ''
   const subject = previewSubject.value || ''
@@ -1167,17 +1501,26 @@ const emailPreviewHtml = computed(() => {
     .replace('{content}', content)
     .replace(/By flossly Team/gi, `By ${orgName}`)
 
+  const osRegex = /<img[^>]*src="https:\/\/dev\.flossly\.ai\/emails\/email-logo\.png"[^>]*>/i
+  const headerRegex = /<img[^>]*src="https:\/\/dev\.flossly\.ai\/emails\/logo\.png"[^>]*>/i
+  const initialsCss = `.org-initials{width:36px;height:36px;border-radius:50%;background:#e8f0fe;color:#1d4ed8;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;letter-spacing:0.5px}.org-initials--os{margin:0}.org-initials--header{margin:0 auto 8px}`
+
+  const osLogoHtml = emailLogo
+    ? `<img src="${emailLogo}" alt="Flossly" width="36" height="36" style="display:block" />`
+    : `<div class="org-initials org-initials--os">${practiceInitials.value}</div>`
+
+  html = html.replace(osRegex, osLogoHtml)
+
   if (practiceLogo.value) {
-    html = html
-      .replaceAll('https://dev.flossly.ai/emails/email-logo.png', practiceLogo.value)
-      .replaceAll('https://dev.flossly.ai/emails/logo.png', practiceLogo.value)
+    html = html.replaceAll('https://dev.flossly.ai/emails/logo.png', practiceLogo.value)
   } else {
-    const osLogo = `<div class="org-initials org-initials--os">${practiceInitials.value}</div>`
     const headerLogo = `<div class="org-initials org-initials--header">${practiceInitials.value}</div>`
-    const osRegex = /<img[\s\S]*?email-logo\.png[\s\S]*?>/i
-    const headerRegex = /<img[\s\S]*?logo\.png[\s\S]*?>/i
-    html = html.replace(osRegex, osLogo).replace(headerRegex, headerLogo)
-    html = html.replace('</style>', `.org-initials{width:36px;height:36px;border-radius:50%;background:#e8f0fe;color:#1d4ed8;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;letter-spacing:0.5px}.org-initials--os{margin:0}.org-initials--header{margin:0 auto 8px}</style>`)
+    html = html.replace(headerRegex, headerLogo)
+  }
+
+  const needsInitials = !practiceLogo.value || !emailLogo
+  if (needsInitials) {
+    html = html.replace('</style>', `${initialsCss}</style>`)
   }
 
   return html
@@ -1215,11 +1558,31 @@ const onToggleEnabled = async (row, val) => {
   try { await crmStore.saveAutomation(payload) } catch (e) {}
 }
 
+const saveTrigger = async () => {
+  if (!triggerEditingRow.value) return
+  try {
+    triggerSaving.value = true
+    const nextTrigger = buildTriggerFromForm()
+    triggerEditingRow.value.trigger = nextTrigger
+    triggerEditingRow.value.sending = formatCrmTriggerPreview(nextTrigger)
+    const payload = buildPayload(triggerEditingRow.value)
+    await crmStore.saveAutomation(payload)
+    closeTriggerDialog()
+  } finally {
+    triggerSaving.value = false
+  }
+}
+
 const onNameUpdate = async (item) => {
   // Optional: auto-save name changes
 }
 
-watch(show, (v) => { if (!v && ej) { ej.destroy(); ej = null } })
+watch(show, (v) => {
+  if (!v && ej) {
+    if (typeof ej.destroy === 'function') ej.destroy()
+    ej = null
+  }
+})
 watch(showGroupDialog, (v) => {
   if (!v && props.displayMode === 'modal') clearAutomationSelection()
 })
@@ -1232,12 +1595,14 @@ watch(showGroupDialog, (v) => {
 
 .automation-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, 240px);
   gap: 16px;
+  justify-content: flex-start;
 }
 
 .automation-card-cell {
-  min-width: 0;
+  width: 240px;
+  max-width: 240px;
 }
 
 .automation-empty {
@@ -1416,6 +1781,9 @@ watch(showGroupDialog, (v) => {
 .action-icon-btn:hover {
   color: #111827;
 }
+.trigger-cell {
+  gap: 8px;
+}
 
 /* Modal Styles */
 .modal-header {
@@ -1424,10 +1792,6 @@ watch(showGroupDialog, (v) => {
   align-items: flex-start;
   padding: 24px 28px;
   background: linear-gradient(to bottom, #fafafa, #ffffff);
-}
-
-.preview-modal-header {
-  padding: 14px 18px;
 }
 
 .modal-title {
@@ -1443,20 +1807,6 @@ watch(showGroupDialog, (v) => {
   min-height: 450px;
   max-height: 70vh;
   overflow-y: auto;
-}
-
-.preview-modal-body {
-  padding: 18px;
-  max-height: none;
-  overflow: hidden;
-}
-
-.recipient-section {
-  background: white;
-  padding: 18px;
-  border-radius: 12px;
-  margin-bottom: 24px;
-  border: 1px solid #e8e8e8;
 }
 
 .editor-section {
@@ -1497,17 +1847,39 @@ watch(showGroupDialog, (v) => {
   background: white;
 }
 
+.preview-modal-header {
+  padding: 16px 20px;
+  background: #ffffff;
+}
+
+.preview-modal-body {
+  padding: 18px;
+  background: #f8fafc;
+  max-height: 75vh;
+  overflow: auto;
+}
+
 .email-preview-frame {
-  background: #f3f4f6;
-  border-radius: 12px;
-  padding: 12px;
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 14px;
+  border: 1px solid rgba(var(--v-theme-outline), 0.2);
+  display: grid;
+  gap: 12px;
+}
+
+.email-preview-meta {
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(var(--v-theme-outline), 0.16);
 }
 
 .email-preview-iframe {
   width: 100%;
   height: 70vh;
   border: 0;
-  border-radius: 10px;
+  border-radius: 12px;
   background: #f8f9fb;
 }
 
@@ -1533,4 +1905,5 @@ watch(showGroupDialog, (v) => {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 </style>
+
 

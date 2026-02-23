@@ -1283,6 +1283,36 @@ export const saveAutomationBatch = async (event) => {
   }
 }
 
+export const deleteAutomation = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const key = String(payload?.key || '').trim()
+    if (!key) return error(400, 'Automation key required')
+
+    const defaultKeys = new Set(crmAutomationDefaults.map((item) => item.key))
+    if (defaultKeys.has(key)) {
+      return error(400, 'Default automations cannot be deleted')
+    }
+
+    try { await CrmAutomationTemplate.sync() } catch {}
+    try { await CrmAutomationGroupTemplate.sync() } catch {}
+
+    await CrmAutomationGroupTemplate.destroy({
+      where: { organisationId: Number(orgId), templateKey: key },
+    })
+    const deleted = await CrmAutomationTemplate.destroy({
+      where: { organisationId: Number(orgId), key },
+    })
+
+    return success({ deleted: !!deleted, key })
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
 // Send email to selected leads
 export const sendLeadMail = async (event) => {
   try {

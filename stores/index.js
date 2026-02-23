@@ -23,7 +23,6 @@ const LICENSE_FEATURES = {
     "docs",
     "team",
     "crm",
-    "diary"
   ]),
   [LICENSE_TYPES.DRIFT]: new Set(["dashboard", "tasks", "docs"]),
   [LICENSE_TYPES.GLIDE]: new Set(["dashboard", "tasks", "docs", "team", "crm"]),
@@ -33,7 +32,6 @@ const LICENSE_FEATURES = {
     "docs",
     "team",
     "crm",
-    "diary",
   ]),
   [LICENSE_TYPES.SYSTEM]: new Set([
     "dashboard",
@@ -197,19 +195,19 @@ export const useMainStore = defineStore("mainStore", {
         //     },
         //   ],
         // },
-        {
-          title: "CRM",
-          imgPath: crmIcon,
-          value: "crm",
-          to:"/crm",
-          children: [
-            {
-              title: "Leads",
-              value: "crmLeads",
-              imgPath: crmIcon,
-              to: "/crm",
-              featureKey: "crm",
-            },
+          {
+            title: "CRM",
+            imgPath: crmIcon,
+            value: "crm",
+            to:"/crm",
+            children: [
+              {
+                title: "Leads",
+                value: "crmLeads",
+                imgPath: crmIcon,
+                to: "/crm/leads",
+                featureKey: "crm",
+              },
             {
               title: "My Automations",
               value: "crmAutomations",

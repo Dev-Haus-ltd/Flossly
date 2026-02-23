@@ -71,6 +71,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  metaPermissions() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/permissions")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   listMetaBusinesses() {
     return new Promise((resolve, reject) => {
       Get("/meta/businesses")
@@ -106,9 +113,16 @@ export default {
         .catch((err) => reject(err));
     });
   },
-  startWhapiConnect() {
+  startWhapiConnect(payload = {}) {
     return new Promise((resolve, reject) => {
-      Post("/whapi/connect", {})
+      Post("/whapi/connect", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getWhapiChannels() {
+    return new Promise((resolve, reject) => {
+      Get("/whapi/channels")
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -127,9 +141,9 @@ export default {
         .catch((err) => reject(err));
     });
   },
-  disconnectWhapi() {
+  disconnectWhapi(payload = {}) {
     return new Promise((resolve, reject) => {
-      Post("/whapi/disconnect", {})
+      Post("/whapi/disconnect", payload)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -137,6 +151,13 @@ export default {
   deleteWhapiChannel() {
     return new Promise((resolve, reject) => {
       Post("/whapi/delete", {})
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  extendWhapiChannel(payload = {}) {
+    return new Promise((resolve, reject) => {
+      Post("/whapi/extend", payload)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -308,6 +329,13 @@ export default {
   saveAutomationBatch(payload) {
     return new Promise((resolve, reject) => {
       Post('/lead/automationSaveBatch', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteAutomation(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/automationDelete', payload)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });

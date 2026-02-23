@@ -36,7 +36,7 @@ const crmAutomationDefaultsAll = [
     subject: 'Your requested price list',
     sending: 'Manual',
     enabled: false,
-    template: `<p>Dear [Patient Name],</p><p>Thank you for contacting us. We appreciate your interest in our practice and are delighted that you're considering us for your dental care needs.</p><p>As requested, please find our practice price list attached to this email. We believe in transparent pricing and strive to make quality dental care accessible to all our patients.</p><p>If you have any questions about our services, pricing, or would like to schedule an appointment, please don't hesitate to reach out. Our friendly team is here to assist you and ensure you receive the best possible care.</p><p>We look forward to welcoming you to our practice and helping you achieve a healthy, beautiful smile.</p><p>Warm regards,<br>[Your Name]</p>`,
+    template: `<p>Dear [Patient Name],</p><p>Thank you for contacting us. We appreciate your interest in our practice and are delighted that you're considering us for your dental care needs.</p><p>As requested, please find our practice price list attached to this email. We believe in transparent pricing and strive to make quality dental care accessible to all our patients.</p><p>If you have any questions about our services, pricing, finance plans, or would like to schedule an appointment, please don't hesitate to reach out. Our friendly team is here to assist you and ensure you receive the best possible care.</p><p>We look forward to welcoming you to our practice and helping you achieve a healthy, beautiful smile.</p><p>Warm regards,<br>[Your Name]</p>`,
   },
   {
     key: 'practice_locations',
