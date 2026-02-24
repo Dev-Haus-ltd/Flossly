@@ -8,6 +8,60 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  startInstagramAuth() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/igAuthStart")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  listDmConversations(params = {}) {
+    const q = new URLSearchParams();
+    Object.entries(params || {}).forEach(([k, v]) => {
+      if (v === undefined || v === null || v === "") return;
+      q.append(k, v);
+    });
+    const qs = q.toString();
+    return new Promise((resolve, reject) => {
+      Get(`/dms/conversations${qs ? `?${qs}` : ""}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  listDmMessages(params = {}) {
+    const q = new URLSearchParams();
+    Object.entries(params || {}).forEach(([k, v]) => {
+      if (v === undefined || v === null || v === "") return;
+      q.append(k, v);
+    });
+    const qs = q.toString();
+    return new Promise((resolve, reject) => {
+      Get(`/dms/messages${qs ? `?${qs}` : ""}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  sendDmMessage(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/dms/send", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  markDmRead(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/dms/read", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  processDmQueue(payload = {}) {
+    return new Promise((resolve, reject) => {
+      Post("/dms/processQueue", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   connectionStatus() {
     return new Promise((resolve, reject) => {
       Get("/meta/connection")

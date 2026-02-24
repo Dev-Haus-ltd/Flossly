@@ -14,7 +14,9 @@ import {
   Organisation,
   UserPreference,
   OnboardingEvent,
+  CrmDmConversation,
 } from "../models/index.js";
+import { processQueuedMessages } from "../controllers/dms.js";
 import { ONBOARDING_EMAIL_TEMPLATES } from "@shared/defaults/onboardingCampaign.js";
 import { buildOnboardingContext, sendOnboardingEmail } from "./onboardingCampaign.js";
 import { renderPatientTokens } from "./templateTokens.js";
@@ -101,6 +103,27 @@ export const startTaskScheduler = () => {
     });
   });
 }
+
+export const startDmQueueScheduler = () => {
+  const pattern = process.env.DM_QUEUE_SCHEDULE || "*/1 * * * *";
+  cron.schedule(pattern, async () => {
+    try {
+      try { await CrmDmConversation.sync(); } catch {}
+      const orgIds = await CrmDmConversation.findAll({
+        attributes: ["organisationId"],
+        group: ["organisationId"],
+        raw: true,
+      });
+      for (const row of orgIds) {
+        const orgId = row.organisationId;
+        if (!orgId) continue;
+        await processQueuedMessages({ organisationId: orgId, limit: 50 });
+      }
+    } catch (err) {
+      console.error("[DM Queue] scheduler error:", err?.message || err);
+    }
+  });
+};
 
 import {
   buildCrmTemplatesByOrg,

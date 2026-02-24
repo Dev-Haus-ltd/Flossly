@@ -1,5 +1,7 @@
 import { Op, fn, col } from 'sequelize'
-import { CrmLead, MetaPage, Organisation, User, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight } from '../models'
+import crypto from 'crypto'
+import { CrmLead, MetaPage, Organisation, User, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight, CrmDmAccount, CrmDmConversation, CrmDmMessage, UserOrganisation } from '../models'
+import { sendNotificationToMultipleUsers } from '../utils/fcmNotification'
 import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
 import { addMetaClient, broadcastMetaEvent } from '../utils/metaStream'
@@ -13,6 +15,42 @@ const getRedirectUri = (config) => {
     config.META_REDIRECT_URI ||
     (config.public?.BASE_URL ? `${config.public.BASE_URL}/api/meta/callback` : '')
   )
+}
+
+const getIgRedirectUri = (config) => {
+  return (
+    config.META_IG_REDIRECT_URI ||
+    (config.public?.BASE_URL ? `${config.public.BASE_URL}/api/meta/igCallback` : '')
+  )
+}
+
+const upsertDmAccount = async ({ organisationId, connectedByUserId, platform, accountId, accountName, accessToken, tokenExpiresAt, metadata }) => {
+  try { await CrmDmAccount.sync() } catch {}
+  const existing = await CrmDmAccount.findOne({
+    where: { organisationId, platform, accountId },
+  })
+  const accessTokenEnc = accessToken ? encrypt(accessToken) : null
+  if (existing) {
+    existing.accountName = accountName || existing.accountName
+    if (accessTokenEnc) existing.accessTokenEnc = accessTokenEnc
+    if (tokenExpiresAt !== undefined) existing.tokenExpiresAt = tokenExpiresAt
+    existing.status = 'Active'
+    if (connectedByUserId) existing.connectedByUserId = connectedByUserId
+    if (metadata) existing.metadata = metadata
+    await existing.save()
+    return existing
+  }
+  return await CrmDmAccount.create({
+    organisationId,
+    connectedByUserId: connectedByUserId || null,
+    platform,
+    accountId,
+    accountName: accountName || null,
+    accessTokenEnc,
+    tokenExpiresAt: tokenExpiresAt || null,
+    status: 'Active',
+    metadata: metadata || null,
+  })
 }
 
 export const authStart = async (event) => {
@@ -51,6 +89,8 @@ export const authStart = async (event) => {
     'leads_retrieval',
     'ads_read',
     'business_management',
+    'pages_messaging',
+    'instagram_business_manage_messages',
   ].join(',')
 
   // ✅ FIX: Add auth_type=rerequest to force fresh login
@@ -244,6 +284,15 @@ export const authCallback = async (event) => {
           status: 'Active',
         })
       }
+
+      await upsertDmAccount({
+        organisationId: orgId,
+        connectedByUserId: userId,
+        platform: 'messenger',
+        accountId: String(p.id),
+        accountName: p.name || null,
+        accessToken: p.access_token,
+      })
     }
 
     // Auto-subscribe pages to leadgen webhooks
@@ -308,6 +357,14 @@ export const disconnect = async (event) => {
       { status: 'Revoked' },
       { where: { organisationId: orgId } }
     )
+
+    // Deactivate DM accounts for the org
+    try {
+      await CrmDmAccount.update(
+        { status: 'Revoked' },
+        { where: { organisationId: orgId } }
+      )
+    } catch (e) {}
 
     return success({ disconnected: true })
   } catch (e) {
@@ -684,6 +741,123 @@ const fetchLeadsForPages = async ({ orgId, pages, days, maxPerForm }) => {
   return debug
 }
 
+export const igAuthStart = async (event) => {
+  const config = useRuntimeConfig()
+  const appId = config.META_IG_APP_ID || config.META_APP_ID
+  const redirectUri = getIgRedirectUri(config)
+  if (!appId || !redirectUri) return error(400, 'Instagram App not configured')
+
+  const { userId, orgId } = event.context.user || {}
+  if (!userId || !orgId) {
+    return error(401, 'User must be logged in to connect Instagram')
+  }
+
+  const stateData = {
+    csrf: Math.random().toString(36).slice(2),
+    userId,
+    orgId,
+    timestamp: Date.now()
+  }
+  const stateToken = Buffer.from(JSON.stringify(stateData)).toString('base64url')
+
+  setCookie(event, 'meta_ig_oauth_state', stateToken, {
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 600,
+    secure: process.env.NODE_ENV === 'production'
+  })
+
+  const scope = [
+    'instagram_business_basic',
+    'instagram_business_manage_messages',
+  ].join(',')
+
+  const url = `https://www.facebook.com/${META_VERSION}/dialog/oauth?client_id=${encodeURIComponent(
+    appId
+  )}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(
+    scope
+  )}&state=${encodeURIComponent(stateToken)}&auth_type=rerequest&display=popup`
+
+  return success({ url })
+}
+
+export const igAuthCallback = async (event) => {
+  const config = useRuntimeConfig()
+  const appId = config.META_IG_APP_ID || config.META_APP_ID
+  const appSecret = config.META_IG_APP_SECRET || config.META_APP_SECRET
+  const redirectUri = getIgRedirectUri(config)
+  if (!appId || !appSecret || !redirectUri) {
+    return sendRedirect(event, `/crm?error=${encodeURIComponent('Instagram App not configured')}`)
+  }
+
+  const q = getQuery(event)
+  const { code, state, error: oauthError, error_description } = q
+  if (oauthError) {
+    const msg = error_description ? `${oauthError}: ${error_description}` : oauthError
+    return sendRedirect(event, `/crm?error=${encodeURIComponent(msg)}`)
+  }
+  if (!code) return sendRedirect(event, `/crm?error=${encodeURIComponent('Missing authorization code')}`)
+
+  const stateCookie = getCookie(event, 'meta_ig_oauth_state')
+  if (!state || !stateCookie || state !== stateCookie) {
+    setCookie(event, 'meta_ig_oauth_state', '', { maxAge: -1 })
+    return sendRedirect(event, `/crm?error=${encodeURIComponent('Invalid state - CSRF check failed')}`)
+  }
+
+  let userId, orgId
+  try {
+    const stateData = JSON.parse(Buffer.from(state, 'base64url').toString())
+    userId = stateData.userId
+    orgId = stateData.orgId
+    if (Date.now() - stateData.timestamp > 600000) throw new Error('State expired')
+  } catch (e) {
+    setCookie(event, 'meta_ig_oauth_state', '', { maxAge: -1 })
+    return sendRedirect(event, `/?error=${encodeURIComponent('Invalid state data')}`)
+  }
+
+  if (!userId || !orgId) {
+    setCookie(event, 'meta_ig_oauth_state', '', { maxAge: -1 })
+    return sendRedirect(event, `/?error=${encodeURIComponent('Missing user context in state')}`)
+  }
+
+  try {
+    const tokenUrl = `https://graph.facebook.com/${META_VERSION}/oauth/access_token?client_id=${encodeURIComponent(
+      appId
+    )}&redirect_uri=${encodeURIComponent(redirectUri)}&client_secret=${encodeURIComponent(
+      appSecret
+    )}&code=${encodeURIComponent(code)}`
+    const shortResp = await $fetch(tokenUrl, { method: 'GET' })
+    const accessToken = shortResp.access_token
+    if (!accessToken) return error(500, 'Failed to get access token')
+
+    const meUrl = `https://graph.facebook.com/${META_VERSION}/me?fields=id,username&access_token=${encodeURIComponent(accessToken)}`
+    const meResp = await $fetch(meUrl, { method: 'GET' })
+    const igAccountId = String(meResp?.id || '')
+    const igUsername = meResp?.username || null
+    if (!igAccountId) throw new Error('Instagram account not found')
+
+    const expiresIn = Number(shortResp?.expires_in || 0)
+    const expiry = expiresIn ? new Date(Date.now() + expiresIn * 1000) : null
+
+    await upsertDmAccount({
+      organisationId: orgId,
+      connectedByUserId: userId,
+      platform: 'instagram',
+      accountId: igAccountId,
+      accountName: igUsername,
+      accessToken,
+      tokenExpiresAt: expiry,
+    })
+
+    setCookie(event, 'meta_ig_oauth_state', '', { maxAge: -1 })
+    return sendRedirect(event, `/?meta=ig_connected&account=${encodeURIComponent(igUsername || igAccountId)}`)
+  } catch (e) {
+    setCookie(event, 'meta_ig_oauth_state', '', { maxAge: -1 })
+    const errorMsg = e?.data?.error?.message || e?.message || 'Instagram connection failed'
+    return sendRedirect(event, `/?error=${encodeURIComponent(errorMsg)}`)
+  }
+}
+
 export const fetchLeadsNow = async (event) => {
   const { orgId } = event.context.user || {}
   if (!orgId) return error(401, 'Unauthenticated')
@@ -882,6 +1056,7 @@ export const webhook = async (event) => {
       for (const entry of entries) {
         const pageId = String(entry.id || '')
         const changes = Array.isArray(entry.changes) ? entry.changes : []
+        const messaging = Array.isArray(entry.messaging) ? entry.messaging : []
         
         for (const ch of changes) {
           if (ch.field !== 'leadgen') continue
@@ -946,6 +1121,105 @@ export const webhook = async (event) => {
               leadStatus: 'New',
             })
             broadcastMetaEvent('lead', { orgId: mp.organisationId, leadId, pageId, formId })
+          }
+        }
+
+        if (messaging.length) {
+          try { await CrmDmConversation.sync() } catch {}
+          try { await CrmDmMessage.sync() } catch {}
+          try { await CrmDmAccount.sync() } catch {}
+
+          const accountByEntry = await CrmDmAccount.findOne({
+            where: { accountId: pageId, status: 'Active' },
+          })
+
+          for (const msgEvent of messaging) {
+            const senderId = String(msgEvent?.sender?.id || '')
+            const recipientId = String(msgEvent?.recipient?.id || '')
+            if (!senderId || !recipientId) continue
+            if (msgEvent?.message?.is_echo) continue
+
+            const account =
+              accountByEntry ||
+              (await CrmDmAccount.findOne({
+                where: { accountId: recipientId, status: 'Active' },
+              }))
+
+            if (!account) continue
+
+            const orgId = account.organisationId
+            const platform = account.platform
+            const threadId = senderId
+            const text = String(msgEvent?.message?.text || '').trim()
+            const attachments = msgEvent?.message?.attachments || null
+            const timestamp = msgEvent?.timestamp ? new Date(msgEvent.timestamp) : new Date()
+
+            let conversation = await CrmDmConversation.findOne({
+              where: { organisationId: orgId, platform, threadId },
+            })
+
+            if (!conversation) {
+              conversation = await CrmDmConversation.create({
+                organisationId: orgId,
+                platform,
+                accountId: account.accountId,
+                threadId,
+                participantName: senderId,
+                lastMessageAt: timestamp,
+                unreadCount: 0,
+                metadata: { recipientId },
+              })
+            }
+
+            const messageText = text || (attachments ? '[Attachment]' : '')
+            if (!messageText) continue
+
+            const newMessage = await CrmDmMessage.create({
+              organisationId: orgId,
+              conversationId: conversation.id,
+              platform,
+              platformMessageId: msgEvent?.message?.mid || null,
+              direction: 'inbound',
+              senderName: senderId,
+              message: messageText,
+              attachments,
+              status: 'received',
+              metadata: msgEvent,
+            })
+
+            conversation.lastMessageAt = timestamp
+            conversation.unreadCount = Number(conversation.unreadCount || 0) + 1
+            conversation.metadata = {
+              ...(conversation.metadata || {}),
+              lastMessagePreview: messageText.slice(0, 120),
+              lastMessageId: newMessage.id,
+            }
+            await conversation.save()
+
+            try {
+              const orgUsers = await UserOrganisation.findAll({
+                where: { organisationId: orgId },
+                attributes: ['userId'],
+              })
+              const userIds = orgUsers.map((u) => u.userId).filter(Boolean)
+              if (userIds.length) {
+                await sendNotificationToMultipleUsers({
+                  userIds,
+                  title: `New ${platform === 'instagram' ? 'Instagram' : 'Messenger'} DM`,
+                  body: messageText.length > 80 ? `${messageText.slice(0, 80)}...` : messageText,
+                  type: 'meta_dm',
+                  referenceType: 'dm_conversation',
+                  referenceId: conversation.id,
+                  data: {
+                    conversationId: String(conversation.id),
+                    platform,
+                    senderId,
+                    url: `/crm/dms?conversationId=${conversation.id}`,
+                  },
+                  priority: 'high',
+                })
+              }
+            } catch (notifyErr) {}
           }
         }
       }
@@ -1273,6 +1547,15 @@ export const connectBusinessPages = async (event) => {
         })
       }
 
+      await upsertDmAccount({
+        organisationId: orgId,
+        connectedByUserId: userId,
+        platform: 'messenger',
+        accountId: String(pageResp.id),
+        accountName: pageResp.name || null,
+        accessToken: pageResp.access_token,
+      })
+
       try {
         const subscribeUrl = `https://graph.facebook.com/${META_VERSION}/${pageId}/subscribed_apps`
         await $fetch(subscribeUrl, {
@@ -1343,3 +1626,85 @@ export const listMetaPermissions = async (event) => {
     return error(400, msg)
   }
 }
+
+// Meta Deauthorize Callback
+// Meta sends a signed request when a user removes the app.
+export const deauthorize = async (event) => {
+  try {
+    const body = await readBody(event);
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body || {};
+    const signedRequest = payload?.signed_request || '';
+    if (!signedRequest) return error(400, 'signed_request required');
+
+    // signed_request is "signature.payload"
+    const [sigB64, payloadB64] = String(signedRequest).split('.', 2);
+    if (!sigB64 || !payloadB64) return error(400, 'Invalid signed_request');
+
+    const config = useRuntimeConfig();
+    const appSecret = config.META_APP_SECRET || process.env.META_APP_SECRET || '';
+    if (!appSecret) return error(500, 'META_APP_SECRET not configured');
+
+    const expected = crypto.createHmac('sha256', appSecret).update(payloadB64).digest('base64')
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    if (expected !== sigB64) return error(403, 'Invalid signed_request signature');
+
+    const decoded = JSON.parse(Buffer.from(payloadB64, 'base64').toString('utf8') || '{}');
+    const fbUserId = decoded?.user_id;
+
+    if (!fbUserId) return success({ status: 'ok' });
+
+    // Revoke tokens for that user across orgs
+    await MetaUserToken.update(
+      { expiresAt: new Date(0) },
+      { where: { fbUserId } }
+    );
+
+    return success({ status: 'ok' });
+  } catch (e) {
+    return error(500, e?.message || 'Deauthorize failed');
+  }
+};
+
+// Meta Data Deletion Request Callback
+export const dataDeletion = async (event) => {
+  try {
+    const body = await readBody(event);
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body || {};
+    const signedRequest = payload?.signed_request || '';
+    if (!signedRequest) return error(400, 'signed_request required');
+
+    const [sigB64, payloadB64] = String(signedRequest).split('.', 2);
+    if (!sigB64 || !payloadB64) return error(400, 'Invalid signed_request');
+
+    const config = useRuntimeConfig();
+    const appSecret = config.META_APP_SECRET || process.env.META_APP_SECRET || '';
+    if (!appSecret) return error(500, 'META_APP_SECRET not configured');
+
+    const expected = crypto.createHmac('sha256', appSecret).update(payloadB64).digest('base64')
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    if (expected !== sigB64) return error(403, 'Invalid signed_request signature');
+
+    const decoded = JSON.parse(Buffer.from(payloadB64, 'base64').toString('utf8') || '{}');
+    const fbUserId = decoded?.user_id || 'unknown';
+
+    // TODO: Delete user data tied to fbUserId if you map it.
+    const baseUrl = config.public?.BASE_URL || '';
+    const statusUrl = `${baseUrl}/api/meta/dataDeletionStatus?request=${encodeURIComponent(fbUserId)}`;
+
+    return {
+      url: statusUrl,
+      confirmation_code: String(fbUserId),
+    };
+  } catch (e) {
+    return error(500, e?.message || 'Data deletion failed');
+  }
+};
+
+export const dataDeletionStatus = async (event) => {
+  const query = getQuery(event) || {};
+  const requestId = query.request || 'unknown';
+  return success({
+    status: 'completed',
+    request: requestId,
+  });
+};

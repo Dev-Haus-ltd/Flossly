@@ -1187,11 +1187,13 @@ export const listUserTaskComments = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { userTaskId } = parseJsonBody(body);
+    const { userTaskId, limit, offset } = parseJsonBody(body);
     if (!userTaskId) {
       throw createError({ message: "userTaskId is required" });
     }
-    const comments = await UserTaskComment.findAll({
+    const parsedLimit = Number.isFinite(Number(limit)) ? Number(limit) : null;
+    const parsedOffset = Number.isFinite(Number(offset)) ? Number(offset) : null;
+    const query = {
       where: { userTaskId, organisationId },
       include: [
         {
@@ -1201,7 +1203,10 @@ export const listUserTaskComments = async (event) => {
         },
       ],
       order: [["createdAt", "DESC"]],
-    });
+    };
+    if (parsedLimit !== null) query.limit = parsedLimit;
+    if (parsedOffset !== null) query.offset = parsedOffset;
+    const comments = await UserTaskComment.findAll(query);
     return success(comments);
   } catch (err) {
     return error(500, err.message);
