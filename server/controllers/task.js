@@ -36,9 +36,16 @@ import {
   sendTaskDetailsEmail,
 } from "../utils/emailNotifications";
 import {
-  ensureOnboardingEventsTable,
-  recordOnboardingEvent,
-} from "../utils/onboardingService";
+  sendTaskAssignmentNotification,
+  sendBulkTaskAssignmentNotification,
+  sendTaskCommentNotification,
+  sendTaskUnassignmentNotification,
+  sendBulkTaskUnassignmentNotification,
+  sendBulkTaskCompletionNotification,
+  sendTaskCompletionNotification,
+} from "../utils/fcmNotification";
+import { ensureOnboardingEventsTable, recordOnboardingEvent } from "../utils/onboardingService";
+import { parseJsonBody } from "../utils/body";
 
 const PRIVILEGED_ROLE_IDS = [1, 8];
 const isManagerOrOwner = (roleId) =>
@@ -47,19 +54,6 @@ const ensureManagerOrOwner = (loggedUser) => {
   if (!isManagerOrOwner(loggedUser?.roleId)) {
     throw createError({ statusCode: 403, message: "Not authorized" });
   }
-};
-
-const parseJsonBody = async (event) => {
-  const body = await readBody(event);
-  if (!body) return {};
-  if (typeof body === "string") {
-    try {
-      return JSON.parse(body);
-    } catch (err) {
-      return {};
-    }
-  }
-  return body;
 };
 
 const recordFirstTaskAchievement = async ({ userId, organisationId }) => {
@@ -100,7 +94,7 @@ const autoArchiveCompletedTasks = async (organisationId, days = 5) => {
 
 export const listMyTasks = async (event) => {
   const loggedUser = event.context.user;
-  const body = await parseJsonBody(event);
+  const body = parseJsonBody(await readBody(event));
   const {
     statusId,
     priorityId,
@@ -187,7 +181,7 @@ export const addTaskCategory = async (event) => {
   const loggedUser = event.context.user;
   ensureManagerOrOwner(loggedUser);
   const body = await readBody(event);
-  const { id, name, description, parentId, color } = JSON.parse(body);
+  const { id, name, description, parentId, color } = parseJsonBody(body);
   if (!name) return error(400, "Name required");
 
   try {
@@ -271,7 +265,7 @@ export const deleteTaskCategory = async (event) => {
   const loggedUser = event.context.user;
   ensureManagerOrOwner(loggedUser);
   const body = await readBody(event);
-  const { id } = typeof body === "string" ? JSON.parse(body) : body;
+  const { id } = typeof body === "string" ? parseJsonBody(body) : body;
   
   if (!id) return error(400, "Category ID required");
 
@@ -347,7 +341,7 @@ export const assignBulkTasks = async (event) => {
   const loggedUser = event.context.user;
   ensureManagerOrOwner(loggedUser);
   const organisationId = loggedUser.orgId;
-  const { userId, tasks } = JSON.parse(body);
+  const { userId, tasks } = parseJsonBody(body);
 
   if (!userId || !Array.isArray(tasks)) {
     return error(
@@ -461,6 +455,19 @@ export const assignBulkTasks = async (event) => {
       name: user.fullName,
       taskTitle: createdUserTasks.length === 1 ? createdUserTasks[0].title : "Bulk Tasks",
     });
+    
+    // Send FCM push notification (summary for bulk)
+    try {
+      const assignedBy = await User.findByPk(loggedUser.userId);
+      await sendBulkTaskAssignmentNotification({
+        tasks: createdUserTasks,
+        assignedUser: user,
+        assignedBy,
+      });
+    } catch (fcmError) {
+      console.error('Failed to send FCM notification:', fcmError);
+    }
+    
     return success(createdUserTasks);
   } catch (err) {
     return error(500, err.message);
@@ -560,7 +567,7 @@ export const updateTask = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const parsedBody = JSON.parse(body);
+    const parsedBody = parseJsonBody(body);
     const {
       frequency,
       priorityId,
@@ -675,6 +682,19 @@ export const updateTask = async (event) => {
           email: user.email,
           task: userTask.title,
         });
+        
+        // Send FCM push notification to task creator/manager
+        try {
+          if (userTask.assignedBy && userTask.assignedBy !== loggedUser.userId) {
+            await sendTaskCompletionNotification({
+              task: userTask,
+              completedBy: user,
+              notifyUsers: [await User.findByPk(userTask.assignedBy)]
+            });
+          }
+        } catch (fcmError) {
+          console.error('Failed to send FCM notification:', fcmError);
+        }
 
         if (userTask.frequency && userTask.frequency !== "One off") {
           await generateNextRecurringTask(userTask, orgStatuses, orgPriorities);
@@ -790,7 +810,7 @@ export const unAssignTask = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { userTaskId } = JSON.parse(body);
+    const { userTaskId } = parseJsonBody(body);
     const userTask = await UserTask.findOne({
       where: {
         id: userTaskId,
@@ -843,6 +863,19 @@ export const unAssignTask = async (event) => {
       });
     }
 
+    // FCM push / in-app notification (avoid notifying yourself)
+    try {
+      if (removedUser && removedUser.id !== loggedUser.userId) {
+        await sendTaskUnassignmentNotification({
+          taskTitle: taskTitle || 'Task',
+          removedBy: removedByUser,
+          removedUser,
+        });
+      }
+    } catch (fcmError) {
+      console.error('Failed to send FCM notification:', fcmError);
+    }
+
     return success("UserTask successfully deleted (unassigned).");
   } catch (err) {
     return error(500, err.message);
@@ -853,7 +886,7 @@ export const completeBulkTasks = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { userTasksIds } = JSON.parse(body);
+    const { userTasksIds } = parseJsonBody(body);
     
     const statuses = await OrganisationStatus.findAll({
       where: { organisationId },
@@ -891,6 +924,37 @@ export const completeBulkTasks = async (event) => {
       email: user.email,
       task: "Multiple",
     });
+
+    // FCM push / in-app notification to assigners (summary, avoid spamming)
+    try {
+      const tasksByAssigner = new Map();
+      for (const task of tasksToComplete) {
+        if (!task.assignedBy || task.assignedBy === loggedUser.userId) continue;
+        if (!tasksByAssigner.has(task.assignedBy)) {
+          tasksByAssigner.set(task.assignedBy, []);
+        }
+        tasksByAssigner.get(task.assignedBy).push(task);
+      }
+
+      if (tasksByAssigner.size) {
+        const assignerIds = Array.from(tasksByAssigner.keys());
+        const assigners = await User.findAll({ where: { id: assignerIds } });
+        const assignerMap = new Map(assigners.map(a => [a.id, a]));
+
+        for (const [assignerId, completedTasks] of tasksByAssigner.entries()) {
+          const notifyUser = assignerMap.get(assignerId);
+          if (!notifyUser) continue;
+          await sendBulkTaskCompletionNotification({
+            tasks: completedTasks,
+            completedBy: user,
+            notifyUser,
+          });
+        }
+      }
+    } catch (fcmError) {
+      console.error('Failed to send FCM notification:', fcmError);
+    }
+
     return success("All tasks completed successfully.");
   } catch (err) {
     return error(500, err.message);
@@ -901,7 +965,7 @@ export const archieveBulkTasks = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { userTasksIds } = JSON.parse(body);
+    const { userTasksIds } = parseJsonBody(body);
     await UserTask.update(
       { isArchieved: true },
       {
@@ -922,7 +986,7 @@ export const unarchiveBulkTasks = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { userTasksIds } = JSON.parse(body);
+    const { userTasksIds } = parseJsonBody(body);
     await UserTask.update(
       { isArchieved: false },
       {
@@ -943,7 +1007,7 @@ export const unAssignBulkTask = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { userTasksIds } = JSON.parse(body);
+    const { userTasksIds } = parseJsonBody(body);
     const tasks = await UserTask.findAll({
       where: {
         id: userTasksIds,
@@ -1028,6 +1092,19 @@ export const unAssignBulkTask = async (event) => {
         taskTitle,
         removedBy: remover?.fullName || "Team",
       });
+
+      // FCM push / in-app notification summary (avoid spamming)
+      try {
+        if (user.id !== loggedUser.userId) {
+          await sendBulkTaskUnassignmentNotification({
+            removedUser: user,
+            removedBy: remover,
+            taskTitles: uniqueTitles,
+          });
+        }
+      } catch (fcmError) {
+        console.error('Failed to send FCM notification:', fcmError);
+      }
     }
 
     return success("UserTask successfully deleted (unassigned).");
@@ -1041,7 +1118,7 @@ export const addUserTaskComment = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { userTaskId, comment } = JSON.parse(body);
+    const { userTaskId, comment } = parseJsonBody(body);
     if (!userTaskId || !comment) {
       throw createError({ message: "userTaskId and comment are required" });
     }
@@ -1079,6 +1156,23 @@ export const addUserTaskComment = async (event) => {
       });
     }
 
+    // FCM push / in-app notification (avoid notifying yourself)
+    try {
+      const commenter = await User.findByPk(loggedUser.userId);
+      const recipients = [];
+      if (userTask.assignedUser && userTask.assignedUser.id !== loggedUser.userId) {
+        recipients.push(userTask.assignedUser);
+      }
+      await sendTaskCommentNotification({
+        task: { id: userTask.id, title: userTask.taskDetails?.title || userTask.title || 'Task' },
+        comment,
+        commentedBy: commenter,
+        notifyUsers: recipients,
+      });
+    } catch (fcmError) {
+      console.error('Failed to send FCM notification:', fcmError);
+    }
+
     return success(newComment);
   } catch (err) {
     return error(500, err.message);
@@ -1090,7 +1184,7 @@ export const listUserTaskComments = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { userTaskId } = JSON.parse(body);
+    const { userTaskId } = parseJsonBody(body);
     if (!userTaskId) {
       throw createError({ message: "userTaskId is required" });
     }
@@ -1116,7 +1210,7 @@ export const updateUserTaskComment = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { commentId, comment } = JSON.parse(body);
+    const { commentId, comment } = parseJsonBody(body);
     if (!commentId || !comment) {
       throw createError({ message: "commentId and comment are required" });
     }
@@ -1145,7 +1239,7 @@ export const deleteUserTaskComment = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { commentId } = JSON.parse(body);
+    const { commentId } = parseJsonBody(body);
     
     if (!commentId) {
       throw createError({ message: "commentId is required" });
@@ -1250,7 +1344,7 @@ export const deleteAttachment = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { id } = JSON.parse(body);
+    const { id } = parseJsonBody(body);
     
     if (!id) {
       throw createError({ message: "Attachment id required" });
@@ -1300,7 +1394,15 @@ export const deleteAttachment = async (event) => {
 
 export const createNewTask = async (event) => {
   const loggedUser = event.context.user;
-  const body = await readBody(event);
+  const bodyRaw = await readBody(event);
+  let body = bodyRaw;
+  if (typeof bodyRaw === "string") {
+    try {
+      body = JSON.parse(bodyRaw);
+    } catch {
+      body = {};
+    }
+  }
   const {
     title,
     description,
@@ -1313,7 +1415,7 @@ export const createNewTask = async (event) => {
     dueDate,
     statusId,
     priorityId: incomingPriorityId,
-  } = JSON.parse(body);
+  } = body || {};
   if (!title || !title.trim() || !categoryId) {
     throw createError({ message: "Task title cannot be empty or only spaces" });
   }
@@ -1424,6 +1526,7 @@ export const createNewTask = async (event) => {
       const assignees = await User.findAll({
         where: { id: assigneeIdsForEmail },
       });
+      const assignerUser = await User.findByPk(loggedUser.userId);
       for (const assignee of assignees) {
         if (assignee?.email) {
           await sendTaskAssignmentEmail({
@@ -1431,6 +1534,20 @@ export const createNewTask = async (event) => {
             name: assignee.fullName,
             taskTitle: title,
           });
+          
+          // Send FCM push notification
+          try {
+            const userTaskForAssignee = userTasks.find(ut => ut.userId === assignee.id);
+            if (userTaskForAssignee) {
+              await sendTaskAssignmentNotification({
+                task: userTaskForAssignee,
+                assignedUser: assignee,
+                assignedBy: assignerUser
+              });
+            }
+          } catch (fcmError) {
+            console.error('Failed to send FCM notification:', fcmError);
+          }
         }
       }
     }
@@ -1488,7 +1605,7 @@ export const createNewTask = async (event) => {
 export const uploadBulkTasks = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);
-  const { tasks } = JSON.parse(body);
+  const { tasks } = parseJsonBody(body);
 
   if (!Array.isArray(tasks) || !tasks.length) {
     throw createError({ message: "No tasks provided" });
@@ -1683,6 +1800,8 @@ export const uploadBulkTasks = async (event) => {
         return acc;
       }, {});
 
+      const assignedBy = await User.findByPk(loggedUser.userId);
+
       for (const [userId, assignedTasks] of Object.entries(tasksByUserId)) {
         const numericUserId = Number(userId);
         const user = userMap.get(numericUserId);
@@ -1695,6 +1814,17 @@ export const uploadBulkTasks = async (event) => {
             name: user.fullName,
             taskTitle: `${assignedTasks.length} default tasks`,
           });
+
+          // Send one push notification summary (avoid spamming)
+          try {
+            await sendBulkTaskAssignmentNotification({
+              tasks: assignedTasks,
+              assignedUser: user,
+              assignedBy,
+            });
+          } catch (fcmError) {
+            console.error('Failed to send FCM notification:', fcmError);
+          }
           continue;
         }
 
@@ -1704,6 +1834,17 @@ export const uploadBulkTasks = async (event) => {
             name: user.fullName,
             taskTitle: task.title,
           });
+        }
+
+        // For bulk assignment via upload, send one push notification summary
+        try {
+          await sendBulkTaskAssignmentNotification({
+            tasks: assignedTasks,
+            assignedUser: user,
+            assignedBy,
+          });
+        } catch (fcmError) {
+          console.error('Failed to send FCM notification:', fcmError);
         }
       }
     }
@@ -1843,7 +1984,7 @@ export const teamTasksCounts = async (event) => {
 
 export const createUserTaskChecklist = async (event) => {
   const body = await readBody(event);
-  const checklist = JSON.parse(body);
+  const checklist = parseJsonBody(body);
   const requiredFields = ["userTaskId", "question"];
   for (const field of requiredFields) {
     if (!checklist[field]) {
@@ -1860,7 +2001,7 @@ export const createUserTaskChecklist = async (event) => {
 
 export const updateUserTaskChecklist = async (event) => {
   const body = await readBody(event);
-  const taskChecklist = JSON.parse(body);
+  const taskChecklist = parseJsonBody(body);
 
   if (!taskChecklist.id) {
     throw createError({ message: "Checklist id required" });
@@ -1885,7 +2026,7 @@ export const updateUserTaskChecklist = async (event) => {
 
 export const deleteUserTaskChecklist = async (event) => {
   const body = await readBody(event);
-  const { id } = JSON.parse(body);
+  const { id } = parseJsonBody(body);
   if (!id) {
     throw createError({ message: "Checklist id required" });
   }
@@ -1903,7 +2044,7 @@ export const groupTeamTasksByTaskId = async (event) => {
   const loggedUser = event.context.user;
   const organisationId = loggedUser.orgId;
   ensureManagerOrOwner(loggedUser);
-  const body = await parseJsonBody(event);
+  const body = parseJsonBody(await readBody(event));
   const {
     categoryId,
     frequency,
@@ -2186,7 +2327,7 @@ export const groupTeamTasksByTaskId = async (event) => {
 
 export const getUserTaskDetails = async (event) => {
   const body = await readBody(event);
-  const { userTaskId } = JSON.parse(body);
+  const { userTaskId } = parseJsonBody(body);
 
   if (!userTaskId) {
     throw createError({ message: "userTaskId is required" });
@@ -2722,7 +2863,7 @@ export const teamTasksCountByCategory = async (event) => {
 
 export const getUserTasksStatusWise = async (event) => {
   const loggedUser = event.context.user;
-  const body = await parseJsonBody(event);
+  const body = parseJsonBody(await readBody(event));
   const {
     categoryId,
     frequency,
@@ -2924,7 +3065,7 @@ export const getUserTasksStatusWise = async (event) => {
 
 export const getGeneralTasksByCategory = async (event) => {
   const body = await readBody(event);
-  const { categoryId } = JSON.parse(body);
+  const { categoryId } = parseJsonBody(body);
   if (!categoryId) {
     throw createError({ message: "CategoryId is required" });
   }
@@ -3192,7 +3333,7 @@ export const createCustomColumn = async (event) => {
   try {
     const loggedUser = event.context.user;
     const body = await readBody(event);
-    const { displayName, dataType, validationRules, defaultValue, dropdownOptions } = JSON.parse(body);
+    const { displayName, dataType, validationRules, defaultValue, dropdownOptions } = parseJsonBody(body);
 
     if (!displayName || !dataType) {
       throw createError({ statusCode: 400, message: "displayName and dataType are required" });
@@ -3264,7 +3405,7 @@ export const updateCustomColumn = async (event) => {
   try {
     const loggedUser = event.context.user;
     const body = await readBody(event);
-    const { columnId, displayName, dataType, validationRules, defaultValue, dropdownOptions, sortOrder } = JSON.parse(body);
+    const { columnId, displayName, dataType, validationRules, defaultValue, dropdownOptions, sortOrder } = parseJsonBody(body);
 
     if (!columnId) {
       throw createError({ statusCode: 400, message: "columnId is required" });
@@ -3305,7 +3446,7 @@ export const deleteCustomColumn = async (event) => {
   try {
     const loggedUser = event.context.user;
     const body = await readBody(event);
-    const { columnId } = JSON.parse(body);
+    const { columnId } = parseJsonBody(body);
 
     if (!columnId) {
       throw createError({ statusCode: 400, message: "columnId is required" });
@@ -3337,7 +3478,7 @@ export const sendTaskDetailsByEmail = async (event) => {
 
     // ✅ Normalize body (string → object)
     if (typeof body === "string") {
-      body = JSON.parse(body);
+      body = parseJsonBody(body);
     }
 
     const { userTaskId, email } = body || {};
@@ -3399,5 +3540,4 @@ export const sendTaskDetailsByEmail = async (event) => {
     return error(500, err.message || err);
   }
 };
-
 

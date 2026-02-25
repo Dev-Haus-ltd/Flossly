@@ -504,7 +504,7 @@ export const useMainStore = defineStore("mainStore", {
       });
     },
     setSnackbar(toast) {
-      this.snackbar = toast;
+      this.snackbar = { ...toast };
     },
     getCustomColumns() {
       return new Promise((resolve, reject) => {

@@ -4,6 +4,7 @@ import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
 import { addMetaClient, broadcastMetaEvent } from '../utils/metaStream'
 import { getWhatsAppProviderKey, getWhapiEnvConfig, resolveWhapiConfig } from '../utils/whatsappProvider'
+import { parseJsonBody } from "../utils/body";
 
 const META_VERSION = 'v24.0'
 
@@ -380,7 +381,7 @@ export const saveWhatsAppConfig = async (event) => {
   if (!orgId || !userId) return error(401, 'Unauthenticated')
 
   const body = await readBody(event)
-  const payload = typeof body === 'string' ? JSON.parse(body) : body
+  const payload = typeof body === 'string' ? parseJsonBody(body) : body
   const phoneNumberId = normalizeWaConfigValue(payload?.phoneNumberId)
   const wabaId = normalizeWaConfigValue(payload?.wabaId)
   const displayPhoneNumber = normalizeWaConfigValue(payload?.displayPhoneNumber)
@@ -439,7 +440,7 @@ export const whatsappEmbeddedComplete = async (event) => {
   const redirectUri = getRedirectUri(config)
 
   const body = await readBody(event)
-  const payload = typeof body === 'string' ? JSON.parse(body) : body
+  const payload = typeof body === 'string' ? parseJsonBody(body) : body
   const code = normalizeWaConfigValue(payload?.code)
   const accessToken = normalizeWaConfigValue(payload?.accessToken)
   let token = accessToken
@@ -1191,7 +1192,7 @@ export const connectBusinessPages = async (event) => {
   if (!orgId || !userId) return error(401, 'Unauthenticated')
 
   const body = await readBody(event)
-  const payload = typeof body === 'string' ? JSON.parse(body) : body
+  const payload = typeof body === 'string' ? parseJsonBody(body) : body
   const pageIds = Array.isArray(payload?.pageIds)
     ? payload.pageIds.map((p) => String(p)).filter(Boolean)
     : []

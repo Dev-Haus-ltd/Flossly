@@ -27,6 +27,14 @@ export default defineNuxtConfig({
       ONBOARDING_WELCOME_CAP_HOURS: process.env.ONBOARDING_WELCOME_CAP_HOURS,
       ONBOARDING_VIDEO_CAP_HOURS: process.env.ONBOARDING_VIDEO_CAP_HOURS,
       ONBOARDING_INAPP_CAP_HOURS: process.env.ONBOARDING_INAPP_CAP_HOURS,
+      // Firebase configuration for FCM
+      firebaseApiKey: process.env.NUXT_PUBLIC_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY,
+      firebaseAuthDomain: process.env.NUXT_PUBLIC_FIREBASE_AUTH_DOMAIN || process.env.FIREBASE_AUTH_DOMAIN,
+      firebaseProjectId: process.env.NUXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID,
+      firebaseStorageBucket: process.env.NUXT_PUBLIC_FIREBASE_STORAGE_BUCKET || process.env.FIREBASE_STORAGE_BUCKET,
+      firebaseMessagingSenderId: process.env.NUXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || process.env.FIREBASE_MESSAGING_SENDER_ID,
+      firebaseAppId: process.env.NUXT_PUBLIC_FIREBASE_APP_ID || process.env.FIREBASE_APP_ID,
+      firebaseVapidKey: process.env.NUXT_PUBLIC_FIREBASE_VAPID_KEY || process.env.FIREBASE_VAPID_KEY,
       colors: {
         primary: "#0061FB",
         "primary-dark": "#0061FB",

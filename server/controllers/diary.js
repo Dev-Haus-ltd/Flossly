@@ -6,6 +6,7 @@ import formidable from 'formidable'
 import path from 'path'
 import os from "os";
 import { uploadTempFile } from "../utils/storage";
+import { parseJsonBody } from "../utils/body";
 
 const pad2 = (n) => String(n).padStart(2, '0')
 const resolveTimeMode = () => {
@@ -186,7 +187,7 @@ export const createPatient = async (event) => {
   try {
     const { orgId } = event.context.user
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const required = ['firstName','lastName']
     for (const k of required) if (!payload?.[k]) return error(400, `${k} is required`)
     const data = {
@@ -244,7 +245,7 @@ export const updatePatient = async (event) => {
   try {
     const { orgId } = event.context.user
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const id = Number(payload.id || 0)
     if (!id) return error(400, 'id is required')
     const row = await DiaryPatient.findOne({ where: { id, organisationId: Number(orgId) } })
@@ -328,7 +329,7 @@ export const createAppointment = async (event) => {
   try {
     const { orgId } = event.context.user
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const required = ['dentistId','date','time','duration']
     for (const k of required) if (!payload?.[k]) return error(400, `${k} is required`)
     let patientId = payload.patientId || null
@@ -432,7 +433,7 @@ export const updateAppointment = async (event) => {
   try {
     const { orgId } = event.context.user
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { id } = payload
     if (!id) return error(400, 'id is required')
     const row = await DiaryAppointment.findOne({ where: { id: Number(id), organisationId: Number(orgId) } })
@@ -566,7 +567,7 @@ export const createNote = async (event) => {
   try {
     const { orgId } = event.context.user
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const required = ['dentistId','title','date','time','channel','summary']
     for (const k of required) if (!payload?.[k]) return error(400, `${k} is required`)
     const created = await DiaryNote.create({
@@ -586,7 +587,7 @@ export const deleteNote = async (event) => {
   try {
     const { orgId } = event.context.user
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const id = Number(payload.id || 0)
     if (!id) return error(400, 'id is required')
     const row = await DiaryNote.findOne({ where: { id, organisationId: Number(orgId) } })
@@ -648,7 +649,7 @@ export const savePatientComfort = async (event) => {
   try {
     const { orgId } = event.context.user
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     
     const patientId = Number(payload.patientId || 0)
     if (!patientId) {
@@ -744,7 +745,7 @@ export const updatePatientComfort = async (event) => {
   try {
     const { orgId } = event.context.user
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     
     const patientId = Number(payload.patientId || 0)
     if (!patientId) {
@@ -1141,7 +1142,7 @@ export const savePatientSurvey = async (event) => {
   try {
     const { orgId } = event.context.user
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     
     const patientId = Number(payload.patientId || 0)
     if (!patientId) {
@@ -1320,7 +1321,7 @@ export const sharePatientSurvey = async (event) => {
   try {
     const { orgId } = event.context.user
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     
     const patientId = Number(payload.patientId || 0)
     const shareMethod = payload.shareMethod || 'email' // email, link, etc.
@@ -1476,7 +1477,7 @@ export const savePatientForm = async (event) => {
   try {
     const { orgId, userId } = event.context.user
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
 
     const patientId = Number(payload.patientId || 0)
     const formType = payload.formType
@@ -1595,7 +1596,7 @@ export const updatePatientForm = async (event) => {
   try {
     const { orgId, userId } = event.context.user
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
 
     const formId = Number(payload.id || 0)
 

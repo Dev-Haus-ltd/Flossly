@@ -757,11 +757,6 @@ const automationSaving = reactive({});
 const automationGroupRows = ref([]);
 const automationGroupsLoading = ref(false);
 const automationGroupsDirty = ref(false);
-const defaultAutomationMap = new Map(
-  (crmAutomationDefaults || [])
-    .filter((item) => item && item.key)
-    .map((item) => [item.key, { ...item }])
-);
 
 const resolveLeadName = (lead) => getLeadDisplayName(lead);
 const resolveLeadEmail = (lead) => getLeadEmail(lead);
@@ -776,33 +771,13 @@ const whatsappRecipients = computed(() => {
 
 const hasWhatsAppRecipients = computed(() => whatsappRecipients.value.length > 0);
 
-const mergeDefaultAutomations = (rows) => {
-  const map = new Map((rows || []).map((row) => [row.key, { ...row }]));
-  for (const [key, def] of defaultAutomationMap.entries()) {
-    if (!map.has(key)) map.set(key, { ...def });
-  }
-  return Array.from(map.values());
-};
-
-const isWhatsAppItem = (item) => {
-  const type = String(item?.type || '').toLowerCase();
-  const key = String(item?.key || '').toLowerCase();
-  return type === 'whatsapp' || key.includes('whatsapp');
-};
-
-const isWhatsAppGroup = (group) => {
-  const key = String(group?.key || '').toLowerCase();
-  const title = String(group?.title || '').toLowerCase();
-  return key.includes('whatsapp') || title.includes('whatsapp');
-};
-
 const loadAutomationGroups = async ({ force = false } = {}) => {
   if (!force && (automationGroupRows.value.length || automationGroupsLoading.value)) return;
   automationGroupsLoading.value = true;
   try {
     const res = await crmStore.listAutomationGroups();
     if (res?.code === 0 && Array.isArray(res.data)) {
-      automationGroupRows.value = res.data.filter((group) => !isWhatsAppGroup(group));
+      automationGroupRows.value = res.data;
     }
   } finally {
     automationGroupsLoading.value = false;
@@ -811,7 +786,7 @@ const loadAutomationGroups = async ({ force = false } = {}) => {
 
 const resolvedAutomationGroups = computed(() => {
   const groups = automationGroupRows.value.length ? automationGroupRows.value : crmAutomationGroups;
-  return groups.filter((group) => !isWhatsAppGroup(group));
+  return groups;
 });
 
 const loadLeadAutomations = async (leadId) => {
@@ -820,13 +795,9 @@ const loadLeadAutomations = async (leadId) => {
   try {
     const res = await crmStore.listAutomation(leadId);
     const apiItems = Array.isArray(res?.data) ? res.data : [];
-    const rows = apiItems.length
-      ? mergeDefaultAutomations(apiItems)
-      : mergeDefaultAutomations(crmAutomationDefaults);
-    const nonWhatsAppRows = rows.filter((item) => !isWhatsAppItem(item));
-    automationRowsCache[leadId] = nonWhatsAppRows;
+    automationRowsCache[leadId] = apiItems.length ? apiItems : crmAutomationDefaults;
   } catch (e) {
-    automationRowsCache[leadId] = mergeDefaultAutomations(crmAutomationDefaults);
+    automationRowsCache[leadId] = crmAutomationDefaults;
   } finally {
     automationLoading[leadId] = false;
   }

@@ -179,6 +179,10 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  isSystem: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const search = ref("");
@@ -204,8 +208,21 @@ const updateValueRow = (file, field, event) => {
   file[field] = newValue;
 };
 
+const resolveBaseUrl = () => {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
+  return runtimeConfig.public?.BASE_URL || "";
+};
+
+const buildViewerLink = (file) => {
+  if (!file?.id) return "";
+  const path = props.isSystem ? `/api/docs/viewSystemDoc?id=${file.id}` : `/api/docs/view?id=${file.id}`;
+  return buildAbsoluteLink(path, resolveBaseUrl());
+};
+
 const copyLink = async (file) => {
-  const url = buildAbsoluteLink(file?.link || "", runtimeConfig.public?.BASE_URL);
+  const url = buildViewerLink(file) || buildAbsoluteLink(file?.link || "", resolveBaseUrl());
   if (!url) {
     mainStore.setSnackbar({ title: "Document link unavailable", type: "error" });
     return;

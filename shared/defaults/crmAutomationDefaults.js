@@ -1,35 +1,5 @@
 const crmAutomationDefaultsAll = [
   {
-    key: 'new_patient_enquiry_immediate',
-    type: 'Email',
-    name: 'New Enquiry - Welcome (Immediate)',
-    subject: 'New Enquiry - Welcome',
-    sending: 'Immediately when lead comes into CRM',
-    enabled: false,
-    trigger: { type: 'inquiry_days', days: 0 },
-    template: `<p>Hi [First Name],</p><p>Thank you for reaching out! We're thrilled you're considering us for your dental care. At [Practice Name], we believe every smile tells a story, and we can't wait to be part of yours.</p><p>Our team is carefully reviewing your enquiry and will contact you within 24 hours to discuss your needs and find the perfect appointment time that fits your schedule.</p><p>In the meantime, meet our award-winning team and explore our state-of-the-art facility [link to virtual tour].</p><p>Welcome to the family!</p>`,
-  },
-  {
-    key: 'new_patient_enquiry_1_day',
-    type: 'Email',
-    name: 'New Enquiry - Why Us (Day 1)',
-    subject: 'New Enquiry - Why Us',
-    sending: '1 day afterward',
-    enabled: false,
-    trigger: { type: 'inquiry_days', days: 1 },
-    template: `<p>Hi [First Name],</p><p>Choosing a dental practice is a big decision, and we want you to feel completely confident about joining our family.</p><p>Here's what our patients love most about us:</p><ul><li>Anxiety-free appointments with our gentle care approach</li><li>Same-day emergency availability</li><li>Advanced technology for pain-free treatments</li><li>A team that actually listens to your concerns</li></ul><p>Over 2,500 patients trust us with their smiles. Read their stories [link to testimonials] and discover why they've made us their dental home.</p><p>Ready to book? Simply reply to this email or call us at [phone number].</p>`,
-  },
-  {
-    key: 'new_patient_enquiry_3_days',
-    type: 'Email',
-    name: 'New Enquiry - Final Nudge (Day 3)',
-    subject: 'New Enquiry - Final Nudge',
-    sending: '3 days after enquiry',
-    enabled: false,
-    trigger: { type: 'inquiry_days', days: 3 },
-    template: `<p>Hi [First Name],</p><p>We noticed you haven't scheduled your appointment yet, and we wanted to reach out one more time.</p><p>Did you know? 94% of our new patients wish they'd booked sooner! Don't let dental anxiety or a busy schedule hold you back from the smile you deserve.</p><p>This month, we're offering extended evening hours to accommodate your lifestyle. Limited slots available!</p><p>Watch this 60-second video of patient transformations that will inspire you [link].</p><p>Your future smile is waiting - let's make it happen together.</p>`,
-  },
-  {
     key: 'send_price_list',
     type: 'Email',
     name: 'Send Price List',
@@ -50,52 +20,52 @@ const crmAutomationDefaultsAll = [
   {
     key: 'lead_enquiry_day_1',
     type: 'Email',
-    name: 'Welcome and Value (Immediate)',
-    subject: 'Welcome to [Practice Name] - Your Smile Journey Starts Here',
-    sending: 'Immediately when lead comes into CRM',
+    name: 'Welcome & Value (Immediate)',
+    subject: 'Welcome to [Practice Name] - Your Smile Journey Starts Here ✨',
+    sending: 'Send immediately',
     enabled: false,
     trigger: { type: 'inquiry_days', days: 0 },
-    template: `<p>Hi [Patient Name],</p><p>Thank you for reaching out to [Practice Name]! We're thrilled you're considering us for your dental care.</p><p>I'm [Treatment Coordinator Name], and I'll be your personal guide throughout this journey. We understand that choosing the right dental practice is important, which is why we've helped over [X] patients achieve their dream smiles right here in [Location].</p><p>What makes us different? We combine cutting-edge technology with genuine care. Every patient receives a personalized treatment plan tailored to their unique needs and budget.</p><p>I'd love to schedule a complimentary consultation where we can discuss your goals and answer any questions. Simply reply to this email or call us at [Phone Number] - we have appointments available this week.</p><p>Looking forward to meeting you!</p><p>Warmly,<br>[Practice Name] Team<br>[Website] | [Phone Number]</p>`,
+    template: `<p>Hi [Name],</p><p>Thank you for reaching out to [Practice Name]! We're thrilled you're considering us for your dental care.</p><p>I'm [Treatment Coordinator Name], and I'll be your personal guide throughout this journey. We understand that choosing the right dental practice is important, which is why we've helped over 1000+ patients achieve their dream smiles right here in [Location].</p><p>What makes us different? We combine cutting-edge technology with genuine care. Every patient receives a personalized treatment plan tailored to their unique needs and budget.</p><p>I'd love to schedule a complimentary consultation where we can discuss your goals and answer any questions. Simply reply to this email or call us at [Phone Number] - we have appointments available this week.</p><p>Looking forward to meeting you!</p><p>Warmly,<br>[Practice Name] Team<br>[Website] | [Phone Number]</p>`,
   },
   {
     key: 'lead_enquiry_day_3',
     type: 'Email',
     name: 'Educational Value (Day 3)',
-    subject: "[Patient Name], here's what to expect at your first visit",
+    subject: "[Name], here's what to expect at your first visit",
     sending: '3 days after enquiry',
     enabled: false,
     trigger: { type: 'inquiry_days', days: 3 },
-    template: `<p>Hi [Patient Name],</p><p>I wanted to share what happens during your first visit with us - no surprises, just exceptional care.</p><p>Your complimentary consultation includes:</p><ul><li>Comprehensive oral health assessment</li><li>3D imaging (if needed) so you can see exactly what we see</li><li>Personalized treatment options with transparent pricing</li><li>No-pressure discussion about your goals and concerns</li></ul><p>Many patients tell us they wish they'd come to see us sooner. The consultation typically takes 30-45 minutes, and you'll leave with a clear roadmap for your smile transformation.</p><p>Have questions before booking? I'm here to help. Just hit reply or call [Phone Number].</p><p>Best wishes,<br>[Practice Name] Team<br>[Address] | [Email]</p>`,
+    template: `<p>Hi [Name],</p><p>I wanted to share what happens during your first visit with us - no surprises, just exceptional care.</p><p>Your complimentary consultation includes:</p><ul><li>Comprehensive oral health assessment</li><li>3D imaging (if needed) so you can see exactly what we see</li><li>Personalized treatment options with transparent pricing</li><li>No-pressure discussion about your goals and concerns</li></ul><p>Many patients tell us they wish they'd come to see us sooner. The consultation typically takes 30-45 minutes, and you'll leave with a clear roadmap for your smile transformation.</p><p>Have questions before booking? I'm here to help. Just hit reply or call [Phone Number].</p><p>Best wishes,<br>[Practice Name] Team<br>[Address] | [Email]</p>`,
   },
   {
     key: 'lead_enquiry_day_5',
     type: 'Email',
-    name: 'Social Proof (Day 7)',
+    name: 'Social Proof (Day 5)',
     subject: 'See why patients choose [Practice Name]',
-    sending: '7 days after enquiry',
+    sending: '5 days after enquiry',
     enabled: false,
-    trigger: { type: 'inquiry_days', days: 7 },
-    template: `<p>Hi [Patient Name],</p><p>Sometimes the best way to understand what we do is to hear from people just like you.</p><p>"I was nervous about dental treatment, but the team at [Practice Name] made me feel completely at ease. The results exceeded my expectations!" - Sarah M.</p><p>"Professional, caring, and transparent about costs. I finally found a dental practice I trust." - James T.</p><p>We're proud to maintain a 5-star rating because we treat every patient like family. Our approach is simple: listen first, recommend honest solutions, and deliver exceptional results.</p><p>Ready to experience the difference? Book your complimentary consultation today: [Phone Number]</p><p>We'd love to welcome you to our practice family.</p><p>Warmly,<br>[Practice Name] Team<br>[Website]</p>`,
+    trigger: { type: 'inquiry_days', days: 5 },
+    template: `<p>Hi [Name],</p><p>Sometimes the best way to understand what we do is to hear from people just like you.</p><p>"I was nervous about dental treatment, but the team at [Practice Name] made me feel completely at ease. The results exceeded my expectations!" - Sarah M.</p><p>"Professional, caring, and transparent about costs. I finally found a dental practice I trust." - James T.</p><p>We're proud to maintain a 5-star rating because we treat every patient like family. Our approach is simple: listen first, recommend honest solutions, and deliver exceptional results.</p><p>Ready to experience the difference? Book your complimentary consultation today: [Phone Number]</p><p>We'd love to welcome you to our practice family.</p><p>Warmly,<br>[Practice Name] Team<br>[Website]</p>`,
   },
   {
     key: 'lead_enquiry_day_12',
     type: 'Email',
-    name: 'Overcome Objections (Day 12)',
+    name: 'Overcome Objections (Day 7)',
     subject: "Questions about dental treatment? We've got answers",
-    sending: '12 days after enquiry',
+    sending: '7 days after enquiry',
     enabled: false,
-    trigger: { type: 'inquiry_days', days: 12 },
-    template: `<p>Hi [Patient Name],</p><p>I know choosing a dental practice can feel overwhelming. Here are the most common questions we hear:</p><p>"How much will it cost?" - We provide transparent pricing during your free consultation and offer flexible payment plans to fit any budget.</p><p>"Will it hurt?" - We use the latest pain-free techniques and sedation options. Your comfort is our priority.</p><p>"How long will it take?" - Most treatments are faster than you think. We'll create a timeline that works with your schedule.</p><p>"Are you accepting new patients?" - Yes. We'd love to welcome you to [Practice Name].</p><p>Still have questions? Let's chat. Call [Phone Number] or reply to this email.</p><p>Best wishes,<br>[Practice Name] Team<br>[Address] | [Email]</p>`,
+    trigger: { type: 'inquiry_days', days: 7 },
+    template: `<p>Hi [Name],</p><p>I know choosing a dental practice can feel overwhelming. Here are the most common questions we hear:</p><p>"How much will it cost?" - We provide transparent pricing during your free consultation and offer flexible payment plans to fit any budget.</p><p>"Will it hurt?" - We use the latest pain-free techniques and sedation options. Your comfort is our priority.</p><p>"How long will it take?" - Most treatments are faster than you think. We'll create a timeline that works with your schedule.</p><p>"Are you accepting new patients?" - Yes! We'd love to welcome you to [Practice Name].</p><p>Still have questions? Let's chat. Call [Phone Number] or reply to this email.</p><p>Best wishes,<br>[Practice Name] Team<br>[Address] | [Email]</p>`,
   },
   {
     key: 'lead_enquiry_day_18',
     type: 'Email',
-    name: 'Final Call to Action (Day 18)',
+    name: 'Final Call to Action (Day 9)',
     subject: "[Patient Name], we'd love to help you achieve your smile goals",
-    sending: '18 days after enquiry',
+    sending: '9 days after enquiry',
     enabled: false,
-    trigger: { type: 'inquiry_days', days: 18 },
-    template: `<p>Hi [Patient Name],</p><p>I wanted to reach out one last time because I genuinely believe we can help you achieve the smile you deserve.</p><p>At [Practice Name], we've transformed thousands of smiles, and we'd be honored to help you too. Whether you're looking for a routine check-up or a complete smile makeover, we're here to support you every step of the way.</p><p>Here's what happens next:</p><ul><li>Call us at [Phone Number] or reply to this email</li><li>Schedule your complimentary consultation at a time that works for you</li><li>Meet our friendly team and discover your personalized treatment options</li></ul><p>Our calendar fills quickly, so I encourage you to book soon. We have limited appointments available this month.</p><p>Looking forward to welcoming you.</p><p>Warmly,<br>[Practice Name] Team<br>[Website] | [Phone Number] | [Email]</p>`,
+    trigger: { type: 'inquiry_days', days: 9 },
+    template: `<p>Hi [Name],</p><p>I wanted to reach out one last time because I genuinely believe we can help you achieve the smile you deserve.</p><p>At [Practice Name], we've transformed thousands of smiles, and we'd be honored to help you too. Whether you're looking for a routine check-up or a complete smile makeover, we're here to support you every step of the way.</p><p>Here's what happens next:</p><ul><li>Call us at [Phone Number] or reply to this email</li><li>Schedule your complimentary consultation at a time that works for you</li><li>Meet our friendly team and discover your personalized treatment options</li></ul><p>Our calendar fills quickly, so I encourage you to book soon. We have limited appointments available this month.</p><p>Looking forward to welcoming you.</p><p>Warmly,<br>[Practice Name] Team<br>[Website] | [Phone Number] | [Email]</p>`,
   },
   {
     key: 'composite_bonding_day_1',
@@ -120,32 +90,32 @@ const crmAutomationDefaultsAll = [
   {
     key: 'composite_bonding_day_5',
     type: 'Email',
-    name: 'Process and Comfort (Day 8)',
+    name: 'Process & Comfort (Day 6)',
     subject: 'What to expect during your composite bonding treatment',
-    sending: '8 days after enquiry',
+    sending: '6 days after enquiry',
     enabled: false,
-    trigger: { type: 'inquiry_days', days: 8 },
+    trigger: { type: 'inquiry_days', days: 6 },
     template: `<p>Hi [Patient Name],</p><p>Let me walk you through exactly what happens during composite bonding - no mysteries, just facts.</p><p>Your Treatment Journey:</p><ul><li>Consultation (30 mins) - We discuss your goals, assess your teeth, and show you what's achievable</li><li>Preparation (15 mins) - We gently prepare your tooth surface (no drilling or pain)</li><li>Application (30-60 mins) - We apply and sculpt the composite resin to create your perfect smile</li><li>Finishing touches (15 mins) - Polish and perfect for a natural, beautiful result</li></ul><p>Total time: 60-90 minutes for most treatments</p><p>Anesthesia needed: Usually not required.</p><p>Recovery time: None - leave with your new smile immediately.</p><p>Many patients are amazed at how comfortable and quick the process is. You can even watch your smile transform in real-time.</p><p>Ready to get started? We're offering a 10% discount on composite bonding consultations booked this month.</p><p>Call [Phone Number] or reply to this email to claim your spot.</p><p>Warmly,<br>[Practice Name] Team<br>[Address] | [Phone Number]</p>`,
   },
   {
     key: 'composite_bonding_day_13',
     type: 'Email',
-    name: 'Overcome Price Objections (Day 13)',
-    subject: 'Affordable smile transformation - here is how we make it work',
-    sending: '13 days after enquiry',
+    name: 'Overcome Price Objections (Day 8)',
+    subject: "Affordable smile transformation - here's how we make it work",
+    sending: '8 days after enquiry',
     enabled: false,
-    trigger: { type: 'inquiry_days', days: 13 },
-    template: `<p>Hi [Patient Name],</p><p>We believe everyone deserves a confident smile, which is why we've made composite bonding accessible to all our patients.</p><p>Investment: Composite bonding typically ranges from GBP [X] per tooth, significantly less than veneers at GBP [higher amount].</p><p>Flexible Payment Plans: Spread the cost over 6-12 months with 0% finance options (subject to approval).</p><p>What's included:</p><ul><li>Comprehensive consultation and assessment</li><li>Expert composite bonding treatment</li><li>Aftercare guidance and support</li><li>12-month satisfaction guarantee</li></ul><p>Think of it as an investment in yourself - your confidence, your career, your social life. Patients tell us their new smile changes everything.</p><p>Plus, this month we're offering up to 15% off composite bonding treatments when you book your consultation.</p><p>Don't let cost hold you back from the smile you deserve. Call [Phone Number] today to discuss your options.</p><p>Best wishes,<br>[Practice Name] Team<br>[Website] | [Email]</p>`,
+    trigger: { type: 'inquiry_days', days: 8 },
+    template: `<p>Hi [Patient Name],</p><p>We believe everyone deserves a confident smile, which is why we've made composite bonding accessible to all our patients.</p><p>Investment: Composite bonding typically ranges from £[X] per tooth, significantly less than veneers at £[higher amount].</p><p>Flexible Payment Plans: Spread the cost over 6-12 months with 0% finance options (subject to approval).</p><p>What's included:</p><ul><li>Comprehensive consultation and assessment</li><li>Expert composite bonding treatment</li><li>Aftercare guidance and support</li><li>12-month satisfaction guarantee</li></ul><p>Think of it as an investment in yourself - your confidence, your career, your social life. Patients tell us their new smile changes everything.</p><p>Plus, this month we're offering up to 10% off composite bonding treatments when you book your consultation.</p><p>Don't let cost hold you back from the smile you deserve. Call [Phone Number] today to discuss your options.</p><p>Best wishes,<br>[Practice Name] Team<br>[Website] | [Email]</p>`,
   },
   {
     key: 'composite_bonding_day_18',
     type: 'Email',
-    name: 'Urgency and Final CTA (Day 18)',
+    name: 'Urgency & Final CTA (Day 10)',
     subject: 'Last chance: 15% off composite bonding ends soon',
-    sending: '18 days after enquiry',
+    sending: '10 days after enquiry',
     enabled: false,
-    trigger: { type: 'inquiry_days', days: 18 },
-    template: `<p>Hi [Patient Name],</p><p>This is your final reminder - our special offer on composite bonding treatments ends this week.</p><p>Save 15% when you book your consultation by [Date]. This exclusive discount won't last, and our calendar is filling fast.</p><p>Composite bonding can transform your smile in just one visit:</p><ul><li>No drilling or pain</li><li>Immediate results</li><li>Natural-looking finish</li><li>Lasts 5-10 years</li></ul><p>Hundreds of patients have trusted [Practice Name] with their smile transformations. Now it's your turn.</p><p>Act now: Call [Phone Number] or reply to this email to secure your discounted consultation.</p><p>Limited appointments available - don't miss out on this opportunity.</p><p>Looking forward to helping you achieve your dream smile.</p><p>Warmly,<br>[Practice Name] Team<br>[Website] | [Address] | [Phone Number]</p>`,
+    trigger: { type: 'inquiry_days', days: 10 },
+    template: `<p>Hi [Patient Name],</p><p>This is your final reminder - our special offer on composite bonding treatments ends this week!</p><p>Save 15% when you book your consultation by [Date]. This exclusive discount won't last, and our calendar is filling fast.</p><p>Composite bonding can transform your smile in just one visit:</p><ul><li>No drilling or pain</li><li>Immediate results</li><li>Natural-looking finish</li><li>Lasts 5-10 years</li></ul><p>Hundreds of patients have trusted [Practice Name] with their smile transformations. Now it's your turn.</p><p>Act now: Call [Phone Number] or reply to this email to secure your discounted consultation.</p><p>Limited appointments available - don't miss out on this opportunity!</p><p>Looking forward to helping you achieve your dream smile.</p><p>Warmly,<br>[Practice Name] Team<br>[Website] | [Address] | [Phone Number]</p>`,
   },
   {
     key: 'invisalign_day_1',
@@ -180,12 +150,12 @@ const crmAutomationDefaultsAll = [
   {
     key: 'invisalign_day_13',
     type: 'Email',
-    name: 'Financial Options (Day 13)',
+    name: 'Financial Options (Day 10)',
     subject: 'Make Invisalign affordable with flexible payment plans',
-    sending: '13 days after enquiry',
+    sending: '10 days after enquiry',
     enabled: false,
-    trigger: { type: 'inquiry_days', days: 13 },
-    template: `<p>Hi [Patient Name],</p><p>We know cost is an important consideration when investing in your smile. That's why we've made Invisalign accessible with flexible financing options.</p><p>Investment options:</p><ul><li>Full payment discount: Pay upfront and save GBP [X]</li><li>Interest-free plans: Spread payments over 12 months at 0% APR</li><li>Extended finance: Monthly plans up to 24 months available</li><li>Deposit: From just GBP [X] to start treatment</li></ul><p>Average Invisalign investment: GBP 2,500-4,500 (varies based on complexity)</p><p>What's included:</p><ul><li>All aligners and retainers</li><li>Regular monitoring appointments</li><li>3D smile preview and treatment planning</li><li>Aftercare and support</li></ul><p>Plus, this month we're offering up to 15% off - that's a potential saving of GBP [X].</p><p>Think of Invisalign as an investment in your confidence, career, and quality of life. Patients consistently tell us it's one of the best decisions they've ever made.</p><p>Let's create a payment plan that works for your budget. Call [Phone Number] today for your free consultation.</p><p>Warmly,<br>[Practice Name] Team<br>[Website] | [Email]</p>`,
+    trigger: { type: 'inquiry_days', days: 10 },
+    template: `<p>Hi [Patient Name],</p><p>We know cost is an important consideration when investing in your smile. That's why we've made Invisalign accessible with flexible financing options.</p><p>Investment options:</p><ul><li>Full payment discount: Pay upfront and save £[X]</li><li>Interest-free plans: Spread payments over 12 months at 0% APR</li><li>Extended finance: Monthly plans up to 24 months available</li><li>Deposit: From just £[X] to start treatment</li></ul><p>Average Invisalign investment: £2,500-4,500 (varies based on complexity)</p><p>What's included:</p><ul><li>All aligners and retainers</li><li>Regular monitoring appointments</li><li>3D smile preview and treatment planning</li><li>Aftercare and support</li></ul><p>Plus, this month we're offering up to 15% off - that's a potential saving of £[X].</p><p>Think of Invisalign as an investment in your confidence, career, and quality of life. Patients consistently tell us it's one of the best decisions they've ever made.</p><p>Let's create a payment plan that works for your budget. Call [Phone Number] today for your free consultation.</p><p>Warmly,<br>[Practice Name] Team<br>[Website] | [Email]</p>`,
   },
   {
     key: 'invisalign_day_18',
@@ -240,102 +210,12 @@ const crmAutomationDefaultsAll = [
   {
     key: 'check_up_day_18',
     type: 'Email',
-    name: 'Final Urgency (Day 18)',
-    subject: 'Last chance: GBP [Y] off new patient dental exam ends [Date]',
-    sending: '18 days after enquiry',
+    name: 'Final Urgency (Day 10)',
+    subject: 'Last chance: £[Y] off new patient dental exam ends [Date]',
+    sending: '10 days after enquiry',
     enabled: false,
-    trigger: { type: 'inquiry_days', days: 18 },
-    template: `<p>Hi [Patient Name],</p><p>This is your final reminder - our new patient special offer ends [Date].</p><p>Final chance to save: Comprehensive exam, X-rays, and professional cleaning for just GBP [X] (regularly GBP [Y]).</p><p>Your oral health shouldn't wait. Here's why booking now matters:</p><ul><li>Catch problems early before they become painful and expensive</li><li>Professional cleaning removes buildup your toothbrush can't reach</li><li>Peace of mind knowing your oral health is in expert hands</li><li>Prevent future issues with personalized care advice</li><li>Save money with our limited-time new patient discount</li></ul><p>We've helped thousands of patients achieve and maintain healthy, beautiful smiles. Let us do the same for you.</p><p>Don't miss out:</p><ul><li>Call [Phone Number] by [Date] to claim this offer</li><li>Limited appointment slots available</li><li>Join our family of happy, healthy patients</li></ul><p>Our team is ready to welcome you with exceptional, gentle care.</p><p>Book now - your smile will thank you.</p><p>Warmly,<br>[Practice Name] Team<br>[Website] | [Address] | [Phone Number]</p>`,
-  },
-  {
-    key: 'black_friday_enquiry_day_1',
-    type: 'Email',
-    name: 'Exclusive Black Friday Offer Just for You!',
-    subject: 'Exclusive Black Friday Offer Just for You!',
-    sending: '1 day after enquiry',
-    enabled: false,
-    trigger: { type: 'inquiry_days', days: 1 },
-    template: `<p>Hi [First Name], are you ready to take advantage of our Black Friday deal?</p><p>Save up to 30% on selected cosmetic treatments. Secure your spot with us today.</p>`,
-  },
-  {
-    key: 'black_friday_enquiry_day_3',
-    type: 'Email',
-    name: 'Reminder: Black Friday Offers Ending Soon',
-    subject: 'Reminder: Black Friday Offers Ending Soon',
-    sending: '3 days after enquiry',
-    enabled: false,
-    trigger: { type: 'inquiry_days', days: 3 },
-    template: `<p>Don't miss out on incredible savings!</p><p>Our Black Friday promotions end soon. Book your consultation now to see how we can elevate your smile.</p>`,
-  },
-  {
-    key: 'black_friday_enquiry_day_5',
-    type: 'Email',
-    name: 'Last Chance! Black Friday Deals End Today',
-    subject: 'Last Chance! Black Friday Deals End Today',
-    sending: '5 days after enquiry',
-    enabled: false,
-    trigger: { type: 'inquiry_days', days: 5 },
-    template: `<p>[First Name], today is the final day to claim your Black Friday discount.</p><p>Book to see us now and transform your smile at a fraction of the cost.</p>`,
-  },
-  {
-    key: 'general_lead_nurture_day_1',
-    type: 'Email',
-    name: 'Thank You for Your Interest in [Practice Name]',
-    subject: 'Thank You for Your Interest in [Practice Name]',
-    sending: '1 day after enquiry',
-    enabled: false,
-    trigger: { type: 'inquiry_days', days: 1 },
-    template: `<p>We appreciate your enquiry and would love to help you on your dental journey!</p><p>We're here to help with all your dental needs and questions. Let us know what procedure you're interested in.</p>`,
-  },
-  {
-    key: 'general_lead_nurture_day_3',
-    type: 'Email',
-    name: 'Meet Our Exceptional Expert Dental Team',
-    subject: 'Meet Our Exceptional Expert Dental Team',
-    sending: '3 days after enquiry',
-    enabled: false,
-    trigger: { type: 'inquiry_days', days: 3 },
-    template: `<p>Get to know our highly skilled dental team dedicated to providing you with the best dental care.</p><p>Book your first appointment to experience why we're a cut above the rest.</p>`,
-  },
-  {
-    key: 'general_lead_nurture_day_5',
-    type: 'Email',
-    name: 'Your Smile Journey Begins Here',
-    subject: 'Your Smile Journey Begins Here',
-    sending: '5 days after enquiry',
-    enabled: false,
-    trigger: { type: 'inquiry_days', days: 5 },
-    template: `<p>Don't wait - join hundreds of happy patients who have trusted us with their smiles.</p><p>Let's schedule your first appointment today.</p>`,
-  },
-  {
-    key: 'birthday_gift_day_1',
-    type: 'Email',
-    name: 'Happy Birthday from [Practice Name]!',
-    subject: 'Happy Birthday from [Practice Name]!',
-    sending: 'On birthday',
-    enabled: false,
-    trigger: { type: 'birthday_offset', days: 0 },
-    template: `<p>Wishing you a wonderful birthday!</p><p>Enjoy a special gift from us - a 10% discount on your next treatment during your birthday month.</p>`,
-  },
-  {
-    key: 'birthday_gift_day_3',
-    type: 'Email',
-    name: "Don't Forget Your Birthday Gift!",
-    subject: "Don't Forget Your Birthday Gift!",
-    sending: '2 days after birthday',
-    enabled: false,
-    trigger: { type: 'birthday_offset', days: 2 },
-    template: `<p>We wanted to remind you of your birthday reward.</p><p>Book your appointment with us this month to enjoy our special offer.</p>`,
-  },
-  {
-    key: 'birthday_gift_day_5',
-    type: 'Email',
-    name: 'Last Chance for Your Birthday Offer!',
-    subject: 'Last Chance for Your Birthday Offer!',
-    sending: '4 days after birthday',
-    enabled: false,
-    trigger: { type: 'birthday_offset', days: 4 },
-    template: `<p>Your birthday month is ending soon - make sure to claim your 10% discount before it's gone!</p>`,
+    trigger: { type: 'inquiry_days', days: 10 },
+    template: `<p>Hi [Patient Name],</p><p>This is your final reminder - our new patient special offer ends [Date].</p><p>Final chance to save: Comprehensive exam + X-rays + professional cleaning for just £[X] (regularly £[Y]).</p><p>Your oral health shouldn't wait. Here's why booking now matters:</p><ul><li>Catch problems early before they become painful and expensive</li><li>Professional cleaning removes buildup your toothbrush can't reach</li><li>Peace of mind knowing your oral health is in expert hands</li><li>Prevent future issues with personalized care advice</li><li>Save money with our limited-time new patient discount</li></ul><p>We've helped thousands of patients achieve and maintain healthy, beautiful smiles. Let us do the same for you.</p><p>Don't miss out:</p><ul><li>Call [Phone Number] by [Date] to claim this offer</li><li>Limited appointment slots available</li><li>Join our family of happy, healthy patients</li></ul><p>Our team is ready to welcome you with exceptional, gentle care.</p><p>Book now - your smile will thank you.</p><p>Warmly,<br>[Practice Name] Team<br>[Website] | [Address] | [Phone Number]</p>`,
   },
   {
     key: 'black_friday_7_days_before',
@@ -390,24 +270,363 @@ const crmAutomationDefaultsAll = [
   {
     key: 'birthday_day',
     type: 'Email',
-    name: 'Birthday - Gift Email (Day 0)',
-    subject: 'Birthday - Gift Email',
-    sending: 'On birthday',
+    name: 'Birthday Promotion - Birthday Month',
+    subject: '🎂 Happy Birthday Month, [Name]!',
+    sending: '1st of birthday month',
     enabled: false,
-    trigger: { type: 'birthday_offset', days: 0 },
-    template: `<p>Hi [First Name],</p><p>HAPPY BIRTHDAY!</p><p>Today is all about celebrating YOU, and we wanted to make your day even brighter with a special birthday gift from our team.</p><p>As our valued patient, we're giving you exclusive birthday access to treatments that will make you smile even wider this year:</p><ul><li>Complimentary smile enhancement consultation</li><li>Professional teeth whitening session</li><li>Priority booking privileges</li></ul><p>Your birthday gift is valid for 30 days - because your celebration shouldn't end today!</p><p>Book your birthday appointment here: [link]</p><p>Here's to another year of confident, radiant smiles. You deserve to shine!</p>`,
+    trigger: { type: 'birthday_month_start', offsetDays: 0 },
+    template: `<p>Hi [Name],</p><p>🎉 IT'S YOUR BIRTHDAY MONTH! 🎉</p><p>At [Practice Name], we believe your birthday should be celebrated all month long - especially when it comes to investing in yourself.</p><p>Your Exclusive Birthday Gift:</p><ul><li>20% OFF any dental treatment (our biggest personal discount!)</li><li>FREE professional teeth whitening with treatment packages (worth £[X])</li><li>Complimentary birthday smile consultation</li></ul>`,
   },
   {
-    key: 'birthday_reminder_20_days',
+    key: 'christmas_email_day_1',
     type: 'Email',
-    name: 'Birthday - Gift Reminder (Day 20)',
-    subject: 'Birthday - Gift Reminder',
-    sending: '20 days after birthday',
+    name: 'Christmas Promotion - Gift of Confidence (2 weeks before)',
+    subject: '🎄 Give yourself the gift of confidence this Christmas',
+    sending: '2 weeks before Christmas',
     enabled: false,
-    trigger: { type: 'birthday_offset', days: 20 },
-    template: `<p>Hi [First Name],</p><p>We hope you had an amazing birthday! Just a friendly reminder that your exclusive birthday gift is still waiting for you - but not for long.</p><p>You have just 10 days left to claim your complimentary treatments. Don't let this special opportunity slip away!</p><p>Hundreds of our patients tell us that using their birthday gift was the best decision they made all year.</p><p>Claim your gift now: [booking link]</p><p>Make this birthday month truly unforgettable!</p>`,
+    trigger: { type: 'month_day', month: 12, day: 25, offsetDays: -14 },
+    template: `<p>Hi [Name],</p><p>The holidays are the perfect time for fresh starts and new beginnings. This Christmas, why not give yourself the gift that keeps on giving - a smile you're proud to show off?</p><p>Our Christmas Gift to You:</p><ul><li>15% OFF all dental treatments booked in December</li><li>FREE teeth whitening worth £[X] with treatment packages</li><li>0% finance available - spread payments into 2026</li><li>Priority appointments for January/February 2026</li></ul><p>Imagine ringing in the New Year with renewed confidence:</p><ul><li>Smiling freely in family photos</li><li>Feeling attractive at holiday parties</li><li>Starting 2026 with the best version of yourself</li></ul><p>Christmas offer valid: Now through December 23rd</p><p>Appointments filling: Book early for January starts</p><p>Book your consultation: Call [Phone Number] or visit [Website]</p><p>Wishing you a season of joy and beautiful smiles!</p><p>Warmly,<br>[Practice Name] Team<br>[Website] | [Address]</p>`,
   },
-,
+  {
+    key: 'christmas_email_day_10',
+    type: 'Email',
+    name: 'Christmas Promotion - Holiday Smile Makeover (10 days before)',
+    subject: '✨ Look your best in holiday photos - Christmas smile specials',
+    sending: '10 days before Christmas',
+    enabled: false,
+    trigger: { type: 'month_day', month: 12, day: 25, offsetDays: -10 },
+    template: `<p>Hi [Name],</p><p>Holiday gatherings, family photos, New Year celebrations - the next few weeks are full of moments you'll want to remember forever.</p><p>Fast-track treatments for the holidays:</p><ul><li>Express Teeth Whitening (1 visit) - Brighten up to 8 shades in 60 minutes - Christmas special: £[X] (save 15%)</li><li>Composite Bonding (1-2 visits) - Fix chips, gaps, or discoloration quickly - Christmas offer: 15% OFF + FREE whitening</li><li>Invisalign New Year Start - Begin your journey to straight teeth - 15% OFF treatment packages</li></ul><p>Limited December appointments available - our calendar is filling fast.</p><p>Book now for pre-holiday appointments: Call [Phone Number]</p><p>Don't hide your smile in this year's holiday photos. Let us help you look and feel your absolute best!</p><p>Festive wishes,<br>[Practice Name] Team<br>[Phone Number] | [Email]</p>`,
+  },
+  {
+    key: 'christmas_email_day_5',
+    type: 'Email',
+    name: 'Christmas Promotion - Last Minute Gift (5 days before)',
+    subject: '🎁 The perfect last-minute gift: A smile transformation',
+    sending: '5 days before Christmas',
+    enabled: false,
+    trigger: { type: 'month_day', month: 12, day: 25, offsetDays: -5 },
+    template: `<p>Hi [Name],</p><p>Still looking for the perfect gift? Give someone (or yourself!) something truly transformative this Christmas.</p><p>[Practice Name] Gift Vouchers:</p><ul><li>Available in any amount</li><li>Redeemable for any treatment</li><li>Beautiful presentation</li><li>Valid for 12 months</li><li>Can be sent digitally or posted</li></ul><p>Plus: All treatments booked before December 31st receive 15% OFF when you redeem your voucher!</p><p>Order gift vouchers: Call [Phone Number] or purchase online at [Website]</p><p>Digital vouchers delivered immediately - perfect for last-minute gifting!</p><p>Give the gift of confidence this Christmas.</p><p>With Christmas cheer,<br>[Practice Name] Team<br>[Website] | [Address]</p>`,
+  },
+  {
+    key: 'christmas_email_day_27',
+    type: 'Email',
+    name: 'Christmas Promotion - New Year Prep (2 days after)',
+    subject: 'New Year, New Smile - Christmas offer extended!',
+    sending: '2 days after Christmas',
+    enabled: false,
+    trigger: { type: 'month_day', month: 12, day: 25, offsetDays: 2 },
+    template: `<p>Hi [Name],</p><p>How were your holidays? Now that Christmas is behind us, it's time to think about starting 2026 with confidence and purpose.</p><p>Great news: Due to popular demand, we're extending our Christmas offer through New Year's Day!</p><p>Start 2026 with your best smile:</p><ul><li>15% OFF all treatments booked by January 1st</li><li>FREE teeth whitening with comprehensive packages</li><li>Zero-deposit payment plans - start paying in February</li><li>Priority appointments for January</li></ul><p>Appointments are limited - January is our busiest month as people commit to their resolutions. Book now to secure your preferred dates.</p><p>Start your transformation: Call [Phone Number] or book at [Website]</p><p>Cheers to new beginnings,<br>[Practice Name] Team<br>[Phone Number] | [Email]</p>`,
+  },
+  {
+    key: 'christmas_email_day_31',
+    type: 'Email',
+    name: 'Christmas Promotion - Final Extended Offer (New Year’s Eve)',
+    subject: '⏰ Final hours: Christmas offer ends tonight at midnight',
+    sending: 'New Year’s Eve',
+    enabled: false,
+    trigger: { type: 'month_day', month: 12, day: 31, offsetDays: 0 },
+    template: `<p>Hi [Name],</p><p>This is your absolute last chance.</p><p>Our Christmas promotion - 15% OFF all treatments + FREE teeth whitening - ends tonight at midnight.</p><p>After tonight, prices return to normal and this offer won't be back until next Christmas.</p><p>Time remaining: Less than 12 hours</p><p>Appointments available: Very limited</p><p>This ends at midnight: Call [Phone Number] now or book instantly at [Website]</p><p>Don't start 2026 with regret. Start it with confidence.</p><p>Final call,<br>[Practice Name] Team<br>[Phone Number] | [Website]</p>`,
+  },
+  {
+    key: 'new_year_email_day_1',
+    type: 'Email',
+    name: 'New Year Promotion - Resolution Focus (Jan 1)',
+    subject: '💫 New Year, New Smile - Make 2026 YOUR year',
+    sending: 'January 1st',
+    enabled: false,
+    trigger: { type: 'month_day', month: 1, day: 1, offsetDays: 0 },
+    template: `<p>Hi [Name],</p><p>Happy New Year! 🎊</p><p>While others are making resolutions they'll abandon by February, you have the opportunity to make a lasting change that will impact every single day of 2026 and beyond.</p><p>Our New Year Resolution Support:</p><ul><li>20% OFF all smile transformation treatments</li><li>No payment required until March (0% interest)</li><li>FREE consultation + treatment planning</li><li>Bonus teeth whitening with packages</li></ul><p>New Year special valid: January 1-15 only</p><p>Start your transformation: Call [Phone Number] or book at [Website]</p><p>Limited January appointments available - our busiest month of the year!</p><p>Here's to your most confident year yet!</p><p>Enthusiastically yours,<br>[Practice Name] Team<br>[Website] | [Address]</p>`,
+  },
+  {
+    key: 'new_year_email_day_5',
+    type: 'Email',
+    name: 'New Year Promotion - Goal Achievement Strategy (Jan 5)',
+    subject: 'Why smile transformations succeed when other resolutions fail',
+    sending: 'January 5th',
+    enabled: false,
+    trigger: { type: 'month_day', month: 1, day: 1, offsetDays: 4 },
+    template: `<p>Hi [Name],</p><p>It's January 5th. Statistics show that 80% of New Year resolutions fail by February.</p><p>But here's why smile transformations are different:</p><ul><li>Measurable results - You can see and feel the progress</li><li>Expert support - We guide you every step of the way</li><li>Timeline commitment - Structured treatment plan keeps you accountable</li><li>Life-changing results - Benefits you notice daily</li></ul><p>New Year special: 20% OFF + pay nothing until March!</p><p>Valid through January 15th only - [X] appointments already booked!</p><p>Book now: Call [Phone Number] or visit [Website]</p><p>Your future self is counting on you!</p><p>Best wishes,<br>[Practice Name] Team<br>[Phone Number] | [Email]</p>`,
+  },
+  {
+    key: 'new_year_email_day_9',
+    type: 'Email',
+    name: 'New Year Promotion - Investment in Self (Jan 9)',
+    subject: "The best investment you'll make in 2026 isn't financial",
+    sending: 'January 9th',
+    enabled: false,
+    trigger: { type: 'month_day', month: 1, day: 1, offsetDays: 8 },
+    template: `<p>Hi [Name],</p><p>While everyone else is focused on investment portfolios and savings accounts, consider this: The ROI of a confident smile is immeasurable.</p><p>Our New Year offer makes it affordable:</p><ul><li>20% OFF all treatments (save up to £[X])</li><li>Zero payments until March</li><li>Flexible finance plans from £[X]/month</li><li>FREE teeth whitening included</li></ul><p>Offer ends January 15th - only [X] promotional slots remaining!</p><p>Book your consultation: Call [Phone Number] or visit [Website]</p><p>Make 2026 the year everything changes!</p><p>Confidently yours,<br>[Practice Name] Team<br>[Website] | [Address]</p>`,
+  },
+  {
+    key: 'new_year_email_day_12',
+    type: 'Email',
+    name: 'New Year Promotion - Social Proof & Urgency (Jan 12)',
+    subject: '[X] people have already started their 2026 smile journey',
+    sending: 'January 12th',
+    enabled: false,
+    trigger: { type: 'month_day', month: 1, day: 1, offsetDays: 11 },
+    template: `<p>Hi [Name],</p><p>Since January 1st, [X] people have booked smile transformation treatments at [Practice Name]. They're already on their way to more confident smiles. The question is: will you join them?</p><p>Only 3 days left to secure your 20% discount!</p><p>New Year offer ends: January 15th at 11:59 PM</p><p>Remaining appointments: Limited (70% already booked)</p><p>Book now: Call [Phone Number] or visit [Website]</p><p>Urgently yours,<br>[Practice Name] Team<br>[Phone Number] | [Email]</p>`,
+  },
+  {
+    key: 'new_year_email_day_15',
+    type: 'Email',
+    name: 'New Year Promotion - Final Call (Jan 15)',
+    subject: '🚨 TODAY ONLY: Final hours for 20% OFF New Year smile transformations',
+    sending: 'January 15th',
+    enabled: false,
+    trigger: { type: 'month_day', month: 1, day: 1, offsetDays: 14 },
+    template: `<p>Hi [Name],</p><p>THIS IS IT.</p><p>Our New Year promotion - 20% OFF + pay nothing until March - ends tonight at midnight.</p><p>Final call to action:</p><ul><li>Call [Phone Number] by [Date] to claim your 20% discount</li><li>Limited consultation slots available</li><li>Join our family of happy, confident patients</li></ul><p>Call now: [Phone Number]</p><p>Final urgency,<br>[Practice Name] Team<br>[Website] | [Address] | [Phone Number]</p>`,
+  },
+  {
+    key: 'valentines_email_day_1',
+    type: 'Email',
+    name: "Valentine's Promotion - Love Yourself (2 weeks before)",
+    subject: "💕 Fall in love with your smile this Valentine's Day",
+    sending: '2 weeks before Valentines Day',
+    enabled: false,
+    trigger: { type: 'month_day', month: 2, day: 14, offsetDays: -14 },
+    template: `<p>Hi [Name],</p><p>This Valentine's Day, forget the chocolates and flowers that fade in days. Give yourself something lasting - a smile you'll love for years to come.</p><p>Our Valentine's Gift to You:</p><ul><li>15% OFF all smile enhancement treatments</li><li>FREE professional teeth whitening with packages (worth £[X])</li><li>Couples' packages available - transform together and save even more</li></ul><p>Valentine's offer valid: Now through February 14th</p><p>Book your confidence boost: Call [Phone Number] or visit [Website]</p><p>With love,<br>[Practice Name] Team<br>[Website] | [Address]</p>`,
+  },
+  {
+    key: 'valentines_email_day_10',
+    type: 'Email',
+    name: "Valentine's Promotion - Date Night Ready (10 days before)",
+    subject: "❤️ Look irresistible this Valentine's Day",
+    sending: '10 days before Valentines Day',
+    enabled: false,
+    trigger: { type: 'month_day', month: 2, day: 14, offsetDays: -10 },
+    template: `<p>Hi [Name],</p><p>Got Valentine's plans? Make sure your smile is as ready as your outfit!</p><p>Last-minute confidence boosters:</p><ul><li>Professional Teeth Whitening (60 minutes) - Valentine's special: £[X] (save 15%)</li><li>Quick Composite Touch-Ups - 15% OFF</li></ul><p>Couples special: Book together and save an additional 5%!</p><p>Limited pre-Valentine's appointments - our calendar is filling fast!</p><p>Book now: Call [Phone Number] - mention \"Valentine's Special\"</p><p>Romantically yours,<br>[Practice Name] Team<br>[Phone Number] | [Email]</p>`,
+  },
+  {
+    key: 'valentines_email_day_5',
+    type: 'Email',
+    name: "Valentine's Promotion - Self-Love (5 days before)",
+    subject: '💝 The most important relationship is with yourself',
+    sending: '5 days before Valentines Day',
+    enabled: false,
+    trigger: { type: 'month_day', month: 2, day: 14, offsetDays: -5 },
+    template: `<p>Hi [Name],</p><p>Valentine's Day isn't just for couples - it's the perfect reminder to love and invest in yourself.</p><p>Self-love investment ideas:</p><ul><li>Teeth Whitening - £[X] (save 15%)</li><li>Composite Bonding - From £[X]/tooth (save 15%)</li><li>Invisalign Start Package (save 15%)</li></ul><p>Valentine's Self-Love Special:</p><ul><li>15% OFF all treatments</li><li>FREE whitening with comprehensive packages</li><li>Flexible payment plans</li></ul><p>Offer ends February 14th - treat yourself before it's too late!</p><p>Book your self-love appointment: Call [Phone Number] or visit [Website]</p><p>With admiration,<br>[Practice Name] Team<br>[Website] | [Address]</p>`,
+  },
+  {
+    key: 'valentines_email_day_3',
+    type: 'Email',
+    name: "Valentine's Promotion - Couples Package (3 days before)",
+    subject: "💑 Couples' special: Transform your smiles together",
+    sending: '3 days before Valentines Day',
+    enabled: false,
+    trigger: { type: 'month_day', month: 2, day: 14, offsetDays: -3 },
+    template: `<p>Hi [Name],</p><p>Looking for a unique Valentine's experience that's actually meaningful?</p><p>Introducing our Couples' Smile Transformation Package:</p><ul><li>Couples' Whitening Experience - £[X] (save 20%)</li><li>Partner Smile Makeover Package - Save up to 20%</li></ul><p>Extra Valentine's bonus: Book by February 14th and receive FREE take-home whitening kits for both partners (£[X] value)!</p><p>Limited couples' slots available - this is our most popular Valentine's offer!</p><p>Book together: Call [Phone Number] and ask for the Couples' Valentine's Package</p><p>Lovingly,<br>[Practice Name] Team<br>[Phone Number] | [Website]</p>`,
+  },
+  {
+    key: 'valentines_email_day_14',
+    type: 'Email',
+    name: "Valentine's Promotion - Last Chance (Feb 14)",
+    subject: "💌 Final hours: Valentine's smile special ends tonight",
+    sending: 'Valentines Day',
+    enabled: false,
+    trigger: { type: 'month_day', month: 2, day: 14, offsetDays: 0 },
+    template: `<p>Hi [Name],</p><p>FINAL CALL: Our Valentine's promotion ends tonight at midnight!</p><p>Today only:</p><ul><li>15% OFF all treatments</li><li>FREE teeth whitening with packages</li><li>Extra 5% OFF for couples</li><li>Priority appointment booking</li></ul><p>Call [Phone Number] RIGHT NOW or book instantly at [Website].</p><p>Final Valentine's wishes,<br>[Practice Name] Team<br>[Website] | [Address] | [Phone Number]</p>`,
+  },
+  {
+    key: 'mothers_day_email_day_1',
+    type: 'Email',
+    name: 'Mothers Day Promotion - Appreciation Focus (3 weeks before)',
+    subject: "💐 Celebrate Mum with the gift of confidence this Mother's Day",
+    sending: '3 weeks before Mothers Day',
+    enabled: false,
+    trigger: { type: 'weekday_of_month', month: 3, weekday: 0, weekIndex: 3, offsetDays: -21 },
+    template: `<p>Hi [Name],</p><p>Mother's Day is approaching, and if you're looking for a gift that's truly meaningful, look no further.</p><p>Our Mother's Day Special:</p><ul><li>15% OFF all dental treatments for mums</li><li>FREE teeth whitening with treatment packages</li><li>Mother-Daughter/Son packages - save an extra 5%</li><li>Gift vouchers available</li></ul><p>Mother's Day special valid: Now through [Mother's Day date]</p><p>Book or purchase gift vouchers: Call [Phone Number] or visit [Website]</p><p>Warmly,<br>[Practice Name] Team<br>[Website] | [Address]</p>`,
+  },
+  {
+    key: 'mothers_day_email_day_2',
+    type: 'Email',
+    name: 'Mothers Day Promotion - Mother-Child Bonding (2 weeks before)',
+    subject: "👩‍👧 Bond with Mum over smile transformations this Mother's Day",
+    sending: '2 weeks before Mothers Day',
+    enabled: false,
+    trigger: { type: 'weekday_of_month', month: 3, weekday: 0, weekIndex: 3, offsetDays: -14 },
+    template: `<p>Hi [Name],</p><p>The best gifts aren't things - they're experiences shared together.</p><p>Mother & Child Special Package:</p><ul><li>20% OFF when you book together (extra 5% on top of Mother's Day discount!)</li><li>Same-day appointments available</li><li>Coordinated treatment planning</li></ul><p>Book together: Call [Phone Number] and mention \"Mother & Child Package\"</p><p>With appreciation,<br>[Practice Name] Team<br>[Phone Number] | [Email]</p>`,
+  },
+  {
+    key: 'mothers_day_email_day_3',
+    type: 'Email',
+    name: 'Mothers Day Promotion - She Deserves It (10 days before)',
+    subject: '🌺 Mum deserves more than flowers this year',
+    sending: '10 days before Mothers Day',
+    enabled: false,
+    trigger: { type: 'weekday_of_month', month: 3, weekday: 0, weekIndex: 3, offsetDays: -10 },
+    template: `<p>Hi [Name],</p><p>Another Mother's Day, another bunch of flowers that will wilt in a week?</p><p>Thoughtful gift options:</p><ul><li>Gift Voucher - Any amount, redeemable for any treatment</li><li>Pre-Booked Treatment - Schedule whitening, bonding, or consultation</li><li>Treatment Package - Complete smile makeover</li></ul><p>Mother's Day special pricing:</p><ul><li>15% OFF all treatments</li><li>FREE whitening with packages</li><li>12-month voucher validity</li></ul><p>Order by [date] for guaranteed Mother's Day delivery!</p><p>Gift options: Call [Phone Number] or order online at [Website]</p><p>Appreciatively yours,<br>[Practice Name] Team<br>[Website] | [Address]</p>`,
+  },
+  {
+    key: 'mothers_day_email_day_4',
+    type: 'Email',
+    name: 'Mothers Day Promotion - Last Minute Gift (5 days before)',
+    subject: "⏰ Last-minute Mother's Day gift - delivered instantly!",
+    sending: '5 days before Mothers Day',
+    enabled: false,
+    trigger: { type: 'weekday_of_month', month: 3, weekday: 0, weekIndex: 3, offsetDays: -5 },
+    template: `<p>Hi [Name],</p><p>Digital Gift Vouchers - delivered to your inbox instantly, redeemable for any treatment, beautifully designed, and actually meaningful.</p><p>Why this is the perfect last-minute gift:</p><ul><li>Delivered in minutes (no shipping stress)</li><li>Shows thought and care</li><li>Valid for 12 months</li><li>15% bonus value included with Mother's Day special</li></ul><p>Order now: Visit [Website] or call [Phone Number]</p><p>Quick gift delivery,<br>[Practice Name] Team<br>[Phone Number] | [Website]</p>`,
+  },
+  {
+    key: 'mothers_day_email_day_5',
+    type: 'Email',
+    name: 'Mothers Day Promotion - Final Day (Mothers Day)',
+    subject: "💕 Happy Mother's Day - final hours for special pricing",
+    sending: 'Mothers Day',
+    enabled: false,
+    trigger: { type: 'weekday_of_month', month: 3, weekday: 0, weekIndex: 3, offsetDays: 0 },
+    template: `<p>Hi [Name],</p><p>FINAL HOURS: Our Mother's Day special pricing ends tonight at midnight!</p><p>Today only:</p><ul><li>15% OFF all treatments</li><li>FREE teeth whitening with packages</li><li>20% OFF mother-child packages</li><li>Bonus value on all gift vouchers</li></ul><p>This pricing ends at midnight - after tonight, the special offer is gone until next Mother's Day.</p><p>Book or order: [Phone Number] | [Website]</p><p>With love and appreciation,<br>[Practice Name] Team<br>[Website] | [Address] | [Phone Number]</p>`,
+  },
+  {
+    key: 'fathers_day_email_day_1',
+    type: 'Email',
+    name: "Father's Day Promotion - Dad Deserves It (2 weeks before)",
+    subject: "🎁 Give Dad a gift he'll use every day - Father's Day smile special",
+    sending: '2 weeks before Fathers Day',
+    enabled: false,
+    trigger: { type: 'weekday_of_month', month: 6, weekday: 0, weekIndex: 3, offsetDays: -14 },
+    template: `<p>Hi [Name],</p><p>Father's Day is coming, and if you're tired of giving Dad ties he won't wear and tools he doesn't need, we have the perfect solution.</p><p>Our Father's Day Special:</p><ul><li>20% OFF all dental treatments for dads</li><li>FREE teeth whitening with treatment packages</li><li>Express appointment booking</li><li>Gift vouchers available</li><li>Father & child packages</li></ul><p>Father's Day special valid: Now through Father's Day</p><p>Order gift voucher or book Dad's appointment: Call [Phone Number] or visit [Website]</p><p>With appreciation for all dads,<br>[Practice Name] Team<br>[Website] | [Address]</p>`,
+  },
+  {
+    key: 'fathers_day_email_day_2',
+    type: 'Email',
+    name: "Father's Day Promotion - Health Focus (10 days before)",
+    subject: "📊 Why Dad's dental health matters more than he thinks",
+    sending: '10 days before Fathers Day',
+    enabled: false,
+    trigger: { type: 'weekday_of_month', month: 6, weekday: 0, weekIndex: 3, offsetDays: -10 },
+    template: `<p>Hi [Name],</p><p>Uncomfortable truth: Men are 30% less likely than women to visit the dentist regularly. Dads especially tend to ignore dental health while prioritizing everyone else's appointments.</p><p>This Father's Day, change that pattern.</p><p>Father's Day offer designed for busy dads:</p><ul><li>20% OFF treatments</li><li>Express appointments</li><li>Flexible finance options</li><li>FREE consultation</li></ul><p>Book Dad's consultation: Call [Phone Number]</p><p>Give Dad the gift of health, confidence, and many more years of smiling!</p><p>With care for dads everywhere,<br>[Practice Name] Team<br>[Phone Number] | [Email]</p>`,
+  },
+  {
+    key: 'fathers_day_email_day_3',
+    type: 'Email',
+    name: "Father's Day Promotion - Father-Child Bonding (5 days before)",
+    subject: "👨‍👧‍👦 The Father's Day gift you'll both benefit from",
+    sending: '5 days before Fathers Day',
+    enabled: false,
+    trigger: { type: 'weekday_of_month', month: 6, weekday: 0, weekIndex: 3, offsetDays: -5 },
+    template: `<p>Hi [Name],</p><p>Introducing: Father & Child Smile Packages. Transform your smiles together. Support each other through treatment. Create lasting memories. Both save money!</p><p>Father & Child Special Terms:</p><ul><li>25% OFF combined (20% Father's Day + 5% together bonus)</li><li>Coordinated scheduling</li><li>Family treatment planning</li></ul><p>Book your Father & Child package: Call [Phone Number] or visit [Website]</p><p>With family appreciation,<br>[Practice Name] Team<br>[Website] | [Address]</p>`,
+  },
+  {
+    key: 'fathers_day_email_day_4',
+    type: 'Email',
+    name: "Father's Day Promotion - Last Minute Gift (3 days before)",
+    subject: "⏰ Last-minute Father's Day gift - delivered instantly!",
+    sending: '3 days before Fathers Day',
+    enabled: false,
+    trigger: { type: 'weekday_of_month', month: 6, weekday: 0, weekIndex: 3, offsetDays: -3 },
+    template: `<p>Hi [Name],</p><p>Digital Gift Vouchers - Delivered Instantly to Your Inbox.</p><p>Why this is perfect for last-minute gifting:</p><ul><li>Instant digital delivery</li><li>Thoughtful and flexible</li><li>20% bonus value included</li></ul><p>Order now: [Website] or call [Phone Number]</p><p>With last-minute life-saving solutions,<br>[Practice Name] Team<br>[Phone Number] | [Website]</p>`,
+  },
+  {
+    key: 'fathers_day_email_day_5',
+    type: 'Email',
+    name: "Father's Day Promotion - Final Day",
+    subject: "🎉 Happy Father's Day to all the amazing dads!",
+    sending: 'Fathers Day',
+    enabled: false,
+    trigger: { type: 'weekday_of_month', month: 6, weekday: 0, weekIndex: 3, offsetDays: 0 },
+    template: `<p>Hi [Name],</p><p>Happy Father's Day to all the incredible fathers, father-figures, and dad-heroes out there!</p><p>Father's Day offer - FINAL HOURS:</p><ul><li>Today only - Extra 5% bonus (total 25% savings)</li><li>FREE teeth whitening with packages</li><li>Gift vouchers include 20% bonus value</li></ul><p>Final chance: Call [Phone Number] or order online at [Website]</p><p>With appreciation for all fathers,<br>[Practice Name] Team<br>[Website] | [Address] | [Phone Number]</p>`,
+  },
+  {
+    key: 'special_occasion_email_day_1',
+    type: 'Email',
+    name: 'Special Occasion - Big Event Preparation (Immediate)',
+    subject: '✨ Look your absolute best for your special occasion',
+    sending: 'Immediately when lead comes into CRM',
+    enabled: false,
+    trigger: { type: 'inquiry_days', days: 0 },
+    template: `<p>Hi [Name],</p><p>Got a big event coming up? Wedding, graduation, milestone birthday, job interview, or important presentation?</p><p>Pre-Event Smile Services:</p><ul><li>Express Teeth Whitening (1 visit, 60 minutes)</li><li>Composite Bonding (1-2 visits)</li><li>Smile Assessment & Planning (FREE consultation)</li></ul><p>Special occasion offer: 10% OFF event-prep treatments</p><p>Book your pre-event appointment: Call [Phone Number] or visit [Website]</p><p>Excitedly yours,<br>[Practice Name] Team<br>[Website] | [Address]</p>`,
+  },
+  {
+    key: 'special_occasion_email_day_4',
+    type: 'Email',
+    name: 'Special Occasion - Timeline Planning (Day 4)',
+    subject: '📅 Plan your perfect smile for your special day',
+    sending: '4 days after enquiry',
+    enabled: false,
+    trigger: { type: 'inquiry_days', days: 4 },
+    template: `<p>Hi [Name],</p><p>Timing is everything when it comes to event-ready smiles!</p><p>Recommended timelines:</p><ul><li>Events 1-2 weeks away: Whitening, minor bonding, cleaning</li><li>Events 1-3 months away: Composite bonding, whitening maintenance</li><li>Events 6-12 months away: Invisalign, complete smile makeovers</li></ul><p>Free consultation to discuss your timeline: Call [Phone Number]</p><p>With excitement,<br>[Practice Name] Team<br>[Phone Number] | [Email]</p>`,
+  },
+  {
+    key: 'special_occasion_email_day_8',
+    type: 'Email',
+    name: 'Special Occasion - Confidence Psychology (Day 8)',
+    subject: '🌟 Why your smile matters more than you think on special occasions',
+    sending: '8 days after enquiry',
+    enabled: false,
+    trigger: { type: 'inquiry_days', days: 8 },
+    template: `<p>Hi [Name],</p><p>Research shows that in photos, videos, and memories of special events, your smile is what people remember most.</p><p>When you feel confident about your smile:</p><ul><li>You smile more naturally in photos</li><li>You feel more attractive and self-assured</li><li>You engage more freely with people</li></ul><p>10% special occasion discount available now!</p><p>Book your confidence consultation: Call [Phone Number] or visit [Website]</p><p>Confidently yours,<br>[Practice Name] Team<br>[Website] | [Address]</p>`,
+  },
+  {
+    key: 'special_occasion_email_day_13',
+    type: 'Email',
+    name: 'Special Occasion - Last-Minute Solutions (Day 13)',
+    subject: '⚡ Last-minute smile emergencies? We can help!',
+    sending: '13 days after enquiry',
+    enabled: false,
+    trigger: { type: 'inquiry_days', days: 13 },
+    template: `<p>Hi [Name],</p><p>Event approaching fast and you just realized your smile needs attention?</p><p>Last-Minute Smile Solutions:</p><ul><li>Same-Day Teeth Whitening</li><li>Express Composite Repairs</li><li>Emergency Cleaning & Polish</li></ul><p>For urgent appointments: Call [Phone Number] immediately and mention your event date.</p><p>Ready to help,<br>[Practice Name] Team<br>[Phone Number] | [Website]</p>`,
+  },
+  {
+    key: 'special_occasion_email_day_18',
+    type: 'Email',
+    name: 'Special Occasion - Post-Event Maintenance (Day 18)',
+    subject: '💫 Keep your event-ready smile looking amazing',
+    sending: '18 days after enquiry',
+    enabled: false,
+    trigger: { type: 'inquiry_days', days: 18 },
+    template: `<p>Hi [Name],</p><p>Whether you've already had your treatment or you're still considering it, I wanted to share how to keep your smile looking event-ready all the time.</p><p>Long-term confidence solutions:</p><ul><li>Invisalign (permanent straightening)</li><li>Composite bonding (lasting transformations)</li><li>Regular whitening maintenance</li><li>Comprehensive smile makeovers</li></ul><p>10% special occasion discount still available for new bookings!</p><p>Call [Phone Number] or visit [Website] to discuss long-term solutions.</p><p>With ongoing support,<br>[Practice Name] Team<br>[Website] | [Address] | [Phone Number]</p>`,
+  },
+  {
+    key: 'practice_anniversary_email_day_1',
+    type: 'Email',
+    name: 'Practice Anniversary - Announcement (2 weeks before)',
+    subject: '🎉 Celebrating [X] years of beautiful smiles - thank YOU!',
+    sending: '2 weeks before practice anniversary',
+    enabled: false,
+    trigger: { type: 'practice_anniversary', offsetDays: -14 },
+    template: `<p>Hi [Name],</p><p>This month marks a very special milestone for us at [Practice Name] - we're celebrating [X] years of serving our wonderful community!</p><p>To celebrate, we're giving back to YOU:</p><ul><li>Anniversary Special: 20% OFF all treatments throughout [Month]</li><li>FREE teeth whitening with treatment packages over £[X]</li><li>Grand prize draw - Win a complete smile makeover worth £[X]</li><li>Exclusive anniversary gift for every patient who visits this month</li></ul><p>Book your anniversary appointment: Call [Phone Number] today</p><p>With heartfelt gratitude,<br>[Practice Name] Team<br>[Website] | [Address]</p>`,
+  },
+  {
+    key: 'practice_anniversary_email_day_10',
+    type: 'Email',
+    name: 'Practice Anniversary - Milestone Stories (10 days before)',
+    subject: '✨ [X] years, [X] smile transformations - your stories inspire us',
+    sending: '10 days before practice anniversary',
+    enabled: false,
+    trigger: { type: 'practice_anniversary', offsetDays: -10 },
+    template: `<p>Hi [Name],</p><p>As we approach our [X]-year anniversary, we've been reflecting on the incredible journey we've shared with patients like you.</p><p>Anniversary special continues:</p><ul><li>20% OFF all treatments throughout [Month]</li><li>FREE teeth whitening with packages over £[X]</li><li>Automatic entry into smile makeover prize draw (worth £[X])</li><li>Special financing - 0% interest on 12-month plans this month only</li></ul><p>Book your anniversary appointment: Call [Phone Number] or visit [Website]</p><p>With appreciation,<br>[Practice Name] Team<br>[Phone Number] | [Email]</p>`,
+  },
+  {
+    key: 'practice_anniversary_email_day_5',
+    type: 'Email',
+    name: 'Practice Anniversary - Community Appreciation (5 days before)',
+    subject: "💙 You're invited: Anniversary celebration week at [Practice Name]",
+    sending: '5 days before practice anniversary',
+    enabled: false,
+    trigger: { type: 'practice_anniversary', offsetDays: -5 },
+    template: `<p>Hi [Name],</p><p>Our [X]-year anniversary is almost here, and we're hosting a special celebration week - and YOU'RE invited!</p><p>Anniversary Celebration Week Details:</p><ul><li>Open house event - [Date], [Time]</li><li>Practice tours, photo booth, and prize draw</li><li>Free oral health screenings</li></ul><p>Anniversary week exclusive offer:</p><ul><li>20% OFF treatment cost</li><li>FREE teeth whitening (worth £[X])</li><li>Double entries into grand prize draw</li></ul><p>Book your appointment: Call [Phone Number] or visit [Website]</p><p>With excitement,<br>[Practice Name] Team<br>[Website] | [Address] | [Phone Number]</p>`,
+  },
+  {
+    key: 'practice_anniversary_email_day_0',
+    type: 'Email',
+    name: 'Practice Anniversary - Anniversary Day',
+    subject: '🎊 Today we celebrate [X] years - and it is all because of YOU',
+    sending: 'Practice anniversary day',
+    enabled: false,
+    trigger: { type: 'practice_anniversary', offsetDays: 0 },
+    template: `<p>Hi [Name],</p><p>Today is the day! [X] years ago, we opened our doors with hope, determination, and a commitment to exceptional dental care.</p><p>Anniversary Day Bonus: Book today and receive an EXTRA 5% off (total 25% discount!)</p><p>Anniversary month continues:</p><ul><li>20% OFF all treatments (25% if booked TODAY)</li><li>FREE teeth whitening with packages</li><li>Special financing terms</li><li>Prize draw entries with bookings</li></ul><p>Book your anniversary appointment: Call [Phone Number] or visit [Website]</p><p>With deep gratitude and celebration,<br>The entire [Practice Name] Family<br>[Website] | [Address] | [Phone Number]</p>`,
+  },
+  {
+    key: 'practice_anniversary_email_month_end',
+    type: 'Email',
+    name: 'Practice Anniversary - Final Week Reminder',
+    subject: '⏰ Final week: Anniversary celebration ends [Date]',
+    sending: '5 days before end of anniversary month',
+    enabled: false,
+    trigger: { type: 'practice_anniversary_month_end', offsetDays: -5 },
+    template: `<p>Hi [Name],</p><p>Our [X]-year anniversary celebration has been incredible - but it's almost over!</p><p>Time is running out to take advantage of our biggest offer of the year:</p><ul><li>20% OFF all treatments</li><li>FREE teeth whitening worth £[X]</li><li>Prize draw entry for smile makeover</li><li>Anniversary gift bags</li></ul><p>Final week availability is limited. Book now: Call [Phone Number] or visit [Website]</p><p>With final celebration wishes,<br>[Practice Name] Team<br>[Website] | [Address] | [Phone Number]</p>`,
+  },
   {
     key: 'lead_enquiry_whatsapp_day_1',
     type: 'WhatsApp',
@@ -417,10 +636,10 @@ const crmAutomationDefaultsAll = [
     enabled: false,
     trigger: { type: 'inquiry_days', days: 0 },
     template: `Hi [Name]!
-Thank you for your enquiry at [Practice Name]. We're excited to help you achieve your smile goals.
-I'm here to answer any questions and help you book a free consultation.
+Thank you for your enquiry at [Practice Name]. We are excited to help you achieve your smile goals.
+I am here to answer any questions and help you book a free consultation.
 When would be a good time for you? We have appointments available this week.
-Reply here or call [Phone Number]
+Reply here or call [Phone Number].
 [Practice Name]`,
   },
   {
@@ -447,9 +666,9 @@ Ready to book your free consultation? Just let me know what works for you.
     enabled: false,
     trigger: { type: 'inquiry_days', days: 7 },
     template: `Hi [Name]!
-"Best dental practice I've ever been to!" - That is what Sarah said after her visit last week.
+"Best dental practice I have ever been to!" - That is what Sarah said after her visit last week.
 We would love to show you why our patients love us. Your free consultation includes a full assessment and personalized treatment plan.
-Available slots: [Day/Time options]
+Available slots: [Diary Booking Link]
 Let me know what works.
 [Practice Name]`,
   },
@@ -468,7 +687,7 @@ We offer:
 - Flexible payment plans
 - Pain-free treatments
 - Free consultation
-I'm here to help. Call [Phone Number] or just reply here.
+I am here to help. Call [Phone Number] or just reply here.
 [Practice Name]`,
   },
   {
@@ -545,7 +764,7 @@ Reply to book your spot.
     template: `Hi [Name],
 Quick question - is cost holding you back from your dream smile?
 We offer flexible payment plans from just GBP [X]/month for composite bonding. Plus 15% off this month.
-Let us make it work for you. Call [Phone Number] or reply here to discuss options.
+Lets make it work for you. Call [Phone Number] or reply here to discuss options.
 [Practice Name]`,
   },
   {
@@ -558,7 +777,7 @@ Let us make it work for you. Call [Phone Number] or reply here to discuss option
     trigger: { type: 'inquiry_days', days: 18 },
     template: `Hi [Name]!
 Final reminder - our 15% off composite bonding offer ends [Date].
-Do not miss this chance to transform your smile at an unbeatable price.
+Do not miss out on this chance to transform your smile at an unbeatable price.
 Only a few slots left. Call [Phone Number] now to book.
 [Practice Name] Team
 [Website]`,
@@ -606,7 +825,7 @@ Book your free consultation and 3D preview: [Phone Number]
     template: `Hi [Name]!
 Special offer: 15% off Invisalign treatment this month.
 That is a saving of up to GBP [X] on your smile transformation.
-Most treatments take 12-18 months. Imagine your new smile by [future date].
+Most treatments take 12-18 months. Imagine your new smile by [Future Date].
 Available appointments: [Days/Times]
 Call [Phone Number] to book.
 [Practice Name]`,
@@ -635,7 +854,7 @@ Let us make your dream smile affordable. Reply here or call [Phone Number] to di
     enabled: false,
     trigger: { type: 'inquiry_days', days: 18 },
     template: `Hi [Name]!
-Last chance - 15% off Invisalign ends [Date].
+LAST CHANCE - 15% off Invisalign ends [Date].
 Over [X] patients trust us for their smile transformations. You could be next.
 Only a few consultation slots left. Call [Phone Number] now to secure your discount.
 [Practice Name] Team
@@ -708,13 +927,13 @@ Call [Phone Number] to book.
   {
     key: 'check_up_whatsapp_day_18',
     type: 'WhatsApp',
-    name: 'Dental Exam - WhatsApp (Day 18)',
+    name: 'Dental Exam - WhatsApp (Day 10)',
     subject: '',
-    sending: '18 days after enquiry',
+    sending: '10 days after enquiry',
     enabled: false,
-    trigger: { type: 'inquiry_days', days: 18 },
+    trigger: { type: 'inquiry_days', days: 10 },
     template: `Hi [Name]!
-Final reminder: New patient offer ends [Date].
+FINAL REMINDER: New patient offer ends [Date].
 Save GBP [Y] on comprehensive exam + cleaning.
 Do not put your oral health on hold. Call [Phone Number] now to book before this offer expires.
 [Practice Name] Team
@@ -747,7 +966,7 @@ Set your reminder: [Phone Number]
     sending: 'Black Friday morning',
     enabled: false,
     trigger: { type: 'black_friday', offsetDays: 0 },
-    template: `IT IS LIVE. BLACK FRIDAY SALE.
+    template: `ITS LIVE. BLACK FRIDAY SALE.
 Hi [Name]!
 20% off all treatments today only.
 - Invisalign - save up to GBP [X]
@@ -774,7 +993,7 @@ Invisalign: 3 left
 Bonding: 5 left
 Whitening: 7 left
 Up to 20% off ends at midnight.
-This is your last chance for 2025's best prices.
+This is your last chance for 2025s best prices.
 Call [Phone Number] now before we sell out.
 [Practice Name]
 [Website]`,
@@ -824,7 +1043,7 @@ Last chance.
 Hi [Name]!
 Give yourself confidence this holiday season.
 - 15% off all treatments
-- Free teeth whitening (worth GBP [X])
+- Free teeth whitening
 - 0% finance available
 Perfect timing for New Year transformations.
 Book now: [Phone Number]
@@ -841,10 +1060,10 @@ Book now: [Phone Number]
     trigger: { type: 'month_day', month: 12, day: 25, offsetDays: -10 },
     template: `Holiday photos coming up?
 Hi [Name]!
-Look your best in holiday pics.
+Look your best in holiday photos.
 Express teeth whitening: GBP [X] (save 15%)
 Composite bonding: 15% off
-Invisalign: Start now, pay in February.
+Invisalign: Start now, pay in February
 Limited December slots available. Call [Phone Number] to book.
 [Practice Name]`,
   },
@@ -859,7 +1078,6 @@ Limited December slots available. Call [Phone Number] to book.
     template: `Perfect last-minute gift.
 Hi [Name],
 Gift vouchers available for any dental treatment.
-Bonus: Buy GBP [X] voucher, get extra GBP [X] free.
 Digital delivery available instantly.
 Order: [Phone Number] or [Website]
 [Practice Name]`,
@@ -875,7 +1093,7 @@ Order: [Phone Number] or [Website]
     template: `NEW YEAR, NEW SMILE
 Hi [Name]!
 Extended: Christmas offer now through Jan 1st.
-15% off all treatments booked by New Year's Day.
+15% off all treatments booked by New Years Day.
 January calendar is filling fast. Book now: [Phone Number]
 [Practice Name]
 [Website]`,
@@ -906,10 +1124,10 @@ Do not start 2026 with regret.
     template: `HAPPY NEW YEAR
 Hi [Name]!
 Make 2026 your year with a smile transformation.
-- 20% off all treatments
-- Pay nothing until March
-- Free consultation + whitening
-Offer: Jan 1-15 only.
+20% off all treatments
+Pay nothing until March
+Free consultation + whitening
+New Year offer: Jan 1-15 only.
 Book now: [Phone Number]
 [Practice Name]
 [Website]`,
@@ -925,7 +1143,7 @@ Book now: [Phone Number]
     template: `Resolution that actually works.
 Hi [Name]!
 Unlike gym memberships, smile transformations have guaranteed results.
-20% off ends Jan 15th.
+20% off ends Jan 15.
 Already [X] bookings this week.
 Call [Phone Number] now.
 [Practice Name]`,
@@ -942,7 +1160,7 @@ Call [Phone Number] now.
 Hi [Name],
 Confident smile = better career, relationships, self-esteem.
 20% off + GBP [X]/month payment plans.
-Offer ends Jan 15th - only [X] slots left.
+Offer ends Jan 15 - only [X] slots left.
 Book: [Phone Number]
 [Practice Name]
 [Website]`,
@@ -958,7 +1176,7 @@ Book: [Phone Number]
     template: `3 days left.
 Hi [Name]!
 [X] people have already started their 2026 smile journey.
-20% off ends January 15th.
+20% off ends January 15.
 70% of slots already booked.
 Call [Phone Number]
 [Practice Name]`,
@@ -1243,6 +1461,102 @@ Final chance: [Phone Number]
 [Practice Name]`,
   },
   {
+    key: 'practice_anniversary_whatsapp_day_1',
+    type: 'WhatsApp',
+    name: 'Practice Anniversary - WhatsApp (2 weeks before)',
+    subject: '',
+    sending: '2 weeks before anniversary',
+    enabled: false,
+    trigger: { type: 'practice_anniversary', offsetDays: -14 },
+    template: `BIG NEWS
+Hi [Name]!
+We are celebrating [X] years of beautiful smiles.
+Anniversary special:
+- 20% off all treatments
+- Free teeth whitening
+- Win smile makeover (GBP [X])
+- Exclusive gifts
+Valid throughout [Month].
+Book now: [Phone Number]
+[Practice Name]`,
+  },
+  {
+    key: 'practice_anniversary_whatsapp_day_2',
+    type: 'WhatsApp',
+    name: 'Practice Anniversary - WhatsApp (10 days before)',
+    subject: '',
+    sending: '10 days before anniversary',
+    enabled: false,
+    trigger: { type: 'practice_anniversary', offsetDays: -10 },
+    template: `Looking back at [X] incredible years thanks to patients like you.
+Anniversary offer continues:
+20% off (biggest discount ever)
+Free whitening with packages
+Prize draw entry with booking
+0% finance this month only
+Calendar filling fast.
+Call [Phone Number]
+[Practice Name]
+[Website]`,
+  },
+  {
+    key: 'practice_anniversary_whatsapp_day_3',
+    type: 'WhatsApp',
+    name: 'Practice Anniversary - WhatsApp (5 days before anniversary week)',
+    subject: '',
+    sending: '5 days before anniversary week',
+    enabled: false,
+    trigger: { type: 'practice_anniversary', offsetDays: -5 },
+    template: `You are invited.
+Anniversary Celebration Week: [Date range]
+Events:
+- Open house: [Specific Date], [Time]
+- Practice tours
+- Photo booth
+- Prize draw live
+- Free screenings
+Book this week for 20% off + double prize entries.
+RSVP: [Phone Number]
+[Practice Name]`,
+  },
+  {
+    key: 'practice_anniversary_whatsapp_day_4',
+    type: 'WhatsApp',
+    name: 'Practice Anniversary - WhatsApp (Anniversary day)',
+    subject: '',
+    sending: 'Anniversary day',
+    enabled: false,
+    trigger: { type: 'practice_anniversary', offsetDays: 0 },
+    template: `IT IS OUR BIRTHDAY
+Hi [Name]!
+Today we celebrate [X] years - thank you.
+Anniversary day bonus: 25% off today only.
+Open house: [Time]-[Time]
+Prize draw live at [Time]
+Drop in or book: [Phone Number]
+[Practice Name]`,
+  },
+  {
+    key: 'practice_anniversary_whatsapp_day_5',
+    type: 'WhatsApp',
+    name: 'Practice Anniversary - WhatsApp (Final week)',
+    subject: '',
+    sending: '5 days before end of anniversary month',
+    enabled: false,
+    trigger: { type: 'practice_anniversary_month_end', offsetDays: -5 },
+    template: `FINAL WEEK
+Hi [Name]!
+Anniversary celebration ends [Date].
+Only 5 days left for:
+- 20% off all treatments
+- Free whitening
+- Prize draw entry
+- Special financing
+Limited slots remaining.
+Call [Phone Number] now.
+[Practice Name]`,
+  },
+  {
     key: 'special_occasion_whatsapp_day_1',
     type: 'WhatsApp',
     name: 'Special Occasion - WhatsApp (Immediate)',
@@ -1345,81 +1659,16 @@ const crmAutomationGroupsAll = [
     templateKeys: ['send_price_list', 'practice_locations'],
   },
   {
-    key: 'new_patient_enquiry',
-    title: 'New Patient Enquiry',
-    description: 'Welcome and follow-up emails for new leads.',
-    source: 'default',
-    templateKeys: ['new_patient_enquiry_immediate', 'new_patient_enquiry_1_day', 'new_patient_enquiry_3_days'],
-  },
-  {
-    key: 'black_friday',
-    title: 'Black Friday Campaign',
-    description: 'Seasonal offers and last-chance reminders.',
-    source: 'default',
-    templateKeys: ['black_friday_7_days_before', 'black_friday_launch', 'black_friday_midday', 'black_friday_last_chance', 'black_friday_sale_ended'],
-  },
-  {
-    key: 'birthday',
-    title: 'Birthday Outreach',
-    description: 'Birthday greetings and reminders.',
-    source: 'default',
-    templateKeys: ['birthday_day', 'birthday_reminder_20_days'],
-  },
-  {
     key: 'lead_enquiry',
     title: 'New Lead Enquiry Automation',
-    description: 'Immediate + day 3/7/12/18 lead enquiry follow-ups.',
-    source: 'default',
-    templateKeys: ['lead_enquiry_day_1', 'lead_enquiry_day_3', 'lead_enquiry_day_5', 'lead_enquiry_day_12', 'lead_enquiry_day_18'],
-  },
-  {
-    key: 'composite_bonding',
-    title: 'Lead Nurture - Composite Bonding',
-    description: 'Lead nurture sequence for composite bonding.',
-    source: 'default',
-    templateKeys: ['composite_bonding_day_1', 'composite_bonding_day_3', 'composite_bonding_day_5', 'composite_bonding_day_13', 'composite_bonding_day_18'],
-  },
-  {
-    key: 'invisalign',
-    title: 'Lead Nurture - Invisalign',
-    description: 'Lead nurture sequence for Invisalign.',
-    source: 'default',
-    templateKeys: ['invisalign_day_1', 'invisalign_day_3', 'invisalign_day_5', 'invisalign_day_13', 'invisalign_day_18'],
-  },
-  {
-    key: 'check_up',
-    title: 'Lead Nurture - Dental Exam',
-    description: 'Lead nurture sequence for dental exams.',
-    source: 'default',
-    templateKeys: ['check_up_day_1', 'check_up_day_3', 'check_up_day_5', 'check_up_day_13', 'check_up_day_18'],
-  },
-  {
-    key: 'black_friday_enquiry',
-    title: 'Black Friday / Special Deal Enquiry',
-    description: 'Black Friday lead nurture day 1/3/5 follow-ups.',
-    source: 'default',
-    templateKeys: ['black_friday_enquiry_day_1', 'black_friday_enquiry_day_3', 'black_friday_enquiry_day_5'],
-  },
-  {
-    key: 'general_lead_nurture',
-    title: 'General Lead Nurture',
-    description: 'General day 1/3/5 lead nurture sequence.',
-    source: 'default',
-    templateKeys: ['general_lead_nurture_day_1', 'general_lead_nurture_day_3', 'general_lead_nurture_day_5'],
-  },
-  {
-    key: 'birthday_gift',
-    title: 'Birthday Gift',
-    description: 'Birthday gift day 1/3/5 sequence.',
-    source: 'default',
-    templateKeys: ['birthday_gift_day_1', 'birthday_gift_day_3', 'birthday_gift_day_5'],
-  },
-  {
-    key: 'lead_enquiry_whatsapp',
-    title: 'New Lead Enquiry - WhatsApp',
-    description: 'WhatsApp lead enquiry follow-ups (day 0/3/7/12/18).',
+    description: 'Email and WhatsApp sequence for new leads.',
     source: 'default',
     templateKeys: [
+      'lead_enquiry_day_1',
+      'lead_enquiry_day_3',
+      'lead_enquiry_day_5',
+      'lead_enquiry_day_12',
+      'lead_enquiry_day_18',
       'lead_enquiry_whatsapp_day_1',
       'lead_enquiry_whatsapp_day_3',
       'lead_enquiry_whatsapp_day_7',
@@ -1428,11 +1677,16 @@ const crmAutomationGroupsAll = [
     ],
   },
   {
-    key: 'composite_bonding_whatsapp',
-    title: 'Composite Bonding - WhatsApp',
-    description: 'WhatsApp nurture sequence for composite bonding.',
+    key: 'composite_bonding',
+    title: 'Lead Nurture - Composite Bonding',
+    description: 'Email and WhatsApp sequence for composite bonding.',
     source: 'default',
     templateKeys: [
+      'composite_bonding_day_1',
+      'composite_bonding_day_3',
+      'composite_bonding_day_5',
+      'composite_bonding_day_13',
+      'composite_bonding_day_18',
       'composite_bonding_whatsapp_day_1',
       'composite_bonding_whatsapp_day_4',
       'composite_bonding_whatsapp_day_8',
@@ -1441,11 +1695,16 @@ const crmAutomationGroupsAll = [
     ],
   },
   {
-    key: 'invisalign_whatsapp',
-    title: 'Invisalign - WhatsApp',
-    description: 'WhatsApp nurture sequence for Invisalign.',
+    key: 'invisalign',
+    title: 'Lead Nurture - Invisalign',
+    description: 'Email and WhatsApp sequence for Invisalign.',
     source: 'default',
     templateKeys: [
+      'invisalign_day_1',
+      'invisalign_day_3',
+      'invisalign_day_5',
+      'invisalign_day_13',
+      'invisalign_day_18',
       'invisalign_whatsapp_day_1',
       'invisalign_whatsapp_day_4',
       'invisalign_whatsapp_day_8',
@@ -1454,11 +1713,16 @@ const crmAutomationGroupsAll = [
     ],
   },
   {
-    key: 'check_up_whatsapp',
-    title: 'Dental Exam - WhatsApp',
-    description: 'WhatsApp nurture sequence for dental exams.',
+    key: 'check_up',
+    title: 'Lead Nurture - Dental Exam',
+    description: 'Email and WhatsApp sequence for dental exams.',
     source: 'default',
     templateKeys: [
+      'check_up_day_1',
+      'check_up_day_3',
+      'check_up_day_5',
+      'check_up_day_13',
+      'check_up_day_18',
       'check_up_whatsapp_day_1',
       'check_up_whatsapp_day_4',
       'check_up_whatsapp_day_8',
@@ -1467,11 +1731,16 @@ const crmAutomationGroupsAll = [
     ],
   },
   {
-    key: 'black_friday_whatsapp',
-    title: 'Black Friday Campaign - WhatsApp',
-    description: 'Black Friday WhatsApp sequence.',
+    key: 'black_friday',
+    title: 'Black Friday Promotion',
+    description: 'Email and WhatsApp Black Friday campaign.',
     source: 'default',
     templateKeys: [
+      'black_friday_7_days_before',
+      'black_friday_launch',
+      'black_friday_midday',
+      'black_friday_last_chance',
+      'black_friday_sale_ended',
       'black_friday_whatsapp_early_access',
       'black_friday_whatsapp_launch',
       'black_friday_whatsapp_midday',
@@ -1480,11 +1749,16 @@ const crmAutomationGroupsAll = [
     ],
   },
   {
-    key: 'christmas_whatsapp',
-    title: 'Christmas Promotion - WhatsApp',
-    description: 'Christmas WhatsApp sequence.',
+    key: 'christmas',
+    title: 'Christmas Promotion',
+    description: 'Email and WhatsApp Christmas campaign.',
     source: 'default',
     templateKeys: [
+      'christmas_email_day_1',
+      'christmas_email_day_10',
+      'christmas_email_day_5',
+      'christmas_email_day_27',
+      'christmas_email_day_31',
       'christmas_whatsapp_day_1',
       'christmas_whatsapp_day_10',
       'christmas_whatsapp_day_5',
@@ -1493,11 +1767,16 @@ const crmAutomationGroupsAll = [
     ],
   },
   {
-    key: 'new_year_whatsapp',
-    title: 'New Year Promotion - WhatsApp',
-    description: 'New Year WhatsApp sequence.',
+    key: 'new_year',
+    title: 'New Year Promotion',
+    description: 'Email and WhatsApp New Year campaign.',
     source: 'default',
     templateKeys: [
+      'new_year_email_day_1',
+      'new_year_email_day_5',
+      'new_year_email_day_9',
+      'new_year_email_day_12',
+      'new_year_email_day_15',
       'new_year_whatsapp_day_1',
       'new_year_whatsapp_day_5',
       'new_year_whatsapp_day_9',
@@ -1506,11 +1785,16 @@ const crmAutomationGroupsAll = [
     ],
   },
   {
-    key: 'valentines_whatsapp',
-    title: 'Valentines Promotion - WhatsApp',
-    description: 'Valentines WhatsApp sequence.',
+    key: 'valentines',
+    title: 'Valentines Promotion',
+    description: 'Email and WhatsApp Valentines campaign.',
     source: 'default',
     templateKeys: [
+      'valentines_email_day_1',
+      'valentines_email_day_10',
+      'valentines_email_day_5',
+      'valentines_email_day_3',
+      'valentines_email_day_14',
       'valentines_whatsapp_day_1',
       'valentines_whatsapp_day_10',
       'valentines_whatsapp_day_5',
@@ -1519,11 +1803,16 @@ const crmAutomationGroupsAll = [
     ],
   },
   {
-    key: 'mothers_day_whatsapp',
-    title: 'Mothers Day Promotion - WhatsApp',
-    description: 'Mothers Day WhatsApp sequence.',
+    key: 'mothers_day',
+    title: 'Mothers Day Promotion',
+    description: 'Email and WhatsApp Mothers Day campaign.',
     source: 'default',
     templateKeys: [
+      'mothers_day_email_day_1',
+      'mothers_day_email_day_2',
+      'mothers_day_email_day_3',
+      'mothers_day_email_day_4',
+      'mothers_day_email_day_5',
       'mothers_day_whatsapp_day_1',
       'mothers_day_whatsapp_day_2',
       'mothers_day_whatsapp_day_3',
@@ -1532,11 +1821,41 @@ const crmAutomationGroupsAll = [
     ],
   },
   {
-    key: 'fathers_day_whatsapp',
-    title: 'Fathers Day Promotion - WhatsApp',
-    description: 'Fathers Day WhatsApp sequence.',
+    key: 'birthday',
+    title: 'Birthday Promotion',
+    description: 'Birthday month greeting email.',
+    source: 'default',
+    templateKeys: ['birthday_day'],
+  },
+  {
+    key: 'practice_anniversary',
+    title: 'Practice Anniversary Promotion',
+    description: 'Email and WhatsApp practice anniversary campaign.',
     source: 'default',
     templateKeys: [
+      'practice_anniversary_email_day_1',
+      'practice_anniversary_email_day_10',
+      'practice_anniversary_email_day_5',
+      'practice_anniversary_email_day_0',
+      'practice_anniversary_email_month_end',
+      'practice_anniversary_whatsapp_day_1',
+      'practice_anniversary_whatsapp_day_2',
+      'practice_anniversary_whatsapp_day_3',
+      'practice_anniversary_whatsapp_day_4',
+      'practice_anniversary_whatsapp_day_5',
+    ],
+  },
+  {
+    key: 'fathers_day',
+    title: 'Fathers Day Promotion',
+    description: 'Email and WhatsApp Fathers Day campaign.',
+    source: 'default',
+    templateKeys: [
+      'fathers_day_email_day_1',
+      'fathers_day_email_day_2',
+      'fathers_day_email_day_3',
+      'fathers_day_email_day_4',
+      'fathers_day_email_day_5',
       'fathers_day_whatsapp_day_1',
       'fathers_day_whatsapp_day_2',
       'fathers_day_whatsapp_day_3',
@@ -1545,11 +1864,16 @@ const crmAutomationGroupsAll = [
     ],
   },
   {
-    key: 'special_occasion_whatsapp',
-    title: 'Special Occasion - WhatsApp',
-    description: 'WhatsApp messages for special occasions.',
+    key: 'special_occasion',
+    title: 'Special Occasion Automation',
+    description: 'Email and WhatsApp special occasion sequence.',
     source: 'default',
     templateKeys: [
+      'special_occasion_email_day_1',
+      'special_occasion_email_day_4',
+      'special_occasion_email_day_8',
+      'special_occasion_email_day_13',
+      'special_occasion_email_day_18',
       'special_occasion_whatsapp_day_1',
       'special_occasion_whatsapp_day_4',
       'special_occasion_whatsapp_day_8',
@@ -1559,15 +1883,11 @@ const crmAutomationGroupsAll = [
   },
 ]
 
-const crmAutomationDefaults = crmAutomationDefaultsAll.filter(
-  (item) => String(item?.type || '').toLowerCase() !== 'whatsapp'
-)
+const crmAutomationDefaults = crmAutomationDefaultsAll
 
-const crmAutomationGroups = crmAutomationGroupsAll.filter((group) => {
-  const key = String(group?.key || '').toLowerCase()
-  const title = String(group?.title || '').toLowerCase()
-  return !key.includes('whatsapp') && !title.includes('whatsapp')
-})
+const crmAutomationGroups = crmAutomationGroupsAll
 
 export { crmAutomationDefaults, crmAutomationGroups }
+
+
 

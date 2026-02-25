@@ -173,7 +173,7 @@ export const useDocStore = defineStore("docStore", {
           });
       });
     },
-    viewDoc(data) {
+    viewSystemDoc(data) {
       this.isLoading = true;
       return new Promise((resolve, reject) => {
         docService

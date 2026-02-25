@@ -15,7 +15,8 @@
         <v-row class="text-center pa-1"> 
           <v-col cols="1" class="d-flex">
             <div class="icn-cntnr">
-             <img :src="typeImage" alt="">
+             <v-icon v-if="iconMdi" class="toast-icon" :style="{ color: iconAndTitleColor }">{{ iconMdi }}</v-icon>
+             <img v-else :src="typeImage" alt="">
             </div>
           </v-col>
           <v-col cols="9">
@@ -57,20 +58,23 @@
   const title = ref("");
   const subtitle = ref("");
   const type = ref("");
+  const iconMdi = ref(null);
   const timeout = ref(3000); 
   const progress = ref(false);
   
   watch(
   () => mainStore.getToast,
   (toast) => {
-    if (toast !== null) {
+    if (toast !== null && toast.title) {
       visible.value = true;
       title.value = toast.title;       // <- Corrected
       subtitle.value = toast.subtitle; // <- Corrected
       progress.value = toast.progress || false;
       type.value = toast.type;
+      iconMdi.value = toast.iconMdi || null;
     }
-  }
+  },
+  { deep: true }
 );
   
   // Computed property for typeColor
@@ -83,6 +87,8 @@
       ? "#FFF8DE"
       : type.value === "information"
       ? "#E7F5FF"
+      : type.value === "notification"
+      ? "#E7F5FF" // Brand blue tint
         : type.value === "pending"
       ? "#F8EFFF"
       : "#F8EFFF"; 
@@ -96,6 +102,8 @@
       ? "#EFB42D"
       : type.value === "information"
       ? "#0E99F6"
+      : type.value === "notification"
+      ? "#0E99F6" // Brand blue
         : type.value === "pending"
       ? "#5D2684"
       : "#5D2684"; 

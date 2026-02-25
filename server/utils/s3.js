@@ -93,6 +93,28 @@ const toReadable = (body) => {
   return Readable.from(body);
 };
 
+const inferContentType = (key = "") => {
+  const lower = String(key || "").toLowerCase();
+  if (lower.endsWith(".docx")) {
+    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  }
+  if (lower.endsWith(".doc")) {
+    return "application/msword";
+  }
+  if (lower.endsWith(".xlsx")) {
+    return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  }
+  if (lower.endsWith(".xls")) {
+    return "application/vnd.ms-excel";
+  }
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".gif")) return "image/gif";
+  if (lower.endsWith(".txt")) return "text/plain";
+  return "application/octet-stream";
+};
+
 export const getS3Object = async (key) => {
   const client = getS3Client();
   const { bucket } = getS3Config();
@@ -128,8 +150,16 @@ export const sendS3Object = async (event, key, options = {}) => {
     throw createError({ statusCode: 404, statusMessage: "File not found" });
   }
 
-  const resolvedContentType = options.contentType || contentType || "application/octet-stream";
+  const resolvedContentType =
+    options.contentType || contentType || inferContentType(key);
   setHeader(event, "Content-Type", resolvedContentType);
+  if (options.filename) {
+    setHeader(
+      event,
+      "Content-Disposition",
+      `inline; filename="${String(options.filename).replace(/"/g, "")}"`
+    );
+  }
   setHeader(event, "Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   setHeader(event, "Pragma", "no-cache");
   setHeader(event, "Expires", "0");
