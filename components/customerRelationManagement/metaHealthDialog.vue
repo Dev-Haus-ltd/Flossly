@@ -107,7 +107,7 @@
                       <th>Token</th>
                       <th>Subscribed</th>
                       <th>App Match</th>
-                      <th>Leadgen</th>
+                      <th>Lead Access</th>
                       <th>Connected At</th>
                       <th>Leads</th>
                       <th>Last Lead</th>
@@ -142,14 +142,24 @@
                         </v-chip>
                       </td>
                       <td>
-                        <v-chip
-                          size="x-small"
-                          :color="row.leadgenAccessible ? 'success' : (row.leadgenAccessible === false ? 'error' : 'warning')"
-                          variant="tonal"
-                          label
-                        >
-                          {{ row.leadgenAccessible ? 'Yes' : (row.leadgenAccessible === false ? 'No' : 'â€”') }}
-                        </v-chip>
+                        <div class="d-flex align-center gap-1">
+                          <v-chip
+                            size="x-small"
+                            :color="row.leadAccessStatus === 'ok' ? 'success' : (row.leadAccessStatus === 'missing' ? 'error' : 'warning')"
+                            variant="tonal"
+                            label
+                          >
+                            {{ row.leadAccessStatus === 'ok' ? 'Granted' : (row.leadAccessStatus === 'missing' ? 'Required' : 'Unknown') }}
+                          </v-chip>
+                          <v-btn
+                            v-if="row.leadAccessStatus === 'missing' && row.leadAccessUrl"
+                            size="x-small"
+                            variant="text"
+                            @click="openLeadAccess(row.leadAccessUrl)"
+                          >
+                            Grant
+                          </v-btn>
+                        </div>
                       </td>
                       <td class="text-nowrap">{{ formatMetaLeadDate(row.connectedAt) }}</td>
                       <td class="text-center">{{ row.leadCount || 0 }}</td>
@@ -198,6 +208,14 @@ const formatMetaLeadDate = (value) => {
   if (Number.isNaN(parsed.valueOf())) return '—';
   return parsed.toLocaleString();
 };
+
+const openLeadAccess = (url) => {
+  if (!url) return;
+  if (typeof window !== 'undefined') {
+    window.open(url, '_blank');
+  }
+};
+
 </script>
 
 <style scoped lang="scss">

@@ -790,6 +790,10 @@ export const healthCheck = async (event) => {
   const verifyTokenSet = Boolean(config.META_VERIFY_TOKEN)
 
   const pages = await MetaPage.findAll({ where: { organisationId: orgId } })
+  const leadAccessUrl = (pageId) =>
+    `https://business.facebook.com/latest/settings/leads_access?selected_asset_id=${encodeURIComponent(
+      pageId
+    )}&selected_asset_type=leads-access`
   const pageIds = pages.map((p) => p.pageId).filter(Boolean)
   const leadStatsByPage = new Map()
   if (pageIds.length) {
@@ -826,8 +830,8 @@ export const healthCheck = async (event) => {
     let subscribed = false
     let appMatched = false
     let errorMsg = null
-    let leadgenAccessible = null
-    let leadgenError = null
+    let leadAccessStatus = 'unknown'
+    let leadAccessError = null
 
     if (tokenPresent && appId) {
       try {
@@ -845,11 +849,11 @@ export const healthCheck = async (event) => {
       try {
         const leadgenUrl = `https://graph.facebook.com/${META_VERSION}/${pageId}/leadgen_forms?fields=id&limit=1&access_token=${encodeURIComponent(token)}`
         const leadgenResp = await $fetch(leadgenUrl, { method: 'GET' })
-        leadgenAccessible = Array.isArray(leadgenResp?.data)
+        leadAccessStatus = Array.isArray(leadgenResp?.data) ? 'ok' : 'unknown'
       } catch (e) {
-        leadgenAccessible = false
-        leadgenError = e?.data?.error?.message || e?.message || 'Failed to access leadgen forms'
-        if (!errorMsg) errorMsg = leadgenError
+        leadAccessStatus = 'missing'
+        leadAccessError = e?.data?.error?.message || e?.message || 'Lead access missing'
+        if (!errorMsg) errorMsg = leadAccessError
       }
     }
 
@@ -860,8 +864,9 @@ export const healthCheck = async (event) => {
       tokenPresent,
       subscribed,
       appMatched,
-      leadgenAccessible,
-      leadgenError,
+      leadAccessStatus,
+      leadAccessError,
+      leadAccessUrl: leadAccessUrl(pageId),
       connectedAt: page.connectedAt || page.updatedAt || page.createdAt || null,
       leadCount: leadStatsByPage.get(String(pageId))?.leadCount || 0,
       lastLeadAt: leadStatsByPage.get(String(pageId))?.lastLeadAt || null,
