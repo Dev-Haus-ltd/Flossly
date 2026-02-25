@@ -711,9 +711,13 @@ export const subscribePages = async (event) => {
   })
   
   let subscribed = 0
+  const errors = []
   for (const mp of pages) {
     const pageToken = decrypt(mp.accessTokenEnc)
-    if (!pageToken) continue
+    if (!pageToken) {
+      errors.push({ pageId: mp.pageId, message: 'Missing page access token' })
+      continue
+    }
     
     const url = `https://graph.facebook.com/${META_VERSION}/${mp.pageId}/subscribed_apps`
     try {
@@ -726,9 +730,14 @@ export const subscribePages = async (event) => {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       })
       subscribed++
-    } catch (e) {}
+    } catch (e) {
+      errors.push({
+        pageId: mp.pageId,
+        message: e?.data?.error?.message || e?.message || 'Failed to subscribe',
+      })
+    }
   }
-  return success({ subscribed })
+  return success({ subscribed, errors })
 }
 
 export const connectionStatus = async (event) => {
@@ -817,6 +826,8 @@ export const healthCheck = async (event) => {
     let subscribed = false
     let appMatched = false
     let errorMsg = null
+    let leadgenAccessible = null
+    let leadgenError = null
 
     if (tokenPresent && appId) {
       try {
@@ -830,6 +841,18 @@ export const healthCheck = async (event) => {
       }
     }
 
+    if (tokenPresent) {
+      try {
+        const leadgenUrl = `https://graph.facebook.com/${META_VERSION}/${pageId}/leadgen_forms?fields=id&limit=1&access_token=${encodeURIComponent(token)}`
+        const leadgenResp = await $fetch(leadgenUrl, { method: 'GET' })
+        leadgenAccessible = Array.isArray(leadgenResp?.data)
+      } catch (e) {
+        leadgenAccessible = false
+        leadgenError = e?.data?.error?.message || e?.message || 'Failed to access leadgen forms'
+        if (!errorMsg) errorMsg = leadgenError
+      }
+    }
+
     results.push({
       pageId,
       pageName,
@@ -837,6 +860,8 @@ export const healthCheck = async (event) => {
       tokenPresent,
       subscribed,
       appMatched,
+      leadgenAccessible,
+      leadgenError,
       connectedAt: page.connectedAt || page.updatedAt || page.createdAt || null,
       leadCount: leadStatsByPage.get(String(pageId))?.leadCount || 0,
       lastLeadAt: leadStatsByPage.get(String(pageId))?.lastLeadAt || null,
@@ -1242,13 +1267,20 @@ export const connectBusinessPages = async (event) => {
   }
 
   let connected = 0
+  const errors = []
   for (const pageId of pageIds) {
     try {
       const pageResp = await $fetch(
         `https://graph.facebook.com/${META_VERSION}/${pageId}?fields=id,name,access_token&access_token=${encodeURIComponent(userToken)}`,
         { method: 'GET' }
       )
-      if (!pageResp?.id || !pageResp?.access_token) continue
+      if (!pageResp?.id || !pageResp?.access_token) {
+        errors.push({
+          pageId,
+          message: 'Missing page access token (check Leads access / page permissions)',
+        })
+        continue
+      }
 
       const existing = await MetaPage.findOne({
         where: { organisationId: orgId, pageId: String(pageResp.id) },
@@ -1283,10 +1315,20 @@ export const connectBusinessPages = async (event) => {
           }).toString(),
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         })
-      } catch (e) {}
+      } catch (e) {
+        errors.push({
+          pageId,
+          message: e?.data?.error?.message || e?.message || 'Failed to subscribe to leadgen',
+        })
+      }
 
       connected++
-    } catch (e) {}
+    } catch (e) {
+      errors.push({
+        pageId,
+        message: e?.data?.error?.message || e?.message || 'Failed to connect page',
+      })
+    }
   }
 
   // Auto-backfill last 30 days of leads for newly connected pages
@@ -1306,7 +1348,7 @@ export const connectBusinessPages = async (event) => {
     })
   } catch (e) {}
 
-  return success({ connected })
+  return success({ connected, errors })
 }
 
 export const debugMetaStatus = async (event) => {
