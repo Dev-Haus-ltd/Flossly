@@ -199,7 +199,7 @@
               color="success"
               density="compact"
               :class="{ 'switch-active': item.enabled }"
-              disabled
+              :disabled="disableToggle"
               @update:model-value="$emit('toggleEnabled', item, $event)"
             />
           </div>
@@ -443,3 +443,7 @@ defineEmits([
   transform: none;
 }
 </style>
+  disableToggle: {
+    type: Boolean,
+    default: false,
+  },

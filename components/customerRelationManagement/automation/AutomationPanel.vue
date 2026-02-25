@@ -26,6 +26,7 @@
         :filter-enabled="filterEnabled"
         :filter-disabled="filterDisabled"
         :active-filters="activeFilters"
+        :disable-toggle="props.disableToggle"
         :show-preview-action="props.showPreviewAction"
         :default-automation-key-set="defaultAutomationKeySet"
         @back="clearAutomationSelection"
@@ -74,6 +75,7 @@
             :filter-enabled="filterEnabled"
             :filter-disabled="filterDisabled"
             :active-filters="activeFilters"
+            :disable-toggle="props.disableToggle"
             :show-preview-action="props.showPreviewAction"
             :default-automation-key-set="defaultAutomationKeySet"
             @update:search="(val) => (search = val)"
@@ -351,6 +353,7 @@ const props = defineProps({
   showCardToggle: { type: Boolean, default: true },
   allowGroupEdit: { type: Boolean, default: false },
   showPreviewAction: { type: Boolean, default: true },
+  disableToggle: { type: Boolean, default: false },
 })
 const crmStore = useCrmStore()
 const orgStore = useOrgStore()
@@ -888,12 +891,22 @@ const applyPlaceholders = (text) => {
     org.phoneNumber ||
     org.telephone ||
     org.contactPhone ||
+    org.contact ||
+    org.contactNumber ||
     '[Phone Number]'
   const website =
+    resolvePlaceholder('website', '') ||
+    resolvePlaceholder('practiceWebsite', '') ||
     org.website ||
     org.site ||
     org.web ||
-    '[Website]'
+    ''
+  const websiteUrl = website || 'https://flossly.ai/'
+  const websiteLabel = website ? website : 'Flossly'
+  const isHtml = /<[^>]+>/.test(text)
+  const websiteReplacement = isHtml
+    ? `<a href="${websiteUrl}" target="_blank" rel="noopener">${websiteLabel}</a>`
+    : `${websiteLabel} (${websiteUrl})`
   const email =
     org.email ||
     org.contactEmail ||
@@ -941,7 +954,12 @@ const applyPlaceholders = (text) => {
   const promoDate = resolvePlaceholder('promoDate', '[Date]')
   const promoTime = resolvePlaceholder('promoTime', '[Time]')
   const promoDateTime = resolvePlaceholder('promoDateTime', '[Date/Time]')
-  const promoMonth = resolvePlaceholder('promoMonth', '[Month]')
+  const leadDob = props.lead?.dob || props.lead?.dateOfBirth || props.lead?.birthDate || ''
+  const resolvedDob = leadDob ? new Date(leadDob) : null
+  const monthName = resolvedDob && !Number.isNaN(resolvedDob.getTime())
+    ? resolvedDob.toLocaleString('en-GB', { month: 'long' })
+    : new Date().toLocaleString('en-GB', { month: 'long' })
+  const promoMonth = resolvePlaceholder('promoMonth', '') || monthName || '[Month]'
   const promoDayTime = resolvePlaceholder('promoDayTime', '[Day/Time]')
   const promoDaysTimes = resolvePlaceholder('promoDaysTimes', '[Days/Times]')
   const futureDate = resolvePlaceholder('futureDate', '[Future Date]')
@@ -960,7 +978,7 @@ const applyPlaceholders = (text) => {
     .replace(/\[?\s*name\s*\]?/gi, recipient.name)
     .replace(/\[?\s*first\s*name\s*\]?/gi, firstName)
     .replace(/\[?\s*phone\s*number\s*\]?/gi, phone)
-    .replace(/\[?\s*website\s*\]?/gi, website)
+    .replace(/\[?\s*website\s*\]?/gi, websiteReplacement)
     .replace(/\[?\s*email\s*\]?/gi, recipient.email || email)
     .replace(/\[?\s*address\s*\]?/gi, address)
     .replace(/\[?\s*street\s*address\s*\]?/gi, street)
@@ -988,10 +1006,11 @@ const applyPlaceholders = (text) => {
     .replace(/\[?\s*local\s*business\s*1\s*\]?/gi, localBusiness1)
     .replace(/\[?\s*local\s*business\s*2\s*\]?/gi, localBusiness2)
     .replace(/\[?\s*local\s*business\s*3\s*\]?/gi, localBusiness3)
-    .replace(/\[?\s*x\s*\]?/gi, promoX)
-    .replace(/\[?\s*y\s*\]?/gi, promoY)
-    .replace(/\[?\s*z\s*\]?/gi, promoZ)
-    .replace(/\[?\s*higher\s*amount\s*\]?/gi, promoHigherAmount)
+    .replaceAll('[X]', promoX)
+    .replaceAll('[Y]', promoY)
+    .replaceAll('[Z]', promoZ)
+    .replaceAll('[higher amount]', promoHigherAmount)
+    .replaceAll('[Higher amount]', promoHigherAmount)
 }
 
 const previewTitle = computed(() => {
@@ -1017,6 +1036,7 @@ const previewHtml = computed(() => {
 
 const stripHtmlToText = (html = '') => {
   return String(html || '')
+    .replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gi, '$2 ($1)')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>\s*/gi, '\n\n')
     .replace(/<\/li>\s*/gi, '\n')

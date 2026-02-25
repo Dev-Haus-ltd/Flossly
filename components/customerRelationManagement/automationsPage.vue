@@ -71,6 +71,7 @@
             :show-card-toggle="false"
             :allow-group-edit="true"
             :show-preview-action="false"
+            :disable-toggle="true"
             @edit-group="openGroupEdit"
             @delete-group="confirmGroupDelete"
           />

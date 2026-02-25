@@ -56,14 +56,15 @@ export const buildEffectiveCrmTemplates = (lead, templatesByOrg) => {
 export const buildCrmEmail = (lead, tpl, org = null) => {
   const baseSubject = tpl?.subject || tpl?.name || "Message from Flossly";
   const ctx = buildLeadContext({ lead, org, userName: "Team" });
-  const subject = renderTokens(baseSubject, ctx);
-  const html = renderTokens(tpl.template || "", ctx);
+  const subject = renderTokens(baseSubject, ctx, { format: "text" });
+  const html = renderTokens(tpl.template || "", ctx, { format: "html" });
   return { subject, html };
 };
 
 const stripHtmlToText = (html = "") => {
   if (!html) return "";
   return String(html)
+    .replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gi, "$2 ($1)")
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/p>\s*/gi, "\n\n")
     .replace(/<\/li>\s*/gi, "\n")
@@ -82,7 +83,7 @@ const stripHtmlToText = (html = "") => {
 export const buildCrmWhatsAppMessage = (lead, tpl, org = null) => {
   const ctx = buildLeadContext({ lead, org, userName: "Team" });
   const rawTemplate = tpl?.template || "";
-  const rendered = renderTokens(rawTemplate, ctx);
+  const rendered = renderTokens(rawTemplate, ctx, { format: "text" });
   return stripHtmlToText(rendered);
 };
 

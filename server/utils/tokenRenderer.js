@@ -69,8 +69,16 @@ export function buildLeadContext({ lead = {}, org = {}, userName = 'Team' } = {}
     org?.phoneNumber ||
     org?.telephone ||
     org?.contactPhone ||
+    org?.contact ||
+    org?.contactNumber ||
     '';
-  const website = org?.website || org?.site || org?.web || '';
+  const website =
+    placeholders?.website ||
+    placeholders?.practiceWebsite ||
+    org?.website ||
+    org?.site ||
+    org?.web ||
+    '';
   const orgEmail = org?.email || org?.contactEmail || '';
   const address = org?.address || org?.location || '';
   const street = org?.streetAddress || org?.addressLine1 || '';
@@ -94,6 +102,28 @@ export function buildLeadContext({ lead = {}, org = {}, userName = 'Team' } = {}
   };
 
   const mothersDayDate = resolvePlaceholder('mothersDayDate') || ukMothersDayDate();
+
+  const monthNameFromDob = (() => {
+    const raw = lead?.dob || lead?.dateOfBirth || lead?.birthDate;
+    if (!raw) return '';
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return '';
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return months[date.getUTCMonth()] || '';
+  })();
 
   return {
     name,
@@ -121,7 +151,7 @@ export function buildLeadContext({ lead = {}, org = {}, userName = 'Team' } = {}
     promoDate: resolvePlaceholder('promoDate'),
     promoTime: resolvePlaceholder('promoTime'),
     promoDateTime: resolvePlaceholder('promoDateTime'),
-    promoMonth: resolvePlaceholder('promoMonth'),
+    promoMonth: resolvePlaceholder('promoMonth') || monthNameFromDob,
     promoDayTime: resolvePlaceholder('promoDayTime'),
     promoDaysTimes: resolvePlaceholder('promoDaysTimes'),
     futureDate: resolvePlaceholder('futureDate'),
@@ -137,8 +167,15 @@ export function buildLeadContext({ lead = {}, org = {}, userName = 'Team' } = {}
   };
 }
 
-export function renderTokens(input, ctx = {}) {
+export function renderTokens(input, ctx = {}, options = {}) {
   let str = input || '';
+  const format = options?.format || 'text';
+  const websiteUrl = ctx.website || 'https://flossly.ai/';
+  const websiteLabel = ctx.website ? ctx.website : 'Flossly';
+  const websiteReplacement =
+    format === 'html'
+      ? `<a href="${websiteUrl}" target="_blank" rel="noopener">${websiteLabel}</a>`
+      : `${websiteLabel} (${websiteUrl})`;
   const replaceIfValue = (token, value) => {
     if (value === undefined || value === null || value === '') return;
     str = str.replaceAll(token, value);
@@ -158,7 +195,7 @@ export function renderTokens(input, ctx = {}) {
     .replaceAll('[Patient Info]', ctx.info || '')
     .replaceAll('[Practice Name]', ctx.practiceName || '')
     .replaceAll('[Phone Number]', ctx.phone || '')
-    .replaceAll('[Website]', ctx.website || '')
+    .replaceAll('[Website]', websiteReplacement)
     .replaceAll('[Email]', ctx.orgEmail || ctx.email || '')
     .replaceAll('[Address]', ctx.address || '')
     .replaceAll('[Street Address]', ctx.street || '')
