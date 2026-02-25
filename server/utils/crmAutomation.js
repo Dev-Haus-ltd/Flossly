@@ -3,7 +3,7 @@ import { formatYmd, parseDayOffsetFromText } from "~/lib/misc";
 import { template as EMAIL_TEMPLATE } from "./emailTemplate.js";
 import { transporter } from "./nodeMailer.js";
 import { buildLeadContext, renderTokens } from "./tokenRenderer.js";
-import { CrmAutomationTemplate } from "../models/index.js";
+import { CrmAutomationTemplate, Organisation } from "../models/index.js";
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from "./whatsapp.js";
 import { resolveWhatsAppProviderConfig } from "./whatsappProvider.js";
 
@@ -53,9 +53,9 @@ export const buildEffectiveCrmTemplates = (lead, templatesByOrg) => {
   return effectiveTemplates;
 };
 
-export const buildCrmEmail = (lead, tpl) => {
+export const buildCrmEmail = (lead, tpl, org = null) => {
   const baseSubject = tpl?.subject || tpl?.name || "Message from Flossly";
-  const ctx = buildLeadContext({ lead, userName: "Team" });
+  const ctx = buildLeadContext({ lead, org, userName: "Team" });
   const subject = renderTokens(baseSubject, ctx);
   const html = renderTokens(tpl.template || "", ctx);
   return { subject, html };
@@ -79,8 +79,8 @@ const stripHtmlToText = (html = "") => {
 };
 
 
-export const buildCrmWhatsAppMessage = (lead, tpl) => {
-  const ctx = buildLeadContext({ lead, userName: "Team" });
+export const buildCrmWhatsAppMessage = (lead, tpl, org = null) => {
+  const ctx = buildLeadContext({ lead, org, userName: "Team" });
   const rawTemplate = tpl?.template || "";
   const rendered = renderTokens(rawTemplate, ctx);
   return stripHtmlToText(rendered);
@@ -230,7 +230,29 @@ const getNthWeekdayOfMonth = (year, monthIndex, weekday, weekIndex) => {
   return new Date(year, monthIndex, day);
 };
 
-export const shouldSendCrmTemplate = ({ lead, tpl, trigger, today }) => {
+const resolveAnniversaryBase = (org, today) => {
+  if (!org?.practiceAnniversaryDate) return null;
+  const d = new Date(org.practiceAnniversaryDate);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Date(today.getFullYear(), d.getMonth(), d.getDate());
+};
+
+const resolveAnniversaryMonthEnd = (org, today) => {
+  if (!org?.practiceAnniversaryDate) return null;
+  const d = new Date(org.practiceAnniversaryDate);
+  if (Number.isNaN(d.getTime())) return null;
+  const year = today.getFullYear();
+  return new Date(year, d.getMonth() + 1, 0);
+};
+
+const resolveBirthdayMonthBase = (lead, today) => {
+  if (!lead?.dob) return null;
+  const dob = new Date(lead.dob);
+  if (Number.isNaN(dob.getTime())) return null;
+  return new Date(today.getFullYear(), dob.getMonth(), 1);
+};
+
+export const shouldSendCrmTemplate = ({ lead, tpl, trigger, today, org }) => {
   if (!trigger) return { due: false, sentKey: null };
   if (trigger.type === "inquiry_days") {
     if (!lead?.inquiryDate) return { due: false, sentKey: tpl.key };
@@ -244,6 +266,17 @@ export const shouldSendCrmTemplate = ({ lead, tpl, trigger, today }) => {
     const base = new Date(year, dob.getMonth(), dob.getDate());
     const target = new Date(base);
     target.setDate(target.getDate() + Number(trigger.days || 0));
+    return {
+      due: formatYmd(today) === formatYmd(target),
+      sentKey: `${tpl.key}_${year}`,
+    };
+  }
+  if (trigger.type === "birthday_month_start") {
+    const year = today.getFullYear();
+    const base = resolveBirthdayMonthBase(lead, today);
+    if (!base) return { due: false, sentKey: `${tpl.key}_${year}` };
+    const target = new Date(base);
+    target.setDate(target.getDate() + Number(trigger.offsetDays || 0));
     return {
       due: formatYmd(today) === formatYmd(target),
       sentKey: `${tpl.key}_${year}`,
@@ -291,6 +324,30 @@ export const shouldSendCrmTemplate = ({ lead, tpl, trigger, today }) => {
       sentKey: `${tpl.key}_${year}`,
     };
   }
+  if (trigger.type === "practice_anniversary") {
+    const year = today.getFullYear();
+    const base = resolveAnniversaryBase(org, today);
+    if (!base) return { due: false, sentKey: `${tpl.key}_${year}` };
+    const target = new Date(base);
+    target.setDate(target.getDate() + Number(trigger.offsetDays || 0));
+    const minHour = Number(trigger.minHour || 0);
+    return {
+      due: formatYmd(today) === formatYmd(target) && today.getHours() >= minHour,
+      sentKey: `${tpl.key}_${year}`,
+    };
+  }
+  if (trigger.type === "practice_anniversary_month_end") {
+    const year = today.getFullYear();
+    const base = resolveAnniversaryMonthEnd(org, today);
+    if (!base) return { due: false, sentKey: `${tpl.key}_${year}` };
+    const target = new Date(base);
+    target.setDate(target.getDate() + Number(trigger.offsetDays || 0));
+    const minHour = Number(trigger.minHour || 0);
+    return {
+      due: formatYmd(today) === formatYmd(target) && today.getHours() >= minHour,
+      sentKey: `${tpl.key}_${year}`,
+    };
+  }
   return { due: false, sentKey: null };
 };
 
@@ -324,6 +381,7 @@ export const sendImmediateCrmAutomationsForLead = async (lead) => {
     where: { organisationId: Number(lead.organisationId) },
   });
   if (!templates.length) return;
+  const org = await Organisation.findByPk(Number(lead.organisationId));
   const waConfig = await resolveWhatsAppProviderConfig(lead.organisationId);
   const templatesByOrg = buildCrmTemplatesByOrg(templates);
   const effectiveTemplates = buildEffectiveCrmTemplates(lead, templatesByOrg);
@@ -333,11 +391,11 @@ export const sendImmediateCrmAutomationsForLead = async (lead) => {
     if (!tpl?.enabled) continue;
     const trigger = resolveCrmTrigger(tpl);
     if (!trigger || trigger.type !== "inquiry_days" || trigger.days !== 0) continue;
-    const { due, sentKey } = shouldSendCrmTemplate({ lead, tpl, trigger, today });
+    const { due, sentKey } = shouldSendCrmTemplate({ lead, tpl, trigger, today, org });
     if (!due || hasCrmSent(raw, sentKey)) continue;
     if (String(tpl?.type || "Email").toLowerCase() === "whatsapp") {
       if (!lead?.telephone) continue;
-      const message = buildCrmWhatsAppMessage(lead, tpl);
+      const message = buildCrmWhatsAppMessage(lead, tpl, org);
       const templatePayload =
         waConfig?.provider === "meta"
           ? buildCrmWhatsAppTemplatePayload(lead, tpl)
@@ -349,7 +407,7 @@ export const sendImmediateCrmAutomationsForLead = async (lead) => {
       await markCrmSent(lead, raw, sentKey);
     } else {
       if (!lead?.email) continue;
-      const { subject, html } = buildCrmEmail(lead, tpl);
+      const { subject, html } = buildCrmEmail(lead, tpl, org);
       await sendCrmAutomationEmail(lead, subject, html);
       await markCrmSent(lead, raw, sentKey);
     }

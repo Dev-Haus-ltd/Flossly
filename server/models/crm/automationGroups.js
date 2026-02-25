@@ -11,6 +11,7 @@ export const CrmAutomationGroup = sequelize.define(
     description: { type: DataTypes.STRING(255), allowNull: true },
     enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     ordering: { type: DataTypes.INTEGER, allowNull: true, defaultValue: 0 },
+    source: { type: DataTypes.STRING(32), allowNull: true, defaultValue: 'custom' },
   },
   { modelName: 'CrmAutomationGroups', timestamps: true }
 )
