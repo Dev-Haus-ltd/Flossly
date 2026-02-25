@@ -148,6 +148,7 @@ config/google-cloud-key.json
 **/*-credentials*.json
 service.json
 
+
 .gemini
 .nvmrc
 

@@ -35,6 +35,15 @@ import {
   sendTaskCommentNotificationEmail,
   sendTaskDetailsEmail,
 } from "../utils/emailNotifications";
+import {
+  sendTaskAssignmentNotification,
+  sendBulkTaskAssignmentNotification,
+  sendTaskCommentNotification,
+  sendTaskUnassignmentNotification,
+  sendBulkTaskUnassignmentNotification,
+  sendBulkTaskCompletionNotification,
+  sendTaskCompletionNotification,
+} from "../utils/fcmNotification";
 import { ensureOnboardingEventsTable, recordOnboardingEvent } from "../utils/onboardingService";
 import { parseJsonBody } from "../utils/body";
 
@@ -446,6 +455,19 @@ export const assignBulkTasks = async (event) => {
       name: user.fullName,
       taskTitle: createdUserTasks.length === 1 ? createdUserTasks[0].title : "Bulk Tasks",
     });
+    
+    // Send FCM push notification (summary for bulk)
+    try {
+      const assignedBy = await User.findByPk(loggedUser.userId);
+      await sendBulkTaskAssignmentNotification({
+        tasks: createdUserTasks,
+        assignedUser: user,
+        assignedBy,
+      });
+    } catch (fcmError) {
+      console.error('Failed to send FCM notification:', fcmError);
+    }
+    
     return success(createdUserTasks);
   } catch (err) {
     return error(500, err.message);
@@ -660,6 +682,19 @@ export const updateTask = async (event) => {
           email: user.email,
           task: userTask.title,
         });
+        
+        // Send FCM push notification to task creator/manager
+        try {
+          if (userTask.assignedBy && userTask.assignedBy !== loggedUser.userId) {
+            await sendTaskCompletionNotification({
+              task: userTask,
+              completedBy: user,
+              notifyUsers: [await User.findByPk(userTask.assignedBy)]
+            });
+          }
+        } catch (fcmError) {
+          console.error('Failed to send FCM notification:', fcmError);
+        }
 
         if (userTask.frequency && userTask.frequency !== "One off") {
           await generateNextRecurringTask(userTask, orgStatuses, orgPriorities);
@@ -828,6 +863,19 @@ export const unAssignTask = async (event) => {
       });
     }
 
+    // FCM push / in-app notification (avoid notifying yourself)
+    try {
+      if (removedUser && removedUser.id !== loggedUser.userId) {
+        await sendTaskUnassignmentNotification({
+          taskTitle: taskTitle || 'Task',
+          removedBy: removedByUser,
+          removedUser,
+        });
+      }
+    } catch (fcmError) {
+      console.error('Failed to send FCM notification:', fcmError);
+    }
+
     return success("UserTask successfully deleted (unassigned).");
   } catch (err) {
     return error(500, err.message);
@@ -876,6 +924,37 @@ export const completeBulkTasks = async (event) => {
       email: user.email,
       task: "Multiple",
     });
+
+    // FCM push / in-app notification to assigners (summary, avoid spamming)
+    try {
+      const tasksByAssigner = new Map();
+      for (const task of tasksToComplete) {
+        if (!task.assignedBy || task.assignedBy === loggedUser.userId) continue;
+        if (!tasksByAssigner.has(task.assignedBy)) {
+          tasksByAssigner.set(task.assignedBy, []);
+        }
+        tasksByAssigner.get(task.assignedBy).push(task);
+      }
+
+      if (tasksByAssigner.size) {
+        const assignerIds = Array.from(tasksByAssigner.keys());
+        const assigners = await User.findAll({ where: { id: assignerIds } });
+        const assignerMap = new Map(assigners.map(a => [a.id, a]));
+
+        for (const [assignerId, completedTasks] of tasksByAssigner.entries()) {
+          const notifyUser = assignerMap.get(assignerId);
+          if (!notifyUser) continue;
+          await sendBulkTaskCompletionNotification({
+            tasks: completedTasks,
+            completedBy: user,
+            notifyUser,
+          });
+        }
+      }
+    } catch (fcmError) {
+      console.error('Failed to send FCM notification:', fcmError);
+    }
+
     return success("All tasks completed successfully.");
   } catch (err) {
     return error(500, err.message);
@@ -1013,6 +1092,19 @@ export const unAssignBulkTask = async (event) => {
         taskTitle,
         removedBy: remover?.fullName || "Team",
       });
+
+      // FCM push / in-app notification summary (avoid spamming)
+      try {
+        if (user.id !== loggedUser.userId) {
+          await sendBulkTaskUnassignmentNotification({
+            removedUser: user,
+            removedBy: remover,
+            taskTitles: uniqueTitles,
+          });
+        }
+      } catch (fcmError) {
+        console.error('Failed to send FCM notification:', fcmError);
+      }
     }
 
     return success("UserTask successfully deleted (unassigned).");
@@ -1062,6 +1154,23 @@ export const addUserTaskComment = async (event) => {
         taskTitle: userTask.taskDetails?.title || userTask.title || "Task",
         comment,
       });
+    }
+
+    // FCM push / in-app notification (avoid notifying yourself)
+    try {
+      const commenter = await User.findByPk(loggedUser.userId);
+      const recipients = [];
+      if (userTask.assignedUser && userTask.assignedUser.id !== loggedUser.userId) {
+        recipients.push(userTask.assignedUser);
+      }
+      await sendTaskCommentNotification({
+        task: { id: userTask.id, title: userTask.taskDetails?.title || userTask.title || 'Task' },
+        comment,
+        commentedBy: commenter,
+        notifyUsers: recipients,
+      });
+    } catch (fcmError) {
+      console.error('Failed to send FCM notification:', fcmError);
     }
 
     return success(newComment);
@@ -1417,6 +1526,7 @@ export const createNewTask = async (event) => {
       const assignees = await User.findAll({
         where: { id: assigneeIdsForEmail },
       });
+      const assignerUser = await User.findByPk(loggedUser.userId);
       for (const assignee of assignees) {
         if (assignee?.email) {
           await sendTaskAssignmentEmail({
@@ -1424,6 +1534,20 @@ export const createNewTask = async (event) => {
             name: assignee.fullName,
             taskTitle: title,
           });
+          
+          // Send FCM push notification
+          try {
+            const userTaskForAssignee = userTasks.find(ut => ut.userId === assignee.id);
+            if (userTaskForAssignee) {
+              await sendTaskAssignmentNotification({
+                task: userTaskForAssignee,
+                assignedUser: assignee,
+                assignedBy: assignerUser
+              });
+            }
+          } catch (fcmError) {
+            console.error('Failed to send FCM notification:', fcmError);
+          }
         }
       }
     }
@@ -1676,6 +1800,8 @@ export const uploadBulkTasks = async (event) => {
         return acc;
       }, {});
 
+      const assignedBy = await User.findByPk(loggedUser.userId);
+
       for (const [userId, assignedTasks] of Object.entries(tasksByUserId)) {
         const numericUserId = Number(userId);
         const user = userMap.get(numericUserId);
@@ -1688,6 +1814,17 @@ export const uploadBulkTasks = async (event) => {
             name: user.fullName,
             taskTitle: `${assignedTasks.length} default tasks`,
           });
+
+          // Send one push notification summary (avoid spamming)
+          try {
+            await sendBulkTaskAssignmentNotification({
+              tasks: assignedTasks,
+              assignedUser: user,
+              assignedBy,
+            });
+          } catch (fcmError) {
+            console.error('Failed to send FCM notification:', fcmError);
+          }
           continue;
         }
 
@@ -1697,6 +1834,17 @@ export const uploadBulkTasks = async (event) => {
             name: user.fullName,
             taskTitle: task.title,
           });
+        }
+
+        // For bulk assignment via upload, send one push notification summary
+        try {
+          await sendBulkTaskAssignmentNotification({
+            tasks: assignedTasks,
+            assignedUser: user,
+            assignedBy,
+          });
+        } catch (fcmError) {
+          console.error('Failed to send FCM notification:', fcmError);
         }
       }
     }

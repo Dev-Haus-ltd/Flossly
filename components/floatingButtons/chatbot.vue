@@ -3,7 +3,7 @@
     <!-- Chatbot Activator Button -->
     <div class="chatbot-container">
       <img
-        src="@/assets/icons/floatButton/chat.svg"
+        src="@/assets/icons/Support/Chat.svg"
         alt="Chat Icon"
         class="chatbot-icon"
         @click="toggleChat"
@@ -24,98 +24,123 @@
       content-class="chatbot-dialog-wrapper"
     >
       <v-card class="chatbot-dialog" elevation="12">
-        <!-- Header with Gradient -->
-        <div class="chatbot-header" :class="{ 'home-view': !isChatView && activeTab === 'home' }">
-          <div class="header-content" :class="{ 'home-view-content': !isChatView && activeTab === 'home', 'chat-view-content': isChatView || activeTab === 'messages' }">
-            <!-- Home view header (with gradient and avatars) -->
-            <template v-if="!isChatView && activeTab === 'home'">
-              <!-- Team Avatars -->
-              <div class="team-avatars">
-                <v-avatar
-                  v-for="(member, index) in teamMembers"
-                  :key="index"
-                  :class="['team-avatar', `avatar-${index}`]"
-                  size="48"
-                >
-                  <v-img v-if="member.image" :src="member.image" />
-                  <span v-else class="avatar-text">{{ member.initials }}</span>
-                </v-avatar>
-              </div>
-
-              <!-- Greeting -->
-              <h2 class="greeting">Hi {{ userName }} 👋</h2>
-              <h3 class="tagline">How can we help?</h3>
-            </template>
-
-            <!-- Messages tab header -->
-            <template v-else-if="!isChatView && activeTab === 'messages'">
-              <h2 class="greeting chat-view-title">Messages</h2>
-            </template>
-
-            <!-- Chat view header -->
-            <template v-else-if="isChatView">
-              <!-- Title bar with back and close buttons -->
-              <div class="chat-title-bar">
-                <!-- Back button -->
-                <v-btn
-                  class="back-btn-inline"
-                  icon
-                  size="small"
-                  variant="text"
-                  @click="goBack"
-                >
-                  <v-icon color="black">mdi-arrow-left</v-icon>
-                </v-btn>
-
-                <!-- Title -->
-                <h2 class="greeting chat-view-title">{{ selectedOption?.title }}</h2>
-
-                <!-- Close Button -->
-                <v-btn
-                  class="close-btn-inline"
-                  icon
-                  size="small"
-                  variant="text"
-                  @click="toggleChat"
-                >
-                  <v-icon color="black">mdi-close</v-icon>
-                </v-btn>
-              </div>
-              
-              <!-- Three-Step Progress Indicator (only for bug reports and feature requests) -->
-              <div v-if="currentConversationData && selectedOption?.id !== 'ask-question'" class="progress-indicator">
-                <div class="progress-steps">
-                  <div 
-                    v-for="(step, index) in progressSteps" 
+        <!-- Header Container -->
+        <div class="chatbot-header-container">
+          <!-- Gradient Header Section -->
+          <div class="chatbot-header" :class="{ 'home-view': !isChatView && activeTab === 'home', 'messages-view': !isChatView && activeTab === 'messages', 'chat-view': isChatView }">
+            <div class="header-content" :class="{ 'home-view-content': !isChatView && activeTab === 'home', 'chat-view-content': isChatView || activeTab === 'messages' }">
+              <!-- Home view header (with gradient and avatars) -->
+              <template v-if="!isChatView && activeTab === 'home'">
+                <!-- Team Avatars -->
+                <div class="team-avatars">
+                  <v-avatar
+                    v-for="(member, index) in teamMembers"
                     :key="index"
-                    class="progress-step"
+                    :class="['team-avatar', `avatar-${index}`]"
+                    size="50"
                   >
-                    <div 
-                      class="step-bar"
-                      :class="{ 
-                        'completed': index < currentStepIndex,
-                        'active': index === currentStepIndex,
-                        'pending': index > currentStepIndex
-                      }"
-                    ></div>
-                    <span class="step-label">{{ step }}</span>
+                    <v-img v-if="member.image" :src="member.image" />
+                    <span v-else class="avatar-text">{{ member.initials }}</span>
+                  </v-avatar>
+                </div>
+
+                <!-- Greeting -->
+                <h2 class="greeting">Hi {{ userName }} 👋</h2>
+                <h3 class="tagline">How can we help?</h3>
+              </template>
+
+              <!-- Messages tab header -->
+              <template v-else-if="!isChatView && activeTab === 'messages'">
+                <h2 class="greeting chat-view-title messages-title">Messages</h2>
+              </template>
+
+              <!-- Chat view header -->
+              <template v-else-if="isChatView">
+                <!-- Title bar with back and close buttons -->
+                <div class="chat-title-bar">
+                  <!-- Back button -->
+                  <v-btn
+                    class="back-btn-inline"
+                    icon
+                    size="small"
+                    variant="text"
+                    @click="goBack"
+                  >
+                    <v-icon color="black">mdi-arrow-left</v-icon>
+                  </v-btn>
+
+                  <!-- Title -->
+                  <h2 class="greeting chat-view-title">{{ selectedOption?.title }}</h2>
+
+                  <!-- Close Button -->
+                  <v-btn
+                    class="close-btn-inline"
+                    icon
+                    size="small"
+                    variant="text"
+                    @click="toggleChat"
+                  >
+                    <v-icon color="black">mdi-close</v-icon>
+                  </v-btn>
+                </div>
+              </template>
+            </div>
+
+            <!-- Close Button (for non-chat views) -->
+            <v-btn
+              v-if="!isChatView"
+              class="close-btn"
+              icon
+              size="small"
+              variant="text"
+              @click="toggleChat"
+            >
+              <v-icon :color="(isChatView || activeTab === 'messages') ? 'black' : 'white'">mdi-close</v-icon>
+            </v-btn>
+          </div>
+          
+          <!-- Progress Indicator Section (white background) -->
+          <div v-if="isChatView && currentConversationData && selectedOption?.id !== 'ask-question'" class="progress-indicator-section">
+            <div class="progress-indicator">
+              <div class="progress-steps">
+                <div 
+                  v-for="(step, index) in progressSteps" 
+                  :key="index"
+                  class="progress-step"
+                  :class="{ 
+                    'completed': index < currentStepIndex,
+                    'active': index === currentStepIndex,
+                    'pending': index > currentStepIndex
+                  }"
+                >
+                  <!-- Connecting line (before circle, except first) -->
+                  <div 
+                    v-if="index > 0"
+                    class="step-line"
+                    :class="{ 
+                      'completed': index <= currentStepIndex,
+                      'pending': index > currentStepIndex
+                    }"
+                  ></div>
+                  
+                  <!-- Circle with number -->
+                  <div 
+                    class="step-circle"
+                    :class="{ 
+                      'completed': index < currentStepIndex,
+                      'active': index === currentStepIndex,
+                      'pending': index > currentStepIndex
+                    }"
+                  >
+                    {{ index + 1 }}
                   </div>
+                  
+                  <!-- Label below -->
+                  <span class="step-label">{{ step }}</span>
                 </div>
               </div>
-            </template>
+            </div>
           </div>
-
-          <!-- Close Button (for non-chat views) -->
-          <v-btn
-            v-if="!isChatView"
-            class="close-btn"
-            icon
-            size="small"
-            variant="text"
-            @click="toggleChat"
-          >
-            <v-icon :color="(isChatView || activeTab === 'messages') ? 'black' : 'white'">mdi-close</v-icon>
-          </v-btn>
         </div>
 
         <!-- Messages/Conversations List -->
@@ -131,9 +156,7 @@
                 @click="openConversation(conversation)"
               >
                 <div class="conversation-icon">
-                  <v-avatar size="40" :color="conversation.unreadCount > 0 ? 'primary' : 'grey-lighten-2'">
-                    <img src="@/assets/logos/Logoicon2.svg" alt="Flossly" class="conversation-logo" />
-                  </v-avatar>
+                  <img src="@/assets/icons/Support/message-icon.svg" alt="Flossly" class="conversation-logo" />
                 </div>
                 <div class="conversation-content">
                   <h4 class="conversation-title">{{ conversation.subject }}</h4>
@@ -153,12 +176,12 @@
                 @click="handleActionOption(option.id)"
               >
                 <div class="option-content">
+                  <div class="option-icon">
+                    <img :src="option.iconSrc" :alt="option.title" class="support-icon support-icon--22" />
+                  </div>
                   <div class="option-text">
                     <span class="option-title">{{ option.title }}</span>
                     <p class="option-subtitle">{{ option.subtitle }}</p>
-                  </div>
-                  <div class="option-icon">
-                    <v-icon :color="option.iconColor" size="22">{{ option.icon }}</v-icon>
                   </div>
                 </div>
               </div>
@@ -185,9 +208,7 @@
                 @click="openConversation(conversation)"
               >
                 <div class="conversation-icon">
-                  <v-avatar size="40" :color="conversation.unreadCount > 0 ? 'primary' : 'grey-lighten-2'">
-                    <img src="@/assets/logos/Logoicon2.svg" alt="Flossly" class="conversation-logo" />
-                  </v-avatar>
+                  <img src="@/assets/icons/Support/message-icon.svg" alt="Flossly" class="conversation-logo" />
                 </div>
                 <div class="conversation-content">
                   <h4 class="conversation-title">{{ conversation.subject }}</h4>
@@ -198,7 +219,11 @@
               </div>
             </div>
             <div v-else class="empty-state">
-              <v-icon size="64" color="grey-lighten-1">mdi-message-outline</v-icon>
+              <img
+                src="@/assets/icons/Support/MessageList.svg"
+                alt="Messages"
+                class="support-icon support-icon--64"
+              />
               <p class="empty-text">No conversations yet</p>
               <p class="empty-subtext">Start a conversation from the Home tab</p>
             </div>
@@ -209,7 +234,7 @@
             <div class="chat-messages" ref="chatMessagesContainer">
               <!-- Typing indicator for welcome message -->
               <div v-if="showWelcomeTyping && !showWelcomeMessage" class="bot-message typing-indicator-wrapper message-fade-in">
-                <img src="@/assets/logos/Logoicon2.svg" alt="Flossly" class="bot-logo" />
+                <img src="@/assets/icons/Support/message-icon.svg" alt="Flossly" class="bot-logo" />
                 <div class="bot-message-bubble typing-indicator-bubble">
                   <div class="typing-indicator">
                     <span></span>
@@ -221,7 +246,7 @@
 
               <!-- Bot welcome message (virtual message, not saved to DB) -->
               <div v-if="!isConversationLoading && showWelcomeMessage" class="bot-message welcome-message message-fade-in">
-                <img src="@/assets/logos/Logoicon2.svg" alt="Flossly" class="bot-logo" />
+                <img src="@/assets/icons/Support/message-icon.svg" alt="Flossly" class="bot-logo" />
                 <div class="bot-message-bubble">
                   <p>{{ getBotMessage() }}</p>
                 </div>
@@ -258,14 +283,15 @@
                         <span class="attachment-size">({{ formatFileSize(attachment.fileSize) }})</span>
                       </div>
                     </div>
-                    
-                    <span class="message-time">{{ formatMessageTime(message.createdAt) }}</span>
                   </div>
+                  <v-avatar size="40" color="#263AAD" class="user-avatar">
+                    <span class="avatar-text">{{ getUserInitials() }}</span>
+                  </v-avatar>
                 </div>
 
                 <!-- Admin/Bot/AI reply -->
                 <div v-else-if="message.senderType === 'support' || message.senderType === 'admin' || message.senderType === 'bot' || message.senderType === 'ai'" class="bot-message message-fade-in">
-                  <img src="@/assets/logos/Logoicon2.svg" alt="Flossly" class="bot-logo" />
+                  <img src="@/assets/icons/Support/message-icon.svg" alt="Flossly" class="bot-logo" />
                   <div class="bot-message-bubble">
                     <!-- Only render markdown for AI answers in the Ask a question flow -->
                     <div
@@ -297,7 +323,7 @@
 
               <!-- Typing indicator - shows at the end while waiting -->
               <div v-if="isWaitingForResponse" class="bot-message typing-indicator-wrapper">
-                <img src="@/assets/logos/Logoicon2.svg" alt="Flossly" class="bot-logo" />
+                <img src="@/assets/icons/Support/message-icon.svg" alt="Flossly" class="bot-logo" />
                 <div class="bot-message-bubble typing-indicator-bubble">
                   <div class="typing-indicator">
                     <span></span>
@@ -316,25 +342,29 @@
         <!-- Input Field (only in chat view and not loading) -->
         <div v-if="isChatView && !isConversationLoading" class="chat-input-container">
           <!-- Action Buttons (only for Report an issue and first time) -->
-          <div v-if="selectedOption?.id === 'report-issue' && currentMessages.length === 0" class="action-buttons">
-            <v-btn
-              variant="text"
-              color="grey-darken-2"
-              class="action-btn"
-              @click="openBugAnnotation"
-            >
-              <v-icon left>mdi-camera-marker</v-icon>
-              Mark the bug
-            </v-btn>
-            <v-btn
-              variant="text"
-              color="grey-darken-2"
-              class="action-btn"
-              @click="openScreenRecorder"
-            >
-              <v-icon left>mdi-record-circle</v-icon>
-              Record screen
-            </v-btn>
+          <div v-if="selectedOption?.id === 'report-issue' && currentMessages.length === 0" class="action-buttons-container">
+            <div class="action-btn-wrapper">
+              <v-btn
+                variant="text"
+                color="grey-darken-2"
+                class="action-btn"
+                @click="openBugAnnotation"
+              >
+                <img src="@/assets/icons/Support/MarkBug.svg" alt="Mark bug" class="support-icon support-icon--18" />
+                Mark the bug
+              </v-btn>
+            </div>
+            <div class="action-btn-wrapper">
+              <v-btn
+                variant="text"
+                color="grey-darken-2"
+                class="action-btn"
+                @click="openScreenRecorder"
+              >
+                <img src="@/assets/icons/Support/RecordScreen.svg" alt="Record screen" class="support-icon support-icon--18" />
+                Record screen
+              </v-btn>
+            </div>
           </div>
 
           <!-- Attached Files Preview -->
@@ -360,6 +390,21 @@
           <!-- First Time Chat Input (with Submit Button) -->
           <div v-if="currentMessages.length === 0" class="first-time-chat-input">
             <div class="textarea-wrapper">
+              <!-- Emoji Picker -->
+              <ClientOnly>
+                <div v-if="showEmojiPicker" class="emoji-picker-wrapper" @click.stop>
+                  <div class="emoji-picker-header">
+                    <span>Emojis</span>
+                    <v-icon size="small" @click="showEmojiPicker = false">mdi-close</v-icon>
+                  </div>
+                  <emoji-picker
+                    ref="emojiPickerRef"
+                    class="emoji-picker-component"
+                    @emoji-click="handleEmojiClick"
+                  ></emoji-picker>
+                </div>
+              </ClientOnly>
+              
               <v-textarea
                 v-model="userMessage"
                 :placeholder="getInputPlaceholder()"
@@ -372,18 +417,18 @@
                 :disabled="isSubmitting"
               />
               
-              <!-- Attach file icon (for Report an issue and Request a feature) -->
-              <v-btn
+              <!-- Bottom right icons -->
+              <div 
                 v-if="selectedOption?.id === 'report-issue' || selectedOption?.id === 'request-feature'"
-                icon
-                size="small"
-                variant="text"
-                color="grey-darken-1"
-                class="attach-file-btn"
-                @click="triggerFileUpload"
+                class="textarea-bottom-icons"
               >
-                <v-icon size="20">mdi-paperclip</v-icon>
-              </v-btn>
+                <img
+                  src="@/assets/icons/Support/AttachFile.svg"
+                  alt="Attach"
+                  class="support-icon support-icon--20 attach-file-icon"
+                  @click="triggerFileUpload"
+                />
+              </div>
               
               <input
                 ref="fileInput"
@@ -410,6 +455,21 @@
 
           <!-- Ongoing Chat Input (with Inline Send Button) -->
           <div v-else class="modern-chat-input">
+            <!-- Emoji Picker for ongoing chat -->
+            <ClientOnly>
+              <div v-if="showEmojiPicker" class="emoji-picker-wrapper" @click.stop>
+                <div class="emoji-picker-header">
+                  <span>Emojis</span>
+                  <v-icon size="small" @click="showEmojiPicker = false">mdi-close</v-icon>
+                </div>
+                <emoji-picker
+                  ref="emojiPickerRef"
+                  class="emoji-picker-component"
+                  @emoji-click="handleEmojiClick"
+                ></emoji-picker>
+              </div>
+            </ClientOnly>
+            
             <v-text-field
               v-model="userMessage"
               :placeholder="getInputPlaceholder()"
@@ -420,30 +480,37 @@
               @keydown.enter="handleEnterKey"
               :disabled="isSubmitting"
             >
+              <template #prepend-inner>
+                <div class="input-actions-left">
+                  <!-- Attach file icon (for Report an issue and Request a feature) -->
+                  <img
+                    v-if="selectedOption?.id === 'report-issue' || selectedOption?.id === 'request-feature'"
+                    src="@/assets/icons/Support/AttachFile.svg"
+                    alt="Attach"
+                    class="support-icon support-icon--20 attach-file-icon"
+                    @click="triggerFileUpload"
+                  />
+                  
+                  <!-- Emoji icon -->
+                  <img
+                    src="@/assets/icons/Support/Emoji.svg"
+                    alt="Emoji"
+                    class="support-icon support-icon--20 emoji-icon"
+                    @click="toggleEmojiPicker"
+                  />
+                </div>
+              </template>
+              
               <template #append-inner>
                 <div class="input-actions">
-                  <!-- Attach file icon (for Report an issue and Request a feature) -->
-                  <v-icon
-                    v-if="selectedOption?.id === 'report-issue' || selectedOption?.id === 'request-feature'"
-                    size="20"
-                    color="grey-darken-1"
-                    class="attach-file-icon"
-                    @click="triggerFileUpload"
-                  >
-                    mdi-paperclip
-                  </v-icon>
-                  
                   <!-- Send Button -->
-                  <v-btn
-                    icon
-                    size="small"
-                    color="primary"
-                    class="send-btn"
-                    :disabled="!userMessage.trim() || isSubmitting"
-                    @click="sendMessage"
-                  >
-                    <v-icon size="20">mdi-send</v-icon>
-                  </v-btn>
+                  <img
+                    src="@/assets/icons/Support/send.svg"
+                    alt="Send"
+                    class="support-icon support-icon--20 send-icon"
+                    :class="{ 'disabled': !userMessage.trim() || isSubmitting }"
+                    @click="!userMessage.trim() || isSubmitting ? null : sendMessage()"
+                  />
                 </div>
               </template>
             </v-text-field>
@@ -467,7 +534,7 @@
             @click="activeTab = 'home'"
           >
             <div class="nav-content">
-              <v-icon>mdi-home</v-icon>
+              <img src="@/assets/icons/Support/home.svg" alt="Home" class="nav-icon support-icon support-icon--22" />
               <span class="nav-label">Home</span>
             </div>
           </v-btn>
@@ -483,9 +550,9 @@
                 color="error"
                 class="nav-badge"
               >
-                <v-icon>mdi-message</v-icon>
+                <img src="@/assets/icons/Support/message-text.svg" alt="Messages" class="nav-icon support-icon support-icon--22" />
               </v-badge>
-              <v-icon v-else>mdi-message</v-icon>
+              <img v-else src="@/assets/icons/Support/message-text.svg" alt="Messages" class="nav-icon support-icon support-icon--22" />
               <span class="nav-label">Messages</span>
             </div>
           </v-btn>
@@ -515,9 +582,13 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { marked } from 'marked';
 import supportChatService from '@/services/supportChatService';
-import { useSupportChatSocket } from '@/composables/useSupportChatSocket.js';
 import BugAnnotation from '@/components/chatbot/BugAnnotation.vue';
 import ScreenRecorder from '@/components/chatbot/ScreenRecorder.vue';
+
+// Import emoji picker only on client side
+if (process.client) {
+  import('emoji-picker-element');
+}
 
 // Configure marked for safe HTML rendering
 marked.setOptions({
@@ -526,6 +597,7 @@ marked.setOptions({
 });
 
 const { user } = useUser();
+const { lastNotification } = useFCM();
 
 const isOpen = ref(false);
 const selectedOption = ref(null);
@@ -534,62 +606,67 @@ const userMessage = ref('');
 const activeTab = ref('home');
 const currentConversationId = ref(null);
 
-const { getSocket } = useSupportChatSocket();
-const socket = getSocket();
-let joinedConversationId = null;
-
-const joinConversationRoom = (conversationId) => {
-  if (!conversationId) return;
-  if (joinedConversationId && joinedConversationId !== conversationId) {
-    socket?.emit('conversation:leave', joinedConversationId);
-  }
-  joinedConversationId = conversationId;
-  socket?.emit('conversation:join', conversationId);
-};
-
-const onNewMessage = (evt) => {
-  const convId = evt?.conversationId;
-  const msg = evt?.message;
-  if (!convId || !msg) return;
-
-  // Update currently open conversation in realtime
-  if (currentConversationId.value === convId) {
-    const exists = currentMessages.value?.some(m => m.id === msg.id);
-    if (!exists) {
-      // Remove temp message if this is the user's message coming back from server
-      if (msg.senderType === 'user') {
-        currentMessages.value = currentMessages.value.filter(m => !m.id?.startsWith('temp-'));
-      }
+// Watch for FCM notifications related to chatbot messages
+const handleFCMNotification = (notification) => {
+  if (!notification) return;
+  
+  const notifData = notification.data || {};
+  const type = notifData.type;
+  
+  // Handle new chatbot messages
+  if (type === 'chatbot_message' || type === 'chatbot_status_update') {
+    const convId = notifData.conversationId ? parseInt(notifData.conversationId) : null;
+    
+    if (type === 'chatbot_message') {
+      const message = notifData.message ? JSON.parse(notifData.message) : null;
       
-      currentMessages.value.push(msg);
-      currentMessages.value = [...currentMessages.value].sort(
-        (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
-      );
-      nextTick(() => scrollToBottom());
+      if (convId && message) {
+        // Update currently open conversation in realtime
+        if (currentConversationId.value === convId) {
+          const exists = currentMessages.value?.some(m => m.id === message.id);
+          if (!exists) {
+            // Remove temp message if this is the user's message coming back from server
+            if (message.senderType === 'user') {
+              currentMessages.value = currentMessages.value.filter(m => !m.id?.startsWith('temp-'));
+            }
+            
+            currentMessages.value.push(message);
+            currentMessages.value = [...currentMessages.value].sort(
+              (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+            );
+            nextTick(() => scrollToBottom());
+          }
+        }
+        
+        // Refresh conversations list to update unread counts
+        fetchConversations();
+      }
+    } else if (type === 'chatbot_status_update') {
+      const status = notifData.status;
+      
+      if (convId && status) {
+        // Update current conversation data
+        if (currentConversationId.value === convId && currentConversationData.value) {
+          currentConversationData.value.status = status;
+        }
+        
+        // Update in conversations list
+        const conv = allConversations.value.find(c => c.id === convId);
+        if (conv) {
+          conv.status = status;
+        }
+      }
     }
   }
 };
 
-const onStatusUpdated = (data) => {
-  if (data.conversationId === currentConversationId.value && currentConversationData.value) {
-    currentConversationData.value.status = data.status;
-  }
-  
-  // Update in conversations list
-  const conv = allConversations.value.find(c => c.id === data.conversationId);
-  if (conv) {
-    conv.status = data.status;
-  }
-};
-
 onMounted(() => {
-  socket?.on('message:new', onNewMessage);
-  socket?.on('conversation:status-updated', onStatusUpdated);
+  // Watch for FCM notifications
+  watch(lastNotification, handleFCMNotification, { immediate: true });
 });
 
 onUnmounted(() => {
-  socket?.off('message:new', onNewMessage);
-  socket?.off('conversation:status-updated', onStatusUpdated);
+  // Cleanup handled by useFCM composable
 });
 
 const isSubmitting = ref(false);
@@ -605,6 +682,8 @@ const showBugAnnotation = ref(false);
 const showScreenRecorder = ref(false);
 const attachedFiles = ref([]);
 const shouldReopenChatAfterSnip = ref(false);
+const showEmojiPicker = ref(false);
+const emojiPickerRef = ref(null);
 
 const userName = computed(() => {
   return user.value?.name || user.value?.firstName || 'there';
@@ -621,22 +700,19 @@ const actionOptions = ref([
     id: 'ask-question',
     title: 'Ask a question',
     subtitle: 'We are here to help.',
-    icon: 'mdi-message-reply',
-    iconColor: 'primary'
+    iconSrc: new URL('@/assets/icons/Support/MessageList.svg', import.meta.url).href,
   },
   {
     id: 'report-issue',
     title: 'Report an issue',
     subtitle: 'Found a bug? Let us know.',
-    icon: 'mdi-bug',
-    iconColor: 'error'
+    iconSrc: new URL('@/assets/icons/Support/ReportBug.svg', import.meta.url).href,
   },
   {
     id: 'request-feature',
     title: 'Request a feature',
     subtitle: 'What would you like to see next?',
-    icon: 'mdi-lightbulb',
-    iconColor: 'warning'
+    iconSrc: new URL('@/assets/icons/Support/RequestFeature.svg', import.meta.url).href,
   }
 ]);
 
@@ -752,6 +828,11 @@ const formatMessageTime = (dateString) => {
   return `${hours}:${minutes}`;
 };
 
+const getUserInitials = () => {
+  const name = user.value?.name || user.value?.firstName || user.value?.fullName || 'U';
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+};
+
 const renderMarkdown = (text) => {
   if (!text) return '';
   try {
@@ -794,7 +875,6 @@ const openConversation = async (conversation) => {
   console.log('Opening conversation:', conversation);
   currentConversationId.value = conversation.id;
   currentConversationData.value = conversation; // Store conversation data for progress indicator
-  joinConversationRoom(conversation.id);
   selectedOption.value = {
     id: conversation.conversationType,
     title: conversation.subject
@@ -858,10 +938,6 @@ const goBack = () => {
   attachedFiles.value = []; // Clear attached files
   showBugAnnotation.value = false; // Close annotation if open
   showScreenRecorder.value = false; // Close recorder if open
-  if (joinedConversationId) {
-    socket?.emit('conversation:leave', joinedConversationId);
-    joinedConversationId = null;
-  }
   currentConversationId.value = null;
   
   // Clear welcome message
@@ -932,7 +1008,6 @@ const sendMessage = async () => {
       if (convResponse.success) {
         currentConversationId.value = convResponse.data.id;
         currentConversationData.value = convResponse.data; // Set conversation data for progress indicator
-        joinConversationRoom(convResponse.data.id);
       } else {
         throw new Error('Failed to create conversation');
       }
@@ -1138,6 +1213,16 @@ const triggerFileUpload = () => {
   fileInput.value?.click();
 };
 
+const toggleEmojiPicker = () => {
+  showEmojiPicker.value = !showEmojiPicker.value;
+};
+
+const handleEmojiClick = (event) => {
+  const emoji = event.detail.unicode;
+  userMessage.value += emoji;
+  showEmojiPicker.value = false;
+};
+
 const handleFileSelect = (event) => {
   const files = Array.from(event.target.files || []);
   if (files.length > 0) {
@@ -1324,9 +1409,23 @@ watch(showBugAnnotation, (val) => {
 }
 
 .chatbot-header.home-view {
-  background: linear-gradient(135deg, #171952 0%, #263AAD 50%, #7D77FF 100%);
+  background: linear-gradient(180deg, #263388 0%, #3247A4 50%, #AD7CF3 100%);
   color: white;
   border-bottom: none;
+}
+
+.chatbot-header.messages-view {
+  background: linear-gradient(90deg, #263388 0%, #3247A4 50%, #AD7CF3 100%);
+  color: white;
+  border-bottom: none;
+}
+
+.chatbot-header.messages-view .greeting {
+  color: white;
+}
+
+.chatbot-header.messages-view .close-btn .v-icon {
+  color: white !important;
 }
 
 .header-content {
@@ -1340,11 +1439,14 @@ watch(showBugAnnotation, (val) => {
 .header-content.home-view-content {
   align-items: flex-start;
   justify-content: flex-start;
+  gap: 5px;
+  /* Keep text below the top-right avatars/close button */
+  padding-top: 86px;
 }
 
 .header-content.chat-view-content {
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .team-avatars {
@@ -1352,10 +1454,52 @@ watch(showBugAnnotation, (val) => {
   margin-bottom: 16px;
 }
 
+/* Home header: avatars on top-left, close button on top-right */
+.chatbot-header.home-view .team-avatars {
+  position: absolute;
+  top: 12px;
+  left: 0px;
+  margin-bottom: 0;
+}
+
+.chatbot-header.home-view .close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+.chatbot-header.messages-view .close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+.chatbot-header.chat-view {
+  background: linear-gradient(90deg, #263388 0%, #3247A4 50%, #AD7CF3 100%);
+  color: white;
+  border-bottom: none;
+}
+
+.chatbot-header.chat-view .greeting {
+  color: white;
+}
+
+.chatbot-header.chat-view .back-btn-inline .v-icon,
+.chatbot-header.chat-view .close-btn-inline .v-icon {
+  color: white !important;
+}
+
+.chatbot-header.chat-view .step-label {
+  color: white !important;
+}
+
 .team-avatar {
-  border: 3px solid rgba(255, 255, 255, 0.5);
+  width: 50px;
+  height: 50px;
+  border: 1px solid hsla(0, 0%, 86%, 1);
   background: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(10px);
+  box-sizing: border-box;
   margin-left: -12px;
   transition: transform 0.2s ease, z-index 0.2s ease;
 }
@@ -1376,15 +1520,16 @@ watch(showBugAnnotation, (val) => {
 }
 
 .greeting {
-  font-size: 28px;
+  font-family: Inter, sans-serif;
+  font-size: 24px;
   font-weight: 700;
-  margin: 0 0 4px 0;
+  line-height: 130%;
+  letter-spacing: 0;
+  margin: 0;
   color: white;
 }
 
 .tagline {
-  font-size: 24px;
-  font-weight: 600;
   margin: 0;
   color: white;
   opacity: 0.95;
@@ -1400,7 +1545,7 @@ watch(showBugAnnotation, (val) => {
 .chatbot-body {
   flex: 1;
   overflow-y: auto;
-  background: #f5f5f5;
+  background: white;
   height: calc(100vh - 200px);
   max-height: 500px;
 }
@@ -1411,10 +1556,9 @@ watch(showBugAnnotation, (val) => {
 
 .conversation-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   padding: 16px 20px;
   gap: 12px;
-  border-bottom: 1px solid #f0f0f0;
   cursor: pointer;
   transition: background 0.2s;
   position: relative;
@@ -1426,12 +1570,22 @@ watch(showBugAnnotation, (val) => {
 
 .conversation-content {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  position: relative;
+  padding-right: 60px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .conversation-title {
+  font-family: Inter, sans-serif;
+  font-weight: 500;
   font-size: 14px;
-  font-weight: 600;
-  margin: 0 0 2px 0;
+  line-height: 130%;
+  letter-spacing: 0;
+  margin: 0;
   color: #1a1a1a;
   display: -webkit-box;
   -webkit-line-clamp: 1;
@@ -1440,19 +1594,31 @@ watch(showBugAnnotation, (val) => {
 }
 
 .conversation-preview {
-  font-size: 13px;
+  font-family: Inter, sans-serif;
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 130%;
+  letter-spacing: 0;
+  margin: 0;
   color: #666;
-  margin: 0 0 2px 0;
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 .conversation-time {
-  font-size: 12px;
-  color: #999;
+  font-family: Inter, sans-serif;
+  font-weight: 400;
+  font-size: 10px;
+  line-height: 130%;
+  letter-spacing: 0;
+  color: hsla(0, 0%, 45%, 1);
   margin: 0;
+  position: absolute;
+  top: 0;
+  right: 0;
+  white-space: nowrap;
 }
 
 .unread-indicator {
@@ -1491,8 +1657,15 @@ watch(showBugAnnotation, (val) => {
 .option-content {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.option-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .option-text {
@@ -1514,29 +1687,8 @@ watch(showBugAnnotation, (val) => {
   line-height: 1.3;
 }
 
-.option-icon {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 /* Chat View Styles */
-.back-btn {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 10;
-}
-
-.close-btn {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 10;
-}
+/* (legacy absolute-position rules removed; chat view uses .chat-title-bar with inline buttons) */
 
 .chat-title-bar {
   display: flex;
@@ -1554,7 +1706,7 @@ watch(showBugAnnotation, (val) => {
 
 .chat-view-title {
   margin: 0;
-  text-align: center;
+  text-align: left;
   flex: 1;
   font-size: 18px;
   font-weight: 600;
@@ -1564,49 +1716,110 @@ watch(showBugAnnotation, (val) => {
   white-space: nowrap;
 }
 
+.chatbot-header-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.progress-indicator-section {
+  background: white;
+  padding: 12px 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
 .progress-indicator {
-  margin: 12px 0 0 0;
   width: 100%;
-  padding: 0;
 }
 
 .progress-steps {
   display: flex;
-  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
   width: 100%;
 }
 
 .progress-step {
-  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  position: relative;
+  flex: 1;
 }
 
-.step-bar {
+.progress-step:first-child {
+  align-items: flex-start;
+}
+
+.progress-step:last-child {
+  align-items: flex-end;
+}
+
+.step-line {
+  position: absolute;
+  top: 18px;
+  left: -50%;
   width: 100%;
-  height: 6px;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
+  height: 3px;
+  z-index: 0;
   transition: background 0.3s ease;
 }
 
-.step-bar.completed,
-.step-bar.active {
-  background: #1a1a1a;
+.step-line.completed {
+  background: hsla(217, 100%, 49%, 1);
 }
 
-.step-bar.pending {
-  background: rgba(0, 0, 0, 0.2);
+.step-line.pending {
+  background: #D1D5DB;
+}
+
+.step-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 600;
+  z-index: 1;
+  transition: all 0.3s ease;
+}
+
+.step-circle.active {
+  background: hsla(217, 100%, 49%, 1);
+  color: white;
+}
+
+.step-circle.completed {
+  background: hsla(217, 100%, 49%, 1);
+  color: white;
+}
+
+.step-circle.pending {
+  background: #D1D5DB;
+  color: #9CA3AF;
 }
 
 .step-label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
-  color: #1a1a1a;
   text-align: center;
   white-space: nowrap;
+  z-index: 1;
+}
+
+.progress-step.active .step-label {
+  color: hsla(217, 100%, 49%, 1);
+}
+
+.progress-step.completed .step-label {
+  color: hsla(217, 100%, 49%, 1);
+}
+
+.progress-step.pending .step-label {
+  color: #9CA3AF;
 }
 
 .chat-messages {
@@ -1626,6 +1839,9 @@ watch(showBugAnnotation, (val) => {
   display: flex;
   gap: 12px;
   margin-bottom: 20px;
+  align-items: center;
+  justify-content: flex-start;
+  position: relative;
 }
 
 .welcome-message {
@@ -1633,28 +1849,61 @@ watch(showBugAnnotation, (val) => {
 }
 
 .bot-logo {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   object-fit: contain;
   flex-shrink: 0;
 }
 
+.conversation-icon {
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
 .conversation-logo {
-  width: 24px;
-  height: 24px;
+  width: 40px;
+  height: 40px;
   object-fit: contain;
 }
 
 .bot-message-bubble {
-  background: #f5f5f5;
+  background: white;
   padding: 16px;
-  border-radius: 12px;
+  border-radius: 20px;
   width: fit-content;
-  max-width: 100%;
+  max-width: calc(100% - 52px);
   display: inline-block;
   word-break: break-word;
+  overflow-wrap: break-word;
   white-space: pre-wrap;
-  overflow-x: hidden;
+  border: 1px solid hsla(0, 0%, 86%, 1);
+  position: relative;
+}
+
+.bot-message-bubble::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 8px 8px 8px 0;
+  border-color: transparent hsla(0, 0%, 86%, 1) transparent transparent;
+}
+
+.bot-message-bubble::after {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 7px 7px 7px 0;
+  border-color: transparent white transparent transparent;
 }
 
 .bot-message-bubble p {
@@ -1843,44 +2092,67 @@ watch(showBugAnnotation, (val) => {
 .user-message {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   margin-bottom: 20px;
+  gap: 12px;
+  position: relative;
 }
 
 .user-message-bubble {
-  background: #0061FB;
-  padding: 12px 16px;
-  border-radius: 18px 18px 4px 18px;
+  background: #E8F0FE;
+  padding: 16px;
+  border-radius: 20px;
   width: fit-content;
-  max-width: 100%;
-  box-shadow: 0 1px 2px rgba(0, 97, 251, 0.2);
+  max-width: calc(100% - 52px);
   word-break: break-word;
   white-space: pre-wrap;
-  overflow-x: hidden;
+  overflow-wrap: break-word;
+  position: relative;
+  order: 1;
+}
+
+.user-message-bubble::before {
+  content: '';
+  position: absolute;
+  right: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 8px 0 8px 8px;
+  border-color: transparent transparent transparent #E8F0FE;
 }
 
 .user-message-bubble p {
   margin: 0;
-  color: white;
+  color: #1a1a1a;
   font-size: 14px;
   line-height: 1.5;
   word-wrap: break-word;
 }
 
+.user-avatar {
+  flex-shrink: 0;
+  order: 2;
+}
+
 .user-message .message-time {
   font-size: 10px;
-  color: white;
+  color: #999;
   opacity: 0.8;
   display: block;
-  margin-top: 2px;
+  margin-top: 4px;
   text-align: right;
 }
 
 .bot-message .message-time {
   font-size: 10px;
-  color: #666;
+  color: #999;
   opacity: 0.8;
   display: block;
-  margin-top: 2px;
+  margin-top: 4px;
+  text-align: right;
 }
 
 .empty-chat {
@@ -1895,7 +2167,6 @@ watch(showBugAnnotation, (val) => {
 .chat-input-container {
   padding: 16px;
   background: white;
-  border-top: 1px solid #e0e0e0;
 }
 
 
@@ -1908,15 +2179,19 @@ watch(showBugAnnotation, (val) => {
   margin-bottom: 12px;
 }
 
-.attach-file-btn {
+.textarea-bottom-icons {
   position: absolute;
-  bottom: 8px;
-  right: 8px;
-  z-index: 10;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 1;
 }
 
+
 .chat-textarea :deep(.v-field) {
-  border-radius: 16px;
+  border-radius: 24px;
   border-color: #d0d0d0;
 }
 
@@ -1955,6 +2230,79 @@ watch(showBugAnnotation, (val) => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.input-actions-left {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: 0px;
+}
+
+.send-icon {
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.send-icon:hover:not(.disabled) {
+  opacity: 0.7;
+}
+
+.send-icon.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.attach-file-icon,
+.emoji-icon {
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.attach-file-icon:hover,
+.emoji-icon:hover {
+  opacity: 0.7;
+}
+
+.emoji-picker-wrapper {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  width: 350px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  z-index: 10000;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.emoji-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e0e0e0;
+  background: #f9f9f9;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.emoji-picker-header .v-icon {
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.emoji-picker-header .v-icon:hover {
+  opacity: 1;
+}
+
+.emoji-picker-component {
+  --border-radius: 0;
+  --background: white;
+  width: 100%;
+  height: 350px;
 }
 
 .attach-file-icon {
@@ -2013,10 +2361,17 @@ watch(showBugAnnotation, (val) => {
   color: #999 !important;
 }
 
-.action-buttons {
+.action-buttons-container {
   display: flex;
+  justify-content: center;
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.action-btn-wrapper {
+  border: 1px solid hsla(0, 0%, 86%, 1);
+  border-radius: 50px;
+  padding: 4px 8px;
 }
 
 .action-btn {
@@ -2076,6 +2431,17 @@ watch(showBugAnnotation, (val) => {
 .nav-label {
   font-size: 12px;
   font-weight: 500;
+}
+
+.nav-icon {
+  opacity: 0.5;
+  filter: grayscale(100%);
+  transition: all 0.2s ease;
+}
+
+.nav-btn.active .nav-icon {
+  opacity: 1;
+  filter: grayscale(0%) brightness(0) saturate(100%) invert(27%) sepia(97%) saturate(3084%) hue-rotate(212deg) brightness(101%) contrast(106%);
 }
 
 .nav-badge {
@@ -2150,34 +2516,37 @@ watch(showBugAnnotation, (val) => {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 6px;
+  padding: 6px 12px;
+  background: white;
+  border-radius: 50px;
   cursor: pointer;
   transition: background 0.2s;
   font-size: 12px;
+  color: #1a1a1a;
+  border: 1px solid #e0e0e0;
 }
 
 .user-message .message-attachment {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
+  background: white;
+  color: #1a1a1a;
+  border: 1px solid #e0e0e0;
 }
 
 .user-message .message-attachment:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: #f5f5f5;
 }
 
 .user-message .message-attachment .attachment-icon {
-  color: white !important;
+  color: #1a1a1a !important;
 }
 
 .user-message .message-attachment .attachment-name,
 .user-message .message-attachment .attachment-size {
-  color: white;
+  color: #1a1a1a;
 }
 
 .bot-message .message-attachment:hover {
-  background: rgba(0, 0, 0, 0.08);
+  background: #f5f5f5;
 }
 
 .attachment-icon {

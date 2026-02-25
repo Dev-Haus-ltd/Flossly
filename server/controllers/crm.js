@@ -6,6 +6,8 @@ import { formatCrmTriggerPreview } from '~/lib/misc'
 import { success, error } from '../utils/response'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
 import { sendImmediateCrmAutomationsForLead } from '../utils/crmAutomation.js'
+import { sendLeadCreatedNotification, sendLeadAssignedNotification, sendLeadUnassignedNotification } from '../utils/fcmNotification.js'
+import { decrypt } from '../utils/crypto'
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from '../utils/whatsapp'
 import { resolveWhatsAppProviderConfig } from '../utils/whatsappProvider'
 import DB from '../utils/db'
@@ -433,6 +435,22 @@ export const createLead = async (event) => {
     try {
       await sendImmediateCrmAutomationsForLead(created)
     } catch (e) {}
+    
+    // Send FCM push notification to assigned users
+    try {
+      if (assignedUsers.length) {
+        await sendLeadCreatedNotification({
+          lead: created,
+          assignedUsers: await User.findAll({ 
+            where: { id: assignedUsers.map(u => u.id) },
+            attributes: ['id', 'fullName', 'email']
+          })
+        });
+      }
+    } catch (fcmError) {
+      console.error('Failed to send FCM notification:', fcmError);
+    }
+    
     return success(created)
   } catch (e) {
     return error(500, e.message)
@@ -460,11 +478,28 @@ export const updateLead = async (event) => {
       const existing = await CrmLeadAssignee.findAll({ where: { organisationId: Number(logged.orgId), leadId: lead.id } })
       const existingUserIds = existing.map((a) => a.userId)
       const toAdd = desiredUserIds.filter((id) => !existingUserIds.includes(id))
-      const toRemove = existing.filter((a) => !desiredUserIds.includes(a.userId)).map((a) => a.id)
+      const toRemoveLinks = existing.filter((a) => !desiredUserIds.includes(a.userId))
+      const toRemove = toRemoveLinks.map((a) => a.id)
       if (toRemove.length) await CrmLeadAssignee.destroy({ where: { id: { [Op.in]: toRemove } } })
       if (toAdd.length) {
         const rows = toAdd.map((userId) => ({ organisationId: Number(logged.orgId), leadId: lead.id, userId }))
         await CrmLeadAssignee.bulkCreate(rows, { ignoreDuplicates: true })
+      }
+
+      // Send FCM notifications for assignment changes
+      try {
+        const actor = await User.findByPk(logged.userId, { attributes: ['id', 'fullName', 'email'] });
+        if (toAdd.length) {
+          const addedUsers = await User.findAll({ where: { id: toAdd }, attributes: ['id', 'fullName', 'email'] });
+          await sendLeadAssignedNotification({ lead, assignedUsers: addedUsers, assignedBy: actor });
+        }
+        if (toRemoveLinks.length) {
+          const removedIds = toRemoveLinks.map(l => l.userId);
+          const removedUsers = await User.findAll({ where: { id: removedIds }, attributes: ['id', 'fullName', 'email'] });
+          await sendLeadUnassignedNotification({ lead, removedUsers, removedBy: actor });
+        }
+      } catch (fcmError) {
+        console.error('Failed to send FCM notification:', fcmError);
       }
       // shape response assigned
       const users = await User.findAll({ where: { id: desiredUserIds }, attributes: ['id', 'fullName', 'email'] })
