@@ -48,6 +48,7 @@ export const authStart = async (event) => {
     'pages_show_list',
     'pages_read_engagement',
     'pages_manage_metadata',
+    'pages_manage_ads',
     'leads_retrieval',
     'ads_read',
     'business_management',
@@ -260,6 +261,11 @@ export const authCallback = async (event) => {
         })
       } catch (e) {}
     }
+
+    // Backfill last 30 days of leads (non-blocking)
+    try {
+      await fetchLeadsForOrg(orgId, { days: 30 })
+    } catch (e) {}
 
     // Clear state cookie
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
@@ -553,21 +559,16 @@ export const listLeads = async (event) => {
   return success(mapped)
 }
 
-export const fetchLeadsNow = async (event) => {
-  const { orgId } = event.context.user || {}
-  if (!orgId) return error(401, 'Unauthenticated')
+const fetchLeadsForOrg = async (orgId, { days = 0, maxPerForm = 1000, debugEnabled = false } = {}) => {
+  if (!orgId) return { ok: false, error: 'Unauthenticated' }
   try { await CrmLead.sync() } catch (_) {}
 
-  const q = getQuery(event) || {}
-  const days = Number(q.days || 0)
-  const maxPerForm = Number(q.maxPerForm || 1000)
-  const debugEnabled = String(q.debug || '').toLowerCase() === 'true'
   const sinceDate = Number.isFinite(days) && days > 0
     ? new Date(Date.now() - days * 24 * 60 * 60 * 1000)
     : null
 
-  const pages = await MetaPage.findAll({ 
-    where: { organisationId: orgId, status: 'Active' } 
+  const pages = await MetaPage.findAll({
+    where: { organisationId: orgId, status: 'Active' }
   })
   const debug = {
     orgId: Number(orgId),
@@ -579,7 +580,7 @@ export const fetchLeadsNow = async (event) => {
     maxPerForm,
     errors: [],
   }
-  
+
   let imported = 0
   for (const mp of pages) {
     const pageId = mp.pageId
@@ -591,7 +592,7 @@ export const fetchLeadsNow = async (event) => {
       const formsUrl = `https://graph.facebook.com/${META_VERSION}/${pageId}/leadgen_forms?fields=id,name&access_token=${encodeURIComponent(pageToken)}`
       const formsResp = await $fetch(formsUrl, { method: 'GET' })
       const forms = Array.isArray(formsResp?.data) ? formsResp.data : []
-      
+
       for (const form of forms) {
         debug.formsProcessed += 1
         const sinceParam = sinceDate ? `&since=${Math.floor(sinceDate.getTime() / 1000)}` : ''
@@ -674,8 +675,24 @@ export const fetchLeadsNow = async (event) => {
       })
     }
   }
-  if (debugEnabled) return success(debug)
-  return success({ imported })
+
+  if (debugEnabled) return { ok: true, debug }
+  return { ok: true, imported }
+}
+
+export const fetchLeadsNow = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const q = getQuery(event) || {}
+  const days = Number(q.days || 0)
+  const maxPerForm = Number(q.maxPerForm || 1000)
+  const debugEnabled = String(q.debug || '').toLowerCase() === 'true'
+
+  const result = await fetchLeadsForOrg(orgId, { days, maxPerForm, debugEnabled })
+  if (!result.ok) return error(401, result.error || 'Unauthenticated')
+  if (debugEnabled) return success(result.debug)
+  return success({ imported: result.imported || 0 })
 }
 
 

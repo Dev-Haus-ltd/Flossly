@@ -39,7 +39,7 @@ const LICENSE_FEATURES = {
     "docs",
     "team",
     "crm",
-    "diary",
+    // "diary",
   ]),
 };
 
