@@ -34,6 +34,15 @@
                 Meta Health
               </v-btn>
               <v-btn
+                color="primary"
+                variant="outlined"
+                rounded="lg"
+                class="action-btn"
+                @click="integrateInstagram"
+              >
+                Connect Instagram
+              </v-btn>
+              <v-btn
                 v-if="isMetaConnected"
                 color="grey-darken-1"
                 variant="outlined"
@@ -550,6 +559,7 @@ const clearMetaQuery = () => {
   delete nextQuery.meta
   delete nextQuery.pages
   delete nextQuery.user
+  delete nextQuery.account
   delete nextQuery.error
   delete nextQuery.warning
   router.replace({ query: nextQuery })
@@ -557,8 +567,10 @@ const clearMetaQuery = () => {
 
 const handleMetaQuery = () => {
   const metaConnected = route.query.meta === 'connected'
+  const igConnected = route.query.meta === 'ig_connected'
   const metaError = route.query.error
   const pagesCount = Number(route.query.pages || 0)
+  const igAccount = route.query.account
 
   if (metaError) {
     const msg = mapMetaErrorMessage(metaError) || 'Meta connection failed. Please try again.'
@@ -568,8 +580,11 @@ const handleMetaQuery = () => {
     mainStore?.setSnackbar?.({ title: msg, type: 'error' })
   } else if (metaConnected) {
     mainStore?.setSnackbar?.({ title: 'Meta connected successfully', type: 'success' })
+  } else if (igConnected) {
+    const label = igAccount ? `Instagram connected: ${igAccount}` : 'Instagram connected successfully'
+    mainStore?.setSnackbar?.({ title: label, type: 'success' })
   }
-  if (metaConnected || metaError) clearMetaQuery()
+  if (metaConnected || metaError || igConnected) clearMetaQuery()
 }
 
 const openMetaHealth = async () => {
@@ -620,6 +635,15 @@ const integrateMeta = async () => {
     return
   }
   mainStore?.setSnackbar?.({ title: res?.message || 'Unable to start Meta connection', type: 'error' })
+}
+
+const integrateInstagram = async () => {
+  const res = await crmStore.startInstagramAuth()
+  if (res && res.code === 0 && res.data?.url) {
+    window.location.href = res.data.url
+    return
+  }
+  mainStore?.setSnackbar?.({ title: res?.message || 'Unable to start Instagram connection', type: 'error' })
 }
 
 const disconnectMeta = async () => {

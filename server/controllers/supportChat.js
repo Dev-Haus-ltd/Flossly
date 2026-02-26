@@ -11,7 +11,6 @@ import {
 } from "../models/index.js";
 
 import { isSupportAgent, getSupportAgentUserIds } from '../utils/supportAgents.js';
-import { parseJsonBody } from "../utils/body";
 import { sendNotificationToUser } from '../utils/fcmNotification.js';
 import { uploadBufferFile } from '../utils/storage.js';
 import { parseJsonBody } from '../utils/body';
