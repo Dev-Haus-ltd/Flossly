@@ -849,6 +849,7 @@ export const healthCheck = async (event) => {
 
 export const webhook = async (event) => {
   const config = useRuntimeConfig()
+  const reqId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
   
   if (getMethod(event) === 'HEAD') {
     return send(event, 'ok')
@@ -872,10 +873,19 @@ export const webhook = async (event) => {
   if (getMethod(event) === 'POST') {
     const body = await readBody(event)
     try {
+      console.log('[META WEBHOOK]', reqId, 'POST received', {
+        object: body?.object,
+        entries: Array.isArray(body?.entry) ? body.entry.length : 0,
+      })
+    } catch {}
+    try {
       const entries = Array.isArray(body?.entry) ? body.entry : []
       for (const entry of entries) {
         const pageId = String(entry.id || '')
         const changes = Array.isArray(entry.changes) ? entry.changes : []
+        if (pageId) {
+          console.log('[META WEBHOOK]', reqId, 'Entry pageId', pageId, 'changes', changes.length)
+        }
         
         for (const ch of changes) {
           if (ch.field !== 'leadgen') continue
@@ -883,19 +893,31 @@ export const webhook = async (event) => {
           const v = ch.value || {}
           const leadId = v.leadgen_id || v.lead_id || v.leadId
           const formId = v.form_id || v.formId
+          console.log('[META WEBHOOK]', reqId, 'Leadgen event', { pageId, leadId, formId })
           
           if (!leadId || !pageId) continue
           
           const mp = await MetaPage.findOne({ 
             where: { pageId, status: 'Active' } 
           })
+          if (!mp) {
+            console.warn('[META WEBHOOK]', reqId, 'No active MetaPage for pageId', pageId)
+          }
           if (!mp) continue
           
           const pageToken = decrypt(mp.accessTokenEnc)
+          if (!pageToken) {
+            console.warn('[META WEBHOOK]', reqId, 'Missing page token for pageId', pageId)
+          }
           if (!pageToken) continue
           
           const url = `https://graph.facebook.com/${META_VERSION}/${leadId}?fields=created_time,field_data,ad_id,adset_id,campaign_id&access_token=${encodeURIComponent(pageToken)}`
           const leadData = await $fetch(url, { method: 'GET' })
+          console.log('[META WEBHOOK]', reqId, 'Fetched lead data', {
+            pageId,
+            leadId,
+            created_time: leadData?.created_time || null,
+          })
           
           const fld = (leadData?.field_data || []).reduce((acc, f) => {
             acc[f.name] = Array.isArray(f.values) ? f.values[0] : f.values

@@ -78,3 +78,13 @@ export const renderOnboardingTokens = (text, ctx = {}) => {
   }
   return renderBracketTokens(text, tokens)
 }
+
+export const renderLeadTokens = (text, ctx = {}) => {
+  const tokens = {
+    'Name': ctx.name || 'there',
+    'Email': ctx.email || '',
+    'Telephone': ctx.telephone || '',
+    'Your Name': ctx.yourName || 'Team',
+  }
+  return renderBracketTokens(text, tokens)
+}
