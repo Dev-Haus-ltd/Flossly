@@ -21,6 +21,7 @@
           :status-color="card.statusColor"
           :icon="card.icon"
           :icon-class="card.iconClass"
+          :class="{ 'integration-card-disabled': card.key === 'whatsapp' && !canManageWhapi }"
         >
           <template #actions>
             <template v-if="card.key === 'meta'">
@@ -222,7 +223,7 @@
             color="primary"
             @click="refreshWhapiQr"
           >
-            Refresh QR
+            {{ whapiQrCtaLabel }}
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -481,6 +482,12 @@ const whapiStatusColor = computed(() => {
   return 'grey-lighten-1'
 })
 
+const whapiQrCtaLabel = computed(() => {
+  if (whapiLoading.value) return 'Generating QR...'
+  if (!whapiQr.value) return 'Refresh QR (wait ~1 min)'
+  return 'Refresh QR'
+})
+
 const whapiChannelOptions = computed(() => {
   const base = [{ title: 'Connect new number', value: 'new' }]
   const items = (whapiChannels.value || []).map((ch) => {
@@ -672,8 +679,15 @@ const connectWhapi = async (channelId = null) => {
     const res = await crmStore.startWhapiConnect(payload)
     if (res?.code === 0 && res.data) {
       whapiQr.value = res.data.qr || ''
+      whapiQrWarning.value = res.data.warning || (!whapiQr.value ? 'QR is being generated. Please wait about 1 minute, then refresh.' : '')
       whapiDialog.value = true
       await loadWhapiStatus()
+      if (!whapiQr.value) {
+        mainStore?.setSnackbar?.({
+          title: whapiQrWarning.value,
+          type: 'info',
+        })
+      }
       return
     }
     const msg = res?.error || res?.message || 'Failed to connect WhatsApp'
@@ -727,6 +741,12 @@ const refreshWhapiQr = async () => {
       whapiQr.value = res.data.qr || ''
       whapiQrWarning.value = res.data.warning || ''
       await loadWhapiStatus()
+      if (!whapiQr.value && whapiQrWarning.value) {
+        mainStore?.setSnackbar?.({
+          title: whapiQrWarning.value,
+          type: 'info',
+        })
+      }
       return
     }
     const msg = res?.error || res?.message || 'Unable to refresh QR'
@@ -1036,6 +1056,11 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 16px;
   margin-top: 16px;
+}
+
+.integration-card-disabled {
+  opacity: 0.55;
+  filter: grayscale(1);
 }
 
 

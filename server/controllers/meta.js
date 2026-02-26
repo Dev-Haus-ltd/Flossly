@@ -103,12 +103,12 @@ export const authCallback = async (event) => {
     }
   } catch (e) {
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
-    return sendRedirect(event, `/?error=${encodeURIComponent('Invalid state data')}`)
+    return sendRedirect(event, `/crm?error=${encodeURIComponent('Invalid state data')}`)
   }
 
   if (!userId || !orgId) {
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
-    return sendRedirect(event, `/?error=${encodeURIComponent('Missing user context in state')}`)
+    return sendRedirect(event, `/crm?error=${encodeURIComponent('Missing user context in state')}`)
   }
 
   try {
@@ -188,7 +188,7 @@ export const authCallback = async (event) => {
       setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
       return sendRedirect(
         event,
-        `/?error=${encodeURIComponent(
+        `/crm?error=${encodeURIComponent(
           `Meta connection failed. The following page(s) are already connected to another organisation: ${conflictNames}`
         )}`
       )
@@ -271,12 +271,12 @@ export const authCallback = async (event) => {
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
     
     // ✅ FIX: Better success redirect with details
-    return sendRedirect(event, `/?meta=connected&pages=${pagesToConnect.length}&user=${encodeURIComponent(fbUserName)}`)
+    return sendRedirect(event, `/crm?meta=connected&pages=${pagesToConnect.length}&user=${encodeURIComponent(fbUserName)}`)
 
   } catch (e) {
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
     const errorMsg = e?.data?.error?.message || e?.message || 'Connection failed'
-    return sendRedirect(event, `/?error=${encodeURIComponent(errorMsg)}`)
+    return sendRedirect(event, `/crm?error=${encodeURIComponent(errorMsg)}`)
   }
 }
 
