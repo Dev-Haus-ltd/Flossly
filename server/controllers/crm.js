@@ -448,7 +448,8 @@ export const createLead = async (event) => {
         });
       }
     } catch (fcmError) {
-      console.error('Failed to send FCM notification:', fcmError);
+      console.warn('FCM notification failed - continuing with lead creation:', fcmError.message);
+      // Don't throw the error - let the lead creation succeed even if notifications fail
     }
     
     return success(created)
@@ -499,7 +500,8 @@ export const updateLead = async (event) => {
           await sendLeadUnassignedNotification({ lead, removedUsers, removedBy: actor });
         }
       } catch (fcmError) {
-        console.error('Failed to send FCM notification:', fcmError);
+        console.warn('FCM notification failed - continuing with lead update:', fcmError.message);
+        // Don't throw the error - let the lead update succeed even if notifications fail
       }
       // shape response assigned
       const users = await User.findAll({ where: { id: desiredUserIds }, attributes: ['id', 'fullName', 'email'] })
