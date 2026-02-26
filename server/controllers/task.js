@@ -44,10 +44,8 @@ import {
   sendBulkTaskCompletionNotification,
   sendTaskCompletionNotification,
 } from "../utils/fcmNotification";
-import {
-  ensureOnboardingEventsTable,
-  recordOnboardingEvent,
-} from "../utils/onboardingService";
+import { ensureOnboardingEventsTable, recordOnboardingEvent } from "../utils/onboardingService";
+import { parseJsonBody } from "../utils/body";
 
 const PRIVILEGED_ROLE_IDS = [1, 8];
 const isManagerOrOwner = (roleId) =>
@@ -56,19 +54,6 @@ const ensureManagerOrOwner = (loggedUser) => {
   if (!isManagerOrOwner(loggedUser?.roleId)) {
     throw createError({ statusCode: 403, message: "Not authorized" });
   }
-};
-
-const parseJsonBody = async (event) => {
-  const body = await readBody(event);
-  if (!body) return {};
-  if (typeof body === "string") {
-    try {
-      return JSON.parse(body);
-    } catch (err) {
-      return {};
-    }
-  }
-  return body;
 };
 
 const recordFirstTaskAchievement = async ({ userId, organisationId }) => {
@@ -109,7 +94,7 @@ const autoArchiveCompletedTasks = async (organisationId, days = 5) => {
 
 export const listMyTasks = async (event) => {
   const loggedUser = event.context.user;
-  const body = await parseJsonBody(event);
+  const body = parseJsonBody(await readBody(event));
   const {
     statusId,
     priorityId,
@@ -196,7 +181,7 @@ export const addTaskCategory = async (event) => {
   const loggedUser = event.context.user;
   ensureManagerOrOwner(loggedUser);
   const body = await readBody(event);
-  const { id, name, description, parentId, color } = JSON.parse(body);
+  const { id, name, description, parentId, color } = parseJsonBody(body);
   if (!name) return error(400, "Name required");
 
   try {
@@ -280,7 +265,7 @@ export const deleteTaskCategory = async (event) => {
   const loggedUser = event.context.user;
   ensureManagerOrOwner(loggedUser);
   const body = await readBody(event);
-  const { id } = typeof body === "string" ? JSON.parse(body) : body;
+  const { id } = typeof body === "string" ? parseJsonBody(body) : body;
   
   if (!id) return error(400, "Category ID required");
 
@@ -356,7 +341,7 @@ export const assignBulkTasks = async (event) => {
   const loggedUser = event.context.user;
   ensureManagerOrOwner(loggedUser);
   const organisationId = loggedUser.orgId;
-  const { userId, tasks } = JSON.parse(body);
+  const { userId, tasks } = parseJsonBody(body);
 
   if (!userId || !Array.isArray(tasks)) {
     return error(
@@ -582,7 +567,7 @@ export const updateTask = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const parsedBody = JSON.parse(body);
+    const parsedBody = parseJsonBody(body);
     const {
       frequency,
       priorityId,
@@ -825,7 +810,7 @@ export const unAssignTask = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { userTaskId } = JSON.parse(body);
+    const { userTaskId } = parseJsonBody(body);
     const userTask = await UserTask.findOne({
       where: {
         id: userTaskId,
@@ -901,7 +886,7 @@ export const completeBulkTasks = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { userTasksIds } = JSON.parse(body);
+    const { userTasksIds } = parseJsonBody(body);
     
     const statuses = await OrganisationStatus.findAll({
       where: { organisationId },
@@ -980,7 +965,7 @@ export const archieveBulkTasks = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { userTasksIds } = JSON.parse(body);
+    const { userTasksIds } = parseJsonBody(body);
     await UserTask.update(
       { isArchieved: true },
       {
@@ -1001,7 +986,7 @@ export const unarchiveBulkTasks = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { userTasksIds } = JSON.parse(body);
+    const { userTasksIds } = parseJsonBody(body);
     await UserTask.update(
       { isArchieved: false },
       {
@@ -1022,7 +1007,7 @@ export const unAssignBulkTask = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { userTasksIds } = JSON.parse(body);
+    const { userTasksIds } = parseJsonBody(body);
     const tasks = await UserTask.findAll({
       where: {
         id: userTasksIds,
@@ -1133,7 +1118,7 @@ export const addUserTaskComment = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { userTaskId, comment } = JSON.parse(body);
+    const { userTaskId, comment } = parseJsonBody(body);
     if (!userTaskId || !comment) {
       throw createError({ message: "userTaskId and comment are required" });
     }
@@ -1199,7 +1184,7 @@ export const listUserTaskComments = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { userTaskId } = JSON.parse(body);
+    const { userTaskId } = parseJsonBody(body);
     if (!userTaskId) {
       throw createError({ message: "userTaskId is required" });
     }
@@ -1225,7 +1210,7 @@ export const updateUserTaskComment = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { commentId, comment } = JSON.parse(body);
+    const { commentId, comment } = parseJsonBody(body);
     if (!commentId || !comment) {
       throw createError({ message: "commentId and comment are required" });
     }
@@ -1254,7 +1239,7 @@ export const deleteUserTaskComment = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { commentId } = JSON.parse(body);
+    const { commentId } = parseJsonBody(body);
     
     if (!commentId) {
       throw createError({ message: "commentId is required" });
@@ -1359,7 +1344,7 @@ export const deleteAttachment = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { id } = JSON.parse(body);
+    const { id } = parseJsonBody(body);
     
     if (!id) {
       throw createError({ message: "Attachment id required" });
@@ -1409,7 +1394,15 @@ export const deleteAttachment = async (event) => {
 
 export const createNewTask = async (event) => {
   const loggedUser = event.context.user;
-  const body = await readBody(event);
+  const bodyRaw = await readBody(event);
+  let body = bodyRaw;
+  if (typeof bodyRaw === "string") {
+    try {
+      body = JSON.parse(bodyRaw);
+    } catch {
+      body = {};
+    }
+  }
   const {
     title,
     description,
@@ -1422,7 +1415,7 @@ export const createNewTask = async (event) => {
     dueDate,
     statusId,
     priorityId: incomingPriorityId,
-  } = JSON.parse(body);
+  } = body || {};
   if (!title || !title.trim() || !categoryId) {
     throw createError({ message: "Task title cannot be empty or only spaces" });
   }
@@ -1612,7 +1605,7 @@ export const createNewTask = async (event) => {
 export const uploadBulkTasks = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);
-  const { tasks } = JSON.parse(body);
+  const { tasks } = parseJsonBody(body);
 
   if (!Array.isArray(tasks) || !tasks.length) {
     throw createError({ message: "No tasks provided" });
@@ -1991,7 +1984,7 @@ export const teamTasksCounts = async (event) => {
 
 export const createUserTaskChecklist = async (event) => {
   const body = await readBody(event);
-  const checklist = JSON.parse(body);
+  const checklist = parseJsonBody(body);
   const requiredFields = ["userTaskId", "question"];
   for (const field of requiredFields) {
     if (!checklist[field]) {
@@ -2008,7 +2001,7 @@ export const createUserTaskChecklist = async (event) => {
 
 export const updateUserTaskChecklist = async (event) => {
   const body = await readBody(event);
-  const taskChecklist = JSON.parse(body);
+  const taskChecklist = parseJsonBody(body);
 
   if (!taskChecklist.id) {
     throw createError({ message: "Checklist id required" });
@@ -2033,7 +2026,7 @@ export const updateUserTaskChecklist = async (event) => {
 
 export const deleteUserTaskChecklist = async (event) => {
   const body = await readBody(event);
-  const { id } = JSON.parse(body);
+  const { id } = parseJsonBody(body);
   if (!id) {
     throw createError({ message: "Checklist id required" });
   }
@@ -2051,7 +2044,7 @@ export const groupTeamTasksByTaskId = async (event) => {
   const loggedUser = event.context.user;
   const organisationId = loggedUser.orgId;
   ensureManagerOrOwner(loggedUser);
-  const body = await parseJsonBody(event);
+  const body = parseJsonBody(await readBody(event));
   const {
     categoryId,
     frequency,
@@ -2334,7 +2327,7 @@ export const groupTeamTasksByTaskId = async (event) => {
 
 export const getUserTaskDetails = async (event) => {
   const body = await readBody(event);
-  const { userTaskId } = JSON.parse(body);
+  const { userTaskId } = parseJsonBody(body);
 
   if (!userTaskId) {
     throw createError({ message: "userTaskId is required" });
@@ -2870,7 +2863,7 @@ export const teamTasksCountByCategory = async (event) => {
 
 export const getUserTasksStatusWise = async (event) => {
   const loggedUser = event.context.user;
-  const body = await parseJsonBody(event);
+  const body = parseJsonBody(await readBody(event));
   const {
     categoryId,
     frequency,
@@ -3072,7 +3065,7 @@ export const getUserTasksStatusWise = async (event) => {
 
 export const getGeneralTasksByCategory = async (event) => {
   const body = await readBody(event);
-  const { categoryId } = JSON.parse(body);
+  const { categoryId } = parseJsonBody(body);
   if (!categoryId) {
     throw createError({ message: "CategoryId is required" });
   }
@@ -3340,7 +3333,7 @@ export const createCustomColumn = async (event) => {
   try {
     const loggedUser = event.context.user;
     const body = await readBody(event);
-    const { displayName, dataType, validationRules, defaultValue, dropdownOptions } = JSON.parse(body);
+    const { displayName, dataType, validationRules, defaultValue, dropdownOptions } = parseJsonBody(body);
 
     if (!displayName || !dataType) {
       throw createError({ statusCode: 400, message: "displayName and dataType are required" });
@@ -3412,7 +3405,7 @@ export const updateCustomColumn = async (event) => {
   try {
     const loggedUser = event.context.user;
     const body = await readBody(event);
-    const { columnId, displayName, dataType, validationRules, defaultValue, dropdownOptions, sortOrder } = JSON.parse(body);
+    const { columnId, displayName, dataType, validationRules, defaultValue, dropdownOptions, sortOrder } = parseJsonBody(body);
 
     if (!columnId) {
       throw createError({ statusCode: 400, message: "columnId is required" });
@@ -3453,7 +3446,7 @@ export const deleteCustomColumn = async (event) => {
   try {
     const loggedUser = event.context.user;
     const body = await readBody(event);
-    const { columnId } = JSON.parse(body);
+    const { columnId } = parseJsonBody(body);
 
     if (!columnId) {
       throw createError({ statusCode: 400, message: "columnId is required" });
@@ -3485,7 +3478,7 @@ export const sendTaskDetailsByEmail = async (event) => {
 
     // ✅ Normalize body (string → object)
     if (typeof body === "string") {
-      body = JSON.parse(body);
+      body = parseJsonBody(body);
     }
 
     const { userTaskId, email } = body || {};
@@ -3547,5 +3540,4 @@ export const sendTaskDetailsByEmail = async (event) => {
     return error(500, err.message || err);
   }
 };
-
 

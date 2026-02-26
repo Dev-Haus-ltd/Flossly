@@ -348,7 +348,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import CommonSideBar from '@/components/Common/sideBar.vue'
 import UniquePatientComfortForm from '@/components/patients/journey/UniquePatientComfortForm.vue'
 import SmileConcernSurveyForm from '@/components/patients/journey/SmileConcernSurveyForm.vue'
-import AutomationCard from '@/components/patients/automationCard.vue'
+import AutomationCard from '@/components/Common/AutomationCard.vue'
 import patientJourneyService from '@/services/patientJourneyService'
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 

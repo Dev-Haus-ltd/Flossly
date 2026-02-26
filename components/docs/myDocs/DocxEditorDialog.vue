@@ -16,13 +16,21 @@
         <div class="docx-editor-dialog-content">
           <ClientOnly>
             <DocsMyDocsDocumentEditor
-              v-if="docxFileUrl && isOpen"
+              v-if="editorShouldMount"
               :key="docxFileUrl"
               ref="documentEditorRef"
-              :document-url="docxFileUrl"
+              :document-url="editorBlobUrl"
               class="editor-wrapper"
+              @editor-ready="handleEditorReady"
+              @editor-error="handleEditorError"
             />
           </ClientOnly>
+          <div v-if="showEditorOverlay" class="docx-editor-loading">
+            <div class="docx-editor-loading-inner">
+              <div class="docx-editor-spinner"></div>
+              <div class="docx-editor-loading-text">Loading document…</div>
+            </div>
+          </div>
         </div>
 
         <!-- Actions -->
@@ -50,31 +58,170 @@ import { buildAbsoluteLink } from '~/lib/misc'
 const props = defineProps({
   modelValue: Boolean,
   doc: Object,
+  isSystem: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits(["update:modelValue", "onUpdate"])
 
 const isOpen = ref(props.modelValue)
 const docxFileUrl = ref(null)
+const editorBlobUrl = ref(null)
+const cacheKey = ref(null)
+const cacheSizeBytes = ref(0)
 const isLoading = ref(false)
+const isPreloading = ref(false)
+const isEditorReady = ref(false)
+const isEditorErrored = ref(false)
+const preloadedUrl = ref(null)
 const documentEditorRef = ref(null)
 const mainStore = useMainStore()
 const docStore = useDocStore()
 
 const appendCacheBuster = (absoluteUrl) => {
   const sep = absoluteUrl.includes('?') ? '&' : '?'
-  const ver = props?.doc?.updatedAt ? new Date(props.doc.updatedAt).getTime() : Date.now()
-  return `${absoluteUrl}${sep}v=${ver}`
+  const ver = props?.doc?.updatedAt
+    ? new Date(props.doc.updatedAt).getTime()
+    : props?.doc?.createdAt
+      ? new Date(props.doc.createdAt).getTime()
+      : null
+  return ver ? `${absoluteUrl}${sep}v=${ver}` : absoluteUrl
+}
+
+const editorShouldMount = computed(() => {
+  return Boolean(editorBlobUrl.value && isOpen.value && preloadedUrl.value === docxFileUrl.value)
+})
+
+const showEditorOverlay = computed(() => {
+  if (!isOpen.value) return false
+  return isPreloading.value || !isEditorReady.value
+})
+
+const resetEditorState = () => {
+  isPreloading.value = false
+  isEditorReady.value = false
+  isEditorErrored.value = false
+  preloadedUrl.value = null
+  if (editorBlobUrl.value) {
+    try {
+      URL.revokeObjectURL(editorBlobUrl.value)
+    } catch (_) {}
+  }
+  editorBlobUrl.value = null
+  cacheKey.value = null
+  cacheSizeBytes.value = 0
+}
+
+const buildCacheKey = (docId, url) => {
+  if (!docId || !url) return null
+  return `docxCache:${docId}:${url}`
+}
+
+const readCachedBlob = async (key) => {
+  try {
+    const cache = await caches.open("docx-viewer-v1")
+    const match = await cache.match(key)
+    if (!match) return null
+    const blob = await match.blob()
+    cacheSizeBytes.value = blob.size || 0
+    return blob
+  } catch (_) {
+    return null
+  }
+}
+
+const writeCachedBlob = async (key, response) => {
+  try {
+    const cache = await caches.open("docx-viewer-v1")
+    await cache.put(key, response)
+  } catch (_) {}
+}
+
+const preloadDocument = async () => {
+  if (!docxFileUrl.value || isPreloading.value) return
+  if (preloadedUrl.value === docxFileUrl.value) return
+  isPreloading.value = true
+  try {
+    const key = buildCacheKey(props.doc?.id, docxFileUrl.value)
+    cacheKey.value = key
+    if (key && typeof caches !== "undefined") {
+      const cachedBlob = await readCachedBlob(key)
+      if (cachedBlob) {
+        if (editorBlobUrl.value) {
+          try {
+            URL.revokeObjectURL(editorBlobUrl.value)
+          } catch (_) {}
+        }
+        editorBlobUrl.value = URL.createObjectURL(cachedBlob)
+        preloadedUrl.value = docxFileUrl.value
+        return
+      }
+    }
+
+    const res = await fetch(docxFileUrl.value, {
+      method: 'GET',
+      credentials: 'include',
+      cache: 'no-store',
+    })
+    if (!res.ok) {
+      throw new Error(`Failed to load document (${res.status})`)
+    }
+    const cloneForCache = res.clone()
+    const blob = await res.blob()
+    if (editorBlobUrl.value) {
+      try {
+        URL.revokeObjectURL(editorBlobUrl.value)
+      } catch (_) {}
+    }
+    editorBlobUrl.value = URL.createObjectURL(blob)
+    preloadedUrl.value = docxFileUrl.value
+    cacheSizeBytes.value = blob.size || 0
+    if (cacheKey.value && typeof caches !== "undefined") {
+      await writeCachedBlob(cacheKey.value, cloneForCache)
+    }
+  } catch (err) {
+    isEditorErrored.value = true
+    mainStore.setSnackbar({
+      title: err?.message || 'Failed to load document',
+      type: 'error',
+    })
+  } finally {
+    isPreloading.value = false
+  }
+}
+
+const handleEditorReady = () => {
+  isEditorReady.value = true
+}
+
+const handleEditorError = (err) => {
+  isEditorErrored.value = true
+  mainStore.setSnackbar({
+    title: err?.message || 'Failed to initialize editor',
+    type: 'error',
+  })
 }
 
 // Set document URL immediately when doc changes
 watch(
   () => props.doc,
   (newDoc) => {
-    if (newDoc?.link) {
+    if (newDoc?.id) {
       const config = useRuntimeConfig()
-      const abs = buildAbsoluteLink(newDoc.link, config.public.BASE_URL)
+      const baseUrl = typeof window !== "undefined" && window.location?.origin
+        ? window.location.origin
+        : config.public?.BASE_URL
+      const path = props.isSystem
+        ? `/api/docs/viewSystemDoc?id=${newDoc.id}`
+        : `/api/docs/view?id=${newDoc.id}`
+      const abs = buildAbsoluteLink(path, baseUrl)
       docxFileUrl.value = appendCacheBuster(abs)
+      resetEditorState()
+      if (isOpen.value) {
+        preloadDocument()
+      }
     }
   },
   { immediate: true }
@@ -87,14 +234,23 @@ watch(
     isOpen.value = val
     if (!val) {
       docxFileUrl.value = null
+      resetEditorState()
       return
     }
     // Ensure URL is set when dialog opens
-    if (props.doc?.link && !docxFileUrl.value) {
+    if (props.doc?.id && !docxFileUrl.value) {
       const config = useRuntimeConfig()
-      const abs = buildAbsoluteLink(props.doc.link, config.public.BASE_URL)
+      const baseUrl = typeof window !== "undefined" && window.location?.origin
+        ? window.location.origin
+        : config.public?.BASE_URL
+    const path = props.isSystem
+      ? `/api/docs/viewSystemDoc?id=${props.doc.id}`
+      : `/api/docs/view?id=${props.doc.id}`
+      const abs = buildAbsoluteLink(path, baseUrl)
       docxFileUrl.value = appendCacheBuster(abs)
     }
+    resetEditorState()
+    preloadDocument()
   },
   { immediate: true }
 )
@@ -168,6 +324,7 @@ const saveDocument = async () => {
 
 const close = () => {
   isOpen.value = false
+  resetEditorState()
 }
 </script>
 
@@ -243,6 +400,40 @@ const close = () => {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  position: relative;
+}
+
+.docx-editor-loading {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+
+.docx-editor-loading-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: #444;
+}
+
+.docx-editor-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #d0d0d0;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: docx-spin 0.8s linear infinite;
+}
+
+@keyframes docx-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .editor-wrapper {

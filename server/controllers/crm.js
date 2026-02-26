@@ -11,6 +11,7 @@ import { decrypt } from '../utils/crypto'
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from '../utils/whatsapp'
 import { resolveWhatsAppProviderConfig } from '../utils/whatsappProvider'
 import DB from '../utils/db'
+import { parseJsonBody } from "../utils/body";
 
 const parseDateValue = (value) => {
   if (!value) return null;
@@ -92,6 +93,80 @@ const normalizeAutomationType = (value) => {
   return 'Email'
 }
 
+const normalizeAutomationTrigger = (trigger) => {
+  if (trigger === undefined) return undefined
+  if (trigger === null) return null
+  if (typeof trigger !== 'object') throw new Error('Invalid trigger')
+  const type = String(trigger.type || '').trim()
+  if (!type) throw new Error('Trigger type required')
+  const safeNumber = (value, fallback = 0) => {
+    const num = Number(value)
+    return Number.isFinite(num) ? num : fallback
+  }
+  switch (type) {
+    case 'inquiry_days':
+    case 'birthday_offset':
+      return { type, days: safeNumber(trigger.days, 0) }
+    case 'birthday_month_start':
+      return { type, offsetDays: safeNumber(trigger.offsetDays, 0) }
+    case 'black_friday':
+      return {
+        type,
+        offsetDays: safeNumber(trigger.offsetDays, 0),
+        ...(trigger.minHour !== undefined ? { minHour: safeNumber(trigger.minHour, 0) } : {}),
+      }
+    case 'month_day': {
+      const month = safeNumber(trigger.month, 0)
+      const day = safeNumber(trigger.day, 0)
+      if (!month || !day) throw new Error('month_day trigger requires month and day')
+      return {
+        type,
+        month,
+        day,
+        offsetDays: safeNumber(trigger.offsetDays, 0),
+      }
+    }
+    case 'weekday_of_month': {
+      const month = safeNumber(trigger.month, 0)
+      const weekday = safeNumber(trigger.weekday, NaN)
+      const weekIndex = safeNumber(trigger.weekIndex, 0)
+      if (!month || Number.isNaN(weekday) || !weekIndex) {
+        throw new Error('weekday_of_month trigger requires month, weekday, and weekIndex')
+      }
+      return {
+        type,
+        month,
+        weekday,
+        weekIndex,
+        offsetDays: safeNumber(trigger.offsetDays, 0),
+      }
+    }
+    case 'practice_anniversary':
+      return {
+        type,
+        offsetDays: safeNumber(trigger.offsetDays, 0),
+        ...(trigger.minHour !== undefined ? { minHour: safeNumber(trigger.minHour, 0) } : {}),
+      }
+    case 'practice_anniversary_month_end':
+      return {
+        type,
+        offsetDays: safeNumber(trigger.offsetDays, 0),
+        ...(trigger.minHour !== undefined ? { minHour: safeNumber(trigger.minHour, 0) } : {}),
+      }
+    default:
+      throw new Error('Unsupported trigger type')
+  }
+}
+
+const validateAutomationPayload = (payload) => {
+  if (!payload || typeof payload !== 'object') throw new Error('Invalid payload')
+  const key = String(payload.key || '').trim()
+  if (!key) throw new Error('key required')
+  const type = normalizeAutomationType(payload.type)
+  const trigger = normalizeAutomationTrigger(payload.trigger)
+  return { ...payload, key, type, trigger }
+}
+
 const seedAutomationGroups = async (orgId) => {
   const rows = await CrmAutomationGroup.findAll({
     where: { organisationId: Number(orgId) },
@@ -109,6 +184,7 @@ const seedAutomationGroups = async (orgId) => {
         description: group.description || null,
         enabled: false,
         ordering: idx,
+        source: 'system',
       }))
     )
     return fresh
@@ -124,6 +200,7 @@ const seedAutomationGroups = async (orgId) => {
       description: group.description || null,
       enabled: false,
       ordering: rows.length + created.length,
+      source: 'system',
     })
     created.push(row)
     byKey.set(group.key, row)
@@ -311,7 +388,7 @@ export const createLead = async (event) => {
   try {
     const logged = event.context.user
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const required = ['name', 'email', 'telephone']
     for (const k of required) if (!payload?.[k]) return error(400, `${k} is required`)
     const data = {
@@ -384,7 +461,7 @@ export const updateLead = async (event) => {
   try {
     const logged = event.context.user
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { id } = payload
     if (!id) return error(400, 'id required')
     const lead = await CrmLead.findOne({ where: { id, organisationId: Number(logged.orgId) } })
@@ -440,7 +517,7 @@ export const deleteLeads = async (event) => {
   try {
     const logged = event.context.user
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const ids = payload?.ids || []
     if (!ids.length) return error(400, 'ids required')
     await CrmLead.destroy({ where: { id: { [Op.in]: ids }, organisationId: Number(logged.orgId) } })
@@ -454,7 +531,7 @@ export const bulkUploadLeads = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const leads = payload?.leads || []
     if (!orgId) return error(401, 'Unauthenticated')
     if (!Array.isArray(leads) || !leads.length) return error(400, 'leads required')
@@ -610,7 +687,7 @@ export const bulkUploadAutomations = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const items = Array.isArray(payload?.items) ? payload.items : []
     if (!orgId) return error(401, 'Unauthenticated')
     if (!items.length) return error(400, 'items required')
@@ -795,7 +872,7 @@ export const addOption = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { category, name, color } = payload || {}
     if (!orgId) return error(401, 'Unauthenticated')
     if (!category || !name) return error(400, 'category and name required')
@@ -810,7 +887,7 @@ export const deleteOption = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { id } = payload || {}
     if (!orgId) return error(401, 'Unauthenticated')
     if (!id) return error(400, 'id required')
@@ -839,7 +916,7 @@ export const saveLeadCommunication = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { leadId } = payload || {}
     const preferredContactMethod = payload?.preferredContactMethod && CONTACT_METHODS.includes(payload.preferredContactMethod)
       ? payload.preferredContactMethod
@@ -877,7 +954,7 @@ export const getLeadTreatment = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const { leadId } = typeof body === 'string' ? JSON.parse(body) : body
+    const { leadId } = typeof body === 'string' ? parseJsonBody(body) : body
     if (!orgId) return error(401, 'Unauthenticated')
     if (!leadId) return error(400, 'leadId required')
     const row = await CrmLeadTreatment.findOne({ where: { organisationId: Number(orgId), leadId: Number(leadId) } })
@@ -891,7 +968,7 @@ export const saveLeadTreatment = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { leadId, data } = payload || {}
     if (!orgId) return error(401, 'Unauthenticated')
     if (!leadId) return error(400, 'leadId required')
@@ -917,7 +994,7 @@ export const deleteLeadTreatment = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const { leadId } = typeof body === 'string' ? JSON.parse(body) : body
+    const { leadId } = typeof body === 'string' ? parseJsonBody(body) : body
     if (!orgId) return error(401, 'Unauthenticated')
     if (!leadId) return error(400, 'leadId required')
     await CrmLeadTreatment.destroy({ where: { organisationId: Number(orgId), leadId: Number(leadId) } })
@@ -931,7 +1008,7 @@ export const listLeadNotes = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const { leadId } = typeof body === 'string' ? JSON.parse(body) : body
+    const { leadId } = typeof body === 'string' ? parseJsonBody(body) : body
     if (!orgId) return error(401, 'Unauthenticated')
     if (!leadId) return error(400, 'leadId required')
     const rows = await CrmLeadNote.findAll({ where: { organisationId: Number(orgId), leadId: Number(leadId) }, order: [['createdAt', 'DESC']] })
@@ -945,7 +1022,7 @@ export const listLeadWhatsAppLogs = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const { leadId, limit = 100 } = typeof body === 'string' ? JSON.parse(body) : body
+    const { leadId, limit = 100 } = typeof body === 'string' ? parseJsonBody(body) : body
     if (!orgId) return error(401, 'Unauthenticated')
     if (!leadId) return error(400, 'leadId required')
     const rows = await CrmWhatsAppMessageLog.findAll({
@@ -966,7 +1043,7 @@ export const addLeadNote = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { leadId, title, date, time, channel, summary } = payload || {}
     if (!orgId) return error(401, 'Unauthenticated')
     for (const k of ['leadId', 'title', 'date', 'time', 'channel', 'summary']) if (!payload?.[k]) return error(400, `${k} is required`)
@@ -985,7 +1062,7 @@ export const deleteLeadNote = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const { id } = typeof body === 'string' ? JSON.parse(body) : body
+    const { id } = typeof body === 'string' ? parseJsonBody(body) : body
     if (!orgId) return error(401, 'Unauthenticated')
     if (!id) return error(400, 'id required')
     await CrmLeadNote.destroy({ where: { id, organisationId: Number(orgId) } })
@@ -1035,7 +1112,7 @@ export const saveAutomationGroup = async (event) => {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { id, key, title, description, enabled } = payload || {}
 
     try { await CrmAutomationGroup.sync() } catch {}
@@ -1073,6 +1150,7 @@ export const saveAutomationGroup = async (event) => {
       description: description || null,
       enabled: !!enabled,
       ordering: nextOrder,
+      source: 'custom',
     })
     return success(created)
   } catch (e) {
@@ -1085,7 +1163,7 @@ export const deleteAutomationGroup = async (event) => {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { id, key } = payload || {}
     if (!id && !key) return error(400, 'id or key required')
 
@@ -1185,6 +1263,7 @@ export const listAutomation = async (event) => {
 }
 
 const applyAutomationSave = async ({ orgId, payload, transaction }) => {
+  const clean = validateAutomationPayload(payload)
   const {
     key,
     type = 'Email',
@@ -1198,7 +1277,7 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
     trigger,
     whatsappTemplateName,
     whatsappTemplateLanguage,
-  } = payload || {}
+  } = clean
   if (!key) throw new Error('key required')
 
   if (leadId) {
@@ -1283,7 +1362,7 @@ export const saveAutomation = async (event) => {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const result = await applyAutomationSave({ orgId, payload })
     return success(result)
   } catch (e) {
@@ -1296,7 +1375,7 @@ export const saveAutomationBatch = async (event) => {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const items = Array.isArray(payload?.items) ? payload.items : []
     if (!items.length) return error(400, 'items required')
 
@@ -1318,12 +1397,48 @@ export const saveAutomationBatch = async (event) => {
   }
 }
 
+export const resetAutomationOverride = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const leadId = Number(payload?.leadId || 0)
+    const key = String(payload?.key || '').trim()
+    if (!leadId) return error(400, 'leadId required')
+    if (!key) return error(400, 'key required')
+
+    const lead = await CrmLead.findOne({
+      where: { organisationId: Number(orgId), id: leadId },
+    })
+    if (!lead) return error(404, 'Lead not found')
+
+    const raw = lead.rawData || {}
+    const overrides = { ...(raw.crmAutomationOverrides || {}) }
+    if (overrides[key]) {
+      delete overrides[key]
+      const nextRaw = { ...raw }
+      if (Object.keys(overrides).length) {
+        nextRaw.crmAutomationOverrides = overrides
+      } else {
+        delete nextRaw.crmAutomationOverrides
+      }
+      lead.rawData = nextRaw
+      await lead.save()
+    }
+
+    return success({ reset: true, key })
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
 export const deleteAutomation = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const key = String(payload?.key || '').trim()
     if (!key) return error(400, 'Automation key required')
 
@@ -1354,7 +1469,7 @@ export const sendLeadMail = async (event) => {
     const { orgId, fullName } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { leadIds = [], subject, html, key } = payload || {}
     if (!subject || !html) return error(400, 'subject and html required')
     if (!Array.isArray(leadIds) || !leadIds.length) return error(400, 'leadIds required')
@@ -1396,7 +1511,7 @@ export const sendLeadWhatsApp = async (event) => {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { leadIds = [], template, message } = payload || {}
     if (!Array.isArray(leadIds) || !leadIds.length) return error(400, 'leadIds required')
     const messageText = String(message || '').trim()

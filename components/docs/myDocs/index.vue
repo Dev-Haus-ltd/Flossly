@@ -64,6 +64,7 @@
       <div class="my-5 px-5">
         <DocsMyDocsAllFiles
           :files="files"
+          :is-system="false"
           @view-file="openFile"
           @edit-file="handleEdit"
           @download-file="handleDownload"
@@ -91,6 +92,7 @@
         <DocsMyDocsAllFiles
           :files="files"
           :folder="selectedFolder"
+          :is-system="false"
           @view-file="openFile"
           @edit-file="handleEdit"
           @download-file="handleDownload"
@@ -116,6 +118,7 @@
       v-if="selectedDoc && isDocxFile(selectedDoc)"
       v-model="viewFileDialog"
       :doc="selectedDoc"
+      :is-system="false"
       @onUpdate="updateView"
     />
     <!-- Vuetify dialog for other file types -->
@@ -123,6 +126,7 @@
       v-else
       v-model="viewFileDialog"
       :doc="selectedDoc"
+      :is-system="false"
     />
     <!-- Move To Folder Dialog -->
     <DocsMyDocsMoveToFolderDialog
@@ -242,11 +246,11 @@ const getDocs = (data) => {
     .catch(() => {});
 };
 
-// Check if file is DOCX/DOC
+// Check if file is DOCX (editor supports .docx only)
 const isDocxFile = (doc) => {
   if (!doc) return false
   const fileName = doc.name?.toLowerCase() || doc.link?.toLowerCase() || ''
-  return fileName.endsWith('.docx') || fileName.endsWith('.doc')
+  return fileName.endsWith('.docx')
 }
 
 const openFile = (file) => {

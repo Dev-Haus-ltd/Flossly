@@ -1,12 +1,13 @@
 import { Role, Rota, RotaShift, RotaUser, User, UserOrganisation, Organisation } from "../models";
 import { Op, fn, col } from "sequelize";
 import DB from "../utils/db";
+import { parseJsonBody } from "../utils/body";
 
 export const addRota = async (event) => {
   try {
     const body = await readBody(event);
     const { name, startDate, endDate, duration, notes, orgId } =
-      JSON.parse(body);
+      parseJsonBody(body);
 
     if (!orgId || !name || !startDate || !endDate) {
       return error("Required fields missing");
@@ -109,7 +110,7 @@ export const getUserRotas = async (event) => {
 export const updateRota = async (event) => {
   try {
     const body = await readBody(event);
-    const { id, name, startDate, endDate, duration, notes } = JSON.parse(body);
+    const { id, name, startDate, endDate, duration, notes } = parseJsonBody(body);
     if (endDate && startDate && new Date(endDate) < new Date(startDate)) {
       return error("End date cannot be before start date");
     }
@@ -124,7 +125,7 @@ export const updateRota = async (event) => {
 
 export const publishRota = async (event) => {
   const body = await readBody(event);
-  const { id } = JSON.parse(body);
+  const { id } = parseJsonBody(body);
   try {
     const rota = await Rota.findByPk(id);
     if (!rota) throw createError({ message: "Rota not found " });
@@ -152,7 +153,7 @@ export const publishRota = async (event) => {
 
 export const unPublishRota = async (event) => {
   const body = await readBody(event);
-  const { id } = JSON.parse(body);
+  const { id } = parseJsonBody(body);
   try {
     const rota = await Rota.findByPk(id);
     if (!rota) throw createError({ message: "Rota not found " });
@@ -168,7 +169,7 @@ export const unPublishRota = async (event) => {
 
 export const removeRotaUser = async (event) => {
   const body = await readBody(event);
-  const { id } = JSON.parse(body);
+  const { id } = parseJsonBody(body);
   try {
     const rotaUser = await RotaUser.findByPk(id);
     if (!rotaUser) throw createError({ message: "Rota user not found " });
@@ -183,7 +184,7 @@ export const addRotaUsers = async (event) => {
   const transaction = await DB.transaction();
   try {
     const body = await readBody(event);
-    const { rotaId, users } = JSON.parse(body);
+    const { rotaId, users } = parseJsonBody(body);
     if (!rotaId) throw createError({ message: "Rota id required" });
     if (!Array.isArray(users) || users.length === 0) {
       throw createError({ message: "users required" });
@@ -323,7 +324,7 @@ export const addRotaShift = async (event) => {
       notes,
       forceCreate,
       isTemplate,
-    } = JSON.parse(body);
+    } = parseJsonBody(body);
     if (!rotaId || !label || !startDate || !endDate) {
       throw createError({ message: "Required fields missing" });
     }
@@ -491,7 +492,7 @@ export const addRotaShift = async (event) => {
 export const deleteRotaShift = async (event) => {
   try {
     const body = await readBody(event);
-    const { rotaId, shiftId } = JSON.parse(body);
+    const { rotaId, shiftId } = parseJsonBody(body);
 
     if (!rotaId || !shiftId)
       throw createError({ message: "rotaId and shiftId are required" });
@@ -517,7 +518,7 @@ export const deleteRotaShift = async (event) => {
 export const updateShift = async (event) => {
   try {
     const body = await readBody(event);
-    const parsedBody = typeof body === 'string' ? JSON.parse(body) : body;
+    const parsedBody = typeof body === 'string' ? parseJsonBody(body) : body;
     const { id, startDate, endDate, dentistId, nurseId, userId, locumUserId, forceCreate, label } = parsedBody;
     
     const shift = await RotaShift.findByPk(id, {
@@ -597,7 +598,7 @@ export const updateShift = async (event) => {
 export const getAllShifts = async (event) => {
   try {
     const body = await readBody(event);
-    const { rotaId } = JSON.parse(body);
+    const { rotaId } = parseJsonBody(body);
     if (!rotaId) throw createError({ message: "rotaId not found" });
     const shifts = await RotaShift.findAll({
       where: { rotaId, isDeleted: false },
@@ -644,7 +645,7 @@ export const completeShift = async (event) => {
 export const getRotaUsers = async (event) => {
   try {
     const body = await readBody(event);
-    const { rotaId } = JSON.parse(body);
+    const { rotaId } = parseJsonBody(body);
     if (!rotaId) {
       throw createError({
         statusCode: 400,

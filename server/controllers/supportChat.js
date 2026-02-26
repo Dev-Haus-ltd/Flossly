@@ -14,6 +14,7 @@ import {
 } from "../models/index.js";
 
 import { isSupportAgent, getSupportAgentUserIds } from '../utils/supportAgents.js';
+import { parseJsonBody } from "../utils/body";
 import { sendNotificationToUser } from '../utils/fcmNotification.js';
 import { uploadBufferFile } from '../utils/storage.js';
 
@@ -332,7 +333,7 @@ export const updateConversationStatus = async (event) => {
     // If body is a string, parse it
     if (typeof body === 'string') {
       try {
-        body = JSON.parse(body);
+        body = parseJsonBody(body);
       } catch (e) {
         console.error('Failed to parse body:', e);
       }

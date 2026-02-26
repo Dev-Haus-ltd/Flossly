@@ -54,6 +54,7 @@
         <DocsMyDocsAllFiles
           :files="files"
           :hideAddFileButton="true"
+          :is-system="true"
           @view-file="openFile"
           @edit-file="handleEdit"
           @download-file="handleDownload"
@@ -66,6 +67,7 @@
           :hideAddFileButton="true"
           :files="files.filter((x) => x.folderId === selectedFolder.id)"
           :folder="selectedFolder"
+          :is-system="true"
           @view-file="openFile"
           @edit-file="handleEdit"
           @download-file="handleDownload"
@@ -73,7 +75,7 @@
       </div>
     </div>
 
-    <DocsMyDocsViewFileDialog v-model="viewFileDialog" :doc="selectedDoc" />
+    <DocsMyDocsViewFileDialog v-model="viewFileDialog" :doc="selectedDoc" :is-system="true" />
   </div>
 </template>
 
