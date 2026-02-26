@@ -7,6 +7,7 @@ import {
 } from '../../utils/fcmNotification';
 import { FcmToken, UserNotification } from '../../models';
 import { error, success } from '../../utils/response';
+import { getQuery, readBody } from 'h3';
 
 export default defineEventHandler(async (event) => {
   const name = event.context.params.name;

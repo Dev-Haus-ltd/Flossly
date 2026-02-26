@@ -44,10 +44,7 @@ import {
   sendBulkTaskCompletionNotification,
   sendTaskCompletionNotification,
 } from "../utils/fcmNotification";
-import {
-  ensureOnboardingEventsTable,
-  recordOnboardingEvent,
-} from "../utils/onboardingService";
+import { ensureOnboardingEventsTable, recordOnboardingEvent } from "../utils/onboardingService";
 import { parseJsonBody } from "../utils/body";
 
 const PRIVILEGED_ROLE_IDS = [1, 8];

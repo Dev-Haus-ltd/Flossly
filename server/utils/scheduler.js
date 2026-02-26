@@ -160,7 +160,13 @@ export const startLeadAutomationScheduler = () => {
           order: [['createdAt','DESC']],
         })
         if (!leads.length) break
+        const orgIds = [...new Set(leads.map((l) => Number(l.organisationId)).filter(Boolean))];
+        const orgRows = orgIds.length
+          ? await Organisation.findAll({ where: { id: { [Op.in]: orgIds } } })
+          : [];
+        const orgMap = new Map(orgRows.map((o) => [Number(o.id), o]));
         for (const lead of leads) {
+          const org = orgMap.get(Number(lead.organisationId)) || null;
           const raw = lead.rawData || {}
           const effectiveTemplates = buildEffectiveCrmTemplates(lead, templatesByOrg)
           for (const tpl of effectiveTemplates) {
@@ -168,7 +174,7 @@ export const startLeadAutomationScheduler = () => {
             const trigger = resolveCrmTrigger(tpl)
             if (!trigger) continue
             try {
-              const { due, sentKey } = shouldSendCrmTemplate({ lead, tpl, trigger, today })
+              const { due, sentKey } = shouldSendCrmTemplate({ lead, tpl, trigger, today, org })
               if (!due || !sentKey || hasCrmSent(raw, sentKey)) continue
               const type = String(tpl?.type || 'Email').toLowerCase()
               if (type === 'whatsapp') {
@@ -177,12 +183,12 @@ export const startLeadAutomationScheduler = () => {
                 if (!templatePayload) {
                   throw new Error('WhatsApp template name is required for automation')
                 }
-                const message = buildCrmWhatsAppMessage(lead, tpl)
+                const message = buildCrmWhatsAppMessage(lead, tpl, org)
                 await sendCrmAutomationWhatsApp(lead, message, templatePayload)
                 await markCrmSent(lead, raw, sentKey)
               } else {
                 if (!lead?.email) continue
-                const { subject, html } = buildCrmEmail(lead, tpl)
+                const { subject, html } = buildCrmEmail(lead, tpl, org)
                 await sendCrmAutomationEmail(lead, subject, html)
                 await markCrmSent(lead, raw, sentKey)
               }

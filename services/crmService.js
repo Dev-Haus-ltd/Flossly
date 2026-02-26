@@ -387,6 +387,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  resetAutomationOverride(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/automationReset', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   deleteAutomation(payload) {
     return new Promise((resolve, reject) => {
       Post('/lead/automationDelete', payload)

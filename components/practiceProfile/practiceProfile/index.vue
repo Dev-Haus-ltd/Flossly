@@ -191,6 +191,148 @@
           </div>
         </v-card>
       </v-col>
+  </v-row>
+    <v-row class="mt-6">
+      <v-col cols="12">
+        <v-card
+          elevation="0"
+          class="pa-7"
+          style="border: 1px solid rgba(var(--v-theme-on-surface), 0.12); border-radius: 12px"
+        >
+          <div class="section-title mb-2">Automation Placeholders</div>
+          <div class="section-subtitle mb-4">
+            These values are used to fill automation templates across email and WhatsApp.
+          </div>
+
+          <v-row>
+            <v-col cols="12" md="4">
+              <label class="info-label">Booking Link</label>
+              <v-text-field
+                v-model="automationPlaceholders.bookingLink"
+                density="compact"
+                variant="outlined"
+                hide-details
+                placeholder="https://..."
+                @update:model-value="markAutomationDirty"
+              />
+            </v-col>
+            <v-col cols="12" md="4">
+              <label class="info-label">Diary Booking Link</label>
+              <v-text-field
+                v-model="automationPlaceholders.diaryBookingLink"
+                density="compact"
+                variant="outlined"
+                hide-details
+                placeholder="https://..."
+                @update:model-value="markAutomationDirty"
+              />
+            </v-col>
+            <v-col cols="12" md="4">
+              <label class="info-label">Practice Anniversary Date</label>
+              <v-menu
+                v-model="menus.practiceAnniversaryDate"
+                :close-on-content-click="false"
+                transition="scale-transition"
+                offset-y
+                min-width="auto"
+              >
+                <template #activator="{ props }">
+                  <v-text-field
+                    v-bind="props"
+                    :model-value="formatDate(organisation.practiceAnniversaryDate)"
+                    density="compact"
+                    variant="outlined"
+                    hide-details
+                    placeholder="Select date"
+                    readonly
+                  />
+                </template>
+                <v-date-picker
+                  v-model="organisation.practiceAnniversaryDate"
+                  @update:model-value="handlePracticeAnniversaryUpdate"
+                />
+              </v-menu>
+            </v-col>
+          </v-row>
+
+          <v-row class="mt-2">
+            <v-col cols="12" md="4">
+              <label class="info-label">Local Charity</label>
+              <v-text-field
+                v-model="automationPlaceholders.localCharity"
+                density="compact"
+                variant="outlined"
+                hide-details
+                placeholder="e.g. City Dental Trust"
+                @update:model-value="markAutomationDirty"
+              />
+            </v-col>
+            <v-col cols="12" md="4">
+              <label class="info-label">Local Business 1</label>
+              <v-text-field
+                v-model="automationPlaceholders.localBusiness1"
+                density="compact"
+                variant="outlined"
+                hide-details
+                placeholder="e.g. High Street Pharmacy"
+                @update:model-value="markAutomationDirty"
+              />
+            </v-col>
+            <v-col cols="12" md="4">
+              <label class="info-label">Local Business 2</label>
+              <v-text-field
+                v-model="automationPlaceholders.localBusiness2"
+                density="compact"
+                variant="outlined"
+                hide-details
+                placeholder="e.g. Smile Cafe"
+                @update:model-value="markAutomationDirty"
+              />
+            </v-col>
+          </v-row>
+
+          <v-row class="mt-2">
+            <v-col cols="12" md="4">
+              <label class="info-label">Local Business 3</label>
+              <v-text-field
+                v-model="automationPlaceholders.localBusiness3"
+                density="compact"
+                variant="outlined"
+                hide-details
+                placeholder="e.g. Community Clinic"
+                @update:model-value="markAutomationDirty"
+              />
+            </v-col>
+          </v-row>
+
+          <v-row class="mt-2">
+            <v-col cols="12" md="6">
+              <label class="info-label">Parking Details</label>
+              <v-textarea
+                v-model="automationPlaceholders.parkingDetails"
+                density="compact"
+                variant="outlined"
+                hide-details
+                rows="2"
+                placeholder="e.g. On-site parking behind the building, or street parking after 6pm."
+                @update:model-value="markAutomationDirty"
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <label class="info-label">Public Transport Details</label>
+              <v-textarea
+                v-model="automationPlaceholders.publicTransportDetails"
+                density="compact"
+                variant="outlined"
+                hide-details
+                rows="2"
+                placeholder="e.g. 5-minute walk from Central Station, Bus 21 stop outside."
+                @update:model-value="markAutomationDirty"
+              />
+            </v-col>
+          </v-row>
+        </v-card>
+      </v-col>
     </v-row>
     <div class="d-flex justify-end pr-5 pt-3">
       <v-btn
@@ -241,10 +383,22 @@ const organisation = reactive({
   cqcInspectionDate: props.practiceDetails.cqcInspectionDate || null,
   pinCodeVerification: props.practiceDetails.pinCodeVerification || 'yes',
   nonWorkingDays: props.practiceDetails.nonWorkingDays || [],
+  practiceAnniversaryDate: props.practiceDetails.practiceAnniversaryDate || null,
+});
+
+const automationPlaceholders = reactive({
+  bookingLink: props.practiceDetails.automationPlaceholders?.bookingLink || '',
+  diaryBookingLink: props.practiceDetails.automationPlaceholders?.diaryBookingLink || '',
+  localCharity: props.practiceDetails.automationPlaceholders?.localCharity || '',
+  localBusiness1: props.practiceDetails.automationPlaceholders?.localBusiness1 || '',
+  localBusiness2: props.practiceDetails.automationPlaceholders?.localBusiness2 || '',
+  localBusiness3: props.practiceDetails.automationPlaceholders?.localBusiness3 || '',
+  parkingDetails: props.practiceDetails.automationPlaceholders?.parkingDetails || '',
+  publicTransportDetails: props.practiceDetails.automationPlaceholders?.publicTransportDetails || '',
 });
 
 const practiceManagers = ref([]);
-const menus = reactive({ cqcInspectionDate: false });
+const menus = reactive({ cqcInspectionDate: false, practiceAnniversaryDate: false });
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 // Initialize original data and validate types
@@ -258,8 +412,10 @@ const initializeOriginalData = () => {
     surgeryCount: organisation.surgeryCount !== null ? Number(organisation.surgeryCount) : null,
     type: organisation.type || '',
     cqcInspectionDate: organisation.cqcInspectionDate || null,
+    practiceAnniversaryDate: organisation.practiceAnniversaryDate || null,
     pinCodeVerification: organisation.pinCodeVerification || 'yes',
     nonWorkingDays: Array.isArray(organisation.nonWorkingDays) ? [...organisation.nonWorkingDays] : [],
+    automationPlaceholders: { ...automationPlaceholders },
   };
 };
 
@@ -301,6 +457,16 @@ const handleDateUpdate = (val) => {
   markDirty('cqcInspectionDate');
 };
 
+const handlePracticeAnniversaryUpdate = (val) => {
+  menus.practiceAnniversaryDate = false;
+  organisation.practiceAnniversaryDate = val;
+  markDirty('practiceAnniversaryDate');
+};
+
+const markAutomationDirty = () => {
+  markDirty('automationPlaceholders');
+};
+
 // Handle PIN verification toggle
 const handlePinVerification = (val) => {
   organisation.pinCodeVerification = val;
@@ -340,6 +506,10 @@ const buildUpdatePayload = () => {
     } else if (fieldName === 'cqcInspectionDate') {
       // Send date as-is (backend will handle formatting)
       payload.append(fieldName, value || '');
+    } else if (fieldName === 'practiceAnniversaryDate') {
+      payload.append(fieldName, value || '');
+    } else if (fieldName === 'automationPlaceholders') {
+      payload.append(fieldName, JSON.stringify(automationPlaceholders));
     } else {
       // Text fields
       payload.append(fieldName, value || '');
@@ -399,6 +569,17 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.section-title {
+  font-weight: 600;
+  font-size: 16px;
+  color: #111827;
+}
+
+.section-subtitle {
+  font-size: 13px;
+  color: #6b7280;
+}
+
 .user-name {
   font-weight: 400;
   font-size: 24px;

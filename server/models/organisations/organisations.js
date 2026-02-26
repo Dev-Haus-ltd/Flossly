@@ -87,6 +87,14 @@ export const Organisation = sequelize.define(
       allowNull: false,
       defaultValue: false,
     },
+    practiceAnniversaryDate: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    automationPlaceholders: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
     },
   {
     modelName: "Organisations",

@@ -376,8 +376,8 @@ export const sendLeadBulkEmail = async ({ leads = [], subject, html, from, sende
   for (const lead of leads) {
     if (!lead?.email) continue;
     const ctx = buildLeadContext({ lead, userName: senderName || 'Team' })
-    const renderedSubject = renderTokens(subject || '', ctx)
-    const content = renderTokens(html || '', ctx)
+    const renderedSubject = renderTokens(subject || '', ctx, { format: 'text' })
+    const content = renderTokens(html || '', ctx, { format: 'html' })
 
     try {
       const wrapped = template
