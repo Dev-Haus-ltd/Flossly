@@ -16,7 +16,7 @@
         </div>
         <div class="chat-bubble">
           <div v-if="automated" class="chat-bubble-badge">Automated</div>
-          <p class="mb-1 chat-bubble-text">{{ message }}</p>
+          <p v-if="showMessage" class="mb-1 chat-bubble-text">{{ message }}</p>
           <div v-if="hasAttachments" class="chat-attachments">
             <div v-if="imageAttachments.length" class="chat-attachments-grid">
               <a
@@ -98,6 +98,11 @@ const props = defineProps({
 });
 
 const showAvatarImage = ref(false);
+const showMessage = computed(() => {
+  const text = String(props.message || "").trim();
+  if (text === "[Attachment]" && props.attachments) return false;
+  return !!text;
+});
 
 const updateAvatarVisibility = () => {
   showAvatarImage.value = !!props.avatarUrl;

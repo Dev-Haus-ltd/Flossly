@@ -1605,6 +1605,16 @@ export const sendLeadWhatsApp = async (event) => {
     let skipped = 0
     const failures = []
 
+    const toAbsoluteUrl = (value) => {
+      const raw = String(value || '').trim()
+      if (!raw) return null
+      if (/^https?:\/\//i.test(raw)) return raw
+      const config = useRuntimeConfig()
+      const base = config.public?.BASE_URL || config.BASE_URL || process.env.BASE_URL || ''
+      if (!base) return raw
+      return `${String(base).replace(/\/+$/, '')}/${raw.replace(/^\/+/, '')}`
+    }
+
     for (const lead of leads) {
       const to = normalizeWhatsAppNumber(lead.telephone)
       if (!to) {
@@ -1695,7 +1705,8 @@ export const sendLeadWhatsApp = async (event) => {
 
         if (hasAttachments) {
           for (const att of attachments) {
-            if (!att?.url) continue
+            const url = toAbsoluteUrl(att?.url)
+            if (!url) continue
             const mime = String(att?.mimeType || '').toLowerCase()
             const name = att?.name || null
             const type =
@@ -1710,10 +1721,10 @@ export const sendLeadWhatsApp = async (event) => {
                 messaging_product: 'whatsapp',
                 to,
                 type,
-                ...(type === 'image' ? { image: { link: att.url } } : {}),
-                ...(type === 'video' ? { video: { link: att.url } } : {}),
-                ...(type === 'audio' ? { audio: { link: att.url } } : {}),
-                ...(type === 'document' ? { document: { link: att.url, filename: name || undefined } } : {}),
+                ...(type === 'image' ? { image: { link: url } } : {}),
+                ...(type === 'video' ? { video: { link: url } } : {}),
+                ...(type === 'audio' ? { audio: { link: url } } : {}),
+                ...(type === 'document' ? { document: { link: url, filename: name || undefined } } : {}),
               }
               resp = await $fetch(metaUrl, {
                 method: 'POST',
@@ -1731,10 +1742,10 @@ export const sendLeadWhatsApp = async (event) => {
               const bodyPayload = {
                 to,
                 type: 'url',
-                ...(endpoint === 'image' ? { image: att.url } : {}),
-                ...(endpoint === 'video' ? { video: att.url } : {}),
-                ...(endpoint === 'audio' ? { audio: att.url } : {}),
-                ...(endpoint === 'document' ? { document: att.url, filename: name || undefined } : {}),
+                ...(endpoint === 'image' ? { image: url } : {}),
+                ...(endpoint === 'video' ? { video: url } : {}),
+                ...(endpoint === 'audio' ? { audio: url } : {}),
+                ...(endpoint === 'document' ? { document: url, filename: name || undefined } : {}),
               }
               resp = await $fetch(`${whapiBase}/messages/${endpoint}`, {
                 method: 'POST',
@@ -1760,7 +1771,7 @@ export const sendLeadWhatsApp = async (event) => {
               status: 'sent',
               providerMessageId,
               content: name || null,
-              attachments: [att],
+              attachments: [{ ...att, url }],
             })
             sent += 1
           }

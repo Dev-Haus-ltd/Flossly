@@ -14,6 +14,16 @@ const ensureDmTables = async () => {
 
 const META_VERSION = "v24.0";
 
+const toAbsoluteUrl = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const config = useRuntimeConfig();
+  const base = config.public?.BASE_URL || config.BASE_URL || process.env.BASE_URL || "";
+  if (!base) return raw;
+  return `${String(base).replace(/\/+$/, "")}/${raw.replace(/^\/+/, "")}`;
+};
+
 const sendMetaMessage = async ({ accessToken, recipientId, message }) => {
   const url = `https://graph.facebook.com/${META_VERSION}/me/messages`;
   return await $fetch(url, {
@@ -122,7 +132,8 @@ export const processQueuedMessages = async ({ organisationId, limit = 20 }) => {
       const recipientId = String(conversation.threadId);
       let resp = null;
       const text = String(msg.message || "").trim();
-      if (text) {
+      const hasOnlyAttachment = text === "[Attachment]" && Array.isArray(msg.attachments) && msg.attachments.length;
+      if (text && !hasOnlyAttachment) {
         resp = await sendMetaMessage({
           accessToken,
           recipientId,
@@ -133,11 +144,12 @@ export const processQueuedMessages = async ({ organisationId, limit = 20 }) => {
       const attachments = Array.isArray(msg.attachments) ? msg.attachments : [];
       if (attachments.length) {
         for (const att of attachments) {
-          if (!att?.url) continue;
+          const url = toAbsoluteUrl(att?.url);
+          if (!url) continue;
           await sendMetaAttachment({
             accessToken,
             recipientId,
-            attachment: att,
+            attachment: { ...att, url },
           });
         }
       }
