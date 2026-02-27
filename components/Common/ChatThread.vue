@@ -49,8 +49,6 @@ const hasItems = computed(() => Array.isArray(props.groups) && props.groups.some
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: 420px;
-  overflow-y: auto;
   padding-right: 8px;
 }
 

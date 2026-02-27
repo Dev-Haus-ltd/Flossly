@@ -24,6 +24,7 @@ export const useCrmStore = defineStore("crmStore", {
     markDmRead(payload) { return this._wrap(() => crmService.markDmRead(payload)); },
     processDmQueue(payload = {}) { return this._wrap(() => crmService.processDmQueue(payload)); },
     uploadDmAttachment(formData, onProgress) { return this._wrap(() => crmService.uploadDmAttachment(formData, onProgress)); },
+    refreshDmProfile(payload) { return this._wrap(() => crmService.refreshDmProfile(payload)); },
     connectionStatus() { return this._wrap(() => crmService.connectionStatus()); },
     fetchLeadsNow(params = {}) { return this._wrap(() => crmService.fetchLeadsNow(params)); },
     fetchMetaStructure() { return this._wrap(() => crmService.fetchMetaStructure()); },

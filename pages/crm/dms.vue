@@ -257,6 +257,19 @@ const selectConversation = (id) => {
   activeConversationId.value = id;
   draftMessage.value = "";
   loadMessages(true);
+  const conv = conversations.value.find((c) => c.id === id);
+  if (conv && /^[0-9]+$/.test(String(conv.title || "")) && !conv.avatarUrl) {
+    crmStore
+      .refreshDmProfile({ conversationId: id })
+      .then((res) => {
+        if (res?.code === 0 && res?.data?.updated) {
+          conv.title = res.data.participantName || conv.title;
+          conv.avatarUrl = res.data.participantAvatar || conv.avatarUrl;
+          conv.avatarText = getInitials(conv.title || conv.avatarText);
+        }
+      })
+      .catch(() => {});
+  }
 };
 
 const scrollThreadToBottom = () => {

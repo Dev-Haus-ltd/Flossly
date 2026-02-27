@@ -69,6 +69,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  refreshDmProfile(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/dms/refreshProfile", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   connectionStatus() {
     return new Promise((resolve, reject) => {
       Get("/meta/connection")

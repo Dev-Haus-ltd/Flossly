@@ -50,6 +50,30 @@ const sendMetaAttachment = async ({ accessToken, recipientId, attachment }) => {
   });
 };
 
+const resolveProfile = async ({ platform, senderId, accessToken }) => {
+  if (!senderId || !accessToken) return null;
+  try {
+    if (platform === "messenger") {
+      const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(senderId)}?fields=first_name,last_name,profile_pic&access_token=${encodeURIComponent(accessToken)}`;
+      const resp = await $fetch(url, { method: "GET" });
+      const name = [resp?.first_name, resp?.last_name].filter(Boolean).join(" ").trim();
+      return {
+        name: name || resp?.name || null,
+        avatar: resp?.profile_pic || null,
+      };
+    }
+    if (platform === "instagram") {
+      const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(senderId)}?fields=username,profile_picture_url&access_token=${encodeURIComponent(accessToken)}`;
+      const resp = await $fetch(url, { method: "GET" });
+      return {
+        name: resp?.username || null,
+        avatar: resp?.profile_picture_url || null,
+      };
+    }
+  } catch {}
+  return null;
+};
+
 export const processQueuedMessages = async ({ organisationId, limit = 20 }) => {
   await ensureDmTables();
   const queued = await CrmDmMessage.findAll({
@@ -335,6 +359,60 @@ export const processDmQueue = async (event) => {
     return success(results);
   } catch (err) {
     return error(500, err.message || "Failed to process queue");
+  }
+};
+
+export const refreshDmProfile = async (event) => {
+  try {
+    await ensureDmTables();
+    const { orgId } = event.context.user || {};
+    if (!orgId) return error(401, "Unauthenticated");
+
+    const raw = await readBody(event);
+    const payload = typeof raw === "string" ? parseJsonBody(raw) : raw || {};
+    const { conversationId } = payload;
+    if (!conversationId) return error(400, "conversationId is required");
+
+    const conversation = await CrmDmConversation.findOne({
+      where: { id: Number(conversationId), organisationId: orgId },
+    });
+    if (!conversation) return error(404, "Conversation not found");
+
+    const account = await CrmDmAccount.findOne({
+      where: {
+        organisationId: orgId,
+        platform: conversation.platform,
+        accountId: String(conversation.accountId),
+        status: "Active",
+      },
+    });
+    if (!account?.accessTokenEnc) return error(400, "Account token missing");
+
+    const accessToken = decrypt(account.accessTokenEnc);
+    const profile = await resolveProfile({
+      platform: conversation.platform,
+      senderId: conversation.threadId,
+      accessToken,
+    });
+    if (!profile) return success({ updated: false });
+
+    conversation.participantName = profile.name || conversation.participantName;
+    conversation.participantAvatar = profile.avatar || conversation.participantAvatar;
+    conversation.metadata = {
+      ...(conversation.metadata || {}),
+      participantName: conversation.participantName,
+      participantAvatar: conversation.participantAvatar,
+    };
+    await conversation.save();
+
+    return success({
+      updated: true,
+      id: conversation.id,
+      participantName: conversation.participantName,
+      participantAvatar: conversation.participantAvatar,
+    });
+  } catch (err) {
+    return error(500, err.message || "Failed to refresh profile");
   }
 };
 
