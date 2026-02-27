@@ -794,6 +794,7 @@ export const igAuthStart = async (event) => {
   const scope = [
     'instagram_basic',
     'instagram_manage_messages',
+    'pages_show_list',
   ].join(',')
 
   const url = `https://www.facebook.com/${META_VERSION}/dialog/oauth?client_id=${encodeURIComponent(
@@ -854,11 +855,19 @@ export const igAuthCallback = async (event) => {
     const accessToken = shortResp.access_token
     if (!accessToken) return error(500, 'Failed to get access token')
 
-    const meUrl = `https://graph.facebook.com/${META_VERSION}/me?fields=id,username&access_token=${encodeURIComponent(accessToken)}`
-    const meResp = await $fetch(meUrl, { method: 'GET' })
-    const igAccountId = String(meResp?.id || '')
-    const igUsername = meResp?.username || null
-    if (!igAccountId) throw new Error('Instagram account not found')
+    const pagesUrl = `https://graph.facebook.com/${META_VERSION}/me/accounts?fields=id,name,instagram_business_account&access_token=${encodeURIComponent(accessToken)}`
+    const pagesResp = await $fetch(pagesUrl, { method: 'GET' })
+    const pages = Array.isArray(pagesResp?.data) ? pagesResp.data : []
+    const withIg = pages.find((p) => p?.instagram_business_account?.id)
+    const igAccountId = String(withIg?.instagram_business_account?.id || '')
+    if (!igAccountId) throw new Error('Instagram business account not found')
+
+    let igUsername = null
+    try {
+      const igUrl = `https://graph.facebook.com/${META_VERSION}/${igAccountId}?fields=id,username&access_token=${encodeURIComponent(accessToken)}`
+      const igResp = await $fetch(igUrl, { method: 'GET' })
+      igUsername = igResp?.username || null
+    } catch (e) {}
 
     const expiresIn = Number(shortResp?.expires_in || 0)
     const expiry = expiresIn ? new Date(Date.now() + expiresIn * 1000) : null
@@ -868,7 +877,7 @@ export const igAuthCallback = async (event) => {
       connectedByUserId: userId,
       platform: 'instagram',
       accountId: igAccountId,
-      accountName: igUsername,
+      accountName: igUsername || withIg?.name || null,
       accessToken,
       tokenExpiresAt: expiry,
     })
