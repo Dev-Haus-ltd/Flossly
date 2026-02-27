@@ -788,8 +788,8 @@ export const igAuthStart = async (event) => {
   })
 
   const scope = [
-    'instagram_business_basic',
-    'instagram_business_manage_messages',
+    'instagram_basic',
+    'instagram_manage_messages',
   ].join(',')
 
   const url = `https://www.facebook.com/${META_VERSION}/dialog/oauth?client_id=${encodeURIComponent(
