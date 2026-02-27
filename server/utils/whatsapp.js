@@ -62,6 +62,7 @@ export const logWhatsAppMessage = async ({
   status = "sent",
   providerMessageId = null,
   content = null,
+  attachments = null,
   error = null,
 }) => {
   try {
@@ -76,6 +77,7 @@ export const logWhatsAppMessage = async ({
       status,
       providerMessageId,
       content: content != null ? String(content) : null,
+      attachments: attachments || null,
       error,
     });
   } catch {

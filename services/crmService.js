@@ -1,4 +1,4 @@
-import { Get, Post } from "./apiWrapper";
+import { Get, Post, PostFormData } from "./apiWrapper";
 
 export default {
   startMetaAuth() {
@@ -58,6 +58,13 @@ export default {
   processDmQueue(payload = {}) {
     return new Promise((resolve, reject) => {
       Post("/dms/processQueue", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  uploadDmAttachment(formData, onProgress) {
+    return new Promise((resolve, reject) => {
+      PostFormData("/dms/uploadAttachment", formData, onProgress)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -320,9 +327,20 @@ export default {
         .catch((err) => reject(err));
     });
   },
-  getLeadWhatsAppLogs(leadId, limit = 100) {
+  getLeadWhatsAppLogs(leadIdOrParams, limit = 100) {
+    const payload =
+      typeof leadIdOrParams === "object"
+        ? leadIdOrParams
+        : { leadId: leadIdOrParams, limit };
     return new Promise((resolve, reject) => {
-      Post("/lead/whatsappLogs", { leadId, limit })
+      Post("/lead/whatsappLogs", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  uploadLeadWhatsAppAttachment(formData, onProgress) {
+    return new Promise((resolve, reject) => {
+      PostFormData("/lead/whatsappUploadAttachment", formData, onProgress)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });

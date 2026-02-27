@@ -1,9 +1,10 @@
 import { Op } from "sequelize";
-import { readBody, getQuery, setResponseStatus, getMethod } from "h3";
+import { readBody, getQuery, setResponseStatus, getMethod, readMultipartFormData } from "h3";
 import { success, error } from "../utils/response";
 import { parseJsonBody } from "../utils/body";
 import { CrmDmConversation, CrmDmMessage, CrmDmAccount } from "../models";
 import { decrypt } from "../utils/crypto";
+import { uploadBufferFile } from "../utils/storage";
 
 const ensureDmTables = async () => {
   try { await CrmDmConversation.sync(); } catch {}
@@ -20,6 +21,28 @@ const sendMetaMessage = async ({ accessToken, recipientId, message }) => {
     body: {
       recipient: { id: recipientId },
       message: { text: message },
+    },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+};
+
+const sendMetaAttachment = async ({ accessToken, recipientId, attachment }) => {
+  const url = `https://graph.facebook.com/${META_VERSION}/me/messages`;
+  return await $fetch(url, {
+    method: "POST",
+    body: {
+      recipient: { id: recipientId },
+      message: {
+        attachment: {
+          type: attachment.type || "file",
+          payload: {
+            url: attachment.url,
+            is_reusable: true,
+          },
+        },
+      },
     },
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -73,11 +96,27 @@ export const processQueuedMessages = async ({ organisationId, limit = 20 }) => {
     try {
       const accessToken = decrypt(account.accessTokenEnc);
       const recipientId = String(conversation.threadId);
-      const resp = await sendMetaMessage({
-        accessToken,
-        recipientId,
-        message: msg.message,
-      });
+      let resp = null;
+      const text = String(msg.message || "").trim();
+      if (text) {
+        resp = await sendMetaMessage({
+          accessToken,
+          recipientId,
+          message: text,
+        });
+      }
+
+      const attachments = Array.isArray(msg.attachments) ? msg.attachments : [];
+      if (attachments.length) {
+        for (const att of attachments) {
+          if (!att?.url) continue;
+          await sendMetaAttachment({
+            accessToken,
+            recipientId,
+            attachment: att,
+          });
+        }
+      }
 
       msg.status = "sent";
       msg.platformMessageId = resp?.message_id || resp?.messageId || msg.platformMessageId || null;
@@ -113,6 +152,7 @@ export const listDmConversations = async (event) => {
 
     const platform = body.platform ?? query.platform ?? null;
     const search = body.search ?? query.search ?? null;
+    const assignedToMeRaw = body.assignedToMe ?? query.assignedToMe ?? null;
     const limit = Number(body.limit ?? query.limit ?? 20);
     const offset = Number(body.offset ?? query.offset ?? 0);
 
@@ -127,6 +167,15 @@ export const listDmConversations = async (event) => {
           { participantName: { [Op.iLike]: `%${term}%` } },
           { threadId: { [Op.iLike]: `%${term}%` } },
         ];
+      }
+    }
+    if (assignedToMeRaw !== null && assignedToMeRaw !== undefined && assignedToMeRaw !== "") {
+      const assignedToMe = String(assignedToMeRaw).toLowerCase();
+      if (assignedToMe === "true" || assignedToMe === "1" || assignedToMe === "yes") {
+        const userId = event.context.user?.userId || event.context.user?.id;
+        if (userId) {
+          where.metadata = { [Op.contains]: { assignedUserId: Number(userId) } };
+        }
       }
     }
 
@@ -202,9 +251,11 @@ export const sendDmMessage = async (event) => {
 
     const raw = await readBody(event);
     const payload = typeof raw === "string" ? parseJsonBody(raw) : raw || {};
-    const { conversationId, message } = payload;
-    if (!conversationId || !String(message || "").trim()) {
-      return error(400, "conversationId and message are required");
+    const { conversationId, message, attachments } = payload;
+    const hasText = String(message || "").trim().length > 0;
+    const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+    if (!conversationId || (!hasText && !hasAttachments)) {
+      return error(400, "conversationId and message or attachments are required");
     }
 
     const conversation = await CrmDmConversation.findOne({
@@ -218,7 +269,8 @@ export const sendDmMessage = async (event) => {
       platform: conversation.platform,
       direction: "outbound",
       senderName: "Flossly",
-      message: String(message || "").trim(),
+      message: String(message || "").trim() || "[Attachment]",
+      attachments: hasAttachments ? attachments : null,
       status: "queued",
     });
 
@@ -283,5 +335,43 @@ export const processDmQueue = async (event) => {
     return success(results);
   } catch (err) {
     return error(500, err.message || "Failed to process queue");
+  }
+};
+
+export const uploadDmAttachment = async (event) => {
+  try {
+    const { orgId, userId } = event.context.user || {};
+    if (!orgId || !userId) return error(401, "Unauthenticated");
+
+    const formData = await readMultipartFormData(event);
+    if (!formData || !formData.length) {
+      return error(400, "No file uploaded");
+    }
+
+    const fileData = formData.find((item) => item.name === "file");
+    if (!fileData) return error(400, "Missing file");
+
+    const originalName = fileData.filename || "file";
+    const fileExt = originalName.includes(".") ? originalName.slice(originalName.lastIndexOf(".")) : "";
+    const uniqueFileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExt}`;
+    const mimeType = fileData.type || "application/octet-stream";
+
+    const s3Path = await uploadBufferFile({
+      data: fileData.data,
+      filename: uniqueFileName,
+      contentType: mimeType,
+      baseDir: "chat-attachments",
+    });
+
+    const attachmentType = mimeType.startsWith("image/") ? "image" : "file";
+    return success({
+      url: s3Path,
+      name: originalName,
+      mimeType,
+      type: attachmentType,
+      size: fileData.data?.length || null,
+    });
+  } catch (err) {
+    return error(500, err.message || "Failed to upload attachment");
   }
 };

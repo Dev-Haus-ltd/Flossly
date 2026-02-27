@@ -58,7 +58,10 @@
           <v-divider />
           <div ref="listBodyRef" class="dms-list-body" @scroll="onListScroll">
             <div v-if="!filteredConversations.length" class="text-caption text-medium-emphasis pa-4">
-              No conversations yet.
+              <div>No conversations yet.</div>
+              <div class="mt-2">
+                Connect Facebook or Instagram in CRM settings to start receiving DMs.
+              </div>
             </div>
             <v-list v-else class="dms-list-items" density="compact">
               <v-list-item
@@ -68,7 +71,19 @@
                 @click="selectConversation(conv.id)"
               >
                 <template #prepend>
-                  <v-avatar size="36">
+                  <v-badge
+                    v-if="conv.unreadCount"
+                    :content="conv.unreadCount"
+                    color="error"
+                    offset-x="6"
+                    offset-y="6"
+                  >
+                    <v-avatar size="36">
+                      <img v-if="conv.avatarUrl" :src="conv.avatarUrl" alt="Avatar" />
+                      <span v-else>{{ conv.avatarText }}</span>
+                    </v-avatar>
+                  </v-badge>
+                  <v-avatar v-else size="36">
                     <img v-if="conv.avatarUrl" :src="conv.avatarUrl" alt="Avatar" />
                     <span v-else>{{ conv.avatarText }}</span>
                   </v-avatar>
@@ -79,6 +94,11 @@
                 <v-list-item-subtitle class="text-caption text-medium-emphasis">
                   {{ conv.preview || "No messages yet" }}
                 </v-list-item-subtitle>
+                <template #append>
+                  <v-icon size="18" class="text-medium-emphasis">
+                    {{ conv.platform === "instagram" ? "mdi-instagram" : "mdi-facebook-messenger" }}
+                  </v-icon>
+                </template>
               </v-list-item>
             </v-list>
           </div>
@@ -90,7 +110,10 @@
               {{ activeConversation?.title || "Select a conversation" }}
             </div>
             <div class="text-caption text-medium-emphasis">
-              {{ activeConversation?.subtitle || "No conversation selected" }}
+              <v-icon v-if="activeConversation" size="16" class="mr-1">
+                {{ activePlatformIcon }}
+              </v-icon>
+              {{ activeConversation ? activePlatformLabel : "No conversation selected" }}
             </div>
           </div>
           <v-divider />
@@ -102,11 +125,26 @@
             />
           </div>
           <v-divider />
+          <div v-if="pendingFiles.length" class="dms-attachments-preview">
+            <div
+              v-for="(file, idx) in pendingFiles"
+              :key="`${file.name}-${idx}`"
+              class="dms-attachment-chip"
+            >
+              <v-icon size="16" class="mr-1">mdi-paperclip</v-icon>
+              <span class="dms-attachment-name">{{ file.name }}</span>
+              <v-btn icon variant="text" size="x-small" @click="removePendingFile(idx)">
+                <v-icon size="14">mdi-close</v-icon>
+              </v-btn>
+            </div>
+          </div>
           <CommonChatInputBar
             v-model="draftMessage"
             :can-send="canSend"
             :disabled="!activeConversationId"
             :loading="sending"
+            :allow-attachments="true"
+            @files-selected="onFilesSelected"
             @send="sendMessage"
           />
         </v-card>
@@ -118,9 +156,12 @@
 <script setup>
 import CommonChatThread from "@/components/Common/ChatThread.vue";
 import CommonChatInputBar from "@/components/Common/ChatInputBar.vue";
-import { groupChatItems, formatChatTimestamp, buildDayKey, buildDayLabel } from "@/lib/chatThread";
+import { groupChatItems } from "@/lib/chatThread";
+import { mapDmMessageToChatItem } from "@/lib/chatMappers";
+import { getInitials } from "@/lib/chatShared";
 import { useCrmStore } from "@/stores/crm";
 import { useMainStore } from "@/stores/index";
+import { useAuthStore } from "@/stores/auth";
 import { useRoute } from "vue-router";
 
 definePageMeta({
@@ -139,6 +180,7 @@ const loadingMessages = ref(false);
 const loadingConversations = ref(false);
 const sending = ref(false);
 const draftMessage = ref("");
+const pendingFiles = ref([]);
 const conversationOffset = ref(0);
 const conversationLimit = ref(20);
 const conversationHasMore = ref(true);
@@ -152,6 +194,7 @@ let searchTimer = null;
 
 const crmStore = useCrmStore();
 const mainStore = useMainStore();
+const authStore = useAuthStore();
 const route = useRoute();
 
 const emptyMessage = computed(() => {
@@ -181,30 +224,33 @@ const activeConversation = computed(() => {
   return conversations.value.find((c) => c.id === activeConversationId.value) || null;
 });
 
+const activePlatformLabel = computed(() => {
+  const platform = activeConversation.value?.platform || "";
+  if (platform === "messenger") return "Messenger";
+  if (platform === "instagram") return "Instagram";
+  return "DM";
+});
+
+const activePlatformIcon = computed(() => {
+  const platform = activeConversation.value?.platform || "";
+  if (platform === "messenger") return "mdi-facebook-messenger";
+  if (platform === "instagram") return "mdi-instagram";
+  return "mdi-message-text-outline";
+});
+
 const messageItems = computed(() => {
   return messages.value.map((row) => {
-    const isOutbound = String(row?.direction || "").toLowerCase() === "outbound";
-    return {
-      id: row.id,
-      isOutbound,
-      sender: row.senderName || (isOutbound ? "Flossly" : "Client"),
-      message: row.message,
-      timeLabel: formatChatTimestamp(row.createdAt),
-      statusIcon: row.status,
-      automated: false,
-      avatarUrl: "",
-      avatarText: isOutbound ? "F" : "C",
-      dayKey: buildDayKey(row.createdAt),
-      dayLabel: buildDayLabel(row.createdAt),
-      createdAt: row.createdAt,
-    };
+    const inboundAvatar = activeConversation.value?.avatarUrl || "";
+    return mapDmMessageToChatItem(row, { inboundAvatarUrl: inboundAvatar });
   });
 });
 
 const groupedMessages = computed(() => groupChatItems(messageItems.value));
 
 const canSend = computed(() => {
-  return !!activeConversationId.value && String(draftMessage.value || "").trim().length > 0 && !sending.value;
+  const hasText = String(draftMessage.value || "").trim().length > 0;
+  const hasFiles = pendingFiles.value.length > 0;
+  return !!activeConversationId.value && (hasText || hasFiles) && !sending.value;
 });
 
 const selectConversation = (id) => {
@@ -269,15 +315,32 @@ const loadMessages = async (reset = false) => {
 const sendMessage = async () => {
   if (!canSend.value) return;
   const text = String(draftMessage.value || "").trim();
-  if (!text) return;
   try {
     sending.value = true;
+    let attachments = [];
+    if (pendingFiles.value.length) {
+      for (const file of pendingFiles.value) {
+        const form = new FormData();
+        form.append("file", file);
+        const resUpload = await crmStore.uploadDmAttachment(form);
+        if (resUpload?.code !== 0) {
+          const msg = resUpload?.error || resUpload?.message || "Failed to upload attachment";
+          mainStore?.setSnackbar?.({ title: msg, type: "error" });
+          sending.value = false;
+          return;
+        }
+        if (resUpload?.data) attachments.push(resUpload.data);
+      }
+    }
+
     const res = await crmStore.sendDmMessage({
       conversationId: activeConversationId.value,
       message: text,
+      attachments,
     });
     if (res?.code === 0) {
       draftMessage.value = "";
+      pendingFiles.value = [];
       await loadMessages(true);
       await crmStore.processDmQueue({ limit: 20 });
       return;
@@ -292,15 +355,20 @@ const sendMessage = async () => {
   }
 };
 
+const onFilesSelected = (files) => {
+  pendingFiles.value = [...pendingFiles.value, ...files];
+};
+
+const removePendingFile = (idx) => {
+  pendingFiles.value = pendingFiles.value.filter((_, i) => i !== idx);
+};
+
 const buildConversationRow = (row) => {
   const name = row?.participantName || row?.metadata?.participantName || row?.threadId || "Unknown";
-  const avatarUrl = row?.participantAvatar || "";
-  const initials = String(name || "")
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() || "")
-    .join("");
+  const avatarUrl = row?.participantAvatar || row?.metadata?.participantAvatar || "";
+  const assignedUserId = row?.metadata?.assignedUserId || null;
+  const currentUserId = authStore?.getLoggedUser?.id || authStore?.getLoggedUser?.userId || authStore?.loggedUser?.id;
+  const initials = getInitials(name);
   return {
     id: row?.id,
     title: name,
@@ -309,7 +377,7 @@ const buildConversationRow = (row) => {
     avatarText: initials || "U",
     platform: row?.platform,
     unreadCount: row?.unreadCount || 0,
-    assignedToMe: false,
+    assignedToMe: assignedUserId && currentUserId ? String(assignedUserId) === String(currentUserId) : false,
   };
 };
 
@@ -326,6 +394,7 @@ const loadConversations = async (reset = false) => {
     const res = await crmStore.listDmConversations({
       platform: activeTab.value,
       search: search.value,
+      assignedToMe: showAssignedOnly.value ? "true" : "",
       limit: conversationLimit.value,
       offset: conversationOffset.value,
     });
@@ -463,6 +532,33 @@ onMounted(() => {
   flex: 1;
   background: #f7f8fb;
   overflow-y: auto;
+}
+
+.dms-attachments-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 16px 0 16px;
+  background: #ffffff;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.dms-attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.06);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #0f172a;
+}
+
+.dms-attachment-name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 960px) {

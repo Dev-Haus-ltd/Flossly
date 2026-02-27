@@ -20,6 +20,7 @@
           :avatar-url="row.avatarUrl"
           :avatar-text="row.avatarText"
           :automated="row.automated"
+          :attachments="row.attachments"
         />
       </template>
     </div>

@@ -1,6 +1,14 @@
 <template>
   <v-card class="chat-timeline-card mt-5" variant="outlined">
-  <v-card-title class="d-flex align-center justify-end">
+  <v-card-title class="d-flex align-center justify-space-between">
+    <v-btn
+      size="small"
+      variant="text"
+      :disabled="!messageHasMore || loadingMore"
+      @click="loadMore"
+    >
+      {{ loadingMore ? "Loading..." : messageHasMore ? "Load older" : "No more" }}
+    </v-btn>
     <v-btn size="small" variant="text" :loading="loading" @click="loadLogs">
       Refresh
     </v-btn>
@@ -14,17 +22,33 @@
       />
     </v-card-text>
     <v-divider />
+    <div v-if="pendingFiles.length" class="chat-timeline-attachments">
+      <div
+        v-for="(file, idx) in pendingFiles"
+        :key="`${file.name}-${idx}`"
+        class="chat-timeline-attachment-chip"
+      >
+        <v-icon size="16" class="mr-1">mdi-paperclip</v-icon>
+        <span class="chat-timeline-attachment-name">{{ file.name }}</span>
+        <v-btn icon variant="text" size="x-small" @click="removePendingFile(idx)">
+          <v-icon size="14">mdi-close</v-icon>
+        </v-btn>
+      </div>
+    </div>
     <CommonChatInputBar
       v-model="draftMessage"
       :can-send="canSend"
       :loading="sending"
+      :allow-attachments="true"
+      @files-selected="onFilesSelected"
       @send="sendMessage"
     />
   </v-card>
 </template>
 
 <script setup>
-import { formatChatTimestamp, groupChatItems, buildDayKey, buildDayLabel } from "@/lib/chatThread";
+import { groupChatItems } from "@/lib/chatThread";
+import { mapWhatsAppLogToChatItem } from "@/lib/chatMappers";
 import CommonChatThread from "@/components/Common/ChatThread.vue";
 import CommonChatInputBar from "@/components/Common/ChatInputBar.vue";
 import { useMainStore } from "@/stores/index";
@@ -70,71 +94,37 @@ const loading = ref(false);
 const logs = ref([]);
 const draftMessage = ref("");
 const sending = ref(false);
+const pendingFiles = ref([]);
+const messageCursor = ref(null);
+const messageHasMore = ref(true);
+const loadingMore = ref(false);
 
 
 const resolvedOrg = ref({ name: "", logo: "" });
 const resolvedLead = ref({ name: "", avatar: "" });
 
 const canSend = computed(() => {
-  return !!props.leadId && String(draftMessage.value || "").trim().length > 0 && !sending.value;
+  const hasText = String(draftMessage.value || "").trim().length > 0;
+  const hasFiles = pendingFiles.value.length > 0;
+  return !!props.leadId && (hasText || hasFiles) && !sending.value;
 });
-
-const getInitials = (value) => {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-  const parts = raw.split(/\s+/).filter(Boolean);
-  const letters = parts.slice(0, 2).map((p) => p[0]?.toUpperCase() || "");
-  return letters.join("");
-};
 
 const chatItems = computed(() => {
   if (!Array.isArray(logs.value)) return [];
   return [...logs.value]
     .reverse()
     .map((row) => {
-      const isOutbound = String(row?.direction || "").toLowerCase() === "outbound";
-      const content = String(row?.content || "").trim();
-      const templateName = String(row?.templateName || "").trim();
-      const type = String(row?.type || "").trim();
-      const message =
-        content ||
-        (templateName ? `Template: ${templateName}` : "") ||
-        (type ? `${type} message` : "");
-      if (!message) return null;
-      const statusRaw = String(row?.status || "").trim().toLowerCase();
-      const statusIcon = resolveStatusIcon(statusRaw);
-      const automated = String(row?.type || "").toLowerCase() === "template" || !!row?.templateName;
-      const avatarUrl = isOutbound ? resolvedOrg.value.logo : resolvedLead.value.avatar;
-      const avatarText = isOutbound
-        ? getInitials(resolvedOrg.value.name || props.outboundSenderLabel)
-        : getInitials(resolvedLead.value.name || props.inboundSenderLabel);
-      return {
-        id: row?.id || `${row?.providerMessageId || "na"}-${row?.createdAt || Date.now()}`,
-        isOutbound,
-        sender: isOutbound ? props.outboundSenderLabel : props.inboundSenderLabel,
-        message,
-        timeLabel: formatChatTimestamp(row?.createdAt),
-        statusIcon,
-        automated,
-        avatarUrl,
-        avatarText,
-        dayKey: buildDayKey(row?.createdAt),
-        dayLabel: buildDayLabel(row?.createdAt),
-        createdAt: row?.createdAt,
-      };
+      return mapWhatsAppLogToChatItem(row, {
+        inboundLabel: props.inboundSenderLabel,
+        outboundLabel: props.outboundSenderLabel,
+        inboundAvatarUrl: resolvedLead.value.avatar,
+        outboundAvatarUrl: resolvedOrg.value.logo,
+      });
     })
     .filter(Boolean);
 });
 
 const groupedChatItems = computed(() => groupChatItems(chatItems.value));
-
-const resolveStatusIcon = (raw) => {
-  if (!raw) return "";
-  if (raw.includes("read")) return "mdi-check-all";
-  if (raw.includes("delivered")) return "mdi-check-all";
-  if (raw.includes("sent")) return "mdi-check";
-  return "";
-};
 
 const loadLogs = async () => {
   if (!props.leadId) {
@@ -143,9 +133,11 @@ const loadLogs = async () => {
   }
   try {
     loading.value = true;
-    const res = await crmStore.getLeadWhatsAppLogs(props.leadId, 100);
-    if (res?.code === 0 && Array.isArray(res.data)) {
-      logs.value = res.data;
+    const res = await crmStore.getLeadWhatsAppLogs({ leadId: props.leadId, limit: 100 });
+    if (res?.code === 0 && Array.isArray(res.data?.data)) {
+      logs.value = res.data.data;
+      messageCursor.value = res.data?.nextCursor || null;
+      messageHasMore.value = !!res.data?.nextCursor;
       return;
     }
     logs.value = [];
@@ -156,18 +148,56 @@ const loadLogs = async () => {
   }
 };
 
+const loadMore = async () => {
+  if (!props.leadId || !messageHasMore.value || loadingMore.value) return;
+  try {
+    loadingMore.value = true;
+    const res = await crmStore.getLeadWhatsAppLogs({
+      leadId: props.leadId,
+      limit: 100,
+      before: messageCursor.value || undefined,
+    });
+    if (res?.code === 0 && Array.isArray(res.data?.data)) {
+      const older = res.data.data;
+      logs.value = [...logs.value, ...older];
+      messageCursor.value = res.data?.nextCursor || null;
+      if (!older.length || !res.data?.nextCursor) messageHasMore.value = false;
+    } else {
+      messageHasMore.value = false;
+    }
+  } finally {
+    loadingMore.value = false;
+  }
+};
+
 const sendMessage = async () => {
   if (!canSend.value) return;
   const message = String(draftMessage.value || "").trim();
-  if (!message) return;
   try {
     sending.value = true;
+    let attachments = [];
+    if (pendingFiles.value.length) {
+      for (const file of pendingFiles.value) {
+        const form = new FormData();
+        form.append("file", file);
+        const resUpload = await crmStore.uploadLeadWhatsAppAttachment(form);
+        if (resUpload?.code !== 0) {
+          const msg = resUpload?.error || resUpload?.message || "Failed to upload attachment";
+          mainStore?.setSnackbar?.({ title: msg, type: "error" });
+          sending.value = false;
+          return;
+        }
+        if (resUpload?.data) attachments.push(resUpload.data);
+      }
+    }
     const res = await crmStore.sendLeadWhatsApp({
       leadIds: [Number(props.leadId)],
       message,
+      attachments,
     });
     if (res?.code === 0) {
       draftMessage.value = "";
+      pendingFiles.value = [];
       await loadLogs();
       return;
     }
@@ -179,6 +209,14 @@ const sendMessage = async () => {
   } finally {
     sending.value = false;
   }
+};
+
+const onFilesSelected = (files) => {
+  pendingFiles.value = [...pendingFiles.value, ...files];
+};
+
+const removePendingFile = (idx) => {
+  pendingFiles.value = pendingFiles.value.filter((_, i) => i !== idx);
 };
 
 const resolveContext = () => {
@@ -209,6 +247,8 @@ watch(
   () => [props.leadId, props.leadName, props.leadAvatar, props.orgName, props.orgLogo],
   () => {
     resolveContext();
+    messageCursor.value = null;
+    messageHasMore.value = true;
     loadLogs();
   },
   { immediate: true }
@@ -222,5 +262,32 @@ watch(
 
 .chat-timeline-body {
   background: #f7f8fb;
+}
+
+.chat-timeline-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 16px 0 16px;
+  background: #ffffff;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.chat-timeline-attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.06);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #0f172a;
+}
+
+.chat-timeline-attachment-name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

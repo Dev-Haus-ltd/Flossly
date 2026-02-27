@@ -11,6 +11,30 @@ import { parseJsonBody } from "../utils/body";
 const META_VERSION = 'v24.0'
 const META_SUBSCRIBED_FIELDS = 'leadgen,messages,messaging_postbacks'
 
+const resolveDmParticipantProfile = async ({ platform, senderId, accessToken }) => {
+  if (!senderId || !accessToken) return {}
+  try {
+    if (platform === 'messenger') {
+      const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(senderId)}?fields=first_name,last_name,profile_pic&access_token=${encodeURIComponent(accessToken)}`
+      const resp = await $fetch(url, { method: 'GET' })
+      const name = [resp?.first_name, resp?.last_name].filter(Boolean).join(' ').trim()
+      return {
+        name: name || resp?.name || null,
+        avatar: resp?.profile_pic || null,
+      }
+    }
+    if (platform === 'instagram') {
+      const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(senderId)}?fields=username,profile_picture_url&access_token=${encodeURIComponent(accessToken)}`
+      const resp = await $fetch(url, { method: 'GET' })
+      return {
+        name: resp?.username || null,
+        avatar: resp?.profile_picture_url || null,
+      }
+    }
+  } catch {}
+  return {}
+}
+
 const getRedirectUri = (config) => {
   return (
     config.META_REDIRECT_URI ||
@@ -1166,22 +1190,51 @@ export const webhook = async (event) => {
             const text = String(msgEvent?.message?.text || '').trim()
             const attachments = msgEvent?.message?.attachments || null
             const timestamp = msgEvent?.timestamp ? new Date(msgEvent.timestamp) : new Date()
+            const accessToken = account?.accessTokenEnc ? decrypt(account.accessTokenEnc) : null
 
             let conversation = await CrmDmConversation.findOne({
               where: { organisationId: orgId, platform, threadId },
             })
 
             if (!conversation) {
+              const profile = await resolveDmParticipantProfile({
+                platform,
+                senderId,
+                accessToken,
+              })
               conversation = await CrmDmConversation.create({
                 organisationId: orgId,
                 platform,
                 accountId: account.accountId,
                 threadId,
-                participantName: senderId,
+                participantName: profile?.name || senderId,
+                participantAvatar: profile?.avatar || null,
                 lastMessageAt: timestamp,
                 unreadCount: 0,
-                metadata: { recipientId },
+                metadata: {
+                  recipientId,
+                  participantName: profile?.name || senderId,
+                  participantAvatar: profile?.avatar || null,
+                  assignedUserId: account.connectedByUserId || null,
+                },
               })
+            } else if (!conversation.participantName || !conversation.participantAvatar || !conversation?.metadata?.assignedUserId) {
+              const profile = await resolveDmParticipantProfile({
+                platform,
+                senderId,
+                accessToken,
+              })
+              const nextName = conversation.participantName || profile?.name || senderId
+              const nextAvatar = conversation.participantAvatar || profile?.avatar || null
+              conversation.participantName = nextName
+              conversation.participantAvatar = nextAvatar
+              conversation.metadata = {
+                ...(conversation.metadata || {}),
+                participantName: nextName,
+                participantAvatar: nextAvatar,
+                assignedUserId: conversation?.metadata?.assignedUserId || account.connectedByUserId || null,
+              }
+              await conversation.save()
             }
 
             const messageText = text || (attachments ? '[Attachment]' : '')
@@ -1193,7 +1246,7 @@ export const webhook = async (event) => {
               platform,
               platformMessageId: msgEvent?.message?.mid || null,
               direction: 'inbound',
-              senderName: senderId,
+              senderName: conversation.participantName || senderId,
               message: messageText,
               attachments,
               status: 'received',

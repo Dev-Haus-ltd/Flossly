@@ -23,6 +23,7 @@ export const useCrmStore = defineStore("crmStore", {
     sendDmMessage(payload) { return this._wrap(() => crmService.sendDmMessage(payload)); },
     markDmRead(payload) { return this._wrap(() => crmService.markDmRead(payload)); },
     processDmQueue(payload = {}) { return this._wrap(() => crmService.processDmQueue(payload)); },
+    uploadDmAttachment(formData, onProgress) { return this._wrap(() => crmService.uploadDmAttachment(formData, onProgress)); },
     connectionStatus() { return this._wrap(() => crmService.connectionStatus()); },
     fetchLeadsNow(params = {}) { return this._wrap(() => crmService.fetchLeadsNow(params)); },
     fetchMetaStructure() { return this._wrap(() => crmService.fetchMetaStructure()); },
@@ -65,7 +66,8 @@ export const useCrmStore = defineStore("crmStore", {
     getLeadNotes(leadId) { return this._wrap(() => crmService.getLeadNotes(leadId)); },
     addLeadNote(payload) { return this._wrap(() => crmService.addLeadNote(payload)); },
     deleteLeadNote(id) { return this._wrap(() => crmService.deleteLeadNote(id)); },
-    getLeadWhatsAppLogs(leadId, limit = 100) { return this._wrap(() => crmService.getLeadWhatsAppLogs(leadId, limit)); },
+    getLeadWhatsAppLogs(leadIdOrParams, limit = 100) { return this._wrap(() => crmService.getLeadWhatsAppLogs(leadIdOrParams, limit)); },
+    uploadLeadWhatsAppAttachment(formData, onProgress) { return this._wrap(() => crmService.uploadLeadWhatsAppAttachment(formData, onProgress)); },
 
     // Treatment (used in details dialog)
     getLeadTreatment(leadId) { return this._wrap(() => crmService.getLeadTreatment(leadId)); },
