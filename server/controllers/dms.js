@@ -229,8 +229,16 @@ export const sendDmMessage = async (event) => {
     };
     await conversation.save();
 
-    // TODO: Send message to Meta Messenger/Instagram here.
-    // For now we enqueue in DB only.
+    // Attempt immediate delivery (falls back to queued if send fails).
+    try {
+      await processQueuedMessages({ organisationId: orgId, limit: 1 });
+      const refreshed = await CrmDmMessage.findOne({ where: { id: newMessage.id } });
+      if (refreshed) {
+        setResponseStatus(event, 201);
+        return success(refreshed);
+      }
+    } catch {}
+
     setResponseStatus(event, 201);
     return success(newMessage);
   } catch (err) {

@@ -9,6 +9,7 @@ import { getWhatsAppProviderKey, getWhapiEnvConfig, resolveWhapiConfig } from '.
 import { parseJsonBody } from "../utils/body";
 
 const META_VERSION = 'v24.0'
+const META_SUBSCRIBED_FIELDS = 'leadgen,messages,messaging_postbacks'
 
 const getRedirectUri = (config) => {
   return (
@@ -91,7 +92,6 @@ export const authStart = async (event) => {
     'ads_read',
     'business_management',
     'pages_messaging',
-    'instagram_business_manage_messages',
   ].join(',')
 
   // ✅ FIX: Add auth_type=rerequest to force fresh login
@@ -296,14 +296,14 @@ export const authCallback = async (event) => {
       })
     }
 
-    // Auto-subscribe pages to leadgen webhooks
+    // Auto-subscribe pages to leadgen + messaging webhooks
     for (const p of pagesToConnect) {
       try {
         const subscribeUrl = `https://graph.facebook.com/${META_VERSION}/${p.id}/subscribed_apps`
         await $fetch(subscribeUrl, {
           method: 'POST',
           body: new URLSearchParams({ 
-            subscribed_fields: 'leadgen', 
+            subscribed_fields: META_SUBSCRIBED_FIELDS, 
             access_token: p.access_token 
           }).toString(),
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -888,7 +888,7 @@ export const subscribePages = async (event) => {
       await $fetch(url, {
         method: 'POST',
         body: new URLSearchParams({ 
-          subscribed_fields: 'leadgen', 
+          subscribed_fields: META_SUBSCRIBED_FIELDS, 
           access_token: pageToken 
         }).toString(),
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -1574,7 +1574,7 @@ export const connectBusinessPages = async (event) => {
         await $fetch(subscribeUrl, {
           method: 'POST',
           body: new URLSearchParams({
-            subscribed_fields: 'leadgen',
+            subscribed_fields: META_SUBSCRIBED_FIELDS,
             access_token: pageResp.access_token,
           }).toString(),
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
