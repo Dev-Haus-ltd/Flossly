@@ -1266,6 +1266,12 @@ export const webhook = async (event) => {
             }
             await conversation.save()
 
+            broadcastMetaEvent('dm', {
+              orgId,
+              conversationId: conversation.id,
+              platform,
+            })
+
             try {
               const orgUsers = await UserOrganisation.findAll({
                 where: { organisationId: orgId },

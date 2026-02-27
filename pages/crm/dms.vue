@@ -191,6 +191,7 @@ const listBodyRef = ref(null);
 const threadBodyRef = ref(null);
 const searchInput = ref("");
 let searchTimer = null;
+let metaEventSource = null;
 
 const crmStore = useCrmStore();
 const mainStore = useMainStore();
@@ -319,6 +320,8 @@ const loadMessages = async (reset = false) => {
       if (!newMessages.length) messageHasMore.value = false;
       if (newMessages.length < 30) messageHasMore.value = false;
       await crmStore.markDmRead({ conversationId: activeConversationId.value });
+      const conv = conversations.value.find((c) => c.id === activeConversationId.value);
+      if (conv) conv.unreadCount = 0;
     }
   } finally {
     loadingMessages.value = false;
@@ -422,6 +425,24 @@ const loadConversations = async (reset = false) => {
       if (!activeConversationId.value && conversations.value.length) {
         selectConversation(conversations.value[0].id);
       }
+
+      // Background refresh for missing avatars/names
+      mapped.forEach((conv) => {
+        if (conv.avatarUrl || !/^[0-9]+$/.test(String(conv.title || ""))) return;
+        crmStore
+          .refreshDmProfile({ conversationId: conv.id })
+          .then((resProfile) => {
+            if (resProfile?.code === 0 && resProfile?.data?.updated) {
+              const target = conversations.value.find((c) => c.id === conv.id);
+              if (target) {
+                target.title = resProfile.data.participantName || target.title;
+                target.avatarUrl = resProfile.data.participantAvatar || target.avatarUrl;
+                target.avatarText = getInitials(target.title || target.avatarText);
+              }
+            }
+          })
+          .catch(() => {});
+      });
     }
   } finally {
     loadingConversations.value = false;
@@ -464,6 +485,36 @@ onMounted(() => {
   if (convoId) {
     activeConversationId.value = Number(convoId);
     loadMessages(true);
+  }
+
+  if (typeof window !== "undefined" && "EventSource" in window) {
+    metaEventSource = new EventSource("/api/meta/stream");
+    metaEventSource.addEventListener("dm", async (evt) => {
+      try {
+        const payload = JSON.parse(evt?.data || "{}");
+        const convId = Number(payload?.conversationId || 0);
+        if (!convId) return;
+        if (activeConversationId.value === convId) {
+          await loadMessages(true);
+        } else {
+          await loadConversations(true);
+          mainStore?.setSnackbar?.({ title: "New DM received", type: "info" });
+        }
+      } catch {}
+    });
+    metaEventSource.onerror = () => {
+      if (metaEventSource) {
+        metaEventSource.close();
+        metaEventSource = null;
+      }
+    };
+  }
+});
+
+onBeforeUnmount(() => {
+  if (metaEventSource) {
+    metaEventSource.close();
+    metaEventSource = null;
   }
 });
 </script>
