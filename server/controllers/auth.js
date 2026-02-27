@@ -882,8 +882,12 @@ export const switchOrgnanisation = async (event) => {
   }
 };
 export const verifyEmail = async (event) => {
-  const body = JSON.parse(await readBody(event));
-  const { link } = body;
+  const rawBody = await readBody(event);
+  const { link } = parseJsonBody(rawBody);
+
+  if (!link) {
+    return error(400, "Missing verification link");
+  }
   const verification = await EmailVerification.findOne({ where: { link } });
   if (verification) {
     const user = await User.findOne({
