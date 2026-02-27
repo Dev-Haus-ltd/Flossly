@@ -12,10 +12,43 @@ export const initializeFirebaseAdmin = () => {
   }
 
   try {
+    // Try to initialize from environment variables first (support full service account fields)
+    const envServiceAccount = {
+      type: process.env.FIREBASE_TYPE || 'service_account',
+      project_id: process.env.FIREBASE_PROJECT_ID,
+      private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
+      private_key: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'), // Handle escaped newlines
+      client_email: process.env.FIREBASE_CLIENT_EMAIL,
+      client_id: process.env.FIREBASE_CLIENT_ID,
+      auth_uri: process.env.FIREBASE_AUTH_URI,
+      token_uri: process.env.FIREBASE_TOKEN_URI,
+      auth_provider_x509_cert_url: process.env.FIREBASE_AUTH_PROVIDER_X509_CERT_URL,
+      client_x509_cert_url: process.env.FIREBASE_CLIENT_X509_CERT_URL,
+      universe_domain: process.env.FIREBASE_UNIVERSE_DOMAIN,
+    };
+
+    // Minimal required fields check
+    if (envServiceAccount.project_id && envServiceAccount.private_key && envServiceAccount.client_email) {
+      console.log('Initializing Firebase from environment variables...');
+      firebaseApp = admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: envServiceAccount.project_id,
+          privateKey: envServiceAccount.private_key,
+          clientEmail: envServiceAccount.client_email,
+          // Extra fields are passed for compatibility with some environments
+          privateKeyId: envServiceAccount.private_key_id,
+          clientId: envServiceAccount.client_id,
+        }),
+      });
+      console.log('Firebase Admin SDK initialized successfully from environment variables');
+      return firebaseApp;
+    }
+
+    // Fallback to service account file
     const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
     
     if (!serviceAccountPath) {
-      console.error('FIREBASE_SERVICE_ACCOUNT_PATH not configured');
+      console.warn('Firebase not configured - neither environment variables nor service account path provided');
       return null;
     }
 
@@ -32,7 +65,7 @@ export const initializeFirebaseAdmin = () => {
       credential: admin.credential.cert(serviceAccount),
     });
 
-    console.log('Firebase Admin SDK initialized successfully');
+    console.log('Firebase Admin SDK initialized successfully from service account file');
     return firebaseApp;
   } catch (error) {
     console.error('Error initializing Firebase Admin SDK:', error);
@@ -59,7 +92,27 @@ export const sendNotificationToUser = async ({
     }
 
     if (!firebaseApp) {
-      throw new Error('Firebase Admin SDK not initialized');
+      console.warn('Firebase Admin SDK not initialized - skipping push notification');
+      // Still create the notification record for in-app display
+      const notification = await UserNotification.create({
+        userId,
+        title,
+        body,
+        type,
+        referenceType,
+        referenceId,
+        data,
+        priority,
+        isRead: false,
+        isSent: false,
+        errorMessage: 'Firebase not configured'
+      });
+      
+      return {
+        success: false,
+        message: 'Firebase not configured',
+        notificationId: notification.id,
+      };
     }
 
     // Create notification record in database (store in-app history even if push can't be delivered)

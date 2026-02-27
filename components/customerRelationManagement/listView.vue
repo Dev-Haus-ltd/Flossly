@@ -592,6 +592,7 @@
         <div class="px-4 pt-4 pb-2">
           <v-textarea
             v-model="whatsappMessage"
+            ref="whatsappTextarea"
             label="Message"
             density="compact"
             variant="outlined"
@@ -600,8 +601,25 @@
             hide-details
             placeholder="Write your WhatsApp message..."
           />
+          <div class="d-flex align-center flex-wrap mt-3" style="gap: 8px">
+            <span class="text-caption text-medium-emphasis">Insert placeholder:</span>
+            <v-chip
+              v-for="token in whatsappTokens"
+              :key="token"
+              size="x-small"
+              variant="tonal"
+              color="primary"
+              class="cursor-pointer"
+              @click="insertWhatsAppToken(token)"
+            >
+              {{ token }}
+            </v-chip>
+          </div>
           <div v-if="!hasWhatsAppRecipients" class="text-caption text-medium-emphasis mt-2">
             No WhatsApp numbers found for the selected lead(s).
+          </div>
+          <div class="text-caption text-medium-emphasis mt-1">
+            Placeholders are replaced per lead at send time.
           </div>
         </div>
 
@@ -750,6 +768,13 @@ const addStaffDrawer = ref(false);
 const showWhatsAppCompose = ref(false);
 const whatsappSending = ref(false);
 const whatsappMessage = ref('');
+const whatsappTextarea = ref(null);
+const whatsappTokens = [
+  '[Name]',
+  '[Email]',
+  '[Telephone]',
+  '[Your Name]',
+];
 const rolesList = ref([]);
 const automationRowsCache = reactive({});
 const automationLoading = reactive({});
@@ -1279,6 +1304,25 @@ const openWhatsAppCompose = () => {
   if (!selectedLeads.value.length) return;
   whatsappMessage.value = '';
   showWhatsAppCompose.value = true;
+};
+
+const insertWhatsAppToken = async (token) => {
+  const current = String(whatsappMessage.value || '');
+  const el = whatsappTextarea.value?.$el?.querySelector?.('textarea');
+  if (!el) {
+    whatsappMessage.value = `${current}${token}`;
+    return;
+  }
+  const start = Number.isFinite(el.selectionStart) ? el.selectionStart : current.length;
+  const end = Number.isFinite(el.selectionEnd) ? el.selectionEnd : current.length;
+  const next = `${current.slice(0, start)}${token}${current.slice(end)}`;
+  whatsappMessage.value = next;
+  await nextTick();
+  const caret = start + token.length;
+  el.focus();
+  if (typeof el.setSelectionRange === 'function') {
+    el.setSelectionRange(caret, caret);
+  }
 };
 
 const mainStore = useMainStore?.() || null

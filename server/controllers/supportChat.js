@@ -13,7 +13,6 @@ import {
 import { isSupportAgent, getSupportAgentUserIds } from '../utils/supportAgents.js';
 import { sendNotificationToUser } from '../utils/fcmNotification.js';
 import { uploadBufferFile } from '../utils/storage.js';
-import { parseJsonBody } from '../utils/body';
 
 // Send FCM notification for new chatbot message
 const notifyNewMessage = async (conversationId, message, recipientUserId) => {
