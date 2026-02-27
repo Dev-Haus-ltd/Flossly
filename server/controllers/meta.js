@@ -35,17 +35,21 @@ const resolveDmParticipantProfile = async ({ platform, senderId, accessToken }) 
   return {}
 }
 
+const normalizeBaseUrl = (value = '') => String(value || '').replace(/\/+$/, '')
+
 const getRedirectUri = (config) => {
+  const baseUrl = normalizeBaseUrl(config.public?.BASE_URL || '')
   return (
     config.META_REDIRECT_URI ||
-    (config.public?.BASE_URL ? `${config.public.BASE_URL}/api/meta/callback` : '')
+    (baseUrl ? `${baseUrl}/api/meta/callback` : '')
   )
 }
 
 const getIgRedirectUri = (config) => {
+  const baseUrl = normalizeBaseUrl(config.public?.BASE_URL || '')
   return (
     config.META_IG_REDIRECT_URI ||
-    (config.public?.BASE_URL ? `${config.public.BASE_URL}/api/meta/igCallback` : '')
+    (baseUrl ? `${baseUrl}/api/meta/igCallback` : '')
   )
 }
 
