@@ -583,32 +583,15 @@ const assignedUsers = computed(() => {
 
 const automationRows = ref([])
 const automationLoading = ref(false)
-const defaultAutomationMap = new Map(
-  (crmAutomationDefaults || [])
-    .filter((item) => item && item.key)
-    .map((item) => [item.key, { ...item }])
-)
-
-const mergeDefaultAutomations = (rows) => {
-  const map = new Map((rows || []).map((row) => [row.key, { ...row }]))
-  for (const [key, def] of defaultAutomationMap.entries()) {
-    if (!map.has(key)) map.set(key, { ...def })
-  }
-  return Array.from(map.values())
-}
-
 const loadLeadAutomations = async (leadId) => {
   if (!leadId || automationLoading.value) return
   automationLoading.value = true
   try {
     const res = await crmStore.listAutomation(leadId)
     const apiItems = Array.isArray(res?.data) ? res.data : []
-    const rows = apiItems.length
-      ? mergeDefaultAutomations(apiItems)
-      : mergeDefaultAutomations(crmAutomationDefaults)
-    automationRows.value = rows
+    automationRows.value = apiItems.length ? apiItems : crmAutomationDefaults
   } catch (e) {
-    automationRows.value = mergeDefaultAutomations(crmAutomationDefaults)
+    automationRows.value = crmAutomationDefaults
   } finally {
     automationLoading.value = false
   }

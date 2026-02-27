@@ -48,6 +48,7 @@ export const authStart = async (event) => {
     'pages_show_list',
     'pages_read_engagement',
     'pages_manage_metadata',
+    'pages_manage_ads',
     'leads_retrieval',
     'ads_read',
     'business_management',
@@ -102,12 +103,12 @@ export const authCallback = async (event) => {
     }
   } catch (e) {
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
-    return sendRedirect(event, `/?error=${encodeURIComponent('Invalid state data')}`)
+    return sendRedirect(event, `/crm?error=${encodeURIComponent('Invalid state data')}`)
   }
 
   if (!userId || !orgId) {
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
-    return sendRedirect(event, `/?error=${encodeURIComponent('Missing user context in state')}`)
+    return sendRedirect(event, `/crm?error=${encodeURIComponent('Missing user context in state')}`)
   }
 
   try {
@@ -187,7 +188,7 @@ export const authCallback = async (event) => {
       setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
       return sendRedirect(
         event,
-        `/?error=${encodeURIComponent(
+        `/crm?error=${encodeURIComponent(
           `Meta connection failed. The following page(s) are already connected to another organisation: ${conflictNames}`
         )}`
       )
@@ -261,33 +262,21 @@ export const authCallback = async (event) => {
       } catch (e) {}
     }
 
-    // Auto-backfill last 30 days of leads for newly connected pages
+    // Backfill last 30 days of leads (non-blocking)
     try {
-      const connectedPages = await MetaPage.findAll({
-        where: {
-          organisationId: orgId,
-          status: 'Active',
-          pageId: { [Op.in]: pagesToConnect.map((p) => String(p.id)) },
-        },
-      })
-      await fetchLeadsForPages({
-        orgId,
-        pages: connectedPages,
-        days: 30,
-        maxPerForm: 1000,
-      })
+      await fetchLeadsForOrg(orgId, { days: 30 })
     } catch (e) {}
 
     // Clear state cookie
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
     
     // ✅ FIX: Better success redirect with details
-    return sendRedirect(event, `/?meta=connected&pages=${pagesToConnect.length}&user=${encodeURIComponent(fbUserName)}`)
+    return sendRedirect(event, `/crm?meta=connected&pages=${pagesToConnect.length}&user=${encodeURIComponent(fbUserName)}`)
 
   } catch (e) {
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
     const errorMsg = e?.data?.error?.message || e?.message || 'Connection failed'
-    return sendRedirect(event, `/?error=${encodeURIComponent(errorMsg)}`)
+    return sendRedirect(event, `/crm?error=${encodeURIComponent(errorMsg)}`)
   }
 }
 
@@ -570,13 +559,17 @@ export const listLeads = async (event) => {
   return success(mapped)
 }
 
-const fetchLeadsForPages = async ({ orgId, pages, days, maxPerForm }) => {
+const fetchLeadsForOrg = async (orgId, { days = 0, maxPerForm = 1000, debugEnabled = false } = {}) => {
+  if (!orgId) return { ok: false, error: 'Unauthenticated' }
   try { await CrmLead.sync() } catch (_) {}
 
   const sinceDate = Number.isFinite(days) && days > 0
     ? new Date(Date.now() - days * 24 * 60 * 60 * 1000)
     : null
 
+  const pages = await MetaPage.findAll({
+    where: { organisationId: orgId, status: 'Active' }
+  })
   const debug = {
     orgId: Number(orgId),
     pagesProcessed: 0,
@@ -588,6 +581,7 @@ const fetchLeadsForPages = async ({ orgId, pages, days, maxPerForm }) => {
     errors: [],
   }
 
+  let imported = 0
   for (const mp of pages) {
     const pageId = mp.pageId
     const pageToken = decrypt(mp.accessTokenEnc)
@@ -598,7 +592,7 @@ const fetchLeadsForPages = async ({ orgId, pages, days, maxPerForm }) => {
       const formsUrl = `https://graph.facebook.com/${META_VERSION}/${pageId}/leadgen_forms?fields=id,name&access_token=${encodeURIComponent(pageToken)}`
       const formsResp = await $fetch(formsUrl, { method: 'GET' })
       const forms = Array.isArray(formsResp?.data) ? formsResp.data : []
-      
+
       for (const form of forms) {
         debug.formsProcessed += 1
         const sinceParam = sinceDate ? `&since=${Math.floor(sinceDate.getTime() / 1000)}` : ''
@@ -663,6 +657,7 @@ const fetchLeadsForPages = async ({ orgId, pages, days, maxPerForm }) => {
                 leadSource: 'Meta Leadgen',
                 leadStatus: 'New',
               })
+              imported++
               debug.imported += 1
               broadcastMetaEvent('lead', { orgId, leadId: le.id, pageId, formId: form.id })
             }
@@ -681,7 +676,8 @@ const fetchLeadsForPages = async ({ orgId, pages, days, maxPerForm }) => {
     }
   }
 
-  return debug
+  if (debugEnabled) return { ok: true, debug }
+  return { ok: true, imported }
 }
 
 export const fetchLeadsNow = async (event) => {
@@ -693,12 +689,10 @@ export const fetchLeadsNow = async (event) => {
   const maxPerForm = Number(q.maxPerForm || 1000)
   const debugEnabled = String(q.debug || '').toLowerCase() === 'true'
 
-  const pages = await MetaPage.findAll({ 
-    where: { organisationId: orgId, status: 'Active' } 
-  })
-  const debug = await fetchLeadsForPages({ orgId, pages, days, maxPerForm })
-  if (debugEnabled) return success(debug)
-  return success({ imported: debug.imported })
+  const result = await fetchLeadsForOrg(orgId, { days, maxPerForm, debugEnabled })
+  if (!result.ok) return error(401, result.error || 'Unauthenticated')
+  if (debugEnabled) return success(result.debug)
+  return success({ imported: result.imported || 0 })
 }
 
 
@@ -711,13 +705,9 @@ export const subscribePages = async (event) => {
   })
   
   let subscribed = 0
-  const errors = []
   for (const mp of pages) {
     const pageToken = decrypt(mp.accessTokenEnc)
-    if (!pageToken) {
-      errors.push({ pageId: mp.pageId, message: 'Missing page access token' })
-      continue
-    }
+    if (!pageToken) continue
     
     const url = `https://graph.facebook.com/${META_VERSION}/${mp.pageId}/subscribed_apps`
     try {
@@ -730,14 +720,9 @@ export const subscribePages = async (event) => {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       })
       subscribed++
-    } catch (e) {
-      errors.push({
-        pageId: mp.pageId,
-        message: e?.data?.error?.message || e?.message || 'Failed to subscribe',
-      })
-    }
+    } catch (e) {}
   }
-  return success({ subscribed, errors })
+  return success({ subscribed })
 }
 
 export const connectionStatus = async (event) => {
@@ -790,10 +775,6 @@ export const healthCheck = async (event) => {
   const verifyTokenSet = Boolean(config.META_VERIFY_TOKEN)
 
   const pages = await MetaPage.findAll({ where: { organisationId: orgId } })
-  const leadAccessUrl = (pageId) =>
-    `https://business.facebook.com/latest/settings/leads_access?selected_asset_id=${encodeURIComponent(
-      pageId
-    )}&selected_asset_type=leads-access`
   const pageIds = pages.map((p) => p.pageId).filter(Boolean)
   const leadStatsByPage = new Map()
   if (pageIds.length) {
@@ -830,8 +811,6 @@ export const healthCheck = async (event) => {
     let subscribed = false
     let appMatched = false
     let errorMsg = null
-    let leadAccessStatus = 'unknown'
-    let leadAccessError = null
 
     if (tokenPresent && appId) {
       try {
@@ -845,18 +824,6 @@ export const healthCheck = async (event) => {
       }
     }
 
-    if (tokenPresent) {
-      try {
-        const leadgenUrl = `https://graph.facebook.com/${META_VERSION}/${pageId}/leadgen_forms?fields=id&limit=1&access_token=${encodeURIComponent(token)}`
-        const leadgenResp = await $fetch(leadgenUrl, { method: 'GET' })
-        leadAccessStatus = Array.isArray(leadgenResp?.data) ? 'ok' : 'unknown'
-      } catch (e) {
-        leadAccessStatus = 'missing'
-        leadAccessError = e?.data?.error?.message || e?.message || 'Lead access missing'
-        if (!errorMsg) errorMsg = leadAccessError
-      }
-    }
-
     results.push({
       pageId,
       pageName,
@@ -864,9 +831,6 @@ export const healthCheck = async (event) => {
       tokenPresent,
       subscribed,
       appMatched,
-      leadAccessStatus,
-      leadAccessError,
-      leadAccessUrl: leadAccessUrl(pageId),
       connectedAt: page.connectedAt || page.updatedAt || page.createdAt || null,
       leadCount: leadStatsByPage.get(String(pageId))?.leadCount || 0,
       lastLeadAt: leadStatsByPage.get(String(pageId))?.lastLeadAt || null,
@@ -885,6 +849,7 @@ export const healthCheck = async (event) => {
 
 export const webhook = async (event) => {
   const config = useRuntimeConfig()
+  const reqId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
   
   if (getMethod(event) === 'HEAD') {
     return send(event, 'ok')
@@ -908,10 +873,19 @@ export const webhook = async (event) => {
   if (getMethod(event) === 'POST') {
     const body = await readBody(event)
     try {
+      console.log('[META WEBHOOK]', reqId, 'POST received', {
+        object: body?.object,
+        entries: Array.isArray(body?.entry) ? body.entry.length : 0,
+      })
+    } catch {}
+    try {
       const entries = Array.isArray(body?.entry) ? body.entry : []
       for (const entry of entries) {
         const pageId = String(entry.id || '')
         const changes = Array.isArray(entry.changes) ? entry.changes : []
+        if (pageId) {
+          console.log('[META WEBHOOK]', reqId, 'Entry pageId', pageId, 'changes', changes.length)
+        }
         
         for (const ch of changes) {
           if (ch.field !== 'leadgen') continue
@@ -919,19 +893,31 @@ export const webhook = async (event) => {
           const v = ch.value || {}
           const leadId = v.leadgen_id || v.lead_id || v.leadId
           const formId = v.form_id || v.formId
+          console.log('[META WEBHOOK]', reqId, 'Leadgen event', { pageId, leadId, formId })
           
           if (!leadId || !pageId) continue
           
           const mp = await MetaPage.findOne({ 
             where: { pageId, status: 'Active' } 
           })
+          if (!mp) {
+            console.warn('[META WEBHOOK]', reqId, 'No active MetaPage for pageId', pageId)
+          }
           if (!mp) continue
           
           const pageToken = decrypt(mp.accessTokenEnc)
+          if (!pageToken) {
+            console.warn('[META WEBHOOK]', reqId, 'Missing page token for pageId', pageId)
+          }
           if (!pageToken) continue
           
           const url = `https://graph.facebook.com/${META_VERSION}/${leadId}?fields=created_time,field_data,ad_id,adset_id,campaign_id&access_token=${encodeURIComponent(pageToken)}`
           const leadData = await $fetch(url, { method: 'GET' })
+          console.log('[META WEBHOOK]', reqId, 'Fetched lead data', {
+            pageId,
+            leadId,
+            created_time: leadData?.created_time || null,
+          })
           
           const fld = (leadData?.field_data || []).reduce((acc, f) => {
             acc[f.name] = Array.isArray(f.values) ? f.values[0] : f.values
@@ -1272,20 +1258,13 @@ export const connectBusinessPages = async (event) => {
   }
 
   let connected = 0
-  const errors = []
   for (const pageId of pageIds) {
     try {
       const pageResp = await $fetch(
         `https://graph.facebook.com/${META_VERSION}/${pageId}?fields=id,name,access_token&access_token=${encodeURIComponent(userToken)}`,
         { method: 'GET' }
       )
-      if (!pageResp?.id || !pageResp?.access_token) {
-        errors.push({
-          pageId,
-          message: 'Missing page access token (check Leads access / page permissions)',
-        })
-        continue
-      }
+      if (!pageResp?.id || !pageResp?.access_token) continue
 
       const existing = await MetaPage.findOne({
         where: { organisationId: orgId, pageId: String(pageResp.id) },
@@ -1320,40 +1299,13 @@ export const connectBusinessPages = async (event) => {
           }).toString(),
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         })
-      } catch (e) {
-        errors.push({
-          pageId,
-          message: e?.data?.error?.message || e?.message || 'Failed to subscribe to leadgen',
-        })
-      }
+      } catch (e) {}
 
       connected++
-    } catch (e) {
-      errors.push({
-        pageId,
-        message: e?.data?.error?.message || e?.message || 'Failed to connect page',
-      })
-    }
+    } catch (e) {}
   }
 
-  // Auto-backfill last 30 days of leads for newly connected pages
-  try {
-    const connectedPages = await MetaPage.findAll({
-      where: {
-        organisationId: orgId,
-        status: 'Active',
-        pageId: { [Op.in]: pageIds },
-      },
-    })
-    await fetchLeadsForPages({
-      orgId,
-      pages: connectedPages,
-      days: 30,
-      maxPerForm: 1000,
-    })
-  } catch (e) {}
-
-  return success({ connected, errors })
+  return success({ connected })
 }
 
 export const debugMetaStatus = async (event) => {

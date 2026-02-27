@@ -40,7 +40,7 @@
     "chart.js": "^4.4.7",
     "csv-parse": "^6.1.0",
     "date-fns": "^4.1.0",
-    "emoji-picker-element": "^1.29.0",
+    "emoji-picker-element": "^1.22.3",
     "fabric": "^7.1.0",
     "firebase": "^12.9.0",
     "firebase-admin": "^13.6.1",

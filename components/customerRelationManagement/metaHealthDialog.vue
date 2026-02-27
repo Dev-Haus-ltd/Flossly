@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <v-dialog v-model="dialog" max-width="980">
     <v-card class="meta-health-card">
       <v-card-title class="meta-health-title">
@@ -36,7 +36,7 @@
               <div class="meta-health-summary">
                 <div class="summary-card">
                   <div class="summary-label">App ID</div>
-                  <div class="summary-value">{{ data?.appId || '—' }}</div>
+                  <div class="summary-value">{{ data?.appId || '-' }}</div>
                 </div>
                 <div class="summary-card">
                   <div class="summary-label">Verify Token</div>
@@ -115,15 +115,15 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="row in (data?.pages || [])" :key="row.pageId">
+                    <tr v-for="row in activePages" :key="row.pageId">
                       <td class="page-cell">
                         <span class="status-dot" :class="row.status === 'Active' ? 'ok' : 'warn'"></span>
                         <span class="page-name">{{ row.pageName || row.pageId }}</span>
-                        <span v-if="row.pageName && row.pageId" class="page-id">· {{ row.pageId }}</span>
+                        <span v-if="row.pageName && row.pageId" class="page-id">- {{ row.pageId }}</span>
                       </td>
                       <td>
                         <v-chip size="x-small" color="primary" variant="tonal" label>
-                          {{ row.status || '—' }}
+                          {{ row.status || '-' }}
                         </v-chip>
                       </td>
                       <td>
@@ -164,10 +164,10 @@
                       <td class="text-nowrap">{{ formatMetaLeadDate(row.connectedAt) }}</td>
                       <td class="text-center">{{ row.leadCount || 0 }}</td>
                       <td class="text-nowrap">{{ formatMetaLeadDate(row.lastLeadAt) }}</td>
-                      <td class="error-cell">{{ row.error || '—' }}</td>
+                      <td class="error-cell">{{ row.error || '-' }}</td>
                     </tr>
-                    <tr v-if="!(data?.pages || []).length">
-                      <td colspan="10" class="text-center py-6 text-medium-emphasis">No pages found.</td>
+                    <tr v-if="!activePages.length">
+                      <td colspan="9" class="text-center py-6 text-medium-emphasis">No pages found.</td>
                     </tr>
                   </tbody>
                 </v-table>
@@ -202,10 +202,15 @@ const close = () => {
   emit('update:modelValue', false);
 };
 
+const activePages = computed(() => {
+  const pages = Array.isArray(props.data?.pages) ? props.data.pages : [];
+  return pages.filter((row) => String(row?.status || '').toLowerCase() === 'active');
+});
+
 const formatMetaLeadDate = (value) => {
-  if (!value) return '—';
+  if (!value) return '-';
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.valueOf())) return '—';
+  if (Number.isNaN(parsed.valueOf())) return '-';
   return parsed.toLocaleString();
 };
 
@@ -349,7 +354,12 @@ const openLeadAccess = (url) => {
 
 .meta-health-table-scroll {
   max-height: 320px;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.meta-health-table :deep(.v-table__wrapper) {
+  overflow: visible;
 }
 
 .meta-health-table :deep(thead th) {
@@ -438,3 +448,5 @@ const openLeadAccess = (url) => {
   }
 }
 </style>
+
+

@@ -153,6 +153,8 @@ export const updateOrganisationDetails = async (event) => {
     const teamCount = firstNonEmpty(fields, 'teamCount');
     const surgeryCount = firstNonEmpty(fields, 'surgeryCount');
     const cqcInspectionDate = firstNonEmpty(fields, 'cqcInspectionDate');
+    const practiceAnniversaryDate = firstNonEmpty(fields, 'practiceAnniversaryDate');
+    const automationPlaceholdersRaw = firstNonEmpty(fields, 'automationPlaceholders');
 
     if (managerId !== undefined) organisation.managerId = parseInt(managerId, 10) || organisation.managerId;
     if (teamCount !== undefined) organisation.teamCount = Number.isNaN(Number(teamCount)) ? organisation.teamCount : parseInt(teamCount, 10);
@@ -160,6 +162,23 @@ export const updateOrganisationDetails = async (event) => {
     if (cqcInspectionDate !== undefined) {
       const d = new Date(cqcInspectionDate);
       organisation.cqcInspectionDate = isNaN(d.getTime()) ? organisation.cqcInspectionDate : d;
+    }
+    if (practiceAnniversaryDate !== undefined) {
+      const d = new Date(practiceAnniversaryDate);
+      organisation.practiceAnniversaryDate = isNaN(d.getTime()) ? organisation.practiceAnniversaryDate : d;
+    }
+    if (automationPlaceholdersRaw !== undefined) {
+      if (typeof automationPlaceholdersRaw === 'string') {
+        try {
+          organisation.automationPlaceholders = JSON.parse(automationPlaceholdersRaw);
+        } catch (err) {
+          return error(400, 'automationPlaceholders must be valid JSON');
+        }
+      } else if (typeof automationPlaceholdersRaw === 'object') {
+        organisation.automationPlaceholders = automationPlaceholdersRaw;
+      } else {
+        return error(400, 'automationPlaceholders must be an object');
+      }
     }
 
     // Handle logo upload (if provided)
