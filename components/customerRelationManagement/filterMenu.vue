@@ -14,7 +14,13 @@
           style="width: 110px"
         >
           <span>Filter</span>
-          <v-icon class="ml-2" size="20">mdi-filter-outline</v-icon>
+          <img
+          :src="filtericon"
+          alt="filtericon"
+          class="ml-2"
+          width="14"
+          height="14"
+        />
           <v-badge
             v-if="activeFiltersCount > 0"
             :content="activeFiltersCount"
@@ -189,7 +195,8 @@
   <script setup>
   import { ref, watch, computed } from "vue";
   import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
-  
+  import filtericon from "@/assets/icons/listView/filter-icon.svg";
+
   const { leadSources, treatmentSources } = defineProps({
     leadSources: Array,
     treatmentSources: Array,
@@ -310,11 +317,14 @@
     
   }
   .tbl-top-btn {
-    height: 40px;
-    border-radius: 6px;
+    height: 46px;
+    border-radius: 8px;
     font-size: 14px;
     text-transform: none;
     box-shadow: none;
+    background-color: #F3F4F6 !important;
+    color: #737373;
+    margin-left: 16px !important;
   }
   </style>
   

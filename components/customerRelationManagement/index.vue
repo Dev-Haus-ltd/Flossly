@@ -23,21 +23,30 @@
     <div class="mt-5 px-5">
       <div class="d-flex align-center mb-2" style="flex-wrap: nowrap; justify-content: space-between; overflow-x: auto;">
         <!-- Left: Search + Filters -->
-        <div class="d-inline-flex align-center py-1" style="flex-wrap: nowrap; gap: 8px;">
-          <div style="width: 150px">
+        <div class="d-inline-flex align-center toolbar-wrapper" style="flex-wrap: nowrap;">
+          <div style="width: 120px">
             <v-text-field
             v-model="searchInput"
               placeholder="Search"
-              append-inner-icon="mdi-magnify"
               clearable
+              @click:clear="clearSearch"
               variant="solo"
               :elevation="0"
               density="compact"
               hide-details
-              bg-color="#FAFAFA"
+              bg-color="#F3F4F6"
               flat
               class="custom-search"
-            />
+            >
+              <template #append-inner>
+                <img
+                  :src="searchicon"
+                  alt="search icon"
+                  width="14"
+                  height="14"
+                />
+              </template>
+            </v-text-field>
           </div>
           <CustomerRelationManagementFilterMenu
             :leadSources="leadSources"
@@ -413,6 +422,7 @@ import { useMainStore } from '@/stores/index'
 import { useCrmStore } from '@/stores/crm'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
+import searchicon from "@/assets/icons/listView/serach-icon.svg";
 const crmStore = useCrmStore();
 const userStore = useUserStore();
 const { users: storeUsers } = storeToRefs(userStore);
@@ -1356,6 +1366,8 @@ const fetchActiveLeads = async (filters = {}) => {
     search: search.value || '',
     page: activePage.value,
     pageSize: itemsPerPage.value,
+    sortBy: 'inquiryDate',
+    sortDir: 'DESC',
     includeStats: true,
   };
   const res = await crmStore.listLeads(payload);
@@ -1375,6 +1387,8 @@ const fetchArchivedLeads = async (filters = {}) => {
     pageSize: itemsPerPage.value,
     archivedOnly: true,
     includeArchived: true,
+    sortBy: 'inquiryDate',
+    sortDir: 'DESC',
   };
   const res = await crmStore.listLeads(payload);
   if (res && res.code === 0) {
@@ -1581,6 +1595,10 @@ watch(searchInput, (val) => {
   }, 250);
 });
 
+const clearSearch = () => {
+  searchInput.value = '';
+};
+
 watch(whapiDialog, (open) => {
   if (!open) {
     clearWhapiCooldown();
@@ -1658,6 +1676,30 @@ watch(isConnected, (val) => {
   overflow-y: auto;
   border: 1px solid #e6e6e6;
   border-radius: 8px;
+}
+
+.toolbar-wrapper {
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.custom-search,
+.tbl-top-btn {
+  height: 46px;
+  border-radius: 8px;
+  font-size: 14px;
+  background-color: #F3F4F6 !important;
+  text-transform: none;
+  box-shadow: none;
+  color: #737373;
+  margin-left: 16px !important;
+  align-items: center;
+}
+
+.custom-search :deep(input::placeholder) {
+  color: #737373;
+  opacity: 1;
 }
 
 </style>

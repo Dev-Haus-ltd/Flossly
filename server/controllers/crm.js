@@ -9,6 +9,7 @@ import { sendImmediateCrmAutomationsForLead } from '../utils/crmAutomation.js'
 import { sendLeadCreatedNotification, sendLeadAssignedNotification, sendLeadUnassignedNotification } from '../utils/fcmNotification.js'
 import { decrypt } from '../utils/crypto'
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from '../utils/whatsapp'
+import { renderLeadTokens } from '../utils/templateTokens'
 import { resolveWhatsAppProviderConfig } from '../utils/whatsappProvider'
 import DB from '../utils/db'
 import { parseJsonBody } from "../utils/body";
@@ -448,7 +449,8 @@ export const createLead = async (event) => {
         });
       }
     } catch (fcmError) {
-      console.error('Failed to send FCM notification:', fcmError);
+      console.warn('FCM notification failed - continuing with lead creation:', fcmError.message);
+      // Don't throw the error - let the lead creation succeed even if notifications fail
     }
     
     return success(created)
@@ -499,7 +501,8 @@ export const updateLead = async (event) => {
           await sendLeadUnassignedNotification({ lead, removedUsers, removedBy: actor });
         }
       } catch (fcmError) {
-        console.error('Failed to send FCM notification:', fcmError);
+        console.warn('FCM notification failed - continuing with lead update:', fcmError.message);
+        // Don't throw the error - let the lead update succeed even if notifications fail
       }
       // shape response assigned
       const users = await User.findAll({ where: { id: desiredUserIds }, attributes: ['id', 'fullName', 'email'] })
@@ -1569,6 +1572,15 @@ export const sendLeadWhatsApp = async (event) => {
         continue
       }
 
+      const leadName = lead?.name || lead?.fullName || lead?.email || 'there'
+      const senderName = event.context.user?.fullName || event.context.user?.name || 'Team'
+      const resolvedText = renderLeadTokens(messageText, {
+        name: leadName,
+        email: lead?.email || '',
+        telephone: lead?.telephone || '',
+        yourName: senderName,
+      })
+
       if (waConfig.provider === 'whapi' && !messageText) {
         failed += 1
         await logWhatsAppMessage({
@@ -1593,9 +1605,9 @@ export const sendLeadWhatsApp = async (event) => {
             type: useTemplate ? 'template' : 'text',
             ...(useTemplate
               ? { template }
-              : { text: { body: String(messageText || '') } }),
+              : { text: { body: String(resolvedText || '') } }),
           }
-        : { to, body: String(messageText || '') }
+        : { to, body: String(resolvedText || '') }
 
       try {
         const resp = await $fetch(waConfig.provider === 'meta' ? metaUrl : whapiUrl, {
@@ -1625,7 +1637,7 @@ export const sendLeadWhatsApp = async (event) => {
           templateName: useTemplate ? (template?.name || template?.namespace || null) : null,
           status: 'sent',
           providerMessageId,
-          content: useTemplate ? null : String(messageText || ''),
+          content: useTemplate ? null : String(resolvedText || ''),
         })
         sent += 1
       } catch (e) {
