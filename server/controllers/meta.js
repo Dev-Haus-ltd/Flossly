@@ -1034,6 +1034,23 @@ export const fetchMetaStructureAndBudgets = async (event) => {
         )
 
         for (const ad of adsResp.data || []) {
+          let imageUrl = null
+          let bodyText = null
+          let platform = 'Facebook'
+
+          if (ad.creative?.id) {
+            try {
+              const creativeResp = await $fetch(
+                `https://graph.facebook.com/${META_VERSION}/${ad.creative.id}?fields=image_url,thumbnail_url,body,instagram_permalink_url&access_token=${userToken}`
+              )
+              imageUrl = creativeResp.image_url || creativeResp.thumbnail_url || null
+              bodyText = creativeResp.body || null
+              if (creativeResp.instagram_permalink_url) platform = 'Instagram'
+            } catch (e) {
+              console.error(`[Meta] Failed to fetch creative ${ad.creative.id}`, e.message)
+            }
+          }
+
           await MetaAd.upsert({
             organisationId: orgId,
             adId: ad.id,
@@ -1041,6 +1058,9 @@ export const fetchMetaStructureAndBudgets = async (event) => {
             name: ad.name,
             status: ad.status,
             creativeId: ad.creative?.id || null,
+            imageUrl,
+            body: bodyText,
+            platform,
           })
         }
       }
@@ -1055,85 +1075,81 @@ export const fetchDailyMetaInsights = async (event) => {
   const { orgId } = event.context.user || {}
   if (!orgId) return error(401, 'Unauthenticated')
 
+  const q = getQuery(event) || {}
+  const days = Number(q.days || 1)
+
   const tokenRow = await MetaUserToken.findOne({ where: { organisationId: orgId } })
   if (!tokenRow) return error(400, 'Meta not connected')
 
   const token = decrypt(tokenRow.userTokenEnc)
 
-  const date =
-    event.context?.date ||
-    new Date(Date.now() - 86400000).toISOString().slice(0, 10) // yesterday
+  const until = new Date(Date.now() - 86400000).toISOString().slice(0, 10) // yesterday
+  const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10)
 
-  const fetchInsights = async (entityType, entityId) => {
-    const url = `https://graph.facebook.com/${META_VERSION}/${entityId}/insights?fields=impressions,clicks,spend,actions,ctr,cpc,cpm&time_range[since]=${date}&time_range[until]=${date}&access_token=${token}`
+  const fetchInsights = async (entityId) => {
+    const url = `https://graph.facebook.com/${META_VERSION}/${entityId}/insights?fields=impressions,clicks,spend,actions,ctr,cpc,cpm,reach,frequency,purchase_roas&time_range[since]=${since}&time_range[until]=${until}&time_increment=1&access_token=${token}`
     const resp = await $fetch(url)
-    return resp.data?.[0]
+    return Array.isArray(resp.data) ? resp.data : []
+  }
+
+  const upsertInsight = async (entityType, entityId, i) => {
+    await MetaInsight.upsert({
+      organisationId: orgId,
+      entityType,
+      entityId,
+      date: i.date_start,
+      impressions: i.impressions,
+      clicks: i.clicks,
+      spend: Math.round(Number(i.spend || 0) * 100),
+      leads: i.actions?.find((a) => a.action_type === 'lead')?.value || 0,
+      reach: i.reach || 0,
+      frequency: i.frequency || 0,
+      purchase_roas: i.purchase_roas?.[0]?.value || 0, // usually first value
+      cpc: i.cpc,
+      ctr: i.ctr,
+      cpm: i.cpm,
+    })
   }
 
   // Campaigns
   const campaigns = await MetaCampaign.findAll({ where: { organisationId: orgId } })
   for (const c of campaigns) {
-    const i = await fetchInsights('campaign', c.campaignId)
-    if (!i) continue
-
-    await MetaInsight.upsert({
-      organisationId: orgId,
-      entityType: 'campaign',
-      entityId: c.campaignId,
-      date,
-      impressions: i.impressions,
-      clicks: i.clicks,
-      spend: Math.round(Number(i.spend || 0) * 100),
-      leads: i.actions?.find(a => a.action_type === 'lead')?.value || 0,
-      cpc: i.cpc,
-      ctr: i.ctr,
-      cpm: i.cpm,
-    })
+    const data = await fetchInsights(c.campaignId)
+    for (const i of data) await upsertInsight('campaign', c.campaignId, i)
   }
 
   // Ad sets
   const adSets = await MetaAdSet.findAll({ where: { organisationId: orgId } })
   for (const s of adSets) {
-    const i = await fetchInsights('adset', s.adSetId)
-    if (!i) continue
-
-    await MetaInsight.upsert({
-      organisationId: orgId,
-      entityType: 'adset',
-      entityId: s.adSetId,
-      date,
-      impressions: i.impressions,
-      clicks: i.clicks,
-      spend: Math.round(Number(i.spend || 0) * 100),
-      leads: i.actions?.find(a => a.action_type === 'lead')?.value || 0,
-      cpc: i.cpc,
-      ctr: i.ctr,
-      cpm: i.cpm,
-    })
+    const data = await fetchInsights(s.adSetId)
+    for (const i of data) await upsertInsight('adset', s.adSetId, i)
   }
 
   // Ads
   const ads = await MetaAd.findAll({ where: { organisationId: orgId } })
   for (const a of ads) {
-    const i = await fetchInsights('ad', a.adId)
-    if (!i) continue
-
-    await MetaInsight.upsert({
-      organisationId: orgId,
-      entityType: 'ad',
-      entityId: a.adId,
-      date,
-      impressions: i.impressions,
-      clicks: i.clicks,
-      spend: Math.round(Number(i.spend || 0) * 100),
-      leads: i.actions?.find(a => a.action_type === 'lead')?.value || 0,
-      cpc: i.cpc,
-      ctr: i.ctr,
-      cpm: i.cpm,
-    })
+    const data = await fetchInsights(a.adId)
+    for (const i of data) await upsertInsight('ad', a.adId, i)
   }
 
-  return success({ date, synced: true })
+  return success({ since, until, synced: true })
+}
+
+export const getMetaInsights = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+  const rows = await MetaInsight.findAll({ where: { organisationId: orgId }, order: [['date', 'DESC']] })
+  return success(rows)
+}
+
+export const getMetaStructure = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+  const campaigns = await MetaCampaign.findAll({ where: { organisationId: orgId } })
+  const adAccounts = await MetaAdAccount.findAll({ where: { organisationId: orgId } })
+  const adSets = await MetaAdSet.findAll({ where: { organisationId: orgId } })
+  const ads = await MetaAd.findAll({ where: { organisationId: orgId } })
+  return success({ campaigns, adAccounts, adSets, ads })
 }
 
 const fetchAllMetaPages = async (url, accessToken) => {

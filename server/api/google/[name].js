@@ -6,9 +6,12 @@ import {
   fetchAvailableSites,
   selectSite,
   fetchSitePages,
-  // fetchPageAnalytics,
   getSitePages,
-  searchSitePages
+  searchSitePages,
+  fetchAvailableAdsCustomers,
+  selectAdsAccount,
+  handleAdsLeadWebhook,
+  getAdsPerformance
 } from "../../controllers/google"
 
 export default defineEventHandler(async (event) => {
@@ -32,13 +35,19 @@ export default defineEventHandler(async (event) => {
       return await selectSite(event)
     case 'fetchPages':
       return await fetchSitePages(event)
-    // case 'fetchAnalytics':
-    //   return await fetchPageAnalytics(event)
     case 'getSitePages':
       return await getSitePages(event)
     case 'searchSitePages':
       return await searchSitePages(event)
-
+    // Google Ads endpoints
+    case 'fetchAdsCustomers':
+      return await fetchAvailableAdsCustomers(event)
+    case 'selectAdsAccount':
+      return await selectAdsAccount(event)
+    case 'handleAdsLeadWebhook':
+      return await handleAdsLeadWebhook(event)
+    case 'getAdsPerformance':
+      return await getAdsPerformance(event)
     default:
       return { code: 0, error: 'Not found' }
   }

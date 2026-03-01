@@ -4,9 +4,9 @@ import { error } from '../utils/response'
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig();
   const path = event.path;
-  
+
   if (!path.includes('/api')) return;
-  
+
   if (isPublicPath(path)) {
     return;
   }
@@ -19,11 +19,11 @@ export default defineEventHandler(async (event) => {
       token = authHeader.split(' ')[1]
     }
   }
-  
+
   if (!token) {
     return error(401, "Missing Authentication");
   }
-  
+
   try {
     const decoded = jwt.verify(token, config.JWT_SECRET);
     event.context.user = decoded;
@@ -53,11 +53,12 @@ const isPublicPath = (path) => {
     "/api/whapi/webhook",
     "/api/chatbot/createAppointment",
     "/api/chatbot/createLead",
+    "/api/google/handleAdsLeadWebhook",
   ];
-  
-  const isPublic = publicPaths.some(publicPath => 
+
+  const isPublic = publicPaths.some(publicPath =>
     path === publicPath || path.startsWith(publicPath + '?') || path.startsWith(publicPath + '/')
   );
-  
+
   return isPublic;
 };

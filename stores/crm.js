@@ -11,8 +11,56 @@ export const useCrmStore = defineStore("crmStore", {
     googleSitePages: [],
     googleSitePagesPagination: null,
     googleSitePagesLoading: false,
+    googleSitePagesLoading: false,
     googleSitePagesError: null,
+    // Google Ads state
+    googleAdsCustomers: [],
+    selectedGoogleAdsAccount: null,
+    googleAdsPerformance: null,
+    googleAdsLoading: false,
+    googleAdsError: null,
+    // Meta state
+    metaCampaigns: [],
+    metaAdAccounts: [],
+    metaAdSets: [],
+    metaAds: [],
+    metaInsights: [],
   }),
+  getters: {
+    metaStats(state) {
+      const totals = {
+        campaigns: state.metaCampaigns.length,
+        spend: 0,
+        impressions: 0,
+        reach: 0,
+        leads: 0,
+        clicks: 0,
+        roas: 0
+      }
+
+      state.metaInsights.forEach(i => {
+        if (i.entityType === 'campaign') {
+          totals.spend += Number(i.spend || 0)
+          totals.impressions += Number(i.impressions || 0)
+          totals.reach += Number(i.reach || 0)
+          totals.leads += Number(i.leads || 0)
+          totals.clicks += Number(i.clicks || 0)
+        }
+      })
+
+      // Calculate ROAS: (Total Revenue / Total Spend) * 100. 
+      // Meta gives purchase_roas directly for specific entities, but for aggregation it's better to calculate or average.
+      // Since we don't have total revenue across all, we can average the ROAS of campaigns or just show one if provided.
+      // For now, let's use a simple average of campaign ROAS or 0.
+      const campaignsWithRoas = state.metaInsights.filter(i => i.entityType === 'campaign' && i.purchase_roas > 0)
+      if (campaignsWithRoas.length) {
+        const sumRoas = campaignsWithRoas.reduce((acc, i) => acc + Number(i.purchase_roas), 0)
+        totals.roas = (sumRoas / campaignsWithRoas.length) * 100
+      }
+
+      return totals
+    }
+  },
   actions: {
     _start() { this._pending++; this.isLoading = true; },
     _end() { this._pending = Math.max(0, this._pending - 1); this.isLoading = this._pending > 0; },
@@ -27,8 +75,31 @@ export const useCrmStore = defineStore("crmStore", {
     startMetaAuth() { return this._wrap(() => crmService.startMetaAuth()); },
     connectionStatus() { return this._wrap(() => crmService.connectionStatus()); },
     fetchLeadsNow(params = {}) { return this._wrap(() => crmService.fetchLeadsNow(params)); },
-    fetchMetaStructure() { return this._wrap(() => crmService.fetchMetaStructure()); },
-    fetchMetaInsights() { return this._wrap(() => crmService.fetchMetaInsights()); },
+    async fetchMetaStructure() {
+      const res = await this._wrap(() => crmService.fetchMetaStructure());
+      if (res?.code === 0) await this.getMetaStructure();
+      return res;
+    },
+    async getMetaStructure() {
+      const res = await this._wrap(() => crmService.getMetaStructure());
+      if (res?.code === 0 && res.data) {
+        this.metaCampaigns = res.data.campaigns || [];
+        this.metaAdAccounts = res.data.adAccounts || [];
+        this.metaAdSets = res.data.adSets || [];
+        this.metaAds = res.data.ads || [];
+      }
+      return res;
+    },
+    async fetchMetaInsights(params = {}) {
+      const res = await this._wrap(() => crmService.fetchMetaInsights(params));
+      if (res?.code === 0) await this.getMetaInsights();
+      return res;
+    },
+    async getMetaInsights() {
+      const res = await this._wrap(() => crmService.getMetaInsights());
+      if (res?.code === 0) this.metaInsights = res.data || [];
+      return res;
+    },
     subscribePages() { return this._wrap(() => crmService.subscribePages()); },
     disconnectMeta() { return this._wrap(() => crmService.disconnectMeta()); },
     metaHealth() { return this._wrap(() => crmService.metaHealth()); },
@@ -114,6 +185,9 @@ export const useCrmStore = defineStore("crmStore", {
       const result = await this._wrap(() => crmService.googleConnectionStatus());
       if (result?.code === 0 && result?.data) {
         this.googleConnection = result.data;
+        if (result.data.selectedAdsAccount) {
+          this.selectedGoogleAdsAccount = result.data.selectedAdsAccount;
+        }
       }
       return result;
     },
@@ -249,6 +323,39 @@ export const useCrmStore = defineStore("crmStore", {
       this.googleSitePages = [];
       this.googleSitePagesPagination = null;
       this.googleSitePagesError = null;
+    },
+
+    async fetchGoogleAdsCustomers() {
+      const res = await this._wrap(() => crmService.fetchGoogleAdsCustomers());
+      if (res?.code === 0 && res?.data?.customers) {
+        this.googleAdsCustomers = res.data.customers;
+      }
+      return res;
+    },
+    async selectGoogleAdsAccount(accountId) {
+      const res = await this._wrap(() => crmService.selectGoogleAdsAccount(accountId));
+      if (res?.code === 0 && res?.data?.account) {
+        this.selectedGoogleAdsAccount = res.data.account;
+      }
+      return res;
+    },
+    async getGoogleAdsPerformance(payload) {
+      this.googleAdsLoading = true;
+      this.googleAdsError = null;
+      try {
+        const res = await this._wrap(() => crmService.getGoogleAdsPerformance(payload));
+        if (res?.code === 0 && res?.data) {
+          this.googleAdsPerformance = res.data;
+        } else {
+          this.googleAdsError = res?.error || 'Failed to fetch performance';
+        }
+        return res;
+      } catch (e) {
+        this.googleAdsError = e?.message || 'Failed to fetch performance';
+        throw e;
+      } finally {
+        this.googleAdsLoading = false;
+      }
     },
   },
 });

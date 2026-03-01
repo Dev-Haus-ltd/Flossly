@@ -37,7 +37,7 @@
     "@types/node": "^20.11.5",
     "@vite-pwa/nuxt": "^1.0.7",
     "bcrypt": "^5.1.1",
-    "chart.js": "^4.4.7",
+    "chart.js": "^4.5.1",
     "csv-parse": "^6.1.0",
     "date-fns": "^4.1.0",
     "emoji-picker-element": "^1.22.3",

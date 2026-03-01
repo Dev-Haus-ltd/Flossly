@@ -1,11 +1,8 @@
 BEGIN;
 
 -- =====================================================
--- 1. GOOGLE OAUTH TOKENS (Flexible Multi-Account Support)
+-- 1. GOOGLE OAUTH TOKENS (One active token per organization)
 -- =====================================================
--- Stores OAuth tokens for Google services (GSC & Business Profile)
--- Supports multiple accounts per organization with scope tracking
-
 CREATE TABLE IF NOT EXISTS "GoogleOAuthTokens" (
   "id" SERIAL PRIMARY KEY,
   "organisationId" INTEGER NOT NULL
@@ -29,15 +26,14 @@ CREATE TABLE IF NOT EXISTS "GoogleOAuthTokens" (
 CREATE INDEX IF NOT EXISTS "google_oauth_tokens_org_status_idx"
   ON "GoogleOAuthTokens" ("organisationId", "status");
 
-CREATE UNIQUE INDEX IF NOT EXISTS "google_oauth_tokens_org_account_active_idx"
-  ON "GoogleOAuthTokens" ("organisationId", "googleAccountId")
-  WHERE "status" = 'Active';
+-- Unique constraint: only one active token per organization
+CREATE UNIQUE INDEX IF NOT EXISTS "unique_org_active_token"
+  ON "GoogleOAuthTokens" ("organisationId")
+  WHERE status = 'Active';
 
 -- =====================================================
--- 2. GOOGLE SEARCH CONSOLE SITES
+-- 2. GOOGLE SEARCH CONSOLE SITES (One site per organization)
 -- =====================================================
--- Stores verified sites from Google Search Console
-
 CREATE TABLE IF NOT EXISTS "GoogleSearchConsoleSites" (
   "id" SERIAL PRIMARY KEY,
   "organisationId" INTEGER NOT NULL
@@ -58,8 +54,9 @@ CREATE TABLE IF NOT EXISTS "GoogleSearchConsoleSites" (
 CREATE INDEX IF NOT EXISTS "gsc_sites_org_active_idx"
   ON "GoogleSearchConsoleSites" ("organisationId", "isActive");
 
-CREATE UNIQUE INDEX IF NOT EXISTS "gsc_sites_org_url_idx"
-  ON "GoogleSearchConsoleSites" ("organisationId", "siteUrl");
+-- Enforce one site per organization
+CREATE UNIQUE INDEX IF NOT EXISTS "unique_org_search_console_site"
+  ON "GoogleSearchConsoleSites" ("organisationId");
 
 CREATE INDEX IF NOT EXISTS "gsc_sites_token_idx"
   ON "GoogleSearchConsoleSites" ("googleOAuthTokenId");
@@ -67,8 +64,6 @@ CREATE INDEX IF NOT EXISTS "gsc_sites_token_idx"
 -- =====================================================
 -- 3. GOOGLE SEARCH CONSOLE PERFORMANCE (Time-Series Analytics)
 -- =====================================================
--- Stores search performance data from GSC API
-
 CREATE TABLE IF NOT EXISTS "GoogleSearchConsolePerformances" (
   "id" SERIAL PRIMARY KEY,
   "organisationId" INTEGER NOT NULL
@@ -106,10 +101,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS "gsc_perf_unique_aggregate_idx"
   WHERE "dimensionType" = 'aggregate';
 
 -- =====================================================
--- 4. GOOGLE BUSINESS PROFILES (Placeholder for future expansion)
+-- 4. GOOGLE BUSINESS PROFILES (One profile per organization)
 -- =====================================================
--- Stores Google Business Profile locations
-
 CREATE TABLE IF NOT EXISTS "GoogleBusinessProfiles" (
   "id" SERIAL PRIMARY KEY,
   "organisationId" INTEGER NOT NULL
@@ -131,11 +124,11 @@ CREATE TABLE IF NOT EXISTS "GoogleBusinessProfiles" (
 CREATE INDEX IF NOT EXISTS "gbp_org_active_idx"
   ON "GoogleBusinessProfiles" ("organisationId", "isActive");
 
-CREATE UNIQUE INDEX IF NOT EXISTS "gbp_org_location_idx"
-  ON "GoogleBusinessProfiles" ("organisationId", "locationName");
+-- Enforce one profile per organization
+CREATE UNIQUE INDEX IF NOT EXISTS "unique_org_business_profile"
+  ON "GoogleBusinessProfiles" ("organisationId");
 
 CREATE INDEX IF NOT EXISTS "gbp_token_idx"
   ON "GoogleBusinessProfiles" ("googleOAuthTokenId");
 
 COMMIT;
-

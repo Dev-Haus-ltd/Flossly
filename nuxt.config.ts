@@ -41,8 +41,8 @@ export default defineNuxtConfig({
         "primary-light": "#008AFE",
         secondary: "#171952",
         "secondary-dark": "#171952",
-        "secondary-light": "#263AAD", 
-        tertiary: "#7D77FF",      
+        "secondary-light": "#263AAD",
+        tertiary: "#7D77FF",
         "tertiary-dark": "#6C63E7",
         "tertiary-light": "#8A82FF"
       },
@@ -77,10 +77,12 @@ export default defineNuxtConfig({
     WHAPI_CHANNEL_MODE: process.env.NUXT_WHAPI_CHANNEL_MODE || process.env.WHAPI_CHANNEL_MODE,
     WHAPI_ALLOW_CREATE_CHANNEL: process.env.NUXT_WHAPI_ALLOW_CREATE_CHANNEL || process.env.WHAPI_ALLOW_CREATE_CHANNEL,
     WHAPI_EXTEND_DAYS: process.env.NUXT_WHAPI_EXTEND_DAYS || process.env.WHAPI_EXTEND_DAYS,
-    // GSC and Buisness (Analytics)
+    // GSC and Buisness and ads (Analytics)
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
     GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI,
+    GOOGLE_ADS_DEVELOPER_TOKEN: process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
+    GOOGLE_ADS_WEBHOOK_SECRET: process.env.GOOGLE_ADS_WEBHOOK_SECRET,
 
 
     //file size
@@ -103,7 +105,7 @@ export default defineNuxtConfig({
     DB_PORT: process.env.NUXT_DB_PORT || process.env.DB_PORT,
     DB_SCHEMA: process.env.NUXT_DB_SCHEMA || process.env.DB_SCHEMA,
   },
-  modules: [ 
+  modules: [
     async (options, nuxt) => {
       nuxt.hooks.hook("vite:extendConfig", (config) =>
         // @ts-ignore
@@ -134,12 +136,12 @@ export default defineNuxtConfig({
           content: process.env.npm_package_description || "",
         },
       ],
-       link: [
-      // Favicon
-      { rel: "icon", type: "image/png", href: "/Logoicon2.svg" },
+      link: [
+        // Favicon
+        { rel: "icon", type: "image/png", href: "/Logoicon2.svg" },
 
-      { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" }
-    ],
+        { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" }
+      ],
       script: [
         { src: "https://js.stripe.com/v3/", defer: true },
         // Load lottie-player synchronously in head - no defer so it loads immediately

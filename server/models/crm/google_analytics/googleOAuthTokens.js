@@ -86,7 +86,7 @@ export const GoogleOAuthToken = sequelize.define(
         fields: ['organisationId', 'status']
       },
       {
-        fields: ['organisationId', 'googleAccountId'],
+        fields: ['organisationId'],
         unique: true,
         where: { status: 'Active' }
       }
@@ -97,7 +97,8 @@ export const GoogleOAuthToken = sequelize.define(
 // Helper constants for Google OAuth scopes
 export const GOOGLE_SCOPES = {
   SEARCH_CONSOLE: 'https://www.googleapis.com/auth/webmasters.readonly',
-  BUSINESS_PROFILE: 'https://www.googleapis.com/auth/business.manage'
+  BUSINESS_PROFILE: 'https://www.googleapis.com/auth/business.manage',
+  GOOGLE_ADS: 'https://www.googleapis.com/auth/adwords'
 }
 
 // Check if token has a specific scope

@@ -8,6 +8,13 @@ import { GoogleSearchConsoleSite } from '../models/crm/google_analytics/googleSe
 import { GoogleSearchConsoleSitePage } from '../models/crm/google_analytics/googleSearchConsoleSitePages'
 import { GoogleSearchConsolePerformance } from '../models/crm/google_analytics/googleSearchConsolePerformance'
 import { GoogleBusinessProfile } from '../models/crm/google_business_analytics/googleBusinessProfiles'
+import { GoogleAdsAccount } from '../models/crm/google_Ads_analytics/googleAdsAccounts'
+import { GoogleAdsCampaign } from '../models/crm/google_Ads_analytics/googleAdsCampaigns'
+import { GoogleAdsAdGroup } from '../models/crm/google_Ads_analytics/googleAdsAdGroups'
+import { GoogleAdsAd } from '../models/crm/google_Ads_analytics/googleAdsAds'
+import { GoogleAdsInsight } from '../models/crm/google_Ads_analytics/googleAdsInsights'
+import { CrmLead } from '../models/crm/leads'
+
 
 // Google OAuth2 endpoints
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
@@ -18,10 +25,14 @@ const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo'
 const GSC_API_BASE = 'https://www.googleapis.com/webmasters/v3'
 const GSC_SEARCHANALYTICS_URL = 'https://searchconsole.googleapis.com/webmasters/v3/sites'
 
+// Google Ads API endpoints
+const GOOGLE_ADS_API_BASE = 'https://googleads.googleapis.com/v17'
+
 // Combined scopes for both GSC and Business Profile
 const REQUESTED_SCOPES = [
   GOOGLE_SCOPES.SEARCH_CONSOLE,
   GOOGLE_SCOPES.BUSINESS_PROFILE,
+  GOOGLE_SCOPES.GOOGLE_ADS,
   'email',
   'profile'
 ].join(' ')
@@ -34,7 +45,8 @@ const getGoogleConfig = () => {
   return {
     clientId: config.GOOGLE_CLIENT_ID,
     clientSecret: config.GOOGLE_CLIENT_SECRET,
-    redirectUri: config.GOOGLE_REDIRECT_URI
+    redirectUri: config.GOOGLE_REDIRECT_URI,
+    developerToken: config.GOOGLE_ADS_DEVELOPER_TOKEN
   }
 }
 
@@ -102,7 +114,7 @@ export const authCallback = async (event) => {
   // Handle OAuth errors
   if (oauthError) {
     console.error('[GOOGLE][AUTH] OAuth error:', oauthError, error_description)
-    return sendRedirect(event, `/crm/google_analytics?error=${encodeURIComponent(oauthError)}`)
+    return sendRedirect(event, `/crm?error=${encodeURIComponent(oauthError)}`)
   }
 
   if (!code) {
@@ -168,22 +180,12 @@ export const authCallback = async (event) => {
     // Clear state cookie
     setCookie(event, 'google_oauth_state', '', { maxAge: -1 })
 
-    // Build success redirect URL with scope info
-    const hasGSC = grantedScopes.includes(GOOGLE_SCOPES.SEARCH_CONSOLE)
-    const hasGBP = grantedScopes.includes(GOOGLE_SCOPES.BUSINESS_PROFILE)
-    const params = new URLSearchParams({
-      google: 'connected',
-      gsc: hasGSC ? '1' : '0',
-      gbp: hasGBP ? '1' : '0',
-      account: userInfo?.email || ''
-    })
-
-    return sendRedirect(event, `/crm/google_analytics?${params.toString()}`)
+    return sendRedirect(event, `/crm`)
   } catch (e) {
     console.error('[GOOGLE][AUTH] Callback error:', e)
     setCookie(event, 'google_oauth_state', '', { maxAge: -1 })
     const errorMsg = e?.message || 'Connection failed'
-    return sendRedirect(event, `/crm/google_analytics?error=${encodeURIComponent(errorMsg)}`)
+    return sendRedirect(event, `/crm?error=${encodeURIComponent(errorMsg)}`)
   }
 }
 
@@ -243,27 +245,32 @@ async function storeTokens({ orgId, userId, tokenResponse, grantedScopes, userIn
   const googleAccountEmail = userInfo?.email || null
 
   // Check for existing token with same Google account
-  const existing = await GoogleOAuthToken.findOne({
+  // Check if ANY active token already exists for this org
+  const existingOrgToken = await GoogleOAuthToken.findOne({
     where: {
       organisationId: orgId,
-      googleAccountId,
       status: 'Active'
     }
   })
 
-  if (existing) {
-    // Update existing token
-    existing.accessTokenEnc = accessTokenEnc
+  if (existingOrgToken) {
+    // Replace existing token (one account per org rule)
+    existingOrgToken.accessTokenEnc = accessTokenEnc
     if (refreshTokenEnc) {
-      existing.refreshTokenEnc = refreshTokenEnc
+      existingOrgToken.refreshTokenEnc = refreshTokenEnc
     }
-    existing.scopes = grantedScopes
-    existing.expiresAt = expiresAt
-    existing.connectedAt = new Date()
-    existing.googleAccountEmail = googleAccountEmail
-    await existing.save()
-    console.log('[GOOGLE][AUTH] Updated existing token for:', googleAccountEmail)
-    return existing
+    existingOrgToken.scopes = grantedScopes
+    existingOrgToken.expiresAt = expiresAt
+    existingOrgToken.connectedAt = new Date()
+    existingOrgToken.googleAccountEmail = googleAccountEmail
+    existingOrgToken.userId = userId
+    existingOrgToken.googleAccountId = googleAccountId
+    existingOrgToken.status = 'Active'
+    existingOrgToken.lastUsedAt = null
+    await existingOrgToken.save()
+
+    console.log('[GOOGLE][AUTH] Replaced existing org token with:', googleAccountEmail)
+    return existingOrgToken
   } else {
     // Create new token
     const token = await GoogleOAuthToken.create({
@@ -342,8 +349,7 @@ export const connectionStatus = async (event) => {
   const { orgId } = event.context.user || {}
   if (!orgId) return error(401, 'Unauthenticated')
 
-  // 1️⃣ Get active tokens
-  const tokens = await GoogleOAuthToken.findAll({
+  const token = await GoogleOAuthToken.findOne({
     where: { organisationId: orgId, status: 'Active' },
     attributes: [
       'id',
@@ -355,42 +361,62 @@ export const connectionStatus = async (event) => {
     ]
   })
 
-  const accounts = tokens.map(t => ({
-    id: t.id,
-    email: t.googleAccountEmail,
-    scopes: t.scopes || [],
-    hasSearchConsole: t.hasSearchConsoleScope(),
-    hasBusinessProfile: t.hasBusinessProfileScope(),
-    expiresAt: t.expiresAt,
-    connectedAt: t.connectedAt,
-    lastUsedAt: t.lastUsedAt
-  }))
+  const REQUIRED_SCOPES = [
+    GOOGLE_SCOPES.SEARCH_CONSOLE,
+    GOOGLE_SCOPES.BUSINESS_PROFILE,
+    GOOGLE_SCOPES.GOOGLE_ADS
+  ]
 
-  // 2️⃣ Get active selected site
+  let account = null
+
+  if (token) {
+    const granted = token.scopes || []
+
+    const scopeStatus = REQUIRED_SCOPES.map(scope => ({
+      scope,
+      granted: granted.includes(scope)
+    }))
+
+    account = {
+      id: token.id,
+      email: token.googleAccountEmail,
+      scopes: granted,
+      scopeStatus,
+      hasSearchConsole: granted.includes(GOOGLE_SCOPES.SEARCH_CONSOLE),
+      hasBusinessProfile: granted.includes(GOOGLE_SCOPES.BUSINESS_PROFILE),
+      hasGoogleAds: granted.includes(GOOGLE_SCOPES.GOOGLE_ADS),
+      expiresAt: token.expiresAt,
+      connectedAt: token.connectedAt,
+      lastUsedAt: token.lastUsedAt
+    }
+  }
+
   const activeSite = await GoogleSearchConsoleSite.findOne({
-    where: {
-      organisationId: orgId,
-      isActive: true
-    },
+    where: { organisationId: orgId, isActive: true },
     attributes: ['id', 'siteUrl', 'siteType', 'isActive', 'lastSyncAt']
   })
 
-  return success({
-    connected: accounts.length > 0,
-    accounts,
-    hasSearchConsole: accounts.some(a => a.hasSearchConsole),
-    hasBusinessProfile: accounts.some(a => a.hasBusinessProfile),
+  const adsAccount = await GoogleAdsAccount.findOne({
+    where: { organisationId: orgId },
+    attributes: ['id', 'googleCustomerId', 'name', 'currency', 'timezone']
+  })
 
-    // 👇 NEW FIELD
+  return success({
+    connected: !!account,
+    account,
+    hasSearchConsole: account?.hasSearchConsole || false,
+    hasBusinessProfile: account?.hasBusinessProfile || false,
+    hasGoogleAds: account?.hasGoogleAds || false,
     selectedSite: activeSite
       ? {
-          id: activeSite.id,
-          siteUrl: activeSite.siteUrl,
-          siteType: activeSite.siteType,
-          isActive: activeSite.isActive,
-          lastSyncAt: activeSite.lastSyncAt
-        }
-      : null
+        id: activeSite.id,
+        siteUrl: activeSite.siteUrl,
+        siteType: activeSite.siteType,
+        isActive: activeSite.isActive,
+        lastSyncAt: activeSite.lastSyncAt
+      }
+      : null,
+    selectedAdsAccount: adsAccount
   })
 }
 
@@ -751,7 +777,7 @@ export const fetchSitePages = async (event) => {
   let body = await readBody(event)
 
   if (typeof body === 'string') {
-    try { body = JSON.parse(body) } catch {}
+    try { body = JSON.parse(body) } catch { }
   }
 
   const siteId = Number(body?.siteId)
@@ -793,190 +819,6 @@ export const fetchSitePages = async (event) => {
     return error(500, e?.message || 'Failed to resync site')
   }
 }
-
-/**
- * Fetch analytics for a specific page
- * POST /api/google/fetchAnalytics
- *
- * Request body:
- * - siteId (required): The GSC site ID
- * - pageUrl (required): The page URL to fetch analytics for
- * - country (optional): Country code filter (e.g., "USA", "GBR")
- * - device (optional): Device filter ("MOBILE", "DESKTOP", "TABLET")
- * - startDate (optional): Start date in YYYY-MM-DD format (defaults to 30 days ago)
- * - endDate (optional): End date in YYYY-MM-DD format (defaults to today)
- */
-// export const fetchPageAnalytics = async (event) => {
-//   const { orgId } = event.context.user || {}
-//   if (!orgId) return error(401, 'Unauthenticated')
-
-//   const body = await readBody(event)
-//   const { siteId, pageUrl, country, device, startDate, endDate } = body || {}
-
-//   if (!siteId) {
-//     return error(400, 'siteId is required')
-//   }
-
-//   if (!pageUrl) {
-//     return error(400, 'pageUrl is required')
-//   }
-
-//   try {
-//     const site = await GoogleSearchConsoleSite.findOne({
-//       where: { id: siteId, organisationId: orgId }
-//     })
-
-//     if (!site) {
-//       return error(404, 'Site not found')
-//     }
-
-//     const token = await GoogleOAuthToken.findByPk(site.googleOAuthTokenId)
-//     if (!token || token.status !== 'Active') {
-//       return error(400, 'OAuth token not available')
-//     }
-
-//     const result = await fetchPageAnalyticsInternal({
-//       orgId,
-//       site,
-//       token,
-//       pageUrl,
-//       country,
-//       device,
-//       startDate,
-//       endDate
-//     })
-
-//     return success(result)
-//   } catch (e) {
-//     console.error('[GSC] Error in fetchPageAnalytics:', e)
-//     return error(500, e?.message || 'Failed to fetch analytics')
-//   }
-// }
-
-/**
- * Internal function to fetch analytics for a specific page
- */
-// async function fetchPageAnalyticsInternal({
-//   orgId,
-//   site,
-//   token,
-//   pageUrl,
-//   country,
-//   device,
-//   startDate,
-//   endDate
-// }) {
-//   const accessToken = await getValidAccessToken(token)
-//   const encodedSiteUrl = encodeURIComponent(site.siteUrl)
-
-//   // Calculate date range (default: last 30 days)
-//   const end = endDate ? new Date(endDate) : new Date()
-//   const start = startDate ? new Date(startDate) : new Date()
-//   if (!startDate) {
-//     start.setDate(start.getDate() - 30)
-//   }
-
-//   const formatDate = (d) => d.toISOString().split('T')[0]
-
-//   // Build dimension filters
-//   // Page filter is mandatory
-//   const filters = [
-//     {
-//       dimension: 'page',
-//       operator: 'equals',
-//       expression: pageUrl
-//     }
-//   ]
-
-//   // Add optional country filter
-//   if (country) {
-//     filters.push({
-//       dimension: 'country',
-//       operator: 'equals',
-//       expression: country
-//     })
-//   }
-
-//   // Add optional device filter
-//   if (device) {
-//     filters.push({
-//       dimension: 'device',
-//       operator: 'equals',
-//       expression: device
-//     })
-//   }
-
-//   console.log('[GSC] Fetching analytics for page:', pageUrl, 'filters:', { country, device })
-
-//   const response = await $fetch(
-//     `${GSC_SEARCHANALYTICS_URL}/${encodedSiteUrl}/searchAnalytics/query`,
-//     {
-//       method: 'POST',
-//       headers: {
-//         Authorization: `Bearer ${accessToken}`,
-//         'Content-Type': 'application/json'
-//       },
-//       body: {
-//         startDate: formatDate(start),
-//         endDate: formatDate(end),
-//         dimensions: ['date'],
-//         dimensionFilterGroups: [
-//           {
-//             groupType: 'and',
-//             filters
-//           }
-//         ]
-//       }
-//     }
-//   )
-
-//   const rows = response.rows || []
-//   console.log('[GSC] Received', rows.length, 'analytics rows for page')
-
-//   // Store analytics data in GoogleSearchConsolePerformance
-//   const now = new Date()
-//   const analyticsRecords = []
-
-//   for (const row of rows) {
-//     const date = row.keys[0] // Date dimension value
-
-//     analyticsRecords.push({
-//       organisationId: orgId,
-//       siteId: site.id,
-//       date,
-//       dimensionType: 'page',
-//       dimensionValue: pageUrl,
-//       impressions: row.impressions || 0,
-//       clicks: row.clicks || 0,
-//       ctr: row.ctr || 0,
-//       position: row.position || 0
-//     })
-//   }
-
-//   // Upsert analytics records
-//   if (analyticsRecords.length > 0) {
-//     for (const record of analyticsRecords) {
-//       await GoogleSearchConsolePerformance.upsert(record, {
-//         conflictFields: ['siteId', 'date', 'dimensionType', 'dimensionValue']
-//       })
-//     }
-//     console.log('[GSC] Stored', analyticsRecords.length, 'analytics records')
-//   }
-
-//   // Update page's lastAnalyticsSyncAt
-//   await GoogleSearchConsoleSitePage.update(
-//     { lastAnalyticsSyncAt: now, lastSyncError: null },
-//     { where: { organisationId: orgId, siteId: site.id, pageUrl } }
-//   )
-
-//   return {
-//     pageUrl,
-//     dateRange: { start: formatDate(start), end: formatDate(end) },
-//     filters: { country, device },
-//     recordsStored: analyticsRecords.length,
-//     analytics: analyticsRecords
-//   }
-// }
 
 /**
  * Get site pages with analytics data (paginated)
@@ -1237,3 +1079,400 @@ export const searchSitePages = async (event) => {
   }
 }
 
+// =====================================================
+// GOOGLE ADS API FUNCTIONS
+// =====================================================
+
+/**
+ * Get an active OAuth token with Google Ads scope for the organization
+ */
+async function getAdsToken(orgId) {
+  const token = await GoogleOAuthToken.findOne({
+    where: {
+      organisationId: orgId,
+      status: 'Active'
+    }
+  })
+
+  if (!token) {
+    throw new Error('No Google account connected')
+  }
+
+  if (!token.hasScope(GOOGLE_SCOPES.GOOGLE_ADS)) {
+    throw new Error('Google account does not have Google Ads access')
+  }
+
+  return token
+}
+
+/**
+ * Fetch available customer accounts from Google Ads
+ * GET /api/google/ads/customers
+ */
+export const fetchAvailableAdsCustomers = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const { developerToken } = getGoogleConfig()
+  if (!developerToken) {
+    return error(400, 'Google Ads Developer Token not configured')
+  }
+
+  try {
+    const token = await getAdsToken(orgId)
+    const accessToken = await getValidAccessToken(token)
+
+    console.log('[ADS] Fetching accessible customers for org:', orgId)
+
+    // 1. List accessible customers (POST request with empty body)
+    const accessibleResp = await $fetch(
+      `${GOOGLE_ADS_API_BASE}/customers:listAccessibleCustomers`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'developer-token': developerToken,
+          'Content-Type': 'application/json'
+        },
+        body: {}
+      }
+    )
+
+    const resourceNames = accessibleResp.resourceNames || []
+    const customers = []
+
+    // 2. Get details for each accessible customer
+    for (const resourceName of resourceNames) {
+      try {
+        const customerId = resourceName.split('/')[1]
+
+        // Use googleAds:search to fetch customer details
+        const customerDetailsQuery = {
+          query: `
+            SELECT
+              customer.id,
+              customer.descriptive_name,
+              customer.currency_code,
+              customer.time_zone,
+              customer.manager
+            FROM customer
+            LIMIT 1
+          `
+        }
+
+        const customerDetailsResp = await $fetch(
+          `${GOOGLE_ADS_API_BASE}/customers/${customerId}/googleAds:search`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'developer-token': developerToken,
+              'login-customer-id': customerId,
+              'Content-Type': 'application/json'
+            },
+            body: customerDetailsQuery
+          }
+        )
+
+        const customerDetails = customerDetailsResp.results?.[0]?.customer || {}
+
+        customers.push({
+          customerId,
+          resourceName,
+          descriptiveName: customerDetails.descriptiveName || `Account ${customerId}`,
+          currencyCode: customerDetails.currencyCode,
+          timeZone: customerDetails.timeZone,
+          manager: customerDetails.manager || false
+        })
+      } catch (e) {
+        console.error(`[ADS] Failed to fetch details for ${resourceName}:`, e.message)
+      }
+    }
+
+    token.lastUsedAt = new Date()
+    await token.save()
+
+    const selectedAccount = await GoogleAdsAccount.findOne({
+      where: { organisationId: orgId }
+    })
+
+    return success({
+      customers,
+      selectedCustomerId: selectedAccount?.googleCustomerId || null,
+      tokenId: token.id,
+      accountEmail: token.googleAccountEmail
+    })
+  } catch (e) {
+    console.error('[ADS] Error fetching customers:', e)
+    return error(500, e?.message || 'Failed to fetch Google Ads customers')
+  }
+}
+
+/**
+ * Select a Google Ads customer account for the organization
+ * POST /api/google/ads/selectAccount
+ */
+export const selectAdsAccount = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const body = await readBody(event)
+  const { customerId, name, currency, timezone, tokenId } = body
+
+  if (!customerId) return error(400, 'customerId is required')
+
+  try {
+    const [account, created] = await GoogleAdsAccount.findOrCreate({
+      where: { organisationId: orgId },
+      defaults: {
+        googleCustomerId: customerId,
+        name,
+        currency,
+        timezone,
+        googleOAuthTokenId: tokenId
+      }
+    })
+
+    if (!created) {
+      account.googleCustomerId = customerId
+      if (name) account.name = name
+      if (currency) account.currency = currency
+      if (timezone) account.timezone = timezone
+      if (tokenId) account.googleOAuthTokenId = tokenId
+      await account.save()
+    }
+
+    // Trigger initial sync in background
+    syncAdsDataInternal({ orgId, customerId }).catch(console.error)
+
+    return success({
+      message: 'Google Ads account selected and sync started',
+      customerId
+    })
+  } catch (e) {
+    console.error('[ADS] Error selecting account:', e)
+    return error(500, 'Failed to select Google Ads account')
+  }
+}
+
+/**
+ * Internal sync function for Google Ads (Campaigns, Analytics)
+ */
+async function syncAdsDataInternal({ orgId, customerId }) {
+  const { developerToken } = getGoogleConfig()
+  if (!developerToken || !orgId || !customerId) return
+
+  try {
+    const token = await getAdsToken(orgId)
+    const accessToken = await getValidAccessToken(token)
+
+    console.log(`[ADS] Starting sync for Org: ${orgId}, Customer: ${customerId}`)
+
+    // 1. Fetch Campaigns
+    const campaignQuery = {
+      query: `
+        SELECT 
+          campaign.id, 
+          campaign.name, 
+          campaign.status, 
+          campaign.advertising_channel_type,
+          campaign_budget.amount_micros,
+          campaign_budget.type
+        FROM campaign
+        WHERE campaign.status != 'REMOVED'
+      `
+    }
+
+    const campaignResp = await $fetch(`${GOOGLE_ADS_API_BASE}/customers/${customerId}/googleAds:search`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'developer-token': developerToken,
+        'login-customer-id': customerId
+      },
+      body: campaignQuery
+    })
+
+    const results = campaignResp.results || []
+    for (const row of results) {
+      const c = row.campaign
+      const budget = row.campaignBudget
+
+      await GoogleAdsCampaign.upsert({
+        campaignId: String(c.id),
+        organisationId: orgId,
+        googleCustomerId: customerId,
+        name: c.name,
+        status: c.status,
+        advertisingChannelType: c.advertisingChannelType,
+        amountMicros: budget?.amountMicros,
+        budgetType: budget?.type
+      })
+    }
+
+    // 2. Fetch Daily Performance (Last 30 days)
+    const metricsQuery = {
+      query: `
+        SELECT
+          segments.date,
+          campaign.id,
+          metrics.impressions,
+          metrics.clicks,
+          metrics.cost_micros,
+          metrics.conversions,
+          metrics.interactions
+        FROM campaign
+        WHERE segments.date DURING LAST_30_DAYS
+      `
+    }
+
+    const metricsResp = await $fetch(`${GOOGLE_ADS_API_BASE}/customers/${customerId}/googleAds:search`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'developer-token': developerToken,
+        'login-customer-id': customerId
+      },
+      body: metricsQuery
+    })
+
+    const metricResults = metricsResp.results || []
+    for (const row of metricResults) {
+      const s = row.segments
+      const c = row.campaign
+      const m = row.metrics
+
+      await GoogleAdsInsight.upsert({
+        organisationId: orgId,
+        entityType: 'campaign',
+        entityId: String(c.id),
+        date: s.date,
+        impressions: m.impressions,
+        clicks: m.clicks,
+        costMicros: m.costMicros,
+        conversions: m.conversions,
+        interactions: m.interactions
+      })
+    }
+
+    console.log(`[ADS] Finished sync for Org: ${orgId}, Customer: ${customerId}. Processed ${results.length} campaigns.`)
+  } catch (e) {
+    console.error(`[ADS] Sync failed for Org: ${orgId}:`, e.message)
+  }
+}
+
+/**
+ * Public webhook for Google Ads Lead Form leads
+ * POST /api/google/webhooks/ads-leads
+ */
+export const handleAdsLeadWebhook = async (event) => {
+  // Use a secret from config to verify (Google sends this in headers or as part of URL if configured)
+  const body = await readBody(event)
+
+  // Google Lead Form Webhook data structure:
+  // {
+  //   lead_id: "...",
+  //   user_column_data: [ { column_name: "Full Name", string_value: "..." }, ... ],
+  //   api_version: "1.0",
+  //   form_id: "...",
+  //   campaign_id: "...",
+  //   google_key: "...", // The secret key configured in Google Ads
+  //   adgroup_id: "...",
+  //   creative_id: "...",
+  //   gclid: "..."
+  // }
+
+  const googleKey = body.google_key
+  const config = useRuntimeConfig()
+  const expectedKey = config.GOOGLE_ADS_WEBHOOK_SECRET
+
+  if (expectedKey && googleKey !== expectedKey) {
+    console.warn('[ADS] Webhook secret mismatch')
+    return error(401, 'Unauthorized')
+  }
+
+  try {
+    const userFields = body.user_column_data || []
+    const mapped = userFields.reduce((acc, f) => {
+      const name = (f.column_name || '').toLowerCase()
+      if (name.includes('full name')) acc.name = f.string_value
+      if (name.includes('email')) acc.email = f.string_value
+      if (name.includes('phone')) acc.phone = f.string_value
+      return acc
+    }, {})
+
+    // Find the organisation this campaign belongs to
+    const campaign = await GoogleAdsCampaign.findOne({
+      where: { campaignId: String(body.campaign_id) }
+    })
+
+    if (!campaign) {
+      console.warn(`[ADS] Webhook received for unknown campaign: ${body.campaign_id}`)
+      // Still return 200 to acknowledge receipt
+      return success({ received: true, status: 'campaign_not_found' })
+    }
+
+    await CrmLead.create({
+      organisationId: campaign.organisationId,
+      leadId: body.lead_id,
+      googleCampaignId: String(body.campaign_id),
+      googleAdGroupId: String(body.adgroup_id),
+      googleAdId: String(body.creative_id),
+      gclid: body.gclid,
+      name: mapped.name || 'Google Lead',
+      email: mapped.email || null,
+      telephone: mapped.phone || null,
+      leadSource: 'Google Ads',
+      leadStatus: 'New',
+      inquiryDate: new Date(),
+      rawData: body
+    })
+
+    return success({ received: true })
+  } catch (e) {
+    console.error('[ADS] Webhook handling failed:', e)
+    return error(500, 'Internal server error')
+  }
+}
+
+/**
+ * Get Google Ads performance data for the dashboard
+ * GET /api/google/ads/performance?startDate=...&endDate=...
+ */
+export const getAdsPerformance = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const q = getQuery(event) || {}
+  const startDate = q.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  const endDate = q.endDate || new Date().toISOString().split('T')[0]
+
+  try {
+    const insights = await GoogleAdsInsight.findAll({
+      where: {
+        organisationId: orgId,
+        date: { [Op.between]: [startDate, endDate] }
+      },
+      order: [['date', 'ASC']]
+    })
+
+    const totals = insights.reduce((acc, row) => {
+      acc.impressions += Number(row.impressions || 0)
+      acc.clicks += Number(row.clicks || 0)
+      acc.costMicros += Number(row.costMicros || 0)
+      acc.conversions += Number(row.conversions || 0)
+      acc.interactions += Number(row.interactions || 0)
+      return acc
+    }, { impressions: 0, clicks: 0, costMicros: 0, conversions: 0, interactions: 0 })
+
+    return success({
+      totals,
+      insights,
+      startDate,
+      endDate
+    })
+  } catch (e) {
+    console.error('[ADS] Failed to get performance:', e)
+    return error(500, 'Failed to fetch analytics')
+  }
+}
