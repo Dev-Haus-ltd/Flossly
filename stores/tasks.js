@@ -373,7 +373,8 @@ export const useTaskStore = defineStore("taskStore", {
           .deleteChecklist(data)
           .then((res) => {
             this.isLoading = false;
-            if (res?.code === 0) this.clearTasksCache();
+            // No need to clear entire cache for checklist deletion
+            // The UI updates the local array directly
             resolve(res);
           })
           .catch((err) => {

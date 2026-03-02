@@ -2031,9 +2031,12 @@ export const deleteUserTaskChecklist = async (event) => {
     throw createError({ message: "Checklist id required" });
   }
   try {
-    const checklist = await UserTaskChecklist.findByPk(id);
-    if (!checklist) throw createError({ message: "Checklist not found" });
-    await checklist.destroy();
+    const deletedCount = await UserTaskChecklist.destroy({
+      where: { id }
+    });
+    if (deletedCount === 0) {
+      throw createError({ message: "Checklist not found" });
+    }
     return success("Deleted");
   } catch (err) {
     return error(500, err.message);
