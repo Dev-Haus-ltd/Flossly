@@ -299,7 +299,7 @@ const form = ref({
 const modelValueRef = toRef(() => props.modelValue);
 watch(
   modelValueRef,
-  (newValue) => {
+  async (newValue) => {
     if (newValue) {
       if (isManager.value) {
         setUsers();
@@ -311,6 +311,9 @@ watch(
         form.value.startDate = props.initialDate;
         form.value.endDate = props.initialDate;
       }
+      // Ensure stale validation state is cleared when opening
+      await nextTick();
+      formRef.value?.resetValidation?.();
     }
   },
   { immediate: true }
@@ -376,9 +379,10 @@ const leaveSummary = computed(() => {
 
   const totalHours = hoursPerDay ? days * hoursPerDay : 0;
 
-  let msg = `Leave from ${form.value.startDate} to ${
-    form.value.endDate
-  } (${days} day${days > 1 ? "s" : ""})`;
+  const startLabel = formatDateDDMMYYYY(form.value.startDate) || form.value.startDate;
+  const endLabel = formatDateDDMMYYYY(form.value.endDate) || form.value.endDate;
+
+  let msg = `Leave from ${startLabel} to ${endLabel} (${days} day${days > 1 ? "s" : ""})`;
   if (totalHours) msg += `, Total Hours: ${totalHours}`;
 
   return msg;
@@ -443,6 +447,9 @@ const onSubmit = async () => {
         emit("update:modelValue", false);
         emit("success");
         resetForm();
+        // Clear any validation state after successful save
+        formRef.value?.reset?.();
+        formRef.value?.resetValidation?.();
         mainStore.setSnackbar({
           title:
             res?.message || res?.data?.message || "Leave applied successfully",
@@ -481,7 +488,8 @@ const onUpdateModelValue = (value) => {
     emit("update:modelValue", false);
     emit("close");
     resetForm();
-    formRef.value?.reset();
+    formRef.value?.reset?.();
+    formRef.value?.resetValidation?.();
   }
 };
 
@@ -489,7 +497,8 @@ const onClose = () => {
   emit("update:modelValue", false);
   emit("close");
   resetForm();
-  formRef.value?.reset();
+  formRef.value?.reset?.();
+  formRef.value?.resetValidation?.();
 };
 </script>
 
