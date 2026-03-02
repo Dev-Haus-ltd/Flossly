@@ -1642,7 +1642,6 @@ const convertSelected = async () => {
   white-space: normal;
 }
 
-
 .editable-field:hover {
   background-color: rgba(0, 0, 0, 0.04);
 }
@@ -1668,7 +1667,6 @@ const convertSelected = async () => {
 .inline-edit-textarea:focus {
   box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.2);
 }
-
 /* Scrollable comment cell */
 .comment-cell-wrapper {
   position: relative;
