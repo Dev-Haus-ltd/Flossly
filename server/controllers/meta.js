@@ -1154,7 +1154,7 @@ export const webhook = async (event) => {
             await existing.save()
             broadcastMetaEvent('lead', { orgId: mp.organisationId, leadId, pageId, formId })
           } else {
-            await CrmLead.create({
+            const created = await CrmLead.create({
               organisationId: mp.organisationId,
               pageId,
               formId: formId || null,
@@ -1171,6 +1171,31 @@ export const webhook = async (event) => {
               leadStatus: 'New',
             })
             broadcastMetaEvent('lead', { orgId: mp.organisationId, leadId, pageId, formId })
+
+            try {
+              const orgUsers = await UserOrganisation.findAll({
+                where: { organisationId: mp.organisationId },
+                attributes: ['userId'],
+              })
+              const userIds = orgUsers.map((u) => u.userId).filter(Boolean)
+              if (userIds.length) {
+                await sendNotificationToMultipleUsers({
+                  userIds,
+                  title: 'New Meta Lead',
+                  body: fullName || email || phone || 'A new lead was received',
+                  type: 'lead_created',
+                  referenceType: 'lead',
+                  referenceId: created.id,
+                  data: {
+                    leadId: String(created.id),
+                    leadSource: 'Meta Leadgen',
+                    pageId: String(pageId || ''),
+                    url: `/crm?leadId=${created.id}`,
+                  },
+                  priority: 'high',
+                })
+              }
+            } catch (notifyErr) {}
           }
         }
 

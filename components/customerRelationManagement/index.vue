@@ -58,6 +58,21 @@
         <!-- Right: Connection Controls -->
         <div class="d-inline-flex ml-auto" style="flex-wrap: nowrap; gap: 12px;">
           <v-btn
+            v-if="isConnected"
+            color="secondary"
+            variant="flat"
+            rounded="lg"
+            class="add-task-btn"
+            :loading="metaBackfillLoading"
+            @click="backfillMetaLeads"
+          >
+            <template #prepend>
+              <v-icon size="18">mdi-refresh</v-icon>
+            </template>
+            Refresh Meta Leads
+          </v-btn>
+
+          <v-btn
             color="secondary"
             variant="flat"
             rounded="lg"
@@ -1564,13 +1579,14 @@ const backfillMetaLeads = async () => {
   metaBackfillLoading.value = true;
   metaMenu.value = false;
   try {
-    const res = await crmStore.fetchLeadsNow({ days: 30 });
+    const res = await crmStore.fetchLeadsNow({ days: 7 });
     if (res?.code === 0) {
       await fetchLeads(activeFilters.value);
+      const imported = Number(res?.data?.imported || 0);
       mainStore?.setSnackbar?.({
-        title: res?.data?.imported
-          ? `Backfill complete: ${res.data.imported} lead(s) imported`
-          : 'Backfill complete',
+        title: imported
+          ? `Fetched ${imported} new lead(s)`
+          : 'No new Meta leads found',
         type: 'success',
       });
       return;
