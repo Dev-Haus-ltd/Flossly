@@ -110,10 +110,30 @@ export default {
         .catch((err) => reject(err));
     });
   },
-  // Fetch daily Meta analytics (insights)
-  fetchMetaInsights() {
+  // Fetch Meta analytics (insights)
+  fetchMetaInsights(params = {}) {
+    const q = new URLSearchParams();
+    Object.entries(params || {}).forEach(([k, v]) => {
+      if (v === undefined || v === null || v === "") return;
+      q.append(k, v);
+    });
+    const qs = q.toString();
     return new Promise((resolve, reject) => {
-      Get("/meta/syncInsights")
+      Get(`/meta/syncInsights${qs ? `?${qs}` : ""}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getMetaInsights() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/getInsights")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getMetaStructure() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/getStructure")
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -253,7 +273,7 @@ export default {
             params.append(k, `${yyyy}-${mm}-${dd}`);
             return;
           }
-        } catch {}
+        } catch { }
       }
       params.append(k, v);
     });
@@ -472,6 +492,152 @@ export default {
   getWhatsAppUsage() {
     return new Promise((resolve, reject) => {
       Get('/lead/whatsappUsage')
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+
+  // =====================================================
+  // GOOGLE SEARCH CONSOLE
+  // =====================================================
+
+  // Start Google OAuth flow
+  startGoogleAuth() {
+    return new Promise((resolve, reject) => {
+      Get('/google/authStart')
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+
+  // Get Google connection status
+  googleConnectionStatus() {
+    return new Promise((resolve, reject) => {
+      Get('/google/connection')
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+
+  // Disconnect Google account
+  disconnectGoogle(tokenId = null) {
+    return new Promise((resolve, reject) => {
+      Post('/google/disconnect', { tokenId })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+
+  // Fetch available GSC sites
+  fetchGoogleSites() {
+    return new Promise((resolve, reject) => {
+      Get('/google/sites')
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+
+  // Select/activate a GSC site for tracking
+  selectGoogleSite(
+    siteUrl,
+    tokenId = null,
+    startDate,
+    endDate,
+    country,
+    device
+  ) {
+    return new Promise((resolve, reject) => {
+      Post('/google/selectSite', {
+        siteUrl,
+        tokenId,
+        startDate,
+        endDate,
+        country,
+        device
+      })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err))
+    })
+  },
+
+  // Trigger page fetching for a site (manual resync)
+  fetchGoogleSitePages(
+    siteId,
+    startDate,
+    endDate,
+    country,
+    device
+  ) {
+    return new Promise((resolve, reject) => {
+      Post('/google/fetchPages', {
+        siteId,
+        startDate,
+        endDate,
+        country,
+        device
+      })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+
+  // Fetch analytics for a specific page
+  // fetchGooglePageAnalytics(payload) {
+  //   // payload: { siteId, pageUrl, country?, device?, startDate?, endDate? }
+  //   return new Promise((resolve, reject) => {
+  //     Post('/google/fetchAnalytics', payload)
+  //       .then((res) => resolve(res))
+  //       .catch((err) => reject(err));
+  //   });
+  // },
+
+  // Get site pages with analytics (paginated)
+  getGoogleSitePages(siteId, page = 1, limit = 50) {
+    const params = new URLSearchParams({
+      siteId: String(siteId),
+      page: String(page),
+      limit: String(limit)
+    });
+    return new Promise((resolve, reject) => {
+      Get(`/google/getSitePages?${params.toString()}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+
+  // Search site pages with analytics (paginated)
+  searchGoogleSitePages(siteId, searchQuery, page = 1, limit = 50) {
+    const params = new URLSearchParams({
+      siteId: String(siteId),
+      searchQuery,
+      page: String(page),
+      limit: String(limit)
+    });
+    return new Promise((resolve, reject) => {
+      Get(`/google/searchSitePages?${params.toString()}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+
+  // Google Ads endpoints
+  fetchGoogleAdsCustomers() {
+    return new Promise((resolve, reject) => {
+      Get('/google/fetchAdsCustomers')
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  selectGoogleAdsAccount(accountId) {
+    return new Promise((resolve, reject) => {
+      Post('/google/selectAdsAccount', { accountId })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getGoogleAdsPerformance(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/google/getAdsPerformance', payload)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });

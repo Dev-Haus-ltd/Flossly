@@ -112,9 +112,9 @@ export const useMainStore = defineStore("mainStore", {
     getManagerOptions() {
       const licenseType = getLicenseTypeFromStorage();
       const authStore = useAuthStore();
-      
+
       const isDeveloper = authStore.getIsDeveloper;
-      
+
       const menuItems = [
         {
           title: "DashBoard",
@@ -180,7 +180,7 @@ export const useMainStore = defineStore("mainStore", {
             //   imgPath: teamIcon,
             //   to: "/teams/invoice",
             // }, 
-        
+
           ],
         },
         // {
@@ -197,19 +197,19 @@ export const useMainStore = defineStore("mainStore", {
         //     },
         //   ],
         // },
-          {
-            title: "CRM",
-            imgPath: crmIcon,
-            value: "crm",
-            to:"/crm",
-            children: [
-              {
-                title: "Leads",
-                value: "crmLeads",
-                imgPath: crmIcon,
-                to: "/crm/leads",
-                featureKey: "crm",
-              },
+        {
+          title: "CRM",
+          imgPath: crmIcon,
+          value: "crm",
+          to: "/crm",
+          children: [
+            {
+              title: "Leads",
+              value: "crmLeads",
+              imgPath: crmIcon,
+              to: "/crm/leads",
+              featureKey: "crm",
+            },
             {
               title: "DMs",
               value: "crmDms",
@@ -231,13 +231,20 @@ export const useMainStore = defineStore("mainStore", {
               to: "/crm/analytics",
               featureKey: "crm",
             },
-            {
-              title: "Google Analytics",
-              value: "crm Google Analytics",
-              imgPath: crmIcon,
-              to: "/crm/google_analytics",
-              featureKey: "crm",
-            },
+            // {
+            //   title: "Google Analytics",
+            //   value: "crm Google Analytics",
+            //   imgPath: crmIcon,
+            //   to: "/crm/google_analytics",
+            //   featureKey: "crm",
+            // },
+            // {
+            //   title: "Google Ads Analytics",
+            //   value: "crm Google Ads Analytics",
+            //   imgPath: crmIcon,
+            //   to: "/crm/google_ads",
+            //   featureKey: "crm",
+            // },
           ],
           featureKey: "crm",
         },
@@ -245,7 +252,7 @@ export const useMainStore = defineStore("mainStore", {
           title: "Flossy Diary",
           imgPath: tasksIcon,
           value: "flosslyDiary",
-          to:"/diary",
+          to: "/diary",
           featureKey: "diary",
           children: [
             {
@@ -313,7 +320,7 @@ export const useMainStore = defineStore("mainStore", {
           to: "/support-chat",
           featureKey: "dashboard", // Use dashboard feature key so it's always visible
         });
-      } 
+      }
 
       const filtered = filterMenuByLicense(menuItems, licenseType);
       return filtered;

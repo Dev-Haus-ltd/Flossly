@@ -67,11 +67,23 @@ import { MetaCampaign } from "./crm/MetaCampaign";
 import { MetaAdSet } from "./crm/MetaAdSet";
 import { MetaAd } from "./crm/MetaAd";
 import { MetaInsight } from "./crm/MetaInsights";
+import { GoogleAdsAccount } from "./crm/google_Ads_analytics/googleAdsAccounts";
+import { GoogleAdsCampaign } from "./crm/google_Ads_analytics/googleAdsCampaigns";
+import { GoogleAdsAdGroup } from "./crm/google_Ads_analytics/googleAdsAdGroups";
+import { GoogleAdsAd } from "./crm/google_Ads_analytics/googleAdsAds";
+import { GoogleAdsInsight } from "./crm/google_Ads_analytics/googleAdsInsights";
 
 // Chatbot Support
 import { ChatbotConversation } from "./chatbot/chatbotConversations";
 import { ChatbotMessage } from "./chatbot/chatbotMessages";
 import { ChatbotMessageAttachment } from "./chatbot/chatbotMessageAttachments";
+
+// Google Analytics (GSC & Business Profile)
+import { GoogleOAuthToken } from "./crm/google_analytics/googleOAuthTokens";
+import { GoogleSearchConsoleSite } from "./crm/google_analytics/googleSearchConsoleSites";
+import { GoogleSearchConsoleSitePage } from "./crm/google_analytics/googleSearchConsoleSitePages";
+import { GoogleSearchConsolePerformance } from "./crm/google_analytics/googleSearchConsolePerformance";
+import { GoogleBusinessProfile } from "./crm/google_business_analytics/googleBusinessProfiles";
 
 // Diary
 import { DiaryTreatment } from "./diary/treatments";
@@ -473,6 +485,49 @@ MetaAd.hasMany(MetaInsight, {
 })
 
 
+// Google Ads Associations
+Organisation.hasOne(GoogleAdsAccount, { foreignKey: 'organisationId', as: 'googleAdsAccounts' })
+GoogleAdsAccount.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true })
+
+GoogleAdsAccount.hasMany(GoogleAdsCampaign, { foreignKey: 'googleCustomerId', sourceKey: 'googleCustomerId', as: 'campaigns' })
+GoogleAdsCampaign.belongsTo(GoogleAdsAccount, { foreignKey: 'googleCustomerId', targetKey: 'googleCustomerId', as: 'account', onDelete: 'CASCADE', hooks: true })
+
+GoogleAdsCampaign.hasMany(GoogleAdsAdGroup, { foreignKey: 'campaignId', as: 'adGroups' })
+GoogleAdsAdGroup.belongsTo(GoogleAdsCampaign, { foreignKey: 'campaignId', as: 'campaign', onDelete: 'CASCADE', hooks: true })
+
+GoogleAdsAdGroup.hasMany(GoogleAdsAd, { foreignKey: 'adGroupId', as: 'ads' })
+GoogleAdsAd.belongsTo(GoogleAdsAdGroup, { foreignKey: 'adGroupId', as: 'adGroup', onDelete: 'CASCADE', hooks: true })
+
+// Insights (Polymorphic-style, no FK constraints)
+GoogleAdsAccount.hasMany(GoogleAdsInsight, {
+  foreignKey: 'entityId',
+  sourceKey: 'googleCustomerId',
+  constraints: false,
+  scope: { entityType: 'account' },
+})
+
+GoogleAdsCampaign.hasMany(GoogleAdsInsight, {
+  foreignKey: 'entityId',
+  sourceKey: 'campaignId',
+  constraints: false,
+  scope: { entityType: 'campaign' },
+})
+
+GoogleAdsAdGroup.hasMany(GoogleAdsInsight, {
+  foreignKey: 'entityId',
+  sourceKey: 'adGroupId',
+  constraints: false,
+  scope: { entityType: 'adgroup' },
+})
+
+GoogleAdsAd.hasMany(GoogleAdsInsight, {
+  foreignKey: 'entityId',
+  sourceKey: 'adId',
+  constraints: false,
+  scope: { entityType: 'ad' },
+})
+
+
 // CPD Associations
 Course.hasMany(CourseQuestionaire, { foreignKey: "courseId", as: "questions" });
 CourseQuestionaire.belongsTo(Course, { foreignKey: "courseId", as: "course", onDelete: 'CASCADE', hooks: true });
@@ -500,6 +555,32 @@ User.hasMany(OrganisationReferral, {
   foreignKey: "referredBy",
   as: "organisationReferrals",
 });
+
+// Google Analytics (GSC & Business Profile) Associations
+GoogleOAuthToken.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+GoogleOAuthToken.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', hooks: true });
+Organisation.hasOne(GoogleOAuthToken, { foreignKey: 'organisationId', as: 'googleOAuthToken', onDelete: 'CASCADE', hooks: true });
+User.hasMany(GoogleOAuthToken, { foreignKey: 'userId', as: 'googleOAuthTokens', onDelete: 'CASCADE', hooks: true });
+
+GoogleSearchConsoleSite.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+GoogleSearchConsoleSite.belongsTo(GoogleOAuthToken, { foreignKey: 'googleOAuthTokenId', as: 'oauthToken', onDelete: 'CASCADE', hooks: true });
+Organisation.hasOne(GoogleSearchConsoleSite, { foreignKey: 'organisationId', as: 'googleSearchConsoleSite', onDelete: 'CASCADE', hooks: true });
+GoogleOAuthToken.hasOne(GoogleSearchConsoleSite, { foreignKey: 'googleOAuthTokenId', as: 'searchConsoleSite', onDelete: 'CASCADE', hooks: true });
+
+GoogleSearchConsoleSitePage.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+GoogleSearchConsoleSitePage.belongsTo(GoogleSearchConsoleSite, { foreignKey: 'siteId', as: 'site', onDelete: 'CASCADE', hooks: true });
+Organisation.hasMany(GoogleSearchConsoleSitePage, { foreignKey: 'organisationId', as: 'googleSearchConsoleSitePages', onDelete: 'CASCADE', hooks: true });
+GoogleSearchConsoleSite.hasMany(GoogleSearchConsoleSitePage, { foreignKey: 'siteId', as: 'pages', onDelete: 'CASCADE', hooks: true });
+
+GoogleSearchConsolePerformance.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+GoogleSearchConsolePerformance.belongsTo(GoogleSearchConsoleSite, { foreignKey: 'siteId', as: 'site', onDelete: 'CASCADE', hooks: true });
+Organisation.hasMany(GoogleSearchConsolePerformance, { foreignKey: 'organisationId', as: 'googleSearchConsolePerformance', onDelete: 'CASCADE', hooks: true });
+GoogleSearchConsoleSite.hasMany(GoogleSearchConsolePerformance, { foreignKey: 'siteId', as: 'performanceData', onDelete: 'CASCADE', hooks: true });
+
+GoogleBusinessProfile.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+GoogleBusinessProfile.belongsTo(GoogleOAuthToken, { foreignKey: 'googleOAuthTokenId', as: 'oauthToken', onDelete: 'CASCADE', hooks: true });
+Organisation.hasOne(GoogleBusinessProfile, { foreignKey: 'organisationId', as: 'googleBusinessProfile', onDelete: 'CASCADE', hooks: true });
+GoogleOAuthToken.hasOne(GoogleBusinessProfile, { foreignKey: 'googleOAuthTokenId', as: 'businessProfile', onDelete: 'CASCADE', hooks: true });
 
 // Export models
 export {
@@ -577,10 +658,21 @@ export {
   MetaAdSet,
   MetaAd,
   MetaInsight,
+  GoogleAdsAccount,
+  GoogleAdsCampaign,
+  GoogleAdsAdGroup,
+  GoogleAdsAd,
+  GoogleAdsInsight,
   // Chatbot Support
   ChatbotConversation,
   ChatbotMessage,
   ChatbotMessageAttachment,
+  // Google Analytics (GSC & Business Profile)
+  GoogleOAuthToken,
+  GoogleSearchConsoleSite,
+  GoogleSearchConsoleSitePage,
+  GoogleSearchConsolePerformance,
+  GoogleBusinessProfile,
   // Diary
   DiaryTreatment,
   DiaryPatient,

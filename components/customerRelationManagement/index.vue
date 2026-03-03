@@ -1448,7 +1448,7 @@ const initLeads = async (metaConnected = false) => {
       // 1️⃣ Sync Meta structure + budgets
       await crmStore.fetchMetaStructure();
       // 2️⃣ Sync Meta analytics (daily insights / backfill)
-      await crmStore.fetchMetaInsights();
+      await crmStore.fetchMetaInsights({ days: 30 });
       // 3️⃣ Fetch last 30 days leads on first connect
       await crmStore.fetchLeadsNow({ days: 30 });
     } catch (e) {

@@ -4,7 +4,63 @@ export const useCrmStore = defineStore("crmStore", {
   state: () => ({
     isLoading: false,
     _pending: 0,
+    // Google Search Console state
+    googleConnection: null,
+    googleSites: [],
+    selectedGoogleSite: null,
+    googleSitePages: [],
+    googleSitePagesPagination: null,
+    googleSitePagesLoading: false,
+    googleSitePagesLoading: false,
+    googleSitePagesError: null,
+    // Google Ads state
+    googleAdsCustomers: [],
+    selectedGoogleAdsAccount: null,
+    googleAdsPerformance: null,
+    googleAdsLoading: false,
+    googleAdsError: null,
+    // Meta state
+    metaCampaigns: [],
+    metaAdAccounts: [],
+    metaAdSets: [],
+    metaAds: [],
+    metaInsights: [],
   }),
+  getters: {
+    metaStats(state) {
+      const totals = {
+        campaigns: state.metaCampaigns.length,
+        spend: 0,
+        impressions: 0,
+        reach: 0,
+        leads: 0,
+        clicks: 0,
+        roas: 0
+      }
+
+      state.metaInsights.forEach(i => {
+        if (i.entityType === 'campaign') {
+          totals.spend += Number(i.spend || 0)
+          totals.impressions += Number(i.impressions || 0)
+          totals.reach += Number(i.reach || 0)
+          totals.leads += Number(i.leads || 0)
+          totals.clicks += Number(i.clicks || 0)
+        }
+      })
+
+      // Calculate ROAS: (Total Revenue / Total Spend) * 100. 
+      // Meta gives purchase_roas directly for specific entities, but for aggregation it's better to calculate or average.
+      // Since we don't have total revenue across all, we can average the ROAS of campaigns or just show one if provided.
+      // For now, let's use a simple average of campaign ROAS or 0.
+      const campaignsWithRoas = state.metaInsights.filter(i => i.entityType === 'campaign' && i.purchase_roas > 0)
+      if (campaignsWithRoas.length) {
+        const sumRoas = campaignsWithRoas.reduce((acc, i) => acc + Number(i.purchase_roas), 0)
+        totals.roas = (sumRoas / campaignsWithRoas.length) * 100
+      }
+
+      return totals
+    }
+  },
   actions: {
     _start() { this._pending++; this.isLoading = true; },
     _end() { this._pending = Math.max(0, this._pending - 1); this.isLoading = this._pending > 0; },
@@ -27,8 +83,31 @@ export const useCrmStore = defineStore("crmStore", {
     refreshDmProfile(payload) { return this._wrap(() => crmService.refreshDmProfile(payload)); },
     connectionStatus() { return this._wrap(() => crmService.connectionStatus()); },
     fetchLeadsNow(params = {}) { return this._wrap(() => crmService.fetchLeadsNow(params)); },
-    fetchMetaStructure() { return this._wrap(() => crmService.fetchMetaStructure()); },
-    fetchMetaInsights() { return this._wrap(() => crmService.fetchMetaInsights()); },
+    async fetchMetaStructure() {
+      const res = await this._wrap(() => crmService.fetchMetaStructure());
+      if (res?.code === 0) await this.getMetaStructure();
+      return res;
+    },
+    async getMetaStructure() {
+      const res = await this._wrap(() => crmService.getMetaStructure());
+      if (res?.code === 0 && res.data) {
+        this.metaCampaigns = res.data.campaigns || [];
+        this.metaAdAccounts = res.data.adAccounts || [];
+        this.metaAdSets = res.data.adSets || [];
+        this.metaAds = res.data.ads || [];
+      }
+      return res;
+    },
+    async fetchMetaInsights(params = {}) {
+      const res = await this._wrap(() => crmService.fetchMetaInsights(params));
+      if (res?.code === 0) await this.getMetaInsights();
+      return res;
+    },
+    async getMetaInsights() {
+      const res = await this._wrap(() => crmService.getMetaInsights());
+      if (res?.code === 0) this.metaInsights = res.data || [];
+      return res;
+    },
     subscribePages() { return this._wrap(() => crmService.subscribePages()); },
     disconnectMeta() { return this._wrap(() => crmService.disconnectMeta()); },
     metaHealth() { return this._wrap(() => crmService.metaHealth()); },
@@ -102,5 +181,190 @@ export const useCrmStore = defineStore("crmStore", {
     sendLeadMail(payload) { return this._wrap(() => crmService.sendLeadMail(payload)); },
     sendLeadWhatsApp(payload) { return this._wrap(() => crmService.sendLeadWhatsApp(payload)); },
     getWhatsAppUsage() { return this._wrap(() => crmService.getWhatsAppUsage()); },
+
+    // =====================================================
+    // GOOGLE SEARCH CONSOLE
+    // =====================================================
+
+    // Start Google OAuth flow
+    startGoogleAuth() { return this._wrap(() => crmService.startGoogleAuth()); },
+
+    // Get Google connection status
+    async googleConnectionStatus() {
+      const result = await this._wrap(() => crmService.googleConnectionStatus());
+      if (result?.code === 0 && result?.data) {
+        this.googleConnection = result.data;
+        if (result.data.selectedAdsAccount) {
+          this.selectedGoogleAdsAccount = result.data.selectedAdsAccount;
+        }
+      }
+      return result;
+    },
+
+    // Disconnect Google account
+    async disconnectGoogle(tokenId = null) {
+      const result = await this._wrap(() => crmService.disconnectGoogle(tokenId));
+      if (result?.code === 0) {
+        this.googleConnection = null;
+        this.googleSites = [];
+        this.selectedGoogleSite = null;
+        this.googleSitePages = [];
+        this.googleSitePagesPagination = null;
+      }
+      return result;
+    },
+
+    // Fetch available GSC sites
+    async fetchGoogleSites() {
+      const result = await this._wrap(() => crmService.fetchGoogleSites());
+      if (result?.code === 0 && result?.data?.sites) {
+        this.googleSites = result.data.sites;
+        // Store tokenId and accountEmail from the response for later use
+        if (result.data.tokenId) {
+          this.googleConnection = {
+            ...(this.googleConnection || {}),
+            tokenId: result.data.tokenId,
+            accountEmail: result.data.accountEmail
+          };
+        }
+      }
+      return result;
+    },
+
+    // Select/activate a GSC site for tracking
+    async selectGoogleSite(
+      siteUrl,
+      tokenId = null,
+      startDate,
+      endDate,
+      country,
+      device
+    ) {
+      const result = await this._wrap(() =>
+        crmService.selectGoogleSite(
+          siteUrl,
+          tokenId,
+          startDate,
+          endDate,
+          country,
+          device
+        )
+      )
+
+      if (result?.code === 0 && result?.data?.site) {
+        this.selectedGoogleSite = result.data.site
+      }
+
+      return result
+    },
+
+    // Trigger page fetching for a site (manual resync)
+    fetchGoogleSitePages(
+      siteId,
+      startDate,
+      endDate,
+      country,
+      device
+    ) {
+      return this._wrap(() =>
+        crmService.fetchGoogleSitePages(
+          siteId,
+          startDate,
+          endDate,
+          country,
+          device
+        )
+      );
+    },
+
+    // Fetch analytics for a specific page
+    // fetchGooglePageAnalytics(payload) {
+    //   return this._wrap(() => crmService.fetchGooglePageAnalytics(payload));
+    // },
+
+    // Get site pages with analytics (paginated)
+    async getGoogleSitePages(siteId, page = 1, limit = 50) {
+      this.googleSitePagesLoading = true;
+      this.googleSitePagesError = null;
+      try {
+        const result = await this._wrap(() => crmService.getGoogleSitePages(siteId, page, limit));
+        if (result?.code === 0 && result?.data) {
+          this.googleSitePages = result.data.pages || [];
+          this.googleSitePagesPagination = result.data.pagination || null;
+          if (result.data.site) {
+            this.selectedGoogleSite = result.data.site;
+          }
+        } else {
+          this.googleSitePagesError = result?.error || 'Failed to fetch pages';
+        }
+        return result;
+      } catch (e) {
+        this.googleSitePagesError = e?.message || 'Failed to fetch pages';
+        throw e;
+      } finally {
+        this.googleSitePagesLoading = false;
+      }
+    },
+
+    // Search site pages with analytics (paginated)
+    async searchGoogleSitePages(siteId, searchQuery, page = 1, limit = 50) {
+      this.googleSitePagesLoading = true;
+      this.googleSitePagesError = null;
+      try {
+        const result = await this._wrap(() => crmService.searchGoogleSitePages(siteId, searchQuery, page, limit));
+        if (result?.code === 0 && result?.data) {
+          this.googleSitePages = result.data.pages || [];
+          this.googleSitePagesPagination = result.data.pagination || null;
+        } else {
+          this.googleSitePagesError = result?.error || 'Failed to search pages';
+        }
+        return result;
+      } catch (e) {
+        this.googleSitePagesError = e?.message || 'Failed to search pages';
+        throw e;
+      } finally {
+        this.googleSitePagesLoading = false;
+      }
+    },
+
+    // Clear Google site pages state
+    clearGoogleSitePages() {
+      this.googleSitePages = [];
+      this.googleSitePagesPagination = null;
+      this.googleSitePagesError = null;
+    },
+
+    async fetchGoogleAdsCustomers() {
+      const res = await this._wrap(() => crmService.fetchGoogleAdsCustomers());
+      if (res?.code === 0 && res?.data?.customers) {
+        this.googleAdsCustomers = res.data.customers;
+      }
+      return res;
+    },
+    async selectGoogleAdsAccount(accountId) {
+      const res = await this._wrap(() => crmService.selectGoogleAdsAccount(accountId));
+      if (res?.code === 0 && res?.data?.account) {
+        this.selectedGoogleAdsAccount = res.data.account;
+      }
+      return res;
+    },
+    async getGoogleAdsPerformance(payload) {
+      this.googleAdsLoading = true;
+      this.googleAdsError = null;
+      try {
+        const res = await this._wrap(() => crmService.getGoogleAdsPerformance(payload));
+        if (res?.code === 0 && res?.data) {
+          this.googleAdsPerformance = res.data;
+        } else {
+          this.googleAdsError = res?.error || 'Failed to fetch performance';
+        }
+        return res;
+      } catch (e) {
+        this.googleAdsError = e?.message || 'Failed to fetch performance';
+        throw e;
+      } finally {
+        this.googleAdsLoading = false;
+      }
+    },
   },
 });

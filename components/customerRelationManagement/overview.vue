@@ -106,6 +106,54 @@
                 WhatsApp is available on paid plans only.
               </span>
             </template>
+            <!-- GOOGLE 
+            <template v-else-if="card.key === 'google'">
+              <v-btn
+                color="primary"
+                variant="outlined"
+                rounded="lg"
+                class="action-btn"
+                :disabled="!isGoogleConnected"
+                @click="openGoogleHealth"
+              >
+                Google Health
+              </v-btn>
+              <v-btn
+                v-if="isGoogleConnected"
+                color="grey-darken-1"
+                variant="outlined"
+                rounded="lg"
+                class="action-btn"
+                @click="disconnectGoogle"
+                :loading="googleDisconnecting"
+              >
+                Disconnect
+              </v-btn>
+              <v-btn
+                v-else
+                color="primary"
+                variant="flat"
+                rounded="lg"
+                class="action-btn action-btn--primary"
+                :loading="googleConnecting"
+                @click="connectGoogle"
+              >
+                Connect
+              </v-btn>
+            </template> 
+            -->
+            <!-- GOOGLE placed temperory above implementation is functional -->
+            <template v-else-if="card.key === 'google'">
+              <v-btn
+                color="primary"
+                variant="flat"
+                rounded="lg"
+                class="action-btn action-btn--primary"
+                disabled
+              >
+                Coming Soon
+              </v-btn>
+            </template>
             <template v-else>
               <v-btn
                 color="primary"
@@ -169,6 +217,12 @@
       v-model="metaHealthDialog"
       :loading="metaHealthLoading"
       :data="metaHealthData"
+    />
+    <!-- GOOGLE HEALTH DIALOG -->
+    <LazyCustomerRelationManagementGoogleAnalyticsGoogleHealthDialog
+      v-model="googleHealthDialog"
+      :loading="googleHealthLoading"
+      :data="googleHealthData"
     />
 
     <v-dialog v-model="whapiDialog" max-width="560">
@@ -369,10 +423,13 @@ import { useCrmStore } from '@/stores/crm'
 import { useMainStore } from '@/stores/index'
 import { useAuthStore } from '@/stores/auth'
 import CustomerRelationManagementMetaHealthDialog from '@/components/customerRelationManagement/metaHealthDialog.vue'
+import CustomerRelationManagementGoogleAnalyticsGoogleHealthDialog from '@/components/customerRelationManagement/googleAnalytics/googleHealthDialog.vue'
 import IntegrationCard from '@/components/customerRelationManagement/IntegrationCard.vue'
 import metaLogo from '@/assets/crm/meta-logo.svg'
 import whatsappLogo from '@/assets/crm/whatsapp-logo.svg'
+import googleLogo from '@/assets/crm/google-logo.svg'
 import chatbotLogo from '@/assets/crm/chatbot-logo.svg'
+import { LazyCustomerRelationManagementGoogleAnalyticsGoogleHealthDialog } from '#components'
 
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
@@ -411,6 +468,24 @@ let leadChartInstance = null
 const metaHealthDialog = ref(false)
 const metaHealthLoading = ref(false)
 const metaHealthData = ref(null)
+
+const isGoogleConnected = ref(false)
+const googleConnecting = ref(false)
+const googleDisconnecting = ref(false)
+const googleHealthDialog = ref(false)
+const googleHealthLoading = ref(false)
+const googleHealthData = ref(null)
+const googleErrorDialog = ref(false)
+const googleErrorMessage = ref('')
+const googleStatus = reactive({
+  connected: false,
+  email: '',
+  tokenId: '',
+  tokenValid: false,
+  connectedAt: '',
+  expiresAt: '',
+  scopes: [],
+})
 
 
 const userEmail = computed(() => user.value?.email || '')
@@ -459,6 +534,16 @@ const integrationCards = computed(() => ([
     iconClass: 'whatsapp',
   },
   {
+    key: 'google',
+    title: 'Google',
+    subtitlePrimary: googleStatus.email || userEmail.value || '-',
+    subtitleSecondary: currentOrgName.value || '-',
+    statusLabel: googleStatusLabel.value,
+    statusColor: googleStatusColor.value,
+    icon: googleLogo,
+    iconClass: 'google',
+  },
+  {
     key: 'chatbot',
     title: 'Chatbot',
     subtitlePrimary: userEmail.value || '-',
@@ -495,6 +580,19 @@ const whapiQrCtaLabel = computed(() => {
   if (whapiLoading.value) return 'Generating QR...'
   if (!whapiQr.value) return 'Refresh QR (wait ~1 min)'
   return 'Refresh QR'
+})
+
+const googleStatusLabel = computed(() => {
+  if (!isGoogleConnected.value) return 'Not Connected'
+  if (!googleStatus.tokenValid) return 'Token Expired'
+  return 'Connected'
+})
+
+const googleStatusColor = computed(() => {
+  const label = String(googleStatusLabel.value || '').toLowerCase()
+  if (label.includes('connected')) return 'success'
+  if (label.includes('expired')) return 'error'
+  return 'grey-lighten-1'
 })
 
 const whapiChannelOptions = computed(() => {
@@ -914,6 +1012,139 @@ const monthlySummary = computed(() => {
   }
 })
 
+const transformGoogleHealthData = (data) => {
+  if (!data || !data.connected || !data.account) {
+    return { connected: false }
+  }
+
+  const account = data.account
+  const now = new Date()
+  const expires = account.expiresAt ? new Date(account.expiresAt) : null
+
+  return {
+    connected: true,
+    tokenId: account.id,
+    email: account.email,
+    tokenValid: expires ? expires > now : false,
+    connectedAt: account.connectedAt,
+    expiresAt: account.expiresAt,
+    scopes: account.scopes || [],
+    hasSearchConsole: account.hasSearchConsole,
+    hasBusinessProfile: account.hasBusinessProfile,
+    hasGoogleAds: account.hasGoogleAds,
+    scopeStatus: account.scopeStatus || [],
+    selectedSite: data.selectedSite || null,
+  }
+}
+
+const checkGoogleConnection = async () => {
+  try {
+    const res = await crmStore.googleConnectionStatus()
+    if (res?.code === 0 && res?.data?.connected) {
+      isGoogleConnected.value = true
+      const transformed = transformGoogleHealthData(res.data)
+      googleStatus.connected = transformed.connected
+      googleStatus.email = transformed.email || ''
+      googleStatus.tokenId = transformed.tokenId || ''
+      googleStatus.tokenValid = transformed.tokenValid || false
+      googleStatus.connectedAt = transformed.connectedAt || ''
+      googleStatus.expiresAt = transformed.expiresAt || ''
+      googleStatus.scopes = transformed.scopes || []
+      googleHealthData.value = transformed
+    } else {
+      isGoogleConnected.value = false
+      googleStatus.connected = false
+      googleStatus.email = ''
+      googleStatus.tokenId = ''
+      googleStatus.tokenValid = false
+      googleHealthData.value = null
+    }
+  } catch (e) {
+    isGoogleConnected.value = false
+    googleStatus.connected = false
+    googleHealthData.value = null
+  }
+}
+
+const connectGoogle = async () => {
+  googleConnecting.value = true
+  try {
+    const res = await crmStore.startGoogleAuth()
+    if (res?.code === 0 && res?.data?.url) {
+      window.location.href = res.data.url
+    } else {
+      googleErrorMessage.value = res?.error || 'Failed to start Google auth'
+      googleErrorDialog.value = true
+    }
+  } catch (e) {
+    googleErrorMessage.value = e?.message || 'Failed to start Google auth'
+    googleErrorDialog.value = true
+  } finally {
+    googleConnecting.value = false
+  }
+}
+
+const disconnectGoogle = async () => {
+  googleDisconnecting.value = true
+  try {
+    const tokenId = googleStatus.tokenId || null
+    const res = await crmStore.disconnectGoogle(tokenId)
+    if (res?.code === 0) {
+      isGoogleConnected.value = false
+      googleStatus.connected = false
+      googleStatus.email = ''
+      googleStatus.tokenId = ''
+      googleStatus.tokenValid = false
+      googleHealthData.value = null
+      mainStore?.setSnackbar?.({ title: 'Google disconnected', type: 'success' })
+    } else {
+      mainStore?.setSnackbar?.({ title: res?.message || 'Failed to disconnect Google', type: 'error' })
+    }
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || 'Failed to disconnect Google', type: 'error' })
+  } finally {
+    googleDisconnecting.value = false
+  }
+}
+
+const openGoogleHealth = async () => {
+  googleHealthDialog.value = true
+  googleHealthLoading.value = true
+  try {
+    const res = await crmStore.googleConnectionStatus()
+    if (res?.code === 0) {
+      googleHealthData.value = transformGoogleHealthData(res.data)
+    } else {
+      googleHealthData.value = { error: res?.error || res?.message || 'Failed to load health status' }
+    }
+  } catch (e) {
+    googleHealthData.value = { error: e?.data?.message || e?.message || 'Failed to load health status' }
+  } finally {
+    googleHealthLoading.value = false
+  }
+}
+
+const handleGoogleCallback = () => {
+  const googleConnected = route.query.google === 'connected'
+  const googleError = route.query.error
+
+  if (googleConnected) {
+    checkGoogleConnection()
+    mainStore?.setSnackbar?.({ title: 'Google connected successfully', type: 'success' })
+  } else if (googleError) {
+    googleErrorMessage.value = decodeURIComponent(googleError)
+    googleErrorDialog.value = true
+  }
+
+  // Clear query params
+  if (googleConnected || googleError) {
+    const nextQuery = { ...route.query }
+    delete nextQuery.google
+    delete nextQuery.error
+    router.replace({ query: nextQuery })
+  }
+}
+
 const buildLeadSeries = (days = 30) => {
   const today = startOfDay(new Date())
   const labels = []
@@ -1028,7 +1259,8 @@ const loadLeads = async () => {
 onMounted(async () => {
   loadUser()
   handleMetaQuery()
-  await Promise.all([checkMetaConnection(), loadWhapiStatus(), loadLeads()])
+  handleGoogleCallback()
+  await Promise.all([checkMetaConnection(), loadWhapiStatus(), checkGoogleConnection(), loadLeads()])
 })
 
 watch(activeLeads, async () => {
