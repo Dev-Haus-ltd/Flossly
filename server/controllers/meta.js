@@ -358,6 +358,14 @@ export const authCallback = async (event) => {
       await fetchLeadsForOrg(orgId, { days: 30 })
     } catch (e) {}
 
+    // Backfill last 30 days of DM history for Messenger + Instagram (non-blocking)
+    try {
+      await fetchDmHistoryForOrg(orgId, {
+        days: 30,
+        platforms: ['messenger', 'instagram'],
+      })
+    } catch (e) {}
+
     // Clear state cookie
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
     
@@ -779,6 +787,230 @@ const fetchLeadsForOrg = async (orgId, { days = 0, maxPerForm = 1000, debugEnabl
   return { ok: true, imported }
 }
 
+const fetchDmHistoryForOrg = async (
+  orgId,
+  {
+    days = 30,
+    maxThreads = 60,
+    maxMessagesPerThread = 120,
+    platforms = ['messenger', 'instagram'],
+    debugEnabled = false,
+  } = {}
+) => {
+  if (!orgId) return { ok: false, error: 'Unauthenticated' }
+  try { await CrmDmAccount.sync() } catch {}
+  try { await CrmDmConversation.sync() } catch {}
+  try { await CrmDmMessage.sync() } catch {}
+
+  const sinceDate = Number.isFinite(days) && days > 0
+    ? new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+    : null
+
+  const accounts = await CrmDmAccount.findAll({
+    where: {
+      organisationId: orgId,
+      status: 'Active',
+      platform: { [Op.in]: platforms },
+    },
+    order: [['updatedAt', 'DESC']],
+  })
+
+  const debug = {
+    orgId: Number(orgId),
+    days,
+    accounts: accounts.length,
+    conversationsScanned: 0,
+    conversationsUpserted: 0,
+    messagesScanned: 0,
+    messagesImported: 0,
+    errors: [],
+  }
+
+  let conversationsUpserted = 0
+  let messagesImported = 0
+
+  for (const acc of accounts) {
+    const platform = String(acc.platform || '').toLowerCase()
+    const accountId = String(acc.accountId || '')
+    const accessToken = acc.accessTokenEnc ? decrypt(acc.accessTokenEnc) : null
+    if (!accountId || !accessToken) continue
+
+    const selfIds = new Set([accountId])
+    const platformParam = platform === 'instagram' ? 'instagram' : 'messenger'
+    let nextConversationsUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(accountId)}/conversations?platform=${encodeURIComponent(platformParam)}&fields=id,updated_time,participants.limit(50){id,name,username,profile_pic,profile_picture_url},messages.limit(50){id,created_time,message,from,to,attachments}&limit=25&access_token=${encodeURIComponent(accessToken)}`
+    let processedThreads = 0
+
+    while (nextConversationsUrl && processedThreads < maxThreads) {
+      let convResp = null
+      try {
+        convResp = await $fetch(nextConversationsUrl, { method: 'GET' })
+      } catch (e) {
+        debug.errors.push({
+          platform,
+          accountId,
+          stage: 'list_conversations',
+          message: e?.data?.error?.message || e?.message || 'Failed to fetch conversations',
+        })
+        break
+      }
+
+      const convItems = Array.isArray(convResp?.data) ? convResp.data : []
+      if (!convItems.length) break
+
+      for (const conv of convItems) {
+        if (processedThreads >= maxThreads) break
+        processedThreads += 1
+        debug.conversationsScanned += 1
+
+        const convUpdated = conv?.updated_time ? new Date(conv.updated_time) : null
+        if (sinceDate && convUpdated && !Number.isNaN(convUpdated.getTime()) && convUpdated < sinceDate) {
+          continue
+        }
+
+        const participants = Array.isArray(conv?.participants?.data) ? conv.participants.data : []
+        const otherParticipant = participants.find((p) => p?.id && !selfIds.has(String(p.id))) || participants[0] || null
+        const threadId = String(otherParticipant?.id || conv?.id || '')
+        if (!threadId) continue
+
+        let conversation = await CrmDmConversation.findOne({
+          where: { organisationId: orgId, platform, threadId },
+        })
+
+        if (!conversation) {
+          conversation = await CrmDmConversation.create({
+            organisationId: orgId,
+            platform,
+            accountId,
+            threadId,
+            participantName: otherParticipant?.name || otherParticipant?.username || threadId,
+            participantAvatar: otherParticipant?.profile_pic || otherParticipant?.profile_picture_url || null,
+            lastMessageAt: convUpdated && !Number.isNaN(convUpdated.getTime()) ? convUpdated : new Date(),
+            unreadCount: 0,
+            metadata: {
+              inboxConversationId: conv?.id || null,
+              participantName: otherParticipant?.name || otherParticipant?.username || threadId,
+              participantAvatar: otherParticipant?.profile_pic || otherParticipant?.profile_picture_url || null,
+              assignedUserId: acc.connectedByUserId || null,
+            },
+          })
+          conversationsUpserted += 1
+          debug.conversationsUpserted += 1
+        } else {
+          const nextName = conversation.participantName || otherParticipant?.name || otherParticipant?.username || threadId
+          const nextAvatar = conversation.participantAvatar || otherParticipant?.profile_pic || otherParticipant?.profile_picture_url || null
+          conversation.participantName = nextName
+          conversation.participantAvatar = nextAvatar
+          if (convUpdated && !Number.isNaN(convUpdated.getTime())) {
+            conversation.lastMessageAt = convUpdated
+          }
+          conversation.metadata = {
+            ...(conversation.metadata || {}),
+            inboxConversationId: conv?.id || conversation?.metadata?.inboxConversationId || null,
+            participantName: nextName,
+            participantAvatar: nextAvatar,
+            assignedUserId: conversation?.metadata?.assignedUserId || acc.connectedByUserId || null,
+          }
+          await conversation.save()
+        }
+
+        const collectMessagePage = async (messagePage) => {
+          const msgItems = Array.isArray(messagePage?.data) ? messagePage.data : []
+          for (const m of msgItems) {
+            debug.messagesScanned += 1
+            const createdAt = m?.created_time ? new Date(m.created_time) : null
+            if (sinceDate && createdAt && !Number.isNaN(createdAt.getTime()) && createdAt < sinceDate) {
+              continue
+            }
+
+            const fromId = String(m?.from?.id || '')
+            const isOutbound = !!fromId && selfIds.has(fromId)
+            const attachments = m?.attachments || null
+            const text = String(m?.message || '').trim()
+            const normalizedMessage = text || (attachments ? '[Attachment]' : '')
+            if (!normalizedMessage) continue
+
+            const platformMessageId = String(m?.id || '').trim() || null
+            if (platformMessageId) {
+              const already = await CrmDmMessage.findOne({
+                where: {
+                  organisationId: orgId,
+                  conversationId: conversation.id,
+                  platformMessageId,
+                },
+              })
+              if (already) continue
+            } else {
+              if (createdAt && !Number.isNaN(createdAt.getTime())) {
+                const duplicate = await CrmDmMessage.findOne({
+                  where: {
+                    organisationId: orgId,
+                    conversationId: conversation.id,
+                    message: normalizedMessage,
+                    direction: isOutbound ? 'outbound' : 'inbound',
+                    createdAt,
+                  },
+                })
+                if (duplicate) continue
+              }
+            }
+
+            await CrmDmMessage.create({
+              organisationId: orgId,
+              conversationId: conversation.id,
+              platform,
+              platformMessageId,
+              direction: isOutbound ? 'outbound' : 'inbound',
+              senderName: m?.from?.name || conversation.participantName || threadId,
+              message: normalizedMessage,
+              attachments,
+              status: isOutbound ? 'sent' : 'received',
+              metadata: m,
+              createdAt: createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt : undefined,
+              updatedAt: createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt : undefined,
+            })
+            messagesImported += 1
+            debug.messagesImported += 1
+          }
+        }
+
+        await collectMessagePage(conv?.messages || {})
+
+        let nextMessagesUrl = conv?.messages?.paging?.next || null
+        let processedMessages = Array.isArray(conv?.messages?.data) ? conv.messages.data.length : 0
+        while (nextMessagesUrl && processedMessages < maxMessagesPerThread) {
+          let msgResp = null
+          try {
+            msgResp = await $fetch(nextMessagesUrl, { method: 'GET' })
+          } catch (e) {
+            debug.errors.push({
+              platform,
+              accountId,
+              conversationId: conv?.id || null,
+              stage: 'list_messages',
+              message: e?.data?.error?.message || e?.message || 'Failed to fetch messages',
+            })
+            break
+          }
+          const count = Array.isArray(msgResp?.data) ? msgResp.data.length : 0
+          if (!count) break
+          processedMessages += count
+          await collectMessagePage(msgResp)
+          nextMessagesUrl = msgResp?.paging?.next || null
+        }
+      }
+
+      nextConversationsUrl = convResp?.paging?.next || null
+    }
+  }
+
+  if (debugEnabled) return { ok: true, debug }
+  return {
+    ok: true,
+    conversationsUpserted,
+    messagesImported,
+  }
+}
+
 export const igAuthStart = async (event) => {
   const config = useRuntimeConfig()
   const appId = config.META_IG_APP_ID || config.META_APP_ID
@@ -895,6 +1127,14 @@ export const igAuthCallback = async (event) => {
       accessToken,
       tokenExpiresAt: expiry,
     })
+
+    // Backfill recent Instagram DM history after IG connect
+    try {
+      await fetchDmHistoryForOrg(orgId, {
+        days: 30,
+        platforms: ['instagram'],
+      })
+    } catch (e) {}
 
     setCookie(event, 'meta_ig_oauth_state', '', { maxAge: -1 })
     return sendRedirect(event, `/crm?meta=ig_connected&account=${encodeURIComponent(igUsername || igAccountId)}`)
