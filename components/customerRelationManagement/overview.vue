@@ -219,7 +219,7 @@
       :data="metaHealthData"
     />
     <!-- GOOGLE HEALTH DIALOG -->
-    <LazyCustomerRelationManagementGoogleAnalyticsGoogleHealthDialog
+    <CustomerRelationManagementGoogleAnalyticsGoogleHealthDialog
       v-model="googleHealthDialog"
       :loading="googleHealthLoading"
       :data="googleHealthData"
@@ -429,7 +429,6 @@ import metaLogo from '@/assets/crm/meta-logo.svg'
 import whatsappLogo from '@/assets/crm/whatsapp-logo.svg'
 import googleLogo from '@/assets/crm/google-logo.svg'
 import chatbotLogo from '@/assets/crm/chatbot-logo.svg'
-import { LazyCustomerRelationManagementGoogleAnalyticsGoogleHealthDialog } from '#components'
 
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
