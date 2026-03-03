@@ -3,7 +3,7 @@
 </template>
 
 <script setup>
-import CustomerRelationManagementGoogleAnalytics from '@/components/customerRelationManagement/googleAnalytics/index.vue'
+import CustomerRelationManagementGoogleAnalytics from '@/components/customerRelationManagement/googleanalytics/index.vue'
 
 definePageMeta({
   layout: 'home',
