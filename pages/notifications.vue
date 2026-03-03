@@ -297,6 +297,7 @@ const handleNotificationClick = async (notification) => {
     task_unassigned: `/tasks/mytasks`,
     lead_created: `/crm?leadId=${notification.data?.leadId || ''}`,
     lead_assigned: `/crm?leadId=${notification.data?.leadId || ''}`,
+    meta_dm: `/crm/dms${notification.data?.conversationId ? `?conversationId=${notification.data.conversationId}` : ''}`,
   };
 
   const url = notification.data?.url || urlMap[notification.type] || '/';

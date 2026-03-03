@@ -192,7 +192,7 @@ const handleNotificationClick = async (notification) => {
     task_completed: `/tasks/${notification.data?.taskId || 'mytasks'}`,
     lead_created: `/crm?leadId=${notification.data?.leadId || ''}`,
     whatsapp_message: `/crm?leadId=${notification.data?.leadId || ''}&tab=communication`,
-    meta_dm: '/crm/analytics',
+    meta_dm: '/crm/dms',
   };
 
   const url = notification.data?.url || urlMap[notification.type] || '/';

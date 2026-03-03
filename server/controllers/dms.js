@@ -84,14 +84,18 @@ const resolveProfile = async ({ platform, senderId, accessToken }) => {
   return null;
 };
 
-export const processQueuedMessages = async ({ organisationId, limit = 20 }) => {
+export const processQueuedMessages = async ({ organisationId, limit = 20, messageIds = null }) => {
   await ensureDmTables();
+  const where = {
+    organisationId,
+    direction: "outbound",
+    status: "queued",
+  };
+  if (Array.isArray(messageIds) && messageIds.length) {
+    where.id = { [Op.in]: messageIds.map((id) => Number(id)).filter(Number.isFinite) };
+  }
   const queued = await CrmDmMessage.findAll({
-    where: {
-      organisationId,
-      direction: "outbound",
-      status: "queued",
-    },
+    where,
     include: [
       { model: CrmDmConversation, as: "conversation" },
     ],
@@ -164,9 +168,16 @@ export const processQueuedMessages = async ({ organisationId, limit = 20 }) => {
       results.push({ id: msg.id, status: "sent" });
     } catch (sendErr) {
       msg.status = "failed";
-      msg.metadata = { ...(msg.metadata || {}), error: sendErr?.message || "Send failed" };
+      msg.metadata = {
+        ...(msg.metadata || {}),
+        error: sendErr?.data?.error?.message || sendErr?.message || "Send failed",
+      };
       await msg.save();
-      results.push({ id: msg.id, status: "failed" });
+      results.push({
+        id: msg.id,
+        status: "failed",
+        error: sendErr?.data?.error?.message || sendErr?.message || "Send failed",
+      });
     }
   }
 
@@ -189,6 +200,7 @@ export const listDmConversations = async (event) => {
     const platform = body.platform ?? query.platform ?? null;
     const search = body.search ?? query.search ?? null;
     const assignedToMeRaw = body.assignedToMe ?? query.assignedToMe ?? null;
+    const unreadOnlyRaw = body.unreadOnly ?? query.unreadOnly ?? null;
     const limit = Number(body.limit ?? query.limit ?? 20);
     const offset = Number(body.offset ?? query.offset ?? 0);
 
@@ -212,6 +224,12 @@ export const listDmConversations = async (event) => {
         if (userId) {
           where.metadata = { [Op.contains]: { assignedUserId: Number(userId) } };
         }
+      }
+    }
+    if (unreadOnlyRaw !== null && unreadOnlyRaw !== undefined && unreadOnlyRaw !== "") {
+      const unreadOnly = String(unreadOnlyRaw).toLowerCase();
+      if (unreadOnly === "true" || unreadOnly === "1" || unreadOnly === "yes") {
+        where.unreadCount = { [Op.gt]: 0 };
       }
     }
 
@@ -319,7 +337,11 @@ export const sendDmMessage = async (event) => {
 
     // Attempt immediate delivery (falls back to queued if send fails).
     try {
-      await processQueuedMessages({ organisationId: orgId, limit: 1 });
+      await processQueuedMessages({
+        organisationId: orgId,
+        limit: 1,
+        messageIds: [newMessage.id],
+      });
       const refreshed = await CrmDmMessage.findOne({ where: { id: newMessage.id } });
       if (refreshed) {
         setResponseStatus(event, 201);

@@ -26,6 +26,7 @@
           <template #actions>
             <template v-if="card.key === 'meta'">
               <v-btn
+                v-if="isMetaConnected"
                 color="primary"
                 variant="outlined"
                 rounded="lg"
@@ -33,15 +34,6 @@
                 @click="openMetaHealth"
               >
                 Meta Health
-              </v-btn>
-              <v-btn
-                color="primary"
-                variant="outlined"
-                rounded="lg"
-                class="action-btn"
-                @click="integrateInstagram"
-              >
-                Connect Instagram
               </v-btn>
               <v-btn
                 v-if="isMetaConnected"
@@ -739,15 +731,6 @@ const integrateMeta = async () => {
     return
   }
   mainStore?.setSnackbar?.({ title: res?.message || 'Unable to start Meta connection', type: 'error' })
-}
-
-const integrateInstagram = async () => {
-  const res = await crmStore.startInstagramAuth()
-  if (res && res.code === 0 && res.data?.url) {
-    window.location.href = res.data.url
-    return
-  }
-  mainStore?.setSnackbar?.({ title: res?.message || 'Unable to start Instagram connection', type: 'error' })
 }
 
 const disconnectMeta = async () => {

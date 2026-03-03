@@ -68,6 +68,7 @@
                 v-for="conv in filteredConversations"
                 :key="conv.id"
                 :active="conv.id === activeConversationId"
+                class="dms-list-item"
                 @click="selectConversation(conv.id)"
               >
                 <template #prepend>
@@ -88,8 +89,9 @@
                     <span v-else>{{ conv.avatarText }}</span>
                   </v-avatar>
                 </template>
-                <v-list-item-title class="text-body-2">
-                  {{ conv.title }}
+                <v-list-item-title class="text-body-2 d-flex align-center justify-space-between">
+                  <span class="conversation-title">{{ conv.title }}</span>
+                  <span class="conversation-time">{{ formatConversationTime(conv.updatedAt) }}</span>
                 </v-list-item-title>
                 <v-list-item-subtitle class="text-caption text-medium-emphasis">
                   {{ conv.preview || "No messages yet" }}
@@ -208,9 +210,6 @@ const emptyMessage = computed(() => {
 const filteredConversations = computed(() => {
   const q = String(search.value || "").trim().toLowerCase();
   const filtered = conversations.value.filter((c) => {
-    if (activeTab.value !== "all" && c.platform !== activeTab.value) {
-      return false;
-    }
     if (!q) return true;
     return String(c.title || "").toLowerCase().includes(q);
   });
@@ -239,10 +238,39 @@ const activePlatformIcon = computed(() => {
   return "mdi-message-text-outline";
 });
 
+const formatConversationTime = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return "";
+  const now = new Date();
+  const isSameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+  if (isSameDay) {
+    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+  return date.toLocaleDateString([], { month: "short", day: "numeric" });
+};
+
 const messageItems = computed(() => {
+  const me = authStore?.getLoggedUser || authStore?.loggedUser || {};
+  const myName = me?.fullName || me?.name || "Flossly";
+  const myAvatar =
+    me?.photo ||
+    me?.profilePicture ||
+    me?.profileImage ||
+    me?.avatar ||
+    me?.logo ||
+    "";
   return messages.value.map((row) => {
     const inboundAvatar = activeConversation.value?.avatarUrl || "";
-    return mapDmMessageToChatItem(row, { inboundAvatarUrl: inboundAvatar });
+    return mapDmMessageToChatItem(row, {
+      inboundAvatarUrl: inboundAvatar,
+      inboundAvatarText: getInitials(activeConversation.value?.title || "Client") || "C",
+      outboundAvatarUrl: myAvatar,
+      outboundAvatarText: getInitials(myName) || "F",
+    });
   });
 });
 
@@ -259,7 +287,7 @@ const selectConversation = (id) => {
   draftMessage.value = "";
   loadMessages(true);
   const conv = conversations.value.find((c) => c.id === id);
-  if (conv && /^[0-9]+$/.test(String(conv.title || "")) && !conv.avatarUrl) {
+  if (conv && (!conv.avatarUrl || /^[0-9]+$/.test(String(conv.title || "")))) {
     crmStore
       .refreshDmProfile({ conversationId: id })
       .then((res) => {
@@ -328,6 +356,19 @@ const loadMessages = async (reset = false) => {
   }
 };
 
+const upsertMessages = (rows = []) => {
+  const incoming = Array.isArray(rows) ? rows : [];
+  if (!incoming.length) return;
+  const byId = new Map(messages.value.map((m) => [String(m.id), m]));
+  incoming.forEach((row) => {
+    if (!row?.id) return;
+    byId.set(String(row.id), row);
+  });
+  messages.value = Array.from(byId.values()).sort(
+    (a, b) => new Date(a?.createdAt || 0).getTime() - new Date(b?.createdAt || 0).getTime()
+  );
+};
+
 const sendMessage = async () => {
   if (!canSend.value) return;
   const text = String(draftMessage.value || "").trim();
@@ -355,10 +396,44 @@ const sendMessage = async () => {
       attachments,
     });
     if (res?.code === 0) {
+      const justSentId = Number(res?.data?.id || 0);
       draftMessage.value = "";
       pendingFiles.value = [];
-      await loadMessages(true);
-      await crmStore.processDmQueue({ limit: 20 });
+      if (res?.data) upsertMessages([res.data]);
+      scrollThreadToBottom();
+
+      const queueRes = await crmStore.processDmQueue({ limit: 20 });
+      if (justSentId && queueRes?.code === 0) {
+        const queuedResult = (queueRes?.data?.results || []).find((r) => Number(r?.id) === justSentId);
+        if (queuedResult?.status === "failed") {
+          mainStore?.setSnackbar?.({
+            title: queuedResult?.error || "Message failed to send. Please reconnect Meta and try again.",
+            type: "error",
+          });
+        }
+      }
+      const latest = await crmStore.listDmMessages({
+        conversationId: activeConversationId.value,
+        limit: 12,
+      });
+      if (latest?.code === 0) {
+        const latestRows = Array.isArray(latest?.data?.data) ? latest.data.data : [];
+        upsertMessages(latestRows);
+        if (justSentId) {
+          const latestMsg = latestRows.find((m) => Number(m?.id) === justSentId);
+          if (latestMsg?.status === "failed") {
+            const detail =
+              latestMsg?.metadata?.error || "Message failed to send. Please reconnect Meta and try again.";
+            mainStore?.setSnackbar?.({ title: detail, type: "error" });
+          }
+        }
+        scrollThreadToBottom();
+      }
+
+      const conv = conversations.value.find((c) => c.id === activeConversationId.value);
+      if (conv) {
+        conv.preview = text || "Attachment";
+      }
       return;
     }
     const msg = res?.error || res?.message || "Failed to send message";
@@ -379,8 +454,21 @@ const removePendingFile = (idx) => {
   pendingFiles.value = pendingFiles.value.filter((_, i) => i !== idx);
 };
 
+const buildConversationDisplayName = (row) => {
+  const raw =
+    row?.participantName ||
+    row?.metadata?.participantName ||
+    row?.threadId ||
+    "Unknown";
+  const name = String(raw || "").trim();
+  if (!/^[0-9]+$/.test(name)) return name;
+  if (String(row?.platform || "").toLowerCase() === "instagram") return "Instagram User";
+  if (String(row?.platform || "").toLowerCase() === "messenger") return "Messenger User";
+  return "User";
+};
+
 const buildConversationRow = (row) => {
-  const name = row?.participantName || row?.metadata?.participantName || row?.threadId || "Unknown";
+  const name = buildConversationDisplayName(row);
   const avatarUrl = row?.participantAvatar || row?.metadata?.participantAvatar || "";
   const assignedUserId = row?.metadata?.assignedUserId || null;
   const currentUserId = authStore?.getLoggedUser?.id || authStore?.getLoggedUser?.userId || authStore?.loggedUser?.id;
@@ -394,6 +482,7 @@ const buildConversationRow = (row) => {
     platform: row?.platform,
     unreadCount: row?.unreadCount || 0,
     assignedToMe: assignedUserId && currentUserId ? String(assignedUserId) === String(currentUserId) : false,
+    updatedAt: row?.lastMessageAt || row?.updatedAt || row?.createdAt || null,
   };
 };
 
@@ -411,6 +500,7 @@ const loadConversations = async (reset = false) => {
       platform: activeTab.value,
       search: search.value,
       assignedToMe: showAssignedOnly.value ? "true" : "",
+      unreadOnly: showUnreadOnly.value ? "true" : "",
       limit: conversationLimit.value,
       offset: conversationOffset.value,
     });
@@ -422,13 +512,19 @@ const loadConversations = async (reset = false) => {
       if (!rows.length || rows.length < conversationLimit.value) {
         conversationHasMore.value = false;
       }
-      if (!activeConversationId.value && conversations.value.length) {
+      if (!conversations.value.length) {
+        activeConversationId.value = null;
+        messages.value = [];
+      } else if (!activeConversationId.value) {
+        selectConversation(conversations.value[0].id);
+      } else if (!conversations.value.some((c) => c.id === activeConversationId.value)) {
         selectConversation(conversations.value[0].id);
       }
 
       // Background refresh for missing avatars/names
       mapped.forEach((conv) => {
-        if (conv.avatarUrl || !/^[0-9]+$/.test(String(conv.title || ""))) return;
+        const isGenericTitle = /(instagram|messenger)\s+user/i.test(String(conv.title || ""));
+        if (conv.avatarUrl && !isGenericTitle) return;
         crmStore
           .refreshDmProfile({ conversationId: conv.id })
           .then((resProfile) => {
@@ -476,6 +572,10 @@ watch(searchInput, (val) => {
 });
 
 watch(activeTab, () => {
+  loadConversations(true);
+});
+
+watch([showAssignedOnly, showUnreadOnly], () => {
   loadConversations(true);
 });
 
@@ -541,9 +641,11 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: 320px 1fr;
   gap: 0;
-  min-height: 520px;
+  min-height: 560px;
   margin-top: 16px;
-  height: calc(100dvh - 210px);
+  height: calc(100dvh - 185px);
+  max-height: calc(100dvh - 185px);
+  overflow: hidden;
 }
 
 .dms-list-card {
@@ -571,6 +673,8 @@ onBeforeUnmount(() => {
 .dms-list-body {
   overflow-y: auto;
   flex: 1;
+  min-height: 0;
+  background: #f8fafc;
 }
 
 .dms-thread-card {
@@ -594,8 +698,34 @@ onBeforeUnmount(() => {
 .dms-thread-body {
   padding: 16px 24px;
   flex: 1;
-  background: #f7f8fb;
+  min-height: 0;
+  background: #eef2f7;
   overflow-y: auto;
+}
+
+.dms-list-item {
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  padding: 10px 6px;
+}
+
+.dms-list-items :deep(.v-list-item--active) {
+  background: #e7f0ff;
+  border-left: 3px solid #1d4ed8;
+}
+
+.conversation-title {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.conversation-time {
+  font-size: 11px;
+  color: #64748b;
+  margin-left: 8px;
+  white-space: nowrap;
 }
 
 .dms-attachments-preview {
@@ -628,7 +758,10 @@ onBeforeUnmount(() => {
 @media (max-width: 960px) {
   .dms-body {
     grid-template-columns: 1fr;
+    min-height: calc(100dvh - 185px);
     height: auto;
+    max-height: none;
+    overflow: visible;
   }
   .dms-list-card {
     border-radius: 15px 15px 0 0;
@@ -663,5 +796,31 @@ onBeforeUnmount(() => {
   font-weight: 500;
   font-size: 14px;
   box-shadow: none;
+}
+
+.dms-thread-body :deep(.chat-bubble-row--inbound .chat-bubble) {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.1);
+  border-radius: 18px 18px 18px 6px;
+}
+
+.dms-thread-body :deep(.chat-bubble-row--outbound .chat-bubble) {
+  background: #1877f2;
+  border-color: #1877f2;
+  border-radius: 18px 18px 6px 18px;
+}
+
+.dms-thread-body :deep(.chat-bubble-row--outbound .chat-bubble-text) {
+  color: #ffffff;
+}
+
+.dms-thread-body :deep(.chat-bubble-row--outbound .chat-bubble-meta) {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.dms-thread-body :deep(.chat-avatar) {
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
 }
 </style>

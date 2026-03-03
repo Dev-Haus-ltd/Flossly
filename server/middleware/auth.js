@@ -48,6 +48,7 @@ const isPublicPath = (path) => {
     "/api/auth/resendVerificationEmail",
     "/api/misc/getRoles",
     "/api/meta/callback",
+    "/api/meta/igCallback",
     "/api/meta/webhook",
     "/api/whatsapp/webhook",
     "/api/whapi/webhook",
