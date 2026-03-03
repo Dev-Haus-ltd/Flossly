@@ -1162,6 +1162,16 @@ onMounted(() => {
   loadBookingDentists();
   loadBookingPatients();
   handleMetaQuery(metaConnected, metaError);
+  // Test function after testing will be removed safely
+  window.testMetaSync = async () => {
+    try {
+      await crmStore.fetchMetaStructure();
+      await crmStore.fetchMetaInsights({ days: 30 });
+      console.log("Meta structure + insights synced");
+    } catch (e) {
+      console.error("[Meta test sync failed]", e);
+    }
+  };
 });
 onBeforeUnmount(() => {
   stopMetaStream();
