@@ -1,11 +1,11 @@
 import { Op, fn, col } from 'sequelize'
 import crypto from 'crypto'
-import { CrmLead, MetaPage, Organisation, User, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight, CrmDmAccount, CrmDmConversation, CrmDmMessage, UserOrganisation } from '../models'
-import { sendNotificationToMultipleUsers } from '../utils/fcmNotification'
+import { CrmLead, MetaPage, Organisation, User, UserOrganisation, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight, CrmDmAccount, CrmDmConversation, CrmDmMessage } from '../models'
 import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
 import { addMetaClient, broadcastMetaEvent } from '../utils/metaStream'
 import { getWhatsAppProviderKey, getWhapiEnvConfig, resolveWhapiConfig } from '../utils/whatsappProvider'
+import { sendNotificationToMultipleUsers } from '../utils/fcmNotification'
 import { parseJsonBody } from "../utils/body";
 
 const META_VERSION = 'v24.0'
@@ -1174,10 +1174,13 @@ export const webhook = async (event) => {
 
             try {
               const orgUsers = await UserOrganisation.findAll({
-                where: { organisationId: mp.organisationId },
+                where: {
+                  organisationId: mp.organisationId,
+                  status: 'Active',
+                },
                 attributes: ['userId'],
               })
-              const userIds = orgUsers.map((u) => u.userId).filter(Boolean)
+              const userIds = [...new Set(orgUsers.map((u) => u.userId).filter(Boolean))]
               if (userIds.length) {
                 await sendNotificationToMultipleUsers({
                   userIds,
@@ -1195,9 +1198,16 @@ export const webhook = async (event) => {
                   priority: 'high',
                 })
               }
-            } catch (notifyErr) {}
+            } catch (notifyErr) {
+              console.warn('[META WEBHOOK]', reqId, 'Lead notification failed', {
+                leadId: created?.id || null,
+                pageId: String(pageId || ''),
+                error: notifyErr?.message || 'Unknown notification error',
+              })
+            }
           }
         }
+
 
         if (messaging.length) {
           try { await CrmDmConversation.sync() } catch {}
