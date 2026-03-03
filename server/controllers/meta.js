@@ -335,6 +335,10 @@ export const authCallback = async (event) => {
           accountId: igAccountId,
           accountName: p?.instagram_business_account?.username || p.name || null,
           accessToken: p.access_token,
+          metadata: {
+            pageId: String(p.id),
+            igAccountId,
+          },
         })
       }
     }
@@ -833,12 +837,23 @@ const fetchDmHistoryForOrg = async (
   for (const acc of accounts) {
     const platform = String(acc.platform || '').toLowerCase()
     const accountId = String(acc.accountId || '')
+    const accountMeta = acc?.metadata || {}
+    let pageIdFromMeta = String(accountMeta?.pageId || '')
+    if (platform === 'instagram' && !pageIdFromMeta) {
+      const fallbackPage = await MetaPage.findOne({
+        where: { organisationId: orgId, status: 'Active' },
+        order: [['updatedAt', 'DESC']],
+      })
+      pageIdFromMeta = String(fallbackPage?.pageId || '')
+    }
     const accessToken = acc.accessTokenEnc ? decrypt(acc.accessTokenEnc) : null
     if (!accountId || !accessToken) continue
 
     const selfIds = new Set([accountId])
+    if (pageIdFromMeta) selfIds.add(pageIdFromMeta)
     const platformParam = platform === 'instagram' ? 'instagram' : 'messenger'
-    let nextConversationsUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(accountId)}/conversations?platform=${encodeURIComponent(platformParam)}&fields=id,updated_time,participants.limit(50){id,name,username,profile_pic,profile_picture_url},messages.limit(50){id,created_time,message,from,to,attachments}&limit=25&access_token=${encodeURIComponent(accessToken)}`
+    const conversationNodeId = platform === 'instagram' && pageIdFromMeta ? pageIdFromMeta : accountId
+    let nextConversationsUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationNodeId)}/conversations?platform=${encodeURIComponent(platformParam)}&fields=id,updated_time,participants.limit(50){id,name,username,profile_pic,profile_picture_url},messages.limit(50){id,created_time,message,from,to,attachments}&limit=25&access_token=${encodeURIComponent(accessToken)}`
     let processedThreads = 0
 
     while (nextConversationsUrl && processedThreads < maxThreads) {
@@ -892,6 +907,7 @@ const fetchDmHistoryForOrg = async (
               participantName: otherParticipant?.name || otherParticipant?.username || threadId,
               participantAvatar: otherParticipant?.profile_pic || otherParticipant?.profile_picture_url || null,
               assignedUserId: acc.connectedByUserId || null,
+              sourceNodeId: conversationNodeId,
             },
           })
           conversationsUpserted += 1
@@ -910,9 +926,14 @@ const fetchDmHistoryForOrg = async (
             participantName: nextName,
             participantAvatar: nextAvatar,
             assignedUserId: conversation?.metadata?.assignedUserId || acc.connectedByUserId || null,
+            sourceNodeId: conversationNodeId,
           }
           await conversation.save()
         }
+
+        let latestImportedAt = null
+        let latestImportedPreview = ''
+        let latestImportedMessageId = null
 
         const collectMessagePage = async (messagePage) => {
           const msgItems = Array.isArray(messagePage?.data) ? messagePage.data : []
@@ -955,7 +976,7 @@ const fetchDmHistoryForOrg = async (
               }
             }
 
-            await CrmDmMessage.create({
+            const inserted = await CrmDmMessage.create({
               organisationId: orgId,
               conversationId: conversation.id,
               platform,
@@ -971,6 +992,15 @@ const fetchDmHistoryForOrg = async (
             })
             messagesImported += 1
             debug.messagesImported += 1
+
+            const insertedAt = inserted?.createdAt ? new Date(inserted.createdAt) : (createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt : null)
+            if (insertedAt && !Number.isNaN(insertedAt.getTime())) {
+              if (!latestImportedAt || insertedAt > latestImportedAt) {
+                latestImportedAt = insertedAt
+                latestImportedPreview = normalizedMessage
+                latestImportedMessageId = inserted.id
+              }
+            }
           }
         }
 
@@ -997,6 +1027,17 @@ const fetchDmHistoryForOrg = async (
           processedMessages += count
           await collectMessagePage(msgResp)
           nextMessagesUrl = msgResp?.paging?.next || null
+        }
+
+        if (latestImportedAt) {
+          conversation.lastMessageAt = latestImportedAt
+          conversation.metadata = {
+            ...(conversation.metadata || {}),
+            lastMessagePreview: String(latestImportedPreview || '').slice(0, 120),
+            lastMessageId: latestImportedMessageId || conversation?.metadata?.lastMessageId || null,
+            sourceNodeId: conversationNodeId,
+          }
+          await conversation.save()
         }
       }
 
@@ -1127,6 +1168,10 @@ export const igAuthCallback = async (event) => {
       accountName: igUsername || withIg?.name || null,
       accessToken,
       tokenExpiresAt: expiry,
+      metadata: {
+        pageId: String(withIg?.id || ''),
+        igAccountId,
+      },
     })
 
     // Backfill recent Instagram DM history after IG connect

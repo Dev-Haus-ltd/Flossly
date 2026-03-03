@@ -98,11 +98,6 @@ const props = defineProps({
 });
 
 const showAvatarImage = ref(false);
-const showMessage = computed(() => {
-  const text = String(props.message || "").trim();
-  if (text === "[Attachment]" && props.attachments) return false;
-  return !!text;
-});
 
 const updateAvatarVisibility = () => {
   showAvatarImage.value = !!props.avatarUrl;
@@ -160,6 +155,16 @@ const normalizedAttachments = computed(() => {
     .filter(Boolean);
 });
 
+const hasRenderableAttachments = computed(() => normalizedAttachments.value.length > 0);
+
+const showMessage = computed(() => {
+  const text = String(props.message || "").trim();
+  if (!text) return false;
+  // Hide attachment placeholder only when we can actually render attachment(s).
+  if (text === "[Attachment]" && hasRenderableAttachments.value) return false;
+  return true;
+});
+
 const imageAttachments = computed(() =>
   normalizedAttachments.value.filter((a) =>
     a.type.includes("image") || /\.(png|jpe?g|gif|webp|bmp)$/i.test(a.url)
@@ -187,7 +192,7 @@ const fileAttachments = computed(() =>
   )
 );
 
-const hasAttachments = computed(() => normalizedAttachments.value.length > 0);
+const hasAttachments = computed(() => hasRenderableAttachments.value);
 </script>
 
 <style scoped>
