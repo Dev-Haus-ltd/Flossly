@@ -165,7 +165,6 @@ export const authStart = async (event) => {
     'pages_manage_ads',
     'leads_retrieval',
     'ads_read',
-    'ads_management',
     'business_management',
     'pages_messaging',
     'instagram_basic',
