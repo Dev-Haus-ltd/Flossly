@@ -1,4 +1,4 @@
-import { authStart, authCallback, igAuthStart, igAuthCallback, listLeads, fetchLeadsNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck, stream, getWhatsAppConfig, saveWhatsAppConfig, whatsappEmbeddedComplete, fetchWhatsAppTemplates, fetchMetaStructureAndBudgets, fetchDailyMetaInsights, listBusinessPortfolios, connectBusinessPages, debugMetaStatus, listMetaPermissions, getMetaInsights, getMetaStructure, deauthorize, dataDeletion, dataDeletionStatus } from "../../controllers/meta";
+import { authStart, authCallback, igAuthStart, igAuthCallback, listLeads, fetchLeadsNow, fetchDmHistoryNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck, stream, getWhatsAppConfig, saveWhatsAppConfig, whatsappEmbeddedComplete, fetchWhatsAppTemplates, fetchMetaStructureAndBudgets, fetchDailyMetaInsights, listBusinessPortfolios, connectBusinessPages, debugMetaStatus, listMetaPermissions, getMetaInsights, getMetaStructure, deauthorize, dataDeletion, dataDeletionStatus } from "../../controllers/meta";
 
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, 'name')
@@ -15,6 +15,8 @@ export default defineEventHandler(async (event) => {
       return await listLeads(event)
     case 'fetchLeads':
       return await fetchLeadsNow(event)
+    case 'fetchDmHistory':
+      return await fetchDmHistoryNow(event)
     case 'subscribe':
       return await subscribePages(event)
     case 'connection':

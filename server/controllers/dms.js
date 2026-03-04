@@ -412,7 +412,7 @@ export const refreshDmProfile = async (event) => {
     });
     if (!conversation) return error(404, "Conversation not found");
 
-    const account = await CrmDmAccount.findOne({
+    let account = await CrmDmAccount.findOne({
       where: {
         organisationId: orgId,
         platform: conversation.platform,
@@ -420,7 +420,19 @@ export const refreshDmProfile = async (event) => {
         status: "Active",
       },
     });
-    if (!account?.accessTokenEnc) return error(400, "Account token missing");
+    if (!account?.accessTokenEnc) {
+      // Fallback for older conversation/account mappings.
+      account = await CrmDmAccount.findOne({
+        where: {
+          organisationId: orgId,
+          platform: conversation.platform,
+          status: "Active",
+          accessTokenEnc: { [Op.ne]: null },
+        },
+        order: [["updatedAt", "DESC"]],
+      });
+    }
+    if (!account?.accessTokenEnc) return success({ updated: false, reason: "account_token_missing" });
 
     const accessToken = decrypt(account.accessTokenEnc);
     const profile = await resolveProfile({

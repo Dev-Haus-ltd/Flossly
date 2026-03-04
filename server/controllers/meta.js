@@ -35,6 +35,53 @@ const resolveDmParticipantProfile = async ({ platform, senderId, accessToken }) 
   return {}
 }
 
+const deriveDmMessageText = ({ message = '', attachments = null }) => {
+  const text = String(message || '').trim()
+  if (text) return text
+  const list = Array.isArray(attachments) ? attachments : (attachments ? [attachments] : [])
+  if (!list.length) return ''
+
+  const walkPayloadForText = (value, depth = 0) => {
+    if (!value || depth > 4) return ''
+    if (typeof value === 'string') {
+      const s = value.trim()
+      if (!s) return ''
+      if (/^https?:\/\//i.test(s)) return ''
+      return s
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const v = walkPayloadForText(item, depth + 1)
+        if (v) return v
+      }
+      return ''
+    }
+    if (typeof value === 'object') {
+      const preferred = ['text', 'title', 'subtitle', 'caption', 'name']
+      for (const key of preferred) {
+        const v = walkPayloadForText(value?.[key], depth + 1)
+        if (v) return v
+      }
+      for (const key of Object.keys(value || {})) {
+        if (preferred.includes(key)) continue
+        const v = walkPayloadForText(value[key], depth + 1)
+        if (v) return v
+      }
+    }
+    return ''
+  }
+
+  // Try to surface meaningful text from attachment payloads before using generic placeholder.
+  for (const att of list) {
+    const payload = att?.payload || {}
+    const normalized = walkPayloadForText(payload)
+    if (normalized) return normalized
+    const typeLabel = String(att?.type || '').trim()
+    if (typeLabel) return `[${typeLabel}]`
+  }
+  return '[Attachment]'
+}
+
 const normalizeBaseUrl = (value = '') => String(value || '').replace(/\/+$/, '')
 
 const getRedirectUri = (config) => {
@@ -326,14 +373,22 @@ export const authCallback = async (event) => {
         accessToken: p.access_token,
       })
 
-      const igAccountId = String(p?.instagram_business_account?.id || '')
+      let igAccount = p?.instagram_business_account || null
+      if (!igAccount?.id) {
+        try {
+          const pageInfoUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(p.id)}?fields=instagram_business_account{id,username}&access_token=${encodeURIComponent(p.access_token)}`
+          const pageInfo = await $fetch(pageInfoUrl, { method: 'GET' })
+          igAccount = pageInfo?.instagram_business_account || null
+        } catch {}
+      }
+      const igAccountId = String(igAccount?.id || '')
       if (igAccountId) {
         await upsertDmAccount({
           organisationId: orgId,
           connectedByUserId: userId,
           platform: 'instagram',
           accountId: igAccountId,
-          accountName: p?.instagram_business_account?.username || p.name || null,
+          accountName: igAccount?.username || p.name || null,
           accessToken: p.access_token,
           metadata: {
             pageId: String(p.id),
@@ -947,8 +1002,10 @@ const fetchDmHistoryForOrg = async (
             const fromId = String(m?.from?.id || '')
             const isOutbound = !!fromId && selfIds.has(fromId)
             const attachments = m?.attachments || null
-            const text = String(m?.message || '').trim()
-            const normalizedMessage = text || (attachments ? '[Attachment]' : '')
+            const normalizedMessage = deriveDmMessageText({
+              message: m?.message,
+              attachments,
+            })
             if (!normalizedMessage) continue
 
             const platformMessageId = String(m?.id || '').trim() || null
@@ -960,7 +1017,16 @@ const fetchDmHistoryForOrg = async (
                   platformMessageId,
                 },
               })
-              if (already) continue
+              if (already) {
+                const current = String(already.message || '').trim()
+                if ((current === '[Attachment]' || !current) && normalizedMessage !== '[Attachment]') {
+                  already.message = normalizedMessage
+                  already.attachments = already.attachments || attachments || null
+                  already.metadata = { ...(already.metadata || {}), ...(m || {}) }
+                  await already.save()
+                }
+                continue
+              }
             } else {
               if (createdAt && !Number.isNaN(createdAt.getTime())) {
                 const duplicate = await CrmDmMessage.findOne({
@@ -1204,6 +1270,36 @@ export const fetchLeadsNow = async (event) => {
   if (!result.ok) return error(401, result.error || 'Unauthenticated')
   if (debugEnabled) return success(result.debug)
   return success({ imported: result.imported || 0 })
+}
+
+export const fetchDmHistoryNow = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const q = getQuery(event) || {}
+  const days = Number(q.days || 30)
+  const maxThreads = Number(q.maxThreads || 60)
+  const maxMessagesPerThread = Number(q.maxMessagesPerThread || 120)
+  const debugEnabled = String(q.debug || '').toLowerCase() === 'true'
+  const platformRaw = String(q.platform || 'all').toLowerCase()
+  const platforms =
+    platformRaw === 'messenger' ? ['messenger'] :
+    platformRaw === 'instagram' ? ['instagram'] :
+    ['messenger', 'instagram']
+
+  const result = await fetchDmHistoryForOrg(orgId, {
+    days,
+    maxThreads,
+    maxMessagesPerThread,
+    platforms,
+    debugEnabled,
+  })
+  if (!result.ok) return error(400, result.error || 'Failed to sync DM history')
+  if (debugEnabled) return success(result.debug)
+  return success({
+    conversationsUpserted: result.conversationsUpserted || 0,
+    messagesImported: result.messagesImported || 0,
+  })
 }
 
 
@@ -1524,18 +1620,19 @@ export const webhook = async (event) => {
             if (!senderId || !recipientId) continue
             if (msgEvent?.message?.is_echo) continue
 
+            // Prefer direct recipient mapping (important for Instagram recipient ids),
+            // then fallback to entry/page mapping.
             const account =
-              accountByEntry ||
               (await CrmDmAccount.findOne({
                 where: { accountId: recipientId, status: 'Active' },
-              }))
+              })) ||
+              accountByEntry
 
             if (!account) continue
 
             const orgId = account.organisationId
             const platform = account.platform
             const threadId = senderId
-            const text = String(msgEvent?.message?.text || '').trim()
             const attachments = msgEvent?.message?.attachments || null
             const timestamp = msgEvent?.timestamp ? new Date(msgEvent.timestamp) : new Date()
             const accessToken = account?.accessTokenEnc ? decrypt(account.accessTokenEnc) : null
@@ -1585,7 +1682,10 @@ export const webhook = async (event) => {
               await conversation.save()
             }
 
-            const messageText = text || (attachments ? '[Attachment]' : '')
+            const messageText = deriveDmMessageText({
+              message: msgEvent?.message?.text,
+              attachments,
+            })
             if (!messageText) continue
 
             const newMessage = await CrmDmMessage.create({
