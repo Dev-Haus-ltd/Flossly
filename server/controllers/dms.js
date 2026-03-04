@@ -13,6 +13,7 @@ const ensureDmTables = async () => {
 };
 
 const META_VERSION = "v24.0";
+const STANDARD_MESSAGING_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const toAbsoluteUrl = (value) => {
   const raw = String(value || "").trim();
@@ -24,40 +25,66 @@ const toAbsoluteUrl = (value) => {
   return `${String(base).replace(/\/+$/, "")}/${raw.replace(/^\/+/, "")}`;
 };
 
-const sendMetaMessage = async ({ accessToken, recipientId, message }) => {
-  const url = `https://graph.facebook.com/${META_VERSION}/me/messages`;
+const sendMetaMessage = async ({ accessToken, senderId, recipientId, message, messagingType = "RESPONSE", tag = null }) => {
+  const targetNode = encodeURIComponent(String(senderId || "me"));
+  const url = `https://graph.facebook.com/${META_VERSION}/${targetNode}/messages`;
+  const body = {
+    recipient: { id: recipientId },
+    messaging_type: messagingType,
+    message: { text: message },
+  };
+  if (tag) body.tag = tag;
   return await $fetch(url, {
     method: "POST",
-    body: {
-      recipient: { id: recipientId },
-      message: { text: message },
-    },
+    body,
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
   });
 };
 
-const sendMetaAttachment = async ({ accessToken, recipientId, attachment }) => {
-  const url = `https://graph.facebook.com/${META_VERSION}/me/messages`;
-  return await $fetch(url, {
-    method: "POST",
-    body: {
-      recipient: { id: recipientId },
-      message: {
-        attachment: {
-          type: attachment.type || "file",
-          payload: {
-            url: attachment.url,
-            is_reusable: true,
-          },
+const sendMetaAttachment = async ({ accessToken, senderId, recipientId, attachment, messagingType = "RESPONSE", tag = null }) => {
+  const targetNode = encodeURIComponent(String(senderId || "me"));
+  const url = `https://graph.facebook.com/${META_VERSION}/${targetNode}/messages`;
+  const body = {
+    recipient: { id: recipientId },
+    messaging_type: messagingType,
+    message: {
+      attachment: {
+        type: attachment.type || "file",
+        payload: {
+          url: attachment.url,
+          is_reusable: true,
         },
       },
     },
+  };
+  if (tag) body.tag = tag;
+  return await $fetch(url, {
+    method: "POST",
+    body,
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
   });
+};
+
+const getLatestInboundMessageAt = async ({ organisationId, conversationId }) => {
+  const lastInbound = await CrmDmMessage.findOne({
+    where: {
+      organisationId,
+      conversationId,
+      direction: "inbound",
+    },
+    order: [["createdAt", "DESC"]],
+    attributes: ["createdAt"],
+  });
+  return lastInbound?.createdAt ? new Date(lastInbound.createdAt) : null;
+};
+
+const isWithinStandardMessagingWindow = (lastInboundAt) => {
+  if (!lastInboundAt || Number.isNaN(lastInboundAt.getTime())) return false;
+  return Date.now() - lastInboundAt.getTime() <= STANDARD_MESSAGING_WINDOW_MS;
 };
 
 const resolveProfile = async ({ platform, senderId, accessToken }) => {
@@ -134,14 +161,40 @@ export const processQueuedMessages = async ({ organisationId, limit = 20, messag
     try {
       const accessToken = decrypt(account.accessTokenEnc);
       const recipientId = String(conversation.threadId);
+      const senderId = String(conversation.accountId || account.accountId || "me");
+      const lastInboundAt = await getLatestInboundMessageAt({
+        organisationId,
+        conversationId: conversation.id,
+      });
+
+      if (!isWithinStandardMessagingWindow(lastInboundAt)) {
+        msg.status = "failed";
+        msg.metadata = {
+          ...(msg.metadata || {}),
+          error: "Outside standard 24-hour messaging window. Send is blocked unless a valid message tag flow is implemented.",
+          code: "outside_messaging_window",
+          lastInboundAt: lastInboundAt ? lastInboundAt.toISOString() : null,
+        };
+        await msg.save();
+        results.push({
+          id: msg.id,
+          status: "failed",
+          error: msg.metadata.error,
+          code: "outside_messaging_window",
+        });
+        continue;
+      }
+
       let resp = null;
       const text = String(msg.message || "").trim();
       const hasOnlyAttachment = text === "[Attachment]" && Array.isArray(msg.attachments) && msg.attachments.length;
       if (text && !hasOnlyAttachment) {
         resp = await sendMetaMessage({
           accessToken,
+          senderId,
           recipientId,
           message: text,
+          messagingType: "RESPONSE",
         });
       }
 
@@ -152,8 +205,10 @@ export const processQueuedMessages = async ({ organisationId, limit = 20, messag
           if (!url) continue;
           await sendMetaAttachment({
             accessToken,
+            senderId,
             recipientId,
             attachment: { ...att, url },
+            messagingType: "RESPONSE",
           });
         }
       }

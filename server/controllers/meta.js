@@ -906,7 +906,9 @@ const fetchDmHistoryForOrg = async (
     const selfIds = new Set([accountId])
     if (pageIdFromMeta) selfIds.add(pageIdFromMeta)
     const platformParam = platform === 'instagram' ? 'instagram' : 'messenger'
-    const conversationNodeId = platform === 'instagram' && pageIdFromMeta ? pageIdFromMeta : accountId
+    // Instagram conversation listing should use the Instagram account id node.
+    // Falling back to a Page id causes missed threads for IG login and some IG business setups.
+    const conversationNodeId = accountId
     let nextConversationsUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationNodeId)}/conversations?platform=${encodeURIComponent(platformParam)}&fields=id,updated_time,participants.limit(50){id,name,username,profile_pic,profile_picture_url},messages.limit(50){id,created_time,message,from,to,attachments}&limit=25&access_token=${encodeURIComponent(accessToken)}`
     let processedThreads = 0
 
@@ -986,6 +988,7 @@ const fetchDmHistoryForOrg = async (
         }
 
         let latestImportedAt = null
+        let latestInboundAt = null
         let latestImportedPreview = ''
         let latestImportedMessageId = null
 
@@ -1065,6 +1068,9 @@ const fetchDmHistoryForOrg = async (
                 latestImportedPreview = normalizedMessage
                 latestImportedMessageId = inserted.id
               }
+              if (!isOutbound && (!latestInboundAt || insertedAt > latestInboundAt)) {
+                latestInboundAt = insertedAt
+              }
             }
           }
         }
@@ -1100,6 +1106,9 @@ const fetchDmHistoryForOrg = async (
             ...(conversation.metadata || {}),
             lastMessagePreview: String(latestImportedPreview || '').slice(0, 120),
             lastMessageId: latestImportedMessageId || conversation?.metadata?.lastMessageId || null,
+            lastInboundAt: latestInboundAt
+              ? latestInboundAt.toISOString()
+              : conversation?.metadata?.lastInboundAt || null,
             sourceNodeId: conversationNodeId,
           }
           await conversation.save()
@@ -1660,6 +1669,7 @@ export const webhook = async (event) => {
                   participantName: profile?.name || senderId,
                   participantAvatar: profile?.avatar || null,
                   assignedUserId: account.connectedByUserId || null,
+                  lastInboundAt: timestamp.toISOString(),
                 },
               })
             } else if (!conversation.participantName || !conversation.participantAvatar || !conversation?.metadata?.assignedUserId) {
@@ -1706,6 +1716,7 @@ export const webhook = async (event) => {
               ...(conversation.metadata || {}),
               lastMessagePreview: messageText.slice(0, 120),
               lastMessageId: newMessage.id,
+              lastInboundAt: timestamp.toISOString(),
             }
             await conversation.save()
 
