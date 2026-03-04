@@ -59,6 +59,10 @@
                   <div class="summary-label">Active Pages</div>
                   <div class="summary-value">{{ data?.activePages || 0 }}</div>
                 </div>
+                <div class="summary-card">
+                  <div class="summary-label">IG Accounts</div>
+                  <div class="summary-value">{{ data?.totalInstagramAccounts || 0 }}</div>
+                </div>
               </div>
             </div>
 
@@ -103,10 +107,13 @@
                   <thead>
                     <tr>
                       <th>Page</th>
+                      <th>Instagram</th>
                       <th>Status</th>
                       <th>Token</th>
                       <th>Subscribed</th>
+                      <th>Msg Subscribed</th>
                       <th>App Match</th>
+                      <th>Messaging Access</th>
                       <th>Lead Access</th>
                       <th>Connected At</th>
                       <th>Leads</th>
@@ -120,6 +127,14 @@
                         <span class="status-dot" :class="row.status === 'Active' ? 'ok' : 'warn'"></span>
                         <span class="page-name">{{ row.pageName || row.pageId }}</span>
                         <span v-if="row.pageName && row.pageId" class="page-id">- {{ row.pageId }}</span>
+                      </td>
+                      <td class="ig-cell">
+                        <div v-if="row.instagramConnected">
+                          <v-chip size="x-small" color="success" variant="tonal" label>Connected</v-chip>
+                          <div class="ig-name">{{ row.instagramAccountName || 'Instagram account' }}</div>
+                          <div class="ig-id">{{ row.instagramAccountId || '-' }}</div>
+                        </div>
+                        <v-chip v-else size="x-small" color="warning" variant="tonal" label>Not linked</v-chip>
                       </td>
                       <td>
                         <v-chip size="x-small" color="primary" variant="tonal" label>
@@ -137,9 +152,30 @@
                         </v-chip>
                       </td>
                       <td>
+                        <v-chip size="x-small" :color="row.messagesSubscribed ? 'success' : 'warning'" variant="tonal" label>
+                          {{ row.messagesSubscribed ? 'Yes' : 'No' }}
+                        </v-chip>
+                      </td>
+                      <td>
                         <v-chip size="x-small" :color="row.appMatched ? 'success' : 'error'" variant="tonal" label>
                           {{ row.appMatched ? 'Yes' : 'No' }}
                         </v-chip>
+                      </td>
+                      <td class="messaging-cell">
+                        <v-chip
+                          size="x-small"
+                          :color="row.messagingAccessStatus === 'ok' ? 'success' : (row.messagingAccessStatus === 'missing' ? 'error' : 'warning')"
+                          variant="tonal"
+                          label
+                        >
+                          {{ row.messagingAccessStatus === 'ok' ? 'Granted' : (row.messagingAccessStatus === 'missing' ? 'Missing' : 'Unknown') }}
+                        </v-chip>
+                        <div
+                          v-if="Array.isArray(row.missingMessagingPermissions) && row.missingMessagingPermissions.length"
+                          class="permission-missing"
+                        >
+                          {{ row.missingMessagingPermissions.join(', ') }}
+                        </div>
                       </td>
                       <td>
                         <div class="d-flex align-center gap-1">
@@ -167,7 +203,7 @@
                       <td class="error-cell">{{ row.error || '-' }}</td>
                     </tr>
                     <tr v-if="!activePages.length">
-                      <td colspan="9" class="text-center py-6 text-medium-emphasis">No pages found.</td>
+                      <td colspan="13" class="text-center py-6 text-medium-emphasis">No pages found.</td>
                     </tr>
                   </tbody>
                 </v-table>
@@ -400,6 +436,38 @@ const openLeadAccess = (url) => {
 .page-cell .page-id {
   font-size: 11px;
   color: rgba(0, 0, 0, 0.55);
+}
+
+.ig-cell {
+  min-width: 180px;
+  white-space: normal;
+}
+
+.ig-name {
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 4px;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ig-id {
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.messaging-cell {
+  min-width: 170px;
+  white-space: normal;
+}
+
+.permission-missing {
+  font-size: 11px;
+  color: #b91c1c;
+  margin-top: 4px;
+  line-height: 1.25;
 }
 
 .status-dot {

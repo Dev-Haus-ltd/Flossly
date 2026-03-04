@@ -194,6 +194,11 @@ const threadBodyRef = ref(null);
 const searchInput = ref("");
 let searchTimer = null;
 let metaEventSource = null;
+let syncingHistory = false;
+let lastHistorySyncAt = 0;
+const PROFILE_REFRESH_COOLDOWN_MS = 60000;
+const profileRefreshInFlight = new Set();
+const profileRefreshAttemptedAt = new Map();
 
 const crmStore = useCrmStore();
 const mainStore = useMainStore();
@@ -287,18 +292,7 @@ const selectConversation = (id) => {
   draftMessage.value = "";
   loadMessages(true);
   const conv = conversations.value.find((c) => c.id === id);
-  if (conv && (!conv.avatarUrl || /^[0-9]+$/.test(String(conv.title || "")))) {
-    crmStore
-      .refreshDmProfile({ conversationId: id })
-      .then((res) => {
-        if (res?.code === 0 && res?.data?.updated) {
-          conv.title = res.data.participantName || conv.title;
-          conv.avatarUrl = res.data.participantAvatar || conv.avatarUrl;
-          conv.avatarText = getInitials(conv.title || conv.avatarText);
-        }
-      })
-      .catch(() => {});
-  }
+  if (conv) queueProfileRefresh(conv);
 };
 
 const scrollThreadToBottom = () => {
@@ -401,17 +395,6 @@ const sendMessage = async () => {
       pendingFiles.value = [];
       if (res?.data) upsertMessages([res.data]);
       scrollThreadToBottom();
-
-      const queueRes = await crmStore.processDmQueue({ limit: 20 });
-      if (justSentId && queueRes?.code === 0) {
-        const queuedResult = (queueRes?.data?.results || []).find((r) => Number(r?.id) === justSentId);
-        if (queuedResult?.status === "failed") {
-          mainStore?.setSnackbar?.({
-            title: queuedResult?.error || "Message failed to send. Please reconnect Meta and try again.",
-            type: "error",
-          });
-        }
-      }
       const latest = await crmStore.listDmMessages({
         conversationId: activeConversationId.value,
         limit: 12,
@@ -486,8 +469,78 @@ const buildConversationRow = (row) => {
   };
 };
 
+const shouldRefreshProfile = (conv, { force = false } = {}) => {
+  if (!conv?.id) return false;
+  if (profileRefreshInFlight.has(conv.id)) return false;
+  const title = String(conv.title || "").trim();
+  const isGenericTitle = /(instagram|messenger)\s+user/i.test(title);
+  const isNumericTitle = /^[0-9]+$/.test(title);
+  const missingAvatar = !conv.avatarUrl;
+  if (!force && !missingAvatar && !isGenericTitle && !isNumericTitle) return false;
+  const lastAttempt = Number(profileRefreshAttemptedAt.get(conv.id) || 0);
+  if (!force && Date.now() - lastAttempt < PROFILE_REFRESH_COOLDOWN_MS) return false;
+  return true;
+};
+
+const queueProfileRefresh = (conv, { force = false } = {}) => {
+  if (!shouldRefreshProfile(conv, { force })) return;
+  const convoId = conv.id;
+  profileRefreshInFlight.add(convoId);
+  profileRefreshAttemptedAt.set(convoId, Date.now());
+  crmStore
+    .refreshDmProfile({ conversationId: convoId })
+    .then((resProfile) => {
+      if (resProfile?.code === 0 && resProfile?.data?.updated) {
+        const target = conversations.value.find((c) => c.id === convoId);
+        if (target) {
+          target.title = resProfile.data.participantName || target.title;
+          target.avatarUrl = resProfile.data.participantAvatar || target.avatarUrl;
+          target.avatarText = getInitials(target.title || target.avatarText);
+        }
+      }
+    })
+    .catch(() => {})
+    .finally(() => {
+      profileRefreshInFlight.delete(convoId);
+    });
+};
+
 const loadConversations = async (reset = false) => {
   if (loadingConversations.value) return;
+  if (reset && activeTab.value === "instagram") {
+    const now = Date.now();
+    if (!syncingHistory && now - lastHistorySyncAt > 20000) {
+      syncingHistory = true;
+      try {
+        const syncRes = await crmStore.fetchDmHistoryNow({
+          platform: "instagram",
+          days: 30,
+          maxThreads: 120,
+          maxMessagesPerThread: 120,
+          debug: "true",
+        });
+        if (typeof window !== "undefined") {
+          const debugData = syncRes?.data || {};
+          const accountSummaries = Array.isArray(debugData?.accountSummaries) ? debugData.accountSummaries : [];
+          console.info("[DM Sync Debug]", {
+            platform: activeTab.value,
+            accounts: debugData?.accounts || 0,
+            conversationsScanned: debugData?.conversationsScanned || 0,
+            conversationsUpserted: debugData?.conversationsUpserted || 0,
+            messagesImported: debugData?.messagesImported || 0,
+            errors: Array.isArray(debugData?.errors) ? debugData.errors : [],
+            accountSummaries,
+          });
+        }
+        lastHistorySyncAt = Date.now();
+      } catch (syncErr) {
+        if (typeof window !== "undefined") {
+          console.warn("[DM Sync Debug] fetch failed", syncErr?.data || syncErr?.message || syncErr);
+        }
+      }
+      syncingHistory = false;
+    }
+  }
   if (reset) {
     conversations.value = [];
     conversationOffset.value = 0;
@@ -523,21 +576,7 @@ const loadConversations = async (reset = false) => {
 
       // Background refresh for missing avatars/names
       mapped.forEach((conv) => {
-        const isGenericTitle = /(instagram|messenger)\s+user/i.test(String(conv.title || ""));
-        if (conv.avatarUrl && !isGenericTitle) return;
-        crmStore
-          .refreshDmProfile({ conversationId: conv.id })
-          .then((resProfile) => {
-            if (resProfile?.code === 0 && resProfile?.data?.updated) {
-              const target = conversations.value.find((c) => c.id === conv.id);
-              if (target) {
-                target.title = resProfile.data.participantName || target.title;
-                target.avatarUrl = resProfile.data.participantAvatar || target.avatarUrl;
-                target.avatarText = getInitials(target.title || target.avatarText);
-              }
-            }
-          })
-          .catch(() => {});
+        queueProfileRefresh(conv);
       });
     }
   } finally {

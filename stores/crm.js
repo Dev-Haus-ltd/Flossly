@@ -83,6 +83,7 @@ export const useCrmStore = defineStore("crmStore", {
     refreshDmProfile(payload) { return this._wrap(() => crmService.refreshDmProfile(payload)); },
     connectionStatus() { return this._wrap(() => crmService.connectionStatus()); },
     fetchLeadsNow(params = {}) { return this._wrap(() => crmService.fetchLeadsNow(params)); },
+    fetchDmHistoryNow(params = {}) { return this._wrap(() => crmService.fetchDmHistoryNow(params)); },
     async fetchMetaStructure() {
       const res = await this._wrap(() => crmService.fetchMetaStructure());
       if (res?.code === 0) await this.getMetaStructure();
