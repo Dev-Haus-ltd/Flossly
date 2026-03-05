@@ -1,4 +1,4 @@
-import { Get, Post } from "./apiWrapper";
+import { Get, Post, PostFormData } from "./apiWrapper";
 
 export default {
   startMetaAuth() {
@@ -393,6 +393,20 @@ export default {
   getWhatsAppUsage() {
     return new Promise((resolve, reject) => {
       Get('/lead/whatsappUsage')
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  uploadLeadAttachment(formData) {
+    return new Promise((resolve, reject) => {
+      PostFormData('/lead/uploadAttachment', formData)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getLeadPriceAttachmentRecent(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/priceAttachmentRecent', payload)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });

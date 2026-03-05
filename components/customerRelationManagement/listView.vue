@@ -578,6 +578,81 @@
       </v-card>
     </v-dialog>
 
+    <v-dialog v-model="showSendPriceCompose" max-width="720px">
+      <v-card class="send-price-card">
+        <div class="d-flex justify-space-between align-center px-6 py-4">
+          <div>
+            <h5 class="mb-1 modal-title">Share Price with Client</h5>
+            <div class="text-caption text-medium-emphasis">{{ sendPrice.recipients.length }} recipient(s)</div>
+          </div>
+          <v-btn icon @click="showSendPriceCompose = false" flat><v-icon>mdi-close</v-icon></v-btn>
+        </div>
+        <v-divider />
+
+        <div class="send-price-body">
+          <div class="px-6 pt-4">
+            <div class="send-price-upload-card">
+              <div v-if="sendPriceAttachment?.link" class="uploaded-file-row mb-3">
+                <div class="uploaded-file-meta">
+                  <v-icon size="18" color="primary" class="mr-2">mdi-file-pdf-box</v-icon>
+                  <div>
+                    <div class="uploaded-file-name">{{ sendPriceAttachment?.name || 'price-list.pdf' }}</div>
+                    <div class="text-caption text-medium-emphasis">
+                      PDF attached{{ sendPriceAttachment?.uploadedAt ? ` • ${formatDate(sendPriceAttachment.uploadedAt)}` : '' }}
+                    </div>
+                  </div>
+                </div>
+                <v-btn size="small" variant="text" color="error" @click="clearSendPriceAttachment">Remove</v-btn>
+              </div>
+
+              <CommonFileUpload :is-single="true" @onFiles="onSendPriceFiles" />
+              <div class="text-caption text-medium-emphasis mt-2">
+                Upload your pricing PDF. Uploading another PDF replaces the current one.
+              </div>
+              <v-progress-linear
+                v-if="sendPriceUploadLoading"
+                indeterminate
+                color="primary"
+                class="mt-2"
+                rounded
+              />
+            </div>
+          </div>
+
+          <div class="px-6 pt-3">
+            <v-text-field
+              v-model="sendPrice.priceLink"
+              label="Paste Price Link"
+              variant="outlined"
+              density="compact"
+              prepend-inner-icon="mdi-link-variant"
+              hide-details
+            />
+          </div>
+
+          <div class="px-6 pt-4 pb-2">
+            <v-text-field
+              v-model="sendPrice.subject"
+              label="Subject"
+              variant="outlined"
+              density="compact"
+              hide-details
+            />
+          </div>
+
+          <div class="px-6 pt-2 pb-4">
+            <div class="text-subtitle-2 text-grey-darken-1 mb-2">Message (Optional)</div>
+            <div ref="sendPriceHolder" class="editor send-price-editor"></div>
+          </div>
+        </div>
+
+        <div class="send-price-footer px-6 py-4 d-flex justify-end" style="gap: 10px">
+          <v-btn variant="outlined" @click="showSendPriceCompose = false">Discard</v-btn>
+          <v-btn color="primary" flat :loading="sendPriceLoading" @click="sendPriceCompose">Send</v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
+
     <v-dialog v-model="showWhatsAppCompose" max-width="720px">
       <v-card class="rounded-lg">
         <div class="d-flex justify-space-between align-center px-4 py-3">
@@ -1054,7 +1129,8 @@ const onActionClick = (key) => {
   else if (key === 'convert') convertSelected();
   else if (key === 'export') exportSelectedLeads();
   else if (key === 'whatsapp') openWhatsAppCompose();
-  else if (['mail','sendPrice','sendForm','shareLocation'].includes(key)) openCompose(key)
+  else if (key === 'sendPrice') openSendPriceCompose();
+  else if (['mail','sendForm','shareLocation'].includes(key)) openCompose(key)
 };
 
 const formatDate = (d) => {
@@ -1236,6 +1312,18 @@ let EditorCtor = null
 let Header = null
 let List = null
 const compose = reactive({ key: 'mail', subject: '', recipients: [], html: '' })
+const showSendPriceCompose = ref(false)
+const sendPriceLoading = ref(false)
+const sendPriceUploadLoading = ref(false)
+const sendPriceHolder = ref(null)
+let sendPriceEditor = null
+const sendPrice = reactive({
+  subject: '',
+  recipients: [],
+  html: '',
+  priceLink: '',
+})
+const sendPriceAttachment = ref(null)
 
 const defaultTemplates = {
   sendPrice: {
@@ -1263,11 +1351,30 @@ const defaultTemplates = {
   mail: { subject: 'Message from our practice', html: `<p>Dear [Patient Name],</p><p>Write your message here.</p><p>Regards,<br/>[Your Name]</p>` },
 }
 
+const ensureEditorModules = async () => {
+  if (typeof window === 'undefined') return false
+  if (EditorCtor && Header && List) return true
+  const [{ default: E }, { default: H }, { default: L }] = await Promise.all([
+    import('@editorjs/editorjs'),
+    import('@editorjs/header'),
+    import('@editorjs/list'),
+  ])
+  EditorCtor = E
+  Header = H
+  List = L
+  return true
+}
+
+const getSelectedEmails = () => {
+  const emails = (selectedLeads.value || [])
+    .map((lead) => resolveLeadEmail(lead))
+    .filter(Boolean)
+  return [...new Set(emails)]
+}
 
 async function openCompose(actionKey) {
   compose.key = actionKey
-  const emails = (selectedLeads.value || []).map(l => l?.email).filter(Boolean)
-  compose.recipients = [...new Set(emails)]
+  compose.recipients = getSelectedEmails()
   const def = defaultTemplates[actionKey] || defaultTemplates.mail
   // Personalize subject/body for preview based on selection
   const many = (selectedLeads.value || []).length !== 1
@@ -1277,15 +1384,7 @@ async function openCompose(actionKey) {
   compose.html = renderWithContext(def.html, ctx)
   showCompose.value = true
   await nextTick()
-  if (typeof window === 'undefined') return
-  if (!EditorCtor || !Header || !List) {
-    const [{ default: E }, { default: H }, { default: L }] = await Promise.all([
-      import('@editorjs/editorjs'),
-      import('@editorjs/header'),
-      import('@editorjs/list'),
-    ])
-    EditorCtor = E; Header = H; List = L
-  }
+  if (!(await ensureEditorModules())) return
   if (composeEditor) { composeEditor.destroy(); composeEditor = null }
   composeEditor = new EditorCtor({
     holder: composeHolder.value,
@@ -1299,6 +1398,84 @@ async function openCompose(actionKey) {
 }
 
 watch(() => showCompose.value, (v) => { if (!v && composeEditor) { composeEditor.destroy(); composeEditor = null } })
+
+const openSendPriceCompose = async () => {
+  sendPrice.recipients = getSelectedEmails()
+  const def = defaultTemplates.sendPrice
+  const many = (selectedLeads.value || []).length !== 1
+  const lead = many ? null : (selectedLeads.value || [])[0]
+  const ctx = buildRecipientContext({ lead, user, many })
+  sendPrice.subject = renderWithContext(def.subject, ctx)
+  sendPrice.html = renderWithContext(def.html, ctx)
+  sendPrice.priceLink = ''
+  sendPriceAttachment.value = null
+
+  const leadIds = (selectedLeads.value || []).map((row) => Number(row?.id)).filter(Boolean)
+  if (leadIds.length) {
+    try {
+      const recent = await crmStore.getLeadPriceAttachmentRecent({ leadIds })
+      if (recent?.code === 0 && recent?.data) {
+        sendPriceAttachment.value = recent.data.attachment || null
+        sendPrice.priceLink = String(recent.data.priceLink || '')
+        if (recent.data.subject) sendPrice.subject = String(recent.data.subject)
+      }
+    } catch {}
+  }
+
+  showSendPriceCompose.value = true
+  await nextTick()
+  if (!(await ensureEditorModules())) return
+  if (sendPriceEditor) {
+    sendPriceEditor.destroy()
+    sendPriceEditor = null
+  }
+  sendPriceEditor = new EditorCtor({
+    holder: sendPriceHolder.value,
+    tools: { header: Header, list: List },
+    data: htmlToBlocks(sendPrice.html || ''),
+    async onChange(api) {
+      const saved = await api.saver.save()
+      sendPrice.html = blocksToHtml(saved)
+    },
+  })
+}
+
+watch(() => showSendPriceCompose.value, (v) => {
+  if (!v && sendPriceEditor) {
+    sendPriceEditor.destroy()
+    sendPriceEditor = null
+  }
+})
+
+const clearSendPriceAttachment = () => {
+  sendPriceAttachment.value = null
+}
+
+const onSendPriceFiles = async (files) => {
+  const file = Array.isArray(files) ? files[files.length - 1] : null
+  if (!file) return
+  const isPdf = String(file?.type || '').toLowerCase().includes('pdf') || String(file?.name || '').toLowerCase().endsWith('.pdf')
+  if (!isPdf) {
+    mainStore?.setSnackbar?.({ title: 'Only PDF files are allowed', type: 'error' })
+    return
+  }
+  try {
+    sendPriceUploadLoading.value = true
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await crmStore.uploadLeadAttachment(formData)
+    if (res?.code === 0 && res?.data?.link) {
+      sendPriceAttachment.value = res.data
+      mainStore?.setSnackbar?.({ title: 'Price list uploaded', type: 'success' })
+      return
+    }
+    mainStore?.setSnackbar?.({ title: res?.message || 'Failed to upload file', type: 'error' })
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || 'Failed to upload file', type: 'error' })
+  } finally {
+    sendPriceUploadLoading.value = false
+  }
+}
 
 const openWhatsAppCompose = () => {
   if (!selectedLeads.value.length) return;
@@ -1352,6 +1529,49 @@ async function sendCompose() {
       showCompose.value = false
     }
   } finally { composeLoading.value = false }
+}
+
+async function sendPriceCompose() {
+  try {
+    sendPriceLoading.value = true
+    const leadIds = selectedLeads.value.map((lead) => lead.id).filter(Boolean)
+    if (!leadIds.length) return
+    const many = (selectedLeads.value || []).length !== 1
+    const lead = many ? null : (selectedLeads.value || [])[0]
+    const ctx = buildRecipientContext({ lead, user, many })
+    const resolvedSubject = renderWithContext(sendPrice.subject || 'Price List', ctx)
+    const resolvedBody = sendPrice.html ? renderWithContext(sendPrice.html, ctx) : ''
+    const link = String(sendPrice.priceLink || '').trim()
+    const linkHtml = link
+      ? `<p><strong>Price Link:</strong> <a href="${link}" target="_blank" rel="noopener noreferrer">${link}</a></p>`
+      : ''
+    const resolvedHtml = [resolvedBody, linkHtml].filter(Boolean).join('')
+    const attachments = sendPriceAttachment.value?.link ? [sendPriceAttachment.value] : []
+
+    const res = await crmStore.sendLeadMail({
+      leadIds,
+      subject: resolvedSubject,
+      html: resolvedHtml,
+      key: 'manual_sendPrice',
+      attachments,
+      metadata: {
+        priceLink: link,
+      },
+    })
+    if (res?.code === 0) {
+      const sent = Number(res?.data?.sent || 0)
+      mainStore?.setSnackbar?.({
+        title: sent ? `Mail sent to ${sent} recipient(s)` : 'No emails were sent',
+        type: sent ? 'success' : 'warning',
+      })
+      showSendPriceCompose.value = false
+    }
+  } catch (e) {
+    const msg = e?.data?.message || e?.message || 'Failed to send price email'
+    mainStore?.setSnackbar?.({ title: msg, type: 'error' })
+  } finally {
+    sendPriceLoading.value = false
+  }
 }
 
 async function sendWhatsAppMessage() {
@@ -1737,6 +1957,55 @@ const convertSelected = async () => {
   border-radius: 8px;
   padding: 10px;
   background: #fff;
+}
+.send-price-card {
+  border-radius: 18px;
+  overflow: hidden;
+  background: #ffffff;
+}
+.send-price-body {
+  max-height: min(62vh, 560px);
+  overflow-y: auto;
+  background: #fcfcfd;
+}
+.send-price-footer {
+  border-top: 1px solid #eceef2;
+  background: #ffffff;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+}
+.send-price-upload-card {
+  border: 1px solid #dbdbdb;
+  border-radius: 14px;
+  padding: 14px;
+  background: #ffffff;
+}
+.uploaded-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fafafa;
+}
+.uploaded-file-meta {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.uploaded-file-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f1f1f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 360px;
+}
+.send-price-editor {
+  min-height: 140px;
 }
 .action-item:hover { background-color: #f5f5f5; }
 
