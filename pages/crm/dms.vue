@@ -518,9 +518,22 @@ const loadConversations = async (reset = false) => {
           maxThreads: 120,
           maxMessagesPerThread: 120,
           debug: "true",
+          trace: "true",
         });
+        const syncDebug = syncRes?.data || {};
+        const syncErrors = Array.isArray(syncDebug?.errors) ? syncDebug.errors : [];
+        const capabilityError = syncErrors.find((e) =>
+          /application does not have the capability/i.test(String(e?.message || ""))
+        );
+        if (capabilityError) {
+          mainStore?.setSnackbar?.({
+            title:
+              "Instagram DM access is blocked by Meta app capability (instagram_manage_messages). Enable advanced access/app review for this app.",
+            type: "error",
+          });
+        }
         if (typeof window !== "undefined") {
-          const debugData = syncRes?.data || {};
+          const debugData = syncDebug;
           const accountSummaries = Array.isArray(debugData?.accountSummaries) ? debugData.accountSummaries : [];
           console.info("[DM Sync Debug]", {
             platform: activeTab.value,

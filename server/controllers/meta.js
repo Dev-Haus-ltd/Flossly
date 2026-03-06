@@ -412,18 +412,13 @@ export const authCallback = async (event) => {
       } catch (e) {}
     }
 
-    // Backfill last 30 days of leads (non-blocking)
-    try {
-      await fetchLeadsForOrg(orgId, { days: 30 })
-    } catch (e) {}
-
-    // Backfill last 30 days of DM history for Messenger + Instagram (non-blocking)
-    try {
-      await fetchDmHistoryForOrg(orgId, {
-        days: 30,
-        platforms: ['messenger', 'instagram'],
-      })
-    } catch (e) {}
+    // Fire-and-forget backfills so OAuth callback can redirect quickly
+    // and avoid upstream (nginx) gateway timeouts.
+    void fetchLeadsForOrg(orgId, { days: 30 }).catch(() => {})
+    void fetchDmHistoryForOrg(orgId, {
+      days: 30,
+      platforms: ['messenger', 'instagram'],
+    }).catch(() => {})
 
     // Clear state cookie
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
@@ -854,6 +849,7 @@ const fetchDmHistoryForOrg = async (
     maxMessagesPerThread = 120,
     platforms = ['messenger', 'instagram'],
     debugEnabled = false,
+    traceEnabled = false,
   } = {}
 ) => {
   if (!orgId) return { ok: false, error: 'Unauthenticated' }
@@ -885,6 +881,14 @@ const fetchDmHistoryForOrg = async (
     accountSummaries: [],
     errors: [],
   }
+  const shouldTrace =
+    traceEnabled ||
+    debugEnabled ||
+    String(process.env.META_DM_SYNC_TRACE || '').toLowerCase() === 'true'
+  const trace = (...args) => {
+    if (!shouldTrace) return
+    try { console.log('[META DM SYNC TRACE]', ...args) } catch {}
+  }
 
   let conversationsUpserted = 0
   let messagesImported = 0
@@ -907,8 +911,10 @@ const fetchDmHistoryForOrg = async (
     const selfIds = new Set([accountId])
     if (pageIdFromMeta) selfIds.add(pageIdFromMeta)
     const platformParam = platform === 'instagram' ? 'instagram' : 'messenger'
+    // For Instagram messaging via Messenger Platform, prefer the connected Page node.
+    // Calling conversations on the IG node often returns capability errors even when Page node works.
     const nodeCandidates = platform === 'instagram'
-      ? [...new Set([accountId, pageIdFromMeta].filter(Boolean).map((v) => String(v)))]
+      ? (pageIdFromMeta ? [String(pageIdFromMeta)] : [String(accountId)])
       : [accountId]
     const accountDebug = {
       platform,
@@ -935,7 +941,15 @@ const fetchDmHistoryForOrg = async (
         errors: [],
       }
       accountDebug.nodesTried.push(nodeDebug)
-      let nextConversationsUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationNodeId)}/conversations?platform=${encodeURIComponent(platformParam)}&fields=id,updated_time,participants.limit(50){id,name,username,profile_pic,profile_picture_url},messages.limit(50){id,created_time,message,from,to,attachments}&limit=25&access_token=${encodeURIComponent(accessToken)}`
+      const conversationPageSize = platform === 'instagram' ? 10 : 25
+      let nextConversationsUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationNodeId)}/conversations?platform=${encodeURIComponent(platformParam)}&fields=id,updated_time,participants.limit(10){id,name,username,profile_pic,profile_picture_url}&limit=${conversationPageSize}&access_token=${encodeURIComponent(accessToken)}`
+      trace('list_conversations:start', JSON.stringify({
+        orgId: Number(orgId),
+        platform,
+        accountId,
+        conversationNodeId,
+        conversationPageSize,
+      }))
 
       while (nextConversationsUrl && processedThreads < maxThreads) {
         let convResp = null
@@ -943,15 +957,43 @@ const fetchDmHistoryForOrg = async (
           convResp = await $fetch(nextConversationsUrl, { method: 'GET' })
         } catch (e) {
           const errorMessage = e?.data?.error?.message || e?.message || 'Failed to fetch conversations'
+          const errorCode = e?.data?.error?.code || null
+          const errorSubcode = e?.data?.error?.error_subcode || null
+          const fbtraceId = e?.data?.error?.fbtrace_id || null
           debug.errors.push({
             platform,
             accountId,
             conversationNodeId,
             stage: 'list_conversations',
             message: errorMessage,
+            code: errorCode,
+            subcode: errorSubcode,
+            fbtraceId,
           })
-          nodeDebug.errors.push({ stage: 'list_conversations', message: errorMessage })
-          accountDebug.errors.push({ conversationNodeId, stage: 'list_conversations', message: errorMessage })
+          nodeDebug.errors.push({
+            stage: 'list_conversations',
+            message: errorMessage,
+            code: errorCode,
+            subcode: errorSubcode,
+            fbtraceId,
+          })
+          accountDebug.errors.push({
+            conversationNodeId,
+            stage: 'list_conversations',
+            message: errorMessage,
+            code: errorCode,
+            subcode: errorSubcode,
+            fbtraceId,
+          })
+          trace('list_conversations:error', JSON.stringify({
+            platform,
+            accountId,
+            conversationNodeId,
+            message: errorMessage,
+            code: errorCode,
+            subcode: errorSubcode,
+            fbtraceId,
+          }))
           break
         }
 
@@ -1114,16 +1156,21 @@ const fetchDmHistoryForOrg = async (
             }
           }
 
-          await collectMessagePage(conv?.messages || {})
-
-          let nextMessagesUrl = conv?.messages?.paging?.next || null
-          let processedMessages = Array.isArray(conv?.messages?.data) ? conv.messages.data.length : 0
+          const conversationIdForMessages = String(conv?.id || '')
+          const messagePageSize = platform === 'instagram' ? 20 : 50
+          let nextMessagesUrl = conversationIdForMessages
+            ? `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationIdForMessages)}/messages?fields=id,created_time,message,from,to,attachments&limit=${messagePageSize}&access_token=${encodeURIComponent(accessToken)}`
+            : null
+          let processedMessages = 0
           while (nextMessagesUrl && processedMessages < maxMessagesPerThread) {
             let msgResp = null
             try {
               msgResp = await $fetch(nextMessagesUrl, { method: 'GET' })
             } catch (e) {
               const errorMessage = e?.data?.error?.message || e?.message || 'Failed to fetch messages'
+              const errorCode = e?.data?.error?.code || null
+              const errorSubcode = e?.data?.error?.error_subcode || null
+              const fbtraceId = e?.data?.error?.fbtrace_id || null
               debug.errors.push({
                 platform,
                 accountId,
@@ -1131,17 +1178,36 @@ const fetchDmHistoryForOrg = async (
                 conversationNodeId,
                 stage: 'list_messages',
                 message: errorMessage,
+                code: errorCode,
+                subcode: errorSubcode,
+                fbtraceId,
               })
               nodeDebug.errors.push({
                 stage: 'list_messages',
                 conversationId: conv?.id || null,
                 message: errorMessage,
+                code: errorCode,
+                subcode: errorSubcode,
+                fbtraceId,
               })
               accountDebug.errors.push({
                 stage: 'list_messages',
                 conversationId: conv?.id || null,
                 message: errorMessage,
+                code: errorCode,
+                subcode: errorSubcode,
+                fbtraceId,
               })
+              trace('list_messages:error', JSON.stringify({
+                platform,
+                accountId,
+                conversationId: conv?.id || null,
+                conversationNodeId,
+                message: errorMessage,
+                code: errorCode,
+                subcode: errorSubcode,
+                fbtraceId,
+              }))
               break
             }
             const count = Array.isArray(msgResp?.data) ? msgResp.data.length : 0
@@ -1169,6 +1235,15 @@ const fetchDmHistoryForOrg = async (
         nextConversationsUrl = convResp?.paging?.next || null
       }
     }
+    trace('account:complete', JSON.stringify({
+      platform,
+      accountId,
+      nodeCandidates,
+      conversationsSeen: accountDebug.conversationsSeen,
+      conversationsUpserted: accountDebug.conversationsUpserted,
+      messagesImported: accountDebug.messagesImported,
+      errors: accountDebug.errors.length,
+    }))
   }
 
   if (debugEnabled) return { ok: true, debug }
@@ -1300,13 +1375,11 @@ export const igAuthCallback = async (event) => {
       },
     })
 
-    // Backfill recent Instagram DM history after IG connect
-    try {
-      await fetchDmHistoryForOrg(orgId, {
-        days: 30,
-        platforms: ['instagram'],
-      })
-    } catch (e) {}
+    // Fire-and-forget backfill to keep callback response fast.
+    void fetchDmHistoryForOrg(orgId, {
+      days: 30,
+      platforms: ['instagram'],
+    }).catch(() => {})
 
     setCookie(event, 'meta_ig_oauth_state', '', { maxAge: -1 })
     return sendRedirect(event, `/crm?meta=ig_connected&account=${encodeURIComponent(igUsername || igAccountId)}`)
@@ -1341,6 +1414,7 @@ export const fetchDmHistoryNow = async (event) => {
   const maxThreads = Number(q.maxThreads || 60)
   const maxMessagesPerThread = Number(q.maxMessagesPerThread || 120)
   const debugEnabled = String(q.debug || '').toLowerCase() === 'true'
+  const traceEnabled = String(q.trace || '').toLowerCase() === 'true'
   const platformRaw = String(q.platform || 'all').toLowerCase()
   const platforms =
     platformRaw === 'messenger' ? ['messenger'] :
@@ -1353,6 +1427,7 @@ export const fetchDmHistoryNow = async (event) => {
     maxMessagesPerThread,
     platforms,
     debugEnabled,
+    traceEnabled,
   })
   if (!result.ok) return error(400, result.error || 'Failed to sync DM history')
   if (debugEnabled) {
