@@ -911,10 +911,10 @@ const fetchDmHistoryForOrg = async (
     const selfIds = new Set([accountId])
     if (pageIdFromMeta) selfIds.add(pageIdFromMeta)
     const platformParam = platform === 'instagram' ? 'instagram' : 'messenger'
-    // For Instagram messaging via Messenger Platform, prefer the connected Page node.
-    // Calling conversations on the IG node often returns capability errors even when Page node works.
+    // For Instagram, try page node first, then IG node as fallback.
+    // Some accounts return conversations only on one of these nodes.
     const nodeCandidates = platform === 'instagram'
-      ? (pageIdFromMeta ? [String(pageIdFromMeta)] : [String(accountId)])
+      ? [...new Set([String(pageIdFromMeta || ''), String(accountId || '')].filter(Boolean))]
       : [accountId]
     const accountDebug = {
       platform,
