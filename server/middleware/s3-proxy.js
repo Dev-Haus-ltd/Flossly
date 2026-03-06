@@ -15,7 +15,9 @@ export default defineEventHandler(async (event) => {
   const matched = PREFIXES.find((prefix) => pathname.startsWith(prefix));
   if (!matched) return;
 
-  const key = pathname.replace(/^\/+/, "");
+  // Decode the URL-encoded pathname to handle filenames with spaces and special characters
+  const decodedPathname = decodeURIComponent(pathname);
+  const key = decodedPathname.replace(/^\/+/, "");
   return await sendS3Object(event, key);
 });
 

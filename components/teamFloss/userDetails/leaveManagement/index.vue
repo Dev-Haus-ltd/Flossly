@@ -157,7 +157,7 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import Annual from "@/assets/icons/teamfloss/total.svg";
 import Sick from "@/assets/icons/teamfloss/birthday.svg";
 import Training from "@/assets/icons/teamfloss/pending.svg";
-import { parsedDate } from "~/lib/dateFormatter";
+import { formatDateDDMMYYYY } from "~/lib/dateFormatter";
 
 const { user } = defineProps({
   user: Object,
@@ -207,7 +207,7 @@ const filteredLeaves = computed(() => {
 });
 
 const formatDate = (date) => {
-  return parsedDate(date);
+  return formatDateDDMMYYYY(date);
 };
 // status chip styling
 const statusChipClass = (status) => {
