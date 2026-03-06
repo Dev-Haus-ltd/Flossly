@@ -1697,6 +1697,11 @@ export const healthCheck = async (event) => {
 export const webhook = async (event) => {
   const config = useRuntimeConfig()
   const reqId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  const webhookTraceEnabled = true
+  const webhookTrace = (...args) => {
+    if (!webhookTraceEnabled) return
+    try { console.log('[META WEBHOOK TRACE]', reqId, ...args) } catch {}
+  }
   
   if (getMethod(event) === 'HEAD') {
     return send(event, 'ok')
@@ -1859,6 +1864,16 @@ export const webhook = async (event) => {
           for (const msgEvent of messaging) {
             const senderId = String(msgEvent?.sender?.id || '')
             const recipientId = String(msgEvent?.recipient?.id || '')
+            const platformHint = msgEvent?.platform || msgEvent?.messaging_product || null
+            webhookTrace('event:incoming', JSON.stringify({
+              pageId,
+              senderId,
+              recipientId,
+              mid: msgEvent?.message?.mid || null,
+              hasText: !!msgEvent?.message?.text,
+              hasAttachments: Array.isArray(msgEvent?.message?.attachments) && msgEvent.message.attachments.length > 0,
+              platformHint,
+            }))
             if (!senderId || !recipientId) continue
             if (msgEvent?.message?.is_echo) continue
 
@@ -1866,6 +1881,17 @@ export const webhook = async (event) => {
               where: { accountId: recipientId, status: 'Active' },
               order: [['updatedAt', 'DESC']],
             })
+            webhookTrace('account:direct_matches', JSON.stringify({
+              recipientId,
+              count: directMatches.length,
+              matches: directMatches.map((a) => ({
+                id: a.id,
+                orgId: a.organisationId,
+                platform: a.platform,
+                accountId: a.accountId,
+                pageId: a?.metadata?.pageId || null,
+              })),
+            }))
 
             // Prefer direct recipient mapping; if entry mapping exists, keep same-organisation affinity.
             let account = directMatches[0] || null
@@ -1876,7 +1902,22 @@ export const webhook = async (event) => {
             }
             if (!account) account = accountByEntry
 
-            if (!account) continue
+            if (!account) {
+              webhookTrace('account:missing', JSON.stringify({
+                pageId,
+                senderId,
+                recipientId,
+                entryMatches: accountByEntryCandidates.length,
+              }))
+              continue
+            }
+            webhookTrace('account:selected', JSON.stringify({
+              accountId: account.id,
+              orgId: account.organisationId,
+              platform: account.platform,
+              mappedAccountId: account.accountId,
+              mappedPageId: account?.metadata?.pageId || null,
+            }))
 
             const orgId = account.organisationId
             const platform = account.platform
@@ -1935,7 +1976,14 @@ export const webhook = async (event) => {
               message: msgEvent?.message?.text,
               attachments,
             })
-            if (!messageText) continue
+            if (!messageText) {
+              webhookTrace('message:skipped_empty', JSON.stringify({
+                senderId,
+                recipientId,
+                platform,
+              }))
+              continue
+            }
 
             const platformMessageId = msgEvent?.message?.mid || null
             if (platformMessageId) {
@@ -1946,7 +1994,14 @@ export const webhook = async (event) => {
                   platformMessageId,
                 },
               })
-              if (existingInbound) continue
+              if (existingInbound) {
+                webhookTrace('message:duplicate', JSON.stringify({
+                  organisationId: orgId,
+                  conversationId: conversation.id,
+                  platformMessageId,
+                }))
+                continue
+              }
             }
 
             const newMessage = await CrmDmMessage.create({
@@ -1977,6 +2032,13 @@ export const webhook = async (event) => {
               conversationId: conversation.id,
               platform,
             })
+            webhookTrace('message:stored', JSON.stringify({
+              orgId,
+              conversationId: conversation.id,
+              platform,
+              threadId,
+              platformMessageId: newMessage?.platformMessageId || null,
+            }))
 
             try {
               const orgUsers = await UserOrganisation.findAll({
