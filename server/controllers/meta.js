@@ -941,7 +941,7 @@ const fetchDmHistoryForOrg = async (
         errors: [],
       }
       accountDebug.nodesTried.push(nodeDebug)
-      const conversationPageSize = platform === 'instagram' ? 10 : 25
+      const conversationPageSize = platform === 'instagram' ? 50 : 25
       let nextConversationsUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationNodeId)}/conversations?platform=${encodeURIComponent(platformParam)}&fields=id,updated_time,participants.limit(10){id,name,username,profile_pic,profile_picture_url}&limit=${conversationPageSize}&access_token=${encodeURIComponent(accessToken)}`
       trace('list_conversations:start', JSON.stringify({
         orgId: Number(orgId),
@@ -1910,7 +1910,7 @@ export const webhook = async (event) => {
             // Instagram webhooks can arrive with entry.pageId while recipient mapping may be ambiguous.
             // Prefer explicit instagram account matches before page-level messenger fallback.
             const looksInstagramEvent =
-              platformHint.includes('instagram') ||
+              platformHintRaw.includes('instagram') ||
               directInstagram.length > 0 ||
               instagramByPageCandidates.length > 0
 
@@ -2102,7 +2102,11 @@ export const webhook = async (event) => {
           }
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      try {
+        console.error('[META WEBHOOK]', reqId, 'Unhandled webhook processing error', e?.message || e)
+      } catch {}
+    }
     
     return success({ received: true })
   }
