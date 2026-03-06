@@ -1860,11 +1860,22 @@ export const webhook = async (event) => {
             order: [['updatedAt', 'DESC']],
           })
           const accountByEntry = accountByEntryCandidates[0] || null
+          const instagramByPageCandidates = pageId
+            ? await CrmDmAccount.findAll({
+                where: {
+                  platform: 'instagram',
+                  status: 'Active',
+                  metadata: { [Op.contains]: { pageId } },
+                },
+                order: [['updatedAt', 'DESC']],
+              })
+            : []
 
           for (const msgEvent of messaging) {
             const senderId = String(msgEvent?.sender?.id || '')
             const recipientId = String(msgEvent?.recipient?.id || '')
-            const platformHint = msgEvent?.platform || msgEvent?.messaging_product || null
+            const platformHintRaw = String(msgEvent?.platform || msgEvent?.messaging_product || '').toLowerCase()
+            const platformHint = platformHintRaw || null
             webhookTrace('event:incoming', JSON.stringify({
               pageId,
               senderId,
@@ -1881,6 +1892,8 @@ export const webhook = async (event) => {
               where: { accountId: recipientId, status: 'Active' },
               order: [['updatedAt', 'DESC']],
             })
+            const directInstagram = directMatches.filter((a) => String(a?.platform || '').toLowerCase() === 'instagram')
+            const directMessenger = directMatches.filter((a) => String(a?.platform || '').toLowerCase() === 'messenger')
             webhookTrace('account:direct_matches', JSON.stringify({
               recipientId,
               count: directMatches.length,
@@ -1891,10 +1904,29 @@ export const webhook = async (event) => {
                 accountId: a.accountId,
                 pageId: a?.metadata?.pageId || null,
               })),
+              instagramByPageCount: instagramByPageCandidates.length,
             }))
 
-            // Prefer direct recipient mapping; if entry mapping exists, keep same-organisation affinity.
-            let account = directMatches[0] || null
+            // Instagram webhooks can arrive with entry.pageId while recipient mapping may be ambiguous.
+            // Prefer explicit instagram account matches before page-level messenger fallback.
+            const looksInstagramEvent =
+              platformHint.includes('instagram') ||
+              directInstagram.length > 0 ||
+              instagramByPageCandidates.length > 0
+
+            let account = null
+            if (looksInstagramEvent) {
+              const instaEntryOrgIds = new Set(instagramByPageCandidates.map((row) => Number(row.organisationId)))
+              const instaSameOrg = directInstagram.find((row) => instaEntryOrgIds.has(Number(row.organisationId)))
+              account =
+                instaSameOrg ||
+                directInstagram[0] ||
+                instagramByPageCandidates[0] ||
+                null
+            }
+
+            // Fallback to original mapping strategy (mostly messenger/page-level events).
+            if (!account) account = directMatches[0] || null
             if (accountByEntryCandidates.length && directMatches.length) {
               const entryOrgIds = new Set(accountByEntryCandidates.map((row) => Number(row.organisationId)))
               const sameOrg = directMatches.find((row) => entryOrgIds.has(Number(row.organisationId)))
@@ -1917,6 +1949,9 @@ export const webhook = async (event) => {
               platform: account.platform,
               mappedAccountId: account.accountId,
               mappedPageId: account?.metadata?.pageId || null,
+              looksInstagramEvent,
+              directInstagramCount: directInstagram.length,
+              directMessengerCount: directMessenger.length,
             }))
 
             const orgId = account.organisationId
