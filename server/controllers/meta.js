@@ -9,7 +9,7 @@ import { sendNotificationToMultipleUsers } from '../utils/fcmNotification'
 import { parseJsonBody } from "../utils/body";
 
 const META_VERSION = 'v24.0'
-const META_SUBSCRIBED_FIELDS = 'leadgen,messages,messaging_postbacks,instagram_manage_messages'
+const META_SUBSCRIBED_FIELDS = 'leadgen,messages,messaging_postbacks'
 
 const resolveDmParticipantProfile = async ({ platform, senderId, accessToken }) => {
   if (!senderId || !accessToken) return {}
@@ -908,13 +908,29 @@ const fetchDmHistoryForOrg = async (
     const accessToken = acc.accessTokenEnc ? decrypt(acc.accessTokenEnc) : null
     if (!accountId || !accessToken) continue
 
+    // For Instagram: Messenger API for Instagram requires a PAGE access token when querying
+    // /{page-id}/conversations?platform=instagram. The IG user token stored in CrmDmAccount
+    // is not sufficient. Look up the page token from MetaPage table.
+    let pageAccessToken = accessToken
+    if (platform === 'instagram' && pageIdFromMeta) {
+      try {
+        const pageRow = await MetaPage.findOne({
+          where: { organisationId: orgId, pageId: pageIdFromMeta, status: 'Active' },
+        })
+        if (pageRow?.accessTokenEnc) {
+          pageAccessToken = decrypt(pageRow.accessTokenEnc) || accessToken
+        }
+      } catch {}
+    }
+
     const selfIds = new Set([accountId])
     if (pageIdFromMeta) selfIds.add(pageIdFromMeta)
     const platformParam = platform === 'instagram' ? 'instagram' : 'messenger'
-    // For Instagram, try page node first, then IG node as fallback.
-    // Some accounts return conversations only on one of these nodes.
+    // For Instagram: Messenger API for Instagram uses /{page-id}/conversations?platform=instagram
+    // with a page access token. The IG account node requires separate Instagram Graph API
+    // capabilities and is not supported in this setup.
     const nodeCandidates = platform === 'instagram'
-      ? [...new Set([String(pageIdFromMeta || ''), String(accountId || '')].filter(Boolean))]
+      ? [...new Set([String(pageIdFromMeta || '')].filter(Boolean))]
       : [accountId]
     const accountDebug = {
       platform,
@@ -942,7 +958,10 @@ const fetchDmHistoryForOrg = async (
       }
       accountDebug.nodesTried.push(nodeDebug)
       const conversationPageSize = platform === 'instagram' ? 50 : 25
-      let nextConversationsUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationNodeId)}/conversations?platform=${encodeURIComponent(platformParam)}&fields=id,updated_time,participants.limit(10){id,name,username,profile_pic,profile_picture_url}&limit=${conversationPageSize}&access_token=${encodeURIComponent(accessToken)}`
+      const tokenForNode = (platform === 'instagram' && conversationNodeId === pageIdFromMeta)
+        ? pageAccessToken
+        : accessToken
+      let nextConversationsUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationNodeId)}/conversations?platform=${encodeURIComponent(platformParam)}&fields=id,updated_time,participants.limit(10){id,name,username,profile_pic,profile_picture_url}&limit=${conversationPageSize}&access_token=${encodeURIComponent(tokenForNode)}`
       trace('list_conversations:start', JSON.stringify({
         orgId: Number(orgId),
         platform,
@@ -1159,7 +1178,7 @@ const fetchDmHistoryForOrg = async (
           const conversationIdForMessages = String(conv?.id || '')
           const messagePageSize = platform === 'instagram' ? 20 : 50
           let nextMessagesUrl = conversationIdForMessages
-            ? `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationIdForMessages)}/messages?fields=id,created_time,message,from,to,attachments&limit=${messagePageSize}&access_token=${encodeURIComponent(accessToken)}`
+            ? `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationIdForMessages)}/messages?fields=id,created_time,message,from,to,attachments&limit=${messagePageSize}&access_token=${encodeURIComponent(tokenForNode)}`
             : null
           let processedMessages = 0
           while (nextMessagesUrl && processedMessages < maxMessagesPerThread) {
