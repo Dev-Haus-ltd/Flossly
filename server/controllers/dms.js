@@ -160,7 +160,8 @@ export const processQueuedMessages = async ({ organisationId, limit = 20, messag
 
     try {
       let accessToken = decrypt(account.accessTokenEnc);
-      // Instagram send requires a Page Access Token, not the IG user token
+      let senderId = String(conversation.accountId || account.accountId || "me");
+      // Instagram send requires Page Access Token + Page ID as sender node
       if (conversation.platform === 'instagram') {
         try {
           const metaPage = await MetaPage.findOne({
@@ -168,10 +169,10 @@ export const processQueuedMessages = async ({ organisationId, limit = 20, messag
             order: [['updatedAt', 'DESC']],
           });
           if (metaPage?.accessTokenEnc) accessToken = decrypt(metaPage.accessTokenEnc);
+          if (metaPage?.pageId) senderId = String(metaPage.pageId);
         } catch {}
       }
       const recipientId = String(conversation.threadId);
-      const senderId = String(conversation.accountId || account.accountId || "me");
       const lastInboundAt = await getLatestInboundMessageAt({
         organisationId,
         conversationId: conversation.id,
