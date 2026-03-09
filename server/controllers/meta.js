@@ -1232,7 +1232,13 @@ const fetchDmHistoryForOrg = async (
             const count = Array.isArray(msgResp?.data) ? msgResp.data.length : 0
             if (!count) break
             processedMessages += count
-            await collectMessagePage(msgResp)
+            try {
+              await collectMessagePage(msgResp)
+            } catch (e) {
+              console.error('[META DM SYNC] collectMessagePage error', {
+                platform, accountId, conversationNodeId, convId: conv?.id, message: e?.message,
+              })
+            }
             nextMessagesUrl = msgResp?.paging?.next || null
           }
 
