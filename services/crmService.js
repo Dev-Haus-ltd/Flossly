@@ -633,6 +633,18 @@ export default {
     });
   },
 
+  getGoogleSearchConsoleAnalytics(siteId, days = 30) {
+    const params = new URLSearchParams({
+      siteId: siteId ? String(siteId) : '',
+      days: String(days)
+    });
+    return new Promise((resolve, reject) => {
+      Get(`/google/getAnalytics?${params.toString()}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+
   // Google Ads endpoints
   fetchGoogleAdsCustomers() {
     return new Promise((resolve, reject) => {
