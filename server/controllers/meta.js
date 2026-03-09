@@ -9,7 +9,7 @@ import { sendNotificationToMultipleUsers } from '../utils/fcmNotification'
 import { parseJsonBody } from "../utils/body";
 
 const META_VERSION = 'v24.0'
-const META_SUBSCRIBED_FIELDS = 'leadgen,messages,messaging_postbacks'
+const META_SUBSCRIBED_FIELDS = 'leadgen,messages,messaging_postbacks,instagram_manage_messages'
 
 const resolveDmParticipantProfile = async ({ platform, senderId, accessToken }) => {
   if (!senderId || !accessToken) return {}
@@ -1341,8 +1341,22 @@ export const igAuthCallback = async (event) => {
       appSecret
     )}&code=${encodeURIComponent(code)}`
     const shortResp = await $fetch(tokenUrl, { method: 'GET' })
-    const accessToken = shortResp.access_token
-    if (!accessToken) return error(500, 'Failed to get access token')
+    const shortToken = shortResp.access_token
+    if (!shortToken) return error(500, 'Failed to get access token')
+
+    // Exchange short-lived user token for long-lived token (60-day expiry)
+    const longLivedUrl = `https://graph.facebook.com/${META_VERSION}/oauth/access_token?grant_type=fb_exchange_token&client_id=${encodeURIComponent(appId)}&client_secret=${encodeURIComponent(appSecret)}&fb_exchange_token=${encodeURIComponent(shortToken)}`
+    let accessToken = shortToken
+    let expiresIn = Number(shortResp?.expires_in || 0)
+    try {
+      const longResp = await $fetch(longLivedUrl, { method: 'GET' })
+      if (longResp?.access_token) {
+        accessToken = longResp.access_token
+        expiresIn = Number(longResp?.expires_in || 0)
+      }
+    } catch (e) {
+      console.warn('[META IG AUTH] Failed to exchange long-lived token, using short-lived:', e?.message)
+    }
 
     const pagesUrl = `https://graph.facebook.com/${META_VERSION}/me/accounts?fields=id,name,instagram_business_account&access_token=${encodeURIComponent(accessToken)}`
     const pagesResp = await $fetch(pagesUrl, { method: 'GET' })
@@ -1358,7 +1372,6 @@ export const igAuthCallback = async (event) => {
       igUsername = igResp?.username || null
     } catch (e) {}
 
-    const expiresIn = Number(shortResp?.expires_in || 0)
     const expiry = expiresIn ? new Date(Date.now() + expiresIn * 1000) : null
 
     await upsertDmAccount({
@@ -1374,6 +1387,28 @@ export const igAuthCallback = async (event) => {
         igAccountId,
       },
     })
+
+    // Subscribe the linked Facebook page to Instagram webhook fields using the page access token.
+    // The page access token is needed (not user token) for subscribed_apps endpoint.
+    const pageId = String(withIg?.id || '')
+    if (pageId) {
+      try {
+        const pageTokenUrl = `https://graph.facebook.com/${META_VERSION}/${pageId}?fields=access_token&access_token=${encodeURIComponent(accessToken)}`
+        const pageTokenResp = await $fetch(pageTokenUrl, { method: 'GET' })
+        const pageToken = pageTokenResp?.access_token || accessToken
+        const subscribeUrl = `https://graph.facebook.com/${META_VERSION}/${pageId}/subscribed_apps`
+        await $fetch(subscribeUrl, {
+          method: 'POST',
+          body: new URLSearchParams({
+            subscribed_fields: META_SUBSCRIBED_FIELDS,
+            access_token: pageToken,
+          }).toString(),
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        })
+      } catch (e) {
+        console.warn('[META IG AUTH] Failed to subscribe page to Instagram webhooks:', e?.message)
+      }
+    }
 
     // Fire-and-forget backfill to keep callback response fast.
     void fetchDmHistoryForOrg(orgId, {
