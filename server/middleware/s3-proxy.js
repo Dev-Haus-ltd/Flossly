@@ -7,6 +7,7 @@ const PREFIXES = [
   "/systemDocs/",
   "/hr-documents/",
   "/leave-documents/",
+  "/chatbot-attachments/",
 ];
 
 export default defineEventHandler(async (event) => {

@@ -66,8 +66,8 @@
                 {{ getConversationTypeLabel(selectedConversation.type) }}
               </v-chip>
               
-              <!-- Status Dropdown -->
-              <v-menu offset-y>
+              <!-- Status Dropdown (only for support agents) -->
+              <v-menu v-if="isSupportAgent" offset-y>
                 <template v-slot:activator="{ props }">
                   <v-chip
                     v-bind="props"
@@ -93,6 +93,10 @@
                   </v-list-item>
                 </v-list>
               </v-menu>
+              <!-- Status chip (read-only for customers) -->
+              <v-chip v-else :color="getStatusColor(selectedConversation.status)" size="small">
+                {{ getStatusLabel(selectedConversation.status) }}
+              </v-chip>
             </div>
           </div>
 
@@ -109,6 +113,9 @@
             >
               <!-- User message (left aligned) -->
               <template v-if="message.isUser">
+                <v-avatar size="40" color="primary" class="user-avatar">
+                  <span class="avatar-text">{{ getUserInitials(selectedConversation.userName) }}</span>
+                </v-avatar>
                 <div class="message-bubble user-bubble">
                   <p>{{ message.text }}</p>
                   
@@ -148,9 +155,10 @@
                       <span class="attachment-size">({{ formatFileSize(attachment.fileSize) }})</span>
                     </div>
                   </div>
-                  
-                  <span class="message-time">{{ formatTime(message.timestamp) }}</span>
                 </div>
+                <v-avatar size="40" color="success" class="support-avatar">
+                  <v-icon color="white" size="20">mdi-face-agent</v-icon>
+                </v-avatar>
               </template>
             </div>
             <!-- Bottom sentinel for reliable scroll-to-last-message -->
@@ -237,7 +245,7 @@ import { useRouter } from 'vue-router';
 import { useDeveloperAccess } from '@/composables/useDeveloperAccess';
 import { useAuthStore } from '@/stores/auth';
 import supportChatService from '@/services/supportChatService';
-import { useSupportChatSocket } from '@/composables/useSupportChatSocket.js';
+import { useFCM } from '@/composables/useFCM';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -264,71 +272,84 @@ const statusOptions = ref([
   { value: 'closed', label: 'Closed', color: 'grey' }
 ]);
 
-const { getSocket } = useSupportChatSocket();
-const socket = getSocket();
-let joinedConversationId = null;
+const { lastNotification } = useFCM();
 
-const joinConversationRoom = (conversationId) => {
-  if (!conversationId) return;
-  if (joinedConversationId && joinedConversationId !== conversationId) {
-    socket?.emit('conversation:leave', joinedConversationId);
-  }
-  joinedConversationId = conversationId;
-  socket?.emit('conversation:join', conversationId);
-};
+// Handle FCM notifications for chatbot messages
+const handleFCMNotification = (notification) => {
+  if (!notification) return;
+  
+  const notifData = notification.data || {};
+  const type = notifData.type;
+  
+  if (type === 'chatbot_message') {
+    const convId = notifData.conversationId ? parseInt(notifData.conversationId) : null;
+    const msg = notifData.message ? JSON.parse(notifData.message) : null;
+    
+    if (!convId || !msg) return;
 
-const onNewMessage = (evt) => {
-  const convId = evt?.conversationId;
-  const msg = evt?.message;
-  if (!convId || !msg) return;
+    // If currently viewing this conversation, append
+    if (selectedConversation.value?.id === convId) {
+      const tmpId = msg?.metadata?.clientTempId;
+      if (tmpId) {
+        const idx = selectedConversation.value.messages?.findIndex(m => m.id === tmpId);
+        if (idx !== -1) {
+          selectedConversation.value.messages[idx] = {
+            id: msg.id,
+            text: msg.message,
+            isUser: msg.senderType === 'user',
+            senderType: msg.senderType,
+            timestamp: new Date(msg.createdAt)
+          };
+          selectedConversation.value.messages.sort((a, b) => a.timestamp - b.timestamp);
+          return;
+        }
+      }
 
-  // If currently viewing this conversation, append
-  if (selectedConversation.value?.id === convId) {
-    const tmpId = msg?.metadata?.clientTempId;
-    if (tmpId) {
-      const idx = selectedConversation.value.messages?.findIndex(m => m.id === tmpId);
-      if (idx !== -1) {
-        selectedConversation.value.messages[idx] = {
+      const exists = selectedConversation.value.messages?.some(m => m.id === msg.id);
+      if (!exists) {
+        selectedConversation.value.messages.push({
           id: msg.id,
           text: msg.message,
           isUser: msg.senderType === 'user',
           senderType: msg.senderType,
-          timestamp: new Date(msg.createdAt)
-        };
+          timestamp: new Date(msg.createdAt),
+          attachments: msg.attachments || []
+        });
         selectedConversation.value.messages.sort((a, b) => a.timestamp - b.timestamp);
-        return;
+        nextTick(() => requestAnimationFrame(() => scrollMessagesToBottom()));
       }
     }
 
-    const exists = selectedConversation.value.messages?.some(m => m.id === msg.id);
-    if (!exists) {
-      selectedConversation.value.messages.push({
-        id: msg.id,
-        text: msg.message,
-        isUser: msg.senderType === 'user',
-        senderType: msg.senderType,
-        timestamp: new Date(msg.createdAt),
-        attachments: msg.attachments || [] // Include attachments from socket
-      });
-      selectedConversation.value.messages.sort((a, b) => a.timestamp - b.timestamp);
-      nextTick(() => requestAnimationFrame(() => scrollMessagesToBottom()));
+    // Update conversation list preview + timestamp
+    const convInList = conversations.value.find(c => c.id === convId);
+    if (convInList) {
+      convInList.lastMessage = msg.message;
+      convInList.timestamp = new Date(msg.createdAt);
+      if (msg.senderType === 'user' && selectedConversation.value?.id !== convId) {
+        convInList.unread = (convInList.unread || 0) + 1;
+      }
     }
-  }
-
-  // Update conversation list preview + timestamp
-  const convInList = conversations.value.find(c => c.id === convId);
-  if (convInList) {
-    convInList.lastMessage = msg.message;
-    convInList.timestamp = new Date(msg.createdAt);
-    if (msg.senderType === 'user' && selectedConversation.value?.id !== convId) {
-      convInList.unread = (convInList.unread || 0) + 1;
+  } else if (type === 'chatbot_status_update') {
+    const convId = notifData.conversationId ? parseInt(notifData.conversationId) : null;
+    const status = notifData.status;
+    
+    if (convId && status) {
+      // Update current conversation status
+      if (selectedConversation.value?.id === convId) {
+        selectedConversation.value.status = status;
+      }
+      
+      // Update in conversations list
+      const conv = conversations.value.find(c => c.id === convId);
+      if (conv) {
+        conv.status = status;
+      }
     }
   }
 };
 
 const selectConversation = async (conversation) => {
   selectedConversation.value = conversation;
-  joinConversationRoom(conversation.id);
 
   isConversationLoading.value = true;
   
@@ -416,28 +437,67 @@ const sendReply = async () => {
   
   // v-textarea tends to include a trailing newline; trim it before sending
   const messageText = replyMessage.value.trim();
+  const tempId = Date.now();
   replyMessage.value = '';
+  
+  // Optimistically add message to UI immediately
+  const tempMessage = {
+    id: tempId,
+    text: messageText,
+    isUser: false,
+    senderType: 'support',
+    timestamp: new Date(),
+    attachments: []
+  };
+  
+  selectedConversation.value.messages.push(tempMessage);
+  await nextTick();
+  requestAnimationFrame(() => scrollMessagesToBottom());
   
   try {
     const response = await supportChatService.createMessage({
       conversationId: selectedConversation.value.id,
       message: messageText,
       senderType: 'support',
-      clientTempId: Date.now()
+      clientTempId: tempId
     });
     
     if (response.success) {
+      // Replace temp message with real message from server
+      const msgIndex = selectedConversation.value.messages.findIndex(m => m.id === tempId);
+      if (msgIndex !== -1) {
+        selectedConversation.value.messages[msgIndex] = {
+          id: response.data.id,
+          text: messageText,
+          isUser: false,
+          senderType: 'support',
+          timestamp: new Date(response.data.createdAt),
+          attachments: []
+        };
+      }
+      
       // Update last message in conversation list
       selectedConversation.value.lastMessage = messageText;
       selectedConversation.value.timestamp = new Date();
       
-      // Refresh conversation to show new message
-      await selectConversation(selectedConversation.value);
+      // Update in conversations list
+      const conv = conversations.value.find(c => c.id === selectedConversation.value.id);
+      if (conv) {
+        conv.lastMessage = messageText;
+        conv.timestamp = new Date();
+      }
     } else {
       throw new Error('Failed to send message');
     }
   } catch (error) {
     console.error('Failed to send reply:', error);
+    
+    // Remove the temp message on error
+    const msgIndex = selectedConversation.value.messages.findIndex(m => m.id === tempId);
+    if (msgIndex !== -1) {
+      selectedConversation.value.messages.splice(msgIndex, 1);
+    }
+    
     alert('Failed to send message. Please try again.');
     replyMessage.value = messageText; // Restore message on error
   }
@@ -501,14 +561,6 @@ const updateConversationStatus = async (newStatus) => {
       const conv = conversations.value.find(c => c.id === selectedConversation.value.id);
       if (conv) {
         conv.status = newStatus;
-      }
-      
-      // Emit socket event to notify user in real-time
-      if (socket) {
-        socket.emit('conversation:status-updated', {
-          conversationId: selectedConversation.value.id,
-          status: newStatus
-        });
       }
     }
   } catch (error) {
@@ -642,7 +694,8 @@ const checkDeveloperAccess = () => {
 onMounted(() => {
   checkDeveloperAccess();
   
-  socket?.on('message:new', onNewMessage);
+  // Watch for FCM notifications
+  watch(lastNotification, handleFCMNotification, { immediate: true });
 
   console.log('Support Chat page mounted');
   fetchConversations();
@@ -651,12 +704,7 @@ onMounted(() => {
   const interval = setInterval(fetchConversations, 30000);
   
   onUnmounted(() => {
-    socket?.off('message:new', onNewMessage);
     clearInterval(interval);
-    if (joinedConversationId) {
-      socket?.emit('conversation:leave', joinedConversationId);
-      joinedConversationId = null;
-    }
   });
 });
 </script>
@@ -872,14 +920,16 @@ onMounted(() => {
   overflow-x: hidden;
   max-height: calc(100vh - 370px); /* Increased by 30px for more message space */
   min-height: 0; /* Important for flex child to allow scrolling */
+  background: white;
 }
 
 .message {
   display: flex;
   gap: 12px;
-  align-items: flex-start;
+  align-items: center;
   max-width: 100%;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+  position: relative;
 }
 
 .message:last-child {
@@ -891,9 +941,37 @@ onMounted(() => {
   justify-content: flex-start;
 
   .message-bubble {
-    background: #f5f5f5;
+    background: white;
     color: #1a1a1a;
-    border-radius: 12px;
+    border-radius: 20px;
+    border: 1px solid hsla(0, 0%, 86%, 1);
+    position: relative;
+  }
+
+  .message-bubble::before {
+    content: '';
+    position: absolute;
+    left: -8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 8px 8px 8px 0;
+    border-color: transparent hsla(0, 0%, 86%, 1) transparent transparent;
+  }
+
+  .message-bubble::after {
+    content: '';
+    position: absolute;
+    left: -6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 7px 7px 7px 0;
+    border-color: transparent white transparent transparent;
   }
 }
 
@@ -902,14 +980,28 @@ onMounted(() => {
   justify-content: flex-end;
 
   .message-bubble {
-    /* Match chatbot widget user bubble (solid blue) */
-    background: #263AAD;
-    color: #ffffff;
+    background: #E8F0FE;
+    color: #1a1a1a;
     border-radius: 20px;
+    position: relative;
+    order: 1;
   }
 
-  .message-time {
-    color: rgba(255, 255, 255, 0.85);
+  .message-bubble::before {
+    content: '';
+    position: absolute;
+    right: -8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 8px 0 8px 8px;
+    border-color: transparent transparent transparent #E8F0FE;
+  }
+
+  .support-avatar {
+    order: 2;
   }
 }
 
@@ -922,13 +1014,13 @@ onMounted(() => {
 }
 
 .message-bubble {
-  padding: 12px 16px;
+  padding: 16px;
   width: fit-content;
-  /* Allow bubbles to grow as wide as needed, but never exceed the row */
-  max-width: 100%;
+  max-width: calc(100% - 52px);
   display: inline-block;
   word-break: break-word;
   white-space: pre-wrap;
+  overflow-wrap: break-word;
 
   p {
     margin: 0 0 2px 0;
@@ -939,10 +1031,19 @@ onMounted(() => {
 
 .message-time {
   display: block;
-  margin-top: 2px;
-  font-size: 11px;
+  margin-top: 4px;
+  font-size: 10px;
   opacity: 0.8;
-  color: #666;
+  color: #999;
+  text-align: right;
+}
+
+.user-avatar {
+  flex-shrink: 0;
+}
+
+.support-avatar {
+  flex-shrink: 0;
 }
 
 /* Message Attachments */
@@ -957,28 +1058,34 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 6px;
+  padding: 6px 12px;
+  background: white;
+  border-radius: 50px;
   cursor: pointer;
   transition: background 0.2s;
   font-size: 12px;
+  color: #1a1a1a;
+  border: 1px solid #e0e0e0;
 }
 
 .user-message .message-attachment {
-  background: rgba(0, 0, 0, 0.08);
+  background: white;
+  color: #1a1a1a;
+  border: 1px solid #e0e0e0;
 }
 
 .user-message .message-attachment:hover {
-  background: rgba(0, 0, 0, 0.12);
+  background: #f5f5f5;
 }
 
 .support-message .message-attachment {
-  background: rgba(255, 255, 255, 0.2);
+  background: white;
+  color: #1a1a1a;
+  border: 1px solid #e0e0e0;
 }
 
 .support-message .message-attachment:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: #f5f5f5;
 }
 
 .attachment-icon {
@@ -1005,7 +1112,7 @@ onMounted(() => {
 }
 
 .reply-textarea :deep(.v-field) {
-  border-radius: 16px;
+  border-radius: 24px;
   border-color: #d0d0d0;
 }
 

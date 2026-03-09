@@ -32,7 +32,6 @@ const LICENSE_FEATURES = {
     "docs",
     "team",
     "crm",
-    "diary",
   ]),
   [LICENSE_TYPES.SYSTEM]: new Set([
     "dashboard",
@@ -40,7 +39,7 @@ const LICENSE_FEATURES = {
     "docs",
     "team",
     "crm",
-    "diary",
+    // "diary",
   ]),
 };
 
@@ -196,19 +195,19 @@ export const useMainStore = defineStore("mainStore", {
         //     },
         //   ],
         // },
-        {
-          title: "CRM",
-          imgPath: crmIcon,
-          value: "crm",
-          to:"/crm",
-          children: [
-            {
-              title: "Leads",
-              value: "crmLeads",
-              imgPath: crmIcon,
-              to: "/crm",
-              featureKey: "crm",
-            },
+          {
+            title: "CRM",
+            imgPath: crmIcon,
+            value: "crm",
+            to:"/crm",
+            children: [
+              {
+                title: "Leads",
+                value: "crmLeads",
+                imgPath: crmIcon,
+                to: "/crm/leads",
+                featureKey: "crm",
+              },
             {
               title: "My Automations",
               value: "crmAutomations",
@@ -505,7 +504,7 @@ export const useMainStore = defineStore("mainStore", {
       });
     },
     setSnackbar(toast) {
-      this.snackbar = toast;
+      this.snackbar = { ...toast };
     },
     getCustomColumns() {
       return new Promise((resolve, reject) => {

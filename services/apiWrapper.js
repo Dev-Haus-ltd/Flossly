@@ -4,7 +4,7 @@ export const Get = async (url) => {
   const args = {
     method: "GET",
   };
-  const response = await fetch(APIURL + url, args);
+  const response = await fetch(APIURL + url  , args)
   const data = await response.json();
   if (!response.ok) {
     throw data;
@@ -14,6 +14,9 @@ export const Get = async (url) => {
 export const Post = async (url, body) => {
   const args = {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify(body),
   };
   const response = await fetch(APIURL + url, args);
@@ -29,6 +32,9 @@ export const Post = async (url, body) => {
 export const Delete = async (url, itemId) => {
   const args = {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({id:itemId}),
   };
   const response = await fetch(APIURL + url, args);

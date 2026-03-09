@@ -1,4 +1,4 @@
-import { createLead, deleteLeads, listLeads, updateLead, getLeadTreatment, saveLeadTreatment, deleteLeadTreatment, listLeadNotes, addLeadNote, deleteLeadNote, listOptions, addOption, deleteOption, getLeadCommunication, saveLeadCommunication, listAutomation, saveAutomation, saveAutomationBatch, sendLeadMail, sendLeadWhatsApp, bulkUploadLeads, listAutomationGroups, saveAutomationGroup, deleteAutomationGroup, getWhatsAppUsage } from '~/server/controllers/crm'
+import { createLead, deleteLeads, listLeads, updateLead, getLeadTreatment, saveLeadTreatment, deleteLeadTreatment, listLeadNotes, addLeadNote, deleteLeadNote, listOptions, addOption, deleteOption, getLeadCommunication, saveLeadCommunication, listAutomation, saveAutomation, saveAutomationBatch, resetAutomationOverride, deleteAutomation, sendLeadMail, sendLeadWhatsApp, bulkUploadLeads, bulkUploadAutomations, listAutomationGroups, saveAutomationGroup, deleteAutomationGroup, getWhatsAppUsage, listLeadWhatsAppLogs, uploadLeadAttachment, getLeadPriceAttachmentRecent } from '~/server/controllers/crm'
 
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, 'name')
@@ -13,6 +13,8 @@ export default defineEventHandler(async (event) => {
       return await deleteLeads(event)
     case 'bulkUpload':
       return await bulkUploadLeads(event)
+    case 'automationBulkUpload':
+      return await bulkUploadAutomations(event)
     case 'treatmentGet':
       return await getLeadTreatment(event)
     case 'treatmentSave':
@@ -41,6 +43,10 @@ export default defineEventHandler(async (event) => {
       return await saveAutomation(event)
     case 'automationSaveBatch':
       return await saveAutomationBatch(event)
+    case 'automationReset':
+      return await resetAutomationOverride(event)
+    case 'automationDelete':
+      return await deleteAutomation(event)
     case 'automationGroups':
       return await listAutomationGroups(event)
     case 'automationGroupSave':
@@ -53,6 +59,12 @@ export default defineEventHandler(async (event) => {
       return await sendLeadWhatsApp(event)
     case 'whatsappUsage':
       return await getWhatsAppUsage(event)
+    case 'whatsappLogs':
+      return await listLeadWhatsAppLogs(event)
+    case 'uploadAttachment':
+      return await uploadLeadAttachment(event)
+    case 'priceAttachmentRecent':
+      return await getLeadPriceAttachmentRecent(event)
     default:
       return { code: 1, message: 'Not found' }
   }

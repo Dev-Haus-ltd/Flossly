@@ -1,8 +1,11 @@
 import { Op, fn, col } from 'sequelize'
-import { CrmLead, MetaPage, Organisation, User, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight } from '../models'
+import { CrmLead, MetaPage, Organisation, User, UserOrganisation, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight } from '../models'
 import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
 import { addMetaClient, broadcastMetaEvent } from '../utils/metaStream'
+import { getWhatsAppProviderKey, getWhapiEnvConfig, resolveWhapiConfig } from '../utils/whatsappProvider'
+import { sendNotificationToMultipleUsers } from '../utils/fcmNotification'
+import { parseJsonBody } from "../utils/body";
 
 const META_VERSION = 'v24.0'
 
@@ -46,6 +49,7 @@ export const authStart = async (event) => {
     'pages_show_list',
     'pages_read_engagement',
     'pages_manage_metadata',
+    'pages_manage_ads',
     'leads_retrieval',
     'ads_read',
     'business_management',
@@ -66,22 +70,25 @@ export const authCallback = async (event) => {
   const appId = config.META_APP_ID
   const appSecret = config.META_APP_SECRET
   const redirectUri = getRedirectUri(config)
-  if (!appId || !appSecret || !redirectUri) return error(400, 'Meta App not configured')
+  if (!appId || !appSecret || !redirectUri) {
+    return sendRedirect(event, `/crm?error=${encodeURIComponent('Meta App not configured')}`)
+  }
 
   const q = getQuery(event)
   const { code, state, error: oauthError, error_description } = q
   
   // ✅ FIX: Handle OAuth errors gracefully
   if (oauthError) {
-    console.error('[META][AUTH] OAuth error:', oauthError, error_description)
-    return sendRedirect(event, `/crm?error=${encodeURIComponent(oauthError)}`)
+    const msg = error_description ? `${oauthError}: ${error_description}` : oauthError
+    return sendRedirect(event, `/crm?error=${encodeURIComponent(msg)}`)
   }
 
-  if (!code) return error(400, 'Missing authorization code')
+  if (!code) return sendRedirect(event, `/crm?error=${encodeURIComponent('Missing authorization code')}`)
   
   const stateCookie = getCookie(event, 'meta_oauth_state')
   if (!state || !stateCookie || state !== stateCookie) {
-    return error(401, 'Invalid state - CSRF check failed')
+    setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
+    return sendRedirect(event, `/crm?error=${encodeURIComponent('Invalid state - CSRF check failed')}`)
   }
 
   // ✅ FIX: Extract user context from state
@@ -96,12 +103,13 @@ export const authCallback = async (event) => {
       throw new Error('State expired')
     }
   } catch (e) {
-    console.error('[META][AUTH] Invalid state data:', e)
-    return error(401, 'Invalid state data')
+    setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
+    return sendRedirect(event, `/crm?error=${encodeURIComponent('Invalid state data')}`)
   }
 
   if (!userId || !orgId) {
-    return error(401, 'Missing user context in state')
+    setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
+    return sendRedirect(event, `/crm?error=${encodeURIComponent('Missing user context in state')}`)
   }
 
   try {
@@ -130,8 +138,6 @@ export const authCallback = async (event) => {
     const fbUserId = meResp.id
     const fbUserName = meResp.name
 
-    console.log(`[META][AUTH] Connected Facebook user: ${fbUserName} (${fbUserId})`)
-
     // Fetch pages with page access tokens
     const pagesUrl = `https://graph.facebook.com/${META_VERSION}/me/accounts?fields=id,name,access_token&access_token=${encodeURIComponent(userToken)}`
     const pagesResp = await $fetch(pagesUrl, { method: 'GET' })
@@ -142,12 +148,12 @@ export const authCallback = async (event) => {
       await MetaPage.sync()
       await CrmLead.sync()
       await MetaUserToken.sync()
-    } catch (e) {
-      console.error('[META][AUTH] Table sync error:', e)
-    }
+    } catch (e) {}
 
     // Enforce one active org per page to avoid lead routing ambiguity
     const pageIds = pages.map((p) => p?.id).filter(Boolean)
+    let conflictsById = new Set()
+    let conflictsByPage = new Map()
     if (pageIds.length) {
       const conflicts = await MetaPage.findAll({
         where: {
@@ -155,18 +161,40 @@ export const authCallback = async (event) => {
           organisationId: { [Op.ne]: orgId },
           status: 'Active',
         },
+        include: [{ model: Organisation, as: 'organisation', attributes: ['id', 'name'] }],
       })
       if (conflicts.length) {
-        const names = conflicts.map((c) => c.pageName || c.pageId).join(', ')
-        setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
-        return sendRedirect(
-          event,
-          `/crm?error=${encodeURIComponent(
-            `Meta connection failed. The following page(s) are already connected to another organisation: ${names}`
-          )}`
-        )
+        conflictsById = new Set(conflicts.map((c) => String(c.pageId)))
+        conflicts.forEach((c) => {
+          const orgName = c.organisation?.name || `Org ${c.organisationId}`
+          conflictsByPage.set(String(c.pageId), orgName)
+        })
       }
     }
+
+    const pagesToConnect = pages.filter(
+      (p) => p?.id && p?.access_token && !conflictsById.has(String(p.id))
+    )
+
+
+    if (!pagesToConnect.length) {
+      const conflictNames = pages
+        .filter((p) => p?.id && conflictsById.has(String(p.id)))
+        .map((p) => {
+          const orgName = conflictsByPage.get(String(p.id))
+          const pageName = p.name || p.id
+          return orgName ? `${pageName} (Org: ${orgName})` : pageName
+        })
+        .join(', ')
+      setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
+      return sendRedirect(
+        event,
+        `/crm?error=${encodeURIComponent(
+          `Meta connection failed. The following page(s) are already connected to another organisation: ${conflictNames}`
+        )}`
+      )
+    }
+
     // ✅ FIX: Store user token with Facebook user ID for tracking
     const encUser = encrypt(userToken)
     const expiresIn = Number(longResp?.expires_in || 0)
@@ -194,9 +222,7 @@ export const authCallback = async (event) => {
     }
 
     // Upsert pages
-    for (const p of pages) {
-      if (!p?.id || !p?.access_token) continue
-      
+    for (const p of pagesToConnect) {
       const existing = await MetaPage.findOne({ 
         where: { organisationId: orgId, pageId: p.id } 
       })
@@ -223,8 +249,7 @@ export const authCallback = async (event) => {
     }
 
     // Auto-subscribe pages to leadgen webhooks
-    for (const p of pages) {
-      if (!p?.id || !p?.access_token) continue
+    for (const p of pagesToConnect) {
       try {
         const subscribeUrl = `https://graph.facebook.com/${META_VERSION}/${p.id}/subscribed_apps`
         await $fetch(subscribeUrl, {
@@ -235,19 +260,21 @@ export const authCallback = async (event) => {
           }).toString(),
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         })
-      } catch (e) {
-        console.error(`[META][AUTH] Failed to subscribe page ${p.id}:`, e)
-      }
+      } catch (e) {}
     }
+
+    // Backfill last 30 days of leads (non-blocking)
+    try {
+      await fetchLeadsForOrg(orgId, { days: 30 })
+    } catch (e) {}
 
     // Clear state cookie
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
     
     // ✅ FIX: Better success redirect with details
-    return sendRedirect(event, `/crm?meta=connected&pages=${pages.length}&user=${encodeURIComponent(fbUserName)}`)
+    return sendRedirect(event, `/crm?meta=connected&pages=${pagesToConnect.length}&user=${encodeURIComponent(fbUserName)}`)
 
   } catch (e) {
-    console.error('[META][AUTH] Callback error:', e)
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
     const errorMsg = e?.data?.error?.message || e?.message || 'Connection failed'
     return sendRedirect(event, `/crm?error=${encodeURIComponent(errorMsg)}`)
@@ -314,9 +341,29 @@ export const getWhatsAppConfig = async (event) => {
   const { orgId } = event.context.user || {}
   if (!orgId) return error(401, 'Unauthenticated')
 
+  const provider = getWhatsAppProviderKey()
+  if (provider === 'whapi') {
+    const whapi = await resolveWhapiConfig(orgId)
+    return success({
+      provider: 'whapi',
+      hasToken: !!whapi?.token,
+      supportsTemplates: false,
+      requiresTemplateOutside24h: false,
+      baseUrl: whapi?.baseUrl || getWhapiEnvConfig().baseUrl,
+      channelId: whapi?.channelId || null,
+    })
+  }
+
   try { await MetaWhatsAppConfig.sync() } catch {}
   const row = await MetaWhatsAppConfig.findOne({ where: { organisationId: orgId } })
-  if (!row) return success(null)
+  if (!row) {
+    return success({
+      provider: 'meta',
+      hasToken: false,
+      supportsTemplates: true,
+      requiresTemplateOutside24h: true,
+    })
+  }
 
   return success({
     id: row.id,
@@ -330,6 +377,9 @@ export const getWhatsAppConfig = async (event) => {
     hasVerifyToken: !!row.verifyTokenEnc,
     tokenExpiresAt: row.tokenExpiresAt || null,
     status: row.status || 'Active',
+    provider: 'meta',
+    supportsTemplates: true,
+    requiresTemplateOutside24h: true,
   })
 }
 
@@ -338,7 +388,7 @@ export const saveWhatsAppConfig = async (event) => {
   if (!orgId || !userId) return error(401, 'Unauthenticated')
 
   const body = await readBody(event)
-  const payload = typeof body === 'string' ? JSON.parse(body) : body
+  const payload = typeof body === 'string' ? parseJsonBody(body) : body
   const phoneNumberId = normalizeWaConfigValue(payload?.phoneNumberId)
   const wabaId = normalizeWaConfigValue(payload?.wabaId)
   const displayPhoneNumber = normalizeWaConfigValue(payload?.displayPhoneNumber)
@@ -397,7 +447,7 @@ export const whatsappEmbeddedComplete = async (event) => {
   const redirectUri = getRedirectUri(config)
 
   const body = await readBody(event)
-  const payload = typeof body === 'string' ? JSON.parse(body) : body
+  const payload = typeof body === 'string' ? parseJsonBody(body) : body
   const code = normalizeWaConfigValue(payload?.code)
   const accessToken = normalizeWaConfigValue(payload?.accessToken)
   let token = accessToken
@@ -510,21 +560,16 @@ export const listLeads = async (event) => {
   return success(mapped)
 }
 
-export const fetchLeadsNow = async (event) => {
-  const { orgId } = event.context.user || {}
-  if (!orgId) return error(401, 'Unauthenticated')
+const fetchLeadsForOrg = async (orgId, { days = 0, maxPerForm = 1000, debugEnabled = false } = {}) => {
+  if (!orgId) return { ok: false, error: 'Unauthenticated' }
   try { await CrmLead.sync() } catch (_) {}
 
-  const q = getQuery(event) || {}
-  const days = Number(q.days || 0)
-  const maxPerForm = Number(q.maxPerForm || 1000)
-  const debugEnabled = String(q.debug || '').toLowerCase() === 'true'
   const sinceDate = Number.isFinite(days) && days > 0
     ? new Date(Date.now() - days * 24 * 60 * 60 * 1000)
     : null
 
-  const pages = await MetaPage.findAll({ 
-    where: { organisationId: orgId, status: 'Active' } 
+  const pages = await MetaPage.findAll({
+    where: { organisationId: orgId, status: 'Active' }
   })
   const debug = {
     orgId: Number(orgId),
@@ -536,7 +581,7 @@ export const fetchLeadsNow = async (event) => {
     maxPerForm,
     errors: [],
   }
-  
+
   let imported = 0
   for (const mp of pages) {
     const pageId = mp.pageId
@@ -548,7 +593,7 @@ export const fetchLeadsNow = async (event) => {
       const formsUrl = `https://graph.facebook.com/${META_VERSION}/${pageId}/leadgen_forms?fields=id,name&access_token=${encodeURIComponent(pageToken)}`
       const formsResp = await $fetch(formsUrl, { method: 'GET' })
       const forms = Array.isArray(formsResp?.data) ? formsResp.data : []
-      
+
       for (const form of forms) {
         debug.formsProcessed += 1
         const sinceParam = sinceDate ? `&since=${Math.floor(sinceDate.getTime() / 1000)}` : ''
@@ -625,15 +670,30 @@ export const fetchLeadsNow = async (event) => {
         }
       }
     } catch (e) {
-      console.error(`[META] Error fetching leads for page ${pageId}:`, e)
       debug.errors.push({
         pageId,
         message: e?.data?.error?.message || e?.message || 'Unknown error',
       })
     }
   }
-  if (debugEnabled) return success(debug)
-  return success({ imported })
+
+  if (debugEnabled) return { ok: true, debug }
+  return { ok: true, imported }
+}
+
+export const fetchLeadsNow = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const q = getQuery(event) || {}
+  const days = Number(q.days || 0)
+  const maxPerForm = Number(q.maxPerForm || 1000)
+  const debugEnabled = String(q.debug || '').toLowerCase() === 'true'
+
+  const result = await fetchLeadsForOrg(orgId, { days, maxPerForm, debugEnabled })
+  if (!result.ok) return error(401, result.error || 'Unauthenticated')
+  if (debugEnabled) return success(result.debug)
+  return success({ imported: result.imported || 0 })
 }
 
 
@@ -661,9 +721,7 @@ export const subscribePages = async (event) => {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       })
       subscribed++
-    } catch (e) {
-      console.error(`[META] Failed to subscribe page ${mp.pageId}:`, e)
-    }
+    } catch (e) {}
   }
   return success({ subscribed })
 }
@@ -774,6 +832,7 @@ export const healthCheck = async (event) => {
       tokenPresent,
       subscribed,
       appMatched,
+      connectedAt: page.connectedAt || page.updatedAt || page.createdAt || null,
       leadCount: leadStatsByPage.get(String(pageId))?.leadCount || 0,
       lastLeadAt: leadStatsByPage.get(String(pageId))?.lastLeadAt || null,
       error: errorMsg,
@@ -791,9 +850,9 @@ export const healthCheck = async (event) => {
 
 export const webhook = async (event) => {
   const config = useRuntimeConfig()
+  const reqId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
   
   if (getMethod(event) === 'HEAD') {
-    console.log('[META][WEBHOOK][HEAD] ping')
     return send(event, 'ok')
   }
   
@@ -806,11 +865,6 @@ export const webhook = async (event) => {
       process.env.NUXT_META_VERIFY_TOKEN ||
       ''
     ).trim()
-    console.log('[META][WEBHOOK][VERIFY]', {
-      mode: q['hub.mode'],
-      hasToken: Boolean(verifyToken),
-    })
-    
     if (q['hub.mode'] === 'subscribe' && verifyToken && verifyToken === expectedToken) {
       return send(event, q['hub.challenge'] || '')
     }
@@ -819,13 +873,20 @@ export const webhook = async (event) => {
   
   if (getMethod(event) === 'POST') {
     const body = await readBody(event)
-    console.log('[META][WEBHOOK][EVENT]', JSON.stringify(body)?.slice(0, 500))
-    
+    try {
+      console.log('[META WEBHOOK]', reqId, 'POST received', {
+        object: body?.object,
+        entries: Array.isArray(body?.entry) ? body.entry.length : 0,
+      })
+    } catch {}
     try {
       const entries = Array.isArray(body?.entry) ? body.entry : []
       for (const entry of entries) {
         const pageId = String(entry.id || '')
         const changes = Array.isArray(entry.changes) ? entry.changes : []
+        if (pageId) {
+          console.log('[META WEBHOOK]', reqId, 'Entry pageId', pageId, 'changes', changes.length)
+        }
         
         for (const ch of changes) {
           if (ch.field !== 'leadgen') continue
@@ -833,19 +894,31 @@ export const webhook = async (event) => {
           const v = ch.value || {}
           const leadId = v.leadgen_id || v.lead_id || v.leadId
           const formId = v.form_id || v.formId
+          console.log('[META WEBHOOK]', reqId, 'Leadgen event', { pageId, leadId, formId })
           
           if (!leadId || !pageId) continue
           
           const mp = await MetaPage.findOne({ 
             where: { pageId, status: 'Active' } 
           })
+          if (!mp) {
+            console.warn('[META WEBHOOK]', reqId, 'No active MetaPage for pageId', pageId)
+          }
           if (!mp) continue
           
           const pageToken = decrypt(mp.accessTokenEnc)
+          if (!pageToken) {
+            console.warn('[META WEBHOOK]', reqId, 'Missing page token for pageId', pageId)
+          }
           if (!pageToken) continue
           
           const url = `https://graph.facebook.com/${META_VERSION}/${leadId}?fields=created_time,field_data,ad_id,adset_id,campaign_id&access_token=${encodeURIComponent(pageToken)}`
           const leadData = await $fetch(url, { method: 'GET' })
+          console.log('[META WEBHOOK]', reqId, 'Fetched lead data', {
+            pageId,
+            leadId,
+            created_time: leadData?.created_time || null,
+          })
           
           const fld = (leadData?.field_data || []).reduce((acc, f) => {
             acc[f.name] = Array.isArray(f.values) ? f.values[0] : f.values
@@ -873,7 +946,7 @@ export const webhook = async (event) => {
             await existing.save()
             broadcastMetaEvent('lead', { orgId: mp.organisationId, leadId, pageId, formId })
           } else {
-            await CrmLead.create({
+            const created = await CrmLead.create({
               organisationId: mp.organisationId,
               pageId,
               formId: formId || null,
@@ -890,12 +963,44 @@ export const webhook = async (event) => {
               leadStatus: 'New',
             })
             broadcastMetaEvent('lead', { orgId: mp.organisationId, leadId, pageId, formId })
+
+            try {
+              const orgUsers = await UserOrganisation.findAll({
+                where: {
+                  organisationId: mp.organisationId,
+                  status: 'Active',
+                },
+                attributes: ['userId'],
+              })
+              const userIds = [...new Set(orgUsers.map((u) => u.userId).filter(Boolean))]
+              if (userIds.length) {
+                await sendNotificationToMultipleUsers({
+                  userIds,
+                  title: 'New Meta Lead',
+                  body: fullName || email || phone || 'A new lead was received',
+                  type: 'lead_created',
+                  referenceType: 'lead',
+                  referenceId: created.id,
+                  data: {
+                    leadId: String(created.id),
+                    leadSource: 'Meta Leadgen',
+                    pageId: String(pageId || ''),
+                    url: `/crm?leadId=${created.id}`,
+                  },
+                  priority: 'high',
+                })
+              }
+            } catch (notifyErr) {
+              console.warn('[META WEBHOOK]', reqId, 'Lead notification failed', {
+                leadId: created?.id || null,
+                pageId: String(pageId || ''),
+                error: notifyErr?.message || 'Unknown notification error',
+              })
+            }
           }
         }
       }
-    } catch (e) {
-      console.error('[META][WEBHOOK] Processing error:', e)
-    }
+    } catch (e) {}
     
     return success({ received: true })
   }
@@ -1098,61 +1203,62 @@ export const listBusinessPortfolios = async (event) => {
   const { orgId } = event.context.user || {}
   if (!orgId) return error(401, 'Unauthenticated')
 
-  const tokenRow = await MetaUserToken.findOne({ where: { organisationId: orgId } })
-  if (!tokenRow) return error(400, 'Meta not connected')
+  try {
+    const tokenRow = await MetaUserToken.findOne({ where: { organisationId: orgId } })
+    if (!tokenRow) return error(400, 'Meta not connected')
 
-  const userToken = decrypt(tokenRow.userTokenEnc)
-  if (!userToken) return error(400, 'Meta token missing')
+    const userToken = decrypt(tokenRow.userTokenEnc)
+    if (!userToken) return error(400, 'Meta token missing')
 
-  const { byOrg, elsewhere } = await buildMetaPageConflictMap(orgId)
+    const { byOrg, elsewhere } = await buildMetaPageConflictMap(orgId)
 
-  const businesses = await fetchAllMetaPages(
-    `https://graph.facebook.com/${META_VERSION}/me/businesses?fields=id,name&limit=200`,
-    userToken
-  )
+    const businesses = await fetchAllMetaPages(
+      `https://graph.facebook.com/${META_VERSION}/me/businesses?fields=id,name&limit=200`,
+      userToken
+    )
 
-  const mapped = []
-  for (const biz of businesses) {
-    if (!biz?.id) continue
-    let ownedPages = []
-    let clientPages = []
-    try {
-      ownedPages = await fetchAllMetaPages(
-        `https://graph.facebook.com/${META_VERSION}/${biz.id}/owned_pages?fields=id,name&limit=200`,
-        userToken
-      )
-    } catch (e) {
-      console.error(`[META] Failed to load owned pages for business ${biz.id}:`, e)
+    const mapped = []
+    for (const biz of businesses) {
+      if (!biz?.id) continue
+      let ownedPages = []
+      let clientPages = []
+      try {
+        ownedPages = await fetchAllMetaPages(
+          `https://graph.facebook.com/${META_VERSION}/${biz.id}/owned_pages?fields=id,name&limit=200`,
+          userToken
+        )
+      } catch (e) {}
+      try {
+        clientPages = await fetchAllMetaPages(
+          `https://graph.facebook.com/${META_VERSION}/${biz.id}/client_pages?fields=id,name&limit=200`,
+          userToken
+        )
+      } catch (e) {}
+
+      const mapPages = (pages, source) =>
+        (pages || [])
+          .filter((p) => p?.id)
+          .map((p) => ({
+            id: String(p.id),
+            name: p.name || '',
+            source,
+            connectedToOrg: byOrg.has(String(p.id)),
+            connectedElsewhere: elsewhere.has(String(p.id)),
+          }))
+
+      mapped.push({
+        id: String(biz.id),
+        name: biz.name || '',
+        ownedPages: mapPages(ownedPages, 'owned'),
+        clientPages: mapPages(clientPages, 'client'),
+      })
     }
-    try {
-      clientPages = await fetchAllMetaPages(
-        `https://graph.facebook.com/${META_VERSION}/${biz.id}/client_pages?fields=id,name&limit=200`,
-        userToken
-      )
-    } catch (e) {
-      console.error(`[META] Failed to load client pages for business ${biz.id}:`, e)
-    }
 
-    const mapPages = (pages, source) =>
-      (pages || [])
-        .filter((p) => p?.id)
-        .map((p) => ({
-          id: String(p.id),
-          name: p.name || '',
-          source,
-          connectedToOrg: byOrg.has(String(p.id)),
-          connectedElsewhere: elsewhere.has(String(p.id)),
-        }))
-
-    mapped.push({
-      id: String(biz.id),
-      name: biz.name || '',
-      ownedPages: mapPages(ownedPages, 'owned'),
-      clientPages: mapPages(clientPages, 'client'),
-    })
+    return success({ businesses: mapped })
+  } catch (e) {
+    const msg = e?.data?.error?.message || e?.message || 'Failed to load business portfolios'
+    return error(400, msg)
   }
-
-  return success({ businesses: mapped })
 }
 
 export const connectBusinessPages = async (event) => {
@@ -1160,7 +1266,7 @@ export const connectBusinessPages = async (event) => {
   if (!orgId || !userId) return error(401, 'Unauthenticated')
 
   const body = await readBody(event)
-  const payload = typeof body === 'string' ? JSON.parse(body) : body
+  const payload = typeof body === 'string' ? parseJsonBody(body) : body
   const pageIds = Array.isArray(payload?.pageIds)
     ? payload.pageIds.map((p) => String(p)).filter(Boolean)
     : []
@@ -1228,15 +1334,46 @@ export const connectBusinessPages = async (event) => {
           }).toString(),
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         })
-      } catch (e) {
-        console.error(`[META][BUSINESS] Failed to subscribe page ${pageId}:`, e)
-      }
+      } catch (e) {}
 
       connected++
-    } catch (e) {
-      console.error(`[META][BUSINESS] Failed to connect page ${pageId}:`, e)
-    }
+    } catch (e) {}
   }
 
   return success({ connected })
+}
+
+export const debugMetaStatus = async (event) => {
+  const { orgId, userId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const tokenRow = await MetaUserToken.findOne({ where: { organisationId: orgId } })
+  return success({
+    orgId,
+    userId: userId || null,
+    hasUserToken: !!tokenRow,
+    fbUserId: tokenRow?.fbUserId || null,
+    fbUserName: tokenRow?.fbUserName || null,
+    tokenExpiresAt: tokenRow?.expiresAt || null,
+  })
+}
+
+export const listMetaPermissions = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const tokenRow = await MetaUserToken.findOne({ where: { organisationId: orgId } })
+  if (!tokenRow) return error(400, 'Meta not connected')
+
+  const userToken = decrypt(tokenRow.userTokenEnc)
+  if (!userToken) return error(400, 'Meta token missing')
+
+  try {
+    const url = `https://graph.facebook.com/${META_VERSION}/me/permissions?access_token=${encodeURIComponent(userToken)}`
+    const resp = await $fetch(url, { method: 'GET' })
+    return success(resp)
+  } catch (e) {
+    const msg = e?.data?.error?.message || e?.message || 'Failed to fetch permissions'
+    return error(400, msg)
+  }
 }

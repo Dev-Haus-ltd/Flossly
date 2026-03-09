@@ -23,21 +23,30 @@
     <div class="mt-5 px-5">
       <div class="d-flex align-center mb-2" style="flex-wrap: nowrap; justify-content: space-between; overflow-x: auto;">
         <!-- Left: Search + Filters -->
-        <div class="d-inline-flex align-center py-1" style="flex-wrap: nowrap; gap: 8px;">
-          <div style="width: 150px">
+        <div class="d-inline-flex align-center toolbar-wrapper" style="flex-wrap: nowrap;">
+          <div style="width: 120px">
             <v-text-field
             v-model="searchInput"
               placeholder="Search"
-              append-inner-icon="mdi-magnify"
               clearable
+              @click:clear="clearSearch"
               variant="solo"
               :elevation="0"
               density="compact"
               hide-details
-              bg-color="#FAFAFA"
+              bg-color="#F3F4F6"
               flat
               class="custom-search"
-            />
+            >
+              <template #append-inner>
+                <img
+                  :src="searchicon"
+                  alt="search icon"
+                  width="14"
+                  height="14"
+                />
+              </template>
+            </v-text-field>
           </div>
           <CustomerRelationManagementFilterMenu
             :leadSources="leadSources"
@@ -48,115 +57,19 @@
 
         <!-- Right: Connection Controls -->
         <div class="d-inline-flex ml-auto" style="flex-wrap: nowrap; gap: 12px;">
-          <!-- WhatsApp connect UI (temporarily hidden until complete)
           <v-btn
-            :color="isWhatsAppConnected ? 'success' : 'primary'"
-            :variant="isWhatsAppConnected ? 'tonal' : 'flat'"
-            rounded="lg"
-            class="add-task-btn"
-            :loading="whatsAppSaving"
-            @click="connectWhatsAppEmbedded"
-          >
-            <template #prepend>
-              <v-icon size="18">mdi-whatsapp</v-icon>
-            </template>
-            <span v-if="isWhatsAppConnected && whatsAppUsage.limit">
-              WhatsApp {{ whatsAppUsage.count }}/{{ whatsAppUsage.limit }}
-            </span>
-            <span v-else>
-              {{ isWhatsAppConnected ? 'WhatsApp Connected' : 'Connect WhatsApp' }}
-            </span>
-          </v-btn>
-          -->
-
-          <v-menu
             v-if="isConnected"
-            v-model="metaMenu"
-            location="bottom end"
-          >
-            <template #activator="{ props }">
-              <v-btn
-                v-bind="props"
-                color="success"
-                variant="flat"
-                rounded="lg"
-                class="add-task-btn"
-              >
-                <template #prepend>
-                  <v-icon size="18">mdi-link-variant</v-icon>
-                </template>
-                Reconnect Meta
-                <v-icon size="16" class="ml-1">mdi-chevron-down</v-icon>
-              </v-btn>
-            </template>
-            <v-list density="compact">
-              <v-list-item @click="onReconnectMeta">
-                <v-list-item-title>Reconnect Meta</v-list-item-title>
-              </v-list-item>
-              <!-- Backfill last 30 days (hidden until permissions are approved) -->
-              <!--
-              <v-list-item
-                :disabled="metaBackfillLoading"
-                @click="backfillMetaLeads"
-              >
-                <v-list-item-title>
-                  {{ metaBackfillLoading ? 'Backfilling 30 days...' : 'Backfill last 30 days' }}
-                </v-list-item-title>
-              </v-list-item>
-              -->
-              <v-list-item @click="confirmDisconnect = true">
-                <v-list-item-title>Disconnect Meta</v-list-item-title>
-              </v-list-item>
-            </v-list>
-          </v-menu>
-
-          <v-btn
-            v-else
-            color="primary"
+            color="secondary"
             variant="flat"
             rounded="lg"
             class="add-task-btn"
-            @click="integrateMeta"
+            :loading="metaBackfillLoading"
+            @click="backfillMetaLeads"
           >
             <template #prepend>
-              <v-icon size="18">mdi-link-variant</v-icon>
+              <v-icon size="18">mdi-refresh</v-icon>
             </template>
-            Connect Meta
-          </v-btn>
-
-          <v-btn
-            :color="isConnected ? 'success' : undefined"
-            :variant="isConnected ? 'tonal' : 'text'"
-            class="add-task-btn"
-            @click="openMetaHealth"
-          >
-            <template #prepend>
-              <v-icon size="18">mdi-heart-pulse</v-icon>
-            </template>
-            Meta Health
-          </v-btn>
-          <v-btn
-            :disabled="!isConnected"
-            variant="text"
-            class="add-task-btn"
-            @click="openBusinessPortfolios"
-          >
-            <template #prepend>
-              <v-icon size="18">mdi-briefcase-outline</v-icon>
-            </template>
-            Business Portfolios
-          </v-btn>
-          <v-btn
-            color="primary"
-            variant="flat"
-            rounded="lg"
-            class="add-task-btn"
-            @click="onConnectChatbot"
-          >
-            <template #prepend>
-              <v-icon size="18">mdi-robot-outline</v-icon>
-            </template>
-            Connect to Chatbot
+            Refresh Meta Leads
           </v-btn>
 
           <v-btn
@@ -298,7 +211,194 @@
         :data="metaHealthData"
       />
 
-      <!-- WhatsApp connect dialog (temporarily hidden until complete)
+      <v-dialog v-model="whapiDialog" max-width="520">
+        <v-card class="pa-4">
+          <v-card-title class="text-subtitle-1 pa-0 mb-2 d-flex justify-space-between align-center">
+            <span>Connect WhatsApp</span>
+            <v-chip v-if="whapiStatusLabel" :color="whapiStatusColor" size="small" label>
+              {{ whapiStatusLabel }}
+            </v-chip>
+          </v-card-title>
+          <v-card-text class="pa-0">
+            <v-alert
+              v-if="whapiActivationMessage"
+              type="info"
+              variant="tonal"
+              class="mb-2"
+            >
+              {{ whapiActivationMessage }}
+              <div v-if="whapiCooldown" class="text-caption text-medium-emphasis mt-1">
+                Refresh available in {{ whapiCooldown }}s
+              </div>
+            </v-alert>
+            <div v-if="whapiQr" class="d-flex flex-column align-center gap-2">
+              <img :src="whapiQr" alt="WhatsApp QR" style="max-width: 260px;" />
+              <div class="text-caption text-medium-emphasis">
+                Scan this QR code using WhatsApp on the phone you want to connect or switch to.
+              </div>
+            </div>
+            <v-alert
+              v-else-if="whapiStatus.phoneNumber || whapiStatus.displayName"
+              type="info"
+              variant="tonal"
+              class="mb-2"
+            >
+              Connected phone:
+              {{ whapiStatus.displayName ? `${whapiStatus.displayName} (${whapiStatus.phoneNumber})` : whapiStatus.phoneNumber }}
+            </v-alert>
+            <v-alert v-else type="info" variant="tonal" class="mb-2">
+              QR code not ready yet. If the channel is Stopped/Overdue, activate it first and then refresh after about a minute.
+            </v-alert>
+          </v-card-text>
+          <v-card-actions class="pa-0 mt-4">
+            <v-btn variant="text" @click="whapiDialog = false">Close</v-btn>
+            <v-spacer />
+            <v-btn
+              v-if="whapiCanActivate && !whapiQr"
+              :loading="whapiLoading"
+              variant="flat"
+              color="warning"
+              @click="activateWhapiChannel"
+            >
+              Activate (1 day)
+            </v-btn>
+            <v-btn
+              :loading="whapiLoading"
+              :disabled="whapiCooldown > 0"
+              variant="flat"
+              color="primary"
+              @click="refreshWhapiQr"
+            >
+              Refresh QR
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
+      <v-dialog v-model="confirmWhapiDisconnect" max-width="520">
+        <v-card class="pa-4">
+          <v-card-title class="text-subtitle-1 pa-0 mb-2">Disconnect WhatsApp</v-card-title>
+          <v-card-text class="pa-0">
+            This will log out the current device but keep the channel so you can scan a new QR to change numbers.
+          </v-card-text>
+          <v-card-actions class="pa-0 mt-4">
+            <v-spacer />
+            <v-btn variant="text" @click="confirmWhapiDisconnect = false">Cancel</v-btn>
+            <v-btn color="error" variant="flat" :loading="whapiDisconnecting" @click="disconnectWhapi">
+              Disconnect
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
+      <v-dialog v-model="confirmWhapiDelete" max-width="520">
+        <v-card class="pa-4">
+          <v-card-title class="text-subtitle-1 pa-0 mb-2">Delete WhatsApp Channel</v-card-title>
+          <v-card-text class="pa-0">
+            This will permanently delete the channel. To reconnect, a new channel will be created.
+          </v-card-text>
+          <v-card-actions class="pa-0 mt-4">
+            <v-spacer />
+            <v-btn variant="text" @click="confirmWhapiDelete = false">Cancel</v-btn>
+            <v-btn color="error" variant="flat" :loading="whapiDeleting" @click="deleteWhapiChannel">
+              Delete Channel
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
+      <v-dialog v-model="businessDialog" max-width="820">
+        <v-card class="pa-4">
+          <v-card-title class="text-subtitle-1 pa-0 mb-2">
+            Select Business Portfolio Pages
+          </v-card-title>
+          <v-card-text class="pa-0">
+            <v-alert
+              v-if="businessError"
+              type="error"
+              variant="tonal"
+              class="mb-3"
+            >
+              {{ businessError }}
+            </v-alert>
+
+            <v-select
+              v-model="selectedBusinessId"
+              :items="businessOptions"
+              item-title="name"
+              item-value="id"
+              label="Business Portfolio"
+              variant="solo"
+              density="compact"
+              :loading="businessLoading"
+              hide-details
+              class="mb-3"
+            />
+
+            <v-text-field
+              v-model="businessPageSearch"
+              placeholder="Search pages"
+              append-inner-icon="mdi-magnify"
+              clearable
+              variant="solo"
+              :elevation="0"
+              density="compact"
+              hide-details
+              bg-color="#FAFAFA"
+              flat
+              class="mb-3"
+            />
+
+            <div v-if="businessPagesFiltered.length" class="business-page-list">
+              <v-list density="compact">
+                <v-list-item
+                  v-for="page in businessPagesFiltered"
+                  :key="page.id"
+                >
+                  <template #prepend>
+                    <v-checkbox-btn
+                      :model-value="selectedPageIds.includes(page.id)"
+                      :disabled="page.connectedElsewhere || page.connectedToOrg"
+                      @click.stop="toggleBusinessPage(page)"
+                    />
+                  </template>
+                  <v-list-item-title>{{ page.name || page.id }}</v-list-item-title>
+                  <v-list-item-subtitle>
+                    {{ page.statusLabel }}
+                  </v-list-item-subtitle>
+                </v-list-item>
+              </v-list>
+            </div>
+            <div v-else class="text-caption text-medium-emphasis">
+              No pages found for this portfolio.
+            </div>
+          </v-card-text>
+          <v-card-actions class="pa-0 mt-4">
+            <v-btn variant="text" @click="businessDialog = false">
+              Close
+            </v-btn>
+            <v-spacer />
+            <v-btn
+              variant="text"
+              :disabled="!businessPagesSelectable.length"
+              @click="selectAllBusinessPages"
+            >
+              Select All
+            </v-btn>
+            <v-btn
+              color="primary"
+              variant="flat"
+              :loading="businessSaving"
+              :disabled="!selectedPageIds.length"
+              @click="connectSelectedBusinessPages"
+            >
+              Connect Selected
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
+      <!-- <!-- WhatsApp connect dialog (temporarily hidden until complete) -->
       <v-dialog v-model="whatsAppDialog" max-width="640">
         <v-card class="pa-4">
           <v-card-title class="text-subtitle-1 pa-0 mb-2 d-flex justify-space-between align-center">
@@ -323,7 +423,7 @@
           </v-card-actions>
         </v-card>
       </v-dialog>
-      -->
+      
     </div>
   </v-sheet>
 </template>
@@ -337,6 +437,7 @@ import { useMainStore } from '@/stores/index'
 import { useCrmStore } from '@/stores/crm'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
+import searchicon from "@/assets/icons/listView/serach-icon.svg";
 const crmStore = useCrmStore();
 const userStore = useUserStore();
 const { users: storeUsers } = storeToRefs(userStore);
@@ -368,6 +469,96 @@ const businessPageSearch = ref('');
 const whatsAppDialog = ref(false);
 const whatsAppSaving = ref(false);
 const isWhatsAppConnected = ref(false);
+const whatsappProvider = reactive({
+  provider: 'meta',
+  supportsTemplates: true,
+  requiresTemplateOutside24h: true,
+});
+const whapiDialog = ref(false);
+const whapiMenu = ref(false);
+const confirmWhapiDisconnect = ref(false);
+const confirmWhapiDelete = ref(false);
+const whapiQr = ref('');
+const whapiLoading = ref(false);
+const whapiDisconnecting = ref(false);
+const whapiDeleting = ref(false);
+const whapiStatus = reactive({
+  connected: false,
+  channelId: '',
+  phoneNumber: '',
+  displayName: '',
+  status: '',
+});
+const whapiCanActivate = ref(false);
+const whapiActivationPending = ref(false);
+const whapiActivationMessage = ref('');
+const whapiCooldown = ref(0);
+let whapiCooldownTimer = null;
+const whapiStatusLabel = computed(() => {
+  const raw = String(whapiStatus.status || '').trim().toLowerCase();
+  const hasPhone = !!(whapiStatus.phoneNumber || whapiStatus.displayName);
+  if (!hasPhone) {
+    if (raw.includes('overdue')) return 'Overdue';
+    if (raw.includes('stopped')) return 'Stopped';
+    if (raw.includes('logout')) return 'Logged Out';
+    if (raw.includes('activating')) return 'Activating';
+    if (raw.includes('pending') || raw.includes('created')) return 'Pending';
+    if (raw.includes('auth')) return 'Authorized';
+    if (raw.includes('active') || raw.includes('live') || raw.includes('trial')) return 'Pending';
+    if (raw) return raw.charAt(0).toUpperCase() + raw.slice(1);
+    return 'Disconnected';
+  }
+  if (raw) {
+    if (raw.includes('overdue')) return 'Overdue';
+    if (raw.includes('stopped')) return 'Stopped';
+    if (raw.includes('logout')) return 'Logged Out';
+    if (raw.includes('activating')) return 'Activating';
+    if (raw.includes('pending') || raw.includes('created')) return 'Pending';
+    if (raw.includes('auth')) return 'Authorized';
+    if (raw.includes('active')) return 'Active';
+    if (raw.includes('live')) return 'Live';
+    if (raw.includes('trial')) return 'Trial';
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  }
+  return whapiStatus.connected ? 'Active' : 'Disconnected';
+});
+
+const whapiStatusColor = computed(() => {
+  const label = String(whapiStatusLabel.value || '').toLowerCase();
+  if (label.includes('active') || label.includes('live') || label.includes('trial') || label.includes('authoriz')) return 'success';
+  if (label.includes('activating')) return 'warning';
+  if (label.includes('pending')) return 'warning';
+  if (label.includes('stopped') || label.includes('overdue')) return 'error';
+  if (label.includes('logged') || label.includes('disconnected')) return 'warning';
+  return 'primary';
+});
+
+const whapiButtonLabel = computed(() => {
+  if (whapiActivationPending.value) return 'WhatsApp Activating';
+  if (!whapiStatusLabel.value) return 'Connect WhatsApp';
+  return `WhatsApp ${whapiStatusLabel.value}`;
+});
+const clearWhapiCooldown = () => {
+  if (whapiCooldownTimer) {
+    clearInterval(whapiCooldownTimer);
+    whapiCooldownTimer = null;
+  }
+  whapiCooldown.value = 0;
+};
+const startWhapiCooldown = (seconds = 60) => {
+  clearWhapiCooldown();
+  whapiCooldown.value = Math.max(0, Number(seconds) || 0);
+  if (!whapiCooldown.value) return;
+  whapiCooldownTimer = setInterval(() => {
+    whapiCooldown.value = Math.max(0, whapiCooldown.value - 1);
+    if (whapiCooldown.value <= 0) clearWhapiCooldown();
+  }, 1000);
+};
+const queueWhapiQrRefresh = async (delayMs = 60000) => {
+  startWhapiCooldown(Math.ceil(delayMs / 1000));
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+  if (whapiDialog.value) await refreshWhapiQr();
+};
 const whatsAppStatus = reactive({
   phoneNumberId: '',
   wabaId: '',
@@ -445,6 +636,7 @@ const leadStats = computed(() => {
     },
   ];
 });
+
 const searchInput = ref("");
 const search = ref("");
 let searchTimeout = null;
@@ -486,24 +678,198 @@ const loadWhatsAppConfig = async () => {
     const res = await crmStore.getWhatsAppConfig();
     if (res?.code === 0 && res.data) {
       const data = res.data;
-      whatsAppStatus.phoneNumberId = data.phoneNumberId || '';
-      whatsAppStatus.wabaId = data.wabaId || '';
-      whatsAppStatus.displayPhoneNumber = data.displayPhoneNumber || '';
-      whatsAppStatus.verifiedName = data.verifiedName || '';
-      isWhatsAppConnected.value = !!data.hasToken;
+      whatsappProvider.provider = data.provider || 'meta';
+      whatsappProvider.supportsTemplates = data.supportsTemplates !== false;
+      whatsappProvider.requiresTemplateOutside24h = data.requiresTemplateOutside24h !== false;
+
+      if (whatsappProvider.provider === 'whapi') {
+        whapiStatus.connected = !!data.hasToken;
+        whapiStatus.channelId = data.channelId || '';
+      } else {
+        whatsAppStatus.phoneNumberId = data.phoneNumberId || '';
+        whatsAppStatus.wabaId = data.wabaId || '';
+        whatsAppStatus.displayPhoneNumber = data.displayPhoneNumber || '';
+        whatsAppStatus.verifiedName = data.verifiedName || '';
+        isWhatsAppConnected.value = !!data.hasToken;
+      }
     } else {
+      whatsappProvider.provider = 'meta';
       whatsAppStatus.phoneNumberId = '';
       whatsAppStatus.wabaId = '';
       whatsAppStatus.displayPhoneNumber = '';
       whatsAppStatus.verifiedName = '';
       isWhatsAppConnected.value = false;
+      whapiStatus.connected = false;
     }
   } catch (e) {
+    whatsappProvider.provider = 'meta';
     whatsAppStatus.phoneNumberId = '';
     whatsAppStatus.wabaId = '';
     whatsAppStatus.displayPhoneNumber = '';
     whatsAppStatus.verifiedName = '';
     isWhatsAppConnected.value = false;
+    whapiStatus.connected = false;
+  }
+};
+
+const loadWhapiStatus = async () => {
+  try {
+    const res = await crmStore.getWhapiStatus();
+    if (res?.code === 0 && res.data) {
+      whapiStatus.connected = !!res.data.connected;
+      whapiStatus.channelId = res.data.channelId || '';
+      whapiStatus.phoneNumber = res.data.phoneNumber || '';
+      whapiStatus.displayName = res.data.displayName || '';
+      whapiStatus.status = res.data.status || '';
+      whapiCanActivate.value = !!res.data.canActivate;
+      if (whapiStatus.connected) {
+        whapiActivationPending.value = false;
+        whapiActivationMessage.value = '';
+        clearWhapiCooldown();
+        if (whapiDialog.value) whapiDialog.value = false;
+      }
+    } else {
+      whapiStatus.connected = false;
+      whapiCanActivate.value = false;
+    }
+  } catch {
+    whapiStatus.connected = false;
+    whapiCanActivate.value = false;
+  }
+};
+
+const connectWhapi = async () => {
+  try {
+    whapiLoading.value = true;
+    whapiActivationPending.value = false;
+    whapiActivationMessage.value = '';
+    const res = await crmStore.startWhapiConnect();
+    if (res?.code === 0 && res.data) {
+      whapiQr.value = res.data.qr || '';
+      whapiStatus.connected = !!res.data.qr ? false : whapiStatus.connected;
+      whapiStatus.channelId = res.data.channelId || whapiStatus.channelId;
+      whapiCanActivate.value = !!res.data.canActivate;
+      whapiDialog.value = true;
+      await loadWhapiStatus();
+      if (res.data.extended) {
+        const days = res.data.extendedDays || 1;
+        whapiActivationPending.value = true;
+        whapiActivationMessage.value = `Channel activated for ${days} day(s). QR should be ready in about a minute.`;
+        queueWhapiQrRefresh(60000);
+      } else if (res.data.canActivate && !res.data.qr) {
+        whapiActivationMessage.value = 'Channel is stopped. Activate it for at least 1 day to enable QR.';
+      }
+      if (!res.data.qr && res.data.warning && !whapiStatus.connected && mainStore?.setSnackbar) {
+        mainStore.setSnackbar({ title: res.data.warning, type: 'warning' });
+      }
+    } else if (mainStore?.setSnackbar) {
+      mainStore.setSnackbar({ title: res?.message || res?.error || 'Failed to connect WhatsApp', type: 'error' });
+    }
+  } finally {
+    whapiLoading.value = false;
+  }
+};
+
+const refreshWhapiQr = async () => {
+  try {
+    whapiLoading.value = true;
+    const res = await crmStore.getWhapiQr();
+    if (res?.code === 0 && res.data) {
+      whapiQr.value = res.data.qr || '';
+      if (res.data.qr) {
+        whapiActivationPending.value = false;
+        whapiActivationMessage.value = '';
+      }
+      if (!res.data.qr && res.data.warning && !whapiStatus.connected && mainStore?.setSnackbar) {
+        mainStore.setSnackbar({ title: res.data.warning, type: 'warning' });
+      }
+    }
+  } finally {
+    whapiLoading.value = false;
+  }
+};
+
+const activateWhapiChannel = async () => {
+  if (whapiLoading.value || whapiActivationPending.value) return;
+  try {
+    whapiLoading.value = true;
+    const res = await crmStore.extendWhapiChannel();
+    if (res?.code === 0 && res.data) {
+      const days = res.data.days || 1;
+      whapiActivationPending.value = true;
+      whapiActivationMessage.value = `Channel activated for ${days} day(s). QR should be ready in about a minute.`;
+      whapiCanActivate.value = false;
+      await loadWhapiStatus();
+      queueWhapiQrRefresh(60000);
+      mainStore?.setSnackbar?.({ title: 'Channel activated. Waiting for QR...', type: 'success' });
+    } else {
+      mainStore?.setSnackbar?.({ title: res?.message || res?.error || 'Failed to activate channel', type: 'error' });
+    }
+  } finally {
+    whapiLoading.value = false;
+  }
+};
+
+const disconnectWhapi = async () => {
+  if (whapiDisconnecting.value) return;
+  try {
+    whapiDisconnecting.value = true;
+    const res = await crmStore.disconnectWhapi();
+    if (res?.code === 0) {
+      mainStore?.setSnackbar?.({ title: 'WhatsApp disconnected', type: 'success' });
+      whapiStatus.connected = false;
+      whapiStatus.status = 'LoggedOut';
+      whapiStatus.phoneNumber = '';
+      whapiStatus.displayName = '';
+      whapiQr.value = '';
+      whapiActivationPending.value = false;
+      whapiActivationMessage.value = '';
+      whapiCanActivate.value = false;
+      clearWhapiCooldown();
+      await loadWhapiStatus();
+    } else {
+      const msg = res?.message || res?.error || 'Failed to disconnect WhatsApp';
+      mainStore?.setSnackbar?.({ title: msg, type: 'error' });
+    }
+  } catch (e) {
+    const msg = e?.data?.message || e?.message || 'Failed to disconnect WhatsApp';
+    mainStore?.setSnackbar?.({ title: msg, type: 'error' });
+  } finally {
+    whapiDisconnecting.value = false;
+    confirmWhapiDisconnect.value = false;
+    whapiMenu.value = false;
+  }
+};
+
+const deleteWhapiChannel = async () => {
+  if (whapiDeleting.value) return;
+  try {
+    whapiDeleting.value = true;
+    const res = await crmStore.deleteWhapiChannel();
+    if (res?.code === 0) {
+      mainStore?.setSnackbar?.({ title: 'WhatsApp channel deleted', type: 'success' });
+      whapiStatus.connected = false;
+      whapiStatus.channelId = '';
+      whapiStatus.status = '';
+      whapiStatus.phoneNumber = '';
+      whapiStatus.displayName = '';
+      whapiQr.value = '';
+      whapiActivationPending.value = false;
+      whapiActivationMessage.value = '';
+      whapiCanActivate.value = false;
+      clearWhapiCooldown();
+      await loadWhapiStatus();
+    } else {
+      const msg = res?.message || res?.error || 'Failed to delete WhatsApp channel';
+      mainStore?.setSnackbar?.({ title: msg, type: 'error' });
+    }
+  } catch (e) {
+    const msg = e?.data?.message || e?.message || 'Failed to delete WhatsApp channel';
+    mainStore?.setSnackbar?.({ title: msg, type: 'error' });
+  } finally {
+    whapiDeleting.value = false;
+    confirmWhapiDelete.value = false;
+    whapiMenu.value = false;
   }
 };
 
@@ -626,23 +992,33 @@ const clearMetaQuery = () => {
   delete nextQuery.user;
   delete nextQuery.error;
   delete nextQuery.warning;
+  delete nextQuery.tokenOnly;
   router.replace({ query: nextQuery });
 };
-const handleMetaQuery = (metaConnected, metaError) => {
+const handleMetaQuery = async (metaConnected, metaError) => {
   const pagesCount = Number(route.query.pages || 0);
+  const tokenOnly =
+    route.query.tokenOnly === '1' ||
+    route.query.tokenOnly === 'true' ||
+    route.query.tokenOnly === 1;
   if (metaError) {
     metaErrorMessage.value =
       normalizeMetaMessage(metaError) || 'Meta connection failed. Please try again.';
     metaErrorDialog.value = true;
-  } else if (metaConnected && pagesCount === 0) {
+  } else if (metaConnected && pagesCount === 0 && !tokenOnly) {
     metaErrorMessage.value =
       'Meta could not be connected. You need full access to the page you are trying to connect.';
     metaErrorDialog.value = true;
+  } else if (metaConnected && tokenOnly && mainStore?.setSnackbar) {
+    mainStore.setSnackbar({
+      title: 'Meta connected. Select pages to finish setup.',
+      type: 'info',
+    });
   } else if (metaConnected && mainStore?.setSnackbar) {
     mainStore.setSnackbar({ title: 'Meta connected successfully', type: 'success' });
   }
   if (metaConnected || metaError) clearMetaQuery();
-  if (metaConnected) await loadBusinessPortfolios(true);
+  if (metaConnected && (pagesCount > 0 || tokenOnly)) await loadBusinessPortfolios(true);
 };
 
 const businessOptions = computed(() =>
@@ -751,6 +1127,9 @@ const connectSelectedBusinessPages = async () => {
       businessDialog.value = false;
       selectedPageIds.value = [];
       await checkConnection();
+      try {
+        await crmStore.fetchLeadsNow();
+      } catch (e) {}
       await fetchLeads(activeFilters.value);
     } else {
       const msg = res?.error || res?.message || 'Failed to connect pages';
@@ -778,6 +1157,7 @@ onMounted(() => {
   checkConnection();
   loadWhatsAppConfig();
   loadWhatsAppUsage();
+  loadWhapiStatus();
   initOptions();
   loadBookingDentists();
   loadBookingPatients();
@@ -1001,6 +1381,8 @@ const fetchActiveLeads = async (filters = {}) => {
     search: search.value || '',
     page: activePage.value,
     pageSize: itemsPerPage.value,
+    sortBy: 'inquiryDate',
+    sortDir: 'DESC',
     includeStats: true,
   };
   const res = await crmStore.listLeads(payload);
@@ -1020,6 +1402,8 @@ const fetchArchivedLeads = async (filters = {}) => {
     pageSize: itemsPerPage.value,
     archivedOnly: true,
     includeArchived: true,
+    sortBy: 'inquiryDate',
+    sortDir: 'DESC',
   };
   const res = await crmStore.listLeads(payload);
   if (res && res.code === 0) {
@@ -1090,11 +1474,24 @@ const openMetaHealth = async () => {
   metaHealthDialog.value = true;
   metaHealthLoading.value = true;
   try {
-    const res = await crmStore.metaHealth();
-    if (res?.code === 0) {
-      metaHealthData.value = res.data || null;
+    const [healthRes, permsRes] = await Promise.all([
+      crmStore.metaHealth(),
+      crmStore.metaPermissions(),
+    ]);
+    if (healthRes?.code === 0) {
+      const permsPayload = permsRes?.code === 0 ? (permsRes.data || null) : null;
+      const permsList = Array.isArray(permsPayload?.data)
+        ? permsPayload.data
+        : Array.isArray(permsPayload)
+          ? permsPayload
+          : null;
+      metaHealthData.value = {
+        ...(healthRes.data || {}),
+        permissions: permsList,
+        permissionsError: permsRes?.code === 0 ? null : (permsRes?.error || permsRes?.message || 'Failed to load permissions'),
+      };
     } else {
-      metaHealthData.value = { error: res?.error || res?.message || 'Failed to load health status' };
+      metaHealthData.value = { error: healthRes?.error || healthRes?.message || 'Failed to load health status' };
     }
   } catch (e) {
     metaHealthData.value = { error: e?.data?.message || e?.message || 'Failed to load health status' };
@@ -1182,13 +1579,14 @@ const backfillMetaLeads = async () => {
   metaBackfillLoading.value = true;
   metaMenu.value = false;
   try {
-    const res = await crmStore.fetchLeadsNow({ days: 30 });
+    const res = await crmStore.fetchLeadsNow({ days: 7 });
     if (res?.code === 0) {
       await fetchLeads(activeFilters.value);
+      const imported = Number(res?.data?.imported || 0);
       mainStore?.setSnackbar?.({
-        title: res?.data?.imported
-          ? `Backfill complete: ${res.data.imported} lead(s) imported`
-          : 'Backfill complete',
+        title: imported
+          ? `Fetched ${imported} new lead(s)`
+          : 'No new Meta leads found',
         type: 'success',
       });
       return;
@@ -1212,6 +1610,21 @@ watch(searchInput, (val) => {
     await fetchLeads(activeFilters.value);
   }, 250);
 });
+
+const clearSearch = () => {
+  searchInput.value = '';
+};
+
+watch(whapiDialog, (open) => {
+  if (!open) {
+    clearWhapiCooldown();
+  }
+});
+
+watch(selectedBusinessId, () => {
+  selectedPageIds.value = [];
+  businessPageSearch.value = '';
+})
 
 const onDeleteSelected = async (ids) => {
   try {
@@ -1279,6 +1692,30 @@ watch(isConnected, (val) => {
   overflow-y: auto;
   border: 1px solid #e6e6e6;
   border-radius: 8px;
+}
+
+.toolbar-wrapper {
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.custom-search,
+.tbl-top-btn {
+  height: 46px;
+  border-radius: 8px;
+  font-size: 14px;
+  background-color: #F3F4F6 !important;
+  text-transform: none;
+  box-shadow: none;
+  color: #737373;
+  margin-left: 16px !important;
+  align-items: center;
+}
+
+.custom-search :deep(input::placeholder) {
+  color: #737373;
+  opacity: 1;
 }
 
 </style>

@@ -12,3 +12,19 @@ export const isSupportAgent = async (userContext) => {
   const email = (dbUser?.email || '').toLowerCase();
   return SUPPORT_AGENT_EMAILS.includes(email);
 };
+
+export const getSupportAgentUserIds = async () => {
+  try {
+    const supportAgents = await User.findAll({
+      where: {
+        email: SUPPORT_AGENT_EMAILS
+      },
+      attributes: ['id']
+    });
+    
+    return supportAgents.map(agent => agent.id);
+  } catch (error) {
+    console.error('Error fetching support agent user IDs:', error);
+    return [];
+  }
+};

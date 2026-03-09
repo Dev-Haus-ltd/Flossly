@@ -1,6 +1,7 @@
 import stripe from "@/server/utils/stripe";
 import { UserPreference, UserSubscription } from "../models";
 import { User } from "../models";
+import { parseJsonBody } from "../utils/body";
 
 const config = useRuntimeConfig();
 
@@ -233,7 +234,7 @@ export const createPortal = async (event) => {
   const config = useRuntimeConfig();
   const body = await readBody(event);
   const loggedUser = event.context.user;
-  const { returnUrl } = JSON.parse(body);
+  const { returnUrl } = parseJsonBody(body);
 
   const user = await UserSubscription.findOne({
     where: { userId: loggedUser.userId, organisationId: loggedUser.orgId },

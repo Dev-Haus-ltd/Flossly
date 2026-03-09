@@ -7,7 +7,9 @@
     :width="520"
   >
     <v-toolbar flat color="white">
-      <v-toolbar-title class="title-text">Add Automation Title</v-toolbar-title>
+      <v-toolbar-title class="title-text">
+        {{ isEdit ? 'Edit Automation Title' : 'Add Automation Title' }}
+      </v-toolbar-title>
       <v-spacer />
       <v-btn
         icon
@@ -80,7 +82,7 @@
         @click="onSubmit()"
         flat
       >
-        Save
+        {{ isEdit ? 'Update' : 'Save' }}
       </v-btn>
     </div>
   </v-navigation-drawer>
@@ -92,6 +94,7 @@ import { useMainStore } from '@/stores/index'
 
 const props = defineProps({
   modelValue: Boolean,
+  group: { type: Object, default: null },
 })
 
 const emit = defineEmits(['close', 'success', 'update:modelValue'])
@@ -106,8 +109,13 @@ const form = ref({
   description: '',
 })
 
+const isEdit = computed(() => !!props.group)
+
 const resetForm = () => {
-  form.value = { title: '', description: '' }
+  form.value = {
+    title: props.group?.title || '',
+    description: props.group?.description || '',
+  }
   if (formRef.value) formRef.value.resetValidation()
 }
 
@@ -122,9 +130,20 @@ const handleDrawerClose = (newValue) => {
   emit('update:modelValue', newValue)
 }
 
-watch(() => props.modelValue, (newValue) => {
-  if (!newValue) resetForm()
-})
+watch(
+  () => props.modelValue,
+  (newValue) => {
+    if (newValue) resetForm()
+    else resetForm()
+  }
+)
+
+watch(
+  () => props.group,
+  () => {
+    if (props.modelValue) resetForm()
+  }
+)
 
 const onSubmit = async () => {
   const validation = await formRef.value.validate()
@@ -132,16 +151,21 @@ const onSubmit = async () => {
   try {
     saving.value = true
     const res = await crmStore.saveAutomationGroup({
+      id: props.group?.id,
+      key: props.group?.key,
       title: form.value.title,
       description: form.value.description,
     })
     if (res?.code === 0) {
-      mainStore.setSnackbar({ title: 'Automation group created', type: 'success' })
+      mainStore.setSnackbar({
+        title: isEdit.value ? 'Automation group updated' : 'Automation group created',
+        type: 'success'
+      })
       emit('success', res.data)
       closeDrawer()
       return
     }
-    mainStore.setSnackbar({ title: res?.message || 'Failed to create group', type: 'error' })
+    mainStore.setSnackbar({ title: res?.message || 'Failed to save group', type: 'error' })
   } catch (e) {
     mainStore.setSnackbar({ title: e.message || 'Failed to create group', type: 'error' })
   } finally {

@@ -1,13 +1,19 @@
 import { Op } from 'sequelize'
-import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, MetaPage, User, UserOrganisation } from '../models'
+import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, MetaPage, User, UserOrganisation, CrmWhatsAppMessageLog } from '../models'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults.js'
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
+import { formatCrmTriggerPreview } from '~/lib/misc'
 import { success, error } from '../utils/response'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
 import { sendImmediateCrmAutomationsForLead } from '../utils/crmAutomation.js'
+import { sendLeadCreatedNotification, sendLeadAssignedNotification, sendLeadUnassignedNotification } from '../utils/fcmNotification.js'
+import { decrypt } from '../utils/crypto'
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from '../utils/whatsapp'
-import { resolveWhatsAppConfig } from '../utils/whatsappConfig'
+import { renderLeadTokens } from '../utils/templateTokens'
+import { resolveWhatsAppProviderConfig } from '../utils/whatsappProvider'
+import { uploadBufferFile } from '../utils/storage'
 import DB from '../utils/db'
+import { parseJsonBody } from "../utils/body";
 
 const parseDateValue = (value) => {
   if (!value) return null;
@@ -15,6 +21,22 @@ const parseDateValue = (value) => {
   if (!isNaN(d.getTime())) return d;
   return null;
 };
+
+const sanitizeFilename = (filename = 'file') =>
+  String(filename || 'file')
+    .replace(/[^\w.\-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+
+const getLeadRawData = (lead) =>
+  lead?.rawData && typeof lead.rawData === 'object' && !Array.isArray(lead.rawData)
+    ? lead.rawData
+    : {}
+
+const buildLeadSelectionKey = (leadIds = []) =>
+  [...new Set((leadIds || []).map((id) => Number(id)).filter(Boolean))]
+    .sort((a, b) => a - b)
+    .join(',')
 
 const slugifyKey = (value) => {
   const raw = String(value || '').trim().toLowerCase()
@@ -26,7 +48,7 @@ const slugifyKey = (value) => {
   return base || 'automation_group'
 }
 
-const ensureUniqueGroupKey = async ({ orgId, key, excludeId = null }) => {
+const ensureUniqueGroupKey = async ({ orgId, key, excludeId = null, transaction = null }) => {
   let candidate = slugifyKey(key)
   let suffix = 1
   while (true) {
@@ -36,11 +58,131 @@ const ensureUniqueGroupKey = async ({ orgId, key, excludeId = null }) => {
         key: candidate,
         ...(excludeId ? { id: { [Op.ne]: excludeId } } : {}),
       },
+      transaction,
     })
     if (!existing) return candidate
     candidate = `${slugifyKey(key)}_${suffix}`
     suffix += 1
   }
+}
+
+const slugifyAutomationKey = (value, maxLen = 50) => {
+  const base = slugifyKey(value)
+  return base.length > maxLen ? base.slice(0, maxLen) : base
+}
+
+const ensureUniqueTemplateKey = ({ base, existingKeys, reservedKeys, usedKeys }) => {
+  const safeBase = slugifyAutomationKey(base || 'automation', 45)
+  let candidate = safeBase
+  let suffix = 1
+  const isUsed = (key) =>
+    (existingKeys && existingKeys.has(key)) ||
+    (reservedKeys && reservedKeys.has(key)) ||
+    (usedKeys && usedKeys.has(key))
+  while (isUsed(candidate)) {
+    candidate = `${safeBase}_${suffix}`
+    if (candidate.length > 50) {
+      candidate = `${safeBase.slice(0, Math.max(1, 50 - String(suffix).length - 1))}_${suffix}`
+    }
+    suffix += 1
+  }
+  if (usedKeys) usedKeys.add(candidate)
+  if (existingKeys) existingKeys.add(candidate)
+  return candidate
+}
+
+const escapeHtml = (value) =>
+  String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+
+const plainTextToHtml = (value) => {
+  const text = String(value || '').replace(/\r\n/g, '\n').trim()
+  if (!text) return ''
+  const escaped = escapeHtml(text).replace(/\n/g, '<br/>')
+  return `<p>${escaped}</p>`
+}
+
+const normalizeAutomationType = (value) => {
+  const raw = String(value || '').trim().toLowerCase()
+  if (!raw) return 'Email'
+  if (raw.includes('whatsapp') || raw === 'wa' || raw === 'whats app') return 'WhatsApp'
+  return 'Email'
+}
+
+const normalizeAutomationTrigger = (trigger) => {
+  if (trigger === undefined) return undefined
+  if (trigger === null) return null
+  if (typeof trigger !== 'object') throw new Error('Invalid trigger')
+  const type = String(trigger.type || '').trim()
+  if (!type) throw new Error('Trigger type required')
+  const safeNumber = (value, fallback = 0) => {
+    const num = Number(value)
+    return Number.isFinite(num) ? num : fallback
+  }
+  switch (type) {
+    case 'inquiry_days':
+    case 'birthday_offset':
+      return { type, days: safeNumber(trigger.days, 0) }
+    case 'birthday_month_start':
+      return { type, offsetDays: safeNumber(trigger.offsetDays, 0) }
+    case 'black_friday':
+      return {
+        type,
+        offsetDays: safeNumber(trigger.offsetDays, 0),
+        ...(trigger.minHour !== undefined ? { minHour: safeNumber(trigger.minHour, 0) } : {}),
+      }
+    case 'month_day': {
+      const month = safeNumber(trigger.month, 0)
+      const day = safeNumber(trigger.day, 0)
+      if (!month || !day) throw new Error('month_day trigger requires month and day')
+      return {
+        type,
+        month,
+        day,
+        offsetDays: safeNumber(trigger.offsetDays, 0),
+      }
+    }
+    case 'weekday_of_month': {
+      const month = safeNumber(trigger.month, 0)
+      const weekday = safeNumber(trigger.weekday, NaN)
+      const weekIndex = safeNumber(trigger.weekIndex, 0)
+      if (!month || Number.isNaN(weekday) || !weekIndex) {
+        throw new Error('weekday_of_month trigger requires month, weekday, and weekIndex')
+      }
+      return {
+        type,
+        month,
+        weekday,
+        weekIndex,
+        offsetDays: safeNumber(trigger.offsetDays, 0),
+      }
+    }
+    case 'practice_anniversary':
+      return {
+        type,
+        offsetDays: safeNumber(trigger.offsetDays, 0),
+        ...(trigger.minHour !== undefined ? { minHour: safeNumber(trigger.minHour, 0) } : {}),
+      }
+    case 'practice_anniversary_month_end':
+      return {
+        type,
+        offsetDays: safeNumber(trigger.offsetDays, 0),
+        ...(trigger.minHour !== undefined ? { minHour: safeNumber(trigger.minHour, 0) } : {}),
+      }
+    default:
+      throw new Error('Unsupported trigger type')
+  }
+}
+
+const validateAutomationPayload = (payload) => {
+  if (!payload || typeof payload !== 'object') throw new Error('Invalid payload')
+  const key = String(payload.key || '').trim()
+  if (!key) throw new Error('key required')
+  const type = normalizeAutomationType(payload.type)
+  const trigger = normalizeAutomationTrigger(payload.trigger)
+  return { ...payload, key, type, trigger }
 }
 
 const seedAutomationGroups = async (orgId) => {
@@ -60,6 +202,7 @@ const seedAutomationGroups = async (orgId) => {
         description: group.description || null,
         enabled: false,
         ordering: idx,
+        source: 'system',
       }))
     )
     return fresh
@@ -75,6 +218,7 @@ const seedAutomationGroups = async (orgId) => {
       description: group.description || null,
       enabled: false,
       ordering: rows.length + created.length,
+      source: 'system',
     })
     created.push(row)
     byKey.set(group.key, row)
@@ -262,7 +406,7 @@ export const createLead = async (event) => {
   try {
     const logged = event.context.user
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const required = ['name', 'email', 'telephone']
     for (const k of required) if (!payload?.[k]) return error(400, `${k} is required`)
     const data = {
@@ -309,6 +453,23 @@ export const createLead = async (event) => {
     try {
       await sendImmediateCrmAutomationsForLead(created)
     } catch (e) {}
+    
+    // Send FCM push notification to assigned users
+    try {
+      if (assignedUsers.length) {
+        await sendLeadCreatedNotification({
+          lead: created,
+          assignedUsers: await User.findAll({ 
+            where: { id: assignedUsers.map(u => u.id) },
+            attributes: ['id', 'fullName', 'email']
+          })
+        });
+      }
+    } catch (fcmError) {
+      console.warn('FCM notification failed - continuing with lead creation:', fcmError.message);
+      // Don't throw the error - let the lead creation succeed even if notifications fail
+    }
+    
     return success(created)
   } catch (e) {
     return error(500, e.message)
@@ -319,7 +480,7 @@ export const updateLead = async (event) => {
   try {
     const logged = event.context.user
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { id } = payload
     if (!id) return error(400, 'id required')
     const lead = await CrmLead.findOne({ where: { id, organisationId: Number(logged.orgId) } })
@@ -336,11 +497,29 @@ export const updateLead = async (event) => {
       const existing = await CrmLeadAssignee.findAll({ where: { organisationId: Number(logged.orgId), leadId: lead.id } })
       const existingUserIds = existing.map((a) => a.userId)
       const toAdd = desiredUserIds.filter((id) => !existingUserIds.includes(id))
-      const toRemove = existing.filter((a) => !desiredUserIds.includes(a.userId)).map((a) => a.id)
+      const toRemoveLinks = existing.filter((a) => !desiredUserIds.includes(a.userId))
+      const toRemove = toRemoveLinks.map((a) => a.id)
       if (toRemove.length) await CrmLeadAssignee.destroy({ where: { id: { [Op.in]: toRemove } } })
       if (toAdd.length) {
         const rows = toAdd.map((userId) => ({ organisationId: Number(logged.orgId), leadId: lead.id, userId }))
         await CrmLeadAssignee.bulkCreate(rows, { ignoreDuplicates: true })
+      }
+
+      // Send FCM notifications for assignment changes
+      try {
+        const actor = await User.findByPk(logged.userId, { attributes: ['id', 'fullName', 'email'] });
+        if (toAdd.length) {
+          const addedUsers = await User.findAll({ where: { id: toAdd }, attributes: ['id', 'fullName', 'email'] });
+          await sendLeadAssignedNotification({ lead, assignedUsers: addedUsers, assignedBy: actor });
+        }
+        if (toRemoveLinks.length) {
+          const removedIds = toRemoveLinks.map(l => l.userId);
+          const removedUsers = await User.findAll({ where: { id: removedIds }, attributes: ['id', 'fullName', 'email'] });
+          await sendLeadUnassignedNotification({ lead, removedUsers, removedBy: actor });
+        }
+      } catch (fcmError) {
+        console.warn('FCM notification failed - continuing with lead update:', fcmError.message);
+        // Don't throw the error - let the lead update succeed even if notifications fail
       }
       // shape response assigned
       const users = await User.findAll({ where: { id: desiredUserIds }, attributes: ['id', 'fullName', 'email'] })
@@ -358,7 +537,7 @@ export const deleteLeads = async (event) => {
   try {
     const logged = event.context.user
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const ids = payload?.ids || []
     if (!ids.length) return error(400, 'ids required')
     await CrmLead.destroy({ where: { id: { [Op.in]: ids }, organisationId: Number(logged.orgId) } })
@@ -372,7 +551,7 @@ export const bulkUploadLeads = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const leads = payload?.leads || []
     if (!orgId) return error(401, 'Unauthenticated')
     if (!Array.isArray(leads) || !leads.length) return error(400, 'leads required')
@@ -524,6 +703,158 @@ export const bulkUploadLeads = async (event) => {
   }
 }
 
+export const bulkUploadAutomations = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const items = Array.isArray(payload?.items) ? payload.items : []
+    if (!orgId) return error(401, 'Unauthenticated')
+    if (!items.length) return error(400, 'items required')
+
+    const organisationId = Number(orgId)
+    const results = []
+    const defaultKeySet = new Set((crmAutomationDefaults || []).map((d) => d.key))
+
+    try { await CrmAutomationGroup.sync() } catch {}
+    try { await CrmAutomationTemplate.sync() } catch {}
+    try { await CrmAutomationGroupTemplate.sync() } catch {}
+
+    const existingTemplates = await CrmAutomationTemplate.findAll({
+      where: { organisationId },
+      attributes: ['key'],
+    })
+    const existingKeySet = new Set(existingTemplates.map((row) => row.key))
+    const usedKeys = new Set()
+
+    const existingGroups = await CrmAutomationGroup.findAll({
+      where: { organisationId },
+      order: [['ordering', 'ASC'], ['createdAt', 'ASC']],
+    })
+    const groupByLowerTitle = new Map()
+    const groupByLowerKey = new Map()
+    existingGroups.forEach((g) => {
+      const title = String(g.title || '').trim().toLowerCase()
+      const key = String(g.key || '').trim().toLowerCase()
+      if (title) groupByLowerTitle.set(title, g)
+      if (key) groupByLowerKey.set(key, g)
+    })
+
+    const transaction = await DB.transaction()
+    try {
+      for (let index = 0; index < items.length; index += 1) {
+        const raw = items[index] || {}
+        const errors = []
+        const groupName = String(raw.groupName || raw.group_name || '').trim()
+        const type = normalizeAutomationType(raw.type)
+        const name = String(raw.name || '').trim()
+        const subjectRaw = String(raw.subject || '').trim()
+        const contentRaw = String(raw.content || '').trim()
+
+        if (!groupName) errors.push('Group name is required')
+        if (!name) errors.push('Name is required')
+        if (!contentRaw) errors.push('Content is required')
+
+        if (errors.length) {
+          results.push({
+            index,
+            name,
+            status: 'failed',
+            message: errors.join('; '),
+          })
+          continue
+        }
+
+        let group = null
+        const groupKeyLookup = groupName.toLowerCase()
+        if (groupByLowerTitle.has(groupKeyLookup)) {
+          group = groupByLowerTitle.get(groupKeyLookup)
+        } else if (groupByLowerKey.has(groupKeyLookup)) {
+          group = groupByLowerKey.get(groupKeyLookup)
+        }
+
+        if (!group) {
+          const safeKey = await ensureUniqueGroupKey({
+            orgId: organisationId,
+            key: groupName,
+            transaction,
+          })
+          const nextOrder = (await CrmAutomationGroup.count({
+            where: { organisationId },
+            transaction,
+          })) || 0
+          group = await CrmAutomationGroup.create({
+            organisationId,
+            key: safeKey,
+            title: groupName,
+            description: null,
+            enabled: false,
+            ordering: nextOrder,
+          }, { transaction })
+          groupByLowerTitle.set(groupName.toLowerCase(), group)
+          groupByLowerKey.set(String(group.key || '').toLowerCase(), group)
+        }
+
+        const key = ensureUniqueTemplateKey({
+          base: name,
+          existingKeys: existingKeySet,
+          reservedKeys: defaultKeySet,
+          usedKeys,
+        })
+
+        const trigger = { type: 'inquiry_days', days: 0 }
+        const sending = formatCrmTriggerPreview(trigger)
+        const subject = type === 'Email' ? (subjectRaw || name) : ''
+        const template = plainTextToHtml(contentRaw)
+
+        const payload = {
+          key,
+          groupKey: group.key,
+          type,
+          name,
+          subject,
+          sending,
+          enabled: false,
+          template,
+          trigger,
+        }
+
+        try {
+          await applyAutomationSave({ orgId: organisationId, payload, transaction })
+          results.push({
+            index,
+            name,
+            status: 'success',
+            key,
+            groupKey: group.key,
+          })
+        } catch (e) {
+          results.push({
+            index,
+            name,
+            status: 'failed',
+            message: e.message,
+          })
+        }
+      }
+
+      await transaction.commit()
+    } catch (err) {
+      await transaction.rollback()
+      return error(500, err.message)
+    }
+
+    const successCount = results.filter((r) => r.status === 'success').length
+    const failCount = results.length - successCount
+    return success({
+      message: `${successCount} automations added successfully, ${failCount} failed`,
+      results,
+    })
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
 export const listOptions = async (event) => {
   try {
     const { orgId } = event.context.user || {}
@@ -561,7 +892,7 @@ export const addOption = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { category, name, color } = payload || {}
     if (!orgId) return error(401, 'Unauthenticated')
     if (!category || !name) return error(400, 'category and name required')
@@ -576,7 +907,7 @@ export const deleteOption = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { id } = payload || {}
     if (!orgId) return error(401, 'Unauthenticated')
     if (!id) return error(400, 'id required')
@@ -605,7 +936,7 @@ export const saveLeadCommunication = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { leadId } = payload || {}
     const preferredContactMethod = payload?.preferredContactMethod && CONTACT_METHODS.includes(payload.preferredContactMethod)
       ? payload.preferredContactMethod
@@ -643,7 +974,7 @@ export const getLeadTreatment = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const { leadId } = typeof body === 'string' ? JSON.parse(body) : body
+    const { leadId } = typeof body === 'string' ? parseJsonBody(body) : body
     if (!orgId) return error(401, 'Unauthenticated')
     if (!leadId) return error(400, 'leadId required')
     const row = await CrmLeadTreatment.findOne({ where: { organisationId: Number(orgId), leadId: Number(leadId) } })
@@ -657,7 +988,7 @@ export const saveLeadTreatment = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { leadId, data } = payload || {}
     if (!orgId) return error(401, 'Unauthenticated')
     if (!leadId) return error(400, 'leadId required')
@@ -683,7 +1014,7 @@ export const deleteLeadTreatment = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const { leadId } = typeof body === 'string' ? JSON.parse(body) : body
+    const { leadId } = typeof body === 'string' ? parseJsonBody(body) : body
     if (!orgId) return error(401, 'Unauthenticated')
     if (!leadId) return error(400, 'leadId required')
     await CrmLeadTreatment.destroy({ where: { organisationId: Number(orgId), leadId: Number(leadId) } })
@@ -697,10 +1028,31 @@ export const listLeadNotes = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const { leadId } = typeof body === 'string' ? JSON.parse(body) : body
+    const { leadId } = typeof body === 'string' ? parseJsonBody(body) : body
     if (!orgId) return error(401, 'Unauthenticated')
     if (!leadId) return error(400, 'leadId required')
     const rows = await CrmLeadNote.findAll({ where: { organisationId: Number(orgId), leadId: Number(leadId) }, order: [['createdAt', 'DESC']] })
+    return success(rows)
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const listLeadWhatsAppLogs = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    const body = await readBody(event)
+    const { leadId, limit = 100 } = typeof body === 'string' ? parseJsonBody(body) : body
+    if (!orgId) return error(401, 'Unauthenticated')
+    if (!leadId) return error(400, 'leadId required')
+    const rows = await CrmWhatsAppMessageLog.findAll({
+      where: {
+        organisationId: Number(orgId),
+        leadId: Number(leadId),
+      },
+      order: [['createdAt', 'DESC']],
+      limit: Math.min(Math.max(Number(limit) || 100, 1), 500),
+    })
     return success(rows)
   } catch (e) {
     return error(500, e.message)
@@ -711,7 +1063,7 @@ export const addLeadNote = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { leadId, title, date, time, channel, summary } = payload || {}
     if (!orgId) return error(401, 'Unauthenticated')
     for (const k of ['leadId', 'title', 'date', 'time', 'channel', 'summary']) if (!payload?.[k]) return error(400, `${k} is required`)
@@ -730,13 +1082,99 @@ export const deleteLeadNote = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const { id } = typeof body === 'string' ? JSON.parse(body) : body
+    const { id } = typeof body === 'string' ? parseJsonBody(body) : body
     if (!orgId) return error(401, 'Unauthenticated')
     if (!id) return error(400, 'id required')
     await CrmLeadNote.destroy({ where: { id, organisationId: Number(orgId) } })
     return success('deleted')
   } catch (e) {
     return error(500, e.message)
+  }
+}
+
+export const uploadLeadAttachment = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+
+    const parts = await readMultipartFormData(event)
+    const filePart = Array.isArray(parts)
+      ? parts.find((part) => part?.filename && part?.data)
+      : null
+    if (!filePart) return error(400, 'file required')
+
+    const originalName = String(filePart.filename || 'attachment.pdf')
+    const ext = originalName.includes('.') ? originalName.split('.').pop() : ''
+    const safeName = sanitizeFilename(originalName) || `attachment.${ext || 'pdf'}`
+    const contentType = String(filePart.type || '').toLowerCase()
+    const isPdfByType = contentType.includes('pdf')
+    const isPdfByName = safeName.toLowerCase().endsWith('.pdf')
+    if (!isPdfByType && !isPdfByName) {
+      return error(400, 'Only PDF files are allowed')
+    }
+
+    const stampedName = `${Date.now()}-${safeName}`
+    const baseDir = 'documents/crm/price-lists'
+    const link = await uploadBufferFile({
+      data: filePart.data,
+      filename: stampedName,
+      contentType: filePart.type || 'application/pdf',
+      baseDir,
+    })
+
+    return success({
+      link,
+      name: originalName,
+      contentType: filePart.type || 'application/pdf',
+      size: Number(filePart.data?.length || 0),
+      uploadedAt: new Date().toISOString(),
+    })
+  } catch (e) {
+    return error(500, e.message || 'Failed to upload attachment')
+  }
+}
+
+export const getLeadPriceAttachmentRecent = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const leadIds = Array.isArray(payload?.leadIds)
+      ? [...new Set(payload.leadIds.map((id) => Number(id)).filter(Boolean))]
+      : []
+    if (!leadIds.length) return error(400, 'leadIds required')
+
+    const rows = await CrmLead.findAll({
+      where: {
+        organisationId: Number(orgId),
+        id: { [Op.in]: leadIds },
+      },
+      attributes: ['id', 'rawData'],
+      limit: 200,
+    })
+
+    let latest = null
+    for (const row of rows) {
+      const raw = getLeadRawData(row)
+      const sendPriceRecent = raw?.manualSendAssets?.sendPriceRecent || null
+      if (!sendPriceRecent) continue
+      const ts = new Date(sendPriceRecent.updatedAt || sendPriceRecent.sentAt || 0).getTime()
+      if (!latest || ts > latest.ts) {
+        latest = { ts, data: sendPriceRecent, leadId: row.id }
+      }
+    }
+
+    return success({
+      attachment: latest?.data?.attachment || null,
+      priceLink: latest?.data?.priceLink || '',
+      subject: latest?.data?.subject || '',
+      updatedAt: latest?.data?.updatedAt || null,
+      leadId: latest?.leadId || null,
+    })
+  } catch (e) {
+    return error(500, e.message || 'Failed to fetch recent price attachment')
   }
 }
 
@@ -780,7 +1218,7 @@ export const saveAutomationGroup = async (event) => {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { id, key, title, description, enabled } = payload || {}
 
     try { await CrmAutomationGroup.sync() } catch {}
@@ -818,6 +1256,7 @@ export const saveAutomationGroup = async (event) => {
       description: description || null,
       enabled: !!enabled,
       ordering: nextOrder,
+      source: 'custom',
     })
     return success(created)
   } catch (e) {
@@ -830,7 +1269,7 @@ export const deleteAutomationGroup = async (event) => {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { id, key } = payload || {}
     if (!id && !key) return error(400, 'id or key required')
 
@@ -930,6 +1369,7 @@ export const listAutomation = async (event) => {
 }
 
 const applyAutomationSave = async ({ orgId, payload, transaction }) => {
+  const clean = validateAutomationPayload(payload)
   const {
     key,
     type = 'Email',
@@ -943,7 +1383,7 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
     trigger,
     whatsappTemplateName,
     whatsappTemplateLanguage,
-  } = payload || {}
+  } = clean
   if (!key) throw new Error('key required')
 
   if (leadId) {
@@ -1028,7 +1468,7 @@ export const saveAutomation = async (event) => {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const result = await applyAutomationSave({ orgId, payload })
     return success(result)
   } catch (e) {
@@ -1041,7 +1481,7 @@ export const saveAutomationBatch = async (event) => {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const items = Array.isArray(payload?.items) ? payload.items : []
     if (!items.length) return error(400, 'items required')
 
@@ -1063,42 +1503,148 @@ export const saveAutomationBatch = async (event) => {
   }
 }
 
+export const resetAutomationOverride = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const leadId = Number(payload?.leadId || 0)
+    const key = String(payload?.key || '').trim()
+    if (!leadId) return error(400, 'leadId required')
+    if (!key) return error(400, 'key required')
+
+    const lead = await CrmLead.findOne({
+      where: { organisationId: Number(orgId), id: leadId },
+    })
+    if (!lead) return error(404, 'Lead not found')
+
+    const raw = lead.rawData || {}
+    const overrides = { ...(raw.crmAutomationOverrides || {}) }
+    if (overrides[key]) {
+      delete overrides[key]
+      const nextRaw = { ...raw }
+      if (Object.keys(overrides).length) {
+        nextRaw.crmAutomationOverrides = overrides
+      } else {
+        delete nextRaw.crmAutomationOverrides
+      }
+      lead.rawData = nextRaw
+      await lead.save()
+    }
+
+    return success({ reset: true, key })
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const deleteAutomation = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const key = String(payload?.key || '').trim()
+    if (!key) return error(400, 'Automation key required')
+
+    const defaultKeys = new Set(crmAutomationDefaults.map((item) => item.key))
+    if (defaultKeys.has(key)) {
+      return error(400, 'Default automations cannot be deleted')
+    }
+
+    try { await CrmAutomationTemplate.sync() } catch {}
+    try { await CrmAutomationGroupTemplate.sync() } catch {}
+
+    await CrmAutomationGroupTemplate.destroy({
+      where: { organisationId: Number(orgId), templateKey: key },
+    })
+    const deleted = await CrmAutomationTemplate.destroy({
+      where: { organisationId: Number(orgId), key },
+    })
+
+    return success({ deleted: !!deleted, key })
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
 // Send email to selected leads
 export const sendLeadMail = async (event) => {
   try {
     const { orgId, fullName } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
-    const { leadIds = [], subject, html, key } = payload || {}
-    if (!subject || !html) return error(400, 'subject and html required')
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const { leadIds = [], subject, html, key, attachments = [], metadata = {} } = payload || {}
+    const safeSubject = String(subject || '').trim()
+    const safeHtml = typeof html === 'string' ? html : ''
+    if (!safeSubject) return error(400, 'subject required')
     if (!Array.isArray(leadIds) || !leadIds.length) return error(400, 'leadIds required')
+    const normalizedAttachments = Array.isArray(attachments)
+      ? attachments
+          .map((item) => ({
+            link: item?.link || item?.url || item?.path || null,
+            name: item?.name || item?.filename || 'Attachment.pdf',
+            contentType: item?.contentType || 'application/pdf',
+          }))
+          .filter((item) => item.link)
+      : []
 
     // Optionally fetch a template to persist edits
     if (key) {
       const where = { organisationId: Number(orgId), key }
       const existing = await CrmAutomationTemplate.findOne({ where })
       if (existing) {
-        existing.name = existing.name || subject
-        existing.subject = existing.subject || subject
-        existing.template = html
+        existing.name = existing.name || safeSubject
+        existing.subject = existing.subject || safeSubject
+        existing.template = safeHtml || existing.template || ''
         await existing.save()
       } else {
         await CrmAutomationTemplate.create({
           organisationId: Number(orgId),
           key,
           type: 'Email',
-          name: subject,
-          subject,
+          name: safeSubject,
+          subject: safeSubject,
           sending: 'Manual',
           enabled: true,
-          template: html
+          template: safeHtml || ''
         })
       }
     }
 
     const leads = await CrmLead.findAll({ where: { id: { [Op.in]: leadIds }, organisationId: Number(orgId), softDeleted: false } })
-    const result = await sendLeadBulkEmail({ leads, subject, html, senderName: fullName })
+    const result = await sendLeadBulkEmail({
+      leads,
+      subject: safeSubject,
+      html: safeHtml,
+      senderName: fullName,
+      attachments: normalizedAttachments,
+    })
+
+    if (String(key || '') === 'manual_sendPrice') {
+      const selectionKey = buildLeadSelectionKey(leadIds)
+      const attachmentMeta = normalizedAttachments[0] || null
+      const priceLink = String(metadata?.priceLink || '').trim()
+      const sentAt = new Date().toISOString()
+      for (const lead of leads) {
+        const raw = getLeadRawData(lead)
+        const manual = raw.manualSendAssets && typeof raw.manualSendAssets === 'object'
+          ? raw.manualSendAssets
+          : {}
+        manual.sendPriceRecent = {
+          attachment: attachmentMeta,
+          priceLink,
+          subject: safeSubject,
+          selectionKey,
+          updatedAt: sentAt,
+        }
+        lead.rawData = { ...raw, manualSendAssets: manual }
+        await lead.save()
+      }
+    }
+
     return success({ sent: result.sent })
   } catch (e) {
     return error(500, e.message)
@@ -1111,16 +1657,22 @@ export const sendLeadWhatsApp = async (event) => {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
-    const payload = typeof body === 'string' ? JSON.parse(body) : body
-    const { leadIds = [], template } = payload || {}
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const { leadIds = [], template, message } = payload || {}
     if (!Array.isArray(leadIds) || !leadIds.length) return error(400, 'leadIds required')
-
+    const messageText = String(message || '').trim()
     const hasTemplate = !!template
-    if (!hasTemplate) return error(400, 'template required for WhatsApp outbound')
+    if (!hasTemplate && !messageText) return error(400, 'template or message required for WhatsApp outbound')
 
-    const waConfig = await resolveWhatsAppConfig(orgId)
-    if (!waConfig?.phoneNumberId || !waConfig?.accessToken) {
+    const waConfig = await resolveWhatsAppProviderConfig(orgId)
+    if (!waConfig?.provider) {
+      return error(400, 'WhatsApp provider not configured')
+    }
+    if (waConfig.provider === 'meta' && (!waConfig.phoneNumberId || !waConfig.accessToken)) {
       return error(400, 'WhatsApp is not configured')
+    }
+    if (waConfig.provider === 'whapi' && !waConfig.token) {
+      return error(400, 'Whapi token is missing')
     }
 
     const limitStatus = await isWhatsAppLimitExceeded(orgId, event.context.user?.userId)
@@ -1128,12 +1680,19 @@ export const sendLeadWhatsApp = async (event) => {
       return error(402, `WhatsApp monthly limit reached (${limitStatus.count}/${limitStatus.limit})`)
     }
 
+    const useTemplate = waConfig.provider === 'meta' && hasTemplate
+
     const leads = await CrmLead.findAll({
       where: { id: { [Op.in]: leadIds }, organisationId: Number(orgId), softDeleted: false },
     })
     if (!leads.length) return error(404, 'No leads found')
 
-    const url = `https://graph.facebook.com/v24.0/${waConfig.phoneNumberId}/messages`
+    const metaUrl = waConfig.provider === 'meta'
+      ? `https://graph.facebook.com/v24.0/${waConfig.phoneNumberId}/messages`
+      : null
+    const whapiUrl = waConfig.provider === 'whapi'
+      ? `${String(waConfig.baseUrl || '').replace(/\/+$/, '')}/messages/text`
+      : null
     let sent = 0
     let failed = 0
     let skipped = 0
@@ -1147,8 +1706,8 @@ export const sendLeadWhatsApp = async (event) => {
           organisationId: orgId,
           leadId: lead.id,
           to: lead.telephone || null,
-          type: hasTemplate ? 'template' : 'text',
-          templateName: hasTemplate ? (template?.name || template?.namespace || null) : null,
+          type: useTemplate ? 'template' : 'text',
+          templateName: useTemplate ? (template?.name || template?.namespace || null) : null,
           status: 'skipped',
           error: 'Missing or invalid phone number',
         })
@@ -1156,32 +1715,72 @@ export const sendLeadWhatsApp = async (event) => {
         continue
       }
 
-      const bodyPayload = {
-        messaging_product: 'whatsapp',
-        to,
-        type: 'template',
-        template,
+      const leadName = lead?.name || lead?.fullName || lead?.email || 'there'
+      const senderName = event.context.user?.fullName || event.context.user?.name || 'Team'
+      const resolvedText = renderLeadTokens(messageText, {
+        name: leadName,
+        email: lead?.email || '',
+        telephone: lead?.telephone || '',
+        yourName: senderName,
+      })
+
+      if (waConfig.provider === 'whapi' && !messageText) {
+        failed += 1
+        await logWhatsAppMessage({
+          organisationId: orgId,
+          leadId: lead.id,
+          to,
+          type: 'text',
+          status: 'failed',
+          error: 'Whapi requires a text message',
+        })
+        failures.push({
+          leadId: lead.id,
+          error: 'Whapi requires a text message',
+        })
+        continue
       }
 
+      const bodyPayload = waConfig.provider === 'meta'
+        ? {
+            messaging_product: 'whatsapp',
+            to,
+            type: useTemplate ? 'template' : 'text',
+            ...(useTemplate
+              ? { template }
+              : { text: { body: String(resolvedText || '') } }),
+          }
+        : { to, body: String(resolvedText || '') }
+
       try {
-        const resp = await $fetch(url, {
+        const resp = await $fetch(waConfig.provider === 'meta' ? metaUrl : whapiUrl, {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${waConfig.accessToken}`,
-            'Content-Type': 'application/json',
-          },
+          headers: waConfig.provider === 'meta'
+            ? {
+                Authorization: `Bearer ${waConfig.accessToken}`,
+                'Content-Type': 'application/json',
+              }
+            : {
+                Authorization: `Bearer ${waConfig.token}`,
+                'Content-Type': 'application/json',
+              },
           body: bodyPayload,
         })
-        const providerMessageId = resp?.messages?.[0]?.id || null
+        const providerMessageId =
+          resp?.messages?.[0]?.id ||
+          resp?.message?.id ||
+          resp?.id ||
+          null
         await markWhatsAppOutbound(lead, to)
         await logWhatsAppMessage({
           organisationId: orgId,
           leadId: lead.id,
           to,
-          type: hasTemplate ? 'template' : 'text',
-          templateName: hasTemplate ? (template?.name || template?.namespace || null) : null,
+          type: useTemplate ? 'template' : 'text',
+          templateName: useTemplate ? (template?.name || template?.namespace || null) : null,
           status: 'sent',
           providerMessageId,
+          content: useTemplate ? null : String(resolvedText || ''),
         })
         sent += 1
       } catch (e) {
@@ -1190,8 +1789,8 @@ export const sendLeadWhatsApp = async (event) => {
           organisationId: orgId,
           leadId: lead.id,
           to,
-          type: hasTemplate ? 'template' : 'text',
-          templateName: hasTemplate ? (template?.name || template?.namespace || null) : null,
+          type: useTemplate ? 'template' : 'text',
+          templateName: useTemplate ? (template?.name || template?.namespace || null) : null,
           status: 'failed',
           error: e?.data?.error?.message || e?.message || 'Failed to send',
         })

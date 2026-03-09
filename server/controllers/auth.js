@@ -58,6 +58,7 @@ import {
   isOnboardingRecipientRole,
   recordOnboardingEvent as recordOnboardingEventInternal,
 } from "../utils/onboardingService";
+import { parseJsonBody } from "../utils/body";
 
 const config = useRuntimeConfig();
 const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
@@ -68,13 +69,8 @@ export const login = async (event) => {
     const ip = requestIp.getClientIp(event.node.req);
     browserAgent = browserAgent + ",ipAddress:" + ip;
     const body = await readBody(event);
-    const { email, password } = JSON.parse(body);
+    const { email, password } = parseJsonBody(body);
     const normalizedEmail = normalizeEmail(email);
-    console.log("[auth.login] email:", {
-      raw: email,
-      normalized: normalizedEmail,
-      schema: config.DB_SCHEMA,
-    });
     if (!normalizedEmail || !password) return error(400, "Missing credentials");
     const user = await User.findOne({
       where: {
@@ -82,11 +78,6 @@ export const login = async (event) => {
           [Op.iLike]: normalizedEmail,
         },
       },
-    });
-    console.log("[auth.login] user lookup:", {
-      found: Boolean(user),
-      userId: user?.id,
-      email: user?.email,
     });
     if (!user) {
       return error(401, "Invalid credentials");
@@ -713,7 +704,7 @@ export const contractDetails = async (event) => {
 export const updateBankDetails = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);
-  const { bankName, sortCode, accountNumber, accountTitle } = JSON.parse(body);
+  const { bankName, sortCode, accountNumber, accountTitle } = parseJsonBody(body);
   try {
     const bankDetails = await UserAccount.findOne({
       where: { userId: loggedUser.userId },
@@ -745,11 +736,6 @@ export const forgetPasswordRequest = async (event) => {
     typeof body === "string" ? JSON.parse(body || "{}") : body || {};
   const { email } = parsed;
   const normalizedEmail = normalizeEmail(email);
-  console.log("[auth.forgetPasswordRequest] email:", {
-    raw: email,
-    normalized: normalizedEmail,
-    schema: config.DB_SCHEMA,
-  });
 
   if (!normalizedEmail) return error(403, "Email required");
 
@@ -760,11 +746,6 @@ export const forgetPasswordRequest = async (event) => {
           [Op.iLike]: normalizedEmail,
         },
       },
-    });
-    console.log("[auth.forgetPasswordRequest] user lookup:", {
-      found: Boolean(user),
-      userId: user?.id,
-      email: user?.email,
     });
     if (!user) {
       throw createError({
@@ -796,7 +777,7 @@ export const forgetPasswordRequest = async (event) => {
 
 export const resetPassword = async (event) => {
   const body = await readBody(event);
-  const { email, otp, newPassword } = JSON.parse(body);
+  const { email, otp, newPassword } = parseJsonBody(body);
   const normalizedEmail = normalizeEmail(email);
   try {
     if (!normalizedEmail || !otp || !newPassword)
@@ -833,7 +814,7 @@ export const resetPassword = async (event) => {
 export const updatePassword = async (event) => {
   const { userId } = event.context.user;
   const body = await readBody(event);
-  const { oldPassword, newPassword } = JSON.parse(body);
+  const { oldPassword, newPassword } = parseJsonBody(body);
   try {
     if (!oldPassword || !newPassword)
       return error(402, "Missing required fields");
@@ -850,8 +831,16 @@ export const updatePassword = async (event) => {
 };
 
 export const switchOrgnanisation = async (event) => {
-  const body = await readBody(event);
-  const { orgId } = JSON.parse(body);
+  const bodyRaw = await readBody(event);
+  let body = bodyRaw;
+  if (typeof bodyRaw === "string") {
+    try {
+      body = JSON.parse(bodyRaw);
+    } catch {
+      body = {};
+    }
+  }
+  const orgId = Number(body?.orgId);
   const user = event.context.user;
   try {
     const record = await UserOrganisation.findOne({
@@ -893,8 +882,12 @@ export const switchOrgnanisation = async (event) => {
   }
 };
 export const verifyEmail = async (event) => {
-  const body = JSON.parse(await readBody(event));
-  const { link } = body;
+  const rawBody = await readBody(event);
+  const { link } = parseJsonBody(rawBody);
+
+  if (!link) {
+    return error(400, "Missing verification link");
+  }
   const verification = await EmailVerification.findOne({ where: { link } });
   if (verification) {
     const user = await User.findOne({
@@ -1001,7 +994,7 @@ export const inviteMembers = async (event) => {
   const loggedUser = event.context.user;
   const currentOrg = loggedUser.orgId;
   const body = await readBody(event);
-  const { users, origin } = JSON.parse(body);
+  const { users, origin } = parseJsonBody(body);
   const transaction = await DB.transaction();
   try {
     if (!Array.isArray(users) || !users.length) {
@@ -1220,7 +1213,7 @@ const inviteNewUsers = async (
 
 export const acceptInvitation = async (event) => {
   const body = await readBody(event);
-  const { inviteToken, password, fullName } = JSON.parse(body);
+  const { inviteToken, password, fullName } = parseJsonBody(body);
   try {
     // Trim and validate fullName
     const trimmedFullName = fullName ? fullName.trim() : "";
@@ -1303,7 +1296,7 @@ export const acceptInvitation = async (event) => {
 
 export const verifyInvitationToken = async (event) => {
   const body = await readBody(event);
-  const { token } = JSON.parse(body);
+  const { token } = parseJsonBody(body);
 
   try {
     if (!token) return error(400, "Token required");
@@ -1804,7 +1797,7 @@ const assignDefaultHRDocsToUser = async (userId) => {
 
 export const userLoginHistory = async (event) => {
   const body = await readBody(event);
-  const { userId } = JSON.parse(body);
+  const { userId } = parseJsonBody(body);
   if (!userId) throw createError({ message: "UserId is required" });
   try {
     const loginHistory = await LoginHistory.findAll({ where: { userId } });
@@ -1816,7 +1809,7 @@ export const userLoginHistory = async (event) => {
 
 export const getUserHrDocuments = async (event) => {
   const body = await readBody(event);
-  const { userId } = JSON.parse(body);
+  const { userId } = parseJsonBody(body);
   if (!userId) throw createError({ message: "userId required" });
   try {
     const docs = await UserHrDocument.findAll({ where: { userId } });
@@ -1889,7 +1882,7 @@ export const addUserHrDoc = async (event) => {
 
 export const removeUserDoc = async (event) => {
   const body = await readBody(event);
-  const { id } = JSON.parse(body);
+  const { id } = parseJsonBody(body);
   try {
     const userDoc = await UserHrDocument.findByPk(id);
     if (!userDoc) throw createError({ message: "Document not found for user" });

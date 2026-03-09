@@ -7,6 +7,7 @@ import {
   UserOrganisation,
 } from "../models/index.js";
 import { format } from "date-fns";
+import { parseJsonBody } from "../utils/body";
 
 export const listCourses = async (event) => {
   try {
@@ -32,7 +33,7 @@ export const myCourses = async (event) => {};
 export const startQuiz = async (event) => {
   try {
     const body = await readBody(event);
-    const { courseId } = JSON.parse(body);
+    const { courseId } = parseJsonBody(body);
     const { userId } = event.context.user;
     if (!userId) {
       throw createError({ statusCode: 400, message: "UserId is required" });
@@ -89,7 +90,7 @@ export const submitQuiz = async (event) => {
   try {
     const body = await readBody(event);
     const { courseId, answers } =
-      typeof body === "string" ? JSON.parse(body) : body;
+      typeof body === "string" ? parseJsonBody(body) : body;
     const { userId } = event.context.user || {};
 
     if (!userId) {
@@ -209,7 +210,7 @@ export const submitQuiz = async (event) => {
 export const addCourse = async (event) => {
   try {
     const body = await readBody(event);
-    const payload = typeof body === "string" ? JSON.parse(body) : body;
+    const payload = typeof body === "string" ? parseJsonBody(body) : body;
 
     const requiredTitle = payload.title;
     const requiredCategory = payload.category;
@@ -369,7 +370,7 @@ export const assignCourseToUsers = async (event) => {
   try {
     const body = await readBody(event);
     const { userIds, courseId } =
-      typeof body === "string" ? JSON.parse(body) : body;
+      typeof body === "string" ? parseJsonBody(body) : body;
     const { userId: managerId, orgId } = event.context.user;
     if (!Array.isArray(userIds) || userIds.length === 0) {
       throw createError({

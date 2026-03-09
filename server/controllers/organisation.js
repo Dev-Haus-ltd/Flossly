@@ -35,6 +35,7 @@ import {
 import bcrypt from "bcrypt";
 import { Op } from "sequelize";
 import { uploadTempFile } from "../utils/storage";
+import { parseJsonBody } from "../utils/body";
 
 // Role constants for access control
 // Role ID 1 = Practice Manager, Role ID 8 = Principal Dentist / Practice Owner
@@ -152,6 +153,8 @@ export const updateOrganisationDetails = async (event) => {
     const teamCount = firstNonEmpty(fields, 'teamCount');
     const surgeryCount = firstNonEmpty(fields, 'surgeryCount');
     const cqcInspectionDate = firstNonEmpty(fields, 'cqcInspectionDate');
+    const practiceAnniversaryDate = firstNonEmpty(fields, 'practiceAnniversaryDate');
+    const automationPlaceholdersRaw = firstNonEmpty(fields, 'automationPlaceholders');
 
     if (managerId !== undefined) organisation.managerId = parseInt(managerId, 10) || organisation.managerId;
     if (teamCount !== undefined) organisation.teamCount = Number.isNaN(Number(teamCount)) ? organisation.teamCount : parseInt(teamCount, 10);
@@ -159,6 +162,23 @@ export const updateOrganisationDetails = async (event) => {
     if (cqcInspectionDate !== undefined) {
       const d = new Date(cqcInspectionDate);
       organisation.cqcInspectionDate = isNaN(d.getTime()) ? organisation.cqcInspectionDate : d;
+    }
+    if (practiceAnniversaryDate !== undefined) {
+      const d = new Date(practiceAnniversaryDate);
+      organisation.practiceAnniversaryDate = isNaN(d.getTime()) ? organisation.practiceAnniversaryDate : d;
+    }
+    if (automationPlaceholdersRaw !== undefined) {
+      if (typeof automationPlaceholdersRaw === 'string') {
+        try {
+          organisation.automationPlaceholders = JSON.parse(automationPlaceholdersRaw);
+        } catch (err) {
+          return error(400, 'automationPlaceholders must be valid JSON');
+        }
+      } else if (typeof automationPlaceholdersRaw === 'object') {
+        organisation.automationPlaceholders = automationPlaceholdersRaw;
+      } else {
+        return error(400, 'automationPlaceholders must be an object');
+      }
     }
 
     // Handle logo upload (if provided)
@@ -399,7 +419,7 @@ export const updateImportantPeople = async (event) => {
       complaintsHandler,
       dpo,
       rpa
-    } = JSON.parse(body);
+    } = parseJsonBody(body);
 
     let people = await OrganisationPeople.findOne({ where: { organisationId, id } });
 
@@ -436,7 +456,7 @@ export const updateImportantPeople = async (event) => {
 export const addEquipment = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);
-  const { equipments } = JSON.parse(body);
+  const { equipments } = parseJsonBody(body);
   if (!equipments || !Array.isArray(equipments)) {
     throw createError({ message: "Equipments array is required" });
   }
@@ -457,7 +477,7 @@ export const addEquipment = async (event) => {
 export const addContacts = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);
-  const { contacts } = JSON.parse(body);
+  const { contacts } = parseJsonBody(body);
   if (!contacts || !Array.isArray(contacts)) {
     throw createError({ message: "Contacts array is required" });
   }
@@ -478,7 +498,7 @@ export const addContacts = async (event) => {
 export const addSurgery = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);
-  const { name, color, description, details } = JSON.parse(body);
+  const { name, color, description, details } = parseJsonBody(body);
   if (!name) {
     throw createError({ message: "Name is required" });
   }
@@ -501,7 +521,7 @@ export const addSurgery = async (event) => {
 export const addGroup = async (event) => {
   const loggedUser = event.context.user;
   const body = await readBody(event);
-  const { name, description, userIds } = JSON.parse(body);
+  const { name, description, userIds } = parseJsonBody(body);
   if (!name) {
     throw createError({ message: "Name is required" });
   }
@@ -529,7 +549,7 @@ export const addGroup = async (event) => {
 
 export const updateAttributes = async (event) => {
   const body = await readBody(event);
-  const { type, data, userIds } = JSON.parse(body);
+  const { type, data, userIds } = parseJsonBody(body);
 
   if (!type) throw createError({ message: "Type is required" });
   const transaction = await DB.transaction();
@@ -596,7 +616,7 @@ export const updateAttributes = async (event) => {
 
 export const deleteAttribute = async (event) => {
   const body = await readBody(event);
-  const { type, id } = JSON.parse(body);
+  const { type, id } = parseJsonBody(body);
 
   if (!type || !id) throw createError({ message: "Type and Id is required" });
   const transaction = await DB.transaction();
@@ -651,7 +671,7 @@ export const deleteAttribute = async (event) => {
 
 export const getSurgeries = async (event) => {
   const body = await readBody(event)
-  const { organisationId } = JSON.parse(body)
+  const { organisationId } = parseJsonBody(body)
   try {
     const surgeries = await OrganisationSurgery.findAll({ where: { organisationId }})
     return success(surgeries)

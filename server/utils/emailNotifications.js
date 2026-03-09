@@ -368,22 +368,44 @@ export const sendInvitationEmail = async (data) => {
 // Performs light-weight placeholder replacement and wraps with the app template.
 // Placeholders supported:
 // - [Patient Name], [First Name], [Your Name]
-export const sendLeadBulkEmail = async ({ leads = [], subject, html, from, senderName }) => {
+export const sendLeadBulkEmail = async ({ leads = [], subject, html, from, senderName, attachments = [] }) => {
   if (!Array.isArray(leads) || !leads.length) return { sent: 0 };
   const fromAddress = from || process.env.MAIL_FROM || "helloflossly@gmail.com";
+  const baseUrl = String(config?.public?.BASE_URL || '').replace(/\/+$/, '');
+  const normalizedAttachments = Array.isArray(attachments)
+    ? attachments
+        .map((item) => {
+          const link = String(item?.link || item?.url || item?.path || '').trim();
+          if (!link) return null;
+          const isAbsolute = /^https?:\/\//i.test(link);
+          if (!isAbsolute && !baseUrl) return null;
+          return {
+            filename: String(item?.name || item?.filename || 'Attachment.pdf'),
+            path: isAbsolute ? link : `${baseUrl}${link}`,
+            contentType: item?.contentType || undefined,
+          };
+        })
+        .filter(Boolean)
+    : [];
 
   let sent = 0;
   for (const lead of leads) {
     if (!lead?.email) continue;
     const ctx = buildLeadContext({ lead, userName: senderName || 'Team' })
-    const renderedSubject = renderTokens(subject || '', ctx)
-    const content = renderTokens(html || '', ctx)
+    const renderedSubject = renderTokens(subject || '', ctx, { format: 'text' })
+    const content = renderTokens(html || '', ctx, { format: 'html' })
 
     try {
       const wrapped = template
         .replaceAll("{subject}", renderedSubject || "")
         .replace("{content}", content);
-      await transporter.sendMail({ to: lead.email, from: fromAddress, subject: renderedSubject, html: wrapped });
+      await transporter.sendMail({
+        to: lead.email,
+        from: fromAddress,
+        subject: renderedSubject,
+        html: wrapped,
+        attachments: normalizedAttachments.length ? normalizedAttachments : undefined,
+      });
       sent++;
     } catch (e) {
       // swallow and continue with others

@@ -1,5 +1,5 @@
 <template>
-    <CustomerRelationManagement/>
+  <CustomerRelationManagementOverview />
 </template>
 <script setup>
 definePageMeta({

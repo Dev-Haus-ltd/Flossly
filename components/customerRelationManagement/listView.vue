@@ -577,101 +577,129 @@
         </div>
       </v-card>
     </v-dialog>
-    <v-dialog v-model="showWhatsAppCompose" max-width="640px">
+
+    <v-dialog v-model="showSendPriceCompose" max-width="720px">
+      <v-card class="send-price-card">
+        <div class="d-flex justify-space-between align-center px-6 py-4">
+          <div>
+            <h5 class="mb-1 modal-title">Share Price with Client</h5>
+            <div class="text-caption text-medium-emphasis">{{ sendPrice.recipients.length }} recipient(s)</div>
+          </div>
+          <v-btn icon @click="showSendPriceCompose = false" flat><v-icon>mdi-close</v-icon></v-btn>
+        </div>
+        <v-divider />
+
+        <div class="send-price-body">
+          <div class="px-6 pt-4">
+            <div class="send-price-upload-card">
+              <div v-if="sendPriceAttachment?.link" class="uploaded-file-row mb-3">
+                <div class="uploaded-file-meta">
+                  <v-icon size="18" color="primary" class="mr-2">mdi-file-pdf-box</v-icon>
+                  <div>
+                    <div class="uploaded-file-name">{{ sendPriceAttachment?.name || 'price-list.pdf' }}</div>
+                    <div class="text-caption text-medium-emphasis">
+                      PDF attached{{ sendPriceAttachment?.uploadedAt ? ` • ${formatDate(sendPriceAttachment.uploadedAt)}` : '' }}
+                    </div>
+                  </div>
+                </div>
+                <v-btn size="small" variant="text" color="error" @click="clearSendPriceAttachment">Remove</v-btn>
+              </div>
+
+              <CommonFileUpload :is-single="true" @onFiles="onSendPriceFiles" />
+              <div class="text-caption text-medium-emphasis mt-2">
+                Upload your pricing PDF. Uploading another PDF replaces the current one.
+              </div>
+              <v-progress-linear
+                v-if="sendPriceUploadLoading"
+                indeterminate
+                color="primary"
+                class="mt-2"
+                rounded
+              />
+            </div>
+          </div>
+
+          <div class="px-6 pt-3">
+            <v-text-field
+              v-model="sendPrice.priceLink"
+              label="Paste Price Link"
+              variant="outlined"
+              density="compact"
+              prepend-inner-icon="mdi-link-variant"
+              hide-details
+            />
+          </div>
+
+          <div class="px-6 pt-4 pb-2">
+            <v-text-field
+              v-model="sendPrice.subject"
+              label="Subject"
+              variant="outlined"
+              density="compact"
+              hide-details
+            />
+          </div>
+
+          <div class="px-6 pt-2 pb-4">
+            <div class="text-subtitle-2 text-grey-darken-1 mb-2">Message (Optional)</div>
+            <div ref="sendPriceHolder" class="editor send-price-editor"></div>
+          </div>
+        </div>
+
+        <div class="send-price-footer px-6 py-4 d-flex justify-end" style="gap: 10px">
+          <v-btn variant="outlined" @click="showSendPriceCompose = false">Discard</v-btn>
+          <v-btn color="primary" flat :loading="sendPriceLoading" @click="sendPriceCompose">Send</v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="showWhatsAppCompose" max-width="720px">
       <v-card class="rounded-lg">
         <div class="d-flex justify-space-between align-center px-4 py-3">
           <div>
-            <h5 class="mb-1 modal-title">Compose WhatsApp</h5>
-            <div class="text-caption text-medium-emphasis">
-              {{ whatsappCompose.recipients.length }} recipient(s)
-            </div>
+            <h5 class="mb-1 modal-title">Send WhatsApp</h5>
+            <div class="text-caption text-medium-emphasis">From connected number</div>
           </div>
           <v-btn icon @click="showWhatsAppCompose = false" flat><v-icon>mdi-close</v-icon></v-btn>
         </div>
         <v-divider />
 
-        <div class="px-4 pt-4">
-          <v-alert
-            v-if="whatsappCompose.missing.length"
-            type="warning"
-            variant="tonal"
-            class="mb-3"
-          >
-            {{ whatsappCompose.missing.length }} lead(s) have no valid phone number and will be skipped.
-          </v-alert>
-          <v-alert
-            type="info"
-            variant="tonal"
-            class="mb-3"
-          >
-            WhatsApp outbound is template-only. Templates must be approved in Meta.
-          </v-alert>
-          <div>
-            <div class="d-flex align-center justify-space-between mb-2">
-              <div class="text-subtitle-2 text-grey-darken-1">Template</div>
-              <v-btn
-                size="x-small"
-                variant="text"
-                :loading="whatsappTemplatesLoading"
-                @click="loadWhatsAppTemplates"
-              >
-                Refresh
-              </v-btn>
-            </div>
-            <v-combobox
-              v-model="whatsappCompose.templateName"
-              :items="whatsappTemplateNameOptions"
-              label="Template name"
-              variant="outlined"
-              density="compact"
-              hide-details
-              class="mb-3"
-              clearable
-            />
-            <v-combobox
-              v-model="whatsappCompose.templateLanguage"
-              :items="whatsappTemplateLanguageOptions"
-              label="Template language (e.g. en_US)"
-              variant="outlined"
-              density="compact"
-              hide-details
-              clearable
-            />
-          <div v-if="whatsappTemplateParamCount" class="mt-3">
-            <div class="text-subtitle-2 text-grey-darken-1 mb-2">Template parameters</div>
-            <v-text-field
-              v-for="idx in whatsappTemplateParamCount"
-              :key="`wa-param-${idx}`"
-              v-model="whatsappCompose.templateParams[idx - 1]"
-              :label="`Parameter {{${idx}}}`"
-              variant="outlined"
-              density="compact"
-              hide-details
-              class="mb-2"
-              :placeholder="whatsappTemplateParamExample(idx)"
-            />
+        <div class="px-4 pt-4 pb-2">
+          <v-textarea
+            v-model="whatsappMessage"
+            ref="whatsappTextarea"
+            label="Message"
+            density="compact"
+            variant="outlined"
+            auto-grow
+            rows="4"
+            hide-details
+            placeholder="Write your WhatsApp message..."
+          />
+          <div class="d-flex align-center flex-wrap mt-3" style="gap: 8px">
+            <span class="text-caption text-medium-emphasis">Insert placeholder:</span>
+            <v-chip
+              v-for="token in whatsappTokens"
+              :key="token"
+              size="x-small"
+              variant="tonal"
+              color="primary"
+              class="cursor-pointer"
+              @click="insertWhatsAppToken(token)"
+            >
+              {{ token }}
+            </v-chip>
           </div>
-          <div v-if="whatsappTemplatePreview" class="mt-4">
-            <div class="text-subtitle-2 text-grey-darken-1 mb-2">Preview</div>
-            <div class="whatsapp-preview">
-              <div class="whatsapp-preview__bubble">
-                <div v-for="(line, i) in whatsappTemplatePreview" :key="`wa-prev-${i}`">
-                  {{ line }}
-                </div>
-              </div>
-            </div>
+          <div v-if="!hasWhatsAppRecipients" class="text-caption text-medium-emphasis mt-2">
+            No WhatsApp numbers found for the selected lead(s).
           </div>
-          <div class="text-caption text-medium-emphasis mt-2">
-            Use parameter inputs to fill {{1}}, {{2}} etc for the selected template.
+          <div class="text-caption text-medium-emphasis mt-1">
+            Placeholders are replaced per lead at send time.
           </div>
-        </div>
         </div>
 
-        <div class="px-4 pb-4 d-flex justify-space-between align-center">
-          <div class="text-caption text-medium-emphasis">
-            Fill parameters to match template placeholders ({{1}}, {{2}}).
-          </div>
-          <v-btn :loading="whatsappLoading" flat color="success" @click="sendWhatsAppCompose">
+        <div class="px-4 pb-4 d-flex justify-end">
+          <v-btn :loading="whatsappSending" :disabled="!hasWhatsAppRecipients" flat color="primary" @click="sendWhatsAppMessage">
             Send
           </v-btn>
         </div>
@@ -705,7 +733,6 @@
 <script setup>
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 import { buildRecipientContext, renderWithContext } from '@/lib/templateTokens'
-import { getTemplateParamCount, getTemplateParamExamples, buildTemplatePreviewLines } from '@/lib/whatsappTemplatePreview'
 import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
 import { formatAssignedUsers, formatTreatmentValue } from "@/lib/misc";
 import { getLeadDisplayName, getLeadEmail, getLeadPhone } from "@/lib/normalizers/lead";
@@ -713,11 +740,11 @@ import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crm
 import DataTableColumnsAutomationGroups from '@/components/dataTableColumns/automationGroups.vue'
 import callIcon from '@/assets/crm/call.svg'
 import sendMailIcon from '@/assets/crm/sendMail.svg'
-import whatsappIcon from '@/assets/crm/whatsapp.svg'
 import bookIcon from '@/assets/crm/book.svg'
 import sendPriceIcon from '@/assets/crm/sendPrice.svg'
 import sendFormIcon from '@/assets/crm/sendForm.svg'
 import shareLocationIcon from '@/assets/crm/shareLocation.svg'
+import whatsappIcon from '@/assets/crm/whatsapp-logo.svg'
 import convertIcon from '@/assets/crm/convert.svg'
 import archiveIcon from '@/assets/crm/archive.svg'
 import deleteIcon from '@/assets/crm/delete.svg'
@@ -813,6 +840,16 @@ const confirmArchive = ref(false);
 const archiving = ref(false);
 const converting = ref(false);
 const addStaffDrawer = ref(false);
+const showWhatsAppCompose = ref(false);
+const whatsappSending = ref(false);
+const whatsappMessage = ref('');
+const whatsappTextarea = ref(null);
+const whatsappTokens = [
+  '[Name]',
+  '[Email]',
+  '[Telephone]',
+  '[Your Name]',
+];
 const rolesList = ref([]);
 const automationRowsCache = reactive({});
 const automationLoading = reactive({});
@@ -820,35 +857,19 @@ const automationSaving = reactive({});
 const automationGroupRows = ref([]);
 const automationGroupsLoading = ref(false);
 const automationGroupsDirty = ref(false);
-const defaultAutomationMap = new Map(
-  (crmAutomationDefaults || [])
-    .filter((item) => item && item.key)
-    .map((item) => [item.key, { ...item }])
-);
 
 const resolveLeadName = (lead) => getLeadDisplayName(lead);
 const resolveLeadEmail = (lead) => getLeadEmail(lead);
 const resolveLeadPhone = (lead) => getLeadPhone(lead);
 
-const mergeDefaultAutomations = (rows) => {
-  const map = new Map((rows || []).map((row) => [row.key, { ...row }]));
-  for (const [key, def] of defaultAutomationMap.entries()) {
-    if (!map.has(key)) map.set(key, { ...def });
-  }
-  return Array.from(map.values());
-};
+const whatsappRecipients = computed(() => {
+  const nums = (selectedLeads.value || [])
+    .map((lead) => resolveLeadPhone(lead))
+    .filter(Boolean);
+  return [...new Set(nums)];
+});
 
-const isWhatsAppItem = (item) => {
-  const type = String(item?.type || '').toLowerCase();
-  const key = String(item?.key || '').toLowerCase();
-  return type === 'whatsapp' || key.includes('whatsapp');
-};
-
-const isWhatsAppGroup = (group) => {
-  const key = String(group?.key || '').toLowerCase();
-  const title = String(group?.title || '').toLowerCase();
-  return key.includes('whatsapp') || title.includes('whatsapp');
-};
+const hasWhatsAppRecipients = computed(() => whatsappRecipients.value.length > 0);
 
 const loadAutomationGroups = async ({ force = false } = {}) => {
   if (!force && (automationGroupRows.value.length || automationGroupsLoading.value)) return;
@@ -856,7 +877,7 @@ const loadAutomationGroups = async ({ force = false } = {}) => {
   try {
     const res = await crmStore.listAutomationGroups();
     if (res?.code === 0 && Array.isArray(res.data)) {
-      automationGroupRows.value = res.data.filter((group) => !isWhatsAppGroup(group));
+      automationGroupRows.value = res.data;
     }
   } finally {
     automationGroupsLoading.value = false;
@@ -865,7 +886,7 @@ const loadAutomationGroups = async ({ force = false } = {}) => {
 
 const resolvedAutomationGroups = computed(() => {
   const groups = automationGroupRows.value.length ? automationGroupRows.value : crmAutomationGroups;
-  return groups.filter((group) => !isWhatsAppGroup(group));
+  return groups;
 });
 
 const loadLeadAutomations = async (leadId) => {
@@ -874,13 +895,9 @@ const loadLeadAutomations = async (leadId) => {
   try {
     const res = await crmStore.listAutomation(leadId);
     const apiItems = Array.isArray(res?.data) ? res.data : [];
-    const rows = apiItems.length
-      ? mergeDefaultAutomations(apiItems)
-      : mergeDefaultAutomations(crmAutomationDefaults);
-    const nonWhatsAppRows = rows.filter((item) => !isWhatsAppItem(item));
-    automationRowsCache[leadId] = nonWhatsAppRows;
+    automationRowsCache[leadId] = apiItems.length ? apiItems : crmAutomationDefaults;
   } catch (e) {
-    automationRowsCache[leadId] = mergeDefaultAutomations(crmAutomationDefaults);
+    automationRowsCache[leadId] = crmAutomationDefaults;
   } finally {
     automationLoading[leadId] = false;
   }
@@ -1110,9 +1127,10 @@ const onActionClick = (key) => {
   else if (key === 'delete') confirmDelete.value = true;
   else if (key === 'archive') confirmArchive.value = true;
   else if (key === 'convert') convertSelected();
-  else if (key === 'whatsapp') openWhatsAppCompose()
   else if (key === 'export') exportSelectedLeads();
-  else if (['mail','sendPrice','sendForm','shareLocation'].includes(key)) openCompose(key)
+  else if (key === 'whatsapp') openWhatsAppCompose();
+  else if (key === 'sendPrice') openSendPriceCompose();
+  else if (['mail','sendForm','shareLocation'].includes(key)) openCompose(key)
 };
 
 const formatDate = (d) => {
@@ -1140,8 +1158,23 @@ const resolveLeadValue = (lead, key) => {
   return value ?? '';
 };
 
-const buildCsvValue = (value) => {
-  const text = value == null ? '' : String(value);
+const buildCsvValue = (value, key = '') => {
+  let text = value == null ? '' : String(value);
+  text = text.replace(/[\r\n]+/g, ' ').trim();
+  const lowerKey = String(key || '').toLowerCase();
+  const forceTextKeys = [
+    'telephone',
+    'phone',
+    'mobile',
+    'whatsapp',
+    'whatsappnumber',
+    'phonenumber',
+    'secondaryphone',
+  ];
+  const looksNumeric = /^\+?\d{7,}$/.test(text);
+  if ((forceTextKeys.some((k) => lowerKey.includes(k)) || looksNumeric) && text) {
+    text = `\t${text}`;
+  }
   if (/[\",\\n]/.test(text)) return `\"${text.replace(/\"/g, '\"\"')}\"`;
   return text;
 };
@@ -1154,10 +1187,10 @@ const exportSelectedLeads = () => {
   if (!columns.length) return;
 
   const rows = selectedLeads.value.map((lead) =>
-    columns.map((col) => buildCsvValue(resolveLeadValue(lead, col.key))).join(',')
+    columns.map((col) => buildCsvValue(resolveLeadValue(lead, col.key), col.key)).join(',')
   );
-  const header = columns.map((col) => buildCsvValue(col.title)).join(',');
-  const csv = [header, ...rows].join('\\n');
+  const header = columns.map((col) => buildCsvValue(col.title, col.key)).join(',');
+  const csv = '\uFEFF' + [header, ...rows].join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const stamp = new Date().toISOString().slice(0, 10);
@@ -1279,17 +1312,18 @@ let EditorCtor = null
 let Header = null
 let List = null
 const compose = reactive({ key: 'mail', subject: '', recipients: [], html: '' })
-const showWhatsAppCompose = ref(false)
-const whatsappLoading = ref(false)
-const whatsappTemplates = ref([])
-const whatsappTemplatesLoading = ref(false)
-const whatsappCompose = reactive({
+const showSendPriceCompose = ref(false)
+const sendPriceLoading = ref(false)
+const sendPriceUploadLoading = ref(false)
+const sendPriceHolder = ref(null)
+let sendPriceEditor = null
+const sendPrice = reactive({
+  subject: '',
   recipients: [],
-  missing: [],
-  templateName: '',
-  templateLanguage: 'en_US',
-  templateParams: [],
+  html: '',
+  priceLink: '',
 })
+const sendPriceAttachment = ref(null)
 
 const defaultTemplates = {
   sendPrice: {
@@ -1317,11 +1351,30 @@ const defaultTemplates = {
   mail: { subject: 'Message from our practice', html: `<p>Dear [Patient Name],</p><p>Write your message here.</p><p>Regards,<br/>[Your Name]</p>` },
 }
 
+const ensureEditorModules = async () => {
+  if (typeof window === 'undefined') return false
+  if (EditorCtor && Header && List) return true
+  const [{ default: E }, { default: H }, { default: L }] = await Promise.all([
+    import('@editorjs/editorjs'),
+    import('@editorjs/header'),
+    import('@editorjs/list'),
+  ])
+  EditorCtor = E
+  Header = H
+  List = L
+  return true
+}
+
+const getSelectedEmails = () => {
+  const emails = (selectedLeads.value || [])
+    .map((lead) => resolveLeadEmail(lead))
+    .filter(Boolean)
+  return [...new Set(emails)]
+}
 
 async function openCompose(actionKey) {
   compose.key = actionKey
-  const emails = (selectedLeads.value || []).map(l => l?.email).filter(Boolean)
-  compose.recipients = [...new Set(emails)]
+  compose.recipients = getSelectedEmails()
   const def = defaultTemplates[actionKey] || defaultTemplates.mail
   // Personalize subject/body for preview based on selection
   const many = (selectedLeads.value || []).length !== 1
@@ -1331,15 +1384,7 @@ async function openCompose(actionKey) {
   compose.html = renderWithContext(def.html, ctx)
   showCompose.value = true
   await nextTick()
-  if (typeof window === 'undefined') return
-  if (!EditorCtor || !Header || !List) {
-    const [{ default: E }, { default: H }, { default: L }] = await Promise.all([
-      import('@editorjs/editorjs'),
-      import('@editorjs/header'),
-      import('@editorjs/list'),
-    ])
-    EditorCtor = E; Header = H; List = L
-  }
+  if (!(await ensureEditorModules())) return
   if (composeEditor) { composeEditor.destroy(); composeEditor = null }
   composeEditor = new EditorCtor({
     holder: composeHolder.value,
@@ -1354,110 +1399,108 @@ async function openCompose(actionKey) {
 
 watch(() => showCompose.value, (v) => { if (!v && composeEditor) { composeEditor.destroy(); composeEditor = null } })
 
-const whatsappTemplateNameOptions = computed(() => {
-  const set = new Set()
-  ;(whatsappTemplates.value || []).forEach((t) => {
-    if (t?.name) set.add(String(t.name))
+const openSendPriceCompose = async () => {
+  sendPrice.recipients = getSelectedEmails()
+  const def = defaultTemplates.sendPrice
+  const many = (selectedLeads.value || []).length !== 1
+  const lead = many ? null : (selectedLeads.value || [])[0]
+  const ctx = buildRecipientContext({ lead, user, many })
+  sendPrice.subject = renderWithContext(def.subject, ctx)
+  sendPrice.html = renderWithContext(def.html, ctx)
+  sendPrice.priceLink = ''
+  sendPriceAttachment.value = null
+
+  const leadIds = (selectedLeads.value || []).map((row) => Number(row?.id)).filter(Boolean)
+  if (leadIds.length) {
+    try {
+      const recent = await crmStore.getLeadPriceAttachmentRecent({ leadIds })
+      if (recent?.code === 0 && recent?.data) {
+        sendPriceAttachment.value = recent.data.attachment || null
+        sendPrice.priceLink = String(recent.data.priceLink || '')
+        if (recent.data.subject) sendPrice.subject = String(recent.data.subject)
+      }
+    } catch {}
+  }
+
+  showSendPriceCompose.value = true
+  await nextTick()
+  if (!(await ensureEditorModules())) return
+  if (sendPriceEditor) {
+    sendPriceEditor.destroy()
+    sendPriceEditor = null
+  }
+  sendPriceEditor = new EditorCtor({
+    holder: sendPriceHolder.value,
+    tools: { header: Header, list: List },
+    data: htmlToBlocks(sendPrice.html || ''),
+    async onChange(api) {
+      const saved = await api.saver.save()
+      sendPrice.html = blocksToHtml(saved)
+    },
   })
-  return Array.from(set)
+}
+
+watch(() => showSendPriceCompose.value, (v) => {
+  if (!v && sendPriceEditor) {
+    sendPriceEditor.destroy()
+    sendPriceEditor = null
+  }
 })
 
-const whatsappTemplateLanguageOptions = computed(() => {
-  const name = String(whatsappCompose.templateName || '').trim()
-  if (!name) return []
-  const langs = (whatsappTemplates.value || [])
-    .filter((t) => String(t?.name || '') === name)
-    .map((t) => t?.language || t?.language?.code || t?.language_code)
-    .filter(Boolean)
-  return Array.from(new Set(langs))
-})
-
-const resolveSelectedTemplate = () => {
-  const name = String(whatsappCompose.templateName || '').trim()
-  if (!name) return null
-  const lang = String(whatsappCompose.templateLanguage || '').trim()
-  const list = whatsappTemplates.value || []
-  if (lang) {
-    const matched = list.find((t) => String(t?.name || '') === name && String(t?.language || t?.language?.code || t?.language_code || '') === lang)
-    if (matched) return matched
-  }
-  return list.find((t) => String(t?.name || '') === name) || null
+const clearSendPriceAttachment = () => {
+  sendPriceAttachment.value = null
 }
 
-const whatsappTemplateParamCount = computed(() => getTemplateParamCount(resolveSelectedTemplate()))
-const whatsappTemplateParamExample = (idx) => {
-  const template = resolveSelectedTemplate()
-  if (!template) return ''
-  const examples = getTemplateParamExamples(template)
-  return String(examples[idx - 1] || '')
-}
-const whatsappTemplatePreview = computed(() => {
-  const template = resolveSelectedTemplate()
-  if (!template) return null
-  const params = (whatsappCompose.templateParams || []).map((v, i) =>
-    String(v || whatsappTemplateParamExample(i + 1) || `{{${i + 1}}}`)
-  )
-  return buildTemplatePreviewLines(template, params)
-})
-watch(
-  () => [whatsappCompose.templateName, whatsappCompose.templateLanguage, whatsappTemplateParamCount.value],
-  () => {
-    const count = whatsappTemplateParamCount.value || 0
-    const next = Array.from({ length: count }, (_, i) => whatsappCompose.templateParams[i] || '')
-    whatsappCompose.templateParams = next
-    if (!whatsappCompose.templateLanguage && whatsappTemplateLanguageOptions.value.length) {
-      whatsappCompose.templateLanguage = whatsappTemplateLanguageOptions.value[0]
-    }
-  }
-)
-
-const buildWhatsAppRecipients = () => {
-  const recipients = []
-  const missing = []
-  ;(selectedLeads.value || []).forEach((lead) => {
-    const phone = String(lead?.telephone || '').trim()
-    if (!phone) {
-      missing.push(lead?.name || lead?.email || `Lead ${lead?.id}`)
-      return
-    }
-    recipients.push(phone)
-  })
-  whatsappCompose.recipients = [...new Set(recipients)]
-  whatsappCompose.missing = missing
-}
-
-const loadWhatsAppTemplates = async () => {
-  if (whatsappTemplatesLoading.value) return
-  try {
-    whatsappTemplatesLoading.value = true
-    const res = await crmStore.getWhatsAppTemplates()
-    if (res?.code === 0 && res.data?.templates) {
-      whatsappTemplates.value = res.data.templates
-    }
-  } catch (e) {
-    // ignore if WhatsApp is not configured
-  } finally {
-    whatsappTemplatesLoading.value = false
-  }
-}
-
-const openWhatsAppCompose = async () => {
-  buildWhatsAppRecipients()
-  if (!whatsappCompose.recipients.length) {
-    if (mainStore?.setSnackbar) {
-      mainStore.setSnackbar({ title: 'No valid phone numbers found', type: 'error' })
-    }
+const onSendPriceFiles = async (files) => {
+  const file = Array.isArray(files) ? files[files.length - 1] : null
+  if (!file) return
+  const isPdf = String(file?.type || '').toLowerCase().includes('pdf') || String(file?.name || '').toLowerCase().endsWith('.pdf')
+  if (!isPdf) {
+    mainStore?.setSnackbar?.({ title: 'Only PDF files are allowed', type: 'error' })
     return
   }
-  await loadWhatsAppTemplates()
-  if (!whatsappCompose.templateName && whatsappTemplateNameOptions.value.length) {
-    whatsappCompose.templateName = whatsappTemplateNameOptions.value[0]
+  try {
+    sendPriceUploadLoading.value = true
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await crmStore.uploadLeadAttachment(formData)
+    if (res?.code === 0 && res?.data?.link) {
+      sendPriceAttachment.value = res.data
+      mainStore?.setSnackbar?.({ title: 'Price list uploaded', type: 'success' })
+      return
+    }
+    mainStore?.setSnackbar?.({ title: res?.message || 'Failed to upload file', type: 'error' })
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || 'Failed to upload file', type: 'error' })
+  } finally {
+    sendPriceUploadLoading.value = false
   }
-  if (!whatsappCompose.templateLanguage && whatsappTemplateLanguageOptions.value.length) {
-    whatsappCompose.templateLanguage = whatsappTemplateLanguageOptions.value[0]
-  }
-  showWhatsAppCompose.value = true
 }
+
+const openWhatsAppCompose = () => {
+  if (!selectedLeads.value.length) return;
+  whatsappMessage.value = '';
+  showWhatsAppCompose.value = true;
+};
+
+const insertWhatsAppToken = async (token) => {
+  const current = String(whatsappMessage.value || '');
+  const el = whatsappTextarea.value?.$el?.querySelector?.('textarea');
+  if (!el) {
+    whatsappMessage.value = `${current}${token}`;
+    return;
+  }
+  const start = Number.isFinite(el.selectionStart) ? el.selectionStart : current.length;
+  const end = Number.isFinite(el.selectionEnd) ? el.selectionEnd : current.length;
+  const next = `${current.slice(0, start)}${token}${current.slice(end)}`;
+  whatsappMessage.value = next;
+  await nextTick();
+  const caret = start + token.length;
+  el.focus();
+  if (typeof el.setSelectionRange === 'function') {
+    el.setSelectionRange(caret, caret);
+  }
+};
 
 const mainStore = useMainStore?.() || null
 const openAddStaff = async () => {
@@ -1487,40 +1530,83 @@ async function sendCompose() {
     }
   } finally { composeLoading.value = false }
 }
-async function sendWhatsAppCompose() {
-  if (!whatsappCompose.templateName?.trim()) {
-    if (mainStore?.setSnackbar) {
-      mainStore.setSnackbar({ title: 'Template name is required', type: 'error' })
+
+async function sendPriceCompose() {
+  try {
+    sendPriceLoading.value = true
+    const leadIds = selectedLeads.value.map((lead) => lead.id).filter(Boolean)
+    if (!leadIds.length) return
+    const many = (selectedLeads.value || []).length !== 1
+    const lead = many ? null : (selectedLeads.value || [])[0]
+    const ctx = buildRecipientContext({ lead, user, many })
+    const resolvedSubject = renderWithContext(sendPrice.subject || 'Price List', ctx)
+    const resolvedBody = sendPrice.html ? renderWithContext(sendPrice.html, ctx) : ''
+    const link = String(sendPrice.priceLink || '').trim()
+    const linkHtml = link
+      ? `<p><strong>Price Link:</strong> <a href="${link}" target="_blank" rel="noopener noreferrer">${link}</a></p>`
+      : ''
+    const resolvedHtml = [resolvedBody, linkHtml].filter(Boolean).join('')
+    const attachments = sendPriceAttachment.value?.link ? [sendPriceAttachment.value] : []
+
+    const res = await crmStore.sendLeadMail({
+      leadIds,
+      subject: resolvedSubject,
+      html: resolvedHtml,
+      key: 'manual_sendPrice',
+      attachments,
+      metadata: {
+        priceLink: link,
+      },
+    })
+    if (res?.code === 0) {
+      const sent = Number(res?.data?.sent || 0)
+      mainStore?.setSnackbar?.({
+        title: sent ? `Mail sent to ${sent} recipient(s)` : 'No emails were sent',
+        type: sent ? 'success' : 'warning',
+      })
+      showSendPriceCompose.value = false
     }
-    return
+  } catch (e) {
+    const msg = e?.data?.message || e?.message || 'Failed to send price email'
+    mainStore?.setSnackbar?.({ title: msg, type: 'error' })
+  } finally {
+    sendPriceLoading.value = false
+  }
+}
+
+async function sendWhatsAppMessage() {
+  if (!selectedLeads.value.length) return;
+  const message = String(whatsappMessage.value || '').trim();
+  if (!message) return;
+  if (!hasWhatsAppRecipients.value) {
+    mainStore?.setSnackbar?.({ title: 'No WhatsApp numbers found for the selected lead(s)', type: 'error' });
+    return;
   }
   try {
-    whatsappLoading.value = true
-    const leadIds = selectedLeads.value.map(l => l.id)
-    const params = (whatsappCompose.templateParams || []).map((val) => ({
-      type: 'text',
-      text: String(val || ''),
-    }))
-    const components = params.length ? [{ type: 'body', parameters: params }] : undefined
-    const template = {
-      name: whatsappCompose.templateName.trim(),
-      language: { code: whatsappCompose.templateLanguage?.trim() || 'en_US' },
-      ...(components ? { components } : {}),
-    }
-    const res = await crmStore.sendLeadWhatsApp({ leadIds, template })
-    if (res && res.code === 0) {
-      const sent = res.data?.sent ?? 0
-      const skipped = res.data?.skipped ?? 0
-      const failed = res.data?.failed ?? 0
-      if (mainStore && mainStore.setSnackbar) {
+    whatsappSending.value = true;
+    const leadIds = selectedLeads.value.map((lead) => lead.id);
+    const res = await crmStore.sendLeadWhatsApp({ leadIds, message });
+    if (res?.code === 0) {
+      const sent = res?.data?.sent ?? 0;
+      const failed = res?.data?.failed ?? 0;
+      const skipped = res?.data?.skipped ?? 0;
+      if (mainStore?.setSnackbar) {
+        const detail = [sent ? `${sent} sent` : null, failed ? `${failed} failed` : null, skipped ? `${skipped} skipped` : null]
+          .filter(Boolean)
+          .join(' - ');
         mainStore.setSnackbar({
-          title: `WhatsApp sent: ${sent}, skipped: ${skipped}, failed: ${failed}`,
+          title: detail || 'WhatsApp sent',
           type: failed ? 'warning' : 'success',
-        })
+        });
       }
-      showWhatsAppCompose.value = false
+      showWhatsAppCompose.value = false;
     }
-  } finally { whatsappLoading.value = false }
+  } catch (e) {
+    const msg = e?.data?.message || e?.message || 'Failed to send WhatsApp message';
+    mainStore?.setSnackbar?.({ title: msg, type: 'error' });
+  } finally {
+    whatsappSending.value = false;
+  }
 }
 const getLeadUsers = (lead) => {
   // Filter to show only active users (not invited, disabled, or expired)
@@ -1674,27 +1760,6 @@ const convertSelected = async () => {
   cursor: col-resize;
 }
 
-.whatsapp-preview {
-  background: #e5ddd5;
-  border-radius: 12px;
-  padding: 16px;
-  min-height: 160px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-}
-
-.whatsapp-preview__bubble {
-  background: #dcf8c6;
-  border-radius: 10px;
-  padding: 12px 14px;
-  max-width: 520px;
-  white-space: pre-wrap;
-  line-height: 1.5;
-  font-size: 14px;
-  color: #111827;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-}
 .cust-checkbox {
   width: 18px;
   height: 18px;
@@ -1797,7 +1862,6 @@ const convertSelected = async () => {
   white-space: normal;
 }
 
-
 .editable-field:hover {
   background-color: rgba(0, 0, 0, 0.04);
 }
@@ -1823,7 +1887,6 @@ const convertSelected = async () => {
 .inline-edit-textarea:focus {
   box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.2);
 }
-
 /* Scrollable comment cell */
 .comment-cell-wrapper {
   position: relative;
@@ -1895,6 +1958,55 @@ const convertSelected = async () => {
   padding: 10px;
   background: #fff;
 }
+.send-price-card {
+  border-radius: 18px;
+  overflow: hidden;
+  background: #ffffff;
+}
+.send-price-body {
+  max-height: min(62vh, 560px);
+  overflow-y: auto;
+  background: #fcfcfd;
+}
+.send-price-footer {
+  border-top: 1px solid #eceef2;
+  background: #ffffff;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+}
+.send-price-upload-card {
+  border: 1px solid #dbdbdb;
+  border-radius: 14px;
+  padding: 14px;
+  background: #ffffff;
+}
+.uploaded-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fafafa;
+}
+.uploaded-file-meta {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.uploaded-file-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f1f1f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 360px;
+}
+.send-price-editor {
+  min-height: 140px;
+}
 .action-item:hover { background-color: #f5f5f5; }
 
 .lead-name-cell-container {
@@ -1931,4 +2043,5 @@ const convertSelected = async () => {
 }
 
 </style>
+
 

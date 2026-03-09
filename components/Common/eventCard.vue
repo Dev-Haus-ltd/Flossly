@@ -103,6 +103,7 @@ import event3 from '@/assets/dashboard/events/event_3.png'
 import calendarIcon from '@/assets/dashboard/events/event-calender-icon.svg'
 
 
+const emit = defineEmits(["close"]);
 const currentIndex = ref(0);
 let autoPlayInterval = null;
 
@@ -158,8 +159,7 @@ const goToCard = (index) => {
 };
 
 const closeCard = () => {
-  // Emit event or handle close action
-  console.log('Close card clicked');
+  emit("close");
 };
 
 // Auto-play functions

@@ -12,11 +12,20 @@ import {
 import { Op } from "sequelize";
 import DB from "../utils/db";
 import { uploadBufferFile } from "../utils/storage";
+import { parseJsonBody } from "../utils/body";
 export const usersList = async (event) => {
   const loggedUser = event.context.user;
   let currentOrg = loggedUser.orgId;
-  const body = await readBody(event);
-  const { roleId, orgId } = JSON.parse(body);
+  const bodyRaw = await readBody(event);
+  let body = bodyRaw;
+  if (typeof bodyRaw === "string") {
+    try {
+      body = JSON.parse(bodyRaw);
+    } catch {
+      body = {};
+    }
+  }
+  const { roleId, orgId } = body || {};
   if (orgId) {
     currentOrg = orgId;
   }
@@ -175,7 +184,7 @@ export const userAcrossOrgs = async (event) => {
 export const updateUserPreferences = async (event) => {
   const body = await readBody(event);
 
-  const { userId, taskTableColumns } = JSON.parse(body);
+  const { userId, taskTableColumns } = parseJsonBody(body);
   if (!userId) {
     throw createError({ message: "userId required" });
   }
@@ -209,7 +218,7 @@ export const updateUserPreferences = async (event) => {
 
 export const userDetails = async (event) => {
   const body = await readBody(event);
-  const { id, organisationId } = JSON.parse(body);
+  const { id, organisationId } = parseJsonBody(body);
   const user = await User.findByPk(id);
   if (!user) throw createError({ message: "User not found" });
   try {
@@ -250,7 +259,7 @@ export const userDetails = async (event) => {
 export const updateContractDetails = async (event) => {
   const transaction = await DB.transaction();
   const body = await readBody(event);
-  const { details, userId, organisationId } = JSON.parse(body);
+  const { details, userId, organisationId } = parseJsonBody(body);
   try {
     if (!userId) {
       throw createError({
@@ -284,9 +293,9 @@ export const updateContractDetails = async (event) => {
 
 export const leaveHistory = async (event) => {
   const body = await readBody(event);
-  const { userId, organisationId } = JSON.parse(body);
+  const { userId, organisationId } = parseJsonBody(body);
   try {
-    const entitlement = await UserLeaveEntitlement.findOne({
+    let entitlement = await UserLeaveEntitlement.findOne({
       where: { userId, organisationId },
       include: [
         {
@@ -296,6 +305,19 @@ export const leaveHistory = async (event) => {
         },
       ],
     });
+
+    // If no entitlement exists yet (e.g. user has never requested leave), create default entitlement
+    if (!entitlement) {
+      entitlement = await UserLeaveEntitlement.create({
+        userId,
+        organisationId,
+        allowedAnnualLeaves: 14,
+        allowedCasualLeaves: 10,
+        allowedCompationateLeaves: 5,
+        allowedSickLeaves: 5,
+        allowedOtherLeaves: 5,
+      });
+    }
     const leaveHistory = await UserLeaveHistory.findAll({
       where: { userId, organisationId },
       include: [
@@ -318,7 +340,7 @@ export const leaveHistory = async (event) => {
 };
 export const updateBankDetails = async (event) => {
   const body = await readBody(event);
-  const { userId, account } = JSON.parse(body);
+  const { userId, account } = parseJsonBody(body);
   try {
     const bankDetails = await UserAccount.findOne({
       where: { userId },
@@ -400,6 +422,26 @@ export const applyLeave = async (event) => {
 
     const start = new Date(startDate);
     const end = new Date(endDate);
+
+    // Prevent overlapping/duplicate leaves for same user/org
+    const existingOverlap = await UserLeaveHistory.findOne({
+      where: {
+        userId,
+        organisationId,
+        status: { [Op.in]: ["Pending", "Approved"] },
+        [Op.and]: [
+          { startDate: { [Op.lte]: end } },
+          { endDate: { [Op.gte]: start } },
+        ],
+      },
+    });
+    if (existingOverlap) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: "You already have a leave that overlaps with the selected dates.",
+      });
+    }
+
     const diffDays =
       Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
@@ -440,6 +482,21 @@ export const applyLeave = async (event) => {
 
     await entitlement.save({ transaction });
 
+    // Normalize totalHours to numeric hours
+    let normalizedHours = 0;
+    if (typeof totalHours === "number") {
+      normalizedHours = totalHours;
+    } else if (typeof totalHours === "string") {
+      const m = totalHours.match(/(\d+(?:\.\d+)?)/);
+      if (m) {
+        normalizedHours = parseFloat(m[1]);
+      } else if (totalHours.toLowerCase().includes("full")) {
+        normalizedHours = 8;
+      } else if (totalHours.toLowerCase().includes("half")) {
+        normalizedHours = 4;
+      }
+    }
+
     const leave = await UserLeaveHistory.create(
       {
         userId,
@@ -448,7 +505,7 @@ export const applyLeave = async (event) => {
         startDate,
         endDate,
         reason,
-        totalHours: totalHours === "Full Day" ? 8 : 4,
+        totalHours: normalizedHours || null,
         isPaid: isPaid === "true", // because form data sends strings
         document: documentPath,
         status: userId == actor.userId ? "Pending" : "Approved",
@@ -467,7 +524,7 @@ export const applyLeave = async (event) => {
 export const updateLeaveStatus = async (event) => {
   const body = await readBody(event);
   try {
-    const { id, status } = JSON.parse(body);
+    const { id, status } = parseJsonBody(body);
     const leave = await UserLeaveHistory.findOne({ where: { id } });
     if (!leave) throw createError({ message: "No Leave found" });
     leave.status = status;
@@ -553,7 +610,7 @@ export const updateAllowedLeaves = async (event) => {
     allowedCompationateLeaves,
     allowedSickLeaves,
     allowedOtherLeaves,
-  } = JSON.parse(body);
+  } = parseJsonBody(body);
   try {
     let leaveEntitlement = await UserLeaveEntitlement.findOne({
       where: { userId, organisationId },
@@ -592,7 +649,7 @@ export const updateAllowedLeaves = async (event) => {
 
 export const deactivateUser = async (event) => {
   const body = await readBody(event);
-  const { userId, organisationId } = JSON.parse(body);
+  const { userId, organisationId } = parseJsonBody(body);
   const transaction = await DB.transaction();
   
   try {
@@ -629,7 +686,7 @@ export const deactivateUser = async (event) => {
 
 export const activateUser = async (event) => {
   const body = await readBody(event);
-  const { userId, organisationId } = JSON.parse(body);
+  const { userId, organisationId } = parseJsonBody(body);
   const transaction = await DB.transaction();
   
   try {
@@ -672,7 +729,7 @@ export const activateUser = async (event) => {
 
 export const deleteUser = async (event) => {
   const body = await readBody(event);
-  const { userId, organisationId } = JSON.parse(body);
+  const { userId, organisationId } = parseJsonBody(body);
   const transaction = await DB.transaction();
   
   try {

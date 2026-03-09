@@ -3,10 +3,10 @@
     <!-- Dashboard Content -->
     <div>
       <CommonEventCard
-        subheading="Watch the Flossly Demo Video"
-        @close="showCard = false"
         v-if="showCard"
         class="my-4"
+        subheading="Watch the Flossly Demo Video"
+        @close="showCard = false"
       />
 
       <!-- Flossly Products Row -->

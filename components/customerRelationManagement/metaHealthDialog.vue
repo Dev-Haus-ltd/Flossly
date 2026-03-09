@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <v-dialog v-model="dialog" max-width="980">
     <v-card class="meta-health-card">
       <v-card-title class="meta-health-title">
@@ -36,7 +36,7 @@
               <div class="meta-health-summary">
                 <div class="summary-card">
                   <div class="summary-label">App ID</div>
-                  <div class="summary-value">{{ data?.appId || '—' }}</div>
+                  <div class="summary-value">{{ data?.appId || '-' }}</div>
                 </div>
                 <div class="summary-card">
                   <div class="summary-label">Verify Token</div>
@@ -62,6 +62,37 @@
               </div>
             </div>
 
+            <div class="meta-health-permissions">
+              <div class="meta-health-table-head">
+                <div class="table-title">Token Permissions</div>
+                <div class="table-hint">Granted or declined permissions for this Meta connection</div>
+              </div>
+              <v-alert
+                v-if="data?.permissionsError"
+                type="warning"
+                variant="tonal"
+                class="mb-3"
+              >
+                {{ data.permissionsError }}
+              </v-alert>
+              <div v-else-if="(data?.permissions || []).length" class="permission-chips">
+                <v-chip
+                  v-for="perm in data.permissions"
+                  :key="perm?.permission || perm?.name || perm?.key || perm?.id || perm"
+                  size="x-small"
+                  :color="(perm?.status || '').toLowerCase() === 'granted' ? 'success' : 'warning'"
+                  label
+                  variant="tonal"
+                >
+                  {{ perm?.permission || perm?.name || perm?.key || perm }}
+                  <span v-if="perm?.status">: {{ perm.status }}</span>
+                </v-chip>
+              </div>
+              <div v-else class="text-caption text-medium-emphasis">
+                No permissions data available.
+              </div>
+            </div>
+
             <div class="meta-health-table-wrap">
               <div class="meta-health-table-head">
                 <div class="table-title">Pages</div>
@@ -76,21 +107,22 @@
                       <th>Token</th>
                       <th>Subscribed</th>
                       <th>App Match</th>
+                      <th>Connected At</th>
                       <th>Leads</th>
                       <th>Last Lead</th>
                       <th>Error</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="row in (data?.pages || [])" :key="row.pageId">
+                    <tr v-for="row in activePages" :key="row.pageId">
                       <td class="page-cell">
                         <span class="status-dot" :class="row.status === 'Active' ? 'ok' : 'warn'"></span>
                         <span class="page-name">{{ row.pageName || row.pageId }}</span>
-                        <span v-if="row.pageName && row.pageId" class="page-id">· {{ row.pageId }}</span>
+                        <span v-if="row.pageName && row.pageId" class="page-id">- {{ row.pageId }}</span>
                       </td>
                       <td>
                         <v-chip size="x-small" color="primary" variant="tonal" label>
-                          {{ row.status || '—' }}
+                          {{ row.status || '-' }}
                         </v-chip>
                       </td>
                       <td>
@@ -108,12 +140,13 @@
                           {{ row.appMatched ? 'Yes' : 'No' }}
                         </v-chip>
                       </td>
+                      <td class="text-nowrap">{{ formatMetaLeadDate(row.connectedAt) }}</td>
                       <td class="text-center">{{ row.leadCount || 0 }}</td>
                       <td class="text-nowrap">{{ formatMetaLeadDate(row.lastLeadAt) }}</td>
-                      <td class="error-cell">{{ row.error || '—' }}</td>
+                      <td class="error-cell">{{ row.error || '-' }}</td>
                     </tr>
-                    <tr v-if="!(data?.pages || []).length">
-                      <td colspan="8" class="text-center py-6 text-medium-emphasis">No pages found.</td>
+                    <tr v-if="!activePages.length">
+                      <td colspan="9" class="text-center py-6 text-medium-emphasis">No pages found.</td>
                     </tr>
                   </tbody>
                 </v-table>
@@ -148,10 +181,15 @@ const close = () => {
   emit('update:modelValue', false);
 };
 
+const activePages = computed(() => {
+  const pages = Array.isArray(props.data?.pages) ? props.data.pages : [];
+  return pages.filter((row) => String(row?.status || '').toLowerCase() === 'active');
+});
+
 const formatMetaLeadDate = (value) => {
-  if (!value) return '—';
+  if (!value) return '-';
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.valueOf())) return '—';
+  if (Number.isNaN(parsed.valueOf())) return '-';
   return parsed.toLocaleString();
 };
 </script>
@@ -256,6 +294,16 @@ const formatMetaLeadDate = (value) => {
   background: #fff;
 }
 
+.meta-health-permissions {
+  margin-bottom: 16px;
+}
+
+.permission-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .meta-health-table-head {
   padding: 12px 14px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
@@ -277,7 +325,12 @@ const formatMetaLeadDate = (value) => {
 
 .meta-health-table-scroll {
   max-height: 320px;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.meta-health-table :deep(.v-table__wrapper) {
+  overflow: visible;
 }
 
 .meta-health-table :deep(thead th) {
@@ -366,3 +419,5 @@ const formatMetaLeadDate = (value) => {
   }
 }
 </style>
+
+

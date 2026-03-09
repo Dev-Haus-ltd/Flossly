@@ -55,6 +55,9 @@ import { CrmLead } from "./crm/leads";
 import { MetaUserToken } from "./crm/metaUserTokens";
 import { MetaWhatsAppConfig } from "./crm/metaWhatsAppConfigs";
 import { CrmWhatsAppMessageLog } from "./crm/whatsappMessageLogs";
+import { WhapiChannelConfig } from "./crm/whapiChannelConfigs";
+import { FcmToken } from "./notifications/fcmTokens";
+import { UserNotification } from "./notifications/userNotifications";
 import { ChatbotConfig } from "./crm/chatbotConfig";
 import { MetaAdAccount } from "./crm/MetaAdAccount";
 import { MetaCampaign } from "./crm/MetaCampaign";
@@ -326,6 +329,9 @@ Organisation.hasMany(MetaUserToken, { foreignKey: 'organisationId', as: 'metaUse
 MetaWhatsAppConfig.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 MetaWhatsAppConfig.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', hooks: true });
 Organisation.hasMany(MetaWhatsAppConfig, { foreignKey: 'organisationId', as: 'metaWhatsAppConfigs', onDelete: 'CASCADE', hooks: true });
+WhapiChannelConfig.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+WhapiChannelConfig.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', hooks: true });
+Organisation.hasMany(WhapiChannelConfig, { foreignKey: 'organisationId', as: 'whapiChannelConfigs', onDelete: 'CASCADE', hooks: true });
 CrmWhatsAppMessageLog.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 Organisation.hasMany(CrmWhatsAppMessageLog, { foreignKey: 'organisationId', as: 'whatsappMessageLogs', onDelete: 'CASCADE', hooks: true });
 CrmWhatsAppMessageLog.belongsTo(CrmLead, { foreignKey: 'leadId', as: 'lead', onDelete: 'SET NULL', hooks: true });
@@ -341,6 +347,14 @@ CrmLead.hasOne(CrmLeadCommunication, { foreignKey: 'leadId', as: 'communication'
 CrmLeadCommunication.belongsTo(CrmLead, { foreignKey: 'leadId', as: 'lead', onDelete: 'CASCADE', hooks: true });
 
 CrmLead.hasMany(CrmLeadAssignee, { foreignKey: 'leadId', as: 'assignees' });
+
+// FCM Token relationships
+FcmToken.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', hooks: true });
+User.hasMany(FcmToken, { foreignKey: 'userId', as: 'fcmTokens', onDelete: 'CASCADE', hooks: true });
+
+// User Notification relationships
+UserNotification.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', hooks: true });
+User.hasMany(UserNotification, { foreignKey: 'userId', as: 'notifications', onDelete: 'CASCADE', hooks: true });
 CrmLeadAssignee.belongsTo(CrmLead, { foreignKey: 'leadId', as: 'lead', onDelete: 'CASCADE', hooks: true });
 CrmLeadAssignee.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', hooks: true });
 
@@ -538,6 +552,7 @@ export {
   CrmWhatsAppMessageLog,
   MetaUserToken,
   MetaWhatsAppConfig,
+  WhapiChannelConfig,
   ChatbotConfig,
   MetaAdAccount,
   MetaCampaign,
@@ -560,7 +575,10 @@ export {
   DictionaryScript,
   OrganisationScript,
   PatientAutomationDictionary,
-  PatientAutomationTemplate
+  PatientAutomationTemplate,
+  // Notifications
+  FcmToken,
+  UserNotification
 };
 
 // --------------------------

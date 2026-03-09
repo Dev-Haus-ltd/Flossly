@@ -27,6 +27,14 @@ export default defineNuxtConfig({
       ONBOARDING_WELCOME_CAP_HOURS: process.env.ONBOARDING_WELCOME_CAP_HOURS,
       ONBOARDING_VIDEO_CAP_HOURS: process.env.ONBOARDING_VIDEO_CAP_HOURS,
       ONBOARDING_INAPP_CAP_HOURS: process.env.ONBOARDING_INAPP_CAP_HOURS,
+      // Firebase configuration for FCM
+      firebaseApiKey: process.env.NUXT_PUBLIC_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY,
+      firebaseAuthDomain: process.env.NUXT_PUBLIC_FIREBASE_AUTH_DOMAIN || process.env.FIREBASE_AUTH_DOMAIN,
+      firebaseProjectId: process.env.NUXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID,
+      firebaseStorageBucket: process.env.NUXT_PUBLIC_FIREBASE_STORAGE_BUCKET || process.env.FIREBASE_STORAGE_BUCKET,
+      firebaseMessagingSenderId: process.env.NUXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || process.env.FIREBASE_MESSAGING_SENDER_ID,
+      firebaseAppId: process.env.NUXT_PUBLIC_FIREBASE_APP_ID || process.env.FIREBASE_APP_ID,
+      firebaseVapidKey: process.env.NUXT_PUBLIC_FIREBASE_VAPID_KEY || process.env.FIREBASE_VAPID_KEY,
       colors: {
         primary: "#0061FB",
         "primary-dark": "#0061FB",
@@ -58,6 +66,17 @@ export default defineNuxtConfig({
     META_APP_SECRET: process.env.META_APP_SECRET,
     META_REDIRECT_URI: process.env.META_REDIRECT_URI,
     META_VERIFY_TOKEN: process.env.META_VERIFY_TOKEN,
+    // WhatsApp / Whapi
+    WHATSAPP_PROVIDER: process.env.NUXT_WHATSAPP_PROVIDER || process.env.WHATSAPP_PROVIDER,
+    WHAPI_BASE_URL: process.env.NUXT_WHAPI_BASE_URL || process.env.WHAPI_BASE_URL,
+    WHAPI_TOKEN: process.env.NUXT_WHAPI_TOKEN || process.env.WHAPI_TOKEN,
+    WHAPI_WEBHOOK_URL: process.env.NUXT_WHAPI_WEBHOOK_URL || process.env.WHAPI_WEBHOOK_URL,
+    WHAPI_PARTNER_TOKEN: process.env.NUXT_WHAPI_PARTNER_TOKEN || process.env.WHAPI_PARTNER_TOKEN,
+    WHAPI_PROJECT_ID: process.env.NUXT_WHAPI_PROJECT_ID || process.env.WHAPI_PROJECT_ID,
+    WHAPI_MANAGER_BASE_URL: process.env.NUXT_WHAPI_MANAGER_BASE_URL || process.env.WHAPI_MANAGER_BASE_URL,
+    WHAPI_CHANNEL_MODE: process.env.NUXT_WHAPI_CHANNEL_MODE || process.env.WHAPI_CHANNEL_MODE,
+    WHAPI_ALLOW_CREATE_CHANNEL: process.env.NUXT_WHAPI_ALLOW_CREATE_CHANNEL || process.env.WHAPI_ALLOW_CREATE_CHANNEL,
+    WHAPI_EXTEND_DAYS: process.env.NUXT_WHAPI_EXTEND_DAYS || process.env.WHAPI_EXTEND_DAYS,
     //file size
     MAX_FILE_SIZE_FOR_TASK_SHEET: process.env.MAX_FILE_SIZE_FOR_TASK_SHEET,
     MAX_FILE_SIZE_FOR_LOGO: process.env.MAX_FILE_SIZE_FOR_LOGO || 5 * 1024 * 1024, // Default 5MB in bytes
@@ -89,7 +108,15 @@ export default defineNuxtConfig({
     "nuxt-scheduler",
     // "vue-social-sharing/nuxt"
   ],
-  css: ["vuetify/lib/styles/main.sass", "@/assets/css/fonts.css"],
+  build: {
+    transpile: ["v-phone-input"],
+  },
+  css: [
+    "vuetify/lib/styles/main.sass",
+    "@/assets/css/fonts.css",
+    "v-phone-input/styles",
+    "flag-icons/css/flag-icons.min.css",
+  ],
   // Add loading indicator for page transitions
   loading: {
     color: '#0061FB',
@@ -180,7 +207,7 @@ export default defineNuxtConfig({
   },
   vite: {
     ssr: {
-      noExternal: ["vuetify"], // add the vuetify vite plugin
+      noExternal: ["vuetify", "v-phone-input"], // add the vuetify vite plugin
     },
   },
   devServer: {

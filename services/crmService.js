@@ -1,4 +1,4 @@
-import { Get, Post } from "./apiWrapper";
+import { Get, Post, PostFormData } from "./apiWrapper";
 
 export default {
   startMetaAuth() {
@@ -71,6 +71,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  metaPermissions() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/permissions")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   listMetaBusinesses() {
     return new Promise((resolve, reject) => {
       Get("/meta/businesses")
@@ -102,6 +109,55 @@ export default {
   saveWhatsAppConfig(payload) {
     return new Promise((resolve, reject) => {
       Post("/meta/whatsappConfig", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  startWhapiConnect(payload = {}) {
+    return new Promise((resolve, reject) => {
+      Post("/whapi/connect", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getWhapiChannels() {
+    return new Promise((resolve, reject) => {
+      Get("/whapi/channels")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getWhapiQr() {
+    return new Promise((resolve, reject) => {
+      Get("/whapi/qr")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getWhapiStatus() {
+    return new Promise((resolve, reject) => {
+      Get("/whapi/status")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  disconnectWhapi(payload = {}) {
+    return new Promise((resolve, reject) => {
+      Post("/whapi/disconnect", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteWhapiChannel() {
+    return new Promise((resolve, reject) => {
+      Post("/whapi/delete", {})
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  extendWhapiChannel(payload = {}) {
+    return new Promise((resolve, reject) => {
+      Post("/whapi/extend", payload)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -210,6 +266,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  getLeadWhatsAppLogs(leadId, limit = 100) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/whatsappLogs", { leadId, limit })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   // CRM options
   listOptions(category) {
     return new Promise((resolve, reject) => {
@@ -270,6 +333,27 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  resetAutomationOverride(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/automationReset', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteAutomation(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/automationDelete', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  bulkUploadAutomations(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/automationBulkUpload', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   listAutomationGroups() {
     return new Promise((resolve, reject) => {
       Get('/lead/automationGroups')
@@ -309,6 +393,20 @@ export default {
   getWhatsAppUsage() {
     return new Promise((resolve, reject) => {
       Get('/lead/whatsappUsage')
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  uploadLeadAttachment(formData) {
+    return new Promise((resolve, reject) => {
+      PostFormData('/lead/uploadAttachment', formData)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getLeadPriceAttachmentRecent(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/priceAttachmentRecent', payload)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });

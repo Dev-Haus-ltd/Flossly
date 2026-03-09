@@ -84,14 +84,19 @@
             <!-- Telephone -->
             <v-col cols="6">
               <label class="mb-1 fld-lbl">Telephone <span class="req">*</span></label>
-              <v-text-field
-                v-model="form.telephone"
-                variant="solo"
-                density="compact"
-                class="mb-1 input-bordered"
-                flat
-                :rules="requiredRule"
-              />
+              <div class="mb-1 crm-phone-input">
+                <v-phone-input
+                  v-model="form.telephone"
+                  variant="solo"
+                  density="compact"
+                  flat
+                  default-country="gb"
+                  :prefer-countries="['gb']"
+                  :country-props="phoneCountryProps"
+                  :phone-props="phoneProps"
+                  :rules="phoneRules"
+                />
+              </div>
             </v-col>
 
             <!-- Inquiry Date -->
@@ -379,6 +384,24 @@ const form = ref({
   comments: "",
 });
 
+const phoneRules = [
+  (value) => !!value || "This field is required",
+];
+const phoneCountryProps = {
+  label: "",
+  hideDetails: true,
+  flat: true,
+  variant: "solo",
+  bgColor: "white",
+};
+const phoneProps = {
+  label: "",
+  hideDetails: true,
+  flat: true,
+  variant: "solo",
+  bgColor: "white",
+};
+
 // Dropdown lists
 const leadStatuses = ["New", "Contacted", "Converted", "Lost"];
 const contactMethods = ["Email", "Phone", "SMS", "In-Person"];
@@ -563,6 +586,38 @@ const onSubmit = async () => {
   min-height: 40px;
   font-size: 14px;
   
+}
+.crm-phone-input :deep(.v-phone-input) {
+  display: flex;
+  width: 100%;
+  border: 1px solid #dfdfdf;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: white;
+}
+.crm-phone-input :deep(.v-phone-input__country__input .v-field),
+.crm-phone-input :deep(.v-phone-input__phone__input .v-field) {
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  background-color: transparent !important;
+  min-height: 40px;
+  font-size: 14px;
+}
+.crm-phone-input :deep(.v-phone-input__country__input.v-input) {
+  min-width: 88px;
+  max-width: 88px;
+  flex: 0 0 88px;
+}
+.crm-phone-input :deep(.v-phone-input__phone__input.v-input) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.crm-phone-input :deep(.v-phone-input__country__input .v-field) {
+  border-right: 1px solid #dfdfdf !important;
+}
+.crm-phone-input :deep(.v-phone-input__phone__input .v-field__input) {
+  padding-left: 10px;
 }
 </style>
 
