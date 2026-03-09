@@ -1986,11 +1986,8 @@ export const webhook = async (event) => {
             }
 
             // Fallback to original mapping strategy (mostly messenger/page-level events).
-            // Do NOT override if we already identified this as an Instagram event — the override
-            // logic uses directMatches which finds the Messenger (page-level) account by pageId,
-            // and would incorrectly replace the Instagram account with the Messenger account.
             if (!account) account = directMatches[0] || null
-            if (!looksInstagramEvent && accountByEntryCandidates.length && directMatches.length) {
+            if (accountByEntryCandidates.length && directMatches.length) {
               const entryOrgIds = new Set(accountByEntryCandidates.map((row) => Number(row.organisationId)))
               const sameOrg = directMatches.find((row) => entryOrgIds.has(Number(row.organisationId)))
               if (sameOrg) account = sameOrg

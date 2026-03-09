@@ -2,7 +2,7 @@ import { Op } from "sequelize";
 import { readBody, getQuery, setResponseStatus, getMethod, readMultipartFormData } from "h3";
 import { success, error } from "../utils/response";
 import { parseJsonBody } from "../utils/body";
-import { CrmDmConversation, CrmDmMessage, CrmDmAccount } from "../models";
+import { CrmDmConversation, CrmDmMessage, CrmDmAccount, MetaPage } from "../models";
 import { decrypt } from "../utils/crypto";
 import { uploadBufferFile } from "../utils/storage";
 
@@ -159,7 +159,17 @@ export const processQueuedMessages = async ({ organisationId, limit = 20, messag
     }
 
     try {
-      const accessToken = decrypt(account.accessTokenEnc);
+      let accessToken = decrypt(account.accessTokenEnc);
+      // Instagram send requires a Page Access Token, not the IG user token
+      if (conversation.platform === 'instagram') {
+        try {
+          const metaPage = await MetaPage.findOne({
+            where: { organisationId, status: 'Active' },
+            order: [['updatedAt', 'DESC']],
+          });
+          if (metaPage?.accessTokenEnc) accessToken = decrypt(metaPage.accessTokenEnc);
+        } catch {}
+      }
       const recipientId = String(conversation.threadId);
       const senderId = String(conversation.accountId || account.accountId || "me");
       const lastInboundAt = await getLatestInboundMessageAt({
