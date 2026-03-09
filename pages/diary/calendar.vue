@@ -99,7 +99,7 @@
       <template v-if="dentists && dentists.length > 0">
         <AddAppointment
           v-model="showAppointment"
-          :initial-date="dateLabel"
+          :initial-date="dateStr"
           :initial-time="modalTime"
           :initial-practitioner="modalDentist?.name || ''"
           :practitioner-options="dentists.map(d=>d.name)"
@@ -135,7 +135,7 @@ import NotesModal from '@/components/diary/NotesModal.vue'
 import { useDiaryStore } from '@/stores/diary'
 import { useMainStore } from '@/stores/index'
 import { useOrgStore } from '@/stores/organisation'
-import { clinicBuildDateTime, clinicMinutesFromTime } from '@/lib/dateFormatter'
+import { clinicMinutesFromTime, dateToLocalYMD } from '@/lib/dateFormatter'
 import listicon from "@/assets/icons/listView/listicon.svg";
 import calendericon from "@/assets/icons/listView/calendericon.svg";
 import { formatDateDDMMYYYY } from '@/lib/dateFormatter'
@@ -163,7 +163,7 @@ const mainStore = useMainStore()
 function showError(message) { mainStore?.setSnackbar?.({ title: message || 'Something went wrong', type: 'error' }) }
 function showSuccess(message) { mainStore?.setSnackbar?.({ title: message || 'Done', type: 'success' }) }
 
-const dateStr = computed(() => date.value.toISOString().slice(0,10))
+const dateStr = computed(() => dateToLocalYMD(date.value))
 const dateLabel = computed(() => formatDateDDMMYYYY(date.value))
 const dayLabel = computed(() => formatDateDDMMYYYY(date.value))
 
@@ -261,16 +261,16 @@ function onAddPatientFromAppointment() {
 
 function onSaveAppointment(appt) {
   if (appt.id) {
-    const startTime = clinicBuildDateTime(appt.date || dateStr.value, appt.time || modalTime.value)
-    const endMinutes = (clinicMinutesFromTime(appt.time || modalTime.value) || 0) + Number(appt.duration || 15)
-    const endStr = `${String(Math.floor(endMinutes / 60)).padStart(2,'0')}:${String(endMinutes % 60).padStart(2,'0')}`
-    const endTime = clinicBuildDateTime(appt.date || dateStr.value, endStr)
+    const apptDate = appt.date || dateStr.value
+    const apptTime = appt.time || modalTime.value
+    const apptDuration = Number(appt.duration || 15)
     const dentistId = modalDentist.value?.id || editingAppointment.value?.dentistId || appt.dentistId
     diaryStore.updateAppointment({
       id: appt.id,
       dentistId,
-      startTime,
-      endTime,
+      date: apptDate,
+      time: apptTime,
+      duration: apptDuration,
       status: appt.status,
       notes: appt.notes,
       treatmentName: appt.treatmentName || appt.exam,
@@ -288,7 +288,7 @@ function onSaveAppointment(appt) {
       dentistId,
       patientId: appt.patientId || preselectedPatientId.value || null,
       patientName: appt.patient || preselectedPatientName.value,
-      date: dateStr.value,
+      date: appt.date || dateStr.value,
       time: appt.time || modalTime.value,
       duration: appt.duration || 10,
       treatmentId: appt.treatmentId || null,
@@ -321,7 +321,7 @@ function buildWeekDates() {
   const start = new Date(base); start.setDate(base.getDate() - diff)
   const days = []
   for (let i=0;i<7;i++) { const d = new Date(start); d.setDate(start.getDate()+i); days.push(d) }
-  return days.map(d => d.toISOString().slice(0,10))
+  return days.map(d => dateToLocalYMD(d))
 }
 
 function loadAppointments() {
@@ -422,17 +422,19 @@ function onMoveAppointment(move) {
     return
   }
   const targetDate = target.date || dateStr.value
-  const startTime = clinicBuildDateTime(targetDate, target.start)
-  const endTime = clinicBuildDateTime(targetDate, target.end)
-  if (!startTime || !endTime) {
+  const startMinutes = clinicMinutesFromTime(target.start)
+  const endMinutes = clinicMinutesFromTime(target.end)
+  if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes) {
     showError('Unable to move appointment: invalid target time')
     return
   }
+  const duration = endMinutes - startMinutes
   diaryStore.updateAppointment({
     id,
     dentistId: target.dentistId,
-    startTime,
-    endTime,
+    date: targetDate,
+    time: target.start,
+    duration,
   })
     .then(() => {
       applyLocalMove(move)

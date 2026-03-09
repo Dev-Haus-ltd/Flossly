@@ -8,11 +8,15 @@
         <v-tab value="details">Details</v-tab>
         <v-tab value="journey">Patient Journey</v-tab>
         <v-tab value="forms">Forms</v-tab>
+        <v-tab value="charting">Charting</v-tab>
         <v-tab value="appointments">Appointments</v-tab>
       </v-tabs>
       <PatientsIndex v-if="activeTab === 'details'" :patient="patient" />
       <PatientJourney v-else-if="activeTab === 'journey'" :patient="patient" @save="handleJourneySave" />
       <PatientForms v-else-if="activeTab === 'forms'" :patient="patient" />
+      <div v-else-if="activeTab === 'charting'" class="mt-4">
+        <PatientsCharting :patient-id="patient?.id" />
+      </div>
       <div v-else class="mt-4">
         <v-row class="px-1 mb-4" align="stretch">
           <v-col v-for="(card, i) in appointmentStatCards" :key="card.label" style="flex: 1 1 0;">
@@ -133,6 +137,7 @@
 import PatientsIndex from '@/components/patients/index.vue'
 import PatientJourney from '@/components/patients/patientJourney.vue'
 import PatientForms from '@/components/patients/PatientForms.vue'
+import PatientsCharting from '@/components/patients/charting/index.vue'
 import { useDiaryStore } from '@/stores/diary'
 import { useMainStore } from '@/stores/index'
 import AddAppointment from '@/components/diary/addAppointment.vue'
