@@ -119,8 +119,9 @@
                       />
                       <p 
                         v-else 
-                        class="ml-2 mb-0 editable-field" 
+                        class="ml-2 mb-0 editable-field break-email" 
                         @click="startEdit(item, 'name')"
+                        :title="resolveLeadName(item)"
                       >
                         {{ resolveLeadName(item) || 'Click to edit' }}
                       </p>
@@ -154,6 +155,7 @@
                     v-else 
                     class="ml-2 mb-0 editable-field break-email" 
                     @click="startEdit(item, 'email')"
+                    :title="resolveLeadEmail(item)"
                   >
                     {{ resolveLeadEmail(item) || 'Click to edit' }}
                   </p>
@@ -1857,9 +1859,10 @@ const convertSelected = async () => {
 }
 
 .break-email {
-  word-break: break-all;        /* breaks very long strings */
-  overflow-wrap: anywhere;      /* modern & safer wrapping */
-  white-space: normal;
+  white-space: nowrap;           /* prevents wrapping */
+  overflow: hidden;              /* hides overflow text */
+  text-overflow: ellipsis;       /* shows ... at end */
+  max-width: 250px;              /* adjust as needed */
 }
 
 .editable-field:hover {
@@ -2025,6 +2028,7 @@ const convertSelected = async () => {
   margin-right: 8px;
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
 .lead-name-border {
