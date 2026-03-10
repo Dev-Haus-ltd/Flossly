@@ -2,7 +2,6 @@ import stripe from "@/server/utils/stripe";
 import { UserPreference, UserSubscription } from "../models";
 import { User } from "../models";
 import { parseJsonBody } from "../utils/body";
-import { sendSystemSubscriptionConfirmedNotification } from "../utils/fcmNotification.js";
 
 const config = useRuntimeConfig();
 
@@ -298,20 +297,6 @@ export const confirmPayment = async (event) => {
     await user.save();
     const loggedUserObj = await User.findByPk(loggedUser.userId)
     await paymentSuccessNotification(loggedUserObj)
-
-    // Push notification (in addition to email)
-    try {
-      await sendSystemSubscriptionConfirmedNotification({
-        userId: loggedUser.userId,
-        stripeSubscriptionId: subscriptionId,
-      });
-    } catch (pushErr) {
-      console.warn("Subscription push notification failed", {
-        userId: loggedUser.userId,
-        error: pushErr?.message || pushErr,
-      });
-    }
-
     return success("Subscription updated");
   } catch (err) {
     return error(500, err.message);

@@ -138,7 +138,6 @@
 import taskIcon from '@/assets/icons/notification/task.svg';
 import leadIcon from '@/assets/icons/notification/lead.svg';
 import messageIcon from '@/assets/icons/notification/message.svg';
-import notificationIconSvg from '@/assets/icons/notification/Notification.svg';
 import searchicon from '@/assets/icons/listView/serach-icon.svg';
 
 definePageMeta({
@@ -292,47 +291,15 @@ const handleNotificationClick = async (notification) => {
   }
 
   const urlMap = {
-    // Tasks
-    task_assigned: '/tasks/mytasks',
-    task_assigned_bulk: '/tasks/mytasks',
-    task_completed: '/tasks/mytasks',
-    task_completed_bulk: '/tasks/mytasks',
-    task_comment: '/tasks/mytasks',
-    task_due_reminder: '/tasks/mytasks',
-    task_overdue_reminder: '/tasks/mytasks',
-    task_unassigned: '/tasks/mytasks',
-    task_unassigned_bulk: '/tasks/mytasks',
-
-    // CRM / Leads
+    task_assigned: `/tasks/${notification.data?.taskId || 'mytasks'}`,
+    task_completed: `/tasks/${notification.data?.taskId || 'mytasks'}`,
+    task_comment: `/tasks/${notification.data?.taskId || 'mytasks'}`,
+    task_unassigned: `/tasks/mytasks`,
     lead_created: `/crm?leadId=${notification.data?.leadId || ''}`,
     lead_assigned: `/crm?leadId=${notification.data?.leadId || ''}`,
-    lead_unassigned: `/crm?leadId=${notification.data?.leadId || ''}`,
-    lead_status_changed: `/crm?leadId=${notification.data?.leadId || ''}`,
-    crm_automation_sent: `/crm?leadId=${notification.data?.leadId || ''}`,
-    crm_automation_failed: `/crm?leadId=${notification.data?.leadId || ''}`,
-    whatsapp_message: `/crm?leadId=${notification.data?.leadId || ''}&tab=communication`,
-    meta_dm: '/crm/analytics',
-
-    // Rota / Leave
-    rota_published: '/teams/rota',
-    shift_reminder: '/teams/rota',
-    leave_approved: '/teams/rota',
-    leave_denied: '/teams/rota',
-
-    // Support/chat
-    support_ticket_submitted: '/support-chat',
-    support_reply: '/support-chat',
-    chatbot_message: '/support-chat',
-
-    // System
-    system_subscription_confirmed: '/',
-    system_account_created: '/',
-    system_password_reset_requested: '/forgetpassword',
-    system_portal_ready: '/dashboard',
   };
 
-  // Prefer frontend mapping (consistent UX) and only fall back to server-provided URLs for unknown types
-  const url = urlMap[notification.type] || notification.data?.url || '/';
+  const url = notification.data?.url || urlMap[notification.type] || '/';
   await navigateTo(url);
 };
 
@@ -340,55 +307,26 @@ const getNotificationIconSvg = (type) => {
   // Map notification types to the custom SVG icons from assets/icons/notification/
   if (type.startsWith('task_')) {
     return taskIcon;
-  } else if (type.startsWith('lead_') || type.startsWith('crm_')) {
+  } else if (type.startsWith('lead_')) {
     return leadIcon;
-  } else if (type.startsWith('system_') || type.startsWith('leave_')) {
-    return notificationIconSvg;
-  } else if (type.startsWith('rota_') || type.startsWith('shift_')) {
-    return notificationIconSvg;
-  } else if (type.startsWith('support_') || type.includes('message') || type.includes('comment') || type === 'whatsapp_message' || type === 'meta_dm' || type === 'chatbot_message') {
+  } else if (type.includes('message') || type.includes('comment') || type === 'whatsapp_message' || type === 'meta_dm') {
     return messageIcon;
   }
-  // Default to notification bell icon for unknown types
-  return notificationIconSvg;
+  // Default to task icon
+  return taskIcon;
 };
 
 const getNotificationTypeLabel = (type) => {
   const labelMap = {
-    // Task types
     task_assigned: 'Task',
-    task_assigned_bulk: 'Task',
     task_completed: 'Task',
-    task_completed_bulk: 'Task',
     task_comment: 'Message',
     task_unassigned: 'Task',
-    task_unassigned_bulk: 'Task',
-    task_due_reminder: 'Task',
-    task_overdue_reminder: 'Task',
-    // Lead/CRM types
     lead_created: 'Lead',
     lead_assigned: 'Lead',
     lead_unassigned: 'Lead',
-    lead_status_changed: 'Lead',
-    crm_automation_sent: 'Automation',
-    crm_automation_failed: 'Automation',
-    // Message types
     whatsapp_message: 'Message',
     meta_dm: 'Message',
-    chatbot_message: 'Message',
-    support_ticket_submitted: 'Support',
-    support_reply: 'Support',
-    // Rota/Team types
-    rota_published: 'Rota',
-    shift_reminder: 'Shift',
-    leave_approved: 'Leave',
-    leave_denied: 'Leave',
-    // System types
-    system_subscription_confirmed: 'System',
-    system_account_created: 'System',
-    system_password_reset_requested: 'System',
-    system_portal_ready: 'System',
-    // Generic
     test: 'Task',
   };
   return labelMap[type] || 'Task';
@@ -412,42 +350,13 @@ const formatTime = (dateString) => {
 
 onMounted(async () => {
   await fetchPage({ reset: true });
-  
-  // Watch for organization changes and refetch notifications
-  const { user } = useUser();
-  let orgWatchEnabled = true;
-  let orgWatchTimeout = null;
-  watch(() => user.value?.currentLoggedInOrgId, (newOrgId, oldOrgId) => {
-    // Prevent multiple rapid calls - debounce
-    if (orgWatchTimeout) clearTimeout(orgWatchTimeout);
-    
-    if (!orgWatchEnabled) return;
-    
-    if (newOrgId !== oldOrgId && newOrgId !== undefined && oldOrgId !== undefined) {
-      console.log('Organization changed in notifications page, refetching notifications...');
-      orgWatchEnabled = false;
-      // Debounce the refetch to avoid rapid calls
-      orgWatchTimeout = setTimeout(() => {
-        fetchPage({ reset: true }); // fetchPage already updates unreadCount
-        orgWatchEnabled = true;
-      }, 500);
-    }
-  }, { immediate: false });
 
-  // FCM event debounce
-  let fcmDebounceTimeout = null;
   if (process.client) {
     window.addEventListener('fcm-notification', async () => {
-      // Debounce to prevent rapid calls
-      if (fcmDebounceTimeout) return;
-      
-      fcmDebounceTimeout = setTimeout(() => {
-        fcmDebounceTimeout = null;
-      }, 2000); // 2 second debounce
-      
-      // Only update unread count for real-time notifications, not the full list
-      // The full list will be fetched when user refreshes or navigates
+      // refresh counts; don't refetch full list unless user is already on this page
       await fetchUnreadCount();
+      // Optional: prepend newest by resetting (simple + correct)
+      await fetchPage({ reset: true });
     });
   }
 });

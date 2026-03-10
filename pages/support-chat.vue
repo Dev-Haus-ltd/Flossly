@@ -700,6 +700,12 @@ onMounted(() => {
   console.log('Support Chat page mounted');
   fetchConversations();
   
+  // Keep a slow refresh as a fallback
+  const interval = setInterval(fetchConversations, 30000);
+  
+  onUnmounted(() => {
+    clearInterval(interval);
+  });
 });
 </script>
 
