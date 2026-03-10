@@ -881,14 +881,7 @@ const fetchDmHistoryForOrg = async (
     accountSummaries: [],
     errors: [],
   }
-  const shouldTrace =
-    traceEnabled ||
-    debugEnabled ||
-    String(process.env.META_DM_SYNC_TRACE || '').toLowerCase() === 'true'
-  const trace = (...args) => {
-    if (!shouldTrace) return
-    try { console.log('[META DM SYNC TRACE]', ...args) } catch {}
-  }
+  const trace = () => {}
 
   let conversationsUpserted = 0
   let messagesImported = 0
@@ -1491,19 +1484,6 @@ export const fetchDmHistoryNow = async (event) => {
   })
   if (!result.ok) return error(400, result.error || 'Failed to sync DM history')
   if (debugEnabled) {
-    try {
-      console.log('[META DM SYNC DEBUG]', JSON.stringify({
-        orgId: Number(orgId),
-        days,
-        platforms,
-        accounts: result?.debug?.accounts || 0,
-        conversationsScanned: result?.debug?.conversationsScanned || 0,
-        conversationsUpserted: result?.debug?.conversationsUpserted || 0,
-        messagesScanned: result?.debug?.messagesScanned || 0,
-        messagesImported: result?.debug?.messagesImported || 0,
-        errors: Array.isArray(result?.debug?.errors) ? result.debug.errors.length : 0,
-      }))
-    } catch {}
     return success(result.debug)
   }
   return success({
@@ -1757,11 +1737,7 @@ export const healthCheck = async (event) => {
 export const webhook = async (event) => {
   const config = useRuntimeConfig()
   const reqId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-  const webhookTraceEnabled = true
-  const webhookTrace = (...args) => {
-    if (!webhookTraceEnabled) return
-    try { console.log('[META WEBHOOK TRACE]', reqId, ...args) } catch {}
-  }
+  const webhookTrace = () => {}
   
   if (getMethod(event) === 'HEAD') {
     return send(event, 'ok')
@@ -1785,12 +1761,6 @@ export const webhook = async (event) => {
   if (getMethod(event) === 'POST') {
     const body = await readBody(event)
     try {
-      console.log('[META WEBHOOK]', reqId, 'POST received', {
-        object: body?.object,
-        entries: Array.isArray(body?.entry) ? body.entry.length : 0,
-      })
-    } catch {}
-    try {
       const entries = Array.isArray(body?.entry) ? body.entry : []
       for (const entry of entries) {
         const pageId = String(entry.id || '')
@@ -1803,7 +1773,6 @@ export const webhook = async (event) => {
           const v = ch.value || {}
           const leadId = v.leadgen_id || v.lead_id || v.leadId
           const formId = v.form_id || v.formId
-          console.log('[META WEBHOOK]', reqId, 'Leadgen event', { pageId, leadId, formId })
           
           if (!leadId || !pageId) continue
           
@@ -1823,11 +1792,6 @@ export const webhook = async (event) => {
           
           const url = `https://graph.facebook.com/${META_VERSION}/${leadId}?fields=created_time,field_data,ad_id,adset_id,campaign_id&access_token=${encodeURIComponent(pageToken)}`
           const leadData = await $fetch(url, { method: 'GET' })
-          console.log('[META WEBHOOK]', reqId, 'Fetched lead data', {
-            pageId,
-            leadId,
-            created_time: leadData?.created_time || null,
-          })
           
           const fld = (leadData?.field_data || []).reduce((acc, f) => {
             acc[f.name] = Array.isArray(f.values) ? f.values[0] : f.values
