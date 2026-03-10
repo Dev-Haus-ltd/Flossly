@@ -697,7 +697,7 @@ onMounted(() => {
   // Watch for FCM notifications
   watch(lastNotification, handleFCMNotification, { immediate: true });
 
-  console.log('Support Chat page mounted');
+  console.log('Support Chat page mo unted');
   fetchConversations();
   
 });
