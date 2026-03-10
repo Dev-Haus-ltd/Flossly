@@ -976,6 +976,7 @@ export const webhook = async (event) => {
               if (userIds.length) {
                 await sendNotificationToMultipleUsers({
                   userIds,
+                  organisationId: mp.organisationId,
                   title: 'New Meta Lead',
                   body: fullName || email || phone || 'A new lead was received',
                   type: 'lead_created',
