@@ -340,6 +340,7 @@ import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crm
 import addFolderIcon from '@/assets/icons/crm/add-folder.svg'
 import { getCurrentUserName } from '@/lib/helpers/storage'
 import { isDefaultAutomationGroup, resolveAutomationGroupAuthor } from '@/lib/crm/automation'
+import { getLeadDisplayName, getLeadEmail } from '@/lib/normalizers/lead'
 
 const props = defineProps({
   leadId: { type: [Number, String], default: null },
@@ -732,23 +733,12 @@ let Header = null
 let List = null
 const editorEl = ref(null)
 
-const resolveLeadName = (lead = {}) => {
-  const direct = String(lead.name || '').trim()
-  if (direct) return direct
-  const first = String(lead.firstName || lead.first_name || '').trim()
-  const last = String(lead.lastName || lead.last_name || '').trim()
-  const combined = `${first} ${last}`.trim()
-  if (combined) return combined
-  const email = String(lead.email || '').trim()
-  return email || ''
-}
-
 const previewItem = ref(null)
 
 const previewRecipient = computed(() => {
   const lead = props.lead || {}
-  const name = resolveLeadName(lead) || 'John Doe'
-  const email = String(lead.email || '').trim() || 'john@example.com'
+  const name = getLeadDisplayName(lead) || '[Patient Name]'
+  const email = getLeadEmail(lead) || '[Email]'
   return { name, email }
 })
 const openEdit = async (row) => {
@@ -868,7 +858,7 @@ const resolveDefault = (row) =>
 
 const applyPlaceholders = (text) => {
   if (!text) return ''
-  const recipient = previewRecipient.value || { name: 'John Doe', email: 'john@example.com' }
+  const recipient = previewRecipient.value || { name: '[Patient Name]', email: '[Email]' }
   const practice = practiceName.value || '[Practice Name]'
   const firstName = recipient.name.split(' ')[0] || recipient.name
   const storedOrg = getStoredOrg() || {}
@@ -973,39 +963,39 @@ const applyPlaceholders = (text) => {
   const localBusiness2 = resolvePlaceholder('localBusiness2', '[Local Business 2]')
   const localBusiness3 = resolvePlaceholder('localBusiness3', '[Local Business 3]')
   return text
-    .replace(/\[?\s*practice\s*name\s*\]?/gi, practice)
-    .replace(/\[?\s*patient\s*name\s*\]?/gi, recipient.name)
-    .replace(/\[?\s*name\s*\]?/gi, recipient.name)
-    .replace(/\[?\s*first\s*name\s*\]?/gi, firstName)
-    .replace(/\[?\s*phone\s*number\s*\]?/gi, phone)
-    .replace(/\[?\s*website\s*\]?/gi, websiteReplacement)
-    .replace(/\[?\s*email\s*\]?/gi, recipient.email || email)
-    .replace(/\[?\s*address\s*\]?/gi, address)
-    .replace(/\[?\s*street\s*address\s*\]?/gi, street)
-    .replace(/\[?\s*city\s*,?\s*state\s*zip\s*code\s*\]?/gi, cityStateZip)
-    .replace(/\[?\s*days\s*and\s*times\s*\]?/gi, officeHours)
-    .replace(/\[?\s*days\s*\/\s*times\s*\]?/gi, promoDaysTimes)
-    .replace(/\[?\s*day\s*\/\s*time\s*\]?/gi, promoDayTime)
-    .replace(/\[?\s*treatment\s*coordinator\s*name\s*\]?/gi, coordinator)
-    .replace(/\[?\s*practice\s*owner\s*\/\s*principal\s*dentist\s*\]?/gi, principalDentist)
-    .replace(/\[?\s*your\s*name\s*\]?/gi, yourName)
-    .replace(/\[?\s*location\s*\]?/gi, location)
-    .replace(/\[?\s*booking\s*link\s*\]?/gi, bookingLink)
-    .replace(/\[?\s*diary\s*booking\s*link\s*\]?/gi, diaryBookingLink)
-    .replace(/\[?\s*date\s*\/\s*time\s*\]?/gi, promoDateTime)
-    .replace(/\[?\s*date\s*\]?/gi, promoDate)
-    .replace(/\[?\s*time\s*\]?/gi, promoTime)
-    .replace(/\[?\s*month\s*\]?/gi, promoMonth)
-    .replace(/\[?\s*future\s*date\s*\]?/gi, futureDate)
-    .replace(/\[?\s*date\s*range\s*\]?/gi, dateRange)
-    .replace(/\[?\s*specific\s*date\s*\]?/gi, specificDate)
-    .replace(/\[?\s*mother'?s\s*day\s*date\s*\]?/gi, mothersDayDate)
-    .replace(/\[?\s*on-site\/nearby\/street\s*parking\s*details\s*\]?/gi, parkingDetails)
-    .replace(/\[?\s*public\s*transportation\s*details\s*if\s*applicable\s*\]?/gi, publicTransportDetails)
-    .replace(/\[?\s*local\s*charity\s*\]?/gi, localCharity)
-    .replace(/\[?\s*local\s*business\s*1\s*\]?/gi, localBusiness1)
-    .replace(/\[?\s*local\s*business\s*2\s*\]?/gi, localBusiness2)
-    .replace(/\[?\s*local\s*business\s*3\s*\]?/gi, localBusiness3)
+    .replace(/\[\s*practice\s*name\s*\]/gi, practice)
+    .replace(/\[\s*patient\s*name\s*\]/gi, recipient.name)
+    .replace(/\[\s*name\s*\]/gi, recipient.name)
+    .replace(/\[\s*first\s*name\s*\]/gi, firstName)
+    .replace(/\[\s*phone\s*number\s*\]/gi, phone)
+    .replace(/\[\s*website\s*\]/gi, websiteReplacement)
+    .replace(/\[\s*email\s*\]/gi, recipient.email || email)
+    .replace(/\[\s*address\s*\]/gi, address)
+    .replace(/\[\s*street\s*address\s*\]/gi, street)
+    .replace(/\[\s*city\s*,?\s*state\s*zip\s*code\s*\]/gi, cityStateZip)
+    .replace(/\[\s*days\s*and\s*times\s*\]/gi, officeHours)
+    .replace(/\[\s*days\s*\/\s*times\s*\]/gi, promoDaysTimes)
+    .replace(/\[\s*day\s*\/\s*time\s*\]/gi, promoDayTime)
+    .replace(/\[\s*treatment\s*coordinator\s*name\s*\]/gi, coordinator)
+    .replace(/\[\s*practice\s*owner\s*\/\s*principal\s*dentist\s*\]/gi, principalDentist)
+    .replace(/\[\s*your\s*name\s*\]/gi, yourName)
+    .replace(/\[\s*location\s*\]/gi, location)
+    .replace(/\[\s*booking\s*link\s*\]/gi, bookingLink)
+    .replace(/\[\s*diary\s*booking\s*link\s*\]/gi, diaryBookingLink)
+    .replace(/\[\s*date\s*\/\s*time\s*\]/gi, promoDateTime)
+    .replace(/\[\s*date\s*\]/gi, promoDate)
+    .replace(/\[\s*time\s*\]/gi, promoTime)
+    .replace(/\[\s*month\s*\]/gi, promoMonth)
+    .replace(/\[\s*future\s*date\s*\]/gi, futureDate)
+    .replace(/\[\s*date\s*range\s*\]/gi, dateRange)
+    .replace(/\[\s*specific\s*date\s*\]/gi, specificDate)
+    .replace(/\[\s*mother'?s\s*day\s*date\s*\]/gi, mothersDayDate)
+    .replace(/\[\s*on-site\/nearby\/street\s*parking\s*details\s*\]/gi, parkingDetails)
+    .replace(/\[\s*public\s*transportation\s*details\s*if\s*applicable\s*\]/gi, publicTransportDetails)
+    .replace(/\[\s*local\s*charity\s*\]/gi, localCharity)
+    .replace(/\[\s*local\s*business\s*1\s*\]/gi, localBusiness1)
+    .replace(/\[\s*local\s*business\s*2\s*\]/gi, localBusiness2)
+    .replace(/\[\s*local\s*business\s*3\s*\]/gi, localBusiness3)
     .replaceAll('[X]', promoX)
     .replaceAll('[Y]', promoY)
     .replaceAll('[Z]', promoZ)

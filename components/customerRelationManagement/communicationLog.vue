@@ -112,39 +112,17 @@
               <!-- Time -->
               <v-col cols="12" md="6">
                 <label class="mb-1 fld-lbl">Select Time</label>
-                <v-menu
-                  v-model="timeMenu"
-                  :close-on-content-click="false"
-                  transition="scale-transition"
-                  offset-y
-                  min-width="auto"
-                >
-                  <template #activator="{ props }">
-                    <v-text-field
-                      v-model="form.time"
-                      v-bind="props"
-                      variant="solo"
-                      density="compact"
-                      class="mb-1 input-bordered"
-                      flat
-                      readonly
-                      required
-                      :error="validationErrors.time"
-                    >
-                      <template #append-inner>
-                        <v-icon class="cursor-pointer" @click.stop="timeMenu = true">
-                          mdi-clock-outline
-                        </v-icon>
-                      </template>
-                    </v-text-field>
-                  </template>
-
-                  <v-time-picker
-                    v-model="form.time"
-                    format="24hr"
-                    @update:modelValue="onTimeSelected"
-                  />
-                </v-menu>
+                <v-text-field
+                  v-model="form.time"
+                  variant="solo"
+                  density="compact"
+                  class="mb-1 input-bordered"
+                  flat
+                  type="time"
+                  required
+                  :error="validationErrors.time"
+                  @update:model-value="clearValidationError('time')"
+                />
                 <div v-if="validationErrors.time" class="validation-error">
                   Time is required
                 </div>
@@ -286,12 +264,12 @@
 
           <div class="mb-1">
             <span class="note-label">Date:</span>
-            <span class="note-value">{{ parsedDate(note.date) || "N/A" }}</span>
+            <span class="note-value">{{ formatDisplayDate(note.date) || "N/A" }}</span>
           </div>
 
           <div class="mb-1">
             <span class="note-label">Time:</span>
-            <span class="note-value">{{ note.time || "N/A" }}</span>
+            <span class="note-value">{{ formatDisplayTime(note.time) || "N/A" }}</span>
           </div>
 
           <div class="mb-1">
@@ -318,7 +296,7 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from "vue";
-import { parsedDate, formatDateDDMMYYYY } from "@/lib/dateFormatter";
+import { formatDateDDMMYYYY, formatDisplayDate, formatDisplayTime } from "@/lib/dateFormatter";
 import { useWebSpeechTranscription } from "@/composables/useWebSpeechTranscription";
 import ScriptsPool from "./ScriptsPool.vue";
 const crmStore = useCrmStore();
@@ -335,7 +313,6 @@ const { leadId, initialNotes, initialPreferences } = defineProps({
 const notes = ref([...initialNotes]);
 const saving = ref(false);
 const deleting = ref(false);
-const timeMenu = ref(false);
 const noteDateMenu = ref(false);
 const formattedNoteDate = ref("");
 
@@ -370,12 +347,6 @@ const bestTimes = ["Morning", "Afternoon", "Evening"];
 const channelOptions = ["Phone", "Email", "WhatsApp", "SMS", "In-person"];
 
 // Date/time handlers
-const onTimeSelected = (val) => {
-  form.value.time = val;
-  timeMenu.value = false;
-  clearValidationError('time');
-};
-
 const onNoteDateSelected = (val) => {
   form.value.date = val;
   formattedNoteDate.value = val ? formatDateDDMMYYYY(val) : "";

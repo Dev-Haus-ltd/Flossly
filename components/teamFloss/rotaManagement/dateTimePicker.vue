@@ -31,7 +31,18 @@
             />
           </v-col>
           <v-col cols="6">
-            <v-time-picker v-model="tempTime" format="24hr" />
+            <div class="pa-4">
+              <v-text-field
+                v-model="tempTime"
+                label="Select Time"
+                type="time"
+                variant="solo"
+                flat
+                density="compact"
+                class="input-bordered"
+                hide-details
+              />
+            </div>
           </v-col>
         </v-row>
   
