@@ -149,6 +149,8 @@ export const useCrmStore = defineStore("crmStore", {
     deleteLeadNote(id) { return this._wrap(() => crmService.deleteLeadNote(id)); },
     getLeadWhatsAppLogs(leadIdOrParams, limit = 100) { return this._wrap(() => crmService.getLeadWhatsAppLogs(leadIdOrParams, limit)); },
     uploadLeadWhatsAppAttachment(formData, onProgress) { return this._wrap(() => crmService.uploadLeadWhatsAppAttachment(formData, onProgress)); },
+    uploadLeadAttachment(formData, onProgress) { return this._wrap(() => crmService.uploadLeadAttachment(formData, onProgress)); },
+    getLeadPriceAttachmentRecent(payload) { return this._wrap(() => crmService.getLeadPriceAttachmentRecent(payload)); },
 
     // Treatment (used in details dialog)
     getLeadTreatment(leadId) { return this._wrap(() => crmService.getLeadTreatment(leadId)); },

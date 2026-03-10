@@ -387,6 +387,32 @@ export const assignBulkTasks = async (event) => {
     const newTasks = tasks.filter((t) => !alreadyAssignedTaskIds.has(t.id));
 
     if (newTasks.length === 0) {
+      // Task already assigned - still send notification to remind the user
+      const user = await User.findOne({ where: { id: userId } });
+      const assignedBy = await User.findByPk(loggedUser.userId);
+      
+      if (user && assignedBy && tasks.length > 0) {
+        try {
+          // Get existing UserTasks for notification
+          const existingUserTasks = await UserTask.findAll({
+            where: {
+              userId,
+              organisationId,
+              taskId: { [Op.in]: taskIds },
+            },
+          });
+          
+          await sendBulkTaskAssignmentNotification({
+            tasks: existingUserTasks,
+            assignedUser: user,
+            assignedBy,
+            organisationId,
+          });
+        } catch (fcmError) {
+          console.error('Failed to send FCM notification for already-assigned tasks:', fcmError);
+        }
+      }
+      
       return success("All tasks already assigned to the user");
     }
 
@@ -463,6 +489,7 @@ export const assignBulkTasks = async (event) => {
         tasks: createdUserTasks,
         assignedUser: user,
         assignedBy,
+        organisationId,
       });
     } catch (fcmError) {
       console.error('Failed to send FCM notification:', fcmError);
@@ -684,13 +711,34 @@ export const updateTask = async (event) => {
         });
         
         // Send FCM push notification to task creator/manager
+        // Ensure organisationId is defined (fallback to loggedUser.orgId)
+        const notifyOrganisationId = organisationId || loggedUser.orgId;
         try {
-          if (userTask.assignedBy && userTask.assignedBy !== loggedUser.userId) {
+          // Get the assigner user
+          const assigner = userTask.assignedBy ? await User.findByPk(userTask.assignedBy) : null;
+          
+          // Notify the assigner if they exist and are not the one completing the task
+          if (assigner && assigner.id !== loggedUser.userId) {
             await sendTaskCompletionNotification({
               task: userTask,
               completedBy: user,
-              notifyUsers: [await User.findByPk(userTask.assignedBy)]
+              notifyUsers: [assigner],
+              organisationId: notifyOrganisationId
             });
+          }
+          
+          // Also notify if someone completed a task that was assigned to them
+          // (when assignedBy is different from userId - meaning task was assigned to someone else)
+          if (userTask.userId && userTask.userId !== loggedUser.userId && userTask.userId !== userTask.assignedBy) {
+            const assignedUser = await User.findByPk(userTask.userId);
+            if (assignedUser && assignedUser.id !== loggedUser.userId) {
+              await sendTaskCompletionNotification({
+                task: userTask,
+                completedBy: user,
+                notifyUsers: [assignedUser],
+                organisationId: notifyOrganisationId
+              });
+            }
           }
         } catch (fcmError) {
           console.error('Failed to send FCM notification:', fcmError);
@@ -864,12 +912,15 @@ export const unAssignTask = async (event) => {
     }
 
     // FCM push / in-app notification (avoid notifying yourself)
+    // Ensure organisationId is defined (fallback to loggedUser.orgId)
+    const notifyOrganisationId = organisationId || loggedUser.orgId;
     try {
       if (removedUser && removedUser.id !== loggedUser.userId) {
         await sendTaskUnassignmentNotification({
           taskTitle: taskTitle || 'Task',
           removedBy: removedByUser,
           removedUser,
+          organisationId: notifyOrganisationId
         });
       }
     } catch (fcmError) {
@@ -926,6 +977,8 @@ export const completeBulkTasks = async (event) => {
     });
 
     // FCM push / in-app notification to assigners (summary, avoid spamming)
+    // Ensure organisationId is defined (fallback to loggedUser.orgId)
+    const notifyOrganisationId = organisationId || loggedUser.orgId;
     try {
       const tasksByAssigner = new Map();
       for (const task of tasksToComplete) {
@@ -948,6 +1001,7 @@ export const completeBulkTasks = async (event) => {
             tasks: completedTasks,
             completedBy: user,
             notifyUser,
+            organisationId: notifyOrganisationId
           });
         }
       }
@@ -1100,6 +1154,7 @@ export const unAssignBulkTask = async (event) => {
             removedUser: user,
             removedBy: remover,
             taskTitles: uniqueTitles,
+            organisationId
           });
         }
       } catch (fcmError) {
@@ -1168,6 +1223,7 @@ export const addUserTaskComment = async (event) => {
         comment,
         commentedBy: commenter,
         notifyUsers: recipients,
+        organisationId
       });
     } catch (fcmError) {
       console.error('Failed to send FCM notification:', fcmError);
@@ -1399,6 +1455,7 @@ export const deleteAttachment = async (event) => {
 
 export const createNewTask = async (event) => {
   const loggedUser = event.context.user;
+  const organisationId = loggedUser.orgId;
   const bodyRaw = await readBody(event);
   let body = bodyRaw;
   if (typeof bodyRaw === "string") {
@@ -1547,7 +1604,8 @@ export const createNewTask = async (event) => {
               await sendTaskAssignmentNotification({
                 task: userTaskForAssignee,
                 assignedUser: assignee,
-                assignedBy: assignerUser
+                assignedBy: assignerUser,
+                organisationId
               });
             }
           } catch (fcmError) {
@@ -1826,6 +1884,7 @@ export const uploadBulkTasks = async (event) => {
               tasks: assignedTasks,
               assignedUser: user,
               assignedBy,
+              organisationId,
             });
           } catch (fcmError) {
             console.error('Failed to send FCM notification:', fcmError);
@@ -1847,6 +1906,7 @@ export const uploadBulkTasks = async (event) => {
             tasks: assignedTasks,
             assignedUser: user,
             assignedBy,
+            organisationId,
           });
         } catch (fcmError) {
           console.error('Failed to send FCM notification:', fcmError);

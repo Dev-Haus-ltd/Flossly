@@ -6,7 +6,7 @@ import { formatCrmTriggerPreview } from '~/lib/misc'
 import { success, error } from '../utils/response'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
 import { sendImmediateCrmAutomationsForLead } from '../utils/crmAutomation.js'
-import { sendLeadCreatedNotification, sendLeadAssignedNotification, sendLeadUnassignedNotification } from '../utils/fcmNotification.js'
+import { sendLeadCreatedNotification, sendLeadAssignedNotification, sendLeadUnassignedNotification, sendLeadStatusChangedNotification } from '../utils/fcmNotification.js'
 import { decrypt } from '../utils/crypto'
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from '../utils/whatsapp'
 import { renderLeadTokens } from '../utils/templateTokens'
@@ -21,6 +21,22 @@ const parseDateValue = (value) => {
   if (!isNaN(d.getTime())) return d;
   return null;
 };
+
+const sanitizeFilename = (filename = 'file') =>
+  String(filename || 'file')
+    .replace(/[^\w.\-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+
+const getLeadRawData = (lead) =>
+  lead?.rawData && typeof lead.rawData === 'object' && !Array.isArray(lead.rawData)
+    ? lead.rawData
+    : {}
+
+const buildLeadSelectionKey = (leadIds = []) =>
+  [...new Set((leadIds || []).map((id) => Number(id)).filter(Boolean))]
+    .sort((a, b) => a - b)
+    .join(',')
 
 const slugifyKey = (value) => {
   const raw = String(value || '').trim().toLowerCase()
@@ -446,7 +462,8 @@ export const createLead = async (event) => {
           assignedUsers: await User.findAll({ 
             where: { id: assignedUsers.map(u => u.id) },
             attributes: ['id', 'fullName', 'email']
-          })
+          }),
+          organisationId: logged.orgId
         });
       }
     } catch (fcmError) {
@@ -469,12 +486,36 @@ export const updateLead = async (event) => {
     if (!id) return error(400, 'id required')
     const lead = await CrmLead.findOne({ where: { id, organisationId: Number(logged.orgId) } })
     if (!lead) return error(404, 'Lead not found')
+
+    // Track old status before update for notification
+    const oldStatus = lead.leadStatus;
+
     const fields = ['alert', 'name', 'email', 'telephone', 'inquiryDate', 'dob', 'occupation', 'location', 'leadSource', 'leadStatus', 'followUpDate', 'comments', 'softDeleted']
     for (const f of fields) if (payload[f] !== undefined) lead[f] = payload[f]
     if (payload.treatment !== undefined) {
       lead.treatment = payload.treatment?.name || payload.treatment || null
     }
-    await lead.save()
+    await lead.save();
+
+    // Send push notification if leadStatus changed
+    const newStatus = lead.leadStatus;
+    if (oldStatus && newStatus && oldStatus !== newStatus) {
+      try {
+        const assignees = await CrmLeadAssignee.findAll({ 
+          where: { organisationId: Number(logged.orgId), leadId: lead.id },
+          include: [{ model: User, as: 'user', attributes: ['id', 'fullName', 'email'] }]
+        });
+        const assignedUsers = assignees.map(a => a.user).filter(Boolean);
+        if (assignedUsers.length) {
+          await sendLeadStatusChangedNotification({ lead, oldStatus, newStatus, assignedUsers, organisationId: logged.orgId });
+        }
+      } catch (fcmError) {
+        console.warn('Lead status change push notification failed', {
+          leadId: lead.id,
+          error: fcmError?.message || fcmError,
+        });
+      }
+    }
     // Sync assignees if provided
     if (payload.assigned !== undefined && Array.isArray(payload.assigned)) {
       const desiredUserIds = payload.assigned.filter((u) => u && u.id).map((u) => Number(u.id))
@@ -494,12 +535,12 @@ export const updateLead = async (event) => {
         const actor = await User.findByPk(logged.userId, { attributes: ['id', 'fullName', 'email'] });
         if (toAdd.length) {
           const addedUsers = await User.findAll({ where: { id: toAdd }, attributes: ['id', 'fullName', 'email'] });
-          await sendLeadAssignedNotification({ lead, assignedUsers: addedUsers, assignedBy: actor });
+          await sendLeadAssignedNotification({ lead, assignedUsers: addedUsers, assignedBy: actor, organisationId: logged.orgId });
         }
         if (toRemoveLinks.length) {
           const removedIds = toRemoveLinks.map(l => l.userId);
           const removedUsers = await User.findAll({ where: { id: removedIds }, attributes: ['id', 'fullName', 'email'] });
-          await sendLeadUnassignedNotification({ lead, removedUsers, removedBy: actor });
+          await sendLeadUnassignedNotification({ lead, removedUsers, removedBy: actor, organisationId: logged.orgId });
         }
       } catch (fcmError) {
         console.warn('FCM notification failed - continuing with lead update:', fcmError.message);
@@ -1124,6 +1165,92 @@ export const deleteLeadNote = async (event) => {
   }
 }
 
+export const uploadLeadAttachment = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+
+    const parts = await readMultipartFormData(event)
+    const filePart = Array.isArray(parts)
+      ? parts.find((part) => part?.filename && part?.data)
+      : null
+    if (!filePart) return error(400, 'file required')
+
+    const originalName = String(filePart.filename || 'attachment.pdf')
+    const ext = originalName.includes('.') ? originalName.split('.').pop() : ''
+    const safeName = sanitizeFilename(originalName) || `attachment.${ext || 'pdf'}`
+    const contentType = String(filePart.type || '').toLowerCase()
+    const isPdfByType = contentType.includes('pdf')
+    const isPdfByName = safeName.toLowerCase().endsWith('.pdf')
+    if (!isPdfByType && !isPdfByName) {
+      return error(400, 'Only PDF files are allowed')
+    }
+
+    const stampedName = `${Date.now()}-${safeName}`
+    const baseDir = 'documents/crm/price-lists'
+    const link = await uploadBufferFile({
+      data: filePart.data,
+      filename: stampedName,
+      contentType: filePart.type || 'application/pdf',
+      baseDir,
+    })
+
+    return success({
+      link,
+      name: originalName,
+      contentType: filePart.type || 'application/pdf',
+      size: Number(filePart.data?.length || 0),
+      uploadedAt: new Date().toISOString(),
+    })
+  } catch (e) {
+    return error(500, e.message || 'Failed to upload attachment')
+  }
+}
+
+export const getLeadPriceAttachmentRecent = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const leadIds = Array.isArray(payload?.leadIds)
+      ? [...new Set(payload.leadIds.map((id) => Number(id)).filter(Boolean))]
+      : []
+    if (!leadIds.length) return error(400, 'leadIds required')
+
+    const rows = await CrmLead.findAll({
+      where: {
+        organisationId: Number(orgId),
+        id: { [Op.in]: leadIds },
+      },
+      attributes: ['id', 'rawData'],
+      limit: 200,
+    })
+
+    let latest = null
+    for (const row of rows) {
+      const raw = getLeadRawData(row)
+      const sendPriceRecent = raw?.manualSendAssets?.sendPriceRecent || null
+      if (!sendPriceRecent) continue
+      const ts = new Date(sendPriceRecent.updatedAt || sendPriceRecent.sentAt || 0).getTime()
+      if (!latest || ts > latest.ts) {
+        latest = { ts, data: sendPriceRecent, leadId: row.id }
+      }
+    }
+
+    return success({
+      attachment: latest?.data?.attachment || null,
+      priceLink: latest?.data?.priceLink || '',
+      subject: latest?.data?.subject || '',
+      updatedAt: latest?.data?.updatedAt || null,
+      leadId: latest?.leadId || null,
+    })
+  } catch (e) {
+    return error(500, e.message || 'Failed to fetch recent price attachment')
+  }
+}
+
 // Automation templates
 export const listAutomationGroups = async (event) => {
   try {
@@ -1522,35 +1649,75 @@ export const sendLeadMail = async (event) => {
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
-    const { leadIds = [], subject, html, key } = payload || {}
-    if (!subject || !html) return error(400, 'subject and html required')
+    const { leadIds = [], subject, html, key, attachments = [], metadata = {} } = payload || {}
+    const safeSubject = String(subject || '').trim()
+    const safeHtml = typeof html === 'string' ? html : ''
+    if (!safeSubject) return error(400, 'subject required')
     if (!Array.isArray(leadIds) || !leadIds.length) return error(400, 'leadIds required')
+    const normalizedAttachments = Array.isArray(attachments)
+      ? attachments
+          .map((item) => ({
+            link: item?.link || item?.url || item?.path || null,
+            name: item?.name || item?.filename || 'Attachment.pdf',
+            contentType: item?.contentType || 'application/pdf',
+          }))
+          .filter((item) => item.link)
+      : []
 
     // Optionally fetch a template to persist edits
     if (key) {
       const where = { organisationId: Number(orgId), key }
       const existing = await CrmAutomationTemplate.findOne({ where })
       if (existing) {
-        existing.name = existing.name || subject
-        existing.subject = existing.subject || subject
-        existing.template = html
+        existing.name = existing.name || safeSubject
+        existing.subject = existing.subject || safeSubject
+        existing.template = safeHtml || existing.template || ''
         await existing.save()
       } else {
         await CrmAutomationTemplate.create({
           organisationId: Number(orgId),
           key,
           type: 'Email',
-          name: subject,
-          subject,
+          name: safeSubject,
+          subject: safeSubject,
           sending: 'Manual',
           enabled: true,
-          template: html
+          template: safeHtml || ''
         })
       }
     }
 
     const leads = await CrmLead.findAll({ where: { id: { [Op.in]: leadIds }, organisationId: Number(orgId), softDeleted: false } })
-    const result = await sendLeadBulkEmail({ leads, subject, html, senderName: fullName })
+    const result = await sendLeadBulkEmail({
+      leads,
+      subject: safeSubject,
+      html: safeHtml,
+      senderName: fullName,
+      attachments: normalizedAttachments,
+    })
+
+    if (String(key || '') === 'manual_sendPrice') {
+      const selectionKey = buildLeadSelectionKey(leadIds)
+      const attachmentMeta = normalizedAttachments[0] || null
+      const priceLink = String(metadata?.priceLink || '').trim()
+      const sentAt = new Date().toISOString()
+      for (const lead of leads) {
+        const raw = getLeadRawData(lead)
+        const manual = raw.manualSendAssets && typeof raw.manualSendAssets === 'object'
+          ? raw.manualSendAssets
+          : {}
+        manual.sendPriceRecent = {
+          attachment: attachmentMeta,
+          priceLink,
+          subject: safeSubject,
+          selectionKey,
+          updatedAt: sentAt,
+        }
+        lead.rawData = { ...raw, manualSendAssets: manual }
+        await lead.save()
+      }
+    }
+
     return success({ sent: result.sent })
   } catch (e) {
     return error(500, e.message)

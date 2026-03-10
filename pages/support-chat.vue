@@ -697,15 +697,9 @@ onMounted(() => {
   // Watch for FCM notifications
   watch(lastNotification, handleFCMNotification, { immediate: true });
 
-  console.log('Support Chat page mounted');
+  console.log('Support Chat page mo unted');
   fetchConversations();
   
-  // Keep a slow refresh as a fallback
-  const interval = setInterval(fetchConversations, 30000);
-  
-  onUnmounted(() => {
-    clearInterval(interval);
-  });
 });
 </script>
 

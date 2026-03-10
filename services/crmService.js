@@ -385,6 +385,20 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  uploadLeadAttachment(formData, onProgress) {
+    return new Promise((resolve, reject) => {
+      PostFormData("/lead/uploadAttachment", formData, onProgress)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getLeadPriceAttachmentRecent(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/priceAttachmentRecent", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   // CRM options
   listOptions(category) {
     return new Promise((resolve, reject) => {

@@ -22,6 +22,7 @@ const baseOptions = {
     timestamps: false,
     ...(DB_SCHEMA ? { schema: DB_SCHEMA } : {}),
   },
+  logging: false, // Disable SQL query logging in console
 }
 
 const sequelize = DATABASE_URL

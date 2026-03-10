@@ -60,7 +60,12 @@ self.addEventListener('message', (event) => {
           };
 
           // Add action buttons based on notification type
-          if (payload.data?.type === 'task_assigned') {
+          if (payload.data?.type?.startsWith('system_')) {
+            notificationOptions.actions = [
+              { action: 'view', title: 'Open' },
+              { action: 'dismiss', title: 'Dismiss' }
+            ];
+          } else if (payload.data?.type === 'task_assigned') {
             notificationOptions.actions = [
               { action: 'view', title: 'View Task' },
               { action: 'dismiss', title: 'Dismiss' }
@@ -109,12 +114,23 @@ self.addEventListener('notificationclick', (event) => {
   if (clickAction === 'view' || !clickAction) {
     switch (notificationData.type) {
       case 'task_assigned':
+      case 'task_assigned_bulk':
       case 'task_completed':
-        urlToOpen = notificationData.taskId 
-          ? `/tasks/${notificationData.taskId}` 
-          : '/tasks/mytasks';
+      case 'task_completed_bulk':
+      case 'task_comment':
+      case 'task_unassigned':
+      case 'task_unassigned_bulk':
+      case 'task_due_reminder':
+      case 'task_overdue_reminder':
+        // Task notifications should always take the user to My Tasks (not a task detail route)
+        urlToOpen = '/tasks/mytasks';
         break;
       case 'lead_created':
+      case 'lead_assigned':
+      case 'lead_unassigned':
+      case 'lead_status_changed':
+      case 'crm_automation_sent':
+      case 'crm_automation_failed':
         urlToOpen = notificationData.leadId 
           ? `/crm?leadId=${notificationData.leadId}` 
           : '/crm';
@@ -126,6 +142,27 @@ self.addEventListener('notificationclick', (event) => {
         break;
       case 'meta_dm':
         urlToOpen = '/crm/analytics';
+        break;
+      case 'rota_published':
+      case 'shift_reminder':
+      case 'leave_approved':
+      case 'leave_denied':
+        urlToOpen = '/teams/rota';
+        break;
+      case 'support_ticket_submitted':
+      case 'support_reply':
+      case 'chatbot_message':
+        urlToOpen = '/support-chat';
+        break;
+      case 'system_subscription_confirmed':
+      case 'system_account_created':
+        urlToOpen = '/';
+        break;
+      case 'system_password_reset_requested':
+        urlToOpen = '/forgetpassword';
+        break;
+      case 'system_portal_ready':
+        urlToOpen = '/dashboard';
         break;
       default:
         urlToOpen = notificationData.url || '/';

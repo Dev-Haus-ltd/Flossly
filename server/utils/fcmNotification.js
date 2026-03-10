@@ -1,5 +1,6 @@
 import admin from 'firebase-admin';
 import { FcmToken, UserNotification } from '../models';
+import { Op } from 'sequelize';
 import fs from 'fs';
 import path from 'path';
 
@@ -76,6 +77,7 @@ export const initializeFirebaseAdmin = () => {
 // Send notification to a single user
 export const sendNotificationToUser = async ({
   userId,
+  organisationId = null,
   title,
   body,
   type,
@@ -96,6 +98,7 @@ export const sendNotificationToUser = async ({
       // Still create the notification record for in-app display
       const notification = await UserNotification.create({
         userId,
+        organisationId,
         title,
         body,
         type,
@@ -118,6 +121,7 @@ export const sendNotificationToUser = async ({
     // Create notification record in database (store in-app history even if push can't be delivered)
     const notification = await UserNotification.create({
       userId,
+      organisationId,
       title,
       body,
       type,
@@ -136,6 +140,13 @@ export const sendNotificationToUser = async ({
         isActive: true,
       },
     });
+
+    console.log(`📱 [FCM] Found ${fcmTokens?.length || 0} active tokens for user ${userId}`);
+    if (fcmTokens?.length > 0) {
+      fcmTokens.forEach((t, idx) => {
+        console.log(`   Token ${idx + 1}: ${t.token.substring(0, 50)}... (device: ${t.deviceType}, browser: ${t.browser})`);
+      });
+    }
 
     if (!fcmTokens || fcmTokens.length === 0) {
       console.log(`No active FCM tokens found for user ${userId}`);
@@ -195,6 +206,8 @@ export const sendNotificationToUser = async ({
 
     // Send using multicast
     
+    console.log(`📤 [FCM] Sending notification to ${tokens.length} tokens: "${title}" - "${body}"`);
+    
     try {
       const response = await admin.messaging().sendEachForMulticast({
         tokens,
@@ -203,31 +216,36 @@ export const sendNotificationToUser = async ({
       
       console.log(`✅ [FCM] Push sent! Success: ${response.successCount}, Failed: ${response.failureCount}`);
 
-      // Process responses
+      const updatePromises = [];
+      
       response.responses.forEach((resp, idx) => {
         if (resp.success) {
           results.success++;
-          // Update last_used_at for successful token
-          FcmToken.update(
-            { lastUsedAt: new Date() },
-            { where: { token: tokens[idx] } }
+          console.log(`   ✅ Sent to token ${idx + 1}: ${tokens[idx].substring(0, 30)}...`);
+          updatePromises.push(
+            FcmToken.update(
+              { lastUsedAt: new Date() },
+              { where: { token: tokens[idx] } }
+            ).catch(err => console.error('Error updating token lastUsedAt:', err))
           );
         } else {
           results.failed++;
-          console.error(`Failed to send to token ${tokens[idx]}:`, resp.error);
+          console.error(`   ❌ Failed to send to token ${idx + 1}: ${tokens[idx].substring(0, 30)}... - Error: ${resp.error?.message || resp.error}`);
           
-          // Handle invalid tokens
           if (resp.error?.code === 'messaging/invalid-registration-token' ||
               resp.error?.code === 'messaging/registration-token-not-registered') {
             results.invalidTokens.push(tokens[idx]);
-            // Mark token as inactive
-            FcmToken.update(
-              { isActive: false },
-              { where: { token: tokens[idx] } }
+            updatePromises.push(
+              FcmToken.update(
+                { isActive: false },
+                { where: { token: tokens[idx] } }
+              ).catch(err => console.error('Error deactivating invalid token:', err))
             );
           }
         }
       });
+      
+      await Promise.all(updatePromises);
 
       // Update notification record
       await notification.update({
@@ -261,6 +279,7 @@ export const sendNotificationToUser = async ({
 // Send notification to multiple users
 export const sendNotificationToMultipleUsers = async ({
   userIds,
+  organisationId = null,
   title,
   body,
   type,
@@ -275,6 +294,7 @@ export const sendNotificationToMultipleUsers = async ({
   for (const userId of userIds) {
     const result = await sendNotificationToUser({
       userId,
+      organisationId,
       title,
       body,
       type,
@@ -290,15 +310,15 @@ export const sendNotificationToMultipleUsers = async ({
   return results;
 };
 
-// Send task assignment notification
-export const sendTaskAssignmentNotification = async ({ task, assignedUser, assignedBy }) => {
+export const sendTaskAssignmentNotification = async ({ task, assignedUser, assignedBy, organisationId = null }) => {
   const taskTitle = task?.title || task?.name || 'Task';
   const assignedByName = assignedBy?.fullName || assignedBy?.name || 'Unknown';
 
   return await sendNotificationToUser({
     userId: assignedUser.id,
-    title: 'New Task Assigned',
-    body: `You have been assigned a new task: ${taskTitle}`,
+    organisationId,
+    title: 'New task assigned 📌',
+    body: `${taskTitle} is waiting for you.`,
     type: 'task_assigned',
     referenceType: 'task',
     referenceId: task.id,
@@ -306,14 +326,15 @@ export const sendTaskAssignmentNotification = async ({ task, assignedUser, assig
       taskId: task.id,
       taskTitle,
       assignedBy: assignedByName,
-      url: `/tasks/${task.id}`
+      // Task notifications should always take the user to My Tasks (not a task detail route)
+      url: '/tasks/mytasks'
     },
     priority: task.priority || 'medium'
   });
 };
 
 // Send summary notification for bulk task assignment (avoid spamming users)
-export const sendBulkTaskAssignmentNotification = async ({ assignedUser, assignedBy, tasks = [] }) => {
+export const sendBulkTaskAssignmentNotification = async ({ assignedUser, assignedBy, tasks = [], organisationId = null }) => {
   const count = Array.isArray(tasks) ? tasks.length : 0;
   if (!assignedUser?.id || count === 0) return;
 
@@ -322,6 +343,7 @@ export const sendBulkTaskAssignmentNotification = async ({ assignedUser, assigne
       task: tasks[0],
       assignedUser,
       assignedBy,
+      organisationId,
     });
   }
 
@@ -336,6 +358,7 @@ export const sendBulkTaskAssignmentNotification = async ({ assignedUser, assigne
 
   return await sendNotificationToUser({
     userId: assignedUser.id,
+    organisationId,
     title: `${count} New Tasks Assigned`,
     body,
     type: 'task_assigned_bulk',
@@ -352,7 +375,7 @@ export const sendBulkTaskAssignmentNotification = async ({ assignedUser, assigne
 };
 
 // Send task comment notification
-export const sendTaskCommentNotification = async ({ task, comment, commentedBy, notifyUsers }) => {
+export const sendTaskCommentNotification = async ({ task, comment, commentedBy, notifyUsers, organisationId = null }) => {
   const recipients = (notifyUsers || []).filter(Boolean);
   if (!recipients.length) return;
 
@@ -361,6 +384,7 @@ export const sendTaskCommentNotification = async ({ task, comment, commentedBy, 
 
   return await sendNotificationToMultipleUsers({
     userIds: recipients.map(u => u.id),
+    organisationId,
     title: 'New Comment',
     body: `${commenterName} commented on "${taskTitle}"`,
     type: 'task_comment',
@@ -371,19 +395,21 @@ export const sendTaskCommentNotification = async ({ task, comment, commentedBy, 
       taskTitle,
       comment: comment || '',
       commentedBy: commenterName,
-      url: `/tasks/${task.id}`,
+      // Task notifications should always take the user to My Tasks (not a task detail route)
+      url: '/tasks/mytasks',
     },
     priority: 'low',
   });
 };
 
 // Send task unassigned notification
-export const sendTaskUnassignmentNotification = async ({ taskTitle, removedBy, removedUser }) => {
+export const sendTaskUnassignmentNotification = async ({ taskTitle, removedBy, removedUser, organisationId = null }) => {
   if (!removedUser?.id) return;
   const removedByName = removedBy?.fullName || removedBy?.name || 'Team';
 
   return await sendNotificationToUser({
     userId: removedUser.id,
+    organisationId,
     title: 'Task Unassigned',
     body: `You were unassigned from: ${taskTitle || 'Task'} (by ${removedByName})`,
     type: 'task_unassigned',
@@ -399,7 +425,7 @@ export const sendTaskUnassignmentNotification = async ({ taskTitle, removedBy, r
 };
 
 // Send bulk task unassigned summary
-export const sendBulkTaskUnassignmentNotification = async ({ removedUser, removedBy, taskTitles = [] }) => {
+export const sendBulkTaskUnassignmentNotification = async ({ removedUser, removedBy, taskTitles = [], organisationId = null }) => {
   const count = Array.isArray(taskTitles) ? taskTitles.length : 0;
   if (!removedUser?.id || count === 0) return;
   if (count === 1) {
@@ -407,6 +433,7 @@ export const sendBulkTaskUnassignmentNotification = async ({ removedUser, remove
       taskTitle: taskTitles[0],
       removedBy,
       removedUser,
+      organisationId,
     });
   }
 
@@ -417,6 +444,7 @@ export const sendBulkTaskUnassignmentNotification = async ({ removedUser, remove
 
   return await sendNotificationToUser({
     userId: removedUser.id,
+    organisationId,
     title: `${count} Tasks Unassigned`,
     body,
     type: 'task_unassigned_bulk',
@@ -433,7 +461,7 @@ export const sendBulkTaskUnassignmentNotification = async ({ removedUser, remove
 };
 
 // Send bulk task completion notification (summary)
-export const sendBulkTaskCompletionNotification = async ({ tasks = [], completedBy, notifyUser }) => {
+export const sendBulkTaskCompletionNotification = async ({ tasks = [], completedBy, notifyUser, organisationId = null }) => {
   const count = Array.isArray(tasks) ? tasks.length : 0;
   if (!notifyUser?.id || count === 0) return;
 
@@ -447,6 +475,7 @@ export const sendBulkTaskCompletionNotification = async ({ tasks = [], completed
 
   return await sendNotificationToUser({
     userId: notifyUser.id,
+    organisationId,
     title: `${count} Tasks Completed`,
     body,
     type: 'task_completed_bulk',
@@ -456,14 +485,14 @@ export const sendBulkTaskCompletionNotification = async ({ tasks = [], completed
       taskCount: count,
       taskTitles: titles,
       completedBy: completedByName,
-      url: '/tasks',
+      // Task notifications should always take the user to My Tasks
+      url: '/tasks/mytasks',
     },
     priority: 'low',
   });
 };
 
-// Send task completion notification
-export const sendTaskCompletionNotification = async ({ task, completedBy, notifyUsers }) => {
+export const sendTaskCompletionNotification = async ({ task, completedBy, notifyUsers, organisationId = null }) => {
   if (!notifyUsers || notifyUsers.length === 0) return;
 
   const taskTitle = task?.title || task?.name || 'Task';
@@ -471,8 +500,9 @@ export const sendTaskCompletionNotification = async ({ task, completedBy, notify
 
   return await sendNotificationToMultipleUsers({
     userIds: notifyUsers.map(u => u.id),
-    title: 'Task Completed',
-    body: `Task "${taskTitle}" has been completed by ${completedByName}`,
+    organisationId,
+    title: 'Task completed ✅',
+    body: `${taskTitle} has been finished.`,
     type: 'task_completed',
     referenceType: 'task',
     referenceId: task.id,
@@ -480,20 +510,21 @@ export const sendTaskCompletionNotification = async ({ task, completedBy, notify
       taskId: task.id,
       taskTitle,
       completedBy: completedByName,
-      url: `/tasks/${task.id}`
+      // Task notifications should always take the user to My Tasks (not a task detail route)
+      url: '/tasks/mytasks'
     },
     priority: 'medium'
   });
 };
 
-// Send lead creation notification
-export const sendLeadCreatedNotification = async ({ lead, assignedUsers }) => {
+export const sendLeadCreatedNotification = async ({ lead, assignedUsers, organisationId = null }) => {
   if (!assignedUsers || assignedUsers.length === 0) return;
 
   return await sendNotificationToMultipleUsers({
     userIds: assignedUsers.map(u => u.id),
-    title: 'New Lead Assigned',
-    body: `A new lead "${lead.name || lead.email}" has been assigned to you`,
+    organisationId,
+    title: 'New lead added 🆕',
+    body: `${lead.name || lead.email} is now in your CRM.`,
     type: 'lead_created',
     referenceType: 'lead',
     referenceId: lead.id,
@@ -508,12 +539,13 @@ export const sendLeadCreatedNotification = async ({ lead, assignedUsers }) => {
 };
 
 // Send lead assignment notification (when assignees are added on update)
-export const sendLeadAssignedNotification = async ({ lead, assignedUsers, assignedBy }) => {
+export const sendLeadAssignedNotification = async ({ lead, assignedUsers, assignedBy, organisationId = null }) => {
   if (!assignedUsers || assignedUsers.length === 0) return;
   const assignedByName = assignedBy?.fullName || assignedBy?.name || 'Team';
 
   return await sendNotificationToMultipleUsers({
     userIds: assignedUsers.map(u => u.id),
+    organisationId,
     title: 'Lead Assigned',
     body: `Lead "${lead.name || lead.email}" has been assigned to you by ${assignedByName}`,
     type: 'lead_assigned',
@@ -530,12 +562,13 @@ export const sendLeadAssignedNotification = async ({ lead, assignedUsers, assign
 };
 
 // Send lead unassignment notification (when assignees are removed on update)
-export const sendLeadUnassignedNotification = async ({ lead, removedUsers, removedBy }) => {
+export const sendLeadUnassignedNotification = async ({ lead, removedUsers, removedBy, organisationId = null }) => {
   if (!removedUsers || removedUsers.length === 0) return;
   const removedByName = removedBy?.fullName || removedBy?.name || 'Team';
 
   return await sendNotificationToMultipleUsers({
     userIds: removedUsers.map(u => u.id),
+    organisationId,
     title: 'Lead Unassigned',
     body: `You were unassigned from lead "${lead.name || lead.email}" by ${removedByName}`,
     type: 'lead_unassigned',
@@ -551,10 +584,157 @@ export const sendLeadUnassignedNotification = async ({ lead, removedUsers, remov
   });
 };
 
-// Send WhatsApp message notification
-export const sendWhatsAppMessageNotification = async ({ message, lead, userId }) => {
+export const sendLeadStatusChangedNotification = async ({ lead, oldStatus, newStatus, assignedUsers = [], organisationId = null }) => {
+  const userIds = assignedUsers.map(u => u.id).filter(Boolean);
+  if (!userIds.length) return;
+  
+  return await sendNotificationToMultipleUsers({
+    userIds,
+    organisationId,
+    title: 'Lead updated 🔄',
+    body: `${lead?.name || 'Lead'} moved to ${newStatus || 'new status'}`,
+    type: 'lead_status_changed',
+    referenceType: 'lead',
+    referenceId: lead?.id,
+    data: {
+      leadId: lead?.id,
+      leadName: lead?.name,
+      oldStatus,
+      newStatus,
+      url: `/crm?leadId=${lead?.id || ''}`
+    },
+    priority: 'medium'
+  });
+};
+
+
+export const sendCrmAutomationSentNotification = async ({ userId, lead, automationName, channel = 'Email', organisationId = null }) => {
+  if (!userId) return;
   return await sendNotificationToUser({
     userId,
+    organisationId,
+    title: 'Automation sent ✅',
+    body: `Message delivered to ${lead?.name || 'lead'} via ${channel}`,
+    type: 'crm_automation_sent',
+    referenceType: 'lead',
+    referenceId: lead?.id,
+    data: {
+      leadId: lead?.id,
+      leadName: lead?.name,
+      automationName,
+      channel,
+      url: `/crm?leadId=${lead?.id || ''}`
+    },
+    priority: 'low'
+  });
+};
+
+export const sendCrmAutomationFailedNotification = async ({ userId, lead, automationName, channel = 'Email', errorMessage = 'Unknown error', organisationId = null }) => {
+  if (!userId) return;
+  return await sendNotificationToUser({
+    userId,
+    organisationId,
+    title: 'Automation failed ⚠️',
+    body: `Message to ${lead?.name || 'lead'} not delivered`,
+    type: 'crm_automation_failed',
+    referenceType: 'lead',
+    referenceId: lead?.id,
+    data: {
+      leadId: lead?.id,
+      leadName: lead?.name,
+      automationName,
+      channel,
+      errorMessage,
+      url: `/crm?leadId=${lead?.id || ''}`
+    },
+    priority: 'high'
+  });
+};
+
+
+export const sendRotaPublishedNotification = async ({ userId, rotaId, weekStartDate, organisationId = null } = {}) => {
+  if (!userId) return;
+  return await sendNotificationToUser({
+    userId,
+    organisationId,
+    title: 'New rota available 📅',
+    body: 'Check your upcoming shifts.',
+    type: 'rota_published',
+    referenceType: 'rota',
+    referenceId: rotaId,
+    data: {
+      rotaId,
+      weekStartDate,
+      url: '/teams/rota'
+    },
+    priority: 'medium'
+  });
+};
+
+export const sendShiftReminderNotification = async ({ userId, shiftDate, shiftTime, organisationId = null } = {}) => {
+  if (!userId) return;
+  return await sendNotificationToUser({
+    userId,
+    organisationId,
+    title: 'Shift reminder ⏳',
+    body: `You're scheduled on ${shiftDate || 'your shift date'}.`,
+    type: 'shift_reminder',
+    referenceType: 'shift',
+    referenceId: null,
+    data: {
+      shiftDate,
+      shiftTime,
+      url: '/teams/rota'
+    },
+    priority: 'medium'
+  });
+};
+
+
+export const sendLeaveApprovedNotification = async ({ userId, startDate, endDate, organisationId = null } = {}) => {
+  if (!userId) return;
+  return await sendNotificationToUser({
+    userId,
+    organisationId,
+    title: 'Leave approved ✅',
+    body: 'Your schedule has been updated.',
+    type: 'leave_approved',
+    referenceType: 'leave',
+    referenceId: null,
+    data: {
+      startDate,
+      endDate,
+      url: '/teams/rota'
+    },
+    priority: 'high'
+  });
+};
+
+export const sendLeaveDeniedNotification = async ({ userId, startDate, endDate, reason = null, organisationId = null } = {}) => {
+  if (!userId) return;
+  return await sendNotificationToUser({
+    userId,
+    organisationId,
+    title: 'Leave request update ❌',
+    body: 'Please review the decision.',
+    type: 'leave_denied',
+    referenceType: 'leave',
+    referenceId: null,
+    data: {
+      startDate,
+      endDate,
+      reason,
+      url: '/teams/rota'
+    },
+    priority: 'high'
+  });
+};
+
+// Send WhatsApp message notification
+export const sendWhatsAppMessageNotification = async ({ message, lead, userId, organisationId = null }) => {
+  return await sendNotificationToUser({
+    userId,
+    organisationId,
     title: 'New WhatsApp Message',
     body: `New message from ${lead.name || lead.phone}: ${message.substring(0, 50)}...`,
     type: 'whatsapp_message',
@@ -571,9 +751,10 @@ export const sendWhatsAppMessageNotification = async ({ message, lead, userId })
 };
 
 // Send Meta DM notification
-export const sendMetaDMNotification = async ({ message, sender, userId }) => {
+export const sendMetaDMNotification = async ({ message, sender, userId, organisationId = null }) => {
   return await sendNotificationToUser({
     userId,
+    organisationId,
     title: 'New Meta Direct Message',
     body: `New message from ${sender}: ${message.substring(0, 50)}...`,
     type: 'meta_dm',
@@ -583,6 +764,121 @@ export const sendMetaDMNotification = async ({ message, sender, userId }) => {
       sender,
       messagePreview: message.substring(0, 100),
       url: '/crm/analytics'
+    },
+    priority: 'high'
+  });
+};
+
+
+export const sendSystemSubscriptionConfirmedNotification = async ({ userId, stripeSubscriptionId = null, organisationId = null } = {}) => {
+  if (!userId) return;
+  return await sendNotificationToUser({
+    userId,
+    organisationId,
+    title: 'Welcome to Flossly 🎉',
+    body: 'Your subscription is active — tap to log in.',
+    type: 'system_subscription_confirmed',
+    referenceType: 'subscription',
+    referenceId: null,
+    data: {
+      stripeSubscriptionId,
+      url: '/'
+    },
+    priority: 'high'
+  });
+};
+
+export const sendSystemPortalReadyNotification = async ({ userId, organisationId = null } = {}) => {
+  if (!userId) return;
+  return await sendNotificationToUser({
+    userId,
+    organisationId,
+    title: 'Your portal is ready 🎉',
+    body: 'Book your training session.',
+    type: 'system_portal_ready',
+    referenceType: 'user',
+    referenceId: userId,
+    data: {
+      trainingUrl: 'https://calendly.com/helloflossly/flossly-training',
+      url: '/dashboard'
+    },
+    priority: 'high'
+  });
+};
+
+export const sendSupportTicketSubmittedNotification = async ({ userId, ticketId, ticketSubject, organisationId = null } = {}) => {
+  if (!userId) return;
+  return await sendNotificationToUser({
+    userId,
+    organisationId,
+    title: 'Support request received ✅',
+    body: "We'll get back to you shortly.",
+    type: 'support_ticket_submitted',
+    referenceType: 'support_ticket',
+    referenceId: ticketId,
+    data: {
+      ticketId,
+      ticketSubject,
+      url: '/support-chat'
+    },
+    priority: 'medium'
+  });
+};
+
+export const sendSupportReplyNotification = async ({ userId, ticketId, replyPreview, organisationId = null } = {}) => {
+  if (!userId) return;
+  return await sendNotificationToUser({
+    userId,
+    organisationId,
+    title: 'New support message 💬',
+    body: 'A reply is waiting for you.',
+    type: 'support_reply',
+    referenceType: 'support_ticket',
+    referenceId: ticketId,
+    data: {
+      ticketId,
+      replyPreview: replyPreview || '',
+      url: '/support-chat'
+    },
+    priority: 'high'
+  });
+};
+
+export const sendTaskDueReminderNotification = async ({ userId, taskId, taskTitle, dueDate, organisationId = null } = {}) => {
+  if (!userId) return;
+  return await sendNotificationToUser({
+    userId,
+    organisationId,
+    title: 'Task reminder ⏰',
+    body: `${taskTitle || 'Task'} is due ${dueDate || 'soon'}`,
+    type: 'task_due_reminder',
+    referenceType: 'task',
+    referenceId: taskId,
+    data: {
+      taskId,
+      taskTitle,
+      dueDate,
+      // Task notifications should always take the user to My Tasks (not a task detail route)
+      url: '/tasks/mytasks'
+    },
+    priority: 'medium'
+  });
+};
+
+export const sendTaskOverdueReminderNotification = async ({ userId, taskIds = [], count = 0, organisationId = null } = {}) => {
+  if (!userId) return;
+  return await sendNotificationToUser({
+    userId,
+    organisationId,
+    title: 'You have overdue tasks ⏰',
+    body: 'Tap to review now.',
+    type: 'task_overdue_reminder',
+    referenceType: 'task',
+    referenceId: taskIds.length === 1 ? taskIds[0] : null,
+    data: {
+      taskIds,
+      count,
+      url: '/tasks/mytasks'
     },
     priority: 'high'
   });
@@ -615,9 +911,19 @@ export const markNotificationAsRead = async (notificationId, userId) => {
 };
 
 // Get user notifications
-export const getUserNotifications = async (userId, { limit = 50, offset = 0, unreadOnly = false } = {}) => {
+export const getUserNotifications = async (userId, { limit = 50, offset = 0, unreadOnly = false, organisationId = null } = {}) => {
   try {
     const where = { userId };
+    
+    // Include notifications for current org OR notifications with no organization (global notifications)
+    // Use Sequelize.or to include both: organisationId matches OR organisationId is null
+    if (organisationId) {
+      where[Op.or] = [
+        { organisationId: organisationId },
+        { organisationId: null }
+      ];
+    }
+    
     if (unreadOnly) {
       where.isRead = false;
     }
@@ -629,12 +935,21 @@ export const getUserNotifications = async (userId, { limit = 50, offset = 0, unr
       order: [['createdAt', 'DESC']]
     });
 
+    // Count unread notifications (also include global notifications with null orgId)
+    const unreadWhere = { userId, isRead: false };
+    if (organisationId) {
+      unreadWhere[Op.or] = [
+        { organisationId: organisationId },
+        { organisationId: null }
+      ];
+    }
+
     return {
       success: true,
       notifications: notifications.rows,
       total: notifications.count,
       unreadCount: unreadOnly ? notifications.count : await UserNotification.count({
-        where: { userId, isRead: false }
+        where: unreadWhere
       })
     };
   } catch (error) {
