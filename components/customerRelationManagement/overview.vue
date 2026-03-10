@@ -26,6 +26,7 @@
           <template #actions>
             <template v-if="card.key === 'meta'">
               <v-btn
+                v-if="isMetaConnected"
                 color="primary"
                 variant="outlined"
                 rounded="lg"
@@ -40,7 +41,7 @@
                 variant="outlined"
                 rounded="lg"
                 class="action-btn"
-                @click="disconnectMeta"
+                @click="startDisconnectMeta"
               >
                 Disconnect
               </v-btn>
@@ -111,6 +112,19 @@
           </template>
         </IntegrationCard>
       </div>
+
+      <v-alert
+        v-if="isMetaConnected && metaHealthIssues.length"
+        type="warning"
+        variant="tonal"
+        class="mt-0"
+      >
+        <div class="font-weight-medium mb-1">Meta connection has issues — new leads may not be arriving</div>
+        <ul style="padding-left: 18px; margin: 4px 0 8px;">
+          <li v-for="(issue, i) in metaHealthIssues" :key="i" style="font-size: 13px;">{{ issue }}</li>
+        </ul>
+        <v-btn size="small" variant="outlined" @click="openMetaHealth">View Details & Fix</v-btn>
+      </v-alert>
 
       <div class="conversion-grid mt-8">
         <v-card class="conversion-card" elevation="0" rounded="lg">
@@ -351,6 +365,14 @@
       </v-card>
     </v-dialog>
 
+    <CommonConfirmDialog
+      v-model="confirmDisconnectMeta"
+      title="Disconnect Meta?"
+      message="This will remove the Meta integration. New leads from Facebook forms will stop arriving until you reconnect."
+      confirm-text="Disconnect"
+      @confirm="doDisconnectMeta"
+      @cancel="confirmDisconnectMeta = false"
+    />
   </v-sheet>
 </template>
 
@@ -402,6 +424,7 @@ let leadChartInstance = null
 const metaHealthDialog = ref(false)
 const metaHealthLoading = ref(false)
 const metaHealthData = ref(null)
+const confirmDisconnectMeta = ref(false)
 
 
 const userEmail = computed(() => user.value?.email || '')
@@ -579,6 +602,21 @@ const handleMetaQuery = () => {
   if (metaConnected || metaError) clearMetaQuery()
 }
 
+const metaHealthIssues = computed(() => {
+  const data = metaHealthData.value
+  if (!data || data.error) return []
+  const issues = []
+  if (!data.verifyTokenSet) issues.push('Verify token is not configured')
+  if (data.permissionsError) issues.push(`Permissions issue: ${data.permissionsError}`)
+  const pages = (Array.isArray(data.pages) ? data.pages : [])
+    .filter((p) => String(p?.status || '').toLowerCase() === 'active')
+  const noToken = pages.filter((p) => !p.tokenPresent).length
+  const noSub = pages.filter((p) => !p.subscribed).length
+  if (noToken) issues.push(`${noToken} active page(s) are missing an access token`)
+  if (noSub) issues.push(`${noSub} active page(s) are not subscribed to webhooks — new leads from these pages will not arrive`)
+  return issues
+})
+
 const openMetaHealth = async () => {
   metaHealthDialog.value = true
   metaHealthLoading.value = true
@@ -629,11 +667,17 @@ const integrateMeta = async () => {
   mainStore?.setSnackbar?.({ title: res?.message || 'Unable to start Meta connection', type: 'error' })
 }
 
-const disconnectMeta = async () => {
+const startDisconnectMeta = () => {
+  confirmDisconnectMeta.value = true
+}
+
+const doDisconnectMeta = async () => {
+  confirmDisconnectMeta.value = false
   try {
     const res = await crmStore.disconnectMeta()
     if (res?.code === 0) {
       await checkMetaConnection()
+      metaHealthData.value = null
       mainStore?.setSnackbar?.({ title: 'Meta disconnected', type: 'success' })
     } else {
       mainStore?.setSnackbar?.({ title: res?.message || 'Failed to disconnect Meta', type: 'error' })
@@ -641,6 +685,16 @@ const disconnectMeta = async () => {
   } catch (e) {
     mainStore?.setSnackbar?.({ title: e?.message || 'Failed to disconnect Meta', type: 'error' })
   }
+}
+
+const fetchMetaHealthSilent = async () => {
+  if (!isMetaConnected.value) return
+  try {
+    const res = await crmStore.metaHealth()
+    if (res?.code === 0) {
+      metaHealthData.value = res.data || null
+    }
+  } catch {}
 }
 
 const loadWhapiStatus = async () => {
@@ -1005,6 +1059,7 @@ onMounted(async () => {
   loadUser()
   handleMetaQuery()
   await Promise.all([checkMetaConnection(), loadWhapiStatus(), loadLeads()])
+  await fetchMetaHealthSilent()
 })
 
 watch(activeLeads, async () => {
