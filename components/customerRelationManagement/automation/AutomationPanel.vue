@@ -340,7 +340,9 @@ import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crm
 import addFolderIcon from '@/assets/icons/crm/add-folder.svg'
 import { getCurrentUserName } from '@/lib/helpers/storage'
 import { isDefaultAutomationGroup, resolveAutomationGroupAuthor } from '@/lib/crm/automation'
-import { getLeadDisplayName, getLeadEmail } from '@/lib/normalizers/lead'
+import { buildRecipientContext } from '@/lib/crm/previewContext'
+import { applyCrmPlaceholders } from '@/lib/crm/placeholders'
+import { htmlToPlainText } from '@/lib/format/text'
 
 const props = defineProps({
   leadId: { type: [Number, String], default: null },
@@ -736,10 +738,13 @@ const editorEl = ref(null)
 const previewItem = ref(null)
 
 const previewRecipient = computed(() => {
-  const lead = props.lead || {}
-  const name = getLeadDisplayName(lead) || '[Patient Name]'
-  const email = getLeadEmail(lead) || '[Email]'
-  return { name, email }
+  return buildRecipientContext({
+    lead: props.lead || {},
+    many: false,
+    fallbackName: '[Patient Name]',
+    fallbackEmail: '[Email]',
+    fallbackYourName: '[Your Name]',
+  })
 })
 const openEdit = async (row) => {
   active.value = row
@@ -820,16 +825,21 @@ const getStoredOrg = () => {
   return null
 }
 
-const practiceName = computed(() => {
+const resolveOrgDetails = () => {
   const storedOrg = getStoredOrg()
-  if (storedOrg?.name) return storedOrg.name
-  const details =
+  if (storedOrg) return storedOrg
+  return (
     orgStore.getOrgDetails ||
     orgStore.organisation ||
     orgStore.organization ||
     orgStore.org ||
     orgStore.orgDetails ||
     {}
+  )
+}
+
+const practiceName = computed(() => {
+  const details = resolveOrgDetails()
   return details?.name || orgStore.name || orgStore.orgName || '[Practice Name]'
 })
 
@@ -841,167 +851,12 @@ const practiceInitials = computed(() => {
 })
 
 const practiceLogo = computed(() => {
-  const storedOrg = getStoredOrg()
-  if (storedOrg?.logo) return storedOrg.logo
-  const details =
-    orgStore.getOrgDetails ||
-    orgStore.organisation ||
-    orgStore.organization ||
-    orgStore.org ||
-    orgStore.orgDetails ||
-    {}
+  const details = resolveOrgDetails()
   return details?.logo || orgStore.logo || null
 })
 
 const resolveDefault = (row) =>
   crmAutomationDefaults.find(d => d && d.key === row?.key) || {}
-
-const applyPlaceholders = (text) => {
-  if (!text) return ''
-  const recipient = previewRecipient.value || { name: '[Patient Name]', email: '[Email]' }
-  const practice = practiceName.value || '[Practice Name]'
-  const firstName = recipient.name.split(' ')[0] || recipient.name
-  const storedOrg = getStoredOrg() || {}
-  const details =
-    orgStore.getOrgDetails ||
-    orgStore.organisation ||
-    orgStore.organization ||
-    orgStore.org ||
-    orgStore.orgDetails ||
-    {}
-  const org = storedOrg || details || {}
-  const placeholders = org.automationPlaceholders || {}
-  const resolvePlaceholder = (key, fallback) => {
-    const val = placeholders[key]
-    if (val === undefined || val === null || val === '') return fallback
-    return String(val)
-  }
-  const phone =
-    org.phone ||
-    org.phoneNumber ||
-    org.telephone ||
-    org.contactPhone ||
-    org.contact ||
-    org.contactNumber ||
-    '[Phone Number]'
-  const website =
-    resolvePlaceholder('website', '') ||
-    resolvePlaceholder('practiceWebsite', '') ||
-    org.website ||
-    org.site ||
-    org.web ||
-    ''
-  const websiteUrl = website || 'https://flossly.ai/'
-  const websiteLabel = website ? website : 'Flossly'
-  const isHtml = /<[^>]+>/.test(text)
-  const websiteReplacement = isHtml
-    ? `<a href="${websiteUrl}" target="_blank" rel="noopener">${websiteLabel}</a>`
-    : `${websiteLabel} (${websiteUrl})`
-  const email =
-    org.email ||
-    org.contactEmail ||
-    '[Email]'
-  const address =
-    org.address ||
-    org.location ||
-    '[Address]'
-  const street =
-    org.streetAddress ||
-    org.addressLine1 ||
-    '[Street Address]'
-  const cityStateZip =
-    org.cityStateZip ||
-    org.city ||
-    '[City, State ZIP Code]'
-  const officeHours =
-    org.officeHours ||
-    org.hours ||
-    '[Days and Times]'
-  const coordinator =
-    org.treatmentCoordinator ||
-    org.coordinatorName ||
-    org.ownerName ||
-    '[Treatment Coordinator Name]'
-  const principalDentist =
-    resolvePlaceholder('principalDentistName', '') ||
-    org.ownerName ||
-    org.principalDentist ||
-    '[Practice Owner/Principal Dentist]'
-  const yourName =
-    org.ownerName ||
-    org.contactName ||
-    '[Your Name]'
-  const location =
-    org.city ||
-    org.location ||
-    '[Location]'
-  const bookingLink = resolvePlaceholder('bookingLink', '[Booking Link]')
-  const diaryBookingLink = resolvePlaceholder('diaryBookingLink', '[Diary Booking Link]')
-  const promoX = resolvePlaceholder('promoX', '[X]')
-  const promoY = resolvePlaceholder('promoY', '[Y]')
-  const promoZ = resolvePlaceholder('promoZ', '[Z]')
-  const promoHigherAmount = resolvePlaceholder('promoHigherAmount', '[higher amount]')
-  const promoDate = resolvePlaceholder('promoDate', '[Date]')
-  const promoTime = resolvePlaceholder('promoTime', '[Time]')
-  const promoDateTime = resolvePlaceholder('promoDateTime', '[Date/Time]')
-  const leadDob = props.lead?.dob || props.lead?.dateOfBirth || props.lead?.birthDate || ''
-  const resolvedDob = leadDob ? new Date(leadDob) : null
-  const monthName = resolvedDob && !Number.isNaN(resolvedDob.getTime())
-    ? resolvedDob.toLocaleString('en-GB', { month: 'long' })
-    : new Date().toLocaleString('en-GB', { month: 'long' })
-  const promoMonth = resolvePlaceholder('promoMonth', '') || monthName || '[Month]'
-  const promoDayTime = resolvePlaceholder('promoDayTime', '[Day/Time]')
-  const promoDaysTimes = resolvePlaceholder('promoDaysTimes', '[Days/Times]')
-  const futureDate = resolvePlaceholder('futureDate', '[Future Date]')
-  const dateRange = resolvePlaceholder('dateRange', '[Date range]')
-  const specificDate = resolvePlaceholder('specificDate', '[Specific Date]')
-  const mothersDayDate = resolvePlaceholder('mothersDayDate', "[Mother's Day date]")
-  const parkingDetails = resolvePlaceholder('parkingDetails', '[on-site/nearby/street parking details]')
-  const publicTransportDetails = resolvePlaceholder('publicTransportDetails', '[public transportation details if applicable]')
-  const localCharity = resolvePlaceholder('localCharity', '[Local Charity]')
-  const localBusiness1 = resolvePlaceholder('localBusiness1', '[Local Business 1]')
-  const localBusiness2 = resolvePlaceholder('localBusiness2', '[Local Business 2]')
-  const localBusiness3 = resolvePlaceholder('localBusiness3', '[Local Business 3]')
-  return text
-    .replace(/\[\s*practice\s*name\s*\]/gi, practice)
-    .replace(/\[\s*patient\s*name\s*\]/gi, recipient.name)
-    .replace(/\[\s*name\s*\]/gi, recipient.name)
-    .replace(/\[\s*first\s*name\s*\]/gi, firstName)
-    .replace(/\[\s*phone\s*number\s*\]/gi, phone)
-    .replace(/\[\s*website\s*\]/gi, websiteReplacement)
-    .replace(/\[\s*email\s*\]/gi, recipient.email || email)
-    .replace(/\[\s*address\s*\]/gi, address)
-    .replace(/\[\s*street\s*address\s*\]/gi, street)
-    .replace(/\[\s*city\s*,?\s*state\s*zip\s*code\s*\]/gi, cityStateZip)
-    .replace(/\[\s*days\s*and\s*times\s*\]/gi, officeHours)
-    .replace(/\[\s*days\s*\/\s*times\s*\]/gi, promoDaysTimes)
-    .replace(/\[\s*day\s*\/\s*time\s*\]/gi, promoDayTime)
-    .replace(/\[\s*treatment\s*coordinator\s*name\s*\]/gi, coordinator)
-    .replace(/\[\s*practice\s*owner\s*\/\s*principal\s*dentist\s*\]/gi, principalDentist)
-    .replace(/\[\s*your\s*name\s*\]/gi, yourName)
-    .replace(/\[\s*location\s*\]/gi, location)
-    .replace(/\[\s*booking\s*link\s*\]/gi, bookingLink)
-    .replace(/\[\s*diary\s*booking\s*link\s*\]/gi, diaryBookingLink)
-    .replace(/\[\s*date\s*\/\s*time\s*\]/gi, promoDateTime)
-    .replace(/\[\s*date\s*\]/gi, promoDate)
-    .replace(/\[\s*time\s*\]/gi, promoTime)
-    .replace(/\[\s*month\s*\]/gi, promoMonth)
-    .replace(/\[\s*future\s*date\s*\]/gi, futureDate)
-    .replace(/\[\s*date\s*range\s*\]/gi, dateRange)
-    .replace(/\[\s*specific\s*date\s*\]/gi, specificDate)
-    .replace(/\[\s*mother'?s\s*day\s*date\s*\]/gi, mothersDayDate)
-    .replace(/\[\s*on-site\/nearby\/street\s*parking\s*details\s*\]/gi, parkingDetails)
-    .replace(/\[\s*public\s*transportation\s*details\s*if\s*applicable\s*\]/gi, publicTransportDetails)
-    .replace(/\[\s*local\s*charity\s*\]/gi, localCharity)
-    .replace(/\[\s*local\s*business\s*1\s*\]/gi, localBusiness1)
-    .replace(/\[\s*local\s*business\s*2\s*\]/gi, localBusiness2)
-    .replace(/\[\s*local\s*business\s*3\s*\]/gi, localBusiness3)
-    .replaceAll('[X]', promoX)
-    .replaceAll('[Y]', promoY)
-    .replaceAll('[Z]', promoZ)
-    .replaceAll('[higher amount]', promoHigherAmount)
-    .replaceAll('[Higher amount]', promoHigherAmount)
-}
 
 const previewTitle = computed(() => {
   if (!previewItem.value) return ''
@@ -1013,7 +868,12 @@ const previewSubject = computed(() => {
   if (!row) return ''
   const def = resolveDefault(row)
   const rawSubject = row.subject || def.subject || def.name
-  return applyPlaceholders(rawSubject)
+  return applyCrmPlaceholders(rawSubject, {
+    lead: props.lead || null,
+    recipient: previewRecipient.value,
+    practiceName: practiceName.value,
+    org: resolveOrgDetails(),
+  })
 })
 
 const previewHtml = computed(() => {
@@ -1021,25 +881,13 @@ const previewHtml = computed(() => {
   if (!row) return ''
   const def = resolveDefault(row)
   const rawTemplate = row.template && row.template.trim() ? row.template : def.template || ''
-  return applyPlaceholders(rawTemplate)
+  return applyCrmPlaceholders(rawTemplate, {
+    lead: props.lead || null,
+    recipient: previewRecipient.value,
+    practiceName: practiceName.value,
+    org: resolveOrgDetails(),
+  })
 })
-
-const stripHtmlToText = (html = '') => {
-  return String(html || '')
-    .replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gi, '$2 ($1)')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>\s*/gi, '\n\n')
-    .replace(/<\/li>\s*/gi, '\n')
-    .replace(/<li>\s*/gi, '- ')
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-}
 
 const previewIsWhatsApp = computed(() =>
   String(previewItem.value?.type || 'Email').toLowerCase() === 'whatsapp'
@@ -1048,7 +896,7 @@ const previewIsWhatsApp = computed(() =>
 const previewWhatsAppText = computed(() => {
   if (!previewItem.value) return ''
   const text = previewHtml.value || ''
-  return stripHtmlToText(text)
+  return htmlToPlainText(text)
 })
 
 const EMAIL_TEMPLATE = `<!DOCTYPE html>
@@ -1290,5 +1138,4 @@ watch(showGroupDialog, (v) => {
 }
 
 </style>
-
 
