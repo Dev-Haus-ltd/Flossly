@@ -1162,16 +1162,6 @@ onMounted(() => {
   loadBookingDentists();
   loadBookingPatients();
   handleMetaQuery(metaConnected, metaError);
-  // Test function after testing will be removed safely
-  window.testMetaSync = async () => {
-    try {
-      await crmStore.fetchMetaStructure();
-      await crmStore.fetchMetaInsights({ days: 30 });
-      console.log("Meta structure + insights synced");
-    } catch (e) {
-      console.error("[Meta test sync failed]", e);
-    }
-  };
 });
 onBeforeUnmount(() => {
   stopMetaStream();
@@ -1455,14 +1445,9 @@ const onItemsPerPageChange = async (val) => {
 const initLeads = async (metaConnected = false) => {
   if (metaConnected) {
     try {
-      // 1️⃣ Sync Meta structure + budgets
-      await crmStore.fetchMetaStructure();
-      // 2️⃣ Sync Meta analytics (daily insights / backfill)
-      await crmStore.fetchMetaInsights({ days: 30 });
-      // 3️⃣ Fetch last 30 days leads on first connect
       await crmStore.fetchLeadsNow({ days: 30 });
     } catch (e) {
-      console.error('[CRM] Meta post-connect sync failed', e);
+      console.error('[CRM] Meta lead sync failed', e);
     }
   }
   await fetchLeads()

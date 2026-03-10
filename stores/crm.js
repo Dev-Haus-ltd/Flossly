@@ -328,6 +328,10 @@ export const useCrmStore = defineStore("crmStore", {
       }
     },
 
+    async getGoogleSearchConsoleAnalytics(siteId, days = 30) {
+      return await this._wrap(() => crmService.getGoogleSearchConsoleAnalytics(siteId, days));
+    },
+
     // Clear Google site pages state
     clearGoogleSitePages() {
       this.googleSitePages = [];

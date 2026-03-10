@@ -1079,9 +1079,57 @@ export const searchSitePages = async (event) => {
   }
 }
 
-// =====================================================
-// GOOGLE ADS API FUNCTIONS
-// =====================================================
+/**
+ * Get aggregated search console analytics by date
+ * GET /api/google/getAnalytics?siteId=X&days=30
+ */
+export const getSearchConsoleAnalytics = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const q = getQuery(event) || {}
+  const siteId = Number(q.siteId)
+  const days = Math.min(90, Math.max(1, Number(q.days || 30)))
+
+  try {
+    let targetSiteId = siteId
+    if (!targetSiteId) {
+      const site = await GoogleSearchConsoleSite.findOne({
+        where: { organisationId: orgId }
+      })
+      if (!site) return success([])
+      targetSiteId = site.id
+    }
+
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - days)
+    const startDateStr = startDate.toISOString().split('T')[0]
+
+    // Aggregate daily performance across all pages
+    const performance = await GoogleSearchConsolePerformance.findAll({
+      where: {
+        organisationId: orgId,
+        siteId: targetSiteId,
+        dimensionType: 'page',
+        date: { [Op.gte]: startDateStr }
+      },
+      attributes: [
+        'date',
+        [sequelize.fn('SUM', sequelize.col('impressions')), 'impressions'],
+        [sequelize.fn('SUM', sequelize.col('clicks')), 'clicks'],
+        [sequelize.fn('AVG', sequelize.col('ctr')), 'ctr'],
+        [sequelize.fn('AVG', sequelize.col('position')), 'position']
+      ],
+      group: ['date'],
+      order: [['date', 'ASC']]
+    })
+
+    return success(performance)
+  } catch (e) {
+    console.error('[GSC] Error in getSearchConsoleAnalytics:', e)
+    return error(500, 'Failed to fetch search console analytics')
+  }
+}
 
 /**
  * Get an active OAuth token with Google Ads scope for the organization

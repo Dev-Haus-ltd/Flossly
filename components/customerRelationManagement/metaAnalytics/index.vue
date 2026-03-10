@@ -76,7 +76,7 @@
 
       <v-sheet v-else class="pa-10 text-center" color="transparent">
         <p class="text-grey">No Meta campaigns found. Make sure your account is connected and synced.</p>
-        <v-btn color="primary" class="mt-3" @click="resync" :loading="crmStore.isLoading">
+        <v-btn color="primary" class="mt-3" @click="resync">
           Sync Now
         </v-btn>
       </v-sheet>
@@ -189,19 +189,6 @@ const filteredCampaigns = computed(() => {
   p {
     font-size: 12px;
   }
-}
-
-.coming-soon-pill {
-  background: #ffe3b3;
-  border: 1px solid #f1b658;
-  border-radius: 999px;
-  color: #7a4b00;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  margin-right: 8px;
-  padding: 3px 8px;
-  text-transform: uppercase;
 }
 
 .custom-search {
