@@ -24,7 +24,7 @@ export const CrmDmMessage = sequelize.define(
       allowNull: false,
     },
     platformMessageId: {
-      type: DataTypes.STRING(160),
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     direction: {

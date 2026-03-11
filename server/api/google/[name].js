@@ -11,7 +11,8 @@ import {
   fetchAvailableAdsCustomers,
   selectAdsAccount,
   handleAdsLeadWebhook,
-  getAdsPerformance
+  getAdsPerformance,
+  getSearchConsoleAnalytics
 } from "../../controllers/google"
 
 export default defineEventHandler(async (event) => {
@@ -39,6 +40,8 @@ export default defineEventHandler(async (event) => {
       return await getSitePages(event)
     case 'searchSitePages':
       return await searchSitePages(event)
+    case 'getAnalytics':
+      return await getSearchConsoleAnalytics(event)
     // Google Ads endpoints
     case 'fetchAdsCustomers':
       return await fetchAvailableAdsCustomers(event)

@@ -9,8 +9,8 @@
     <!-- Activator -->
     <template #activator="{ props }">
       <v-badge
-        v-if="unreadCount > 0"
-        :content="unreadCount > 99 ? '99+' : unreadCount"
+        v-if="globalUnreadCount > 0"
+        :content="globalUnreadCount > 99 ? '99+' : globalUnreadCount"
         color="error"
         overlap
         class="notification-badge-custom"
@@ -106,11 +106,20 @@ import notificationIcon from '@/assets/icons/notification/Notification.svg';
 import taskIcon from '@/assets/icons/notification/task.svg';
 import leadIcon from '@/assets/icons/notification/lead.svg';
 import messageIcon from '@/assets/icons/notification/message.svg';
+import notificationIconSvg from '@/assets/icons/notification/Notification.svg';
+
+// Global state for unread count (accessible from anywhere)
+const globalUnreadCount = useState('notification-unread-count', () => 0);
 
 const menu = ref(false);
 const notifications = ref([]);
-const unreadCount = ref(0);
+const unreadCount = ref(0); // Local count for menu display
 const router = useRouter();
+
+// Sync global state to local when it changes (for real-time updates)
+watch(globalUnreadCount, (newVal) => {
+  // Global state changes will reflect in template automatically
+});
 
 // Initialize FCM
 const { isSupported, isPermissionGranted, requestPermission } = useFCM();
@@ -135,6 +144,7 @@ const fetchNotifications = async () => {
     if (payload?.success || response?.success) {
       notifications.value = payload.notifications || [];
       unreadCount.value = payload.unreadCount || 0;
+      globalUnreadCount.value = payload.unreadCount || 0; // Update global state
     }
   } catch (error) {
     console.error('Error fetching notifications:', error);
@@ -148,6 +158,7 @@ const fetchUnreadCount = async () => {
     const payload = response?.data || response;
     if (payload?.success || response?.success) {
       unreadCount.value = payload.unreadCount || 0;
+      globalUnreadCount.value = payload.unreadCount || 0; // Update global state
     }
   } catch (error) {
     console.error('Error fetching unread count:', error);
@@ -162,6 +173,7 @@ const markAsRead = async (notificationId) => {
       body: { notificationId }
     });
     await fetchNotifications();
+    await fetchUnreadCount(); // Update badge
   } catch (error) {
     console.error('Error marking notification as read:', error);
   }
@@ -174,6 +186,7 @@ const markAllAsRead = async () => {
       method: 'POST'
     });
     await fetchNotifications();
+    await fetchUnreadCount(); // Update badge
   } catch (error) {
     console.error('Error marking all as read:', error);
   }
@@ -188,14 +201,42 @@ const handleNotificationClick = async (notification) => {
 
   // Navigate based on notification type
   const urlMap = {
-    task_assigned: `/tasks/${notification.data?.taskId || 'mytasks'}`,
-    task_completed: `/tasks/${notification.data?.taskId || 'mytasks'}`,
+    // Tasks (always go to My Tasks)
+    task_assigned: '/tasks/mytasks',
+    task_assigned_bulk: '/tasks/mytasks',
+    task_completed: '/tasks/mytasks',
+    task_completed_bulk: '/tasks/mytasks',
+    task_comment: '/tasks/mytasks',
+    task_unassigned: '/tasks/mytasks',
+    task_unassigned_bulk: '/tasks/mytasks',
+    task_due_reminder: '/tasks/mytasks',
+    task_overdue_reminder: '/tasks/mytasks',
     lead_created: `/crm?leadId=${notification.data?.leadId || ''}`,
+    lead_assigned: `/crm?leadId=${notification.data?.leadId || ''}`,
+    lead_unassigned: `/crm?leadId=${notification.data?.leadId || ''}`,
+    lead_status_changed: `/crm?leadId=${notification.data?.leadId || ''}`,
+    crm_automation_sent: `/crm?leadId=${notification.data?.leadId || ''}`,
+    crm_automation_failed: `/crm?leadId=${notification.data?.leadId || ''}`,
     whatsapp_message: `/crm?leadId=${notification.data?.leadId || ''}&tab=communication`,
-    meta_dm: '/crm/dms',
+    meta_dm: '/crm/analytics',
+    rota_published: '/teams/rota',
+    shift_reminder: '/teams/rota',
+    leave_approved: '/teams/rota',
+    leave_denied: '/teams/rota',
+    // Support/chat notifications
+    support_ticket_submitted: '/support-chat',
+    support_reply: '/support-chat',
+    chatbot_message: '/support-chat',
+
+    // System notifications
+    system_subscription_confirmed: '/',
+    system_account_created: '/',
+    system_password_reset_requested: '/forgetpassword',
+    system_portal_ready: '/dashboard',
   };
 
-  const url = notification.data?.url || urlMap[notification.type] || '/';
+  // Prefer frontend mapping (consistent UX) and only fall back to server-provided URLs for unknown types
+  const url = urlMap[notification.type] || notification.data?.url || '/';
   menu.value = false;
   await navigateTo(url);
 };
@@ -211,9 +252,13 @@ const viewAllNotifications = () => {
 const getNotificationIconSvg = (type) => {
   if (type.startsWith('task_')) {
     return taskIcon;
-  } else if (type.startsWith('lead_')) {
+  } else if (type.startsWith('lead_') || type.startsWith('crm_')) {
     return leadIcon;
-  } else if (type.includes('message') || type.includes('comment') || type === 'whatsapp_message' || type === 'meta_dm') {
+  } else if (type.startsWith('system_')) {
+    return notificationIconSvg;
+  } else if (type.startsWith('rota_') || type.startsWith('shift_') || type.startsWith('leave_')) {
+    return notificationIconSvg;
+  } else if (type.startsWith('support_') || type.includes('message') || type.includes('comment') || type === 'whatsapp_message' || type === 'meta_dm' || type === 'chatbot_message') {
     return messageIcon;
   }
   return taskIcon;
@@ -236,12 +281,21 @@ const formatTime = (dateString) => {
 };
 
 // Listen for FCM messages
+let fcmDebounceTimeout = null;
 onMounted(() => {
   fetchNotifications();
+  fetchUnreadCount(); // Initial fetch for badge
   
   // Listen for new notifications from FCM
   if (process.client) {
     window.addEventListener('fcm-notification', (event) => {
+      // Debounce to prevent rapid calls
+      if (fcmDebounceTimeout) return;
+      
+      fcmDebounceTimeout = setTimeout(() => {
+        fcmDebounceTimeout = null;
+      }, 2000); // 2 second debounce
+      
       fetchUnreadCount();
       // Don't fetch notifications unless menu is open - let the badge update via unreadCount
       if (menu.value) {
@@ -257,6 +311,27 @@ watch(menu, (newVal) => {
     fetchNotifications();
   }
 });
+
+// Watch for organization changes and refetch notifications
+const { user } = useUser();
+let orgWatchEnabled = true;
+let orgWatchTimeout = null;
+watch(() => user.value?.currentLoggedInOrgId, (newOrgId, oldOrgId) => {
+  // Prevent multiple rapid calls - debounce
+  if (orgWatchTimeout) clearTimeout(orgWatchTimeout);
+  
+  if (!orgWatchEnabled) return;
+  
+  if (newOrgId !== oldOrgId && newOrgId !== undefined && oldOrgId !== undefined) {
+    console.log('Organization changed in notification menu, refetching notifications...');
+    orgWatchEnabled = false;
+    // Debounce the refetch to avoid rapid calls
+    orgWatchTimeout = setTimeout(() => {
+      fetchNotifications(); // fetchNotifications already updates unreadCount
+      orgWatchEnabled = true;
+    }, 500);
+  }
+}, { immediate: false });
 </script>
 
 <style scoped>

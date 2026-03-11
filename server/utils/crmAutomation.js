@@ -3,9 +3,10 @@ import { formatYmd, parseDayOffsetFromText } from "~/lib/misc";
 import { template as EMAIL_TEMPLATE } from "./emailTemplate.js";
 import { transporter } from "./nodeMailer.js";
 import { buildLeadContext, renderTokens } from "./tokenRenderer.js";
-import { CrmAutomationTemplate, Organisation } from "../models/index.js";
+import { CrmAutomationTemplate, Organisation, CrmLeadAssignee, User } from "../models/index.js";
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from "./whatsapp.js";
 import { resolveWhatsAppProviderConfig } from "./whatsappProvider.js";
+import { sendCrmAutomationSentNotification, sendCrmAutomationFailedNotification } from "./fcmNotification.js";
 
 const crmTriggersByKey = new Map(
   crmAutomationDefaults
@@ -121,7 +122,7 @@ export const buildCrmWhatsAppTemplatePayload = (lead, tpl) => {
   };
 };
 
-export const sendCrmAutomationEmail = async (lead, subject, html) => {
+export const sendCrmAutomationEmail = async (lead, subject, html, automationName = null) => {
   const wrapped = EMAIL_TEMPLATE.replaceAll("{subject}", subject).replace(
     "{content}",
     html
@@ -132,9 +133,31 @@ export const sendCrmAutomationEmail = async (lead, subject, html) => {
     subject,
     html: wrapped,
   });
+
+  // Send push notification to lead assignees on success
+  try {
+    const assignees = await CrmLeadAssignee.findAll({
+      where: { organisationId: Number(lead.organisationId), leadId: lead.id },
+      include: [{ model: User, as: 'user', attributes: ['id'] }]
+    });
+    const userIds = assignees.map(a => a.user?.id).filter(Boolean);
+    for (const userId of userIds) {
+      await sendCrmAutomationSentNotification({
+        userId,
+        lead,
+        automationName: automationName || subject,
+        channel: 'Email'
+      });
+    }
+  } catch (pushErr) {
+    console.warn('CRM automation sent push notification failed', {
+      leadId: lead.id,
+      error: pushErr?.message || pushErr
+    });
+  }
 };
 
-export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload = null) => {
+export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload = null, automationName = null) => {
   const to = normalizeWhatsAppNumber(lead?.telephone);
   if (!to) throw new Error("Missing or invalid phone number");
   const waConfig = await resolveWhatsAppProviderConfig(lead.organisationId);
@@ -193,6 +216,28 @@ export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload =
       providerMessageId,
       content: waConfig.provider === "meta" && templatePayload ? null : String(message || ""),
     });
+
+    // Send push notification to lead assignees on success
+    try {
+      const assignees = await CrmLeadAssignee.findAll({
+        where: { organisationId: Number(lead.organisationId), leadId: lead.id },
+        include: [{ model: User, as: 'user', attributes: ['id'] }]
+      });
+      const userIds = assignees.map(a => a.user?.id).filter(Boolean);
+      for (const userId of userIds) {
+        await sendCrmAutomationSentNotification({
+          userId,
+          lead,
+          automationName: automationName || templatePayload?.name || 'WhatsApp',
+          channel: 'WhatsApp'
+        });
+      }
+    } catch (pushErr) {
+      console.warn('CRM automation sent push notification failed', {
+        leadId: lead.id,
+        error: pushErr?.message || pushErr
+      });
+    }
   } catch (e) {
     await logWhatsAppMessage({
       organisationId: lead.organisationId,
@@ -203,6 +248,30 @@ export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload =
       status: "failed",
       error: e?.data?.error?.message || e?.message || "Failed to send",
     });
+
+    // Send push notification to lead assignees on failure
+    try {
+      const assignees = await CrmLeadAssignee.findAll({
+        where: { organisationId: Number(lead.organisationId), leadId: lead.id },
+        include: [{ model: User, as: 'user', attributes: ['id'] }]
+      });
+      const userIds = assignees.map(a => a.user?.id).filter(Boolean);
+      for (const userId of userIds) {
+        await sendCrmAutomationFailedNotification({
+          userId,
+          lead,
+          automationName: automationName || templatePayload?.name || 'WhatsApp',
+          channel: 'WhatsApp',
+          errorMessage: e?.data?.error?.message || e?.message || "Failed to send"
+        });
+      }
+    } catch (pushErr) {
+      console.warn('CRM automation failed push notification failed', {
+        leadId: lead.id,
+        error: pushErr?.message || pushErr
+      });
+    }
+
     throw e;
   }
 };
@@ -404,12 +473,12 @@ export const sendImmediateCrmAutomationsForLead = async (lead) => {
       if (waConfig?.provider === "meta" && !templatePayload) {
         throw new Error("WhatsApp template name is required for automation");
       }
-      await sendCrmAutomationWhatsApp(lead, message, templatePayload);
+      await sendCrmAutomationWhatsApp(lead, message, templatePayload, tpl?.name);
       await markCrmSent(lead, raw, sentKey);
     } else {
       if (!lead?.email) continue;
       const { subject, html } = buildCrmEmail(lead, tpl, org);
-      await sendCrmAutomationEmail(lead, subject, html);
+      await sendCrmAutomationEmail(lead, subject, html, tpl?.name);
       await markCrmSent(lead, raw, sentKey);
     }
   }

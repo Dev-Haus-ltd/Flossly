@@ -162,46 +162,47 @@
       </div>
 
       <div class="conversion-grid mt-8">
-        <v-card class="conversion-card" elevation="0" rounded="lg">
-          <h4 class="card-head">Leads Conversion</h4>
-          <div class="card-body">
-            <div class="chart-shell">
-              <canvas ref="leadChartRef" />
-            </div>
-            <div class="chart-legend">
-              <div class="legend-item">
-                <span class="dot total"></span>
-                <span>Total Lead</span>
-              </div>
-              <div class="legend-item">
-                <span class="dot converted"></span>
-                <span>Converted Leads</span>
-              </div>
-            </div>
-            <div class="lead-stats">
-              <div class="stat-row">
-                <span>Total Leads (this month)</span>
-                <span>{{ monthlySummary.total }}</span>
-              </div>
-              <div class="stat-row">
-                <span>New Leads</span>
-                <span>{{ monthlySummary.new }}</span>
-              </div>
-              <div class="stat-row">
-                <span>Converted</span>
-                <span>{{ monthlySummary.converted }}</span>
-              </div>
-              <div class="stat-row">
-                <span>Contacted</span>
-                <span>{{ monthlySummary.contacted }}</span>
-              </div>
-              <div class="stat-row">
-                <span>Lost</span>
-                <span>{{ monthlySummary.lost }}</span>
-              </div>
-            </div>
-          </div>
-        </v-card>
+        <CrmCharts
+          :chartType="leadsChartType"
+          :chartTitle="leadsChartConfig.chartTitle"
+          :chartSubtitle="leadsChartConfig.chartSubtitle"
+          :chartData="leadsChartConfig.chartData"
+          :summaryStats="leadsChartConfig.summaryStats"
+          :chartHeight="'320px'"
+          :showLegend="true"
+          :legendPosition="'bottom'"
+          :isLoading="leadsChartLoading"
+          :showFallback="!leadsChartLoading && leadRows.length === 0"
+          :error="leadsChartError"
+        />
+
+        <CrmCharts
+          :chartType="'bar'"
+          :chartTitle="metaChartConfig.chartTitle"
+          :chartSubtitle="metaChartConfig.chartSubtitle"
+          :chartData="metaChartConfig.chartData"
+          :summaryStats="metaChartConfig.summaryStats"
+          :chartHeight="'320px'"
+          :showLegend="true"
+          :legendPosition="'bottom'"
+          :isLoading="metaChartLoading"
+          :showFallback="!metaChartLoading && (!isMetaConnected || metaChartConfig.chartData.datasets.length === 0)"
+          :error="metaChartError"
+        />
+
+        <CrmCharts
+          :chartType="'line'"
+          :chartTitle="gscChartConfig.chartTitle"
+          :chartSubtitle="gscChartConfig.chartSubtitle"
+          :chartData="gscChartConfig.chartData"
+          :summaryStats="gscChartConfig.summaryStats"
+          :chartHeight="'320px'"
+          :showLegend="true"
+          :legendPosition="'bottom'"
+          :isLoading="gscChartLoading"
+          :showFallback="!gscChartLoading && (!isGoogleConnected || gscChartConfig.chartData.datasets.length === 0)"
+          :error="gscChartError"
+        />
       </div>
     </div>
 
@@ -417,6 +418,8 @@ import { useAuthStore } from '@/stores/auth'
 import CustomerRelationManagementMetaHealthDialog from '@/components/customerRelationManagement/metaHealthDialog.vue'
 import CustomerRelationManagementGoogleAnalyticsGoogleHealthDialog from '@/components/customerRelationManagement/googleanalytics/googleHealthDialog.vue'
 import IntegrationCard from '@/components/customerRelationManagement/IntegrationCard.vue'
+import CrmCharts from '@/components/customerRelationManagement/CrmCharts.vue'
+import { transformLeadsConversionData, transformMetaInsightsData, transformGoogleSearchConsoleData } from '@/composables/useChartAdapters'
 import metaLogo from '@/assets/crm/meta-logo.svg'
 import whatsappLogo from '@/assets/crm/whatsapp-logo.svg'
 import googleLogo from '@/assets/crm/google-logo.svg'
@@ -453,8 +456,42 @@ const whapiStatus = reactive({
 })
 
 const leadRows = ref([])
-const leadChartRef = ref(null)
-let leadChartInstance = null
+const leadsChartType = ref('line')
+const leadsChartLoading = ref(false)
+const leadsChartError = ref(null)
+const leadsChartConfig = reactive({
+  chartTitle: 'Leads Conversion',
+  chartSubtitle: 'Last 30 days',
+  chartData: {
+    labels: [],
+    datasets: []
+  },
+  summaryStats: []
+})
+
+const metaChartLoading = ref(false)
+const metaChartError = ref(null)
+const metaChartConfig = reactive({
+  chartTitle: 'Meta Analytics',
+  chartSubtitle: 'Last 30 days',
+  chartData: {
+    labels: [],
+    datasets: []
+  },
+  summaryStats: []
+})
+
+const gscChartLoading = ref(false)
+const gscChartError = ref(null)
+const gscChartConfig = reactive({
+  chartTitle: 'Google Search Console',
+  chartSubtitle: 'Last 30 days',
+  chartData: {
+    labels: [],
+    datasets: []
+  },
+  summaryStats: []
+})
 
 const metaHealthDialog = ref(false)
 const metaHealthLoading = ref(false)
@@ -977,23 +1014,6 @@ const onConnectChatbot = async () => {
 
 const activeLeads = computed(() => (leadRows.value || []).filter((lead) => !lead?.softDeleted))
 
-const monthlySummary = computed(() => {
-  const start = startOfMonth(new Date())
-  const scoped = activeLeads.value.filter((lead) => {
-    const date = new Date(lead?.inquiryDate || lead?.createdAt || 0)
-    return !Number.isNaN(date.valueOf()) && date >= start
-  })
-  const byStatus = (status) =>
-    scoped.filter((lead) => (lead.leadStatus || '').toLowerCase() === status).length
-  return {
-    total: scoped.length,
-    new: byStatus('new'),
-    converted: byStatus('converted'),
-    contacted: byStatus('contacted'),
-    lost: byStatus('lost'),
-  }
-})
-
 const transformGoogleHealthData = (data) => {
   if (!data || !data.connected || !data.account) {
     return { connected: false }
@@ -1127,135 +1147,140 @@ const handleGoogleCallback = () => {
   }
 }
 
-const buildLeadSeries = (days = 30) => {
-  const today = startOfDay(new Date())
-  const labels = []
-  const totalCounts = []
-  const convertedCounts = []
-  const indexByDate = new Map()
 
-  for (let i = days - 1; i >= 0; i -= 1) {
-    const d = subDays(today, i)
-    const key = format(d, 'yyyy-MM-dd')
-    indexByDate.set(key, labels.length)
-    labels.push(format(d, 'd MMM'))
-    totalCounts.push(0)
-    convertedCounts.push(0)
-  }
+const updateLeadsChartData = async () => {
+  try {
+    leadsChartError.value = null
 
-  activeLeads.value.forEach((lead) => {
-    const date = new Date(lead?.inquiryDate || lead?.createdAt || 0)
-    if (Number.isNaN(date.valueOf())) return
-    const key = format(startOfDay(date), 'yyyy-MM-dd')
-    const idx = indexByDate.get(key)
-    if (idx == null) return
-    totalCounts[idx] += 1
-    if ((lead.leadStatus || '').toLowerCase() === 'converted') {
-      convertedCounts[idx] += 1
+    if (!activeLeads.value || activeLeads.value.length === 0) {
+      console.warn('⚠️ No active leads to display')
+      leadsChartConfig.chartData = {
+        labels: [],
+        datasets: []
+      }
+      leadsChartConfig.summaryStats = []
+      leadsChartConfig.chartSubtitle = 'No data available'
+      return
     }
-  })
 
-  return { labels, totalCounts, convertedCounts }
-}
+    // Use the adapter to transform raw leads data
+    const normalizedData = transformLeadsConversionData(
+      activeLeads.value,
+      {
+        metricLabels: ['Total Leads', 'Converted Leads'],
+        summaryLabels: ['Total Leads (this month)', 'New Leads', 'Converted', 'Contacted', 'Lost'],
+        chartType: 'line',
+        colors: ['#3B82F6', '#F97316']
+      }
+    )
 
-const renderLeadChart = async () => {
-  if (!leadChartRef.value) return
-  const { labels, totalCounts, convertedCounts } = buildLeadSeries(30)
-  const { Chart } = await import('chart.js/auto')
+    // Important: Update the entire chartData object at once to trigger reactivity
+    leadsChartConfig.chartData = {
+      labels: normalizedData.chartData?.labels || [],
+      datasets: normalizedData.chartData?.datasets || []
+    }
+    
+    leadsChartConfig.summaryStats = normalizedData.summary || []
+    leadsChartConfig.chartSubtitle = `${activeLeads.value.length} leads • Last 30 days`
 
-  if (leadChartInstance) {
-    leadChartInstance.destroy()
+
+  } catch (error) {
+    console.error('❌ Error updating leads chart:', error)
+    leadsChartError.value = 'Failed to render chart: ' + error.message
   }
-
-  leadChartInstance = new Chart(leadChartRef.value, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'Total Lead',
-          data: totalCounts,
-          borderColor: '#3B82F6',
-          backgroundColor: 'rgba(59, 130, 246, 0.12)',
-          fill: false,
-          tension: 0.35,
-          pointRadius: 0,
-        },
-        {
-          label: 'Converted Leads',
-          data: convertedCounts,
-          borderColor: '#F97316',
-          backgroundColor: 'rgba(249, 115, 22, 0.12)',
-          fill: false,
-          tension: 0.35,
-          pointRadius: 0,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          mode: 'index',
-          intersect: false,
-        },
-      },
-      scales: {
-        x: {
-          grid: { display: false },
-          ticks: {
-            maxTicksLimit: 6,
-            color: '#9CA3AF',
-          },
-        },
-        y: {
-          grid: { color: '#E5E7EB' },
-          beginAtZero: true,
-          suggestedMin: 0,
-          ticks: { color: '#9CA3AF' },
-        },
-      },
-    },
-  })
 }
 
 const loadLeads = async () => {
+  leadsChartLoading.value = true
+  leadsChartError.value = null
+
   try {
     const res = await crmStore.listLeads({ includeArchived: true })
+    
     if (res?.code === 0) {
       leadRows.value = res.data || []
     } else {
       leadRows.value = []
+      leadsChartError.value = res?.message || 'Failed to load leads'
     }
   } catch (e) {
     leadRows.value = []
+    leadsChartError.value = e?.message || 'Error loading leads'
+    console.error('❌ Error loading leads:', e)
   } finally {
-    await nextTick()
-    renderLeadChart()
+    leadsChartLoading.value = false
   }
 }
 
+const loadMetaAnalytics = async () => {
+  if (!isMetaConnected.value) return
+  metaChartLoading.value = true
+  metaChartError.value = null
+  try {
+    const res = await crmStore.getMetaInsights()
+    if (res?.code === 0) {
+      const normalized = transformMetaInsightsData(res.data || [])
+      metaChartConfig.chartData = normalized.chartData
+      metaChartConfig.summaryStats = normalized.summary
+    } else {
+      metaChartError.value = res?.message || 'Failed to load Meta analytics'
+    }
+  } catch (e) {
+    metaChartError.value = e?.message || 'Failed to load Meta analytics'
+  } finally {
+    metaChartLoading.value = false
+  }
+}
+
+const loadGscAnalytics = async () => {
+  if (!isGoogleConnected.value) return
+  gscChartLoading.value = true
+  gscChartError.value = null
+  try {
+    const res = await crmStore.getGoogleSearchConsoleAnalytics()
+    if (res?.code === 0) {
+      const normalized = transformGoogleSearchConsoleData(res)
+      gscChartConfig.chartData = normalized.chartData
+      gscChartConfig.summaryStats = normalized.summary
+    } else {
+      gscChartError.value = res?.message || 'Failed to load GSC analytics'
+    }
+  } catch (e) {
+    gscChartError.value = e?.message || 'Failed to load GSC analytics'
+  } finally {
+    gscChartLoading.value = false
+  }
+}
 
 onMounted(async () => {
   loadUser()
   handleMetaQuery()
   handleGoogleCallback()
-  await Promise.all([checkMetaConnection(), loadWhapiStatus(), checkGoogleConnection(), loadLeads()])
+  
+  // Wait for connections first
+  await Promise.all([
+    checkMetaConnection(), 
+    loadWhapiStatus(), 
+    checkGoogleConnection()
+  ])
+  
+  // Now load data - connections will be correct
+  await Promise.all([
+    loadLeads(), 
+    loadMetaAnalytics(),
+    loadGscAnalytics()
+  ])
 })
 
-watch(activeLeads, async () => {
-  await nextTick()
-  renderLeadChart()
-})
+watch(
+  () => activeLeads.value,
+  async () => {
+    await nextTick()
+    updateLeadsChartData()
+  },
+  { deep: true }
+)
 
-onBeforeUnmount(() => {
-  if (leadChartInstance) {
-    leadChartInstance.destroy()
-    leadChartInstance = null
-  }
-})
 </script>
 
 <style scoped>
@@ -1312,7 +1337,15 @@ onBeforeUnmount(() => {
 
 .conversion-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+
+@media (min-width: 1400px) {
+  .conversion-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 .conversion-card {

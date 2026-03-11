@@ -881,14 +881,7 @@ const fetchDmHistoryForOrg = async (
     accountSummaries: [],
     errors: [],
   }
-  const shouldTrace =
-    traceEnabled ||
-    debugEnabled ||
-    String(process.env.META_DM_SYNC_TRACE || '').toLowerCase() === 'true'
-  const trace = (...args) => {
-    if (!shouldTrace) return
-    try { console.log('[META DM SYNC TRACE]', ...args) } catch {}
-  }
+  const trace = () => {}
 
   let conversationsUpserted = 0
   let messagesImported = 0
@@ -908,13 +901,29 @@ const fetchDmHistoryForOrg = async (
     const accessToken = acc.accessTokenEnc ? decrypt(acc.accessTokenEnc) : null
     if (!accountId || !accessToken) continue
 
+    // For Instagram: Messenger API for Instagram requires a PAGE access token when querying
+    // /{page-id}/conversations?platform=instagram. The IG user token stored in CrmDmAccount
+    // is not sufficient. Look up the page token from MetaPage table.
+    let pageAccessToken = accessToken
+    if (platform === 'instagram' && pageIdFromMeta) {
+      try {
+        const pageRow = await MetaPage.findOne({
+          where: { organisationId: orgId, pageId: pageIdFromMeta, status: 'Active' },
+        })
+        if (pageRow?.accessTokenEnc) {
+          pageAccessToken = decrypt(pageRow.accessTokenEnc) || accessToken
+        }
+      } catch {}
+    }
+
     const selfIds = new Set([accountId])
     if (pageIdFromMeta) selfIds.add(pageIdFromMeta)
     const platformParam = platform === 'instagram' ? 'instagram' : 'messenger'
-    // For Instagram, try page node first, then IG node as fallback.
-    // Some accounts return conversations only on one of these nodes.
+    // For Instagram: Messenger API for Instagram uses /{page-id}/conversations?platform=instagram
+    // with a page access token. The IG account node requires separate Instagram Graph API
+    // capabilities and is not supported in this setup.
     const nodeCandidates = platform === 'instagram'
-      ? [...new Set([String(pageIdFromMeta || ''), String(accountId || '')].filter(Boolean))]
+      ? [...new Set([String(pageIdFromMeta || '')].filter(Boolean))]
       : [accountId]
     const accountDebug = {
       platform,
@@ -942,7 +951,10 @@ const fetchDmHistoryForOrg = async (
       }
       accountDebug.nodesTried.push(nodeDebug)
       const conversationPageSize = platform === 'instagram' ? 50 : 25
-      let nextConversationsUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationNodeId)}/conversations?platform=${encodeURIComponent(platformParam)}&fields=id,updated_time,participants.limit(10){id,name,username,profile_pic,profile_picture_url}&limit=${conversationPageSize}&access_token=${encodeURIComponent(accessToken)}`
+      const tokenForNode = (platform === 'instagram' && conversationNodeId === pageIdFromMeta)
+        ? pageAccessToken
+        : accessToken
+      let nextConversationsUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationNodeId)}/conversations?platform=${encodeURIComponent(platformParam)}&fields=id,updated_time,participants.limit(10){id,name,username,profile_pic,profile_picture_url}&limit=${conversationPageSize}&access_token=${encodeURIComponent(tokenForNode)}`
       trace('list_conversations:start', JSON.stringify({
         orgId: Number(orgId),
         platform,
@@ -1159,7 +1171,7 @@ const fetchDmHistoryForOrg = async (
           const conversationIdForMessages = String(conv?.id || '')
           const messagePageSize = platform === 'instagram' ? 20 : 50
           let nextMessagesUrl = conversationIdForMessages
-            ? `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationIdForMessages)}/messages?fields=id,created_time,message,from,to,attachments&limit=${messagePageSize}&access_token=${encodeURIComponent(accessToken)}`
+            ? `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationIdForMessages)}/messages?fields=id,created_time,message,from,to,attachments&limit=${messagePageSize}&access_token=${encodeURIComponent(tokenForNode)}`
             : null
           let processedMessages = 0
           while (nextMessagesUrl && processedMessages < maxMessagesPerThread) {
@@ -1213,7 +1225,13 @@ const fetchDmHistoryForOrg = async (
             const count = Array.isArray(msgResp?.data) ? msgResp.data.length : 0
             if (!count) break
             processedMessages += count
-            await collectMessagePage(msgResp)
+            try {
+              await collectMessagePage(msgResp)
+            } catch (e) {
+              console.error('[META DM SYNC] collectMessagePage error', {
+                platform, accountId, conversationNodeId, convId: conv?.id, message: e?.message,
+              })
+            }
             nextMessagesUrl = msgResp?.paging?.next || null
           }
 
@@ -1341,8 +1359,22 @@ export const igAuthCallback = async (event) => {
       appSecret
     )}&code=${encodeURIComponent(code)}`
     const shortResp = await $fetch(tokenUrl, { method: 'GET' })
-    const accessToken = shortResp.access_token
-    if (!accessToken) return error(500, 'Failed to get access token')
+    const shortToken = shortResp.access_token
+    if (!shortToken) return error(500, 'Failed to get access token')
+
+    // Exchange short-lived user token for long-lived token (60-day expiry)
+    const longLivedUrl = `https://graph.facebook.com/${META_VERSION}/oauth/access_token?grant_type=fb_exchange_token&client_id=${encodeURIComponent(appId)}&client_secret=${encodeURIComponent(appSecret)}&fb_exchange_token=${encodeURIComponent(shortToken)}`
+    let accessToken = shortToken
+    let expiresIn = Number(shortResp?.expires_in || 0)
+    try {
+      const longResp = await $fetch(longLivedUrl, { method: 'GET' })
+      if (longResp?.access_token) {
+        accessToken = longResp.access_token
+        expiresIn = Number(longResp?.expires_in || 0)
+      }
+    } catch (e) {
+      console.warn('[META IG AUTH] Failed to exchange long-lived token, using short-lived:', e?.message)
+    }
 
     const pagesUrl = `https://graph.facebook.com/${META_VERSION}/me/accounts?fields=id,name,instagram_business_account&access_token=${encodeURIComponent(accessToken)}`
     const pagesResp = await $fetch(pagesUrl, { method: 'GET' })
@@ -1358,7 +1390,6 @@ export const igAuthCallback = async (event) => {
       igUsername = igResp?.username || null
     } catch (e) {}
 
-    const expiresIn = Number(shortResp?.expires_in || 0)
     const expiry = expiresIn ? new Date(Date.now() + expiresIn * 1000) : null
 
     await upsertDmAccount({
@@ -1374,6 +1405,28 @@ export const igAuthCallback = async (event) => {
         igAccountId,
       },
     })
+
+    // Subscribe the linked Facebook page to Instagram webhook fields using the page access token.
+    // The page access token is needed (not user token) for subscribed_apps endpoint.
+    const pageId = String(withIg?.id || '')
+    if (pageId) {
+      try {
+        const pageTokenUrl = `https://graph.facebook.com/${META_VERSION}/${pageId}?fields=access_token&access_token=${encodeURIComponent(accessToken)}`
+        const pageTokenResp = await $fetch(pageTokenUrl, { method: 'GET' })
+        const pageToken = pageTokenResp?.access_token || accessToken
+        const subscribeUrl = `https://graph.facebook.com/${META_VERSION}/${pageId}/subscribed_apps`
+        await $fetch(subscribeUrl, {
+          method: 'POST',
+          body: new URLSearchParams({
+            subscribed_fields: META_SUBSCRIBED_FIELDS,
+            access_token: pageToken,
+          }).toString(),
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        })
+      } catch (e) {
+        console.warn('[META IG AUTH] Failed to subscribe page to Instagram webhooks:', e?.message)
+      }
+    }
 
     // Fire-and-forget backfill to keep callback response fast.
     void fetchDmHistoryForOrg(orgId, {
@@ -1431,19 +1484,6 @@ export const fetchDmHistoryNow = async (event) => {
   })
   if (!result.ok) return error(400, result.error || 'Failed to sync DM history')
   if (debugEnabled) {
-    try {
-      console.log('[META DM SYNC DEBUG]', JSON.stringify({
-        orgId: Number(orgId),
-        days,
-        platforms,
-        accounts: result?.debug?.accounts || 0,
-        conversationsScanned: result?.debug?.conversationsScanned || 0,
-        conversationsUpserted: result?.debug?.conversationsUpserted || 0,
-        messagesScanned: result?.debug?.messagesScanned || 0,
-        messagesImported: result?.debug?.messagesImported || 0,
-        errors: Array.isArray(result?.debug?.errors) ? result.debug.errors.length : 0,
-      }))
-    } catch {}
     return success(result.debug)
   }
   return success({
@@ -1697,11 +1737,7 @@ export const healthCheck = async (event) => {
 export const webhook = async (event) => {
   const config = useRuntimeConfig()
   const reqId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-  const webhookTraceEnabled = true
-  const webhookTrace = (...args) => {
-    if (!webhookTraceEnabled) return
-    try { console.log('[META WEBHOOK TRACE]', reqId, ...args) } catch {}
-  }
+  const webhookTrace = () => {}
   
   if (getMethod(event) === 'HEAD') {
     return send(event, 'ok')
@@ -1725,12 +1761,6 @@ export const webhook = async (event) => {
   if (getMethod(event) === 'POST') {
     const body = await readBody(event)
     try {
-      console.log('[META WEBHOOK]', reqId, 'POST received', {
-        object: body?.object,
-        entries: Array.isArray(body?.entry) ? body.entry.length : 0,
-      })
-    } catch {}
-    try {
       const entries = Array.isArray(body?.entry) ? body.entry : []
       for (const entry of entries) {
         const pageId = String(entry.id || '')
@@ -1743,7 +1773,6 @@ export const webhook = async (event) => {
           const v = ch.value || {}
           const leadId = v.leadgen_id || v.lead_id || v.leadId
           const formId = v.form_id || v.formId
-          console.log('[META WEBHOOK]', reqId, 'Leadgen event', { pageId, leadId, formId })
           
           if (!leadId || !pageId) continue
           
@@ -1763,11 +1792,6 @@ export const webhook = async (event) => {
           
           const url = `https://graph.facebook.com/${META_VERSION}/${leadId}?fields=created_time,field_data,ad_id,adset_id,campaign_id&access_token=${encodeURIComponent(pageToken)}`
           const leadData = await $fetch(url, { method: 'GET' })
-          console.log('[META WEBHOOK]', reqId, 'Fetched lead data', {
-            pageId,
-            leadId,
-            created_time: leadData?.created_time || null,
-          })
           
           const fld = (leadData?.field_data || []).reduce((acc, f) => {
             acc[f.name] = Array.isArray(f.values) ? f.values[0] : f.values
@@ -1825,6 +1849,7 @@ export const webhook = async (event) => {
               if (userIds.length) {
                 await sendNotificationToMultipleUsers({
                   userIds,
+                  organisationId: mp.organisationId,
                   title: 'New Meta Lead',
                   body: fullName || email || phone || 'A new lead was received',
                   type: 'lead_created',
