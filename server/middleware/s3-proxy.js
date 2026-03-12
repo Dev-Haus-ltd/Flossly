@@ -17,7 +17,11 @@ export default defineEventHandler(async (event) => {
 
   // Decode the URL-encoded pathname to handle filenames with spaces and special characters
   const decodedPathname = decodeURIComponent(pathname);
-  const key = decodedPathname.replace(/^\/+/, "");
+  const pathParts = decodedPathname.replace(/^\/+/, "").split("/");
+  const baseDir = pathParts[0];
+  const filename = pathParts.slice(1).join("/");
+  const encodedFilename = encodeURIComponent(filename);
+  const key = `${baseDir}/${encodedFilename}`;
   return await sendS3Object(event, key);
 });
 

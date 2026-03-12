@@ -287,6 +287,16 @@ watch([leaveHistory, entitlementStats], () => {
   });
 }, { deep: true });
 
+watch(
+  () => userStore.currentLeaveEntitlement,
+  (newEntitlement) => {
+    if (newEntitlement && newEntitlement.userId === user?.id) {
+      entitlementStats.value = { ...entitlementStats.value, ...newEntitlement };
+    }
+  },
+  { deep: true }
+);
+
 const handleSuccess = (data) => {
   openDrawer.value = false;
   getLeaveStats();
