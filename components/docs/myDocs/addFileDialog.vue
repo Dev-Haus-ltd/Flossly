@@ -27,18 +27,20 @@
         <v-label v-if="!folder?.id" class="mb-2" style="font-size: 14px"
           >Select folder</v-label
         >
-        <v-select
+        <v-autocomplete
           v-if="!folder?.id"
           v-model="selectedFolder"
-          :items="foldersList"
+          v-model:search="searchQuery"
+          :items="filteredFolders"
           item-title="name"
           item-value="id"
           class="input-bordered"
           density="compact"
           variant="solo"
-          @update:model-value="
-            (id) => handleSelect(foldersList.find((f) => f.id === id))
-          "
+          placeholder="Search folders..."
+          clearable
+          no-filter
+          @update:model-value="handleSelect"
           flat
         />
         <CommonFileUpload 
@@ -89,7 +91,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from "vue";
+import { ref, watch, computed } from "vue";
 const mainStore = useMainStore();
 const props = defineProps({
   modelValue: Boolean,
@@ -101,6 +103,18 @@ const selectedFolder = ref(null);
 const uploadedFiles = ref([]);
 const fileUploader = ref(null);
 const docStore = useDocStore();
+const searchQuery = ref("");
+
+// Compute filtered folders based on search query
+const filteredFolders = computed(() => {
+  if (!searchQuery.value) {
+    return props.foldersList;
+  }
+  const query = searchQuery.value.toLowerCase();
+  return props.foldersList.filter((folder) =>
+    folder.name.toLowerCase().includes(query)
+  );
+});
 
 const getFiles = (files) => {
   uploadedFiles.value = files;
@@ -160,10 +174,17 @@ const close = () => {
   fileUploader.value?.clearFiles();
   uploadedFiles.value = [];
   selectedFolder.value = null;
+  searchQuery.value = "";
   isOpen.value = false;
 };
 function handleSelect(folder) {
-  selectedFolder.value = folder;
+  if (folder && typeof folder === 'object') {
+    selectedFolder.value = folder;
+  } else if (folder) {
+    // If it's an ID, find the folder object
+    const foundFolder = props.foldersList.find((f) => f.id === folder);
+    selectedFolder.value = foundFolder || null;
+  }
 }
 </script>
 <style scoped>

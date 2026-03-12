@@ -1,12 +1,12 @@
 import { crmAutomationDefaults } from "@shared/defaults/crmAutomationDefaults.js";
 import { formatYmd, parseDayOffsetFromText } from "~/lib/misc";
+import { htmlToPlainText } from "~/lib/format/text.js";
 import { template as EMAIL_TEMPLATE } from "./emailTemplate.js";
 import { transporter } from "./nodeMailer.js";
 import { buildLeadContext, renderTokens } from "./tokenRenderer.js";
-import { CrmAutomationTemplate, Organisation, CrmLeadAssignee, User } from "../models/index.js";
+import { CrmAutomationTemplate, Organisation } from "../models/index.js";
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from "./whatsapp.js";
 import { resolveWhatsAppProviderConfig } from "./whatsappProvider.js";
-import { sendCrmAutomationSentNotification, sendCrmAutomationFailedNotification } from "./fcmNotification.js";
 
 const crmTriggersByKey = new Map(
   crmAutomationDefaults
@@ -62,30 +62,12 @@ export const buildCrmEmail = (lead, tpl, org = null) => {
   return { subject, html };
 };
 
-const stripHtmlToText = (html = "") => {
-  if (!html) return "";
-  return String(html)
-    .replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gi, "$2 ($1)")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>\s*/gi, "\n\n")
-    .replace(/<\/li>\s*/gi, "\n")
-    .replace(/<li>\s*/gi, "• ")
-    .replace(/<[^>]*>/g, "")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-};
-
 
 export const buildCrmWhatsAppMessage = (lead, tpl, org = null) => {
   const ctx = buildLeadContext({ lead, org, userName: "Team" });
   const rawTemplate = tpl?.template || "";
   const rendered = renderTokens(rawTemplate, ctx, { format: "text" });
-  return stripHtmlToText(rendered);
+  return htmlToPlainText(rendered);
 };
 
 const extractWhatsAppParams = (templateText = "", ctx = {}) => {
@@ -122,7 +104,7 @@ export const buildCrmWhatsAppTemplatePayload = (lead, tpl) => {
   };
 };
 
-export const sendCrmAutomationEmail = async (lead, subject, html, automationName = null) => {
+export const sendCrmAutomationEmail = async (lead, subject, html) => {
   const wrapped = EMAIL_TEMPLATE.replaceAll("{subject}", subject).replace(
     "{content}",
     html
@@ -133,31 +115,9 @@ export const sendCrmAutomationEmail = async (lead, subject, html, automationName
     subject,
     html: wrapped,
   });
-
-  // Send push notification to lead assignees on success
-  try {
-    const assignees = await CrmLeadAssignee.findAll({
-      where: { organisationId: Number(lead.organisationId), leadId: lead.id },
-      include: [{ model: User, as: 'user', attributes: ['id'] }]
-    });
-    const userIds = assignees.map(a => a.user?.id).filter(Boolean);
-    for (const userId of userIds) {
-      await sendCrmAutomationSentNotification({
-        userId,
-        lead,
-        automationName: automationName || subject,
-        channel: 'Email'
-      });
-    }
-  } catch (pushErr) {
-    console.warn('CRM automation sent push notification failed', {
-      leadId: lead.id,
-      error: pushErr?.message || pushErr
-    });
-  }
 };
 
-export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload = null, automationName = null) => {
+export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload = null) => {
   const to = normalizeWhatsAppNumber(lead?.telephone);
   if (!to) throw new Error("Missing or invalid phone number");
   const waConfig = await resolveWhatsAppProviderConfig(lead.organisationId);
@@ -216,28 +176,6 @@ export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload =
       providerMessageId,
       content: waConfig.provider === "meta" && templatePayload ? null : String(message || ""),
     });
-
-    // Send push notification to lead assignees on success
-    try {
-      const assignees = await CrmLeadAssignee.findAll({
-        where: { organisationId: Number(lead.organisationId), leadId: lead.id },
-        include: [{ model: User, as: 'user', attributes: ['id'] }]
-      });
-      const userIds = assignees.map(a => a.user?.id).filter(Boolean);
-      for (const userId of userIds) {
-        await sendCrmAutomationSentNotification({
-          userId,
-          lead,
-          automationName: automationName || templatePayload?.name || 'WhatsApp',
-          channel: 'WhatsApp'
-        });
-      }
-    } catch (pushErr) {
-      console.warn('CRM automation sent push notification failed', {
-        leadId: lead.id,
-        error: pushErr?.message || pushErr
-      });
-    }
   } catch (e) {
     await logWhatsAppMessage({
       organisationId: lead.organisationId,
@@ -248,30 +186,6 @@ export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload =
       status: "failed",
       error: e?.data?.error?.message || e?.message || "Failed to send",
     });
-
-    // Send push notification to lead assignees on failure
-    try {
-      const assignees = await CrmLeadAssignee.findAll({
-        where: { organisationId: Number(lead.organisationId), leadId: lead.id },
-        include: [{ model: User, as: 'user', attributes: ['id'] }]
-      });
-      const userIds = assignees.map(a => a.user?.id).filter(Boolean);
-      for (const userId of userIds) {
-        await sendCrmAutomationFailedNotification({
-          userId,
-          lead,
-          automationName: automationName || templatePayload?.name || 'WhatsApp',
-          channel: 'WhatsApp',
-          errorMessage: e?.data?.error?.message || e?.message || "Failed to send"
-        });
-      }
-    } catch (pushErr) {
-      console.warn('CRM automation failed push notification failed', {
-        leadId: lead.id,
-        error: pushErr?.message || pushErr
-      });
-    }
-
     throw e;
   }
 };
@@ -473,13 +387,14 @@ export const sendImmediateCrmAutomationsForLead = async (lead) => {
       if (waConfig?.provider === "meta" && !templatePayload) {
         throw new Error("WhatsApp template name is required for automation");
       }
-      await sendCrmAutomationWhatsApp(lead, message, templatePayload, tpl?.name);
+      await sendCrmAutomationWhatsApp(lead, message, templatePayload);
       await markCrmSent(lead, raw, sentKey);
     } else {
       if (!lead?.email) continue;
       const { subject, html } = buildCrmEmail(lead, tpl, org);
-      await sendCrmAutomationEmail(lead, subject, html, tpl?.name);
+      await sendCrmAutomationEmail(lead, subject, html);
       await markCrmSent(lead, raw, sentKey);
     }
   }
 };
+

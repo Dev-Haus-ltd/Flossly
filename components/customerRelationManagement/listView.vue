@@ -119,8 +119,9 @@
                       />
                       <p 
                         v-else 
-                        class="ml-2 mb-0 editable-field" 
+                        class="ml-2 mb-0 editable-field break-email" 
                         @click="startEdit(item, 'name')"
+                        :title="resolveLeadName(item)"
                       >
                         {{ resolveLeadName(item) || 'Click to edit' }}
                       </p>
@@ -154,6 +155,7 @@
                     v-else 
                     class="ml-2 mb-0 editable-field break-email" 
                     @click="startEdit(item, 'email')"
+                    :title="resolveLeadEmail(item)"
                   >
                     {{ resolveLeadEmail(item) || 'Click to edit' }}
                   </p>
@@ -732,7 +734,8 @@
 
 <script setup>
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
-import { buildRecipientContext, renderWithContext } from '@/lib/templateTokens'
+import { buildRecipientContext } from '@/lib/crm/previewContext'
+import { applyCrmPlaceholders } from '@/lib/crm/placeholders'
 import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
 import { formatAssignedUsers, formatTreatmentValue } from "@/lib/misc";
 import { getLeadDisplayName, getLeadEmail, getLeadPhone } from "@/lib/normalizers/lead";
@@ -861,6 +864,60 @@ const automationGroupsDirty = ref(false);
 const resolveLeadName = (lead) => getLeadDisplayName(lead);
 const resolveLeadEmail = (lead) => getLeadEmail(lead);
 const resolveLeadPhone = (lead) => getLeadPhone(lead);
+
+const getStoredOrg = () => {
+  if (typeof window === 'undefined') return null
+  try {
+    const storedUser = JSON.parse(localStorage.getItem('user') || '{}')
+    if (storedUser?.userOrganisations?.length && storedUser?.currentLoggedInOrgId) {
+      const activeOrgs = storedUser.userOrganisations.filter((org) => org.status === 'Active')
+      const orgWrapper =
+        activeOrgs.find((org) => org.organisationId === storedUser.currentLoggedInOrgId) ||
+        activeOrgs.find((org) => org.organisation?.id === storedUser.currentLoggedInOrgId)
+      if (orgWrapper?.organisation) return orgWrapper.organisation
+      if (orgWrapper?.name) return orgWrapper
+    }
+  } catch {}
+  return null
+}
+
+const resolveOrgDetails = () => {
+  return (
+    getStoredOrg() ||
+    mainStore?.getOrgDetails ||
+    mainStore?.organisation ||
+    mainStore?.organization ||
+    mainStore?.org ||
+    mainStore?.orgDetails ||
+    {}
+  )
+}
+
+const resolvePracticeName = () => {
+  const org = resolveOrgDetails()
+  return org?.name || '[Practice Name]'
+}
+
+const renderTemplateWithContext = (input, ctx, lead) => {
+  const withMustache = String(input || '')
+    .replaceAll('{{name}}', ctx.name || '')
+    .replaceAll('{{firstName}}', ctx.firstName || '')
+    .replaceAll('{{email}}', ctx.email || '')
+    .replaceAll('{{yourName}}', ctx.yourName || '')
+    .replaceAll('{{info}}', ctx.info || '')
+
+  return applyCrmPlaceholders(withMustache, {
+    recipient: {
+      name: ctx.name || 'User',
+      firstName: ctx.firstName || 'User',
+      email: ctx.email || '',
+      yourName: ctx.yourName || 'Team',
+    },
+    lead: lead || null,
+    org: resolveOrgDetails(),
+    practiceName: resolvePracticeName(),
+  }).replaceAll('[Patient Info]', ctx.info || '')
+}
 
 const whatsappRecipients = computed(() => {
   const nums = (selectedLeads.value || [])
@@ -1379,9 +1436,16 @@ async function openCompose(actionKey) {
   // Personalize subject/body for preview based on selection
   const many = (selectedLeads.value || []).length !== 1
   const lead = many ? null : (selectedLeads.value || [])[0]
-  const ctx = buildRecipientContext({ lead, user, many })
-  compose.subject = renderWithContext(def.subject, ctx)
-  compose.html = renderWithContext(def.html, ctx)
+  const ctx = buildRecipientContext({
+    lead,
+    user,
+    many,
+    fallbackName: 'User',
+    fallbackEmail: '',
+    fallbackYourName: 'Team',
+  })
+  compose.subject = renderTemplateWithContext(def.subject, ctx, lead)
+  compose.html = renderTemplateWithContext(def.html, ctx, lead)
   showCompose.value = true
   await nextTick()
   if (!(await ensureEditorModules())) return
@@ -1404,9 +1468,16 @@ const openSendPriceCompose = async () => {
   const def = defaultTemplates.sendPrice
   const many = (selectedLeads.value || []).length !== 1
   const lead = many ? null : (selectedLeads.value || [])[0]
-  const ctx = buildRecipientContext({ lead, user, many })
-  sendPrice.subject = renderWithContext(def.subject, ctx)
-  sendPrice.html = renderWithContext(def.html, ctx)
+  const ctx = buildRecipientContext({
+    lead,
+    user,
+    many,
+    fallbackName: 'User',
+    fallbackEmail: '',
+    fallbackYourName: 'Team',
+  })
+  sendPrice.subject = renderTemplateWithContext(def.subject, ctx, lead)
+  sendPrice.html = renderTemplateWithContext(def.html, ctx, lead)
   sendPrice.priceLink = ''
   sendPriceAttachment.value = null
 
@@ -1520,9 +1591,16 @@ async function sendCompose() {
     const leadIds = selectedLeads.value.map(l => l.id)
     const many = (selectedLeads.value || []).length !== 1
     const lead = many ? null : (selectedLeads.value || [])[0]
-    const ctx = buildRecipientContext({ lead, user, many })
-    const resolvedSubject = renderWithContext(compose.subject, ctx)
-    const resolvedHtml = renderWithContext(compose.html, ctx)
+    const ctx = buildRecipientContext({
+      lead,
+      user,
+      many,
+      fallbackName: 'User',
+      fallbackEmail: '',
+      fallbackYourName: 'Team',
+    })
+    const resolvedSubject = renderTemplateWithContext(compose.subject, ctx, lead)
+    const resolvedHtml = renderTemplateWithContext(compose.html, ctx, lead)
     const res = await crmStore.sendLeadMail({ leadIds, subject: resolvedSubject, html: resolvedHtml, key: `manual_${compose.key}` })
     if (res && res.code === 0) {
       if (mainStore && mainStore.setSnackbar) mainStore.setSnackbar({ title: `Mail sent to ${res.data?.sent || compose.recipients.length} recipient(s)`, type: 'success' })
@@ -1538,9 +1616,16 @@ async function sendPriceCompose() {
     if (!leadIds.length) return
     const many = (selectedLeads.value || []).length !== 1
     const lead = many ? null : (selectedLeads.value || [])[0]
-    const ctx = buildRecipientContext({ lead, user, many })
-    const resolvedSubject = renderWithContext(sendPrice.subject || 'Price List', ctx)
-    const resolvedBody = sendPrice.html ? renderWithContext(sendPrice.html, ctx) : ''
+    const ctx = buildRecipientContext({
+      lead,
+      user,
+      many,
+      fallbackName: 'User',
+      fallbackEmail: '',
+      fallbackYourName: 'Team',
+    })
+    const resolvedSubject = renderTemplateWithContext(sendPrice.subject || 'Price List', ctx, lead)
+    const resolvedBody = sendPrice.html ? renderTemplateWithContext(sendPrice.html, ctx, lead) : ''
     const link = String(sendPrice.priceLink || '').trim()
     const linkHtml = link
       ? `<p><strong>Price Link:</strong> <a href="${link}" target="_blank" rel="noopener noreferrer">${link}</a></p>`
@@ -1857,9 +1942,10 @@ const convertSelected = async () => {
 }
 
 .break-email {
-  word-break: break-all;        /* breaks very long strings */
-  overflow-wrap: anywhere;      /* modern & safer wrapping */
-  white-space: normal;
+  white-space: nowrap;           /* prevents wrapping */
+  overflow: hidden;              /* hides overflow text */
+  text-overflow: ellipsis;       /* shows ... at end */
+  max-width: 250px;              /* adjust as needed */
 }
 
 .editable-field:hover {
@@ -2025,6 +2111,7 @@ const convertSelected = async () => {
   margin-right: 8px;
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
 .lead-name-border {
