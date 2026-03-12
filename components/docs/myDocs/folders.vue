@@ -178,7 +178,7 @@ const toggleShowAll = () => {
   font-size: 14px;
   font-weight: 400;
   line-height: 130%;
-  color: #737373;
+  background-color: #F3F4F6 !important;
   font-style: normal;
   width: 105px;
 }

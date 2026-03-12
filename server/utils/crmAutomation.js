@@ -1,5 +1,6 @@
 import { crmAutomationDefaults } from "@shared/defaults/crmAutomationDefaults.js";
 import { formatYmd, parseDayOffsetFromText } from "~/lib/misc";
+import { htmlToPlainText } from "~/lib/format/text.js";
 import { template as EMAIL_TEMPLATE } from "./emailTemplate.js";
 import { transporter } from "./nodeMailer.js";
 import { buildLeadContext, renderTokens } from "./tokenRenderer.js";
@@ -61,30 +62,12 @@ export const buildCrmEmail = (lead, tpl, org = null) => {
   return { subject, html };
 };
 
-const stripHtmlToText = (html = "") => {
-  if (!html) return "";
-  return String(html)
-    .replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gi, "$2 ($1)")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>\s*/gi, "\n\n")
-    .replace(/<\/li>\s*/gi, "\n")
-    .replace(/<li>\s*/gi, "• ")
-    .replace(/<[^>]*>/g, "")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-};
-
 
 export const buildCrmWhatsAppMessage = (lead, tpl, org = null) => {
   const ctx = buildLeadContext({ lead, org, userName: "Team" });
   const rawTemplate = tpl?.template || "";
   const rendered = renderTokens(rawTemplate, ctx, { format: "text" });
-  return stripHtmlToText(rendered);
+  return htmlToPlainText(rendered);
 };
 
 const extractWhatsAppParams = (templateText = "", ctx = {}) => {
@@ -414,3 +397,4 @@ export const sendImmediateCrmAutomationsForLead = async (lead) => {
     }
   }
 };
+
