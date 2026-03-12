@@ -141,9 +141,9 @@ const scriptTitles = computed(() => scripts.value.map(script => ({ title: script
 const applyOrgSubstitutions = (text) => {
   if (!text) return text;
   const name = resolvedPracticeName.value || '[Practice Name]';
-  // Replace: [Practice Name], [practice name], Practice Name (case-insensitive)
+  // Replace bracket token only to avoid changing normal words.
   return text
-    .replace(/\[?\s*practice\s*name\s*\]?/gi, name);
+    .replace(/\[\s*practice\s*name\s*\]/gi, name);
 };
 
 const selectedScriptContent = computed(() => {

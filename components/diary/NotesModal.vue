@@ -33,9 +33,9 @@
                 </v-col>
                 <v-col cols="12" md="6">
                   <label class="mb-1 fld-lbl">Select time</label>
-                  <v-select
+                  <v-text-field
                     v-model="form.time"
-                    :items="timeOptions"
+                    type="time"
                     variant="solo"
                     density="compact"
                     class="mb-1 input-bordered"
@@ -103,11 +103,11 @@
                 </div>
                 <div class="mb-2">
                   <span class="note-label">Date</span>
-                  <span class="note-value">{{ formatNoteDate(n.date) }}</span>
+                  <span class="note-value">{{ formatDisplayDate(n.date) || 'N/A' }}</span>
                 </div>
                 <div class="mb-2">
                   <span class="note-label">Time</span>
-                  <span class="note-value">{{ n.time }}</span>
+                  <span class="note-value">{{ formatDisplayTime(n.time) || 'N/A' }}</span>
                 </div>
                 <div class="mb-2">
                   <span class="note-label">Channel</span>
@@ -139,7 +139,7 @@ import { ref, computed, watch, reactive } from 'vue'
 import { useDiaryStore } from '@/stores/diary'
 import { useMainStore } from '@/stores/index'
 import diaryService from '@/services/diaryService'
-import { formatDateDDMMYYYY } from '@/lib/dateFormatter'
+import { formatDateDDMMYYYY, formatDisplayDate, formatDisplayTime } from '@/lib/dateFormatter'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -168,18 +168,6 @@ const canSubmit = computed(() => {
     (form.value.summary || '').trim()
   )
 })
-const WORK_START = 9
-const WORK_END = 17
-const SLOT_MINUTES = 15
-const toHM = (h, m) => `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`
-const timeOptions = computed(() => {
-  const options = []
-  for (let mins=WORK_START*60; mins<=WORK_END*60; mins+=SLOT_MINUTES) {
-    const h = Math.floor(mins/60); const m = mins%60
-    if (mins <= WORK_END*60) options.push(toHM(h,m))
-  }
-  return options
-})
 const channelOptions = ['Phone','Email','WhatsApp','SMS','In-person']
 
 // Format dates to DD/MM/YYYY
@@ -191,10 +179,6 @@ const formattedFormDate = computed(() => {
   return formatDateDDMMYYYY(form.value.date)
 })
 
-const formatNoteDate = (dateStr) => {
-  return formatDateDDMMYYYY(dateStr)
-}
-
 const notify = (message, type = 'success') => {
   if (mainStore?.setSnackbar) mainStore.setSnackbar({ title: message, type })
 }
@@ -203,7 +187,7 @@ const resetForm = () => {
   form.value = {
     title: '',
     date: props.date || '',
-    time: timeOptions.value[0] || '09:00',
+    time: '09:00',
     channel: channelOptions[0] || '',
     summary: '',
   }

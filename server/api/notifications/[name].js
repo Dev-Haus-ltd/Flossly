@@ -8,7 +8,6 @@ import {
 import { FcmToken, UserNotification } from '../../models';
 import { error, success } from '../../utils/response';
 import { getQuery, readBody } from 'h3';
-import { Op } from 'sequelize';
 
 export default defineEventHandler(async (event) => {
   const name = event.context.params.name;
@@ -60,68 +59,25 @@ async function saveToken(event, userId) {
       return error(400, 'Token is required');
     }
 
-    console.log(`📥 [FCM] Received token from user ${userId}: ${token.substring(0, 50)}... (device: ${deviceType}, browser: ${browser})`);
-
     // Check if token already exists
     const existingToken = await FcmToken.findOne({
       where: { token }
     });
 
     if (existingToken) {
-      if (existingToken.userId === userId) {
-        console.log(`🔄 [FCM] Updating existing token for same user`);
-        await existingToken.update({
-          deviceType,
-          browser,
-          deviceInfo,
-          isActive: true,
-          lastUsedAt: new Date()
-        });
+      // Update existing token
+      await existingToken.update({
+        userId,
+        deviceType,
+        browser,
+        deviceInfo,
+        isActive: true,
+        lastUsedAt: new Date()
+      });
 
-        return success({ 
-          message: 'Token updated successfully', 
-          tokenId: existingToken.id,
-          action: 'updated'
-        });
-      } else if (!existingToken.isActive) {
-        console.log(`♻️ [FCM] Reassigning inactive token from user ${existingToken.userId} to user ${userId}`);
-        await existingToken.update({
-          userId,
-          deviceType,
-          browser,
-          deviceInfo,
-          isActive: true,
-          lastUsedAt: new Date()
-        });
-
-        return success({ 
-          message: 'Inactive token reassigned successfully', 
-          tokenId: existingToken.id,
-          action: 'reassigned'
-        });
-      } else {
-        console.warn(`⚠️ [FCM] Token transfer detected! Token was active for user ${existingToken.userId}, now being used by user ${userId}. Deactivating old token.`);
-        await existingToken.update({ isActive: false });
-        
-        const newToken = await FcmToken.create({
-          userId,
-          token,
-          deviceType,
-          browser,
-          deviceInfo,
-          isActive: true,
-          lastUsedAt: new Date()
-        });
-
-        return success({ 
-          message: 'Token ownership transferred', 
-          tokenId: newToken.id,
-          action: 'transferred',
-          warning: 'Token was active for another user'
-        });
-      }
+      return success({ message: 'Token updated successfully', tokenId: existingToken.id });
     } else {
-      console.log(`🆕 [FCM] Creating new token for user ${userId}`);
+      // Create new token
       const newToken = await FcmToken.create({
         userId,
         token,
@@ -132,19 +88,11 @@ async function saveToken(event, userId) {
         lastUsedAt: new Date()
       });
 
-      return success({ 
-        message: 'Token saved successfully', 
-        tokenId: newToken.id,
-        action: 'created'
-      });
+      return success({ message: 'Token saved successfully', tokenId: newToken.id });
     }
   } catch (err) {
     console.error('Error saving FCM token:', err);
-    return error(500, {
-      message: err.message,
-      code: err.code,
-      details: process.env.NODE_ENV === 'development' ? err.stack : undefined
-    });
+    return error(500, err.message);
   }
 }
 
@@ -182,14 +130,8 @@ async function getNotifications(event, userId) {
     const limit = parseInt(query.limit) || 50;
     const offset = parseInt(query.offset) || 0;
     const unreadOnly = query.unreadOnly === 'true';
-    
-    // Get current organisation from user context
-    const user = event.context.user;
-    const organisationId = user?.organisationId || user?.orgId || null;
-    
-    console.log('📋 [NOTIFICATIONS API] Fetching notifications for userId:', userId, 'orgId:', organisationId);
 
-    const result = await getUserNotifications(userId, { limit, offset, unreadOnly, organisationId });
+    const result = await getUserNotifications(userId, { limit, offset, unreadOnly });
 
     if (result.success) {
       return success(result);
@@ -227,28 +169,16 @@ async function markAsRead(event, userId) {
 // Mark all notifications as read
 async function markAllAsRead(event, userId) {
   try {
-    // Get current organisation from user context
-    const user = event.context.user;
-    const organisationId = user?.organisationId || user?.orgId || null;
-    
-    const where = { userId, isRead: false };
-    
-    // Mark both org-specific AND global (null org) notifications as read
-    // Global notifications should be marked as read across all organizations
-    if (organisationId) {
-      where[Op.or] = [
-        { organisationId: organisationId },
-        { organisationId: null }
-      ];
-    }
-    
     await UserNotification.update(
       { 
         isRead: true, 
         readAt: new Date() 
       },
       {
-        where
+        where: {
+          userId,
+          isRead: false
+        }
       }
     );
 
@@ -293,26 +223,12 @@ async function sendTestNotification(event, userId) {
 // Get unread notification count
 async function getUnreadCount(event, userId) {
   try {
-    // Get current organisation from user context
-    const user = event.context.user;
-    const organisationId = user?.organisationId || user?.orgId || null;
-    
-    console.log('🔔 [NOTIFICATIONS API] Fetching unread count for userId:', userId, 'orgId:', organisationId);
-    
-    const where = {
-      userId,
-      isRead: false
-    };
-    
-    // Include notifications for current org OR global notifications (null org)
-    if (organisationId) {
-      where[Op.or] = [
-        { organisationId: organisationId },
-        { organisationId: null }
-      ];
-    }
-    
-    const count = await UserNotification.count({ where });
+    const count = await UserNotification.count({
+      where: {
+        userId,
+        isRead: false
+      }
+    });
 
     return success({ unreadCount: count });
   } catch (err) {

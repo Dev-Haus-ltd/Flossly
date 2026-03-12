@@ -17,14 +17,6 @@ export const UserNotification = sequelize.define(
         key: "id",
       },
     },
-    organisationId: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      references: {
-        model: "Organisations",
-        key: "id",
-      },
-    },
     title: {
       type: DataTypes.STRING(255),
       allowNull: false,

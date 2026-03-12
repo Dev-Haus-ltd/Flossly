@@ -10,6 +10,8 @@
       alt="Upload File"
       width="50"
       height="50"
+      draggable="false"
+      class="upload-icon"
     />
 
     <p class="upload-text">
@@ -108,5 +110,10 @@ defineExpose({
 }
 .hidden-input {
   display: none;
+}
+.upload-icon {
+  user-select: none;           /* prevents selection */
+  pointer-events: none;        /* clicks pass through */
+  -webkit-user-drag: none;     /* webkit compatibility */
 }
 </style>

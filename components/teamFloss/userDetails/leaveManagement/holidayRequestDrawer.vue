@@ -303,6 +303,9 @@ watch(
     if (newValue) {
       if (isManager.value) {
         setUsers();
+        if (props.user && props.user.id) {
+          form.value.userId = props.user.id;
+        }
       } else {
         form.value.userId = user.value.id;
       }

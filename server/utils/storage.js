@@ -6,7 +6,7 @@ const trimSlashes = (value = "") => String(value || "").replace(/^\/+|\/+$/g, ""
 
 export const buildLink = (baseDir, filename) => {
   const base = trimSlashes(baseDir);
-  const name = trimSlashes(filename);
+  const name = encodeURIComponent(trimSlashes(filename));
   return `/${base}/${name}`;
 };
 

@@ -121,32 +121,6 @@ onMounted(async () => {
     await requestPermission();
   }
   
-  // Global listener for FCM notifications - updates badge in real-time
-  let fcmDebounceTimeout = null;
-  if (process.client) {
-    window.addEventListener('fcm-notification', async () => {
-      // Debounce to prevent rapid calls
-      if (fcmDebounceTimeout) return;
-      
-      fcmDebounceTimeout = setTimeout(() => {
-        fcmDebounceTimeout = null;
-      }, 2000); // 2 second debounce
-      
-      console.log('🔔 [app.vue] FCM notification received, refreshing unread count globally');
-      try {
-        const response = await $fetch('/api/notifications/get-unread-count');
-        const payload = response?.data || response;
-        if (payload?.success || response?.success) {
-          const globalUnreadCount = useState('notification-unread-count');
-          globalUnreadCount.value = payload.unreadCount || 0;
-          console.log('🔔 [app.vue] Updated global unread count:', payload.unreadCount);
-        }
-      } catch (error) {
-        console.error('Error refreshing unread count:', error);
-      }
-    });
-  }
-  
   setTimeout(() => {
     const appLoader = document.getElementById('app-loader');
     if (appLoader) {
