@@ -1,5 +1,5 @@
 import { Op } from 'sequelize'
-import { DiaryTreatment, DiaryPatient, DiaryAppointment, DiaryNote, DiaryPatientComfort, DiaryPatientSurvey, DiaryPatientForm, DiaryPatientChart, DiaryTreatmentPlanItem, User, RotaShift, Rota, OrganisationTreatment, Role, UserOrganisation } from '../models'
+import { DiaryPatient, DiaryAppointment, DiaryNote, DiaryPatientComfort, DiaryPatientSurvey, DiaryPatientForm, DiaryPatientChart, DiaryTreatmentPlan, DiaryTreatmentPlanItem, User, RotaShift, Rota, OrganisationTreatment, Role, UserOrganisation } from '../models'
 import { success, error } from '../utils/response'
 import { readBody, getQuery, createError } from 'h3'
 import formidable from 'formidable'
@@ -7,6 +7,7 @@ import path from 'path'
 import os from "os";
 import { uploadTempFile } from "../utils/storage";
 import { parseJsonBody } from "../utils/body";
+import { DEFAULT_ORGANISATION_TREATMENTS } from '~/shared/defaults/charting/treatmentDefaults.js'
 
 const pad2 = (n) => String(n).padStart(2, '0')
 const resolveTimeMode = () => {
@@ -72,16 +73,18 @@ const getUtcRangeForDate = (dateStr) => {
     end: buildUtcDate(parts, 23, 59, 59, 999),
   }
 }
-const ensureChartingTables = async () => {
-  try { await DiaryPatientChart.sync({ alter: true }) } catch (_) {}
-  try { await DiaryTreatmentPlanItem.sync({ alter: true }) } catch (_) {}
-}
 const requirePatientInOrg = async (orgId, patientId) => {
   if (!patientId) return null
   return await DiaryPatient.findOne({
     where: { id: Number(patientId), organisationId: Number(orgId) },
     attributes: ['id', 'organisationId'],
   })
+}
+const parsePositiveIntOrNull = (value) => {
+  if (value === undefined || value === null || value === '') return null
+  const num = Number(value)
+  if (!Number.isInteger(num) || num <= 0) return null
+  return num
 }
 const overlapWindowClause = (start, end, excludeAppointmentId = null) => {
   const clause = {
@@ -102,33 +105,94 @@ const normalizeTreatmentPlanItem = (row) => ({
   surface: row.surface,
   condition: row.condition,
   conditionLabel: row.conditionLabel,
+  treatmentId: row.treatmentId || null,
+  treatmentCode: row.treatmentCode || null,
+  treatmentName: row.treatmentName || null,
+  treatmentCategory: row.treatmentCategory || null,
   status: row.status,
   priority: row.priority,
   cost: Number(row.cost || 0),
   duration: Number(row.duration || 0),
   notes: row.notes || '',
   clinicianName: row.clinicianName || '',
+  practitionerId: row.practitionerId || null,
+  practitionerName: row.practitionerName || row.clinicianName || '',
+  completedAt: row.completedAt || null,
+  completedByPractitionerId: row.completedByPractitionerId || null,
+  completedByPractitionerName: row.completedByPractitionerName || null,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 })
+const normalizeTreatmentPlan = (row) => ({
+  id: row.id,
+  organisationId: row.organisationId,
+  patientId: row.patientId,
+  planKey: row.planKey,
+  name: row.name,
+  color: row.color || null,
+  priority: Number(row.priority || 1),
+  appointments: Array.isArray(row.appointmentsJson) ? row.appointmentsJson : [],
+  createdAt: row.createdAt,
+  updatedAt: row.updatedAt,
+})
+const sanitizeChartMeta = (meta = {}) => {
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) {
+    return { images: [], history: [], links: {}, favoriteCodeIds: [], softTissue: {}, riskAssessment: {} }
+  }
+  const images = Array.isArray(meta.images) ? meta.images.slice(0, 100) : []
+  const history = Array.isArray(meta.history) ? meta.history.slice(0, 200) : []
+  const links = (meta.links && typeof meta.links === 'object' && !Array.isArray(meta.links)) ? meta.links : {}
+  const favoriteCodeIds = Array.isArray(meta.favoriteCodeIds) ? meta.favoriteCodeIds : []
+  const softTissue = (meta.softTissue && typeof meta.softTissue === 'object' && !Array.isArray(meta.softTissue)) ? meta.softTissue : {}
+  const riskAssessment = (meta.riskAssessment && typeof meta.riskAssessment === 'object' && !Array.isArray(meta.riskAssessment)) ? meta.riskAssessment : {}
+  return { images, history, links, favoriteCodeIds, softTissue, riskAssessment }
+}
+
+// Fix #15 — seed default treatments once per org per server process lifetime, not on every request
+const _seededOrgs = new Set()
 
 // --- Treatments ---
 export const listTreatments = async (event) => {
   try {
     const { orgId } = event.context.user
-    const rows = await OrganisationTreatment.findAll({ where: { organisationId: Number(orgId), active: true }, order: [['name','ASC']] })
-    // Seed a few defaults on first run
-    if (!rows.length) {
-      const seed = [
-        { code: 'EXAM', name: 'Exam', amount: 60, defaultDuration: 20 },
-        { code: 'SCALE', name: 'Scale & Polish', amount: 80, defaultDuration: 30 },
-        { code: 'WHIT', name: 'Teeth Whitening', amount: 200, defaultDuration: 45 },
-      ]
-      await OrganisationTreatment.bulkCreate(seed.map(s => ({ ...s, organisationId: Number(orgId) })))
-      const seeded = await OrganisationTreatment.findAll({ where: { organisationId: Number(orgId) }, order: [['name','ASC']] })
-      return success(seeded)
+    const orgIdNum = Number(orgId)
+
+    if (!_seededOrgs.has(orgIdNum)) {
+      const existingAll = await OrganisationTreatment.findAll({
+        where: { organisationId: orgIdNum },
+        attributes: ['id', 'code', 'name'],
+        order: [['name', 'ASC']],
+      })
+      const existingCodes = new Set(
+        existingAll.map((t) => String(t.code || '').trim().toUpperCase()).filter(Boolean)
+      )
+      const existingNames = new Set(
+        existingAll.map((t) => String(t.name || '').trim().toLowerCase()).filter(Boolean)
+      )
+      const missingDefaults = DEFAULT_ORGANISATION_TREATMENTS.filter((seed) => {
+        const codeKey = String(seed.code || '').trim().toUpperCase()
+        const nameKey = String(seed.name || '').trim().toLowerCase()
+        if (codeKey && existingCodes.has(codeKey)) return false
+        if (nameKey && existingNames.has(nameKey)) return false
+        return true
+      })
+      if (missingDefaults.length) {
+        await OrganisationTreatment.bulkCreate(missingDefaults.map((s) => ({
+          ...s,
+          price: s.price ?? 0,
+          organisationId: orgIdNum,
+        })))
+      }
+      _seededOrgs.add(orgIdNum)
     }
-    return success(rows)
+
+    const rows = await OrganisationTreatment.findAll({ where: { organisationId: orgIdNum, active: true }, order: [['name','ASC']] })
+    return success(
+      rows.map((t) => ({
+        ...t.toJSON(),
+        amount: Number(t.price ?? 0),
+      }))
+    )
   } catch (e) {
     const msg = e?.message || e?.data?.message || e?.original?.detail || 'Internal server error'
     return error(500, msg)
@@ -406,14 +470,14 @@ export const createAppointment = async (event) => {
       if (patientOverlap > 0) return error(409, 'Patient already has an appointment at this time')
     }
     let amount = 0
-    let treatmentId = null // keep null to avoid FK mismatch with DiaryTreatments
+    let treatmentId = null // kept null; appointment currently uses treatmentName/amount snapshot
     let treatmentName = payload.treatmentName || null
     const incomingOrgTreatmentId = payload.treatmentId ? Number(payload.treatmentId) : null
     if (incomingOrgTreatmentId) {
       const t = await OrganisationTreatment.findOne({ where: { id: incomingOrgTreatmentId, organisationId: Number(orgId) } })
       if (t) {
         // Use dictionary amount unless explicitly overridden in payload
-        amount = Number(t.amount || 0)
+        amount = Number(t.price ?? 0)
         if (!treatmentName) treatmentName = t.name
         else treatmentName = treatmentName || t.name
       }
@@ -475,13 +539,12 @@ export const getPatientChart = async (event) => {
     const q = getQuery(event) || {}
     const patientId = Number(q.patientId || 0)
     if (!patientId) return error(400, 'patientId is required')
-    await ensureChartingTables()
     const patient = await requirePatientInOrg(orgId, patientId)
     if (!patient) return error(404, 'Patient not found')
     const row = await DiaryPatientChart.findOne({
       where: { organisationId: Number(orgId), patientId },
     })
-    return success({ chart: row?.chartJson || {} })
+    return success({ chart: row?.chartJson || {}, meta: sanitizeChartMeta(row?.metaJson || {}) })
   } catch (e) {
     const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
     return error(500, msg)
@@ -498,7 +561,10 @@ export const savePatientChart = async (event) => {
     if (!payload || typeof payload.chart !== 'object' || Array.isArray(payload.chart)) {
       return error(400, 'chart must be an object')
     }
-    await ensureChartingTables()
+    const hasMeta = payload?.meta !== undefined
+    if (hasMeta && (typeof payload.meta !== 'object' || Array.isArray(payload.meta))) {
+      return error(400, 'meta must be an object')
+    }
     const patient = await requirePatientInOrg(orgId, patientId)
     if (!patient) return error(404, 'Patient not found')
     const existing = await DiaryPatientChart.findOne({
@@ -509,12 +575,14 @@ export const savePatientChart = async (event) => {
         organisationId: Number(orgId),
         patientId,
         chartJson: payload.chart,
+        metaJson: hasMeta ? sanitizeChartMeta(payload.meta) : {},
       })
-      return success({ id: created.id, chart: created.chartJson })
+      return success({ id: created.id, chart: created.chartJson, meta: sanitizeChartMeta(created.metaJson || {}) })
     }
     existing.chartJson = payload.chart
+    if (hasMeta) existing.metaJson = sanitizeChartMeta(payload.meta)
     await existing.save()
-    return success({ id: existing.id, chart: existing.chartJson })
+    return success({ id: existing.id, chart: existing.chartJson, meta: sanitizeChartMeta(existing.metaJson || {}) })
   } catch (e) {
     const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
     return error(500, msg)
@@ -533,7 +601,6 @@ export const savePatientChartTooth = async (event) => {
     if (!payload || typeof payload.toothData !== 'object' || Array.isArray(payload.toothData)) {
       return error(400, 'toothData must be an object')
     }
-    await ensureChartingTables()
     const patient = await requirePatientInOrg(orgId, patientId)
     if (!patient) return error(404, 'Patient not found')
     let row = await DiaryPatientChart.findOne({
@@ -557,6 +624,165 @@ export const savePatientChartTooth = async (event) => {
   }
 }
 
+export const getPatientChartMeta = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const q = getQuery(event) || {}
+    const patientId = Number(q.patientId || 0)
+    if (!patientId) return error(400, 'patientId is required')
+    const patient = await requirePatientInOrg(orgId, patientId)
+    if (!patient) return error(404, 'Patient not found')
+    const row = await DiaryPatientChart.findOne({
+      where: { organisationId: Number(orgId), patientId },
+      attributes: ['id', 'metaJson'],
+    })
+    return success({ meta: sanitizeChartMeta(row?.metaJson || {}) })
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const savePatientChartMeta = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const patientId = Number(payload?.patientId || 0)
+    if (!patientId) return error(400, 'patientId is required')
+    if (!payload || typeof payload.meta !== 'object' || Array.isArray(payload.meta)) {
+      return error(400, 'meta must be an object')
+    }
+    const patient = await requirePatientInOrg(orgId, patientId)
+    if (!patient) return error(404, 'Patient not found')
+    let row = await DiaryPatientChart.findOne({
+      where: { organisationId: Number(orgId), patientId },
+    })
+    if (!row) {
+      row = await DiaryPatientChart.create({
+        organisationId: Number(orgId),
+        patientId,
+        chartJson: {},
+        metaJson: sanitizeChartMeta(payload.meta),
+      })
+    } else {
+      row.metaJson = sanitizeChartMeta(payload.meta)
+      await row.save()
+    }
+    return success({ id: row.id, meta: sanitizeChartMeta(row.metaJson || {}) })
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+// --- Treatment Plan Containers ---
+export const listTreatmentPlans = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const q = getQuery(event) || {}
+    const patientId = Number(q.patientId || 0)
+    if (!patientId) return error(400, 'patientId is required')
+    const patient = await requirePatientInOrg(orgId, patientId)
+    if (!patient) return error(404, 'Patient not found')
+    const rows = await DiaryTreatmentPlan.findAll({
+      where: { organisationId: Number(orgId), patientId },
+      order: [['priority', 'ASC'], ['id', 'ASC']],
+    })
+    return success((rows || []).map(normalizeTreatmentPlan))
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const createTreatmentPlan = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const patientId = Number(payload?.patientId || 0)
+    if (!patientId) return error(400, 'patientId is required')
+    const patient = await requirePatientInOrg(orgId, patientId)
+    if (!patient) return error(404, 'Patient not found')
+    const planKey = String(payload?.planKey || '').trim() || `plan-${Date.now()}`
+    const name = String(payload?.name || '').trim() || 'Treatment Plan'
+    const existing = await DiaryTreatmentPlan.findOne({
+      where: { organisationId: Number(orgId), patientId, planKey },
+    })
+    if (existing) return success(normalizeTreatmentPlan(existing))
+    const count = await DiaryTreatmentPlan.count({ where: { organisationId: Number(orgId), patientId } })
+    const created = await DiaryTreatmentPlan.create({
+      organisationId: Number(orgId),
+      patientId,
+      planKey,
+      name,
+      color: payload?.color || null,
+      priority: Number(payload?.priority || 0) || (count + 1),
+      appointmentsJson: Array.isArray(payload?.appointments) ? payload.appointments : [],
+    })
+    return success(normalizeTreatmentPlan(created))
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const updateTreatmentPlan = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const patientId = Number(payload?.patientId || 0)
+    const planKey = String(payload?.planKey || '').trim()
+    if (!patientId) return error(400, 'patientId is required')
+    if (!planKey) return error(400, 'planKey is required')
+    const row = await DiaryTreatmentPlan.findOne({
+      where: { organisationId: Number(orgId), patientId, planKey },
+    })
+    if (!row) return error(404, 'Treatment plan not found')
+    if (payload.name !== undefined) row.name = String(payload.name || '').trim() || row.name
+    if (payload.color !== undefined) row.color = payload.color || null
+    if (payload.priority !== undefined) row.priority = Number(payload.priority || row.priority)
+    if (payload.appointments !== undefined) row.appointmentsJson = Array.isArray(payload.appointments) ? payload.appointments : []
+    await row.save()
+    if (payload.name !== undefined) {
+      await DiaryTreatmentPlanItem.update(
+        { planName: row.name },
+        { where: { organisationId: Number(orgId), patientId, planId: planKey } }
+      )
+    }
+    return success(normalizeTreatmentPlan(row))
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const deleteTreatmentPlan = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const patientId = Number(payload?.patientId || 0)
+    const planKey = String(payload?.planKey || '').trim()
+    if (!patientId) return error(400, 'patientId is required')
+    if (!planKey) return error(400, 'planKey is required')
+    const row = await DiaryTreatmentPlan.findOne({
+      where: { organisationId: Number(orgId), patientId, planKey },
+    })
+    if (!row) return error(404, 'Treatment plan not found')
+    await DiaryTreatmentPlanItem.destroy({
+      where: { organisationId: Number(orgId), patientId, planId: planKey },
+    })
+    await row.destroy()
+    return success({ planKey })
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
 // --- Treatment Plan ---
 export const listTreatmentPlanItems = async (event) => {
   try {
@@ -564,7 +790,6 @@ export const listTreatmentPlanItems = async (event) => {
     const q = getQuery(event) || {}
     const patientId = Number(q.patientId || 0)
     if (!patientId) return error(400, 'patientId is required')
-    await ensureChartingTables()
     const patient = await requirePatientInOrg(orgId, patientId)
     if (!patient) return error(404, 'Patient not found')
     const rows = await DiaryTreatmentPlanItem.findAll({
@@ -585,28 +810,52 @@ export const createTreatmentPlanItem = async (event) => {
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const patientId = Number(payload?.patientId || 0)
     if (!patientId) return error(400, 'patientId is required')
-    await ensureChartingTables()
     const patient = await requirePatientInOrg(orgId, patientId)
     if (!patient) return error(404, 'Patient not found')
+    const incomingPlanId = payload?.planId || null
+    let resolvedPlanName = payload?.planName || null
+    if (incomingPlanId && !resolvedPlanName) {
+      const plan = await DiaryTreatmentPlan.findOne({
+        where: { organisationId: Number(orgId), patientId, planKey: incomingPlanId },
+        attributes: ['name'],
+      })
+      resolvedPlanName = plan?.name || null
+    }
     const count = await DiaryTreatmentPlanItem.count({ where: { organisationId: Number(orgId), patientId } })
-    const appointmentId = Number(payload?.appointmentId)
+    const appointmentId = parsePositiveIntOrNull(payload?.appointmentId)
+    const practitionerId = parsePositiveIntOrNull(payload?.practitionerId)
+    const practitionerName = payload?.practitionerName || payload?.clinicianName || null
+    const status = String(payload?.status || 'planned')
+    const isCompleted = status.toLowerCase() === 'completed'
+    const completedAt = payload?.completedAt ? new Date(payload.completedAt) : (isCompleted ? new Date() : null)
+    const completedByPractitionerId = parsePositiveIntOrNull(payload?.completedByPractitionerId) || (isCompleted ? practitionerId : null)
+    const completedByPractitionerName = payload?.completedByPractitionerName || (isCompleted ? practitionerName : null)
     const created = await DiaryTreatmentPlanItem.create({
       organisationId: Number(orgId),
       patientId,
-      planId: payload?.planId || null,
-      planName: payload?.planName || null,
+      planId: incomingPlanId,
+      planName: resolvedPlanName,
       appointmentGroupId: payload?.appointmentGroupId || null,
-      appointmentId: Number.isFinite(appointmentId) ? appointmentId : null,
+      appointmentId,
       fdi: payload?.fdi ? Number(payload.fdi) : null,
       surface: payload?.surface || null,
       condition: payload?.condition || null,
       conditionLabel: payload?.conditionLabel || null,
-      status: payload?.status || 'planned',
+      treatmentId: payload?.treatmentId ? Number(payload.treatmentId) : null,
+      treatmentCode: payload?.treatmentCode || null,
+      treatmentName: payload?.treatmentName || null,
+      treatmentCategory: payload?.treatmentCategory || null,
+      status,
       priority: Number(payload?.priority || 0) || (count + 1),
       cost: Number(payload?.cost || 0),
       duration: Number(payload?.duration || 0),
       notes: payload?.notes || null,
-      clinicianName: payload?.clinicianName || null,
+      clinicianName: practitionerName,
+      practitionerId,
+      practitionerName,
+      completedAt,
+      completedByPractitionerId,
+      completedByPractitionerName,
     })
     return success(normalizeTreatmentPlanItem(created))
   } catch (e) {
@@ -622,7 +871,6 @@ export const updateTreatmentPlanItem = async (event) => {
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const id = Number(payload?.id || 0)
     if (!id) return error(400, 'id is required')
-    await ensureChartingTables()
     const row = await DiaryTreatmentPlanItem.findOne({
       where: { id, organisationId: Number(orgId) },
     })
@@ -637,14 +885,44 @@ export const updateTreatmentPlanItem = async (event) => {
     if (payload.cost !== undefined) row.cost = Number(payload.cost || 0)
     if (payload.duration !== undefined) row.duration = Number(payload.duration || 0)
     if (payload.notes !== undefined) row.notes = payload.notes || null
-    if (payload.clinicianName !== undefined) row.clinicianName = payload.clinicianName || null
+    if (payload.clinicianName !== undefined || payload.practitionerName !== undefined) {
+      const practitionerName = payload.practitionerName || payload.clinicianName || null
+      row.clinicianName = practitionerName
+      row.practitionerName = practitionerName
+    }
+    if (payload.practitionerId !== undefined) row.practitionerId = parsePositiveIntOrNull(payload.practitionerId)
+    if (payload.completedAt !== undefined) row.completedAt = payload.completedAt ? new Date(payload.completedAt) : null
+    if (payload.completedByPractitionerId !== undefined) {
+      row.completedByPractitionerId = parsePositiveIntOrNull(payload.completedByPractitionerId)
+    }
+    if (payload.completedByPractitionerName !== undefined) {
+      row.completedByPractitionerName = payload.completedByPractitionerName || null
+    }
     if (payload.conditionLabel !== undefined) row.conditionLabel = payload.conditionLabel || null
+    if (payload.treatmentId !== undefined) row.treatmentId = payload.treatmentId ? Number(payload.treatmentId) : null
+    if (payload.treatmentCode !== undefined) row.treatmentCode = payload.treatmentCode || null
+    if (payload.treatmentName !== undefined) row.treatmentName = payload.treatmentName || null
+    if (payload.treatmentCategory !== undefined) row.treatmentCategory = payload.treatmentCategory || null
     if (payload.surface !== undefined) row.surface = payload.surface || null
     if (payload.condition !== undefined) row.condition = payload.condition || null
     if (payload.fdi !== undefined) row.fdi = payload.fdi ? Number(payload.fdi) : null
     if (payload.appointmentId !== undefined) {
-      const appointmentId = Number(payload.appointmentId)
-      row.appointmentId = Number.isFinite(appointmentId) ? appointmentId : null
+      row.appointmentId = parsePositiveIntOrNull(payload.appointmentId)
+    }
+    const normalizedStatus = String(row.status || '').toLowerCase()
+    if (normalizedStatus === 'completed') {
+      if (!row.completedAt) row.completedAt = new Date()
+      if (!row.completedByPractitionerId && row.practitionerId) row.completedByPractitionerId = row.practitionerId
+      if (!row.completedByPractitionerName) row.completedByPractitionerName = row.practitionerName || row.clinicianName || null
+    } else if (
+      payload.status !== undefined &&
+      payload.completedAt === undefined &&
+      payload.completedByPractitionerId === undefined &&
+      payload.completedByPractitionerName === undefined
+    ) {
+      row.completedAt = null
+      row.completedByPractitionerId = null
+      row.completedByPractitionerName = null
     }
     await row.save()
     return success(normalizeTreatmentPlanItem(row))
@@ -661,7 +939,6 @@ export const deleteTreatmentPlanItem = async (event) => {
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const id = Number(payload?.id || 0)
     if (!id) return error(400, 'id is required')
-    await ensureChartingTables()
     const row = await DiaryTreatmentPlanItem.findOne({
       where: { id, organisationId: Number(orgId) },
     })
@@ -688,7 +965,6 @@ export const reorderTreatmentPlanItems = async (event) => {
     const appointmentGroupId = payload?.appointmentGroupId || null
     if (!patientId) return error(400, 'patientId is required')
     if (!orderedIds.length) return error(400, 'orderedIds is required')
-    await ensureChartingTables()
     const patient = await requirePatientInOrg(orgId, patientId)
     if (!patient) return error(404, 'Patient not found')
     const existing = await DiaryTreatmentPlanItem.findAll({
@@ -750,7 +1026,7 @@ export const appointmentConflictCheck = async (event) => {
     const date = payload?.date
     const startTime = payload?.startTime
     const endTime = payload?.endTime
-    const dentistId = payload?.dentistId ? Number(payload.dentistId) : null
+    const payloadDentistId = parsePositiveIntOrNull(payload?.dentistId)
     const patientId = payload?.patientId ? Number(payload.patientId) : null
     const excludeAppointmentId = payload?.excludeAppointmentId ? Number(payload.excludeAppointmentId) : null
     const start = parseLocalDateTime(date, startTime)
@@ -766,7 +1042,7 @@ export const appointmentConflictCheck = async (event) => {
       status: { [Op.ne]: 'Cancelled' },
       ...overlapWindowClause(start, end, excludeAppointmentId),
     }
-    if (dentistId) where.dentistId = dentistId
+    if (payloadDentistId) where.dentistId = payloadDentistId
     if (patientId) where.patientId = patientId
     const overlaps = await DiaryAppointment.findAll({
       where,
@@ -802,14 +1078,12 @@ export const bookFromTreatmentPlan = async (event) => {
     const date = payload?.date
     const startTime = payload?.startTime
     const endTime = payload?.endTime
-    const dentistId = payload?.dentistId ? Number(payload.dentistId) : null
+    const payloadDentistId = parsePositiveIntOrNull(payload?.dentistId)
     const notes = payload?.notes || null
     if (!patientId) return error(400, 'patientId is required')
     if (!treatmentItemIds.length) return error(400, 'No treatment items selected for booking')
-    if (!dentistId) return error(400, 'dentistId is required')
     const patient = await requirePatientInOrg(orgId, patientId)
     if (!patient) return error(404, 'Patient not found')
-    await ensureChartingTables()
 
     const selectedItems = await DiaryTreatmentPlanItem.findAll({
       where: {
@@ -822,6 +1096,9 @@ export const bookFromTreatmentPlan = async (event) => {
     if (!selectedItems.length || selectedItems.length !== treatmentItemIds.length) {
       return error(400, 'Selected treatment items are invalid')
     }
+    const fallbackDentistId = selectedItems.find((item) => Number(item.practitionerId || 0) > 0)?.practitionerId || null
+    const dentistId = payloadDentistId || fallbackDentistId
+    if (!dentistId) return error(400, 'dentistId is required')
 
     const start = parseLocalDateTime(date, startTime)
     const end = parseLocalDateTime(date, endTime)
@@ -844,7 +1121,7 @@ export const bookFromTreatmentPlan = async (event) => {
     if (patientOverlap > 0) return error(409, 'Patient already has an appointment at this time')
 
     const treatmentName = selectedItems
-      .map((item) => item.conditionLabel || item.condition || `Tooth ${item.fdi || ''}`.trim())
+      .map((item) => item.treatmentName || item.conditionLabel || item.condition || `Tooth ${item.fdi || ''}`.trim())
       .filter(Boolean)
       .join(', ')
       .slice(0, 120) || 'Treatment Plan'
@@ -2177,4 +2454,5 @@ export const deletePatientForm = async (event) => {
     return error(500, msg)
   }
 }
+
 

@@ -42,6 +42,7 @@
         <v-icon
           size="16"
           class="code-item__star"
+          :class="{ 'code-item__star--favorite': favoriteCodeIds.includes(code.id) }"
           :color="favoriteCodeIds.includes(code.id) ? 'amber-darken-2' : 'grey-lighten-1'"
           @click.stop="toggleFavorite(code.id)"
         >{{ favoriteCodeIds.includes(code.id) ? 'mdi-star' : 'mdi-star-outline' }}</v-icon>
@@ -73,6 +74,7 @@
 const props = defineProps({
   activeCodeId: { type: [Number, String], default: null },
   favoriteCodeIds: { type: Array, default: () => [] },
+  codes: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['code-select', 'toggle-favorite'])
@@ -80,33 +82,13 @@ const emit = defineEmits(['code-select', 'toggle-favorite'])
 const searchQuery = ref('')
 const selectedCategory = ref('All')
 
-const categoryOptions = ['All', 'Restorations', 'Prosthetics', 'Endodontics', 'Implantology', 'Surgical', 'Preventive', 'Other']
-
-const CODES = [
-  { id: 1,  code: '0000',  name: 'Digital Planning',    conditionKey: 'crown',            category: 'Prosthetics' },
-  { id: 2,  code: '0001',  name: 'Spark Moderate',      conditionKey: null,               category: 'Other' },
-  { id: 3,  code: '011',   name: 'SCAN',                conditionKey: null,               category: 'Other' },
-  { id: 4,  code: '012',   name: 'SCAN',                conditionKey: null,               category: 'Other' },
-  { id: 5,  code: '00022', name: 'Crown Fit',           conditionKey: 'crown',            category: 'Prosthetics' },
-  { id: 6,  code: '00000', name: 'Smile Trail',         conditionKey: null,               category: 'Other' },
-  { id: 7,  code: '0007',  name: 'Direct Access',       conditionKey: null,               category: 'Surgical' },
-  { id: 8,  code: '001',   name: 'FTA Clinician',       conditionKey: null,               category: 'Other' },
-  { id: 9,  code: '006',   name: 'Whitening Trays',     conditionKey: null,               category: 'Preventive' },
-  { id: 10, code: '002',   name: 'Composite Filling',   conditionKey: 'composite',        category: 'Restorations' },
-  { id: 11, code: '003',   name: 'Extraction',          conditionKey: 'extraction-planned', category: 'Surgical' },
-  { id: 12, code: '004',   name: 'Root Canal',          conditionKey: 'rct',              category: 'Endodontics' },
-  { id: 13, code: '005',   name: 'Scale & Polish',      conditionKey: null,               category: 'Preventive' },
-  { id: 14, code: '007',   name: 'Metal Crown',         conditionKey: 'crown',            category: 'Prosthetics' },
-  { id: 15, code: '008',   name: 'Zirconia Crown',      conditionKey: 'crown-zirconia',   category: 'Prosthetics' },
-  { id: 16, code: '009',   name: 'Veneer',              conditionKey: 'veneer',           category: 'Prosthetics' },
-  { id: 17, code: '010',   name: 'Implant',             conditionKey: 'implant',          category: 'Implantology' },
-  { id: 18, code: '013',   name: 'Amalgam Filling',     conditionKey: 'amalgam',          category: 'Restorations' },
-  { id: 19, code: '014',   name: 'Cavity',              conditionKey: 'caries',           category: 'Restorations' },
-  { id: 20, code: '015',   name: 'Missing Tooth',       conditionKey: 'missing',          category: 'Surgical' },
-]
+const categoryOptions = computed(() => {
+  const categories = new Set((props.codes || []).map((c) => c.category).filter(Boolean))
+  return ['All', ...Array.from(categories)]
+})
 
 const filteredCodes = computed(() => {
-  let list = CODES
+  let list = props.codes || []
   if (selectedCategory.value !== 'All') {
     list = list.filter(c => c.category === selectedCategory.value)
   }
@@ -121,6 +103,10 @@ const filteredCodes = computed(() => {
     const bFav = props.favoriteCodeIds.includes(b.id) ? 1 : 0
     return bFav - aFav
   })
+})
+
+watch(categoryOptions, (options) => {
+  if (!options.includes(selectedCategory.value)) selectedCategory.value = 'All'
 })
 
 function onCodeClick(code) {
@@ -201,7 +187,18 @@ function toggleFavorite(codeId) {
 .code-item:hover .code-item__star,
 .code-item--active .code-item__star {
   opacity: 1;
+}
+
+.code-item:hover .code-item__star:not(.code-item__star--favorite),
+.code-item--active .code-item__star:not(.code-item__star--favorite) {
   color: #0061FB !important;
+}
+
+.code-item__star--favorite,
+.code-item:hover .code-item__star--favorite,
+.code-item--active .code-item__star--favorite {
+  color: #ffb300 !important;
+  opacity: 1;
 }
 
 .code-item__code {

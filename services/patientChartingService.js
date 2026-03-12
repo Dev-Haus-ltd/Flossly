@@ -1,85 +1,72 @@
 import { Post, Get } from './apiWrapper'
 
+// Fix #16 — removed redundant new Promise(resolve/reject) wrappers; Get/Post already return Promises
 export default {
+  listTreatments() {
+    return Get('/diary/treatments')
+  },
+
   getChart(patientId) {
-    return new Promise((resolve, reject) => {
-      Get(`/diary/chart?patientId=${encodeURIComponent(patientId)}`)
-        .then(resolve)
-        .catch(reject)
-    })
+    return Get(`/diary/chart?patientId=${encodeURIComponent(patientId)}`)
   },
 
   saveChart(payload) {
-    // payload: { patientId, chart }  — full chart snapshot
-    return new Promise((resolve, reject) => {
-      Post('/diary/chartSave', payload)
-        .then(resolve)
-        .catch(reject)
-    })
+    return Post('/diary/chartSave', payload)
   },
 
   saveTooth(payload) {
-    // payload: { patientId, fdi, toothData }  — single tooth update
-    return new Promise((resolve, reject) => {
-      Post('/diary/chartToothSave', payload)
-        .then(resolve)
-        .catch(reject)
-    })
+    return Post('/diary/chartToothSave', payload)
   },
 
-  // Treatment Plan
   listTreatmentPlans(patientId) {
-    return new Promise((resolve, reject) => {
-      Get(`/diary/treatmentPlans?patientId=${encodeURIComponent(patientId)}`)
-        .then(resolve)
-        .catch(reject)
-    })
+    return Get(`/diary/treatmentPlans?patientId=${encodeURIComponent(patientId)}`)
+  },
+
+  createTreatmentPlan(payload) {
+    return Post('/diary/treatmentPlanCreate', payload)
+  },
+
+  updateTreatmentPlan(payload) {
+    return Post('/diary/treatmentPlanUpdate', payload)
+  },
+
+  deleteTreatmentPlan(payload) {
+    return Post('/diary/treatmentPlanDelete', payload)
+  },
+
+  listTreatmentPlanItems(patientId) {
+    return Get(`/diary/treatmentPlanItems?patientId=${encodeURIComponent(patientId)}`)
   },
 
   createTreatmentPlanItem(payload) {
-    // payload: { patientId, fdi, surface, condition, conditionLabel, cost, priority, notes, status }
-    return new Promise((resolve, reject) => {
-      Post('/diary/treatmentPlanCreate', payload)
-        .then(resolve)
-        .catch(reject)
-    })
+    return Post('/diary/treatmentPlanItemCreate', payload)
   },
 
   updateTreatmentPlanItem(payload) {
-    // payload: { id, status, priority, cost, notes }
-    return new Promise((resolve, reject) => {
-      Post('/diary/treatmentPlanUpdate', payload)
-        .then(resolve)
-        .catch(reject)
-    })
+    return Post('/diary/treatmentPlanItemUpdate', payload)
   },
 
   deleteTreatmentPlanItem(id) {
-    return new Promise((resolve, reject) => {
-      Post('/diary/treatmentPlanDelete', { id })
-        .then(resolve)
-        .catch(reject)
-    })
+    return Post('/diary/treatmentPlanItemDelete', { id })
+  },
+
+  getChartMeta(patientId) {
+    return Get(`/diary/chartMeta?patientId=${encodeURIComponent(patientId)}`)
+  },
+
+  saveChartMeta(payload) {
+    return Post('/diary/chartMetaSave', payload)
   },
 
   reorderTreatmentPlan(payload) {
-    // payload: { patientId, orderedIds: [id, id, ...] }
-    return new Promise((resolve, reject) => {
-      Post('/diary/treatmentPlanReorder', payload)
-        .then(resolve)
-        .catch(reject)
-    })
+    return Post('/diary/treatmentPlanReorder', payload)
   },
 
   checkConflict(payload) {
-    return new Promise((resolve, reject) =>
-      Post('/diary/appointmentConflictCheck', payload).then(resolve).catch(reject)
-    )
+    return Post('/diary/appointmentConflictCheck', payload)
   },
 
   bookAppointmentInDiary(payload) {
-    return new Promise((resolve, reject) =>
-      Post('/diary/bookFromTreatmentPlan', payload).then(resolve).catch(reject)
-    )
+    return Post('/diary/bookFromTreatmentPlan', payload)
   },
 }

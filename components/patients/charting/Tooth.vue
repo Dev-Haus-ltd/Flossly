@@ -14,15 +14,15 @@
       <rect
         x="0" y="0" :width="VB" :height="VB"
         rx="2"
-        :fill="isSelected ? '#EEF4FF' : '#fff'"
+        :fill="tooth.missing ? '#f3f4f6' : isSelected ? '#EEF4FF' : '#fff'"
         :stroke="isSelected ? '#0061FB' : isBridgePending ? '#fb8c00' : '#bbb'"
         :stroke-width="isSelected || isBridgePending ? 2 : 1"
       />
 
       <!-- ── MISSING TOOTH ──────────────────────────────────────── -->
       <template v-if="tooth.missing">
-        <line :x1="2" :y1="2" :x2="VB-2" :y2="VB-2" stroke="#555" stroke-width="2" stroke-linecap="round"/>
-        <line :x1="VB-2" :y1="2" :x2="2" :y2="VB-2" stroke="#555" stroke-width="2" stroke-linecap="round"/>
+        <line :x1="2" :y1="2" :x2="VB-2" :y2="VB-2" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round"/>
+        <line :x1="VB-2" :y1="2" :x2="2" :y2="VB-2" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round"/>
       </template>
 
       <!-- ── NORMAL TOOTH ───────────────────────────────────────── -->

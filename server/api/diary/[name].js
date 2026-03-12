@@ -1,4 +1,4 @@
-import { listTreatments, listPatients, createPatient, updatePatient, listAppointments, createAppointment, updateAppointment, listDentistsForDate, getStats, getPatient, listNotes, createNote, deleteNote, getPatientComfort, savePatientComfort, updatePatientComfort, getPatientSurvey, savePatientSurvey, uploadSurveyPhotos, downloadPatientSurvey, printPatientSurvey, sharePatientSurvey, getSurveyStructure, listPatientForms, getPatientForm, savePatientForm, updatePatientForm, deletePatientForm, listPatientsPaged, getPatientStats, getPatientChart, savePatientChart, savePatientChartTooth, listTreatmentPlanItems, createTreatmentPlanItem, updateTreatmentPlanItem, deleteTreatmentPlanItem, reorderTreatmentPlanItems, appointmentConflictCheck, bookFromTreatmentPlan } from '~/server/controllers/diary'
+import { listTreatments, listPatients, createPatient, updatePatient, listAppointments, createAppointment, updateAppointment, listDentistsForDate, getStats, getPatient, listNotes, createNote, deleteNote, getPatientComfort, savePatientComfort, updatePatientComfort, getPatientSurvey, savePatientSurvey, uploadSurveyPhotos, downloadPatientSurvey, printPatientSurvey, sharePatientSurvey, getSurveyStructure, listPatientForms, getPatientForm, savePatientForm, updatePatientForm, deletePatientForm, listPatientsPaged, getPatientStats, getPatientChart, savePatientChart, savePatientChartTooth, getPatientChartMeta, savePatientChartMeta, listTreatmentPlans, createTreatmentPlan, updateTreatmentPlan, deleteTreatmentPlan, listTreatmentPlanItems, createTreatmentPlanItem, updateTreatmentPlanItem, deleteTreatmentPlanItem, reorderTreatmentPlanItems, appointmentConflictCheck, bookFromTreatmentPlan } from '~/server/controllers/diary'
 import { success } from '~/server/utils/response'
 
 export default defineEventHandler(async (event) => {
@@ -70,13 +70,25 @@ export default defineEventHandler(async (event) => {
       return await savePatientChart(event)
     case 'chartToothSave':
       return await savePatientChartTooth(event)
+    case 'chartMeta':
+      return await getPatientChartMeta(event)
+    case 'chartMetaSave':
+      return await savePatientChartMeta(event)
     case 'treatmentPlans':
-      return await listTreatmentPlanItems(event)
+      return await listTreatmentPlans(event)
     case 'treatmentPlanCreate':
-      return await createTreatmentPlanItem(event)
+      return await createTreatmentPlan(event)
     case 'treatmentPlanUpdate':
-      return await updateTreatmentPlanItem(event)
+      return await updateTreatmentPlan(event)
     case 'treatmentPlanDelete':
+      return await deleteTreatmentPlan(event)
+    case 'treatmentPlanItems':
+      return await listTreatmentPlanItems(event)
+    case 'treatmentPlanItemCreate':
+      return await createTreatmentPlanItem(event)
+    case 'treatmentPlanItemUpdate':
+      return await updateTreatmentPlanItem(event)
+    case 'treatmentPlanItemDelete':
       return await deleteTreatmentPlanItem(event)
     case 'treatmentPlanReorder':
       return await reorderTreatmentPlanItems(event)

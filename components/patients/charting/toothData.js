@@ -133,6 +133,46 @@ export function getConditionColor(condition) {
   return CONDITIONS[condition]?.color || '#000000'
 }
 
+// ─── Deciduous (Primary) Teeth ────────────────────────────────────────────
+// FDI 55–51 upper right, 61–65 upper left, 71–75 lower left, 85–81 lower right
+export const DECIDUOUS_META = [
+  // Upper Right
+  { fdi: 55, palmer: 'URe', uns: 'A', type: TOOTH_TYPE.MOLAR,    arch: ARCH.UPPER, quadrant: QUADRANT.UR, mesialRight: true  },
+  { fdi: 54, palmer: 'URd', uns: 'B', type: TOOTH_TYPE.PREMOLAR, arch: ARCH.UPPER, quadrant: QUADRANT.UR, mesialRight: true  },
+  { fdi: 53, palmer: 'URc', uns: 'C', type: TOOTH_TYPE.CANINE,   arch: ARCH.UPPER, quadrant: QUADRANT.UR, mesialRight: true  },
+  { fdi: 52, palmer: 'URb', uns: 'D', type: TOOTH_TYPE.INCISOR,  arch: ARCH.UPPER, quadrant: QUADRANT.UR, mesialRight: true  },
+  { fdi: 51, palmer: 'URa', uns: 'E', type: TOOTH_TYPE.INCISOR,  arch: ARCH.UPPER, quadrant: QUADRANT.UR, mesialRight: true  },
+  // Upper Left
+  { fdi: 61, palmer: 'ULa', uns: 'F', type: TOOTH_TYPE.INCISOR,  arch: ARCH.UPPER, quadrant: QUADRANT.UL, mesialRight: false },
+  { fdi: 62, palmer: 'ULb', uns: 'G', type: TOOTH_TYPE.INCISOR,  arch: ARCH.UPPER, quadrant: QUADRANT.UL, mesialRight: false },
+  { fdi: 63, palmer: 'ULc', uns: 'H', type: TOOTH_TYPE.CANINE,   arch: ARCH.UPPER, quadrant: QUADRANT.UL, mesialRight: false },
+  { fdi: 64, palmer: 'ULd', uns: 'I', type: TOOTH_TYPE.PREMOLAR, arch: ARCH.UPPER, quadrant: QUADRANT.UL, mesialRight: false },
+  { fdi: 65, palmer: 'ULe', uns: 'J', type: TOOTH_TYPE.MOLAR,    arch: ARCH.UPPER, quadrant: QUADRANT.UL, mesialRight: false },
+  // Lower Left
+  { fdi: 71, palmer: 'LLa', uns: 'K', type: TOOTH_TYPE.INCISOR,  arch: ARCH.LOWER, quadrant: QUADRANT.LL, mesialRight: false },
+  { fdi: 72, palmer: 'LLb', uns: 'L', type: TOOTH_TYPE.INCISOR,  arch: ARCH.LOWER, quadrant: QUADRANT.LL, mesialRight: false },
+  { fdi: 73, palmer: 'LLc', uns: 'M', type: TOOTH_TYPE.CANINE,   arch: ARCH.LOWER, quadrant: QUADRANT.LL, mesialRight: false },
+  { fdi: 74, palmer: 'LLd', uns: 'N', type: TOOTH_TYPE.PREMOLAR, arch: ARCH.LOWER, quadrant: QUADRANT.LL, mesialRight: false },
+  { fdi: 75, palmer: 'LLe', uns: 'O', type: TOOTH_TYPE.MOLAR,    arch: ARCH.LOWER, quadrant: QUADRANT.LL, mesialRight: false },
+  // Lower Right
+  { fdi: 85, palmer: 'LRe', uns: 'P', type: TOOTH_TYPE.MOLAR,    arch: ARCH.LOWER, quadrant: QUADRANT.LR, mesialRight: true  },
+  { fdi: 84, palmer: 'LRd', uns: 'Q', type: TOOTH_TYPE.PREMOLAR, arch: ARCH.LOWER, quadrant: QUADRANT.LR, mesialRight: true  },
+  { fdi: 83, palmer: 'LRc', uns: 'R', type: TOOTH_TYPE.CANINE,   arch: ARCH.LOWER, quadrant: QUADRANT.LR, mesialRight: true  },
+  { fdi: 82, palmer: 'LRb', uns: 'S', type: TOOTH_TYPE.INCISOR,  arch: ARCH.LOWER, quadrant: QUADRANT.LR, mesialRight: true  },
+  { fdi: 81, palmer: 'LRa', uns: 'T', type: TOOTH_TYPE.INCISOR,  arch: ARCH.LOWER, quadrant: QUADRANT.LR, mesialRight: true  },
+]
+
+// Merge deciduous into TEETH_BY_FDI lookup
+DECIDUOUS_META.forEach(t => { TEETH_BY_FDI[t.fdi] = t })
+
+export const DECIDUOUS_UPPER_RIGHT = [55, 54, 53, 52, 51]
+export const DECIDUOUS_UPPER_LEFT  = [61, 62, 63, 64, 65]
+export const DECIDUOUS_LOWER_LEFT  = [71, 72, 73, 74, 75]
+export const DECIDUOUS_LOWER_RIGHT = [85, 84, 83, 82, 81]
+
+export const DECIDUOUS_UPPER_ARCH = [...DECIDUOUS_UPPER_RIGHT, ...DECIDUOUS_UPPER_LEFT]
+export const DECIDUOUS_LOWER_ARCH = [...DECIDUOUS_LOWER_RIGHT, ...DECIDUOUS_LOWER_LEFT]
+
 // ─── Tooth Status Definitions ─────────────────────────────────────────────
 export const TOOTH_STATUSES = [
   { value: 'present',           label: 'Present' },

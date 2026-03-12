@@ -1,360 +1,348 @@
 <template>
   <div class="tooth-chart" @click.self="closePopup">
+    <Teleport to="body">
+      <!-- Treatment hover tooltip -->
+      <div
+        v-if="hoverTooltip.visible && hoverTooltip.lines.length"
+        class="tooth-hover-tip"
+        :style="{ top: hoverTooltip.y + 'px', left: hoverTooltip.x + 'px' }"
+      >
+        <div class="tooth-hover-tip__title">{{ hoverTooltip.label }}</div>
+        <div v-for="(line, i) in hoverTooltip.lines" :key="i" class="tooth-hover-tip__line">
+          <span class="tooth-hover-tip__dot" :style="{ background: line.color }" />
+          <span>{{ line.text }}</span>
+        </div>
+      </div>
+    </Teleport>
 
-    <!-- ── Status popup (click — no active condition) ────────────────── -->
     <Teleport to="body">
       <div
         v-if="statusPopup.visible"
+        ref="statusPopupEl"
         class="status-popup"
         :style="{ top: statusPopup.y + 'px', left: statusPopup.x + 'px' }"
-        ref="statusPopupEl"
       >
         <div class="status-popup__title">{{ statusPopup.label }}</div>
-        <div class="status-popup__sub">Current Status</div>
-        <select
-          class="status-popup__select"
-          :value="toothStatuses[statusPopup.fdi] || ''"
-          @change="onStatusChange(statusPopup.fdi, $event.target.value)"
-        >
-          <option value="">Select</option>
-          <option
-            v-for="s in TOOTH_STATUSES"
-            :key="s.value"
-            :value="s.value"
-          >{{ s.label }}</option>
-        </select>
-      </div>
-    </Teleport>
-
-    <!-- ── Hover popup (conditions) ──────────────────────────────────── -->
-    <Teleport to="body">
-      <div
-        v-if="hoverPopup.visible"
-        class="hover-popup"
-        :style="{ top: hoverPopup.y + 'px', left: hoverPopup.x + 'px' }"
-        @mouseenter="onHoverPopupEnter"
-        @mouseleave="onHoverPopupLeave"
-      >
-        <div class="hover-popup__label">{{ hoverPopup.label }}</div>
-        <div class="hover-popup__date">{{ hoverPopup.date }}</div>
-        <div class="hover-popup__icons">
-          <span
-            v-for="(ic, i) in hoverPopup.icons"
-            :key="i"
-            class="hover-popup__icon-dot"
-            :style="{ background: ic.color }"
-            :title="ic.label"
-          />
+        <div class="status-popup__menu-col">
+          <button
+            class="status-popup__menu-btn"
+            :class="{ 'status-popup__menu-btn--active': statusPopup.section === 'status' }"
+            @click="statusPopup.section = 'status'"
+          >
+            <span>Status</span>
+            <v-icon size="16">mdi-chevron-right</v-icon>
+          </button>
+          <button
+            class="status-popup__menu-btn"
+            :class="{ 'status-popup__menu-btn--active': statusPopup.section === 'diagnosis' }"
+            @click="statusPopup.section = 'diagnosis'"
+          >
+            <span>Diagnosis</span>
+            <v-icon size="16">mdi-chevron-right</v-icon>
+          </button>
+        </div>
+        <div class="status-popup__submenu">
+          <template v-if="statusPopup.section === 'status'">
+            <button
+              v-for="opt in STATUS_OPTIONS"
+              :key="opt.value"
+              class="status-popup__sub-btn"
+              @click="onSelectStatus(opt.value)"
+            >
+              <span>{{ opt.label }}</span>
+              <v-icon v-if="currentStatus === opt.value" size="16" color="primary">mdi-check</v-icon>
+            </button>
+          </template>
+          <template v-else>
+            <button
+              v-for="opt in DIAGNOSIS_OPTIONS"
+              :key="opt.value"
+              class="status-popup__sub-btn"
+              @click="onSelectDiagnosis(opt.value)"
+            >
+              <span>{{ opt.label }}</span>
+              <v-icon v-if="currentDiagnosis === opt.value" size="16" color="primary">mdi-check</v-icon>
+            </button>
+          </template>
         </div>
       </div>
     </Teleport>
 
-    <!-- ── Main grid ─────────────────────────────────────────────────── -->
     <div class="chart-grid">
-
-      <!-- ──────────── HEADER ROW ──────────────────────────────────── -->
-      <div class="row-label-cell" />
-      <div class="arch-numbers-row">
-        <!-- Upper Right numbers -->
-        <div class="quadrant-nums quadrant-nums--right">
-          <span class="arch-tag">UR</span>
-          <span v-for="fdi in UPPER_RIGHT" :key="`hn-${fdi}`" class="tooth-num">
-            {{ toothNumber(fdi) }}
-          </span>
-        </div>
-        <div class="midline-gap" />
-        <!-- Upper Left numbers -->
-        <div class="quadrant-nums quadrant-nums--left">
-          <span v-for="fdi in UPPER_LEFT" :key="`hn-${fdi}`" class="tooth-num">
-            {{ toothNumber(fdi) }}
-          </span>
-          <span class="arch-tag">UL</span>
-        </div>
-      </div>
-
-      <!-- ──────────── ROW 1: Upper Front (ToothFront) ──────────────── -->
-      <div class="row-label-cell">
-        <span class="row-label-text">Front</span>
-      </div>
-      <div class="teeth-row-wrap">
-        <div class="quadrant">
-          <div
-            v-for="fdi in UPPER_RIGHT"
-            :key="`ufr-${fdi}`"
-            class="tooth-cell tooth-cell--front"
-            @mouseenter="onToothMouseEnter(fdi, $event)"
-            @mouseleave="onToothMouseLeave"
-          >
-            <ToothFront
-              :fdi="fdi"
-              :tooth-data="getTooth(fdi)"
-              :notation="notation"
-              :selected="selectedToothFdi === fdi"
-              @tooth-click="onToothClick"
-            />
-          </div>
-        </div>
-        <div class="midline-gap" />
-        <div class="quadrant">
-          <div
-            v-for="fdi in UPPER_LEFT"
-            :key="`ufl-${fdi}`"
-            class="tooth-cell tooth-cell--front"
-            @mouseenter="onToothMouseEnter(fdi, $event)"
-            @mouseleave="onToothMouseLeave"
-          >
-            <ToothFront
-              :fdi="fdi"
-              :tooth-data="getTooth(fdi)"
-              :notation="notation"
-              :selected="selectedToothFdi === fdi"
-              @tooth-click="onToothClick"
-            />
-          </div>
-        </div>
-      </div>
-
-      <!-- ──────────── ROW 2: Upper Occlusal (Tooth) ────────────────── -->
-      <div class="row-label-cell">
-        <span class="row-label-text">Top</span>
-      </div>
-      <div class="teeth-row-wrap">
-        <div class="quadrant">
-          <div
-            v-for="fdi in UPPER_RIGHT"
-            :key="`uor-${fdi}`"
-            class="tooth-cell"
-            @click="onToothCellClick(fdi, $event)"
-            @mouseenter="onToothMouseEnter(fdi, $event)"
-            @mouseleave="onToothMouseLeave"
-          >
-            <Tooth
-              :fdi="fdi"
-              :tooth="getTooth(fdi)"
-              :mesial-right="true"
-              :is-selected="selectedToothFdi === fdi"
-              :active-condition="activeCondition"
-              :is-bridge-pending="bridgeSelectMode && bridgeStartFdi === fdi"
-              :size="44"
-              @surface-click="onSurfaceClick"
-              @tooth-click="onToothClick"
-            />
-          </div>
-        </div>
-        <div class="midline-gap" />
-        <div class="quadrant">
-          <div
-            v-for="fdi in UPPER_LEFT"
-            :key="`uol-${fdi}`"
-            class="tooth-cell"
-            @click="onToothCellClick(fdi, $event)"
-            @mouseenter="onToothMouseEnter(fdi, $event)"
-            @mouseleave="onToothMouseLeave"
-          >
-            <Tooth
-              :fdi="fdi"
-              :tooth="getTooth(fdi)"
-              :mesial-right="false"
-              :is-selected="selectedToothFdi === fdi"
-              :active-condition="activeCondition"
-              :is-bridge-pending="bridgeSelectMode && bridgeStartFdi === fdi"
-              :size="44"
-              @surface-click="onSurfaceClick"
-              @tooth-click="onToothClick"
-            />
-          </div>
-        </div>
-      </div>
-
-      <!-- ──────────── DIVIDER ROW ─────────────────────────────────── -->
-      <div class="row-label-cell" />
-      <div class="arch-divider-row">
-        <div class="arch-divider-line" />
-      </div>
-
-      <!-- ──────────── ROW 3: Lower Occlusal (Tooth) ────────────────── -->
-      <div class="row-label-cell row-label-cell--multi">
-        <span class="row-label-text row-label-text--sm">Present</span>
-        <span class="row-label-text row-label-text--sm">Dental</span>
-        <span class="row-label-text row-label-text--sm">Status</span>
-      </div>
-      <div class="teeth-row-wrap">
-        <div class="quadrant">
-          <div
-            v-for="fdi in LOWER_RIGHT"
-            :key="`lor-${fdi}`"
-            class="tooth-cell"
-            @click="onToothCellClick(fdi, $event)"
-            @mouseenter="onToothMouseEnter(fdi, $event)"
-            @mouseleave="onToothMouseLeave"
-          >
-            <Tooth
-              :fdi="fdi"
-              :tooth="getTooth(fdi)"
-              :mesial-right="true"
-              :is-selected="selectedToothFdi === fdi"
-              :active-condition="activeCondition"
-              :is-bridge-pending="bridgeSelectMode && bridgeStartFdi === fdi"
-              :size="44"
-              @surface-click="onSurfaceClick"
-              @tooth-click="onToothClick"
-            />
-          </div>
-        </div>
-        <div class="midline-gap" />
-        <div class="quadrant">
-          <div
-            v-for="fdi in LOWER_LEFT"
-            :key="`lol-${fdi}`"
-            class="tooth-cell"
-            @click="onToothCellClick(fdi, $event)"
-            @mouseenter="onToothMouseEnter(fdi, $event)"
-            @mouseleave="onToothMouseLeave"
-          >
-            <Tooth
-              :fdi="fdi"
-              :tooth="getTooth(fdi)"
-              :mesial-right="false"
-              :is-selected="selectedToothFdi === fdi"
-              :active-condition="activeCondition"
-              :is-bridge-pending="bridgeSelectMode && bridgeStartFdi === fdi"
-              :size="44"
-              @surface-click="onSurfaceClick"
-              @tooth-click="onToothClick"
-            />
-          </div>
-        </div>
-      </div>
-
-      <!-- ──────────── ROW 4: Lower Front (ToothFront) ──────────────── -->
-      <div class="row-label-cell row-label-cell--multi">
-        <span class="row-label-text row-label-text--sm">Work to</span>
-        <span class="row-label-text row-label-text--sm">be carried</span>
-        <span class="row-label-text row-label-text--sm">out</span>
-      </div>
-      <div class="teeth-row-wrap">
-        <div class="quadrant">
-          <div
-            v-for="fdi in LOWER_RIGHT"
-            :key="`lfr-${fdi}`"
-            class="tooth-cell tooth-cell--front"
-            @mouseenter="onToothMouseEnter(fdi, $event)"
-            @mouseleave="onToothMouseLeave"
-          >
-            <ToothFront
-              :fdi="fdi"
-              :tooth-data="getTooth(fdi)"
-              :notation="notation"
-              :selected="selectedToothFdi === fdi"
-              @tooth-click="onToothClick"
-            />
-          </div>
-        </div>
-        <div class="midline-gap" />
-        <div class="quadrant">
-          <div
-            v-for="fdi in LOWER_LEFT"
-            :key="`lfl-${fdi}`"
-            class="tooth-cell tooth-cell--front"
-            @mouseenter="onToothMouseEnter(fdi, $event)"
-            @mouseleave="onToothMouseLeave"
-          >
-            <ToothFront
-              :fdi="fdi"
-              :tooth-data="getTooth(fdi)"
-              :notation="notation"
-              :selected="selectedToothFdi === fdi"
-              @tooth-click="onToothClick"
-            />
-          </div>
-        </div>
-      </div>
-
-      <!-- ──────────── FOOTER ROW ───────────────────────────────────── -->
       <div class="row-label-cell" />
       <div class="arch-numbers-row">
         <div class="quadrant-nums quadrant-nums--right">
-          <span class="arch-tag">LR</span>
-          <span v-for="fdi in LOWER_RIGHT" :key="`fn-${fdi}`" class="tooth-num">
-            {{ toothNumber(fdi) }}
-          </span>
+          <span class="arch-tag">R</span>
+          <span v-for="fdi in UPPER_RIGHT" :key="`hn-${fdi}`" class="tooth-num">{{ toothNumber(fdi) }}</span>
         </div>
         <div class="midline-gap" />
         <div class="quadrant-nums quadrant-nums--left">
-          <span v-for="fdi in LOWER_LEFT" :key="`fn-${fdi}`" class="tooth-num">
-            {{ toothNumber(fdi) }}
-          </span>
-          <span class="arch-tag">LL</span>
+          <span v-for="fdi in UPPER_LEFT" :key="`hn-${fdi}`" class="tooth-num">{{ toothNumber(fdi) }}</span>
+          <span class="arch-tag">L</span>
         </div>
       </div>
 
-    </div><!-- /chart-grid -->
+      <template v-for="row in ROWS" :key="row.id">
+        <div class="row-label-cell" />
+        <div class="teeth-row-wrap" :class="{ 'teeth-row-wrap--inactive': isRowDimmed(row.id) }">
+          <div class="quadrant">
+            <div
+              v-for="fdi in (row.arch === 'upper' ? UPPER_RIGHT : LOWER_RIGHT)"
+              :key="`${row.id}-r-${fdi}`"
+              class="tooth-cell"
+              :class="{ 'tooth-cell--inactive': !isRowInteractive(row.id) }"
+              @mouseenter="onToothMouseEnter(fdi, $event)"
+              @mouseleave="onToothMouseLeave"
+              @click.capture="onToothCellClick(row.id, fdi, $event)"
+            >
+              <Tooth
+                :fdi="fdi"
+                :tooth="getTooth(fdi)"
+                :mesial-right="true"
+                :is-selected="selectedToothFdi === fdi"
+                :active-condition="isRowInteractive(row.id) ? activeCondition : null"
+                :is-bridge-pending="bridgeSelectMode && bridgeStartFdi === fdi"
+                :size="44"
+                @surface-click="onSurfaceClickRow(row.id, $event)"
+                @tooth-click="onToothClickRow(row.id, $event)"
+              />
+              <div v-if="getMarker(row.id, fdi)" class="tooth-marker" :class="`tooth-marker--${getMarker(row.id, fdi).type}`">
+                <span v-if="getMarker(row.id, fdi).type === 'text'">{{ getMarker(row.id, fdi).text }}</span>
+                <span v-else class="tooth-marker-line" />
+              </div>
+            </div>
+          </div>
+          <div class="midline-gap" />
+          <div class="quadrant">
+            <div
+              v-for="fdi in (row.arch === 'upper' ? UPPER_LEFT : LOWER_LEFT)"
+              :key="`${row.id}-l-${fdi}`"
+              class="tooth-cell"
+              :class="{ 'tooth-cell--inactive': !isRowInteractive(row.id) }"
+              @mouseenter="onToothMouseEnter(fdi, $event)"
+              @mouseleave="onToothMouseLeave"
+              @click.capture="onToothCellClick(row.id, fdi, $event)"
+            >
+              <Tooth
+                :fdi="fdi"
+                :tooth="getTooth(fdi)"
+                :mesial-right="false"
+                :is-selected="selectedToothFdi === fdi"
+                :active-condition="isRowInteractive(row.id) ? activeCondition : null"
+                :is-bridge-pending="bridgeSelectMode && bridgeStartFdi === fdi"
+                :size="44"
+                @surface-click="onSurfaceClickRow(row.id, $event)"
+                @tooth-click="onToothClickRow(row.id, $event)"
+              />
+              <div v-if="getMarker(row.id, fdi)" class="tooth-marker" :class="`tooth-marker--${getMarker(row.id, fdi).type}`">
+                <span v-if="getMarker(row.id, fdi).type === 'text'">{{ getMarker(row.id, fdi).text }}</span>
+                <span v-else class="tooth-marker-line" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
 
-    <!-- Bridge hint -->
+      <div class="row-label-cell" />
+      <div class="arch-numbers-row">
+        <div class="quadrant-nums quadrant-nums--right">
+          <span class="arch-tag">R</span>
+          <span v-for="fdi in LOWER_RIGHT" :key="`fn-${fdi}`" class="tooth-num">{{ toothNumber(fdi) }}</span>
+        </div>
+        <div class="midline-gap" />
+        <div class="quadrant-nums quadrant-nums--left">
+          <span v-for="fdi in LOWER_LEFT" :key="`fn-${fdi}`" class="tooth-num">{{ toothNumber(fdi) }}</span>
+          <span class="arch-tag">L</span>
+        </div>
+      </div>
+    </div>
+
     <div v-if="bridgeSelectMode" class="bridge-hint">
       <v-icon size="16" color="warning" class="mr-1">mdi-bridge</v-icon>
       Bridge: click the <strong>second abutment tooth</strong> to complete the span
     </div>
-
+    <div v-if="layerHint" class="layer-hint">
+      {{ layerHint }}
+    </div>
   </div>
 </template>
 
 <script setup>
 import Tooth from './Tooth.vue'
-import ToothFront from './ToothFront.vue'
 import {
-  TEETH_BY_FDI, getToothLabel, createDefaultTooth,
-  CONDITIONS, getConditionColor, TOOTH_STATUSES,
+  TEETH_BY_FDI, createDefaultTooth, TOOTH_STATUSES,
+  DECIDUOUS_UPPER_RIGHT, DECIDUOUS_UPPER_LEFT, DECIDUOUS_LOWER_RIGHT, DECIDUOUS_LOWER_LEFT,
 } from './toothData.js'
+import { getDiagnosisAbbr, getStatusMarker } from '~/shared/defaults/charting/chartingDefaults.js'
 
 const props = defineProps({
-  chart:            { type: Object,  default: () => ({}) },
-  notation:         { type: String,  default: 'FDI' },
-  activeCondition:  { type: String,  default: null },
-  selectedToothFdi: { type: Number,  default: null },
+  chart: { type: Object, default: () => ({}) },
+  notation: { type: String, default: 'FDI' },
+  activeCondition: { type: String, default: null },
+  selectedToothFdi: { type: Number, default: null },
+  chartScope: { type: String, default: 'both' },
   bridgeSelectMode: { type: Boolean, default: false },
-  bridgeStartFdi:   { type: Number,  default: null },
-  toothStatuses:    { type: Object,  default: () => ({}) },
+  bridgeStartFdi: { type: Number, default: null },
+  toothStatuses: { type: Object, default: () => ({}) },
+  // all treatment items so we can show a per-tooth hover tooltip
+  treatmentItems: { type: Array, default: () => [] },
+  teethType: { type: String, default: 'permanent' },
 })
 
-const emit = defineEmits(['surface-click', 'tooth-click', 'tooth-status-change'])
+const emit = defineEmits(['surface-click', 'tooth-click', 'tooth-status-change', 'tooth-diagnosis-change'])
 
-// Quadrant arrays
-const UPPER_RIGHT = [18, 17, 16, 15, 14, 13, 12, 11]
-const UPPER_LEFT  = [21, 22, 23, 24, 25, 26, 27, 28]
-const LOWER_RIGHT = [48, 47, 46, 45, 44, 43, 42, 41]
-const LOWER_LEFT  = [31, 32, 33, 34, 35, 36, 37, 38]
+const PERM_UPPER_RIGHT = [18, 17, 16, 15, 14, 13, 12, 11]
+const PERM_UPPER_LEFT  = [21, 22, 23, 24, 25, 26, 27, 28]
+const PERM_LOWER_RIGHT = [48, 47, 46, 45, 44, 43, 42, 41]
+const PERM_LOWER_LEFT  = [31, 32, 33, 34, 35, 36, 37, 38]
+
+const UPPER_RIGHT = computed(() => props.teethType === 'deciduous' ? [...DECIDUOUS_UPPER_RIGHT].reverse() : props.teethType === 'mixed' ? [...DECIDUOUS_UPPER_RIGHT, ...PERM_UPPER_RIGHT].filter((v, i, a) => a.indexOf(v) === i) : PERM_UPPER_RIGHT)
+const UPPER_LEFT  = computed(() => props.teethType === 'deciduous' ? DECIDUOUS_UPPER_LEFT  : props.teethType === 'mixed' ? [...PERM_UPPER_LEFT, ...DECIDUOUS_UPPER_LEFT].filter((v, i, a) => a.indexOf(v) === i) : PERM_UPPER_LEFT)
+const LOWER_RIGHT = computed(() => props.teethType === 'deciduous' ? [...DECIDUOUS_LOWER_RIGHT].reverse() : props.teethType === 'mixed' ? [...DECIDUOUS_LOWER_RIGHT, ...PERM_LOWER_RIGHT].filter((v, i, a) => a.indexOf(v) === i) : PERM_LOWER_RIGHT)
+const LOWER_LEFT  = computed(() => props.teethType === 'deciduous' ? DECIDUOUS_LOWER_LEFT  : props.teethType === 'mixed' ? [...PERM_LOWER_LEFT, ...DECIDUOUS_LOWER_LEFT].filter((v, i, a) => a.indexOf(v) === i) : PERM_LOWER_LEFT)
+
+const ROWS = [
+  { id: 'upper-plan', arch: 'upper', layer: 'plan' },
+  { id: 'upper-base', arch: 'upper', layer: 'base' },
+  { id: 'lower-base', arch: 'lower', layer: 'base' },
+  { id: 'lower-plan', arch: 'lower', layer: 'plan' },
+]
+
+const MIRROR_ROW = {
+  'upper-plan': 'upper-base',
+  'lower-plan': 'lower-base',
+}
+
+const STATUS_OPTIONS = TOOTH_STATUSES
+const DIAGNOSIS_OPTIONS = [
+  { value: 'drifted_mesially', label: 'Drifted Mesially' },
+  { value: 'drifted_distally', label: 'Drifted Distally' },
+  { value: 'rotated_mesially', label: 'Rotated Mesially' },
+  { value: 'rotated_distally', label: 'Rotated Distally' },
+  { value: 'over_erupted', label: 'Over Erupted' },
+  { value: 'impacted', label: 'Impacted' },
+  { value: 'mobile', label: 'Mobile' },
+]
+
+const statusPopupEl = ref(null)
+const statusPopup = reactive({
+  visible: false,
+  rowId: null,
+  fdi: null,
+  label: '',
+  x: 0,
+  y: 0,
+  section: 'status',
+})
+const layerHint = ref('')
+let layerHintTimer = null
+
+const currentStatus = computed(() => {
+  if (!statusPopup.rowId || !statusPopup.fdi) return ''
+  return getAnnotation(targetRowForSelection(statusPopup.rowId), statusPopup.fdi).status || ''
+})
+
+const currentDiagnosis = computed(() => {
+  if (!statusPopup.rowId || !statusPopup.fdi) return ''
+  return getAnnotation(targetRowForSelection(statusPopup.rowId), statusPopup.fdi).diagnosis || ''
+})
 
 function getTooth(fdi) {
   return props.chart[fdi] || createDefaultTooth(fdi)
 }
 
-// Palmer tooth number (1–8) for header display
 function toothNumber(fdi) {
-  const meta = TEETH_BY_FDI[fdi]
-  if (!meta) return ''
-  // Palmer number is the digit after the quadrant letter pair
-  const p = meta.palmer  // e.g. 'UR8'
+  const p = TEETH_BY_FDI[fdi]?.palmer
   return p ? p.slice(2) : ''
 }
 
-// ── Status popup ──────────────────────────────────────────────────────────
-const statusPopupEl = ref(null)
-const statusPopup = reactive({
-  visible: false,
-  fdi: null,
-  label: '',
-  x: 0,
-  y: 0,
-})
+// Fix #3 — 'both' scope previously only allowed plan rows to be interactive, silently swallowing
+// base row clicks with a confusing hint message. Now both layers are fully interactive in 'both' mode.
+function isRowInteractive(rowId) {
+  const row = ROWS.find((r) => r.id === rowId)
+  if (!row) return false
+  if (props.chartScope === 'both') return true
+  return props.chartScope === row.layer
+}
 
-function openStatusPopup(fdi, event) {
-  const meta = TEETH_BY_FDI[fdi]
+function isRowDimmed(rowId) {
+  if (props.chartScope === 'both') return false
+  return !isRowInteractive(rowId)
+}
+
+function targetRowForSelection(rowId) {
+  return MIRROR_ROW[rowId] || rowId
+}
+
+function annotationKey(rowId, fdi) {
+  return `${rowId}:${fdi}`
+}
+
+function getAnnotation(rowId, fdi) {
+  const keyed = props.toothStatuses?.[annotationKey(rowId, fdi)]
+  if (keyed && typeof keyed === 'object') {
+    return { status: keyed.status || '', diagnosis: keyed.diagnosis || '' }
+  }
+  const legacy = props.toothStatuses?.[fdi]
+  if (typeof legacy === 'string') return { status: legacy, diagnosis: '' }
+  if (legacy && typeof legacy === 'object') {
+    return { status: legacy.status || '', diagnosis: legacy.diagnosis || '' }
+  }
+  return { status: '', diagnosis: '' }
+}
+
+function getMarker(rowId, fdi) {
+  const a = getAnnotation(rowId, fdi)
+  if (a.diagnosis) {
+    const abbr = getDiagnosisAbbr(a.diagnosis)
+    if (abbr) return { type: 'text', text: abbr }
+  }
+  return getStatusMarker(a.status)
+}
+
+// Hover tooltip state
+const hoverTooltip = reactive({ visible: false, fdi: null, label: '', lines: [], x: 0, y: 0 })
+let hoverTimer = null
+
+const CONDITION_COLORS = {
+  existing: '#6b7280',
+  planned: '#0061FB',
+  scheduled: '#10b981',
+  completed: '#22c55e',
+}
+
+function onToothMouseEnter(fdi, event) {
+  const items = props.treatmentItems.filter((i) => i.fdi === fdi)
+  if (!items.length) return
   const rect = event.currentTarget.getBoundingClientRect()
+  hoverTooltip.fdi = fdi
+  hoverTooltip.label = TEETH_BY_FDI[fdi]?.palmer || String(fdi)
+  hoverTooltip.lines = items.map((i) => {
+    const label = i.treatmentName || i.conditionLabel || i.condition || 'Treatment'
+    const surf = i.surface ? ` · ${i.surface.charAt(0).toUpperCase()}` : ''
+    const scope = i.status === 'existing' ? 'Base' : (i.planName || 'Plan')
+    return { text: `${label}${surf} — ${scope}`, color: CONDITION_COLORS[i.status] || '#0061FB' }
+  })
+  hoverTooltip.x = rect.right + window.scrollX + 6
+  hoverTooltip.y = rect.top + window.scrollY - 4
+  if (hoverTimer) clearTimeout(hoverTimer)
+  hoverTimer = setTimeout(() => { hoverTooltip.visible = true }, 120)
+}
+
+function onToothMouseLeave() {
+  if (hoverTimer) clearTimeout(hoverTimer)
+  hoverTimer = null
+  hoverTooltip.visible = false
+}
+
+function openStatusPopup(rowId, fdi, event) {
+  const rect = event.currentTarget.getBoundingClientRect()
+  statusPopup.rowId = rowId
   statusPopup.fdi = fdi
-  statusPopup.label = meta?.palmer || String(fdi)
-  statusPopup.x = rect.left + window.scrollX
-  statusPopup.y = rect.bottom + window.scrollY + 4
+  statusPopup.section = 'status'
+  statusPopup.label = TEETH_BY_FDI[fdi]?.palmer || String(fdi)
+  statusPopup.x = rect.left + window.scrollX + 56
+  statusPopup.y = rect.top + window.scrollY + 6
   statusPopup.visible = true
 }
 
@@ -362,121 +350,77 @@ function closePopup() {
   statusPopup.visible = false
 }
 
-function onStatusChange(fdi, value) {
-  emit('tooth-status-change', { fdi, status: value })
-  statusPopup.visible = false
+function onSelectStatus(status) {
+  if (!statusPopup.fdi || !statusPopup.rowId) return
+  emit('tooth-status-change', {
+    fdi: statusPopup.fdi,
+    rowId: targetRowForSelection(statusPopup.rowId),
+    status,
+  })
+  closePopup()
 }
 
-// Close status popup on outside click
-onMounted(() => {
-  document.addEventListener('click', onDocClick)
-})
-onUnmounted(() => {
-  document.removeEventListener('click', onDocClick)
-})
+function onSelectDiagnosis(diagnosis) {
+  if (!statusPopup.fdi || !statusPopup.rowId) return
+  emit('tooth-diagnosis-change', {
+    fdi: statusPopup.fdi,
+    rowId: targetRowForSelection(statusPopup.rowId),
+    diagnosis,
+  })
+  closePopup()
+}
+
+function onToothCellClick(rowId, fdi, event) {
+  const row = ROWS.find((r) => r.id === rowId)
+  if (!isRowInteractive(rowId)) {
+    event.preventDefault()
+    event.stopPropagation()
+    if (props.chartScope === 'plan' && row?.layer === 'base') {
+      layerHint.value = 'Select the Base Chart tab to add treatments to the base line.'
+    } else if (props.chartScope === 'base' && row?.layer === 'plan') {
+      layerHint.value = 'Select the Treatment Plan tab to add planned treatments.'
+    } else if (props.chartScope === 'both' && row?.layer === 'base') {
+      layerHint.value = 'Select the Base Chart tab to add treatments to the base line.'
+    }
+    if (layerHint.value) {
+      if (layerHintTimer) clearTimeout(layerHintTimer)
+      layerHintTimer = setTimeout(() => { layerHint.value = '' }, 2200)
+    }
+    return
+  }
+  if (!props.activeCondition) {
+    if (props.chartScope !== 'base') return
+    event.preventDefault()
+    event.stopPropagation()
+    openStatusPopup(rowId, fdi, event)
+  }
+}
+
+function onSurfaceClickRow(rowId, payload) {
+  if (!isRowInteractive(rowId)) return
+  emit('surface-click', payload)
+}
+
+function onToothClickRow(rowId, fdi) {
+  if (!isRowInteractive(rowId)) return
+  emit('tooth-click', fdi)
+}
+
 function onDocClick(e) {
   if (statusPopup.visible && statusPopupEl.value && !statusPopupEl.value.contains(e.target)) {
     statusPopup.visible = false
   }
 }
 
-// ── Hover popup ───────────────────────────────────────────────────────────
-let hoverLeaveTimer = null
-const hoverPopup = reactive({
-  visible: false,
-  fdi: null,
-  label: '',
-  date: '',
-  icons: [],
-  x: 0,
-  y: 0,
+onMounted(() => {
+  document.addEventListener('click', onDocClick)
 })
 
-function toothHasConditions(fdi) {
-  const t = props.chart[fdi]
-  if (!t) return false
-  if (t.toothCondition) return true
-  return Object.values(t.surfaces || {}).some(s => s.condition)
-}
-
-function buildHoverIcons(fdi) {
-  const t = props.chart[fdi]
-  if (!t) return []
-  const icons = []
-  if (t.toothCondition) {
-    icons.push({ color: getConditionColor(t.toothCondition), label: CONDITIONS[t.toothCondition]?.label || t.toothCondition })
-  }
-  Object.entries(t.surfaces || {}).forEach(([, s]) => {
-    if (s.condition) {
-      icons.push({ color: getConditionColor(s.condition), label: CONDITIONS[s.condition]?.label || s.condition })
-    }
-  })
-  return icons
-}
-
-function buildHoverLabel(fdi) {
-  const meta = TEETH_BY_FDI[fdi]
-  const t = props.chart[fdi]
-  let label = meta?.palmer || String(fdi)
-  if (t?.toothCondition) {
-    label += ' - ' + (CONDITIONS[t.toothCondition]?.label || t.toothCondition)
-  }
-  return label
-}
-
-function buildHoverDate(fdi) {
-  const t = props.chart[fdi]
-  const iso = t?.updatedAt || t?.createdAt
-  if (!iso) return 'Not dated'
-  const d = new Date(iso)
-  if (isNaN(d)) return 'Not dated'
-  return d.toLocaleDateString('en-GB')
-}
-
-function onToothMouseEnter(fdi, event) {
-  if (hoverLeaveTimer) { clearTimeout(hoverLeaveTimer); hoverLeaveTimer = null }
-  if (!toothHasConditions(fdi)) return
-  const rect = event.currentTarget.getBoundingClientRect()
-  hoverPopup.fdi = fdi
-  hoverPopup.label = buildHoverLabel(fdi)
-  hoverPopup.date = buildHoverDate(fdi)
-  hoverPopup.icons = buildHoverIcons(fdi)
-  hoverPopup.x = rect.left + window.scrollX
-  hoverPopup.y = rect.bottom + window.scrollY + 4
-  hoverPopup.visible = true
-}
-
-function onToothMouseLeave() {
-  hoverLeaveTimer = setTimeout(() => {
-    hoverPopup.visible = false
-  }, 120)
-}
-
-function onHoverPopupEnter() {
-  if (hoverLeaveTimer) { clearTimeout(hoverLeaveTimer); hoverLeaveTimer = null }
-}
-
-function onHoverPopupLeave() {
-  hoverPopup.visible = false
-}
-
-// ── Tooth interactions ────────────────────────────────────────────────────
-function onToothCellClick(fdi, event) {
-  // If no active condition, show status popup
-  if (!props.activeCondition) {
-    event.stopPropagation()
-    openStatusPopup(fdi, event)
-  }
-  // If there IS an active condition the Tooth component handles it via @tooth-click
-}
-
-function onSurfaceClick(payload) {
-  emit('surface-click', payload)
-}
-
-function onToothClick(fdi) {
-  emit('tooth-click', fdi)
-}
+onUnmounted(() => {
+  document.removeEventListener('click', onDocClick)
+  if (layerHintTimer) clearTimeout(layerHintTimer)
+  if (hoverTimer) clearTimeout(hoverTimer)
+})
 </script>
 
 <style scoped>
@@ -485,84 +429,50 @@ function onToothClick(fdi) {
   padding: 8px 4px;
 }
 
-/* ── Grid layout ────────────────────────────────────────────────── */
 .chart-grid {
   display: grid;
-  grid-template-columns: 100px 1fr;
-  row-gap: 0;
+  grid-template-columns: 24px 1fr;
+  row-gap: 6px;
   align-items: center;
 }
 
-/* ── Row label cell ─────────────────────────────────────────────── */
 .row-label-cell {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-end;
-  padding-right: 8px;
-  min-height: 48px;
+  min-height: 24px;
 }
 
-.row-label-cell--multi {
-  align-items: flex-end;
-  justify-content: center;
-}
-
-.row-label-text {
-  font-size: 10px;
-  color: #888;
-  white-space: nowrap;
-  line-height: 1.5;
-  text-align: right;
-}
-
-.row-label-text--sm {
-  font-size: 9px;
-}
-
-/* ── Numbers row ────────────────────────────────────────────────── */
 .arch-numbers-row {
   display: flex;
   align-items: center;
-  padding: 2px 0;
 }
 
 .quadrant-nums {
   display: flex;
   align-items: center;
-  gap: 0;
-}
-
-.quadrant-nums--right {
-  flex-direction: row;
-}
-
-.quadrant-nums--left {
-  flex-direction: row;
 }
 
 .tooth-num {
   width: 46px;
   text-align: center;
   font-size: 10px;
-  color: #666;
-  line-height: 1.4;
+  color: #374151;
   flex-shrink: 0;
 }
 
 .arch-tag {
-  font-size: 10px;
-  font-weight: 700;
-  color: #444;
-  width: 28px;
+  width: 16px;
   text-align: center;
-  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #111827;
 }
 
-/* ── Teeth row ──────────────────────────────────────────────────── */
 .teeth-row-wrap {
   display: flex;
   align-items: center;
+}
+
+.teeth-row-wrap--inactive {
+  opacity: 0.28;
 }
 
 .quadrant {
@@ -574,37 +484,54 @@ function onToothClick(fdi) {
   width: 44px;
   height: 46px;
   flex-shrink: 0;
-  position: relative;
   cursor: pointer;
-  overflow: visible;
+  position: relative;
 }
 
-/* Front-view rows (ToothFront SVG is 48×82 — taller than occlusal) */
-.tooth-cell--front {
-  height: 76px;
+.tooth-cell--inactive {
+  cursor: not-allowed;
 }
 
-/* ── Midline gap ────────────────────────────────────────────────── */
+.tooth-cell--inactive :deep(.tooth-surface),
+.tooth-cell--inactive :deep(.tooth-svg) {
+  cursor: not-allowed !important;
+}
+
+.tooth-cell--inactive :deep(.tooth-surface:hover) {
+  filter: none;
+}
+
 .midline-gap {
   width: 8px;
   flex-shrink: 0;
 }
 
-/* ── Divider row ────────────────────────────────────────────────── */
-.arch-divider-row {
+.tooth-marker {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
-  padding: 6px 0;
+  justify-content: center;
+  pointer-events: none;
+  font-size: 30px;
+  font-weight: 700;
+  color: #0f172a;
 }
 
-.arch-divider-line {
-  flex: 1;
-  height: 2px;
-  background: #d0d0d0;
-  border-radius: 1px;
+.tooth-marker--line {
+  align-items: flex-start;
+  padding-top: 4px;
 }
 
-/* ── Bridge hint ────────────────────────────────────────────────── */
+.tooth-marker-line {
+  display: inline-block;
+  width: 32px;
+  height: 4px;
+  border-radius: 999px;
+  background: #64748b;
+  border: 1px solid #0f172a;
+}
+
 .bridge-hint {
   margin-top: 8px;
   padding: 6px 12px;
@@ -617,83 +544,121 @@ function onToothClick(fdi) {
   align-items: center;
 }
 
-/* ── Status popup ───────────────────────────────────────────────── */
-.status-popup {
-  position: absolute;
-  z-index: 9999;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 10px;
-  padding: 12px 14px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.13);
-  min-width: 180px;
-}
-
-.status-popup__title {
-  font-size: 13px;
-  font-weight: 700;
-  color: #222;
-  margin-bottom: 2px;
-}
-
-.status-popup__sub {
-  font-size: 11px;
-  color: #999;
-  margin-bottom: 8px;
-}
-
-.status-popup__select {
-  width: 100%;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  padding: 5px 8px;
+.layer-hint {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #f6b0b0;
+  background: #fff1f1;
+  color: #bf1f1f;
   font-size: 12px;
-  color: #333;
-  outline: none;
-  background: #fafafa;
-  cursor: pointer;
+  font-weight: 500;
 }
 
-.status-popup__select:focus {
-  border-color: #0061FB;
-}
-
-/* ── Hover popup ────────────────────────────────────────────────── */
-.hover-popup {
+.tooth-hover-tip {
   position: absolute;
-  z-index: 9998;
-  background: #fff;
-  border: 1px solid #e0e0e0;
+  z-index: 10000;
+  background: #1e293b;
+  color: #f8fafc;
   border-radius: 8px;
   padding: 8px 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.10);
-  min-width: 140px;
-  pointer-events: auto;
+  min-width: 160px;
+  max-width: 260px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
 }
 
-.hover-popup__label {
+.tooth-hover-tip__title {
   font-size: 12px;
-  font-weight: 600;
-  color: #222;
-  margin-bottom: 2px;
-}
-
-.hover-popup__date {
-  font-size: 10px;
-  color: #999;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   margin-bottom: 6px;
 }
 
-.hover-popup__icons {
+.tooth-hover-tip__line {
   display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #f1f5f9;
+  padding: 2px 0;
 }
 
-.hover-popup__icon-dot {
-  width: 14px;
-  height: 14px;
+.tooth-hover-tip__dot {
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  display: inline-block;
+  flex-shrink: 0;
+}
+
+.status-popup {
+  position: absolute;
+  z-index: 9999;
+  display: grid;
+  grid-template-columns: 250px 250px;
+  align-items: start;
+  background: #fff;
+  border: 1px solid #d8dee7;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+.status-popup__title {
+  grid-column: 1 / span 2;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2937;
+  padding: 10px 14px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.status-popup__menu-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.status-popup__menu-btn {
+  height: 46px;
+  border: none;
+  border-bottom: 1px solid #f3f4f6;
+  background: #fff;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  color: #334155;
+  cursor: pointer;
+}
+
+.status-popup__menu-btn--active {
+  background: #eef2f7;
+}
+
+.status-popup__submenu {
+  border-left: 1px solid #eef2f7;
+  display: flex;
+  flex-direction: column;
+}
+
+.status-popup__sub-btn {
+  height: 46px;
+  border: none;
+  border-bottom: 1px solid #f3f4f6;
+  background: #fff;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  color: #334155;
+  cursor: pointer;
+}
+
+.status-popup__sub-btn:hover {
+  background: #f8fafc;
 }
 </style>

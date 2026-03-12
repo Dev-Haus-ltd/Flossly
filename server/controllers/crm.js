@@ -1018,7 +1018,17 @@ export const saveLeadTreatment = async (event) => {
     if (!orgId) return error(401, 'Unauthenticated')
     if (!leadId) return error(400, 'leadId required')
     const exists = await CrmLeadTreatment.findOne({ where: { organisationId: Number(orgId), leadId: Number(leadId) } })
-    const fields = ['primaryTreatment', 'secondaryTreatments', 'concerns', 'treatmentAreas', 'previousExperience', 'budget', 'specialOccasion']
+    const fields = [
+      'primaryTreatment',
+      'primaryTreatmentPrice',
+      'secondaryTreatments',
+      'secondaryTreatmentPrices',
+      'concerns',
+      'treatmentAreas',
+      'previousExperience',
+      'budget',
+      'specialOccasion',
+    ]
     if (exists) {
       for (const f of fields) if (data?.[f] !== undefined) exists[f] = data[f]
       await exists.save()

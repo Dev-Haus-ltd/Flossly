@@ -8,6 +8,7 @@ export const DiaryPatientChart = sequelize.define(
     organisationId: { type: DataTypes.INTEGER, allowNull: false },
     patientId: { type: DataTypes.INTEGER, allowNull: false },
     chartJson: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
+    metaJson: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
   },
   {
     tableName: 'DiaryPatientCharts',

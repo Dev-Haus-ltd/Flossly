@@ -86,7 +86,6 @@ import { GoogleSearchConsolePerformance } from "./crm/google_analytics/googleSea
 import { GoogleBusinessProfile } from "./crm/google_business_analytics/googleBusinessProfiles";
 
 // Diary
-import { DiaryTreatment } from "./diary/treatments";
 import { DiaryPatient } from "./diary/patients";
 import { DiaryAppointment } from "./diary/appointments";
 import { DiaryNote } from "./diary/notes";
@@ -94,6 +93,7 @@ import { DiaryPatientComfort } from "./diary/patientComfort";
 import { DiaryPatientSurvey } from "./diary/patientSurvey";
 import { DiaryPatientForm } from "./diary/patientForm";
 import { DiaryPatientChart } from "./diary/patientCharts";
+import { DiaryTreatmentPlan } from "./diary/treatmentPlans";
 import { DiaryTreatmentPlanItem } from "./diary/treatmentPlanItems";
 // Organisation dictionary
 import { OrganisationTreatment } from "./organisations/organisationTreatments";
@@ -242,7 +242,6 @@ DiaryPatient.hasMany(DiaryAppointment, { foreignKey: 'patientId', as: 'appointme
 DiaryAppointment.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 DiaryAppointment.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
 DiaryAppointment.belongsTo(User, { foreignKey: 'dentistId', as: 'dentist', onDelete: 'CASCADE', hooks: true });
-DiaryAppointment.belongsTo(DiaryTreatment, { foreignKey: 'treatmentId', as: 'treatment' });
 
 DiaryNote.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 DiaryNote.belongsTo(User, { foreignKey: 'dentistId', as: 'dentist', onDelete: 'CASCADE', hooks: true });
@@ -271,6 +270,9 @@ DiaryTreatmentPlanItem.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'p
 DiaryTreatmentPlanItem.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 DiaryTreatmentPlanItem.belongsTo(DiaryAppointment, { foreignKey: 'appointmentId', as: 'appointment', onDelete: 'SET NULL' });
 DiaryAppointment.hasMany(DiaryTreatmentPlanItem, { foreignKey: 'appointmentId', as: 'treatmentPlanItems' });
+DiaryPatient.hasMany(DiaryTreatmentPlan, { foreignKey: 'patientId', as: 'treatmentPlans', onDelete: 'CASCADE', hooks: true });
+DiaryTreatmentPlan.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
+DiaryTreatmentPlan.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 
 // OrganisationTreatment
 OrganisationTreatment.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
@@ -686,7 +688,6 @@ export {
   GoogleSearchConsolePerformance,
   GoogleBusinessProfile,
   // Diary
-  DiaryTreatment,
   DiaryPatient,
   DiaryAppointment,
   DiaryNote,
@@ -694,6 +695,7 @@ export {
   DiaryPatientSurvey,
   DiaryPatientForm,
   DiaryPatientChart,
+  DiaryTreatmentPlan,
   DiaryTreatmentPlanItem,
   OrganisationTreatment,
   DictionaryScript,

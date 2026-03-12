@@ -1,14 +1,19 @@
 import patientChartingService from '~/services/patientChartingService'
-import { createDefaultTooth, UPPER_ARCH, LOWER_ARCH, CONDITIONS } from '~/components/patients/charting/toothData.js'
+import diaryService from '~/services/diaryService'
+import { createDefaultTooth, UPPER_ARCH, LOWER_ARCH, DECIDUOUS_UPPER_ARCH, DECIDUOUS_LOWER_ARCH, CONDITIONS } from '~/components/patients/charting/toothData.js'
+import {
+  DEFAULT_APPOINTMENT_ID,
+  DEFAULT_PLAN_ID,
+  DEFAULT_PLAN_NAME,
+  resolveTreatmentMapping,
+  applyBaseToothStatus,
+  makeDefaultAppointment,
+  makeDefaultPlan,
+  getPlanColor,
+} from '~/shared/defaults/charting/chartingDefaults.js'
 
 // Module-level timer map — not reactive, just for debouncing
 const _saveTimers = {}
-const DEFAULT_APPOINTMENT_ID = 'appt-1'
-const DEFAULT_APPOINTMENT = { id: DEFAULT_APPOINTMENT_ID, name: 'Appointment 1', status: 'pending' }
-const DEFAULT_PLAN_ID = 'plan-1'
-const DEFAULT_PLAN_NAME = 'Treatment Plan 1'
-const DEFAULT_PLAN_COLOR = '#0061FB'
-const PLAN_COLORS = ['#0061FB', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#14B8A6', '#F97316']
 
 export const usePatientChartingStore = defineStore('patientChartingStore', {
   state: () => ({
@@ -29,15 +34,21 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
     isDirty: false,
     // New UI state
     teethType: 'permanent',
+    chartScope: 'both',         // 'base' | 'plan' | 'both'
     toothStatuses: {},          // map of fdi → status string
-    appointments: [{ ...DEFAULT_APPOINTMENT }],
-    plans: [{ id: DEFAULT_PLAN_ID, name: DEFAULT_PLAN_NAME, color: DEFAULT_PLAN_COLOR, appointments: [{ ...DEFAULT_APPOINTMENT }] }],
+    appointments: [makeDefaultAppointment()],
+    plans: [makeDefaultPlan()],
     activePlanId: DEFAULT_PLAN_ID,
     favoriteCodeIds: [],
     chartImages: [],
     historyEntries: [],
     appointmentLinks: {},
     activeCodeId: null,         // currently selected code from right panel
+    treatmentCatalog: [],
+    practitioners: [],
+    periData: {},
+    softTissueData: {},
+    riskData: {},
   }),
 
   getters: {
@@ -55,60 +66,116 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       const details = error?.response?.data || error?.message || error
       console.error(`[patientChartingStore] ${context}`, details)
     },
-    _uiStorageKey(patientId = this.patientId) {
-      return patientId ? `patient-charting-ui:${patientId}` : null
-    },
-    _persistUiState() {
-      if (typeof window === 'undefined') return
-      const key = this._uiStorageKey()
-      if (!key) return
-      const payload = {
-        plans: this.plans,
-        activePlanId: this.activePlanId,
-        favoriteCodeIds: this.favoriteCodeIds,
-        chartImages: this.chartImages,
-        historyEntries: this.historyEntries.slice(0, 200),
-        appointmentLinks: this.appointmentLinks,
+    async loadTreatmentCatalog() {
+      try {
+        const res = await patientChartingService.listTreatments()
+        if (res?.code !== 0) return
+        this.treatmentCatalog = (res.data || []).map((t) => ({
+          id: t.id,
+          code: t.code || String(t.id),
+          name: t.name || 'Treatment',
+          category: t.category || 'Other',
+          amount: Number(t.price ?? t.amount ?? 0),
+          price: Number(t.price ?? t.amount ?? 0),
+          defaultDuration: Number(t.defaultDuration || 0),
+          ...resolveTreatmentMapping(t),
+        }))
+      } catch (error) {
+        this._logError('loadTreatmentCatalog', error)
       }
-      window.localStorage.setItem(key, JSON.stringify(payload))
+    },
+    async loadPractitioners(date = '') {
+      try {
+        const res = await diaryService.listDentists(date)
+        if (res?.code !== 0) return
+        this.practitioners = (res.data || []).map((d) => ({
+          id: Number(d.id),
+          name: d.name || 'Practitioner',
+        }))
+      } catch (error) {
+        this._logError('loadPractitioners', error)
+      }
+    },
+    _getActiveTreatment() {
+      if (!this.activeCodeId) return null
+      return this.treatmentCatalog.find((t) => String(t.id) === String(this.activeCodeId)) || null
+    },
+    async _persistChartMeta() {
+      if (!this.patientId) return
+      const meta = {
+        images: this.chartImages.slice(0, 100),
+        history: this.historyEntries.slice(0, 200),
+        links: this.appointmentLinks,
+        favoriteCodeIds: this.favoriteCodeIds,
+        softTissue: this.softTissueData,
+        riskAssessment: this.riskData,
+      }
+      await patientChartingService.saveChartMeta({ patientId: this.patientId, meta }).catch((error) => this._logError('saveChartMeta', error))
+    },
+    _defaultAppointments() {
+      return [makeDefaultAppointment()]
+    },
+    _getChartToothIds() {
+      if (this.teethType === 'deciduous') {
+        return [...DECIDUOUS_UPPER_ARCH, ...DECIDUOUS_LOWER_ARCH]
+      }
+      if (this.teethType === 'mixed') {
+        return Array.from(new Set([
+          ...UPPER_ARCH,
+          ...LOWER_ARCH,
+          ...DECIDUOUS_UPPER_ARCH,
+          ...DECIDUOUS_LOWER_ARCH,
+        ]))
+      }
+      return [...UPPER_ARCH, ...LOWER_ARCH]
+    },
+    _upsertPlanRemote(plan, extraPayload = {}, errorContext = 'upsertTreatmentPlan') {
+      if (!this.patientId || !plan?.id) return
+      patientChartingService.updateTreatmentPlan({
+        patientId: this.patientId,
+        planKey: plan.id,
+        ...extraPayload,
+      }).catch((error) => this._logError(errorContext, error))
+    },
+    _createPlanRemote(plan, priority = 1, errorContext = 'createTreatmentPlan') {
+      if (!this.patientId || !plan?.id) return
+      patientChartingService.createTreatmentPlan({
+        patientId: this.patientId,
+        planKey: plan.id,
+        name: plan.name,
+        color: plan.color,
+        appointments: plan.appointments || this._defaultAppointments(),
+        priority,
+      }).catch((error) => this._logError(errorContext, error))
+    },
+    _syncItemPlanName(planId, planName) {
+      this.treatmentPlan.forEach((item) => {
+        if ((item.planId || DEFAULT_PLAN_ID) !== planId) return
+        item.planName = planName
+        if (item.id) {
+          patientChartingService.updateTreatmentPlanItem({ id: item.id, planName }).catch((error) => this._logError('syncItemPlanName', error))
+        }
+      })
     },
     _nextPlanColor(index = 0) {
-      return PLAN_COLORS[index % PLAN_COLORS.length] || DEFAULT_PLAN_COLOR
+      return getPlanColor(index)
     },
     _normalizePlans() {
       if (!Array.isArray(this.plans) || !this.plans.length) {
-        this.plans = [{ id: DEFAULT_PLAN_ID, name: DEFAULT_PLAN_NAME, color: DEFAULT_PLAN_COLOR, appointments: [{ ...DEFAULT_APPOINTMENT }] }]
+        this.plans = [makeDefaultPlan()]
         return
       }
       this.plans = this.plans.map((plan, idx) => ({
         id: plan.id || `plan-${Date.now()}-${idx}`,
         name: String(plan.name || '').trim() || `Treatment Plan ${idx + 1}`,
         color: plan.color || this._nextPlanColor(idx),
-        appointments: Array.isArray(plan.appointments) && plan.appointments.length ? plan.appointments : [{ ...DEFAULT_APPOINTMENT }],
+        appointments: Array.isArray(plan.appointments) && plan.appointments.length ? plan.appointments : this._defaultAppointments(),
       }))
       const autoPattern = /^Treatment Plan\s+\d+$/i
       const autoNamed = this.plans.every((p) => autoPattern.test(String(p.name || '').trim()))
       if (autoNamed) {
         this.plans = this.plans.map((p, idx) => ({ ...p, name: `Treatment Plan ${idx + 1}` }))
       }
-    },
-    _restoreUiState(patientId) {
-      if (typeof window === 'undefined') return
-      const key = this._uiStorageKey(patientId)
-      if (!key) return
-      try {
-        const parsed = JSON.parse(window.localStorage.getItem(key) || 'null')
-        if (!parsed || typeof parsed !== 'object') return
-        this.plans = Array.isArray(parsed.plans) && parsed.plans.length
-          ? parsed.plans
-          : [{ id: DEFAULT_PLAN_ID, name: DEFAULT_PLAN_NAME, color: DEFAULT_PLAN_COLOR, appointments: [{ ...DEFAULT_APPOINTMENT }] }]
-        this._normalizePlans()
-        this.activePlanId = parsed.activePlanId || this.plans[0]?.id || DEFAULT_PLAN_ID
-        this.favoriteCodeIds = Array.isArray(parsed.favoriteCodeIds) ? parsed.favoriteCodeIds : []
-        this.chartImages = Array.isArray(parsed.chartImages) ? parsed.chartImages : []
-        this.historyEntries = Array.isArray(parsed.historyEntries) ? parsed.historyEntries : []
-        this.appointmentLinks = parsed.appointmentLinks && typeof parsed.appointmentLinks === 'object' ? parsed.appointmentLinks : {}
-      } catch (_) {}
     },
     _logHistory(action, details = '') {
       this.historyEntries.unshift({
@@ -118,13 +185,13 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
         at: new Date().toISOString(),
       })
       this.historyEntries = this.historyEntries.slice(0, 200)
-      this._persistUiState()
+      this._persistChartMeta()
     },
     _syncActivePlanAppointments() {
       const plan = this.plans.find((p) => p.id === this.activePlanId) || this.plans[0]
       if (!plan) return
       if (!Array.isArray(plan.appointments) || !plan.appointments.length) {
-        plan.appointments = [{ ...DEFAULT_APPOINTMENT }]
+        plan.appointments = this._defaultAppointments()
       }
       this.activePlanId = plan.id
       this.appointments = plan.appointments.map((a) => ({ ...a }))
@@ -133,22 +200,22 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       const idx = this.plans.findIndex((p) => p.id === this.activePlanId)
       if (idx === -1) return
       this.plans[idx].appointments = this.appointments.map((a) => ({ ...a }))
-      this._persistUiState()
+      const plan = this.plans[idx]
+      this._upsertPlanRemote(plan, { appointments: plan.appointments }, 'updateTreatmentPlanAppointments')
     },
     // ── Initialise chart for a patient ──────────────────────────────────
     async loadChart(patientId) {
       this.toothStatuses = {}
-      this.appointments = [{ ...DEFAULT_APPOINTMENT }]
-      this.plans = [{ id: DEFAULT_PLAN_ID, name: DEFAULT_PLAN_NAME, color: DEFAULT_PLAN_COLOR, appointments: [{ ...DEFAULT_APPOINTMENT }] }]
+      this.appointments = this._defaultAppointments()
+      this.plans = [makeDefaultPlan()]
       this.activePlanId = DEFAULT_PLAN_ID
       this.activeCodeId = null
       this.patientId = patientId
-      this._restoreUiState(patientId)
       this._syncActivePlanAppointments()
       this.isLoading = true
-      // Build blank chart with all 32 teeth
+      // Build blank chart using correct dentition
       const blankChart = {}
-      ;[...UPPER_ARCH, ...LOWER_ARCH].forEach(fdi => {
+      this._getChartToothIds().forEach((fdi) => {
         blankChart[fdi] = createDefaultTooth(fdi)
       })
       this.chart = blankChart
@@ -158,11 +225,21 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
         if (res?.code === 0 && res.data?.chart) {
           // Merge API data over defaults so any new teeth still get defaults
           const apiChart = res.data.chart
-          Object.keys(apiChart).forEach(fdi => {
+          const { periodontal: _peri, ...toothData } = apiChart
+          if (_peri) this.periData = _peri
+          Object.keys(toothData).forEach(fdi => {
             const numFdi = Number(fdi)
-            this.chart[numFdi] = { ...createDefaultTooth(numFdi), ...apiChart[fdi] }
+            if (isNaN(numFdi)) return
+            this.chart[numFdi] = { ...createDefaultTooth(numFdi), ...toothData[fdi] }
           })
         }
+        const meta = res?.data?.meta || {}
+        this.chartImages = Array.isArray(meta.images) ? meta.images : []
+        this.historyEntries = Array.isArray(meta.history) ? meta.history : []
+        this.appointmentLinks = meta.links && typeof meta.links === 'object' ? meta.links : {}
+        this.favoriteCodeIds = Array.isArray(meta.favoriteCodeIds) ? meta.favoriteCodeIds : []
+        this.softTissueData = (meta.softTissue && typeof meta.softTissue === 'object') ? meta.softTissue : {}
+        this.riskData = (meta.riskAssessment && typeof meta.riskAssessment === 'object') ? meta.riskAssessment : {}
       } catch (error) {
         this._logError('loadChart', error)
         // Chart will show blank — that's fine for a new patient
@@ -170,51 +247,70 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
         this.isLoading = false
       }
 
-      // Load treatment plan
-      await this.loadTreatmentPlan(patientId)
+      // Load plan structures/items and treatment code catalog
+      await Promise.all([
+        this.loadTreatmentPlan(patientId),
+        this.loadTreatmentCatalog(),
+        this.loadPractitioners(),
+      ])
     },
 
     async loadTreatmentPlan(patientId) {
       try {
-        const res = await patientChartingService.listTreatmentPlans(patientId)
-        if (res?.code === 0) {
-          const rows = (res.data || []).map((item) => ({
-            ...item,
-            planId: item.planId || DEFAULT_PLAN_ID,
-            planName: item.planName || DEFAULT_PLAN_NAME,
-            appointmentGroupId: item.appointmentGroupId || DEFAULT_APPOINTMENT_ID,
+        const [plansRes, itemsRes] = await Promise.all([
+          patientChartingService.listTreatmentPlans(patientId),
+          patientChartingService.listTreatmentPlanItems(patientId),
+        ])
+        const planRows = plansRes?.code === 0 ? (plansRes.data || []) : []
+        const itemRows = itemsRes?.code === 0 ? (itemsRes.data || []) : []
+        if (planRows.length) {
+          this.plans = planRows.map((plan, idx) => ({
+            id: plan.planKey || `plan-${Date.now()}-${idx}`,
+            name: String(plan.name || '').trim() || `Treatment Plan ${idx + 1}`,
+            color: plan.color || this._nextPlanColor(idx),
+            appointments: Array.isArray(plan.appointments) && plan.appointments.length ? plan.appointments : this._defaultAppointments(),
           }))
-          this.treatmentPlan = rows
-          const existingPlanIds = new Set(this.plans.map((p) => p.id))
-          rows.forEach((item) => {
-            if (!existingPlanIds.has(item.planId)) {
-              this.plans.push({
-                id: item.planId,
-                name: item.planName || `Treatment Plan ${this.plans.length + 1}`,
-                color: this._nextPlanColor(this.plans.length),
-                appointments: [{ ...DEFAULT_APPOINTMENT }],
-              })
-              existingPlanIds.add(item.planId)
-            }
-          })
-          this._normalizePlans()
-          this.plans = this.plans.map((plan) => {
-            const groupIds = new Set(
-              rows
-                .filter((i) => (i.planId || DEFAULT_PLAN_ID) === plan.id)
-                .map((i) => i.appointmentGroupId || DEFAULT_APPOINTMENT_ID)
-            )
-            const existingAppts = Array.isArray(plan.appointments) ? plan.appointments : [{ ...DEFAULT_APPOINTMENT }]
-            const merged = [...existingAppts]
-            groupIds.forEach((gid) => {
-              if (!merged.some((a) => a.id === gid)) merged.push({ id: gid, name: `Appointment ${merged.length + 1}`, status: 'pending' })
-            })
-            return { ...plan, appointments: merged.length ? merged : [{ ...DEFAULT_APPOINTMENT }] }
-          })
-          if (!this.plans.some((p) => p.id === this.activePlanId)) this.activePlanId = this.plans[0]?.id || DEFAULT_PLAN_ID
-          this._syncActivePlanAppointments()
-          this._persistUiState()
         }
+        const rows = itemRows.map((item) => ({
+          ...item,
+          planId: item.planId || DEFAULT_PLAN_ID,
+          planName: item.planName || DEFAULT_PLAN_NAME,
+          appointmentGroupId: item.appointmentGroupId || (
+            ['planned', 'scheduled', 'completed'].includes(String(item.status || '').toLowerCase())
+              ? DEFAULT_APPOINTMENT_ID
+              : null
+          ),
+        }))
+        this.treatmentPlan = rows
+        const existingPlanIds = new Set(this.plans.map((p) => p.id))
+        rows.forEach((item) => {
+          if (!existingPlanIds.has(item.planId)) {
+            this.plans.push({
+              id: item.planId,
+              name: item.planName || `Treatment Plan ${this.plans.length + 1}`,
+              color: this._nextPlanColor(this.plans.length),
+              appointments: this._defaultAppointments(),
+            })
+            existingPlanIds.add(item.planId)
+          }
+        })
+        this._normalizePlans()
+        this.plans = this.plans.map((plan) => {
+          const groupIds = new Set(
+            rows
+              .filter((i) => (i.planId || DEFAULT_PLAN_ID) === plan.id)
+              .map((i) => i.appointmentGroupId)
+              .filter(Boolean)
+          )
+          const existingAppts = Array.isArray(plan.appointments) ? plan.appointments : this._defaultAppointments()
+          const merged = [...existingAppts]
+          groupIds.forEach((gid) => {
+            if (!merged.some((a) => a.id === gid)) merged.push({ id: gid, name: `Appointment ${merged.length + 1}`, status: 'pending' })
+          })
+          return { ...plan, appointments: merged.length ? merged : this._defaultAppointments() }
+        })
+        if (!this.plans.some((p) => p.id === this.activePlanId)) this.activePlanId = this.plans[0]?.id || DEFAULT_PLAN_ID
+        this._syncActivePlanAppointments()
       } catch (error) {
         this._logError('loadTreatmentPlan', error)
         this.treatmentPlan = []
@@ -223,10 +319,13 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
 
     // ── Apply condition to a surface or full tooth ───────────────────────
     applyCondition(fdi, surface) {
-      if (!this.activeCondition) return
-      const condition = this.activeCondition
-      const condMeta = CONDITIONS[condition]
-      if (!condMeta) return
+      const selectedTreatment = this._getActiveTreatment()
+      const mappedCondition = selectedTreatment?.conditionKey || null
+      const condition = this.activeCondition || mappedCondition
+      const condMeta = condition ? CONDITIONS[condition] : null
+      const hasConditionFlow = !!(condition && condMeta)
+
+      if (!hasConditionFlow && !selectedTreatment) return
 
       if (!this.chart[fdi]) {
         this.chart[fdi] = createDefaultTooth(fdi)
@@ -236,7 +335,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
                    : this.mode === 'completed' ? 'completed'
                    : 'existing'
 
-      if (condition === 'missing') {
+      if (hasConditionFlow && condition === 'missing') {
         // Toggle missing
         tooth.missing = !tooth.missing
         if (tooth.missing) {
@@ -246,27 +345,27 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
           )
         }
         this._scheduleSave(fdi)
-        this._maybeAddTreatmentItem(fdi, null, condition, condMeta, status)
+        this._maybeAddTreatmentItem(fdi, null, condition, condMeta, status, selectedTreatment)
         return
       }
 
-      if (condition === 'bridge') {
+      if (hasConditionFlow && condition === 'bridge') {
         this._handleBridgeClick(fdi)
         return
       }
 
-      if (condMeta.fullTooth && !condMeta.surface) {
+      if (hasConditionFlow && condMeta.fullTooth && !condMeta.surface) {
         // Full-tooth condition — apply regardless of which surface was clicked
         const wasApplied = tooth.toothCondition === condition
         tooth.toothCondition = wasApplied ? null : condition
         tooth.toothConditionStatus = wasApplied ? 'existing' : status
         if (condition === 'implant') tooth.implant = !wasApplied
         if (!wasApplied) {
-          this._maybeAddTreatmentItem(fdi, null, condition, condMeta, status)
+          this._maybeAddTreatmentItem(fdi, null, condition, condMeta, status, selectedTreatment)
         } else {
-          this._removeTreatmentItem(fdi, null, condition)
+          this._removeTreatmentItem(fdi, null, condition, status, selectedTreatment)
         }
-      } else if (condMeta.surface && surface) {
+      } else if (hasConditionFlow && condMeta.surface && surface) {
         // Surface condition
         const surf = tooth.surfaces[surface]
         if (!surf) return
@@ -274,20 +373,31 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
         surf.condition = wasApplied ? null : condition
         surf.status    = wasApplied ? 'existing' : status
         if (!wasApplied) {
-          this._maybeAddTreatmentItem(fdi, surface, condition, condMeta, status)
+          this._maybeAddTreatmentItem(fdi, surface, condition, condMeta, status, selectedTreatment)
         } else {
-          this._removeTreatmentItem(fdi, surface, condition)
+          this._removeTreatmentItem(fdi, surface, condition, status, selectedTreatment)
         }
-      } else if (condMeta.fullTooth) {
+      } else if (hasConditionFlow && condMeta.fullTooth) {
         // Can also act as full-tooth if surface supports it
         const wasApplied = tooth.toothCondition === condition
         tooth.toothCondition = wasApplied ? null : condition
         tooth.toothConditionStatus = wasApplied ? 'existing' : status
-        if (!wasApplied) this._maybeAddTreatmentItem(fdi, null, condition, condMeta, status)
-        else this._removeTreatmentItem(fdi, null, condition)
+        if (!wasApplied) this._maybeAddTreatmentItem(fdi, null, condition, condMeta, status, selectedTreatment)
+        else this._removeTreatmentItem(fdi, null, condition, status, selectedTreatment)
+      } else if (selectedTreatment) {
+        // Some treatment codes do not map cleanly to a chart condition.
+        // Persist a treatment plan item directly so the click still has a useful effect.
+        this._maybeAddTreatmentItem(
+          fdi,
+          surface || null,
+          null,
+          null,
+          status,
+          selectedTreatment
+        )
       }
 
-      this._scheduleSave(fdi)
+      if (hasConditionFlow) this._scheduleSave(fdi)
     },
 
     _handleBridgeClick(fdi) {
@@ -331,10 +441,22 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
     },
 
     // ── Treatment Plan helpers ───────────────────────────────────────────
-    _maybeAddTreatmentItem(fdi, surface, condition, condMeta, status) {
-      if (status !== 'planned') return   // only treatment-mode items go to plan
+    _maybeAddTreatmentItem(fdi, surface, condition, condMeta, status, treatment = null) {
+      const isBaseChartItem = status === 'existing'
+      const treatmentId = treatment?.id || null
+      const treatmentCode = treatment?.code || null
+      const treatmentName = treatment?.name || null
+      // Fix #7 — name-based dedup was too broad (same treatment name on different teeth
+      // would be falsely deduplicated). Now match by treatmentId first, then code, then condition.
       const exists = this.treatmentPlan.find(
-        i => i.fdi === fdi && i.surface === surface && i.condition === condition
+        (i) => {
+          if (i.fdi !== fdi || i.surface !== surface) return false
+          const itemIsBase = !i.appointmentGroupId
+          if (itemIsBase !== isBaseChartItem) return false
+          if (treatmentId) return Number(i.treatmentId || 0) === Number(treatmentId)
+          if (treatmentCode) return String(i.treatmentCode || '') === String(treatmentCode)
+          return i.condition === condition
+        }
       )
       if (exists) return
       const priority = this.treatmentPlan.length + 1
@@ -345,15 +467,21 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
         fdi,
         surface,
         condition,
-        conditionLabel: condMeta.label,
-        cost: 0,
+        conditionLabel: treatmentName || condMeta?.label || null,
+        treatmentId,
+        treatmentCode,
+        treatmentName,
+        treatmentCategory: treatment?.category || null,
+        cost: Number(treatment?.price ?? 0),
         priority,
-        status: 'planned',
+        status,
         notes: '',
-        appointmentGroupId: this.appointments[0]?.id || DEFAULT_APPOINTMENT_ID,
+        appointmentGroupId: isBaseChartItem ? null : (this.appointments[0]?.id || DEFAULT_APPOINTMENT_ID),
         appointmentId: null,
         clinicianName: '',
-        duration: 0,
+        practitionerId: null,
+        practitionerName: '',
+        duration: Number(treatment?.defaultDuration || 0),
         createdAt: new Date().toISOString(),
       }
       this.treatmentPlan.push(item)
@@ -366,12 +494,23 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
             }
           }).catch((error) => this._logError('createTreatmentPlanItem', error))
       }
-      this._logHistory('Treatment item added', `${condMeta.label} on tooth ${fdi}${surface ? `-${surface}` : ''}`)
+      const label = item.treatmentName || item.conditionLabel || item.condition || 'Treatment'
+      this._logHistory('Treatment item added', `${label} on tooth ${fdi}${surface ? `-${surface}` : ''}`)
     },
 
-    _removeTreatmentItem(fdi, surface, condition) {
+    _removeTreatmentItem(fdi, surface, condition, status = 'planned', treatment = null) {
+      const isBaseChartItem = status === 'existing'
+      const treatmentId = treatment?.id || null
+      const treatmentCode = treatment?.code || null
       const idx = this.treatmentPlan.findIndex(
-        i => i.fdi === fdi && i.surface === surface && i.condition === condition
+        (i) => {
+          if (i.fdi !== fdi || i.surface !== surface) return false
+          const itemIsBase = !i.appointmentGroupId
+          if (itemIsBase !== isBaseChartItem) return false
+          if (treatmentId) return Number(i.treatmentId || 0) === Number(treatmentId)
+          if (treatmentCode) return String(i.treatmentCode || '') === String(treatmentCode)
+          return i.condition === condition
+        }
       )
       if (idx === -1) return
       const item = this.treatmentPlan[idx]
@@ -487,20 +626,107 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       if (!this.patientId) return
       this.isSaving = true
       try {
-        await patientChartingService.saveChart({ patientId: this.patientId, chart: this.chart })
+        await patientChartingService.saveChart({
+          patientId: this.patientId,
+          chart: { ...this.chart, periodontal: this.periData || {} },
+        })
         this.isDirty = false
       } finally {
         this.isSaving = false
       }
     },
+    _schedulePerioSave() {
+      clearTimeout(_saveTimers.periodontal)
+      _saveTimers.periodontal = setTimeout(() => {
+        this._savePerioData()
+      }, 700)
+    },
+    async _savePerioData() {
+      if (!this.patientId) return
+      try {
+        await patientChartingService.saveChart({
+          patientId: this.patientId,
+          chart: { ...this.chart, periodontal: this.periData || {} },
+        })
+      } catch (error) {
+        this._logError('_savePerioData', error)
+      }
+    },
 
     // ── New UI state mutations ───────────────────────────────────────────
     setTeethType(type) {
-      if (type !== 'permanent') return
+      if (!['permanent', 'deciduous', 'mixed'].includes(type)) return
       this.teethType = type
     },
-    setToothStatus(fdi, status) {
-      this.toothStatuses = { ...this.toothStatuses, [fdi]: status }
+    setChartScope(scope) {
+      if (!['base', 'plan', 'both'].includes(scope)) return
+      this.chartScope = scope
+    },
+    setToothStatus(fdi, status, rowId = 'base') {
+      const key = `${rowId}:${fdi}`
+      const prev = this.toothStatuses[key]
+      const prevObj = (prev && typeof prev === 'object') ? prev : {}
+      this.toothStatuses = { ...this.toothStatuses, [key]: { ...prevObj, status } }
+      if (String(rowId).includes('base')) {
+        if (!this.chart[fdi]) this.chart[fdi] = createDefaultTooth(fdi)
+        applyBaseToothStatus(this.chart[fdi], status)
+        this._scheduleSave(fdi)
+      }
+    },
+    setToothDiagnosis(fdi, diagnosis, rowId = 'base') {
+      const key = `${rowId}:${fdi}`
+      const prev = this.toothStatuses[key]
+      const prevObj = (prev && typeof prev === 'object') ? prev : {}
+      this.toothStatuses = { ...this.toothStatuses, [key]: { ...prevObj, diagnosis } }
+      if (String(rowId).includes('base')) {
+        if (!this.chart[fdi]) this.chart[fdi] = createDefaultTooth(fdi)
+        this.chart[fdi].diagnosis = diagnosis || null
+        this._scheduleSave(fdi)
+      }
+    },
+    setPerioData(data = {}) {
+      this.periData = (data && typeof data === 'object') ? data : {}
+      this._schedulePerioSave()
+    },
+    setSoftTissueData(data = {}) {
+      this.softTissueData = (data && typeof data === 'object') ? data : {}
+      this._persistChartMeta()
+    },
+    setRiskData(data = {}) {
+      this.riskData = (data && typeof data === 'object') ? data : {}
+      this._persistChartMeta()
+    },
+    async markItemComplete(itemOrId, practitionerId = null, practitionerName = '') {
+      const item = typeof itemOrId === 'object' ? itemOrId
+        : this.treatmentPlan.find(i => i.id === itemOrId || i._tempId === itemOrId)
+      if (!item) return
+
+      const resolvedPractitionerId = practitionerId || item.practitionerId || null
+      const resolvedPractitionerName = practitionerName
+        || item.practitionerName
+        || item.clinicianName
+        || this.practitioners.find((p) => Number(p.id) === Number(resolvedPractitionerId))?.name
+        || ''
+
+      const patch = {
+        status: 'completed',
+        completedAt: new Date().toISOString(),
+        completedByPractitionerId: resolvedPractitionerId || null,
+        completedByPractitionerName: resolvedPractitionerName || null,
+      }
+      if (resolvedPractitionerId && !item.practitionerId) patch.practitionerId = resolvedPractitionerId
+      if (resolvedPractitionerName && !item.practitionerName) {
+        patch.practitionerName = resolvedPractitionerName
+        patch.clinicianName = resolvedPractitionerName
+      }
+
+      await this.updateTreatmentItem(item, patch)
+
+      const groupId = item.appointmentGroupId || DEFAULT_APPOINTMENT_ID
+      const inGroup = this.treatmentItems.filter((i) => (i.appointmentGroupId || DEFAULT_APPOINTMENT_ID) === groupId)
+      if (inGroup.length && inGroup.every((i) => String(i.status || '').toLowerCase() === 'completed')) {
+        this.updateAppointment(groupId, { status: 'completed' })
+      }
     },
     addAppointment() {
       const n = this.appointments.length + 1
@@ -509,9 +735,13 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       this._logHistory('Appointment group added', `Plan ${this.activePlanId}`)
     },
     deleteAppointment(id) {
+      const removedItems = this.treatmentPlan.filter(i => i.appointmentGroupId === id)
       this.appointments = this.appointments.filter(a => a.id !== id)
       this.treatmentPlan = this.treatmentPlan.filter(i => i.appointmentGroupId !== id)
-      if (!this.appointments.length) this.appointments = [{ ...DEFAULT_APPOINTMENT }]
+      removedItems.filter((i) => i.id).forEach((item) => {
+        patientChartingService.deleteTreatmentPlanItem(item.id).catch((error) => this._logError('deleteAppointmentItems', error))
+      })
+      if (!this.appointments.length) this.appointments = this._defaultAppointments()
       this._saveActivePlanAppointments()
       this._logHistory('Appointment group deleted', id)
     },
@@ -537,11 +767,12 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
         id: nextId,
         name,
         color: payload?.color || this._nextPlanColor(this.plans.length),
-        appointments: [{ ...DEFAULT_APPOINTMENT }],
+        appointments: this._defaultAppointments(),
       })
       this.activePlanId = nextId
       this._syncActivePlanAppointments()
-      this._persistUiState()
+      const createdPlan = this.plans.find((p) => p.id === nextId)
+      this._createPlanRemote(createdPlan, this.plans.length, 'createTreatmentPlan')
       this._logHistory('Treatment plan added', name)
       return nextId
     },
@@ -549,32 +780,24 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       if (!this.plans.some((p) => p.id === planId)) return
       this.activePlanId = planId
       this._syncActivePlanAppointments()
-      this._persistUiState()
     },
     renameTreatmentPlan(planId, name) {
       const plan = this.plans.find((p) => p.id === planId)
       if (!plan || !name) return
       plan.name = String(name).trim()
-      this.treatmentPlan.forEach((item) => {
-        if ((item.planId || DEFAULT_PLAN_ID) === planId) {
-          item.planName = plan.name
-          if (item.id) {
-            patientChartingService.updateTreatmentPlanItem({ id: item.id, planName: plan.name }).catch((error) => this._logError('renamePlanItem', error))
-          }
-        }
-      })
-      this._persistUiState()
+      this._syncItemPlanName(planId, plan.name)
+      this._upsertPlanRemote(plan, { name: plan.name }, 'renameTreatmentPlan')
       this._logHistory('Treatment plan renamed', plan.name)
     },
     updateTreatmentPlanColor(planId, color) {
       const plan = this.plans.find((p) => p.id === planId)
       if (!plan || !color) return
       plan.color = color
-      this._persistUiState()
+      this._upsertPlanRemote(plan, { color }, 'updateTreatmentPlanColor')
       this._logHistory('Treatment plan color changed', `${plan.name} -> ${color}`)
     },
     deleteTreatmentPlan(planId) {
-      if (this.plans.length <= 1) return false
+      const deletingLastPlan = this.plans.length <= 1
       const fallback = this.plans.find((p) => p.id !== planId)?.id || DEFAULT_PLAN_ID
       const removedItems = this.treatmentPlan.filter((item) => (item.planId || DEFAULT_PLAN_ID) === planId)
       this.treatmentPlan = this.treatmentPlan.filter((item) => (item.planId || DEFAULT_PLAN_ID) !== planId)
@@ -582,9 +805,28 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
         patientChartingService.deleteTreatmentPlanItem(item.id).catch((error) => this._logError('deletePlanItem', error))
       })
       this.plans = this.plans.filter((p) => p.id !== planId)
-      this.activePlanId = fallback
-      this._syncActivePlanAppointments()
-      this._persistUiState()
+
+      if (!this.plans.length || deletingLastPlan) {
+        const replacementId = `plan-${Date.now()}`
+        const replacementPlan = {
+          id: replacementId,
+          name: 'Treatment Plan 1',
+          color: this._nextPlanColor(0),
+          appointments: this._defaultAppointments(),
+        }
+        this.plans = [replacementPlan]
+        this.activePlanId = replacementId
+        this._syncActivePlanAppointments()
+        this._createPlanRemote(replacementPlan, 1, 'recreateTreatmentPlanAfterDelete')
+      } else {
+        this.activePlanId = fallback
+        this._syncActivePlanAppointments()
+      }
+
+      if (this.patientId) {
+        patientChartingService.deleteTreatmentPlan({ patientId: this.patientId, planKey: planId })
+          .catch((error) => this._logError('deleteTreatmentPlan', error))
+      }
       this._logHistory('Treatment plan deleted', planId)
       return true
     },
@@ -597,7 +839,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
         id: newId,
         name: newName,
         color: source.color || this._nextPlanColor(this.plans.length),
-        appointments: (source.appointments || [{ ...DEFAULT_APPOINTMENT }]).map((a) => ({ ...a, id: `appt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` })),
+        appointments: (source.appointments || this._defaultAppointments()).map((a) => ({ ...a, id: `appt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` })),
       })
       const sourceItems = this.treatmentPlan.filter((item) => (item.planId || DEFAULT_PLAN_ID) === planId)
       sourceItems.forEach((item) => {
@@ -611,18 +853,18 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       })
       this.activePlanId = newId
       this._syncActivePlanAppointments()
-      this._persistUiState()
+      const duplicatedPlan = this.plans.find((p) => p.id === newId)
+      this._createPlanRemote(duplicatedPlan, this.plans.length, 'duplicateCreatePlan')
       this._logHistory('Treatment plan duplicated', newName)
       return newId
     },
     toggleFavoriteCode(codeId) {
       if (this.favoriteCodeIds.includes(codeId)) this.favoriteCodeIds = this.favoriteCodeIds.filter((id) => id !== codeId)
       else this.favoriteCodeIds = [...this.favoriteCodeIds, codeId]
-      this._persistUiState()
+      this._persistChartMeta()
     },
     setAppointmentLink(groupId, link) {
       this.appointmentLinks = { ...this.appointmentLinks, [groupId]: link || '' }
-      this._persistUiState()
       this._logHistory('Appointment link updated', groupId)
     },
     setIntervalDays(days) {
@@ -642,12 +884,10 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       const url = await toDataUrl(file)
       this.chartImages.unshift({ id: `img-${Date.now()}`, name: file.name || 'image', url, uploadedAt: new Date().toISOString() })
       this.chartImages = this.chartImages.slice(0, 100)
-      this._persistUiState()
       this._logHistory('Image added', file.name || 'image')
     },
     removeChartImage(id) {
       this.chartImages = this.chartImages.filter((img) => img.id !== id)
-      this._persistUiState()
       this._logHistory('Image removed', id)
     },
     setActiveCode(codeId) {
@@ -752,15 +992,21 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       this.bridgeStartFdi = null
       this.isDirty = false
       this.teethType = 'permanent'
+      this.chartScope = 'both'
       this.toothStatuses = {}
-      this.appointments = [{ ...DEFAULT_APPOINTMENT }]
-      this.plans = [{ id: DEFAULT_PLAN_ID, name: DEFAULT_PLAN_NAME, color: DEFAULT_PLAN_COLOR, appointments: [{ ...DEFAULT_APPOINTMENT }] }]
+      this.appointments = this._defaultAppointments()
+      this.plans = [makeDefaultPlan()]
       this.activePlanId = DEFAULT_PLAN_ID
       this.favoriteCodeIds = []
       this.chartImages = []
       this.historyEntries = []
       this.appointmentLinks = {}
       this.activeCodeId = null
+      this.treatmentCatalog = []
+      this.practitioners = []
+      this.periData = {}
+      this.softTissueData = {}
+      this.riskData = {}
     },
   },
 })
@@ -768,4 +1014,3 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
 if (import.meta.hot) {
   import.meta.hot.accept(acceptHMRUpdate(usePatientChartingStore, import.meta.hot))
 }
-

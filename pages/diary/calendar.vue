@@ -9,7 +9,27 @@
       <div class="d-flex align-center" style="gap: 8px">
         <v-btn icon variant="text" @click="prevDay"><v-icon>mdi-chevron-left</v-icon></v-btn>
         <v-btn icon variant="text" @click="nextDay"><v-icon>mdi-chevron-right</v-icon></v-btn>
-        <div class="text-subtitle-1 font-weight-600 ml-2">{{ dayLabel }}</div>
+
+        <!-- Clicking the date label opens an inline date picker -->
+        <v-menu v-model="datePickerOpen" :close-on-content-click="false" location="bottom start">
+          <template #activator="{ props: menuProps }">
+            <button
+              v-bind="menuProps"
+              class="date-label-btn ml-2"
+            >
+              <span class="text-subtitle-1 font-weight-600">{{ dayLabel }}</span>
+              <v-icon size="16" class="ml-1" style="opacity:0.5">mdi-calendar</v-icon>
+            </button>
+          </template>
+          <v-card elevation="4" rounded="lg" style="overflow:hidden">
+            <v-date-picker
+              :model-value="dateStr"
+              color="primary"
+              show-adjacent-months
+              @update:model-value="onPickerDate"
+            />
+          </v-card>
+        </v-menu>
       
         <v-btn-toggle v-model="view" mandatory class="custom-toggle ml-6">
           <v-btn value="day" class="toggle-btn">
@@ -169,8 +189,12 @@ const dayLabel = computed(() => formatDateDDMMYYYY(date.value))
 
 const prevDay = () => { const d = new Date(date.value); d.setDate(d.getDate()-1); date.value = d }
 const nextDay = () => { const d = new Date(date.value); d.setDate(d.getDate()+1); date.value = d }
-const dateMenu = ref(false)
-const onPickDate = (d) => { date.value = new Date(d); dateMenu.value = false }
+const datePickerOpen = ref(false)
+const onPickerDate = (val) => {
+  // v-date-picker emits a YYYY-MM-DD string
+  if (val) date.value = new Date(val)
+  datePickerOpen.value = false
+}
 const filters = ref({})
 function onFilters(f){
   filters.value = f || {}
@@ -527,5 +551,19 @@ onMounted(() => {
   box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.08);
 
   border-radius: 6px;
+}
+
+.date-label-btn {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  &:hover {
+    background: #f0f4fa;
+  }
 }
 </style>

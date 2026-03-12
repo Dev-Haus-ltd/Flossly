@@ -292,7 +292,7 @@ watch(() => props.modelValue, (open) => {
     }
     if (!treatmentOptions.value.length) {
       organisationStore.listTreatments().then((res) => {
-        if (res?.code === 0) treatmentOptions.value = (res.data || []).map(r => ({ id: r.id, name: r.name, defaultDuration: r.defaultDuration || 15, amount: r.amount || 0 }))
+        if (res?.code === 0) treatmentOptions.value = (res.data || []).map(r => ({ id: r.id, name: r.name, defaultDuration: r.defaultDuration || 15, amount: r.price ?? r.amount ?? 0 }))
       })
     }
   } else {
