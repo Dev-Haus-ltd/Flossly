@@ -13,6 +13,11 @@ import { Op } from "sequelize";
 import DB from "../utils/db";
 import { uploadBufferFile } from "../utils/storage";
 import { parseJsonBody } from "../utils/body";
+import {
+  leaveRequestApprovedNotification as emailLeaveRequestApprovedNotification,
+  leaveRequestDeniedNotification as emailLeaveRequestDeniedNotification,
+} from "../utils/emailNotifications.js";
+import { sendLeaveApprovedNotification, sendLeaveDeniedNotification } from "../utils/fcmNotification.js";
 export const usersList = async (event) => {
   const loggedUser = event.context.user;
   let currentOrg = loggedUser.orgId;
@@ -536,10 +541,48 @@ export const updateLeaveStatus = async (event) => {
       fullName: user.fullName,
       email: user.email,
     };
+    const startDateFormatted = leave.startDate
+      ? new Date(leave.startDate).toLocaleDateString("en-GB")
+      : null;
+    const endDateFormatted = leave.endDate
+      ? new Date(leave.endDate).toLocaleDateString("en-GB")
+      : null;
+
     if (status === "Approved") {
-      await leaveRequestApprovedNotification(data);
+      // Email notification (existing)
+      await emailLeaveRequestApprovedNotification(data);
+
+      // Push notification (new - in addition to email)
+      try {
+        await sendLeaveApprovedNotification({
+          userId: user.id,
+          startDate: startDateFormatted,
+          endDate: endDateFormatted,
+        });
+      } catch (pushErr) {
+        console.warn('Leave approved push notification failed', {
+          userId: user.id,
+          error: pushErr?.message || pushErr,
+        });
+      }
     } else {
-      await leaveRequestDeniedNotification(data);
+      // Email notification (existing)
+      await emailLeaveRequestDeniedNotification(data);
+
+      // Push notification (new - in addition to email)
+      try {
+        await sendLeaveDeniedNotification({
+          userId: user.id,
+          startDate: startDateFormatted,
+          endDate: endDateFormatted,
+          reason: body.reason || null,
+        });
+      } catch (pushErr) {
+        console.warn('Leave denied push notification failed', {
+          userId: user.id,
+          error: pushErr?.message || pushErr,
+        });
+      }
     }
     return success("Updated");
   } catch (err) {

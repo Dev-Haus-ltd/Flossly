@@ -103,7 +103,7 @@
 
       <!-- List View (child) -->
       <CustomerRelationManagementListView
-        v-if="!isLoading && (activeLeads.length || archivedLeads.length)"
+        v-if="!isLoading && (activeLeads.length || archivedLeads.length || route.query.leadId)"
         :active-leads="activeLeads"
         :archived-leads="archivedLeads"
         :active-total="activeTotal"

@@ -544,7 +544,7 @@
       v-if="showLeadDetailDialog"
       v-model="showLeadDetailDialog"
       :selected-lead="selectedLead"
-      @close="showLeadDetailDialog = false"
+      @close="handleLeadDialogClose"
     />
 
     <v-dialog v-model="showCompose" max-width="900px">
@@ -753,7 +753,10 @@ import archiveIcon from '@/assets/crm/archive.svg'
 import deleteIcon from '@/assets/crm/delete.svg'
 import exportIcon from '@/assets/crm/export.svg'
 const crmStore = useCrmStore();
-const { user } = useUser();
+const authStore = useAuthStore();
+const { user, setUser } = useUser();
+const route = useRoute();
+const router = useRouter();
 const emit = defineEmits([
   'select',
   'openLead',
@@ -786,6 +789,7 @@ const isAllArchived = ref(false);
 const showLeadDetailDialog = ref(false);
 const selectedLead = ref({});
 const commentMenus = reactive({});
+const leadRouteRequestId = ref(0);
 
 const leadStatusOptions = [
   { name: 'New', color: '#36a863' },
@@ -814,7 +818,109 @@ const archivedLeads = computed(() =>
     ? props.archivedLeads
     : (props.leads || []).filter((l) => isArchivedLead(l))
 );
+const allVisibleLeads = computed(() => [
+  ...(activeLeads.value || []),
+  ...(archivedLeads.value || []),
+]);
 const canViewArchive = computed(() => [1, 8].includes(user.value?.roleId));
+
+const normalizeLeadForDialog = (lead = {}) => ({
+  ...lead,
+  alert: lead.alert || "",
+  name: getLeadDisplayName(lead) || lead.name || "",
+  email: getLeadEmail(lead) || lead.email || "",
+  telephone: getLeadPhone(lead) || lead.telephone || "",
+  inquiryDate: lead.inquiryDate || "",
+  rawData: lead.rawData || null,
+  dob: lead.dob || null,
+  occupation: lead.occupation || "",
+  location: lead.location || "",
+  leadSource: lead.leadSource?.name
+    ? lead.leadSource
+    : { id: 99, name: lead.leadSource || "Meta Leadgen" },
+  metaPage: lead.metaPage || lead.pageName || lead.pageId || "",
+  leadStatus: lead.leadStatus || "New",
+  treatment: lead.treatment?.name ? lead.treatment : { id: null, name: lead.treatment || "" },
+  assigned: lead.assigned || [],
+  followUpDate: lead.followUpDate || "",
+  comments: lead.comments || "",
+  id: lead.id,
+  softDeleted: !!lead.softDeleted,
+});
+
+const findVisibleLeadById = (leadId) => {
+  const numericLeadId = Number(leadId || 0);
+  if (!numericLeadId) return null;
+  return allVisibleLeads.value.find((lead) => Number(lead?.id) === numericLeadId) || null;
+};
+
+const fetchLeadById = async (leadId) => {
+  const numericLeadId = Number(leadId || 0);
+  if (!numericLeadId) return null;
+
+  const res = await crmStore.listLeads({ id: numericLeadId, includeArchived: true });
+  const rows = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.data?.rows)
+      ? res.data.rows
+      : [];
+
+  return rows[0] || null;
+};
+
+const syncLeadDialogWithRoute = async (rawLeadId = route.query.leadId) => {
+  const numericLeadId = Number(rawLeadId || 0);
+  if (!numericLeadId) return;
+
+  if (showLeadDetailDialog.value && Number(selectedLead.value?.id) === numericLeadId) {
+    return;
+  }
+
+  // Handle org switch for push-driven opens
+  const orgIdFromQuery = route.query.orgId;
+  if (orgIdFromQuery) {
+    const targetOrgId = Number(orgIdFromQuery);
+    const currentOrgId = user.value?.currentLoggedInOrgId;
+
+    if (targetOrgId && currentOrgId && targetOrgId !== currentOrgId) {
+      // Need to switch org first
+      try {
+        const res = await authStore.switchOrgnanisation({ orgId: targetOrgId });
+        if (res.code === 0) {
+          const profileRes = await authStore.profile();
+          if (profileRes.code === 0 && profileRes.data) {
+            setUser(profileRes.data);
+            // Continue with lead dialog opening after org switch
+          }
+        } else {
+          console.error('Org switch failed for lead notification');
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to switch org for lead notification:', error);
+        return;
+      }
+    }
+  }
+
+  const visibleLead = findVisibleLeadById(numericLeadId);
+  if (visibleLead) {
+    selectedLead.value = normalizeLeadForDialog(visibleLead);
+    showLeadDetailDialog.value = true;
+    return;
+  }
+
+  const requestId = ++leadRouteRequestId.value;
+
+  try {
+    const fetchedLead = await fetchLeadById(numericLeadId);
+    if (requestId !== leadRouteRequestId.value || !fetchedLead) return;
+    selectedLead.value = normalizeLeadForDialog(fetchedLead);
+    showLeadDetailDialog.value = true;
+  } catch (error) {
+    console.error('Failed to open lead from route query', error);
+  }
+};
 
 // Inline editing state
 const editingCell = reactive({
@@ -1359,6 +1465,27 @@ const openLeadDialog = (lead) => {
   selectedLead.value = lead;
   showLeadDetailDialog.value = true;
 };
+
+const handleLeadDialogClose = () => {
+  showLeadDetailDialog.value = false;
+
+  if (route.query.leadId || route.query.orgId) {
+    const newQuery = { ...route.query };
+    delete newQuery.leadId;
+    delete newQuery.orgId;
+    router.replace({ query: newQuery });
+  }
+};
+
+watch(
+  () => route.query.leadId,
+  (leadId) => {
+    if (leadId) {
+      syncLeadDialogWithRoute(leadId);
+    }
+  },
+  { immediate: true }
+);
 
 // Compose mail dialog using Editor.js (client-only)
 const showCompose = ref(false)
