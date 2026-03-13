@@ -793,7 +793,8 @@ export const updateTask = async (event) => {
             await sendTaskCompletionNotification({
               task: userTask,
               completedBy: user,
-              notifyUsers: [await User.findByPk(userTask.assignedBy)]
+              notifyUsers: [await User.findByPk(userTask.assignedBy)],
+              organisationId: Number(loggedUser.orgId)
             });
           }
         } catch (fcmError) {
@@ -971,9 +972,11 @@ export const unAssignTask = async (event) => {
     try {
       if (removedUser && removedUser.id !== loggedUser.userId) {
         await sendTaskUnassignmentNotification({
+          taskId: userTask?.taskId,
           taskTitle: taskTitle || 'Task',
           removedBy: removedByUser,
           removedUser,
+          organisationId: Number(loggedUser.orgId),
         });
       }
     } catch (fcmError) {
@@ -1268,10 +1271,11 @@ export const addUserTaskComment = async (event) => {
         recipients.push(userTask.assignedUser);
       }
       await sendTaskCommentNotification({
-        task: { id: userTask.id, title: userTask.taskDetails?.title || userTask.title || 'Task' },
+        task: { id: userTask.id, title: userTask.taskDetails?.title || userTask.title || 'Task', organisationId },
         comment,
         commentedBy: commenter,
         notifyUsers: recipients,
+        organisationId,
       });
     } catch (fcmError) {
       console.error('Failed to send FCM notification:', fcmError);
@@ -1651,7 +1655,8 @@ export const createNewTask = async (event) => {
               await sendTaskAssignmentNotification({
                 task: userTaskForAssignee,
                 assignedUser: assignee,
-                assignedBy: assignerUser
+                assignedBy: assignerUser,
+                organisationId: Number(loggedUser.orgId)
               });
             }
           } catch (fcmError) {

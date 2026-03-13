@@ -110,19 +110,28 @@ self.addEventListener('notificationclick', (event) => {
     switch (notificationData.type) {
       case 'task_assigned':
       case 'task_completed':
-        urlToOpen = notificationData.taskId 
-          ? `/tasks/${notificationData.taskId}` 
-          : '/tasks/mytasks';
+      case 'task_completed_bulk':
+      case 'task_comment':
+      case 'task_unassigned':
+      case 'task_unassigned_bulk':
+      case 'task_due_reminder':
+      case 'task_overdue_reminder':
+        // Use the URL from notification data if available, otherwise fallback to taskId
+        urlToOpen = notificationData.url || (notificationData.taskId 
+          ? `/tasks/mytasks?taskId=${notificationData.taskId}` 
+          : '/tasks/mytasks');
         break;
       case 'lead_created':
+      case 'lead_assigned':
+      case 'lead_unassigned':
         urlToOpen = notificationData.leadId 
-          ? `/crm?leadId=${notificationData.leadId}` 
-          : '/crm';
+          ? `/crm/leads?leadId=${notificationData.leadId}` 
+          : '/crm/leads';
         break;
       case 'whatsapp_message':
         urlToOpen = notificationData.leadId 
-          ? `/crm?leadId=${notificationData.leadId}&tab=communication` 
-          : '/crm';
+          ? `/crm/leads?leadId=${notificationData.leadId}&tab=communication` 
+          : '/crm/leads';
         break;
       case 'meta_dm':
         urlToOpen = '/crm/analytics';
@@ -133,6 +142,24 @@ self.addEventListener('notificationclick', (event) => {
   } else if (clickAction === 'dismiss') {
     return; // Just close the notification
   }
+
+  const appendOrgId = (rawUrl) => {
+    const orgId = notificationData.organisationId;
+    if (!orgId || !rawUrl) return rawUrl;
+
+    try {
+      const parsed = new URL(rawUrl, self.location.origin);
+      if (!parsed.searchParams.has('orgId')) {
+        parsed.searchParams.set('orgId', orgId);
+      }
+      return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    } catch (error) {
+      const separator = rawUrl.includes('?') ? '&' : '?';
+      return `${rawUrl}${separator}orgId=${encodeURIComponent(orgId)}`;
+    }
+  };
+
+  urlToOpen = appendOrgId(urlToOpen);
 
   // Open the URL in a window
   event.waitUntil(
