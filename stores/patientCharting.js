@@ -873,18 +873,38 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       this._saveActivePlanAppointments()
       this._logHistory('Interval updated', `${interval} day(s)`)
     },
-    async addChartImage(file) {
-      if (!file) return
-      const toDataUrl = (f) => new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result)
-        reader.onerror = reject
-        reader.readAsDataURL(f)
-      })
-      const url = await toDataUrl(file)
-      this.chartImages.unshift({ id: `img-${Date.now()}`, name: file.name || 'image', url, uploadedAt: new Date().toISOString() })
-      this.chartImages = this.chartImages.slice(0, 100)
-      this._logHistory('Image added', file.name || 'image')
+    async addChartImage(file, meta = {}) {
+      if (!file || !this.patientId) return
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('patientId', String(this.patientId))
+      try {
+        const res = await patientChartingService.uploadChartImage(formData)
+        if (res?.code === 0 && res.data?.url) {
+          const image = {
+            id: `img-${Date.now()}`,
+            name: res.data.name || file.name || 'image',
+            url: res.data.url,
+            type: meta.type || '',
+            grade: meta.grade || '',
+            developedBy: meta.developedBy || null,
+            developedByName: meta.developedByName || '',
+            justification: meta.justification || '',
+            takenBy: meta.takenBy || null,
+            takenByName: meta.takenByName || '',
+            dateTaken: meta.dateTaken || new Date().toISOString().slice(0, 10),
+            description: meta.description || '',
+            uploadedAt: new Date().toISOString(),
+          }
+          this.chartImages.unshift(image)
+          this.chartImages = this.chartImages.slice(0, 100)
+          this._persistChartMeta()
+          this._logHistory('Image added', file.name || 'image')
+        }
+        return res
+      } catch (e) {
+        return null
+      }
     },
     removeChartImage(id) {
       this.chartImages = this.chartImages.filter((img) => img.id !== id)

@@ -1,19 +1,36 @@
 <template>
   <div class="charting-root">
 
-    <!-- ── Loading ──────────────────────────────────────────────────── -->
+    <!-- ── Loading ────────────────────────────────────────────────── -->
     <div v-if="store.isLoading" class="charting-loading">
       <v-progress-circular indeterminate color="primary" size="48" />
       <p class="mt-3 text-body-2 text-medium-emphasis">Loading chart...</p>
     </div>
 
     <template v-else>
-      <!-- ── Top row: chart card + codes panel ────────────────────── -->
-      <div class="charting-body">
 
-        <!-- Left: chart card -->
+      <!-- ── Stepper ───────────────────────────────────────────────── -->
+      <div class="cw-stepper">
+        <div
+          v-for="(step, idx) in STEPS"
+          :key="idx"
+          class="cw-step"
+          :class="{
+            'cw-step--active':    currentStep === idx + 1,
+            'cw-step--completed': currentStep > idx + 1,
+            'cw-step--future':    currentStep < idx + 1,
+          }"
+          @click="currentStep = idx + 1"
+        >
+          <span class="cw-step__label">{{ step }}</span>
+        </div>
+      </div>
+
+      <!-- ── Chart + side panel (steps 1 & 2 only) ──────────────────── -->
+      <div v-if="currentStep <= 2" class="charting-body">
+
+        <!-- Tooth chart card -->
         <div class="chart-card">
-          <!-- Toolbar: teeth-type dropdown, mode pills, 3D toggle -->
           <div class="chart-card__toolbar">
             <div class="teeth-type-control">
               <span class="teeth-type-label">Teeth Type</span>
@@ -29,7 +46,6 @@
                 @update:model-value="store.setTeethType($event)"
               />
             </div>
-            <!-- 3D / 2D toggle -->
             <v-btn
               :variant="view3d ? 'flat' : 'outlined'"
               :color="view3d ? 'primary' : undefined"
@@ -40,7 +56,6 @@
             >{{ view3d ? '3D' : '2D' }}</v-btn>
           </div>
 
-          <!-- Tooth chart -->
           <div class="chart-scroll">
             <ToothChart3D
               v-if="view3d"
@@ -48,7 +63,7 @@
               :notation="store.notation"
               :active-condition="store.activeCondition"
               :selected-tooth-fdi="store.selectedToothFdi"
-              style="width: 100%; height: 420px;"
+              style="width:100%;height:420px"
               @surface-click="onSurfaceClick"
               @tooth-click="onToothClick"
             />
@@ -58,7 +73,7 @@
               :notation="store.notation"
               :active-condition="store.activeCondition"
               :selected-tooth-fdi="store.selectedToothFdi"
-              :chart-scope="store.chartScope"
+              :chart-scope="currentStep === 1 ? 'base' : store.chartScope"
               :bridge-select-mode="store.bridgeSelectMode"
               :bridge-start-fdi="store.bridgeStartFdi"
               :tooth-statuses="store.toothStatuses"
@@ -69,15 +84,21 @@
               @tooth-status-change="onToothStatusChange"
               @tooth-diagnosis-change="onToothDiagnosisChange"
             />
-            <div v-if="view3d && isSurfaceConditionActive" class="surface-hint mt-2">
-              Surface mapping in 3D is approximate. Use 2D mode for maximum precision.
-            </div>
           </div>
         </div>
 
-        <!-- Right: codes panel -->
+        <!-- Right panel: conditions (step 1) or treatment codes (step 2) -->
         <div class="codes-side">
           <CodesPanel
+            v-if="currentStep === 1"
+            mode="diagnosis"
+            :conditions="diagnosisConditions"
+            :active-condition="store.activeCondition"
+            @condition-select="onConditionSelect"
+          />
+          <CodesPanel
+            v-else
+            mode="treatment"
             :active-code-id="store.activeCodeId"
             :favorite-code-ids="store.favoriteCodeIds"
             :codes="store.treatmentCatalog"
@@ -85,11 +106,21 @@
             @toggle-favorite="store.toggleFavoriteCode($event)"
           />
         </div>
-
       </div>
 
-      <!-- ── Bottom: treatment plan panel ─────────────────────────── -->
-      <div class="treatment-plan-wrap">
+      <!-- ── Bottom panel: switches per step ────────────────────────── -->
+
+      <!-- Step 1: Diagnosis notes + findings list -->
+      <DiagnosePanel
+        v-if="currentStep === 1"
+        v-model="diagnosisNotes"
+        :base-items="baseChartItems"
+        :notation="store.notation"
+        @remove="store.removeTreatmentItemById($event)"
+      />
+
+      <!-- Step 2: Full treatment plan panel -->
+      <div v-if="currentStep === 2" class="treatment-plan-wrap">
         <TreatmentPlanPanel
           :items="store.treatmentItems"
           :total="store.treatmentTotal"
@@ -115,50 +146,50 @@
           @update-plan-color="store.updateTreatmentPlanColor($event.id, $event.color)"
           @set-interval="onSetInterval"
           @link-appointment="onLinkAppointment"
-          @add-image="store.addChartImage($event)"
+          @add-image="store.addChartImage($event.file, $event.meta)"
           @remove-image="store.removeChartImage($event)"
           @delete-appointment="store.deleteAppointment($event)"
           @update-appointment="onUpdateAppointment"
           @book-appointment="onBookAppointment"
           @chart-scope-change="onChartScopeChange"
           @mark-complete="onMarkComplete"
-          @print-plan="printDialogOpen = true"
+          @print-plan="currentStep = 3"
         />
       </div>
 
-      <!-- ── Clinical tabs: Perio / Soft Tissue / Risk ──────────── -->
-      <div class="clinical-panel">
-        <div class="clinical-tabs">
-          <button
-            v-for="tab in CLINICAL_TABS"
-            :key="tab.key"
-            class="clinical-tab"
-            :class="{ 'clinical-tab--active': activeClinicalTab === tab.key }"
-            @click="activeClinicalTab = tab.key"
-          >{{ tab.label }}</button>
-        </div>
-        <div class="clinical-tab-body">
-          <PerioChart
-            v-if="activeClinicalTab === 'perio'"
-            :peri-data="store.periData"
-            @update="store.setPerioData($event)"
-          />
-          <SoftTissueExam
-            v-else-if="activeClinicalTab === 'soft-tissue'"
-            :soft-tissue-data="store.softTissueData"
-            @update="store.setSoftTissueData($event)"
-          />
-          <RiskAssessment
-            v-else-if="activeClinicalTab === 'risk'"
-            :risk-data="store.riskData"
-            @update="store.setRiskData($event)"
-          />
-        </div>
-      </div>
+      <!-- Step 3: Treatment plan document (review) -->
+      <TreatmentPlanDocument
+        v-if="currentStep === 3"
+        :active-plan="activePlanObj"
+        :plan-ref="activePlanRef"
+        :items="store.treatmentItems"
+        :appointments="store.appointments"
+        :notation="store.notation"
+        :patient-name="patientName"
+        :practice-name="practiceName"
+        :practitioner-name="activePractitionerName"
+        :show-actions="false"
+      />
+
+      <!-- Step 4: Overview with share/print/download -->
+      <TreatmentPlanDocument
+        v-if="currentStep === 4"
+        :active-plan="activePlanObj"
+        :plan-ref="activePlanRef"
+        :items="store.treatmentItems"
+        :appointments="store.appointments"
+        :notation="store.notation"
+        :patient-name="patientName"
+        :practice-name="practiceName"
+        :practitioner-name="activePractitionerName"
+        :show-actions="true"
+        @share="onSharePlan"
+        @download="onDownloadPlan"
+      />
+
     </template>
 
-    <!-- ── Booking dialog ────────────────────────────────────────────── -->
-    <!-- Fix #1 — added practitioner selector; dentistId is now required before booking -->
+    <!-- ── Dialogs ─────────────────────────────────────────────────── -->
     <v-dialog v-model="bookingDialog" max-width="480">
       <v-card rounded="lg">
         <v-card-title class="pt-4 px-5">Book Appointment in Diary</v-card-title>
@@ -192,20 +223,11 @@
       </v-card>
     </v-dialog>
 
-    <!-- Fix #11 — replace window.prompt() with proper inline dialogs -->
     <v-dialog v-model="intervalDialog" max-width="360">
       <v-card rounded="lg">
         <v-card-title class="pt-4 px-5">Set Appointment Interval</v-card-title>
         <v-card-text class="px-5 pb-2">
-          <v-text-field
-            v-model.number="intervalDraft"
-            label="Days between appointments"
-            type="number"
-            min="0"
-            variant="outlined"
-            density="compact"
-            hide-details
-          />
+          <v-text-field v-model.number="intervalDraft" label="Days between appointments" type="number" min="0" variant="outlined" density="compact" hide-details />
         </v-card-text>
         <v-card-actions class="px-5 pb-4">
           <v-spacer />
@@ -219,13 +241,7 @@
       <v-card rounded="lg">
         <v-card-title class="pt-4 px-5">Set Appointment Link</v-card-title>
         <v-card-text class="px-5 pb-2">
-          <v-text-field
-            v-model="linkDraft"
-            label="External link URL"
-            variant="outlined"
-            density="compact"
-            hide-details
-          />
+          <v-text-field v-model="linkDraft" label="External link URL" variant="outlined" density="compact" hide-details />
         </v-card-text>
         <v-card-actions class="px-5 pb-4">
           <v-spacer />
@@ -252,20 +268,31 @@ import ToothChart from './ToothChart.vue'
 import ToothChart3D from './ToothChart3D.vue'
 import TreatmentPlanPanel from './TreatmentPlanPanel.vue'
 import CodesPanel from './CodesPanel.vue'
-import PerioChart from './PerioChart.vue'
-import SoftTissueExam from './SoftTissueExam.vue'
-import RiskAssessment from './RiskAssessment.vue'
+import DiagnosePanel from './DiagnosePanel.vue'
+import TreatmentPlanDocument from './TreatmentPlanDocument.vue'
 import { usePatientChartingStore } from '@/stores/patientCharting'
 import { useMainStore } from '@/stores/index'
+import { useOrgStore } from '@/stores/organisation'
 import { CONDITIONS } from './toothData.js'
 import { DEFAULT_PLAN_ID } from '~/shared/defaults/charting/chartingDefaults.js'
 
 const props = defineProps({
   patientId: { type: [String, Number], required: true },
+  patientName: { type: String, default: '' },
 })
 
 const store = usePatientChartingStore()
 const mainStore = useMainStore()
+const orgStore = useOrgStore()
+
+const STEPS = ['Diagnose', 'Treatment', 'Treatment Plan', 'Overview']
+const currentStep = ref(1)
+
+// Sync store mode with wizard step
+watch(currentStep, (step) => {
+  if (step === 1) store.setMode('examination')
+  else if (step === 2) store.setMode('treatment')
+})
 
 const teethTypeOptions = [
   { label: 'Permanent', value: 'permanent' },
@@ -274,124 +301,104 @@ const teethTypeOptions = [
 ]
 
 const view3d = ref(false)
-const activeClinicalTab = ref('perio')
-const printDialogOpen = ref(false)
+const diagnosisNotes = ref('')
 
-const CLINICAL_TABS = [
-  { key: 'perio', label: 'Periodontal' },
-  { key: 'soft-tissue', label: 'Soft Tissue Exam' },
-  { key: 'risk', label: 'Risk Assessment' },
-]
-
-const isSurfaceConditionActive = computed(() => {
-  const key = store.activeCondition
-  return !!(key && CONDITIONS[key]?.surface)
+const practiceName = computed(() => orgStore?.organisation?.name || '')
+const activePlanObj = computed(() => store.plans?.find(p => p.id === store.activePlanId) || store.plans?.[0] || null)
+const activePlanRef = computed(() => activePlanObj.value?.name || 'TP-01')
+const activePractitionerName = computed(() => {
+  const first = (store.treatmentItems || []).find(i => i.practitionerName)
+  return first?.practitionerName || ''
 })
 
-// ── Fix #4 — per-scope display chart ────────────────────────────────────────
-// base scope: strip planned/completed conditions so only existing findings show
-// plan scope:  start from base (existing only) then overlay the active plan's items
-// both scope:  raw chart unchanged
+// Base chart items (status=existing) — shown in DiagnosePanel findings
+const baseChartItems = computed(() =>
+  (store.treatmentPlan || []).filter(i => String(i.status || '') === 'existing')
+)
+
+// Conditions list for CodesPanel in diagnosis mode
+const diagnosisConditions = computed(() =>
+  Object.entries(CONDITIONS).map(([key, meta]) => ({
+    key,
+    label: meta.label,
+    color: meta.color,
+    category: meta.category || 'Other',
+  }))
+)
+
+// Display chart filtered by scope
 const displayChart = computed(() => {
   const raw = store.chart
-  if (store.chartScope === 'both') return raw
+  const scope = currentStep.value === 1 ? 'base' : store.chartScope
+  if (scope === 'both') return raw
 
-  // Build a map of active plan condition keys for 'plan' scope filtering
   const activePlanId = store.activePlanId || DEFAULT_PLAN_ID
   const activePlanKeys = new Set()
-  if (store.chartScope === 'plan') {
+  if (scope === 'plan') {
     store.treatmentPlan
-      .filter((i) => (i.planId || DEFAULT_PLAN_ID) === activePlanId && i.status !== 'existing')
-      .forEach((i) => {
-        activePlanKeys.add(`${i.fdi}:${i.surface || ''}:${i.condition || ''}`)
-      })
+      .filter(i => (i.planId || DEFAULT_PLAN_ID) === activePlanId && i.status !== 'existing')
+      .forEach(i => activePlanKeys.add(`${i.fdi}:${i.surface || ''}:${i.condition || ''}`))
   }
 
   const result = {}
   Object.entries(raw).forEach(([fdiStr, tooth]) => {
     const fdi = Number(fdiStr)
     const t = { ...tooth }
-
-    // Filter tooth-level condition
     if (t.toothConditionStatus && t.toothConditionStatus !== 'existing') {
-      const keep = store.chartScope === 'plan' && activePlanKeys.has(`${fdi}::${t.toothCondition || ''}`)
-      if (!keep) {
-        t.toothCondition = null
-        t.toothConditionStatus = null
-      }
+      const keep = scope === 'plan' && activePlanKeys.has(`${fdi}::${t.toothCondition || ''}`)
+      if (!keep) { t.toothCondition = null; t.toothConditionStatus = null }
     }
-
-    // Filter surface conditions
     if (tooth.surfaces) {
-      const newSurfaces = {}
+      const ns = {}
       Object.entries(tooth.surfaces).forEach(([s, sv]) => {
-        if (!sv.status || sv.status === 'existing') {
-          newSurfaces[s] = { ...sv }
-        } else {
-          const keep = store.chartScope === 'plan' && activePlanKeys.has(`${fdi}:${s}:${sv.condition || ''}`)
-          newSurfaces[s] = keep ? { ...sv } : { condition: null, status: 'existing' }
+        if (!sv.status || sv.status === 'existing') ns[s] = { ...sv }
+        else {
+          const keep = scope === 'plan' && activePlanKeys.has(`${fdi}:${s}:${sv.condition || ''}`)
+          ns[s] = keep ? { ...sv } : { condition: null, status: 'existing' }
         }
       })
-      t.surfaces = newSurfaces
+      t.surfaces = ns
     }
-
     result[fdi] = t
   })
   return result
 })
 
-// Load chart on mount / patientId change
+// Load chart
 watch(() => props.patientId, async (id, prevId) => {
   if (!id) return
   if (prevId && prevId !== id) store.reset()
   await store.loadChart(id)
 }, { immediate: true })
 
-// ── Event handlers ──────────────────────────────────────────────────────────
-function onSurfaceClick({ fdi, surface }) {
-  store.applyCondition(fdi, surface)
-}
+// ── Event handlers ───────────────────────────────────────────────────────────
+function onSurfaceClick({ fdi, surface }) { store.applyCondition(fdi, surface) }
 
 function onToothClick(fdi) {
   if (store.activeCondition && CONDITIONS[store.activeCondition]?.fullTooth) {
     store.applyCondition(fdi, null)
-  } else if (store.activeCondition && view3d.value) {
-    store.selectTooth(fdi)
   } else {
     store.selectTooth(fdi)
   }
 }
 
-function onToothStatusChange({ fdi, status, rowId }) {
-  store.setToothStatus(fdi, status, rowId)
-}
-
-function onToothDiagnosisChange({ fdi, diagnosis, rowId }) {
-  store.setToothDiagnosis(fdi, diagnosis, rowId)
-}
+function onToothStatusChange({ fdi, status, rowId }) { store.setToothStatus(fdi, status, rowId) }
+function onToothDiagnosisChange({ fdi, diagnosis, rowId }) { store.setToothDiagnosis(fdi, diagnosis, rowId) }
 
 function onChartScopeChange(scope) {
   store.setChartScope(scope)
-  if (scope === 'base' && store.mode !== 'examination') store.setMode('examination')
-  if (scope === 'plan' && store.mode !== 'treatment') store.setMode('treatment')
+  if (scope === 'base') store.setMode('examination')
+  if (scope === 'plan') store.setMode('treatment')
 }
+
+function onConditionSelect(key) { store.setCondition(key) }
 
 function onCodeSelect(codeId, conditionKey) {
   store.setActiveCode(codeId)
-  if (String(store.activeCodeId || '') !== String(codeId)) {
-    if (store.activeCondition) store.setCondition(store.activeCondition)
-    return
-  }
-  if (conditionKey) {
-    if (store.activeCondition !== conditionKey) store.setCondition(conditionKey)
-  } else if (store.activeCondition) {
-    store.setCondition(store.activeCondition)
-  }
+  if (conditionKey && store.activeCondition !== conditionKey) store.setCondition(conditionKey)
 }
 
-function onTreatmentUpdate({ id, ...patch }) {
-  store.updateTreatmentItem(id, patch)
-}
+function onTreatmentUpdate({ id, ...patch }) { store.updateTreatmentItem(id, patch) }
 
 function onMarkComplete(payload) {
   const itemId = typeof payload === 'object' ? payload?.id : payload
@@ -403,85 +410,49 @@ function onMarkComplete(payload) {
   )
 }
 
-function onReorder(payload) {
-  store.reorderTreatmentPlan(payload)
-}
+function onReorder(payload) { store.reorderTreatmentPlan(payload) }
+function onUpdateAppointment({ id, patch }) { store.updateAppointment(id, patch) }
 
-function onUpdateAppointment({ id, patch }) {
-  store.updateAppointment(id, patch)
-}
-
-function onDeletePlan(planId) {
-  deletePlanId.value = planId
-  deletePlanDialog.value = true
-}
-
-function onCancelDeletePlan() {
-  deletePlanDialog.value = false
-  deletePlanId.value = null
-}
-
+function onDeletePlan(planId) { deletePlanId.value = planId; deletePlanDialog.value = true }
+function onCancelDeletePlan() { deletePlanDialog.value = false; deletePlanId.value = null }
 function onConfirmDeletePlan() {
-  const planId = deletePlanId.value
-  if (!planId) return onCancelDeletePlan()
-  store.deleteTreatmentPlan(planId)
+  const id = deletePlanId.value
+  if (!id) return onCancelDeletePlan()
+  store.deleteTreatmentPlan(id)
   onCancelDeletePlan()
 }
 
-// Fix #11 — replace window.prompt() with proper v-dialog dialogs
+function onSharePlan() { mainStore?.setSnackbar?.({ title: 'Sharing coming soon.', type: 'info' }) }
+function onDownloadPlan() { mainStore?.setSnackbar?.({ title: 'PDF download coming soon.', type: 'info' }) }
+
+// Interval dialog
 const intervalDialog = ref(false)
 const intervalDraft = ref(7)
+function onSetInterval() { intervalDraft.value = store.appointments?.[1]?.intervalDays ?? 7; intervalDialog.value = true }
+function confirmInterval() { store.setIntervalDays(Number(intervalDraft.value || 0)); intervalDialog.value = false }
 
-function onSetInterval() {
-  intervalDraft.value = store.appointments?.[1]?.intervalDays ?? 7
-  intervalDialog.value = true
-}
-
-function confirmInterval() {
-  store.setIntervalDays(Number(intervalDraft.value || 0))
-  intervalDialog.value = false
-}
-
+// Link dialog
 const linkDialog = ref(false)
 const linkGroupId = ref(null)
 const linkDraft = ref('')
+function onLinkAppointment(gid) { linkGroupId.value = gid; linkDraft.value = store.appointmentLinks?.[gid] || ''; linkDialog.value = true }
+function confirmLink() { if (linkGroupId.value) store.setAppointmentLink(linkGroupId.value, linkDraft.value.trim()); linkDialog.value = false; linkGroupId.value = null }
 
-function onLinkAppointment(appointmentGroupId) {
-  linkGroupId.value = appointmentGroupId
-  linkDraft.value = store.appointmentLinks?.[appointmentGroupId] || ''
-  linkDialog.value = true
-}
-
-function confirmLink() {
-  if (linkGroupId.value) store.setAppointmentLink(linkGroupId.value, linkDraft.value.trim())
-  linkDialog.value = false
-  linkGroupId.value = null
-}
-
-// ── Booking dialog ──────────────────────────────────────────────────────────
+// Booking dialog
 const bookingDialog = ref(false)
 const bookingApptId = ref(null)
 const bookingLoading = ref(false)
 const conflictWarning = ref('')
 const deletePlanDialog = ref(false)
 const deletePlanId = ref(null)
-
-// Fix #1 — include dentistId in the booking form
 const bookingForm = reactive({ date: '', startTime: '09:00', endTime: '09:30', notes: '', dentistId: null })
-
-// Fix #1 — require a practitioner before the Book button enables
-const bookingDisabled = computed(() =>
-  !bookingForm.date || !bookingForm.startTime || !bookingForm.endTime ||
-  !bookingForm.dentistId || bookingLoading.value
-)
+const bookingDisabled = computed(() => !bookingForm.date || !bookingForm.startTime || !bookingForm.endTime || !bookingForm.dentistId || bookingLoading.value)
 
 async function onBookAppointment(appointmentId) {
   bookingApptId.value = appointmentId
-  // Pre-fill practitioner + notes from the first plan item in this appointment
-  const apptItems = store.treatmentItems.filter((i) => (i.appointmentGroupId || 'appt-1') === appointmentId)
-  const firstItem = apptItems[0]
-  bookingForm.dentistId = firstItem?.practitionerId ? Number(firstItem.practitionerId) : null
-  bookingForm.notes = firstItem?.notes || ''
+  const first = store.treatmentItems.filter(i => (i.appointmentGroupId || 'appt-1') === appointmentId)[0]
+  bookingForm.dentistId = first?.practitionerId ? Number(first.practitionerId) : null
+  bookingForm.notes = first?.notes || ''
   if (!bookingForm.date) {
     const now = new Date()
     bookingForm.date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -490,27 +461,17 @@ async function onBookAppointment(appointmentId) {
   conflictWarning.value = ''
 }
 
-function getAppointmentItems(appointmentId) {
-  return store.treatmentItems.filter((i) => (i.appointmentGroupId || 'appt-1') === appointmentId)
-}
-
-function parseDateTime(date, time) {
-  if (!date || !time) return null
-  const t = time.length === 5 ? `${time}:00` : time
-  const dt = new Date(`${date}T${t}`)
-  return isNaN(dt) ? null : dt
-}
-
 function validateBooking() {
   if (!bookingApptId.value) return 'No appointment selected.'
   if (!bookingForm.dentistId) return 'Please select a practitioner.'
-  if (!getAppointmentItems(bookingApptId.value).length) return 'Add at least one treatment item before booking.'
+  if (!store.treatmentItems.filter(i => (i.appointmentGroupId || 'appt-1') === bookingApptId.value).length) return 'Add at least one treatment item before booking.'
   if (!bookingForm.date || !bookingForm.startTime || !bookingForm.endTime) return 'Please provide date, start, and end time.'
-  const start = parseDateTime(bookingForm.date, bookingForm.startTime)
-  const end = parseDateTime(bookingForm.date, bookingForm.endTime)
-  if (!start || !end) return 'Invalid date or time format.'
+  const toDate = (d, t) => { const dt = new Date(`${d}T${t.length === 5 ? t + ':00' : t}`); return isNaN(dt) ? null : dt }
+  const start = toDate(bookingForm.date, bookingForm.startTime)
+  const end = toDate(bookingForm.date, bookingForm.endTime)
+  if (!start || !end) return 'Invalid date or time.'
   if (end <= start) return 'End time must be after start time.'
-  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const today = new Date(); today.setHours(0,0,0,0)
   if (start < today) return 'Appointment date cannot be in the past.'
   return ''
 }
@@ -518,19 +479,9 @@ function validateBooking() {
 async function confirmBooking() {
   bookingLoading.value = true
   conflictWarning.value = ''
-  const validationError = validateBooking()
-  if (validationError) {
-    conflictWarning.value = validationError
-    bookingLoading.value = false
-    return
-  }
-  // Fix #1 — pass dentistId to conflict check so it's practitioner-specific
-  const check = await store.checkAppointmentConflict({
-    date: bookingForm.date,
-    startTime: bookingForm.startTime,
-    endTime: bookingForm.endTime,
-    dentistId: bookingForm.dentistId,
-  })
+  const err = validateBooking()
+  if (err) { conflictWarning.value = err; bookingLoading.value = false; return }
+  const check = await store.checkAppointmentConflict({ date: bookingForm.date, startTime: bookingForm.startTime, endTime: bookingForm.endTime, dentistId: bookingForm.dentistId })
   if (check?.hasConflict) {
     conflictWarning.value = `Conflict: overlaps with ${check.conflicts?.[0]?.patientName || 'another appointment'} at ${check.conflicts?.[0]?.startTime || bookingForm.startTime}`
     bookingLoading.value = false
@@ -538,14 +489,11 @@ async function confirmBooking() {
   }
   const res = await store.bookInDiary({ appointmentId: bookingApptId.value, ...bookingForm })
   bookingLoading.value = false
-  if (res?.code === 0) {
-    bookingDialog.value = false
-    // Fix #2 & #12 — show success snackbar; diary will load fresh appointments when navigated to
-    mainStore?.setSnackbar?.({ title: 'Appointment booked. Open the Diary to view it.', type: 'success' })
-  } else {
-    conflictWarning.value = res?.message || 'Unable to book appointment.'
-  }
+  if (res?.code === 0) { bookingDialog.value = false; mainStore?.setSnackbar?.({ title: 'Appointment booked.', type: 'success' }) }
+  else conflictWarning.value = res?.message || 'Unable to book appointment.'
 }
+
+function advanceStep() { currentStep.value = Math.min(currentStep.value + 1, STEPS.length) }
 </script>
 
 <style scoped>
@@ -556,7 +504,7 @@ async function confirmBooking() {
   padding: 16px 0;
 }
 
-/* ── Loading ────────────────────────────────────────────────────── */
+/* ── Loading ─────────────────────────────────────────────────────── */
 .charting-loading {
   display: flex;
   flex-direction: column;
@@ -565,21 +513,71 @@ async function confirmBooking() {
   min-height: 300px;
 }
 
-/* ── Body row ───────────────────────────────────────────────────── */
+/* ── Stepper ─────────────────────────────────────────────────────── */
+.cw-stepper {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 5px 8px;
+  height: 52px;
+  gap: 0;
+}
+
+.cw-step {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 42px;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.18s;
+}
+
+.cw-step--active {
+  background: #BD6ED7;
+}
+
+.cw-step--completed {
+  background: transparent;
+}
+
+.cw-step--future {
+  background: transparent;
+}
+
+.cw-step__label {
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.cw-step--active    .cw-step__label { color: #fff; font-weight: 600; }
+.cw-step--completed .cw-step__label { color: #555; }
+.cw-step--future    .cw-step__label { color: #999; }
+
+.cw-chevron {
+  color: #ccc;
+  flex-shrink: 0;
+}
+
+/* ── Body row ────────────────────────────────────────────────────── */
 .charting-body {
   display: flex;
   gap: 12px;
   align-items: flex-start;
 }
 
-/* ── Chart card ─────────────────────────────────────────────────── */
+/* ── Chart card ──────────────────────────────────────────────────── */
 .chart-card {
   flex: 1;
   min-width: 0;
   background: #fff;
   border: 1px solid #e8e8e8;
   border-radius: 12px;
-  overflow: visible;
 }
 
 .chart-card__toolbar {
@@ -622,18 +620,16 @@ async function confirmBooking() {
   min-height: 320px;
 }
 
-/* ── Codes side panel ───────────────────────────────────────────── */
+/* ── Codes side ──────────────────────────────────────────────────── */
 .codes-side {
   width: 260px;
   flex-shrink: 0;
 }
 
-/* ── Treatment plan ─────────────────────────────────────────────── */
-.treatment-plan-wrap {
-  width: 100%;
-}
+/* ── Treatment plan ──────────────────────────────────────────────── */
+.treatment-plan-wrap { width: 100%; }
 
-/* ── Conflict warning ───────────────────────────────────────────── */
+/* ── Conflict warning ────────────────────────────────────────────── */
 .conflict-warning {
   background: #fff5f5;
   border: 1px solid #fca5a5;
@@ -643,14 +639,5 @@ async function confirmBooking() {
   color: #b91c1c;
   display: flex;
   align-items: center;
-}
-
-.surface-hint {
-  border: 1px solid #f0e3bb;
-  background: #fff8e6;
-  color: #8a6d1d;
-  border-radius: 8px;
-  font-size: 12px;
-  padding: 8px 12px;
 }
 </style>

@@ -124,6 +124,18 @@ export function applyBaseToothStatus(tooth, status) {
   }
 }
 
+export function makeTPName(existingPlans = []) {
+  const usedNumbers = new Set(
+    (existingPlans || [])
+      .map(p => /^TP-(\d+)$/i.exec(String(p.name || '').trim()))
+      .filter(Boolean)
+      .map(m => Number(m[1]))
+  )
+  let n = 1
+  while (usedNumbers.has(n)) n++
+  return `TP-${String(n).padStart(2, '0')}`
+}
+
 export function getDiagnosisAbbr(value) {
   return DIAGNOSIS_ABBREVIATIONS[value] || ''
 }

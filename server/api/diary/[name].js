@@ -1,4 +1,4 @@
-import { listTreatments, listPatients, createPatient, updatePatient, listAppointments, createAppointment, updateAppointment, listDentistsForDate, getStats, getPatient, listNotes, createNote, deleteNote, getPatientComfort, savePatientComfort, updatePatientComfort, getPatientSurvey, savePatientSurvey, uploadSurveyPhotos, downloadPatientSurvey, printPatientSurvey, sharePatientSurvey, getSurveyStructure, listPatientForms, getPatientForm, savePatientForm, updatePatientForm, deletePatientForm, listPatientsPaged, getPatientStats, getPatientChart, savePatientChart, savePatientChartTooth, getPatientChartMeta, savePatientChartMeta, listTreatmentPlans, createTreatmentPlan, updateTreatmentPlan, deleteTreatmentPlan, listTreatmentPlanItems, createTreatmentPlanItem, updateTreatmentPlanItem, deleteTreatmentPlanItem, reorderTreatmentPlanItems, appointmentConflictCheck, bookFromTreatmentPlan } from '~/server/controllers/diary'
+import { listTreatments, listPatients, createPatient, updatePatient, listAppointments, createAppointment, updateAppointment, listDentistsForDate, getStats, getPatient, listNotes, createNote, deleteNote, getPatientComfort, savePatientComfort, updatePatientComfort, getPatientSurvey, savePatientSurvey, uploadSurveyPhotos, downloadPatientSurvey, printPatientSurvey, sharePatientSurvey, getSurveyStructure, listPatientForms, getPatientForm, savePatientForm, updatePatientForm, deletePatientForm, listPatientsPaged, getPatientStats, getPatientChart, savePatientChart, savePatientChartTooth, getPatientChartMeta, savePatientChartMeta, listTreatmentPlans, createTreatmentPlan, updateTreatmentPlan, deleteTreatmentPlan, listTreatmentPlanItems, createTreatmentPlanItem, updateTreatmentPlanItem, deleteTreatmentPlanItem, reorderTreatmentPlanItems, appointmentConflictCheck, bookFromTreatmentPlan, uploadChartImage } from '~/server/controllers/diary'
 import { success } from '~/server/utils/response'
 
 export default defineEventHandler(async (event) => {
@@ -96,6 +96,8 @@ export default defineEventHandler(async (event) => {
       return await appointmentConflictCheck(event)
     case 'bookFromTreatmentPlan':
       return await bookFromTreatmentPlan(event)
+    case 'chartImageUpload':
+      return await uploadChartImage(event)
     default:
       return { code: 1, message: 'Not found' }
   }

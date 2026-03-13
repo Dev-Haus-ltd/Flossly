@@ -1,4 +1,4 @@
-import { Post, Get } from './apiWrapper'
+import { Post, Get, PostFormData } from './apiWrapper'
 
 // Fix #16 — removed redundant new Promise(resolve/reject) wrappers; Get/Post already return Promises
 export default {
@@ -68,5 +68,9 @@ export default {
 
   bookAppointmentInDiary(payload) {
     return Post('/diary/bookFromTreatmentPlan', payload)
+  },
+
+  uploadChartImage(formData) {
+    return PostFormData('/diary/chartImageUpload', formData)
   },
 }

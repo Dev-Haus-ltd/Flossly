@@ -10,7 +10,10 @@
         <div class="tooth-hover-tip__title">{{ hoverTooltip.label }}</div>
         <div v-for="(line, i) in hoverTooltip.lines" :key="i" class="tooth-hover-tip__line">
           <span class="tooth-hover-tip__dot" :style="{ background: line.color }" />
-          <span>{{ line.text }}</span>
+          <div>
+            <div>{{ line.text }}</div>
+            <div v-if="line.sub" class="tooth-hover-tip__sub">{{ line.sub }}</div>
+          </div>
         </div>
       </div>
     </Teleport>
@@ -318,10 +321,17 @@ function onToothMouseEnter(fdi, event) {
   hoverTooltip.fdi = fdi
   hoverTooltip.label = TEETH_BY_FDI[fdi]?.palmer || String(fdi)
   hoverTooltip.lines = items.map((i) => {
+    const toothLabel = TEETH_BY_FDI[fdi]?.palmer || String(fdi)
+    const surf = i.surface ? ` - ${i.surface.charAt(0).toUpperCase()}` : ''
     const label = i.treatmentName || i.conditionLabel || i.condition || 'Treatment'
-    const surf = i.surface ? ` · ${i.surface.charAt(0).toUpperCase()}` : ''
-    const scope = i.status === 'existing' ? 'Base' : (i.planName || 'Plan')
-    return { text: `${label}${surf} — ${scope}`, color: CONDITION_COLORS[i.status] || '#0061FB' }
+    const text = `${toothLabel}${surf} - ${label}`
+    const dateStr = i.createdAt
+      ? new Date(i.createdAt).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: '2-digit' })
+      : ''
+    const practitioner = i.practitionerName || i.clinicianName || ''
+    const scope = i.status === 'existing' ? 'Base chart' : (i.planName || 'Treatment plan')
+    const parts = [dateStr, practitioner, scope].filter(Boolean)
+    return { text, sub: parts.join(' - '), color: CONDITION_COLORS[i.status] || '#0061FB' }
   })
   hoverTooltip.x = rect.right + window.scrollX + 6
   hoverTooltip.y = rect.top + window.scrollY - 4
@@ -591,6 +601,13 @@ onUnmounted(() => {
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.tooth-hover-tip__sub {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 1px;
 }
 
 .status-popup {

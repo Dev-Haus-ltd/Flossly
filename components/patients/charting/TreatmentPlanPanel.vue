@@ -96,14 +96,14 @@
             <label class="tp-field">
               <span>Duration (min)</span>
               <select v-model.number="draft.duration">
-                  <option :value="15">15 min</option>
-                  <option :value="30">30 min</option>
-                  <option :value="45">45 min</option>
-                  <option :value="60">60 min</option>
-                </select>
+                <option :value="15">15 min</option>
+                <option :value="30">30 min</option>
+                <option :value="45">45 min</option>
+                <option :value="60">60 min</option>
+              </select>
             </label>
             <label class="tp-field">
-              <span>Price</span>
+              <span>Price (£)</span>
               <input v-model.number="draft.cost" type="number" min="0" step="0.01" />
             </label>
             <label class="tp-field">
@@ -113,8 +113,52 @@
                 <option value="completed">Completed</option>
               </select>
             </label>
+            <label class="tp-field">
+              <span>Completed on</span>
+              <input v-model="draft.completedOn" type="date" />
+            </label>
+            <label class="tp-field">
+              <span>Payment plan</span>
+              <select v-model="draft.paymentPlan">
+                <option value="private">Private</option>
+                <option value="nhs1">NHS Band 1</option>
+                <option value="nhs2">NHS Band 2</option>
+                <option value="nhs3">NHS Band 3</option>
+              </select>
+            </label>
+            <label class="tp-field">
+              <span>Referrer</span>
+              <select v-model.number="draft.referrerId">
+                <option :value="null">No referrer</option>
+                <option v-for="p in practitioners" :key="p.id" :value="Number(p.id)">{{ p.name }}</option>
+              </select>
+            </label>
+            <label class="tp-field">
+              <span>Invoice desc.</span>
+              <input v-model="draft.invoiceDesc" type="text" placeholder="Invoice description..." />
+            </label>
           </div>
-          <textarea v-model="draft.notes" class="tp-notes-input" placeholder="Notes..." />
+          <div class="tp-notes-wrap">
+            <div class="tp-notes-toolbar">
+              <button class="tp-notes-fmt-btn" title="Bold" @click.prevent="execNoteCmd('bold')"><b>B</b></button>
+              <button class="tp-notes-fmt-btn" title="Italic" @click.prevent="execNoteCmd('italic')"><i>I</i></button>
+              <button class="tp-notes-fmt-btn" title="Bullet list" @click.prevent="execNoteCmd('insertUnorderedList')">• List</button>
+              <label class="tp-expand-check ml-auto">
+                <input v-model="draft.showOnInvoice" type="checkbox" />
+                <span>Show on invoice</span>
+              </label>
+              <button class="tp-ai-note-btn" :class="{ 'tp-ai-note-btn--active': voiceActive }" title="Voice dictation" @click.prevent="toggleVoice">
+                <v-icon size="13">mdi-microphone</v-icon>
+                AI Note
+              </button>
+            </div>
+            <div
+              ref="notesEditorEl"
+              contenteditable="true"
+              class="tp-notes-editor"
+              @input="draft.notes = $event.target.innerHTML"
+            />
+          </div>
           <div class="tp-expand-actions">
             <v-btn variant="text" @click="cancelExpanded">Cancel</v-btn>
             <v-btn color="primary" variant="flat" @click="saveExpanded">Save</v-btn>
@@ -190,14 +234,14 @@
                 <label class="tp-field">
                   <span>Duration (min)</span>
                   <select v-model.number="draft.duration">
-                  <option :value="15">15 min</option>
-                  <option :value="30">30 min</option>
-                  <option :value="45">45 min</option>
-                  <option :value="60">60 min</option>
-                </select>
+                    <option :value="15">15 min</option>
+                    <option :value="30">30 min</option>
+                    <option :value="45">45 min</option>
+                    <option :value="60">60 min</option>
+                  </select>
                 </label>
                 <label class="tp-field">
-                  <span>Price</span>
+                  <span>Price (£)</span>
                   <input v-model.number="draft.cost" type="number" min="0" step="0.01" />
                 </label>
                 <label class="tp-field">
@@ -208,8 +252,52 @@
                     <option value="completed">Completed</option>
                   </select>
                 </label>
+                <label class="tp-field">
+                  <span>Completed on</span>
+                  <input v-model="draft.completedOn" type="date" />
+                </label>
+                <label class="tp-field">
+                  <span>Payment plan</span>
+                  <select v-model="draft.paymentPlan">
+                    <option value="private">Private</option>
+                    <option value="nhs1">NHS Band 1</option>
+                    <option value="nhs2">NHS Band 2</option>
+                    <option value="nhs3">NHS Band 3</option>
+                  </select>
+                </label>
+                <label class="tp-field">
+                  <span>Referrer</span>
+                  <select v-model.number="draft.referrerId">
+                    <option :value="null">No referrer</option>
+                    <option v-for="p in practitioners" :key="p.id" :value="Number(p.id)">{{ p.name }}</option>
+                  </select>
+                </label>
+                <label class="tp-field">
+                  <span>Invoice desc.</span>
+                  <input v-model="draft.invoiceDesc" type="text" placeholder="Invoice description..." />
+                </label>
               </div>
-              <textarea v-model="draft.notes" class="tp-notes-input" placeholder="Notes..." />
+              <div class="tp-notes-wrap">
+                <div class="tp-notes-toolbar">
+                  <button class="tp-notes-fmt-btn" title="Bold" @click.prevent="execNoteCmd('bold')"><b>B</b></button>
+                  <button class="tp-notes-fmt-btn" title="Italic" @click.prevent="execNoteCmd('italic')"><i>I</i></button>
+                  <button class="tp-notes-fmt-btn" title="Bullet list" @click.prevent="execNoteCmd('insertUnorderedList')">• List</button>
+                  <label class="tp-expand-check ml-auto">
+                    <input v-model="draft.showOnInvoice" type="checkbox" />
+                    <span>Show on invoice</span>
+                  </label>
+                  <button class="tp-ai-note-btn" :class="{ 'tp-ai-note-btn--active': voiceActive }" title="Voice dictation" @click.prevent="toggleVoice">
+                    <v-icon size="13">mdi-microphone</v-icon>
+                    AI Note
+                  </button>
+                </div>
+                <div
+                  ref="notesEditorEl"
+                  contenteditable="true"
+                  class="tp-notes-editor"
+                  @input="draft.notes = $event.target.innerHTML"
+                />
+              </div>
               <div class="tp-expand-actions">
                 <v-btn variant="text" @click="cancelExpanded">Cancel</v-btn>
                 <v-btn
@@ -233,27 +321,81 @@
       </div>
     </div>
 
-    <div v-else-if="activeView === 'images'" class="tp-body">
-      <div class="tp-images-toolbar">
-        <v-file-input
-          accept="image/*"
-          density="compact"
-          variant="outlined"
-          hide-details
-          prepend-icon="mdi-image-plus"
-          label="Add image"
-          @update:model-value="onImagePicked"
-        />
+    <div v-else-if="activeView === 'images'" class="tp-body tp-body--images">
+      <!-- Upload form -->
+      <div class="tp-img-upload-card">
+        <div class="tp-img-upload-form">
+          <label class="tp-field">
+            <span>Type</span>
+            <select v-model="imgForm.type">
+              <option v-for="t in IMAGE_TYPES" :key="t" :value="t">{{ t }}</option>
+            </select>
+          </label>
+          <label class="tp-field">
+            <span>Grade</span>
+            <select v-model="imgForm.grade">
+              <option v-for="g in IMAGE_GRADES" :key="g.value" :value="g.value">{{ g.label }}</option>
+            </select>
+          </label>
+          <label class="tp-field">
+            <span>Developed by</span>
+            <select v-model.number="imgForm.developedBy">
+              <option :value="null">—</option>
+              <option v-for="p in practitioners" :key="p.id" :value="Number(p.id)">{{ p.name }}</option>
+            </select>
+          </label>
+          <label class="tp-field">
+            <span>Justification</span>
+            <select v-model="imgForm.justification">
+              <option v-for="j in IMAGE_JUSTIFICATIONS" :key="j" :value="j === '—' ? '' : j">{{ j }}</option>
+            </select>
+          </label>
+          <label class="tp-field">
+            <span>Taken by</span>
+            <select v-model.number="imgForm.takenBy">
+              <option :value="null">—</option>
+              <option v-for="p in practitioners" :key="p.id" :value="Number(p.id)">{{ p.name }}</option>
+            </select>
+          </label>
+          <label class="tp-field">
+            <span>Date taken</span>
+            <input v-model="imgForm.dateTaken" type="date" />
+          </label>
+          <label class="tp-field tp-field--full">
+            <span>Description</span>
+            <textarea v-model="imgForm.description" rows="2" class="tp-notes-input tp-notes-input--sm" placeholder="Optional description..." />
+          </label>
+        </div>
+        <div class="tp-img-upload-drop">
+          <DirectFileUpload :disabled="imgUploading" @upload="onImagesSelected" />
+          <p v-if="imgUploading" class="tp-img-uploading">Uploading...</p>
+        </div>
       </div>
-      <div v-if="!images.length" class="tp-appt-empty">No images uploaded</div>
-      <div class="tp-images-grid">
+
+      <!-- Image grid -->
+      <div v-if="!images.length" class="tp-appt-empty">No images uploaded yet</div>
+      <div v-else class="tp-images-grid">
         <div v-for="img in images" :key="img.id" class="tp-image-card">
-          <img :src="img.url" :alt="img.name" class="tp-image" />
+          <a :href="img.url" target="_blank" rel="noopener">
+            <img :src="img.url" :alt="img.name" class="tp-image" />
+          </a>
           <div class="tp-image-meta">
-            <span class="tp-image-name">{{ img.name }}</span>
-            <button class="tp-icon-btn tp-icon-btn--danger" @click="$emit('remove-image', img.id)">
-              <v-icon size="14">mdi-trash-can-outline</v-icon>
-            </button>
+            <div class="tp-image-badges">
+              <span v-if="img.type" class="tp-img-badge">{{ img.type }}</span>
+              <span v-if="img.grade" class="tp-img-badge tp-img-badge--grade">Grade {{ img.grade }}</span>
+            </div>
+            <div class="tp-image-info">
+              <span v-if="img.dateTaken" class="tp-image-sub">{{ img.dateTaken }}</span>
+              <span v-if="img.takenByName || img.developedByName" class="tp-image-sub">{{ img.takenByName || img.developedByName }}</span>
+              <span v-if="img.justification" class="tp-image-sub">{{ img.justification }}</span>
+              <span v-if="img.description" class="tp-image-desc">{{ img.description }}</span>
+            </div>
+            <div class="tp-image-actions">
+              <span class="tp-image-name">{{ img.name }}</span>
+              <button class="tp-icon-btn tp-icon-btn--danger" @click="$emit('remove-image', img.id)">
+                <v-icon size="14">mdi-trash-can-outline</v-icon>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -316,6 +458,8 @@
 
 <script setup>
 import { getToothLabel } from './toothData.js'
+import DirectFileUpload from '@/components/Common/directFileUpload.vue'
+import { makeTPName } from '~/shared/defaults/charting/chartingDefaults.js'
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
@@ -443,6 +587,11 @@ const draft = reactive({
   cost: 0,
   status: 'planned',
   notes: '',
+  completedOn: '',
+  paymentPlan: 'private',
+  referrerId: null,
+  invoiceDesc: '',
+  showOnInvoice: true,
 })
 
 function isExpanded(item) {
@@ -457,6 +606,11 @@ function resetDraft() {
   draft.cost = 0
   draft.status = 'planned'
   draft.notes = ''
+  draft.completedOn = ''
+  draft.paymentPlan = 'private'
+  draft.referrerId = null
+  draft.invoiceDesc = ''
+  draft.showOnInvoice = true
 }
 
 function resolvePractitionerName(id) {
@@ -472,7 +626,14 @@ async function openExpanded(item) {
   draft.cost = Number(item.cost || 0)
   draft.status = item.status || (isBaseEntry(item) ? 'existing' : 'planned')
   draft.notes = item.notes || ''
+  draft.completedOn = item.completedAt ? new Date(item.completedAt).toISOString().slice(0, 10) : ''
+  draft.paymentPlan = item.paymentPlan || 'private'
+  draft.referrerId = item.referrerId ? Number(item.referrerId) : null
+  draft.invoiceDesc = item.invoiceDesc || item.treatmentName || item.conditionLabel || ''
+  draft.showOnInvoice = item.showOnInvoice !== false
   expandedRowId.value = rowKey(item)
+  await nextTick()
+  if (notesEditorEl.value) notesEditorEl.value.innerHTML = draft.notes || ''
 }
 
 async function closeExpanded() {
@@ -499,6 +660,7 @@ async function toggleExpand(item) {
 async function saveExpanded() {
   if (!draft.id) return
   const practitionerName = resolvePractitionerName(draft.practitionerId) || draft.practitionerName || ''
+  const referrerName = resolvePractitionerName(draft.referrerId) || ''
   emit('update', {
     id: draft.id,
     practitionerId: draft.practitionerId || null,
@@ -507,7 +669,13 @@ async function saveExpanded() {
     duration: Number(draft.duration || 0),
     cost: Number(draft.cost || 0),
     status: draft.status,
-    notes: draft.notes || '',
+    notes: notesEditorEl.value ? notesEditorEl.value.innerHTML : (draft.notes || ''),
+    completedAt: draft.completedOn ? new Date(draft.completedOn).toISOString() : null,
+    paymentPlan: draft.paymentPlan || 'private',
+    referrerId: draft.referrerId || null,
+    referrerName,
+    invoiceDesc: draft.invoiceDesc || '',
+    showOnInvoice: draft.showOnInvoice,
   })
   await closeExpanded()
 }
@@ -517,6 +685,96 @@ async function cancelExpanded() {
 }
 
 const planDrawerOpen = ref(false)
+
+// Rich text notes editor
+const notesEditorEl = ref(null)
+function execNoteCmd(cmd) {
+  notesEditorEl.value?.focus()
+  document.execCommand(cmd, false, null)
+}
+
+// AI Note — voice dictation via Web Speech API
+const voiceActive = ref(false)
+let _recognition = null
+function toggleVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+  if (!SR) { alert('Speech recognition is not supported in this browser.'); return }
+  if (voiceActive.value) {
+    _recognition?.stop()
+    voiceActive.value = false
+    return
+  }
+  _recognition = new SR()
+  _recognition.continuous = true
+  _recognition.interimResults = false
+  _recognition.lang = 'en-GB'
+  _recognition.onresult = (e) => {
+    const text = Array.from(e.results).map(r => r[0].transcript).join(' ')
+    if (notesEditorEl.value) {
+      notesEditorEl.value.focus()
+      document.execCommand('insertText', false, (notesEditorEl.value.innerHTML ? ' ' : '') + text)
+    }
+  }
+  _recognition.onerror = () => { voiceActive.value = false }
+  _recognition.onend = () => { voiceActive.value = false }
+  _recognition.start()
+  voiceActive.value = true
+}
+
+// Image upload form
+const imgForm = reactive({
+  type: 'Radiograph',
+  grade: '',
+  developedBy: null,
+  justification: '',
+  takenBy: null,
+  dateTaken: new Date().toISOString().slice(0, 10),
+  description: '',
+})
+const imgUploading = ref(false)
+
+const IMAGE_TYPES = ['Radiograph', 'Photograph', 'Study model', 'Other']
+const IMAGE_GRADES = [
+  { label: '—', value: '' },
+  { label: 'Acceptable (A)', value: 'A' },
+  { label: 'Not acceptable (N)', value: 'N' },
+]
+const IMAGE_JUSTIFICATIONS = [
+  '—',
+  'Caries diagnosis',
+  'Investigation',
+  'Periodontal',
+  'Endodontic',
+  'Periapical Status',
+  'Surgical/Implant',
+  'Extraction',
+  'Orthodontics',
+]
+
+async function onImagesSelected(files) {
+  const file = Array.isArray(files) ? files[0] : files
+  if (!file) return
+  imgUploading.value = true
+  const practitionerList = props.practitioners || []
+  const devPrac = practitionerList.find(p => Number(p.id) === Number(imgForm.developedBy))
+  const takenPrac = practitionerList.find(p => Number(p.id) === Number(imgForm.takenBy))
+  emit('add-image', {
+    file,
+    meta: {
+      type: imgForm.type,
+      grade: imgForm.grade,
+      developedBy: imgForm.developedBy,
+      developedByName: devPrac?.name || '',
+      justification: imgForm.justification,
+      takenBy: imgForm.takenBy,
+      takenByName: takenPrac?.name || '',
+      dateTaken: imgForm.dateTaken,
+      description: imgForm.description,
+    },
+  })
+  imgUploading.value = false
+}
+
 const planDrawerMode = ref('add')
 const planDraft = reactive({ id: null, name: '', color: planColors[0] })
 
@@ -550,17 +808,9 @@ function onUpdatePlanColor(planId, color) {
 }
 
 function openCreatePlanDrawer() {
-  const usedNumbers = new Set(
-    props.plans
-      .map((p) => /^Treatment Plan\s+(\d+)$/i.exec(String(p.name || '').trim()))
-      .filter(Boolean)
-      .map((m) => Number(m[1]))
-  )
-  let nextNumber = 1
-  while (usedNumbers.has(nextNumber)) nextNumber += 1
   planDrawerMode.value = 'add'
   planDraft.id = null
-  planDraft.name = `Treatment Plan ${nextNumber}`
+  planDraft.name = makeTPName(props.plans)
   planDraft.color = planColors[props.plans.length % planColors.length]
   planDrawerOpen.value = true
 }
@@ -651,11 +901,6 @@ watch(activeView, async () => {
   await closeExpanded()
 })
 
-function onImagePicked(value) {
-  const file = Array.isArray(value) ? value[0] : value
-  if (!file) return
-  emit('add-image', file)
-}
 </script>
 
 <style scoped>
@@ -1257,5 +1502,233 @@ function onImagePicked(value) {
   .tp-item-row {
     grid-template-columns: 28px 120px 70px minmax(140px, 1fr) 100px 70px 90px 34px;
   }
+}
+
+/* ── Rich text notes ────────────────────────────────────────── */
+.tp-notes-wrap {
+  margin-bottom: 12px;
+}
+
+.tp-notes-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: #f1f5f9;
+  border: 1px solid #d1d5db;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  flex-wrap: wrap;
+}
+
+.tp-notes-fmt-btn {
+  padding: 2px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  color: #374151;
+}
+
+.tp-notes-fmt-btn:hover {
+  background: #e5e7eb;
+}
+
+.tp-notes-editor {
+  min-height: 120px;
+  border: 1px solid #d1d5db;
+  border-radius: 0 0 8px 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #334155;
+  background: #fff;
+  outline: none;
+  line-height: 1.6;
+}
+
+.tp-notes-editor:focus {
+  border-color: #0061FB;
+}
+
+.tp-ai-note-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border: 1px solid #0061FB;
+  border-radius: 20px;
+  background: #fff;
+  color: #0061FB;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tp-ai-note-btn:hover {
+  background: #eff6ff;
+}
+
+.tp-ai-note-btn--active {
+  background: #0061FB;
+  color: #fff;
+}
+
+.tp-expand-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #374151;
+  cursor: pointer;
+}
+
+.tp-expand-check input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: #0061FB;
+  cursor: pointer;
+}
+
+/* ── Images upload section ──────────────────────────────────── */
+.tp-body--images {
+  max-height: none;
+  overflow: visible;
+}
+
+.tp-img-upload-card {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  background: #f8fbff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 900px) {
+  .tp-img-upload-card {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tp-img-upload-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-content: start;
+}
+
+.tp-field--full {
+  grid-column: 1 / -1;
+}
+
+.tp-img-upload-drop {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tp-img-uploading {
+  font-size: 12px;
+  color: #0061FB;
+  text-align: center;
+}
+
+.tp-notes-input--sm {
+  min-height: 60px;
+  resize: none;
+}
+
+/* ── Image grid improvements ────────────────────────────────── */
+.tp-images-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.tp-image-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
+.tp-image {
+  width: 100%;
+  height: 130px;
+  object-fit: cover;
+  display: block;
+  transition: opacity 0.15s;
+}
+
+.tp-image:hover {
+  opacity: 0.9;
+}
+
+.tp-image-meta {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.tp-image-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tp-img-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.tp-img-badge--grade {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.tp-image-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.tp-image-sub {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.tp-image-desc {
+  font-size: 11px;
+  color: #374151;
+  font-style: italic;
+}
+
+.tp-image-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  gap: 6px;
+}
+
+.tp-image-name {
+  font-size: 11px;
+  color: #374151;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  flex: 1;
 }
 </style>

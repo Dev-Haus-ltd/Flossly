@@ -119,6 +119,11 @@ const normalizeTreatmentPlanItem = (row) => ({
   practitionerName: row.practitionerName || row.clinicianName || '',
   completedAt: row.completedAt || null,
   completedByPractitionerId: row.completedByPractitionerId || null,
+  paymentPlan: row.paymentPlan || 'private',
+  referrerId: row.referrerId || null,
+  referrerName: row.referrerName || '',
+  invoiceDesc: row.invoiceDesc || '',
+  showOnInvoice: row.showOnInvoice !== false,
   completedByPractitionerName: row.completedByPractitionerName || null,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
@@ -909,6 +914,11 @@ export const updateTreatmentPlanItem = async (event) => {
     if (payload.appointmentId !== undefined) {
       row.appointmentId = parsePositiveIntOrNull(payload.appointmentId)
     }
+    if (payload.paymentPlan !== undefined) row.paymentPlan = payload.paymentPlan || 'private'
+    if (payload.referrerId !== undefined) row.referrerId = parsePositiveIntOrNull(payload.referrerId)
+    if (payload.referrerName !== undefined) row.referrerName = payload.referrerName || null
+    if (payload.invoiceDesc !== undefined) row.invoiceDesc = payload.invoiceDesc || null
+    if (payload.showOnInvoice !== undefined) row.showOnInvoice = payload.showOnInvoice !== false
     const normalizedStatus = String(row.status || '').toLowerCase()
     if (normalizedStatus === 'completed') {
       if (!row.completedAt) row.completedAt = new Date()
@@ -2455,4 +2465,40 @@ export const deletePatientForm = async (event) => {
   }
 }
 
+export const uploadChartImage = async (event) => {
+  try {
+    const { orgId } = event.context.user
 
+    const form = formidable({
+      multiples: false,
+      uploadDir: os.tmpdir(),
+      keepExtensions: true,
+    })
+
+    const { files, fields } = await new Promise((resolve, reject) => {
+      form.parse(event.node.req, (err, fields, files) => {
+        if (err) reject(err)
+        resolve({ files, fields })
+      })
+    })
+
+    const patientId = Number(fields.patientId?.[0] || 0)
+    if (!patientId) return error(400, 'patientId is required')
+
+    const file = Array.isArray(files.file) ? files.file[0] : files.file
+    if (!file) return error(400, 'file is required')
+
+    const ext = path.extname(file.originalFilename || file.newFilename || '')
+    const baseName = `chart-${Date.now()}-${Math.random().toString(36).substring(7)}${ext}`
+    const link = await uploadTempFile({
+      filepath: file.filepath,
+      filename: baseName,
+      contentType: file.mimetype || file.type,
+      baseDir: 'chart-images',
+    })
+
+    return success({ url: link, name: file.originalFilename || baseName })
+  } catch (e) {
+    return error(500, (e && e.message) || 'Internal server error')
+  }
+}

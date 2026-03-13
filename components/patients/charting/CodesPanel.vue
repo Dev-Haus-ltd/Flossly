@@ -1,83 +1,125 @@
 <template>
   <div class="codes-panel">
 
-    <!-- Header row: filter dropdown -->
-    <div class="codes-panel__header">
-      <span class="codes-panel__title">Treatment Codes</span>
-      <v-select
-        v-model="selectedCategory"
-        :items="categoryOptions"
-        density="compact"
-        variant="outlined"
-        hide-details
-        style="max-width: 100px; min-width: 80px;"
-      />
-    </div>
-
-    <!-- Search -->
-    <div class="codes-panel__search">
-      <v-text-field
-        v-model="searchQuery"
-        placeholder="Search codes..."
-        density="compact"
-        variant="outlined"
-        hide-details
-        prepend-inner-icon="mdi-magnify"
-        clearable
-      />
-    </div>
-
-    <!-- Codes list -->
-    <div class="codes-panel__list">
-      <div
-        v-for="(code, idx) in filteredCodes"
-        :key="code.id"
-        class="code-item"
-        :class="{
-          'code-item--active': activeCodeId === code.id,
-          'code-item--first': idx === 0 && !searchQuery && selectedCategory === 'All',
-        }"
-        @click="onCodeClick(code)"
-      >
-        <v-icon
-          size="16"
-          class="code-item__star"
-          :class="{ 'code-item__star--favorite': favoriteCodeIds.includes(code.id) }"
-          :color="favoriteCodeIds.includes(code.id) ? 'amber-darken-2' : 'grey-lighten-1'"
-          @click.stop="toggleFavorite(code.id)"
-        >{{ favoriteCodeIds.includes(code.id) ? 'mdi-star' : 'mdi-star-outline' }}</v-icon>
-        <span
-          class="code-item__code"
-          :class="{
-            'code-item__code--active': activeCodeId === code.id,
-            'code-item__code--first': idx === 0 && !searchQuery && selectedCategory === 'All',
-          }"
-        >{{ code.code }}</span>
-        <span
-          class="code-item__name"
-          :class="{
-            'code-item__name--active': activeCodeId === code.id,
-            'code-item__name--first': idx === 0 && !searchQuery && selectedCategory === 'All',
-          }"
-        >{{ code.name }}</span>
+    <!-- ── Diagnosis mode ─────────────────────────────────────────── -->
+    <template v-if="mode === 'diagnosis'">
+      <div class="codes-panel__header">
+        <span class="codes-panel__title">Conditions</span>
+        <v-select
+          v-model="diagCategory"
+          :items="diagCategoryOptions"
+          density="compact"
+          variant="outlined"
+          hide-details
+          style="max-width: 110px; min-width: 80px;"
+        />
       </div>
-
-      <div v-if="filteredCodes.length === 0" class="codes-panel__empty">
-        No codes found
+      <div class="codes-panel__list">
+        <div
+          v-for="cond in filteredConditions"
+          :key="cond.key"
+          class="code-item"
+          :class="{ 'code-item--active': activeCondition === cond.key }"
+          @click="emit('condition-select', cond.key)"
+        >
+          <span class="cond-dot" :style="{ background: cond.color }" />
+          <span
+            class="code-item__name"
+            :class="{ 'code-item__name--active': activeCondition === cond.key }"
+          >{{ cond.label }}</span>
+        </div>
+        <div v-if="!filteredConditions.length" class="codes-panel__empty">No conditions</div>
       </div>
-    </div>
+    </template>
+
+    <!-- ── Treatment mode (default) ──────────────────────────────── -->
+    <template v-else>
+      <div class="codes-panel__header">
+        <span class="codes-panel__title">Treatment Codes</span>
+        <v-select
+          v-model="selectedCategory"
+          :items="categoryOptions"
+          density="compact"
+          variant="outlined"
+          hide-details
+          style="max-width: 100px; min-width: 80px;"
+        />
+      </div>
+      <div class="codes-panel__search">
+        <v-text-field
+          v-model="searchQuery"
+          placeholder="Search codes..."
+          density="compact"
+          variant="outlined"
+          hide-details
+          prepend-inner-icon="mdi-magnify"
+          clearable
+        />
+      </div>
+      <div class="codes-panel__list">
+        <div
+          v-for="(code, idx) in filteredCodes"
+          :key="code.id"
+          class="code-item"
+          :class="{
+            'code-item--active': activeCodeId === code.id,
+            'code-item--first': idx === 0 && !searchQuery && selectedCategory === 'All',
+          }"
+          @click="onCodeClick(code)"
+        >
+          <v-icon
+            size="16"
+            class="code-item__star"
+            :class="{ 'code-item__star--favorite': favoriteCodeIds.includes(code.id) }"
+            :color="favoriteCodeIds.includes(code.id) ? 'amber-darken-2' : 'grey-lighten-1'"
+            @click.stop="toggleFavorite(code.id)"
+          >{{ favoriteCodeIds.includes(code.id) ? 'mdi-star' : 'mdi-star-outline' }}</v-icon>
+          <span
+            class="code-item__code"
+            :class="{
+              'code-item__code--active': activeCodeId === code.id,
+              'code-item__code--first': idx === 0 && !searchQuery && selectedCategory === 'All',
+            }"
+          >{{ code.code }}</span>
+          <span
+            class="code-item__name"
+            :class="{
+              'code-item__name--active': activeCodeId === code.id,
+              'code-item__name--first': idx === 0 && !searchQuery && selectedCategory === 'All',
+            }"
+          >{{ code.name }}</span>
+        </div>
+        <div v-if="filteredCodes.length === 0" class="codes-panel__empty">
+          No codes found
+        </div>
+      </div>
+    </template>
 
   </div>
 </template>
 
 <script setup>
 const props = defineProps({
+  mode: { type: String, default: 'treatment' }, // 'treatment' | 'diagnosis'
   activeCodeId: { type: [Number, String], default: null },
+  activeCondition: { type: String, default: null },
   favoriteCodeIds: { type: Array, default: () => [] },
   codes: { type: Array, default: () => [] },
+  conditions: { type: Array, default: () => [] }, // [{ key, label, color, category }]
 })
 
-const emit = defineEmits(['code-select', 'toggle-favorite'])
+const emit = defineEmits(['code-select', 'toggle-favorite', 'condition-select'])
+
+// Diagnosis mode
+const diagCategory = ref('All')
+const diagCategoryOptions = computed(() => {
+  const cats = new Set((props.conditions || []).map(c => c.category).filter(Boolean))
+  return ['All', ...Array.from(cats)]
+})
+const filteredConditions = computed(() => {
+  if (diagCategory.value === 'All') return props.conditions || []
+  return (props.conditions || []).filter(c => c.category === diagCategory.value)
+})
 
 const searchQuery = ref('')
 const selectedCategory = ref('All')
@@ -234,5 +276,14 @@ function toggleFavorite(codeId) {
   text-align: center;
   font-size: 13px;
   color: #bbb;
+}
+
+/* ── Condition dot ──────────────────────────────────────────────── */
+.cond-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
 }
 </style>

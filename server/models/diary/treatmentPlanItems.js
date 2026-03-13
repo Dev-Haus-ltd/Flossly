@@ -30,6 +30,11 @@ export const DiaryTreatmentPlanItem = sequelize.define(
     completedAt: { type: DataTypes.DATE, allowNull: true },
     completedByPractitionerId: { type: DataTypes.INTEGER, allowNull: true },
     completedByPractitionerName: { type: DataTypes.STRING(120), allowNull: true },
+    paymentPlan: { type: DataTypes.STRING(30), allowNull: true, defaultValue: 'private' },
+    referrerId: { type: DataTypes.INTEGER, allowNull: true },
+    referrerName: { type: DataTypes.STRING(120), allowNull: true },
+    invoiceDesc: { type: DataTypes.STRING(300), allowNull: true },
+    showOnInvoice: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
   },
   {
     tableName: 'DiaryTreatmentPlanItems',

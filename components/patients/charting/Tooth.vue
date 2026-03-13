@@ -1,7 +1,5 @@
 <template>
   <div class="tooth-wrapper" :class="{ 'tooth--selected': isSelected, 'tooth--bridge-pending': isBridgePending }">
-    <!-- Tooth number label (above for upper arch, below for lower arch — rendered by ToothChart) -->
-
     <svg
       :width="SIZE"
       :height="SIZE"
@@ -10,155 +8,173 @@
       :class="{ 'tooth-svg--cursor': !!activeCondition }"
       @click.stop="onToothBodyClick"
     >
-      <!-- ── BACKGROUND ─────────────────────────────────────────── -->
-      <rect
-        x="0" y="0" :width="VB" :height="VB"
-        rx="2"
-        :fill="tooth.missing ? '#f3f4f6' : isSelected ? '#EEF4FF' : '#fff'"
-        :stroke="isSelected ? '#0061FB' : isBridgePending ? '#fb8c00' : '#bbb'"
-        :stroke-width="isSelected || isBridgePending ? 2 : 1"
-      />
-
-      <!-- ── MISSING TOOTH ──────────────────────────────────────── -->
+      <!-- ── MISSING TOOTH ───────────────────────────────────────── -->
       <template v-if="tooth.missing">
-        <line :x1="2" :y1="2" :x2="VB-2" :y2="VB-2" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round"/>
-        <line :x1="VB-2" :y1="2" :x2="2" :y2="VB-2" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round"/>
+        <!-- Outer circle (greyed) -->
+        <circle :cx="CX" :cy="CY" :r="R_OUT" fill="#f3f4f6" stroke="#d0d0d0" stroke-width="1.2" />
+        <!-- X marks -->
+        <line :x1="CX-R_OUT*0.55" :y1="CY-R_OUT*0.55" :x2="CX+R_OUT*0.55" :y2="CY+R_OUT*0.55" stroke="#dc2626" stroke-width="2" stroke-linecap="round"/>
+        <line :x1="CX+R_OUT*0.55" :y1="CY-R_OUT*0.55" :x2="CX-R_OUT*0.55" :y2="CY+R_OUT*0.55" stroke="#dc2626" stroke-width="2" stroke-linecap="round"/>
       </template>
 
       <!-- ── NORMAL TOOTH ───────────────────────────────────────── -->
       <template v-else>
-        <!-- Bridge bar overlay (pontic) -->
-        <rect
-          v-if="tooth.bridgePontic"
-          x="0" :y="VB*0.35" :width="VB" :height="VB*0.30"
-          fill="#fb8c00" fill-opacity="0.15"
-          stroke="none"
+
+        <!-- Outer background circle -->
+        <circle
+          :cx="CX" :cy="CY" :r="R_OUT"
+          :fill="isSelected ? '#EEF4FF' : '#fff'"
+          :stroke="isSelected ? '#0061FB' : isBridgePending ? '#fb8c00' : '#d0d0d0'"
+          :stroke-width="isSelected || isBridgePending ? 2 : 1"
         />
 
-        <!-- Buccal / Labial (top trapezoid) -->
-        <polygon
-          :points="buccalPts"
+        <!-- ── 4 ARC SECTORS ─────────────────────────────────────── -->
+
+        <!-- Buccal (top) -->
+        <path
+          :d="BUCCAL_PATH"
           :fill="sfColor('buccal')"
           :stroke="sfStroke('buccal')"
-          stroke-width="0.5"
+          stroke-width="0.6"
           class="tooth-surface"
           @click.stop="onSurface('buccal')"
         />
 
-        <!-- Lingual / Palatal (bottom trapezoid) -->
-        <polygon
-          :points="lingualPts"
+        <!-- Lingual (bottom) -->
+        <path
+          :d="LINGUAL_PATH"
           :fill="sfColor('lingual')"
           :stroke="sfStroke('lingual')"
-          stroke-width="0.5"
+          stroke-width="0.6"
           class="tooth-surface"
           @click.stop="onSurface('lingual')"
         />
 
-        <!-- Left surface (mesial or distal depending on quadrant) -->
-        <polygon
-          :points="leftPts"
+        <!-- Left (mesial or distal) -->
+        <path
+          :d="LEFT_PATH"
           :fill="sfColor(leftSurface)"
           :stroke="sfStroke(leftSurface)"
-          stroke-width="0.5"
+          stroke-width="0.6"
           class="tooth-surface"
           @click.stop="onSurface(leftSurface)"
         />
 
-        <!-- Right surface (distal or mesial depending on quadrant) -->
-        <polygon
-          :points="rightPts"
+        <!-- Right (distal or mesial) -->
+        <path
+          :d="RIGHT_PATH"
           :fill="sfColor(rightSurface)"
           :stroke="sfStroke(rightSurface)"
-          stroke-width="0.5"
+          stroke-width="0.6"
           class="tooth-surface"
           @click.stop="onSurface(rightSurface)"
         />
 
-        <!-- Occlusal / Incisal (center rect) -->
-        <rect
-          :x="IC" :y="IC" :width="IS" :height="IS"
+        <!-- ── OCCLUSAL / INCISAL (centre circle) ────────────────── -->
+        <circle
+          :cx="CX" :cy="CY" :r="R_IN"
           :fill="sfColor('occlusal')"
           :stroke="sfStroke('occlusal')"
-          stroke-width="0.5"
+          stroke-width="0.6"
           class="tooth-surface"
           @click.stop="onSurface('occlusal')"
         />
 
-        <!-- ── TOOTH-CONDITION OVERLAYS ──────────────────────────── -->
+        <!-- ── CONDITION OVERLAYS ─────────────────────────────────── -->
 
-        <!-- Crown: thick colored border -->
-        <rect
+        <!-- Crown: thick coloured outer ring -->
+        <circle
           v-if="isCrown"
-          x="1.5" y="1.5" :width="VB-3" :height="VB-3"
-          rx="2"
+          :cx="CX" :cy="CY" :r="R_OUT - 2"
           fill="none"
           :stroke="condColor(tooth.toothCondition)"
-          stroke-width="3.5"
+          stroke-width="4"
         />
 
-        <!-- Veneer: left-side thick bar -->
-        <rect
+        <!-- Veneer: left arc bar -->
+        <path
           v-if="tooth.toothCondition === 'veneer'"
-          x="0" y="0" width="5" :height="VB"
-          :fill="condColor('veneer')"
-          fill-opacity="0.85"
+          :d="VENEER_PATH"
+          fill="none"
+          :stroke="condColor('veneer')"
+          stroke-width="4"
+          stroke-linecap="round"
         />
 
-        <!-- RCT: pink filled circle in center -->
+        <!-- RCT / Post-core: filled dot in centre -->
         <circle
           v-if="tooth.toothCondition === 'rct' || tooth.toothCondition === 'post-core'"
-          :cx="VB/2" :cy="VB/2" r="4"
+          :cx="CX" :cy="CY" r="3.5"
           :fill="condColor(tooth.toothCondition)"
         />
 
-        <!-- Fracture: diagonal crack line -->
+        <!-- Fracture: diagonal crack -->
         <line
           v-if="tooth.toothCondition === 'fracture'"
-          :x1="VB*0.3" :y1="VB*0.05"
-          :x2="VB*0.7" :y2="VB*0.95"
+          :x1="CX-R_OUT*0.5" :y1="CY-R_OUT*0.8"
+          :x2="CX+R_OUT*0.5" :y2="CY+R_OUT*0.8"
           :stroke="condColor('fracture')"
           stroke-width="1.5"
           stroke-dasharray="2,2"
         />
 
-        <!-- Implant indicator: small diamond -->
+        <!-- Implant: small diamond at top -->
         <polygon
           v-if="tooth.implant || tooth.toothCondition === 'implant' || tooth.toothCondition === 'implant-crown'"
-          :points="`${VB/2},4 ${VB/2+5},9 ${VB/2},14 ${VB/2-5},9`"
+          :points="`${CX},${CY-R_IN-5} ${CX+4},${CY-R_IN} ${CX},${CY-R_IN+5} ${CX-4},${CY-R_IN}`"
           :fill="condColor('implant')"
         />
 
-        <!-- Bridge abutment: top/bottom bar -->
+        <!-- Bridge abutment: horizontal bar through centre -->
         <rect
           v-if="tooth.bridgeStart || tooth.bridgeEnd"
-          x="0" :y="VB*0.4" :width="VB" :height="VB*0.2"
+          :x="0" :y="CY - 2.5" :width="VB" height="5"
           :fill="condColor('bridge')"
-          fill-opacity="0.6"
+          fill-opacity="0.55"
+          pointer-events="none"
         />
 
-        <!-- Planned hatching pattern -->
-        <rect
+        <!-- Bridge pontic: dimmed ring -->
+        <circle
+          v-if="tooth.bridgePontic"
+          :cx="CX" :cy="CY" :r="R_OUT - 1"
+          fill="#fb8c00"
+          fill-opacity="0.12"
+          pointer-events="none"
+        />
+
+        <!-- Planned hatching -->
+        <circle
           v-if="hasAnyPlanned"
-          x="0" y="0" :width="VB" :height="VB"
+          :cx="CX" :cy="CY" :r="R_OUT - 1"
           fill="url(#planned-hatch)"
           pointer-events="none"
         />
 
-        <!-- Completed tick: small checkmark badge -->
+        <!-- Completed tick badge -->
         <g v-if="hasAllCompleted" pointer-events="none">
-          <circle :cx="VB-7" :cy="7" r="5" fill="#43a047"/>
+          <circle :cx="CX + R_OUT - 5" :cy="CY - R_OUT + 5" r="5" fill="#43a047"/>
           <polyline
-            :points="`${VB-10},7 ${VB-7},10 ${VB-4},4`"
+            :points="`${CX+R_OUT-8},${CY-R_OUT+5} ${CX+R_OUT-5},${CY-R_OUT+8} ${CX+R_OUT-2},${CY-R_OUT+2}`"
             fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round"
           />
         </g>
+
+        <!-- Selection ring -->
+        <circle
+          v-if="isSelected"
+          :cx="CX" :cy="CY" :r="R_OUT + 1"
+          fill="none"
+          stroke="#0061FB"
+          stroke-width="1.5"
+          stroke-dasharray="3,2"
+        />
       </template>
 
-      <!-- ── SVG DEFS (hatch pattern) ──────────────────────────── -->
+      <!-- SVG defs -->
       <defs>
         <pattern id="planned-hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <line x1="0" y1="0" x2="0" y2="5" stroke="rgba(30,136,229,0.25)" stroke-width="2"/>
+          <line x1="0" y1="0" x2="0" y2="5" stroke="rgba(30,136,229,0.2)" stroke-width="2"/>
         </pattern>
       </defs>
     </svg>
@@ -170,51 +186,80 @@ import { computed } from 'vue'
 import { getSurfaceColor, getConditionColor, CONDITIONS } from './toothData.js'
 
 const props = defineProps({
-  fdi:             { type: Number, required: true },
-  tooth:           { type: Object, required: true },
-  mesialRight:     { type: Boolean, default: false },  // true = mesial is on the right side of the box
+  fdi:             { type: Number,  required: true },
+  tooth:           { type: Object,  required: true },
+  mesialRight:     { type: Boolean, default: false },
   isSelected:      { type: Boolean, default: false },
   activeCondition: { type: String,  default: null  },
   isBridgePending: { type: Boolean, default: false },
-  size:            { type: Number,  default: 44 },
+  size:            { type: Number,  default: 44    },
 })
 
 const emit = defineEmits(['surface-click', 'tooth-click'])
 
-// ── SVG geometry constants ────────────────────────────────────────────────
-const SIZE = computed(() => props.size)
-const VB   = 44          // viewBox dimension
-const INSET = 13         // how far the inner box insets from each edge
-const IC   = INSET       // inner rect x/y start
-const IS   = VB - INSET * 2  // inner rect width/height = 18
+// ── Geometry ──────────────────────────────────────────────────────────────
+const VB    = 44
+const CX    = 22
+const CY    = 22
+const R_OUT = 19   // outer radius
+const R_IN  = 8    // inner (occlusal) radius
+const SIZE  = computed(() => props.size)
+const GAP   = 4    // degrees gap between sectors
 
-// Polygon points (string format "x,y x,y ...")
-const buccalPts  = `0,0 ${VB},0 ${VB-INSET},${INSET} ${INSET},${INSET}`
-const lingualPts = `${INSET},${VB-INSET} ${VB-INSET},${VB-INSET} ${VB},${VB} 0,${VB}`
-const leftPts    = `0,0 ${INSET},${INSET} ${INSET},${VB-INSET} 0,${VB}`
-const rightPts   = `${VB-INSET},${INSET} ${VB},0 ${VB},${VB} ${VB-INSET},${VB-INSET}`
+// Arc path helper: angles in SVG degrees (0=right, clockwise)
+function arcPath(startDeg, endDeg) {
+  const toRad = d => d * Math.PI / 180
+  const s = toRad(startDeg)
+  const e = toRad(endDeg)
+  const x1 = (CX + R_OUT * Math.cos(s)).toFixed(3)
+  const y1 = (CY + R_OUT * Math.sin(s)).toFixed(3)
+  const x2 = (CX + R_OUT * Math.cos(e)).toFixed(3)
+  const y2 = (CY + R_OUT * Math.sin(e)).toFixed(3)
+  const x3 = (CX + R_IN  * Math.cos(e)).toFixed(3)
+  const y3 = (CY + R_IN  * Math.sin(e)).toFixed(3)
+  const x4 = (CX + R_IN  * Math.cos(s)).toFixed(3)
+  const y4 = (CY + R_IN  * Math.sin(s)).toFixed(3)
+  // Sweep angle (clockwise from start to end)
+  const sweep = ((endDeg - startDeg) + 360) % 360
+  const large = sweep > 180 ? 1 : 0
+  return `M ${x1} ${y1} A ${R_OUT} ${R_OUT} 0 ${large} 1 ${x2} ${y2} L ${x3} ${y3} A ${R_IN} ${R_IN} 0 ${large} 0 ${x4} ${y4} Z`
+}
 
-// ── Surface mapping ───────────────────────────────────────────────────────
-// mesialRight: if true, right polygon = mesial, left = distal
-// if false,    left polygon = mesial, right = distal
+// Sector angles (SVG: 0=right, 90=bottom, 180=left, 270=top)
+// Buccal=top (centered at 270°), Lingual=bottom (90°), Left (180°), Right (0°)
+const BUCCAL_PATH  = arcPath(270 - 90 + GAP, 270 + 90 - GAP)  // 184° → 356°
+const LINGUAL_PATH = arcPath(90  - 90 + GAP, 90  + 90 - GAP)  //   4° → 176°
+const LEFT_PATH    = arcPath(180 - 90 + GAP, 180 + 90 - GAP)  //  94° → 266°
+const RIGHT_PATH   = arcPath(0   - 90 + GAP, 0   + 90 - GAP)  // 274° →  86° (wraps)
+
+// Veneer: left arc of outer circle
+const VENEER_PATH = (() => {
+  const toRad = d => d * Math.PI / 180
+  const s = toRad(120), e = toRad(240)
+  const x1 = (CX + (R_OUT-2) * Math.cos(s)).toFixed(3)
+  const y1 = (CY + (R_OUT-2) * Math.sin(s)).toFixed(3)
+  const x2 = (CX + (R_OUT-2) * Math.cos(e)).toFixed(3)
+  const y2 = (CY + (R_OUT-2) * Math.sin(e)).toFixed(3)
+  return `M ${x1} ${y1} A ${R_OUT-2} ${R_OUT-2} 0 0 0 ${x2} ${y2}`
+})()
+
+// Surface name mapping
 const leftSurface  = computed(() => props.mesialRight ? 'distal'  : 'mesial')
 const rightSurface = computed(() => props.mesialRight ? 'mesial'  : 'distal')
 
 // ── Color helpers ─────────────────────────────────────────────────────────
 function sfColor(surface) {
   const sf = props.tooth.surfaces?.[surface]
-  if (!sf?.condition) return '#f9f9f9'
+  if (!sf?.condition) return '#f7f7f7'
   return getSurfaceColor(sf.condition, sf.status)
 }
 
 function sfStroke(surface) {
   const sf = props.tooth.surfaces?.[surface]
-  return sf?.condition ? '#999' : '#ccc'
+  return sf?.condition ? '#aaa' : '#ddd'
 }
 
-function condColor(cond) {
-  return getConditionColor(cond)
-}
+function condColor(cond) { return getConditionColor(cond) }
 
 // ── Derived states ────────────────────────────────────────────────────────
 const isCrown = computed(() => {
@@ -235,12 +280,9 @@ const hasAllCompleted = computed(() => {
 })
 
 // ── Event handlers ────────────────────────────────────────────────────────
-function onSurface(surface) {
-  emit('surface-click', { fdi: props.fdi, surface })
-}
+function onSurface(surface) { emit('surface-click', { fdi: props.fdi, surface }) }
 
 function onToothBodyClick() {
-  // Full-tooth condition click or select
   const cond = props.activeCondition
   if (cond && CONDITIONS[cond]?.fullTooth) {
     emit('surface-click', { fdi: props.fdi, surface: null })
@@ -260,24 +302,20 @@ function onToothBodyClick() {
 
 .tooth-svg {
   display: block;
-  border-radius: 2px;
+  overflow: visible;
 }
 
-.tooth-svg--cursor {
-  cursor: crosshair;
-}
+.tooth-svg--cursor { cursor: crosshair; }
 
 .tooth-surface {
   cursor: crosshair;
   transition: filter 0.1s;
 }
 
-.tooth-surface:hover {
-  filter: brightness(0.88);
-}
+.tooth-surface:hover { filter: brightness(0.85); }
 
 .tooth--selected .tooth-svg {
-  filter: drop-shadow(0 0 3px rgba(0, 97, 251, 0.4));
+  filter: drop-shadow(0 0 3px rgba(0, 97, 251, 0.35));
 }
 
 .tooth--bridge-pending .tooth-svg {

@@ -9,14 +9,26 @@
         <v-tab value="journey">Patient Journey</v-tab>
         <v-tab value="forms">Forms</v-tab>
         <v-tab value="charting">Charting</v-tab>
+        <!-- <v-tab value="perio">Periodontal</v-tab> -->
+        <!-- <v-tab value="soft-tissue">Soft Tissue</v-tab> -->
+        <!-- <v-tab value="risk">Risk Assessment</v-tab> -->
         <v-tab value="appointments">Appointments</v-tab>
       </v-tabs>
       <PatientsIndex v-if="activeTab === 'details'" :patient="patient" />
       <PatientJourney v-else-if="activeTab === 'journey'" :patient="patient" @save="handleJourneySave" />
       <PatientForms v-else-if="activeTab === 'forms'" :patient="patient" />
       <div v-else-if="activeTab === 'charting'" class="mt-4">
-        <PatientsCharting :patient-id="patient?.id" />
+        <PatientsCharting :patient-id="patient?.id" :patient-name="patient ? `${patient.firstName || ''} ${patient.lastName || ''}`.trim() : ''" />
       </div>
+      <!-- <div v-else-if="activeTab === 'perio'" class="mt-4">
+        <PerioChart :peri-data="chartingStore.periData" @update="chartingStore.setPerioData($event)" />
+      </div>
+      <div v-else-if="activeTab === 'soft-tissue'" class="mt-4">
+        <SoftTissueExam :soft-tissue-data="chartingStore.softTissueData" @update="chartingStore.setSoftTissueData($event)" />
+      </div>
+      <div v-else-if="activeTab === 'risk'" class="mt-4">
+        <RiskAssessment :risk-data="chartingStore.riskData" @update="chartingStore.setRiskData($event)" />
+      </div> -->
       <div v-else class="mt-4">
         <v-row class="px-1 mb-4" align="stretch">
           <v-col v-for="(card, i) in appointmentStatCards" :key="card.label" style="flex: 1 1 0;">
@@ -138,7 +150,11 @@ import PatientsIndex from '@/components/patients/index.vue'
 import PatientJourney from '@/components/patients/patientJourney.vue'
 import PatientForms from '@/components/patients/PatientForms.vue'
 import PatientsCharting from '@/components/patients/charting/index.vue'
+import PerioChart from '@/components/patients/charting/PerioChart.vue'
+import SoftTissueExam from '@/components/patients/charting/SoftTissueExam.vue'
+import RiskAssessment from '@/components/patients/charting/RiskAssessment.vue'
 import { useDiaryStore } from '@/stores/diary'
+import { usePatientChartingStore } from '@/stores/patientCharting'
 import { useMainStore } from '@/stores/index'
 import AddAppointment from '@/components/diary/addAppointment.vue'
 import { ref, computed, onMounted, watch } from 'vue'
@@ -149,6 +165,7 @@ definePageMeta({ layout: 'home' })
 const route = useRoute()
 const store = useDiaryStore()
 const mainStore = useMainStore()
+const chartingStore = usePatientChartingStore()
 const patient = ref(null)
 const activeTab = ref('details')
 const patientName = computed(() => {
@@ -314,6 +331,9 @@ watch(activeTab, (val) => {
   if (val === 'appointments') {
     fetchPractitioners()
     fetchAppointments()
+  }
+  if (['perio', 'soft-tissue', 'risk'].includes(val) && patient.value?.id && chartingStore.patientId !== patient.value.id) {
+    chartingStore.loadChart(patient.value.id)
   }
 })
 watch(appointmentSearch, (val) => {
