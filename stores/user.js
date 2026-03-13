@@ -6,6 +6,7 @@ export const useUserStore = defineStore("userStore", {
     users: [],
     orgUsers: [],
     usersQueryKey: null,
+    currentLeaveEntitlement: null,
   }),
 
   getters: {},
@@ -152,6 +153,9 @@ export const useUserStore = defineStore("userStore", {
           .updateLeaveEntitlement(data)
           .then((res) => {
             this.isLoading = false;
+            if (res.code === 0) {
+              this.currentLeaveEntitlement = { ...data };
+            }
             resolve(res);
           })
           .catch((err) => {

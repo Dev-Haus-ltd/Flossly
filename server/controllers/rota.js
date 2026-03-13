@@ -2,8 +2,6 @@ import { Role, Rota, RotaShift, RotaUser, User, UserOrganisation, Organisation }
 import { Op, fn, col } from "sequelize";
 import DB from "../utils/db";
 import { parseJsonBody } from "../utils/body";
-import { newRotaAvailableNotification } from "../utils/emailNotifications.js";
-import { sendRotaPublishedNotification } from "../utils/fcmNotification.js";
 
 export const addRota = async (event) => {
   try {
@@ -139,34 +137,12 @@ export const publishRota = async (event) => {
     await Promise.all(
       users.map(async (el) => {
         const user = await User.findOne({ where: { id: el.userId } });
-        if (user?.email) {
-          const weekStartFormatted = rota.startDate
-            ? new Date(rota.startDate).toLocaleDateString("en-GB")
-            : "";
-
-          // Email notification (existing)
-          await newRotaAvailableNotification({
-            startDate: new Date(rota.startDate),
-            fullName: user.fullName,
-            email: user.email,
-            name: rota.name
-          });
-
-          // Push notification (new - in addition to email)
-          try {
-            await sendRotaPublishedNotification({
-              userId: user.id,
-              rotaId: rota.id,
-              weekStartDate: weekStartFormatted,
-            });
-          } catch (pushErr) {
-            console.warn('Rota published push notification failed', {
-              userId: user.id,
-              rotaId: rota.id,
-              error: pushErr?.message || pushErr,
-            });
-          }
-        }
+        await newRotaAvailableNotification({
+          startDate: new Date(rota.startDate),
+          fullName: user.fullName,
+          email: user.email,
+          name: rota.name
+        });
       })
     );
     return success(rota);
