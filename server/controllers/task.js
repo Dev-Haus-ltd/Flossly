@@ -480,6 +480,48 @@ const addDays = (date, days) => {
   return result;
 };
 
+// Helper function to delete next recurring instance when task is moved back from completed
+const deleteNextRecurringTask = async (task, orgStatuses) => {
+  try {
+    if (!task.frequency || task.frequency === "One off") {
+      return;
+    }
+
+    // Find the most recently created recurring task for this user/task/org
+    // that was created AFTER this current task was created
+    // This ensures we only delete instances that were auto-generated after this task
+    const futureTasks = await UserTask.findAll({
+      where: {
+        userId: task.userId,
+        taskId: task.taskId,
+        organisationId: task.organisationId,
+        id: { [Op.ne]: task.id }, // Don't find the current task itself
+        createdAt: {
+          [Op.gt]: task.createdAt, // Find tasks created AFTER this task was created
+        },
+      },
+      order: [['createdAt', 'DESC']], // Most recently created first
+      limit: 1,
+    });
+
+    if (futureTasks && futureTasks.length > 0) {
+      const nextTask = futureTasks[0];
+      
+      // Delete checklists for the next recurring task
+      await UserTaskChecklist.destroy({
+        where: { userTaskId: nextTask.id },
+      });
+
+      // Delete the next recurring task
+      await UserTask.destroy({
+        where: { id: nextTask.id },
+      });
+    }
+  } catch (err) {
+    // Silent fail for recurring task deletion
+  }
+};
+
 const generateNextRecurringTask = async (completedTask, orgStatuses, orgPriorities) => {
   try {
     const currentDueDate = completedTask.dueDate || new Date();
@@ -491,7 +533,22 @@ const generateNextRecurringTask = async (completedTask, orgStatuses, orgPrioriti
                           orgStatuses.find(s => s.key === "todo") ||
                           orgStatuses[0];
 
-    await UserTask.create({
+    // Check if a task already exists for this user, task, and due date to prevent duplicates
+    const existingTask = await UserTask.findOne({
+      where: {
+        userId: completedTask.userId,
+        taskId: completedTask.taskId,
+        organisationId: completedTask.organisationId,
+        dueDate: nextDueDate,
+      },
+    });
+
+    if (existingTask) {
+      // Task already exists for this period, don't create a duplicate
+      return;
+    }
+
+    const newTask = await UserTask.create({
       userId: completedTask.userId,
       taskId: completedTask.taskId,
       organisationId: completedTask.organisationId,
@@ -504,7 +561,37 @@ const generateNextRecurringTask = async (completedTask, orgStatuses, orgPrioriti
       comments: "",
       assignedBy: completedTask.assignedBy,
     });
+
+    // Copy checklists from the completed task to the new recurring task
+    // Preserve previous answers to show on the next task
+    const existingChecklists = await UserTaskChecklist.findAll({
+      where: {
+        userTaskId: completedTask.id,
+      },
+    });
+
+    if (existingChecklists?.length) {
+      const checklistToCreate = existingChecklists.map((checklist) => ({
+        userTaskId: newTask.id,
+        question: checklist.question,
+        category: checklist.category || null,
+        fieldOneTitle: checklist.fieldOneTitle || null,
+        fieldOneValue: checklist.fieldOneValue || null,
+        fieldTwoTitle: checklist.fieldTwoTitle || null,
+        fieldTwoValue: checklist.fieldTwoValue || null,
+        showRadio: checklist.showRadio || false,
+        showTime: checklist.showTime || false,
+        showDate: checklist.showDate || false,
+        radioValue: checklist.radioValue || "N/A", // Preserve previous answer
+        timeValue: checklist.timeValue || null, // Preserve previous time
+        dateValue: checklist.dateValue || null, // Preserve previous date
+        isCompleted: false, // Reset checklist for the new task
+      }));
+
+      await UserTaskChecklist.bulkCreate(checklistToCreate);
+    }
   } catch (err) {
+    // Silent fail for recurring task generation
   }
 };
 
@@ -608,6 +695,10 @@ export const updateTask = async (event) => {
         throw createError({ message: "PriorityId not found for this org" });
       }
 
+      const oldStatusId = userTask.statusId;
+      const oldStatus = orgStatuses.find((x) => x.id === oldStatusId);
+      const oldStatusKey = oldStatus?.key;
+
       if (frequency !== undefined) userTask.frequency = frequency;
       if (priorityId !== undefined) userTask.priorityId = priorityId;
       if (statusId !== undefined) userTask.statusId = statusId;
@@ -618,6 +709,19 @@ export const updateTask = async (event) => {
         userTask.dueDate = dueDate ? new Date(dueDate) : null;
       if (isArchieved !== undefined) userTask.isArchieved = isArchieved;
       await userTask.save();
+
+      const newStatus = orgStatuses.find((x) => x.id === statusId);
+      const newStatusKey = newStatus?.key;
+
+      const wasCompleted = oldStatusKey === "completed";
+      const isNowCompleted = newStatusKey === "completed";
+      const statusChangedFromCompleted = statusId !== undefined && wasCompleted && !isNowCompleted;
+      const hasFrequency = userTask.frequency && userTask.frequency !== "One off";
+      
+      if (statusChangedFromCompleted && hasFrequency) {
+        // Delete the next recurring instance when status changes from completed to something else
+        await deleteNextRecurringTask(userTask, orgStatuses);
+      }
 
       if (taskDetails && taskId) {
         const task = await Task.findByPk(taskId);
@@ -1318,7 +1422,7 @@ export const addAttachments = async (event) => {
       uploadedFiles.map(async (file) => {
         const link = await uploadTempFile({
           filepath: file.filepath,
-          filename: path.basename(file.filepath),
+          filename: `${Date.now()}-${file.originalFilename}`,
           contentType: file.mimetype || file.type,
           baseDir: "uploads",
         });
