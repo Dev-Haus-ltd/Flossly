@@ -18,6 +18,88 @@ export const useFCM = () => {
   let offlineHandler = null;
   let isInitialized = false;
   let tokenFetchInProgress = false;
+  let lastTokenSyncAt = 0;
+  let serviceWorkerInitPromise = null;
+
+  const getFirebaseConfig = () => ({
+    apiKey: config.public.firebaseApiKey,
+    authDomain: config.public.firebaseAuthDomain,
+    projectId: config.public.firebaseProjectId,
+    storageBucket: config.public.firebaseStorageBucket,
+    messagingSenderId: config.public.firebaseMessagingSenderId,
+    appId: config.public.firebaseAppId,
+  });
+
+  const buildServiceWorkerUrl = () => {
+    const firebaseConfig = getFirebaseConfig();
+    const swUrl = new URL('/firebase-messaging-sw.js', window.location.origin);
+
+    Object.entries(firebaseConfig).forEach(([key, value]) => {
+      if (value) {
+        swUrl.searchParams.set(key, value);
+      }
+    });
+
+    return {
+      firebaseConfig,
+      swUrl: `${swUrl.pathname}${swUrl.search}`
+    };
+  };
+
+  const ensureServiceWorkerInitialized = async ({ force = false } = {}) => {
+    if (!process.client || !('serviceWorker' in navigator)) {
+      return null;
+    }
+
+    if (serviceWorkerInitPromise && !force) {
+      return serviceWorkerInitPromise;
+    }
+
+    serviceWorkerInitPromise = (async () => {
+      const { firebaseConfig, swUrl } = buildServiceWorkerUrl();
+
+      try {
+        const registration = await navigator.serviceWorker.register(swUrl, {
+          scope: '/',
+          updateViaCache: 'none'
+        });
+
+        console.log('✅ Firebase service worker registered/updated');
+
+        await navigator.serviceWorker.ready;
+        await registration.update().catch(err => {
+          console.warn('Service worker update check failed:', err);
+        });
+
+        const initMessage = {
+          type: 'INIT_FIREBASE',
+          config: firebaseConfig
+        };
+
+        const targets = [
+          registration.installing,
+          registration.waiting,
+          registration.active,
+          navigator.serviceWorker.controller,
+        ].filter(Boolean);
+
+        targets.forEach((target) => {
+          try {
+            target.postMessage(initMessage);
+          } catch (error) {
+            console.warn('Failed to post INIT_FIREBASE to service worker target:', error);
+          }
+        });
+
+        return registration;
+      } catch (swError) {
+        console.error('Service worker registration error:', swError);
+        return null;
+      }
+    })();
+
+    return serviceWorkerInitPromise;
+  };
 
   // Initialize Firebase
   const initializeFirebase = async () => {
@@ -26,59 +108,11 @@ export const useFCM = () => {
     }
 
     try {
-      const firebaseConfig = {
-        apiKey: config.public.firebaseApiKey,
-        authDomain: config.public.firebaseAuthDomain,
-        projectId: config.public.firebaseProjectId,
-        storageBucket: config.public.firebaseStorageBucket,
-        messagingSenderId: config.public.firebaseMessagingSenderId,
-        appId: config.public.firebaseAppId,
-      };
-
+      const firebaseConfig = getFirebaseConfig();
       const app = initializeApp(firebaseConfig);
       messaging = getMessaging(app);
-      
-      // Register and initialize service worker with Firebase config
-      if ('serviceWorker' in navigator) {
-        try {
-          // Check if service worker is already registered
-          const existingRegistration = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js');
-          
-          let registration;
-          if (existingRegistration) {
-            registration = existingRegistration;
-            console.log('♻️ Using existing service worker registration');
-          } else {
-            registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
-              scope: '/',
-              updateViaCache: 'none' // Always fetch fresh service worker
-            });
-            console.log('✅ New service worker registered');
-          }
 
-          // Wait for service worker to be ready
-          await navigator.serviceWorker.ready;
-
-          // Send config to service worker
-          if (registration.active) {
-            registration.active.postMessage({
-              type: 'INIT_FIREBASE',
-              config: firebaseConfig
-            });
-          }
-
-          // Set up periodic service worker updates
-          setInterval(() => {
-            registration.update().catch(err => {
-              console.warn('Service worker update check failed:', err);
-            });
-          }, 60 * 60 * 1000); // Check every hour
-
-        } catch (swError) {
-          console.error('Service worker registration error:', swError);
-          // Continue without service worker for browsers with extensions that block it
-        }
-      }
+      await ensureServiceWorkerInitialized();
 
       isInitialized = true;
       return true;
@@ -101,6 +135,21 @@ export const useFCM = () => {
     }
     
     return isSupported.value;
+  };
+
+  const scheduleTokenRetry = (delayMs = 15000) => {
+    if (!process.client) {
+      return;
+    }
+
+    window.setTimeout(async () => {
+      try {
+        await ensureServiceWorkerInitialized({ force: true });
+        await syncCurrentTokenToBackend({ force: true });
+      } catch (error) {
+        console.error('Scheduled FCM token retry failed:', error);
+      }
+    }, delayMs);
   };
 
   // Request notification permission
@@ -162,7 +211,7 @@ export const useFCM = () => {
       let registration;
       try {
         registration = await Promise.race([
-          navigator.serviceWorker.ready,
+          ensureServiceWorkerInitialized(),
           new Promise((_, reject) => 
             setTimeout(() => reject(new Error('Service worker timeout')), 10000)
           )
@@ -170,6 +219,10 @@ export const useFCM = () => {
       } catch (swError) {
         console.error('Service worker not ready:', swError);
         throw new Error('Service worker initialization failed');
+      }
+
+      if (!registration) {
+        throw new Error('Service worker registration unavailable');
       }
 
       const currentToken = await getToken(messaging, {
@@ -244,6 +297,7 @@ export const useFCM = () => {
           timeout: 30000 // Increased timeout to 30 seconds
         });
         
+        lastTokenSyncAt = Date.now();
         return { success: true, response };
       } catch (error) {
         console.error(`Error saving FCM token (attempt ${attempt + 1}/${maxRetries}):`, error);
@@ -344,20 +398,66 @@ export const useFCM = () => {
     }
   };
 
-  const refreshFCMToken = async () => {
+  const syncCurrentTokenToBackend = async ({ force = false, maxAgeMs = 5 * 60 * 1000 } = {}) => {
+    if (!isPermissionGranted.value) {
+      return false;
+    }
+
+    const shouldSync = force || !lastTokenSyncAt || (Date.now() - lastTokenSyncAt) >= maxAgeMs;
+    if (!shouldSync) {
+      return true;
+    }
+
+    const tokenToSync = fcmToken.value || (process.client ? localStorage.getItem('fcm_token') : null);
+    if (!tokenToSync) {
+      return false;
+    }
+
+    const saveResult = await saveFCMTokenToBackend(tokenToSync, 2);
+    if (saveResult.success) {
+      fcmToken.value = tokenToSync;
+      return true;
+    }
+
+    return false;
+  };
+
+  const refreshFCMToken = async ({ forceBackendSync = false } = {}) => {
     if (!messaging || !isPermissionGranted.value) {
       return;
     }
 
     try {
-      if (!fcmToken.value) {
+      const registration = await ensureServiceWorkerInitialized();
+
+      if (!registration) {
+        throw new Error('Service worker registration unavailable');
+      }
+
+      const currentToken = await getToken(messaging, {
+        vapidKey: config.public.firebaseVapidKey,
+        serviceWorkerRegistration: registration
+      });
+
+      if (!currentToken) {
+        fcmToken.value = null;
+        tokenFetchInProgress = false;
         await getFCMToken();
         return;
       }
 
-      const saveResult = await saveFCMTokenToBackend(fcmToken.value, 2);
+      const tokenChanged = currentToken !== fcmToken.value;
+      fcmToken.value = currentToken;
+
+      if (process.client) {
+        localStorage.setItem('fcm_token', currentToken);
+      }
+
+      const saveResult = tokenChanged || forceBackendSync
+        ? await saveFCMTokenToBackend(currentToken, 2)
+        : await syncCurrentTokenToBackend();
       
-      if (!saveResult.success) {
+      if (!saveResult) {
         fcmToken.value = null;
         tokenFetchInProgress = false;
         await getFCMToken();
@@ -447,9 +547,10 @@ export const useFCM = () => {
         }
       }
       
-      // Then refresh the token
+      // Then re-initialize the service worker and refresh the token
       if (isPermissionGranted.value && messaging) {
-        await refreshFCMToken();
+        await ensureServiceWorkerInitialized({ force: true });
+        await refreshFCMToken({ forceBackendSync: true });
       }
     };
 
@@ -467,17 +568,10 @@ export const useFCM = () => {
         if (messaging && !unsubscribeMessage) {
           setupMessageListener();
         }
-        
-        try {
-          const currentToken = await getToken(messaging, {
-            vapidKey: config.public.firebaseVapidKey
-          });
 
-          if (currentToken && currentToken !== fcmToken.value) {
-            console.log('🔄 Token changed while tab was hidden, updating...');
-            fcmToken.value = currentToken;
-            await saveFCMTokenToBackend(currentToken, 3);
-          }
+        try {
+          await ensureServiceWorkerInitialized({ force: true });
+          await refreshFCMToken({ forceBackendSync: true });
         } catch (error) {
           console.error('Error checking token on visibility change:', error);
         }
@@ -496,15 +590,8 @@ export const useFCM = () => {
       if (!messaging || !isPermissionGranted.value) return;
 
       try {
-        const currentToken = await getToken(messaging, {
-          vapidKey: config.public.firebaseVapidKey
-        });
-
-        if (currentToken && currentToken !== fcmToken.value) {
-          console.log('🔄 Token rotation detected during periodic check');
-          fcmToken.value = currentToken;
-          await saveFCMTokenToBackend(currentToken, 3);
-        }
+        await ensureServiceWorkerInitialized({ force: true });
+        await refreshFCMToken({ forceBackendSync: true });
       } catch (error) {
         console.error('Error during periodic token check:', error);
       }
@@ -536,7 +623,7 @@ export const useFCM = () => {
           if ('serviceWorker' in navigator) {
             try {
               await Promise.race([
-                navigator.serviceWorker.ready,
+                ensureServiceWorkerInitialized({ force: true }),
                 new Promise((_, reject) => setTimeout(() => reject(new Error('SW timeout')), 5000))
               ]);
             } catch (err) {

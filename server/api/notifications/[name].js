@@ -8,6 +8,7 @@ import {
 import { FcmToken, UserNotification } from '../../models';
 import { error, success } from '../../utils/response';
 import { getQuery, readBody } from 'h3';
+import { Op } from 'sequelize';
 
 export default defineEventHandler(async (event) => {
   const name = event.context.params.name;

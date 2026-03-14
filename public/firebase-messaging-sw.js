@@ -9,87 +9,134 @@ try {
   console.error('Failed to load Firebase scripts:', e);
 }
 
-// Initialize Firebase in the service worker
-// The config will be dynamically injected by the client
+// Initialize Firebase in the service worker using config embedded in the script URL.
 let messaging = null;
 let isFirebaseInitialized = false;
 let messageHandlerSet = false;
+let firebaseConfigCache = null;
+
+const buildNotificationOptions = (payload) => {
+  const notificationOptions = {
+    body: payload.notification?.body || payload.data?.body || '',
+    icon: payload.notification?.icon || payload.data?.icon || '/pwa-192x192.png',
+    badge: '/pwa-64x64.png',
+    data: payload.data || {},
+    tag: payload.data?.type || 'general',
+    requireInteraction: payload.data?.priority === 'high' || payload.data?.priority === 'urgent',
+    renotify: true,
+    vibrate: [200, 100, 200]
+  };
+
+  if (payload.data?.type === 'task_assigned') {
+    notificationOptions.actions = [
+      { action: 'view', title: 'View Task' },
+      { action: 'dismiss', title: 'Dismiss' }
+    ];
+  } else if (payload.data?.type === 'lead_created') {
+    notificationOptions.actions = [
+      { action: 'view', title: 'View Lead' },
+      { action: 'dismiss', title: 'Dismiss' }
+    ];
+  } else if (payload.data?.type === 'whatsapp_message' || payload.data?.type === 'meta_dm') {
+    notificationOptions.actions = [
+      { action: 'view', title: 'View Message' },
+      { action: 'dismiss', title: 'Dismiss' }
+    ];
+  }
+
+  return notificationOptions;
+};
+
+const notifyClients = async (payload) => {
+  const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  clientList.forEach((client) => {
+    client.postMessage({
+      type: 'FCM_NOTIFICATION',
+      payload
+    });
+  });
+};
+
+const getFirebaseConfigFromScriptUrl = () => {
+  if (firebaseConfigCache) {
+    return firebaseConfigCache;
+  }
+
+  try {
+    const url = new URL(self.location.href);
+    const config = {
+      apiKey: url.searchParams.get('apiKey') || '',
+      authDomain: url.searchParams.get('authDomain') || '',
+      projectId: url.searchParams.get('projectId') || '',
+      storageBucket: url.searchParams.get('storageBucket') || '',
+      messagingSenderId: url.searchParams.get('messagingSenderId') || '',
+      appId: url.searchParams.get('appId') || ''
+    };
+
+    const hasAllConfig = Object.values(config).every(Boolean);
+    firebaseConfigCache = hasAllConfig ? config : null;
+    return firebaseConfigCache;
+  } catch (error) {
+    console.error('❌ Failed to parse Firebase config from service worker URL:', error);
+    return null;
+  }
+};
+
+const registerBackgroundHandler = () => {
+  if (messageHandlerSet || typeof firebase === 'undefined' || !isFirebaseInitialized) {
+    return;
+  }
+
+  messaging = firebase.messaging();
+  messaging.onBackgroundMessage(async (payload) => {
+    console.log('📨 Background message received:', payload);
+
+    await notifyClients(payload);
+
+    const notificationTitle = payload.notification?.title || payload.data?.title || 'New Notification';
+    const notificationOptions = buildNotificationOptions(payload);
+    return self.registration.showNotification(notificationTitle, notificationOptions);
+  });
+
+  messageHandlerSet = true;
+  console.log('✅ Message handler set up');
+};
+
+const initializeFirebaseInServiceWorker = (overrideConfig = null) => {
+  try {
+    const firebaseConfig = overrideConfig || getFirebaseConfigFromScriptUrl();
+    if (!firebaseConfig) {
+      console.warn('⚠️ Firebase config unavailable in service worker');
+      return false;
+    }
+
+    firebaseConfigCache = firebaseConfig;
+
+    if (!isFirebaseInitialized && typeof firebase !== 'undefined') {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+        console.log('✅ Firebase initialized in service worker');
+      }
+      isFirebaseInitialized = true;
+    }
+
+    registerBackgroundHandler();
+    return true;
+  } catch (error) {
+    console.error('❌ Error initializing Firebase in service worker:', error);
+    return false;
+  }
+};
+
+initializeFirebaseInServiceWorker();
 
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'INIT_FIREBASE') {
-    const firebaseConfig = event.data.config;
-    
-    try {
-      // Init Firebase only once
-      if (!isFirebaseInitialized && typeof firebase !== 'undefined') {
-        if (!firebase.apps.length) {
-          firebase.initializeApp(firebaseConfig);
-          console.log('✅ Firebase initialized in service worker');
-        }
-        isFirebaseInitialized = true;
-      }
-      
-      // Set up messaging handler only once
-      if (!messageHandlerSet && typeof firebase !== 'undefined' && isFirebaseInitialized) {
-        messaging = firebase.messaging();
-        
-        // Handle background messages
-        messaging.onBackgroundMessage((payload) => {
-          console.log('📨 Background message received:', payload);
-          
-          // Notify all clients (open tabs) about the new notification
-          self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-            clients.forEach((client) => {
-              client.postMessage({
-                type: 'FCM_NOTIFICATION',
-                payload: payload
-              });
-            });
-          });
-          
-          const notificationTitle = payload.notification?.title || payload.data?.title || 'New Notification';
-          const notificationOptions = {
-            body: payload.notification?.body || payload.data?.body || '',
-            icon: payload.notification?.icon || payload.data?.icon || '/pwa-192x192.png',
-            badge: '/pwa-64x64.png',
-            data: payload.data || {},
-            tag: payload.data?.type || 'general',
-            requireInteraction: payload.data?.priority === 'high' || payload.data?.priority === 'urgent',
-            renotify: true, // Renotify even if tag matches (for updates)
-            vibrate: [200, 100, 200] // Vibration pattern
-          };
-
-          // Add action buttons based on notification type
-          if (payload.data?.type === 'task_assigned') {
-            notificationOptions.actions = [
-              { action: 'view', title: 'View Task' },
-              { action: 'dismiss', title: 'Dismiss' }
-            ];
-          } else if (payload.data?.type === 'lead_created') {
-            notificationOptions.actions = [
-              { action: 'view', title: 'View Lead' },
-              { action: 'dismiss', title: 'Dismiss' }
-            ];
-          } else if (payload.data?.type === 'whatsapp_message' || payload.data?.type === 'meta_dm') {
-            notificationOptions.actions = [
-              { action: 'view', title: 'View Message' },
-              { action: 'dismiss', title: 'Dismiss' }
-            ];
-          }
-
-          return self.registration.showNotification(notificationTitle, notificationOptions);
-        });
-        
-        messageHandlerSet = true;
-        console.log('✅ Message handler set up');
-      }
-    } catch (error) {
-      console.error('❌ Error initializing Firebase in service worker:', error);
-    }
+    initializeFirebaseInServiceWorker(event.data.config || null);
   }
-  
-  // Handle keep-alive ping
+
   if (event.data && event.data.type === 'KEEP_ALIVE') {
+    initializeFirebaseInServiceWorker();
     event.ports[0]?.postMessage({ status: 'alive' });
   }
 });
@@ -187,18 +234,20 @@ self.addEventListener('notificationclick', (event) => {
 // Handle service worker activation
 self.addEventListener('activate', (event) => {
   console.log('[firebase-messaging-sw.js] Service Worker activated');
-  event.waitUntil(
-    clients.claim().then(() => {
-      console.log('✅ Service Worker claimed all clients');
-    })
-  );
+  event.waitUntil((async () => {
+    initializeFirebaseInServiceWorker();
+    await clients.claim();
+    console.log('✅ Service Worker claimed all clients');
+  })());
 });
 
 // Handle service worker installation
 self.addEventListener('install', (event) => {
   console.log('[firebase-messaging-sw.js] Service Worker installing');
-  // Force the waiting service worker to become the active service worker
-  self.skipWaiting();
+  event.waitUntil((async () => {
+    initializeFirebaseInServiceWorker();
+    await self.skipWaiting();
+  })());
 });
 
 // Keep service worker alive with periodic tasks (helps with extension compatibility)
