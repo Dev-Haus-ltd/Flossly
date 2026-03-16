@@ -496,21 +496,52 @@ export const startTaskOverDueScheduler = () => {
       }
 
       let totalUpdated = 0;
+      const overdueTasksByUser = new Map(); // Track overdue tasks per user for notifications
+
       for (const [orgId, ids] of statusByOrg.entries()) {
         if (!ids?.overdueId) continue;
         const excludedStatusIds = [ids.overdueId, ids.completedId].filter(Boolean);
-        const [updated] = await UserTask.update(
-          { statusId: ids.overdueId },
-          {
-            where: {
-              organisationId: orgId,
-              isArchieved: false,
-              dueDate: { [Op.lt]: startOfToday },
-              statusId: { [Op.notIn]: excludedStatusIds },
-            },
-          }
-        );
-        totalUpdated += Number(updated) || 0;
+        
+        // Find tasks that will become overdue
+        const tasksToMarkOverdue = await UserTask.findAll({
+          where: {
+            organisationId: orgId,
+            isArchieved: false,
+            dueDate: { [Op.lt]: startOfToday },
+            statusId: { [Op.notIn]: excludedStatusIds },
+          },
+          attributes: ["id", "userId", "organisationId"],
+        });
+
+        if (tasksToMarkOverdue.length > 0) {
+          // Group tasks by user for notification purposes
+          tasksToMarkOverdue.forEach((task) => {
+            const userId = Number(task.userId);
+            if (!userId) return;
+            const key = `${userId}:${task.organisationId}`;
+            const userTasks = overdueTasksByUser.get(key) || {
+              userId,
+              organisationId: task.organisationId,
+              taskIds: [],
+            };
+            userTasks.taskIds.push(task.id);
+            overdueTasksByUser.set(key, userTasks);
+          });
+
+          // Update tasks to overdue status
+          const [updated] = await UserTask.update(
+            { statusId: ids.overdueId },
+            {
+              where: {
+                organisationId: orgId,
+                isArchieved: false,
+                dueDate: { [Op.lt]: startOfToday },
+                statusId: { [Op.notIn]: excludedStatusIds },
+              },
+            }
+          );
+          totalUpdated += Number(updated) || 0;
+        }
       }
 
       if (totalUpdated === 0) {
@@ -519,6 +550,26 @@ export const startTaskOverDueScheduler = () => {
       }
 
       console.log(`${totalUpdated} tasks marked as overdue.`);
+
+      // Send notifications to users about their overdue tasks
+      for (const [key, { userId, organisationId, taskIds }] of overdueTasksByUser.entries()) {
+        try {
+          await sendTaskOverdueReminderNotification({
+            userId,
+            taskIds,
+            count: taskIds.length,
+            organisationId,
+          });
+        } catch (notificationErr) {
+          console.warn('Overdue task notification failed', {
+            userId,
+            taskCount: taskIds.length,
+            error: notificationErr?.message || notificationErr,
+          });
+        }
+      }
+
+      console.log(`Sent overdue notifications to ${overdueTasksByUser.size} users.`);
     } catch (err) {
       console.error("Error in overdue scheduler:", err);
     }

@@ -770,15 +770,6 @@ export const forgetPasswordRequest = async (event) => {
       name: user.fullName,
     });
 
-    // Push notification (in addition to email)
-    try {
-    } catch (pushErr) {
-      console.warn('Password reset push notification failed', {
-        userId: user.id,
-        error: pushErr?.message || pushErr,
-      });
-    }
-
     return success("OTP sent");
   } catch (err) {
     if (err.statusCode) {
@@ -1278,15 +1269,6 @@ export const acceptInvitation = async (event) => {
     await assignDefaultHRDocsToUser(user.id);
     await accountCreationNotification(user);
     await portalReadyTrainingInvite(user);
-
-    // Push notifications (in addition to email)
-    try {
-    } catch (pushErr) {
-      console.warn('Account-created push notification failed', {
-        userId: user.id,
-        error: pushErr?.message || pushErr,
-      });
-    }
 
     try {
       await sendSystemPortalReadyNotification({ userId: user.id });
