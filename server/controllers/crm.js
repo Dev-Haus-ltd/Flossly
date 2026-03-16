@@ -1,4 +1,5 @@
 import { Op } from 'sequelize'
+import { parsePhoneNumber } from 'awesome-phonenumber'
 import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, MetaPage, User, UserOrganisation, CrmWhatsAppMessageLog } from '../models'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults.js'
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
@@ -14,6 +15,8 @@ import { resolveWhatsAppProviderConfig } from '../utils/whatsappProvider'
 import { uploadBufferFile } from '../utils/storage'
 import DB from '../utils/db'
 import { parseJsonBody } from "../utils/body";
+
+const EMAIL_REGEX = /^(?:[a-zA-Z0-9_'^&+\-]+(?:\.[a-zA-Z0-9_'^&+\-]+)*|".+")@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/
 
 const parseDateValue = (value) => {
   if (!value) return null;
@@ -37,6 +40,18 @@ const buildLeadSelectionKey = (leadIds = []) =>
   [...new Set((leadIds || []).map((id) => Number(id)).filter(Boolean))]
     .sort((a, b) => a - b)
     .join(',')
+
+const normalizeLeadContactFields = (payload = {}) => ({
+  email: String(payload.email || '').trim(),
+  telephone: String(payload.telephone || '').trim(),
+})
+
+const validateLeadContactFields = ({ email, telephone }) => {
+  if (!EMAIL_REGEX.test(email)) return 'Enter a valid email'
+  const phone = parsePhoneNumber(telephone)
+  if (!phone?.valid) return 'Enter a valid telephone number'
+  return null
+}
 
 const slugifyKey = (value) => {
   const raw = String(value || '').trim().toLowerCase()
@@ -418,12 +433,15 @@ export const createLead = async (event) => {
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const required = ['name', 'email', 'telephone']
     for (const k of required) if (!payload?.[k]) return error(400, `${k} is required`)
+    const { email, telephone } = normalizeLeadContactFields(payload)
+    const contactValidationError = validateLeadContactFields({ email, telephone })
+    if (contactValidationError) return error(400, contactValidationError)
     const data = {
       organisationId: Number(logged.orgId),
       alert: payload.alert || null,
       name: payload.name,
-      email: payload.email,
-      telephone: payload.telephone,
+      email,
+      telephone,
       inquiryDate: payload.inquiryDate || new Date(),
       dob: payload.dob || null,
       occupation: payload.occupation || null,
