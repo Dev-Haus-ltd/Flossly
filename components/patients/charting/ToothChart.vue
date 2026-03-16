@@ -105,7 +105,7 @@
                 :is-selected="selectedToothFdi === fdi"
                 :active-condition="isRowInteractive(row.id) ? activeCondition : null"
                 :is-bridge-pending="bridgeSelectMode && bridgeStartFdi === fdi"
-                :size="44"
+                :size="52"
                 @surface-click="onSurfaceClickRow(row.id, $event)"
                 @tooth-click="onToothClickRow(row.id, $event)"
               />
@@ -133,7 +133,7 @@
                 :is-selected="selectedToothFdi === fdi"
                 :active-condition="isRowInteractive(row.id) ? activeCondition : null"
                 :is-bridge-pending="bridgeSelectMode && bridgeStartFdi === fdi"
-                :size="44"
+                :size="52"
                 @surface-click="onSurfaceClickRow(row.id, $event)"
                 @tooth-click="onToothClickRow(row.id, $event)"
               />
@@ -435,6 +435,9 @@ onUnmounted(() => {
 
 <style scoped>
 .tooth-chart {
+  --tooth-size: 52px;
+  --tooth-gap: 2px;
+  --tooth-step: calc(var(--tooth-size) + var(--tooth-gap));
   user-select: none;
   padding: 8px 4px;
 }
@@ -461,7 +464,7 @@ onUnmounted(() => {
 }
 
 .tooth-num {
-  width: 46px;
+  width: var(--tooth-step);
   text-align: center;
   font-size: 10px;
   color: #374151;
@@ -487,15 +490,18 @@ onUnmounted(() => {
 
 .quadrant {
   display: flex;
-  gap: 2px;
+  gap: var(--tooth-gap);
 }
 
 .tooth-cell {
-  width: 44px;
-  height: 46px;
+  width: var(--tooth-size);
+  height: var(--tooth-size);
   flex-shrink: 0;
   cursor: pointer;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tooth-cell--inactive {
