@@ -272,8 +272,27 @@ export const listLeads = async (event) => {
     const where = { organisationId: Number(logged.orgId) }
     const archivedOnly = String(q.archivedOnly || '').toLowerCase() === 'true'
     const includeArchived = String(q.includeArchived || '').toLowerCase() === 'true'
-    if (!includeArchived) where.softDeleted = archivedOnly ? true : false
-    if (archivedOnly) where.softDeleted = true
+    const archivedCondition = {
+      [Op.or]: [
+        { softDeleted: true },
+        { leadStatus: 'Archived' },
+      ],
+    }
+    if (archivedOnly) {
+      where[Op.and] = [...(where[Op.and] || []), archivedCondition]
+    } else if (!includeArchived) {
+      where[Op.and] = [
+        ...(where[Op.and] || []),
+        {
+          [Op.not]: {
+            [Op.or]: [
+              { softDeleted: true },
+              { leadStatus: 'Archived' },
+            ],
+          },
+        },
+      ]
+    }
 
     // Server-side filtering moved from client
     // Text search across name/email/telephone
@@ -647,6 +666,7 @@ export const bulkUploadLeads = async (event) => {
           telephone,
           leadSource,
           leadStatus: status || 'New',
+          softDeleted: (status || 'New') === 'Archived',
           treatment,
           inquiryDate: inquiryDate || new Date(),
           followUpDate: followUpDate || null,
