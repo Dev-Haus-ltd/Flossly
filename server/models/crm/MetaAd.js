@@ -21,6 +21,9 @@ export const MetaAd = sequelize.define(
     name: { type: DataTypes.STRING(200), allowNull: true },
     status: { type: DataTypes.STRING(50), allowNull: true },
     creativeId: { type: DataTypes.STRING(50), allowNull: true },
+    platform: { type: DataTypes.STRING(50), allowNull: true },
+    imageUrl: { type: DataTypes.TEXT, allowNull: true },
+    body: { type: DataTypes.TEXT, allowNull: true },
   },
   { modelName: 'MetaAds', timestamps: true }
 )
