@@ -51,12 +51,10 @@
       </div>
 
       <div class="tp-header__right">
-        <button class="tp-hdr-btn" :class="{ 'tp-hdr-btn--active': activeView === 'base' }" @click="activeView = 'base'">Base Chart</button>
-        <button class="tp-hdr-btn" :class="{ 'tp-hdr-btn--active': activeView === 'plan' }" @click="activeView = 'plan'">Treatment Plan</button>
-        <button class="tp-hdr-btn" :class="{ 'tp-hdr-btn--active': activeView === 'images' }" @click="activeView = 'images'">
+        <button class="tp-hdr-btn" :class="{ 'tp-hdr-btn--active': activeView === 'images' }" @click="toggleAuxView('images')">
           <v-icon size="15" class="mr-1">mdi-image-outline</v-icon>Images
         </button>
-        <button class="tp-hdr-btn" :class="{ 'tp-hdr-btn--active': activeView === 'history' }" @click="activeView = 'history'">
+        <button class="tp-hdr-btn" :class="{ 'tp-hdr-btn--active': activeView === 'history' }" @click="toggleAuxView('history')">
           <v-icon size="15" class="mr-1">mdi-history</v-icon>History
         </button>
       </div>
@@ -139,24 +137,13 @@
             </label>
           </div>
           <div class="tp-notes-wrap">
-            <div class="tp-notes-toolbar">
-              <button class="tp-notes-fmt-btn" title="Bold" @click.prevent="execNoteCmd('bold')"><b>B</b></button>
-              <button class="tp-notes-fmt-btn" title="Italic" @click.prevent="execNoteCmd('italic')"><i>I</i></button>
-              <button class="tp-notes-fmt-btn" title="Bullet list" @click.prevent="execNoteCmd('insertUnorderedList')">• List</button>
-              <label class="tp-expand-check ml-auto">
-                <input v-model="draft.showOnInvoice" type="checkbox" />
-                <span>Show on invoice</span>
-              </label>
-              <button class="tp-ai-note-btn" :class="{ 'tp-ai-note-btn--active': voiceActive }" title="Voice dictation" @click.prevent="toggleVoice">
-                <v-icon size="13">mdi-microphone</v-icon>
-                AI Note
-              </button>
-            </div>
-            <div
-              ref="notesEditorEl"
-              contenteditable="true"
-              class="tp-notes-editor"
-              @input="draft.notes = $event.target.innerHTML"
+            <label class="tp-expand-check">
+              <input v-model="draft.showOnInvoice" type="checkbox" />
+              <span>Show notes on invoice</span>
+            </label>
+            <ChartRichTextEditor
+              v-model="draft.notes"
+              placeholder="Add notes for this base chart item..."
             />
           </div>
           <div class="tp-expand-actions">
@@ -188,6 +175,32 @@
             </span>
           </div>
           <div class="tp-appt-header__right">
+            <v-menu offset-y>
+              <template #activator="{ props: menuProps }">
+                <v-chip
+                  v-bind="menuProps"
+                  size="small"
+                  class="tp-status-chip"
+                  :style="appointmentChipStyle(appt)"
+                >
+                  <span class="tp-status-dot"></span>
+                  {{ appointmentStatusLabel(appt.status) }}
+                  <v-icon size="14" class="ml-1">mdi-chevron-down</v-icon>
+                </v-chip>
+              </template>
+              <v-list density="compact">
+                <v-list-item
+                  v-for="status in APPOINTMENT_STATUS_MENU_OPTIONS"
+                  :key="status.value"
+                  @click="$emit('update-appointment', { id: appt.id, patch: { status: status.value } })"
+                >
+                  <template #prepend>
+                    <span class="tp-status-indicator" :style="{ background: status.color }"></span>
+                  </template>
+                  <v-list-item-title>{{ status.label }}</v-list-item-title>
+                </v-list-item>
+              </v-list>
+            </v-menu>
             <button class="tp-appt-icon-btn tp-appt-icon-btn--danger" title="Delete appointment" @click="$emit('delete-appointment', appt.id)">
               <v-icon size="15">mdi-trash-can-outline</v-icon>
             </button>
@@ -278,24 +291,13 @@
                 </label>
               </div>
               <div class="tp-notes-wrap">
-                <div class="tp-notes-toolbar">
-                  <button class="tp-notes-fmt-btn" title="Bold" @click.prevent="execNoteCmd('bold')"><b>B</b></button>
-                  <button class="tp-notes-fmt-btn" title="Italic" @click.prevent="execNoteCmd('italic')"><i>I</i></button>
-                  <button class="tp-notes-fmt-btn" title="Bullet list" @click.prevent="execNoteCmd('insertUnorderedList')">• List</button>
-                  <label class="tp-expand-check ml-auto">
-                    <input v-model="draft.showOnInvoice" type="checkbox" />
-                    <span>Show on invoice</span>
-                  </label>
-                  <button class="tp-ai-note-btn" :class="{ 'tp-ai-note-btn--active': voiceActive }" title="Voice dictation" @click.prevent="toggleVoice">
-                    <v-icon size="13">mdi-microphone</v-icon>
-                    AI Note
-                  </button>
-                </div>
-                <div
-                  ref="notesEditorEl"
-                  contenteditable="true"
-                  class="tp-notes-editor"
-                  @input="draft.notes = $event.target.innerHTML"
+                <label class="tp-expand-check">
+                  <input v-model="draft.showOnInvoice" type="checkbox" />
+                  <span>Show notes on invoice</span>
+                </label>
+                <ChartRichTextEditor
+                  v-model="draft.notes"
+                  placeholder="Add treatment notes for this chart item..."
                 />
               </div>
               <div class="tp-expand-actions">
@@ -347,7 +349,7 @@
           <label class="tp-field">
             <span>Justification</span>
             <select v-model="imgForm.justification">
-              <option v-for="j in IMAGE_JUSTIFICATIONS" :key="j" :value="j === '—' ? '' : j">{{ j }}</option>
+              <option v-for="j in IMAGE_JUSTIFICATIONS" :key="j" :value="j === '-' ? '' : j">{{ j }}</option>
             </select>
           </label>
           <label class="tp-field">
@@ -368,7 +370,8 @@
         </div>
         <div class="tp-img-upload-drop">
           <DirectFileUpload :disabled="imgUploading" @upload="onImagesSelected" />
-          <p v-if="imgUploading" class="tp-img-uploading">Uploading...</p>
+          <p v-if="imgUploading" class="tp-img-uploading">Uploading {{ pendingImageName || 'image' }}...</p>
+          <p v-else-if="pendingImageName" class="tp-img-uploading">{{ pendingImageName }} selected</p>
         </div>
       </div>
 
@@ -459,6 +462,7 @@
 <script setup>
 import { getToothLabel } from './toothData.js'
 import DirectFileUpload from '@/components/Common/directFileUpload.vue'
+import ChartRichTextEditor from './ChartRichTextEditor.vue'
 import { makeTPName } from '~/shared/defaults/charting/chartingDefaults.js'
 
 const props = defineProps({
@@ -483,10 +487,23 @@ const emit = defineEmits([
   'mark-complete', 'print-plan',
 ])
 
-const activeView = ref('base')
+const activeView = ref('plan')
 // Fix #10 — use £ not the verbose 'GBP ' prefix
 const currencySymbol = '£'
 const totalFormatted = computed(() => Number(props.total || 0).toFixed(2))
+const pendingImageName = ref('')
+
+const APPOINTMENT_STATUS_OPTIONS = [
+  { value: 'pending', label: 'Pending', color: '#6b7280' },
+  { value: 'confirmed', label: 'Confirmed', color: '#2563eb' },
+  { value: 'arrived', label: 'Arrived', color: '#7c3aed' },
+  { value: 'in surgery', label: 'In Surgery', color: '#f97316' },
+  { value: 'completed', label: 'Complete', color: '#16a34a' },
+  { value: 'cancelled', label: 'Cancelled', color: '#dc2626' },
+  { value: 'did not attend', label: 'Did not attend', color: '#b91c1c' },
+  { value: 'scheduled', label: 'Scheduled', color: '#0f766e' },
+]
+const APPOINTMENT_STATUS_MENU_OPTIONS = APPOINTMENT_STATUS_OPTIONS.filter((option) => option.value !== 'scheduled')
 
 const NHS_BAND3_KEYS = ['crown', 'bridge', 'denture', 'veneer', 'implant', 'onlay', 'inlay', 'post and core', 'post & core']
 const NHS_BAND2_KEYS = ['fill', 'extract', 'root canal', 'rct', 'composite', 'amalgam', 'deep scale', 'periodon', 'surgery']
@@ -548,6 +565,28 @@ function toothLabel(item) {
 
 function itemDisplayLabel(item) {
   return item.treatmentName || item.conditionLabel || item.condition || 'Treatment'
+}
+
+function toggleAuxView(view) {
+  activeView.value = activeView.value === view ? 'plan' : view
+}
+
+function appointmentStatusMeta(status) {
+  const raw = String(status || '').trim().toLowerCase()
+  const key = raw === 'complete' ? 'completed' : raw
+  return APPOINTMENT_STATUS_OPTIONS.find((option) => option.value === key) || APPOINTMENT_STATUS_OPTIONS[0]
+}
+
+function appointmentStatusLabel(status) {
+  return appointmentStatusMeta(status).label
+}
+
+function appointmentChipStyle(appt) {
+  const meta = appointmentStatusMeta(appt?.status)
+  return {
+    background: meta.color,
+    color: '#fff',
+  }
 }
 
 function formatDate(iso) {
@@ -632,8 +671,6 @@ async function openExpanded(item) {
   draft.invoiceDesc = item.invoiceDesc || item.treatmentName || item.conditionLabel || ''
   draft.showOnInvoice = item.showOnInvoice !== false
   expandedRowId.value = rowKey(item)
-  await nextTick()
-  if (notesEditorEl.value) notesEditorEl.value.innerHTML = draft.notes || ''
 }
 
 async function closeExpanded() {
@@ -669,7 +706,7 @@ async function saveExpanded() {
     duration: Number(draft.duration || 0),
     cost: Number(draft.cost || 0),
     status: draft.status,
-    notes: notesEditorEl.value ? notesEditorEl.value.innerHTML : (draft.notes || ''),
+    notes: draft.notes || '',
     completedAt: draft.completedOn ? new Date(draft.completedOn).toISOString() : null,
     paymentPlan: draft.paymentPlan || 'private',
     referrerId: draft.referrerId || null,
@@ -685,41 +722,6 @@ async function cancelExpanded() {
 }
 
 const planDrawerOpen = ref(false)
-
-// Rich text notes editor
-const notesEditorEl = ref(null)
-function execNoteCmd(cmd) {
-  notesEditorEl.value?.focus()
-  document.execCommand(cmd, false, null)
-}
-
-// AI Note — voice dictation via Web Speech API
-const voiceActive = ref(false)
-let _recognition = null
-function toggleVoice() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-  if (!SR) { alert('Speech recognition is not supported in this browser.'); return }
-  if (voiceActive.value) {
-    _recognition?.stop()
-    voiceActive.value = false
-    return
-  }
-  _recognition = new SR()
-  _recognition.continuous = true
-  _recognition.interimResults = false
-  _recognition.lang = 'en-GB'
-  _recognition.onresult = (e) => {
-    const text = Array.from(e.results).map(r => r[0].transcript).join(' ')
-    if (notesEditorEl.value) {
-      notesEditorEl.value.focus()
-      document.execCommand('insertText', false, (notesEditorEl.value.innerHTML ? ' ' : '') + text)
-    }
-  }
-  _recognition.onerror = () => { voiceActive.value = false }
-  _recognition.onend = () => { voiceActive.value = false }
-  _recognition.start()
-  voiceActive.value = true
-}
 
 // Image upload form
 const imgForm = reactive({
@@ -752,25 +754,28 @@ const IMAGE_JUSTIFICATIONS = [
 ]
 
 async function onImagesSelected(files) {
-  const file = Array.isArray(files) ? files[0] : files
-  if (!file) return
+  const selected = Array.isArray(files) ? files.filter(Boolean) : [files].filter(Boolean)
+  if (!selected.length) return
   imgUploading.value = true
+  pendingImageName.value = selected.map((file) => file.name).join(', ')
   const practitionerList = props.practitioners || []
   const devPrac = practitionerList.find(p => Number(p.id) === Number(imgForm.developedBy))
   const takenPrac = practitionerList.find(p => Number(p.id) === Number(imgForm.takenBy))
-  emit('add-image', {
-    file,
-    meta: {
-      type: imgForm.type,
-      grade: imgForm.grade,
-      developedBy: imgForm.developedBy,
-      developedByName: devPrac?.name || '',
-      justification: imgForm.justification,
-      takenBy: imgForm.takenBy,
-      takenByName: takenPrac?.name || '',
-      dateTaken: imgForm.dateTaken,
-      description: imgForm.description,
-    },
+  selected.forEach((file) => {
+    emit('add-image', {
+      file,
+      meta: {
+        type: imgForm.type,
+        grade: imgForm.grade,
+        developedBy: imgForm.developedBy,
+        developedByName: devPrac?.name || '',
+        justification: imgForm.justification,
+        takenBy: imgForm.takenBy,
+        takenByName: takenPrac?.name || '',
+        dateTaken: imgForm.dateTaken,
+        description: imgForm.description,
+      },
+    })
   })
   imgUploading.value = false
 }
@@ -863,7 +868,7 @@ function onPlansWheel(e) {
 }
 
 onMounted(() => {
-  emit('chart-scope-change', activeView.value === 'base' ? 'base' : (activeView.value === 'plan' ? 'plan' : 'both'))
+  emit('chart-scope-change', activeView.value === 'plan' ? 'plan' : 'both')
   if (!props.activePlanId && props.plans?.length) emit('select-plan', props.plans[0].id)
   nextTick(updateScrollButtons)
   window.addEventListener('resize', updateScrollButtons, { passive: true })
@@ -894,9 +899,15 @@ watch(
   }
 )
 
+watch(
+  () => props.images.length,
+  () => {
+    pendingImageName.value = ''
+  }
+)
+
 watch(activeView, async () => {
-  if (activeView.value === 'base') emit('chart-scope-change', 'base')
-  else if (activeView.value === 'plan') emit('chart-scope-change', 'plan')
+  if (activeView.value === 'plan') emit('chart-scope-change', 'plan')
   else emit('chart-scope-change', 'both')
   await closeExpanded()
 })
@@ -1310,6 +1321,30 @@ watch(activeView, async () => {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.tp-status-chip {
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  height: 24px !important;
+  padding: 0 8px !important;
+}
+
+.tp-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.8);
+  display: inline-block;
+  margin-right: 6px;
+}
+
+.tp-status-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 8px;
 }
 
 .tp-appt-icon-btn {

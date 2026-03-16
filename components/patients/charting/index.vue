@@ -113,10 +113,15 @@
       <!-- Step 1: Diagnosis notes + findings list -->
       <DiagnosePanel
         v-if="currentStep === 1"
-        v-model="diagnosisNotes"
         :base-items="baseChartItems"
         :notation="store.notation"
+        :images="store.chartImages"
+        :history="store.historyEntries"
+        :practitioners="store.practitioners"
         @remove="store.removeTreatmentItemById($event)"
+        @update="onTreatmentUpdate"
+        @add-image="onAddChartImage"
+        @remove-image="store.removeChartImage($event)"
       />
 
       <!-- Step 2: Full treatment plan panel -->
@@ -146,7 +151,7 @@
           @update-plan-color="store.updateTreatmentPlanColor($event.id, $event.color)"
           @set-interval="onSetInterval"
           @link-appointment="onLinkAppointment"
-          @add-image="store.addChartImage($event.file, $event.meta)"
+          @add-image="onAddChartImage"
           @remove-image="store.removeChartImage($event)"
           @delete-appointment="store.deleteAppointment($event)"
           @update-appointment="onUpdateAppointment"
@@ -301,8 +306,6 @@ const teethTypeOptions = [
 ]
 
 const view3d = ref(false)
-const diagnosisNotes = ref('')
-
 const practiceName = computed(() => orgStore?.organisation?.name || '')
 const activePlanObj = computed(() => store.plans?.find(p => p.id === store.activePlanId) || store.plans?.[0] || null)
 const activePlanRef = computed(() => activePlanObj.value?.name || 'TP-01')
@@ -399,6 +402,15 @@ function onCodeSelect(codeId, conditionKey) {
 }
 
 function onTreatmentUpdate({ id, ...patch }) { store.updateTreatmentItem(id, patch) }
+
+async function onAddChartImage(payload) {
+  const res = await store.addChartImage(payload?.file, payload?.meta)
+  if (res?.code === 0) {
+    mainStore?.setSnackbar?.({ title: 'Image uploaded.', type: 'success' })
+    return
+  }
+  mainStore?.setSnackbar?.({ title: res?.message || 'Unable to upload image.', type: 'error' })
+}
 
 function onMarkComplete(payload) {
   const itemId = typeof payload === 'object' ? payload?.id : payload

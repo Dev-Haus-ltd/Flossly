@@ -900,10 +900,11 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
           this.chartImages = this.chartImages.slice(0, 100)
           this._persistChartMeta()
           this._logHistory('Image added', file.name || 'image')
-        }
-        return res
+      }
+      return res
       } catch (e) {
-        return null
+        this._logError('addChartImage', e)
+        return e
       }
     },
     removeChartImage(id) {
