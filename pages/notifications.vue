@@ -138,12 +138,14 @@
 import taskIcon from '@/assets/icons/notification/task.svg';
 import leadIcon from '@/assets/icons/notification/lead.svg';
 import messageIcon from '@/assets/icons/notification/message.svg';
+import notificationIcon from '@/assets/icons/notification/notification (1).svg';
 import searchicon from '@/assets/icons/listView/serach-icon.svg';
 
 definePageMeta({
   layout: 'home',
 });
 
+const { user } = useUser();
 const notifications = ref([]);
 const unreadCount = ref(0);
 const limit = 30;
@@ -232,9 +234,15 @@ const onFiltersUpdated = (newFilters) => {
 
 const fetchPage = async ({ reset = false } = {}) => {
   const currentOffset = reset ? 0 : offset.value;
+  const currentOrgId = user.value?.currentLoggedInOrgId || null;
+  
   const response = await $fetch('/api/notifications/get-notifications', {
     method: 'GET',
-    params: { limit, offset: currentOffset },
+    params: { 
+      limit, 
+      offset: currentOffset,
+      organisationId: currentOrgId
+    },
   });
 
   const payload = response?.data || response;
@@ -254,7 +262,12 @@ const fetchPage = async ({ reset = false } = {}) => {
 };
 
 const fetchUnreadCount = async () => {
-  const response = await $fetch('/api/notifications/get-unread-count');
+  const currentOrgId = user.value?.currentLoggedInOrgId || null;
+  
+  const response = await $fetch('/api/notifications/get-unread-count', {
+    method: 'GET',
+    params: { organisationId: currentOrgId }
+  });
   const payload = response?.data || response;
   unreadCount.value = payload.unreadCount || 0;
 };
@@ -290,16 +303,79 @@ const handleNotificationClick = async (notification) => {
     await fetchUnreadCount();
   }
 
-  const urlMap = {
-    task_assigned: `/tasks/${notification.data?.taskId || 'mytasks'}`,
-    task_completed: `/tasks/${notification.data?.taskId || 'mytasks'}`,
-    task_comment: `/tasks/${notification.data?.taskId || 'mytasks'}`,
-    task_unassigned: `/tasks/mytasks`,
-    lead_created: `/crm?leadId=${notification.data?.leadId || ''}`,
-    lead_assigned: `/crm?leadId=${notification.data?.leadId || ''}`,
-  };
+  // Support notifications don't redirect - just mark as read
+  if (notification.type?.startsWith('support_') || notification.type === 'chatbot_message') {
+    return;
+  }
 
-  const url = notification.data?.url || urlMap[notification.type] || '/';
+  // Build URL with query parameters for task notifications
+  let url = notification.data?.url || '/';
+  
+  if (!notification.data?.url) {
+    const urlMap = {
+      // Tasks
+      task_assigned: `/tasks/mytasks`,
+      task_assigned_bulk: `/tasks/mytasks`,
+      task_completed: `/tasks/mytasks`,
+      task_completed_bulk: `/tasks/mytasks`,
+      task_comment: `/tasks/mytasks`,
+      task_unassigned: `/tasks/mytasks`,
+      task_unassigned_bulk: `/tasks/mytasks`,
+      task_due_reminder: `/tasks/mytasks`,
+      task_overdue_reminder: `/tasks/mytasks`,
+      
+      // CRM / Leads
+      lead_created: `/crm/leads?leadId=${notification.data?.leadId || ''}`,
+      lead_assigned: `/crm/leads?leadId=${notification.data?.leadId || ''}`,
+      lead_unassigned: `/crm/leads?leadId=${notification.data?.leadId || ''}`,
+      lead_status_changed: `/crm/leads?leadId=${notification.data?.leadId || ''}`,
+      crm_automation_sent: `/crm/leads?leadId=${notification.data?.leadId || ''}`,
+      crm_automation_failed: `/crm/leads?leadId=${notification.data?.leadId || ''}`,
+      whatsapp_message: `/crm/leads?leadId=${notification.data?.leadId || ''}&tab=communication`,
+      meta_dm: '/crm/analytics',
+      
+      // Rota / Leave
+      rota_published: '/teams/rota',
+      shift_reminder: '/teams/rota',
+      leave_approved: '/teams/rota',
+      leave_denied: '/teams/rota',
+      
+      // Support/chat (no redirect, just show notification)
+      support_ticket_submitted: null,
+      support_reply: null,
+      chatbot_message: null,
+      
+      // System
+      system_subscription_confirmed: '/',
+      system_account_created: '/',
+      system_password_reset_requested: '/forgetpassword',
+      system_portal_ready: '/dashboard',
+    };
+    url = urlMap[notification.type] || '/';
+  }
+  
+  // Normalize legacy CRM routes for lead-related notifications
+  if ((notification.type?.startsWith('lead_') || notification.type === 'whatsapp_message') && typeof url === 'string') {
+    url = url.replace(/^\/crm\?/, '/crm/leads?');
+    if (url === '/crm') url = '/crm/leads';
+  }
+
+  // For task notifications, add userTaskId as query parameter to open dialog
+  if (notification.type?.startsWith('task_') && notification.data?.userTaskId) {
+    const separator = url.includes('?') ? '&' : '?';
+    url = `${url}${separator}userTaskId=${notification.data.userTaskId}`;
+  }
+  
+  // For lead notifications, add leadId as query parameter to open dialog
+  if (
+    notification.type?.startsWith('lead_') &&
+    notification.data?.leadId &&
+    !/[?&]leadId=/.test(url)
+  ) {
+    const separator = url.includes('?') ? '&' : '?';
+    url = `${url}${separator}leadId=${notification.data.leadId}`;
+  }
+
   await navigateTo(url);
 };
 
@@ -307,13 +383,17 @@ const getNotificationIconSvg = (type) => {
   // Map notification types to the custom SVG icons from assets/icons/notification/
   if (type.startsWith('task_')) {
     return taskIcon;
-  } else if (type.startsWith('lead_')) {
+  } else if (type.startsWith('lead_') || type.startsWith('crm_')) {
     return leadIcon;
-  } else if (type.includes('message') || type.includes('comment') || type === 'whatsapp_message' || type === 'meta_dm') {
+  } else if (type.startsWith('system_')) {
+    return notificationIcon;
+  } else if (type.startsWith('rota_') || type.startsWith('shift_') || type.startsWith('leave_')) {
+    return notificationIcon;
+  } else if (type.includes('message') || type.includes('comment') || type === 'whatsapp_message' || type === 'meta_dm' || type === 'chatbot_message') {
     return messageIcon;
   }
-  // Default to task icon
-  return taskIcon;
+  // Default to notification icon
+  return notificationIcon;
 };
 
 const getNotificationTypeLabel = (type) => {

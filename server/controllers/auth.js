@@ -36,6 +36,9 @@ import {
   sendOtpForPasswordReset,
   sendOrganisationCreatedInternalNotification,
 } from "../utils/emailNotifications";
+import {
+  sendSystemPortalReadyNotification,
+} from "../utils/fcmNotification.js";
 import { getCurrentEnvironment } from "../utils/environment";
 import requestIp from "request-ip";
 import { HrDocument } from "../models/hrDocuments";
@@ -766,6 +769,7 @@ export const forgetPasswordRequest = async (event) => {
       otp,
       name: user.fullName,
     });
+
     return success("OTP sent");
   } catch (err) {
     if (err.statusCode) {
@@ -980,6 +984,16 @@ export const verifyEmail = async (event) => {
 
         await assignDefaultHRDocsToUser(user.id);
         await portalReadyTrainingInvite(user);
+
+        // Push notification (in addition to email)
+        try {
+          await sendSystemPortalReadyNotification({ userId: user.id });
+        } catch (pushErr) {
+          console.warn('Portal-ready push notification failed', {
+            userId: user.id,
+            error: pushErr?.message || pushErr,
+          });
+        }
       }
       return success("Email Verified");
     } else {
@@ -1255,6 +1269,16 @@ export const acceptInvitation = async (event) => {
     await assignDefaultHRDocsToUser(user.id);
     await accountCreationNotification(user);
     await portalReadyTrainingInvite(user);
+
+    try {
+      await sendSystemPortalReadyNotification({ userId: user.id });
+    } catch (pushErr) {
+      console.warn('Portal-ready push notification failed', {
+        userId: user.id,
+        error: pushErr?.message || pushErr,
+      });
+    }
+
     const token = jwt.sign(
       {
         userId: user.id,

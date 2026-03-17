@@ -442,6 +442,7 @@ export const startPatientJourneyAutomationScheduler = () => {
 }
 
 import { sendTaskDueReminderEmail } from './emailNotifications.js'
+import { sendTaskDueReminderNotification, sendTaskOverdueReminderNotification, sendShiftReminderNotification } from './fcmNotification.js'
 
 export const startTaskOverDueScheduler = () => {
   // Run every night at 12 AM (server time)
@@ -474,21 +475,52 @@ export const startTaskOverDueScheduler = () => {
       }
 
       let totalUpdated = 0;
+      const overdueTasksByUser = new Map(); // Track overdue tasks per user for notifications
+
       for (const [orgId, ids] of statusByOrg.entries()) {
         if (!ids?.overdueId) continue;
         const excludedStatusIds = [ids.overdueId, ids.completedId].filter(Boolean);
-        const [updated] = await UserTask.update(
-          { statusId: ids.overdueId },
-          {
-            where: {
-              organisationId: orgId,
-              isArchieved: false,
-              dueDate: { [Op.lt]: startOfToday },
-              statusId: { [Op.notIn]: excludedStatusIds },
-            },
-          }
-        );
-        totalUpdated += Number(updated) || 0;
+        
+        // Find tasks that will become overdue
+        const tasksToMarkOverdue = await UserTask.findAll({
+          where: {
+            organisationId: orgId,
+            isArchieved: false,
+            dueDate: { [Op.lt]: startOfToday },
+            statusId: { [Op.notIn]: excludedStatusIds },
+          },
+          attributes: ["id", "userId", "organisationId"],
+        });
+
+        if (tasksToMarkOverdue.length > 0) {
+          // Group tasks by user for notification purposes
+          tasksToMarkOverdue.forEach((task) => {
+            const userId = Number(task.userId);
+            if (!userId) return;
+            const key = `${userId}:${task.organisationId}`;
+            const userTasks = overdueTasksByUser.get(key) || {
+              userId,
+              organisationId: task.organisationId,
+              taskIds: [],
+            };
+            userTasks.taskIds.push(task.id);
+            overdueTasksByUser.set(key, userTasks);
+          });
+
+          // Update tasks to overdue status
+          const [updated] = await UserTask.update(
+            { statusId: ids.overdueId },
+            {
+              where: {
+                organisationId: orgId,
+                isArchieved: false,
+                dueDate: { [Op.lt]: startOfToday },
+                statusId: { [Op.notIn]: excludedStatusIds },
+              },
+            }
+          );
+          totalUpdated += Number(updated) || 0;
+        }
       }
 
       if (totalUpdated === 0) {
@@ -497,6 +529,26 @@ export const startTaskOverDueScheduler = () => {
       }
 
       console.log(`${totalUpdated} tasks marked as overdue.`);
+
+      // Send notifications to users about their overdue tasks
+      for (const [key, { userId, organisationId, taskIds }] of overdueTasksByUser.entries()) {
+        try {
+          await sendTaskOverdueReminderNotification({
+            userId,
+            taskIds,
+            count: taskIds.length,
+            organisationId,
+          });
+        } catch (notificationErr) {
+          console.warn('Overdue task notification failed', {
+            userId,
+            taskCount: taskIds.length,
+            error: notificationErr?.message || notificationErr,
+          });
+        }
+      }
+
+      console.log(`Sent overdue notifications to ${overdueTasksByUser.size} users.`);
     } catch (err) {
       console.error("Error in overdue scheduler:", err);
     }
@@ -538,12 +590,32 @@ export const startTaskDueReminderScheduler = () => {
           const formattedDue = ut.dueDate
             ? new Date(ut.dueDate).toLocaleDateString("en-GB")
             : "";
+          const taskTitle = ut.taskDetails?.title || ut.title || "Task";
+
+          // Email reminder (existing)
           await sendTaskDueReminderEmail({
             email: assignee.email,
             name: assignee.fullName,
-            taskTitle: ut.taskDetails?.title || ut.title || "Task",
+            taskTitle,
             dueDate: formattedDue,
           });
+
+          // Push notification (new - in addition to email)
+          try {
+            await sendTaskDueReminderNotification({
+              userId: assignee.id,
+              taskId: ut.id,
+              taskTitle,
+              dueDate: `tomorrow (${formattedDue})`,
+              organisationId: ut.organisationId
+            });
+          } catch (pushErr) {
+            console.warn('Task due reminder push notification failed', {
+              userId: assignee.id,
+              taskId: ut.id,
+              error: pushErr?.message || pushErr,
+            });
+          }
         }
       }
     } catch (err) {
@@ -696,6 +768,69 @@ export const startMetaSyncScheduler = () => {
       console.log("[MetaScheduler] Daily Meta sync complete");
     } catch (err) {
       console.error("[MetaScheduler] scheduler error", err?.message);
+    }
+  });
+};
+
+export const startShiftReminderScheduler = () => {
+  cron.schedule('0 9 * * *', async () => {
+    console.log('[Shift Reminder] Running daily shift reminder check...');
+    try {
+      const { RotaShift, RotaUser, Rota } = await import('../models/index.js');
+      
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(0, 0, 0, 0);
+      
+      const dayAfterTomorrow = new Date(tomorrow);
+      dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
+      
+      const upcomingShifts = await RotaShift.findAll({
+        where: {
+          date: {
+            [Op.gte]: tomorrow,
+            [Op.lt]: dayAfterTomorrow
+          }
+        },
+        include: [
+          {
+            model: RotaUser,
+            as: 'rotaUsers',
+            include: [{
+              model: User,
+              as: 'user',
+              attributes: ['id', 'fullName']
+            }]
+          },
+          {
+            model: Rota,
+            as: 'rota'
+          }
+        ]
+      });
+      
+      for (const shift of upcomingShifts) {
+        if (!shift.rotaUsers || shift.rotaUsers.length === 0) continue;
+        
+        const shiftDate = new Date(shift.date).toLocaleDateString('en-GB');
+        const shiftTime = shift.startTime || '';
+        const shiftOrganisationId = shift.rota?.organisationId;
+        
+        for (const rotaUser of shift.rotaUsers) {
+          if (!rotaUser.user?.id) continue;
+          
+          await sendShiftReminderNotification({
+            userId: rotaUser.user.id,
+            shiftDate,
+            shiftTime,
+            organisationId: shiftOrganisationId
+          });
+        }
+      }
+      
+      console.log(`[Shift Reminder] Processed ${upcomingShifts.length} upcoming shifts`);
+    } catch (err) {
+      console.error('[Shift Reminder] scheduler error:', err?.message);
     }
   });
 };

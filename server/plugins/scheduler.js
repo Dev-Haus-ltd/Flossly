@@ -8,6 +8,7 @@ import {
   startTaskDueReminderScheduler,
   startOnboardingScheduler,
   startMetaSyncScheduler,
+  startShiftReminderScheduler,
 } from "../utils/scheduler";
 
 const SCHEDULER_LOCK_KEY = 3482173901;
@@ -39,6 +40,7 @@ export default defineNitroPlugin(async (nitroApp) => {
     startTaskDueReminderScheduler();
     startOnboardingScheduler();
     startMetaSyncScheduler();
+    startShiftReminderScheduler();
     console.log("Scheduler Started");
   } catch (error) {
     console.error("Unable to start scheduler", error);

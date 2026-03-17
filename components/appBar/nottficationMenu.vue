@@ -103,11 +103,13 @@
 <script setup>
 import { useFCM } from '~/composables/useFCM';
 import notificationIcon from '@/assets/icons/notification/Notification.svg';
+import notificationListIcon from '@/assets/icons/notification/notification (1).svg';
 import taskIcon from '@/assets/icons/notification/task.svg';
 import leadIcon from '@/assets/icons/notification/lead.svg';
 import messageIcon from '@/assets/icons/notification/message.svg';
 
 const menu = ref(false);
+const { user } = useUser();
 const notifications = ref([]);
 const unreadCount = ref(0);
 const router = useRouter();
@@ -125,9 +127,15 @@ const maybeRequestPermission = async () => {
 // Fetch notifications
 const fetchNotifications = async () => {
   try {
+    const currentOrgId = user.value?.currentLoggedInOrgId || null;
+    
     const response = await $fetch('/api/notifications/get-notifications', {
       method: 'GET',
-      params: { limit: 10, offset: 0 }
+      params: { 
+        limit: 10, 
+        offset: 0,
+        organisationId: currentOrgId
+      }
     });
 
     const payload = response?.data || response;
@@ -144,7 +152,12 @@ const fetchNotifications = async () => {
 // Get unread count
 const fetchUnreadCount = async () => {
   try {
-    const response = await $fetch('/api/notifications/get-unread-count');
+    const currentOrgId = user.value?.currentLoggedInOrgId || null;
+    
+    const response = await $fetch('/api/notifications/get-unread-count', {
+      method: 'GET',
+      params: { organisationId: currentOrgId }
+    });
     const payload = response?.data || response;
     if (payload?.success || response?.success) {
       unreadCount.value = payload.unreadCount || 0;
@@ -186,16 +199,80 @@ const handleNotificationClick = async (notification) => {
     await markAsRead(notification.id);
   }
 
-  // Navigate based on notification type
-  const urlMap = {
-    task_assigned: `/tasks/${notification.data?.taskId || 'mytasks'}`,
-    task_completed: `/tasks/${notification.data?.taskId || 'mytasks'}`,
-    lead_created: `/crm?leadId=${notification.data?.leadId || ''}`,
-    whatsapp_message: `/crm?leadId=${notification.data?.leadId || ''}&tab=communication`,
-    meta_dm: '/crm/analytics',
-  };
+  // Build URL with query parameters for task notifications
+  let url = notification.data?.url || '/';
+  
+  // Support notifications don't redirect - just mark as read
+  if (notification.type?.startsWith('support_') || notification.type === 'chatbot_message') {
+    menu.value = false;
+    return;
+  }
+  
+  if (!notification.data?.url) {
+    const urlMap = {
+      // Tasks (always go to My Tasks)
+      task_assigned: `/tasks/mytasks`,
+      task_assigned_bulk: `/tasks/mytasks`,
+      task_completed: `/tasks/mytasks`,
+      task_completed_bulk: `/tasks/mytasks`,
+      task_comment: `/tasks/mytasks`,
+      task_unassigned: `/tasks/mytasks`,
+      task_unassigned_bulk: `/tasks/mytasks`,
+      task_due_reminder: `/tasks/mytasks`,
+      task_overdue_reminder: `/tasks/mytasks`,
+      
+      // CRM / Leads
+      lead_created: `/crm/leads?leadId=${notification.data?.leadId || ''}`,
+      lead_assigned: `/crm/leads?leadId=${notification.data?.leadId || ''}`,
+      lead_unassigned: `/crm/leads?leadId=${notification.data?.leadId || ''}`,
+      lead_status_changed: `/crm/leads?leadId=${notification.data?.leadId || ''}`,
+      crm_automation_sent: `/crm/leads?leadId=${notification.data?.leadId || ''}`,
+      crm_automation_failed: `/crm/leads?leadId=${notification.data?.leadId || ''}`,
+      whatsapp_message: `/crm/leads?leadId=${notification.data?.leadId || ''}&tab=communication`,
+      meta_dm: '/crm/analytics',
+      
+      // Rota / Leave / Team
+      rota_published: '/teams/rota',
+      shift_reminder: '/teams/rota',
+      leave_approved: '/teams/rota',
+      leave_denied: '/teams/rota',
+      
+      // Support/chat notifications (no redirect, just show notification)
+      support_ticket_submitted: null,
+      support_reply: null,
+      chatbot_message: null,
+      
+      // System notifications
+      system_subscription_confirmed: '/',
+      system_account_created: '/',
+      system_password_reset_requested: '/forgetpassword',
+      system_portal_ready: '/dashboard',
+    };
+    url = urlMap[notification.type] || '/';
+  }
+  
+  // Normalize legacy CRM routes for lead-related notifications
+  if ((notification.type?.startsWith('lead_') || notification.type === 'whatsapp_message') && typeof url === 'string') {
+    url = url.replace(/^\/crm\?/, '/crm/leads?');
+    if (url === '/crm') url = '/crm/leads';
+  }
 
-  const url = notification.data?.url || urlMap[notification.type] || '/';
+  // For task notifications, add userTaskId as query parameter to open dialog
+  if (notification.type?.startsWith('task_') && notification.data?.userTaskId) {
+    const separator = url.includes('?') ? '&' : '?';
+    url = `${url}${separator}userTaskId=${notification.data.userTaskId}`;
+  }
+  
+  // For lead notifications, add leadId as query parameter to open dialog
+  if (
+    notification.type?.startsWith('lead_') &&
+    notification.data?.leadId &&
+    !/[?&]leadId=/.test(url)
+  ) {
+    const separator = url.includes('?') ? '&' : '?';
+    url = `${url}${separator}leadId=${notification.data.leadId}`;
+  }
+
   menu.value = false;
   await navigateTo(url);
 };
@@ -211,12 +288,16 @@ const viewAllNotifications = () => {
 const getNotificationIconSvg = (type) => {
   if (type.startsWith('task_')) {
     return taskIcon;
-  } else if (type.startsWith('lead_')) {
+  } else if (type.startsWith('lead_') || type.startsWith('crm_')) {
     return leadIcon;
-  } else if (type.includes('message') || type.includes('comment') || type === 'whatsapp_message' || type === 'meta_dm') {
+  } else if (type.startsWith('system_')) {
+    return notificationListIcon;
+  } else if (type.startsWith('rota_') || type.startsWith('shift_') || type.startsWith('leave_')) {
+    return notificationListIcon;
+  } else if (type.startsWith('support_') || type.includes('message') || type.includes('comment') || type === 'whatsapp_message' || type === 'meta_dm' || type === 'chatbot_message') {
     return messageIcon;
   }
-  return taskIcon;
+  return notificationListIcon;
 };
 
 // Format time

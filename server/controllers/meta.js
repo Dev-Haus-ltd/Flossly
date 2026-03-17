@@ -686,6 +686,42 @@ const fetchLeadsForOrg = async (orgId, { days = 0, maxPerForm = 1000, debugEnabl
   }
 
   if (debugEnabled) return { ok: true, debug }
+
+  // Send notification to org users about imported leads
+  if (imported > 0) {
+    try {
+      const orgUsers = await UserOrganisation.findAll({
+        where: {
+          organisationId: orgId,
+          status: 'Active',
+        },
+        attributes: ['userId'],
+      })
+      const userIds = [...new Set(orgUsers.map((u) => u.userId).filter(Boolean))]
+      if (userIds.length) {
+        await sendNotificationToMultipleUsers({
+          userIds,
+          title: 'Meta Leads Imported',
+          body: `${imported} new lead${imported > 1 ? 's were' : ' was'} imported from Meta`,
+          type: 'lead_bulk_import',
+          referenceType: 'lead',
+          data: {
+            importedCount: imported,
+            leadSource: 'Meta Leadgen',
+            url: '/crm',
+          },
+          priority: 'high',
+        })
+      }
+    } catch (notifyErr) {
+      console.warn('[META BULK IMPORT] Lead notification failed', {
+        orgId,
+        imported,
+        error: notifyErr?.message || 'Unknown notification error',
+      })
+    }
+  }
+
   return { ok: true, imported }
 }
 
@@ -984,6 +1020,7 @@ export const webhook = async (event) => {
               if (userIds.length) {
                 await sendNotificationToMultipleUsers({
                   userIds,
+                  organisationId: mp.organisationId,
                   title: 'New Meta Lead',
                   body: fullName || email || phone || 'A new lead was received',
                   type: 'lead_created',
@@ -993,7 +1030,7 @@ export const webhook = async (event) => {
                     leadId: String(created.id),
                     leadSource: 'Meta Leadgen',
                     pageId: String(pageId || ''),
-                    url: `/crm?leadId=${created.id}`,
+                    url: `/crm/leads?leadId=${created.id}`,
                   },
                   priority: 'high',
                 })
