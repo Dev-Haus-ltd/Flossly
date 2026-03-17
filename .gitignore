@@ -151,6 +151,7 @@ service.json
 
 .gemini
 .nvmrc
+.claude/settings.local.json
 
 /public/documents/
 
