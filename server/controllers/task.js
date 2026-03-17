@@ -402,18 +402,28 @@ export const assignBulkTasks = async (event) => {
       });
     }
 
+    const todoStatusId =
+      orgStatuses.find((x) => x.key === "todo")?.id || orgStatuses?.[0]?.id;
+    const defaultPriorityId =
+      orgPriorities.find((x) => x.key === "low")?.id || orgPriorities?.[0]?.id;
+
     const userTasks = newTasks
       .map((t) => {
+        const frequency = t.frequency ?? t.defaultFrequency ?? null;
+        const priorityId = t.priorityId ?? t.priority?.id ?? defaultPriorityId;
+        const statusId = t.statusId ?? t.status?.id ?? todoStatusId;
+        const dueDate = t.dueDate ? new Date(t.dueDate) : getDueDate(frequency);
+
         return {
           userId,
           organisationId,
           taskId: t.id,
-          statusId: orgStatuses.find((x) => x.key === "todo").id,
-          priorityId: orgPriorities.find((x) => x.key === "low").id,
+          statusId,
+          priorityId,
           title: t.title,
           documentLink: "",
-          frequency: t.defaultFrequency,
-          dueDate: getDueDate(t.defaultFrequency),
+          frequency,
+          dueDate,
           comments: "",
           assignedBy: loggedUser.userId,
         };
@@ -2237,9 +2247,12 @@ export const groupTeamTasksByTaskId = async (event) => {
 
   const buildTasksResponse = (tasks) =>
     tasks.map((task) => {
-      const assignments = task.userTasks || [];
+      const assignments = Array.isArray(task.userTasks) ? [...task.userTasks] : [];
+      // Ensure deterministic ordering so display fields (priority/frequency) don't "flip"
+      // when new assignments are added.
+      assignments.sort((a, b) => (a.id || 0) - (b.id || 0));
       const firstAssignment = assignments[0];
-      
+
       // Check if any assignment was made by Practice Profile (Admin)
       const hasPracticeProfileAssignment = assignments.some((assignment) => {
         const assignerRoleId = assignment.assigner?.roleId;
@@ -2289,6 +2302,7 @@ export const groupTeamTasksByTaskId = async (event) => {
           as: "userTasks",
           where: buildAssignmentWhere(false, status.id),
           required: true,
+          order: [["id", "ASC"]],
           attributes: [
             "id",
             "userId",
@@ -2371,6 +2385,7 @@ export const groupTeamTasksByTaskId = async (event) => {
         as: "userTasks",
         where: buildAssignmentWhere(true),
         required: true,
+        order: [["id", "ASC"]],
         attributes: [
           "id",
           "userId",
