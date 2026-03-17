@@ -1,4 +1,5 @@
 import { Op } from 'sequelize'
+import { parsePhoneNumber } from 'awesome-phonenumber'
 import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, MetaPage, User, UserOrganisation, CrmWhatsAppMessageLog } from '../models'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults.js'
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
@@ -6,7 +7,7 @@ import { formatCrmTriggerPreview } from '~/lib/misc'
 import { success, error } from '../utils/response'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
 import { sendImmediateCrmAutomationsForLead } from '../utils/crmAutomation.js'
-import { sendLeadCreatedNotification, sendLeadAssignedNotification, sendLeadUnassignedNotification } from '../utils/fcmNotification.js'
+import { sendLeadCreatedNotification, sendLeadAssignedNotification, sendLeadUnassignedNotification, sendLeadStatusChangedNotification, sendNotificationToMultipleUsers } from '../utils/fcmNotification.js'
 import { decrypt } from '../utils/crypto'
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from '../utils/whatsapp'
 import { renderLeadTokens } from '../utils/templateTokens'
@@ -14,6 +15,8 @@ import { resolveWhatsAppProviderConfig } from '../utils/whatsappProvider'
 import { uploadBufferFile } from '../utils/storage'
 import DB from '../utils/db'
 import { parseJsonBody } from "../utils/body";
+
+const EMAIL_REGEX = /^(?:[a-zA-Z0-9_'^&+\-]+(?:\.[a-zA-Z0-9_'^&+\-]+)*|".+")@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/
 
 const parseDateValue = (value) => {
   if (!value) return null;
@@ -37,6 +40,18 @@ const buildLeadSelectionKey = (leadIds = []) =>
   [...new Set((leadIds || []).map((id) => Number(id)).filter(Boolean))]
     .sort((a, b) => a - b)
     .join(',')
+
+const normalizeLeadContactFields = (payload = {}) => ({
+  email: String(payload.email || '').trim(),
+  telephone: String(payload.telephone || '').trim(),
+})
+
+const validateLeadContactFields = ({ email, telephone }) => {
+  if (!EMAIL_REGEX.test(email)) return 'Enter a valid email'
+  const phone = parsePhoneNumber(telephone)
+  if (!phone?.valid) return 'Enter a valid telephone number'
+  return null
+}
 
 const slugifyKey = (value) => {
   const raw = String(value || '').trim().toLowerCase()
@@ -257,8 +272,27 @@ export const listLeads = async (event) => {
     const where = { organisationId: Number(logged.orgId) }
     const archivedOnly = String(q.archivedOnly || '').toLowerCase() === 'true'
     const includeArchived = String(q.includeArchived || '').toLowerCase() === 'true'
-    if (!includeArchived) where.softDeleted = archivedOnly ? true : false
-    if (archivedOnly) where.softDeleted = true
+    const archivedCondition = {
+      [Op.or]: [
+        { softDeleted: true },
+        { leadStatus: 'Archived' },
+      ],
+    }
+    if (archivedOnly) {
+      where[Op.and] = [...(where[Op.and] || []), archivedCondition]
+    } else if (!includeArchived) {
+      where[Op.and] = [
+        ...(where[Op.and] || []),
+        {
+          [Op.not]: {
+            [Op.or]: [
+              { softDeleted: true },
+              { leadStatus: 'Archived' },
+            ],
+          },
+        },
+      ]
+    }
 
     // Server-side filtering moved from client
     // Text search across name/email/telephone
@@ -307,6 +341,13 @@ export const listLeads = async (event) => {
         where.inquiryDate = { [Op.between]: [start, end] }
       }
     }
+
+    // Exact lead lookup for route-driven dialog opening
+    const exactLeadId = Number(q.id || q.leadId || 0)
+    if (exactLeadId) {
+      where.id = exactLeadId
+    }
+
     const page = Number(q.page || 0)
     const pageSize = Number(q.pageSize || 0)
     const usePagination = Number.isFinite(page) && page > 0 && Number.isFinite(pageSize) && pageSize > 0
@@ -403,18 +444,23 @@ export const listLeads = async (event) => {
 }
 
 export const createLead = async (event) => {
+  console.log('[CRM] createLead API called - checking if endpoint is hit')
   try {
     const logged = event.context.user
+    console.log('[CRM] User context:', logged)
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const required = ['name', 'email', 'telephone']
     for (const k of required) if (!payload?.[k]) return error(400, `${k} is required`)
+    const { email, telephone } = normalizeLeadContactFields(payload)
+    const contactValidationError = validateLeadContactFields({ email, telephone })
+    if (contactValidationError) return error(400, contactValidationError)
     const data = {
       organisationId: Number(logged.orgId),
       alert: payload.alert || null,
       name: payload.name,
-      email: payload.email,
-      telephone: payload.telephone,
+      email,
+      telephone,
       inquiryDate: payload.inquiryDate || new Date(),
       dob: payload.dob || null,
       occupation: payload.occupation || null,
@@ -459,6 +505,7 @@ export const createLead = async (event) => {
       if (assignedUsers.length) {
         await sendLeadCreatedNotification({
           lead: created,
+          organisationId: Number(logged.orgId),
           assignedUsers: await User.findAll({ 
             where: { id: assignedUsers.map(u => u.id) },
             attributes: ['id', 'fullName', 'email']
@@ -468,6 +515,43 @@ export const createLead = async (event) => {
     } catch (fcmError) {
       console.warn('FCM notification failed - continuing with lead creation:', fcmError.message);
       // Don't throw the error - let the lead creation succeed even if notifications fail
+    }
+    
+    // Send FCM push notification to all org users
+    try {
+      const leadSource = created.leadSource || 'Manual'
+      console.log('[CRM] Processing lead notification:', { leadId: created.id, leadSource, orgId: logged.orgId })
+      const orgUsers = await UserOrganisation.findAll({
+        where: {
+          organisationId: logged.orgId,
+          status: 'Active',
+        },
+        attributes: ['userId'],
+      })
+      const userIds = [...new Set(orgUsers.map((u) => u.userId).filter(Boolean))]
+      console.log('[CRM] Found org users for notification:', { userIdsCount: userIds.length, userIds })
+      if (userIds.length) {
+        await sendNotificationToMultipleUsers({
+          userIds,
+          title: 'New Lead Created',
+          body: created.name || created.email || created.telephone || 'A new lead was created',
+          type: 'lead_created',
+          referenceType: 'lead',
+          referenceId: created.id,
+          data: {
+            leadId: String(created.id),
+            leadName: created.name || created.email,
+            leadSource: leadSource,
+            url: `/crm/leads?leadId=${created.id}`,
+          },
+          priority: 'high',
+        })
+        console.log('[CRM] Lead notification sent successfully')
+      } else {
+        console.log('[CRM] No org users found for notification')
+      }
+    } catch (notifyErr) {
+      console.error('[CRM] Lead creation notification failed:', notifyErr?.message, notifyErr?.stack);
     }
     
     return success(created)
@@ -510,12 +594,12 @@ export const updateLead = async (event) => {
         const actor = await User.findByPk(logged.userId, { attributes: ['id', 'fullName', 'email'] });
         if (toAdd.length) {
           const addedUsers = await User.findAll({ where: { id: toAdd }, attributes: ['id', 'fullName', 'email'] });
-          await sendLeadAssignedNotification({ lead, assignedUsers: addedUsers, assignedBy: actor });
+          await sendLeadAssignedNotification({ lead, assignedUsers: addedUsers, assignedBy: actor, organisationId: Number(logged.orgId) });
         }
         if (toRemoveLinks.length) {
           const removedIds = toRemoveLinks.map(l => l.userId);
           const removedUsers = await User.findAll({ where: { id: removedIds }, attributes: ['id', 'fullName', 'email'] });
-          await sendLeadUnassignedNotification({ lead, removedUsers, removedBy: actor });
+          await sendLeadUnassignedNotification({ lead, removedUsers, removedBy: actor, organisationId: Number(logged.orgId) });
         }
       } catch (fcmError) {
         console.warn('FCM notification failed - continuing with lead update:', fcmError.message);
@@ -629,6 +713,7 @@ export const bulkUploadLeads = async (event) => {
           telephone,
           leadSource,
           leadStatus: status || 'New',
+          softDeleted: (status || 'New') === 'Archived',
           treatment,
           inquiryDate: inquiryDate || new Date(),
           followUpDate: followUpDate || null,

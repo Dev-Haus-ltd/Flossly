@@ -71,6 +71,7 @@ const { currentOrg, rail } = defineProps({
 });
 const router = useRouter();
 const authStore = useAuthStore();
+const crmStore = useCrmStore();
 const mainStore = useMainStore();
 const orgStore = useOrgStore();
 const { user, canAddWorkspace, setUser } = useUser();
@@ -134,7 +135,8 @@ const handleOrgClick = async (org) => {
         title: "Organisation switched successfully",
       });
       menu.value = false;
-      getProfile();
+      crmStore.resetMetaAnalyticsState();
+      await getProfile();
     } else {
       mainStore.setSnackbar({
         type: "error",

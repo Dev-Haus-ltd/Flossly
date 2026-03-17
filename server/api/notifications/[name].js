@@ -8,6 +8,7 @@ import {
 import { FcmToken, UserNotification } from '../../models';
 import { error, success } from '../../utils/response';
 import { getQuery, readBody } from 'h3';
+import { Op } from 'sequelize';
 
 export default defineEventHandler(async (event) => {
   const name = event.context.params.name;
@@ -130,8 +131,9 @@ async function getNotifications(event, userId) {
     const limit = parseInt(query.limit) || 50;
     const offset = parseInt(query.offset) || 0;
     const unreadOnly = query.unreadOnly === 'true';
+    const organisationId = query.organisationId ? parseInt(query.organisationId) : null;
 
-    const result = await getUserNotifications(userId, { limit, offset, unreadOnly });
+    const result = await getUserNotifications(userId, { limit, offset, unreadOnly, organisationId });
 
     if (result.success) {
       return success(result);
@@ -223,12 +225,23 @@ async function sendTestNotification(event, userId) {
 // Get unread notification count
 async function getUnreadCount(event, userId) {
   try {
-    const count = await UserNotification.count({
-      where: {
-        userId,
-        isRead: false
-      }
-    });
+    const query = getQuery(event);
+    const organisationId = query.organisationId ? parseInt(query.organisationId) : null;
+
+    const where = {
+      userId,
+      isRead: false
+    };
+
+    // Filter by organisation: show current org + null org (global notifications)
+    if (organisationId !== null && organisationId !== undefined) {
+      where[Op.or] = [
+        { organisationId: Number(organisationId) },
+        { organisationId: null }
+      ];
+    }
+
+    const count = await UserNotification.count({ where });
 
     return success({ unreadCount: count });
   } catch (err) {

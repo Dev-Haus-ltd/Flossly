@@ -5,6 +5,7 @@ import { createError } from "h3";
 import { Op } from "sequelize";
 import { success, error } from "../utils/response";
 import { parseJsonBody } from "../utils/body";
+import { sendNotificationToMultipleUsers } from "../utils/fcmNotification";
 
 // Keep the old success/error for existing functions
 const successOld = (data) => ({ code: 1, data });
@@ -545,6 +546,42 @@ export const createLeadViaChatbot = async (event) => {
       name: created.name,
       email: created.email,
     });
+    
+    // Send notification to org users about new chatbot lead
+    try {
+      console.log('[Chatbot API] Processing lead notification:', { leadId: created.id, orgId: organisationId })
+      const orgUsers = await UserOrganisation.findAll({
+        where: {
+          organisationId: Number(organisationId),
+          status: 'Active',
+        },
+        attributes: ['userId'],
+      })
+      const userIds = [...new Set(orgUsers.map((u) => u.userId).filter(Boolean))]
+      console.log('[Chatbot API] Found org users for notification:', { userIdsCount: userIds.length, userIds })
+      if (userIds.length) {
+        await sendNotificationToMultipleUsers({
+          userIds,
+          title: 'New Chatbot Lead',
+          body: created.name || created.email || 'A new lead was received from chatbot',
+          type: 'lead_created',
+          referenceType: 'lead',
+          referenceId: created.id,
+          data: {
+            leadId: String(created.id),
+            leadName: created.name || created.email,
+            leadSource: 'Chatbot',
+            url: `/crm/leads?leadId=${created.id}`,
+          },
+          priority: 'high',
+        })
+        console.log('[Chatbot API] Lead notification sent successfully')
+      } else {
+        console.log('[Chatbot API] No org users found for notification')
+      }
+    } catch (notifyErr) {
+      console.error('[Chatbot API] Lead notification failed:', notifyErr?.message, notifyErr?.stack)
+    }
     
     // Shape treatment in response
     created.setDataValue('treatment', { id: null, name: created.treatment || '' });

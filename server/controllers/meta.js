@@ -838,6 +838,42 @@ const fetchLeadsForOrg = async (orgId, { days = 0, maxPerForm = 1000, debugEnabl
   }
 
   if (debugEnabled) return { ok: true, debug }
+
+  // Send notification to org users about imported leads
+  if (imported > 0) {
+    try {
+      const orgUsers = await UserOrganisation.findAll({
+        where: {
+          organisationId: orgId,
+          status: 'Active',
+        },
+        attributes: ['userId'],
+      })
+      const userIds = [...new Set(orgUsers.map((u) => u.userId).filter(Boolean))]
+      if (userIds.length) {
+        await sendNotificationToMultipleUsers({
+          userIds,
+          title: 'Meta Leads Imported',
+          body: `${imported} new lead${imported > 1 ? 's were' : ' was'} imported from Meta`,
+          type: 'lead_bulk_import',
+          referenceType: 'lead',
+          data: {
+            importedCount: imported,
+            leadSource: 'Meta Leadgen',
+            url: '/crm',
+          },
+          priority: 'high',
+        })
+      }
+    } catch (notifyErr) {
+      console.warn('[META BULK IMPORT] Lead notification failed', {
+        orgId,
+        imported,
+        error: notifyErr?.message || 'Unknown notification error',
+      })
+    }
+  }
+
   return { ok: true, imported }
 }
 
@@ -1849,6 +1885,7 @@ export const webhook = async (event) => {
               if (userIds.length) {
                 await sendNotificationToMultipleUsers({
                   userIds,
+                  organisationId: mp.organisationId,
                   title: 'New Meta Lead',
                   body: fullName || email || phone || 'A new lead was received',
                   type: 'lead_created',
@@ -1857,8 +1894,9 @@ export const webhook = async (event) => {
                   data: {
                     leadId: String(created.id),
                     leadSource: 'Meta Leadgen',
+                    organisationId: String(mp.organisationId || ''),
                     pageId: String(pageId || ''),
-                    url: `/crm?leadId=${created.id}`,
+                    url: `/crm/leads?leadId=${created.id}`,
                   },
                   priority: 'high',
                 })
@@ -2257,44 +2295,44 @@ export const fetchDailyMetaInsights = async (event) => {
     return Array.isArray(resp.data) ? resp.data : []
   }
 
-  const upsertInsight = async (entityType, entityId, i) => {
+  const upsertInsight = async (entityType, entityId, insight) => {
     await MetaInsight.upsert({
       organisationId: orgId,
       entityType,
       entityId,
-      date: i.date_start,
-      impressions: i.impressions,
-      clicks: i.clicks,
-      spend: Math.round(Number(i.spend || 0) * 100),
-      leads: i.actions?.find((a) => a.action_type === 'lead')?.value || 0,
-      reach: i.reach || 0,
-      frequency: i.frequency || 0,
-      purchase_roas: i.purchase_roas?.[0]?.value || 0, // usually first value
-      cpc: i.cpc,
-      ctr: i.ctr,
-      cpm: i.cpm,
+      date: insight.date_start,
+      impressions: insight.impressions,
+      clicks: insight.clicks,
+      spend: Math.round(Number(insight.spend || 0) * 100),
+      leads: insight.actions?.find((action) => action.action_type === 'lead')?.value || 0,
+      reach: insight.reach || 0,
+      frequency: insight.frequency || 0,
+      purchase_roas: insight.purchase_roas?.[0]?.value || 0, // usually first value
+      cpc: insight.cpc,
+      ctr: insight.ctr,
+      cpm: insight.cpm,
     })
   }
 
   // Campaigns
   const campaigns = await MetaCampaign.findAll({ where: { organisationId: orgId } })
   for (const c of campaigns) {
-    const data = await fetchInsights(c.campaignId)
-    for (const i of data) await upsertInsight('campaign', c.campaignId, i)
+    const rows = await fetchInsights(c.campaignId)
+    for (const insight of rows) await upsertInsight('campaign', c.campaignId, insight)
   }
 
   // Ad sets
   const adSets = await MetaAdSet.findAll({ where: { organisationId: orgId } })
   for (const s of adSets) {
-    const data = await fetchInsights(s.adSetId)
-    for (const i of data) await upsertInsight('adset', s.adSetId, i)
+    const rows = await fetchInsights(s.adSetId)
+    for (const insight of rows) await upsertInsight('adset', s.adSetId, insight)
   }
 
   // Ads
   const ads = await MetaAd.findAll({ where: { organisationId: orgId } })
   for (const a of ads) {
-    const data = await fetchInsights(a.adId)
-    for (const i of data) await upsertInsight('ad', a.adId, i)
+    const rows = await fetchInsights(a.adId)
+    for (const insight of rows) await upsertInsight('ad', a.adId, insight)
   }
 
   return success({ since, until, synced: true })

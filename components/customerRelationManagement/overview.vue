@@ -41,7 +41,8 @@
                 variant="outlined"
                 rounded="lg"
                 class="action-btn"
-                @click="disconnectMeta"
+                :loading="metaDisconnecting"
+                @click="metaDisconnectDialog = true"
               >
                 Disconnect
               </v-btn>
@@ -211,6 +212,18 @@
       :loading="metaHealthLoading"
       :data="metaHealthData"
     />
+
+    <ConfirmDialog
+      v-model="metaDisconnectDialog"
+      title="Disconnect Meta?"
+      confirm-text="Disconnect"
+      icon="mdi-link-off"
+      :loading="metaDisconnecting"
+      message="Disconnecting Meta will stop new leads, page subscriptions, and future analytics syncs for this organisation. Existing historical analytics will remain visible until new data is synced again after reconnecting."
+      @cancel="metaDisconnectDialog = false"
+      @confirm="disconnectMeta"
+    />
+
     <!-- GOOGLE HEALTH DIALOG -->
     <CustomerRelationManagementGoogleAnalyticsGoogleHealthDialog
       v-model="googleHealthDialog"
@@ -417,6 +430,7 @@ import { useMainStore } from '@/stores/index'
 import { useAuthStore } from '@/stores/auth'
 import CustomerRelationManagementMetaHealthDialog from '@/components/customerRelationManagement/metaHealthDialog.vue'
 import CustomerRelationManagementGoogleAnalyticsGoogleHealthDialog from '@/components/customerRelationManagement/googleanalytics/googleHealthDialog.vue'
+import ConfirmDialog from '@/components/Common/ConfirmDialog.vue'
 import IntegrationCard from '@/components/customerRelationManagement/IntegrationCard.vue'
 import CrmCharts from '@/components/customerRelationManagement/CrmCharts.vue'
 import { transformLeadsConversionData, transformMetaInsightsData, transformGoogleSearchConsoleData } from '@/composables/useChartAdapters'
@@ -496,6 +510,8 @@ const gscChartConfig = reactive({
 const metaHealthDialog = ref(false)
 const metaHealthLoading = ref(false)
 const metaHealthData = ref(null)
+const metaDisconnectDialog = ref(false)
+const metaDisconnecting = ref(false)
 
 const isGoogleConnected = ref(false)
 const googleConnecting = ref(false)
@@ -771,16 +787,21 @@ const integrateMeta = async () => {
 }
 
 const disconnectMeta = async () => {
+  if (metaDisconnecting.value) return
+  metaDisconnecting.value = true
   try {
     const res = await crmStore.disconnectMeta()
     if (res?.code === 0) {
       await checkMetaConnection()
+      metaDisconnectDialog.value = false
       mainStore?.setSnackbar?.({ title: 'Meta disconnected', type: 'success' })
     } else {
       mainStore?.setSnackbar?.({ title: res?.message || 'Failed to disconnect Meta', type: 'error' })
     }
   } catch (e) {
     mainStore?.setSnackbar?.({ title: e?.message || 'Failed to disconnect Meta', type: 'error' })
+  } finally {
+    metaDisconnecting.value = false
   }
 }
 

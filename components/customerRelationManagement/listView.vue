@@ -395,7 +395,6 @@
                 {{ props.archivedTotal || archivedLeads.length }}
               </v-chip>
             </div>
-            <span class="text-caption text-medium-emphasis">Visible to Owner & Manager</span>
           </div>
         </v-expansion-panel-title>
         <v-expansion-panel-text class="pt-0">
@@ -421,7 +420,7 @@
             :page="props.archivedPage"
             :items-per-page="props.itemsPerPage"
             :items-per-page-options="[10, 25, 50, 100]"
-            :item-selectable="() => false"
+            :item-selectable="() => true"
             @update:model-value="onArchivedSelectionChange"
             @update:page="(val) => emit('update:archivedPage', val)"
             @update:items-per-page="(val) => emit('update:itemsPerPage', val)"
@@ -437,7 +436,6 @@
               <input
                 type="checkbox"
                 :checked="isSelected(internalItem)"
-                disabled
                 @change="() => toggleSelect(internalItem)"
                 class="cust-checkbox"
               />
@@ -468,7 +466,6 @@
                         class="cust-checkbox ma-0"
                         :checked="allSelected"
                         :indeterminate.prop="someSelected && !allSelected"
-                        disabled
                         @change="toggleAllArchived"
                       />
                     </div>
@@ -536,6 +533,45 @@
               </template>
             </template>
           </v-data-table-server>
+          <v-card
+            v-if="selectedArchivedLeads.length"
+            class="action-bar py-4 d-flex justify-center align-center rounded-lg"
+            style="padding: 0px 50px; gap: 40px;"
+            :elevation="5"
+            flat
+          >
+            <div class="selected-count d-flex align-center">
+              <span class="selected-text">
+                {{ selectedArchivedLeads.length }}
+              </span>
+              <p class="ml-3 mt-1">Archived Selected</p>
+            </div>
+
+            <div class="actions-container d-flex align-center" style="gap: 8px;">
+              <div
+                class="action-item d-flex flex-column align-center"
+                @click="confirmRestore = true"
+              >
+                <v-icon size="22" color="#6d6d6d">mdi-restore</v-icon>
+                <span class="action-label">Restore</span>
+              </div>
+
+              <div
+                class="action-item d-flex flex-column align-center"
+                @click="confirmArchivedDelete = true"
+              >
+                <img :src="deleteIcon" alt="Delete" class="action-icon" />
+                <span class="action-label">Delete</span>
+              </div>
+
+              <v-divider vertical class="mx-2" style="height: 40px;" />
+
+              <div class="action-item d-flex flex-column align-center" @click="closeTray">
+                <v-icon size="20" color="#6d6d6d">mdi-close</v-icon>
+                <span class="action-label">Close</span>
+              </div>
+            </div>
+          </v-card>
         </v-expansion-panel-text>
       </v-expansion-panel>
     </v-expansion-panels>
@@ -544,7 +580,7 @@
       v-if="showLeadDetailDialog"
       v-model="showLeadDetailDialog"
       :selected-lead="selectedLead"
-      @close="showLeadDetailDialog = false"
+      @close="handleLeadDialogClose"
     />
 
     <v-dialog v-model="showCompose" max-width="900px">
@@ -719,9 +755,25 @@
       v-model="confirmDelete"
       title="Delete leads?"
       :loading="deleting"
-      :message="`Are you sure you want to delete ${selectedLeads.length} lead(s)?`"
+      :message="getPermanentDeleteMessage(selectedLeads.length)"
       @confirm="doDelete"
       @cancel="confirmDelete = false"
+    />
+    <CommonConfirmDialog
+      v-model="confirmRestore"
+      title="Restore leads?"
+      :loading="restoring"
+      :message="`Restore ${selectedArchivedLeads.length} lead(s) back to the main list? They will be marked as New.`"
+      @confirm="doRestore"
+      @cancel="confirmRestore = false"
+    />
+    <CommonConfirmDialog
+      v-model="confirmArchivedDelete"
+      title="Delete archived leads?"
+      :loading="deletingArchived"
+      :message="getPermanentDeleteMessage(selectedArchivedLeads.length)"
+      @confirm="doDeleteArchived"
+      @cancel="confirmArchivedDelete = false"
     />
     <TeamFlossSideBarAddNewstaff
       v-model="addStaffDrawer"
@@ -753,12 +805,15 @@ import archiveIcon from '@/assets/crm/archive.svg'
 import deleteIcon from '@/assets/crm/delete.svg'
 import exportIcon from '@/assets/crm/export.svg'
 const crmStore = useCrmStore();
-const { user } = useUser();
+const authStore = useAuthStore();
+const { user, setUser } = useUser();
+const route = useRoute();
+const router = useRouter();
 const emit = defineEmits([
   'select',
   'openLead',
-  'delete',
   'book',
+  'refresh',
   'update:activePage',
   'update:archivedPage',
   'update:itemsPerPage',
@@ -786,6 +841,7 @@ const isAllArchived = ref(false);
 const showLeadDetailDialog = ref(false);
 const selectedLead = ref({});
 const commentMenus = reactive({});
+const leadRouteRequestId = ref(0);
 
 const leadStatusOptions = [
   { name: 'New', color: '#36a863' },
@@ -804,17 +860,121 @@ const isArchivedLead = (lead) => {
   const status = (lead?.leadStatus || '').toLowerCase();
   return !!lead?.softDeleted || status === 'archived';
 };
+const activeLeadSource = computed(() =>
+  Array.isArray(props.activeLeads) ? props.activeLeads : (props.leads || [])
+);
+const archivedLeadSource = computed(() =>
+  Array.isArray(props.archivedLeads) ? props.archivedLeads : (props.leads || [])
+);
 const activeLeads = computed(() =>
-  Array.isArray(props.activeLeads)
-    ? props.activeLeads
-    : (props.leads || []).filter((l) => !isArchivedLead(l))
+  activeLeadSource.value.filter((l) => !isArchivedLead(l))
 );
 const archivedLeads = computed(() =>
-  Array.isArray(props.archivedLeads)
-    ? props.archivedLeads
-    : (props.leads || []).filter((l) => isArchivedLead(l))
+  archivedLeadSource.value.filter((l) => isArchivedLead(l))
 );
+const allVisibleLeads = computed(() => [
+  ...(activeLeads.value || []),
+  ...(archivedLeads.value || []),
+]);
 const canViewArchive = computed(() => [1, 8].includes(user.value?.roleId));
+
+const normalizeLeadForDialog = (lead = {}) => ({
+  ...lead,
+  alert: lead.alert || "",
+  name: getLeadDisplayName(lead) || lead.name || "",
+  email: getLeadEmail(lead) || lead.email || "",
+  telephone: getLeadPhone(lead) || lead.telephone || "",
+  inquiryDate: lead.inquiryDate || "",
+  rawData: lead.rawData || null,
+  dob: lead.dob || null,
+  occupation: lead.occupation || "",
+  location: lead.location || "",
+  leadSource: lead.leadSource?.name
+    ? lead.leadSource
+    : { id: 99, name: lead.leadSource || "Meta Leadgen" },
+  metaPage: lead.metaPage || lead.pageName || lead.pageId || "",
+  leadStatus: lead.leadStatus || "New",
+  treatment: lead.treatment?.name ? lead.treatment : { id: null, name: lead.treatment || "" },
+  assigned: lead.assigned || [],
+  followUpDate: lead.followUpDate || "",
+  comments: lead.comments || "",
+  id: lead.id,
+  softDeleted: !!lead.softDeleted,
+});
+
+const findVisibleLeadById = (leadId) => {
+  const numericLeadId = Number(leadId || 0);
+  if (!numericLeadId) return null;
+  return allVisibleLeads.value.find((lead) => Number(lead?.id) === numericLeadId) || null;
+};
+
+const fetchLeadById = async (leadId) => {
+  const numericLeadId = Number(leadId || 0);
+  if (!numericLeadId) return null;
+
+  const res = await crmStore.listLeads({ id: numericLeadId, includeArchived: true });
+  const rows = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.data?.rows)
+      ? res.data.rows
+      : [];
+
+  return rows[0] || null;
+};
+
+const syncLeadDialogWithRoute = async (rawLeadId = route.query.leadId) => {
+  const numericLeadId = Number(rawLeadId || 0);
+  if (!numericLeadId) return;
+
+  if (showLeadDetailDialog.value && Number(selectedLead.value?.id) === numericLeadId) {
+    return;
+  }
+
+  // Handle org switch for push-driven opens
+  const orgIdFromQuery = route.query.orgId;
+  if (orgIdFromQuery) {
+    const targetOrgId = Number(orgIdFromQuery);
+    const currentOrgId = user.value?.currentLoggedInOrgId;
+
+    if (targetOrgId && currentOrgId && targetOrgId !== currentOrgId) {
+      // Need to switch org first
+      try {
+        const res = await authStore.switchOrgnanisation({ orgId: targetOrgId });
+        if (res.code === 0) {
+          const profileRes = await authStore.profile();
+          if (profileRes.code === 0 && profileRes.data) {
+            setUser(profileRes.data);
+            // Continue with lead dialog opening after org switch
+          }
+        } else {
+          console.error('Org switch failed for lead notification');
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to switch org for lead notification:', error);
+        return;
+      }
+    }
+  }
+
+  const visibleLead = findVisibleLeadById(numericLeadId);
+  if (visibleLead) {
+    selectedLead.value = normalizeLeadForDialog(visibleLead);
+    showLeadDetailDialog.value = true;
+    return;
+  }
+
+  const requestId = ++leadRouteRequestId.value;
+
+  try {
+    const fetchedLead = await fetchLeadById(numericLeadId);
+    if (requestId !== leadRouteRequestId.value || !fetchedLead) return;
+    selectedLead.value = normalizeLeadForDialog(fetchedLead);
+    showLeadDetailDialog.value = true;
+  } catch (error) {
+    console.error('Failed to open lead from route query', error);
+  }
+};
 
 // Inline editing state
 const editingCell = reactive({
@@ -841,7 +1001,13 @@ const confirmDelete = ref(false);
 const deleting = ref(false);
 const confirmArchive = ref(false);
 const archiving = ref(false);
+const confirmRestore = ref(false);
+const restoring = ref(false);
+const confirmArchivedDelete = ref(false);
+const deletingArchived = ref(false);
 const converting = ref(false);
+const getPermanentDeleteMessage = (count) =>
+  `Delete ${count} lead(s) permanently? This cannot be undone.`;
 const addStaffDrawer = ref(false);
 const showWhatsAppCompose = ref(false);
 const whatsappSending = ref(false);
@@ -1298,13 +1464,26 @@ const toggleAll = () => {
   }
 };
 const toggleAllArchived = () => {
-  isAllArchived.value = false;
-  selectedArchivedLeads.value = [];
+  const allCurrentlySelected =
+    archivedLeads.value.length > 0 &&
+    archivedLeads.value.every((lead) =>
+      selectedArchivedLeads.value.some((selected) => selected.id === lead.id)
+    );
+
+  if (allCurrentlySelected) {
+    isAllArchived.value = false;
+    selectedArchivedLeads.value = [];
+  } else {
+    selectedArchivedLeads.value = [...archivedLeads.value];
+    isAllArchived.value = true;
+  }
 };
 const onArchivedSelectionChange = () => {
-  if (selectedArchivedLeads.value.length) {
-    selectedArchivedLeads.value = [];
-  }
+  isAllArchived.value =
+    !!archivedLeads.value.length &&
+    archivedLeads.value.every((lead) =>
+      selectedArchivedLeads.value.some((selected) => selected.id === lead.id)
+    );
 };
 const closeTray = () => {
   isAllSelected.value = false;
@@ -1312,6 +1491,8 @@ const closeTray = () => {
   isAllArchived.value = false;
   selectedArchivedLeads.value = [];
   confirmArchive.value = false;
+  confirmRestore.value = false;
+  confirmArchivedDelete.value = false;
 };
 const isResizing = ref(false);
 let startX = 0;
@@ -1348,10 +1529,17 @@ const updateValueRow = async (row, key) => {
     const payload = { id: row.id }
     if (key === 'leadSource') payload.leadSource = row?.leadSource?.name || row.leadSource || null
     else if (key === 'treatment') payload.treatment = row?.treatment || null
-    else if (key === 'leadStatus') payload.leadStatus = row?.leadStatus || null
+    else if (key === 'leadStatus') {
+      payload.leadStatus = row?.leadStatus || null
+      payload.softDeleted = String(row?.leadStatus || '').toLowerCase() === 'archived'
+    }
     else if (key === 'alert') payload.alert = row?.alert || null
     else return
-    await crmStore.updateLead(payload)
+    const res = await crmStore.updateLead(payload)
+    if (res?.code === 0 && key === 'leadStatus') {
+      row.softDeleted = !!payload.softDeleted
+      emit('refresh')
+    }
   } catch (e) {}
 };
 
@@ -1359,6 +1547,27 @@ const openLeadDialog = (lead) => {
   selectedLead.value = lead;
   showLeadDetailDialog.value = true;
 };
+
+const handleLeadDialogClose = () => {
+  showLeadDetailDialog.value = false;
+
+  if (route.query.leadId || route.query.orgId) {
+    const newQuery = { ...route.query };
+    delete newQuery.leadId;
+    delete newQuery.orgId;
+    router.replace({ query: newQuery });
+  }
+};
+
+watch(
+  () => route.query.leadId,
+  (leadId) => {
+    if (leadId) {
+      syncLeadDialogWithRoute(leadId);
+    }
+  },
+  { immediate: true }
+);
 
 // Compose mail dialog using Editor.js (client-only)
 const showCompose = ref(false)
@@ -1715,18 +1924,41 @@ const assignLead = async (lead, user) => {
   } catch (e) { /* noop */ }
 };
 
-const doDelete = async () => {
-  try {
-    deleting.value = true
-    const ids = selectedLeads.value.map(l => l.id)
-    const res = await crmStore.deleteLeads(ids)
-    if (res?.code === 0) emit('delete', ids)
-  } finally {
-    deleting.value = false
-    confirmDelete.value = false
-    closeTray()
+const deleteLeadRows = async (rows, options = {}) => {
+  const {
+    loadingRef,
+    closeConfirm,
+    successTitle = 'Lead(s) deleted permanently',
+    errorTitle = 'Unable to delete leads',
+  } = options;
+  if (!rows.length) {
+    closeConfirm?.();
+    return;
   }
-}
+  try {
+    if (loadingRef) loadingRef.value = true;
+    const ids = rows.map((lead) => lead.id).filter(Boolean);
+    const res = await crmStore.deleteLeads(ids);
+    if (res?.code === 0) {
+      mainStore?.setSnackbar?.({ title: successTitle, type: 'success' });
+      emit('refresh');
+    }
+  } catch (e) {
+    console.error(errorTitle, e);
+    mainStore?.setSnackbar?.({ title: errorTitle, type: 'error' });
+  } finally {
+    if (loadingRef) loadingRef.value = false;
+    closeConfirm?.();
+    closeTray();
+  }
+};
+
+const doDelete = async () => {
+  await deleteLeadRows(selectedLeads.value, {
+    loadingRef: deleting,
+    closeConfirm: () => { confirmDelete.value = false; },
+  });
+};
 
 const doArchive = async () => {
   if (!selectedLeads.value.length) {
@@ -1743,6 +1975,7 @@ const doArchive = async () => {
       }
     }
     if (mainStore?.setSnackbar) mainStore.setSnackbar({ title: 'Lead(s) archived', type: 'success' });
+    emit('refresh');
   } catch (e) {
     console.error('Failed to archive leads', e);
     if (mainStore?.setSnackbar) mainStore.setSnackbar({ title: 'Unable to archive leads', type: 'error' });
@@ -1751,6 +1984,45 @@ const doArchive = async () => {
     confirmArchive.value = false;
     closeTray();
   }
+};
+
+const doRestore = async () => {
+  if (!selectedArchivedLeads.value.length) {
+    confirmRestore.value = false;
+    return;
+  }
+  try {
+    restoring.value = true;
+    for (const lead of selectedArchivedLeads.value) {
+      const res = await crmStore.updateLead({
+        id: lead.id,
+        leadStatus: 'New',
+        softDeleted: false,
+      });
+      if (res?.code === 0) {
+        lead.leadStatus = 'New';
+        lead.softDeleted = false;
+      }
+    }
+    mainStore?.setSnackbar?.({ title: 'Lead(s) restored', type: 'success' });
+    emit('refresh');
+  } catch (e) {
+    console.error('Failed to restore leads', e);
+    mainStore?.setSnackbar?.({ title: 'Unable to restore leads', type: 'error' });
+  } finally {
+    restoring.value = false;
+    confirmRestore.value = false;
+    closeTray();
+  }
+};
+
+const doDeleteArchived = async () => {
+  await deleteLeadRows(selectedArchivedLeads.value, {
+    loadingRef: deletingArchived,
+    closeConfirm: () => { confirmArchivedDelete.value = false; },
+    successTitle: 'Archived lead(s) deleted permanently',
+    errorTitle: 'Unable to delete archived leads',
+  });
 };
 
 const convertSelected = async () => {
