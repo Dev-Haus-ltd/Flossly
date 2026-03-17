@@ -938,10 +938,24 @@ export const unAssignTask = async (event) => {
     const isAssigner = userTask.assignedBy === loggedUser.userId;
     const isPrivileged = isManagerOrOwner(loggedUser.roleId);
     
+    const userIdsToFetch = [loggedUser.userId, userTask.userId];
+    if (userTask.assignedBy && userTask.assignedBy !== loggedUser.userId && userTask.assignedBy !== userTask.userId) {
+      userIdsToFetch.push(userTask.assignedBy);
+    }
+    
+    const users = await User.findAll({
+      where: { id: [...new Set(userIdsToFetch)] },
+      attributes: ['id', 'fullName', 'email', 'roleId'],
+    });
+    const usersMap = new Map(users.map(u => [u.id, u]));
+    
+    const removedByUser = usersMap.get(loggedUser.userId);
+    const removedUser = usersMap.get(userTask.userId);
+    
     // Check if task was assigned by Practice Profile (Admin)
     let wasAssignedByPracticeProfile = false;
     if (userTask.assignedBy) {
-      const assignerUser = await User.findByPk(userTask.assignedBy);
+      const assignerUser = usersMap.get(userTask.assignedBy);
       if (assignerUser && isManagerOrOwner(assignerUser.roleId)) {
         wasAssignedByPracticeProfile = true;
       }
@@ -961,12 +975,25 @@ export const unAssignTask = async (event) => {
         message: "Not authorized to delete this task",
       });
     }
-    const removedByUser = await User.findByPk(loggedUser.userId);
-    const removedUser = await User.findByPk(userTask.userId);
     const taskTitle =
       userTask.title || (await Task.findByPk(userTask.taskId))?.title;
 
-    await userTask.destroy();
+    
+    await Promise.all([
+      UserTaskChecklist.destroy({ where: { userTaskId: userTask.id }, individualHooks: false }),
+      UserTaskComment.destroy({ where: { userTaskId: userTask.id }, individualHooks: false }),
+      UserTaskAttachment.destroy({ where: { userTaskId: userTask.id }, individualHooks: false }),
+      UserTaskCustomField.destroy({ where: { userTaskId: userTask.id }, individualHooks: false }),
+    ]);
+    
+    await UserTask.destroy({
+      where: {
+        id: userTask.id,
+        organisationId: organisationId,
+      },
+      force: true,
+      hooks: false,
+    });
 
     if (removedUser?.email) {
       await sendTaskUnassignmentEmail({
@@ -1133,16 +1160,24 @@ export const unAssignBulkTask = async (event) => {
     }
     const isPrivileged = isManagerOrOwner(loggedUser.roleId);
     
-    // Check for tasks assigned by Practice Profile (Admin)
-    const tasksAssignedByPracticeProfile = [];
-    for (const task of tasks) {
-      if (task.assignedBy) {
-        const assignerUser = await User.findByPk(task.assignedBy);
-        if (assignerUser && isManagerOrOwner(assignerUser.roleId)) {
-          tasksAssignedByPracticeProfile.push(task);
-        }
-      }
+    // Check for tasks assigned by Practice Profile (Admin) - OPTIMIZED
+    // Collect all unique assignedBy IDs and fetch them in ONE query
+    const assignedByIds = [...new Set(tasks.map(t => t.assignedBy).filter(Boolean))];
+    let assignerUsersMap = new Map();
+    
+    if (assignedByIds.length > 0) {
+      const assignerUsers = await User.findAll({
+        where: { id: assignedByIds },
+        attributes: ['id', 'roleId'],
+      });
+      assignerUsersMap = new Map(assignerUsers.map(u => [u.id, u]));
     }
+    
+    const tasksAssignedByPracticeProfile = tasks.filter(task => {
+      if (!task.assignedBy) return false;
+      const assignerUser = assignerUsersMap.get(task.assignedBy);
+      return assignerUser && isManagerOrOwner(assignerUser.roleId);
+    });
     
     // Prevent normal users from deleting tasks assigned by Practice Profile
     if (tasksAssignedByPracticeProfile.length > 0 && !isPrivileged) {
