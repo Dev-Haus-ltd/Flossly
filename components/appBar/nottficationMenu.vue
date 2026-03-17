@@ -103,6 +103,7 @@
 <script setup>
 import { useFCM } from '~/composables/useFCM';
 import notificationIcon from '@/assets/icons/notification/Notification.svg';
+import notificationListIcon from '@/assets/icons/notification/notification (1).svg';
 import taskIcon from '@/assets/icons/notification/task.svg';
 import leadIcon from '@/assets/icons/notification/lead.svg';
 import messageIcon from '@/assets/icons/notification/message.svg';
@@ -290,13 +291,13 @@ const getNotificationIconSvg = (type) => {
   } else if (type.startsWith('lead_') || type.startsWith('crm_')) {
     return leadIcon;
   } else if (type.startsWith('system_')) {
-    return notificationIcon;
+    return notificationListIcon;
   } else if (type.startsWith('rota_') || type.startsWith('shift_') || type.startsWith('leave_')) {
-    return notificationIcon;
+    return notificationListIcon;
   } else if (type.startsWith('support_') || type.includes('message') || type.includes('comment') || type === 'whatsapp_message' || type === 'meta_dm' || type === 'chatbot_message') {
     return messageIcon;
   }
-  return taskIcon;
+  return notificationListIcon;
 };
 
 // Format time

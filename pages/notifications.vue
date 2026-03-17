@@ -138,6 +138,7 @@
 import taskIcon from '@/assets/icons/notification/task.svg';
 import leadIcon from '@/assets/icons/notification/lead.svg';
 import messageIcon from '@/assets/icons/notification/message.svg';
+import notificationIcon from '@/assets/icons/notification/notification (1).svg';
 import searchicon from '@/assets/icons/listView/serach-icon.svg';
 
 definePageMeta({
@@ -382,13 +383,17 @@ const getNotificationIconSvg = (type) => {
   // Map notification types to the custom SVG icons from assets/icons/notification/
   if (type.startsWith('task_')) {
     return taskIcon;
-  } else if (type.startsWith('lead_')) {
+  } else if (type.startsWith('lead_') || type.startsWith('crm_')) {
     return leadIcon;
-  } else if (type.includes('message') || type.includes('comment') || type === 'whatsapp_message' || type === 'meta_dm') {
+  } else if (type.startsWith('system_')) {
+    return notificationIcon;
+  } else if (type.startsWith('rota_') || type.startsWith('shift_') || type.startsWith('leave_')) {
+    return notificationIcon;
+  } else if (type.includes('message') || type.includes('comment') || type === 'whatsapp_message' || type === 'meta_dm' || type === 'chatbot_message') {
     return messageIcon;
   }
-  // Default to task icon
-  return taskIcon;
+  // Default to notification icon
+  return notificationIcon;
 };
 
 const getNotificationTypeLabel = (type) => {
