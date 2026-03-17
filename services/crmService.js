@@ -42,10 +42,30 @@ export default {
         .catch((err) => reject(err));
     });
   },
-  // Fetch daily Meta analytics (insights)
-  fetchMetaInsights() {
+  // Fetch Meta analytics (insights)
+  fetchMetaInsights(params = {}) {
+    const q = new URLSearchParams();
+    Object.entries(params || {}).forEach(([k, v]) => {
+      if (v === undefined || v === null || v === "") return;
+      q.append(k, v);
+    });
+    const qs = q.toString();
     return new Promise((resolve, reject) => {
-      Get("/meta/syncInsights")
+      Get(`/meta/syncInsights${qs ? `?${qs}` : ""}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getMetaInsights() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/getInsights")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getMetaStructure() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/getStructure")
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });

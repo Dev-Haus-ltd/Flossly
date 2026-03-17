@@ -117,8 +117,8 @@
         :treatmentSources="treatmentSources"
         :users="userList"
         @select="onSelect"
-        @delete="onDeleteSelected"
         @book="onBookLeads"
+        @refresh="handleLeadsRefresh"
         @update:activePage="onActivePageChange"
         @update:archivedPage="onArchivedPageChange"
         @update:itemsPerPage="onItemsPerPageChange"
@@ -1442,6 +1442,10 @@ const onItemsPerPageChange = async (val) => {
   await fetchLeads(activeFilters.value);
 };
 
+const handleLeadsRefresh = async () => {
+  await fetchLeads(activeFilters.value);
+};
+
 const initLeads = async (metaConnected = false) => {
   if (metaConnected) {
     try {
@@ -1625,15 +1629,6 @@ watch(selectedBusinessId, () => {
   selectedPageIds.value = [];
   businessPageSearch.value = '';
 })
-
-const onDeleteSelected = async (ids) => {
-  try {
-    const res = await crmStore.deleteLeads(ids)
-    if (res && res.code === 0) {
-      await fetchLeads(activeFilters.value)
-    }
-  } catch (e) {}
-}
 
 watch(isConnected, (val) => {
   if (val) startMetaStream();
