@@ -1843,6 +1843,9 @@ export const uploadBulkTasks = async (event) => {
         (x) => x.key === "progress"
       )?.id;
 
+      
+      const userIds = [...new Set(tasksWithUsers.map((t) => t.userId))];
+
       const userTaskData = tasksWithUsers.map((t, userTaskIndex) => {
         const taskIndex = validTasks.findIndex((vt) => vt.index === t.index);
         return {
@@ -1901,7 +1904,6 @@ export const uploadBulkTasks = async (event) => {
         });
       }
 
-      const userIds = [...new Set(tasksWithUsers.map((t) => t.userId))];
       const users = await User.findAll({
         where: { id: userIds },
       });
