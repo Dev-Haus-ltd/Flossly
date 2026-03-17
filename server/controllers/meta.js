@@ -6,7 +6,15 @@ import { success, error } from '../utils/response'
 import { addMetaClient, broadcastMetaEvent } from '../utils/metaStream'
 import { getWhatsAppProviderKey, getWhapiEnvConfig, resolveWhapiConfig } from '../utils/whatsappProvider'
 import { sendNotificationToMultipleUsers } from '../utils/fcmNotification'
-import { parseJsonBody } from "../utils/body";
+import { parseJsonBody } from "../utils/body"
+import {
+  runStructureSync,
+  runInsightsSync,
+  enqueueStructureSync,
+  enqueueInsightsSync,
+  getStructureSyncStatus,
+  getInsightsSyncStatus,
+} from '../utils/metaSync.js'
 
 const META_VERSION = 'v24.0'
 const META_SUBSCRIBED_FIELDS = 'leadgen,messages,messaging_postbacks'
@@ -2180,96 +2188,7 @@ export const fetchMetaStructureAndBudgets = async (event) => {
   const { orgId } = event.context.user || {}
   if (!orgId) return error(401, 'Unauthenticated')
 
-  const tokenRow = await MetaUserToken.findOne({ where: { organisationId: orgId } })
-  if (!tokenRow) return error(400, 'Meta not connected')
-
-  const userToken = decrypt(tokenRow.userTokenEnc)
-
-  // 1️⃣ Fetch ad accounts
-  const adAccountsResp = await $fetch(
-    `https://graph.facebook.com/${META_VERSION}/me/adaccounts?fields=id,name,currency,timezone_name&access_token=${userToken}`
-  )
-
-  for (const acc of adAccountsResp.data || []) {
-    await MetaAdAccount.upsert({
-      organisationId: orgId,
-      adAccountId: acc.id,
-      name: acc.name,
-      currency: acc.currency,
-      timezone: acc.timezone_name,
-    })
-
-    // 2️⃣ Campaigns
-    const campaignsResp = await $fetch(
-      `https://graph.facebook.com/${META_VERSION}/${acc.id}/campaigns?fields=id,name,status,daily_budget,lifetime_budget&access_token=${userToken}`
-    )
-
-    for (const c of campaignsResp.data || []) {
-      await MetaCampaign.upsert({
-        organisationId: orgId,
-        adAccountId: acc.id,
-        campaignId: c.id,
-        name: c.name,
-        status: c.status,
-        dailyBudget: c.daily_budget || null,
-        lifetimeBudget: c.lifetime_budget || null,
-      })
-
-      // 3️⃣ Ad Sets
-      const adSetsResp = await $fetch(
-        `https://graph.facebook.com/${META_VERSION}/${c.id}/adsets?fields=id,name,daily_budget,lifetime_budget,optimization_goal&access_token=${userToken}`
-      )
-
-      for (const s of adSetsResp.data || []) {
-        await MetaAdSet.upsert({
-          organisationId: orgId,
-          adSetId: s.id,
-          campaignId: c.id,
-          name: s.name,
-          dailyBudget: s.daily_budget || null,
-          lifetimeBudget: s.lifetime_budget || null,
-          optimizationGoal: s.optimization_goal || null,
-        })
-
-        // 4️⃣ Ads
-        const adsResp = await $fetch(
-          `https://graph.facebook.com/${META_VERSION}/${s.id}/ads?fields=id,name,status,creative{id}&access_token=${userToken}`
-        )
-
-        for (const ad of adsResp.data || []) {
-          let imageUrl = null
-          let bodyText = null
-          let platform = 'Facebook'
-
-          if (ad.creative?.id) {
-            try {
-              const creativeResp = await $fetch(
-                `https://graph.facebook.com/${META_VERSION}/${ad.creative.id}?fields=image_url,thumbnail_url,body,instagram_permalink_url&access_token=${userToken}`
-              )
-              imageUrl = creativeResp.image_url || creativeResp.thumbnail_url || null
-              bodyText = creativeResp.body || null
-              if (creativeResp.instagram_permalink_url) platform = 'Instagram'
-            } catch (e) {
-              console.error(`[Meta] Failed to fetch creative ${ad.creative.id}`, e.message)
-            }
-          }
-
-          await MetaAd.upsert({
-            organisationId: orgId,
-            adId: ad.id,
-            adSetId: s.id,
-            name: ad.name,
-            status: ad.status,
-            creativeId: ad.creative?.id || null,
-            imageUrl,
-            body: bodyText,
-            platform,
-          })
-        }
-      }
-    }
-  }
-
+  await runStructureSync(orgId)
   return success({ synced: true })
 }
 
@@ -2286,7 +2205,7 @@ export const fetchDailyMetaInsights = async (event) => {
 
   const token = decrypt(tokenRow.userTokenEnc)
 
-  const until = new Date(Date.now() - 86400000).toISOString().slice(0, 10) // yesterday
+  const until = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
   const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10)
 
   const fetchInsights = async (entityId) => {
@@ -2307,7 +2226,7 @@ export const fetchDailyMetaInsights = async (event) => {
       leads: insight.actions?.find((action) => action.action_type === 'lead')?.value || 0,
       reach: insight.reach || 0,
       frequency: insight.frequency || 0,
-      purchase_roas: insight.purchase_roas?.[0]?.value || 0, // usually first value
+      purchase_roas: insight.purchase_roas?.[0]?.value || 0,
       cpc: insight.cpc,
       ctr: insight.ctr,
       cpm: insight.cpm,
