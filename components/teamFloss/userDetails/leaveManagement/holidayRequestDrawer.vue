@@ -217,22 +217,56 @@
                   />
                 </div>
 
-                <div v-if="uploadedFile.length" class="pa-5">
-                  <v-row>
-                    <v-col
-                      v-for="(file, index) in uploadedFile"
-                      :key="index"
-                      cols="12"
-                      sm="6"
-                      md="6"
-                    >
-                      <DocsMyDocsRecentlyAccessed
-                        class="mb-2"
-                        :file="file"
-                        :folder="selectedFolder"
-                      />
-                    </v-col>
-                  </v-row>
+                <div v-if="uploadedFile.length" class="uploaded-file-section">
+                  <p class="text-body-2 text-grey-darken-1 mb-2">
+                    Supporting Document
+                  </p>
+                  <v-card
+                    class="pa-3 d-flex align-center justify-space-between uploaded-file-card"
+                    flat
+                  >
+                    <div class="d-flex align-center">
+                      <v-icon size="40" color="primary" class="mr-3">
+                        mdi-file-document-outline
+                      </v-icon>
+                      <div>
+                        <div class="file-name">
+                          {{ uploadedFile[0].name }}
+                        </div>
+                        <div class="file-size">
+                          {{ formatFileSize(uploadedFile[0].size) }}
+                        </div>
+                      </div>
+                    </div>
+                    <div class="d-flex align-center" style="gap: 8px;">
+                      <v-btn
+                        icon
+                        size="small"
+                        variant="text"
+                        color="primary"
+                        @click="$refs.fileInput.click()"
+                        title="Change document"
+                      >
+                        <v-icon size="20">mdi-upload</v-icon>
+                      </v-btn>
+                      <v-btn
+                        icon
+                        size="small"
+                        variant="text"
+                        color="error"
+                        @click="removeFile"
+                        title="Remove document"
+                      >
+                        <v-icon size="20">mdi-delete-outline</v-icon>
+                      </v-btn>
+                    </div>
+                  </v-card>
+                  <input
+                    ref="fileInput"
+                    type="file"
+                    class="d-none"
+                    @change="handleFileUpload"
+                  />
                 </div>
               </v-col>
             </v-row>
@@ -331,7 +365,26 @@ const selectedFolder = ref(null);
 
 const handleFileUpload = (event) => {
   const files = event.target.files;
-  uploadedFile.value = files;
+  if (files && files.length > 0) {
+    uploadedFile.value = files;
+  }
+};
+
+const removeFile = () => {
+  uploadedFile.value = [];
+  // Reset the file input so the same file can be selected again if needed
+  const fileInput = document.querySelector('input[type="file"]');
+  if (fileInput) {
+    fileInput.value = '';
+  }
+};
+
+const formatFileSize = (bytes) => {
+  if (!bytes) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 };
 const leaveHoursOptions = ref(["8 hrs", "4 hrs"]);
 const leaveTypes = ref([
@@ -521,5 +574,25 @@ const onClose = () => {
   background-color: white !important;
   min-height: 40px;
   font-size: 14px;
+}
+.uploaded-file-section {
+  margin-bottom: 16px;
+}
+.uploaded-file-card {
+  border: 1px solid #dfdfdf;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+}
+.file-name {
+  font-weight: 500;
+  font-size: 14px;
+  color: #1e1e1e;
+  word-break: break-word;
+}
+.file-size {
+  font-weight: 400;
+  font-size: 12px;
+  color: #737373;
+  margin-top: 2px;
 }
 </style>
