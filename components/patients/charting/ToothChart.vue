@@ -461,6 +461,7 @@ onUnmounted(() => {
 .quadrant-nums {
   display: flex;
   align-items: center;
+  position: relative;
 }
 
 .tooth-num {
@@ -477,6 +478,16 @@ onUnmounted(() => {
   font-size: 12px;
   font-weight: 700;
   color: #111827;
+  position: absolute;
+  top: 0;
+}
+
+.quadrant-nums--right .arch-tag {
+  right: 100%;
+}
+
+.quadrant-nums--left .arch-tag {
+  left: 100%;
 }
 
 .teeth-row-wrap {

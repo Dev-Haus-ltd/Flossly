@@ -83,68 +83,86 @@
         </div>
 
         <div v-if="isExpanded(item)" class="tp-expand">
-          <div class="tp-expand-fields">
-            <label class="tp-field">
-              <span>Practitioner</span>
-              <select v-model.number="draft.practitionerId">
-                <option :value="null">Select practitioner</option>
-                <option v-for="p in practitioners" :key="p.id" :value="Number(p.id)">{{ p.name }}</option>
-              </select>
-            </label>
-            <label class="tp-field">
-              <span>Duration (min)</span>
-              <select v-model.number="draft.duration">
-                <option :value="15">15 min</option>
-                <option :value="30">30 min</option>
-                <option :value="45">45 min</option>
-                <option :value="60">60 min</option>
-              </select>
-            </label>
-            <label class="tp-field">
-              <span>Price (£)</span>
-              <input v-model.number="draft.cost" type="number" min="0" step="0.01" />
-            </label>
-            <label class="tp-field">
-              <span>Status</span>
-              <select v-model="draft.status">
-                <option value="existing">Existing</option>
-                <option value="completed">Completed</option>
-              </select>
-            </label>
-            <label class="tp-field">
-              <span>Completed on</span>
-              <input v-model="draft.completedOn" type="date" />
-            </label>
-            <label class="tp-field">
-              <span>Payment plan</span>
-              <select v-model="draft.paymentPlan">
-                <option value="private">Private</option>
-                <option value="nhs1">NHS Band 1</option>
-                <option value="nhs2">NHS Band 2</option>
-                <option value="nhs3">NHS Band 3</option>
-              </select>
-            </label>
-            <label class="tp-field">
-              <span>Referrer</span>
-              <select v-model.number="draft.referrerId">
-                <option :value="null">No referrer</option>
-                <option v-for="p in practitioners" :key="p.id" :value="Number(p.id)">{{ p.name }}</option>
-              </select>
-            </label>
-            <label class="tp-field">
-              <span>Invoice desc.</span>
-              <input v-model="draft.invoiceDesc" type="text" placeholder="Invoice description..." />
-            </label>
-          </div>
-          <div class="tp-notes-wrap">
-            <label class="tp-expand-check">
-              <input v-model="draft.showOnInvoice" type="checkbox" />
-              <span>Show notes on invoice</span>
-            </label>
-            <ChartRichTextEditor
-              v-model="draft.notes"
-              placeholder="Add notes for this base chart item..."
-            />
+          <div class="tp-expand-body">
+            <div class="tp-expand-left">
+              <div class="tp-expand-fields">
+                <label class="tp-field">
+                  <span>Price (£)</span>
+                  <input v-model.number="draft.cost" type="number" min="0" step="0.01" />
+                </label>
+                <label class="tp-field">
+                  <span>Duration (min)</span>
+                  <select v-model.number="draft.duration">
+                    <option :value="0">0 min</option>
+                    <option :value="15">15 min</option>
+                    <option :value="30">30 min</option>
+                    <option :value="45">45 min</option>
+                    <option :value="60">60 min</option>
+                  </select>
+                </label>
+                <label class="tp-field">
+                  <span>Completed on</span>
+                  <input v-model="draft.completedOn" type="date" />
+                </label>
+                <label class="tp-field">
+                  <span>Payment plan</span>
+                  <select v-model="draft.paymentPlan">
+                    <option value="private">Private</option>
+                    <option value="nhs1">NHS Band 1</option>
+                    <option value="nhs2">NHS Band 2</option>
+                    <option value="nhs3">NHS Band 3</option>
+                  </select>
+                </label>
+                <label class="tp-field">
+                  <span>Practitioner</span>
+                  <select v-model.number="draft.practitionerId">
+                    <option :value="null">Select practitioner</option>
+                    <option v-for="p in practitioners" :key="p.id" :value="Number(p.id)">{{ p.name }}</option>
+                  </select>
+                </label>
+                <label class="tp-field">
+                  <span>Referrer</span>
+                  <select v-model.number="draft.referrerId">
+                    <option :value="null">No referrer</option>
+                    <option v-for="p in practitioners" :key="p.id" :value="Number(p.id)">{{ p.name }}</option>
+                  </select>
+                </label>
+                <label class="tp-field">
+                  <span>Status</span>
+                  <select v-model="draft.status">
+                    <option value="existing">Existing</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </label>
+                <label class="tp-field">
+                  <span>Invoice desc.</span>
+                  <input v-model="draft.invoiceDesc" type="text" placeholder="Invoice description..." />
+                </label>
+              </div>
+            </div>
+            <div class="tp-expand-right">
+              <div class="tp-notes-header">
+                <span class="tp-notes-title">Notes</span>
+                <button
+                  class="tp-transcribe-btn"
+                  :class="{ 'tp-transcribe-btn--active': isTranscribing }"
+                  :title="speechSupported ? (isTranscribing ? 'Stop transcribing' : 'Transcribe notes by voice') : 'Speech recognition not supported in this browser'"
+                  :disabled="!speechSupported"
+                  @click="toggleTranscribe"
+                >
+                  <v-icon size="15">{{ isTranscribing ? 'mdi-microphone-off' : 'mdi-microphone' }}</v-icon>
+                  <span>{{ isTranscribing ? 'Stop' : 'Transcribe notes' }}</span>
+                </button>
+              </div>
+              <label class="tp-expand-check">
+                <input v-model="draft.showOnInvoice" type="checkbox" />
+                <span>Show notes on invoice</span>
+              </label>
+              <ChartRichTextEditor
+                v-model="draft.notes"
+                placeholder="Add notes for this base chart item..."
+              />
+            </div>
           </div>
           <div class="tp-expand-actions">
             <v-btn variant="text" @click="cancelExpanded">Cancel</v-btn>
@@ -236,69 +254,87 @@
             </div>
 
             <div v-if="isExpanded(item)" class="tp-expand">
-              <div class="tp-expand-fields">
-                <label class="tp-field">
-                  <span>Practitioner</span>
-                  <select v-model.number="draft.practitionerId">
-                    <option :value="null">Select practitioner</option>
-                    <option v-for="p in practitioners" :key="p.id" :value="Number(p.id)">{{ p.name }}</option>
-                  </select>
-                </label>
-                <label class="tp-field">
-                  <span>Duration (min)</span>
-                  <select v-model.number="draft.duration">
-                    <option :value="15">15 min</option>
-                    <option :value="30">30 min</option>
-                    <option :value="45">45 min</option>
-                    <option :value="60">60 min</option>
-                  </select>
-                </label>
-                <label class="tp-field">
-                  <span>Price (£)</span>
-                  <input v-model.number="draft.cost" type="number" min="0" step="0.01" />
-                </label>
-                <label class="tp-field">
-                  <span>Status</span>
-                  <select v-model="draft.status">
-                    <option value="planned">Planned</option>
-                    <option value="scheduled">Scheduled</option>
-                    <option value="completed">Completed</option>
-                  </select>
-                </label>
-                <label class="tp-field">
-                  <span>Completed on</span>
-                  <input v-model="draft.completedOn" type="date" />
-                </label>
-                <label class="tp-field">
-                  <span>Payment plan</span>
-                  <select v-model="draft.paymentPlan">
-                    <option value="private">Private</option>
-                    <option value="nhs1">NHS Band 1</option>
-                    <option value="nhs2">NHS Band 2</option>
-                    <option value="nhs3">NHS Band 3</option>
-                  </select>
-                </label>
-                <label class="tp-field">
-                  <span>Referrer</span>
-                  <select v-model.number="draft.referrerId">
-                    <option :value="null">No referrer</option>
-                    <option v-for="p in practitioners" :key="p.id" :value="Number(p.id)">{{ p.name }}</option>
-                  </select>
-                </label>
-                <label class="tp-field">
-                  <span>Invoice desc.</span>
-                  <input v-model="draft.invoiceDesc" type="text" placeholder="Invoice description..." />
-                </label>
-              </div>
-              <div class="tp-notes-wrap">
-                <label class="tp-expand-check">
-                  <input v-model="draft.showOnInvoice" type="checkbox" />
-                  <span>Show notes on invoice</span>
-                </label>
-                <ChartRichTextEditor
-                  v-model="draft.notes"
-                  placeholder="Add treatment notes for this chart item..."
-                />
+              <div class="tp-expand-body">
+                <div class="tp-expand-left">
+                  <div class="tp-expand-fields">
+                    <label class="tp-field">
+                      <span>Price (£)</span>
+                      <input v-model.number="draft.cost" type="number" min="0" step="0.01" />
+                    </label>
+                    <label class="tp-field">
+                      <span>Duration (min)</span>
+                      <select v-model.number="draft.duration">
+                        <option :value="0">0 min</option>
+                        <option :value="15">15 min</option>
+                        <option :value="30">30 min</option>
+                        <option :value="45">45 min</option>
+                        <option :value="60">60 min</option>
+                      </select>
+                    </label>
+                    <label class="tp-field">
+                      <span>Completed on</span>
+                      <input v-model="draft.completedOn" type="date" />
+                    </label>
+                    <label class="tp-field">
+                      <span>Payment plan</span>
+                      <select v-model="draft.paymentPlan">
+                        <option value="private">Private</option>
+                        <option value="nhs1">NHS Band 1</option>
+                        <option value="nhs2">NHS Band 2</option>
+                        <option value="nhs3">NHS Band 3</option>
+                      </select>
+                    </label>
+                    <label class="tp-field">
+                      <span>Practitioner</span>
+                      <select v-model.number="draft.practitionerId">
+                        <option :value="null">Select practitioner</option>
+                        <option v-for="p in practitioners" :key="p.id" :value="Number(p.id)">{{ p.name }}</option>
+                      </select>
+                    </label>
+                    <label class="tp-field">
+                      <span>Referrer</span>
+                      <select v-model.number="draft.referrerId">
+                        <option :value="null">No referrer</option>
+                        <option v-for="p in practitioners" :key="p.id" :value="Number(p.id)">{{ p.name }}</option>
+                      </select>
+                    </label>
+                    <label class="tp-field">
+                      <span>Status</span>
+                      <select v-model="draft.status">
+                        <option value="planned">Planned</option>
+                        <option value="scheduled">Scheduled</option>
+                        <option value="completed">Completed</option>
+                      </select>
+                    </label>
+                    <label class="tp-field">
+                      <span>Invoice desc.</span>
+                      <input v-model="draft.invoiceDesc" type="text" placeholder="Invoice description..." />
+                    </label>
+                  </div>
+                </div>
+                <div class="tp-expand-right">
+                  <div class="tp-notes-header">
+                    <span class="tp-notes-title">Notes</span>
+                    <button
+                      class="tp-transcribe-btn"
+                      :class="{ 'tp-transcribe-btn--active': isTranscribing }"
+                      :title="speechSupported ? (isTranscribing ? 'Stop transcribing' : 'Transcribe notes by voice') : 'Speech recognition not supported in this browser'"
+                      :disabled="!speechSupported"
+                      @click="toggleTranscribe"
+                    >
+                      <v-icon size="15">{{ isTranscribing ? 'mdi-microphone-off' : 'mdi-microphone' }}</v-icon>
+                      <span>{{ isTranscribing ? 'Stop' : 'Transcribe notes' }}</span>
+                    </button>
+                  </div>
+                  <label class="tp-expand-check">
+                    <input v-model="draft.showOnInvoice" type="checkbox" />
+                    <span>Show notes on invoice</span>
+                  </label>
+                  <ChartRichTextEditor
+                    v-model="draft.notes"
+                    placeholder="Add treatment notes for this chart item..."
+                  />
+                </div>
               </div>
               <div class="tp-expand-actions">
                 <v-btn variant="text" @click="cancelExpanded">Cancel</v-btn>
@@ -617,6 +653,35 @@ function moveItem(apptId, item, direction) {
   emit('reorder', { appointmentId: apptId, from, to })
 }
 
+// ── Voice transcript ─────────────────────────────────────────────────────
+const SpeechRecognition = typeof window !== 'undefined'
+  ? (window.SpeechRecognition || window.webkitSpeechRecognition)
+  : null
+const speechSupported = !!SpeechRecognition
+const isTranscribing = ref(false)
+let _recognition = null
+
+function toggleTranscribe() {
+  if (!SpeechRecognition) return
+  if (isTranscribing.value) {
+    _recognition?.stop()
+    isTranscribing.value = false
+    return
+  }
+  _recognition = new SpeechRecognition()
+  _recognition.continuous = true
+  _recognition.interimResults = false
+  _recognition.lang = 'en-GB'
+  _recognition.onresult = (e) => {
+    const text = Array.from(e.results).map(r => r[0].transcript).join(' ')
+    draft.notes = draft.notes ? `${draft.notes} ${text}` : text
+  }
+  _recognition.onerror = () => { isTranscribing.value = false }
+  _recognition.onend = () => { isTranscribing.value = false }
+  _recognition.start()
+  isTranscribing.value = true
+}
+
 const expandedRowId = ref(null)
 const draft = reactive({
   id: null,
@@ -674,6 +739,7 @@ async function openExpanded(item) {
 }
 
 async function closeExpanded() {
+  if (isTranscribing.value) { _recognition?.stop(); isTranscribing.value = false }
   expandedRowId.value = null
   resetDraft()
 }
@@ -1204,11 +1270,73 @@ watch(activeView, async () => {
   background: #f8fbff;
 }
 
+/* ── 2-column expand layout ─────────────────────────────────── */
+.tp-expand-body {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 12px;
+}
+
+.tp-expand-left {
+  display: flex;
+  flex-direction: column;
+}
+
+.tp-expand-right {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tp-notes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tp-notes-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.tp-transcribe-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  background: #f0f6ff;
+  border: 1px solid #0061FB;
+  border-radius: 20px;
+  color: #0061FB;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.tp-transcribe-btn:hover:not(:disabled) {
+  background: #e0eeff;
+}
+
+.tp-transcribe-btn--active {
+  background: #0061FB;
+  color: #fff;
+}
+
+.tp-transcribe-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .tp-expand-fields {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  margin-bottom: 12px;
 }
 
 .tp-field {
@@ -1644,6 +1772,10 @@ watch(activeView, async () => {
 }
 
 @media (max-width: 900px) {
+  .tp-expand-body {
+    grid-template-columns: 1fr;
+  }
+
   .tp-img-upload-card {
     grid-template-columns: 1fr;
   }

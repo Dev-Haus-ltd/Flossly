@@ -83,7 +83,7 @@
     <div v-if="showActions" class="tpd-actions no-print">
       <v-btn variant="outlined" rounded="lg" prepend-icon="mdi-printer-outline" @click="printDoc">Print</v-btn>
       <v-btn variant="outlined" rounded="lg" prepend-icon="mdi-share-variant-outline" @click="emit('share')">Share</v-btn>
-      <v-btn color="primary" variant="flat" rounded="lg" prepend-icon="mdi-download-outline" @click="emit('download')">Download PDF</v-btn>
+      <v-btn color="primary" variant="flat" rounded="lg" prepend-icon="mdi-download-outline" @click="_openPrintWindow">Download PDF</v-btn>
     </div>
   </div>
 </template>
@@ -167,7 +167,41 @@ function formatCost(val) {
 }
 
 function printDoc() {
-  window.print()
+  _openPrintWindow()
+}
+
+function _openPrintWindow() {
+  const el = docEl.value
+  if (!el) return
+  const html = el.outerHTML
+  const win = window.open('', '_blank', 'width=820,height=700')
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Treatment Plan</title><style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,sans-serif;padding:24px;background:#fff;color:#222}
+    table{width:100%;border-collapse:collapse;margin-bottom:12px}
+    th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;font-size:13px}
+    th{font-weight:600;background:#f9fafb;color:#374151}
+    .tpd-td--right,.tpd-th--right{text-align:right}
+    .tpd-doc__header{display:flex;justify-content:space-between;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #e5e7eb}
+    .tpd-doc__practice{font-size:18px;font-weight:700;color:#0061FB;margin-bottom:4px}
+    .tpd-doc__title{font-size:14px;font-weight:600;color:#374151}
+    .tpd-doc__ref{font-size:12px;color:#6b7280}
+    .tpd-doc__meta-row{font-size:13px;color:#374151;margin-bottom:3px}
+    .tpd-appt-title{font-size:13px;font-weight:600;color:#374151;padding:10px 0 6px;border-bottom:1px solid #f0f0f0;margin-bottom:6px}
+    .tpd-footer{margin-top:20px;padding-top:12px;border-top:2px solid #e5e7eb}
+    .tpd-total-row{display:flex;justify-content:space-between;font-size:15px;font-weight:700;color:#111827;margin:8px 0}
+    .tpd-total-note,.tpd-nhs-note{font-size:11px;color:#6b7280;margin-top:4px}
+    .tpd-consent{margin-top:20px}.tpd-consent__title{font-size:13px;font-weight:600;margin-bottom:8px}
+    .tpd-consent-row{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#374151;margin-bottom:6px}
+    .tpd-consent-box{width:14px;height:14px;border:2px solid #9ca3af;border-radius:3px;flex-shrink:0;display:inline-block}
+    .tpd-signatures{display:flex;gap:40px;margin-top:32px}
+    .tpd-sig__line{height:1px;background:#374151;margin-bottom:6px}
+    .tpd-sig__label{font-size:11px;color:#6b7280}
+    .tpd-actions,.no-print{display:none!important}
+  </style></head><body>${html}</body></html>`)
+  win.document.close()
+  win.focus()
+  setTimeout(() => { win.print() }, 500)
 }
 </script>
 

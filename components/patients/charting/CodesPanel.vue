@@ -167,7 +167,7 @@ function toggleFavorite(codeId) {
   border: 1px solid #e8e8e8;
   border-radius: 12px;
   overflow: hidden;
-  max-height: 600px;
+  flex: 1;
 }
 
 /* ── Header ─────────────────────────────────────────────────────── */

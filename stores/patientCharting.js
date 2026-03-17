@@ -32,6 +32,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
     isLoading: false,
     isSaving: false,
     isDirty: false,
+    lastSavedAt: null,
     // New UI state
     teethType: 'permanent',
     chartScope: 'both',         // 'base' | 'plan' | 'both'
@@ -616,6 +617,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       try {
         await patientChartingService.saveTooth({ patientId: this.patientId, fdi, toothData: this.chart[fdi] })
         this.isDirty = false
+        this.lastSavedAt = Date.now()
       } catch (error) {
         this._logError('_saveTooth', error)
         // Silent — user can use manual save
@@ -631,6 +633,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
           chart: { ...this.chart, periodontal: this.periData || {} },
         })
         this.isDirty = false
+        this.lastSavedAt = Date.now()
       } finally {
         this.isSaving = false
       }

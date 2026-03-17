@@ -34,6 +34,11 @@
           <div class="chart-card__toolbar">
             <div class="teeth-type-control">
               <span class="teeth-type-label">Teeth Type</span>
+              <transition name="fade-save">
+                <span v-if="showSaved" class="save-indicator">
+                  <v-icon size="13" color="success">mdi-check-circle</v-icon> Saved
+                </span>
+              </transition>
               <v-select
                 :model-value="store.teethType"
                 :items="teethTypeOptions"
@@ -434,8 +439,38 @@ function onConfirmDeletePlan() {
   onCancelDeletePlan()
 }
 
-function onSharePlan() { mainStore?.setSnackbar?.({ title: 'Sharing coming soon.', type: 'info' }) }
-function onDownloadPlan() { mainStore?.setSnackbar?.({ title: 'PDF download coming soon.', type: 'info' }) }
+async function onSharePlan() {
+  const items = (store.treatmentItems || []).filter(i => i.status !== 'existing')
+  const lines = items.map(i => `• ${i.treatmentName || i.conditionLabel || i.condition || '—'} - £${Number(i.cost || 0).toFixed(2)}`).join('\n')
+  const total = items.reduce((s, i) => s + Number(i.cost || 0), 0).toFixed(2)
+  const text = `Treatment Plan — ${props.patientName || 'Patient'}\n\n${lines || 'No items'}\n\nTotal: £${total}`
+  if (navigator.share) {
+    try { await navigator.share({ title: 'Treatment Plan', text }); return } catch {}
+  }
+  try {
+    await navigator.clipboard.writeText(text)
+    mainStore?.setSnackbar?.({ title: 'Plan summary copied to clipboard.', type: 'success' })
+  } catch {
+    mainStore?.setSnackbar?.({ title: 'Unable to share. Please print the plan.', type: 'info' })
+  }
+}
+
+function onDownloadPlan() {
+  currentStep.value = 4
+  nextTick(() => {
+    const docEl = document.querySelector('.tpd-doc')
+    if (!docEl) { window.print(); return }
+    const html = docEl.outerHTML
+    const styles = Array.from(document.styleSheets).reduce((acc, ss) => {
+      try { return acc + Array.from(ss.cssRules).map(r => r.cssText).join('\n') } catch { return acc }
+    }, '')
+    const win = window.open('', '_blank', 'width=820,height=700')
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Treatment Plan</title><style>${styles}\n body{margin:0;padding:24px;font-family:sans-serif;background:#fff}</style></head><body>${html}</body></html>`)
+    win.document.close()
+    win.focus()
+    setTimeout(() => { win.print() }, 600)
+  })
+}
 
 // Interval dialog
 const intervalDialog = ref(false)
@@ -506,6 +541,16 @@ async function confirmBooking() {
 }
 
 function advanceStep() { currentStep.value = Math.min(currentStep.value + 1, STEPS.length) }
+
+// Save indicator
+const showSaved = ref(false)
+let _savedTimer = null
+watch(() => store.lastSavedAt, (v) => {
+  if (!v) return
+  showSaved.value = true
+  clearTimeout(_savedTimer)
+  _savedTimer = setTimeout(() => { showSaved.value = false }, 2200)
+})
 </script>
 
 <style scoped>
@@ -580,7 +625,7 @@ function advanceStep() { currentStep.value = Math.min(currentStep.value + 1, STE
 .charting-body {
   display: flex;
   gap: 12px;
-  align-items: flex-start;
+  align-items: stretch;
 }
 
 /* ── Chart card ──────────────────────────────────────────────────── */
@@ -636,10 +681,28 @@ function advanceStep() { currentStep.value = Math.min(currentStep.value + 1, STE
 .codes-side {
   width: 260px;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── Treatment plan ──────────────────────────────────────────────── */
 .treatment-plan-wrap { width: 100%; }
+
+/* ── Save indicator ──────────────────────────────────────────────── */
+.save-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #43a047;
+  font-weight: 500;
+  margin-left: 8px;
+}
+
+.fade-save-enter-active,
+.fade-save-leave-active { transition: opacity 0.4s; }
+.fade-save-enter-from,
+.fade-save-leave-to   { opacity: 0; }
 
 /* ── Conflict warning ────────────────────────────────────────────── */
 .conflict-warning {

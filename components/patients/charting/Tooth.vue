@@ -39,54 +39,17 @@
           :stroke-width="isSelected || isBridgePending ? 2 : 1.2"
         />
 
+        <!-- surfaces via orderedSurfaceItems (handles single + multi-path surfaces) -->
         <path
-          :d="surfacePaths.buccal.d"
-          :transform="surfaceTransform(surfacePaths.buccal)"
-          :fill="sfColor('buccal')"
-          :stroke="sfStroke('buccal')"
+          v-for="(item, i) in orderedSurfaceItems"
+          :key="i"
+          :d="item.d"
+          :transform="`scale(${PATH_SCALE})`"
+          :fill="sfColor(item.logicalName)"
+          :stroke="sfStroke(item.logicalName)"
           stroke-width="0.9"
           class="tooth-surface"
-          @click.stop="onSurface('buccal')"
-        />
-
-        <path
-          :d="surfacePaths.lingual.d"
-          :transform="surfaceTransform(surfacePaths.lingual)"
-          :fill="sfColor('lingual')"
-          :stroke="sfStroke('lingual')"
-          stroke-width="0.9"
-          class="tooth-surface"
-          @click.stop="onSurface('lingual')"
-        />
-
-        <path
-          :d="surfacePaths.left.d"
-          :transform="surfaceTransform(surfacePaths.left)"
-          :fill="sfColor(leftSurface)"
-          :stroke="sfStroke(leftSurface)"
-          stroke-width="0.9"
-          class="tooth-surface"
-          @click.stop="onSurface(leftSurface)"
-        />
-
-        <path
-          :d="surfacePaths.right.d"
-          :transform="surfaceTransform(surfacePaths.right)"
-          :fill="sfColor(rightSurface)"
-          :stroke="sfStroke(rightSurface)"
-          stroke-width="0.9"
-          class="tooth-surface"
-          @click.stop="onSurface(rightSurface)"
-        />
-
-        <path
-          :d="surfacePaths.occlusal.d"
-          :transform="surfaceTransform(surfacePaths.occlusal)"
-          :fill="sfColor('occlusal')"
-          :stroke="sfStroke('occlusal')"
-          stroke-width="0.9"
-          class="tooth-surface"
-          @click.stop="onSurface('occlusal')"
+          @click.stop="onSurface(item.logicalName)"
         />
 
         <path
@@ -110,9 +73,9 @@
         />
 
         <path
-          v-if="tooth.toothCondition === 'rct' || tooth.toothCondition === 'post-core'"
-          :d="surfacePaths.occlusal.d"
-          :transform="surfaceTransform(surfacePaths.occlusal)"
+          v-if="(tooth.toothCondition === 'rct' || tooth.toothCondition === 'post-core') && rctOverlayD"
+          :d="rctOverlayD"
+          :transform="`scale(${PATH_SCALE})`"
           :fill="condColor(tooth.toothCondition)"
           fill-opacity="0.9"
           pointer-events="none"
@@ -218,10 +181,13 @@ const centerX = VB / 2
 const centerY = VB / 2
 
 const toothMeta = computed(() => TEETH_BY_FDI[props.fdi] || null)
-const occlusalFamily = computed(() => (
-  toothMeta.value?.type === TOOTH_TYPE.MOLAR ? 'round' : 'tapered'
-))
-const geometry = computed(() => OCCLUSAL_PATHS[occlusalFamily.value] || OCCLUSAL_PATHS.round)
+const occlusalFamily = computed(() => {
+  const type = toothMeta.value?.type
+  if (type === TOOTH_TYPE.MOLAR)    return 'molar'
+  if (type === TOOTH_TYPE.PREMOLAR) return 'premolar'
+  return 'anterior'
+})
+const geometry = computed(() => OCCLUSAL_PATHS[occlusalFamily.value] || OCCLUSAL_PATHS.molar)
 const outlinePath = computed(() => geometry.value.outline)
 const surfacePaths = computed(() => geometry.value.surfaces)
 const outlineTransform = computed(() => `scale(${PATH_SCALE})`)
@@ -245,11 +211,35 @@ const implantPoints = computed(() => (
   `${centerX},${centerY - 15} ${centerX + 4},${centerY - 10} ${centerX},${centerY - 5} ${centerX - 4},${centerY - 10}`
 ))
 
-const veneerPath = computed(() => (
-  occlusalFamily.value === 'round'
-    ? 'M 15 12 C 11 18 11 34 15 40'
-    : 'M 12 8 L 8 13 L 8 26 L 12 31'
-))
+// Ordered surface draw list — handles both single { d } and array [{ d }, { d }] surfaces.
+// Array surfaces (molar buccal/lingual/occlusal) render as separate <path> elements so
+// each sub-section hovers independently while all fire the same logical surface click.
+const SURFACE_DRAW_ORDER = ['buccal', 'lingual', 'left', 'right', 'occlusal']
+const orderedSurfaceItems = computed(() => {
+  const result = []
+  for (const key of SURFACE_DRAW_ORDER) {
+    const sf = surfacePaths.value[key]
+    if (!sf) continue
+    const logicalName = key === 'left' ? leftSurface.value
+      : key === 'right' ? rightSurface.value
+      : key
+    const items = Array.isArray(sf) ? sf : [sf]
+    for (const item of items) {
+      result.push({ logicalName, d: item.d })
+    }
+  }
+  return result
+})
+
+// RCT/post-core overlay path — only valid for single-path occlusal (premolar/anterior).
+// Multi-path occlusal (molar inner circle) is skipped to avoid partial overlap.
+const rctOverlayD = computed(() => {
+  const occ = surfacePaths.value.occlusal
+  if (!occ || Array.isArray(occ)) return null
+  return occ.d
+})
+
+const veneerPath = computed(() => 'M 15 12 C 11 18 11 34 15 40')
 
 function surfaceTransform(surface) {
   return surface?.transform
