@@ -1,5 +1,7 @@
 import cron from "node-cron";
 import { Op } from "sequelize";
+import { MetaPage } from "../models/index.js";
+import { runStructureSync, runInsightsSync } from "./metaSync.js";
 import { formatYmd, parseDayOffsetFromText, addDaysSafe } from "~/lib/misc";
 import {
   OrganisationStatus,
@@ -645,6 +647,55 @@ export const startOnboardingScheduler = () => {
       }
     } catch (err) {
       console.error("[Onboarding] scheduler error", err?.message);
+    }
+  });
+};
+
+/**
+ * Meta daily sync scheduler
+ *
+ * Runs at 3 AM every day. Finds all orgs with at least one active Meta page
+ * and runs the structure + insights sync for each, spaced 10 s apart to
+ * avoid hammering Meta's API when many orgs are connected.
+ *
+ * Configurable via META_SYNC_SCHEDULE env var (default: "0 3 * * *").
+ */
+export const startMetaSyncScheduler = () => {
+  const schedule = process.env.META_SYNC_SCHEDULE || "0 0 * * *";
+
+  cron.schedule(schedule, async () => {
+    console.log("[MetaScheduler] Starting daily Meta sync");
+    try {
+      const rows = await MetaPage.findAll({
+        where: { status: "Active" },
+        attributes: ["organisationId"],
+        group: ["organisationId"],
+        raw: true,
+      });
+
+      const orgIds = [...new Set(rows.map((r) => r.organisationId).filter(Boolean))];
+      console.log(`[MetaScheduler] Syncing ${orgIds.length} org(s)`);
+
+      for (const orgId of orgIds) {
+        try {
+          await runStructureSync(orgId);
+        } catch (e) {
+          console.error(`[MetaScheduler] Structure sync failed for org ${orgId}:`, e?.message);
+        }
+
+        try {
+          await runInsightsSync(orgId, 2); // last 2 days for daily delta
+        } catch (e) {
+          console.error(`[MetaScheduler] Insights sync failed for org ${orgId}:`, e?.message);
+        }
+
+        // Small gap between orgs to respect Meta's per-user rate limits
+        await new Promise((r) => setTimeout(r, 10_000));
+      }
+
+      console.log("[MetaScheduler] Daily Meta sync complete");
+    } catch (err) {
+      console.error("[MetaScheduler] scheduler error", err?.message);
     }
   });
 };
