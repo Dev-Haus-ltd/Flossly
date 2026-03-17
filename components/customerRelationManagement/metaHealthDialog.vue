@@ -1,226 +1,203 @@
-﻿<template>
-  <v-dialog v-model="dialog" max-width="980">
-    <v-card class="meta-health-card">
-      <v-card-title class="meta-health-title">
-        <div class="d-flex align-center">
-          <v-icon size="18" class="mr-2">mdi-heart-pulse</v-icon>
-          Meta Health
-          <span class="meta-health-subtitle">Connection overview</span>
+<template>
+  <v-dialog v-model="dialog" max-width="760" :content-class="'mh-dialog-wrapper'">
+    <v-card class="mh-card">
+      <div class="mh-header">
+        <div class="mh-header__left">
+          <div class="mh-icon-wrap">
+            <v-icon size="15" color="#0061FB">mdi-heart-pulse</v-icon>
+          </div>
+          <div>
+            <div class="mh-header__title">Meta Health</div>
+            <div class="mh-header__sub">Connection overview</div>
+          </div>
         </div>
-        <v-btn icon variant="text" size="small" @click="close">
-          <v-icon>mdi-close</v-icon>
+        <v-btn icon variant="text" size="x-small" @click="close">
+          <v-icon size="17">mdi-close</v-icon>
         </v-btn>
-      </v-card-title>
-      <v-card-text class="meta-health-body">
-        <div v-if="loading" class="meta-health-loading">
-          <v-progress-circular indeterminate size="28" />
+      </div>
+
+      <div class="mh-body">
+        <div v-if="loading" class="mh-loading">
+          <v-progress-circular indeterminate size="22" color="#0061FB" />
         </div>
         <template v-else>
-          <v-alert
-            v-if="data?.error"
-            type="error"
-            variant="tonal"
-            class="mb-3"
-          >
+          <v-alert v-if="data?.error" type="error" variant="tonal" density="compact" class="mb-3">
             {{ data.error }}
           </v-alert>
           <template v-else>
-            <div class="meta-health-top">
-              <div class="meta-health-score">
-                <div class="score-title">Overall</div>
-                <div class="score-value">
-                  {{ data?.activePages || 0 }}/{{ data?.totalPages || 0 }}
-                </div>
-                <div class="score-subtitle">Active pages</div>
+            <div class="mh-stats-bar">
+              <div class="mh-stat">
+                <div class="mh-stat__key">Pages</div>
+                <div class="mh-stat__val mh-stat__val--big">{{ activePages.length || 0 }}</div>
               </div>
-              <div class="meta-health-summary">
-                <div class="summary-card">
-                  <div class="summary-label">App ID</div>
-                  <div class="summary-value">{{ data?.appId || '-' }}</div>
-                </div>
-                <div class="summary-card">
-                  <div class="summary-label">Verify Token</div>
-                  <div class="summary-value">
-                    <v-chip
-                      size="x-small"
-                      :color="data?.verifyTokenSet ? 'success' : 'warning'"
-                      label
-                      variant="tonal"
-                    >
-                      {{ data?.verifyTokenSet ? 'Set' : 'Missing' }}
-                    </v-chip>
-                  </div>
-                </div>
-                <div class="summary-card">
-                  <div class="summary-label">Total Pages</div>
-                  <div class="summary-value">{{ data?.totalPages || 0 }}</div>
-                </div>
-                <div class="summary-card">
-                  <div class="summary-label">Active Pages</div>
-                  <div class="summary-value">{{ data?.activePages || 0 }}</div>
-                </div>
-                <div class="summary-card">
-                  <div class="summary-label">IG Accounts</div>
-                  <div class="summary-value">{{ data?.totalInstagramAccounts || 0 }}</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="meta-health-permissions">
-              <div class="meta-health-table-head">
-                <div class="table-title">Token Permissions</div>
-                <div class="table-hint">Granted or declined permissions for this Meta connection</div>
-              </div>
-              <v-alert
-                v-if="data?.permissionsError"
-                type="warning"
-                variant="tonal"
-                class="mb-3"
-              >
-                {{ data.permissionsError }}
-              </v-alert>
-              <div v-else-if="(data?.permissions || []).length" class="permission-chips">
+              <div class="mh-divider" />
+              <div class="mh-stat">
+                <div class="mh-stat__key">Status</div>
                 <v-chip
-                  v-for="perm in data.permissions"
-                  :key="perm?.permission || perm?.name || perm?.key || perm?.id || perm"
                   size="x-small"
-                  :color="(perm?.status || '').toLowerCase() === 'granted' ? 'success' : 'warning'"
+                  :color="activePages.length ? 'success' : 'warning'"
                   label
                   variant="tonal"
+                  class="mh-stat__chip"
                 >
-                  {{ perm?.permission || perm?.name || perm?.key || perm }}
-                  <span v-if="perm?.status">: {{ perm.status }}</span>
+                  {{ activePages.length ? 'Connected' : 'Not Connected' }}
                 </v-chip>
               </div>
-              <div v-else class="text-caption text-medium-emphasis">
-                No permissions data available.
+              <div class="mh-divider" />
+              <div class="mh-stat">
+                <div class="mh-stat__key">Webhook Token</div>
+                <v-chip
+                  size="x-small"
+                  :color="data?.verifyTokenSet ? 'success' : 'warning'"
+                  label
+                  variant="tonal"
+                  class="mh-stat__chip"
+                >
+                  {{ data?.verifyTokenSet ? 'Set' : 'Missing' }}
+                </v-chip>
+              </div>
+              <div class="mh-divider" />
+              <div class="mh-stat">
+                <div class="mh-stat__key">App ID</div>
+                <div class="mh-stat__val">{{ data?.appId || '-' }}</div>
+              </div>
+              <div v-if="typeof data?.totalInstagramAccounts !== 'undefined'" class="mh-divider" />
+              <div v-if="typeof data?.totalInstagramAccounts !== 'undefined'" class="mh-stat">
+                <div class="mh-stat__key">IG Accounts</div>
+                <div class="mh-stat__val">{{ data?.totalInstagramAccounts || 0 }}</div>
               </div>
             </div>
 
-            <div class="meta-health-table-wrap">
-              <div class="meta-health-table-head">
-                <div class="table-title">Pages</div>
-                <div class="table-hint">Status, subscriptions, and lead activity</div>
+            <div class="mh-pages">
+              <div class="mh-pages__head">
+                <span>Connected Meta Pages</span>
+                <span class="mh-pages__hint">Lead activity &amp; connection health</span>
               </div>
-              <div class="meta-health-table-scroll">
-                <v-table density="compact" class="meta-health-table">
-                  <thead>
-                    <tr>
-                      <th>Page</th>
-                      <th>Instagram</th>
-                      <th>Status</th>
-                      <th>Token</th>
-                      <th>Subscribed</th>
-                      <th>Msg Subscribed</th>
-                      <th>App Match</th>
-                      <th>Messaging Access</th>
-                      <th>Lead Access</th>
-                      <th>Connected At</th>
-                      <th>Leads</th>
-                      <th>Last Lead</th>
-                      <th>Error</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="row in activePages" :key="row.pageId">
-                      <td class="page-cell">
-                        <span class="status-dot" :class="row.status === 'Active' ? 'ok' : 'warn'"></span>
-                        <span class="page-name">{{ row.pageName || row.pageId }}</span>
-                        <span v-if="row.pageName && row.pageId" class="page-id">- {{ row.pageId }}</span>
-                      </td>
-                      <td class="ig-cell">
-                        <div v-if="row.instagramConnected">
-                          <v-chip size="x-small" color="success" variant="tonal" label>Connected</v-chip>
-                          <div class="ig-name">{{ row.instagramAccountName || 'Instagram account' }}</div>
-                          <div class="ig-id">{{ row.instagramAccountId || '-' }}</div>
-                        </div>
-                        <v-chip v-else size="x-small" color="warning" variant="tonal" label>Not linked</v-chip>
-                      </td>
-                      <td>
-                        <v-chip size="x-small" color="primary" variant="tonal" label>
-                          {{ row.status || '-' }}
-                        </v-chip>
-                      </td>
-                      <td>
-                        <v-chip size="x-small" :color="row.tokenPresent ? 'success' : 'error'" variant="tonal" label>
-                          {{ row.tokenPresent ? 'Yes' : 'No' }}
-                        </v-chip>
-                      </td>
-                      <td>
-                        <v-chip size="x-small" :color="row.subscribed ? 'success' : 'error'" variant="tonal" label>
-                          {{ row.subscribed ? 'Yes' : 'No' }}
-                        </v-chip>
-                      </td>
-                      <td>
-                        <v-chip size="x-small" :color="row.messagesSubscribed ? 'success' : 'warning'" variant="tonal" label>
-                          {{ row.messagesSubscribed ? 'Yes' : 'No' }}
-                        </v-chip>
-                      </td>
-                      <td>
-                        <v-chip size="x-small" :color="row.appMatched ? 'success' : 'error'" variant="tonal" label>
-                          {{ row.appMatched ? 'Yes' : 'No' }}
-                        </v-chip>
-                      </td>
-                      <td class="messaging-cell">
-                        <v-chip
-                          size="x-small"
-                          :color="row.messagingAccessStatus === 'ok' ? 'success' : (row.messagingAccessStatus === 'missing' ? 'error' : 'warning')"
-                          variant="tonal"
-                          label
-                        >
-                          {{ row.messagingAccessStatus === 'ok' ? 'Granted' : (row.messagingAccessStatus === 'missing' ? 'Missing' : 'Unknown') }}
-                        </v-chip>
-                        <div
-                          v-if="Array.isArray(row.missingMessagingPermissions) && row.missingMessagingPermissions.length"
-                          class="permission-missing"
-                        >
-                          {{ row.missingMessagingPermissions.join(', ') }}
-                        </div>
-                      </td>
-                      <td>
-                        <div class="d-flex align-center gap-1">
-                          <v-chip
-                            size="x-small"
-                            :color="row.leadAccessStatus === 'ok' ? 'success' : (row.leadAccessStatus === 'missing' ? 'error' : 'warning')"
-                            variant="tonal"
-                            label
-                          >
-                            {{ row.leadAccessStatus === 'ok' ? 'Granted' : (row.leadAccessStatus === 'missing' ? 'Required' : 'Unknown') }}
-                          </v-chip>
-                          <v-btn
-                            v-if="row.leadAccessStatus === 'missing' && row.leadAccessUrl"
-                            size="x-small"
-                            variant="text"
-                            @click="openLeadAccess(row.leadAccessUrl)"
-                          >
-                            Grant
-                          </v-btn>
-                        </div>
-                      </td>
-                      <td class="text-nowrap">{{ formatMetaLeadDate(row.connectedAt) }}</td>
-                      <td class="text-center">{{ row.leadCount || 0 }}</td>
-                      <td class="text-nowrap">{{ formatMetaLeadDate(row.lastLeadAt) }}</td>
-                      <td class="error-cell">{{ row.error || '-' }}</td>
-                    </tr>
-                    <tr v-if="!activePages.length">
-                      <td colspan="13" class="text-center py-6 text-medium-emphasis">No pages found.</td>
-                    </tr>
-                  </tbody>
-                </v-table>
+
+              <div v-if="activePages.length">
+                <div
+                  v-for="(page, i) in activePages"
+                  :key="page.pageId"
+                  class="mh-page-row"
+                  :class="{ 'mh-page-row--last': i === activePages.length - 1 }"
+                >
+                  <div class="mh-page-row__main">
+                    <div class="mh-page-row__name">
+                      {{ page.pageName || page.pageId }}
+                      <v-tooltip :text="page.pageId || '-'" location="top" max-width="320">
+                        <template #activator="{ props: tip }">
+                          <v-icon v-bind="tip" size="13" class="mh-page-info-icon">mdi-information-outline</v-icon>
+                        </template>
+                      </v-tooltip>
+                    </div>
+                    <div class="mh-page-row__chips">
+                      <v-chip size="x-small" :color="page.tokenPresent ? 'success' : 'error'" variant="tonal" label>
+                        Token {{ page.tokenPresent ? 'Yes' : 'No' }}
+                      </v-chip>
+                      <v-chip size="x-small" :color="page.subscribed ? 'success' : 'error'" variant="tonal" label>
+                        Subscribed {{ page.subscribed ? 'Yes' : 'No' }}
+                      </v-chip>
+                      <v-chip size="x-small" :color="page.appMatched ? 'success' : 'error'" variant="tonal" label>
+                        App {{ page.appMatched ? 'Yes' : 'No' }}
+                      </v-chip>
+                      <v-chip
+                        v-if="typeof page.messagesSubscribed !== 'undefined'"
+                        size="x-small"
+                        :color="page.messagesSubscribed ? 'success' : 'warning'"
+                        variant="tonal"
+                        label
+                      >
+                        Messages {{ page.messagesSubscribed ? 'Yes' : 'No' }}
+                      </v-chip>
+                      <v-chip
+                        v-if="page.instagramConnected"
+                        size="x-small"
+                        color="success"
+                        variant="tonal"
+                        label
+                      >
+                        IG Connected
+                      </v-chip>
+                      <v-chip
+                        v-else-if="typeof page.instagramConnected !== 'undefined'"
+                        size="x-small"
+                        color="warning"
+                        variant="tonal"
+                        label
+                      >
+                        IG Not linked
+                      </v-chip>
+                      <v-chip size="x-small" color="primary" variant="tonal" label>
+                        {{ page.status || '-' }}
+                      </v-chip>
+                    </div>
+                    <div
+                      v-if="Array.isArray(page.missingMessagingPermissions) && page.missingMessagingPermissions.length"
+                      class="mh-page-row__meta"
+                    >
+                      Missing messaging permissions: {{ page.missingMessagingPermissions.join(', ') }}
+                    </div>
+                    <div
+                      v-if="page.instagramConnected && (page.instagramAccountName || page.instagramAccountId)"
+                      class="mh-page-row__meta"
+                    >
+                      {{ page.instagramAccountName || 'Instagram account' }}{{ page.instagramAccountId ? ` (${page.instagramAccountId})` : '' }}
+                    </div>
+                    <div v-if="page.error" class="mh-page-row__error">{{ page.error }}</div>
+                  </div>
+
+                  <div class="mh-page-row__stats">
+                    <div class="mh-mini-stat">
+                      <div class="mh-mini-stat__key">Total Leads</div>
+                      <div class="mh-mini-stat__val">{{ page.leadCount || 0 }}</div>
+                    </div>
+                    <div class="mh-mini-stat">
+                      <div class="mh-mini-stat__key">Last Lead</div>
+                      <v-tooltip :text="dateFull(page.lastLeadAt)" location="top">
+                        <template #activator="{ props: tip }">
+                          <div v-bind="tip" class="mh-mini-stat__val mh-mini-stat__val--date">{{ dateShort(page.lastLeadAt) }}</div>
+                        </template>
+                      </v-tooltip>
+                    </div>
+                    <div class="mh-mini-stat">
+                      <div class="mh-mini-stat__key">Connected</div>
+                      <v-tooltip :text="dateFull(page.connectedAt)" location="top">
+                        <template #activator="{ props: tip }">
+                          <div v-bind="tip" class="mh-mini-stat__val mh-mini-stat__val--date">{{ dateShort(page.connectedAt) }}</div>
+                        </template>
+                      </v-tooltip>
+                    </div>
+                    <div v-if="page.leadAccessStatus" class="mh-mini-stat">
+                      <div class="mh-mini-stat__key">Lead Access</div>
+                      <div class="mh-mini-stat__val">{{ page.leadAccessStatus }}</div>
+                      <v-btn
+                        v-if="page.leadAccessStatus === 'missing' && page.leadAccessUrl"
+                        size="x-small"
+                        variant="text"
+                        class="mh-mini-stat__action"
+                        @click="openLeadAccess(page.leadAccessUrl)"
+                      >
+                        Grant
+                      </v-btn>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-else class="mh-pages__empty">
+                No active Meta page is currently connected for this organisation.
               </div>
             </div>
           </template>
         </template>
-      </v-card-text>
-      <v-card-actions class="meta-health-actions">
-        <v-spacer />
-        <v-btn variant="text" @click="close">Close</v-btn>
-      </v-card-actions>
+      </div>
     </v-card>
   </v-dialog>
 </template>
 
 <script setup>
+import { formatDateOnly, parsedDate } from '~/lib/dateFormatter';
+
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   loading: { type: Boolean, default: false },
@@ -234,287 +211,306 @@ const dialog = computed({
   set: (val) => emit('update:modelValue', val),
 });
 
-const close = () => {
-  emit('update:modelValue', false);
-};
+const close = () => emit('update:modelValue', false);
 
 const activePages = computed(() => {
   const pages = Array.isArray(props.data?.pages) ? props.data.pages : [];
   return pages.filter((row) => String(row?.status || '').toLowerCase() === 'active');
 });
 
-const formatMetaLeadDate = (value) => {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.valueOf())) return '-';
-  return parsed.toLocaleString();
-};
+const dateShort = (value) => formatDateOnly(value) || '-';
+const dateFull = (value) => parsedDate(value) || '-';
 
 const openLeadAccess = (url) => {
-  if (!url) return;
-  if (typeof window !== 'undefined') {
-    window.open(url, '_blank');
-  }
+  if (!url || typeof window === 'undefined') return;
+  window.open(url, '_blank');
 };
-
 </script>
 
 <style scoped lang="scss">
-.meta-health-card {
-  border-radius: 16px;
-  padding: 18px 20px 16px;
-  background: linear-gradient(180deg, rgba(250, 250, 250, 0.9), rgba(255, 255, 255, 0.98));
+::v-deep(.mh-dialog-wrapper) {
+  border-radius: 26px !important;
+  overflow: hidden;
 }
 
-.meta-health-title {
-  padding: 0;
-  margin-bottom: 8px;
+.mh-card {
+  border-radius: 26px;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 16px 56px rgba(15, 23, 42, 0.14);
+  overflow: hidden;
+}
+
+.mh-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-weight: 600;
-  font-size: 18px;
-  gap: 12px;
+  padding: 14px 16px 0;
+  margin-bottom: 12px;
 }
 
-.meta-health-subtitle {
-  font-size: 12px;
-  font-weight: 500;
-  margin-left: 10px;
-  color: rgba(0, 0, 0, 0.55);
+.mh-header__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.meta-health-body {
-  padding: 0;
+.mh-icon-wrap {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: rgba(0, 97, 251, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
-.meta-health-loading {
-  padding: 40px 0;
+.mh-header__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.2;
+}
+
+.mh-header__sub {
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.4);
+  margin-top: 1px;
+}
+
+.mh-body {
+  padding: 0 16px 16px;
+}
+
+.mh-loading {
+  padding: 32px 0;
   text-align: center;
 }
 
-.meta-health-top {
-  display: grid;
-  grid-template-columns: minmax(180px, 220px) 1fr;
-  gap: 16px;
-  margin-bottom: 16px;
+.mh-stats-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.9);
+  padding: 10px 16px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  row-gap: 10px;
 }
 
-.meta-health-score {
-  border-radius: 14px;
-  padding: 16px;
-  background: linear-gradient(135deg, rgba(0, 97, 251, 0.12), rgba(0, 97, 251, 0.04));
-  border: 1px solid rgba(0, 97, 251, 0.2);
+.mh-stat {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px;
+  padding: 0 16px;
+  flex: 1;
+  min-width: 90px;
 }
 
-.score-title {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: rgba(0, 0, 0, 0.55);
+.mh-stat:first-child {
+  padding-left: 0;
 }
 
-.score-value {
-  font-size: 28px;
+.mh-stat:last-child {
+  padding-right: 0;
+}
+
+.mh-stat__val {
+  font-size: 13px;
   font-weight: 700;
-  color: #0f172a;
+  color: #111827;
+  line-height: 1;
+  word-break: break-all;
 }
 
-.score-subtitle {
-  font-size: 12px;
-  color: rgba(0, 0, 0, 0.55);
+.mh-stat__val--big {
+  font-size: 22px;
 }
 
-.meta-health-summary {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(150px, 1fr));
-  gap: 12px;
+.mh-stat__chip {
+  align-self: flex-start;
 }
 
-.summary-card {
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 12px;
-  padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.9);
+.mh-stat__key {
+  font-size: 10px;
+  color: rgba(0, 0, 0, 0.42);
+  font-weight: 500;
+  white-space: nowrap;
 }
 
-.summary-label {
-  font-size: 12px;
-  color: rgba(0, 0, 0, 0.6);
-  margin-bottom: 6px;
+.mh-divider {
+  width: 1px;
+  height: 32px;
+  background: rgba(15, 23, 42, 0.08);
+  flex-shrink: 0;
 }
 
-.summary-value {
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.meta-health-table-wrap {
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 12px;
+.mh-pages {
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  border-radius: 14px;
   overflow: hidden;
   background: #fff;
 }
 
-.meta-health-permissions {
-  margin-bottom: 16px;
-}
-
-.permission-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.meta-health-table-head {
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+.mh-pages__head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  font-size: 12px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.mh-pages__hint {
+  font-size: 10px;
+  font-weight: 400;
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.mh-page-row {
+  display: flex;
   gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.05);
+  align-items: flex-start;
 }
 
-.table-title {
-  font-weight: 600;
-  font-size: 14px;
+.mh-page-row--last {
+  border-bottom: none;
 }
 
-.table-hint {
-  font-size: 12px;
-  color: rgba(0, 0, 0, 0.55);
+.mh-page-row__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
-.meta-health-table-scroll {
-  max-height: 320px;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.meta-health-table :deep(.v-table__wrapper) {
-  overflow: visible;
-}
-
-.meta-health-table :deep(thead th) {
-  background: #f6f6f6;
-  font-weight: 600;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: rgba(0, 0, 0, 0.65);
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-
-.meta-health-table :deep(tbody tr:nth-child(odd)) {
-  background: rgba(0, 0, 0, 0.015);
-}
-
-.meta-health-table :deep(tbody td) {
-  font-size: 13px;
-  padding: 10px 12px;
-  vertical-align: middle;
-  white-space: nowrap;
-}
-
-.page-cell {
-  white-space: nowrap;
+.mh-page-row__name {
   display: flex;
   align-items: center;
-  gap: 6px;
-}
-
-.page-cell .page-name {
-  font-weight: 600;
+  gap: 5px;
   font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.page-cell .page-id {
+.mh-page-info-icon {
+  color: rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s;
+
+  &:hover {
+    color: #0061FB;
+  }
+}
+
+.mh-page-row__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.mh-page-row__meta {
   font-size: 11px;
-  color: rgba(0, 0, 0, 0.55);
+  color: rgba(0, 0, 0, 0.58);
+  line-height: 1.4;
 }
 
-.ig-cell {
-  min-width: 180px;
-  white-space: normal;
+.mh-page-row__error {
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: rgba(249, 115, 22, 0.08);
+  color: rgba(124, 45, 18, 0.9);
+  font-size: 11px;
+  line-height: 1.4;
 }
 
-.ig-name {
+.mh-page-row__stats {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.mh-mini-stat {
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 10px;
+  padding: 7px 10px;
+  background: rgba(248, 250, 252, 0.8);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 80px;
+  text-align: center;
+}
+
+.mh-mini-stat__val {
   font-size: 12px;
   font-weight: 600;
-  margin-top: 4px;
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: #111827;
+  word-break: break-word;
 }
 
-.ig-id {
-  font-size: 11px;
-  color: rgba(0, 0, 0, 0.55);
+.mh-mini-stat__val--date {
+  cursor: default;
+  text-decoration: underline dotted rgba(0, 0, 0, 0.25);
+  text-underline-offset: 2px;
 }
 
-.messaging-cell {
-  min-width: 170px;
-  white-space: normal;
+.mh-mini-stat__key {
+  font-size: 10px;
+  color: rgba(0, 0, 0, 0.4);
 }
 
-.permission-missing {
-  font-size: 11px;
-  color: #b91c1c;
-  margin-top: 4px;
-  line-height: 1.25;
+.mh-mini-stat__action {
+  min-height: auto;
+  padding: 0;
 }
 
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-  background: #cbd5e1;
-}
-
-.status-dot.ok {
-  background: #16a34a;
-}
-
-.status-dot.warn {
-  background: #f97316;
-}
-
-.error-cell {
-  max-width: 220px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: rgba(0, 0, 0, 0.65);
-}
-
-.meta-health-actions {
-  padding: 10px 0 0;
-}
-
-@media (max-width: 960px) {
-  .meta-health-top {
-    grid-template-columns: 1fr;
-  }
-  .meta-health-summary {
-    grid-template-columns: repeat(2, minmax(160px, 1fr));
-  }
+.mh-pages__empty {
+  padding: 14px;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
 }
 
 @media (max-width: 600px) {
-  .meta-health-summary {
-    grid-template-columns: 1fr;
+  .mh-page-row {
+    flex-direction: column;
   }
-  .meta-health-card {
-    padding: 16px;
+
+  .mh-page-row__stats {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .mh-mini-stat {
+    flex: 1;
+  }
+
+  .mh-divider {
+    display: none;
+  }
+
+  .mh-stats-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .mh-stat {
+    padding: 0;
   }
 }
 </style>
-
-

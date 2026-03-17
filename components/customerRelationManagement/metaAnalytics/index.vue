@@ -1,11 +1,9 @@
 <template>
   <v-sheet color="background">
-    <!-- Page Header -->
     <div class="cust-border d-flex align-center">
       <p class="mr-1">CRM Meta Analytics</p>
     </div>
 
-    <!-- Stats Cards Row -->
     <div class="mt-5 px-5">
       <v-row align="stretch">
         <v-col v-for="(stat, i) in analyticsStats" :key="i" style="flex: 1 1 0; min-width: 0;">
@@ -20,8 +18,19 @@
       </v-row>
     </div>
 
-    <!-- Search and Filters -->
     <div class="mt-5 px-5">
+      <v-sheet
+        v-if="showDisconnectedBanner"
+        class="mb-4 pa-4 disconnected-banner"
+        color="#fff7ed"
+        rounded="lg"
+      >
+        <p class="banner-title">No active Meta pages are connected.</p>
+        <p class="banner-copy">
+          Showing previously synced analytics for this organisation. Reconnect a Meta page and run sync to refresh the data.
+        </p>
+      </v-sheet>
+
       <div class="d-flex align-center mb-2" style="flex-wrap: nowrap; gap: 8px;">
         <div style="width: 150px">
           <v-text-field
@@ -38,16 +47,21 @@
             class="custom-search"
           />
         </div>
-        <v-btn
-          variant="text"
-          prepend-icon="mdi-filter-variant"
-          class="filter-btn"
-        >
+        <v-btn variant="text" prepend-icon="mdi-filter-variant" class="filter-btn">
           Filters
+        </v-btn>
+        <v-btn
+          color="primary"
+          variant="tonal"
+          :loading="isSyncing"
+          :disabled="isSyncing"
+          class="sync-btn"
+          @click="resync"
+        >
+          Sync Now
         </v-btn>
       </div>
 
-      <!-- Campaign Cards Grid -->
       <v-row v-if="filteredCampaigns.length" class="campaign-grid">
         <v-col
           v-for="(campaign, index) in filteredCampaigns"
@@ -75,44 +89,182 @@
       </v-row>
 
       <v-sheet v-else class="pa-10 text-center" color="transparent">
-        <p class="text-grey">No Meta campaigns found. Make sure your account is connected and synced.</p>
-        <v-btn color="primary" class="mt-3" @click="resync">
-          Sync Now
-        </v-btn>
+        <p class="empty-state-title">{{ emptyStateTitle }}</p>
+        <p class="text-grey empty-state-copy">{{ emptyStateCopy }}</p>
       </v-sheet>
     </div>
   </v-sheet>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useCrmStore } from '@/stores/crm';
+import { useMainStore } from '@/stores';
+import { useUser } from '@/composables/useUser';
 import instagramIcon from '@/assets/crm/instagram.svg';
 import facebookIcon from '@/assets/crm/facebook.svg';
 import reference1 from '@/assets/crm/placeholder/reference-1.png';
 
-definePageMeta({
-  layout: 'home',
-});
-
 const crmStore = useCrmStore();
+const mainStore = useMainStore();
+const { user } = useUser();
 const search = ref('');
+const isSyncing = ref(false);
+const currentOrgId = computed(() => Number(user.value?.currentLoggedInOrgId || 0) || null);
+const metaConnection = ref({ count: 0, pages: [] });
 
-onMounted(async () => {
-  if (!crmStore.metaCampaigns.length) {
-    await crmStore.getMetaStructure();
-  }
-  if (!crmStore.metaInsights.length) {
-    await crmStore.getMetaInsights();
-  }
-});
+let analyticsLoadPromise = null;
+let analyticsLoadOrgId = null;
 
-const resync = () => {
-  crmStore.fetchMetaStructure();
-  crmStore.fetchMetaInsights({ days: 30 });
+const hydrateMetaAnalytics = async ({ syncIfInsightsMissing = false, force = false } = {}) => {
+  const orgId = currentOrgId.value;
+  if (!orgId) return;
+
+  if (!force && analyticsLoadPromise && analyticsLoadOrgId === orgId) {
+    return analyticsLoadPromise;
+  }
+
+  analyticsLoadOrgId = orgId;
+  analyticsLoadPromise = (async () => {
+    const [connectionRes, structureRes, insightsRes] = await Promise.all([
+      crmStore.connectionStatus(),
+      crmStore.getMetaStructure(orgId),
+      crmStore.getMetaInsights(orgId),
+    ]);
+
+    if (currentOrgId.value === orgId && connectionRes?.code === 0 && connectionRes?.data) {
+      metaConnection.value = connectionRes.data;
+    }
+
+    const campaignCount = structureRes?.data?.campaigns?.length || 0;
+    const insightCount = insightsRes?.data?.length || 0;
+
+    if (
+      syncIfInsightsMissing &&
+      campaignCount > 0 &&
+      insightCount === 0 &&
+      currentOrgId.value === orgId
+    ) {
+      await crmStore.fetchMetaInsights({ days: 30 }, orgId);
+    }
+  })().finally(() => {
+    if (analyticsLoadOrgId === orgId) {
+      analyticsLoadPromise = null;
+      analyticsLoadOrgId = null;
+    }
+  });
+
+  return analyticsLoadPromise;
+};
+
+watch(
+  currentOrgId,
+  async (nextOrgId, prevOrgId) => {
+    if (!nextOrgId) {
+      crmStore.resetMetaAnalyticsState();
+      return;
+    }
+
+    if (nextOrgId !== prevOrgId) {
+      crmStore.resetMetaAnalyticsState();
+    }
+
+    await hydrateMetaAnalytics({ syncIfInsightsMissing: true });
+  },
+  { immediate: true }
+);
+
+const resync = async () => {
+  const orgId = currentOrgId.value;
+  if (!orgId) return;
+  if (isSyncing.value) return;
+  if (analyticsLoadPromise && analyticsLoadOrgId === orgId) return analyticsLoadPromise;
+
+  isSyncing.value = true;
+  try {
+    analyticsLoadOrgId = orgId;
+    analyticsLoadPromise = (async () => {
+      const prevCampaignCount = crmStore.metaCampaigns.length;
+      const prevInsightCount = crmStore.metaInsights.length;
+
+      const structureRes = await crmStore.fetchMetaStructure(orgId);
+      const insightsRes = await crmStore.fetchMetaInsights({ days: 30 }, orgId);
+
+      const campaignCount = crmStore.metaCampaigns.length;
+      const insightCount = crmStore.metaInsights.length;
+
+      if (structureRes?.code !== 0 || insightsRes?.code !== 0) {
+        throw new Error(
+          insightsRes?.error ||
+          structureRes?.error ||
+          'Meta analytics sync failed'
+        );
+      }
+
+      if (!campaignCount && !insightCount) {
+        mainStore.setSnackbar({
+          type: 'info',
+          color: 'warning',
+          title: 'Meta sync completed with no analytics data',
+          subtitle: 'No campaigns or insights were returned for the last 30 days.',
+        });
+        return;
+      }
+
+      if (campaignCount > 0 && insightCount === 0) {
+        mainStore.setSnackbar({
+          type: 'info',
+          color: 'warning',
+          title: 'Meta campaigns synced, but no insights were returned',
+          subtitle: 'Check the selected date range, account activity, or Meta attribution data.',
+        });
+        return;
+      }
+
+      const newCampaigns = campaignCount - prevCampaignCount;
+      const newInsights = insightCount - prevInsightCount;
+      const hasNewData = newCampaigns > 0 || newInsights > 0;
+
+      mainStore.setSnackbar({
+        type: 'success',
+        color: 'success',
+        title: hasNewData ? 'Meta analytics synced - new data found' : 'Meta analytics synced - already up to date',
+        subtitle: hasNewData
+          ? `${newCampaigns > 0 ? `+${newCampaigns} new campaign${newCampaigns === 1 ? '' : 's'}` : 'No new campaigns'}${newInsights > 0 ? `, +${newInsights} new insight row${newInsights === 1 ? '' : 's'}` : ', no new insight rows'} (${campaignCount} total).`
+          : `No new data since last sync - ${campaignCount} campaign${campaignCount === 1 ? '' : 's'} and ${insightCount} insight row${insightCount === 1 ? '' : 's'} already loaded.`,
+      });
+    })();
+    await analyticsLoadPromise;
+  } catch (error) {
+    mainStore.setSnackbar({
+      type: 'error',
+      color: 'error',
+      title: 'Meta sync failed',
+      subtitle: error?.message || 'Unable to refresh Meta analytics right now.',
+    });
+  } finally {
+    if (analyticsLoadOrgId === orgId) {
+      analyticsLoadPromise = null;
+      analyticsLoadOrgId = null;
+    }
+    isSyncing.value = false;
+  }
 };
 
 const stats = computed(() => crmStore.metaStats);
+const hasActiveMetaPages = computed(() => Number(metaConnection.value?.count || 0) > 0);
+const hasHistoricalAnalytics = computed(() => crmStore.metaCampaigns.length > 0);
+const showDisconnectedBanner = computed(() => !hasActiveMetaPages.value && hasHistoricalAnalytics.value);
+const emptyStateTitle = computed(() =>
+  hasActiveMetaPages.value
+    ? 'No Meta analytics available yet'
+    : 'No Meta pages connected'
+);
+const emptyStateCopy = computed(() =>
+  hasActiveMetaPages.value
+    ? 'Connect is already active, but no campaigns have been synced yet. Use Sync Now to fetch the latest analytics.'
+    : 'Connect a Meta page for this organisation first. Once connected, run Sync Now to start importing campaign analytics.'
+);
 
 const analyticsStats = computed(() => [
   {
@@ -142,42 +294,48 @@ const analyticsStats = computed(() => [
   },
 ]);
 
-const campaigns = computed(() => {
-  return crmStore.metaCampaigns.map(c => {
-    // Aggregated insights for this campaign
-    const campaignInsights = crmStore.metaInsights.filter(i => i.entityType === 'campaign' && i.entityId === c.campaignId);
-    
-    // Find one ad to get creative details
-    const campaignAdSetIds = crmStore.metaAdSets.filter(s => s.campaignId === c.campaignId).map(s => s.adSetId);
-    const ad = crmStore.metaAds.find(a => campaignAdSetIds.includes(a.adSetId));
+const campaigns = computed(() =>
+  crmStore.metaCampaigns.map((campaign) => {
+    const campaignInsights = crmStore.metaInsights.filter(
+      (insight) => insight.entityType === 'campaign' && insight.entityId === campaign.campaignId
+    );
+    const campaignAdSetIds = crmStore.metaAdSets
+      .filter((adSet) => adSet.campaignId === campaign.campaignId)
+      .map((adSet) => adSet.adSetId);
+    const ad = crmStore.metaAds.find((item) => campaignAdSetIds.includes(item.adSetId));
 
-    const totalSpend = campaignInsights.reduce((acc, i) => acc + Number(i.spend || 0), 0);
-    const totalImpressions = campaignInsights.reduce((acc, i) => acc + Number(i.impressions || 0), 0);
-    const totalClicks = campaignInsights.reduce((acc, i) => acc + Number(i.clicks || 0), 0);
-    const totalReach = campaignInsights.reduce((acc, i) => acc + Number(i.reach || 0), 0);
+    const totalSpend = campaignInsights.reduce((acc, insight) => acc + Number(insight.spend || 0), 0);
+    const totalImpressions = campaignInsights.reduce((acc, insight) => acc + Number(insight.impressions || 0), 0);
+    const totalClicks = campaignInsights.reduce((acc, insight) => acc + Number(insight.clicks || 0), 0);
+    const totalReach = campaignInsights.reduce((acc, insight) => acc + Number(insight.reach || 0), 0);
 
     return {
       platform: ad?.platform || 'Facebook',
       platformIcon: ad?.platform === 'Instagram' ? instagramIcon : facebookIcon,
-      title: c.name || 'Untitled Campaign',
-      date: new Date(c.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+      title: campaign.name || 'Untitled Campaign',
+      date: new Date(campaign.createdAt).toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      }),
       description: ad?.body || 'No ad text description available.',
       previewImage: ad?.imageUrl || reference1,
       hasVideo: false,
       cost: `£${(totalSpend / 100).toFixed(2)}`,
       impressions: totalImpressions,
       linkClicks: totalClicks,
-      reach: totalReach
+      reach: totalReach,
     };
-  });
-});
+  })
+);
 
 const filteredCampaigns = computed(() => {
   if (!search.value) return campaigns.value;
-  const s = search.value.toLowerCase();
-  return campaigns.value.filter(c => 
-    c.title.toLowerCase().includes(s) || 
-    c.description.toLowerCase().includes(s)
+  const normalizedSearch = search.value.toLowerCase();
+  return campaigns.value.filter(
+    (campaign) =>
+      campaign.title.toLowerCase().includes(normalizedSearch) ||
+      campaign.description.toLowerCase().includes(normalizedSearch)
   );
 });
 </script>
@@ -186,6 +344,7 @@ const filteredCampaigns = computed(() => {
 .cust-border {
   border-bottom: 1px solid #dbdbdb;
   padding: 17px;
+
   p {
     font-size: 12px;
   }
@@ -202,6 +361,27 @@ const filteredCampaigns = computed(() => {
   font-size: 14px;
   color: #666666;
   letter-spacing: 0;
+}
+
+.sync-btn {
+  text-transform: none;
+}
+
+.disconnected-banner {
+  border: 1px solid #fdba74;
+}
+
+.banner-title,
+.empty-state-title {
+  color: #111827;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.banner-copy,
+.empty-state-copy {
+  margin: 0;
 }
 
 .campaign-grid {

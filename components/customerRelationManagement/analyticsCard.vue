@@ -1,23 +1,44 @@
 <template>
   <div class="campaign-card">
-    <!-- Header with Platform Icon and Meta Info -->
     <div class="card-header">
       <div class="platform-badge">
         <img src="@/assets/crm/flossly-analytics.png" alt="Flossly Analytics" class="flossly-icon" />
       </div>
       <div class="meta-info">
-        <div class="d-flex align-center">
+        <div class="d-flex align-start">
           <img :src="platformIcon" :alt="platform" class="small-platform-icon" />
-          <span class="campaign-title">{{ title }}</span>
+          <v-tooltip location="top" :text="title" max-width="360">
+            <template #activator="{ props }">
+              <span v-bind="props" class="campaign-title title-clamp">{{ title }}</span>
+            </template>
+          </v-tooltip>
         </div>
         <span class="campaign-date">{{ date }}</span>
       </div>
     </div>
 
-    <!-- Campaign Description -->
-    <p class="campaign-description">{{ description }}</p>
+    <div class="description-block">
+      <v-tooltip location="top" :text="description" max-width="420">
+        <template #activator="{ props }">
+          <p
+            v-bind="props"
+            class="campaign-description"
+            :class="{ 'description-clamp': !showFullDescription }"
+          >
+            {{ description }}
+          </p>
+        </template>
+      </v-tooltip>
+      <button
+        v-if="showDescriptionToggle"
+        type="button"
+        class="see-more-btn"
+        @click="showFullDescription = !showFullDescription"
+      >
+        {{ showFullDescription ? 'See less' : 'See more' }}
+      </button>
+    </div>
 
-    <!-- Campaign Preview Image/Video -->
     <div class="campaign-preview">
       <img :src="previewImage" :alt="title" class="preview-image" />
       <div v-if="hasVideo" class="play-button-overlay">
@@ -25,7 +46,6 @@
       </div>
     </div>
 
-    <!-- Campaign Stats -->
     <div class="campaign-stats">
       <div class="stat-item">
         <span class="stat-label">Cost</span>
@@ -48,7 +68,9 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed, ref } from 'vue';
+
+const props = defineProps({
   platform: {
     type: String,
     required: true,
@@ -94,6 +116,9 @@ defineProps({
     required: true,
   },
 });
+
+const showFullDescription = ref(false);
+const showDescriptionToggle = computed(() => String(props.description || '').trim().length > 140);
 </script>
 
 <style scoped lang="scss">
@@ -118,6 +143,7 @@ defineProps({
     padding: 1px;
     background: linear-gradient(43.6deg, #68ECE6 8.01%, #7D77FF 34.47%, #FF85DA 64.25%, #FFA977 90.72%);
     -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
     pointer-events: none;
@@ -130,8 +156,9 @@ defineProps({
 
 .card-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
+  min-height: 72px;
 }
 
 .platform-badge {
@@ -163,6 +190,8 @@ defineProps({
   width: 16px;
   height: 16px;
   margin-right: 6px;
+  margin-top: 2px;
+  flex-shrink: 0;
 }
 
 .campaign-title {
@@ -173,6 +202,9 @@ defineProps({
   line-height: 150%;
   letter-spacing: 0%;
   color: hsla(0, 0%, 0%, 1);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .campaign-date {
@@ -194,6 +226,37 @@ defineProps({
   letter-spacing: 0%;
   color: hsla(0, 0%, 45%, 1);
   margin: 0;
+  min-height: 72px;
+}
+
+.title-clamp {
+  line-clamp: 3;
+  -webkit-line-clamp: 3;
+}
+
+.description-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.description-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  line-clamp: 4;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+}
+
+.see-more-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: #3f51b5;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .campaign-preview {

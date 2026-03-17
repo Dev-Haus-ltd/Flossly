@@ -35,33 +35,46 @@ export const useCrmStore = defineStore("crmStore", {
         reach: 0,
         leads: 0,
         clicks: 0,
-        roas: 0
-      }
+        roas: 0,
+      };
 
-      state.metaInsights.forEach(i => {
-        if (i.entityType === 'campaign') {
-          totals.spend += Number(i.spend || 0)
-          totals.impressions += Number(i.impressions || 0)
-          totals.reach += Number(i.reach || 0)
-          totals.leads += Number(i.leads || 0)
-          totals.clicks += Number(i.clicks || 0)
+      state.metaInsights.forEach((insight) => {
+        if (insight.entityType === "campaign") {
+          totals.spend += Number(insight.spend || 0);
+          totals.impressions += Number(insight.impressions || 0);
+          totals.reach += Number(insight.reach || 0);
+          totals.leads += Number(insight.leads || 0);
+          totals.clicks += Number(insight.clicks || 0);
         }
-      })
+      });
 
-      // Calculate ROAS: (Total Revenue / Total Spend) * 100. 
-      // Meta gives purchase_roas directly for specific entities, but for aggregation it's better to calculate or average.
-      // Since we don't have total revenue across all, we can average the ROAS of campaigns or just show one if provided.
-      // For now, let's use a simple average of campaign ROAS or 0.
-      const campaignsWithRoas = state.metaInsights.filter(i => i.entityType === 'campaign' && i.purchase_roas > 0)
+      const campaignsWithRoas = state.metaInsights.filter(
+        (insight) => insight.entityType === "campaign" && Number(insight.purchase_roas) > 0
+      );
       if (campaignsWithRoas.length) {
-        const sumRoas = campaignsWithRoas.reduce((acc, i) => acc + Number(i.purchase_roas), 0)
-        totals.roas = (sumRoas / campaignsWithRoas.length) * 100
+        const sumRoas = campaignsWithRoas.reduce(
+          (acc, insight) => acc + Number(insight.purchase_roas || 0),
+          0
+        );
+        totals.roas = (sumRoas / campaignsWithRoas.length) * 100;
       }
 
-      return totals
-    }
+      return totals;
+    },
   },
   actions: {
+    _isCurrentAnalyticsOrg(orgId) {
+      if (!orgId) return true;
+      const { user } = useUser();
+      return Number(user.value?.currentLoggedInOrgId || 0) === Number(orgId);
+    },
+    resetMetaAnalyticsState() {
+      this.metaCampaigns = [];
+      this.metaAdAccounts = [];
+      this.metaAdSets = [];
+      this.metaAds = [];
+      this.metaInsights = [];
+    },
     _start() { this._pending++; this.isLoading = true; },
     _end() { this._pending = Math.max(0, this._pending - 1); this.isLoading = this._pending > 0; },
 
@@ -84,14 +97,14 @@ export const useCrmStore = defineStore("crmStore", {
     connectionStatus() { return this._wrap(() => crmService.connectionStatus()); },
     fetchLeadsNow(params = {}) { return this._wrap(() => crmService.fetchLeadsNow(params)); },
     fetchDmHistoryNow(params = {}) { return this._wrap(() => crmService.fetchDmHistoryNow(params)); },
-    async fetchMetaStructure() {
+    async fetchMetaStructure(orgId = null) {
       const res = await this._wrap(() => crmService.fetchMetaStructure());
-      if (res?.code === 0) await this.getMetaStructure();
+      if (res?.code === 0) await this.getMetaStructure(orgId);
       return res;
     },
-    async getMetaStructure() {
+    async getMetaStructure(orgId = null) {
       const res = await this._wrap(() => crmService.getMetaStructure());
-      if (res?.code === 0 && res.data) {
+      if (res?.code === 0 && res.data && this._isCurrentAnalyticsOrg(orgId)) {
         this.metaCampaigns = res.data.campaigns || [];
         this.metaAdAccounts = res.data.adAccounts || [];
         this.metaAdSets = res.data.adSets || [];
@@ -99,14 +112,16 @@ export const useCrmStore = defineStore("crmStore", {
       }
       return res;
     },
-    async fetchMetaInsights(params = {}) {
+    async fetchMetaInsights(params = {}, orgId = null) {
       const res = await this._wrap(() => crmService.fetchMetaInsights(params));
-      if (res?.code === 0) await this.getMetaInsights();
+      if (res?.code === 0) await this.getMetaInsights(orgId);
       return res;
     },
-    async getMetaInsights() {
+    async getMetaInsights(orgId = null) {
       const res = await this._wrap(() => crmService.getMetaInsights());
-      if (res?.code === 0) this.metaInsights = res.data || [];
+      if (res?.code === 0 && this._isCurrentAnalyticsOrg(orgId)) {
+        this.metaInsights = res.data || [];
+      }
       return res;
     },
     subscribePages() { return this._wrap(() => crmService.subscribePages()); },
