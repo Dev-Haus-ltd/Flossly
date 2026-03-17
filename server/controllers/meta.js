@@ -2200,61 +2200,20 @@ export const fetchDailyMetaInsights = async (event) => {
   const q = getQuery(event) || {}
   const days = Number(q.days || 1)
 
-  const tokenRow = await MetaUserToken.findOne({ where: { organisationId: orgId } })
-  if (!tokenRow) return error(400, 'Meta not connected')
+  await runInsightsSync(orgId, days)
+  return success({ synced: true })
+}
 
-  const token = decrypt(tokenRow.userTokenEnc)
+export const getSyncJobStatus = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
 
-  const until = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
-  const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10)
+  const [structure, insights] = await Promise.all([
+    getStructureSyncStatus(orgId),
+    getInsightsSyncStatus(orgId),
+  ])
 
-  const fetchInsights = async (entityId) => {
-    const url = `https://graph.facebook.com/${META_VERSION}/${entityId}/insights?fields=impressions,clicks,spend,actions,ctr,cpc,cpm,reach,frequency,purchase_roas&time_range[since]=${since}&time_range[until]=${until}&time_increment=1&access_token=${token}`
-    const resp = await $fetch(url)
-    return Array.isArray(resp.data) ? resp.data : []
-  }
-
-  const upsertInsight = async (entityType, entityId, insight) => {
-    await MetaInsight.upsert({
-      organisationId: orgId,
-      entityType,
-      entityId,
-      date: insight.date_start,
-      impressions: insight.impressions,
-      clicks: insight.clicks,
-      spend: Math.round(Number(insight.spend || 0) * 100),
-      leads: insight.actions?.find((action) => action.action_type === 'lead')?.value || 0,
-      reach: insight.reach || 0,
-      frequency: insight.frequency || 0,
-      purchase_roas: insight.purchase_roas?.[0]?.value || 0,
-      cpc: insight.cpc,
-      ctr: insight.ctr,
-      cpm: insight.cpm,
-    })
-  }
-
-  // Campaigns
-  const campaigns = await MetaCampaign.findAll({ where: { organisationId: orgId } })
-  for (const c of campaigns) {
-    const rows = await fetchInsights(c.campaignId)
-    for (const insight of rows) await upsertInsight('campaign', c.campaignId, insight)
-  }
-
-  // Ad sets
-  const adSets = await MetaAdSet.findAll({ where: { organisationId: orgId } })
-  for (const s of adSets) {
-    const rows = await fetchInsights(s.adSetId)
-    for (const insight of rows) await upsertInsight('adset', s.adSetId, insight)
-  }
-
-  // Ads
-  const ads = await MetaAd.findAll({ where: { organisationId: orgId } })
-  for (const a of ads) {
-    const rows = await fetchInsights(a.adId)
-    for (const insight of rows) await upsertInsight('ad', a.adId, insight)
-  }
-
-  return success({ since, until, synced: true })
+  return success({ structure, insights })
 }
 
 export const getMetaInsights = async (event) => {
