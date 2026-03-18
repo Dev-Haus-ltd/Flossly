@@ -63,7 +63,27 @@
         <span class="stat-label">Reach</span>
         <span class="stat-value">{{ reach }}</span>
       </div>
+      <div class="stat-item">
+        <span class="stat-label">Leads</span>
+        <span class="stat-value">{{ leads }}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Cost Per Lead</span>
+        <span class="stat-value">{{ cpl }}</span>
+      </div>
     </div>
+
+    <v-btn
+      v-if="leads > 0"
+      color="primary"
+      variant="flat"
+      rounded="lg"
+      size="small"
+      class="view-leads-btn"
+      :to="`/crm?campaignId=${campaignId}`"
+    >
+      View {{ leads }} Lead{{ leads === 1 ? '' : 's' }}
+    </v-btn>
   </div>
 </template>
 
@@ -114,6 +134,18 @@ const props = defineProps({
   reach: {
     type: [String, Number],
     required: true,
+  },
+  leads: {
+    type: [String, Number],
+    default: 0,
+  },
+  cpl: {
+    type: String,
+    default: '—',
+  },
+  campaignId: {
+    type: String,
+    default: null,
   },
 });
 
@@ -302,6 +334,13 @@ const showDescriptionToggle = computed(() => String(props.description || '').tri
   gap: 8px;
   padding-top: 8px;
   border-top: 1px solid #f0f0f0;
+}
+
+.view-leads-btn {
+  width: 100%;
+  text-transform: none;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .stat-item {

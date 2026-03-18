@@ -342,6 +342,11 @@ export const listLeads = async (event) => {
       }
     }
 
+    // Filter by Meta campaign attribution
+    if (q.campaignId) {
+      where.campaignId = q.campaignId
+    }
+
     // Exact lead lookup for route-driven dialog opening
     const exactLeadId = Number(q.id || q.leadId || 0)
     if (exactLeadId) {

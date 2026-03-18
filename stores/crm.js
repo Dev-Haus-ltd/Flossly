@@ -9,6 +9,8 @@ export const useCrmStore = defineStore("crmStore", {
     metaAdSets: [],
     metaAds: [],
     metaInsights: [],
+    // CRM lead counts keyed by campaignId — single source of truth for lead attribution
+    metaCampaignLeadCounts: {},
   }),
   getters: {
     metaStats(state) {
@@ -19,35 +21,27 @@ export const useCrmStore = defineStore("crmStore", {
         reach: 0,
         leads: 0,
         clicks: 0,
-        roas: 0,
+        cpl: 0,
       };
 
       // Only aggregate campaign-level rows to avoid triple-counting
       // (the DB stores insights at campaign, adset, and ad level — same money counted three times)
-      let roas_numer = 0;
-      let roas_denom = 0;
-
       state.metaInsights.forEach((insight) => {
         if (insight.entityType !== "campaign") return;
         totals.spend += Number(insight.spend || 0);
         totals.impressions += Number(insight.impressions || 0);
         totals.reach += Number(insight.reach || 0);
-        totals.leads += Number(insight.leads || 0);
         totals.clicks += Number(insight.clicks || 0);
-
-        // Spend-weighted ROAS: weight each day's ROAS by that day's spend so
-        // high-spend days count more than low-spend days (simple average is misleading)
-        const roas = Number(insight.purchase_roas || 0);
-        if (roas > 0) {
-          const spendVal = Number(insight.spend || 0);
-          roas_numer += spendVal * roas;
-          roas_denom += spendVal;
-        }
       });
 
-      if (roas_denom > 0) {
-        // Raw multiplier — e.g. 2.5 means £2.50 returned per £1 spent
-        totals.roas = roas_numer / roas_denom;
+      // Leads from CrmLeads (single source of truth — matches what "View Leads" shows)
+      totals.leads = Object.values(state.metaCampaignLeadCounts).reduce(
+        (sum, n) => sum + Number(n || 0), 0
+      );
+
+      // CPL = total spend (in major units) / total CRM leads
+      if (totals.leads > 0) {
+        totals.cpl = totals.spend / 100 / totals.leads;
       }
 
       return totals;
@@ -65,6 +59,14 @@ export const useCrmStore = defineStore("crmStore", {
       this.metaAdSets = [];
       this.metaAds = [];
       this.metaInsights = [];
+      this.metaCampaignLeadCounts = {};
+    },
+    async getCampaignLeadCounts(orgId = null) {
+      const res = await this._wrap(() => crmService.getCampaignLeadCounts());
+      if (res?.code === 0 && res.data && this._isCurrentAnalyticsOrg(orgId)) {
+        this.metaCampaignLeadCounts = res.data || {};
+      }
+      return res;
     },
     _start() { this._pending++; this.isLoading = true; },
     _end() { this._pending = Math.max(0, this._pending - 1); this.isLoading = this._pending > 0; },
@@ -84,8 +86,8 @@ export const useCrmStore = defineStore("crmStore", {
       if (res?.code === 0) await this.getMetaStructure(orgId);
       return res;
     },
-    async getMetaStructure(orgId = null) {
-      const res = await this._wrap(() => crmService.getMetaStructure());
+    async getMetaStructure(orgId = null, params = {}) {
+      const res = await this._wrap(() => crmService.getMetaStructure(params));
       if (res?.code === 0 && res.data && this._isCurrentAnalyticsOrg(orgId)) {
         this.metaCampaigns = res.data.campaigns || [];
         this.metaAdAccounts = res.data.adAccounts || [];

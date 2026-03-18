@@ -63,9 +63,21 @@ export default {
         .catch((err) => reject(err));
     });
   },
-  getMetaStructure() {
+  getCampaignLeadCounts() {
     return new Promise((resolve, reject) => {
-      Get("/meta/getStructure")
+      Get("/meta/campaignLeadCounts")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getMetaStructure(params = {}) {
+    const qs = Object.entries(params)
+      .filter(([, v]) => v != null && v !== '')
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+      .join('&');
+    const url = qs ? `/meta/getStructure?${qs}` : '/meta/getStructure';
+    return new Promise((resolve, reject) => {
+      Get(url)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });

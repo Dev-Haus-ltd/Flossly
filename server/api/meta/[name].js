@@ -1,4 +1,4 @@
-import { authStart, authCallback, listLeads, fetchLeadsNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck, stream, getWhatsAppConfig, saveWhatsAppConfig, whatsappEmbeddedComplete, fetchWhatsAppTemplates, fetchMetaStructureAndBudgets, fetchDailyMetaInsights, listBusinessPortfolios, connectBusinessPages, debugMetaStatus, listMetaPermissions, getMetaInsights, getMetaStructure, getSyncJobStatus } from "../../controllers/meta";
+import { authStart, authCallback, igAuthStart, igAuthCallback, listLeads, fetchLeadsNow, fetchDmHistoryNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck, stream, getWhatsAppConfig, saveWhatsAppConfig, whatsappEmbeddedComplete, fetchWhatsAppTemplates, fetchMetaStructureAndBudgets, fetchDailyMetaInsights, listBusinessPortfolios, connectBusinessPages, debugMetaStatus, listMetaPermissions, getMetaInsights, getMetaStructure, getCampaignLeadCounts, deauthorize, dataDeletion, dataDeletionStatus, getSyncJobStatus } from "../../controllers/meta";
 
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, 'name')
@@ -7,10 +7,16 @@ export default defineEventHandler(async (event) => {
       return await authStart(event)
     case 'callback':
       return await authCallback(event)
+    case 'igAuthStart':
+      return await igAuthStart(event)
+    case 'igCallback':
+      return await igAuthCallback(event)
     case 'leads':
       return await listLeads(event)
     case 'fetchLeads':
       return await fetchLeadsNow(event)
+    case 'fetchDmHistory':
+      return await fetchDmHistoryNow(event)
     case 'subscribe':
       return await subscribePages(event)
     case 'connection':
@@ -46,8 +52,16 @@ export default defineEventHandler(async (event) => {
       return await debugMetaStatus(event)
     case 'permissions':
       return await listMetaPermissions(event)
+    case 'deauthorize':
+      return await deauthorize(event)
+    case 'dataDeletion':
+      return await dataDeletion(event)
+    case 'dataDeletionStatus':
+      return await dataDeletionStatus(event)
     case 'syncStatus':
       return await getSyncJobStatus(event)
+    case 'campaignLeadCounts':
+      return await getCampaignLeadCounts(event)
     default:
       return { code: 0, error: 'Not found' }
   }

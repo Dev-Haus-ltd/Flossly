@@ -1459,7 +1459,12 @@ const initLeads = async (metaConnected = false) => {
       console.error('[CRM] Meta post-connect sync failed', e);
     }
   }
-  await fetchLeads()
+  // Pre-filter by campaign if navigated from the analytics page
+  const campaignId = route.query.campaignId || null;
+  if (campaignId) {
+    activeFilters.value = { campaignId };
+  }
+  await fetchLeads(activeFilters.value)
 };
 
 const integrateMeta = async () => {
