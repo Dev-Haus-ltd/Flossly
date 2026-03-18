@@ -429,6 +429,7 @@
                   :lead-id="selectedLead?.id"
                   :lead-name="displayLeadName"
                   :lead-avatar="selectedLead?.photo"
+                  :connected="whatsappEnabled"
                 />
               </div>
             </v-tabs-window-item>
