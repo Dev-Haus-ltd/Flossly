@@ -4,18 +4,21 @@ import sequelize from '../../utils/db'
 export const MetaCampaign = sequelize.define(
   'MetaCampaigns',
   {
-    campaignId: { type: DataTypes.STRING(50), primaryKey: true },
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
 
     organisationId: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      references: { model: 'Organisations', key: 'id' },
     },
 
     adAccountId: {
       type: DataTypes.STRING(50),
       allowNull: false,
-      references: { model: 'MetaAdAccounts', key: 'adAccountId' },
+    },
+
+    campaignId: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
     },
 
     name: { type: DataTypes.STRING(200), allowNull: true },
@@ -25,5 +28,13 @@ export const MetaCampaign = sequelize.define(
     dailyBudget: { type: DataTypes.INTEGER, allowNull: true },
     lifetimeBudget: { type: DataTypes.INTEGER, allowNull: true },
   },
-  { modelName: 'MetaCampaigns', timestamps: true }
+  {
+    modelName: 'MetaCampaigns',
+    timestamps: true,
+    indexes: [
+      // Composite unique: one campaign per org (safe even if two orgs share an ad account)
+      { unique: true, fields: ['campaignId', 'organisationId'] },
+      { fields: ['organisationId'] },
+    ],
+  }
 )
