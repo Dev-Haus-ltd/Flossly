@@ -2223,14 +2223,98 @@ export const getMetaInsights = async (event) => {
   return success(rows)
 }
 
+export const getCampaignLeadCounts = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+  try {
+    const rows = await CrmLead.findAll({
+      where: { organisationId: orgId, campaignId: { [Op.ne]: null } },
+      attributes: ['campaignId', [fn('COUNT', col('id')), 'count']],
+      group: ['campaignId'],
+      raw: true,
+    })
+    const counts = {}
+    rows.forEach((r) => { counts[r.campaignId] = Number(r.count) })
+    return success(counts)
+  } catch (err) {
+    console.error('[getCampaignLeadCounts]', err)
+    return error(500, 'Failed to fetch campaign lead counts')
+  }
+}
+
 export const getMetaStructure = async (event) => {
   const { orgId } = event.context.user || {}
   if (!orgId) return error(401, 'Unauthenticated')
-  const campaigns = await MetaCampaign.findAll({ where: { organisationId: orgId } })
-  const adAccounts = await MetaAdAccount.findAll({ where: { organisationId: orgId } })
-  const adSets = await MetaAdSet.findAll({ where: { organisationId: orgId } })
-  const ads = await MetaAd.findAll({ where: { organisationId: orgId } })
-  return success({ campaigns, adAccounts, adSets, ads })
+
+  try {
+    const query = getQuery(event)
+    const platform = typeof query.platform === 'string' ? query.platform.trim() : null
+    const allowedPlatforms = new Set(['Facebook', 'Instagram'])
+    const validPlatform = platform && allowedPlatforms.has(platform) ? platform : null
+
+    // Validate and parse date params — reject invalid date strings immediately
+    const parseDate = (val) => {
+      if (!val) return null
+      const d = new Date(val)
+      return isNaN(d.getTime()) ? null : d
+    }
+    const dateFromParsed = parseDate(query.dateFrom)
+    const dateToParsed = parseDate(query.dateTo)
+
+    // Build campaign WHERE clause
+    const campaignWhere = { organisationId: orgId }
+    if (dateFromParsed || dateToParsed) {
+      campaignWhere.createdAt = {}
+      if (dateFromParsed) campaignWhere.createdAt[Op.gte] = dateFromParsed
+      if (dateToParsed) {
+        dateToParsed.setHours(23, 59, 59, 999)
+        campaignWhere.createdAt[Op.lte] = dateToParsed
+      }
+    }
+
+    let campaigns = await MetaCampaign.findAll({ where: campaignWhere })
+
+    // Platform filter: scope adSets lookup to campaigns already found (not whole org)
+    if (validPlatform && campaigns.length) {
+      const candidateCampaignIds = campaigns.map((c) => c.campaignId)
+      const [adSetsForCampaigns, adsWithPlatform] = await Promise.all([
+        MetaAdSet.findAll({ where: { organisationId: orgId, campaignId: { [Op.in]: candidateCampaignIds } } }),
+        MetaAd.findAll({ where: { organisationId: orgId, platform: validPlatform } }),
+      ])
+      const adSetIdsWithPlatform = new Set(adsWithPlatform.map((a) => a.adSetId))
+      const matchingCampaignIds = new Set(
+        adSetsForCampaigns
+          .filter((as) => adSetIdsWithPlatform.has(as.adSetId))
+          .map((as) => as.campaignId)
+      )
+      campaigns = campaigns.filter((c) => matchingCampaignIds.has(c.campaignId))
+    }
+
+    const campaignIds = campaigns.map((c) => c.campaignId)
+    const filtersActive = validPlatform || dateFromParsed || dateToParsed
+
+    // Filters applied but nothing matched — return empty structure early
+    if (filtersActive && !campaignIds.length) {
+      const adAccounts = await MetaAdAccount.findAll({ where: { organisationId: orgId } })
+      return success({ campaigns: [], adAccounts, adSets: [], ads: [] })
+    }
+
+    const adSetsWhere = { organisationId: orgId }
+    if (campaignIds.length) adSetsWhere.campaignId = { [Op.in]: campaignIds }
+
+    const adSets = await MetaAdSet.findAll({ where: adSetsWhere })
+    const adSetIds = adSets.map((as) => as.adSetId)
+
+    const [adAccounts, ads] = await Promise.all([
+      MetaAdAccount.findAll({ where: { organisationId: orgId } }),
+      adSetIds.length ? MetaAd.findAll({ where: { organisationId: orgId, adSetId: { [Op.in]: adSetIds } } }) : Promise.resolve([]),
+    ])
+
+    return success({ campaigns, adAccounts, adSets, ads })
+  } catch (err) {
+    console.error('[getMetaStructure]', err)
+    return error(500, 'Failed to fetch Meta structure')
+  }
 }
 
 const fetchAllMetaPages = async (url, accessToken) => {

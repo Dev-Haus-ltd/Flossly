@@ -421,13 +421,17 @@ export const transformWhatsAppAnalyticsData = (rawData = {}, options = {}) => {
  * @param {Object} options - Configuration options
  * @returns {Object} - Normalized chart data
  */
+const META_CURRENCY_SYMBOLS = { GBP: '£', USD: '$', EUR: '€', AUD: 'A$', CAD: 'C$' }
+
 export const transformMetaInsightsData = (rawInsights = [], options = {}) => {
   const {
     metricLabels = ['Spend', 'Leads', 'CPL', 'CTR', 'Impressions', 'Clicks'],
     summaryLabels = ['Total Spend', 'Total Leads', 'Avg CPL', 'Avg CTR', 'Total Impressions', 'Total Clicks'],
     chartType = 'bar',
-    colors = ['#3B82F6', '#F97316', '#10B981', '#EF4444', '#8B5CF6', '#F59E0B']
+    colors = ['#3B82F6', '#F97316', '#10B981', '#EF4444', '#8B5CF6', '#F59E0B'],
+    currency = 'GBP',
   } = options
+  const sym = META_CURRENCY_SYMBOLS[currency?.toUpperCase()] || '£'
 
   if (!rawInsights || rawInsights.length === 0) {
     return {
@@ -493,9 +497,9 @@ export const transformMetaInsightsData = (rawInsights = [], options = {}) => {
   const avgCtr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0
 
   normalized.summary = [
-    { label: summaryLabels[0], value: '$' + totalSpend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
+    { label: summaryLabels[0], value: sym + totalSpend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
     { label: summaryLabels[1], value: totalLeads.toLocaleString() },
-    { label: summaryLabels[2], value: '$' + avgCpl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
+    { label: summaryLabels[2], value: avgCpl > 0 ? sym + avgCpl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—' },
     { label: summaryLabels[3], value: avgCtr.toFixed(2) + '%' },
     { label: summaryLabels[4], value: totalImpressions.toLocaleString() },
     { label: summaryLabels[5], value: totalClicks.toLocaleString() }

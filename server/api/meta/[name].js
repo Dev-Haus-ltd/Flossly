@@ -1,4 +1,4 @@
-import { authStart, authCallback, igAuthStart, igAuthCallback, listLeads, fetchLeadsNow, fetchDmHistoryNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck, stream, getWhatsAppConfig, saveWhatsAppConfig, whatsappEmbeddedComplete, fetchWhatsAppTemplates, fetchMetaStructureAndBudgets, fetchDailyMetaInsights, listBusinessPortfolios, connectBusinessPages, debugMetaStatus, listMetaPermissions, getMetaInsights, getMetaStructure, deauthorize, dataDeletion, dataDeletionStatus, getSyncJobStatus } from "../../controllers/meta";
+import { authStart, authCallback, igAuthStart, igAuthCallback, listLeads, fetchLeadsNow, fetchDmHistoryNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck, stream, getWhatsAppConfig, saveWhatsAppConfig, whatsappEmbeddedComplete, fetchWhatsAppTemplates, fetchMetaStructureAndBudgets, fetchDailyMetaInsights, listBusinessPortfolios, connectBusinessPages, debugMetaStatus, listMetaPermissions, getMetaInsights, getMetaStructure, getCampaignLeadCounts, deauthorize, dataDeletion, dataDeletionStatus, getSyncJobStatus } from "../../controllers/meta";
 
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, 'name')
@@ -60,6 +60,8 @@ export default defineEventHandler(async (event) => {
       return await dataDeletionStatus(event)
     case 'syncStatus':
       return await getSyncJobStatus(event)
+    case 'campaignLeadCounts':
+      return await getCampaignLeadCounts(event)
     default:
       return { code: 0, error: 'Not found' }
   }

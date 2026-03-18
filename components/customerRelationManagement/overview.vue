@@ -1240,7 +1240,8 @@ const loadMetaAnalytics = async () => {
   try {
     const res = await crmStore.getMetaInsights()
     if (res?.code === 0) {
-      const normalized = transformMetaInsightsData(res.data || [])
+      const currency = crmStore.metaAdAccounts?.[0]?.currency || 'GBP'
+      const normalized = transformMetaInsightsData(res.data || [], { currency })
       metaChartConfig.chartData = normalized.chartData
       metaChartConfig.summaryStats = normalized.summary
     } else {
