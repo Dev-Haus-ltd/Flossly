@@ -1,0 +1,1 @@
+ALTER TABLE "public"."MetaPages" ADD COLUMN IF NOT EXISTS "businessId" VARCHAR(50) NULL;

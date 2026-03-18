@@ -70,6 +70,7 @@ const { currentOrg, rail } = defineProps({
   rail: Boolean,
 });
 const router = useRouter();
+const route = useRoute();
 const authStore = useAuthStore();
 const crmStore = useCrmStore();
 const mainStore = useMainStore();
@@ -136,6 +137,8 @@ const handleOrgClick = async (org) => {
       });
       menu.value = false;
       crmStore.resetMetaAnalyticsState();
+      // Clear all query params so stale leadId/campaignId from previous org don't trigger warnings
+      await router.replace({ path: route.path, query: {} });
       await getProfile();
     } else {
       mainStore.setSnackbar({

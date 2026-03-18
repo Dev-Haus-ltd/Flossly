@@ -21,6 +21,18 @@
       </v-row>
     </div>
     <div class="mt-5 px-5">
+      <v-alert
+        v-if="activeCampaignFilter"
+        type="info"
+        variant="tonal"
+        density="compact"
+        rounded="lg"
+        class="mb-3"
+        closable
+        @click:close="clearCampaignFilter"
+      >
+        Showing leads filtered by campaign: <strong>{{ activeCampaignFilter }}</strong>
+      </v-alert>
       <div class="d-flex align-center mb-2" style="flex-wrap: nowrap; justify-content: space-between; overflow-x: auto;">
         <!-- Left: Search + Filters -->
         <div class="d-inline-flex align-center toolbar-wrapper" style="flex-wrap: nowrap;">
@@ -666,6 +678,11 @@ const headers = [
 const leadSources = ref([]);
 const treatmentSources = ref([]);
 const activeFilters = ref({});
+const activeCampaignFilter = computed(() => activeFilters.value?.campaignId || null);
+const clearCampaignFilter = async () => {
+  activeFilters.value = {};
+  await fetchLeads({});
+};
 const onLeadsFilterUpdate = async (filters) => {
   activeFilters.value = filters || {};
   activePage.value = 1;
@@ -1460,6 +1477,7 @@ const initLeads = async (metaConnected = false) => {
     activeFilters.value = { campaignId };
   }
   await fetchLeads(activeFilters.value)
+
 };
 
 const integrateMeta = async () => {

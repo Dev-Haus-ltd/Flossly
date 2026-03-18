@@ -13,7 +13,7 @@
  * batch calls, which keeps us well within Meta's rate limits.
  */
 
-import { MetaUserToken, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight } from '../models/index.js'
+import { MetaUserToken, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight, MetaPage } from '../models/index.js'
 import { decrypt } from './crypto.js'
 import { getRedisClient } from './redis.js'
 import { metaBatch, withRetry } from './metaBatch.js'
@@ -85,13 +85,40 @@ export const runStructureSync = async (orgId) => {
   await setState(key, { status: 'running', startedAt, progress })
 
   try {
+    // ── Resolve business IDs from connected pages for this org ───────────────
+    const connectedPages = await MetaPage.findAll({ where: { organisationId: orgId, status: 'Active' } })
+    const allowedBusinessIds = new Set()
+
+    for (const page of connectedPages) {
+      let businessId = page.businessId
+      if (!businessId) {
+        try {
+          const pageResp = await withRetry(() =>
+            $fetch(`https://graph.facebook.com/${META_VERSION}/${page.pageId}?fields=business&access_token=${encodeURIComponent(userToken)}`)
+          )
+          businessId = pageResp?.business?.id || null
+          if (businessId) {
+            await page.update({ businessId })
+          }
+        } catch (e) {
+          console.warn(`[MetaSync] Could not fetch business for page ${page.pageId}:`, e?.message)
+        }
+      }
+      if (businessId) allowedBusinessIds.add(businessId)
+    }
+
     // ── Wave 1: Ad accounts ──────────────────────────────────────────────────
     const accResp = await withRetry(() =>
       $fetch(
-        `https://graph.facebook.com/${META_VERSION}/me/adaccounts?fields=id,name,currency,timezone_name&limit=200&access_token=${encodeURIComponent(userToken)}`
+        `https://graph.facebook.com/${META_VERSION}/me/adaccounts?fields=id,name,currency,timezone_name,business&limit=200&access_token=${encodeURIComponent(userToken)}`
       )
     )
-    const accounts = Array.isArray(accResp?.data) ? accResp.data : []
+    const allAccounts = Array.isArray(accResp?.data) ? accResp.data : []
+
+    // Filter to only ad accounts belonging to the org's connected business(es)
+    const accounts = allowedBusinessIds.size > 0
+      ? allAccounts.filter((acc) => acc.business?.id && allowedBusinessIds.has(acc.business.id))
+      : allAccounts
 
     for (const acc of accounts) {
       await MetaAdAccount.upsert(
@@ -278,7 +305,7 @@ export const runInsightsSync = async (orgId, days = 1) => {
   const startedAt = new Date().toISOString()
   await setState(key, { status: 'running', startedAt })
 
-  const until = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+  const until = new Date().toISOString().slice(0, 10)
   const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10)
 
   const insightFields =
