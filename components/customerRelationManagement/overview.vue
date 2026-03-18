@@ -191,6 +191,7 @@
           :error="metaChartError"
         />
 
+        <!-- GOOGLE ANALYTICS CHART — hidden until Google integration is live on prod
         <CrmCharts
           :chartType="'line'"
           :chartTitle="gscChartConfig.chartTitle"
@@ -204,6 +205,7 @@
           :showFallback="!gscChartLoading && (!isGoogleConnected || gscChartConfig.chartData.datasets.length === 0)"
           :error="gscChartError"
         />
+        -->
       </div>
     </div>
 
@@ -588,16 +590,17 @@ const integrationCards = computed(() => ([
     icon: whatsappLogo,
     iconClass: 'whatsapp',
   },
-  {
-    key: 'google',
-    title: 'Google',
-    subtitlePrimary: googleStatus.email || userEmail.value || '-',
-    subtitleSecondary: currentOrgName.value || '-',
-    statusLabel: googleStatusLabel.value,
-    statusColor: googleStatusColor.value,
-    icon: googleLogo,
-    iconClass: 'google',
-  },
+  // GOOGLE ANALYTICS CARD — hidden until Google integration is live on prod
+  // {
+  //   key: 'google',
+  //   title: 'Google',
+  //   subtitlePrimary: googleStatus.email || userEmail.value || '-',
+  //   subtitleSecondary: currentOrgName.value || '-',
+  //   statusLabel: googleStatusLabel.value,
+  //   statusColor: googleStatusColor.value,
+  //   icon: googleLogo,
+  //   iconClass: 'google',
+  // },
   {
     key: 'chatbot',
     title: 'Chatbot',
