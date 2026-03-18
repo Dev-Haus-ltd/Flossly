@@ -1,48 +1,64 @@
 <template>
   <v-card class="chat-timeline-card mt-5" variant="outlined">
-  <v-card-title class="d-flex align-center justify-space-between">
-    <v-btn
-      size="small"
-      variant="text"
-      :disabled="!messageHasMore || loadingMore"
-      @click="loadMore"
+    <v-alert
+      v-if="!connected"
+      type="warning"
+      variant="tonal"
+      icon="mdi-whatsapp"
+      class="ma-4 rounded-lg"
     >
-      {{ loadingMore ? "Loading..." : messageHasMore ? "Load older" : "No more" }}
-    </v-btn>
-    <v-btn size="small" variant="text" :loading="loading" @click="loadLogs">
-      Refresh
-    </v-btn>
-  </v-card-title>
-    <v-divider />
-    <v-card-text class="chat-timeline-body">
-      <CommonChatThread
-        :groups="groupedChatItems"
-        :loading="loading"
-        :empty-message="emptyMessage"
-      />
-    </v-card-text>
-    <v-divider />
-    <div v-if="pendingFiles.length" class="chat-timeline-attachments">
-      <div
-        v-for="(file, idx) in pendingFiles"
-        :key="`${file.name}-${idx}`"
-        class="chat-timeline-attachment-chip"
-      >
-        <v-icon size="16" class="mr-1">mdi-paperclip</v-icon>
-        <span class="chat-timeline-attachment-name">{{ file.name }}</span>
-        <v-btn icon variant="text" size="x-small" @click="removePendingFile(idx)">
-          <v-icon size="14">mdi-close</v-icon>
-        </v-btn>
+      <div class="font-weight-medium mb-1">WhatsApp not connected</div>
+      <div class="text-body-2">
+        No WhatsApp number is connected for this organisation. Go to
+        <strong>CRM → Integration Details</strong> and connect a WhatsApp number
+        before you can send or receive messages here.
       </div>
-    </div>
-    <CommonChatInputBar
-      v-model="draftMessage"
-      :can-send="canSend"
-      :loading="sending"
-      :allow-attachments="true"
-      @files-selected="onFilesSelected"
-      @send="sendMessage"
-    />
+    </v-alert>
+    <template v-else>
+      <v-card-title class="d-flex align-center justify-space-between">
+        <v-btn
+          size="small"
+          variant="text"
+          :disabled="!messageHasMore || loadingMore"
+          @click="loadMore"
+        >
+          {{ loadingMore ? "Loading..." : messageHasMore ? "Load older" : "No more" }}
+        </v-btn>
+        <v-btn size="small" variant="text" :loading="loading" @click="loadLogs">
+          Refresh
+        </v-btn>
+      </v-card-title>
+      <v-divider />
+      <v-card-text class="chat-timeline-body">
+        <CommonChatThread
+          :groups="groupedChatItems"
+          :loading="loading"
+          :empty-message="emptyMessage"
+        />
+      </v-card-text>
+      <v-divider />
+      <div v-if="pendingFiles.length" class="chat-timeline-attachments">
+        <div
+          v-for="(file, idx) in pendingFiles"
+          :key="`${file.name}-${idx}`"
+          class="chat-timeline-attachment-chip"
+        >
+          <v-icon size="16" class="mr-1">mdi-paperclip</v-icon>
+          <span class="chat-timeline-attachment-name">{{ file.name }}</span>
+          <v-btn icon variant="text" size="x-small" @click="removePendingFile(idx)">
+            <v-icon size="14">mdi-close</v-icon>
+          </v-btn>
+        </div>
+      </div>
+      <CommonChatInputBar
+        v-model="draftMessage"
+        :can-send="canSend"
+        :loading="sending"
+        :allow-attachments="true"
+        @files-selected="onFilesSelected"
+        @send="sendMessage"
+      />
+    </template>
   </v-card>
 </template>
 
@@ -86,6 +102,10 @@ const props = defineProps({
     type: String,
     default: "Flossly",
   },
+  connected: {
+    type: Boolean,
+    default: true,
+  },
 });
 
 const crmStore = useCrmStore();
@@ -98,6 +118,57 @@ const pendingFiles = ref([]);
 const messageCursor = ref(null);
 const messageHasMore = ref(true);
 const loadingMore = ref(false);
+
+let whapiEventSource = null;
+let whapiPollTimer = null;
+
+const startWhapiStream = () => {
+  if (!props.connected || !props.leadId) return;
+  if (whapiEventSource) return;
+  if (typeof window === "undefined" || !("EventSource" in window)) {
+    startWhapiPoll();
+    return;
+  }
+  whapiEventSource = new EventSource("/api/whapi/stream");
+  whapiEventSource.addEventListener("message", (evt) => {
+    try {
+      const payload = JSON.parse(evt.data || "{}");
+      if (Number(payload.leadId) === Number(props.leadId) && !loading.value) {
+        loadLogs();
+      }
+    } catch {}
+  });
+  whapiEventSource.onerror = () => {
+    stopWhapiStream();
+    startWhapiPoll();
+  };
+};
+
+const stopWhapiStream = () => {
+  if (whapiEventSource) {
+    whapiEventSource.close();
+    whapiEventSource = null;
+  }
+};
+
+const startWhapiPoll = () => {
+  if (whapiPollTimer || !props.connected || !props.leadId) return;
+  whapiPollTimer = setInterval(() => {
+    if (!loading.value) loadLogs();
+  }, 15000);
+};
+
+const stopWhapiPoll = () => {
+  if (whapiPollTimer) {
+    clearInterval(whapiPollTimer);
+    whapiPollTimer = null;
+  }
+};
+
+onBeforeUnmount(() => {
+  stopWhapiStream();
+  stopWhapiPoll();
+});
 
 
 const resolvedOrg = ref({ name: "", logo: "" });
@@ -249,7 +320,10 @@ watch(
     resolveContext();
     messageCursor.value = null;
     messageHasMore.value = true;
+    stopWhapiStream();
+    stopWhapiPoll();
     loadLogs();
+    startWhapiStream();
   },
   { immediate: true }
 );
