@@ -937,14 +937,15 @@ const syncLeadDialogWithRoute = async (rawLeadId = route.query.leadId) => {
     const currentOrgId = user.value?.currentLoggedInOrgId;
 
     if (targetOrgId && currentOrgId && targetOrgId !== currentOrgId) {
-      // Need to switch org first
       try {
         const res = await authStore.switchOrgnanisation({ orgId: targetOrgId });
         if (res.code === 0) {
           const profileRes = await authStore.profile();
           if (profileRes.code === 0 && profileRes.data) {
             setUser(profileRes.data);
-            // Continue with lead dialog opening after org switch
+            // Refresh the leads list in the background for the new org
+            // (non-blocking — dialog opening proceeds concurrently)
+            emit('refresh');
           }
         } else {
           console.error('Org switch failed for lead notification');
