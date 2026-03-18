@@ -155,3 +155,6 @@ service.json
 
 /public/documents/
 
+# Claude Code local settings
+.claude/settings.local.json
+

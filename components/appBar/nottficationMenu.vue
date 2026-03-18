@@ -103,10 +103,7 @@
 <script setup>
 import { useFCM } from '~/composables/useFCM';
 import notificationIcon from '@/assets/icons/notification/Notification.svg';
-import notificationListIcon from '@/assets/icons/notification/notification (1).svg';
-import taskIcon from '@/assets/icons/notification/task.svg';
-import leadIcon from '@/assets/icons/notification/lead.svg';
-import messageIcon from '@/assets/icons/notification/message.svg';
+import { buildNotificationUrl, getNotificationIcon, formatNotificationTime } from '@/lib/notifications';
 
 const menu = ref(false);
 const { user } = useUser();
@@ -194,127 +191,22 @@ const markAllAsRead = async () => {
 
 // Handle notification click
 const handleNotificationClick = async (notification) => {
-  // Mark as read
   if (!notification.isRead) {
     await markAsRead(notification.id);
   }
-
-  // Build URL with query parameters for task notifications
-  let url = notification.data?.url || '/';
-  
-  // Support notifications don't redirect - just mark as read
-  if (notification.type?.startsWith('support_') || notification.type === 'chatbot_message') {
-    menu.value = false;
-    return;
-  }
-  
-  if (!notification.data?.url) {
-    const urlMap = {
-      // Tasks (always go to My Tasks)
-      task_assigned: `/tasks/mytasks`,
-      task_assigned_bulk: `/tasks/mytasks`,
-      task_completed: `/tasks/mytasks`,
-      task_completed_bulk: `/tasks/mytasks`,
-      task_comment: `/tasks/mytasks`,
-      task_unassigned: `/tasks/mytasks`,
-      task_unassigned_bulk: `/tasks/mytasks`,
-      task_due_reminder: `/tasks/mytasks`,
-      task_overdue_reminder: `/tasks/mytasks`,
-      
-      // CRM / Leads
-      lead_created: `/crm/leads?leadId=${notification.data?.leadId || ''}`,
-      lead_assigned: `/crm/leads?leadId=${notification.data?.leadId || ''}`,
-      lead_unassigned: `/crm/leads?leadId=${notification.data?.leadId || ''}`,
-      lead_status_changed: `/crm/leads?leadId=${notification.data?.leadId || ''}`,
-      crm_automation_sent: `/crm/leads?leadId=${notification.data?.leadId || ''}`,
-      crm_automation_failed: `/crm/leads?leadId=${notification.data?.leadId || ''}`,
-      whatsapp_message: `/crm/leads?leadId=${notification.data?.leadId || ''}&tab=communication`,
-      meta_dm: '/crm/analytics',
-      
-      // Rota / Leave / Team
-      rota_published: '/teams/rota',
-      shift_reminder: '/teams/rota',
-      leave_approved: '/teams/rota',
-      leave_denied: '/teams/rota',
-      
-      // Support/chat notifications (no redirect, just show notification)
-      support_ticket_submitted: null,
-      support_reply: null,
-      chatbot_message: null,
-      
-      // System notifications
-      system_subscription_confirmed: '/',
-      system_account_created: '/',
-      system_password_reset_requested: '/forgetpassword',
-      system_portal_ready: '/dashboard',
-    };
-    url = urlMap[notification.type] || '/';
-  }
-  
-  // Normalize legacy CRM routes for lead-related notifications
-  if ((notification.type?.startsWith('lead_') || notification.type === 'whatsapp_message') && typeof url === 'string') {
-    url = url.replace(/^\/crm\?/, '/crm/leads?');
-    if (url === '/crm') url = '/crm/leads';
-  }
-
-  // For task notifications, add userTaskId as query parameter to open dialog
-  if (notification.type?.startsWith('task_') && notification.data?.userTaskId) {
-    const separator = url.includes('?') ? '&' : '?';
-    url = `${url}${separator}userTaskId=${notification.data.userTaskId}`;
-  }
-  
-  // For lead notifications, add leadId as query parameter to open dialog
-  if (
-    notification.type?.startsWith('lead_') &&
-    notification.data?.leadId &&
-    !/[?&]leadId=/.test(url)
-  ) {
-    const separator = url.includes('?') ? '&' : '?';
-    url = `${url}${separator}leadId=${notification.data.leadId}`;
-  }
-
+  const url = buildNotificationUrl(notification);
   menu.value = false;
-  await navigateTo(url);
+  if (url) await navigateTo(url);
 };
 
 // View all notifications
 const viewAllNotifications = () => {
   menu.value = false;
-  // Navigate to notifications page
   navigateTo('/notifications');
 };
 
-// Get notification icon SVG based on type
-const getNotificationIconSvg = (type) => {
-  if (type.startsWith('task_')) {
-    return taskIcon;
-  } else if (type.startsWith('lead_') || type.startsWith('crm_')) {
-    return leadIcon;
-  } else if (type.startsWith('system_')) {
-    return notificationListIcon;
-  } else if (type.startsWith('rota_') || type.startsWith('shift_') || type.startsWith('leave_')) {
-    return notificationListIcon;
-  } else if (type.startsWith('support_') || type.includes('message') || type.includes('comment') || type === 'whatsapp_message' || type === 'meta_dm' || type === 'chatbot_message') {
-    return messageIcon;
-  }
-  return notificationListIcon;
-};
-
-// Format time
-const formatTime = (dateString) => {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diff = now - date;
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-
-  if (minutes < 1) return 'Just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  if (days < 7) return `${days}d ago`;
-  return date.toLocaleDateString();
-};
+const getNotificationIconSvg = (type) => getNotificationIcon(type);
+const formatTime = (dateString) => formatNotificationTime(dateString);
 
 // Listen for FCM messages
 onMounted(() => {
