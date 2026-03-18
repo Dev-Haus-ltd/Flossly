@@ -968,7 +968,13 @@ const syncLeadDialogWithRoute = async (rawLeadId = route.query.leadId) => {
 
   try {
     const fetchedLead = await fetchLeadById(numericLeadId);
-    if (requestId !== leadRouteRequestId.value || !fetchedLead) return;
+    if (requestId !== leadRouteRequestId.value) return;
+    if (!fetchedLead) {
+      if (mainStore?.setSnackbar) {
+        mainStore.setSnackbar({ title: 'This lead no longer exists or has been deleted.', type: 'warning' });
+      }
+      return;
+    }
     selectedLead.value = normalizeLeadForDialog(fetchedLead);
     showLeadDetailDialog.value = true;
   } catch (error) {

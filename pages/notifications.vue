@@ -376,6 +376,12 @@ const handleNotificationClick = async (notification) => {
     url = `${url}${separator}leadId=${notification.data.leadId}`;
   }
 
+  // For lead/whatsapp notifications, append orgId so listView can auto-switch org if needed
+  const isLeadNav = notification.type?.startsWith('lead_') || notification.type?.startsWith('crm_') || notification.type === 'whatsapp_message';
+  if (isLeadNav && notification.organisationId && typeof url === 'string' && url.startsWith('/crm')) {
+    url = `${url}&orgId=${notification.organisationId}`;
+  }
+
   await navigateTo(url);
 };
 
