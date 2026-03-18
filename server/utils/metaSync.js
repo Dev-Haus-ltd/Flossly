@@ -94,13 +94,16 @@ export const runStructureSync = async (orgId) => {
     const accounts = Array.isArray(accResp?.data) ? accResp.data : []
 
     for (const acc of accounts) {
-      await MetaAdAccount.upsert({
-        organisationId: orgId,
-        adAccountId: acc.id,
-        name: acc.name,
-        currency: acc.currency,
-        timezone: acc.timezone_name,
-      })
+      await MetaAdAccount.upsert(
+        {
+          organisationId: orgId,
+          adAccountId: acc.id,
+          name: acc.name,
+          currency: acc.currency,
+          timezone: acc.timezone_name,
+        },
+        { conflictFields: ['adAccountId', 'organisationId'] }
+      )
     }
     progress.accounts = accounts.length
     await setState(key, { status: 'running', startedAt, progress })
@@ -121,15 +124,18 @@ export const runStructureSync = async (orgId) => {
     for (let i = 0; i < accounts.length; i++) {
       const campaigns = Array.isArray(campaignBatchRes[i]?.data) ? campaignBatchRes[i].data : []
       for (const c of campaigns) {
-        await MetaCampaign.upsert({
-          organisationId: orgId,
-          adAccountId: accounts[i].id,
-          campaignId: c.id,
-          name: c.name,
-          status: c.status,
-          dailyBudget: c.daily_budget || null,
-          lifetimeBudget: c.lifetime_budget || null,
-        })
+        await MetaCampaign.upsert(
+          {
+            organisationId: orgId,
+            adAccountId: accounts[i].id,
+            campaignId: c.id,
+            name: c.name,
+            status: c.status,
+            dailyBudget: c.daily_budget || null,
+            lifetimeBudget: c.lifetime_budget || null,
+          },
+          { conflictFields: ['campaignId', 'organisationId'] }
+        )
         allCampaigns.push({ id: c.id, adAccountId: accounts[i].id })
       }
     }
@@ -152,15 +158,18 @@ export const runStructureSync = async (orgId) => {
     for (let i = 0; i < allCampaigns.length; i++) {
       const adsets = Array.isArray(adsetBatchRes[i]?.data) ? adsetBatchRes[i].data : []
       for (const s of adsets) {
-        await MetaAdSet.upsert({
-          organisationId: orgId,
-          adSetId: s.id,
-          campaignId: allCampaigns[i].id,
-          name: s.name,
-          dailyBudget: s.daily_budget || null,
-          lifetimeBudget: s.lifetime_budget || null,
-          optimizationGoal: s.optimization_goal || null,
-        })
+        await MetaAdSet.upsert(
+          {
+            organisationId: orgId,
+            adSetId: s.id,
+            campaignId: allCampaigns[i].id,
+            name: s.name,
+            dailyBudget: s.daily_budget || null,
+            lifetimeBudget: s.lifetime_budget || null,
+            optimizationGoal: s.optimization_goal || null,
+          },
+          { conflictFields: ['adSetId', 'organisationId'] }
+        )
         allAdsets.push({ id: s.id, campaignId: allCampaigns[i].id })
       }
     }
@@ -184,15 +193,18 @@ export const runStructureSync = async (orgId) => {
     for (let i = 0; i < allAdsets.length; i++) {
       const ads = Array.isArray(adBatchRes[i]?.data) ? adBatchRes[i].data : []
       for (const ad of ads) {
-        await MetaAd.upsert({
-          organisationId: orgId,
-          adId: ad.id,
-          adSetId: allAdsets[i].id,
-          name: ad.name,
-          status: ad.status,
-          creativeId: ad.creative?.id || null,
-          // imageUrl / body / platform filled in Wave 5
-        })
+        await MetaAd.upsert(
+          {
+            organisationId: orgId,
+            adId: ad.id,
+            adSetId: allAdsets[i].id,
+            name: ad.name,
+            status: ad.status,
+            creativeId: ad.creative?.id || null,
+            // imageUrl / body / platform filled in Wave 5
+          },
+          { conflictFields: ['adId', 'organisationId'] }
+        )
         if (ad.creative?.id) creativeIds.set(ad.creative.id, ad.id)
         allAds.push(ad.id)
         progress.ads++
@@ -219,7 +231,7 @@ export const runStructureSync = async (orgId) => {
             body: cr.body || null,
             platform: cr.instagram_permalink_url ? 'Instagram' : 'Facebook',
           },
-          { where: { adId } }
+          { where: { adId, organisationId: orgId } }
         )
       }
     }
@@ -273,23 +285,30 @@ export const runInsightsSync = async (orgId, days = 1) => {
     'impressions,clicks,spend,actions,ctr,cpc,cpm,reach,frequency,purchase_roas'
   const timeParams = `time_range[since]=${since}&time_range[until]=${until}&time_increment=1`
 
+  // Collects insight rows for a single entity and upserts them.
+  // Uses conflictFields so ON CONFLICT targets (organisationId, entityType, entityId, date)
+  // instead of the autoincrement PK — this prevents a new row being inserted on every sync.
   const upsertInsights = async (entityType, entityId, rows) => {
-    for (const insight of rows) {
-      await MetaInsight.upsert({
-        organisationId: orgId,
-        entityType,
-        entityId,
-        date: insight.date_start,
-        impressions: insight.impressions || 0,
-        clicks: insight.clicks || 0,
-        spend: Math.round(Number(insight.spend || 0) * 100),
-        leads: insight.actions?.find((a) => a.action_type === 'lead')?.value || 0,
-        reach: insight.reach || 0,
-        frequency: insight.frequency || 0,
-        purchase_roas: insight.purchase_roas?.[0]?.value || 0,
-        cpc: insight.cpc || null,
-        ctr: insight.ctr || null,
-        cpm: insight.cpm || null,
+    if (!rows.length) return
+    const records = rows.map((insight) => ({
+      organisationId: orgId,
+      entityType,
+      entityId,
+      date: insight.date_start,
+      impressions: Number(insight.impressions) || 0,
+      clicks: Number(insight.clicks) || 0,
+      spend: Math.round(Number(insight.spend || 0) * 100),
+      leads: Number(insight.actions?.find((a) => a.action_type === 'lead')?.value) || 0,
+      reach: Number(insight.reach) || 0,
+      frequency: Number(insight.frequency) || 0,
+      purchase_roas: Number(insight.purchase_roas?.[0]?.value) || 0,
+      cpc: insight.cpc != null ? Number(insight.cpc) : null,
+      ctr: insight.ctr != null ? Number(insight.ctr) : null,
+      cpm: insight.cpm != null ? Number(insight.cpm) : null,
+    }))
+    for (const record of records) {
+      await MetaInsight.upsert(record, {
+        conflictFields: ['organisationId', 'entityType', 'entityId', 'date'],
       })
     }
   }

@@ -38,25 +38,32 @@ export const useCrmStore = defineStore("crmStore", {
         roas: 0,
       };
 
+      // Only aggregate campaign-level rows to avoid triple-counting
+      // (the DB stores insights at campaign, adset, and ad level — same money counted three times)
+      let roas_numer = 0;
+      let roas_denom = 0;
+
       state.metaInsights.forEach((insight) => {
-        if (insight.entityType === "campaign") {
-          totals.spend += Number(insight.spend || 0);
-          totals.impressions += Number(insight.impressions || 0);
-          totals.reach += Number(insight.reach || 0);
-          totals.leads += Number(insight.leads || 0);
-          totals.clicks += Number(insight.clicks || 0);
+        if (insight.entityType !== "campaign") return;
+        totals.spend += Number(insight.spend || 0);
+        totals.impressions += Number(insight.impressions || 0);
+        totals.reach += Number(insight.reach || 0);
+        totals.leads += Number(insight.leads || 0);
+        totals.clicks += Number(insight.clicks || 0);
+
+        // Spend-weighted ROAS: weight each day's ROAS by that day's spend so
+        // high-spend days count more than low-spend days (simple average is misleading)
+        const roas = Number(insight.purchase_roas || 0);
+        if (roas > 0) {
+          const spendVal = Number(insight.spend || 0);
+          roas_numer += spendVal * roas;
+          roas_denom += spendVal;
         }
       });
 
-      const campaignsWithRoas = state.metaInsights.filter(
-        (insight) => insight.entityType === "campaign" && Number(insight.purchase_roas) > 0
-      );
-      if (campaignsWithRoas.length) {
-        const sumRoas = campaignsWithRoas.reduce(
-          (acc, insight) => acc + Number(insight.purchase_roas || 0),
-          0
-        );
-        totals.roas = (sumRoas / campaignsWithRoas.length) * 100;
+      if (roas_denom > 0) {
+        // Raw multiplier — e.g. 2.5 means £2.50 returned per £1 spent
+        totals.roas = roas_numer / roas_denom;
       }
 
       return totals;

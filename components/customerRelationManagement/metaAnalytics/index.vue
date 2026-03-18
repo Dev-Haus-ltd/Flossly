@@ -222,16 +222,14 @@ const resync = async () => {
       }
 
       const newCampaigns = campaignCount - prevCampaignCount;
-      const newInsights = insightCount - prevInsightCount;
-      const hasNewData = newCampaigns > 0 || newInsights > 0;
 
       mainStore.setSnackbar({
         type: 'success',
         color: 'success',
-        title: hasNewData ? 'Meta analytics synced - new data found' : 'Meta analytics synced - already up to date',
-        subtitle: hasNewData
-          ? `${newCampaigns > 0 ? `+${newCampaigns} new campaign${newCampaigns === 1 ? '' : 's'}` : 'No new campaigns'}${newInsights > 0 ? `, +${newInsights} new insight row${newInsights === 1 ? '' : 's'}` : ', no new insight rows'} (${campaignCount} total).`
-          : `No new data since last sync - ${campaignCount} campaign${campaignCount === 1 ? '' : 's'} and ${insightCount} insight row${insightCount === 1 ? '' : 's'} already loaded.`,
+        title: newCampaigns > 0 ? 'Meta analytics synced — new campaigns found' : 'Meta analytics synced',
+        subtitle: newCampaigns > 0
+          ? `+${newCampaigns} new campaign${newCampaigns === 1 ? '' : 's'} (${campaignCount} total). Insights updated for the last 30 days.`
+          : `${campaignCount} campaign${campaignCount === 1 ? '' : 's'} — insights updated for the last 30 days.`,
       });
     })();
     await analyticsLoadPromise;
@@ -280,7 +278,7 @@ const analyticsStats = computed(() => [
   {
     icon: 'https://cdn.lordicon.com/tzynxkwl.json',
     label: 'ROAS',
-    value: `${stats.value.roas.toFixed(1)}%`,
+    value: stats.value.roas > 0 ? `${stats.value.roas.toFixed(2)}x` : '—',
   },
   {
     icon: 'https://cdn.lordicon.com/tzynxkwl.json',
