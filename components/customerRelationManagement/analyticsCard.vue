@@ -80,7 +80,9 @@
       rounded="lg"
       size="small"
       class="view-leads-btn"
-      :to="`/crm?campaignId=${campaignId}`"
+      :href="`/crm/leads?campaignId=${campaignId}`"
+      target="_blank"
+      append-icon="mdi-open-in-new"
     >
       View {{ leads }} Lead{{ leads === 1 ? '' : 's' }}
     </v-btn>

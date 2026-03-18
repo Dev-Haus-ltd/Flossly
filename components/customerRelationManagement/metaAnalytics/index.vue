@@ -398,7 +398,9 @@ const campaigns = computed(() =>
     const totalSpend = campaignInsights.reduce((acc, insight) => acc + Number(insight.spend || 0), 0);
     const totalImpressions = campaignInsights.reduce((acc, insight) => acc + Number(insight.impressions || 0), 0);
     const totalClicks = campaignInsights.reduce((acc, insight) => acc + Number(insight.clicks || 0), 0);
-    const totalReach = campaignInsights.reduce((acc, insight) => acc + Number(insight.reach || 0), 0);
+    // Reach is deduplicated — summing daily rows inflates it. Use the most recent day's value.
+    const latestInsight = campaignInsights.slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+    const totalReach = Number(latestInsight?.reach || 0);
     // Use CRM lead count for this campaign — single source of truth
     const crmLeads = Number(crmStore.metaCampaignLeadCounts[campaign.campaignId] || 0);
     const spendMajor = totalSpend / 100;

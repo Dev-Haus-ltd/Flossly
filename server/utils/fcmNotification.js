@@ -1,5 +1,5 @@
 import admin from 'firebase-admin';
-import { FcmToken, UserNotification } from '../models';
+import { FcmToken, UserNotification, Organisation } from '../models';
 import { Op } from 'sequelize';
 import fs from 'fs';
 import path from 'path';
@@ -514,17 +514,30 @@ export const sendTaskCompletionNotification = async ({ task, completedBy, notify
   });
 };
 
+// Resolve org name for notification context
+const resolveOrgName = async (organisationId) => {
+  if (!organisationId) return null;
+  try {
+    const org = await Organisation.findOne({ where: { id: organisationId }, attributes: ['name'] });
+    return org?.name || null;
+  } catch {
+    return null;
+  }
+};
+
 // Send lead creation notification
 export const sendLeadCreatedNotification = async ({ lead, assignedUsers, organisationId = null }) => {
   if (!assignedUsers || assignedUsers.length === 0) return;
 
   const resolvedOrganisationId = organisationId || lead?.organisationId || null;
+  const orgName = await resolveOrgName(resolvedOrganisationId);
+  const orgSuffix = orgName ? ` in ${orgName}` : '';
 
   return await sendNotificationToMultipleUsers({
     userIds: assignedUsers.map(u => u.id),
     organisationId: resolvedOrganisationId,
-    title: 'New Lead Assigned',
-    body: `A new lead "${lead.name || lead.email}" has been assigned to you`,
+    title: `New Lead Arrived${orgSuffix}`,
+    body: `"${lead.name || lead.email}" has been assigned to you${orgSuffix}`,
     type: 'lead_created',
     referenceType: 'lead',
     referenceId: lead.id,
@@ -544,12 +557,14 @@ export const sendLeadAssignedNotification = async ({ lead, assignedUsers, assign
   if (!assignedUsers || assignedUsers.length === 0) return;
   const assignedByName = assignedBy?.fullName || assignedBy?.name || 'Team';
   const resolvedOrganisationId = organisationId || lead?.organisationId || null;
+  const orgName = await resolveOrgName(resolvedOrganisationId);
+  const orgSuffix = orgName ? ` in ${orgName}` : '';
 
   return await sendNotificationToMultipleUsers({
     userIds: assignedUsers.map(u => u.id),
     organisationId: resolvedOrganisationId,
-    title: 'Lead Assigned',
-    body: `Lead "${lead.name || lead.email}" has been assigned to you by ${assignedByName}`,
+    title: `Lead Assigned${orgSuffix}`,
+    body: `"${lead.name || lead.email}" was assigned to you by ${assignedByName}${orgSuffix}`,
     type: 'lead_assigned',
     referenceType: 'lead',
     referenceId: lead.id,
@@ -569,12 +584,14 @@ export const sendLeadUnassignedNotification = async ({ lead, removedUsers, remov
   if (!removedUsers || removedUsers.length === 0) return;
   const removedByName = removedBy?.fullName || removedBy?.name || 'Team';
   const resolvedOrganisationId = organisationId || lead?.organisationId || null;
+  const orgName = await resolveOrgName(resolvedOrganisationId);
+  const orgSuffix = orgName ? ` in ${orgName}` : '';
 
   return await sendNotificationToMultipleUsers({
     userIds: removedUsers.map(u => u.id),
     organisationId: resolvedOrganisationId,
-    title: 'Lead Unassigned',
-    body: `You were unassigned from lead "${lead.name || lead.email}" by ${removedByName}`,
+    title: `Lead Unassigned${orgSuffix}`,
+    body: `You were unassigned from "${lead.name || lead.email}" by ${removedByName}${orgSuffix}`,
     type: 'lead_unassigned',
     referenceType: 'lead',
     referenceId: lead.id,
