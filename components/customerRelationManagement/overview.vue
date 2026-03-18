@@ -224,13 +224,6 @@
       @confirm="disconnectMeta"
     />
 
-    <!-- GOOGLE HEALTH DIALOG -->
-    <CustomerRelationManagementGoogleAnalyticsGoogleHealthDialog
-      v-model="googleHealthDialog"
-      :loading="googleHealthLoading"
-      :data="googleHealthData"
-    />
-
     <v-dialog v-model="whapiDialog" max-width="560">
       <v-card class="pa-5 rounded-xl">
         <v-card-title class="text-subtitle-1 pa-0 mb-2 d-flex justify-space-between align-center">
@@ -447,7 +440,6 @@ import { useCrmStore } from '@/stores/crm'
 import { useMainStore } from '@/stores/index'
 import { useAuthStore } from '@/stores/auth'
 import CustomerRelationManagementMetaHealthDialog from '@/components/customerRelationManagement/metaHealthDialog.vue'
-import CustomerRelationManagementGoogleAnalyticsGoogleHealthDialog from '@/components/customerRelationManagement/googleanalytics/googleHealthDialog.vue'
 import ConfirmDialog from '@/components/Common/ConfirmDialog.vue'
 import IntegrationCard from '@/components/customerRelationManagement/IntegrationCard.vue'
 import CrmCharts from '@/components/customerRelationManagement/CrmCharts.vue'
