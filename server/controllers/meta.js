@@ -1168,11 +1168,12 @@ export const getMetaStructure = async (event) => {
       return success({ campaigns: [], adAccounts, adSets: [], ads: [] })
     }
 
-    const [adAccounts, adSets, ads] = await Promise.all([
+    const [adAccounts, adSets] = await Promise.all([
       MetaAdAccount.findAll({ where: { organisationId: orgId } }),
       MetaAdSet.findAll({ where: { organisationId: orgId, ...(campaignIds.length ? { campaignId: { [Op.in]: campaignIds } } : {}) } }),
-      MetaAd.findAll({ where: { organisationId: orgId, ...(campaignIds.length ? { campaignId: { [Op.in]: campaignIds } } : {}) } }),
     ])
+    const adSetIds = adSets.map((s) => s.adSetId)
+    const ads = await MetaAd.findAll({ where: { organisationId: orgId, ...(adSetIds.length ? { adSetId: { [Op.in]: adSetIds } } : {}) } })
 
     return success({ campaigns, adAccounts, adSets, ads })
   } catch (err) {
