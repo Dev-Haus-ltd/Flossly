@@ -341,6 +341,43 @@ export const useMainStore = defineStore("mainStore", {
           to: "/teams/holiday",
           featureKey: "team",
         },
+        {
+          title: "CRM",
+          imgPath: crmIcon,
+          value: "crm",
+          to: "/crm",
+          featureKey: "crm",
+          children: [
+            {
+              title: "Leads",
+              value: "crmLeads",
+              imgPath: crmIcon,
+              to: "/crm/leads",
+              featureKey: "crm",
+            },
+            {
+              title: "My Automations",
+              value: "crmAutomations",
+              imgPath: crmIcon,
+              to: "/crm/automations",
+              featureKey: "crm",
+            },
+            {
+              title: "Meta Analytics",
+              value: "crmAnalytics",
+              imgPath: crmIcon,
+              to: "/crm/analytics",
+              featureKey: "crm",
+            },
+            {
+              title: "Google Analytics",
+              value: "crm Google Analytics",
+              imgPath: crmIcon,
+              to: "/crm/google_analytics",
+              featureKey: "crm",
+            },
+          ],
+        },
         // {
         //   title: "Floss Academy",
         //   imgPath: academyIcon,

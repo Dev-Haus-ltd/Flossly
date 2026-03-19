@@ -93,6 +93,16 @@
             >
               Treatment: {{ selectedTreatmentName }}
             </v-chip>
+            <v-chip
+              v-if="selectedAlert"
+              size="small"
+              variant="tonal"
+              color="primary"
+              closable
+              @click:close="clearAlert"
+            >
+              Alert: {{ selectedAlertName }}
+            </v-chip>
           </div>
 
           <!-- Inquiry Date -->
@@ -187,6 +197,35 @@
             clearable
             @click:clear="clearTreatment"
           />
+
+          <!-- Alert -->
+          <v-label class="my-1 mt-2" style="font-size: 14px">
+            Alert
+          </v-label>
+          <v-select
+            v-model="selectedAlert"
+            :items="alertOptions"
+            item-title="label"
+            item-value="key"
+            variant="solo"
+            flat
+            density="compact"
+            hide-details
+            class="input-bordered"
+            clearable
+            @click:clear="clearAlert"
+          >
+            <template #item="{ item, props: itemProps }">
+              <v-list-item v-bind="itemProps">
+                <template #prepend>
+                  <span style="font-size:16px; margin-right:8px">{{ item.raw.emoji }}</span>
+                </template>
+              </v-list-item>
+            </template>
+            <template #selection="{ item }">
+              <span>{{ item.raw.emoji }} {{ item.raw.label }}</span>
+            </template>
+          </v-select>
         </v-list>
       </v-card>
     </v-menu>
@@ -197,9 +236,10 @@
   import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
   import filtericon from "@/assets/icons/listView/filter-icon.svg";
 
-  const { leadSources, treatmentSources } = defineProps({
+  const { leadSources, treatmentSources, alertOptions } = defineProps({
     leadSources: Array,
     treatmentSources: Array,
+    alertOptions: { type: Array, default: () => [] },
   });
   
   const emit = defineEmits(["update:filters"]);
@@ -223,6 +263,7 @@
   const selectedLeadSource = ref(null);
   const selectedLeadStatus = ref(null);
   const selectedTreatment = ref(null);
+  const selectedAlert = ref(null);
 
   // Keep in sync with components/dataTableColumns/leadStatus.vue
   const leadStatuses = ref([
@@ -274,23 +315,30 @@
     return found?.name || ''
   })
 
+  const selectedAlertName = computed(() => {
+    const found = (alertOptions || []).find(o => o.key === selectedAlert.value)
+    return found ? `${found.emoji} ${found.label}` : ''
+  })
+
   const activeFiltersCount = computed(() => {
     let c = 0
     if (selectedInquiryDate.value) c++
     if (selectedLeadSource.value) c++
     if (selectedLeadStatus.value) c++
     if (selectedTreatment.value) c++
+    if (selectedAlert.value) c++
     return c
   })
   
   watch(
-    [selectedInquiryDate, selectedLeadSource, selectedLeadStatus, selectedTreatment],
+    [selectedInquiryDate, selectedLeadSource, selectedLeadStatus, selectedTreatment, selectedAlert],
     () => {
       emit("update:filters", {
         inquiryDate: selectedInquiryDate.value,
         leadSourceId: resolvedLeadSourceId.value,
         leadStatus: selectedLeadStatus.value,
         treatmentId: selectedTreatment.value,
+        alert: selectedAlert.value || undefined,
       });
     }
   );
@@ -301,12 +349,14 @@
     selectedLeadSource.value = null;
     selectedLeadStatus.value = null;
     selectedTreatment.value = null;
+    selectedAlert.value = null;
   };
 
   const clearInquiryDate = () => { selectedInquiryDate.value = null; formattedInquiryDate.value = "" }
   const clearLeadSource = () => { selectedLeadSource.value = null }
   const clearLeadStatus = () => { selectedLeadStatus.value = null }
   const clearTreatment = () => { selectedTreatment.value = null }
+  const clearAlert = () => { selectedAlert.value = null }
   </script>
   
   <style scoped>
