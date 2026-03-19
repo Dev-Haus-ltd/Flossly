@@ -1,19 +1,8 @@
 <template>
   <v-card class="chat-timeline-card mt-5" variant="outlined">
-    <v-alert
-      v-if="!connected"
-      type="warning"
-      variant="tonal"
-      icon="mdi-whatsapp"
-      class="ma-4 rounded-lg"
-    >
-      <div class="font-weight-medium mb-1">WhatsApp not connected</div>
-      <div class="text-body-2">
-        No WhatsApp number is connected for this organisation. Go to
-        <strong>CRM → Integration Details</strong> and connect a WhatsApp number
-        before you can send or receive messages here.
-      </div>
-    </v-alert>
+    <div v-if="!connected" class="ma-4">
+      <CommonWhatsAppNotConnectedAlert />
+    </div>
     <template v-else>
       <v-card-title class="d-flex align-center justify-space-between">
         <v-btn

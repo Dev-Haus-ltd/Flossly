@@ -63,6 +63,7 @@
           <CustomerRelationManagementFilterMenu
             :leadSources="leadSources"
             :treatmentSources="treatmentSources"
+            :alertOptions="alertOptions.length ? alertOptions : DEFAULT_ALERT_OPTIONS"
             @update:filters="onLeadsFilterUpdate"
           />
         </div>
@@ -128,9 +129,12 @@
         :leadSources="leadSources"
         :treatmentSources="treatmentSources"
         :users="userList"
+        :alert-options="alertOptions"
+        :whatsapp-connected="isAnyWhatsAppConnected"
         @select="onSelect"
         @book="onBookLeads"
         @refresh="handleLeadsRefresh"
+        @alert-options-saved="onAlertOptionsSaved"
         @update:activePage="onActivePageChange"
         @update:archivedPage="onArchivedPageChange"
         @update:itemsPerPage="onItemsPerPageChange"
@@ -222,6 +226,7 @@
         :loading="metaHealthLoading"
         :data="metaHealthData"
       />
+
 
       <v-dialog v-model="whapiDialog" max-width="520">
         <v-card class="pa-4">
@@ -450,6 +455,7 @@ import { useCrmStore } from '@/stores/crm'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
 import searchicon from "@/assets/icons/listView/serach-icon.svg";
+import crmService from '@/services/crmService'
 const crmStore = useCrmStore();
 const userStore = useUserStore();
 const { users: storeUsers } = storeToRefs(userStore);
@@ -506,6 +512,9 @@ const whapiActivationPending = ref(false);
 const whapiActivationMessage = ref('');
 const whapiCooldown = ref(0);
 let whapiCooldownTimer = null;
+const isAnyWhatsAppConnected = computed(() =>
+  whatsappProvider.provider === 'whapi' ? whapiStatus.connected : isWhatsAppConnected.value
+);
 const whapiStatusLabel = computed(() => {
   const raw = String(whapiStatus.status || '').trim().toLowerCase();
   const hasPhone = !!(whapiStatus.phoneNumber || whapiStatus.displayName);
@@ -1183,15 +1192,32 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stopMetaStream();
 });
+const alertOptions = ref([])
+
+const DEFAULT_ALERT_OPTIONS = [
+  { key: 'hot',      label: 'Hot lead alerts',          emoji: '🔥', color: 'error' },
+  { key: 'time',     label: 'Time-sensitive deadlines',  emoji: '⏰', color: 'warning' },
+  { key: 'value',    label: 'High-value opportunity',    emoji: '💸', color: 'tertiary' },
+  { key: 'follow',   label: 'Follow-up reminders',       emoji: '🔄', color: 'info' },
+  { key: 'callback', label: 'Callback scheduled',        emoji: '📞', color: 'success' },
+  { key: 'none',     label: 'No response warnings',      emoji: '🚨', color: 'on-surface' },
+]
+
 const initOptions = async () => {
   try {
-    const [src, tr] = await Promise.all([
+    const [src, tr, al] = await Promise.all([
       crmStore.listOptions('lead_source'),
       crmStore.listOptions('treatment'),
+      crmService.getAlertOptions(),
     ])
     if (src?.code === 0) leadSources.value = (src.data || []).map(o => ({ id: o.id, name: o.name }))
     if (tr?.code === 0) treatmentSources.value = (tr.data || []).map(o => ({ id: o.id, name: o.name }))
+    if (al?.code === 0 && al.data?.length) alertOptions.value = al.data
   } catch (e) {}
+}
+
+const onAlertOptionsSaved = (options) => {
+  alertOptions.value = options
 }
 
 const normalizeDateInput = (value) => {

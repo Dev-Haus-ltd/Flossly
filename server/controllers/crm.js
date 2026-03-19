@@ -1,6 +1,6 @@
 import { Op } from 'sequelize'
 import { parsePhoneNumber } from 'awesome-phonenumber'
-import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, MetaPage, User, UserOrganisation, CrmWhatsAppMessageLog } from '../models'
+import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, MetaPage, User, UserOrganisation, CrmWhatsAppMessageLog, Organisation } from '../models'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults.js'
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
 import { formatCrmTriggerPreview } from '~/lib/misc'
@@ -340,6 +340,10 @@ export const listLeads = async (event) => {
         const end = new Date(day); end.setHours(23,59,59,999)
         where.inquiryDate = { [Op.between]: [start, end] }
       }
+    }
+
+    if (q.alert) {
+      where.alert = q.alert
     }
 
     // Filter by Meta campaign attribution
@@ -1003,6 +1007,55 @@ export const deleteOption = async (event) => {
     if (!id) return error(400, 'id required')
     await CrmOption.destroy({ where: { id, organisationId: Number(orgId) } })
     return success('deleted')
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+const DEFAULT_ALERT_OPTIONS = [
+  { key: 'hot',      label: 'Hot lead alerts',          emoji: '🔥', color: 'error' },
+  { key: 'time',     label: 'Time-sensitive deadlines',  emoji: '⏰', color: 'warning' },
+  { key: 'value',    label: 'High-value opportunity',    emoji: '💸', color: 'tertiary' },
+  { key: 'follow',   label: 'Follow-up reminders',       emoji: '🔄', color: 'info' },
+  { key: 'callback', label: 'Callback scheduled',        emoji: '📞', color: 'success' },
+  { key: 'none',     label: 'No response warnings',      emoji: '🚨', color: 'on-surface' },
+]
+
+export const getAlertOptions = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const org = await Organisation.findByPk(Number(orgId), { attributes: ['id', 'automationPlaceholders'] })
+    if (!org) return error(404, 'Organisation not found')
+    const stored = org.automationPlaceholders?.alertOptions
+    return success(Array.isArray(stored) && stored.length ? stored : DEFAULT_ALERT_OPTIONS)
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const saveAlertOptions = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const options = payload?.options
+    if (!Array.isArray(options) || !options.length) return error(400, 'Options array is required')
+    if (options.length > 30) return error(400, 'Cannot exceed 30 alert options')
+    const valid = options.filter(o => o.key && typeof o.label === 'string' && o.label.trim())
+    if (!valid.length) return error(400, 'Each option must have a key and label')
+    const oversized = valid.find(o => o.label.length > 100)
+    if (oversized) return error(400, `Label "${oversized.label.slice(0, 30)}..." exceeds 100 characters`)
+    const keys = valid.map(o => o.key)
+    if (new Set(keys).size !== keys.length) return error(400, 'Alert option keys must be unique')
+    const labels = valid.map(o => o.label.trim().toLowerCase())
+    if (new Set(labels).size !== labels.length) return error(400, 'Alert option names must be unique (case-insensitive)')
+    const org = await Organisation.findByPk(Number(orgId))
+    if (!org) return error(404, 'Organisation not found')
+    org.automationPlaceholders = { ...(org.automationPlaceholders || {}), alertOptions: valid }
+    await org.save()
+    return success(valid)
   } catch (e) {
     return error(500, e.message)
   }

@@ -365,6 +365,20 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  getAlertOptions() {
+    return new Promise((resolve, reject) => {
+      Get("/lead/alertOptions")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  saveAlertOptions(options) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/alertOptionsSave", { options })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   addLeadNote(payload) {
     return new Promise((resolve, reject) => {
       Post("/lead/notesAdd", payload)

@@ -244,7 +244,7 @@
               </template>
 
               <template v-else-if="col.key === 'alert'">
-                <DataTableColumnsAlerts :selected="item" @update="updateValueRow(item, 'alert')" />
+                <DataTableColumnsAlerts :selected="item" :alert-options="props.alertOptions" @update="updateValueRow(item, 'alert')" @options-saved="(opts) => emit('alert-options-saved', opts)" />
               </template>
               <template v-else-if="col.key === 'leadStatus'">
                 <div 
@@ -380,7 +380,6 @@
       </v-expansion-panel>
 
       <v-expansion-panel
-        v-if="canViewArchive"
         rounded="lg"
         class="border-sm pb-1"
       >
@@ -557,6 +556,7 @@
               </div>
 
               <div
+                v-if="canDelete"
                 class="action-item d-flex flex-column align-center"
                 @click="confirmArchivedDelete = true"
               >
@@ -702,7 +702,12 @@
         </div>
         <v-divider />
 
-        <div class="px-4 pt-4 pb-2">
+        <!-- Not-connected state -->
+        <div v-if="!props.whatsappConnected" class="px-4 pt-4 pb-4">
+          <CommonWhatsAppNotConnectedAlert />
+        </div>
+
+        <div v-else class="px-4 pt-4 pb-2">
           <v-textarea
             v-model="whatsappMessage"
             ref="whatsappTextarea"
@@ -736,7 +741,7 @@
           </div>
         </div>
 
-        <div class="px-4 pb-4 d-flex justify-end">
+        <div v-if="props.whatsappConnected" class="px-4 pb-4 d-flex justify-end">
           <v-btn :loading="whatsappSending" :disabled="!hasWhatsAppRecipients" flat color="primary" @click="sendWhatsAppMessage">
             Send
           </v-btn>
@@ -817,6 +822,7 @@ const emit = defineEmits([
   'update:activePage',
   'update:archivedPage',
   'update:itemsPerPage',
+  'alert-options-saved',
 ]);
 const props = defineProps({
   leads: { type: Array, default: () => [] },
@@ -832,6 +838,8 @@ const props = defineProps({
   leadSources: { type: Array, required: true },
   treatmentSources: { type: Array, required: true },
   users: { type: Array, required: true },
+  alertOptions: { type: Array, default: () => [] },
+  whatsappConnected: { type: Boolean, default: false },
 });
 const openedPanels = ref([0]);
 const selectedLeads = ref([]);
@@ -876,7 +884,7 @@ const allVisibleLeads = computed(() => [
   ...(activeLeads.value || []),
   ...(archivedLeads.value || []),
 ]);
-const canViewArchive = computed(() => [1, 8].includes(user.value?.roleId));
+const canDelete = computed(() => [1, 8].includes(user.value?.roleId));
 
 const normalizeLeadForDialog = (lead = {}) => ({
   ...lead,
@@ -991,7 +999,7 @@ const editingCell = reactive({
   originalValue: null
 });
 
-const actions = [
+const ALL_ACTIONS = [
   // { key: "call", label: "Call", icon: callIcon },
   { key: "mail", label: "Send Mail", icon: sendMailIcon },
   { key: "whatsapp", label: "WhatsApp", icon: whatsappIcon },
@@ -1004,6 +1012,9 @@ const actions = [
   { key: "delete", label: "Delete", icon: deleteIcon },
   { key: "export", label: "Export", icon: exportIcon },
 ];
+const actions = computed(() =>
+  canDelete.value ? ALL_ACTIONS : ALL_ACTIONS.filter(a => a.key !== 'delete')
+);
 const confirmDelete = ref(false);
 const deleting = ref(false);
 const confirmArchive = ref(false);
