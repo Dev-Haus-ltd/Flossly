@@ -11,7 +11,11 @@
       <div class="meta-info">
         <div class="d-flex align-start">
           <img :src="platformIcon" :alt="platform" class="small-platform-icon" />
-          <span class="campaign-title title-clamp">{{ title }}</span>
+          <v-tooltip location="top" :text="title" max-width="360" open-on-click :open-on-hover="false">
+            <template #activator="{ props: tipProps }">
+              <span v-bind="tipProps" class="campaign-title title-clamp">{{ title }}</span>
+            </template>
+          </v-tooltip>
         </div>
         <span class="campaign-date">{{ date }}</span>
       </div>
