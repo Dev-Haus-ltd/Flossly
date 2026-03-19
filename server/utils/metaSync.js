@@ -80,8 +80,6 @@ export const runStructureSync = async (orgId) => {
     return
   }
 
-  // Ensure videoId column exists (added after initial deploy)
-  try { await MetaAd.sync({ alter: true }) } catch {}
 
   const startedAt = new Date().toISOString()
   const progress = { accounts: 0, campaigns: 0, adsets: 0, ads: 0 }
@@ -180,7 +178,7 @@ export const runStructureSync = async (orgId) => {
     // ── Wave 3: Ad sets (one batch request per campaign) ─────────────────────
     const adsetBatchReqs = allCampaigns.map((c) => ({
       method: 'GET',
-      relative_url: `${c.id}/adsets?fields=id,name,daily_budget,lifetime_budget,optimization_goal&limit=200`,
+      relative_url: `${c.id}/adsets?fields=id,name,status,daily_budget,lifetime_budget,optimization_goal&limit=200`,
     }))
     const adsetBatchRes = await metaBatch(adsetBatchReqs, userToken)
 
@@ -194,6 +192,7 @@ export const runStructureSync = async (orgId) => {
             adSetId: s.id,
             campaignId: allCampaigns[i].id,
             name: s.name,
+            status: s.status || null,
             dailyBudget: s.daily_budget || null,
             lifetimeBudget: s.lifetime_budget || null,
             optimizationGoal: s.optimization_goal || null,

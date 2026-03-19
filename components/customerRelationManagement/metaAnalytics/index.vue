@@ -202,7 +202,7 @@ const hydrateMetaAnalytics = async ({ syncIfInsightsMissing = false, force = fal
         crmStore.connectionStatus(),
         crmStore.getMetaStructure(orgId, buildFilterParams()),
         crmStore.getMetaInsights(orgId),
-        crmStore.getCampaignLeadCounts(orgId), // updates store; result intentionally unused here
+        crmStore.getAllLeadCounts(orgId), // updates store; result intentionally unused here
       ]);
 
       if (currentOrgId.value === orgId && connectionRes?.code === 0 && connectionRes?.data) {
@@ -313,7 +313,7 @@ const resync = async () => {
         crmStore.fetchMetaStructure(orgId),
         crmStore.fetchMetaInsights({ days: 30 }, orgId),
       ]);
-      await crmStore.getCampaignLeadCounts(orgId);
+      await crmStore.getAllLeadCounts(orgId);
 
       const campaignCount = crmStore.metaCampaigns.length;
       const insightCount = crmStore.metaInsights.length;
@@ -465,6 +465,7 @@ const campaigns = computed(() =>
       previewImage: ad?.imageUrl || reference1,
       hasVideo: !!ad?.videoId,
       videoId: ad?.videoId || null,
+      status: campaign.status || null,
       cost: `${sym}${spendMajor.toFixed(2)}`,
       impressions: totalImpressions,
       linkClicks: totalClicks,
@@ -492,6 +493,8 @@ const adSetCards = computed(() => {
     const totalReach = Number(latestInsight?.reach || 0);
     const spendMajor = totalSpend / 100;
     const firstAd = crmStore.metaAds.find((a) => a.adSetId === adSet.adSetId);
+    const adSetLeads = Number(crmStore.metaAdSetLeadCounts[adSet.adSetId] || 0);
+    const adSetCpl = adSetLeads > 0 ? spendMajor / adSetLeads : 0;
     return {
       id: adSet.adSetId,
       adSetId: adSet.adSetId,
@@ -506,12 +509,13 @@ const adSetCards = computed(() => {
       previewImage: firstAd?.imageUrl || reference1,
       hasVideo: !!firstAd?.videoId,
       videoId: firstAd?.videoId || null,
+      status: adSet.status || null,
       cost: `${sym}${spendMajor.toFixed(2)}`,
       impressions: totalImpressions,
       linkClicks: totalClicks,
       reach: totalReach,
-      leads: 0,
-      cpl: '—',
+      leads: adSetLeads,
+      cpl: adSetCpl > 0 ? `${sym}${adSetCpl.toFixed(2)}` : '—',
       drillLabel: 'View Ads',
     };
   });
@@ -531,6 +535,8 @@ const adCards = computed(() => {
     const latestInsight = insights.slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0];
     const totalReach = Number(latestInsight?.reach || 0);
     const spendMajor = totalSpend / 100;
+    const adLeads = Number(crmStore.metaAdLeadCounts[ad.adId] || 0);
+    const adCpl = adLeads > 0 ? spendMajor / adLeads : 0;
     return {
       id: ad.adId,
       adId: ad.adId,
@@ -543,13 +549,14 @@ const adCards = computed(() => {
       previewImage: ad.imageUrl || reference1,
       hasVideo: !!ad.videoId,
       videoId: ad.videoId || null,
+      status: ad.status || null,
       cost: `${sym}${spendMajor.toFixed(2)}`,
       impressions: totalImpressions,
       linkClicks: totalClicks,
       reach: totalReach,
-      leads: 0,
-      cpl: '—',
-      drillLabel: null, // ads are the deepest level
+      leads: adLeads,
+      cpl: adCpl > 0 ? `${sym}${adCpl.toFixed(2)}` : '—',
+      drillLabel: null,
     };
   });
 });

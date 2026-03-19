@@ -9,8 +9,10 @@ export const useCrmStore = defineStore("crmStore", {
     metaAdSets: [],
     metaAds: [],
     metaInsights: [],
-    // CRM lead counts keyed by campaignId — single source of truth for lead attribution
+    // CRM lead counts — single source of truth for lead attribution
     metaCampaignLeadCounts: {},
+    metaAdSetLeadCounts: {},
+    metaAdLeadCounts: {},
   }),
   getters: {
     metaStats(state) {
@@ -60,11 +62,22 @@ export const useCrmStore = defineStore("crmStore", {
       this.metaAds = [];
       this.metaInsights = [];
       this.metaCampaignLeadCounts = {};
+      this.metaAdSetLeadCounts = {};
+      this.metaAdLeadCounts = {};
     },
     async getCampaignLeadCounts(orgId = null) {
       const res = await this._wrap(() => crmService.getCampaignLeadCounts());
       if (res?.code === 0 && res.data && this._isCurrentAnalyticsOrg(orgId)) {
         this.metaCampaignLeadCounts = res.data || {};
+      }
+      return res;
+    },
+    async getAllLeadCounts(orgId = null) {
+      const res = await this._wrap(() => crmService.getAllLeadCounts());
+      if (res?.code === 0 && res.data && this._isCurrentAnalyticsOrg(orgId)) {
+        this.metaCampaignLeadCounts = res.data.byCampaign || {};
+        this.metaAdSetLeadCounts = res.data.byAdSet || {};
+        this.metaAdLeadCounts = res.data.byAd || {};
       }
       return res;
     },

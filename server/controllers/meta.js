@@ -1397,19 +1397,68 @@ export const getVideoSource = async (event) => {
   const { videoId } = typeof body === 'string' ? JSON.parse(body) : (body || {})
   if (!videoId) return error(400, 'videoId required')
 
+  const fetchVideoFields = async (token) => {
+    try {
+      const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(videoId)}?fields=source,permalink_url,picture&access_token=${encodeURIComponent(token)}`
+      return await $fetch(url, { method: 'GET' })
+    } catch {
+      return null
+    }
+  }
+
+  // Try user token first
   const tokenRow = await MetaUserToken.findOne({ where: { organisationId: orgId } })
-  if (!tokenRow) return error(400, 'Meta not connected')
+  if (tokenRow) {
+    const userToken = decrypt(tokenRow.userTokenEnc)
+    if (userToken) {
+      const resp = await fetchVideoFields(userToken)
+      if (resp?.source) return success({ source: resp.source, permalink: resp.permalink_url || null, thumbnail: resp.picture || null })
+    }
+  }
 
-  const userToken = decrypt(tokenRow.userTokenEnc)
-  if (!userToken) return error(400, 'Meta token missing')
+  // Fall back to page tokens — they often have more media permissions
+  const pages = await MetaPage.findAll({ where: { organisationId: orgId } })
+  for (const page of pages) {
+    const pageToken = decrypt(page.accessTokenEnc)
+    if (!pageToken) continue
+    const resp = await fetchVideoFields(pageToken)
+    if (resp?.source) return success({ source: resp.source, permalink: resp.permalink_url || null, thumbnail: resp.picture || null })
+    // Even if no source, capture permalink for fallback
+    if (resp?.permalink_url) return success({ source: null, permalink: resp.permalink_url, thumbnail: resp.picture || null })
+  }
 
+  return error(404, 'Video source not available — the video may require additional Meta permissions')
+}
+
+export const getAllLeadCounts = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
   try {
-    const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(videoId)}?fields=source,picture&access_token=${encodeURIComponent(userToken)}`
-    const resp = await $fetch(url, { method: 'GET' })
-    if (!resp?.source) return error(404, 'Video source not available — it may have expired or require additional permissions')
-    return success({ source: resp.source, thumbnail: resp.picture || null })
-  } catch (e) {
-    const msg = e?.data?.error?.message || e?.message || 'Failed to fetch video source'
-    return error(400, msg)
+    const rows = await CrmLead.findAll({
+      where: {
+        organisationId: orgId,
+        [Op.or]: [
+          { campaignId: { [Op.ne]: null } },
+          { adSetId: { [Op.ne]: null } },
+          { adId: { [Op.ne]: null } },
+        ],
+      },
+      attributes: ['campaignId', 'adSetId', 'adId', [fn('COUNT', col('id')), 'count']],
+      group: ['campaignId', 'adSetId', 'adId'],
+      raw: true,
+    })
+    const byCampaign = {}
+    const byAdSet = {}
+    const byAd = {}
+    rows.forEach((r) => {
+      const count = Number(r.count)
+      if (r.campaignId) byCampaign[r.campaignId] = (byCampaign[r.campaignId] || 0) + count
+      if (r.adSetId) byAdSet[r.adSetId] = (byAdSet[r.adSetId] || 0) + count
+      if (r.adId) byAd[r.adId] = (byAd[r.adId] || 0) + count
+    })
+    return success({ byCampaign, byAdSet, byAd })
+  } catch (err) {
+    console.error('[getAllLeadCounts]', err)
+    return error(500, 'Failed to fetch lead counts')
   }
 }
