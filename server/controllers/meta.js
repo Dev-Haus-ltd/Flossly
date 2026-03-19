@@ -2533,84 +2533,142 @@ export const listMetaPermissions = async (event) => {
   }
 }
 
+export const getVideoSource = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const body = await readBody(event)
+  const { videoId } = typeof body === 'string' ? JSON.parse(body) : (body || {})
+  if (!videoId) return error(400, 'videoId required')
+
+  const fetchVideoFields = async (token) => {
+    try {
+      const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(videoId)}?fields=source,permalink_url,picture&access_token=${encodeURIComponent(token)}`
+      return await $fetch(url, { method: 'GET' })
+    } catch {
+      return null
+    }
+  }
+
+  // Try user token first
+  const tokenRow = await MetaUserToken.findOne({ where: { organisationId: orgId } })
+  if (tokenRow) {
+    const userToken = decrypt(tokenRow.userTokenEnc)
+    if (userToken) {
+      const resp = await fetchVideoFields(userToken)
+      if (resp?.source) return success({ source: resp.source, permalink: resp.permalink_url || null, thumbnail: resp.picture || null })
+    }
+  }
+
+  // Fall back to page tokens — they often have more media permissions
+  const pages = await MetaPage.findAll({ where: { organisationId: orgId } })
+  for (const page of pages) {
+    const pageToken = decrypt(page.accessTokenEnc)
+    if (!pageToken) continue
+    const resp = await fetchVideoFields(pageToken)
+    if (resp?.source) return success({ source: resp.source, permalink: resp.permalink_url || null, thumbnail: resp.picture || null })
+    if (resp?.permalink_url) return success({ source: null, permalink: resp.permalink_url, thumbnail: resp.picture || null })
+  }
+
+  return error(404, 'Video source not available — the video may require additional Meta permissions')
+}
+
+export const getAllLeadCounts = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+  try {
+    const rows = await CrmLead.findAll({
+      where: {
+        organisationId: orgId,
+        [Op.or]: [
+          { campaignId: { [Op.ne]: null } },
+          { adSetId: { [Op.ne]: null } },
+          { adId: { [Op.ne]: null } },
+        ],
+      },
+      attributes: ['campaignId', 'adSetId', 'adId', [fn('COUNT', col('id')), 'count']],
+      group: ['campaignId', 'adSetId', 'adId'],
+      raw: true,
+    })
+    const byCampaign = {}
+    const byAdSet = {}
+    const byAd = {}
+    rows.forEach((r) => {
+      const count = Number(r.count)
+      if (r.campaignId) byCampaign[r.campaignId] = (byCampaign[r.campaignId] || 0) + count
+      if (r.adSetId) byAdSet[r.adSetId] = (byAdSet[r.adSetId] || 0) + count
+      if (r.adId) byAd[r.adId] = (byAd[r.adId] || 0) + count
+    })
+    return success({ byCampaign, byAdSet, byAd })
+  } catch (err) {
+    console.error('[getAllLeadCounts]', err)
+    return error(500, 'Failed to fetch lead counts')
+  }
+}
+
 // Meta Deauthorize Callback
-// Meta sends a signed request when a user removes the app.
 export const deauthorize = async (event) => {
   try {
-    const body = await readBody(event);
-    const payload = typeof body === 'string' ? parseJsonBody(body) : body || {};
-    const signedRequest = payload?.signed_request || '';
-    if (!signedRequest) return error(400, 'signed_request required');
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body || {}
+    const signedRequest = payload?.signed_request || ''
+    if (!signedRequest) return error(400, 'signed_request required')
 
-    // signed_request is "signature.payload"
-    const [sigB64, payloadB64] = String(signedRequest).split('.', 2);
-    if (!sigB64 || !payloadB64) return error(400, 'Invalid signed_request');
+    const [sigB64, payloadB64] = String(signedRequest).split('.', 2)
+    if (!sigB64 || !payloadB64) return error(400, 'Invalid signed_request')
 
-    const config = useRuntimeConfig();
-    const appSecret = config.META_APP_SECRET || process.env.META_APP_SECRET || '';
-    if (!appSecret) return error(500, 'META_APP_SECRET not configured');
+    const config = useRuntimeConfig()
+    const appSecret = config.META_APP_SECRET || process.env.META_APP_SECRET || ''
+    if (!appSecret) return error(500, 'META_APP_SECRET not configured')
 
     const expected = crypto.createHmac('sha256', appSecret).update(payloadB64).digest('base64')
-      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    if (expected !== sigB64) return error(403, 'Invalid signed_request signature');
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    if (expected !== sigB64) return error(403, 'Invalid signed_request signature')
 
-    const decoded = JSON.parse(Buffer.from(payloadB64, 'base64').toString('utf8') || '{}');
-    const fbUserId = decoded?.user_id;
+    const decoded = JSON.parse(Buffer.from(payloadB64, 'base64').toString('utf8') || '{}')
+    const fbUserId = decoded?.user_id
+    if (!fbUserId) return success({ status: 'ok' })
 
-    if (!fbUserId) return success({ status: 'ok' });
-
-    // Revoke tokens for that user across orgs
-    await MetaUserToken.update(
-      { expiresAt: new Date(0) },
-      { where: { fbUserId } }
-    );
-
-    return success({ status: 'ok' });
+    await MetaUserToken.update({ expiresAt: new Date(0) }, { where: { fbUserId } })
+    return success({ status: 'ok' })
   } catch (e) {
-    return error(500, e?.message || 'Deauthorize failed');
+    return error(500, e?.message || 'Deauthorize failed')
   }
-};
+}
 
 // Meta Data Deletion Request Callback
 export const dataDeletion = async (event) => {
   try {
-    const body = await readBody(event);
-    const payload = typeof body === 'string' ? parseJsonBody(body) : body || {};
-    const signedRequest = payload?.signed_request || '';
-    if (!signedRequest) return error(400, 'signed_request required');
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body || {}
+    const signedRequest = payload?.signed_request || ''
+    if (!signedRequest) return error(400, 'signed_request required')
 
-    const [sigB64, payloadB64] = String(signedRequest).split('.', 2);
-    if (!sigB64 || !payloadB64) return error(400, 'Invalid signed_request');
+    const [sigB64, payloadB64] = String(signedRequest).split('.', 2)
+    if (!sigB64 || !payloadB64) return error(400, 'Invalid signed_request')
 
-    const config = useRuntimeConfig();
-    const appSecret = config.META_APP_SECRET || process.env.META_APP_SECRET || '';
-    if (!appSecret) return error(500, 'META_APP_SECRET not configured');
+    const config = useRuntimeConfig()
+    const appSecret = config.META_APP_SECRET || process.env.META_APP_SECRET || ''
+    if (!appSecret) return error(500, 'META_APP_SECRET not configured')
 
     const expected = crypto.createHmac('sha256', appSecret).update(payloadB64).digest('base64')
-      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    if (expected !== sigB64) return error(403, 'Invalid signed_request signature');
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    if (expected !== sigB64) return error(403, 'Invalid signed_request signature')
 
-    const decoded = JSON.parse(Buffer.from(payloadB64, 'base64').toString('utf8') || '{}');
-    const fbUserId = decoded?.user_id || 'unknown';
+    const decoded = JSON.parse(Buffer.from(payloadB64, 'base64').toString('utf8') || '{}')
+    const fbUserId = decoded?.user_id || 'unknown'
 
-    // TODO: Delete user data tied to fbUserId if you map it.
-    const baseUrl = config.public?.BASE_URL || '';
-    const statusUrl = `${baseUrl}/api/meta/dataDeletionStatus?request=${encodeURIComponent(fbUserId)}`;
+    const baseUrl = config.public?.BASE_URL || ''
+    const statusUrl = `${baseUrl}/api/meta/dataDeletionStatus?request=${encodeURIComponent(fbUserId)}`
 
-    return {
-      url: statusUrl,
-      confirmation_code: String(fbUserId),
-    };
+    return { url: statusUrl, confirmation_code: String(fbUserId) }
   } catch (e) {
-    return error(500, e?.message || 'Data deletion failed');
+    return error(500, e?.message || 'Data deletion failed')
   }
-};
+}
 
 export const dataDeletionStatus = async (event) => {
-  const query = getQuery(event) || {};
-  const requestId = query.request || 'unknown';
-  return success({
-    status: 'completed',
-    request: requestId,
-  });
-};
+  const query = getQuery(event) || {}
+  const requestId = query.request || 'unknown'
+  return success({ status: 'completed', request: requestId })
+}

@@ -22,6 +22,7 @@ export const MetaAdSet = sequelize.define(
     },
 
     name: { type: DataTypes.STRING(200), allowNull: true },
+    status: { type: DataTypes.STRING(50), allowNull: true },
 
     // Budgets (minor units)
     dailyBudget: { type: DataTypes.INTEGER, allowNull: true },
