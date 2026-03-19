@@ -11,36 +11,26 @@
       <div class="meta-info">
         <div class="d-flex align-start">
           <img :src="platformIcon" :alt="platform" class="small-platform-icon" />
-          <v-tooltip location="top" :text="title" max-width="360">
-            <template #activator="{ props }">
-              <span v-bind="props" class="campaign-title title-clamp">{{ title }}</span>
-            </template>
-          </v-tooltip>
+          <span class="campaign-title title-clamp">{{ title }}</span>
         </div>
         <span class="campaign-date">{{ date }}</span>
       </div>
     </div>
 
     <div class="description-block">
-      <v-tooltip location="top" :text="description" max-width="420">
-        <template #activator="{ props }">
-          <p
-            v-bind="props"
-            class="campaign-description"
-            :class="{ 'description-clamp': !showFullDescription }"
-          >
-            {{ description }}
-          </p>
+      <p class="campaign-description">{{ description }}</p>
+      <v-tooltip
+        v-if="showDescriptionToggle"
+        location="top"
+        :text="description"
+        max-width="360"
+        open-on-click
+        :open-on-hover="false"
+      >
+        <template #activator="{ props: tipProps }">
+          <button v-bind="tipProps" type="button" class="see-more-btn">Read more</button>
         </template>
       </v-tooltip>
-      <button
-        v-if="showDescriptionToggle"
-        type="button"
-        class="see-more-btn"
-        @click="showFullDescription = !showFullDescription"
-      >
-        {{ showFullDescription ? 'See less' : 'See more' }}
-      </button>
     </div>
 
     <div class="campaign-preview">
@@ -221,8 +211,7 @@ const statusConfig = computed(() => {
   return null;
 });
 
-const showFullDescription = ref(false);
-const showDescriptionToggle = computed(() => String(props.description || '').trim().length > 140);
+const showDescriptionToggle = computed(() => String(props.description || '').trim().length > 120);
 
 const videoSrc = ref(null);
 const videoPermalink = ref(null);
@@ -262,6 +251,7 @@ const playVideo = async () => {
   flex-direction: column;
   gap: 16px;
   transition: box-shadow 0.3s ease;
+  width: 100%;
   height: 100%;
   position: relative;
   background-clip: padding-box;
@@ -380,12 +370,21 @@ const playVideo = async () => {
   letter-spacing: 0%;
   color: hsla(0, 0%, 45%, 1);
   margin: 0;
-  min-height: 72px;
+  /* Fixed height = 3 lines × 18px line-height */
+  height: 54px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
 }
 
 .title-clamp {
-  line-clamp: 3;
-  -webkit-line-clamp: 3;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .description-block {
@@ -398,8 +397,8 @@ const playVideo = async () => {
 .description-clamp {
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  line-clamp: 4;
-  -webkit-line-clamp: 4;
+  line-clamp: 3;
+  -webkit-line-clamp: 3;
   overflow: hidden;
 }
 

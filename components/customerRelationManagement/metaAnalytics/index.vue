@@ -96,7 +96,7 @@
         </template>
       </div>
 
-      <v-row v-if="displayCards.length" class="campaign-grid">
+      <v-row v-if="displayCards.length" class="campaign-grid" align="stretch">
         <v-col
           v-for="(card, index) in displayCards"
           :key="card.id || index"
@@ -104,7 +104,7 @@
           sm="6"
           md="4"
           lg="3"
-          class="campaign-col"
+          class="campaign-col d-flex"
         >
           <CustomerRelationManagementAnalyticsCard
             :platform="card.platform"
@@ -115,6 +115,7 @@
             :preview-image="card.previewImage"
             :has-video="card.hasVideo"
             :video-id="card.videoId"
+            :status="card.status"
             :cost="card.cost"
             :impressions="card.impressions"
             :link-clicks="card.linkClicks"
