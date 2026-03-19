@@ -1,4 +1,4 @@
-import { authStart, authCallback, listLeads, fetchLeadsNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck, stream, getWhatsAppConfig, saveWhatsAppConfig, whatsappEmbeddedComplete, fetchWhatsAppTemplates, fetchMetaStructureAndBudgets, fetchDailyMetaInsights, listBusinessPortfolios, connectBusinessPages, debugMetaStatus, listMetaPermissions, getMetaInsights, getMetaStructure, getCampaignLeadCounts, getSyncJobStatus } from "../../controllers/meta";
+import { authStart, authCallback, listLeads, fetchLeadsNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck, stream, getWhatsAppConfig, saveWhatsAppConfig, whatsappEmbeddedComplete, fetchWhatsAppTemplates, fetchMetaStructureAndBudgets, fetchDailyMetaInsights, listBusinessPortfolios, connectBusinessPages, debugMetaStatus, listMetaPermissions, getMetaInsights, getMetaStructure, getCampaignLeadCounts, getSyncJobStatus, getVideoSource } from "../../controllers/meta";
 
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, 'name')
@@ -50,6 +50,8 @@ export default defineEventHandler(async (event) => {
       return await getSyncJobStatus(event)
     case 'campaignLeadCounts':
       return await getCampaignLeadCounts(event)
+    case 'videoSource':
+      return await getVideoSource(event)
     default:
       return { code: 0, error: 'Not found' }
   }

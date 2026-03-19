@@ -1388,3 +1388,28 @@ export const listMetaPermissions = async (event) => {
     return error(400, msg)
   }
 }
+
+export const getVideoSource = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const body = await readBody(event)
+  const { videoId } = typeof body === 'string' ? JSON.parse(body) : (body || {})
+  if (!videoId) return error(400, 'videoId required')
+
+  const tokenRow = await MetaUserToken.findOne({ where: { organisationId: orgId } })
+  if (!tokenRow) return error(400, 'Meta not connected')
+
+  const userToken = decrypt(tokenRow.userTokenEnc)
+  if (!userToken) return error(400, 'Meta token missing')
+
+  try {
+    const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(videoId)}?fields=source,picture&access_token=${encodeURIComponent(userToken)}`
+    const resp = await $fetch(url, { method: 'GET' })
+    if (!resp?.source) return error(404, 'Video source not available — it may have expired or require additional permissions')
+    return success({ source: resp.source, thumbnail: resp.picture || null })
+  } catch (e) {
+    const msg = e?.data?.error?.message || e?.message || 'Failed to fetch video source'
+    return error(400, msg)
+  }
+}

@@ -40,10 +40,26 @@
     </div>
 
     <div class="campaign-preview">
-      <img :src="previewImage" :alt="title" class="preview-image" />
-      <div v-if="hasVideo" class="play-button-overlay">
-        <img src="@/assets/crm/play.svg" alt="Play" class="play-button-svg" />
-      </div>
+      <!-- Video player — shown once source URL is fetched -->
+      <video
+        v-if="videoSrc"
+        :src="videoSrc"
+        class="preview-image"
+        controls
+        autoplay
+        @ended="videoSrc = null"
+      />
+      <!-- Thumbnail + play/loading overlay -->
+      <template v-else>
+        <img :src="previewImage" :alt="title" class="preview-image" />
+        <div v-if="hasVideo" class="play-button-overlay" @click="playVideo">
+          <v-progress-circular v-if="videoLoading" indeterminate color="white" size="48" />
+          <img v-else src="@/assets/crm/play.svg" alt="Play" class="play-button-svg" />
+        </div>
+        <div v-if="videoError" class="video-error-overlay">
+          <span>{{ videoError }}</span>
+        </div>
+      </template>
     </div>
 
     <div class="campaign-stats">
@@ -73,24 +89,38 @@
       </div>
     </div>
 
-    <v-btn
-      v-if="leads > 0"
-      color="primary"
-      variant="flat"
-      rounded="lg"
-      size="small"
-      class="view-leads-btn"
-      :href="`/crm/leads?campaignId=${campaignId}`"
-      target="_blank"
-      append-icon="mdi-open-in-new"
-    >
-      View {{ leads }} Lead{{ leads === 1 ? '' : 's' }}
-    </v-btn>
+    <div class="card-actions">
+      <v-btn
+        v-if="leads > 0"
+        color="primary"
+        variant="flat"
+        rounded="lg"
+        size="small"
+        class="view-leads-btn"
+        :href="`/crm/leads?campaignId=${campaignId}`"
+        target="_blank"
+        append-icon="mdi-open-in-new"
+      >
+        View {{ leads }} Lead{{ leads === 1 ? '' : 's' }}
+      </v-btn>
+      <v-btn
+        v-if="drillLabel"
+        variant="outlined"
+        rounded="lg"
+        size="small"
+        class="view-leads-btn"
+        append-icon="mdi-chevron-right"
+        @click="emit('drill')"
+      >
+        {{ drillLabel }}
+      </v-btn>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed, ref } from 'vue';
+import crmService from '@/services/crmService';
 
 const props = defineProps({
   platform: {
@@ -121,6 +151,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  videoId: {
+    type: String,
+    default: null,
+  },
   cost: {
     type: String,
     required: true,
@@ -149,10 +183,39 @@ const props = defineProps({
     type: String,
     default: null,
   },
+  drillLabel: {
+    type: String,
+    default: null,
+  },
 });
+
+const emit = defineEmits(['drill']);
 
 const showFullDescription = ref(false);
 const showDescriptionToggle = computed(() => String(props.description || '').trim().length > 140);
+
+const videoSrc = ref(null);
+const videoLoading = ref(false);
+const videoError = ref(null);
+
+const playVideo = async () => {
+  if (!props.videoId || videoLoading.value) return;
+  if (videoSrc.value) { videoSrc.value = null; return; } // toggle off
+  videoError.value = null;
+  videoLoading.value = true;
+  try {
+    const res = await crmService.getMetaVideoSource(props.videoId);
+    if (res?.code === 0 && res.data?.source) {
+      videoSrc.value = res.data.source;
+    } else {
+      videoError.value = res?.error || res?.message || 'Video not available';
+    }
+  } catch (e) {
+    videoError.value = e?.message || 'Failed to load video';
+  } finally {
+    videoLoading.value = false;
+  }
+};
 </script>
 
 <style scoped lang="scss">
@@ -317,6 +380,25 @@ const showDescriptionToggle = computed(() => String(props.description || '').tri
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.15);
+  transition: background 0.2s ease;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.3);
+  }
+}
+
+.video-error-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 11px;
+  padding: 6px 10px;
+  text-align: center;
 }
 
 .play-button-svg {
@@ -336,6 +418,12 @@ const showDescriptionToggle = computed(() => String(props.description || '').tri
   gap: 8px;
   padding-top: 8px;
   border-top: 1px solid #f0f0f0;
+}
+
+.card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .view-leads-btn {

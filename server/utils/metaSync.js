@@ -80,6 +80,9 @@ export const runStructureSync = async (orgId) => {
     return
   }
 
+  // Ensure videoId column exists (added after initial deploy)
+  try { await MetaAd.sync({ alter: true }) } catch {}
+
   const startedAt = new Date().toISOString()
   const progress = { accounts: 0, campaigns: 0, adsets: 0, ads: 0 }
   await setState(key, { status: 'running', startedAt, progress })
@@ -244,7 +247,7 @@ export const runStructureSync = async (orgId) => {
       const ids = Array.from(creativeIds.keys())
       const creativeBatchReqs = ids.map((cid) => ({
         method: 'GET',
-        relative_url: `${cid}?fields=image_url,thumbnail_url,body,instagram_permalink_url`,
+        relative_url: `${cid}?fields=image_url,thumbnail_url,body,instagram_permalink_url,video_id`,
       }))
       const creativeBatchRes = await metaBatch(creativeBatchReqs, userToken)
 
@@ -255,6 +258,7 @@ export const runStructureSync = async (orgId) => {
         await MetaAd.update(
           {
             imageUrl: cr.image_url || cr.thumbnail_url || null,
+            videoId: cr.video_id || null,
             body: cr.body || null,
             platform: cr.instagram_permalink_url ? 'Instagram' : 'Facebook',
           },

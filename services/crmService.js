@@ -70,6 +70,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  getMetaVideoSource(videoId) {
+    return new Promise((resolve, reject) => {
+      Post("/meta/videoSource", { videoId })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   getMetaStructure(params = {}) {
     const qs = Object.entries(params)
       .filter(([, v]) => v != null && v !== '')
