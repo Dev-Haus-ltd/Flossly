@@ -180,7 +180,8 @@ export const sendNotificationToUser = async ({
         referenceId: String(referenceId || ''),
         priority: String(priority || 'medium'),
         clickAction: String(stringifiedData.url || data?.url || '/'),
-        icon: String(icon)
+        icon: String(icon),
+        organisationId: String(organisationId || ''),
       },
       webpush: {
         headers: {

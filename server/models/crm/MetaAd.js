@@ -26,6 +26,7 @@ export const MetaAd = sequelize.define(
     creativeId: { type: DataTypes.STRING(50), allowNull: true },
     platform: { type: DataTypes.STRING(50), allowNull: true },
     imageUrl: { type: DataTypes.TEXT, allowNull: true },
+    videoId: { type: DataTypes.STRING(50), allowNull: true },
     body: { type: DataTypes.TEXT, allowNull: true },
   },
   {

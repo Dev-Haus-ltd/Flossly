@@ -75,38 +75,63 @@
         </v-btn>
       </div>
 
-      <v-row v-if="filteredCampaigns.length" class="campaign-grid">
+      <!-- Breadcrumb drill path -->
+      <div v-if="drill.level > 0" class="drill-breadcrumb mb-3">
+        <v-btn variant="text" size="small" class="breadcrumb-btn" @click="drillBack(0)">
+          <v-icon size="16" class="mr-1">mdi-view-grid</v-icon>Campaigns
+        </v-btn>
+        <v-icon size="14" class="breadcrumb-sep">mdi-chevron-right</v-icon>
+        <v-btn
+          variant="text"
+          size="small"
+          class="breadcrumb-btn"
+          :class="{ 'breadcrumb-active': drill.level === 1 }"
+          @click="drill.level > 1 ? drillBack(1) : null"
+        >
+          {{ drill.campaign?.title }}
+        </v-btn>
+        <template v-if="drill.level === 2">
+          <v-icon size="14" class="breadcrumb-sep">mdi-chevron-right</v-icon>
+          <span class="breadcrumb-active">{{ drill.adSet?.title }}</span>
+        </template>
+      </div>
+
+      <v-row v-if="displayCards.length" class="campaign-grid" align="stretch">
         <v-col
-          v-for="(campaign, index) in filteredCampaigns"
-          :key="index"
+          v-for="(card, index) in displayCards"
+          :key="card.id || index"
           cols="12"
           sm="6"
           md="4"
           lg="3"
-          class="campaign-col"
+          class="campaign-col d-flex"
         >
           <CustomerRelationManagementAnalyticsCard
-            :platform="campaign.platform"
-            :platform-icon="campaign.platformIcon"
-            :title="campaign.title"
-            :date="campaign.date"
-            :description="campaign.description"
-            :preview-image="campaign.previewImage"
-            :has-video="campaign.hasVideo"
-            :cost="campaign.cost"
-            :impressions="campaign.impressions"
-            :link-clicks="campaign.linkClicks"
-            :reach="campaign.reach"
-            :leads="campaign.leads"
-            :cpl="campaign.cpl"
-            :campaign-id="campaign.campaignId"
+            :platform="card.platform"
+            :platform-icon="card.platformIcon"
+            :title="card.title"
+            :date="card.date"
+            :description="card.description"
+            :preview-image="card.previewImage"
+            :has-video="card.hasVideo"
+            :video-id="card.videoId"
+            :status="card.status"
+            :cost="card.cost"
+            :impressions="card.impressions"
+            :link-clicks="card.linkClicks"
+            :reach="card.reach"
+            :leads="card.leads"
+            :cpl="card.cpl"
+            :campaign-id="card.campaignId"
+            :drill-label="card.drillLabel"
+            @drill="onDrill(card)"
           />
         </v-col>
       </v-row>
 
       <v-sheet v-else class="pa-10 text-center" color="transparent">
-        <p class="empty-state-title">{{ emptyStateTitle }}</p>
-        <p class="text-grey empty-state-copy">{{ emptyStateCopy }}</p>
+        <p class="empty-state-title">{{ drillEmptyTitle }}</p>
+        <p class="text-grey empty-state-copy">{{ drillEmptyCopy }}</p>
       </v-sheet>
     </div>
   </v-sheet>
@@ -131,6 +156,25 @@ const isFiltering = ref(false);
 const activeFilters = ref({ platform: null, dateFrom: null, dateTo: null });
 const currentOrgId = computed(() => Number(user.value?.currentLoggedInOrgId || 0) || null);
 const metaConnection = ref({ count: 0, pages: [] });
+
+// Drill-down state: level 0 = campaigns, 1 = ad sets, 2 = ads
+const drill = reactive({ level: 0, campaign: null, adSet: null });
+
+const drillBack = (toLevel) => {
+  drill.level = toLevel;
+  if (toLevel < 2) drill.adSet = null;
+  if (toLevel < 1) drill.campaign = null;
+};
+
+const onDrill = (card) => {
+  if (drill.level === 0) {
+    drill.campaign = card;
+    drill.level = 1;
+  } else if (drill.level === 1) {
+    drill.adSet = card;
+    drill.level = 2;
+  }
+};
 
 let analyticsLoadPromise = null;
 let analyticsLoadOrgId = null;
@@ -159,7 +203,7 @@ const hydrateMetaAnalytics = async ({ syncIfInsightsMissing = false, force = fal
         crmStore.connectionStatus(),
         crmStore.getMetaStructure(orgId, buildFilterParams()),
         crmStore.getMetaInsights(orgId),
-        crmStore.getCampaignLeadCounts(orgId), // updates store; result intentionally unused here
+        crmStore.getAllLeadCounts(orgId), // updates store; result intentionally unused here
       ]);
 
       if (currentOrgId.value === orgId && connectionRes?.code === 0 && connectionRes?.data) {
@@ -270,7 +314,7 @@ const resync = async () => {
         crmStore.fetchMetaStructure(orgId),
         crmStore.fetchMetaInsights({ days: 30 }, orgId),
       ]);
-      await crmStore.getCampaignLeadCounts(orgId);
+      await crmStore.getAllLeadCounts(orgId);
 
       const campaignCount = crmStore.metaCampaigns.length;
       const insightCount = crmStore.metaInsights.length;
@@ -420,7 +464,9 @@ const campaigns = computed(() =>
       rawDate: campaign.createdAt,
       description: ad?.body || 'No ad text description available.',
       previewImage: ad?.imageUrl || reference1,
-      hasVideo: false,
+      hasVideo: !!ad?.videoId,
+      videoId: ad?.videoId || null,
+      status: campaign.status || null,
       cost: `${sym}${spendMajor.toFixed(2)}`,
       impressions: totalImpressions,
       linkClicks: totalClicks,
@@ -431,14 +477,118 @@ const campaigns = computed(() =>
   })
 );
 
-// Platform and date filters are applied server-side via getMetaStructure.
-// Only text search runs client-side for real-time UX.
-const filteredCampaigns = computed(() => {
-  if (!search.value) return campaigns.value;
-  const q = search.value.toLowerCase();
-  return campaigns.value.filter(
-    (c) => c.title.toLowerCase().includes(q) || c.description.toLowerCase().includes(q)
+const adSetCards = computed(() => {
+  if (!drill.campaign) return [];
+  const sym = currencySymbol.value;
+  const campaignAdSets = crmStore.metaAdSets.filter(
+    (as) => as.campaignId === drill.campaign.campaignId
   );
+  return campaignAdSets.map((adSet) => {
+    const insights = crmStore.metaInsights.filter(
+      (i) => i.entityType === 'adset' && i.entityId === adSet.adSetId
+    );
+    const totalSpend = insights.reduce((acc, i) => acc + Number(i.spend || 0), 0);
+    const totalImpressions = insights.reduce((acc, i) => acc + Number(i.impressions || 0), 0);
+    const totalClicks = insights.reduce((acc, i) => acc + Number(i.clicks || 0), 0);
+    const latestInsight = insights.slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+    const totalReach = Number(latestInsight?.reach || 0);
+    const spendMajor = totalSpend / 100;
+    const firstAd = crmStore.metaAds.find((a) => a.adSetId === adSet.adSetId);
+    const adSetLeads = Number(crmStore.metaAdSetLeadCounts[adSet.adSetId] || 0);
+    const adSetCpl = adSetLeads > 0 ? spendMajor / adSetLeads : 0;
+    return {
+      id: adSet.adSetId,
+      adSetId: adSet.adSetId,
+      campaignId: null,
+      platform: firstAd?.platform || drill.campaign.platform,
+      platformIcon: firstAd?.platform === 'Instagram' ? instagramIcon : facebookIcon,
+      title: adSet.name || 'Untitled Ad Set',
+      date: new Date(adSet.createdAt || drill.campaign.rawDate).toLocaleDateString('en-GB', {
+        day: 'numeric', month: 'long', year: 'numeric',
+      }),
+      description: `Ad set within "${drill.campaign.title}"`,
+      previewImage: firstAd?.imageUrl || reference1,
+      hasVideo: !!firstAd?.videoId,
+      videoId: firstAd?.videoId || null,
+      status: adSet.status || null,
+      cost: `${sym}${spendMajor.toFixed(2)}`,
+      impressions: totalImpressions,
+      linkClicks: totalClicks,
+      reach: totalReach,
+      leads: adSetLeads,
+      cpl: adSetCpl > 0 ? `${sym}${adSetCpl.toFixed(2)}` : '—',
+      drillLabel: 'View Ads',
+    };
+  });
+});
+
+const adCards = computed(() => {
+  if (!drill.adSet) return [];
+  const sym = currencySymbol.value;
+  const adSetAds = crmStore.metaAds.filter((a) => a.adSetId === drill.adSet.adSetId);
+  return adSetAds.map((ad) => {
+    const insights = crmStore.metaInsights.filter(
+      (i) => i.entityType === 'ad' && i.entityId === ad.adId
+    );
+    const totalSpend = insights.reduce((acc, i) => acc + Number(i.spend || 0), 0);
+    const totalImpressions = insights.reduce((acc, i) => acc + Number(i.impressions || 0), 0);
+    const totalClicks = insights.reduce((acc, i) => acc + Number(i.clicks || 0), 0);
+    const latestInsight = insights.slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+    const totalReach = Number(latestInsight?.reach || 0);
+    const spendMajor = totalSpend / 100;
+    const adLeads = Number(crmStore.metaAdLeadCounts[ad.adId] || 0);
+    const adCpl = adLeads > 0 ? spendMajor / adLeads : 0;
+    return {
+      id: ad.adId,
+      adId: ad.adId,
+      campaignId: null,
+      platform: ad.platform || drill.campaign?.platform,
+      platformIcon: ad.platform === 'Instagram' ? instagramIcon : facebookIcon,
+      title: ad.name || 'Untitled Ad',
+      date: drill.adSet?.date || '',
+      description: ad.body || `Ad in "${drill.adSet?.title}"`,
+      previewImage: ad.imageUrl || reference1,
+      hasVideo: !!ad.videoId,
+      videoId: ad.videoId || null,
+      status: ad.status || null,
+      cost: `${sym}${spendMajor.toFixed(2)}`,
+      impressions: totalImpressions,
+      linkClicks: totalClicks,
+      reach: totalReach,
+      leads: adLeads,
+      cpl: adCpl > 0 ? `${sym}${adCpl.toFixed(2)}` : '—',
+      drillLabel: null,
+    };
+  });
+});
+
+const displayCards = computed(() => {
+  if (drill.level === 2) return adCards.value;
+  if (drill.level === 1) return adSetCards.value;
+  return filteredCampaigns.value;
+});
+
+// Add drillLabel to campaign cards
+const campaignsWithDrill = computed(() =>
+  campaigns.value.map((c) => ({ ...c, drillLabel: 'View Ad Sets' }))
+);
+
+// Replace filtered campaigns with drill-aware version
+const filteredCampaigns = computed(() => {
+  const base = campaignsWithDrill.value;
+  if (!search.value) return base;
+  const q = search.value.toLowerCase();
+  return base.filter((c) => c.title.toLowerCase().includes(q) || c.description.toLowerCase().includes(q));
+});
+
+const drillEmptyTitle = computed(() => {
+  if (drill.level === 2) return 'No ads in this ad set';
+  if (drill.level === 1) return 'No ad sets in this campaign';
+  return emptyStateTitle.value;
+});
+const drillEmptyCopy = computed(() => {
+  if (drill.level >= 1) return 'Run a Sync Now to refresh the latest structure from Meta.';
+  return emptyStateCopy.value;
 });
 </script>
 
@@ -477,6 +627,32 @@ const filteredCampaigns = computed(() => {
 .sync-btn {
   text-transform: none;
   font-size: 14px;
+}
+
+.drill-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+
+.breadcrumb-btn {
+  text-transform: none;
+  font-size: 13px;
+  color: #6b7280;
+  padding: 0 6px;
+  min-width: 0;
+}
+
+.breadcrumb-sep {
+  color: #9ca3af;
+}
+
+.breadcrumb-active {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+  padding: 0 6px;
 }
 
 .disconnected-banner {

@@ -80,6 +80,7 @@ export const runStructureSync = async (orgId) => {
     return
   }
 
+
   const startedAt = new Date().toISOString()
   const progress = { accounts: 0, campaigns: 0, adsets: 0, ads: 0 }
   await setState(key, { status: 'running', startedAt, progress })
@@ -177,7 +178,7 @@ export const runStructureSync = async (orgId) => {
     // ── Wave 3: Ad sets (one batch request per campaign) ─────────────────────
     const adsetBatchReqs = allCampaigns.map((c) => ({
       method: 'GET',
-      relative_url: `${c.id}/adsets?fields=id,name,daily_budget,lifetime_budget,optimization_goal&limit=200`,
+      relative_url: `${c.id}/adsets?fields=id,name,status,daily_budget,lifetime_budget,optimization_goal&limit=200`,
     }))
     const adsetBatchRes = await metaBatch(adsetBatchReqs, userToken)
 
@@ -191,6 +192,7 @@ export const runStructureSync = async (orgId) => {
             adSetId: s.id,
             campaignId: allCampaigns[i].id,
             name: s.name,
+            status: s.status || null,
             dailyBudget: s.daily_budget || null,
             lifetimeBudget: s.lifetime_budget || null,
             optimizationGoal: s.optimization_goal || null,
@@ -244,7 +246,7 @@ export const runStructureSync = async (orgId) => {
       const ids = Array.from(creativeIds.keys())
       const creativeBatchReqs = ids.map((cid) => ({
         method: 'GET',
-        relative_url: `${cid}?fields=image_url,thumbnail_url,body,instagram_permalink_url`,
+        relative_url: `${cid}?fields=image_url,thumbnail_url,body,instagram_permalink_url,video_id`,
       }))
       const creativeBatchRes = await metaBatch(creativeBatchReqs, userToken)
 
@@ -255,6 +257,7 @@ export const runStructureSync = async (orgId) => {
         await MetaAd.update(
           {
             imageUrl: cr.image_url || cr.thumbnail_url || null,
+            videoId: cr.video_id || null,
             body: cr.body || null,
             platform: cr.instagram_permalink_url ? 'Instagram' : 'Facebook',
           },
