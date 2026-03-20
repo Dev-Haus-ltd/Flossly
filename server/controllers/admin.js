@@ -1,13 +1,16 @@
 import { success, error } from '../utils/response';
 import { 
   User, UserOrganisation, Organisation, Role, LoginHistory, UserSubscription, UserPreference,
-  UserDocument, CrmLead, UserTask, DiaryAppointment, UserNotification, Task, TaskCategory
+  UserDocument, CrmLead, UserTask, DiaryAppointment, UserNotification, Task, TaskCategory,
+  CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, FcmToken, UserPoint, UserPointsHistory, RewardPoint
 } from '../models';
 import { Op } from 'sequelize';
-import { sequelize } from '../utils/db';
+import sequelize from '../utils/db';
 import { sendInvitationEmail } from '../utils/emailNotifications';
 import { v4 as uuidv4 } from 'uuid';
 import stripe from '../utils/stripe';
+import { getS3Object } from '../utils/s3';
+import { sendNotificationToMultipleUsers } from '../utils/fcmNotification';
 
 
 /**
@@ -1123,6 +1126,634 @@ export const getTaskPool = async (event) => {
 };
 
 /**
+ * Get global default CRM automation library
+ * View all system automation templates available to all practices
+ */
+export const getGlobalAutomationLibrary = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  const query = getQuery(event);
+  const { type, enabled, limit = 100, offset = 0 } = query;
+
+  try {
+    // Build where clause - get templates that are system defaults (source = 'system')
+    const whereClause = {};
+    
+    if (type) {
+      whereClause.type = type; // Email, SMS, WhatsApp
+    }
+    
+    if (enabled !== undefined) {
+      whereClause.enabled = enabled === 'true';
+    }
+
+    // Get automation groups with source = 'system'
+    const groups = await CrmAutomationGroup.findAll({
+      where: { source: 'system' },
+      include: [
+        {
+          model: CrmAutomationGroupTemplate,
+          as: 'templates',
+          required: false
+        }
+      ],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      order: [['ordering', 'ASC'], ['title', 'ASC']]
+    });
+
+    // For each group, get the actual templates by templateKey
+    const groupsWithTemplates = await Promise.all(groups.map(async (group) => {
+      const templateKeys = group.templates?.map(t => t.templateKey) || [];
+      
+      const templates = templateKeys.length > 0 ? await CrmAutomationTemplate.findAll({
+        where: {
+          key: { [Op.in]: templateKeys },
+          ...whereClause
+        }
+      }) : [];
+
+      return {
+        id: group.id,
+        key: group.key,
+        title: group.title,
+        description: group.description,
+        enabled: group.enabled,
+        ordering: group.ordering,
+        source: group.source,
+        templateCount: templates.length,
+        templates: templates.map(template => ({
+          id: template.id,
+          key: template.key,
+          type: template.type,
+          name: template.name,
+          subject: template.subject,
+          sending: template.sending,
+          enabled: template.enabled,
+          whatsappTemplateName: template.whatsappTemplateName,
+          trigger: template.trigger
+        }))
+      };
+    }));
+
+    // Get statistics
+    const totalTemplates = await CrmAutomationTemplate.count();
+    const enabledTemplates = await CrmAutomationTemplate.count({ where: { enabled: true } });
+
+    return success({
+      totalGroups: groupsWithTemplates.length,
+      totalTemplates: totalTemplates,
+      enabledTemplates: enabledTemplates,
+      disabledTemplates: totalTemplates - enabledTemplates,
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      groups: groupsWithTemplates
+    });
+  } catch (err) {
+    console.error('Get global automation library error:', err);
+    return error(500, err.message);
+  }
+};
+
+/**
+ * Get practice-specific CRM automation library
+ * View automation templates for a specific organisation
+ */
+export const getPracticeAutomationLibrary = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  const query = getQuery(event);
+  const { organisationId, type, enabled, limit = 100, offset = 0 } = query;
+
+  if (!organisationId) {
+    return error(400, "organisationId is required");
+  }
+
+  try {
+    // Get organisation details
+    const organisation = await Organisation.findByPk(organisationId, {
+      attributes: ['id', 'name']
+    });
+
+    if (!organisation) {
+      return error(404, "Organisation not found");
+    }
+
+    // Build where clause for templates
+    const templateWhere = {};
+    
+    if (type) {
+      templateWhere.type = type;
+    }
+    
+    if (enabled !== undefined) {
+      templateWhere.enabled = enabled === 'true';
+    }
+
+    // Get automation groups for this organisation
+    const groups = await CrmAutomationGroup.findAll({
+      where: { organisationId: parseInt(organisationId) },
+      include: [
+        {
+          model: CrmAutomationGroupTemplate,
+          as: 'templates',
+          required: false
+        }
+      ],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      order: [['ordering', 'ASC'], ['title', 'ASC']]
+    });
+
+    // For each group, get the actual templates by templateKey
+    const groupsWithTemplates = await Promise.all(groups.map(async (group) => {
+      const templateKeys = group.templates?.map(t => t.templateKey) || [];
+      
+      const templates = templateKeys.length > 0 ? await CrmAutomationTemplate.findAll({
+        where: {
+          key: { [Op.in]: templateKeys },
+          organisationId: parseInt(organisationId),
+          ...templateWhere
+        }
+      }) : [];
+
+      return {
+        id: group.id,
+        key: group.key,
+        title: group.title,
+        description: group.description,
+        enabled: group.enabled,
+        ordering: group.ordering,
+        source: group.source,
+        templateCount: templates.length,
+        templates: templates.map(template => ({
+          id: template.id,
+          key: template.key,
+          type: template.type,
+          name: template.name,
+          subject: template.subject,
+          sending: template.sending,
+          enabled: template.enabled,
+          whatsappTemplateName: template.whatsappTemplateName,
+          trigger: template.trigger
+        }))
+      };
+    }));
+
+    // Get statistics for this org
+    const totalTemplates = await CrmAutomationTemplate.count({ 
+      where: { organisationId: parseInt(organisationId) } 
+    });
+    const enabledTemplates = await CrmAutomationTemplate.count({ 
+      where: { organisationId: parseInt(organisationId), enabled: true } 
+    });
+
+    return success({
+      organisationId: organisation.id,
+      organisationName: organisation.name,
+      totalGroups: groupsWithTemplates.length,
+      totalTemplates: totalTemplates,
+      enabledTemplates: enabledTemplates,
+      disabledTemplates: totalTemplates - enabledTemplates,
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      groups: groupsWithTemplates
+    });
+  } catch (err) {
+    console.error('Get practice automation library error:', err);
+    return error(500, err.message);
+  }
+};
+
+/**
+ * Activate or deactivate a CRM automation template
+ * Controls whether an automation template is active
+ */
+export const toggleAutomationTemplate = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  const body = await readBody(event);
+  const { templateId, enabled } = body;
+
+  if (!templateId) {
+    return error(400, "templateId is required");
+  }
+
+  if (enabled === undefined) {
+    return error(400, "enabled is required (true or false)");
+  }
+
+  try {
+    const template = await CrmAutomationTemplate.findByPk(templateId);
+
+    if (!template) {
+      return error(404, "Automation template not found");
+    }
+
+    // Update enabled status
+    template.enabled = enabled;
+    await template.save();
+
+    return success({
+      message: `Automation template ${enabled ? 'activated' : 'deactivated'} successfully`,
+      template: {
+        id: template.id,
+        key: template.key,
+        name: template.name,
+        type: template.type,
+        enabled: template.enabled,
+        updatedBy: admin.userId,
+        updatedAt: template.updatedAt
+      }
+    });
+  } catch (err) {
+    console.error('Toggle automation template error:', err);
+    return error(500, err.message);
+  }
+};
+
+/**
+ * Get storage usage per practice
+ * Track Flossly Docs storage usage for each organisation
+ */
+export const getStorageUsagePerPractice = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  const query = getQuery(event);
+  const { organisationId, includeDetails = 'false' } = query;
+
+  try {
+    let whereClause = {};
+    
+    // Filter by specific organisation if provided
+    if (organisationId) {
+      whereClause.organisationId = parseInt(organisationId);
+    }
+
+    // Get all documents
+    const documents = await UserDocument.findAll({
+      where: whereClause,
+      attributes: ['id', 'link', 'name', 'organisationId', 'createdAt']
+    });
+
+    // Get unique organisation IDs and fetch organisation details
+    const orgIds = [...new Set(documents.map(doc => doc.organisationId).filter(Boolean))];
+    const organisations = await Organisation.findAll({
+      where: { id: { [Op.in]: orgIds } },
+      attributes: ['id', 'name']
+    });
+    const orgMap = Object.fromEntries(organisations.map(o => [o.id, o.name]));
+
+    // Group documents by organisation
+    const orgGroups = {};
+    documents.forEach(doc => {
+      const orgId = doc.organisationId;
+      if (!orgGroups[orgId]) {
+        orgGroups[orgId] = {
+          organisationId: orgId,
+          organisationName: orgMap[orgId] || 'Unknown',
+          documents: []
+        };
+      }
+      orgGroups[orgId].documents.push(doc);
+    });
+
+    // Calculate storage for each organisation
+    const storageByOrg = await Promise.all(
+      Object.values(orgGroups).map(async (orgGroup) => {
+        let totalSize = 0;
+        let successCount = 0;
+        let errorCount = 0;
+        const documentDetails = [];
+
+        // Get size of each document from S3
+        for (const doc of orgGroup.documents) {
+          if (!doc.link) {
+            errorCount++;
+            continue;
+          }
+
+          try {
+            const s3Object = await getS3Object(doc.link);
+            const fileSize = s3Object.contentLength || 0;
+            totalSize += fileSize;
+            successCount++;
+
+            if (includeDetails === 'true') {
+              documentDetails.push({
+                id: doc.id,
+                name: doc.name,
+                link: doc.link,
+                sizeBytes: fileSize,
+                sizeMB: (fileSize / (1024 * 1024)).toFixed(2),
+                createdAt: doc.createdAt
+              });
+            }
+          } catch (err) {
+            console.error(`Error getting size for document ${doc.id}:`, err.message);
+            errorCount++;
+          }
+        }
+
+        return {
+          organisationId: orgGroup.organisationId,
+          organisationName: orgGroup.organisationName,
+          totalDocuments: orgGroup.documents.length,
+          successfullyScanned: successCount,
+          errors: errorCount,
+          totalSizeBytes: totalSize,
+          totalSizeMB: (totalSize / (1024 * 1024)).toFixed(2),
+          totalSizeGB: (totalSize / (1024 * 1024 * 1024)).toFixed(4),
+          ...(includeDetails === 'true' && { documents: documentDetails })
+        };
+      })
+    );
+
+    // Sort by storage size descending
+    storageByOrg.sort((a, b) => b.totalSizeBytes - a.totalSizeBytes);
+
+    // Calculate totals
+    const totalStats = storageByOrg.reduce((acc, org) => ({
+      totalDocuments: acc.totalDocuments + org.totalDocuments,
+      totalSizeBytes: acc.totalSizeBytes + org.totalSizeBytes,
+      totalOrganisations: acc.totalOrganisations + 1
+    }), { totalDocuments: 0, totalSizeBytes: 0, totalOrganisations: 0 });
+
+    return success({
+      summary: {
+        totalOrganisations: totalStats.totalOrganisations,
+        totalDocuments: totalStats.totalDocuments,
+        totalStorageBytes: totalStats.totalSizeBytes,
+        totalStorageMB: (totalStats.totalSizeBytes / (1024 * 1024)).toFixed(2),
+        totalStorageGB: (totalStats.totalSizeBytes / (1024 * 1024 * 1024)).toFixed(4)
+      },
+      organisations: storageByOrg
+    });
+  } catch (err) {
+    console.error('Get storage usage error:', err);
+    return error(500, err.message);
+  }
+};
+
+/**
+ * Admin broadcast notification
+ * Send notification to all users or filtered users via FCM and in-app
+ */
+export const broadcastNotification = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  const body = await readBody(event);
+  const { title, message, organisationId, roleId, priority = 'medium', data = {} } = body;
+
+  if (!title || !message) {
+    return error(400, "title and message are required");
+  }
+
+  try {
+    // Build user filter - include Active users and users with NULL status
+    const userWhere = { 
+      [Op.or]: [
+        { status: 'Active' },
+        { status: null }
+      ]
+    };
+    
+    if (organisationId) {
+      // Get users in specific organisation
+      const userOrgs = await UserOrganisation.findAll({
+        where: { organisationId: parseInt(organisationId) },
+        attributes: ['userId']
+      });
+      userWhere.id = { [Op.in]: userOrgs.map(uo => uo.userId) };
+    }
+    
+    if (roleId) {
+      userWhere.roleId = parseInt(roleId);
+    }
+
+    // Get target users
+    const targetUsers = await User.findAll({
+      where: userWhere,
+      attributes: ['id', 'fullName', 'email']
+    });
+
+    if (targetUsers.length === 0) {
+      return error(400, "No users found matching the criteria");
+    }
+
+    const userIds = targetUsers.map(u => u.id);
+
+    // Send FCM notifications (this will create notification records for each user)
+    let sentCount = 0;
+    let failedCount = 0;
+    const fcmResults = [];
+
+    if (userIds.length > 0) {
+      try {
+        const results = await sendNotificationToMultipleUsers({
+          userIds,
+          organisationId: organisationId || null,
+          title,
+          body: message,
+          type: 'admin_broadcast',
+          referenceType: null,
+          referenceId: null,
+          data: {
+            ...data,
+            broadcastBy: admin.userId,
+            broadcastAt: new Date().toISOString()
+          },
+          priority
+        });
+
+        // Count successes and failures from results
+        results.forEach(result => {
+          if (result.success) {
+            sentCount++;
+          } else {
+            failedCount++;
+          }
+        });
+
+        fcmResults.push(...results);
+
+        // Mark notifications as sent (only for users who received the notification successfully)
+        const successfulNotificationIds = results
+          .filter(r => r.success && r.notificationId)
+          .map(r => r.notificationId);
+        
+        if (successfulNotificationIds.length > 0) {
+          await UserNotification.update(
+            { isSent: true, sentAt: new Date() },
+            { where: { id: { [Op.in]: successfulNotificationIds } } }
+          );
+        }
+      } catch (err) {
+        console.error('FCM broadcast error:', err);
+        failedCount = userIds.length;
+      }
+    }
+
+    return success({
+      message: 'Broadcast notification sent successfully',
+      stats: {
+        totalUsers: targetUsers.length,
+        notificationsCreated: sentCount + failedCount,
+        fcmSent: sentCount,
+        fcmFailed: failedCount,
+        usersWithoutFcmTokens: targetUsers.length - sentCount - failedCount
+      },
+      broadcast: {
+        title,
+        message,
+        priority,
+        organisationId: organisationId || 'All',
+        roleId: roleId || 'All',
+        broadcastBy: admin.userId,
+        broadcastAt: new Date()
+      }
+    });
+  } catch (err) {
+    console.error('Broadcast notification error:', err);
+    return error(500, err.message);
+  }
+};
+
+/**
+ * Get notification delivery statistics
+ * Track notification delivery success/failure rates
+ */
+export const getNotificationDeliveryStats = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  const query = getQuery(event);
+  const { organisationId, startDate, endDate, type } = query;
+
+  try {
+    // Build where clause
+    const whereClause = {};
+    
+    if (organisationId) {
+      whereClause.organisationId = parseInt(organisationId);
+    }
+    
+    if (type) {
+      whereClause.type = type;
+    }
+    
+    if (startDate || endDate) {
+      whereClause.createdAt = {};
+      if (startDate) whereClause.createdAt[Op.gte] = new Date(startDate);
+      if (endDate) whereClause.createdAt[Op.lte] = new Date(endDate);
+    }
+
+    // Get statistics
+    const [
+      totalNotifications,
+      sentNotifications,
+      failedNotifications,
+      readNotifications,
+      unreadNotifications
+    ] = await Promise.all([
+      UserNotification.count({ where: whereClause }),
+      UserNotification.count({ where: { ...whereClause, isSent: true } }),
+      UserNotification.count({ where: { ...whereClause, isSent: false, errorMessage: { [Op.ne]: null } } }),
+      UserNotification.count({ where: { ...whereClause, isRead: true } }),
+      UserNotification.count({ where: { ...whereClause, isRead: false } })
+    ]);
+
+    // Get stats by type
+    const notificationsByType = await UserNotification.findAll({
+      where: whereClause,
+      attributes: [
+        'type',
+        [sequelize.fn('COUNT', sequelize.col('id')), 'count'],
+        [sequelize.fn('SUM', sequelize.literal('CASE WHEN "isSent" = true THEN 1 ELSE 0 END')), 'sent'],
+        [sequelize.fn('SUM', sequelize.literal('CASE WHEN "isRead" = true THEN 1 ELSE 0 END')), 'read']
+      ],
+      group: ['type'],
+      raw: true
+    });
+
+    // Get stats by priority
+    const notificationsByPriority = await UserNotification.findAll({
+      where: whereClause,
+      attributes: [
+        'priority',
+        [sequelize.fn('COUNT', sequelize.col('id')), 'count'],
+        [sequelize.fn('SUM', sequelize.literal('CASE WHEN "isRead" = true THEN 1 ELSE 0 END')), 'read']
+      ],
+      group: ['priority'],
+      raw: true
+    });
+
+    // Calculate rates
+    const deliveryRate = totalNotifications > 0 ? ((sentNotifications / totalNotifications) * 100).toFixed(2) + '%' : '0%';
+    const readRate = totalNotifications > 0 ? ((readNotifications / totalNotifications) * 100).toFixed(2) + '%' : '0%';
+    const failureRate = totalNotifications > 0 ? ((failedNotifications / totalNotifications) * 100).toFixed(2) + '%' : '0%';
+
+    return success({
+      summary: {
+        totalNotifications,
+        sent: sentNotifications,
+        failed: failedNotifications,
+        read: readNotifications,
+        unread: unreadNotifications,
+        deliveryRate,
+        readRate,
+        failureRate
+      },
+      byType: notificationsByType.map(item => ({
+        type: item.type,
+        total: parseInt(item.count),
+        sent: parseInt(item.sent || 0),
+        read: parseInt(item.read || 0),
+        readRate: item.count > 0 ? ((parseInt(item.read || 0) / parseInt(item.count)) * 100).toFixed(2) + '%' : '0%'
+      })),
+      byPriority: notificationsByPriority.map(item => ({
+        priority: item.priority,
+        total: parseInt(item.count),
+        read: parseInt(item.read || 0),
+        readRate: item.count > 0 ? ((parseInt(item.read || 0) / parseInt(item.count)) * 100).toFixed(2) + '%' : '0%'
+      })),
+      filters: {
+        organisationId: organisationId || 'All',
+        type: type || 'All',
+        startDate: startDate || null,
+        endDate: endDate || null
+      }
+    });
+  } catch (err) {
+    console.error('Get notification delivery stats error:', err);
+    return error(500, err.message);
+  }
+};
+
+/**
  * Admin-assisted resend invite
  * Resends invitation email to users with status "Invited"
  */
@@ -1227,3 +1858,778 @@ export const resendInvite = async (event) => {
   }
 };
 
+
+/**
+ * Deduct points from a user (Admin only - for correction/fraud)
+ * POST /api/admin/deduct-points
+ */
+export const deductPoints = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const body = await readBody(event);
+    const { userId, points, reason } = body;
+
+    // Validate input
+    if (!userId || !points || !reason) {
+      return error(400, "userId, points, and reason are required");
+    }
+
+    if (typeof points !== 'number' || points <= 0) {
+      return error(400, "Points must be a positive number");
+    }
+
+    if (reason.trim().length < 10) {
+      return error(400, "Reason must be at least 10 characters long");
+    }
+
+    // Check if user exists
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return error(404, "User not found");
+    }
+
+    // For non-super admins (roleId 17 is super admin), verify user belongs to same organization
+    // Note: Regular admins have roleId 8, super admin has roleId 17
+    if (admin.roleId !== 17) {
+      const userOrg = await UserOrganisation.findOne({
+        where: { userId }
+      });
+
+      const adminOrg = await UserOrganisation.findOne({
+        where: { userId: admin.userId }
+      });
+
+      if (!userOrg || !adminOrg || userOrg.organisationId !== adminOrg.organisationId) {
+        return error(403, "You can only deduct points from users in your organization");
+      }
+    }
+
+    // Get user's current points
+    let userPoints = await UserPoint.findOne({ where: { userId } });
+    
+    if (!userPoints) {
+      return error(404, "User has no points record");
+    }
+
+    if (userPoints.balance < points) {
+      return error(400, `Insufficient balance. User has ${userPoints.balance} points, cannot deduct ${points} points`);
+    }
+
+    // Start transaction
+    const transaction = await sequelize.transaction();
+
+    try {
+      // Deduct points from balance
+      userPoints.balance -= points;
+      await userPoints.save({ transaction });
+
+      // Create negative points history entry
+      await UserPointsHistory.create({
+        userId,
+        rewardPointId: null,
+        points: -points, // Negative value to indicate deduction
+        description: `[ADMIN DEDUCTION] ${reason} | Deducted by: ${admin.fullName || admin.email} (ID: ${admin.userId})`
+      }, { transaction });
+
+      await transaction.commit();
+
+      return success({
+        message: "Points deducted successfully",
+        user: {
+          id: user.id,
+          fullName: user.fullName,
+          email: user.email
+        },
+        pointsDeducted: points,
+        newBalance: userPoints.balance,
+        reason,
+        deductedBy: {
+          id: admin.userId,
+          name: admin.fullName || admin.email
+        },
+        timestamp: new Date()
+      });
+
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+
+  } catch (err) {
+    console.error('Deduct points error:', err);
+    return error(500, err.message || "Failed to deduct points");
+  }
+};
+
+/**
+ * Award points to a user (Admin only - for bonuses/rewards)
+ * POST /api/admin/awardPoints
+ */
+export const awardPoints = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const body = await readBody(event);
+    const { userId, points, reason, rewardPointId } = body;
+
+    // Validate input
+    if (!userId || !points || !reason) {
+      return error(400, "userId, points, and reason are required");
+    }
+
+    if (typeof points !== 'number' || points <= 0) {
+      return error(400, "Points must be a positive number");
+    }
+
+    if (reason.trim().length < 10) {
+      return error(400, "Reason must be at least 10 characters long");
+    }
+
+    // Check if user exists
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return error(404, "User not found");
+    }
+
+    // For non-super admins (roleId 17 is super admin), verify user belongs to same organization
+    // Note: Regular admins have roleId 8, super admin has roleId 17
+    if (admin.roleId !== 17) {
+      const userOrg = await UserOrganisation.findOne({
+        where: { userId }
+      });
+
+      const adminOrg = await UserOrganisation.findOne({
+        where: { userId: admin.userId }
+      });
+
+      if (!userOrg || !adminOrg || userOrg.organisationId !== adminOrg.organisationId) {
+        return error(403, "You can only award points to users in your organization");
+      }
+    }
+
+    // Verify rewardPointId if provided
+    if (rewardPointId) {
+      const rewardPoint = await RewardPoint.findByPk(rewardPointId);
+      if (!rewardPoint) {
+        return error(404, "Reward point definition not found");
+      }
+    }
+
+    // Start transaction
+    const transaction = await sequelize.transaction();
+
+    try {
+      // Get or create user's points record
+      let userPoints = await UserPoint.findOne({ where: { userId } });
+      
+      if (!userPoints) {
+        // First time earning points
+        userPoints = await UserPoint.create({
+          userId,
+          balance: points,
+          totalPointsRewarded: points,
+          redeemed: 0
+        }, { transaction });
+      } else {
+        // Add to existing balance
+        userPoints.balance += points;
+        userPoints.totalPointsRewarded += points;
+        await userPoints.save({ transaction });
+      }
+
+      // Create positive points history entry
+      await UserPointsHistory.create({
+        userId,
+        rewardPointId: rewardPointId || null,
+        points: points, // Positive value
+        description: `[ADMIN AWARD] ${reason} | Awarded by: ${admin.fullName || admin.email} (ID: ${admin.userId})`
+      }, { transaction });
+
+      await transaction.commit();
+
+      return success({
+        message: "Points awarded successfully",
+        user: {
+          id: user.id,
+          fullName: user.fullName,
+          email: user.email
+        },
+        pointsAwarded: points,
+        newBalance: userPoints.balance,
+        totalRewarded: userPoints.totalPointsRewarded,
+        reason,
+        awardedBy: {
+          id: admin.userId,
+          name: admin.fullName || admin.email
+        },
+        timestamp: new Date()
+      });
+
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+
+  } catch (err) {
+    console.error('Award points error:', err);
+    return error(500, err.message || "Failed to award points");
+  }
+};
+
+/**
+ * Get points issued by admin users (reporting)
+ * GET /api/admin/pointsIssuedByAdmin
+ */
+export const getPointsIssuedByAdmin = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const query = getQuery(event);
+    const { organisationId, startDate, endDate, adminUserId, action } = query;
+
+    // Build where clause for filtering
+    const whereClause = {};
+    
+    // Filter by organisation (super admin can see all, regular admin only their org)
+    if (admin.roleId !== 17) {
+      // Regular admin - get their organisation
+      const adminOrg = await UserOrganisation.findOne({
+        where: { userId: admin.userId }
+      });
+      if (!adminOrg) {
+        return error(404, "Admin organisation not found");
+      }
+      whereClause['$User.UserOrganisations.organisationId$'] = adminOrg.organisationId;
+    } else if (organisationId) {
+      // Super admin can filter by specific organisation
+      whereClause['$User.UserOrganisations.organisationId$'] = parseInt(organisationId);
+    }
+
+    // Filter by date range
+    if (startDate || endDate) {
+      whereClause.createdAt = {};
+      if (startDate) {
+        whereClause.createdAt[Op.gte] = new Date(startDate);
+      }
+      if (endDate) {
+        whereClause.createdAt[Op.lte] = new Date(endDate);
+      }
+    }
+
+    // Filter by specific admin user
+    if (adminUserId) {
+      whereClause.description = {
+        [Op.like]: `%ID: ${adminUserId}%`
+      };
+    }
+
+    // Filter by action type (AWARD or DEDUCTION)
+    if (action) {
+      if (action === 'award') {
+        whereClause.description = {
+          [Op.like]: '%[ADMIN AWARD]%'
+        };
+      } else if (action === 'deduct') {
+        whereClause.description = {
+          [Op.like]: '%[ADMIN DEDUCTION]%'
+        };
+      }
+    }
+
+    // Get all admin-issued points history
+    const pointsHistory = await UserPointsHistory.findAll({
+      where: whereClause,
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'fullName', 'email'],
+          include: [
+            {
+              model: UserOrganisation,
+              as: 'userOrganisations',
+              attributes: ['organisationId'],
+              include: [
+                {
+                  model: Organisation,
+                  as: 'organisation',
+                  attributes: ['id', 'name']
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    // Parse and aggregate data
+    const adminStats = {};
+    const orgStats = {};
+    let totalAwarded = 0;
+    let totalDeducted = 0;
+    const transactions = [];
+
+    pointsHistory.forEach(record => {
+      const description = record.description || '';
+      
+      // Only process admin-issued points
+      if (!description.includes('[ADMIN AWARD]') && !description.includes('[ADMIN DEDUCTION]')) {
+        return;
+      }
+
+      const isAward = description.includes('[ADMIN AWARD]');
+      const points = Math.abs(record.points);
+      
+      // Extract admin info from description
+      const adminMatch = description.match(/by: (.+?) \(ID: (\d+)\)/);
+      const adminName = adminMatch ? adminMatch[1] : 'Unknown';
+      const adminId = adminMatch ? parseInt(adminMatch[2]) : null;
+
+      // Track by admin user
+      if (adminId) {
+        if (!adminStats[adminId]) {
+          adminStats[adminId] = {
+            adminId,
+            adminName,
+            totalAwarded: 0,
+            totalDeducted: 0,
+            transactionCount: 0
+          };
+        }
+        
+        if (isAward) {
+          adminStats[adminId].totalAwarded += points;
+          totalAwarded += points;
+        } else {
+          adminStats[adminId].totalDeducted += points;
+          totalDeducted += points;
+        }
+        adminStats[adminId].transactionCount++;
+      }
+
+      // Track by organisation
+      const userOrg = record.user?.userOrganisations?.[0];
+      if (userOrg && userOrg.organisation) {
+        const orgId = userOrg.organisation.id;
+        const orgName = userOrg.organisation.name;
+        
+        if (!orgStats[orgId]) {
+          orgStats[orgId] = {
+            organisationId: orgId,
+            organisationName: orgName,
+            totalAwarded: 0,
+            totalDeducted: 0,
+            transactionCount: 0
+          };
+        }
+        
+        if (isAward) {
+          orgStats[orgId].totalAwarded += points;
+        } else {
+          orgStats[orgId].totalDeducted += points;
+        }
+        orgStats[orgId].transactionCount++;
+      }
+
+      // Add to transactions list
+      transactions.push({
+        id: record.id,
+        userId: record.userId,
+        userName: record.user?.fullName || 'Unknown',
+        userEmail: record.user?.email,
+        organisationId: userOrg?.organisation?.id,
+        organisationName: userOrg?.organisation?.name,
+        points: record.points,
+        action: isAward ? 'award' : 'deduct',
+        description: record.description,
+        adminName,
+        adminId,
+        createdAt: record.createdAt
+      });
+    });
+
+    return success({
+      summary: {
+        totalAwarded,
+        totalDeducted,
+        netChange: totalAwarded - totalDeducted,
+        transactionCount: transactions.length
+      },
+      byAdmin: Object.values(adminStats).sort((a, b) => 
+        (b.totalAwarded + b.totalDeducted) - (a.totalAwarded + a.totalDeducted)
+      ),
+      byOrganisation: Object.values(orgStats).sort((a, b) => 
+        (b.totalAwarded + b.totalDeducted) - (a.totalAwarded + a.totalDeducted)
+      ),
+      transactions
+    });
+
+  } catch (err) {
+    console.error('Get points issued by admin error:', err);
+    return error(500, err.message || "Failed to get points issued by admin");
+  }
+};
+
+/**
+ * Get points totals by practice (reporting)
+ * GET /api/admin/pointsTotalsByPractice
+ */
+export const getPointsTotalsByPractice = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const query = getQuery(event);
+    const { organisationId, sortBy = 'totalPoints' } = query;
+
+    // Build organisation filter
+    let orgFilter = {};
+    if (admin.roleId !== 17) {
+      // Regular admin - only their organisation
+      const adminOrg = await UserOrganisation.findOne({
+        where: { userId: admin.userId }
+      });
+      if (!adminOrg) {
+        return error(404, "Admin organisation not found");
+      }
+      orgFilter = { id: adminOrg.organisationId };
+    } else if (organisationId) {
+      // Super admin filtering by specific org
+      orgFilter = { id: parseInt(organisationId) };
+    }
+
+    // Get all organisations with user point data
+    const organisations = await Organisation.findAll({
+      where: orgFilter,
+      attributes: ['id', 'name'],
+      include: [
+        {
+          model: UserOrganisation,
+          as: 'userOrganisations',
+          attributes: ['userId'],
+          include: [
+            {
+              model: User,
+              as: 'user',
+              attributes: ['id', 'fullName', 'email'],
+              include: [
+                {
+                  model: UserPoint,
+                  as: 'userPoints',
+                  attributes: ['balance', 'totalPointsRewarded', 'redeemed']
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    const practiceStats = organisations.map(org => {
+      const users = org.userOrganisations || [];
+      
+      let totalBalance = 0;
+      let totalRewarded = 0;
+      let totalRedeemed = 0;
+      let usersWithPoints = 0;
+
+      users.forEach(userOrg => {
+        const user = userOrg.user;
+        if (user && user.userPoints) {
+          totalBalance += user.userPoints.balance || 0;
+          totalRewarded += user.userPoints.totalPointsRewarded || 0;
+          totalRedeemed += user.userPoints.redeemed || 0;
+          usersWithPoints++;
+        }
+      });
+
+      return {
+        organisationId: org.id,
+        organisationName: org.name,
+        totalUsers: users.length,
+        usersWithPoints,
+        totalBalance,
+        totalPointsRewarded: totalRewarded,
+        totalPointsRedeemed: totalRedeemed,
+        averageBalancePerUser: usersWithPoints > 0 ? Math.round(totalBalance / usersWithPoints) : 0,
+        averageRewardedPerUser: usersWithPoints > 0 ? Math.round(totalRewarded / usersWithPoints) : 0
+      };
+    });
+
+    // Sort results
+    const sortField = {
+      'totalPoints': 'totalPointsRewarded',
+      'balance': 'totalBalance',
+      'redeemed': 'totalPointsRedeemed',
+      'users': 'usersWithPoints'
+    }[sortBy] || 'totalPointsRewarded';
+
+    practiceStats.sort((a, b) => b[sortField] - a[sortField]);
+
+    // Calculate grand totals
+    const grandTotals = practiceStats.reduce((acc, org) => ({
+      totalOrganisations: acc.totalOrganisations + 1,
+      totalUsers: acc.totalUsers + org.totalUsers,
+      totalUsersWithPoints: acc.totalUsersWithPoints + org.usersWithPoints,
+      totalBalance: acc.totalBalance + org.totalBalance,
+      totalPointsRewarded: acc.totalPointsRewarded + org.totalPointsRewarded,
+      totalPointsRedeemed: acc.totalPointsRedeemed + org.totalPointsRedeemed
+    }), {
+      totalOrganisations: 0,
+      totalUsers: 0,
+      totalUsersWithPoints: 0,
+      totalBalance: 0,
+      totalPointsRewarded: 0,
+      totalPointsRedeemed: 0
+    });
+
+    return success({
+      grandTotals,
+      practices: practiceStats
+    });
+
+  } catch (err) {
+    console.error('Get points totals by practice error:', err);
+    return error(500, err.message || "Failed to get points totals by practice");
+  }
+};
+
+/**
+ * Search organisations by name (paginated)
+ * GET /api/admin/searchOrganisations
+ */
+export const searchOrganisations = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const query = getQuery(event);
+    const { search = '', page = 1, limit = 20 } = query;
+
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    // Build where clause
+    const whereClause = {};
+    
+    // For non-super admins, only show their organisation
+    if (admin.roleId !== 17) {
+      const adminOrg = await UserOrganisation.findOne({
+        where: { userId: admin.userId }
+      });
+      if (!adminOrg) {
+        return error(404, "Admin organisation not found");
+      }
+      whereClause.id = adminOrg.organisationId;
+    }
+
+    // Add name search if provided
+    if (search.trim()) {
+      whereClause.name = {
+        [Op.iLike]: `%${search.trim()}%`
+      };
+    }
+
+    // Get organisations with pagination
+    const { count, rows: organisations } = await Organisation.findAndCountAll({
+      where: whereClause,
+      attributes: ['id', 'name', 'contact', 'address', 'postalCode', 'type', 'status', 'createdAt'],
+      order: [['name', 'ASC']],
+      limit: parseInt(limit),
+      offset
+    });
+
+    return success({
+      organisations,
+      pagination: {
+        total: count,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(count / parseInt(limit))
+      }
+    });
+
+  } catch (err) {
+    console.error('Search organisations error:', err);
+    return error(500, err.message || "Failed to search organisations");
+  }
+};
+
+/**
+ * Get organisation by ID
+ * GET /api/admin/getOrganisationById?id=5
+ */
+export const getOrganisationById = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const query = getQuery(event);
+    const { id } = query;
+
+    if (!id) {
+      return error(400, "Organisation ID is required");
+    }
+
+    // For non-super admins, verify they can access this organisation
+    if (admin.roleId !== 17) {
+      const adminOrg = await UserOrganisation.findOne({
+        where: { userId: admin.userId }
+      });
+      
+      if (!adminOrg || adminOrg.organisationId !== parseInt(id)) {
+        return error(403, "You can only access your own organisation");
+      }
+    }
+
+    // Get organisation with user count
+    const organisation = await Organisation.findByPk(parseInt(id), {
+      attributes: ['id', 'name', 'contact', 'address', 'postalCode', 'description', 'type', 'status', 'surgeryCount', 'teamCount', 'managerId', 'createdAt', 'updatedAt'],
+      include: [
+        {
+          model: UserOrganisation,
+          as: 'userOrganisations',
+          attributes: ['userId', 'createdAt'],
+          include: [
+            {
+              model: User,
+              as: 'user',
+              attributes: ['id', 'fullName', 'email', 'status']
+            }
+          ]
+        }
+      ]
+    });
+
+    if (!organisation) {
+      return error(404, "Organisation not found");
+    }
+
+    // Format response
+    const users = organisation.userOrganisations?.map(uo => ({
+      userId: uo.user?.id,
+      fullName: uo.user?.fullName,
+      email: uo.user?.email,
+      status: uo.user?.status,
+      joinedAt: uo.createdAt
+    })) || [];
+
+    return success({
+      organisation: {
+        id: organisation.id,
+        name: organisation.name,
+        contact: organisation.contact,
+        address: organisation.address,
+        postalCode: organisation.postalCode,
+        description: organisation.description,
+        type: organisation.type,
+        status: organisation.status,
+        surgeryCount: organisation.surgeryCount,
+        teamCount: organisation.teamCount,
+        managerId: organisation.managerId,
+        createdAt: organisation.createdAt,
+        updatedAt: organisation.updatedAt,
+        userCount: users.length,
+        users
+      }
+    });
+
+  } catch (err) {
+    console.error('Get organisation by ID error:', err);
+    return error(500, err.message || "Failed to get organisation");
+  }
+};
+
+/**
+ * Search roles by name (paginated)
+ * GET /api/admin/searchRoles
+ */
+export const searchRoles = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const query = getQuery(event);
+    const { search = '', page = 1, limit = 20 } = query;
+
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    // Build where clause
+    const whereClause = {};
+    
+    // Add title search if provided
+    if (search.trim()) {
+      whereClause.title = {
+        [Op.iLike]: `%${search.trim()}%`
+      };
+    }
+
+    // Get roles with pagination
+    const { count, rows: roles } = await Role.findAndCountAll({
+      where: whereClause,
+      attributes: ['id', 'title', 'roleType', 'description', 'icon', 'color', 'createdAt'],
+      order: [['title', 'ASC']],
+      limit: parseInt(limit),
+      offset
+    });
+
+    // Get user count for each role
+    const rolesWithCounts = await Promise.all(
+      roles.map(async (role) => {
+        const userCount = await User.count({
+          where: { roleId: role.id }
+        });
+        
+        return {
+          id: role.id,
+          title: role.title,
+          roleType: role.roleType,
+          description: role.description,
+          icon: role.icon,
+          color: role.color,
+          userCount,
+          createdAt: role.createdAt
+        };
+      })
+    );
+
+    return success({
+      roles: rolesWithCounts,
+      pagination: {
+        total: count,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(count / parseInt(limit))
+      }
+    });
+
+  } catch (err) {
+    console.error('Search roles error:', err);
+    return error(500, err.message || "Failed to search roles");
+  }
+};
