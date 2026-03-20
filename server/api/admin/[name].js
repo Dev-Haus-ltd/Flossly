@@ -13,7 +13,20 @@ import {
   getUsageMetrics,
   exportOrgTasks,
   exportAllTasks,
-  getTaskPool
+  getTaskPool,
+  getGlobalAutomationLibrary,
+  getPracticeAutomationLibrary,
+  toggleAutomationTemplate,
+  getStorageUsagePerPractice,
+  broadcastNotification,
+  getNotificationDeliveryStats,
+  deductPoints,
+  awardPoints,
+  getPointsIssuedByAdmin,
+  getPointsTotalsByPractice,
+  searchOrganisations,
+  getOrganisationById,
+  searchRoles
 } from '../../controllers/admin';
 
 export default defineEventHandler(async (event) => {
@@ -29,6 +42,15 @@ export default defineEventHandler(async (event) => {
     
     case 'updateUserStatus':
       return await updateUserStatus(event);
+    
+    case 'searchOrganisations':
+      return await searchOrganisations(event);
+    
+    case 'getOrganisationById':
+      return await getOrganisationById(event);
+    
+    case 'searchRoles':
+      return await searchRoles(event);
     
     case 'getUserLoginHistory':
       return await getUserLoginHistory(event);
@@ -59,6 +81,16 @@ export default defineEventHandler(async (event) => {
     case 'getUsageMetrics':
       return await getUsageMetrics(event);
     
+    case 'getStorageUsagePerPractice':
+      return await getStorageUsagePerPractice(event);
+    
+    // Notifications
+    case 'broadcastNotification':
+      return await broadcastNotification(event);
+    
+    case 'getNotificationDeliveryStats':
+      return await getNotificationDeliveryStats(event);
+    
     // Export Data
     case 'exportOrgTasks':
       return await exportOrgTasks(event);
@@ -69,6 +101,29 @@ export default defineEventHandler(async (event) => {
     // Task Pool
     case 'getTaskPool':
       return await getTaskPool(event);
+    
+    // CRM Automation Library
+    case 'getGlobalAutomationLibrary':
+      return await getGlobalAutomationLibrary(event);
+    
+    case 'getPracticeAutomationLibrary':
+      return await getPracticeAutomationLibrary(event);
+    
+    case 'toggleAutomationTemplate':
+      return await toggleAutomationTemplate(event);
+    
+    // Points Management
+    case 'deductPoints':
+      return await deductPoints(event);
+    
+    case 'awardPoints':
+      return await awardPoints(event);
+    
+    case 'pointsIssuedByAdmin':
+      return await getPointsIssuedByAdmin(event);
+    
+    case 'pointsTotalsByPractice':
+      return await getPointsTotalsByPractice(event);
 
     // 404 for unknown endpoints
     default:
