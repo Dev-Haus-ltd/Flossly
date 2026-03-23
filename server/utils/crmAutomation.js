@@ -307,6 +307,9 @@ const resolveBirthdayMonthBase = (lead, today) => {
 
 export const shouldSendCrmTemplate = ({ lead, tpl, trigger, today, org }) => {
   if (!trigger) return { due: false, sentKey: null };
+  if (trigger.type === "send_now") {
+    return { due: true, sentKey: tpl.key };
+  }
   if (trigger.type === "inquiry_days") {
     if (!lead?.inquiryDate) return { due: false, sentKey: tpl.key };
     const d = daysSince(today, lead.inquiryDate);
