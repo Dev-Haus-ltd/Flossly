@@ -137,6 +137,8 @@ const normalizeAutomationTrigger = (trigger) => {
     return Number.isFinite(num) ? num : fallback
   }
   switch (type) {
+    case 'send_now':
+      return { type }
     case 'inquiry_days':
     case 'birthday_offset':
       return { type, days: safeNumber(trigger.days, 0) }
