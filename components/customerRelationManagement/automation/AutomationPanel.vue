@@ -359,6 +359,7 @@ const props = defineProps({
   disableToggle: { type: Boolean, default: false },
 })
 const crmStore = useCrmStore()
+const mainStore = useMainStore()
 const orgStore = useOrgStore()
 const emit = defineEmits(['update:rows','save','edit-group','delete-group'])
 
@@ -1032,14 +1033,82 @@ const saveTrigger = async () => {
   try {
     triggerSaving.value = true
     const nextTrigger = buildTriggerFromForm()
+    const isSendNow = nextTrigger?.type === 'send_now'
     triggerEditingRow.value.trigger = nextTrigger
     triggerEditingRow.value.sending = formatCrmTriggerPreview(nextTrigger)
+    if (isSendNow) {
+      // "Send Now" should dispatch immediately, so ensure row is enabled.
+      triggerEditingRow.value.enabled = true
+    }
     const payload = buildPayload(triggerEditingRow.value)
-    await crmStore.saveAutomation(payload)
+    const res = await crmStore.saveAutomation(payload)
+    if (res?.code !== 0) {
+      mainStore?.setSnackbar?.({
+        title: res?.error || res?.message || 'Failed to save trigger',
+        type: 'error',
+      })
+      return
+    }
     closeTriggerDialog()
+    if (!isSendNow) return
+    const jobId = String(res?.data?.sendNowJob?.jobId || '').trim()
+    if (!jobId) {
+      mainStore?.setSnackbar?.({
+        title: 'Send now is running. Please check again in a moment.',
+        type: 'info',
+      })
+      return
+    }
+    mainStore?.setSnackbar?.({
+      title: 'Send now started. Checking delivery status...',
+      type: 'info',
+    })
+    const done = await pollSendNowStatus(jobId)
+    if (done?.status === 'completed') {
+      const sent = Number(done?.result?.sent || 0)
+      const failed = Number(done?.result?.failed || 0)
+      const skipped = Number(done?.result?.skippedAlreadySent || 0) + Number(done?.result?.skippedMissingRecipient || 0)
+      const chunks = []
+      if (sent) chunks.push(`${sent} sent`)
+      if (failed) chunks.push(`${failed} failed`)
+      if (skipped) chunks.push(`${skipped} skipped`)
+      mainStore?.setSnackbar?.({
+        title: chunks.length ? chunks.join(' - ') : 'Send now completed',
+        type: failed ? 'warning' : 'success',
+      })
+      return
+    }
+    const errMsg = done?.error || 'Send now failed. Please try again.'
+    mainStore?.setSnackbar?.({
+      title: errMsg,
+      type: 'error',
+    })
+  } catch (e) {
+    mainStore?.setSnackbar?.({
+      title: e?.data?.message || e?.message || 'Failed to save trigger',
+      type: 'error',
+    })
   } finally {
     triggerSaving.value = false
   }
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const pollSendNowStatus = async (jobId) => {
+  const maxAttempts = 40
+  const intervalMs = 1500
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const res = await crmStore.getAutomationSendNowStatus({ jobId })
+    if (res?.code === 0 && res?.data) {
+      const status = String(res.data.status || '').toLowerCase()
+      if (status === 'completed' || status === 'failed') return res.data
+    } else if (res?.code === 404) {
+      return { status: 'failed', error: 'Send now status expired. Please check email logs.' }
+    }
+    await sleep(intervalMs)
+  }
+  return { status: 'failed', error: 'Send now is taking longer than expected. Please check again shortly.' }
 }
 
 const onNameUpdate = async (item) => {

@@ -436,6 +436,15 @@ export const dispatchSendNowAutomation = async (orgId, tpl) => {
   const org = await Organisation.findByPk(Number(orgId));
   const waConfig = await resolveWhatsAppProviderConfig(orgId);
   const batchSize = 500;
+  const summary = {
+    orgId: Number(orgId),
+    key: String(tpl?.key || ""),
+    totalLeads: 0,
+    sent: 0,
+    skippedAlreadySent: 0,
+    skippedMissingRecipient: 0,
+    failed: 0,
+  };
   let offset = 0;
   while (true) {
     const leads = await CrmLead.findAll({
@@ -446,34 +455,51 @@ export const dispatchSendNowAutomation = async (orgId, tpl) => {
     });
     if (!leads.length) break;
     for (const lead of leads) {
+      summary.totalLeads += 1;
       const raw = lead.rawData || {};
       const sentKey = tpl.key;
-      if (hasCrmSent(raw, sentKey)) continue;
+      if (hasCrmSent(raw, sentKey)) {
+        summary.skippedAlreadySent += 1;
+        continue;
+      }
       try {
         const type = String(tpl?.type || "Email").toLowerCase();
         if (type === "whatsapp") {
-          if (!lead?.telephone) continue;
+          if (!lead?.telephone) {
+            summary.skippedMissingRecipient += 1;
+            continue;
+          }
           const message = buildCrmWhatsAppMessage(lead, tpl, org);
           const templatePayload =
             waConfig?.provider === "meta"
               ? buildCrmWhatsAppTemplatePayload(lead, tpl)
               : null;
-          if (waConfig?.provider === "meta" && !templatePayload) continue;
+          if (waConfig?.provider === "meta" && !templatePayload) {
+            summary.skippedMissingRecipient += 1;
+            continue;
+          }
           await sendCrmAutomationWhatsApp(lead, message, templatePayload, tpl?.name);
           await markCrmSent(lead, raw, sentKey);
+          summary.sent += 1;
         } else {
-          if (!lead?.email) continue;
+          if (!lead?.email) {
+            summary.skippedMissingRecipient += 1;
+            continue;
+          }
           const { subject, html } = buildCrmEmail(lead, tpl, org);
           await sendCrmAutomationEmail(lead, subject, html, tpl?.name);
           await markCrmSent(lead, raw, sentKey);
+          summary.sent += 1;
         }
       } catch (e) {
+        summary.failed += 1;
         console.error("[CRM send_now] failed for lead", lead.id, e?.message);
       }
     }
     offset += leads.length;
     if (leads.length < batchSize) break;
   }
+  return summary;
 };
 
 export const sendImmediateCrmAutomationsForLead = async (lead) => {
