@@ -26,7 +26,13 @@ import {
   getPointsTotalsByPractice,
   searchOrganisations,
   getOrganisationById,
-  searchRoles
+  searchRoles,
+  adminBulkUploadTasks,
+  downloadAdminTaskTemplate,
+  getDefaultPriorities,
+  getDefaultStatuses,
+  updateDefaultPriority,
+  updateDefaultStatus
 } from '../../controllers/admin';
 
 export default defineEventHandler(async (event) => {
@@ -124,6 +130,27 @@ export default defineEventHandler(async (event) => {
     
     case 'pointsTotalsByPractice':
       return await getPointsTotalsByPractice(event);
+
+    // Admin Bulk Task Upload
+    case 'bulkUploadTasks':
+      return await adminBulkUploadTasks(event);
+    
+    case 'downloadTaskTemplate':
+      return await downloadAdminTaskTemplate(event);
+
+    // Default Priorities Management
+    case 'getDefaultPriorities':
+      return await getDefaultPriorities(event);
+    
+    case 'updateDefaultPriority':
+      return await updateDefaultPriority(event);
+
+    // Default Statuses Management
+    case 'getDefaultStatuses':
+      return await getDefaultStatuses(event);
+    
+    case 'updateDefaultStatus':
+      return await updateDefaultStatus(event);
 
     // 404 for unknown endpoints
     default:

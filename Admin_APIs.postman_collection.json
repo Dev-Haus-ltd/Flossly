@@ -513,56 +513,6 @@
       "description": "Monitor organisations subscriptions, trials, and seat limits"
     },
     {
-      "name": "Task Pool",
-      "item": [
-        {
-          "name": "Get Task Pool (Super Admin)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/admin/getTaskPool?limit=100&offset=0",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "admin",
-                "getTaskPool"
-              ],
-              "query": [
-                {
-                  "key": "limit",
-                  "value": "100",
-                  "description": "Results per page (default: 100)"
-                },
-                {
-                  "key": "offset",
-                  "value": "0",
-                  "description": "Pagination offset (default: 0)"
-                },
-                {
-                  "key": "categoryId",
-                  "value": "5",
-                  "description": "Filter by category ID (optional)",
-                  "disabled": true
-                },
-                {
-                  "key": "roleId",
-                  "value": "3",
-                  "description": "Filter by role ID (optional)",
-                  "disabled": true
-                }
-              ]
-            },
-            "description": "View global task pool (Super Admin). Shows all template/predefined tasks that can be assigned to users across all practices. The task pool is centrally managed and shared by all organisations."
-          },
-          "response": []
-        }
-      ],
-      "description": "View global task pool templates managed by super admin"
-    },
-    {
       "name": "Data Export",
       "item": [
         {
@@ -1004,6 +954,218 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Task Pool",
+      "item": [
+        {
+          "name": "Get Task Pool (Super Admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getTaskPool?limit=100&offset=0",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getTaskPool"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Results per page (default: 100)"
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "description": "Pagination offset (default: 0)"
+                },
+                {
+                  "key": "categoryId",
+                  "value": "5",
+                  "description": "Filter by category ID (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "roleId",
+                  "value": "3",
+                  "description": "Filter by role ID (optional)",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "View global task pool (Super Admin). Shows all template/predefined tasks that can be assigned to users across all practices."
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk Upload Tasks (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "CSV file with columns: title, description, categoryId, roleId, defaultFrequency"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/bulkUploadTasks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "bulkUploadTasks"
+              ]
+            },
+            "description": "Upload multiple tasks from CSV file. Creates tasks in the task pool WITHOUT user assignment. Requires categoryId to specify the task category."
+          },
+          "response": [],
+          "body": {
+            "formdata": [
+              {
+                "description": "CSV file with columns: title, description, categoryId, roleId, defaultFrequency"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Download Task Template (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/downloadTaskTemplate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "downloadTaskTemplate"
+              ]
+            },
+            "description": "Download CSV template for bulk task upload. Template does NOT include user column."
+          },
+          "response": []
+        }
+      ],
+      "description": "Manage global task pool and bulk task uploads"
+    },
+    {
+      "name": "Default Priorities & Statuses",
+      "item": [
+        {
+          "name": "Get Default Priorities",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getDefaultPriorities",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getDefaultPriorities"
+              ]
+            },
+            "description": "Get all default priorities. These are the master priorities that all organisations inherit."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Default Statuses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getDefaultStatuses",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getDefaultStatuses"
+              ]
+            },
+            "description": "Get all default statuses. These are the master statuses that all organisations inherit."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Default Priority",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"name\": \"Critical\",\n  \"color\": \"#FF0000\",\n  \"sortOrder\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/updateDefaultPriority",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "updateDefaultPriority"
+              ]
+            },
+            "description": "Update a default priority. Changes cascade to ALL organisation priorities with the same key."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Default Status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"name\": \"To Do\",\n  \"color\": \"#808080\",\n  \"description\": \"Task pending completion\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/updateDefaultStatus",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "updateDefaultStatus"
+              ]
+            },
+            "description": "Update a default status. Changes cascade to ALL organisation statuses with the same key."
+          },
+          "response": []
+        }
+      ],
+      "description": "Manage default priorities and statuses that cascade to all organisations"
     }
   ],
   "event": [

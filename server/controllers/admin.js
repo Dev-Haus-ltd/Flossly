@@ -2633,3 +2633,340 @@ export const searchRoles = async (event) => {
     return error(500, err.message || "Failed to search roles");
   }
 };
+
+// ============================================
+// Admin Bulk Task Upload (No User Assignment)
+// ============================================
+
+/**
+ * Admin bulk task upload from CSV
+ * This endpoint creates tasks in the task pool WITHOUT user assignment
+ * Unlike the regular bulk upload, this doesn't require a user column
+ */
+export const adminBulkUploadTasks = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const formidable = (await import('formidable')).default;
+    const fs = await import('fs');
+    const { parse } = await import('csv-parse');
+
+    const form = formidable({ multiples: false });
+    const [fields, files] = await new Promise((resolve, reject) => {
+      form.parse(event.node.req, (err, fields, files) => {
+        if (err) reject(err);
+        else resolve([fields, files]);
+      });
+    });
+
+    const file = files.file[0];
+    if (!file) {
+      return error(400, "No CSV file provided");
+    }
+
+    // Parse CSV
+    const records = await new Promise((resolve, reject) => {
+      const results = [];
+      fs.createReadStream(file.filepath)
+        .pipe(parse({ columns: true, trim: true }))
+        .on("data", (data) => results.push(data))
+        .on("end", () => resolve(results))
+        .on("error", (err) => reject(err));
+    });
+
+    if (!records || records.length === 0) {
+      return error(400, "CSV file is empty or invalid");
+    }
+
+    // Validate and prepare tasks for insertion
+    const tasksToInsert = [];
+    const errors = [];
+
+    for (let i = 0; i < records.length; i++) {
+      const record = records[i];
+      const rowNum = i + 2; // +2 because row 1 is header and index starts at 0
+
+      // Validate required fields
+      if (!record.title || !record.title.trim()) {
+        errors.push(`Row ${rowNum}: Title is required`);
+        continue;
+      }
+
+      // Validate categoryId is required
+      if (!record.categoryId || !record.categoryId.trim()) {
+        errors.push(`Row ${rowNum}: categoryId is required`);
+        continue;
+      }
+
+      const categoryId = Number(record.categoryId);
+      if (isNaN(categoryId)) {
+        errors.push(`Row ${rowNum}: Invalid categoryId - must be a number`);
+        continue;
+      }
+
+      // Prepare task object
+      const taskData = {
+        title: record.title.trim(),
+        description: record.description ? record.description.trim() : null,
+        categoryId: categoryId,
+        roleId: record.roleId ? Number(record.roleId) : null,
+        defaultFrequency: record.defaultFrequency || null,
+        isSystemTask: true, // Admin uploaded tasks are system tasks (visible in task pool)
+      };
+
+      // Validate roleId if provided
+      if (record.roleId && isNaN(Number(record.roleId))) {
+        errors.push(`Row ${rowNum}: Invalid roleId`);
+        continue;
+      }
+
+      tasksToInsert.push(taskData);
+    }
+
+    // If there are validation errors, return them
+    if (errors.length > 0 && tasksToInsert.length === 0) {
+      return error(400, `Validation errors: ${errors.join(', ')}`);
+    }
+
+    // Insert tasks into database
+    let createdTasks = [];
+    if (tasksToInsert.length > 0) {
+      createdTasks = await Task.bulkCreate(tasksToInsert);
+    }
+
+    return success({
+      message: `Successfully uploaded ${createdTasks.length} tasks`,
+      created: createdTasks.length,
+      errors: errors.length > 0 ? errors : undefined,
+      tasks: createdTasks.map(t => ({
+        id: t.id,
+        title: t.title,
+        categoryId: t.categoryId,
+        roleId: t.roleId,
+        defaultFrequency: t.defaultFrequency
+      }))
+    });
+
+  } catch (err) {
+    console.error('Admin bulk upload tasks error:', err);
+    return error(500, err.message || "Failed to upload tasks");
+  }
+};
+
+/**
+ * Download CSV template for admin bulk task upload
+ * This template does NOT include user column
+ */
+export const downloadAdminTaskTemplate = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    // CSV template with categoryId column
+    const csvContent = `title,description,categoryId,roleId,defaultFrequency
+Morning Rounds,Complete morning patient rounds,1,1,Daily
+Equipment Check,Check all medical equipment,1,1,Weekly
+Inventory Review,Review inventory levels,1,1,Monthly
+Staff Meeting,Weekly staff meeting,1,1,Weekly
+Safety Inspection,Perform safety inspection,1,1,Monthly`;
+
+    // Set headers for CSV download
+    event.node.res.setHeader('Content-Type', 'text/csv');
+    event.node.res.setHeader('Content-Disposition', 'attachment; filename="admin-task-template.csv"');
+    
+    return csvContent;
+
+  } catch (err) {
+    console.error('Download admin task template error:', err);
+    return error(500, err.message || "Failed to download template");
+  }
+};
+
+// ============================================
+// Default Priorities and Statuses Management
+// ============================================
+
+/**
+ * Get all default priorities
+ */
+export const getDefaultPriorities = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const { DefaultPriority } = await import('../models/index.js');
+    
+    const priorities = await DefaultPriority.findAll({
+      order: [['sortOrder', 'ASC']]
+    });
+
+    return success({
+      priorities,
+      total: priorities.length
+    });
+
+  } catch (err) {
+    console.error('Get default priorities error:', err);
+    return error(500, err.message || "Failed to get default priorities");
+  }
+};
+
+/**
+ * Get all default statuses
+ */
+export const getDefaultStatuses = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const { DefaultStatus } = await import('../models/index.js');
+    
+    const statuses = await DefaultStatus.findAll({
+      order: [['id', 'ASC']]
+    });
+
+    return success({
+      statuses,
+      total: statuses.length
+    });
+
+  } catch (err) {
+    console.error('Get default statuses error:', err);
+    return error(500, err.message || "Failed to get default statuses");
+  }
+};
+
+/**
+ * Update a default priority and cascade to all organisations
+ */
+export const updateDefaultPriority = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const { DefaultPriority, OrganisationPriority } = await import('../models/index.js');
+    const body = await readBody(event);
+    const { id, name, color, sortOrder } = typeof body === 'string' ? JSON.parse(body) : body;
+
+    if (!id) {
+      return error(400, "Priority ID is required");
+    }
+
+    // Find the default priority
+    const defaultPriority = await DefaultPriority.findByPk(id);
+    if (!defaultPriority) {
+      return error(404, "Default priority not found");
+    }
+
+    // Store the key for matching organisation priorities
+    const priorityKey = defaultPriority.key;
+
+    // Update default priority
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (color !== undefined) updateData.color = color;
+    if (sortOrder !== undefined) updateData.sortOrder = sortOrder;
+
+    await defaultPriority.update(updateData);
+
+    // Cascade update to all organisation priorities with the same key
+    const orgUpdateData = {};
+    if (name !== undefined) orgUpdateData.name = name;
+    if (color !== undefined) orgUpdateData.color = color;
+    if (sortOrder !== undefined) orgUpdateData.sortOrder = sortOrder;
+
+    const [updatedCount] = await OrganisationPriority.update(
+      orgUpdateData,
+      {
+        where: { key: priorityKey }
+      }
+    );
+
+    return success({
+      message: "Default priority updated successfully",
+      priority: defaultPriority,
+      organisationsUpdated: updatedCount
+    });
+
+  } catch (err) {
+    console.error('Update default priority error:', err);
+    return error(500, err.message || "Failed to update default priority");
+  }
+};
+
+/**
+ * Update a default status and cascade to all organisations
+ */
+export const updateDefaultStatus = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const { DefaultStatus, OrganisationStatus } = await import('../models/index.js');
+    const body = await readBody(event);
+    const { id, name, color, description } = typeof body === 'string' ? JSON.parse(body) : body;
+
+    if (!id) {
+      return error(400, "Status ID is required");
+    }
+
+    // Find the default status
+    const defaultStatus = await DefaultStatus.findByPk(id);
+    if (!defaultStatus) {
+      return error(404, "Default status not found");
+    }
+
+    // Store the key for matching organisation statuses
+    const statusKey = defaultStatus.key;
+
+    // Update default status
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (color !== undefined) updateData.color = color;
+    if (description !== undefined) updateData.description = description;
+
+    await defaultStatus.update(updateData);
+
+    // Cascade update to all organisation statuses with the same key
+    const orgUpdateData = {};
+    if (name !== undefined) orgUpdateData.name = name;
+    if (color !== undefined) orgUpdateData.color = color;
+    if (description !== undefined) orgUpdateData.description = description;
+
+    const [updatedCount] = await OrganisationStatus.update(
+      orgUpdateData,
+      {
+        where: { key: statusKey }
+      }
+    );
+
+    return success({
+      message: "Default status updated successfully",
+      status: defaultStatus,
+      organisationsUpdated: updatedCount
+    });
+
+  } catch (err) {
+    console.error('Update default status error:', err);
+    return error(500, err.message || "Failed to update default status");
+  }
+};
