@@ -633,37 +633,62 @@ export const sendLeadStatusChangedNotification = async ({ lead, oldStatus, newSt
 };
 
 // Send WhatsApp message notification
-export const sendWhatsAppMessageNotification = async ({ message, lead, userId }) => {
+export const sendWhatsAppMessageNotification = async ({ message, lead, userId, organisationId = null }) => {
+  const senderLabel = lead.name || lead.phone || lead.telephone || 'Unknown';
+  const preview = String(
+    typeof message === 'string'
+      ? message
+      : (message?.text || message?.body || message?.caption || message?.content || '')
+  ).trim();
+  const body = preview.length > 80 ? `${preview.slice(0, 80)}...` : preview;
   return await sendNotificationToUser({
     userId,
-    title: 'New WhatsApp Message',
-    body: `New message from ${lead.name || lead.phone}: ${message.substring(0, 50)}...`,
+    organisationId,
+    title: `New WhatsApp message from ${senderLabel}`,
+    body,
     type: 'whatsapp_message',
     referenceType: 'lead',
     referenceId: lead.id,
     data: {
-      leadId: lead.id,
-      leadName: lead.name || lead.phone,
-      messagePreview: message.substring(0, 100),
-      url: `/crm/leads?leadId=${lead.id}&tab=communication`
+      leadId: String(lead.id || ''),
+      leadName: senderLabel,
+      messagePreview: preview.slice(0, 100),
+      url: `/crm/leads?leadId=${lead.id}&tab=communication`,
     },
-    priority: 'high'
+    priority: 'high',
   });
 };
 
 // Send Meta DM notification
-export const sendMetaDMNotification = async ({ message, sender, userId }) => {
+export const sendMetaDMNotification = async ({
+  message,
+  sender,
+  userId,
+  organisationId = null,
+  conversationId = null,
+  platform = null,
+}) => {
+  const preview = String(message || '').trim();
+  const senderLabel = String(sender || 'Unknown');
+  const q = new URLSearchParams();
+  if (conversationId) q.set('conversationId', String(conversationId));
+  if (organisationId) q.set('orgId', String(organisationId));
+  const url = `/crm/dms${q.toString() ? `?${q.toString()}` : ''}`;
+
   return await sendNotificationToUser({
     userId,
+    organisationId,
     title: 'New Meta Direct Message',
-    body: `New message from ${sender}: ${message.substring(0, 50)}...`,
+    body: `New message from ${senderLabel}: ${preview.slice(0, 50)}${preview.length > 50 ? '...' : ''}`,
     type: 'meta_dm',
-    referenceType: 'message',
-    referenceId: null,
+    referenceType: 'dm_conversation',
+    referenceId: conversationId || null,
     data: {
-      sender,
-      messagePreview: message.substring(0, 100),
-      url: '/crm/analytics'
+      sender: senderLabel,
+      platform: platform ? String(platform) : '',
+      conversationId: conversationId ? String(conversationId) : '',
+      messagePreview: preview.slice(0, 100),
+      url,
     },
     priority: 'high'
   });
@@ -978,3 +1003,4 @@ export const getUserNotifications = async (userId, { limit = 50, offset = 0, unr
     return { success: false, error: error.message };
   }
 };
+

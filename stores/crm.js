@@ -114,6 +114,7 @@ export const useCrmStore = defineStore("crmStore", {
     sendDmMessage(payload) { return this._wrap(() => crmService.sendDmMessage(payload)); },
     markDmRead(payload) { return this._wrap(() => crmService.markDmRead(payload)); },
     processDmQueue(payload = {}) { return this._wrap(() => crmService.processDmQueue(payload)); },
+    getDmConnectionStatus() { return this._wrap(() => crmService.getDmConnectionStatus()); },
     uploadDmAttachment(formData, onProgress) { return this._wrap(() => crmService.uploadDmAttachment(formData, onProgress)); },
     refreshDmProfile(payload) { return this._wrap(() => crmService.refreshDmProfile(payload)); },
     connectionStatus() { return this._wrap(() => crmService.connectionStatus()); },

@@ -57,10 +57,22 @@
           </div>
           <v-divider />
           <div ref="listBodyRef" class="dms-list-body" @scroll="onListScroll">
-            <div v-if="!filteredConversations.length" class="text-caption text-medium-emphasis pa-4">
-              <div>No conversations yet.</div>
-              <div class="mt-2">
-                Connect Facebook or Instagram in CRM settings to start receiving DMs.
+            <div v-if="!filteredConversations.length" class="pa-4">
+              <div v-if="showConnectionHelp" class="dms-empty-state">
+                <div class="dms-empty-title">{{ connectionHelp.title }}</div>
+                <div class="dms-empty-description">{{ connectionHelp.description }}</div>
+                <v-btn
+                  color="primary"
+                  variant="flat"
+                  size="small"
+                  class="mt-3 text-none"
+                  @click="openConnectionsSetup"
+                >
+                  Open CRM Connections
+                </v-btn>
+              </div>
+              <div v-else class="text-caption text-medium-emphasis">
+                No conversations yet.
               </div>
             </div>
             <v-list v-else class="dms-list-items" density="compact">
@@ -140,11 +152,19 @@
               </v-btn>
             </div>
           </div>
+          <div v-if="activeConversationId && !withinMessageWindow" class="dms-window-banner">
+            <v-icon size="16" class="mr-1">mdi-clock-alert-outline</v-icon>
+            <span>
+              24-hour messaging window has closed. Meta only allows replies within 24 hours of the customer's last message.
+              <template v-if="lastInboundAgo"> Last received {{ lastInboundAgo }}.</template>
+            </span>
+          </div>
           <CommonChatInputBar
             v-model="draftMessage"
             :can-send="canSend"
-            :disabled="!activeConversationId"
+            :disabled="!activeConversationId || !withinMessageWindow"
             :loading="sending"
+            :placeholder="withinMessageWindow ? 'Type here...' : 'Cannot reply - 24-hour window closed'"
             :allow-attachments="true"
             @files-selected="onFilesSelected"
             @send="sendMessage"
@@ -192,6 +212,12 @@ const loadingMoreMessages = ref(false);
 const listBodyRef = ref(null);
 const threadBodyRef = ref(null);
 const searchInput = ref("");
+const dmConnectionStatus = ref({
+  loaded: false,
+  anyConnected: false,
+  messengerConnected: false,
+  instagramConnected: false,
+});
 let searchTimer = null;
 let metaEventSource = null;
 let syncingHistory = false;
@@ -210,6 +236,35 @@ const emptyMessage = computed(() => {
     return "Select a conversation to view messages.";
   }
   return "No messages yet.";
+});
+
+const showConnectionHelp = computed(() => {
+  if (!dmConnectionStatus.value.loaded) return false;
+  if (activeTab.value === "messenger") return !dmConnectionStatus.value.messengerConnected;
+  if (activeTab.value === "instagram") return !dmConnectionStatus.value.instagramConnected;
+  return !dmConnectionStatus.value.anyConnected;
+});
+
+const connectionHelp = computed(() => {
+  if (activeTab.value === "messenger") {
+    return {
+      title: "Messenger is not connected",
+      description:
+        "To receive Facebook Messenger conversations here, connect Meta in CRM Connections. Messenger and Instagram are authorized together in the same Meta connection flow.",
+    };
+  }
+  if (activeTab.value === "instagram") {
+    return {
+      title: "Instagram is not connected",
+      description:
+        "To receive Instagram Direct Messages here, connect Meta in CRM Connections. Instagram is authorized through the same Meta connection used for Messenger.",
+    };
+  }
+  return {
+    title: "No messaging channels connected",
+    description:
+      "Connect Meta in CRM Connections to authorize both Facebook Messenger and Instagram, fetch incoming messages, and reply from this inbox.",
+  };
 });
 
 const filteredConversations = computed(() => {
@@ -281,10 +336,43 @@ const messageItems = computed(() => {
 
 const groupedMessages = computed(() => groupChatItems(messageItems.value));
 
+const lastInboundAt = computed(() => {
+  const conversationInbound = activeConversation.value?.lastInboundAt;
+  if (conversationInbound) {
+    const parsed = new Date(conversationInbound);
+    if (!Number.isNaN(parsed.valueOf())) return parsed;
+  }
+  const timestamps = messages.value
+    .filter((m) => String(m?.direction || "").toLowerCase() === "inbound")
+    .map((m) => new Date(m?.createdAt).getTime())
+    .filter((t) => !Number.isNaN(t));
+  if (!timestamps.length) return null;
+  return new Date(Math.max(...timestamps));
+});
+
+const withinMessageWindow = computed(() => {
+  if (!activeConversation.value) return false;
+  const platform = String(activeConversation.value.platform || "").toLowerCase();
+  if (platform !== "messenger" && platform !== "instagram") return true;
+  if (!lastInboundAt.value) return false;
+  return Date.now() - lastInboundAt.value.getTime() < 24 * 60 * 60 * 1000;
+});
+
+const lastInboundAgo = computed(() => {
+  if (!lastInboundAt.value) return "";
+  const ms = Date.now() - lastInboundAt.value.getTime();
+  const hours = Math.floor(ms / 3600000);
+  const days = Math.floor(hours / 24);
+  if (days > 0) return `${days}d ago`;
+  if (hours > 0) return `${hours}h ago`;
+  const minutes = Math.floor(ms / 60000);
+  return `${minutes}m ago`;
+});
+
 const canSend = computed(() => {
   const hasText = String(draftMessage.value || "").trim().length > 0;
   const hasFiles = pendingFiles.value.length > 0;
-  return !!activeConversationId.value && (hasText || hasFiles) && !sending.value;
+  return !!activeConversationId.value && (hasText || hasFiles) && !sending.value && withinMessageWindow.value;
 });
 
 const selectConversation = (id) => {
@@ -437,6 +525,31 @@ const removePendingFile = (idx) => {
   pendingFiles.value = pendingFiles.value.filter((_, i) => i !== idx);
 };
 
+const openConnectionsSetup = () => {
+  navigateTo("/crm");
+};
+
+const loadDmConnectionStatus = async () => {
+  try {
+    const res = await crmStore.getDmConnectionStatus();
+    if (res?.code === 0 && res.data) {
+      dmConnectionStatus.value = {
+        loaded: true,
+        anyConnected: !!res.data.anyConnected,
+        messengerConnected: !!res.data.messengerConnected,
+        instagramConnected: !!res.data.instagramConnected,
+      };
+      return;
+    }
+  } catch {}
+  dmConnectionStatus.value = {
+    loaded: true,
+    anyConnected: false,
+    messengerConnected: false,
+    instagramConnected: false,
+  };
+};
+
 const buildConversationDisplayName = (row) => {
   const raw =
     row?.participantName ||
@@ -466,6 +579,7 @@ const buildConversationRow = (row) => {
     unreadCount: row?.unreadCount || 0,
     assignedToMe: assignedUserId && currentUserId ? String(assignedUserId) === String(currentUserId) : false,
     updatedAt: row?.lastMessageAt || row?.updatedAt || row?.createdAt || null,
+    lastInboundAt: row?.metadata?.lastInboundAt || null,
   };
 };
 
@@ -631,12 +745,29 @@ watch([showAssignedOnly, showUnreadOnly], () => {
   loadConversations(true);
 });
 
-onMounted(() => {
-  loadConversations(true);
-  const convoId = route.query.conversationId;
+onMounted(async () => {
+  const convoId = route.query.conversationId ? Number(route.query.conversationId) : null;
+  const orgIdFromQuery = route.query.orgId ? Number(route.query.orgId) : null;
+
+  if (orgIdFromQuery) {
+    const { user, setUser } = useUser();
+    const currentOrgId = user.value?.currentLoggedInOrgId;
+    if (currentOrgId && orgIdFromQuery !== Number(currentOrgId)) {
+      try {
+        const res = await authStore.switchOrgnanisation({ orgId: orgIdFromQuery });
+        if (res?.code === 0) {
+          const profileRes = await authStore.profile();
+          if (profileRes?.code === 0 && profileRes.data) setUser(profileRes.data);
+        }
+      } catch {}
+    }
+    await navigateTo({ query: { ...(convoId ? { conversationId: convoId } : {}) } }, { replace: true });
+  }
+
+  await loadConversations(true);
+  await loadDmConnectionStatus();
   if (convoId) {
-    activeConversationId.value = Number(convoId);
-    loadMessages(true);
+    selectConversation(convoId);
   }
 
   if (typeof window !== "undefined" && "EventSource" in window) {
@@ -805,6 +936,39 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dms-empty-state {
+  border: 1px solid #dbe4ff;
+  background: #f7faff;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.dms-empty-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.dms-empty-description {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #4b5563;
+}
+
+.dms-window-banner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px;
+  background: #fff8e1;
+  border-top: 1px solid #ffe082;
+  color: #7b5e00;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 @media (max-width: 960px) {

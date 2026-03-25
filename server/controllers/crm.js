@@ -6,7 +6,7 @@ import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/lea
 import { formatCrmTriggerPreview } from '~/lib/misc'
 import { success, error } from '../utils/response'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
-import { sendImmediateCrmAutomationsForLead, dispatchSendNowAutomation } from '../utils/crmAutomation.js'
+import { sendImmediateCrmAutomationsForLead, dispatchSendNowAutomation, dispatchSendNowAutomationWithOptions, previewSendNowAutomation } from '../utils/crmAutomation.js'
 import { sendLeadCreatedNotification, sendLeadAssignedNotification, sendLeadUnassignedNotification, sendLeadStatusChangedNotification, sendNotificationToMultipleUsers } from '../utils/fcmNotification.js'
 import { decrypt } from '../utils/crypto'
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from '../utils/whatsapp'
@@ -17,6 +17,8 @@ import DB from '../utils/db'
 import { parseJsonBody } from "../utils/body";
 
 const EMAIL_REGEX = /^(?:[a-zA-Z0-9_'^&+\-]+(?:\.[a-zA-Z0-9_'^&+\-]+)*|".+")@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/
+const SEND_NOW_JOB_TTL_MS = 30 * 60 * 1000
+const sendNowJobStore = new Map()
 
 const parseDateValue = (value) => {
   if (!value) return null;
@@ -24,6 +26,59 @@ const parseDateValue = (value) => {
   if (!isNaN(d.getTime())) return d;
   return null;
 };
+
+const makeSendNowJobKey = (orgId, jobId) => `${Number(orgId)}:${String(jobId || '')}`
+
+const pruneSendNowJobs = () => {
+  const now = Date.now()
+  for (const [jobKey, job] of sendNowJobStore.entries()) {
+    const updatedAt = Number(job?.updatedAt || 0)
+    if (!updatedAt || now - updatedAt > SEND_NOW_JOB_TTL_MS) {
+      sendNowJobStore.delete(jobKey)
+    }
+  }
+}
+
+const createSendNowJob = ({ orgId, key }) => {
+  pruneSendNowJobs()
+  const jobId = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+  const nowIso = new Date().toISOString()
+  const job = {
+    jobId,
+    key: String(key || ''),
+    status: 'running',
+    startedAt: nowIso,
+    updatedAt: Date.now(),
+    completedAt: null,
+    result: null,
+    error: null,
+  }
+  sendNowJobStore.set(makeSendNowJobKey(orgId, jobId), job)
+  return job
+}
+
+const completeSendNowJob = ({ orgId, jobId, result }) => {
+  const found = sendNowJobStore.get(makeSendNowJobKey(orgId, jobId))
+  if (!found) return
+  found.status = 'completed'
+  found.completedAt = new Date().toISOString()
+  found.updatedAt = Date.now()
+  found.result = result || null
+  found.error = null
+}
+
+const failSendNowJob = ({ orgId, jobId, err }) => {
+  const found = sendNowJobStore.get(makeSendNowJobKey(orgId, jobId))
+  if (!found) return
+  found.status = 'failed'
+  found.completedAt = new Date().toISOString()
+  found.updatedAt = Date.now()
+  found.result = null
+  found.error = err?.message || String(err || 'Send now job failed')
+}
+
+const getSendNowJob = ({ orgId, jobId }) =>
+  sendNowJobStore.get(makeSendNowJobKey(orgId, jobId)) || null
 
 const sanitizeFilename = (filename = 'file') =>
   String(filename || 'file')
@@ -1663,12 +1718,48 @@ export const saveAutomation = async (event) => {
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const result = await applyAutomationSave({ orgId, payload })
+    const out =
+      result && typeof result.toJSON === 'function'
+        ? result.toJSON()
+        : { ...(result || {}) }
     if (payload?.trigger?.type === 'send_now' && payload?.enabled && !payload?.leadId) {
-      dispatchSendNowAutomation(orgId, result).catch((e) =>
-        console.error('[CRM send_now] dispatch failed', e?.message)
-      )
+      const waitForSendNow =
+        payload?.awaitSendNow === true ||
+        String(payload?.awaitSendNow || '').toLowerCase() === 'true'
+      const forceResend =
+        payload?.forceResend === true ||
+        String(payload?.forceResend || '').toLowerCase() === 'true'
+      if (waitForSendNow) {
+        if (!forceResend) {
+          const preview = await previewSendNowAutomation(orgId, out)
+          if (Number(preview?.alreadySent || 0) > 0) {
+            out.sendNowConfirmationRequired = true
+            out.sendNowPreview = preview
+            return success(out)
+          }
+        }
+        try {
+          const summary = await dispatchSendNowAutomationWithOptions(orgId, out, { forceResend })
+          out.sendNowResult = summary
+        } catch (e) {
+          return error(500, e?.message || 'Failed to run send now')
+        }
+      } else {
+        const job = createSendNowJob({ orgId, key: out?.key || payload?.key })
+        out.sendNowJob = {
+          jobId: job.jobId,
+          status: job.status,
+          startedAt: job.startedAt,
+        }
+        dispatchSendNowAutomation(orgId, out)
+          .then((summary) => completeSendNowJob({ orgId, jobId: job.jobId, result: summary }))
+          .catch((e) => {
+            console.error('[CRM send_now] dispatch failed', e?.message)
+            failSendNowJob({ orgId, jobId: job.jobId, err: e })
+          })
+      }
     }
-    return success(result)
+    return success(out)
   } catch (e) {
     return error(500, e.message)
   }
@@ -1695,16 +1786,56 @@ export const saveAutomationBatch = async (event) => {
         }
       }
       await transaction.commit()
+      const sendNowJobs = []
       for (const tpl of sendNowItems) {
-        dispatchSendNowAutomation(orgId, tpl).catch((e) =>
-          console.error('[CRM send_now] batch dispatch failed', e?.message)
-        )
+        const out =
+          tpl && typeof tpl.toJSON === 'function'
+            ? tpl.toJSON()
+            : { ...(tpl || {}) }
+        const job = createSendNowJob({ orgId, key: out?.key })
+        sendNowJobs.push({
+          key: out?.key || '',
+          jobId: job.jobId,
+          status: job.status,
+          startedAt: job.startedAt,
+        })
+        dispatchSendNowAutomation(orgId, out)
+          .then((summary) => completeSendNowJob({ orgId, jobId: job.jobId, result: summary }))
+          .catch((e) => {
+            console.error('[CRM send_now] batch dispatch failed', e?.message)
+            failSendNowJob({ orgId, jobId: job.jobId, err: e })
+          })
       }
-      return success({ items: results, updated: results.length })
+      return success({ items: results, updated: results.length, sendNowJobs })
     } catch (e) {
       await transaction.rollback()
       return error(500, e.message)
     }
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const getAutomationSendNowStatus = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    pruneSendNowJobs()
+    const query = getQuery(event) || {}
+    const jobId = String(query?.jobId || '').trim()
+    if (!jobId) return error(400, 'jobId required')
+    const job = getSendNowJob({ orgId, jobId })
+    if (!job) return error(404, 'Send now status not found')
+    return success({
+      jobId: job.jobId,
+      key: job.key,
+      status: job.status,
+      startedAt: job.startedAt,
+      updatedAt: new Date(job.updatedAt).toISOString(),
+      completedAt: job.completedAt,
+      result: job.result,
+      error: job.error,
+    })
   } catch (e) {
     return error(500, e.message)
   }
