@@ -357,6 +357,8 @@ const props = defineProps({
   allowGroupEdit: { type: Boolean, default: false },
   showPreviewAction: { type: Boolean, default: true },
   disableToggle: { type: Boolean, default: false },
+  showTriggerColumn: { type: Boolean, default: true },
+  showStatusColumn: { type: Boolean, default: true },
 })
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
@@ -379,13 +381,20 @@ const defaultGroupKeySet = new Set(crmAutomationGroups.map(group => group.key))
 const whatsappTemplates = ref([])
 const whatsappTemplatesLoading = ref(false)
 
-const tableHeaders = [
-  { title: 'Type', key: 'type', sortable: false },
-  { title: 'Automation Name', key: 'name', sortable: false },
-  { title: 'Trigger', key: 'sending', sortable: false },
-  { title: 'Actions', key: 'actions', sortable: false, align: 'center' },
-  { title: 'Status', key: 'enabled', sortable: false, align: 'center' },
-]
+const tableHeaders = computed(() => {
+  const headers = [
+    { title: 'Type', key: 'type', sortable: false },
+    { title: 'Automation Name', key: 'name', sortable: false },
+  ]
+  if (props.showTriggerColumn) {
+    headers.push({ title: 'Trigger', key: 'sending', sortable: false })
+  }
+  headers.push({ title: 'Actions', key: 'actions', sortable: false, align: 'center' })
+  if (props.showStatusColumn) {
+    headers.push({ title: 'Status', key: 'enabled', sortable: false, align: 'center' })
+  }
+  return headers
+})
 
 const triggerTypes = [
   { label: 'Send Now', value: 'send_now' },

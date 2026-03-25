@@ -70,8 +70,10 @@
             :whatsapp-requires-templates="whatsappRequiresTemplates"
             :show-card-toggle="false"
             :allow-group-edit="true"
-            :show-preview-action="false"
+            :show-preview-action="true"
             :disable-toggle="true"
+            :show-trigger-column="false"
+            :show-status-column="false"
             @edit-group="openGroupEdit"
             @delete-group="confirmGroupDelete"
           />
