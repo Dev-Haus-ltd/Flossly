@@ -62,6 +62,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  getDmConnectionStatus() {
+    return new Promise((resolve, reject) => {
+      Get("/dms/status")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   connectionStatus() {
     return new Promise((resolve, reject) => {
       Get("/meta/connection")

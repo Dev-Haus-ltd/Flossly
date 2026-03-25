@@ -285,3 +285,35 @@ export const processDmQueue = async (event) => {
     return error(500, err.message || "Failed to process queue");
   }
 };
+
+export const getDmConnectionStatus = async (event) => {
+  try {
+    await ensureDmTables();
+    const { orgId } = event.context.user || {};
+    if (!orgId) return error(401, "Unauthenticated");
+
+    const rows = await CrmDmAccount.findAll({
+      where: { organisationId: orgId },
+      order: [["updatedAt", "DESC"]],
+    });
+
+    const activeRows = rows.filter((row) => String(row.status || "").toLowerCase() === "active");
+    const messengerConnected = activeRows.some((row) => String(row.platform || "").toLowerCase() === "messenger");
+    const instagramConnected = activeRows.some((row) => String(row.platform || "").toLowerCase() === "instagram");
+
+    return success({
+      messengerConnected,
+      instagramConnected,
+      anyConnected: messengerConnected || instagramConnected,
+      accounts: activeRows.map((row) => ({
+        id: row.id,
+        platform: row.platform,
+        accountId: row.accountId,
+        accountName: row.accountName,
+        status: row.status,
+      })),
+    });
+  } catch (err) {
+    return error(500, err.message || "Failed to load DM connection status");
+  }
+};

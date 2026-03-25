@@ -98,6 +98,7 @@ export const useCrmStore = defineStore("crmStore", {
     sendDmMessage(payload) { return this._wrap(() => crmService.sendDmMessage(payload)); },
     markDmRead(payload) { return this._wrap(() => crmService.markDmRead(payload)); },
     processDmQueue(payload = {}) { return this._wrap(() => crmService.processDmQueue(payload)); },
+    getDmConnectionStatus() { return this._wrap(() => crmService.getDmConnectionStatus()); },
     connectionStatus() { return this._wrap(() => crmService.connectionStatus()); },
     fetchLeadsNow(params = {}) { return this._wrap(() => crmService.fetchLeadsNow(params)); },
     async fetchMetaStructure(orgId = null) {

@@ -18,7 +18,7 @@
           <div class="dms-list-header">
             <div class="dms-list-title">Conversations</div>
             <div class="d-inline-flex align-center py-1 dms-toolbar">
-              <div style="width: 160px">
+              <div style="width: 120px">
                 <v-text-field
                   v-model="searchInput"
                   placeholder="Search"
@@ -89,21 +89,34 @@
                     hide-details
                     class="dms-filter-check"
                   />
-                  <v-checkbox
-                    v-model="showAssignedOnly"
-                    label="Assigned to me"
-                    density="compact"
-                    hide-details
-                    class="dms-filter-check"
-                  />
                 </v-card>
               </v-menu>
             </div>
           </div>
           <v-divider />
           <div ref="listBodyRef" class="dms-list-body" @scroll="onListScroll">
-            <div v-if="!filteredConversations.length" class="text-caption text-medium-emphasis pa-4">
-              No conversations yet.
+            <div v-if="!filteredConversations.length" class="pa-4">
+              <div
+                v-if="showConnectionHelp"
+                class="dms-empty-state"
+              >
+                <div class="dms-empty-title">{{ connectionHelp.title }}</div>
+                <div class="dms-empty-description">
+                  {{ connectionHelp.description }}
+                </div>
+                <v-btn
+                  color="primary"
+                  variant="flat"
+                  size="small"
+                  class="mt-3 text-none"
+                  @click="openConnectionsSetup"
+                >
+                  Open CRM Connections
+                </v-btn>
+              </div>
+              <div v-else class="text-caption text-medium-emphasis">
+                No conversations yet.
+              </div>
             </div>
             <v-list v-else class="dms-list-items" density="compact">
               <v-list-item
@@ -198,7 +211,6 @@ const activeTab = ref("all");
 const search = ref("");
 const filterMenu = ref(false);
 const showUnreadOnly = ref(false);
-const showAssignedOnly = ref(false);
 const conversations = ref([]);
 const activeConversationId = ref(null);
 const messages = ref([]);
@@ -215,6 +227,12 @@ const loadingMoreMessages = ref(false);
 const listBodyRef = ref(null);
 const threadBodyRef = ref(null);
 const searchInput = ref("");
+const dmConnectionStatus = ref({
+  loaded: false,
+  anyConnected: false,
+  messengerConnected: false,
+  instagramConnected: false,
+});
 const messageCache = ref(new Map());
 const MESSAGE_CACHE_TTL_MS = 45000;
 let searchTimer = null;
@@ -230,6 +248,35 @@ const emptyMessage = computed(() => {
   return "No messages yet.";
 });
 
+const showConnectionHelp = computed(() => {
+  if (!dmConnectionStatus.value.loaded) return false;
+  if (activeTab.value === "messenger") return !dmConnectionStatus.value.messengerConnected;
+  if (activeTab.value === "instagram") return !dmConnectionStatus.value.instagramConnected;
+  return !dmConnectionStatus.value.anyConnected;
+});
+
+const connectionHelp = computed(() => {
+  if (activeTab.value === "messenger") {
+    return {
+      title: "Messenger is not connected",
+      description:
+        "To receive Facebook Messenger conversations here, please connect your Facebook Page in CRM connections.",
+    };
+  }
+  if (activeTab.value === "instagram") {
+    return {
+      title: "Instagram is not connected",
+      description:
+        "To receive Instagram Direct Messages here, please authorize your Instagram Business account in CRM connections.",
+    };
+  }
+  return {
+    title: "No messaging channels connected",
+    description:
+      "Connect Facebook Messenger and Instagram in CRM connections to fetch incoming messages and reply from this inbox.",
+  };
+});
+
 const filteredConversations = computed(() => {
   const q = String(search.value || "").trim().toLowerCase();
   const filtered = conversations.value.filter((c) => {
@@ -241,7 +288,6 @@ const filteredConversations = computed(() => {
   });
   return filtered.filter((c) => {
     if (showUnreadOnly.value && !c.unreadCount) return false;
-    if (showAssignedOnly.value && !c.assignedToMe) return false;
     return true;
   });
 });
@@ -315,7 +361,6 @@ const canSend = computed(() => {
 
 const clearFilters = () => {
   showUnreadOnly.value = false;
-  showAssignedOnly.value = false;
 };
 
 const readConversationCache = (conversationId) => {
@@ -349,6 +394,31 @@ const clearActiveConversation = () => {
   draftMessage.value = "";
   messageCursor.value = null;
   messageHasMore.value = true;
+};
+
+const openConnectionsSetup = () => {
+  navigateTo("/crm");
+};
+
+const loadDmConnectionStatus = async () => {
+  try {
+    const res = await crmStore.getDmConnectionStatus();
+    if (res?.code === 0 && res.data) {
+      dmConnectionStatus.value = {
+        loaded: true,
+        anyConnected: !!res.data.anyConnected,
+        messengerConnected: !!res.data.messengerConnected,
+        instagramConnected: !!res.data.instagramConnected,
+      };
+      return;
+    }
+  } catch {}
+  dmConnectionStatus.value = {
+    loaded: true,
+    anyConnected: false,
+    messengerConnected: false,
+    instagramConnected: false,
+  };
 };
 
 const scrollThreadToBottom = () => {
@@ -459,7 +529,6 @@ const buildConversationRow = (row) => {
     avatarText: initials || "U",
     platform: row?.platform,
     unreadCount: row?.unreadCount || 0,
-    assignedToMe: false,
   };
 };
 
@@ -550,6 +619,7 @@ onMounted(async () => {
   }
 
   await loadConversations(true);
+  await loadDmConnectionStatus();
 
   if (convoId) {
     selectConversation(convoId);
@@ -653,7 +723,7 @@ onMounted(async () => {
 
 .dms-toolbar {
   flex-wrap: nowrap;
-  gap: 8px;
+  gap: 0;
 }
 
 .dms-list-body {
@@ -707,6 +777,26 @@ onMounted(async () => {
   justify-content: center;
 }
 
+.dms-empty-state {
+  border: 1px solid #dbe4ff;
+  background: #f7faff;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.dms-empty-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.dms-empty-description {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #4b5563;
+}
+
 /* ── Thread panel ──────────────────────────────────── */
 .dms-thread-card {
   display: flex;
@@ -755,8 +845,12 @@ onMounted(async () => {
   height: 46px;
   border-radius: 8px;
   font-size: 14px;
+  background-color: #F3F4F6 !important;
+  text-transform: none;
   box-shadow: none;
   color: #737373;
+  margin-left: 16px !important;
+  align-items: center;
 }
 
 .custom-search :deep(input::placeholder) {
@@ -773,6 +867,8 @@ onMounted(async () => {
   font-weight: 500;
   box-shadow: none;
   color: #737373;
+  margin-left: 16px !important;
+  align-items: center;
 }
 
 .dms-filter-menu {

@@ -948,11 +948,15 @@ export const connectionStatus = async (event) => {
   if (!orgId) return error(401, 'Unauthenticated')
   
   const pages = await MetaPage.findAll({ where: { organisationId: orgId } })
+  const dmAccounts = await CrmDmAccount.findAll({ where: { organisationId: orgId } })
+  const activeDmAccounts = dmAccounts.filter((row) => String(row.status || '').toLowerCase() === 'active')
   const count = pages.filter(p => p.status === 'Active').length
   const lastConnectedAt = pages.reduce((acc, p) => {
     const t = p.connectedAt || p.updatedAt || p.createdAt
     return !acc || (t && t > acc) ? t : acc
   }, null)
+  const messengerConnected = activeDmAccounts.some((row) => String(row.platform || '').toLowerCase() === 'messenger')
+  const instagramConnected = activeDmAccounts.some((row) => String(row.platform || '').toLowerCase() === 'instagram')
   
   const data = pages.map((p) => ({ 
     id: p.pageId, 
@@ -960,7 +964,23 @@ export const connectionStatus = async (event) => {
     status: p.status 
   }))
   
-  return success({ count, lastConnectedAt, pages: data })
+  return success({
+    count,
+    lastConnectedAt,
+    pages: data,
+    dmConnections: {
+      messengerConnected,
+      instagramConnected,
+      anyConnected: messengerConnected || instagramConnected,
+      accounts: activeDmAccounts.map((row) => ({
+        id: row.id,
+        platform: row.platform,
+        accountId: row.accountId,
+        accountName: row.accountName,
+        status: row.status,
+      })),
+    },
+  })
 }
 
 export const stream = async (event) => {
