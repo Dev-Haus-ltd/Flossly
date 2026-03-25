@@ -57,7 +57,7 @@
                 Disconnect
               </v-btn>
               <v-btn
-                v-else
+                v-if="!isMetaConnected"
                 color="primary"
                 variant="flat"
                 rounded="lg"
