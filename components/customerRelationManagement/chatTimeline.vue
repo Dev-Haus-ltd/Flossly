@@ -1,84 +1,90 @@
 <template>
   <v-card class="chat-timeline-card mt-5" variant="outlined">
-  <v-card-title class="d-flex align-center justify-end">
-    <v-btn size="small" variant="text" :loading="loading" @click="loadLogs">
-      Refresh
-    </v-btn>
-  </v-card-title>
-    <v-divider />
-    <v-card-text class="chat-timeline-body">
-      <div v-if="loading" class="text-caption text-medium-emphasis">
-        Loading messages...
-      </div>
-      <div v-else-if="!chatItems.length" class="text-caption text-medium-emphasis">
-        {{ emptyMessage }}
-      </div>
-      <div v-else class="chat-timeline-list">
-        <template v-for="group in groupedChatItems" :key="group.key">
-          <div class="chat-day-pill">{{ group.label }}</div>
-          <CommonChatBubble
-            v-for="row in group.items"
-            :key="row.id"
-            :is-outbound="row.isOutbound"
-            :sender="row.sender"
-            :message="row.message"
-            :timestamp="row.timeLabel"
-            :status-icon="row.statusIcon"
-            :avatar-url="row.avatarUrl"
-            :avatar-text="row.avatarText"
-            :automated="row.automated"
-          />
-        </template>
-      </div>
-    </v-card-text>
-    <v-divider />
-    <div class="chat-input-bar">
-      <div class="chat-input-left">
-        <v-menu v-model="emojiMenu" offset-y>
-          <template #activator="{ props: menuProps }">
-            <v-btn v-bind="menuProps" icon variant="text" size="small">
-              <v-icon size="18">mdi-emoticon-outline</v-icon>
-            </v-btn>
-          </template>
-          <ClientOnly>
-            <div class="emoji-menu">
-              <emoji-picker
-                class="emoji-picker"
-                @emoji-click="onEmojiClick"
-              />
-            </div>
-          </ClientOnly>
-        </v-menu>
-      </div>
-      <v-text-field
-        v-model="draftMessage"
-        placeholder="Type here..."
-        variant="solo"
-        density="compact"
-        hide-details
-        flat
-        bg-color="#FFFFFF"
-        class="chat-input-field"
-        @keydown.enter.prevent="sendMessage"
-      />
-      <v-btn
-        icon
-        color="primary"
-        variant="flat"
-        class="chat-send-btn"
-        :loading="sending"
-        :disabled="!canSend"
-        @click="sendMessage"
-      >
-        <v-icon size="20">mdi-send</v-icon>
-      </v-btn>
+    <div v-if="!connected" class="ma-4">
+      <CommonWhatsAppNotConnectedAlert />
     </div>
+    <template v-else>
+      <v-card-title class="d-flex align-center justify-end">
+        <v-btn size="small" variant="text" :loading="loading" @click="loadLogs">
+          Refresh
+        </v-btn>
+      </v-card-title>
+      <v-divider />
+      <v-card-text class="chat-timeline-body">
+        <div v-if="loading" class="text-caption text-medium-emphasis">
+          Loading messages...
+        </div>
+        <div v-else-if="!chatItems.length" class="text-caption text-medium-emphasis">
+          {{ emptyMessage }}
+        </div>
+        <div v-else class="chat-timeline-list">
+          <template v-for="group in groupedChatItems" :key="group.key">
+            <div class="chat-day-pill">{{ group.label }}</div>
+            <CommonChatBubble
+              v-for="row in group.items"
+              :key="row.id"
+              :is-outbound="row.isOutbound"
+              :sender="row.sender"
+              :message="row.message"
+              :timestamp="row.timeLabel"
+              :status-icon="row.statusIcon"
+              :avatar-url="row.avatarUrl"
+              :avatar-text="row.avatarText"
+              :automated="row.automated"
+            />
+          </template>
+        </div>
+      </v-card-text>
+      <v-divider />
+      <div class="chat-input-bar">
+        <div class="chat-input-left">
+          <v-menu v-model="emojiMenu" offset-y>
+            <template #activator="{ props: menuProps }">
+              <v-btn v-bind="menuProps" icon variant="text" size="small">
+                <v-icon size="18">mdi-emoticon-outline</v-icon>
+              </v-btn>
+            </template>
+            <ClientOnly>
+              <div class="emoji-menu">
+                <emoji-picker
+                  class="emoji-picker"
+                  @emoji-click="onEmojiClick"
+                />
+              </div>
+            </ClientOnly>
+          </v-menu>
+        </div>
+        <v-text-field
+          v-model="draftMessage"
+          placeholder="Type here..."
+          variant="solo"
+          density="compact"
+          hide-details
+          flat
+          bg-color="#FFFFFF"
+          class="chat-input-field"
+          @keydown.enter.prevent="sendMessage"
+        />
+        <v-btn
+          icon
+          color="primary"
+          variant="flat"
+          class="chat-send-btn"
+          :loading="sending"
+          :disabled="!canSend"
+          @click="sendMessage"
+        >
+          <v-icon size="20">mdi-send</v-icon>
+        </v-btn>
+      </div>
+    </template>
   </v-card>
 </template>
 
 <script setup>
 import { parsedDate } from "@/lib/dateFormatter";
 import CommonChatBubble from "@/components/Common/chatBubble.vue";
+import CommonWhatsAppNotConnectedAlert from "@/components/Common/WhatsAppNotConnectedAlert.vue";
 import { useMainStore } from "@/stores/index";
 import { useCrmStore } from "@/stores/crm";
 
@@ -364,13 +370,17 @@ const resolveContext = () => {
 };
 
 watch(
-  () => [props.leadId, props.leadName, props.leadAvatar, props.orgName, props.orgLogo],
+  () => [props.leadId, props.leadName, props.leadAvatar, props.orgName, props.orgLogo, props.connected],
   () => {
     resolveContext();
     messageCursor.value = null;
     messageHasMore.value = true;
     stopWhapiStream();
     stopWhapiPoll();
+    if (!props.connected) {
+      logs.value = [];
+      return;
+    }
     loadLogs();
     startWhapiStream();
   },
