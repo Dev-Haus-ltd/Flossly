@@ -80,6 +80,7 @@
 import { parsedDate } from "@/lib/dateFormatter";
 import CommonChatBubble from "@/components/Common/chatBubble.vue";
 import { useMainStore } from "@/stores/index";
+import { useCrmStore } from "@/stores/crm";
 
 const props = defineProps({
   leadId: {
@@ -127,10 +128,15 @@ const logs = ref([]);
 const draftMessage = ref("");
 const sending = ref(false);
 const emojiMenu = ref(false);
+const pendingFiles = ref([]);
+const messageCursor = ref(null);
+const messageHasMore = ref(true);
+const loadingMore = ref(false);
 
 
 const resolvedOrg = ref({ name: "", logo: "" });
 const resolvedLead = ref({ name: "", avatar: "" });
+let whapiPollTimer = null;
 
 const canSend = computed(() => {
   const hasText = String(draftMessage.value || "").trim().length > 0;
@@ -231,9 +237,14 @@ const loadLogs = async () => {
   }
   try {
     loading.value = true;
-    const res = await crmStore.getLeadWhatsAppLogs({ leadId: props.leadId, limit: 100 });
-    if (res?.code === 0 && Array.isArray(res.data?.data)) {
-      logs.value = res.data.data;
+    const res = await crmStore.getLeadWhatsAppLogs(props.leadId, 100);
+    const rows = Array.isArray(res?.data?.data)
+      ? res.data.data
+      : Array.isArray(res?.data)
+        ? res.data
+        : [];
+    if (res?.code === 0) {
+      logs.value = rows;
       messageCursor.value = res.data?.nextCursor || null;
       messageHasMore.value = !!res.data?.nextCursor;
       return;
@@ -250,11 +261,7 @@ const loadMore = async () => {
   if (!props.leadId || !messageHasMore.value || loadingMore.value) return;
   try {
     loadingMore.value = true;
-    const res = await crmStore.getLeadWhatsAppLogs({
-      leadId: props.leadId,
-      limit: 100,
-      before: messageCursor.value || undefined,
-    });
+    const res = await crmStore.getLeadWhatsAppLogs(props.leadId, 100);
     if (res?.code === 0 && Array.isArray(res.data?.data)) {
       const older = res.data.data;
       logs.value = [...logs.value, ...older];
@@ -278,7 +285,7 @@ const sendMessage = async () => {
       for (const file of pendingFiles.value) {
         const form = new FormData();
         form.append("file", file);
-        const resUpload = await crmStore.uploadLeadWhatsAppAttachment(form);
+        const resUpload = await crmStore.uploadLeadAttachment(form);
         if (resUpload?.code !== 0) {
           const msg = resUpload?.error || resUpload?.message || "Failed to upload attachment";
           mainStore?.setSnackbar?.({ title: msg, type: "error" });
@@ -314,6 +321,22 @@ const onEmojiClick = (event) => {
   if (!symbol) return;
   draftMessage.value = `${draftMessage.value || ""}${symbol}`;
   emojiMenu.value = false;
+};
+
+const stopWhapiPoll = () => {
+  if (!whapiPollTimer) return;
+  clearInterval(whapiPollTimer);
+  whapiPollTimer = null;
+};
+
+const stopWhapiStream = () => {};
+
+const startWhapiStream = () => {
+  stopWhapiPoll();
+  if (!props.connected || !props.leadId) return;
+  whapiPollTimer = setInterval(() => {
+    loadLogs();
+  }, 15000);
 };
 
 const resolveContext = () => {
@@ -353,6 +376,11 @@ watch(
   },
   { immediate: true }
 );
+
+onBeforeUnmount(() => {
+  stopWhapiPoll();
+  stopWhapiStream();
+});
 </script>
 
 <style scoped>
