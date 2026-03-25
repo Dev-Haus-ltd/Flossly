@@ -6,7 +6,7 @@ import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/lea
 import { formatCrmTriggerPreview } from '~/lib/misc'
 import { success, error } from '../utils/response'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
-import { sendImmediateCrmAutomationsForLead, dispatchSendNowAutomation } from '../utils/crmAutomation.js'
+import { sendImmediateCrmAutomationsForLead, dispatchSendNowAutomation, dispatchSendNowAutomationWithOptions, previewSendNowAutomation } from '../utils/crmAutomation.js'
 import { sendLeadCreatedNotification, sendLeadAssignedNotification, sendLeadUnassignedNotification, sendLeadStatusChangedNotification, sendNotificationToMultipleUsers } from '../utils/fcmNotification.js'
 import { decrypt } from '../utils/crypto'
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from '../utils/whatsapp'
@@ -1675,18 +1675,41 @@ export const saveAutomation = async (event) => {
         ? result.toJSON()
         : { ...(result || {}) }
     if (payload?.trigger?.type === 'send_now' && payload?.enabled && !payload?.leadId) {
-      const job = createSendNowJob({ orgId, key: out?.key || payload?.key })
-      out.sendNowJob = {
-        jobId: job.jobId,
-        status: job.status,
-        startedAt: job.startedAt,
+      const waitForSendNow =
+        payload?.awaitSendNow === true ||
+        String(payload?.awaitSendNow || '').toLowerCase() === 'true'
+      const forceResend =
+        payload?.forceResend === true ||
+        String(payload?.forceResend || '').toLowerCase() === 'true'
+      if (waitForSendNow) {
+        if (!forceResend) {
+          const preview = await previewSendNowAutomation(orgId, out)
+          if (Number(preview?.alreadySent || 0) > 0) {
+            out.sendNowConfirmationRequired = true
+            out.sendNowPreview = preview
+            return success(out)
+          }
+        }
+        try {
+          const summary = await dispatchSendNowAutomationWithOptions(orgId, out, { forceResend })
+          out.sendNowResult = summary
+        } catch (e) {
+          return error(500, e?.message || 'Failed to run send now')
+        }
+      } else {
+        const job = createSendNowJob({ orgId, key: out?.key || payload?.key })
+        out.sendNowJob = {
+          jobId: job.jobId,
+          status: job.status,
+          startedAt: job.startedAt,
+        }
+        dispatchSendNowAutomation(orgId, out)
+          .then((summary) => completeSendNowJob({ orgId, jobId: job.jobId, result: summary }))
+          .catch((e) => {
+            console.error('[CRM send_now] dispatch failed', e?.message)
+            failSendNowJob({ orgId, jobId: job.jobId, err: e })
+          })
       }
-      dispatchSendNowAutomation(orgId, out)
-        .then((summary) => completeSendNowJob({ orgId, jobId: job.jobId, result: summary }))
-        .catch((e) => {
-          console.error('[CRM send_now] dispatch failed', e?.message)
-          failSendNowJob({ orgId, jobId: job.jobId, err: e })
-        })
     }
     return success(out)
   } catch (e) {

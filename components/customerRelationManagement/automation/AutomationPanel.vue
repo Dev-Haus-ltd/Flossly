@@ -1041,7 +1041,8 @@ const saveTrigger = async () => {
       triggerEditingRow.value.enabled = true
     }
     const payload = buildPayload(triggerEditingRow.value)
-    const res = await crmStore.saveAutomation(payload)
+    if (isSendNow) payload.awaitSendNow = true
+    let res = await crmStore.saveAutomation(payload)
     if (res?.code !== 0) {
       mainStore?.setSnackbar?.({
         title: res?.error || res?.message || 'Failed to save trigger',
@@ -1049,8 +1050,52 @@ const saveTrigger = async () => {
       })
       return
     }
+    if (isSendNow && res?.data?.sendNowConfirmationRequired) {
+      const preview = res?.data?.sendNowPreview || {}
+      const alreadySent = Number(preview?.alreadySent || 0)
+      const sendable = Number(preview?.sendable || 0)
+      const confirmResend = typeof window !== 'undefined'
+        ? window.confirm(
+            `This automation was already sent to ${alreadySent} lead(s). ` +
+            `There are ${sendable} new eligible lead(s). ` +
+            `Do you want to resend to previously-sent leads as well?`
+          )
+        : false
+      if (!confirmResend) {
+        mainStore?.setSnackbar?.({
+          title: 'Send now cancelled',
+          type: 'info',
+        })
+        return
+      }
+      res = await crmStore.saveAutomation({ ...payload, forceResend: true })
+      if (res?.code !== 0) {
+        mainStore?.setSnackbar?.({
+          title: res?.error || res?.message || 'Failed to resend automation',
+          type: 'error',
+        })
+        return
+      }
+    }
     closeTriggerDialog()
     if (!isSendNow) return
+    const immediate = res?.data?.sendNowResult
+    if (immediate) {
+      const sent = Number(immediate?.sent || 0)
+      const resent = Number(immediate?.resent || 0)
+      const failed = Number(immediate?.failed || 0)
+      const skipped = Number(immediate?.skippedAlreadySent || 0) + Number(immediate?.skippedMissingRecipient || 0)
+      const chunks = []
+      if (sent) chunks.push(`${sent} sent`)
+      if (resent) chunks.push(`${resent} resent`)
+      if (failed) chunks.push(`${failed} failed`)
+      if (skipped) chunks.push(`${skipped} skipped`)
+      mainStore?.setSnackbar?.({
+        title: chunks.length ? chunks.join(' - ') : 'Send now completed',
+        type: failed ? 'warning' : 'success',
+      })
+      return
+    }
     const jobId = String(res?.data?.sendNowJob?.jobId || '').trim()
     if (!jobId) {
       mainStore?.setSnackbar?.({

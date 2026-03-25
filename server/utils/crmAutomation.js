@@ -433,6 +433,13 @@ export const getBlackFriday = (year) => {
 };
 
 export const dispatchSendNowAutomation = async (orgId, tpl) => {
+  return dispatchSendNowAutomationWithOptions(orgId, tpl, {});
+};
+
+export const dispatchSendNowAutomationWithOptions = async (orgId, tpl, options = {}) => {
+  const forceResend =
+    options?.forceResend === true ||
+    String(options?.forceResend || "").toLowerCase() === "true";
   const org = await Organisation.findByPk(Number(orgId));
   const waConfig = await resolveWhatsAppProviderConfig(orgId);
   const batchSize = 500;
@@ -441,6 +448,7 @@ export const dispatchSendNowAutomation = async (orgId, tpl) => {
     key: String(tpl?.key || ""),
     totalLeads: 0,
     sent: 0,
+    resent: 0,
     skippedAlreadySent: 0,
     skippedMissingRecipient: 0,
     failed: 0,
@@ -458,7 +466,8 @@ export const dispatchSendNowAutomation = async (orgId, tpl) => {
       summary.totalLeads += 1;
       const raw = lead.rawData || {};
       const sentKey = tpl.key;
-      if (hasCrmSent(raw, sentKey)) {
+      const wasAlreadySent = hasCrmSent(raw, sentKey);
+      if (wasAlreadySent && !forceResend) {
         summary.skippedAlreadySent += 1;
         continue;
       }
@@ -480,7 +489,8 @@ export const dispatchSendNowAutomation = async (orgId, tpl) => {
           }
           await sendCrmAutomationWhatsApp(lead, message, templatePayload, tpl?.name);
           await markCrmSent(lead, raw, sentKey);
-          summary.sent += 1;
+          if (wasAlreadySent && forceResend) summary.resent += 1;
+          else summary.sent += 1;
         } else {
           if (!lead?.email) {
             summary.skippedMissingRecipient += 1;
@@ -489,12 +499,54 @@ export const dispatchSendNowAutomation = async (orgId, tpl) => {
           const { subject, html } = buildCrmEmail(lead, tpl, org);
           await sendCrmAutomationEmail(lead, subject, html, tpl?.name);
           await markCrmSent(lead, raw, sentKey);
-          summary.sent += 1;
+          if (wasAlreadySent && forceResend) summary.resent += 1;
+          else summary.sent += 1;
         }
       } catch (e) {
         summary.failed += 1;
         console.error("[CRM send_now] failed for lead", lead.id, e?.message);
       }
+    }
+    offset += leads.length;
+    if (leads.length < batchSize) break;
+  }
+  return summary;
+};
+
+export const previewSendNowAutomation = async (orgId, tpl) => {
+  const summary = {
+    orgId: Number(orgId),
+    key: String(tpl?.key || ""),
+    totalLeads: 0,
+    alreadySent: 0,
+    sendable: 0,
+    missingRecipient: 0,
+  };
+  const batchSize = 500;
+  let offset = 0;
+  while (true) {
+    const leads = await CrmLead.findAll({
+      where: { organisationId: Number(orgId), softDeleted: false },
+      limit: batchSize,
+      offset,
+      order: [["createdAt", "DESC"]],
+    });
+    if (!leads.length) break;
+    for (const lead of leads) {
+      summary.totalLeads += 1;
+      const raw = lead.rawData || {};
+      const sentKey = tpl.key;
+      const alreadySent = hasCrmSent(raw, sentKey);
+      if (alreadySent) {
+        summary.alreadySent += 1;
+      }
+      const type = String(tpl?.type || "Email").toLowerCase();
+      const hasRecipient = type === "whatsapp" ? !!lead?.telephone : !!lead?.email;
+      if (!hasRecipient) {
+        summary.missingRecipient += 1;
+        continue;
+      }
+      if (!alreadySent) summary.sendable += 1;
     }
     offset += leads.length;
     if (leads.length < batchSize) break;
