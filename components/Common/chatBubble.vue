@@ -16,7 +16,39 @@
         </div>
         <div class="chat-bubble">
           <div v-if="automated" class="chat-bubble-badge">Automated</div>
-          <p class="mb-1 chat-bubble-text">{{ message }}</p>
+          <div v-if="parsedAttachments.length" class="chat-attachments">
+            <template v-for="(att, i) in parsedAttachments" :key="i">
+              <img
+                v-if="att.type === 'image' || att.type === 'sticker'"
+                :src="att.url"
+                class="chat-attachment-image"
+                @error="(e) => e.target.style.display = 'none'"
+              />
+              <video
+                v-else-if="att.type === 'video'"
+                :src="att.url"
+                controls
+                class="chat-attachment-video"
+              />
+              <audio
+                v-else-if="att.type === 'audio'"
+                :src="att.url"
+                controls
+                class="chat-attachment-audio"
+              />
+              <a
+                v-else-if="att.url"
+                :href="att.url"
+                target="_blank"
+                rel="noopener"
+                class="chat-attachment-file"
+              >
+                <v-icon size="16" class="mr-1">mdi-paperclip</v-icon>
+                {{ att.name || 'Attachment' }}
+              </a>
+            </template>
+          </div>
+          <p v-if="messageText" class="mb-1 chat-bubble-text">{{ messageText }}</p>
           <div class="chat-bubble-meta">
             <span>{{ timestamp || "N/A" }}</span>
             <v-icon v-if="statusIcon" size="14" class="chat-status-icon">
@@ -42,6 +74,7 @@ const props = defineProps({
   isOutbound: { type: Boolean, default: false },
   sender: { type: String, default: "" },
   message: { type: String, default: "" },
+  attachments: { type: [Array, null], default: null },
   timestamp: { type: String, default: "" },
   statusIcon: { type: String, default: "" },
   avatarUrl: { type: String, default: "" },
@@ -64,6 +97,23 @@ watch(
   () => updateAvatarVisibility(),
   { immediate: true }
 );
+
+const parsedAttachments = computed(() => {
+  if (!Array.isArray(props.attachments)) return [];
+  return props.attachments
+    .map((att) => ({
+      type: String(att?.type || "").toLowerCase(),
+      url: att?.payload?.url || att?.url || "",
+      name: att?.payload?.name || att?.name || "",
+    }))
+    .filter((att) => att.url);
+});
+
+// Only show raw "[Attachment]" text if there are no renderable attachments
+const messageText = computed(() => {
+  if (props.message === "[Attachment]" && parsedAttachments.value.length) return "";
+  return props.message;
+});
 </script>
 
 <style scoped>
@@ -89,7 +139,7 @@ watch(
 
 .chat-bubble-content {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 10px;
 }
 
@@ -180,5 +230,47 @@ watch(
 
 .chat-avatar--image {
   background: transparent;
+}
+
+.chat-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.chat-attachment-image {
+  max-width: 240px;
+  max-height: 200px;
+  border-radius: 8px;
+  object-fit: cover;
+  display: block;
+  cursor: pointer;
+}
+
+.chat-attachment-video {
+  max-width: 280px;
+  border-radius: 8px;
+  display: block;
+}
+
+.chat-attachment-audio {
+  max-width: 260px;
+  display: block;
+}
+
+.chat-attachment-file {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  color: #0061fb;
+  text-decoration: none;
+  padding: 4px 6px;
+  background: rgba(0, 97, 251, 0.06);
+  border-radius: 6px;
+}
+
+.chat-attachment-file:hover {
+  text-decoration: underline;
 }
 </style>

@@ -587,7 +587,7 @@ const whatsAppStatus = reactive({
   verifiedName: '',
 });
 const whatsAppUsage = reactive({ count: 0, limit: 0 });
-const isLoading = ref(false);
+const isLoading = ref(true);
 const showBookingDrawer = ref(false);
 const bookingLead = ref(null);
 const bookingDateInput = ref(new Date().toISOString().slice(0,10));
@@ -1465,6 +1465,13 @@ const fetchLeads = async (filters = {}) => {
   }
 };
 
+// Background refresh — does NOT toggle isLoading so the table stays mounted
+const silentRefreshLeads = async (filters = {}) => {
+  try {
+    await Promise.all([fetchActiveLeads(filters), fetchArchivedLeads(filters)]);
+  } catch {}
+};
+
 const onActivePageChange = async (val) => {
   if (activePage.value === val) return;
   activePage.value = val;
@@ -1561,7 +1568,7 @@ const startLeadsPolling = () => {
   if (leadsPollTimer) return;
   leadsPollTimer = setInterval(async () => {
     if (!isConnected.value || isLoading.value) return;
-    await fetchLeads(activeFilters.value);
+    await silentRefreshLeads(activeFilters.value);
   }, 20000);
 };
 const stopLeadsPolling = () => {
@@ -1580,7 +1587,7 @@ const startMetaStream = () => {
   metaEventSource = new EventSource('/api/meta/stream');
   metaEventSource.addEventListener('lead', async () => {
     if (isLoading.value) return;
-    await fetchLeads(activeFilters.value);
+    await silentRefreshLeads(activeFilters.value);
   });
   metaEventSource.onerror = () => {
     stopMetaStream();

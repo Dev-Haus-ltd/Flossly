@@ -1263,6 +1263,22 @@ export const webhook = async (event) => {
               })
             }
 
+            // Enrich participant name/avatar from Meta Graph API if not yet resolved
+            if (!conversation.participantAvatar || conversation.participantName === senderId) {
+              try {
+                const pageToken = decrypt(account.accessTokenEnc)
+                const profileResp = await $fetch(
+                  `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(senderId)}?fields=name,profile_pic&access_token=${encodeURIComponent(pageToken)}`,
+                  { method: 'GET' }
+                )
+                if (profileResp?.name || profileResp?.profile_pic) {
+                  if (profileResp.name) conversation.participantName = profileResp.name
+                  if (profileResp.profile_pic) conversation.participantAvatar = profileResp.profile_pic
+                  await conversation.save()
+                }
+              } catch {}
+            }
+
             const messageText = text || (attachments ? '[Attachment]' : '')
             if (!messageText) continue
 
@@ -1297,6 +1313,7 @@ export const webhook = async (event) => {
               if (userIds.length) {
                 await sendNotificationToMultipleUsers({
                   userIds,
+                  organisationId: orgId,
                   title: `New ${platform === 'instagram' ? 'Instagram' : 'Messenger'} DM`,
                   body: messageText.length > 80 ? `${messageText.slice(0, 80)}...` : messageText,
                   type: 'meta_dm',

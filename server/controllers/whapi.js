@@ -9,6 +9,7 @@ import {
 import { normalizeWhatsAppNumber, logWhatsAppMessage } from "../utils/whatsapp";
 import { success, error } from "../utils/response";
 import { addWhapiClient, broadcastWhapiEvent } from "../utils/whapiStream";
+import { sendNotificationToMultipleUsers } from "../utils/fcmNotification";
 import { encrypt, decrypt } from "../utils/crypto";
 import { getWhapiEnvConfig, getWhapiPartnerConfig } from "../utils/whatsappProvider";
 
@@ -880,6 +881,34 @@ export const webhook = async (event) => {
         content,
       });
       broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+
+      // Push notification to all org members
+      try {
+        const orgUsers = await UserOrganisation.findAll({
+          where: { organisationId: orgId },
+          attributes: ["userId"],
+        });
+        const userIds = orgUsers.map((u) => u.userId).filter(Boolean);
+        if (userIds.length) {
+          const senderLabel = lead.name || lead.telephone || fromDigits;
+          const preview = String(content?.text || content?.caption || "[Media]").slice(0, 80);
+          await sendNotificationToMultipleUsers({
+            userIds,
+            organisationId: orgId,
+            title: `New WhatsApp message from ${senderLabel}`,
+            body: preview,
+            type: "whatsapp_message",
+            referenceType: "lead",
+            referenceId: lead.id,
+            data: {
+              leadId: String(lead.id),
+              leadName: String(senderLabel),
+              url: `/crm/leads?leadId=${lead.id}&tab=communication`,
+            },
+            priority: "high",
+          });
+        }
+      } catch {}
     }
 
     return success({ received: true });
