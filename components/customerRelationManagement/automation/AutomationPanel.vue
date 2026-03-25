@@ -561,9 +561,17 @@ const buildTriggerFromForm = () => {
   return { type: triggerType, days: sanitizeNumber(triggerForm.triggerDays, 0) }
 }
 
-const triggerPreviewText = computed(() =>
-  formatCrmTriggerPreview(buildTriggerFromForm())
-)
+const triggerPreviewText = computed(() => {
+  const nextTrigger = buildTriggerFromForm()
+  if (nextTrigger?.type !== 'send_now') {
+    return formatCrmTriggerPreview(nextTrigger)
+  }
+  const channel = String(triggerEditingRow.value?.type || 'Email').toLowerCase()
+  if (channel === 'whatsapp') {
+    return 'Message will be sent immediately when you click Save Trigger.'
+  }
+  return 'Email will be sent immediately when you click Save Trigger.'
+})
 
 const hydrateTriggerForm = (trigger = {}) => {
   const type = String(trigger?.type || 'inquiry_days')
@@ -1037,20 +1045,53 @@ const onToggleEnabled = async (row, val) => {
   try { await crmStore.saveAutomation(payload) } catch (e) {}
 }
 
+const sendImmediateLeadMail = async (row) => {
+  if (!resolvedLeadId.value) return null
+  if (String(row?.type || 'Email').toLowerCase() === 'whatsapp') return null
+  const def = resolveDefault(row || {})
+  const rawSubject = row?.subject || def.subject || def.name || row?.name || 'Automation'
+  const rawTemplate = row?.template && String(row.template).trim()
+    ? row.template
+    : (def.template || '')
+  const subject = applyCrmPlaceholders(rawSubject, {
+    lead: props.lead || null,
+    recipient: previewRecipient.value,
+    practiceName: practiceName.value,
+    org: resolveOrgDetails(),
+  })
+  const html = applyCrmPlaceholders(rawTemplate, {
+    lead: props.lead || null,
+    recipient: previewRecipient.value,
+    practiceName: practiceName.value,
+    org: resolveOrgDetails(),
+  })
+  return crmStore.sendLeadMail({
+    leadIds: [resolvedLeadId.value],
+    subject,
+    html,
+    key: `automation_${row?.key || 'send_now'}`,
+  })
+}
+
 const saveTrigger = async () => {
   if (!triggerEditingRow.value) return
   try {
+    const selectedRow = triggerEditingRow.value
     triggerSaving.value = true
     const nextTrigger = buildTriggerFromForm()
     const isSendNow = nextTrigger?.type === 'send_now'
-    triggerEditingRow.value.trigger = nextTrigger
-    triggerEditingRow.value.sending = formatCrmTriggerPreview(nextTrigger)
+    selectedRow.trigger = nextTrigger
+    selectedRow.sending = formatCrmTriggerPreview(nextTrigger)
     if (isSendNow) {
       // "Send Now" should dispatch immediately, so ensure row is enabled.
-      triggerEditingRow.value.enabled = true
+      selectedRow.enabled = true
     }
-    const payload = buildPayload(triggerEditingRow.value)
-    if (isSendNow) payload.awaitSendNow = true
+    const payload = buildPayload(selectedRow)
+    const isLeadSendNowEmail =
+      isSendNow &&
+      !!resolvedLeadId.value &&
+      String(selectedRow?.type || 'Email').toLowerCase() !== 'whatsapp'
+    if (isSendNow && !isLeadSendNowEmail) payload.awaitSendNow = true
     let res = await crmStore.saveAutomation(payload)
     if (res?.code !== 0) {
       mainStore?.setSnackbar?.({
@@ -1059,7 +1100,7 @@ const saveTrigger = async () => {
       })
       return
     }
-    if (isSendNow && res?.data?.sendNowConfirmationRequired) {
+    if (isSendNow && !isLeadSendNowEmail && res?.data?.sendNowConfirmationRequired) {
       const preview = res?.data?.sendNowPreview || {}
       const alreadySent = Number(preview?.alreadySent || 0)
       const sendable = Number(preview?.sendable || 0)
@@ -1088,6 +1129,22 @@ const saveTrigger = async () => {
     }
     closeTriggerDialog()
     if (!isSendNow) return
+    if (isLeadSendNowEmail) {
+      const sendRes = await sendImmediateLeadMail(selectedRow)
+      if (sendRes?.code === 0) {
+        const sent = Number(sendRes?.data?.sent || 0)
+        mainStore?.setSnackbar?.({
+          title: sent ? `Mail sent to ${sent} recipient(s)` : 'Mail sent successfully',
+          type: 'success',
+        })
+        return
+      }
+      mainStore?.setSnackbar?.({
+        title: sendRes?.error || sendRes?.message || 'Failed to send email',
+        type: 'error',
+      })
+      return
+    }
     const immediate = res?.data?.sendNowResult
     if (immediate) {
       const sent = Number(immediate?.sent || 0)
