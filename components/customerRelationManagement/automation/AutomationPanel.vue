@@ -1022,6 +1022,7 @@ const onToggleEnabled = async (row, val) => {
     sending: row.sending || def.sending || '',
     enabled: row.enabled,
     template: (row.template && row.template.trim()) ? row.template : (def.template || ''),
+    trigger: row.trigger || def.trigger || undefined,
   })
   try { await crmStore.saveAutomation(payload) } catch (e) {}
 }
