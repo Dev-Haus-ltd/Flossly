@@ -260,20 +260,20 @@ const connectionHelp = computed(() => {
     return {
       title: "Messenger is not connected",
       description:
-        "To receive Facebook Messenger conversations here, please connect your Facebook Page in CRM connections.",
+        "To receive Facebook Messenger conversations here, connect Meta in CRM Connections. Messenger and Instagram are authorized together in the same Meta connection flow.",
     };
   }
   if (activeTab.value === "instagram") {
     return {
       title: "Instagram is not connected",
       description:
-        "To receive Instagram Direct Messages here, please authorize your Instagram Business account in CRM connections.",
+        "To receive Instagram Direct Messages here, connect Meta in CRM Connections. Instagram is authorized through the same Meta connection used for Messenger.",
     };
   }
   return {
     title: "No messaging channels connected",
     description:
-      "Connect Facebook Messenger and Instagram in CRM connections to fetch incoming messages and reply from this inbox.",
+      "Connect Meta in CRM Connections to authorize both Facebook Messenger and Instagram, fetch incoming messages, and reply from this inbox.",
   };
 });
 
