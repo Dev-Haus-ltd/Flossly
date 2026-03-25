@@ -37,6 +37,16 @@
               </v-btn>
               <v-btn
                 v-if="isMetaConnected"
+                color="primary"
+                variant="outlined"
+                rounded="lg"
+                class="action-btn"
+                @click="integrateMeta"
+              >
+                Reconnect
+              </v-btn>
+              <v-btn
+                v-if="isMetaConnected"
                 color="grey-darken-1"
                 variant="outlined"
                 rounded="lg"

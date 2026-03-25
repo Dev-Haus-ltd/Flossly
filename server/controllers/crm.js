@@ -6,7 +6,7 @@ import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/lea
 import { formatCrmTriggerPreview } from '~/lib/misc'
 import { success, error } from '../utils/response'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
-import { sendImmediateCrmAutomationsForLead } from '../utils/crmAutomation.js'
+import { sendImmediateCrmAutomationsForLead, dispatchSendNowAutomation } from '../utils/crmAutomation.js'
 import { sendLeadCreatedNotification, sendLeadAssignedNotification, sendLeadUnassignedNotification, sendLeadStatusChangedNotification, sendNotificationToMultipleUsers } from '../utils/fcmNotification.js'
 import { decrypt } from '../utils/crypto'
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from '../utils/whatsapp'
@@ -137,6 +137,8 @@ const normalizeAutomationTrigger = (trigger) => {
     return Number.isFinite(num) ? num : fallback
   }
   switch (type) {
+    case 'send_now':
+      return { type }
     case 'inquiry_days':
     case 'birthday_offset':
       return { type, days: safeNumber(trigger.days, 0) }
@@ -1661,6 +1663,11 @@ export const saveAutomation = async (event) => {
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const result = await applyAutomationSave({ orgId, payload })
+    if (payload?.trigger?.type === 'send_now' && payload?.enabled && !payload?.leadId) {
+      dispatchSendNowAutomation(orgId, result).catch((e) =>
+        console.error('[CRM send_now] dispatch failed', e?.message)
+      )
+    }
     return success(result)
   } catch (e) {
     return error(500, e.message)
@@ -1679,11 +1686,20 @@ export const saveAutomationBatch = async (event) => {
     const transaction = await DB.transaction()
     try {
       const results = []
+      const sendNowItems = []
       for (const item of items) {
         const res = await applyAutomationSave({ orgId, payload: item, transaction })
         results.push(res)
+        if (item?.trigger?.type === 'send_now' && item?.enabled && !item?.leadId) {
+          sendNowItems.push(res)
+        }
       }
       await transaction.commit()
+      for (const tpl of sendNowItems) {
+        dispatchSendNowAutomation(orgId, tpl).catch((e) =>
+          console.error('[CRM send_now] batch dispatch failed', e?.message)
+        )
+      }
       return success({ items: results, updated: results.length })
     } catch (e) {
       await transaction.rollback()

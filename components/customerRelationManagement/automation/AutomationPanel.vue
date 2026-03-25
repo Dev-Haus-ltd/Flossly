@@ -143,7 +143,7 @@
             <v-col
               cols="12"
               md="6"
-              v-if="triggerForm.triggerType !== 'black_friday' && triggerForm.triggerType !== 'month_day' && triggerForm.triggerType !== 'weekday_of_month' && triggerForm.triggerType !== 'birthday_month_start' && triggerForm.triggerType !== 'practice_anniversary'"
+              v-if="triggerForm.triggerType !== 'black_friday' && triggerForm.triggerType !== 'month_day' && triggerForm.triggerType !== 'weekday_of_month' && triggerForm.triggerType !== 'birthday_month_start' && triggerForm.triggerType !== 'practice_anniversary' && triggerForm.triggerType !== 'send_now'"
             >
               <label class="mb-1 fld-lbl">Days Offset</label>
               <v-text-field
@@ -387,6 +387,7 @@ const tableHeaders = [
 ]
 
 const triggerTypes = [
+  { label: 'Send Now', value: 'send_now' },
   { label: 'After enquiry', value: 'inquiry_days' },
   { label: 'Birthday offset', value: 'birthday_offset' },
   { label: 'Birthday month start', value: 'birthday_month_start' },
@@ -518,6 +519,9 @@ const sanitizeNumber = (value, fallback = 0) => {
 
 const buildTriggerFromForm = () => {
   const triggerType = triggerForm.triggerType
+  if (triggerType === 'send_now') {
+    return { type: 'send_now' }
+  }
   if (triggerType === 'black_friday') {
     return { type: 'black_friday', offsetDays: sanitizeNumber(triggerForm.triggerOffsetDays, 0) }
   }
@@ -1018,6 +1022,7 @@ const onToggleEnabled = async (row, val) => {
     sending: row.sending || def.sending || '',
     enabled: row.enabled,
     template: (row.template && row.template.trim()) ? row.template : (def.template || ''),
+    trigger: row.trigger || def.trigger || undefined,
   })
   try { await crmStore.saveAutomation(payload) } catch (e) {}
 }
