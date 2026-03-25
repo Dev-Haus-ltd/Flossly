@@ -108,7 +108,15 @@ export default defineNuxtConfig({
     "nuxt-scheduler",
     // "vue-social-sharing/nuxt"
   ],
-  css: ["vuetify/lib/styles/main.sass", "@/assets/css/fonts.css"],
+  build: {
+    transpile: ["v-phone-input"],
+  },
+  css: [
+    "vuetify/lib/styles/main.sass",
+    "@/assets/css/fonts.css",
+    "v-phone-input/styles",
+    "flag-icons/css/flag-icons.min.css",
+  ],
   // Add loading indicator for page transitions
   loading: {
     color: '#0061FB',
@@ -199,7 +207,7 @@ export default defineNuxtConfig({
   },
   vite: {
     ssr: {
-      noExternal: ["vuetify"], // add the vuetify vite plugin
+      noExternal: ["vuetify", "v-phone-input"], // add the vuetify vite plugin
     },
   },
   devServer: {

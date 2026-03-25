@@ -119,8 +119,9 @@
                       />
                       <p 
                         v-else 
-                        class="ml-2 mb-0 editable-field" 
+                        class="ml-2 mb-0 editable-field break-email" 
                         @click="startEdit(item, 'name')"
+                        :title="resolveLeadName(item)"
                       >
                         {{ resolveLeadName(item) || 'Click to edit' }}
                       </p>
@@ -154,6 +155,7 @@
                     v-else 
                     class="ml-2 mb-0 editable-field break-email" 
                     @click="startEdit(item, 'email')"
+                    :title="resolveLeadEmail(item)"
                   >
                     {{ resolveLeadEmail(item) || 'Click to edit' }}
                   </p>
@@ -242,7 +244,7 @@
               </template>
 
               <template v-else-if="col.key === 'alert'">
-                <DataTableColumnsAlerts :selected="item" @update="updateValueRow(item, 'alert')" />
+                <DataTableColumnsAlerts :selected="item" :alert-options="props.alertOptions" @update="updateValueRow(item, 'alert')" @options-saved="(opts) => emit('alert-options-saved', opts)" />
               </template>
               <template v-else-if="col.key === 'leadStatus'">
                 <div 
@@ -378,7 +380,6 @@
       </v-expansion-panel>
 
       <v-expansion-panel
-        v-if="canViewArchive"
         rounded="lg"
         class="border-sm pb-1"
       >
@@ -393,7 +394,6 @@
                 {{ props.archivedTotal || archivedLeads.length }}
               </v-chip>
             </div>
-            <span class="text-caption text-medium-emphasis">Visible to Owner & Manager</span>
           </div>
         </v-expansion-panel-title>
         <v-expansion-panel-text class="pt-0">
@@ -419,7 +419,7 @@
             :page="props.archivedPage"
             :items-per-page="props.itemsPerPage"
             :items-per-page-options="[10, 25, 50, 100]"
-            :item-selectable="() => false"
+            :item-selectable="() => true"
             @update:model-value="onArchivedSelectionChange"
             @update:page="(val) => emit('update:archivedPage', val)"
             @update:items-per-page="(val) => emit('update:itemsPerPage', val)"
@@ -435,7 +435,6 @@
               <input
                 type="checkbox"
                 :checked="isSelected(internalItem)"
-                disabled
                 @change="() => toggleSelect(internalItem)"
                 class="cust-checkbox"
               />
@@ -466,7 +465,6 @@
                         class="cust-checkbox ma-0"
                         :checked="allSelected"
                         :indeterminate.prop="someSelected && !allSelected"
-                        disabled
                         @change="toggleAllArchived"
                       />
                     </div>
@@ -534,6 +532,46 @@
               </template>
             </template>
           </v-data-table-server>
+          <v-card
+            v-if="selectedArchivedLeads.length"
+            class="action-bar py-4 d-flex justify-center align-center rounded-lg"
+            style="padding: 0px 50px; gap: 40px;"
+            :elevation="5"
+            flat
+          >
+            <div class="selected-count d-flex align-center">
+              <span class="selected-text">
+                {{ selectedArchivedLeads.length }}
+              </span>
+              <p class="ml-3 mt-1">Archived Selected</p>
+            </div>
+
+            <div class="actions-container d-flex align-center" style="gap: 8px;">
+              <div
+                class="action-item d-flex flex-column align-center"
+                @click="confirmRestore = true"
+              >
+                <v-icon size="22" color="#6d6d6d">mdi-restore</v-icon>
+                <span class="action-label">Restore</span>
+              </div>
+
+              <div
+                v-if="canDelete"
+                class="action-item d-flex flex-column align-center"
+                @click="confirmArchivedDelete = true"
+              >
+                <img :src="deleteIcon" alt="Delete" class="action-icon" />
+                <span class="action-label">Delete</span>
+              </div>
+
+              <v-divider vertical class="mx-2" style="height: 40px;" />
+
+              <div class="action-item d-flex flex-column align-center" @click="closeTray">
+                <v-icon size="20" color="#6d6d6d">mdi-close</v-icon>
+                <span class="action-label">Close</span>
+              </div>
+            </div>
+          </v-card>
         </v-expansion-panel-text>
       </v-expansion-panel>
     </v-expansion-panels>
@@ -542,7 +580,7 @@
       v-if="showLeadDetailDialog"
       v-model="showLeadDetailDialog"
       :selected-lead="selectedLead"
-      @close="showLeadDetailDialog = false"
+      @close="handleLeadDialogClose"
     />
 
     <v-dialog v-model="showCompose" max-width="900px">
@@ -578,6 +616,81 @@
       </v-card>
     </v-dialog>
 
+    <v-dialog v-model="showSendPriceCompose" max-width="720px">
+      <v-card class="send-price-card">
+        <div class="d-flex justify-space-between align-center px-6 py-4">
+          <div>
+            <h5 class="mb-1 modal-title">Share Price with Client</h5>
+            <div class="text-caption text-medium-emphasis">{{ sendPrice.recipients.length }} recipient(s)</div>
+          </div>
+          <v-btn icon @click="showSendPriceCompose = false" flat><v-icon>mdi-close</v-icon></v-btn>
+        </div>
+        <v-divider />
+
+        <div class="send-price-body">
+          <div class="px-6 pt-4">
+            <div class="send-price-upload-card">
+              <div v-if="sendPriceAttachment?.link" class="uploaded-file-row mb-3">
+                <div class="uploaded-file-meta">
+                  <v-icon size="18" color="primary" class="mr-2">mdi-file-pdf-box</v-icon>
+                  <div>
+                    <div class="uploaded-file-name">{{ sendPriceAttachment?.name || 'price-list.pdf' }}</div>
+                    <div class="text-caption text-medium-emphasis">
+                      PDF attached{{ sendPriceAttachment?.uploadedAt ? ` • ${formatDate(sendPriceAttachment.uploadedAt)}` : '' }}
+                    </div>
+                  </div>
+                </div>
+                <v-btn size="small" variant="text" color="error" @click="clearSendPriceAttachment">Remove</v-btn>
+              </div>
+
+              <CommonFileUpload :is-single="true" @onFiles="onSendPriceFiles" />
+              <div class="text-caption text-medium-emphasis mt-2">
+                Upload your pricing PDF. Uploading another PDF replaces the current one.
+              </div>
+              <v-progress-linear
+                v-if="sendPriceUploadLoading"
+                indeterminate
+                color="primary"
+                class="mt-2"
+                rounded
+              />
+            </div>
+          </div>
+
+          <div class="px-6 pt-3">
+            <v-text-field
+              v-model="sendPrice.priceLink"
+              label="Paste Price Link"
+              variant="outlined"
+              density="compact"
+              prepend-inner-icon="mdi-link-variant"
+              hide-details
+            />
+          </div>
+
+          <div class="px-6 pt-4 pb-2">
+            <v-text-field
+              v-model="sendPrice.subject"
+              label="Subject"
+              variant="outlined"
+              density="compact"
+              hide-details
+            />
+          </div>
+
+          <div class="px-6 pt-2 pb-4">
+            <div class="text-subtitle-2 text-grey-darken-1 mb-2">Message (Optional)</div>
+            <div ref="sendPriceHolder" class="editor send-price-editor"></div>
+          </div>
+        </div>
+
+        <div class="send-price-footer px-6 py-4 d-flex justify-end" style="gap: 10px">
+          <v-btn variant="outlined" @click="showSendPriceCompose = false">Discard</v-btn>
+          <v-btn color="primary" flat :loading="sendPriceLoading" @click="sendPriceCompose">Send</v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
+
     <v-dialog v-model="showWhatsAppCompose" max-width="720px">
       <v-card class="rounded-lg">
         <div class="d-flex justify-space-between align-center px-4 py-3">
@@ -589,7 +702,12 @@
         </div>
         <v-divider />
 
-        <div class="px-4 pt-4 pb-2">
+        <!-- Not-connected state -->
+        <div v-if="!props.whatsappConnected" class="px-4 pt-4 pb-4">
+          <CommonWhatsAppNotConnectedAlert />
+        </div>
+
+        <div v-else class="px-4 pt-4 pb-2">
           <v-textarea
             v-model="whatsappMessage"
             ref="whatsappTextarea"
@@ -623,7 +741,7 @@
           </div>
         </div>
 
-        <div class="px-4 pb-4 d-flex justify-end">
+        <div v-if="props.whatsappConnected" class="px-4 pb-4 d-flex justify-end">
           <v-btn :loading="whatsappSending" :disabled="!hasWhatsAppRecipients" flat color="primary" @click="sendWhatsAppMessage">
             Send
           </v-btn>
@@ -642,9 +760,25 @@
       v-model="confirmDelete"
       title="Delete leads?"
       :loading="deleting"
-      :message="`Are you sure you want to delete ${selectedLeads.length} lead(s)?`"
+      :message="getPermanentDeleteMessage(selectedLeads.length)"
       @confirm="doDelete"
       @cancel="confirmDelete = false"
+    />
+    <CommonConfirmDialog
+      v-model="confirmRestore"
+      title="Restore leads?"
+      :loading="restoring"
+      :message="`Restore ${selectedArchivedLeads.length} lead(s) back to the main list? They will be marked as New.`"
+      @confirm="doRestore"
+      @cancel="confirmRestore = false"
+    />
+    <CommonConfirmDialog
+      v-model="confirmArchivedDelete"
+      title="Delete archived leads?"
+      :loading="deletingArchived"
+      :message="getPermanentDeleteMessage(selectedArchivedLeads.length)"
+      @confirm="doDeleteArchived"
+      @cancel="confirmArchivedDelete = false"
     />
     <TeamFlossSideBarAddNewstaff
       v-model="addStaffDrawer"
@@ -657,7 +791,8 @@
 
 <script setup>
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
-import { buildRecipientContext, renderWithContext } from '@/lib/templateTokens'
+import { buildRecipientContext } from '@/lib/crm/previewContext'
+import { applyCrmPlaceholders } from '@/lib/crm/placeholders'
 import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
 import { formatAssignedUsers, formatTreatmentValue } from "@/lib/misc";
 import { getLeadDisplayName, getLeadEmail, getLeadPhone } from "@/lib/normalizers/lead";
@@ -675,15 +810,19 @@ import archiveIcon from '@/assets/crm/archive.svg'
 import deleteIcon from '@/assets/crm/delete.svg'
 import exportIcon from '@/assets/crm/export.svg'
 const crmStore = useCrmStore();
-const { user } = useUser();
+const authStore = useAuthStore();
+const { user, setUser } = useUser();
+const route = useRoute();
+const router = useRouter();
 const emit = defineEmits([
   'select',
   'openLead',
-  'delete',
   'book',
+  'refresh',
   'update:activePage',
   'update:archivedPage',
   'update:itemsPerPage',
+  'alert-options-saved',
 ]);
 const props = defineProps({
   leads: { type: Array, default: () => [] },
@@ -699,6 +838,8 @@ const props = defineProps({
   leadSources: { type: Array, required: true },
   treatmentSources: { type: Array, required: true },
   users: { type: Array, required: true },
+  alertOptions: { type: Array, default: () => [] },
+  whatsappConnected: { type: Boolean, default: false },
 });
 const openedPanels = ref([0]);
 const selectedLeads = ref([]);
@@ -708,6 +849,7 @@ const isAllArchived = ref(false);
 const showLeadDetailDialog = ref(false);
 const selectedLead = ref({});
 const commentMenus = reactive({});
+const leadRouteRequestId = ref(0);
 
 const leadStatusOptions = [
   { name: 'New', color: '#36a863' },
@@ -726,17 +868,128 @@ const isArchivedLead = (lead) => {
   const status = (lead?.leadStatus || '').toLowerCase();
   return !!lead?.softDeleted || status === 'archived';
 };
+const activeLeadSource = computed(() =>
+  Array.isArray(props.activeLeads) ? props.activeLeads : (props.leads || [])
+);
+const archivedLeadSource = computed(() =>
+  Array.isArray(props.archivedLeads) ? props.archivedLeads : (props.leads || [])
+);
 const activeLeads = computed(() =>
-  Array.isArray(props.activeLeads)
-    ? props.activeLeads
-    : (props.leads || []).filter((l) => !isArchivedLead(l))
+  activeLeadSource.value.filter((l) => !isArchivedLead(l))
 );
 const archivedLeads = computed(() =>
-  Array.isArray(props.archivedLeads)
-    ? props.archivedLeads
-    : (props.leads || []).filter((l) => isArchivedLead(l))
+  archivedLeadSource.value.filter((l) => isArchivedLead(l))
 );
-const canViewArchive = computed(() => [1, 8].includes(user.value?.roleId));
+const allVisibleLeads = computed(() => [
+  ...(activeLeads.value || []),
+  ...(archivedLeads.value || []),
+]);
+const canDelete = computed(() => [1, 8].includes(user.value?.roleId));
+
+const normalizeLeadForDialog = (lead = {}) => ({
+  ...lead,
+  alert: lead.alert || "",
+  name: getLeadDisplayName(lead) || lead.name || "",
+  email: getLeadEmail(lead) || lead.email || "",
+  telephone: getLeadPhone(lead) || lead.telephone || "",
+  inquiryDate: lead.inquiryDate || "",
+  rawData: lead.rawData || null,
+  dob: lead.dob || null,
+  occupation: lead.occupation || "",
+  location: lead.location || "",
+  leadSource: lead.leadSource?.name
+    ? lead.leadSource
+    : { id: 99, name: lead.leadSource || "Meta Leadgen" },
+  metaPage: lead.metaPage || lead.pageName || lead.pageId || "",
+  leadStatus: lead.leadStatus || "New",
+  treatment: lead.treatment?.name ? lead.treatment : { id: null, name: lead.treatment || "" },
+  assigned: lead.assigned || [],
+  followUpDate: lead.followUpDate || "",
+  comments: lead.comments || "",
+  id: lead.id,
+  softDeleted: !!lead.softDeleted,
+});
+
+const findVisibleLeadById = (leadId) => {
+  const numericLeadId = Number(leadId || 0);
+  if (!numericLeadId) return null;
+  return allVisibleLeads.value.find((lead) => Number(lead?.id) === numericLeadId) || null;
+};
+
+const fetchLeadById = async (leadId) => {
+  const numericLeadId = Number(leadId || 0);
+  if (!numericLeadId) return null;
+
+  const res = await crmStore.listLeads({ id: numericLeadId, includeArchived: true });
+  const rows = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.data?.rows)
+      ? res.data.rows
+      : [];
+
+  return rows[0] || null;
+};
+
+const syncLeadDialogWithRoute = async (rawLeadId = route.query.leadId) => {
+  const numericLeadId = Number(rawLeadId || 0);
+  if (!numericLeadId) return;
+
+  if (showLeadDetailDialog.value && Number(selectedLead.value?.id) === numericLeadId) {
+    return;
+  }
+
+  // Handle org switch for push-driven opens
+  const orgIdFromQuery = route.query.orgId;
+  if (orgIdFromQuery) {
+    const targetOrgId = Number(orgIdFromQuery);
+    const currentOrgId = user.value?.currentLoggedInOrgId;
+
+    if (targetOrgId && currentOrgId && targetOrgId !== currentOrgId) {
+      try {
+        const res = await authStore.switchOrgnanisation({ orgId: targetOrgId });
+        if (res.code === 0) {
+          const profileRes = await authStore.profile();
+          if (profileRes.code === 0 && profileRes.data) {
+            setUser(profileRes.data);
+            // Refresh the leads list in the background for the new org
+            // (non-blocking — dialog opening proceeds concurrently)
+            emit('refresh');
+          }
+        } else {
+          console.error('Org switch failed for lead notification');
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to switch org for lead notification:', error);
+        return;
+      }
+    }
+  }
+
+  const visibleLead = findVisibleLeadById(numericLeadId);
+  if (visibleLead) {
+    selectedLead.value = normalizeLeadForDialog(visibleLead);
+    showLeadDetailDialog.value = true;
+    return;
+  }
+
+  const requestId = ++leadRouteRequestId.value;
+
+  try {
+    const fetchedLead = await fetchLeadById(numericLeadId);
+    if (requestId !== leadRouteRequestId.value) return;
+    if (!fetchedLead) {
+      if (mainStore?.setSnackbar) {
+        mainStore.setSnackbar({ title: 'This lead no longer exists or has been deleted.', type: 'warning' });
+      }
+      return;
+    }
+    selectedLead.value = normalizeLeadForDialog(fetchedLead);
+    showLeadDetailDialog.value = true;
+  } catch (error) {
+    console.error('Failed to open lead from route query', error);
+  }
+};
 
 // Inline editing state
 const editingCell = reactive({
@@ -746,7 +999,7 @@ const editingCell = reactive({
   originalValue: null
 });
 
-const actions = [
+const ALL_ACTIONS = [
   // { key: "call", label: "Call", icon: callIcon },
   { key: "mail", label: "Send Mail", icon: sendMailIcon },
   { key: "whatsapp", label: "WhatsApp", icon: whatsappIcon },
@@ -759,11 +1012,20 @@ const actions = [
   { key: "delete", label: "Delete", icon: deleteIcon },
   { key: "export", label: "Export", icon: exportIcon },
 ];
+const actions = computed(() =>
+  canDelete.value ? ALL_ACTIONS : ALL_ACTIONS.filter(a => a.key !== 'delete')
+);
 const confirmDelete = ref(false);
 const deleting = ref(false);
 const confirmArchive = ref(false);
 const archiving = ref(false);
+const confirmRestore = ref(false);
+const restoring = ref(false);
+const confirmArchivedDelete = ref(false);
+const deletingArchived = ref(false);
 const converting = ref(false);
+const getPermanentDeleteMessage = (count) =>
+  `Delete ${count} lead(s) permanently? This cannot be undone.`;
 const addStaffDrawer = ref(false);
 const showWhatsAppCompose = ref(false);
 const whatsappSending = ref(false);
@@ -786,6 +1048,60 @@ const automationGroupsDirty = ref(false);
 const resolveLeadName = (lead) => getLeadDisplayName(lead);
 const resolveLeadEmail = (lead) => getLeadEmail(lead);
 const resolveLeadPhone = (lead) => getLeadPhone(lead);
+
+const getStoredOrg = () => {
+  if (typeof window === 'undefined') return null
+  try {
+    const storedUser = JSON.parse(localStorage.getItem('user') || '{}')
+    if (storedUser?.userOrganisations?.length && storedUser?.currentLoggedInOrgId) {
+      const activeOrgs = storedUser.userOrganisations.filter((org) => org.status === 'Active')
+      const orgWrapper =
+        activeOrgs.find((org) => org.organisationId === storedUser.currentLoggedInOrgId) ||
+        activeOrgs.find((org) => org.organisation?.id === storedUser.currentLoggedInOrgId)
+      if (orgWrapper?.organisation) return orgWrapper.organisation
+      if (orgWrapper?.name) return orgWrapper
+    }
+  } catch {}
+  return null
+}
+
+const resolveOrgDetails = () => {
+  return (
+    getStoredOrg() ||
+    mainStore?.getOrgDetails ||
+    mainStore?.organisation ||
+    mainStore?.organization ||
+    mainStore?.org ||
+    mainStore?.orgDetails ||
+    {}
+  )
+}
+
+const resolvePracticeName = () => {
+  const org = resolveOrgDetails()
+  return org?.name || '[Practice Name]'
+}
+
+const renderTemplateWithContext = (input, ctx, lead) => {
+  const withMustache = String(input || '')
+    .replaceAll('{{name}}', ctx.name || '')
+    .replaceAll('{{firstName}}', ctx.firstName || '')
+    .replaceAll('{{email}}', ctx.email || '')
+    .replaceAll('{{yourName}}', ctx.yourName || '')
+    .replaceAll('{{info}}', ctx.info || '')
+
+  return applyCrmPlaceholders(withMustache, {
+    recipient: {
+      name: ctx.name || 'User',
+      firstName: ctx.firstName || 'User',
+      email: ctx.email || '',
+      yourName: ctx.yourName || 'Team',
+    },
+    lead: lead || null,
+    org: resolveOrgDetails(),
+    practiceName: resolvePracticeName(),
+  }).replaceAll('[Patient Info]', ctx.info || '')
+}
 
 const whatsappRecipients = computed(() => {
   const nums = (selectedLeads.value || [])
@@ -1054,7 +1370,8 @@ const onActionClick = (key) => {
   else if (key === 'convert') convertSelected();
   else if (key === 'export') exportSelectedLeads();
   else if (key === 'whatsapp') openWhatsAppCompose();
-  else if (['mail','sendPrice','sendForm','shareLocation'].includes(key)) openCompose(key)
+  else if (key === 'sendPrice') openSendPriceCompose();
+  else if (['mail','sendForm','shareLocation'].includes(key)) openCompose(key)
 };
 
 const formatDate = (d) => {
@@ -1165,13 +1482,26 @@ const toggleAll = () => {
   }
 };
 const toggleAllArchived = () => {
-  isAllArchived.value = false;
-  selectedArchivedLeads.value = [];
+  const allCurrentlySelected =
+    archivedLeads.value.length > 0 &&
+    archivedLeads.value.every((lead) =>
+      selectedArchivedLeads.value.some((selected) => selected.id === lead.id)
+    );
+
+  if (allCurrentlySelected) {
+    isAllArchived.value = false;
+    selectedArchivedLeads.value = [];
+  } else {
+    selectedArchivedLeads.value = [...archivedLeads.value];
+    isAllArchived.value = true;
+  }
 };
 const onArchivedSelectionChange = () => {
-  if (selectedArchivedLeads.value.length) {
-    selectedArchivedLeads.value = [];
-  }
+  isAllArchived.value =
+    !!archivedLeads.value.length &&
+    archivedLeads.value.every((lead) =>
+      selectedArchivedLeads.value.some((selected) => selected.id === lead.id)
+    );
 };
 const closeTray = () => {
   isAllSelected.value = false;
@@ -1179,6 +1509,8 @@ const closeTray = () => {
   isAllArchived.value = false;
   selectedArchivedLeads.value = [];
   confirmArchive.value = false;
+  confirmRestore.value = false;
+  confirmArchivedDelete.value = false;
 };
 const isResizing = ref(false);
 let startX = 0;
@@ -1215,10 +1547,17 @@ const updateValueRow = async (row, key) => {
     const payload = { id: row.id }
     if (key === 'leadSource') payload.leadSource = row?.leadSource?.name || row.leadSource || null
     else if (key === 'treatment') payload.treatment = row?.treatment || null
-    else if (key === 'leadStatus') payload.leadStatus = row?.leadStatus || null
+    else if (key === 'leadStatus') {
+      payload.leadStatus = row?.leadStatus || null
+      payload.softDeleted = String(row?.leadStatus || '').toLowerCase() === 'archived'
+    }
     else if (key === 'alert') payload.alert = row?.alert || null
     else return
-    await crmStore.updateLead(payload)
+    const res = await crmStore.updateLead(payload)
+    if (res?.code === 0 && key === 'leadStatus') {
+      row.softDeleted = !!payload.softDeleted
+      emit('refresh')
+    }
   } catch (e) {}
 };
 
@@ -1226,6 +1565,27 @@ const openLeadDialog = (lead) => {
   selectedLead.value = lead;
   showLeadDetailDialog.value = true;
 };
+
+const handleLeadDialogClose = () => {
+  showLeadDetailDialog.value = false;
+
+  if (route.query.leadId || route.query.orgId) {
+    const newQuery = { ...route.query };
+    delete newQuery.leadId;
+    delete newQuery.orgId;
+    router.replace({ query: newQuery });
+  }
+};
+
+watch(
+  () => route.query.leadId,
+  (leadId) => {
+    if (leadId) {
+      syncLeadDialogWithRoute(leadId);
+    }
+  },
+  { immediate: true }
+);
 
 // Compose mail dialog using Editor.js (client-only)
 const showCompose = ref(false)
@@ -1236,6 +1596,18 @@ let EditorCtor = null
 let Header = null
 let List = null
 const compose = reactive({ key: 'mail', subject: '', recipients: [], html: '' })
+const showSendPriceCompose = ref(false)
+const sendPriceLoading = ref(false)
+const sendPriceUploadLoading = ref(false)
+const sendPriceHolder = ref(null)
+let sendPriceEditor = null
+const sendPrice = reactive({
+  subject: '',
+  recipients: [],
+  html: '',
+  priceLink: '',
+})
+const sendPriceAttachment = ref(null)
 
 const defaultTemplates = {
   sendPrice: {
@@ -1263,29 +1635,47 @@ const defaultTemplates = {
   mail: { subject: 'Message from our practice', html: `<p>Dear [Patient Name],</p><p>Write your message here.</p><p>Regards,<br/>[Your Name]</p>` },
 }
 
+const ensureEditorModules = async () => {
+  if (typeof window === 'undefined') return false
+  if (EditorCtor && Header && List) return true
+  const [{ default: E }, { default: H }, { default: L }] = await Promise.all([
+    import('@editorjs/editorjs'),
+    import('@editorjs/header'),
+    import('@editorjs/list'),
+  ])
+  EditorCtor = E
+  Header = H
+  List = L
+  return true
+}
+
+const getSelectedEmails = () => {
+  const emails = (selectedLeads.value || [])
+    .map((lead) => resolveLeadEmail(lead))
+    .filter(Boolean)
+  return [...new Set(emails)]
+}
 
 async function openCompose(actionKey) {
   compose.key = actionKey
-  const emails = (selectedLeads.value || []).map(l => l?.email).filter(Boolean)
-  compose.recipients = [...new Set(emails)]
+  compose.recipients = getSelectedEmails()
   const def = defaultTemplates[actionKey] || defaultTemplates.mail
   // Personalize subject/body for preview based on selection
   const many = (selectedLeads.value || []).length !== 1
   const lead = many ? null : (selectedLeads.value || [])[0]
-  const ctx = buildRecipientContext({ lead, user, many })
-  compose.subject = renderWithContext(def.subject, ctx)
-  compose.html = renderWithContext(def.html, ctx)
+  const ctx = buildRecipientContext({
+    lead,
+    user,
+    many,
+    fallbackName: 'User',
+    fallbackEmail: '',
+    fallbackYourName: 'Team',
+  })
+  compose.subject = renderTemplateWithContext(def.subject, ctx, lead)
+  compose.html = renderTemplateWithContext(def.html, ctx, lead)
   showCompose.value = true
   await nextTick()
-  if (typeof window === 'undefined') return
-  if (!EditorCtor || !Header || !List) {
-    const [{ default: E }, { default: H }, { default: L }] = await Promise.all([
-      import('@editorjs/editorjs'),
-      import('@editorjs/header'),
-      import('@editorjs/list'),
-    ])
-    EditorCtor = E; Header = H; List = L
-  }
+  if (!(await ensureEditorModules())) return
   if (composeEditor) { composeEditor.destroy(); composeEditor = null }
   composeEditor = new EditorCtor({
     holder: composeHolder.value,
@@ -1299,6 +1689,91 @@ async function openCompose(actionKey) {
 }
 
 watch(() => showCompose.value, (v) => { if (!v && composeEditor) { composeEditor.destroy(); composeEditor = null } })
+
+const openSendPriceCompose = async () => {
+  sendPrice.recipients = getSelectedEmails()
+  const def = defaultTemplates.sendPrice
+  const many = (selectedLeads.value || []).length !== 1
+  const lead = many ? null : (selectedLeads.value || [])[0]
+  const ctx = buildRecipientContext({
+    lead,
+    user,
+    many,
+    fallbackName: 'User',
+    fallbackEmail: '',
+    fallbackYourName: 'Team',
+  })
+  sendPrice.subject = renderTemplateWithContext(def.subject, ctx, lead)
+  sendPrice.html = renderTemplateWithContext(def.html, ctx, lead)
+  sendPrice.priceLink = ''
+  sendPriceAttachment.value = null
+
+  const leadIds = (selectedLeads.value || []).map((row) => Number(row?.id)).filter(Boolean)
+  if (leadIds.length) {
+    try {
+      const recent = await crmStore.getLeadPriceAttachmentRecent({ leadIds })
+      if (recent?.code === 0 && recent?.data) {
+        sendPriceAttachment.value = recent.data.attachment || null
+        sendPrice.priceLink = String(recent.data.priceLink || '')
+        if (recent.data.subject) sendPrice.subject = String(recent.data.subject)
+      }
+    } catch {}
+  }
+
+  showSendPriceCompose.value = true
+  await nextTick()
+  if (!(await ensureEditorModules())) return
+  if (sendPriceEditor) {
+    sendPriceEditor.destroy()
+    sendPriceEditor = null
+  }
+  sendPriceEditor = new EditorCtor({
+    holder: sendPriceHolder.value,
+    tools: { header: Header, list: List },
+    data: htmlToBlocks(sendPrice.html || ''),
+    async onChange(api) {
+      const saved = await api.saver.save()
+      sendPrice.html = blocksToHtml(saved)
+    },
+  })
+}
+
+watch(() => showSendPriceCompose.value, (v) => {
+  if (!v && sendPriceEditor) {
+    sendPriceEditor.destroy()
+    sendPriceEditor = null
+  }
+})
+
+const clearSendPriceAttachment = () => {
+  sendPriceAttachment.value = null
+}
+
+const onSendPriceFiles = async (files) => {
+  const file = Array.isArray(files) ? files[files.length - 1] : null
+  if (!file) return
+  const isPdf = String(file?.type || '').toLowerCase().includes('pdf') || String(file?.name || '').toLowerCase().endsWith('.pdf')
+  if (!isPdf) {
+    mainStore?.setSnackbar?.({ title: 'Only PDF files are allowed', type: 'error' })
+    return
+  }
+  try {
+    sendPriceUploadLoading.value = true
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await crmStore.uploadLeadAttachment(formData)
+    if (res?.code === 0 && res?.data?.link) {
+      sendPriceAttachment.value = res.data
+      mainStore?.setSnackbar?.({ title: 'Price list uploaded', type: 'success' })
+      return
+    }
+    mainStore?.setSnackbar?.({ title: res?.message || 'Failed to upload file', type: 'error' })
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || 'Failed to upload file', type: 'error' })
+  } finally {
+    sendPriceUploadLoading.value = false
+  }
+}
 
 const openWhatsAppCompose = () => {
   if (!selectedLeads.value.length) return;
@@ -1343,15 +1818,72 @@ async function sendCompose() {
     const leadIds = selectedLeads.value.map(l => l.id)
     const many = (selectedLeads.value || []).length !== 1
     const lead = many ? null : (selectedLeads.value || [])[0]
-    const ctx = buildRecipientContext({ lead, user, many })
-    const resolvedSubject = renderWithContext(compose.subject, ctx)
-    const resolvedHtml = renderWithContext(compose.html, ctx)
+    const ctx = buildRecipientContext({
+      lead,
+      user,
+      many,
+      fallbackName: 'User',
+      fallbackEmail: '',
+      fallbackYourName: 'Team',
+    })
+    const resolvedSubject = renderTemplateWithContext(compose.subject, ctx, lead)
+    const resolvedHtml = renderTemplateWithContext(compose.html, ctx, lead)
     const res = await crmStore.sendLeadMail({ leadIds, subject: resolvedSubject, html: resolvedHtml, key: `manual_${compose.key}` })
     if (res && res.code === 0) {
       if (mainStore && mainStore.setSnackbar) mainStore.setSnackbar({ title: `Mail sent to ${res.data?.sent || compose.recipients.length} recipient(s)`, type: 'success' })
       showCompose.value = false
     }
   } finally { composeLoading.value = false }
+}
+
+async function sendPriceCompose() {
+  try {
+    sendPriceLoading.value = true
+    const leadIds = selectedLeads.value.map((lead) => lead.id).filter(Boolean)
+    if (!leadIds.length) return
+    const many = (selectedLeads.value || []).length !== 1
+    const lead = many ? null : (selectedLeads.value || [])[0]
+    const ctx = buildRecipientContext({
+      lead,
+      user,
+      many,
+      fallbackName: 'User',
+      fallbackEmail: '',
+      fallbackYourName: 'Team',
+    })
+    const resolvedSubject = renderTemplateWithContext(sendPrice.subject || 'Price List', ctx, lead)
+    const resolvedBody = sendPrice.html ? renderTemplateWithContext(sendPrice.html, ctx, lead) : ''
+    const link = String(sendPrice.priceLink || '').trim()
+    const linkHtml = link
+      ? `<p><strong>Price Link:</strong> <a href="${link}" target="_blank" rel="noopener noreferrer">${link}</a></p>`
+      : ''
+    const resolvedHtml = [resolvedBody, linkHtml].filter(Boolean).join('')
+    const attachments = sendPriceAttachment.value?.link ? [sendPriceAttachment.value] : []
+
+    const res = await crmStore.sendLeadMail({
+      leadIds,
+      subject: resolvedSubject,
+      html: resolvedHtml,
+      key: 'manual_sendPrice',
+      attachments,
+      metadata: {
+        priceLink: link,
+      },
+    })
+    if (res?.code === 0) {
+      const sent = Number(res?.data?.sent || 0)
+      mainStore?.setSnackbar?.({
+        title: sent ? `Mail sent to ${sent} recipient(s)` : 'No emails were sent',
+        type: sent ? 'success' : 'warning',
+      })
+      showSendPriceCompose.value = false
+    }
+  } catch (e) {
+    const msg = e?.data?.message || e?.message || 'Failed to send price email'
+    mainStore?.setSnackbar?.({ title: msg, type: 'error' })
+  } finally {
+    sendPriceLoading.value = false
+  }
 }
 
 async function sendWhatsAppMessage() {
@@ -1410,18 +1942,41 @@ const assignLead = async (lead, user) => {
   } catch (e) { /* noop */ }
 };
 
-const doDelete = async () => {
-  try {
-    deleting.value = true
-    const ids = selectedLeads.value.map(l => l.id)
-    const res = await crmStore.deleteLeads(ids)
-    if (res?.code === 0) emit('delete', ids)
-  } finally {
-    deleting.value = false
-    confirmDelete.value = false
-    closeTray()
+const deleteLeadRows = async (rows, options = {}) => {
+  const {
+    loadingRef,
+    closeConfirm,
+    successTitle = 'Lead(s) deleted permanently',
+    errorTitle = 'Unable to delete leads',
+  } = options;
+  if (!rows.length) {
+    closeConfirm?.();
+    return;
   }
-}
+  try {
+    if (loadingRef) loadingRef.value = true;
+    const ids = rows.map((lead) => lead.id).filter(Boolean);
+    const res = await crmStore.deleteLeads(ids);
+    if (res?.code === 0) {
+      mainStore?.setSnackbar?.({ title: successTitle, type: 'success' });
+      emit('refresh');
+    }
+  } catch (e) {
+    console.error(errorTitle, e);
+    mainStore?.setSnackbar?.({ title: errorTitle, type: 'error' });
+  } finally {
+    if (loadingRef) loadingRef.value = false;
+    closeConfirm?.();
+    closeTray();
+  }
+};
+
+const doDelete = async () => {
+  await deleteLeadRows(selectedLeads.value, {
+    loadingRef: deleting,
+    closeConfirm: () => { confirmDelete.value = false; },
+  });
+};
 
 const doArchive = async () => {
   if (!selectedLeads.value.length) {
@@ -1438,6 +1993,7 @@ const doArchive = async () => {
       }
     }
     if (mainStore?.setSnackbar) mainStore.setSnackbar({ title: 'Lead(s) archived', type: 'success' });
+    emit('refresh');
   } catch (e) {
     console.error('Failed to archive leads', e);
     if (mainStore?.setSnackbar) mainStore.setSnackbar({ title: 'Unable to archive leads', type: 'error' });
@@ -1446,6 +2002,45 @@ const doArchive = async () => {
     confirmArchive.value = false;
     closeTray();
   }
+};
+
+const doRestore = async () => {
+  if (!selectedArchivedLeads.value.length) {
+    confirmRestore.value = false;
+    return;
+  }
+  try {
+    restoring.value = true;
+    for (const lead of selectedArchivedLeads.value) {
+      const res = await crmStore.updateLead({
+        id: lead.id,
+        leadStatus: 'New',
+        softDeleted: false,
+      });
+      if (res?.code === 0) {
+        lead.leadStatus = 'New';
+        lead.softDeleted = false;
+      }
+    }
+    mainStore?.setSnackbar?.({ title: 'Lead(s) restored', type: 'success' });
+    emit('refresh');
+  } catch (e) {
+    console.error('Failed to restore leads', e);
+    mainStore?.setSnackbar?.({ title: 'Unable to restore leads', type: 'error' });
+  } finally {
+    restoring.value = false;
+    confirmRestore.value = false;
+    closeTray();
+  }
+};
+
+const doDeleteArchived = async () => {
+  await deleteLeadRows(selectedArchivedLeads.value, {
+    loadingRef: deletingArchived,
+    closeConfirm: () => { confirmArchivedDelete.value = false; },
+    successTitle: 'Archived lead(s) deleted permanently',
+    errorTitle: 'Unable to delete archived leads',
+  });
 };
 
 const convertSelected = async () => {
@@ -1637,11 +2232,11 @@ const convertSelected = async () => {
 }
 
 .break-email {
-  word-break: break-all;        /* breaks very long strings */
-  overflow-wrap: anywhere;      /* modern & safer wrapping */
-  white-space: normal;
+  white-space: nowrap;           /* prevents wrapping */
+  overflow: hidden;              /* hides overflow text */
+  text-overflow: ellipsis;       /* shows ... at end */
+  max-width: 250px;              /* adjust as needed */
 }
-
 
 .editable-field:hover {
   background-color: rgba(0, 0, 0, 0.04);
@@ -1668,7 +2263,6 @@ const convertSelected = async () => {
 .inline-edit-textarea:focus {
   box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.2);
 }
-
 /* Scrollable comment cell */
 .comment-cell-wrapper {
   position: relative;
@@ -1740,6 +2334,55 @@ const convertSelected = async () => {
   padding: 10px;
   background: #fff;
 }
+.send-price-card {
+  border-radius: 18px;
+  overflow: hidden;
+  background: #ffffff;
+}
+.send-price-body {
+  max-height: min(62vh, 560px);
+  overflow-y: auto;
+  background: #fcfcfd;
+}
+.send-price-footer {
+  border-top: 1px solid #eceef2;
+  background: #ffffff;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+}
+.send-price-upload-card {
+  border: 1px solid #dbdbdb;
+  border-radius: 14px;
+  padding: 14px;
+  background: #ffffff;
+}
+.uploaded-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fafafa;
+}
+.uploaded-file-meta {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.uploaded-file-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f1f1f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 360px;
+}
+.send-price-editor {
+  min-height: 140px;
+}
 .action-item:hover { background-color: #f5f5f5; }
 
 .lead-name-cell-container {
@@ -1758,6 +2401,7 @@ const convertSelected = async () => {
   margin-right: 8px;
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
 .lead-name-border {

@@ -84,6 +84,7 @@
             <th>Type</th>
             <th>Status</th>
             <th>Comment</th>
+            <th>Document</th>
           </tr>
         </thead>
         <tbody>
@@ -127,10 +128,16 @@
                 {{ leave.reason }}
               </div>
             </td>
+            <td>
+              <div class="px-4">
+                <a v-if="leave.document" :href="leave.document" target="_blank" rel="noopener" class="text-primary">View</a>
+                <span v-else class="text-grey">-</span>
+              </div>
+            </td>
           </tr>
 
           <tr v-if="filteredLeaves.length === 0">
-            <td colspan="7" class="text-center" style="padding: 20px">
+            <td colspan="8" class="text-center" style="padding: 20px">
               No leave history found
             </td>
           </tr>
@@ -150,7 +157,7 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import Annual from "@/assets/icons/teamfloss/total.svg";
 import Sick from "@/assets/icons/teamfloss/birthday.svg";
 import Training from "@/assets/icons/teamfloss/pending.svg";
-import { parsedDate } from "~/lib/dateFormatter";
+import { formatDateDDMMYYYY } from "~/lib/dateFormatter";
 
 const { user } = defineProps({
   user: Object,
@@ -161,15 +168,12 @@ const leaveHistory = ref([]);
 const openDrawer = ref(false);
 const userStore = useUserStore();
 
-onMounted(() => {
-  getLeaveStats();
-});
-
-const getLeaveStats = () => {
+const getLeaveStats = (u = user) => {
+  if (!u?.id || !u?.organisationId) return;
   userStore
     .getUserLeaveHistory({
-      userId: user.id,
-      organisationId: user.organisationId,
+      userId: u.id,
+      organisationId: u.organisationId,
     })
     .then((res) => {
       if (res.code === 0) {
@@ -178,6 +182,15 @@ const getLeaveStats = () => {
       }
     });
 };
+
+// user prop may arrive async; fetch when available
+watch(
+  () => user,
+  (u) => {
+    getLeaveStats(u);
+  },
+  { immediate: true, deep: false }
+);
 
 const search = ref("");
 
@@ -194,7 +207,7 @@ const filteredLeaves = computed(() => {
 });
 
 const formatDate = (date) => {
-  return parsedDate(date);
+  return formatDateDDMMYYYY(date);
 };
 // status chip styling
 const statusChipClass = (status) => {
@@ -220,28 +233,48 @@ const dynamicLeaveStats = computed(() => {
     otherLeaves: { total: entitlementStats.value.allowedOtherLeaves || 0, taken: 0, approved: 0 }
   };
 
-  leaveHistory.value.forEach(leave => {
-    const leaveType = (leave.leaveType || '').toLowerCase();
-    const status = (leave.status || '').toLowerCase();
-    const hours = parseFloat(leave.totalHours || 0);
+  leaveHistory.value.forEach((leave) => {
+    const leaveType = (leave.leaveType || "").toLowerCase();
+    const status = (leave.status || "").toLowerCase();
+
+    // Calculate leave taken in "days" based on date range.
+    // totalHours is treated as hours-per-day selection (8 => full day, 4 => half day).
+    const start = new Date(leave.startDate);
+    const end = new Date(leave.endDate);
+    const diffDays =
+      Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+    const hoursPerDay = Number(leave.totalHours) || 8;
+    const dayUnitsRaw = diffDays * (hoursPerDay / 8);
+    const dayUnits = Number.isFinite(dayUnitsRaw) ? dayUnitsRaw : 0;
 
     // Categorize leave types
-    let category = 'otherLeaves';
-    if (leaveType.includes('annual') || leaveType.includes('holiday') || leaveType.includes('vacation')) {
-      category = 'annualLeaves';
-    } else if (leaveType.includes('sick') || leaveType.includes('illness')) {
-      category = 'sickLeaves';
+    let category = "otherLeaves";
+    if (
+      leaveType.includes("annual") ||
+      leaveType.includes("holiday") ||
+      leaveType.includes("vacation")
+    ) {
+      category = "annualLeaves";
+    } else if (leaveType.includes("sick") || leaveType.includes("illness")) {
+      category = "sickLeaves";
     }
 
     // Count all leaves that are not rejected
-    if (status !== 'rejected') {
-      stats[category].taken += hours;
+    if (status !== "rejected") {
+      stats[category].taken += dayUnits;
     }
 
     // Count only approved leaves
-    if (status === 'approved') {
-      stats[category].approved += hours;
+    if (status === "approved") {
+      stats[category].approved += dayUnits;
     }
+  });
+
+  // Round to 1 decimal to avoid ugly floating point values (e.g. 0.30000000004)
+  Object.keys(stats).forEach((k) => {
+    stats[k].taken = Math.round(stats[k].taken * 10) / 10;
+    stats[k].approved = Math.round(stats[k].approved * 10) / 10;
   });
 
   return stats;
@@ -253,6 +286,16 @@ watch([leaveHistory, entitlementStats], () => {
     // Force re-render of cards
   });
 }, { deep: true });
+
+watch(
+  () => userStore.currentLeaveEntitlement,
+  (newEntitlement) => {
+    if (newEntitlement && newEntitlement.userId === user?.id) {
+      entitlementStats.value = { ...entitlementStats.value, ...newEntitlement };
+    }
+  },
+  { deep: true }
+);
 
 const handleSuccess = (data) => {
   openDrawer.value = false;

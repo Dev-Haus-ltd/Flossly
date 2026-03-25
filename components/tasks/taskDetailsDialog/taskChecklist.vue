@@ -82,34 +82,17 @@
 
       <!-- Time Picker -->
       <v-col cols="4" v-if="item.showTime">
-        <v-dialog
-          v-model="showTimePickers[index]"
-          width="auto"
-          scroll-strategy="none"
-        >
-          <template #activator="{ props }">
-            <v-text-field
-              v-model="item.timeValue"
-              density="compact"
-              label="Select Time"
-              variant="solo"
-              flat
-              bg-color="white"
-              readonly
-              append-inner-icon="mdi-clock-outline"
-              class="input-bordered"
-              hide-details
-              v-bind="props"
-            />
-          </template>
-
-          <v-card>
-            <v-time-picker
-              v-model="item.timeValue"
-              @update:modelValue="showTimePickers[index] = false"
-            />
-          </v-card>
-        </v-dialog>
+        <v-text-field
+          v-model="item.timeValue"
+          density="compact"
+          label="Select Time"
+          variant="solo"
+          flat
+          bg-color="white"
+          type="time"
+          class="input-bordered"
+          hide-details
+        />
       </v-col>
 
   
@@ -168,7 +151,6 @@ const { item, index } = defineProps(["item", "index"]);
 const taskStore = useTaskStore();
 const emit = defineEmits(["deleteItem"]);
 const showDatePickers = ref([]);
-const showTimePickers = ref([]);
 const mainStore = useMainStore();
 const isEditing = ref(false);
 const initialItem = ref({...item})

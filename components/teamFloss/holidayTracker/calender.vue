@@ -117,7 +117,7 @@
 
 <script setup>
 import { CommonAvatar } from "#components";
-import { parsedDate } from "~/lib/dateFormatter";
+import { formatDateDDMMYYYY } from "~/lib/dateFormatter";
 import { differenceInCalendarDays } from "date-fns";
 
 const { events } = defineProps({
@@ -142,7 +142,7 @@ const onDayClick = (day) => {
 };
 
 const formatDate = (date) => {
-    return parsedDate(date)
+    return formatDateDDMMYYYY(date)
 }
 const getTotalDays = (event) => {
     const start = new Date(event.start);

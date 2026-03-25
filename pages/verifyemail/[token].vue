@@ -2,39 +2,33 @@
   <v-container class="full-height d-flex" fluid>
     <v-row align="center" justify="center">
       <v-col cols="12" md="6" class="text-center">
-        <!-- Loading Spinner -->
-        <v-progress-circular
-          v-if="loading"
-          indeterminate
-          size="64"
-          color="primary"
-        />
+        <template v-if="!loading">
+          <!-- No Token Found -->
+          <div v-if="!hasToken && !success">
+            <v-icon color="error" size="48">mdi-alert-circle-outline</v-icon>
+            <h2 class="mt-4">Verification link not found.</h2>
+          </div>
 
-        <!-- No Token Found -->
-        <div v-else-if="!hasToken && !success">
-          <v-icon color="error" size="48">mdi-alert-circle-outline</v-icon>
-          <h2 class="mt-4">Verification link not found.</h2>
-        </div>
+          <!-- Verification Successful -->
+          <div v-else-if="success">
+            <v-icon color="success" size="48">mdi-check-circle-outline</v-icon>
+            <h2 class="mt-4">Great! Your email has been verified successfully!</h2>
+            <h3>Please login to continue onboarding process.</h3>
+            <v-btn class="mt-6" variant="flat" color="primary" @click="navigateToLogin">
+              Go to Login
+            </v-btn>
+          </div>
 
-        <!-- Verification Successful -->
-        <div v-else-if="success">
-          <v-icon color="success" size="48">mdi-check-circle-outline</v-icon>
-          <h2 class="mt-4">Great! Your email has been verified successfully!</h2>
-          <h3>Please login to continue onboarding process.</h3>
-          <v-btn class="mt-6" variant="flat" color="primary" @click="navigateToLogin">
-            Go to Login
-          </v-btn>
-        </div>
-
-        <!-- Verification Failed -->
-        <div v-else>
-          <v-icon color="error" size="48">mdi-close-circle-outline</v-icon>
-          <h2 class="mt-4">Verification failed.</h2>
-          <p>Your email link is either expired or invalid.</p>
-          <v-btn class="mt-6" variant="flat" color="primary" @click="navigateToLogin">
-            Home
-          </v-btn>
-        </div>
+          <!-- Verification Failed -->
+          <div v-else>
+            <v-icon color="error" size="48">mdi-close-circle-outline</v-icon>
+            <h2 class="mt-4">Verification failed.</h2>
+            <p>Your email link is either expired or invalid.</p>
+            <v-btn class="mt-6" variant="flat" color="primary" @click="navigateToLogin">
+              Home
+            </v-btn>
+          </div>
+        </template>
       </v-col>
     </v-row>
   </v-container>

@@ -4,8 +4,83 @@ export const useCrmStore = defineStore("crmStore", {
   state: () => ({
     isLoading: false,
     _pending: 0,
+    metaCampaigns: [],
+    metaAdAccounts: [],
+    metaAdSets: [],
+    metaAds: [],
+    metaInsights: [],
+    // CRM lead counts — single source of truth for lead attribution
+    metaCampaignLeadCounts: {},
+    metaAdSetLeadCounts: {},
+    metaAdLeadCounts: {},
   }),
+  getters: {
+    metaStats(state) {
+      const totals = {
+        campaigns: state.metaCampaigns.length,
+        spend: 0,
+        impressions: 0,
+        reach: 0,
+        leads: 0,
+        clicks: 0,
+        cpl: 0,
+      };
+
+      // Only aggregate campaign-level rows to avoid triple-counting
+      // (the DB stores insights at campaign, adset, and ad level — same money counted three times)
+      state.metaInsights.forEach((insight) => {
+        if (insight.entityType !== "campaign") return;
+        totals.spend += Number(insight.spend || 0);
+        totals.impressions += Number(insight.impressions || 0);
+        totals.reach += Number(insight.reach || 0);
+        totals.clicks += Number(insight.clicks || 0);
+      });
+
+      // Leads from CrmLeads (single source of truth — matches what "View Leads" shows)
+      totals.leads = Object.values(state.metaCampaignLeadCounts).reduce(
+        (sum, n) => sum + Number(n || 0), 0
+      );
+
+      // CPL = total spend (in major units) / total CRM leads
+      if (totals.leads > 0) {
+        totals.cpl = totals.spend / 100 / totals.leads;
+      }
+
+      return totals;
+    },
+  },
   actions: {
+    _isCurrentAnalyticsOrg(orgId) {
+      if (!orgId) return true;
+      const { user } = useUser();
+      return Number(user.value?.currentLoggedInOrgId || 0) === Number(orgId);
+    },
+    resetMetaAnalyticsState() {
+      this.metaCampaigns = [];
+      this.metaAdAccounts = [];
+      this.metaAdSets = [];
+      this.metaAds = [];
+      this.metaInsights = [];
+      this.metaCampaignLeadCounts = {};
+      this.metaAdSetLeadCounts = {};
+      this.metaAdLeadCounts = {};
+    },
+    async getCampaignLeadCounts(orgId = null) {
+      const res = await this._wrap(() => crmService.getCampaignLeadCounts());
+      if (res?.code === 0 && res.data && this._isCurrentAnalyticsOrg(orgId)) {
+        this.metaCampaignLeadCounts = res.data || {};
+      }
+      return res;
+    },
+    async getAllLeadCounts(orgId = null) {
+      const res = await this._wrap(() => crmService.getAllLeadCounts());
+      if (res?.code === 0 && res.data && this._isCurrentAnalyticsOrg(orgId)) {
+        this.metaCampaignLeadCounts = res.data.byCampaign || {};
+        this.metaAdSetLeadCounts = res.data.byAdSet || {};
+        this.metaAdLeadCounts = res.data.byAd || {};
+      }
+      return res;
+    },
     _start() { this._pending++; this.isLoading = true; },
     _end() { this._pending = Math.max(0, this._pending - 1); this.isLoading = this._pending > 0; },
 
@@ -25,8 +100,33 @@ export const useCrmStore = defineStore("crmStore", {
     processDmQueue(payload = {}) { return this._wrap(() => crmService.processDmQueue(payload)); },
     connectionStatus() { return this._wrap(() => crmService.connectionStatus()); },
     fetchLeadsNow(params = {}) { return this._wrap(() => crmService.fetchLeadsNow(params)); },
-    fetchMetaStructure() { return this._wrap(() => crmService.fetchMetaStructure()); },
-    fetchMetaInsights() { return this._wrap(() => crmService.fetchMetaInsights()); },
+    async fetchMetaStructure(orgId = null) {
+      const res = await this._wrap(() => crmService.fetchMetaStructure());
+      if (res?.code === 0) await this.getMetaStructure(orgId);
+      return res;
+    },
+    async getMetaStructure(orgId = null, params = {}) {
+      const res = await this._wrap(() => crmService.getMetaStructure(params));
+      if (res?.code === 0 && res.data && this._isCurrentAnalyticsOrg(orgId)) {
+        this.metaCampaigns = res.data.campaigns || [];
+        this.metaAdAccounts = res.data.adAccounts || [];
+        this.metaAdSets = res.data.adSets || [];
+        this.metaAds = res.data.ads || [];
+      }
+      return res;
+    },
+    async fetchMetaInsights(params = {}, orgId = null) {
+      const res = await this._wrap(() => crmService.fetchMetaInsights(params));
+      if (res?.code === 0) await this.getMetaInsights(orgId);
+      return res;
+    },
+    async getMetaInsights(orgId = null) {
+      const res = await this._wrap(() => crmService.getMetaInsights());
+      if (res?.code === 0 && this._isCurrentAnalyticsOrg(orgId)) {
+        this.metaInsights = res.data || [];
+      }
+      return res;
+    },
     subscribePages() { return this._wrap(() => crmService.subscribePages()); },
     disconnectMeta() { return this._wrap(() => crmService.disconnectMeta()); },
     metaHealth() { return this._wrap(() => crmService.metaHealth()); },
@@ -99,5 +199,7 @@ export const useCrmStore = defineStore("crmStore", {
     sendLeadMail(payload) { return this._wrap(() => crmService.sendLeadMail(payload)); },
     sendLeadWhatsApp(payload) { return this._wrap(() => crmService.sendLeadWhatsApp(payload)); },
     getWhatsAppUsage() { return this._wrap(() => crmService.getWhatsAppUsage()); },
+    uploadLeadAttachment(formData) { return this._wrap(() => crmService.uploadLeadAttachment(formData)); },
+    getLeadPriceAttachmentRecent(payload) { return this._wrap(() => crmService.getLeadPriceAttachmentRecent(payload)); },
   },
 });

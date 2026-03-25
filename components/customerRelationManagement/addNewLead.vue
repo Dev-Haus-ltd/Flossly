@@ -77,6 +77,7 @@
                 class="mb-1 input-bordered"
                 flat
                 :rules="emailRules"
+                validate-on="input"
                 type="email"
               />
             </v-col>
@@ -84,14 +85,20 @@
             <!-- Telephone -->
             <v-col cols="6">
               <label class="mb-1 fld-lbl">Telephone <span class="req">*</span></label>
-              <v-text-field
-                v-model="form.telephone"
-                variant="solo"
-                density="compact"
-                class="mb-1 input-bordered"
-                flat
-                :rules="requiredRule"
-              />
+              <div class="mb-1 crm-phone-input" :class="{ 'crm-phone-input--error': phoneError }">
+                <v-phone-input
+                  v-model="form.telephone"
+                  variant="solo"
+                  density="compact"
+                  flat
+                  default-country="gb"
+                  :prefer-countries="['gb']"
+                  :country-props="phoneCountryProps"
+                  :phone-props="phoneProps"
+                  @update:phone-object="onPhoneObjectUpdate"
+                />
+              </div>
+              <div v-if="phoneError" class="phone-error-msg">{{ phoneError }}</div>
             </v-col>
 
             <!-- Inquiry Date -->
@@ -354,12 +361,13 @@ const props = defineProps({
 
 const emit = defineEmits(["close", "success", "update:modelValue"]);
 const formRef = ref(null);
-const saving = ref(false)
+const saving = ref(false);
+const hasAttemptedSubmit = ref(false);
 
 const requiredRule = [(v) => !!v || "This field is required"];
 const emailRules = [
   (v) => !!v || "Email is required",
-  (v) => /^(?:[a-zA-Z0-9_'^&+\-]+(?:\.[a-zA-Z0-9_'^&+\-]+)*|".+")@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/.test(v) || "Enter a valid email",
+  (v) => /^(?:[a-zA-Z0-9_'^&+\-]+(?:\.[a-zA-Z0-9_'^&+\-]+)*|".+")@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/.test(String(v || "").trim()) || "Enter a valid email",
 ];
 
 const form = ref({
@@ -378,6 +386,43 @@ const form = ref({
   location: "",
   comments: "",
 });
+
+const phoneObject = ref(null);
+const phoneError = ref("");
+const normalizeText = (value) => String(value || "").trim();
+
+const validatePhone = () => {
+  const val = normalizeText(form.value.telephone);
+  if (!val) {
+    phoneError.value = "Telephone is required";
+    return false;
+  }
+  if (!phoneObject.value?.valid) {
+    phoneError.value = "Enter a valid telephone number";
+    return false;
+  }
+  phoneError.value = "";
+  return true;
+};
+
+const onPhoneObjectUpdate = (value) => {
+  phoneObject.value = value;
+  if (hasAttemptedSubmit.value) validatePhone();
+};
+const phoneCountryProps = {
+  label: "",
+  hideDetails: true,
+  flat: true,
+  variant: "solo",
+  bgColor: "white",
+};
+const phoneProps = {
+  label: "",
+  hideDetails: true,
+  flat: true,
+  variant: "solo",
+  bgColor: "white",
+};
 
 // Dropdown lists
 const leadStatuses = ["New", "Contacted", "Converted", "Lost"];
@@ -476,6 +521,9 @@ const resetForm = () => {
   if (formRef.value) {
     formRef.value.resetValidation();
   }
+  phoneObject.value = null;
+  phoneError.value = "";
+  hasAttemptedSubmit.value = false;
   // Reset date of birth error
   dobError.value = false;
   // Close date picker menus
@@ -506,6 +554,15 @@ watch(() => props.modelValue, (newValue) => {
   }
 });
 
+watch(
+  () => form.value.telephone,
+  (value) => {
+    if (!normalizeText(value)) phoneObject.value = null;
+    if (hasAttemptedSubmit.value) validatePhone();
+  }
+);
+
+
 const onSubmit = async () => {
   // Validate date of birth before form submission
   if (form.value.dob) {
@@ -524,11 +581,20 @@ const onSubmit = async () => {
     }
   }
   
+  hasAttemptedSubmit.value = true;
+  const phoneValid = validatePhone();
   const validation = await formRef.value.validate();
-  if (!validation.valid || dobError.value) return;
+  if (!validation.valid || !phoneValid || dobError.value) {
+    mainStore.setSnackbar({ title: "Please fix the highlighted fields before saving", type: "error" });
+    return;
+  }
   try {
     saving.value = true
-    const payload = { ...form.value };
+    const payload = {
+      ...form.value,
+      email: normalizeText(form.value.email),
+      telephone: normalizeText(form.value.telephone),
+    };
     const res = await crmStore.createLead(payload);
     if (res.code === 0) {
       mainStore.setSnackbar({ title: "Lead created", type: "success" });
@@ -538,7 +604,10 @@ const onSubmit = async () => {
       mainStore.setSnackbar({ title: res.message || "Failed to create lead", type: "error" });
     }
   } catch (e) {
-    mainStore.setSnackbar({ title: e.message || "Failed to create lead", type: "error" });
+    mainStore.setSnackbar({
+      title: e?.message || e?.data?.message || "Failed to create lead",
+      type: "error",
+    });
   } finally { saving.value = false }
 };
 </script>
@@ -563,6 +632,46 @@ const onSubmit = async () => {
   min-height: 40px;
   font-size: 14px;
   
+}
+.crm-phone-input :deep(.v-phone-input) {
+  display: flex;
+  width: 100%;
+  border: 1px solid #dfdfdf;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: white;
+}
+.crm-phone-input :deep(.v-phone-input__country__input .v-field),
+.crm-phone-input :deep(.v-phone-input__phone__input .v-field) {
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  background-color: transparent !important;
+  min-height: 40px;
+  font-size: 14px;
+}
+.crm-phone-input :deep(.v-phone-input__country__input.v-input) {
+  min-width: 88px;
+  max-width: 88px;
+  flex: 0 0 88px;
+}
+.crm-phone-input :deep(.v-phone-input__phone__input.v-input) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.crm-phone-input :deep(.v-phone-input__country__input .v-field) {
+  border-right: 1px solid #dfdfdf !important;
+}
+.crm-phone-input :deep(.v-phone-input__phone__input .v-field__input) {
+  padding-left: 10px;
+}
+.crm-phone-input--error {
+  border-color: rgb(var(--v-theme-error)) !important;
+}
+.phone-error-msg {
+  font-size: 12px;
+  color: rgb(var(--v-theme-error));
+  padding: 4px 16px 0;
 }
 </style>
 

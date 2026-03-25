@@ -978,7 +978,7 @@
     <TasksTaskDetailsDialog
       v-model="dialogOpen"
       :selectedItem="selectedItem"
-      @close="dialogOpen = false"
+      @close="handleDialogClose"
       @save="updateTaskInfo"
     />
     <CommonConfirmDialog
@@ -1032,6 +1032,7 @@
 </template>
 
 <script setup>
+import { nextTick, watch } from "vue";
 import { parsedDate } from "@/lib/dateFormatter";
 import { describeTextContent } from "@/lib/misc";
 import draggable from "vuedraggable";
@@ -1307,6 +1308,10 @@ const selectedItem = ref({});
 const userStore = useUserStore();
 const taskStore = useTaskStore();
 const mainStore = useMainStore();
+const authStore = useAuthStore();
+const { setUser } = useUser();
+const route = useRoute();
+const router = useRouter();
 const drawerOpen = ref(false);
 const openedPanels = ref([0]);
 const dialogOpen = ref(false);
@@ -1316,6 +1321,7 @@ const addStaffDrawer = ref(false);
 const isAllSelected = ref(false);
 const selectedStatusForNewTask = ref(null);
 const selectedCategoryForNewTask = ref(null);
+const isOpenedFromNotification = ref(false); // Flag to prevent clearing selectedItem from notifications
 const createColumnDialog = ref(false);
 const isCreatingColumn = ref(false);
 const columnNameError = ref("");
@@ -1607,7 +1613,63 @@ onMounted(() => {
   priorityStatuses.value = priorities;
   // Add keyboard shortcut listener
   window.addEventListener("keydown", handleKeyboardShortcut);
+  
+  // Handle orgId + userTaskId query parameters for push-driven org switch + dialog open
+  const orgIdFromQuery = route.query.orgId;
+  const userTaskIdFromQuery = route.query.userTaskId || route.query.taskId;
+
+  if (orgIdFromQuery && userTaskIdFromQuery) {
+    const targetOrgId = Number(orgIdFromQuery);
+    const currentOrgId = user.value?.currentLoggedInOrgId;
+
+    if (targetOrgId && currentOrgId && targetOrgId !== currentOrgId) {
+      // Need to switch org first
+      authStore.switchOrgnanisation({ orgId: targetOrgId })
+        .then((res) => {
+          if (res.code === 0) {
+            return authStore.profile();
+          }
+          throw new Error('Org switch failed');
+        })
+        .then((profileRes) => {
+          if (profileRes.code === 0 && profileRes.data) {
+            setUser(profileRes.data);
+            user.value = profileRes.data;
+          }
+          // Now open the dialog
+          isOpenedFromNotification.value = true;
+          selectedItem.value = { id: parseInt(userTaskIdFromQuery) };
+          dialogOpen.value = true;
+        })
+        .catch((err) => {
+          console.error('Failed to switch org for task notification:', err);
+        });
+      return;
+    }
+  }
+
+  // Handle userTaskId query parameter to open task details dialog (no org switch needed)
+  if (userTaskIdFromQuery) {
+    // Set flag to prevent the watch on taskDetails from clearing selectedItem
+    isOpenedFromNotification.value = true;
+    // Set the selectedItem with the userTaskId - the dialog will fetch full details when opened
+    selectedItem.value = { id: parseInt(userTaskIdFromQuery) };
+    dialogOpen.value = true;
+  }
 });
+
+// Watch for route changes to handle userTaskId parameter
+watch(
+  () => route.query.userTaskId || route.query.taskId,
+  (newTaskId) => {
+    if (newTaskId) {
+      // Set flag to prevent the watch on taskDetails from clearing selectedItem
+      isOpenedFromNotification.value = true;
+      selectedItem.value = { id: parseInt(newTaskId) };
+      dialogOpen.value = true;
+    }
+  }
+);
 
 // Add cleanup on unmount
 onBeforeUnmount(() => {
@@ -1661,7 +1723,10 @@ watch(
 watch(
   () => taskDetails,
   (newVal) => {
-    selectedItem.value = [];
+    // Don't clear selectedItem if it was opened from a notification
+    if (!isOpenedFromNotification.value) {
+      selectedItem.value = [];
+    }
     selectedTasks.value = []; // Clear selections when task details change
     emit("updateSelectedRowItems", []); // Notify parent to clear selection UI
     tasksForCalender.value = newVal.flatMap((group) =>
@@ -2321,6 +2386,20 @@ const toggleAll = (group) => {
 const getDetails = (item) => {
   selectedItem.value = item;
   dialogOpen.value = true;
+};
+
+const handleDialogClose = () => {
+  dialogOpen.value = false;
+  // Reset the notification flag when dialog closes
+  isOpenedFromNotification.value = false;
+  // Clear the query params when dialog closes
+  if (route.query.userTaskId || route.query.taskId || route.query.orgId) {
+    const newQuery = { ...route.query };
+    delete newQuery.userTaskId;
+    delete newQuery.taskId;
+    delete newQuery.orgId;
+    router.replace({ query: newQuery });
+  }
 };
 
 function onFiltersUpdated(newFilters) {

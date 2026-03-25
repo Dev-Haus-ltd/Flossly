@@ -1,12 +1,20 @@
 import { Op, fn, col } from 'sequelize'
 import crypto from 'crypto'
-import { CrmLead, MetaPage, Organisation, User, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight, CrmDmAccount, CrmDmConversation, CrmDmMessage, UserOrganisation } from '../models'
-import { sendNotificationToMultipleUsers } from '../utils/fcmNotification'
+import { CrmLead, MetaPage, Organisation, User, UserOrganisation, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight, CrmDmAccount, CrmDmConversation, CrmDmMessage } from '../models'
 import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
 import { addMetaClient, broadcastMetaEvent } from '../utils/metaStream'
 import { getWhatsAppProviderKey, getWhapiEnvConfig, resolveWhapiConfig } from '../utils/whatsappProvider'
-import { parseJsonBody } from "../utils/body";
+import { sendNotificationToMultipleUsers } from '../utils/fcmNotification'
+import { parseJsonBody } from "../utils/body"
+import {
+  runStructureSync,
+  runInsightsSync,
+  enqueueStructureSync,
+  enqueueInsightsSync,
+  getStructureSyncStatus,
+  getInsightsSyncStatus,
+} from '../utils/metaSync.js'
 
 const META_VERSION = 'v24.0'
 const META_SUBSCRIBED_FIELDS = 'leadgen,messages,messaging_postbacks'
@@ -734,6 +742,42 @@ const fetchLeadsForOrg = async (orgId, { days = 0, maxPerForm = 1000, debugEnabl
   }
 
   if (debugEnabled) return { ok: true, debug }
+
+  // Send notification to org users about imported leads
+  if (imported > 0) {
+    try {
+      const orgUsers = await UserOrganisation.findAll({
+        where: {
+          organisationId: orgId,
+          status: 'Active',
+        },
+        attributes: ['userId'],
+      })
+      const userIds = [...new Set(orgUsers.map((u) => u.userId).filter(Boolean))]
+      if (userIds.length) {
+        await sendNotificationToMultipleUsers({
+          userIds,
+          title: 'Meta Leads Imported',
+          body: `${imported} new lead${imported > 1 ? 's were' : ' was'} imported from Meta`,
+          type: 'lead_bulk_import',
+          referenceType: 'lead',
+          data: {
+            importedCount: imported,
+            leadSource: 'Meta Leadgen',
+            url: '/crm',
+          },
+          priority: 'high',
+        })
+      }
+    } catch (notifyErr) {
+      console.warn('[META BULK IMPORT] Lead notification failed', {
+        orgId,
+        imported,
+        error: notifyErr?.message || 'Unknown notification error',
+      })
+    }
+  }
+
   return { ok: true, imported }
 }
 
@@ -1117,7 +1161,7 @@ export const webhook = async (event) => {
             await existing.save()
             broadcastMetaEvent('lead', { orgId: mp.organisationId, leadId, pageId, formId })
           } else {
-            await CrmLead.create({
+            const created = await CrmLead.create({
               organisationId: mp.organisationId,
               pageId,
               formId: formId || null,
@@ -1134,6 +1178,41 @@ export const webhook = async (event) => {
               leadStatus: 'New',
             })
             broadcastMetaEvent('lead', { orgId: mp.organisationId, leadId, pageId, formId })
+
+            try {
+              const orgUsers = await UserOrganisation.findAll({
+                where: {
+                  organisationId: mp.organisationId,
+                  status: 'Active',
+                },
+                attributes: ['userId'],
+              })
+              const userIds = [...new Set(orgUsers.map((u) => u.userId).filter(Boolean))]
+              if (userIds.length) {
+                await sendNotificationToMultipleUsers({
+                  userIds,
+                  organisationId: mp.organisationId,
+                  title: 'New Meta Lead',
+                  body: fullName || email || phone || 'A new lead was received',
+                  type: 'lead_created',
+                  referenceType: 'lead',
+                  referenceId: created.id,
+                  data: {
+                    leadId: String(created.id),
+                    leadSource: 'Meta Leadgen',
+                    pageId: String(pageId || ''),
+                    url: `/crm/leads?leadId=${created.id}`,
+                  },
+                  priority: 'high',
+                })
+              }
+            } catch (notifyErr) {
+              console.warn('[META WEBHOOK]', reqId, 'Lead notification failed', {
+                leadId: created?.id || null,
+                pageId: String(pageId || ''),
+                error: notifyErr?.message || 'Unknown notification error',
+              })
+            }
           }
         }
 
@@ -1248,76 +1327,7 @@ export const fetchMetaStructureAndBudgets = async (event) => {
   const { orgId } = event.context.user || {}
   if (!orgId) return error(401, 'Unauthenticated')
 
-  const tokenRow = await MetaUserToken.findOne({ where: { organisationId: orgId } })
-  if (!tokenRow) return error(400, 'Meta not connected')
-
-  const userToken = decrypt(tokenRow.userTokenEnc)
-
-  // 1️⃣ Fetch ad accounts
-  const adAccountsResp = await $fetch(
-    `https://graph.facebook.com/${META_VERSION}/me/adaccounts?fields=id,name,currency,timezone_name&access_token=${userToken}`
-  )
-
-  for (const acc of adAccountsResp.data || []) {
-    await MetaAdAccount.upsert({
-      organisationId: orgId,
-      adAccountId: acc.id,
-      name: acc.name,
-      currency: acc.currency,
-      timezone: acc.timezone_name,
-    })
-
-    // 2️⃣ Campaigns
-    const campaignsResp = await $fetch(
-      `https://graph.facebook.com/${META_VERSION}/${acc.id}/campaigns?fields=id,name,status,daily_budget,lifetime_budget&access_token=${userToken}`
-    )
-
-    for (const c of campaignsResp.data || []) {
-      await MetaCampaign.upsert({
-        organisationId: orgId,
-        adAccountId: acc.id,
-        campaignId: c.id,
-        name: c.name,
-        status: c.status,
-        dailyBudget: c.daily_budget || null,
-        lifetimeBudget: c.lifetime_budget || null,
-      })
-
-      // 3️⃣ Ad Sets
-      const adSetsResp = await $fetch(
-        `https://graph.facebook.com/${META_VERSION}/${c.id}/adsets?fields=id,name,daily_budget,lifetime_budget,optimization_goal&access_token=${userToken}`
-      )
-
-      for (const s of adSetsResp.data || []) {
-        await MetaAdSet.upsert({
-          organisationId: orgId,
-          adSetId: s.id,
-          campaignId: c.id,
-          name: s.name,
-          dailyBudget: s.daily_budget || null,
-          lifetimeBudget: s.lifetime_budget || null,
-          optimizationGoal: s.optimization_goal || null,
-        })
-
-        // 4️⃣ Ads
-        const adsResp = await $fetch(
-          `https://graph.facebook.com/${META_VERSION}/${s.id}/ads?fields=id,name,status,creative{id}&access_token=${userToken}`
-        )
-
-        for (const ad of adsResp.data || []) {
-          await MetaAd.upsert({
-            organisationId: orgId,
-            adId: ad.id,
-            adSetId: s.id,
-            name: ad.name,
-            status: ad.status,
-            creativeId: ad.creative?.id || null,
-          })
-        }
-      }
-    }
-  }
-
+  await runStructureSync(orgId)
   return success({ synced: true })
 }
 
@@ -1326,85 +1336,120 @@ export const fetchDailyMetaInsights = async (event) => {
   const { orgId } = event.context.user || {}
   if (!orgId) return error(401, 'Unauthenticated')
 
-  const tokenRow = await MetaUserToken.findOne({ where: { organisationId: orgId } })
-  if (!tokenRow) return error(400, 'Meta not connected')
+  const q = getQuery(event) || {}
+  const days = Number(q.days || 1)
 
-  const token = decrypt(tokenRow.userTokenEnc)
+  await runInsightsSync(orgId, days)
+  return success({ synced: true })
+}
 
-  const date =
-    event.context?.date ||
-    new Date(Date.now() - 86400000).toISOString().slice(0, 10) // yesterday
+export const getSyncJobStatus = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
 
-  const fetchInsights = async (entityType, entityId) => {
-    const url = `https://graph.facebook.com/${META_VERSION}/${entityId}/insights?fields=impressions,clicks,spend,actions,ctr,cpc,cpm&time_range[since]=${date}&time_range[until]=${date}&access_token=${token}`
-    const resp = await $fetch(url)
-    return resp.data?.[0]
-  }
+  const [structure, insights] = await Promise.all([
+    getStructureSyncStatus(orgId),
+    getInsightsSyncStatus(orgId),
+  ])
 
-  // Campaigns
-  const campaigns = await MetaCampaign.findAll({ where: { organisationId: orgId } })
-  for (const c of campaigns) {
-    const i = await fetchInsights('campaign', c.campaignId)
-    if (!i) continue
+  return success({ structure, insights })
+}
 
-    await MetaInsight.upsert({
-      organisationId: orgId,
-      entityType: 'campaign',
-      entityId: c.campaignId,
-      date,
-      impressions: i.impressions,
-      clicks: i.clicks,
-      spend: Math.round(Number(i.spend || 0) * 100),
-      leads: i.actions?.find(a => a.action_type === 'lead')?.value || 0,
-      cpc: i.cpc,
-      ctr: i.ctr,
-      cpm: i.cpm,
+export const getMetaInsights = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const rows = await MetaInsight.findAll({
+    where: { organisationId: orgId },
+    order: [['date', 'DESC']],
+  })
+  return success(rows)
+}
+
+export const getCampaignLeadCounts = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+  try {
+    const rows = await CrmLead.findAll({
+      where: { organisationId: orgId, campaignId: { [Op.ne]: null } },
+      attributes: ['campaignId', [fn('COUNT', col('id')), 'count']],
+      group: ['campaignId'],
+      raw: true,
     })
+    const counts = {}
+    rows.forEach((r) => { counts[r.campaignId] = Number(r.count) })
+    return success(counts)
+  } catch (err) {
+    console.error('[getCampaignLeadCounts]', err)
+    return error(500, 'Failed to fetch campaign lead counts')
   }
+}
 
-  // Ad sets
-  const adSets = await MetaAdSet.findAll({ where: { organisationId: orgId } })
-  for (const s of adSets) {
-    const i = await fetchInsights('adset', s.adSetId)
-    if (!i) continue
+export const getMetaStructure = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
 
-    await MetaInsight.upsert({
-      organisationId: orgId,
-      entityType: 'adset',
-      entityId: s.adSetId,
-      date,
-      impressions: i.impressions,
-      clicks: i.clicks,
-      spend: Math.round(Number(i.spend || 0) * 100),
-      leads: i.actions?.find(a => a.action_type === 'lead')?.value || 0,
-      cpc: i.cpc,
-      ctr: i.ctr,
-      cpm: i.cpm,
-    })
+  try {
+    const query = getQuery(event)
+    const platform = typeof query.platform === 'string' ? query.platform.trim() : null
+    const allowedPlatforms = new Set(['Facebook', 'Instagram'])
+    const validPlatform = platform && allowedPlatforms.has(platform) ? platform : null
+
+    const parseDate = (val) => {
+      if (!val) return null
+      const d = new Date(val)
+      return isNaN(d.getTime()) ? null : d
+    }
+    const dateFromParsed = parseDate(query.dateFrom)
+    const dateToParsed = parseDate(query.dateTo)
+
+    const campaignWhere = { organisationId: orgId }
+    if (dateFromParsed || dateToParsed) {
+      campaignWhere.createdAt = {}
+      if (dateFromParsed) campaignWhere.createdAt[Op.gte] = dateFromParsed
+      if (dateToParsed) {
+        dateToParsed.setHours(23, 59, 59, 999)
+        campaignWhere.createdAt[Op.lte] = dateToParsed
+      }
+    }
+
+    let campaigns = await MetaCampaign.findAll({ where: campaignWhere })
+
+    if (validPlatform && campaigns.length) {
+      const candidateCampaignIds = campaigns.map((c) => c.campaignId)
+      const [adSetsForCampaigns, adsWithPlatform] = await Promise.all([
+        MetaAdSet.findAll({ where: { organisationId: orgId, campaignId: { [Op.in]: candidateCampaignIds } } }),
+        MetaAd.findAll({ where: { organisationId: orgId, platform: validPlatform } }),
+      ])
+      const adSetIdsWithPlatform = new Set(adsWithPlatform.map((a) => a.adSetId))
+      const matchingCampaignIds = new Set(
+        adSetsForCampaigns
+          .filter((as) => adSetIdsWithPlatform.has(as.adSetId))
+          .map((as) => as.campaignId)
+      )
+      campaigns = campaigns.filter((c) => matchingCampaignIds.has(c.campaignId))
+    }
+
+    const campaignIds = campaigns.map((c) => c.campaignId)
+    const filtersActive = validPlatform || dateFromParsed || dateToParsed
+
+    if (filtersActive && !campaignIds.length) {
+      const adAccounts = await MetaAdAccount.findAll({ where: { organisationId: orgId } })
+      return success({ campaigns: [], adAccounts, adSets: [], ads: [] })
+    }
+
+    const [adAccounts, adSets] = await Promise.all([
+      MetaAdAccount.findAll({ where: { organisationId: orgId } }),
+      MetaAdSet.findAll({ where: { organisationId: orgId, ...(campaignIds.length ? { campaignId: { [Op.in]: campaignIds } } : {}) } }),
+    ])
+    const adSetIds = adSets.map((s) => s.adSetId)
+    const ads = await MetaAd.findAll({ where: { organisationId: orgId, ...(adSetIds.length ? { adSetId: { [Op.in]: adSetIds } } : {}) } })
+
+    return success({ campaigns, adAccounts, adSets, ads })
+  } catch (err) {
+    console.error('[getMetaStructure]', err)
+    return error(500, 'Failed to fetch Meta structure')
   }
-
-  // Ads
-  const ads = await MetaAd.findAll({ where: { organisationId: orgId } })
-  for (const a of ads) {
-    const i = await fetchInsights('ad', a.adId)
-    if (!i) continue
-
-    await MetaInsight.upsert({
-      organisationId: orgId,
-      entityType: 'ad',
-      entityId: a.adId,
-      date,
-      impressions: i.impressions,
-      clicks: i.clicks,
-      spend: Math.round(Number(i.spend || 0) * 100),
-      leads: i.actions?.find(a => a.action_type === 'lead')?.value || 0,
-      cpc: i.cpc,
-      ctr: i.ctr,
-      cpm: i.cpm,
-    })
-  }
-
-  return success({ date, synced: true })
 }
 
 const fetchAllMetaPages = async (url, accessToken) => {
@@ -1632,7 +1677,6 @@ export const deauthorize = async (event) => {
     const signedRequest = payload?.signed_request || '';
     if (!signedRequest) return error(400, 'signed_request required');
 
-    // signed_request is "signature.payload"
     const [sigB64, payloadB64] = String(signedRequest).split('.', 2);
     if (!sigB64 || !payloadB64) return error(400, 'Invalid signed_request');
 
@@ -1649,7 +1693,6 @@ export const deauthorize = async (event) => {
 
     if (!fbUserId) return success({ status: 'ok' });
 
-    // Revoke tokens for that user across orgs
     await MetaUserToken.update(
       { expiresAt: new Date(0) },
       { where: { fbUserId } }
@@ -1683,8 +1726,8 @@ export const dataDeletion = async (event) => {
     const decoded = JSON.parse(Buffer.from(payloadB64, 'base64').toString('utf8') || '{}');
     const fbUserId = decoded?.user_id || 'unknown';
 
-    // TODO: Delete user data tied to fbUserId if you map it.
-    const baseUrl = config.public?.BASE_URL || '';
+    const config2 = useRuntimeConfig();
+    const baseUrl = config2.public?.BASE_URL || '';
     const statusUrl = `${baseUrl}/api/meta/dataDeletionStatus?request=${encodeURIComponent(fbUserId)}`;
 
     return {
@@ -1704,3 +1747,74 @@ export const dataDeletionStatus = async (event) => {
     request: requestId,
   });
 };
+
+export const getVideoSource = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const body = await readBody(event)
+  const { videoId } = typeof body === 'string' ? JSON.parse(body) : (body || {})
+  if (!videoId) return error(400, 'videoId required')
+
+  const fetchVideoFields = async (token) => {
+    try {
+      const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(videoId)}?fields=source,permalink_url,picture&access_token=${encodeURIComponent(token)}`
+      return await $fetch(url, { method: 'GET' })
+    } catch {
+      return null
+    }
+  }
+
+  const tokenRow = await MetaUserToken.findOne({ where: { organisationId: orgId } })
+  if (tokenRow) {
+    const userToken = decrypt(tokenRow.userTokenEnc)
+    if (userToken) {
+      const resp = await fetchVideoFields(userToken)
+      if (resp?.source) return success({ source: resp.source, permalink: resp.permalink_url || null, thumbnail: resp.picture || null })
+    }
+  }
+
+  const pages = await MetaPage.findAll({ where: { organisationId: orgId } })
+  for (const page of pages) {
+    const pageToken = decrypt(page.accessTokenEnc)
+    if (!pageToken) continue
+    const resp = await fetchVideoFields(pageToken)
+    if (resp?.source) return success({ source: resp.source, permalink: resp.permalink_url || null, thumbnail: resp.picture || null })
+    if (resp?.permalink_url) return success({ source: null, permalink: resp.permalink_url, thumbnail: resp.picture || null })
+  }
+
+  return error(404, 'Video source not available — the video may require additional Meta permissions')
+}
+
+export const getAllLeadCounts = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+  try {
+    const rows = await CrmLead.findAll({
+      where: {
+        organisationId: orgId,
+        [Op.or]: [
+          { campaignId: { [Op.ne]: null } },
+          { adSetId: { [Op.ne]: null } },
+          { adId: { [Op.ne]: null } },
+        ],
+      },
+      attributes: ['campaignId', 'adSetId', 'adId', [fn('COUNT', col('id')), 'count']],
+      group: ['campaignId', 'adSetId', 'adId'],
+      raw: true,
+    })
+    const byCampaign = {}
+    const byAdSet = {}
+    const byAd = {}
+    rows.forEach((r) => {
+      const count = Number(r.count)
+      if (r.campaignId) byCampaign[r.campaignId] = (byCampaign[r.campaignId] || 0) + count
+      if (r.adSetId) byAdSet[r.adSetId] = (byAdSet[r.adSetId] || 0) + count
+      if (r.adId) byAd[r.adId] = (byAd[r.adId] || 0) + count
+    })
+    return success({ byCampaign, byAdSet, byAd })
+  } catch (err) {
+    console.error('[getAllLeadCounts]', err)
+    return error(500, 'Failed to fetch lead counts')
+  }
+}

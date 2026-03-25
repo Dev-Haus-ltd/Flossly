@@ -1,4 +1,4 @@
-import { Get, Post } from "./apiWrapper";
+import { Get, Post, PostFormData } from "./apiWrapper";
 
 export default {
   startMetaAuth() {
@@ -96,10 +96,56 @@ export default {
         .catch((err) => reject(err));
     });
   },
-  // Fetch daily Meta analytics (insights)
-  fetchMetaInsights() {
+  // Fetch Meta analytics (insights)
+  fetchMetaInsights(params = {}) {
+    const q = new URLSearchParams();
+    Object.entries(params || {}).forEach(([k, v]) => {
+      if (v === undefined || v === null || v === "") return;
+      q.append(k, v);
+    });
+    const qs = q.toString();
     return new Promise((resolve, reject) => {
-      Get("/meta/syncInsights")
+      Get(`/meta/syncInsights${qs ? `?${qs}` : ""}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getMetaInsights() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/getInsights")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getCampaignLeadCounts() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/campaignLeadCounts")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getAllLeadCounts() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/allLeadCounts")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getMetaVideoSource(videoId) {
+    return new Promise((resolve, reject) => {
+      Post("/meta/videoSource", { videoId })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getMetaStructure(params = {}) {
+    const qs = Object.entries(params)
+      .filter(([, v]) => v != null && v !== '')
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+      .join('&');
+    const url = qs ? `/meta/getStructure?${qs}` : '/meta/getStructure';
+    return new Promise((resolve, reject) => {
+      Get(url)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -306,6 +352,20 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  getAlertOptions() {
+    return new Promise((resolve, reject) => {
+      Get("/lead/alertOptions")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  saveAlertOptions(options) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/alertOptionsSave", { options })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   addLeadNote(payload) {
     return new Promise((resolve, reject) => {
       Post("/lead/notesAdd", payload)
@@ -447,6 +507,20 @@ export default {
   getWhatsAppUsage() {
     return new Promise((resolve, reject) => {
       Get('/lead/whatsappUsage')
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  uploadLeadAttachment(formData) {
+    return new Promise((resolve, reject) => {
+      PostFormData('/lead/uploadAttachment', formData)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getLeadPriceAttachmentRecent(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/priceAttachmentRecent', payload)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });

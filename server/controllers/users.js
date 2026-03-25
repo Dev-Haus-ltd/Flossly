@@ -13,6 +13,11 @@ import { Op } from "sequelize";
 import DB from "../utils/db";
 import { uploadBufferFile } from "../utils/storage";
 import { parseJsonBody } from "../utils/body";
+import {
+  leaveRequestApprovedNotification as emailLeaveRequestApprovedNotification,
+  leaveRequestDeniedNotification as emailLeaveRequestDeniedNotification,
+} from "../utils/emailNotifications.js";
+import { sendLeaveApprovedNotification, sendLeaveDeniedNotification } from "../utils/fcmNotification.js";
 export const usersList = async (event) => {
   const loggedUser = event.context.user;
   let currentOrg = loggedUser.orgId;
@@ -295,7 +300,7 @@ export const leaveHistory = async (event) => {
   const body = await readBody(event);
   const { userId, organisationId } = parseJsonBody(body);
   try {
-    const entitlement = await UserLeaveEntitlement.findOne({
+    let entitlement = await UserLeaveEntitlement.findOne({
       where: { userId, organisationId },
       include: [
         {
@@ -305,6 +310,19 @@ export const leaveHistory = async (event) => {
         },
       ],
     });
+
+    // If no entitlement exists yet (e.g. user has never requested leave), create default entitlement
+    if (!entitlement) {
+      entitlement = await UserLeaveEntitlement.create({
+        userId,
+        organisationId,
+        allowedAnnualLeaves: 14,
+        allowedCasualLeaves: 10,
+        allowedCompationateLeaves: 5,
+        allowedSickLeaves: 5,
+        allowedOtherLeaves: 5,
+      });
+    }
     const leaveHistory = await UserLeaveHistory.findAll({
       where: { userId, organisationId },
       include: [
@@ -409,6 +427,26 @@ export const applyLeave = async (event) => {
 
     const start = new Date(startDate);
     const end = new Date(endDate);
+
+    // Prevent overlapping/duplicate leaves for same user/org
+    const existingOverlap = await UserLeaveHistory.findOne({
+      where: {
+        userId,
+        organisationId,
+        status: { [Op.in]: ["Pending", "Approved"] },
+        [Op.and]: [
+          { startDate: { [Op.lte]: end } },
+          { endDate: { [Op.gte]: start } },
+        ],
+      },
+    });
+    if (existingOverlap) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: "You already have a leave that overlaps with the selected dates.",
+      });
+    }
+
     const diffDays =
       Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
@@ -449,6 +487,21 @@ export const applyLeave = async (event) => {
 
     await entitlement.save({ transaction });
 
+    // Normalize totalHours to numeric hours
+    let normalizedHours = 0;
+    if (typeof totalHours === "number") {
+      normalizedHours = totalHours;
+    } else if (typeof totalHours === "string") {
+      const m = totalHours.match(/(\d+(?:\.\d+)?)/);
+      if (m) {
+        normalizedHours = parseFloat(m[1]);
+      } else if (totalHours.toLowerCase().includes("full")) {
+        normalizedHours = 8;
+      } else if (totalHours.toLowerCase().includes("half")) {
+        normalizedHours = 4;
+      }
+    }
+
     const leave = await UserLeaveHistory.create(
       {
         userId,
@@ -457,7 +510,7 @@ export const applyLeave = async (event) => {
         startDate,
         endDate,
         reason,
-        totalHours: totalHours === "Full Day" ? 8 : 4,
+        totalHours: normalizedHours || null,
         isPaid: isPaid === "true", // because form data sends strings
         document: documentPath,
         status: userId == actor.userId ? "Pending" : "Approved",
@@ -488,10 +541,48 @@ export const updateLeaveStatus = async (event) => {
       fullName: user.fullName,
       email: user.email,
     };
+    const startDateFormatted = leave.startDate
+      ? new Date(leave.startDate).toLocaleDateString("en-GB")
+      : null;
+    const endDateFormatted = leave.endDate
+      ? new Date(leave.endDate).toLocaleDateString("en-GB")
+      : null;
+
     if (status === "Approved") {
-      await leaveRequestApprovedNotification(data);
+      // Email notification (existing)
+      await emailLeaveRequestApprovedNotification(data);
+
+      // Push notification (new - in addition to email)
+      try {
+        await sendLeaveApprovedNotification({
+          userId: user.id,
+          startDate: startDateFormatted,
+          endDate: endDateFormatted,
+        });
+      } catch (pushErr) {
+        console.warn('Leave approved push notification failed', {
+          userId: user.id,
+          error: pushErr?.message || pushErr,
+        });
+      }
     } else {
-      await leaveRequestDeniedNotification(data);
+      // Email notification (existing)
+      await emailLeaveRequestDeniedNotification(data);
+
+      // Push notification (new - in addition to email)
+      try {
+        await sendLeaveDeniedNotification({
+          userId: user.id,
+          startDate: startDateFormatted,
+          endDate: endDateFormatted,
+          reason: body.reason || null,
+        });
+      } catch (pushErr) {
+        console.warn('Leave denied push notification failed', {
+          userId: user.id,
+          error: pushErr?.message || pushErr,
+        });
+      }
     }
     return success("Updated");
   } catch (err) {

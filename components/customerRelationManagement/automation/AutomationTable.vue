@@ -269,6 +269,10 @@ defineProps({
     type: Object,
     default: () => new Set(),
   },
+  disableToggle: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 defineEmits([
@@ -443,7 +447,3 @@ defineEmits([
   transform: none;
 }
 </style>
-  disableToggle: {
-    type: Boolean,
-    default: false,
-  },

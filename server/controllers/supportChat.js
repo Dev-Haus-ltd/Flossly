@@ -11,7 +11,12 @@ import {
 } from "../models/index.js";
 
 import { isSupportAgent, getSupportAgentUserIds } from '../utils/supportAgents.js';
-import { sendNotificationToUser } from '../utils/fcmNotification.js';
+import { parseJsonBody } from "../utils/body";
+import {
+  sendNotificationToUser,
+  sendSupportTicketSubmittedNotification,
+  sendSupportReplyNotification
+} from '../utils/fcmNotification.js';
 import { uploadBufferFile } from '../utils/storage.js';
 
 // Send FCM notification for new chatbot message
@@ -19,34 +24,43 @@ const notifyNewMessage = async (conversationId, message, recipientUserId) => {
   try {
     if (!recipientUserId) return;
 
-    let title = 'New Message';
-    let body = message.message;
-
     if (message.senderType === 'support' || message.senderType === 'admin') {
-      title = 'Support Team replied';
-      body = message.message?.substring(0, 100) || 'You have a new reply';
+      await sendSupportReplyNotification({
+        userId: recipientUserId,
+        ticketId: conversationId,
+        replyPreview: message.message?.substring(0, 100)
+      });
     } else if (message.senderType === 'ai' || message.senderType === 'bot') {
-      title = 'Flossly Assistant';
-      body = message.message?.substring(0, 100) || 'You have a new response';
+      await sendNotificationToUser({
+        userId: recipientUserId,
+        title: 'Flossly Assistant',
+        body: message.message?.substring(0, 100) || 'You have a new response',
+        type: 'chatbot_message',
+        referenceType: 'chatbot_conversation',
+        referenceId: conversationId,
+        data: {
+          conversationId: String(conversationId),
+          message: JSON.stringify(message),
+          url: '/support-chat'
+        },
+        priority: 'high'
+      });
     } else if (message.senderType === 'user') {
-      title = 'New User Message';
-      body = message.message?.substring(0, 100) || 'New message received';
+      await sendNotificationToUser({
+        userId: recipientUserId,
+        title: 'New User Message',
+        body: message.message?.substring(0, 100) || 'New message received',
+        type: 'chatbot_message',
+        referenceType: 'chatbot_conversation',
+        referenceId: conversationId,
+        data: {
+          conversationId: String(conversationId),
+          message: JSON.stringify(message),
+          url: '/support-chat'
+        },
+        priority: 'high'
+      });
     }
-
-    await sendNotificationToUser({
-      userId: recipientUserId,
-      title,
-      body,
-      type: 'chatbot_message',
-      referenceType: 'chatbot_conversation',
-      referenceId: conversationId,
-      data: {
-        conversationId: String(conversationId),
-        message: JSON.stringify(message),
-        url: '/support-chat'
-      },
-      priority: 'high'
-    });
   } catch (error) {
     console.error('Error sending chatbot message notification:', error);
   }
@@ -169,6 +183,12 @@ export const createConversation = async (event) => {
       metadata,
       status: 'active',
       lastMessageAt: new Date()
+    });
+
+    await sendSupportTicketSubmittedNotification({
+      userId,
+      ticketId: conversation.id,
+      ticketSubject: subject || 'Support Request'
     });
 
     setResponseStatus(event, 201);

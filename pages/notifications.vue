@@ -135,15 +135,14 @@
 </template>
 
 <script setup>
-import taskIcon from '@/assets/icons/notification/task.svg';
-import leadIcon from '@/assets/icons/notification/lead.svg';
-import messageIcon from '@/assets/icons/notification/message.svg';
 import searchicon from '@/assets/icons/listView/serach-icon.svg';
+import { buildNotificationUrl, getNotificationIcon, getNotificationTypeLabel, formatNotificationTime } from '@/lib/notifications';
 
 definePageMeta({
   layout: 'home',
 });
 
+const { user } = useUser();
 const notifications = ref([]);
 const unreadCount = ref(0);
 const limit = 30;
@@ -232,9 +231,15 @@ const onFiltersUpdated = (newFilters) => {
 
 const fetchPage = async ({ reset = false } = {}) => {
   const currentOffset = reset ? 0 : offset.value;
+  const currentOrgId = user.value?.currentLoggedInOrgId || null;
+  
   const response = await $fetch('/api/notifications/get-notifications', {
     method: 'GET',
-    params: { limit, offset: currentOffset },
+    params: { 
+      limit, 
+      offset: currentOffset,
+      organisationId: currentOrgId
+    },
   });
 
   const payload = response?.data || response;
@@ -254,7 +259,12 @@ const fetchPage = async ({ reset = false } = {}) => {
 };
 
 const fetchUnreadCount = async () => {
-  const response = await $fetch('/api/notifications/get-unread-count');
+  const currentOrgId = user.value?.currentLoggedInOrgId || null;
+  
+  const response = await $fetch('/api/notifications/get-unread-count', {
+    method: 'GET',
+    params: { organisationId: currentOrgId }
+  });
   const payload = response?.data || response;
   unreadCount.value = payload.unreadCount || 0;
 };
@@ -289,64 +299,12 @@ const handleNotificationClick = async (notification) => {
     notification.isRead = true;
     await fetchUnreadCount();
   }
-
-  const urlMap = {
-    task_assigned: `/tasks/${notification.data?.taskId || 'mytasks'}`,
-    task_completed: `/tasks/${notification.data?.taskId || 'mytasks'}`,
-    task_comment: `/tasks/${notification.data?.taskId || 'mytasks'}`,
-    task_unassigned: `/tasks/mytasks`,
-    lead_created: `/crm?leadId=${notification.data?.leadId || ''}`,
-    lead_assigned: `/crm?leadId=${notification.data?.leadId || ''}`,
-  };
-
-  const url = notification.data?.url || urlMap[notification.type] || '/';
-  await navigateTo(url);
+  const url = buildNotificationUrl(notification);
+  if (url) await navigateTo(url);
 };
 
-const getNotificationIconSvg = (type) => {
-  // Map notification types to the custom SVG icons from assets/icons/notification/
-  if (type.startsWith('task_')) {
-    return taskIcon;
-  } else if (type.startsWith('lead_')) {
-    return leadIcon;
-  } else if (type.includes('message') || type.includes('comment') || type === 'whatsapp_message' || type === 'meta_dm') {
-    return messageIcon;
-  }
-  // Default to task icon
-  return taskIcon;
-};
-
-const getNotificationTypeLabel = (type) => {
-  const labelMap = {
-    task_assigned: 'Task',
-    task_completed: 'Task',
-    task_comment: 'Message',
-    task_unassigned: 'Task',
-    lead_created: 'Lead',
-    lead_assigned: 'Lead',
-    lead_unassigned: 'Lead',
-    whatsapp_message: 'Message',
-    meta_dm: 'Message',
-    test: 'Task',
-  };
-  return labelMap[type] || 'Task';
-};
-
-const formatTime = (dateString) => {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diff = now - date;
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-
-  if (minutes < 1) return 'Just now';
-  if (minutes < 60) return `${minutes} min ago`;
-  if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
-  if (days === 1) return '24 hours ago';
-  if (days < 7) return `${days} days ago`;
-  return date.toLocaleDateString();
-};
+const getNotificationIconSvg = (type) => getNotificationIcon(type);
+const formatTime = (dateString) => formatNotificationTime(dateString);
 
 onMounted(async () => {
   await fetchPage({ reset: true });

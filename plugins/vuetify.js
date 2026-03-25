@@ -1,6 +1,5 @@
 import "@mdi/font/css/materialdesignicons.css";
 import { createVuetify } from "vuetify";
-import { VCalendar } from "vuetify/labs/VCalendar";
 import * as directives from "vuetify/directives";
 import { aliases, mdi } from "vuetify/iconsets/mdi";
 import "vuetify/styles"; // Ensure global styles are loaded
@@ -19,9 +18,6 @@ export default defineNuxtPlugin((nuxtApp) => {
 
   const vuetify = createVuetify({
     ssr: true,
-    components: {
-      VCalendar,
-    },
     directives,
     theme: {
       options: {

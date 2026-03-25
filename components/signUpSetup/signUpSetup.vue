@@ -24,7 +24,7 @@
     </div>
 
     <!-- Navigation Buttons -->
-    <div class="button-container">
+    <div v-if="!isPaymentCompleted" class="button-container">
       <v-btn
         v-if="!isPaymentOpen"
         color="grey-darken-1"

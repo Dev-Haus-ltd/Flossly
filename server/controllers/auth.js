@@ -36,6 +36,9 @@ import {
   sendOtpForPasswordReset,
   sendOrganisationCreatedInternalNotification,
 } from "../utils/emailNotifications";
+import {
+  sendSystemPortalReadyNotification,
+} from "../utils/fcmNotification.js";
 import { getCurrentEnvironment } from "../utils/environment";
 import requestIp from "request-ip";
 import { HrDocument } from "../models/hrDocuments";
@@ -766,6 +769,7 @@ export const forgetPasswordRequest = async (event) => {
       otp,
       name: user.fullName,
     });
+
     return success("OTP sent");
   } catch (err) {
     if (err.statusCode) {
@@ -882,8 +886,12 @@ export const switchOrgnanisation = async (event) => {
   }
 };
 export const verifyEmail = async (event) => {
-  const body = JSON.parse(await readBody(event));
-  const { link } = body;
+  const rawBody = await readBody(event);
+  const { link } = parseJsonBody(rawBody);
+
+  if (!link) {
+    return error(400, "Missing verification link");
+  }
   const verification = await EmailVerification.findOne({ where: { link } });
   if (verification) {
     const user = await User.findOne({
@@ -976,6 +984,16 @@ export const verifyEmail = async (event) => {
 
         await assignDefaultHRDocsToUser(user.id);
         await portalReadyTrainingInvite(user);
+
+        // Push notification (in addition to email)
+        try {
+          await sendSystemPortalReadyNotification({ userId: user.id });
+        } catch (pushErr) {
+          console.warn('Portal-ready push notification failed', {
+            userId: user.id,
+            error: pushErr?.message || pushErr,
+          });
+        }
       }
       return success("Email Verified");
     } else {
@@ -1251,6 +1269,16 @@ export const acceptInvitation = async (event) => {
     await assignDefaultHRDocsToUser(user.id);
     await accountCreationNotification(user);
     await portalReadyTrainingInvite(user);
+
+    try {
+      await sendSystemPortalReadyNotification({ userId: user.id });
+    } catch (pushErr) {
+      console.warn('Portal-ready push notification failed', {
+        userId: user.id,
+        error: pushErr?.message || pushErr,
+      });
+    }
+
     const token = jwt.sign(
       {
         userId: user.id,

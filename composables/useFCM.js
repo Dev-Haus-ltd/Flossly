@@ -18,6 +18,88 @@ export const useFCM = () => {
   let offlineHandler = null;
   let isInitialized = false;
   let tokenFetchInProgress = false;
+  let lastTokenSyncAt = 0;
+  let serviceWorkerInitPromise = null;
+
+  const getFirebaseConfig = () => ({
+    apiKey: config.public.firebaseApiKey,
+    authDomain: config.public.firebaseAuthDomain,
+    projectId: config.public.firebaseProjectId,
+    storageBucket: config.public.firebaseStorageBucket,
+    messagingSenderId: config.public.firebaseMessagingSenderId,
+    appId: config.public.firebaseAppId,
+  });
+
+  const buildServiceWorkerUrl = () => {
+    const firebaseConfig = getFirebaseConfig();
+    const swUrl = new URL('/firebase-messaging-sw.js', window.location.origin);
+
+    Object.entries(firebaseConfig).forEach(([key, value]) => {
+      if (value) {
+        swUrl.searchParams.set(key, value);
+      }
+    });
+
+    return {
+      firebaseConfig,
+      swUrl: `${swUrl.pathname}${swUrl.search}`
+    };
+  };
+
+  const ensureServiceWorkerInitialized = async ({ force = false } = {}) => {
+    if (!process.client || !('serviceWorker' in navigator)) {
+      return null;
+    }
+
+    if (serviceWorkerInitPromise && !force) {
+      return serviceWorkerInitPromise;
+    }
+
+    serviceWorkerInitPromise = (async () => {
+      const { firebaseConfig, swUrl } = buildServiceWorkerUrl();
+
+      try {
+        const registration = await navigator.serviceWorker.register(swUrl, {
+          scope: '/',
+          updateViaCache: 'none'
+        });
+
+        console.log('✅ Firebase service worker registered/updated');
+
+        await navigator.serviceWorker.ready;
+        await registration.update().catch(err => {
+          console.warn('Service worker update check failed:', err);
+        });
+
+        const initMessage = {
+          type: 'INIT_FIREBASE',
+          config: firebaseConfig
+        };
+
+        const targets = [
+          registration.installing,
+          registration.waiting,
+          registration.active,
+          navigator.serviceWorker.controller,
+        ].filter(Boolean);
+
+        targets.forEach((target) => {
+          try {
+            target.postMessage(initMessage);
+          } catch (error) {
+            console.warn('Failed to post INIT_FIREBASE to service worker target:', error);
+          }
+        });
+
+        return registration;
+      } catch (swError) {
+        console.error('Service worker registration error:', swError);
+        return null;
+      }
+    })();
+
+    return serviceWorkerInitPromise;
+  };
 
   // Initialize Firebase
   const initializeFirebase = async () => {
@@ -26,59 +108,11 @@ export const useFCM = () => {
     }
 
     try {
-      const firebaseConfig = {
-        apiKey: config.public.firebaseApiKey,
-        authDomain: config.public.firebaseAuthDomain,
-        projectId: config.public.firebaseProjectId,
-        storageBucket: config.public.firebaseStorageBucket,
-        messagingSenderId: config.public.firebaseMessagingSenderId,
-        appId: config.public.firebaseAppId,
-      };
-
+      const firebaseConfig = getFirebaseConfig();
       const app = initializeApp(firebaseConfig);
       messaging = getMessaging(app);
-      
-      // Register and initialize service worker with Firebase config
-      if ('serviceWorker' in navigator) {
-        try {
-          // Check if service worker is already registered
-          const existingRegistration = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js');
-          
-          let registration;
-          if (existingRegistration) {
-            registration = existingRegistration;
-            console.log('♻️ Using existing service worker registration');
-          } else {
-            registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
-              scope: '/',
-              updateViaCache: 'none' // Always fetch fresh service worker
-            });
-            console.log('✅ New service worker registered');
-          }
 
-          // Wait for service worker to be ready
-          await navigator.serviceWorker.ready;
-
-          // Send config to service worker
-          if (registration.active) {
-            registration.active.postMessage({
-              type: 'INIT_FIREBASE',
-              config: firebaseConfig
-            });
-          }
-
-          // Set up periodic service worker updates
-          setInterval(() => {
-            registration.update().catch(err => {
-              console.warn('Service worker update check failed:', err);
-            });
-          }, 60 * 60 * 1000); // Check every hour
-
-        } catch (swError) {
-          console.error('Service worker registration error:', swError);
-          // Continue without service worker for browsers with extensions that block it
-        }
-      }
+      await ensureServiceWorkerInitialized();
 
       isInitialized = true;
       return true;
@@ -101,6 +135,21 @@ export const useFCM = () => {
     }
     
     return isSupported.value;
+  };
+
+  const scheduleTokenRetry = (delayMs = 15000) => {
+    if (!process.client) {
+      return;
+    }
+
+    window.setTimeout(async () => {
+      try {
+        await ensureServiceWorkerInitialized({ force: true });
+        await syncCurrentTokenToBackend({ force: true });
+      } catch (error) {
+        console.error('Scheduled FCM token retry failed:', error);
+      }
+    }, delayMs);
   };
 
   // Request notification permission
@@ -127,21 +176,21 @@ export const useFCM = () => {
     }
   };
 
-  // Get FCM token with retry logic
   const getFCMToken = async (retryCount = 0) => {
     const MAX_RETRIES = 3;
     const RETRY_DELAY = 2000;
 
-    // Prevent multiple simultaneous calls
     if (tokenFetchInProgress) {
-      console.log('⏳ Token fetch already in progress, waiting...');
-      // Wait for the ongoing fetch to complete
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      return fcmToken.value;
+      for (let i = 0; i < 20; i++) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        if (!tokenFetchInProgress) {
+          return fcmToken.value;
+        }
+      }
+      tokenFetchInProgress = false;
     }
 
     if (fcmToken.value && retryCount === 0) {
-      // Token already exists and this is not a refresh attempt
       return fcmToken.value;
     }
 
@@ -149,17 +198,32 @@ export const useFCM = () => {
 
     try {
       if (!messaging) {
-        await initializeFirebase();
+        const initialized = await initializeFirebase();
+        if (!initialized) {
+          throw new Error('Failed to initialize Firebase');
+        }
       }
 
       if (!isPermissionGranted.value) {
-        console.warn('Notification permission not granted');
-        tokenFetchInProgress = false;
         return null;
       }
 
-      // Use the existing service worker registration
-      const registration = await navigator.serviceWorker.ready;
+      let registration;
+      try {
+        registration = await Promise.race([
+          ensureServiceWorkerInitialized(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Service worker timeout')), 10000)
+          )
+        ]);
+      } catch (swError) {
+        console.error('Service worker not ready:', swError);
+        throw new Error('Service worker initialization failed');
+      }
+
+      if (!registration) {
+        throw new Error('Service worker registration unavailable');
+      }
 
       const currentToken = await getToken(messaging, {
         vapidKey: config.public.firebaseVapidKey,
@@ -167,36 +231,48 @@ export const useFCM = () => {
       });
 
       if (currentToken) {
-        const tokenChanged = fcmToken.value !== currentToken;
         fcmToken.value = currentToken;
-        console.log(tokenChanged ? '🔄 FCM Token refreshed:' : '✅ FCM Token obtained:', currentToken);
         
-        // Save token to backend with retry
-        await saveFCMTokenToBackend(currentToken, 3);
+        // Always store token in localStorage as backup for network failures
+        if (process.client) {
+          localStorage.setItem('fcm_token', currentToken);
+          console.log('📱 [FCM] Token stored in localStorage:', currentToken.substring(0, 50) + '...');
+        }
         
-        tokenFetchInProgress = false;
+        const saveResult = await saveFCMTokenToBackend(currentToken, 3);
+        
+        if (!saveResult.success) {
+          if (process.client) {
+            localStorage.setItem('fcm_token_save_pending', currentToken);
+            console.warn('📱 [FCM] Token save failed, stored in localStorage for retry');
+            // Schedule retry
+            scheduleTokenRetry();
+          }
+        } else {
+          if (process.client) {
+            localStorage.removeItem('fcm_token_save_pending');
+            console.log('📱 [FCM] Token saved to backend successfully');
+          }
+        }
+        
         return currentToken;
       } else {
-        console.log('No registration token available.');
-        tokenFetchInProgress = false;
         return null;
       }
     } catch (error) {
       console.error('Error getting FCM token:', error);
-      tokenFetchInProgress = false;
 
-      // Retry logic for transient errors
       if (retryCount < MAX_RETRIES) {
-        console.log(`🔁 Retrying token fetch (${retryCount + 1}/${MAX_RETRIES})...`);
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1)));
         return getFCMToken(retryCount + 1);
       }
 
       return null;
+    } finally {
+      tokenFetchInProgress = false;
     }
   };
 
-  // Save FCM token to backend with retry
   const saveFCMTokenToBackend = async (token, maxRetries = 3) => {
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
@@ -204,7 +280,8 @@ export const useFCM = () => {
           userAgent: navigator.userAgent,
           platform: navigator.platform,
           language: navigator.language,
-          screenResolution: `${screen.width}x${screen.height}`
+          screenResolution: `${screen.width}x${screen.height}`,
+          timestamp: new Date().toISOString()
         };
 
         const browser = getBrowserInfo();
@@ -216,23 +293,32 @@ export const useFCM = () => {
             deviceType: 'web',
             browser,
             deviceInfo
-          }
+          },
+          timeout: 30000 // Increased timeout to 30 seconds
         });
-
-        console.log('💾 Token saved to backend successfully');
-        return response;
+        
+        lastTokenSyncAt = Date.now();
+        return { success: true, response };
       } catch (error) {
         console.error(`Error saving FCM token (attempt ${attempt + 1}/${maxRetries}):`, error);
         
+        // If authentication failed, don't retry - just save to localStorage for later
+        if (error.statusCode === 401 || error.statusCode === 403) {
+          console.log('📝 Authentication pending, will retry token save after login');
+          return { success: false, error: 'Authentication pending', authFailed: true };
+        }
+        
         if (attempt < maxRetries - 1) {
-          // Wait before retrying
-          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+          const delay = 2000 * Math.pow(2, attempt); // Increased delay
+          console.log(`⏳ Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
         } else {
-          // Last attempt failed, but don't throw - token is still valid locally
-          console.warn('⚠️ Failed to save token to backend after all retries, continuing with local token');
+          return { success: false, error: error.message };
         }
       }
     }
+    
+    return { success: false, error: 'Max retries exceeded' };
   };
 
   // Get browser info
@@ -312,52 +398,98 @@ export const useFCM = () => {
     }
   };
 
-  // Refresh FCM token
-  const refreshFCMToken = async () => {
-    console.log('🔄 Refreshing FCM token...');
-    
+  const syncCurrentTokenToBackend = async ({ force = false, maxAgeMs = 5 * 60 * 1000 } = {}) => {
+    if (!isPermissionGranted.value) {
+      return false;
+    }
+
+    const shouldSync = force || !lastTokenSyncAt || (Date.now() - lastTokenSyncAt) >= maxAgeMs;
+    if (!shouldSync) {
+      return true;
+    }
+
+    const tokenToSync = fcmToken.value || (process.client ? localStorage.getItem('fcm_token') : null);
+    if (!tokenToSync) {
+      return false;
+    }
+
+    const saveResult = await saveFCMTokenToBackend(tokenToSync, 2);
+    if (saveResult.success) {
+      fcmToken.value = tokenToSync;
+      return true;
+    }
+
+    return false;
+  };
+
+  const refreshFCMToken = async ({ forceBackendSync = false } = {}) => {
     if (!messaging || !isPermissionGranted.value) {
       return;
     }
 
     try {
-      // Delete old token from Firebase
-      if (fcmToken.value) {
-        await deleteToken(messaging);
-        console.log('🗑️ Old token deleted from Firebase');
+      const registration = await ensureServiceWorkerInitialized();
+
+      if (!registration) {
+        throw new Error('Service worker registration unavailable');
       }
 
-      // Clear local token
-      fcmToken.value = null;
-      tokenFetchInProgress = false;
+      const currentToken = await getToken(messaging, {
+        vapidKey: config.public.firebaseVapidKey,
+        serviceWorkerRegistration: registration
+      });
 
-      // Get new token
-      await getFCMToken();
+      if (!currentToken) {
+        fcmToken.value = null;
+        tokenFetchInProgress = false;
+        await getFCMToken();
+        return;
+      }
+
+      const tokenChanged = currentToken !== fcmToken.value;
+      fcmToken.value = currentToken;
+
+      if (process.client) {
+        localStorage.setItem('fcm_token', currentToken);
+      }
+
+      const saveResult = tokenChanged || forceBackendSync
+        ? await saveFCMTokenToBackend(currentToken, 2)
+        : await syncCurrentTokenToBackend();
+      
+      if (!saveResult) {
+        fcmToken.value = null;
+        tokenFetchInProgress = false;
+        await getFCMToken();
+      }
     } catch (error) {
       console.error('Error refreshing FCM token:', error);
     }
   };
 
-  // Delete FCM token
   const deleteFCMToken = async () => {
     try {
       if (fcmToken.value) {
-        // Delete from backend
         await $fetch('/api/notifications/delete-token', {
           method: 'POST',
           body: { token: fcmToken.value }
         });
 
-        // Delete from Firebase
         if (messaging) {
           await deleteToken(messaging);
         }
         
+        if (process.client) {
+          localStorage.removeItem('fcm_token_save_pending');
+        }
+        
         fcmToken.value = null;
-        console.log('🗑️ FCM token deleted');
+        tokenFetchInProgress = false;
       }
     } catch (error) {
       console.error('Error deleting FCM token:', error);
+      fcmToken.value = null;
+      tokenFetchInProgress = false;
     }
   };
 
@@ -400,9 +532,25 @@ export const useFCM = () => {
   // Setup connection monitoring
   const setupConnectionMonitoring = () => {
     onlineHandler = async () => {
-      console.log('🌐 Connection restored, refreshing FCM token...');
+      console.log('🌐 Connection restored');
+      
+      // First, try to save any pending token
+      if (process.client) {
+        const pendingToken = localStorage.getItem('fcm_token_save_pending');
+        if (pendingToken) {
+          console.log('🔄 Retrying pending FCM token save after network restore...');
+          const saveResult = await saveFCMTokenToBackend(pendingToken, 3);
+          if (saveResult.success) {
+            console.log('✅ Pending FCM token saved successfully!');
+            localStorage.removeItem('fcm_token_save_pending');
+          }
+        }
+      }
+      
+      // Then re-initialize the service worker and refresh the token
       if (isPermissionGranted.value && messaging) {
-        await refreshFCMToken();
+        await ensureServiceWorkerInitialized({ force: true });
+        await refreshFCMToken({ forceBackendSync: true });
       }
     };
 
@@ -414,15 +562,18 @@ export const useFCM = () => {
     window.addEventListener('offline', offlineHandler);
   };
 
-  // Setup visibility change monitoring
   const setupVisibilityMonitoring = () => {
     visibilityChangeHandler = async () => {
       if (!document.hidden && isPermissionGranted.value) {
-        console.log('👁️ Tab became visible, checking FCM status...');
-        
-        // Reinitialize message listener when tab becomes visible
         if (messaging && !unsubscribeMessage) {
           setupMessageListener();
+        }
+
+        try {
+          await ensureServiceWorkerInitialized({ force: true });
+          await refreshFCMToken({ forceBackendSync: true });
+        } catch (error) {
+          console.error('Error checking token on visibility change:', error);
         }
       }
     };
@@ -430,48 +581,76 @@ export const useFCM = () => {
     document.addEventListener('visibilitychange', visibilityChangeHandler);
   };
 
-  // Setup periodic token refresh (every 24 hours)
   const setupTokenRefresh = () => {
-    // Clear any existing interval
     if (tokenRefreshInterval) {
       clearInterval(tokenRefreshInterval);
     }
 
-    // Refresh token every 24 hours
     tokenRefreshInterval = setInterval(async () => {
-      console.log('⏰ Periodic token refresh triggered');
-      await refreshFCMToken();
-    }, 24 * 60 * 60 * 1000);
+      if (!messaging || !isPermissionGranted.value) return;
+
+      try {
+        await ensureServiceWorkerInitialized({ force: true });
+        await refreshFCMToken({ forceBackendSync: true });
+      } catch (error) {
+        console.error('Error during periodic token check:', error);
+      }
+    }, 5 * 60 * 1000);
   };
 
-  // Initialize on mount
+  // Watch for authentication changes and retry token save
+  const retryPendingTokenSave = async () => {
+    if (process.client) {
+      const pendingToken = localStorage.getItem('fcm_token_save_pending');
+      if (pendingToken) {
+        console.log('🔄 Retrying pending FCM token save after authentication...');
+        const saveResult = await saveFCMTokenToBackend(pendingToken, 3);
+        if (saveResult.success) {
+          console.log('✅ Pending FCM token saved successfully!');
+          localStorage.removeItem('fcm_token_save_pending');
+        }
+      }
+    }
+  };
+
   onMounted(async () => {
     if (process.client) {
       checkSupport();
       if (isSupported.value) {
         await initializeFirebase();
         
-        // Wait for service worker to be fully ready before getting token
-        if ('serviceWorker' in navigator) {
-          try {
-            await navigator.serviceWorker.ready;
-          } catch (err) {
-            console.warn('Service worker not ready:', err);
-          }
-        }
-        
         if (isPermissionGranted.value) {
-          // Small delay to ensure service worker is fully activated
-          setTimeout(() => {
-            getFCMToken();
-            setupTokenRefresh();
-          }, 500);
+          if ('serviceWorker' in navigator) {
+            try {
+              await Promise.race([
+                ensureServiceWorkerInitialized({ force: true }),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('SW timeout')), 5000))
+              ]);
+            } catch (err) {
+              console.error('Service worker initialization delayed:', err);
+            }
+          }
+          
+          // Try to save pending token first
+          const pendingToken = localStorage.getItem('fcm_token_save_pending');
+          if (pendingToken) {
+            const saveResult = await saveFCMTokenToBackend(pendingToken, 3);
+            if (saveResult.success) {
+              localStorage.removeItem('fcm_token_save_pending');
+            }
+          }
+          
+          await getFCMToken();
+          setupTokenRefresh();
         }
         
         setupMessageListener();
         setupServiceWorkerListener();
         setupConnectionMonitoring();
         setupVisibilityMonitoring();
+        
+        // Listen for authentication success events
+        window.addEventListener('user-authenticated', retryPendingTokenSave);
       }
     }
   });
@@ -492,6 +671,9 @@ export const useFCM = () => {
     }
     if (offlineHandler) {
       window.removeEventListener('offline', offlineHandler);
+    }
+    if (process.client) {
+      window.removeEventListener('user-authenticated', retryPendingTokenSave);
     }
   });
 

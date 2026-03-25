@@ -103,11 +103,10 @@
 <script setup>
 import { useFCM } from '~/composables/useFCM';
 import notificationIcon from '@/assets/icons/notification/Notification.svg';
-import taskIcon from '@/assets/icons/notification/task.svg';
-import leadIcon from '@/assets/icons/notification/lead.svg';
-import messageIcon from '@/assets/icons/notification/message.svg';
+import { buildNotificationUrl, getNotificationIcon, formatNotificationTime } from '@/lib/notifications';
 
 const menu = ref(false);
+const { user } = useUser();
 const notifications = ref([]);
 const unreadCount = ref(0);
 const router = useRouter();
@@ -125,9 +124,15 @@ const maybeRequestPermission = async () => {
 // Fetch notifications
 const fetchNotifications = async () => {
   try {
+    const currentOrgId = user.value?.currentLoggedInOrgId || null;
+    
     const response = await $fetch('/api/notifications/get-notifications', {
       method: 'GET',
-      params: { limit: 10, offset: 0 }
+      params: { 
+        limit: 10, 
+        offset: 0,
+        organisationId: currentOrgId
+      }
     });
 
     const payload = response?.data || response;
@@ -144,7 +149,12 @@ const fetchNotifications = async () => {
 // Get unread count
 const fetchUnreadCount = async () => {
   try {
-    const response = await $fetch('/api/notifications/get-unread-count');
+    const currentOrgId = user.value?.currentLoggedInOrgId || null;
+    
+    const response = await $fetch('/api/notifications/get-unread-count', {
+      method: 'GET',
+      params: { organisationId: currentOrgId }
+    });
     const payload = response?.data || response;
     if (payload?.success || response?.success) {
       unreadCount.value = payload.unreadCount || 0;
@@ -181,59 +191,22 @@ const markAllAsRead = async () => {
 
 // Handle notification click
 const handleNotificationClick = async (notification) => {
-  // Mark as read
   if (!notification.isRead) {
     await markAsRead(notification.id);
   }
-
-  // Navigate based on notification type
-  const urlMap = {
-    task_assigned: `/tasks/${notification.data?.taskId || 'mytasks'}`,
-    task_completed: `/tasks/${notification.data?.taskId || 'mytasks'}`,
-    lead_created: `/crm?leadId=${notification.data?.leadId || ''}`,
-    whatsapp_message: `/crm?leadId=${notification.data?.leadId || ''}&tab=communication`,
-    meta_dm: '/crm/analytics',
-  };
-
-  const url = notification.data?.url || urlMap[notification.type] || '/';
+  const url = buildNotificationUrl(notification);
   menu.value = false;
-  await navigateTo(url);
+  if (url) await navigateTo(url);
 };
 
 // View all notifications
 const viewAllNotifications = () => {
   menu.value = false;
-  // Navigate to notifications page
   navigateTo('/notifications');
 };
 
-// Get notification icon SVG based on type
-const getNotificationIconSvg = (type) => {
-  if (type.startsWith('task_')) {
-    return taskIcon;
-  } else if (type.startsWith('lead_')) {
-    return leadIcon;
-  } else if (type.includes('message') || type.includes('comment') || type === 'whatsapp_message' || type === 'meta_dm') {
-    return messageIcon;
-  }
-  return taskIcon;
-};
-
-// Format time
-const formatTime = (dateString) => {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diff = now - date;
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-
-  if (minutes < 1) return 'Just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  if (days < 7) return `${days}d ago`;
-  return date.toLocaleDateString();
-};
+const getNotificationIconSvg = (type) => getNotificationIcon(type);
+const formatTime = (dateString) => formatNotificationTime(dateString);
 
 // Listen for FCM messages
 onMounted(() => {

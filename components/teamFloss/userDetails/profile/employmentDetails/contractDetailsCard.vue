@@ -311,6 +311,11 @@ const savePanel = () => {
   /* optionally shrink control height if needed */
   --v-input-control-height: 28px;
 }
+.no-pad-textfield :deep(input) {
+  color: #9e9e9e;
+  font-style: italic;
+  font-size: 14px;
+}
 
 /* Optional: compact spacing on smaller screens */
 @media (max-width: 600px) {

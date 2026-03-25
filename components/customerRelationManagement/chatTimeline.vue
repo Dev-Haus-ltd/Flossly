@@ -7,26 +7,78 @@
   </v-card-title>
     <v-divider />
     <v-card-text class="chat-timeline-body">
-      <CommonChatThread
-        :groups="groupedChatItems"
-        :loading="loading"
-        :empty-message="emptyMessage"
-      />
+      <div v-if="loading" class="text-caption text-medium-emphasis">
+        Loading messages...
+      </div>
+      <div v-else-if="!chatItems.length" class="text-caption text-medium-emphasis">
+        {{ emptyMessage }}
+      </div>
+      <div v-else class="chat-timeline-list">
+        <template v-for="group in groupedChatItems" :key="group.key">
+          <div class="chat-day-pill">{{ group.label }}</div>
+          <CommonChatBubble
+            v-for="row in group.items"
+            :key="row.id"
+            :is-outbound="row.isOutbound"
+            :sender="row.sender"
+            :message="row.message"
+            :timestamp="row.timeLabel"
+            :status-icon="row.statusIcon"
+            :avatar-url="row.avatarUrl"
+            :avatar-text="row.avatarText"
+            :automated="row.automated"
+          />
+        </template>
+      </div>
     </v-card-text>
     <v-divider />
-    <CommonChatInputBar
-      v-model="draftMessage"
-      :can-send="canSend"
-      :loading="sending"
-      @send="sendMessage"
-    />
+    <div class="chat-input-bar">
+      <div class="chat-input-left">
+        <v-menu v-model="emojiMenu" offset-y>
+          <template #activator="{ props: menuProps }">
+            <v-btn v-bind="menuProps" icon variant="text" size="small">
+              <v-icon size="18">mdi-emoticon-outline</v-icon>
+            </v-btn>
+          </template>
+          <ClientOnly>
+            <div class="emoji-menu">
+              <emoji-picker
+                class="emoji-picker"
+                @emoji-click="onEmojiClick"
+              />
+            </div>
+          </ClientOnly>
+        </v-menu>
+      </div>
+      <v-text-field
+        v-model="draftMessage"
+        placeholder="Type here..."
+        variant="solo"
+        density="compact"
+        hide-details
+        flat
+        bg-color="#FFFFFF"
+        class="chat-input-field"
+        @keydown.enter.prevent="sendMessage"
+      />
+      <v-btn
+        icon
+        color="primary"
+        variant="flat"
+        class="chat-send-btn"
+        :loading="sending"
+        :disabled="!canSend"
+        @click="sendMessage"
+      >
+        <v-icon size="20">mdi-send</v-icon>
+      </v-btn>
+    </div>
   </v-card>
 </template>
 
 <script setup>
-import { formatChatTimestamp, groupChatItems, buildDayKey, buildDayLabel } from "@/lib/chatThread";
-import CommonChatThread from "@/components/Common/ChatThread.vue";
-import CommonChatInputBar from "@/components/Common/ChatInputBar.vue";
+import { parsedDate } from "@/lib/dateFormatter";
+import CommonChatBubble from "@/components/Common/chatBubble.vue";
 import { useMainStore } from "@/stores/index";
 
 const props = defineProps({
@@ -62,6 +114,10 @@ const props = defineProps({
     type: String,
     default: "Flossly",
   },
+  connected: {
+    type: Boolean,
+    default: true,
+  },
 });
 
 const crmStore = useCrmStore();
@@ -70,22 +126,17 @@ const loading = ref(false);
 const logs = ref([]);
 const draftMessage = ref("");
 const sending = ref(false);
+const emojiMenu = ref(false);
 
 
 const resolvedOrg = ref({ name: "", logo: "" });
 const resolvedLead = ref({ name: "", avatar: "" });
 
 const canSend = computed(() => {
-  return !!props.leadId && String(draftMessage.value || "").trim().length > 0 && !sending.value;
+  const hasText = String(draftMessage.value || "").trim().length > 0;
+  const hasFiles = pendingFiles.value.length > 0;
+  return !!props.leadId && (hasText || hasFiles) && !sending.value;
 });
-
-const getInitials = (value) => {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-  const parts = raw.split(/\s+/).filter(Boolean);
-  const letters = parts.slice(0, 2).map((p) => p[0]?.toUpperCase() || "");
-  return letters.join("");
-};
 
 const chatItems = computed(() => {
   if (!Array.isArray(logs.value)) return [];
@@ -113,20 +164,50 @@ const chatItems = computed(() => {
         isOutbound,
         sender: isOutbound ? props.outboundSenderLabel : props.inboundSenderLabel,
         message,
-        timeLabel: formatChatTimestamp(row?.createdAt),
+        timeLabel: formatTimestamp(row?.createdAt),
         statusIcon,
         automated,
         avatarUrl,
         avatarText,
         dayKey: buildDayKey(row?.createdAt),
         dayLabel: buildDayLabel(row?.createdAt),
-        createdAt: row?.createdAt,
       };
     })
     .filter(Boolean);
 });
 
-const groupedChatItems = computed(() => groupChatItems(chatItems.value));
+const groupedChatItems = computed(() => {
+  const groups = [];
+  const map = new Map();
+  chatItems.value.forEach((item) => {
+    const key = item.dayKey || "unknown";
+    if (!map.has(key)) {
+      const group = { key, label: item.dayLabel || "Unknown", items: [] };
+      map.set(key, group);
+      groups.push(group);
+    }
+    map.get(key).items.push(item);
+  });
+  return groups;
+});
+
+const buildDayKey = (value) => {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.valueOf())) return "unknown";
+  return date.toISOString().slice(0, 10);
+};
+
+const buildDayLabel = (value) => {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.valueOf())) return "Unknown";
+  const today = new Date();
+  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const startDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.round((startDate - startToday) / 86400000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === -1) return "Yesterday";
+  return date.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+};
 
 const resolveStatusIcon = (raw) => {
   if (!raw) return "";
@@ -136,6 +217,13 @@ const resolveStatusIcon = (raw) => {
   return "";
 };
 
+const formatTimestamp = (value) => {
+  if (!value) return "N/A";
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return parsedDate(value) || "N/A";
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+};
+
 const loadLogs = async () => {
   if (!props.leadId) {
     logs.value = [];
@@ -143,9 +231,11 @@ const loadLogs = async () => {
   }
   try {
     loading.value = true;
-    const res = await crmStore.getLeadWhatsAppLogs(props.leadId, 100);
-    if (res?.code === 0 && Array.isArray(res.data)) {
-      logs.value = res.data;
+    const res = await crmStore.getLeadWhatsAppLogs({ leadId: props.leadId, limit: 100 });
+    if (res?.code === 0 && Array.isArray(res.data?.data)) {
+      logs.value = res.data.data;
+      messageCursor.value = res.data?.nextCursor || null;
+      messageHasMore.value = !!res.data?.nextCursor;
       return;
     }
     logs.value = [];
@@ -156,18 +246,56 @@ const loadLogs = async () => {
   }
 };
 
+const loadMore = async () => {
+  if (!props.leadId || !messageHasMore.value || loadingMore.value) return;
+  try {
+    loadingMore.value = true;
+    const res = await crmStore.getLeadWhatsAppLogs({
+      leadId: props.leadId,
+      limit: 100,
+      before: messageCursor.value || undefined,
+    });
+    if (res?.code === 0 && Array.isArray(res.data?.data)) {
+      const older = res.data.data;
+      logs.value = [...logs.value, ...older];
+      messageCursor.value = res.data?.nextCursor || null;
+      if (!older.length || !res.data?.nextCursor) messageHasMore.value = false;
+    } else {
+      messageHasMore.value = false;
+    }
+  } finally {
+    loadingMore.value = false;
+  }
+};
+
 const sendMessage = async () => {
   if (!canSend.value) return;
   const message = String(draftMessage.value || "").trim();
-  if (!message) return;
   try {
     sending.value = true;
+    let attachments = [];
+    if (pendingFiles.value.length) {
+      for (const file of pendingFiles.value) {
+        const form = new FormData();
+        form.append("file", file);
+        const resUpload = await crmStore.uploadLeadWhatsAppAttachment(form);
+        if (resUpload?.code !== 0) {
+          const msg = resUpload?.error || resUpload?.message || "Failed to upload attachment";
+          mainStore?.setSnackbar?.({ title: msg, type: "error" });
+          sending.value = false;
+          return;
+        }
+        if (resUpload?.data) attachments.push(resUpload.data);
+      }
+    }
     const res = await crmStore.sendLeadWhatsApp({
       leadIds: [Number(props.leadId)],
       message,
+      attachments,
     });
     if (res?.code === 0) {
       draftMessage.value = "";
+      pendingFiles.value = [];
       await loadLogs();
       return;
     }
@@ -179,6 +307,13 @@ const sendMessage = async () => {
   } finally {
     sending.value = false;
   }
+};
+
+const onEmojiClick = (event) => {
+  const symbol = event?.detail?.unicode || event?.detail?.emoji?.unicode || "";
+  if (!symbol) return;
+  draftMessage.value = `${draftMessage.value || ""}${symbol}`;
+  emojiMenu.value = false;
 };
 
 const resolveContext = () => {
@@ -209,7 +344,12 @@ watch(
   () => [props.leadId, props.leadName, props.leadAvatar, props.orgName, props.orgLogo],
   () => {
     resolveContext();
+    messageCursor.value = null;
+    messageHasMore.value = true;
+    stopWhapiStream();
+    stopWhapiPoll();
     loadLogs();
+    startWhapiStream();
   },
   { immediate: true }
 );
@@ -222,5 +362,64 @@ watch(
 
 .chat-timeline-body {
   background: #f7f8fb;
+}
+
+.chat-timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.chat-day-pill {
+  align-self: center;
+  background: #eef2f7;
+  color: #64748b;
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  margin: 6px 0 2px;
+}
+
+.chat-input-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #ffffff;
+}
+
+.chat-input-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-input-field {
+  flex: 1;
+}
+
+.chat-send-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+}
+
+.emoji-menu {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.emoji-picker {
+  --emoji-picker-height: 320px;
+  --emoji-picker-width: 300px;
+  --emoji-size: 20px;
+  --emoji-padding: 0.4rem;
+  --num-columns: 8;
 }
 </style>

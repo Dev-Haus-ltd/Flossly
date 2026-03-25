@@ -429,6 +429,7 @@
                   :lead-id="selectedLead?.id"
                   :lead-name="displayLeadName"
                   :lead-avatar="selectedLead?.photo"
+                  :connected="whatsappEnabled"
                 />
               </div>
             </v-tabs-window-item>
@@ -441,6 +442,7 @@
                   :include-defaults="true"
                   :whatsapp-enabled="whatsappEnabled"
                   :whatsapp-requires-templates="whatsappRequiresTemplates"
+                  :disable-toggle="false"
                 />
               </div>
             </v-tabs-window-item>
@@ -453,6 +455,7 @@
                   :include-defaults="false"
                   :whatsapp-enabled="whatsappEnabled"
                   :whatsapp-requires-templates="whatsappRequiresTemplates"
+                  :disable-toggle="false"
                 />
               </div>
             </v-tabs-window-item>
