@@ -97,7 +97,7 @@
                   md="4"
                   xl="3"
                 >
-                  <DashBoardRecentlyAccessed :file="file" @open="openFile" />
+                  <DashBoardRecentlyAccessed :file="file" @open="openFile" @action="openFileInDocs" />
                 </v-col>
               </v-row>
             </div>
@@ -366,6 +366,7 @@ import { useDisplay } from "vuetify";
 import { downloadFile } from "~/lib/misc";
 
 const { mdAndDown } = useDisplay();
+const router = useRouter();
 const showToolboxDialog = ref(false);
 const showCard = ref(true);
 const isLoading = ref(true);
@@ -442,7 +443,7 @@ const flosslyItems = ref([
     title: "Flossly Tasks",
     img: "https://cdn.lordicon.com/wwcdwkaf.json",
     isToolBox: false,
-    route: "/tasks",
+    route: "/tasks/mytasks",
     colors:"#008AFE"
   },
   {
@@ -481,7 +482,7 @@ const isPrivilegedUser = computed(() =>
   DASHBOARD_PRIVILEGED_ROLE_IDS.includes(Number(user.value?.roleId))
 );
 const taskListLink = computed(() =>
-  isPrivilegedUser.value ? "/tasks/teamtasks" : "/tasks"
+  isPrivilegedUser.value ? "/tasks/teamtasks" : "/tasks/mytasks"
 );
 
 // Filtered categories excluding Compliance and child categories — mirrors tasks page visibility
@@ -492,6 +493,16 @@ const filteredCategories = computed(() => {
     return name !== 'compliance';
   });
 });
+const syncDashboardTaskRoutes = () => {
+  const route = taskListLink.value;
+  const taskCard = flosslyItems.value.find((item) => item.title === "Flossly Tasks");
+  if (taskCard) {
+    taskCard.route = route;
+  }
+  if (Array.isArray(stats.value) && stats.value.length) {
+    stats.value = stats.value.map((item) => ({ ...item, link: route }));
+  }
+};
 const getRecentDocs = () => {
   return docStore
     .recentDocs()
@@ -544,6 +555,13 @@ const openFile = async (file) => {
   }
   selectedDoc.value = file
   viewDocDialog.value = true
+};
+const openFileInDocs = async (file) => {
+  await docStore.viewDoc({ id: file.id }).catch(() => {});
+  const query = {};
+  if (file?.id) query.docId = String(file.id);
+  if (file?.folderId) query.folderId = String(file.folderId);
+  await router.push({ path: "/docs/mydocs", query });
 };
 const buildZeroStats = () => [
   { status: "Completed",       key: "completed", total: 0, link: taskListLink.value, image: "/images/open-icon.svg" },
@@ -720,6 +738,7 @@ onMounted(async () => {
     if (localStorage.getItem("user")) {
       user.value = JSON.parse(localStorage.getItem("user"));
     }
+    syncDashboardTaskRoutes();
     
     // Fetch all data in parallel
     await Promise.all([
@@ -735,6 +754,9 @@ onMounted(async () => {
     // Always hide loading state after data is loaded
     isLoading.value = false;
   }
+});
+watch(taskListLink, () => {
+  syncDashboardTaskRoutes();
 });
 const getMyTasks = () => {
   return;
