@@ -189,11 +189,16 @@ export const createConversation = async (event) => {
       lastMessageAt: new Date()
     });
 
-    await sendSupportTicketSubmittedNotification({
-      userId,
-      ticketId: conversation.id,
-      ticketSubject: subject || 'Support Request'
-    });
+    // Skip notification for ask-question flow
+    if (conversationType !== 'ask-question') {
+      await sendSupportTicketSubmittedNotification({
+        userId,
+        ticketId: conversation.id,
+        ticketSubject: subject || 'Support Request'
+      });
+    } else {
+      console.log('>>> Skipping ticket submitted notification for ask-question flow');
+    }
 
     setResponseStatus(event, 201);
     return {
@@ -479,13 +484,18 @@ export const createMessage = async (event) => {
     });
 
     // Send FCM notification to the conversation participant
+    // Skip FCM for ask-question flow (response is returned directly in API)
     // If message is from support, notify the user. If from user, notify support agents.
-    if (senderType === 'support' || senderType === 'admin') {
-      // Notify the user who created the conversation
-      await notifyNewMessage(conversationId, newMessage.toJSON(), conversation.userId);
-    } else if (senderType === 'user') {
-      // Notify all support agents about the new user message
-      await notifySupportAgents(conversationId, newMessage.toJSON(), conversation);
+    if (conversation.conversationType !== 'ask-question') {
+      if (senderType === 'support' || senderType === 'admin') {
+        // Notify the user who created the conversation
+        await notifyNewMessage(conversationId, newMessage.toJSON(), conversation.userId);
+      } else if (senderType === 'user') {
+        // Notify all support agents about the new user message
+        await notifySupportAgents(conversationId, newMessage.toJSON(), conversation);
+      }
+    } else {
+      console.log('>>> Skipping FCM notification for ask-question flow');
     }
 
     // Update conversation lastMessageAt
@@ -555,11 +565,16 @@ export const createMessage = async (event) => {
             isRead: false
           });
 
-          // Send FCM notification to user
-          await notifyNewMessage(conversationId, botMessage.toJSON(), conversation.userId);
-
           console.log('>>> Bot response message created:', botMessage.id);
           console.log('>>> Bot message text:', messageText);
+          
+          // Return BOTH user message and bot response for ask-question flow
+          setResponseStatus(event, 201);
+          return {
+            success: true,
+            data: newMessage,
+            botResponse: botMessage.toJSON() // Include bot response in the API response
+          };
         }
 
       } catch (webhookError) {
@@ -575,8 +590,13 @@ export const createMessage = async (event) => {
           isRead: false
         });
 
-        // Send FCM notification to user
-        await notifyNewMessage(conversationId, errMsg.toJSON(), conversation.userId);
+        // Return error response
+        setResponseStatus(event, 201);
+        return {
+          success: true,
+          data: newMessage,
+          botResponse: errMsg.toJSON() // Include error message in the API response
+        };
       }
     } else {
       console.log('>>> Webhook NOT triggered (condition not met)');
