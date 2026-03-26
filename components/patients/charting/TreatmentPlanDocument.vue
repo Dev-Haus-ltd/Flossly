@@ -1,8 +1,29 @@
 <template>
   <div class="tpd-wrap">
+    <div v-if="showActions" class="tpd-topbar no-print">
+      <v-menu location="bottom start" offset="8">
+        <template #activator="{ props: menuProps }">
+          <v-btn v-bind="menuProps" class="tpd-action-btn tpd-action-btn--share" rounded="lg" prepend-icon="mdi-send-outline">
+            Share
+          </v-btn>
+        </template>
+        <v-list density="compact" min-width="180">
+          <v-list-item title="Email" prepend-icon="mdi-email-outline" @click="emit('share-email')" />
+          <v-list-item
+            v-if="whatsappEnabled"
+            title="WhatsApp"
+            prepend-icon="mdi-whatsapp"
+            @click="emit('share-whatsapp')"
+          />
+        </v-list>
+      </v-menu>
+      <v-btn class="tpd-action-btn" rounded="lg" prepend-icon="mdi-printer-outline" @click="printDoc">Print</v-btn>
+      <v-btn class="tpd-action-btn tpd-action-btn--download" rounded="lg" prepend-icon="mdi-download-outline" @click="emit('download')">Download</v-btn>
+    </div>
+
     <!-- Document card -->
     <div ref="docEl" class="tpd-doc">
-      <!-- Header -->
+      <!-- Header always shown -->
       <div class="tpd-doc__header">
         <div class="tpd-doc__header-left">
           <div class="tpd-doc__practice">{{ practiceName || 'Dental Practice' }}</div>
@@ -17,46 +38,87 @@
         </div>
       </div>
 
-      <!-- Items table -->
-      <template v-if="appointments.length">
-        <div v-for="appt in appointmentsWithItems" :key="appt.id" class="tpd-appt-section">
-          <div class="tpd-appt-title">{{ appt.name }}</div>
-          <table class="tpd-table">
-            <thead>
-              <tr>
-                <th>Tooth</th>
-                <th>Treatment</th>
-                <th>Duration</th>
-                <th class="tpd-th--right">Fee (£)</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in appt.items" :key="item.id || item._tempId">
-                <td>{{ toothLabel(item) }}</td>
-                <td>{{ item.treatmentName || item.conditionLabel || item.condition || '—' }}</td>
-                <td>{{ item.duration ? `${item.duration} min` : '—' }}</td>
-                <td class="tpd-td--right">{{ formatCost(item.cost) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </template>
-      <div v-else class="tpd-empty">No treatment plan items added yet.</div>
-
-      <!-- Footer totals -->
-      <div class="tpd-footer">
-        <div v-if="nhsBand" class="tpd-nhs-note">
-          NHS Band {{ nhsBand }} charge may apply. Please confirm at reception.
-        </div>
-        <div class="tpd-total-row">
-          <span class="tpd-total-label">Total estimated fee</span>
-          <span class="tpd-total-value">£{{ totalFormatted }}</span>
-        </div>
-        <div class="tpd-total-note">* Fees are estimates and may vary based on clinical findings.</div>
+      <!-- About the Clinic -->
+      <div v-if="sections.clinicInfo" class="tpd-section">
+        <div class="tpd-section__title">About the Practice</div>
+        <div class="tpd-section__body tpd-placeholder">{{ practiceName || 'Practice details will appear here.' }}</div>
       </div>
 
-      <!-- Consent checkboxes -->
-      <div class="tpd-consent">
+      <!-- About the Dentist -->
+      <div v-if="sections.dentistInfo" class="tpd-section">
+        <div class="tpd-section__title">About the Dentist</div>
+        <div class="tpd-section__body tpd-placeholder">{{ practitionerName || 'Practitioner details will appear here.' }}</div>
+      </div>
+
+      <!-- Diagnosis findings -->
+      <div v-if="sections.diagnosis && baseItems.length" class="tpd-section">
+        <div class="tpd-section__title">Diagnosis</div>
+        <table class="tpd-table">
+          <thead>
+            <tr>
+              <th>Tooth</th>
+              <th>Condition</th>
+              <th>Surface</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in baseItems" :key="item.id || item._tempId">
+              <td>{{ toothLabel(item) }}</td>
+              <td>{{ item.conditionLabel || item.condition || '—' }}</td>
+              <td>{{ item.surface || 'Full tooth' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Treatment Plan items -->
+      <div v-if="sections.treatmentPlan">
+        <template v-if="appointments.length">
+          <div v-for="appt in appointmentsWithItems" :key="appt.id" class="tpd-appt-section">
+            <div class="tpd-appt-title">{{ appt.name }}</div>
+            <table class="tpd-table">
+              <thead>
+                <tr>
+                  <th>Tooth</th>
+                  <th>Treatment</th>
+                  <th>Duration</th>
+                  <th class="tpd-th--right">Fee (£)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in appt.items" :key="item.id || item._tempId">
+                  <td>{{ toothLabel(item) }}</td>
+                  <td>{{ item.treatmentName || item.conditionLabel || item.condition || '—' }}</td>
+                  <td>{{ item.duration ? `${item.duration} min` : '—' }}</td>
+                  <td class="tpd-td--right">{{ formatCost(item.cost) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
+        <div v-else class="tpd-empty">No treatment plan items added yet.</div>
+
+        <!-- Footer totals always with treatment plan -->
+        <div class="tpd-footer">
+          <div v-if="nhsBand" class="tpd-nhs-note">
+            NHS Band {{ nhsBand }} charge may apply. Please confirm at reception.
+          </div>
+          <div class="tpd-total-row">
+            <span class="tpd-total-label">Total estimated fee</span>
+            <span class="tpd-total-value">£{{ totalFormatted }}</span>
+          </div>
+          <div class="tpd-total-note">* Fees are estimates and may vary based on clinical findings.</div>
+        </div>
+      </div>
+
+      <!-- Payment Plan -->
+      <div v-if="sections.paymentPlan" class="tpd-section">
+        <div class="tpd-section__title">Payment Plan</div>
+        <div class="tpd-section__body tpd-placeholder">Payment arrangement details will be confirmed at reception.</div>
+      </div>
+
+      <!-- Consent Form -->
+      <div v-if="sections.consentForm" class="tpd-section">
         <div class="tpd-consent__title">Patient Agreement</div>
         <div v-for="item in consentItems" :key="item" class="tpd-consent-row">
           <span class="tpd-consent-box" :class="{ 'tpd-consent-box--checked': checkedConsent.has(item) }" @click="toggleConsent(item)">
@@ -66,7 +128,13 @@
         </div>
       </div>
 
-      <!-- Signature -->
+      <!-- Testimonial -->
+      <div v-if="sections.testimonial" class="tpd-section">
+        <div class="tpd-section__title">Patient Feedback</div>
+        <div class="tpd-section__body tpd-placeholder">I am very happy with the care and treatment I received...</div>
+      </div>
+
+      <!-- Signature always shown -->
       <div class="tpd-signatures">
         <div class="tpd-sig">
           <div class="tpd-sig__line" />
@@ -77,13 +145,6 @@
           <div class="tpd-sig__label">Clinician signature &amp; date</div>
         </div>
       </div>
-    </div>
-
-    <!-- Action bar (hidden in print) -->
-    <div v-if="showActions" class="tpd-actions no-print">
-      <v-btn variant="outlined" rounded="lg" prepend-icon="mdi-printer-outline" @click="printDoc">Print</v-btn>
-      <v-btn variant="outlined" rounded="lg" prepend-icon="mdi-share-variant-outline" @click="emit('share')">Share</v-btn>
-      <v-btn color="primary" variant="flat" rounded="lg" prepend-icon="mdi-download-outline" @click="_openPrintWindow">Download PDF</v-btn>
     </div>
   </div>
 </template>
@@ -101,9 +162,15 @@ const props = defineProps({
   practiceName: { type: String, default: '' },
   practitionerName: { type: String, default: '' },
   showActions: { type: Boolean, default: false },
+  whatsappEnabled: { type: Boolean, default: false },
+  sections: { type: Object, default: () => ({
+    clinicInfo: true, dentistInfo: true, diagnosis: true,
+    treatmentPlan: true, paymentPlan: true, consentForm: false, testimonial: false
+  }) },
+  baseItems: { type: Array, default: () => [] },
 })
 
-const emit = defineEmits(['share', 'download'])
+const emit = defineEmits(['share-email', 'share-whatsapp', 'download'])
 
 const docEl = ref(null)
 
@@ -203,6 +270,15 @@ function _openPrintWindow() {
   win.focus()
   setTimeout(() => { win.print() }, 500)
 }
+
+function getDocumentHtml() {
+  return docEl.value?.outerHTML || ''
+}
+
+defineExpose({
+  getDocumentHtml,
+  printDoc,
+})
 </script>
 
 <style scoped>
@@ -210,8 +286,30 @@ function _openPrintWindow() {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 800px;
-  margin: 0 auto;
+  flex: 1;
+  min-width: 0;
+}
+
+.tpd-topbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.tpd-action-btn {
+  min-width: 108px;
+  background: #0f63ff;
+  color: #fff;
+  box-shadow: none;
+  text-transform: none;
+}
+
+.tpd-action-btn--share {
+  background: #7f73ff;
+}
+
+.tpd-action-btn--download {
+  background: #18296f;
 }
 
 /* ── Document card ──────────────────────────────────────────────── */
@@ -425,13 +523,6 @@ function _openPrintWindow() {
 }
 
 /* ── Action bar ─────────────────────────────────────────────────── */
-.tpd-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
 .tpd-empty {
   text-align: center;
   padding: 32px;
@@ -440,6 +531,32 @@ function _openPrintWindow() {
 }
 
 /* ── Print styles ───────────────────────────────────────────────── */
+.tpd-section {
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.tpd-section__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 10px;
+}
+
+.tpd-section__body {
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.6;
+}
+
+.tpd-placeholder {
+  color: #9ca3af;
+  font-style: italic;
+}
+
 @media print {
   .no-print { display: none !important; }
   .tpd-doc {

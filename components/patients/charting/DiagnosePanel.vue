@@ -8,6 +8,7 @@
           :class="{ 'diag-tab-btn--active': activeTab === 'findings' }"
           @click="activeTab = 'findings'"
         >
+          <v-icon size="14">mdi-tooth-outline</v-icon>
           Findings
         </button>
         <button
@@ -15,7 +16,7 @@
           :class="{ 'diag-tab-btn--active': activeTab === 'images' }"
           @click="activeTab = 'images'"
         >
-          <v-icon size="15" class="mr-1">mdi-image-outline</v-icon>
+          <v-icon size="14">mdi-image-outline</v-icon>
           Images
         </button>
         <button
@@ -23,7 +24,7 @@
           :class="{ 'diag-tab-btn--active': activeTab === 'history' }"
           @click="activeTab = 'history'"
         >
-          <v-icon size="15" class="mr-1">mdi-history</v-icon>
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path d="M1.75 5.25H12.25M1.75 8.75H12.25M7 1.75V12.25M4.55 1.75H9.45C10.4301 1.75 10.9201 1.75 11.2945 1.94074C11.6238 2.10852 11.8915 2.37623 12.0592 2.70552C12.25 3.07986 12.25 3.56991 12.25 4.55V9.45C12.25 10.4301 12.25 10.9201 12.0592 11.2945C11.8915 11.6238 11.6238 11.8915 11.2945 12.0592C10.9201 12.25 10.4301 12.25 9.45 12.25H4.55C3.56991 12.25 3.07986 12.25 2.70552 12.0592C2.37623 11.8915 2.10852 11.6238 1.94074 11.2945C1.75 10.9201 1.75 10.4301 1.75 9.45V4.55C1.75 3.56991 1.75 3.07986 1.94074 2.70552C2.10852 2.37623 2.37623 2.10852 2.70552 1.94074C3.07986 1.75 3.56991 1.75 4.55 1.75Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
           History
         </button>
       </div>
@@ -199,7 +200,7 @@ const props = defineProps({
   history: { type: Array, default: () => [] },
 })
 
-const emit = defineEmits(['remove', 'update', 'add-image', 'remove-image'])
+const emit = defineEmits(['remove', 'update', 'add-image', 'remove-image', 'save-success'])
 
 const activeTab = ref('findings')
 const expandedRowId = ref(null)
@@ -287,6 +288,7 @@ function saveExpanded() {
     invoiceDesc: draft.invoiceDesc || '',
     completedAt: draft.completedOn ? new Date(draft.completedOn).toISOString() : null,
   })
+  emit('save-success')
   closeExpanded()
 }
 
@@ -374,18 +376,26 @@ watch(
 .diag-tab-btn {
   display: inline-flex;
   align-items: center;
-  border: 1px solid #e0e0e0;
-  background: #fafafa;
-  color: #555;
-  border-radius: 20px;
+  gap: 5px;
+  border: none;
+  background: #F3F4F6;
+  color: #737373;
+  border-radius: 8px;
   padding: 6px 12px;
   font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
+  height: 32px;
+  transition: background 0.15s;
+}
+
+.diag-tab-btn:hover:not(.diag-tab-btn--active) {
+  background: #e5e7eb;
+  color: #374151;
 }
 
 .diag-tab-btn--active {
   background: #0061fb;
-  border-color: #0061fb;
   color: #fff;
   font-weight: 600;
 }
@@ -463,9 +473,12 @@ watch(
   transform: rotate(90deg);
 }
 
+.diag-icon-btn--danger {
+  color: #dc2626;
+}
+
 .diag-icon-btn--danger:hover {
   background: #fee2e2;
-  color: #dc2626;
 }
 
 .diag-dot {

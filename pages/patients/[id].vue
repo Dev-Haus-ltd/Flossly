@@ -18,7 +18,11 @@
       <PatientJourney v-else-if="activeTab === 'journey'" :patient="patient" @save="handleJourneySave" />
       <PatientForms v-else-if="activeTab === 'forms'" :patient="patient" />
       <div v-else-if="activeTab === 'charting'" class="mt-4">
-        <PatientsCharting :patient-id="patient?.id" :patient-name="patient ? `${patient.firstName || ''} ${patient.lastName || ''}`.trim() : ''" />
+        <PatientsCharting
+          :patient-id="patient?.id"
+          :patient-name="patient ? `${patient.firstName || ''} ${patient.lastName || ''}`.trim() : ''"
+          :patient="patient"
+        />
       </div>
       <!-- <div v-else-if="activeTab === 'perio'" class="mt-4">
         <PerioChart :peri-data="chartingStore.periData" @update="chartingStore.setPerioData($event)" />

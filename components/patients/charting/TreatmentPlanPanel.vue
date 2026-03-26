@@ -754,7 +754,7 @@ async function toggleExpand(item) {
   await openExpanded(item)
   // Fix #8 — scroll the expanded form into view so the user doesn't have to hunt for it
   await nextTick()
-  document.querySelector(`[data-item-key="${key}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  document.querySelector(`[data-item-key="${key}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
 // Fix #5 — the previous code set savingExpanded = true then turned it off in finally,
@@ -988,6 +988,7 @@ watch(activeView, async () => {
   border: 1px solid #e8e8e8;
   border-radius: 12px;
   overflow: hidden;
+  min-height: 0;
 }
 
 .tp-header {
@@ -1152,7 +1153,8 @@ watch(activeView, async () => {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 430px;
+  min-height: 420px;
+  max-height: calc(100vh - 250px);
 }
 
 .tp-empty {
@@ -1253,9 +1255,12 @@ watch(activeView, async () => {
   color: #374151;
 }
 
+.tp-icon-btn--danger {
+  color: #dc2626;
+}
+
 .tp-icon-btn--danger:hover {
   background: #fee2e2;
-  color: #dc2626;
 }
 
 .tp-item-actions {
@@ -1488,9 +1493,12 @@ watch(activeView, async () => {
   cursor: pointer;
 }
 
+.tp-appt-icon-btn--danger {
+  color: #dc2626;
+}
+
 .tp-appt-icon-btn--danger:hover {
   background: #ffebee;
-  color: #e53935;
 }
 
 .tp-appt-icon-btn--scheduled {

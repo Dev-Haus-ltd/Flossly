@@ -11,19 +11,22 @@
 
       <!-- ── Stepper ───────────────────────────────────────────────── -->
       <div class="cw-stepper">
-        <div
-          v-for="(step, idx) in STEPS"
-          :key="idx"
-          class="cw-step"
-          :class="{
-            'cw-step--active':    currentStep === idx + 1,
-            'cw-step--completed': currentStep > idx + 1,
-            'cw-step--future':    currentStep < idx + 1,
-          }"
-          @click="currentStep = idx + 1"
-        >
-          <span class="cw-step__label">{{ step }}</span>
-        </div>
+        <template v-for="(step, idx) in STEPS" :key="idx">
+          <div
+            class="cw-step"
+            :class="{
+              'cw-step--active':    currentStep === idx + 1,
+              'cw-step--completed': currentStep > idx + 1,
+              'cw-step--future':    currentStep < idx + 1,
+            }"
+            @click="currentStep = idx + 1"
+          >
+            <span class="cw-step__icon">
+              <v-icon size="16" color="white">mdi-check</v-icon>
+            </span>
+            <span class="cw-step__label">{{ step }}</span>
+          </div>
+        </template>
       </div>
 
       <!-- ── Chart + side panel (steps 1 & 2 only) ──────────────────── -->
@@ -123,6 +126,7 @@
         :images="store.chartImages"
         :history="store.historyEntries"
         :practitioners="store.practitioners"
+        @save-success="mainStore?.setSnackbar?.({ title: 'Diagnosis saved.', type: 'success' })"
         @remove="store.removeTreatmentItemById($event)"
         @update="onTreatmentUpdate"
         @add-image="onAddChartImage"
@@ -167,35 +171,48 @@
         />
       </div>
 
-      <!-- Step 3: Treatment plan document (review) -->
-      <TreatmentPlanDocument
-        v-if="currentStep === 3"
-        :active-plan="activePlanObj"
-        :plan-ref="activePlanRef"
-        :items="store.treatmentItems"
-        :appointments="store.appointments"
-        :notation="store.notation"
-        :patient-name="patientName"
-        :practice-name="practiceName"
-        :practitioner-name="activePractitionerName"
-        :show-actions="false"
-      />
+      <!-- Step 3 & 4: Two-column layout — sections control + live document preview -->
+      <div v-if="currentStep === 3" class="tpd-layout">
+        <TreatmentPlanDocument
+          :active-plan="activePlanObj"
+          :plan-ref="activePlanRef"
+          :items="store.treatmentItems"
+          :appointments="store.appointments"
+          :notation="store.notation"
+          :patient-name="patientName"
+          :practice-name="practiceName"
+          :practitioner-name="activePractitionerName"
+          :base-items="baseChartItems"
+          :sections="planSections"
+        />
+        <PlanSectionsPanel
+          v-model:sections="planSections"
+          :base-items="baseChartItems"
+          :items="store.treatmentItems"
+          :notation="store.notation"
+          :practitioners="store.practitioners"
+        />
+      </div>
 
-      <!-- Step 4: Overview with share/print/download -->
-      <TreatmentPlanDocument
-        v-if="currentStep === 4"
-        :active-plan="activePlanObj"
-        :plan-ref="activePlanRef"
-        :items="store.treatmentItems"
-        :appointments="store.appointments"
-        :notation="store.notation"
-        :patient-name="patientName"
-        :practice-name="practiceName"
-        :practitioner-name="activePractitionerName"
-        :show-actions="true"
-        @share="onSharePlan"
-        @download="onDownloadPlan"
-      />
+      <div v-if="currentStep === 4" class="tpd-layout tpd-layout--overview">
+        <TreatmentPlanDocument
+          :active-plan="activePlanObj"
+          :plan-ref="activePlanRef"
+          :items="store.treatmentItems"
+          :appointments="store.appointments"
+          :notation="store.notation"
+          :patient-name="patientName"
+          :practice-name="practiceName"
+          :practitioner-name="activePractitionerName"
+          :base-items="baseChartItems"
+          :sections="planSections"
+          :show-actions="true"
+          :whatsapp-enabled="whatsAppAvailable"
+          @share-email="onSharePlanByChannel('email')"
+          @share-whatsapp="onSharePlanByChannel('whatsapp')"
+          @download="onDownloadPlan"
+        />
+      </div>
 
     </template>
 
@@ -280,23 +297,28 @@ import TreatmentPlanPanel from './TreatmentPlanPanel.vue'
 import CodesPanel from './CodesPanel.vue'
 import DiagnosePanel from './DiagnosePanel.vue'
 import TreatmentPlanDocument from './TreatmentPlanDocument.vue'
+import PlanSectionsPanel from './PlanSectionsPanel.vue'
 import { usePatientChartingStore } from '@/stores/patientCharting'
 import { useMainStore } from '@/stores/index'
 import { useOrgStore } from '@/stores/organisation'
-import { CONDITIONS } from './toothData.js'
+import { useCrmStore } from '@/stores/crm'
+import { CONDITIONS, getToothLabel } from './toothData.js'
 import { DEFAULT_PLAN_ID } from '~/shared/defaults/charting/chartingDefaults.js'
 
 const props = defineProps({
   patientId: { type: [String, Number], required: true },
   patientName: { type: String, default: '' },
+  patient: { type: Object, default: null },
 })
 
 const store = usePatientChartingStore()
 const mainStore = useMainStore()
 const orgStore = useOrgStore()
+const crmStore = useCrmStore()
 
 const STEPS = ['Diagnose', 'Treatment', 'Treatment Plan', 'Overview']
 const currentStep = ref(1)
+const whatsAppAvailable = ref(false)
 
 // Sync store mode with wizard step
 watch(currentStep, (step) => {
@@ -319,10 +341,27 @@ const activePractitionerName = computed(() => {
   return first?.practitionerName || ''
 })
 
+const planSections = reactive({
+  clinicInfo: true,
+  dentistInfo: true,
+  diagnosis: true,
+  treatmentPlan: true,
+  paymentPlan: true,
+  consentForm: false,
+  testimonial: false,
+})
+
 // Base chart items (status=existing) — shown in DiagnosePanel findings
 const baseChartItems = computed(() =>
   (store.treatmentPlan || []).filter(i => String(i.status || '') === 'existing')
 )
+
+const plannedItems = computed(() =>
+  (store.treatmentItems || []).filter(i => String(i.status || '').toLowerCase() !== 'existing')
+)
+
+const patientEmail = computed(() => String(props.patient?.email || '').trim())
+const patientPhone = computed(() => String(props.patient?.preferredPhone || props.patient?.mobile || '').trim())
 
 // Conditions list for CodesPanel in diagnosis mode
 const diagnosisConditions = computed(() =>
@@ -380,7 +419,17 @@ watch(() => props.patientId, async (id, prevId) => {
 }, { immediate: true })
 
 // ── Event handlers ───────────────────────────────────────────────────────────
-function onSurfaceClick({ fdi, surface }) { store.applyCondition(fdi, surface) }
+function onSurfaceClick({ fdi, surface }) {
+  if (currentStep.value === 1 && !store.activeCondition) {
+    mainStore?.setSnackbar?.({ title: 'Select a condition from the panel first.', type: 'warning' })
+    return
+  }
+  if (currentStep.value === 2 && !store.activeCodeId && !store.activeCondition) {
+    mainStore?.setSnackbar?.({ title: 'Select a treatment code from the panel first.', type: 'warning' })
+    return
+  }
+  store.applyCondition(fdi, surface)
+}
 
 function onToothClick(fdi) {
   if (store.activeCondition && CONDITIONS[store.activeCondition]?.fullTooth) {
@@ -439,19 +488,171 @@ function onConfirmDeletePlan() {
   onCancelDeletePlan()
 }
 
-async function onSharePlan() {
-  const items = (store.treatmentItems || []).filter(i => i.status !== 'existing')
-  const lines = items.map(i => `• ${i.treatmentName || i.conditionLabel || i.condition || '—'} - £${Number(i.cost || 0).toFixed(2)}`).join('\n')
-  const total = items.reduce((s, i) => s + Number(i.cost || 0), 0).toFixed(2)
-  const text = `Treatment Plan — ${props.patientName || 'Patient'}\n\n${lines || 'No items'}\n\nTotal: £${total}`
-  if (navigator.share) {
-    try { await navigator.share({ title: 'Treatment Plan', text }); return } catch {}
+function formatShareTooth(item) {
+  const base = getToothLabel(item.fdi, store.notation)
+  return item.surface ? `${base}-${item.surface.charAt(0).toUpperCase()}` : base
+}
+
+const shareModel = computed(() => {
+  const sections = []
+
+  if (planSections.clinicInfo) {
+    const clinicText = practiceName.value || 'Practice details will be shared by the clinic.'
+    sections.push({
+      title: 'About the clinic',
+      text: clinicText,
+      html: `<p>${clinicText}</p>`,
+    })
   }
+
+  if (planSections.dentistInfo && activePractitionerName.value) {
+    sections.push({
+      title: 'About the Dentist',
+      text: activePractitionerName.value,
+      html: `<p>${activePractitionerName.value}</p>`,
+    })
+  }
+
+  if (planSections.diagnosis && baseChartItems.value.length) {
+    const rows = baseChartItems.value.map((item) => ({
+      tooth: formatShareTooth(item),
+      condition: item.conditionLabel || item.condition || '—',
+      surface: item.surface || 'Full tooth',
+    }))
+    sections.push({
+      title: 'Diagnoses',
+      text: rows.map((row) => `- ${row.tooth}: ${row.condition} (${row.surface})`).join('\n'),
+      html: `<ul>${rows.map((row) => `<li><strong>${row.tooth}</strong> ${row.condition} (${row.surface})</li>`).join('')}</ul>`,
+    })
+  }
+
+  if (planSections.treatmentPlan) {
+    const rows = plannedItems.value.map((item) => ({
+      tooth: formatShareTooth(item),
+      name: item.treatmentName || item.conditionLabel || item.condition || '—',
+      duration: item.duration ? `${item.duration} min` : '—',
+      fee: Number(item.cost || 0).toFixed(2),
+    }))
+    sections.push({
+      title: 'Treatment Plan',
+      text: rows.length
+        ? rows.map((row) => `- ${row.tooth}: ${row.name} | ${row.duration} | £${row.fee}`).join('\n')
+        : 'No treatment items added yet.',
+      html: rows.length
+        ? `<table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;width:100%"><thead><tr><th align="left">Tooth</th><th align="left">Treatment</th><th align="left">Duration</th><th align="right">Fee (£)</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${row.tooth}</td><td>${row.name}</td><td>${row.duration}</td><td align="right">${row.fee}</td></tr>`).join('')}</tbody></table>`
+        : '<p>No treatment items added yet.</p>',
+    })
+  }
+
+  if (planSections.paymentPlan) {
+    sections.push({
+      title: 'Payment Plan',
+      text: 'Payment arrangement details will be confirmed at reception.',
+      html: '<p>Payment arrangement details will be confirmed at reception.</p>',
+    })
+  }
+
+  if (planSections.consentForm) {
+    sections.push({
+      title: 'Consent Form',
+      text: 'Please review the consent points on the shared treatment plan.',
+      html: '<p>Please review the consent points on the shared treatment plan.</p>',
+    })
+  }
+
+  if (planSections.testimonial) {
+    sections.push({
+      title: 'Testimonials',
+      text: 'Patient feedback section included.',
+      html: '<p>Patient feedback section included.</p>',
+    })
+  }
+
+  const total = plannedItems.value.reduce((sum, item) => sum + Number(item.cost || 0), 0).toFixed(2)
+  const introName = props.patientName || 'Patient'
+
+  return {
+    subject: `Treatment Plan - ${introName}`,
+    html: [
+      `<p>Hi ${introName},</p>`,
+      '<p>Please find your treatment plan summary below.</p>',
+      ...sections.map((section) => `<h3>${section.title}</h3>${section.html}`),
+      `<p><strong>Total estimated fee:</strong> £${total}</p>`,
+    ].join(''),
+    text: [
+      `Treatment Plan - ${introName}`,
+      '',
+      ...sections.flatMap((section) => [section.title, section.text, '']),
+      `Total estimated fee: £${total}`,
+    ].join('\n'),
+  }
+})
+
+async function loadWhatsAppAvailability() {
   try {
-    await navigator.clipboard.writeText(text)
-    mainStore?.setSnackbar?.({ title: 'Plan summary copied to clipboard.', type: 'success' })
+    const [whapiRes, waConfigRes] = await Promise.allSettled([
+      crmStore.getWhapiStatus(),
+      crmStore.getWhatsAppConfig(),
+    ])
+    const whapiConnected = whapiRes.status === 'fulfilled' && (
+      !!whapiRes.value?.data?.connected
+      || !!whapiRes.value?.data?.phoneNumber
+      || !!whapiRes.value?.data?.displayName
+    )
+    const metaConnected = waConfigRes.status === 'fulfilled' && (
+      !!waConfigRes.value?.data?.phoneNumberId
+      || !!waConfigRes.value?.data?.accessToken
+      || !!waConfigRes.value?.data?.provider
+    )
+    whatsAppAvailable.value = !!(whapiConnected || metaConnected)
   } catch {
-    mainStore?.setSnackbar?.({ title: 'Unable to share. Please print the plan.', type: 'info' })
+    whatsAppAvailable.value = false
+  }
+}
+
+async function onSharePlanByChannel(channel = 'email') {
+  if (channel === 'email' && !patientEmail.value) {
+    mainStore?.setSnackbar?.({ title: 'No patient email found.', type: 'warning' })
+    return
+  }
+  if (channel === 'whatsapp' && !patientPhone.value) {
+    mainStore?.setSnackbar?.({ title: 'No patient phone number found.', type: 'warning' })
+    return
+  }
+  if (channel === 'whatsapp' && !whatsAppAvailable.value) {
+    mainStore?.setSnackbar?.({ title: 'WhatsApp is not connected for this organisation.', type: 'warning' })
+    return
+  }
+
+  const recipient = {
+    id: props.patient?.id || null,
+    name: props.patientName || 'Patient',
+    email: patientEmail.value,
+    telephone: patientPhone.value,
+  }
+  const payload = shareModel.value
+
+  try {
+    if (channel === 'email') {
+      const res = await crmStore.sendLeadMail({
+        recipients: [recipient],
+        subject: payload.subject,
+        html: payload.html,
+        key: 'manual_treatmentPlan',
+      })
+      if (res?.code !== 0) throw new Error(res?.message || res?.error || 'Unable to send email')
+      mainStore?.setSnackbar?.({ title: `Treatment plan emailed to ${patientEmail.value}`, type: 'success' })
+      return
+    }
+
+    const res = await crmStore.sendLeadWhatsApp({
+      recipients: [recipient],
+      message: payload.text,
+    })
+    if (res?.code !== 0) throw new Error(res?.message || res?.error || 'Unable to send WhatsApp message')
+    mainStore?.setSnackbar?.({ title: `Treatment plan sent to ${patientPhone.value}`, type: 'success' })
+  } catch (error) {
+    mainStore?.setSnackbar?.({ title: error?.message || `Unable to share by ${channel}.`, type: 'error' })
   }
 }
 
@@ -551,6 +752,10 @@ watch(() => store.lastSavedAt, (v) => {
   clearTimeout(_savedTimer)
   _savedTimer = setTimeout(() => { showSaved.value = false }, 2200)
 })
+
+onMounted(() => {
+  loadWhatsAppAvailability()
+})
 </script>
 
 <style scoped>
@@ -587,6 +792,7 @@ watch(() => store.lastSavedAt, (v) => {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 12px;
   height: 42px;
   border-radius: 8px;
   cursor: pointer;
@@ -594,25 +800,36 @@ watch(() => store.lastSavedAt, (v) => {
   transition: background 0.18s;
 }
 
-.cw-step--active {
-  background: #BD6ED7;
-}
-
-.cw-step--completed {
-  background: transparent;
-}
-
+.cw-step--active,
+.cw-step--completed,
 .cw-step--future {
   background: transparent;
 }
 
+.cw-step__icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #0061FB;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 3px rgba(0, 97, 251, 0.12);
+}
+
+.cw-step--future .cw-step__icon {
+  background: #d5d9e1;
+  box-shadow: none;
+}
+
 .cw-step__label {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 500;
   white-space: nowrap;
 }
 
-.cw-step--active    .cw-step__label { color: #fff; font-weight: 600; }
+.cw-step--active    .cw-step__label { color: #2f2f35; font-weight: 600; }
 .cw-step--completed .cw-step__label { color: #555; }
 .cw-step--future    .cw-step__label { color: #999; }
 
@@ -621,11 +838,30 @@ watch(() => store.lastSavedAt, (v) => {
   flex-shrink: 0;
 }
 
+.cw-connector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  flex-shrink: 0;
+}
+
+.cw-done-circle {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #0061FB;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 /* ── Body row ────────────────────────────────────────────────────── */
 .charting-body {
   display: flex;
   gap: 12px;
-  align-items: stretch;
+  align-items: flex-start; /* chart card drives height */
 }
 
 /* ── Chart card ──────────────────────────────────────────────────── */
@@ -683,10 +919,23 @@ watch(() => store.lastSavedAt, (v) => {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
+  align-self: stretch;
+  overflow: hidden;
 }
 
 /* ── Treatment plan ──────────────────────────────────────────────── */
 .treatment-plan-wrap { width: 100%; }
+
+/* ── Treatment plan 2-column layout ───────────────── */
+.tpd-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.tpd-layout--overview {
+  display: block;
+}
 
 /* ── Save indicator ──────────────────────────────────────────────── */
 .save-indicator {

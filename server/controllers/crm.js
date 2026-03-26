@@ -1719,11 +1719,23 @@ export const sendLeadMail = async (event) => {
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
-    const { leadIds = [], subject, html, key, attachments = [], metadata = {} } = payload || {}
+    const { leadIds = [], recipients = [], subject, html, key, attachments = [], metadata = {} } = payload || {}
     const safeSubject = String(subject || '').trim()
     const safeHtml = typeof html === 'string' ? html : ''
     if (!safeSubject) return error(400, 'subject required')
-    if (!Array.isArray(leadIds) || !leadIds.length) return error(400, 'leadIds required')
+    const normalizedRecipients = Array.isArray(recipients)
+      ? recipients
+          .map((item) => ({
+            id: item?.id ? Number(item.id) : null,
+            name: String(item?.name || item?.fullName || '').trim(),
+            email: String(item?.email || '').trim(),
+            telephone: String(item?.telephone || item?.phone || item?.mobile || '').trim(),
+            location: String(item?.location || '').trim(),
+            treatment: item?.treatment || null,
+          }))
+          .filter((item) => item.email)
+      : []
+    if ((!Array.isArray(leadIds) || !leadIds.length) && !normalizedRecipients.length) return error(400, 'leadIds or recipients required')
     const normalizedAttachments = Array.isArray(attachments)
       ? attachments
           .map((item) => ({
@@ -1757,7 +1769,9 @@ export const sendLeadMail = async (event) => {
       }
     }
 
-    const leads = await CrmLead.findAll({ where: { id: { [Op.in]: leadIds }, organisationId: Number(orgId), softDeleted: false } })
+    const leads = Array.isArray(leadIds) && leadIds.length
+      ? await CrmLead.findAll({ where: { id: { [Op.in]: leadIds }, organisationId: Number(orgId), softDeleted: false } })
+      : normalizedRecipients
     const result = await sendLeadBulkEmail({
       leads,
       subject: safeSubject,
@@ -1766,7 +1780,7 @@ export const sendLeadMail = async (event) => {
       attachments: normalizedAttachments,
     })
 
-    if (String(key || '') === 'manual_sendPrice') {
+    if (String(key || '') === 'manual_sendPrice' && Array.isArray(leadIds) && leadIds.length) {
       const selectionKey = buildLeadSelectionKey(leadIds)
       const attachmentMeta = normalizedAttachments[0] || null
       const priceLink = String(metadata?.priceLink || '').trim()
@@ -1801,8 +1815,18 @@ export const sendLeadWhatsApp = async (event) => {
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
-    const { leadIds = [], template, message, attachments = [] } = payload || {}
-    if (!Array.isArray(leadIds) || !leadIds.length) return error(400, 'leadIds required')
+    const { leadIds = [], recipients = [], template, message, attachments = [] } = payload || {}
+    const normalizedRecipients = Array.isArray(recipients)
+      ? recipients
+          .map((item) => ({
+            id: item?.id ? Number(item.id) : null,
+            name: String(item?.name || item?.fullName || '').trim(),
+            email: String(item?.email || '').trim(),
+            telephone: String(item?.telephone || item?.phone || item?.mobile || '').trim(),
+          }))
+          .filter((item) => item.telephone)
+      : []
+    if ((!Array.isArray(leadIds) || !leadIds.length) && !normalizedRecipients.length) return error(400, 'leadIds or recipients required')
     const messageText = String(message || '').trim()
     const hasTemplate = !!template
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0
@@ -1826,9 +1850,11 @@ export const sendLeadWhatsApp = async (event) => {
 
     const useTemplate = waConfig.provider === 'meta' && hasTemplate
 
-    const leads = await CrmLead.findAll({
-      where: { id: { [Op.in]: leadIds }, organisationId: Number(orgId), softDeleted: false },
-    })
+    const leads = Array.isArray(leadIds) && leadIds.length
+      ? await CrmLead.findAll({
+          where: { id: { [Op.in]: leadIds }, organisationId: Number(orgId), softDeleted: false },
+        })
+      : normalizedRecipients
     if (!leads.length) return error(404, 'No leads found')
 
     const metaUrl = waConfig.provider === 'meta'
@@ -1858,7 +1884,7 @@ export const sendLeadWhatsApp = async (event) => {
         skipped += 1
         await logWhatsAppMessage({
           organisationId: orgId,
-          leadId: lead.id,
+          leadId: lead.id || null,
           to: lead.telephone || null,
           type: useTemplate ? 'template' : 'text',
           templateName: useTemplate ? (template?.name || template?.namespace || null) : null,
@@ -1882,7 +1908,7 @@ export const sendLeadWhatsApp = async (event) => {
         failed += 1
         await logWhatsAppMessage({
           organisationId: orgId,
-          leadId: lead.id,
+          leadId: lead.id || null,
           to,
           type: 'text',
           status: 'failed',
@@ -1926,10 +1952,12 @@ export const sendLeadWhatsApp = async (event) => {
             resp?.message?.id ||
             resp?.id ||
             null
-          await markWhatsAppOutbound(lead, to)
+          if (typeof lead?.save === 'function') {
+            await markWhatsAppOutbound(lead, to)
+          }
           await logWhatsAppMessage({
             organisationId: orgId,
-            leadId: lead.id,
+            leadId: lead.id || null,
             to,
             type: useTemplate ? 'template' : 'text',
             templateName: useTemplate ? (template?.name || template?.namespace || null) : null,
@@ -1999,10 +2027,12 @@ export const sendLeadWhatsApp = async (event) => {
               resp?.message?.id ||
               resp?.id ||
               null
-            await markWhatsAppOutbound(lead, to)
+            if (typeof lead?.save === 'function') {
+              await markWhatsAppOutbound(lead, to)
+            }
             await logWhatsAppMessage({
               organisationId: orgId,
-              leadId: lead.id,
+              leadId: lead.id || null,
               to,
               type,
               status: 'sent',
@@ -2017,7 +2047,7 @@ export const sendLeadWhatsApp = async (event) => {
         failed += 1
         await logWhatsAppMessage({
           organisationId: orgId,
-          leadId: lead.id,
+          leadId: lead.id || null,
           to,
           type: useTemplate ? 'template' : 'text',
           templateName: useTemplate ? (template?.name || template?.namespace || null) : null,
@@ -2025,7 +2055,7 @@ export const sendLeadWhatsApp = async (event) => {
           error: e?.data?.error?.message || e?.message || 'Failed to send',
         })
         failures.push({
-          leadId: lead.id,
+          leadId: lead.id || null,
           error: e?.data?.error?.message || e?.message || 'Failed to send',
         })
       }
