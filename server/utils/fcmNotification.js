@@ -185,9 +185,28 @@ export const sendNotificationToUser = async ({
       },
       webpush: {
         headers: {
-          TTL: '86400'
+          TTL: '86400',
+          Urgency: priority === 'high' ? 'high' : 'normal'
+        },
+        fcmOptions: {
+          link: String(stringifiedData.url || data?.url || '/')
         }
-      }
+      },
+      // Set Android priority for mobile devices
+      android: priority === 'high' ? {
+        priority: 'high'
+      } : undefined,
+      // Set APNS priority for iOS devices
+      apns: priority === 'high' ? {
+        headers: {
+          'apns-priority': '10'
+        },
+        payload: {
+          aps: {
+            contentAvailable: true
+          }
+        }
+      } : undefined
     };
 
     // Send to all user's devices

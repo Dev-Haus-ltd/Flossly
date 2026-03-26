@@ -160,6 +160,8 @@
 <script setup>
 import { downloadFile } from "~/lib/misc";
 
+const route = useRoute();
+const router = useRouter();
 const showFolderDetails = ref(false);
 const showAddFolderDialog = ref(false);
 const showAddFileDialog = ref(false);
@@ -201,10 +203,13 @@ const currentDepth = computed(() => folderStack.value.length);
 // Check if we can create more subfolders (only allowed at depth 0 and 1)
 const canCreateSubfolder = computed(() => currentDepth.value < 2);
 
-onMounted(() => {
-  getFolders();
-  getRecentDocs();
-  getDocs({ folderId: null });
+onMounted(async () => {
+  await Promise.all([
+    getFolders(),
+    getRecentDocs(),
+    getDocs({ folderId: null }),
+  ]);
+  await tryOpenDocFromQuery();
 });
 
 const updateView = () => {
@@ -214,7 +219,7 @@ const updateView = () => {
 };
 
 const getFolders = (parentId = null) => {
-  docStore
+  return docStore
     .getFolders({ parentId })
     .then((res) => {
       if (res.code === 0) {
@@ -225,7 +230,7 @@ const getFolders = (parentId = null) => {
 };
 
 const getRecentDocs = () => {
-  docStore
+  return docStore
     .recentDocs()
     .then((res) => {
       if (res.code === 0) {
@@ -236,7 +241,7 @@ const getRecentDocs = () => {
 };
 
 const getDocs = (data) => {
-  docStore
+  return docStore
     .listDocs(data)
     .then((res) => {
       if (res.code === 0) {
@@ -253,9 +258,67 @@ const isDocxFile = (doc) => {
   return fileName.endsWith('.docx')
 }
 
+const isXlsxFile = (file) => {
+  const name = (file?.name || '').toLowerCase()
+  return name.endsWith('.xlsx') || name.endsWith('.xls')
+}
+
 const openFile = (file) => {
+  if (isXlsxFile(file)) {
+    handleDownload(file)
+    return
+  }
   selectedDoc.value = file;
   viewFileDialog.value = true;
+};
+
+const clearDocQueryParams = async () => {
+  const nextQuery = { ...route.query };
+  delete nextQuery.docId;
+  delete nextQuery.folderId;
+  await router.replace({ path: route.path, query: nextQuery });
+};
+
+const tryOpenDocFromQuery = async () => {
+  const docId = Number(route.query?.docId);
+  if (!docId) return;
+
+  try {
+    let doc =
+      recentFiles.value.find((x) => Number(x?.id) === docId) ||
+      files.value.find((x) => Number(x?.id) === docId);
+
+    if (!doc) {
+      const recentRes = await docStore.recentDocs();
+      if (recentRes?.code === 0) {
+        recentFiles.value = recentRes.data || [];
+        doc = recentFiles.value.find((x) => Number(x?.id) === docId);
+      }
+    }
+
+    if (!doc) {
+      const folderId = Number(route.query?.folderId);
+      if (folderId) {
+        const folderDocsRes = await docStore.listDocs({ folderId });
+        if (folderDocsRes?.code === 0) {
+          doc = (folderDocsRes.data || []).find((x) => Number(x?.id) === docId);
+        }
+      }
+    }
+
+    if (!doc) {
+      const rootDocsRes = await docStore.listDocs({ folderId: null });
+      if (rootDocsRes?.code === 0) {
+        doc = (rootDocsRes.data || []).find((x) => Number(x?.id) === docId);
+      }
+    }
+
+    if (doc) {
+      openFile(doc);
+    }
+  } finally {
+    await clearDocQueryParams();
+  }
 };
 
 const handleEdit = (file) => {

@@ -18,10 +18,19 @@
         </v-btn>
       </v-card-title>
       <!-- Viewer -->
-      <div class="pa-5" style="height: 700px">
-        <!-- Iframe for file viewing -->
+      <div class="file-viewer-body">
+        <!-- Image viewer with zoom/pan/rotate -->
+        <div v-if="isImageFile && viewerUrl" class="image-viewer">
+          <viewer
+            :options="viewerOptions"
+            class="image-viewer-inner"
+          >
+            <img :src="viewerUrl" class="image-viewer-img" :alt="doc?.name" />
+          </viewer>
+        </div>
+        <!-- Iframe for PDFs and other file types -->
         <iframe
-          v-if="viewerUrl"
+          v-else-if="viewerUrl"
           :src="viewerUrl"
           width="100%"
           height="100%"
@@ -62,6 +71,34 @@ import { buildAbsoluteLink } from '~/lib/misc'
 
 const viewerUrl = ref(null)
 const isLoading = ref(false)
+
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico']
+
+const isImageFile = computed(() => {
+  const name = (props.doc?.name || '').toLowerCase()
+  const ext = name.split('.').pop()
+  return IMAGE_EXTENSIONS.includes(ext)
+})
+
+const viewerOptions = {
+  inline: true,
+  button: false,
+  navbar: false,
+  title: false,
+  toolbar: {
+    zoomIn: true,
+    zoomOut: true,
+    oneToOne: true,
+    reset: true,
+    rotateLeft: true,
+    rotateRight: true,
+    flipHorizontal: true,
+    flipVertical: true,
+    download: false,
+  },
+  minZoomRatio: 0.1,
+  maxZoomRatio: 10,
+}
 
 const props = defineProps({
   modelValue: Boolean,
@@ -115,4 +152,34 @@ const close = () => {
   font-size: 14px;
 }
 
+.file-viewer-body {
+  padding: 20px;
+  height: 700px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.image-viewer {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #1a1a1a;
+}
+
+.image-viewer-inner {
+  width: 100%;
+  height: 100%;
+}
+
+/* v-viewer inline mode needs explicit height on its root element */
+.image-viewer-inner :deep(.viewer-container) {
+  height: 100% !important;
+}
+
+.image-viewer-img {
+  display: none; /* v-viewer renders its own canvas; the img is just the source */
+}
 </style>

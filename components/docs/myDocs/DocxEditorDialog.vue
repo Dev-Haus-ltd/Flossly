@@ -28,7 +28,7 @@
           <div v-if="showEditorOverlay" class="docx-editor-loading">
             <div class="docx-editor-loading-inner">
               <div class="docx-editor-spinner"></div>
-              <div class="docx-editor-loading-text">Loading document…</div>
+              <div class="docx-editor-loading-text">{{ loadingMessage }}</div>
             </div>
           </div>
         </div>
@@ -77,6 +77,8 @@ const isEditorReady = ref(false)
 const isEditorErrored = ref(false)
 const preloadedUrl = ref(null)
 const documentEditorRef = ref(null)
+const isSlowLoading = ref(false)
+let slowLoadTimer = null
 const mainStore = useMainStore()
 const docStore = useDocStore()
 
@@ -98,8 +100,29 @@ const showEditorOverlay = computed(() => {
   if (!isOpen.value) return false
   return isPreloading.value || !isEditorReady.value
 })
+const loadingMessage = computed(() =>
+  isSlowLoading.value
+    ? "Loading large document. Please wait..."
+    : "Loading document..."
+)
+
+const clearSlowLoadTimer = () => {
+  if (slowLoadTimer) {
+    clearTimeout(slowLoadTimer)
+    slowLoadTimer = null
+  }
+  isSlowLoading.value = false
+}
+
+const startSlowLoadTimer = () => {
+  clearSlowLoadTimer()
+  slowLoadTimer = setTimeout(() => {
+    isSlowLoading.value = true
+  }, 2500)
+}
 
 const resetEditorState = () => {
+  clearSlowLoadTimer()
   isPreloading.value = false
   isEditorReady.value = false
   isEditorErrored.value = false
@@ -143,6 +166,7 @@ const preloadDocument = async () => {
   if (!docxFileUrl.value || isPreloading.value) return
   if (preloadedUrl.value === docxFileUrl.value) return
   isPreloading.value = true
+  startSlowLoadTimer()
   try {
     const key = buildCacheKey(props.doc?.id, docxFileUrl.value)
     cacheKey.value = key
@@ -183,6 +207,7 @@ const preloadDocument = async () => {
     }
   } catch (err) {
     isEditorErrored.value = true
+    clearSlowLoadTimer()
     mainStore.setSnackbar({
       title: err?.message || 'Failed to load document',
       type: 'error',
@@ -192,12 +217,20 @@ const preloadDocument = async () => {
   }
 }
 
-const handleEditorReady = () => {
+const handleEditorReady = (payload) => {
   isEditorReady.value = true
+  clearSlowLoadTimer()
+  if (payload && payload.rendered === false) {
+    mainStore.setSnackbar({
+      title: "Document took too long to render. Please wait a bit or reopen the file.",
+      type: "warning",
+    })
+  }
 }
 
 const handleEditorError = (err) => {
   isEditorErrored.value = true
+  clearSlowLoadTimer()
   mainStore.setSnackbar({
     title: err?.message || 'Failed to initialize editor',
     type: 'error',
@@ -326,6 +359,10 @@ const close = () => {
   isOpen.value = false
   resetEditorState()
 }
+
+onUnmounted(() => {
+  clearSlowLoadTimer()
+})
 </script>
 
 <style scoped>
