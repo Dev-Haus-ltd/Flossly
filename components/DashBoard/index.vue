@@ -476,6 +476,13 @@ const flosslyItems = ref([
 const tab = ref(null);
 const categoryList = ref([]);
 const stats = ref([]);
+const DASHBOARD_PRIVILEGED_ROLE_IDS = [1, 8];
+const isPrivilegedUser = computed(() =>
+  DASHBOARD_PRIVILEGED_ROLE_IDS.includes(Number(user.value?.roleId))
+);
+const taskListLink = computed(() =>
+  isPrivilegedUser.value ? "/tasks/teamtasks" : "/tasks"
+);
 
 // Filtered categories excluding Compliance and child categories — mirrors tasks page visibility
 const filteredCategories = computed(() => {
@@ -501,7 +508,9 @@ const getRecentDocs = () => {
 };
 const fetchListCategories = async () => {
   try {
-    const res = await taskStore.getTeamTaskStatsByCategory();
+    const res = isPrivilegedUser.value
+      ? await taskStore.getTeamTaskStatsByCategory()
+      : await taskStore.getMyTaskStatsByCategory();
     if (res.code === 0) {
       categoryList.value = res.data || [];
       if (filteredCategories.value.length > 0) {
@@ -537,30 +546,83 @@ const openFile = async (file) => {
   viewDocDialog.value = true
 };
 const buildZeroStats = () => [
-  { status: "Completed",       key: "completed", total: 0, link: "/tasks/teamtasks", image: "/images/open-icon.svg" },
-  { status: "Overdue Tasks",   key: "overdue",   total: 0, link: "/tasks/teamtasks", image: "/images/inprogress-icon.svg" },
-  { status: "In Progress Tasks", key: "progress", total: 0, link: "/tasks/teamtasks", image: "/images/completed-icon.svg" },
-  { status: "To do",           key: "todo",      total: 0, link: "/tasks/teamtasks", image: "/images/completed-icon.svg" },
+  { status: "Completed",       key: "completed", total: 0, link: taskListLink.value, image: "/images/open-icon.svg" },
+  { status: "Overdue Tasks",   key: "overdue",   total: 0, link: taskListLink.value, image: "/images/inprogress-icon.svg" },
+  { status: "In Progress Tasks", key: "progress", total: 0, link: taskListLink.value, image: "/images/completed-icon.svg" },
+  { status: "To do",           key: "todo",      total: 0, link: taskListLink.value, image: "/images/completed-icon.svg" },
 ];
 
 const fetchDummyStats = async () => {
   try {
     const categoryId = tab.value || null;
-    const res = await taskStore.getTeamTaskStatsByStatusAndCategory(categoryId);
-    if (res && res.code === 0) {
-      const data = res.data || {};
-      stats.value = [
-        { status: "Completed",         key: "completed", total: data.completed || 0, link: "/tasks/teamtasks", image: "/images/open-icon.svg" },
-        { status: "Overdue Tasks",     key: "overdue",   total: data.overdue || 0,   link: "/tasks/teamtasks", image: "/images/inprogress-icon.svg" },
-        { status: "In Progress Tasks", key: "progress",  total: data.progress || 0,  link: "/tasks/teamtasks", image: "/images/completed-icon.svg" },
-        { status: "To do",             key: "todo",      total: data.todo || data.upcoming || 0, link: "/tasks/teamtasks", image: "/images/completed-icon.svg" },
-      ];
-    } else {
+    if (isPrivilegedUser.value) {
+      const res = await taskStore.getTeamTaskStatsByStatusAndCategory(categoryId);
+      if (res && res.code === 0) {
+        const data = res.data || {};
+        stats.value = [
+          { status: "Completed",         key: "completed", total: data.completed || 0, link: taskListLink.value, image: "/images/open-icon.svg" },
+          { status: "Overdue Tasks",     key: "overdue",   total: data.overdue || 0,   link: taskListLink.value, image: "/images/inprogress-icon.svg" },
+          { status: "In Progress Tasks", key: "progress",  total: data.progress || 0,  link: taskListLink.value, image: "/images/completed-icon.svg" },
+          { status: "To do",             key: "todo",      total: data.todo || data.upcoming || 0, link: taskListLink.value, image: "/images/completed-icon.svg" },
+        ];
+        return;
+      }
       stats.value = buildZeroStats();
       mainStore.setSnackbar({
         title: res?.data?.message || res?.message || "Failed to load task stats",
         type: "Error",
       });
+      return;
+    }
+
+    const [statusRes, overdueRes] = await Promise.all([
+      taskStore.tasksGroupedByStatus({
+        categoryId,
+        page: 1,
+        pageSize: 1,
+      }),
+      taskStore.tasksGroupedByStatus({
+        categoryId,
+        dueDateFilter: "overdue",
+        page: 1,
+        pageSize: 1,
+      }),
+    ]);
+
+    if (statusRes?.code !== 0 || overdueRes?.code !== 0) {
+      stats.value = buildZeroStats();
+      mainStore.setSnackbar({
+        title:
+          statusRes?.data?.message ||
+          statusRes?.message ||
+          overdueRes?.data?.message ||
+          overdueRes?.message ||
+          "Failed to load task stats",
+        type: "Error",
+      });
+      return;
+    } else {
+      const statuses = statusRes?.data?.statuses || [];
+      const overdueStatuses = overdueRes?.data?.statuses || [];
+
+      const totalByStatus = statuses.reduce((acc, item) => {
+        const key = String(item?.status || "").toLowerCase();
+        acc[key] = Number(item?.total || 0);
+        return acc;
+      }, {});
+
+      const overdueTotal = overdueStatuses.reduce((sum, item) => {
+        const key = String(item?.status || "").toLowerCase();
+        if (key === "completed" || key === "archived") return sum;
+        return sum + Number(item?.total || 0);
+      }, 0);
+
+      stats.value = [
+        { status: "Completed",         key: "completed", total: totalByStatus.completed || 0, link: taskListLink.value, image: "/images/open-icon.svg" },
+        { status: "Overdue Tasks",     key: "overdue",   total: overdueTotal, link: taskListLink.value, image: "/images/inprogress-icon.svg" },
+        { status: "In Progress Tasks", key: "progress",  total: totalByStatus.progress || 0, link: taskListLink.value, image: "/images/completed-icon.svg" },
+        { status: "To do",             key: "todo",      total: totalByStatus.todo || totalByStatus.upcoming || 0, link: taskListLink.value, image: "/images/completed-icon.svg" },
+      ];
     }
   } catch (err) {
     stats.value = buildZeroStats();
@@ -663,9 +725,9 @@ onMounted(async () => {
     await Promise.all([
       fetchListCategories(),
       getRecentDocs(),
-      user.value.roleId === 8 || user.value.roleId === 1 ? getMyTasks() : Promise.resolve(),
-      user.value.roleId === 8 || user.value.roleId === 1 ? loadCrmLeads() : Promise.resolve(),
-      user.value.roleId === 8 || user.value.roleId === 1 ? loadLeadSources() : Promise.resolve()
+      isPrivilegedUser.value ? getMyTasks() : Promise.resolve(),
+      isPrivilegedUser.value ? loadCrmLeads() : Promise.resolve(),
+      isPrivilegedUser.value ? loadLeadSources() : Promise.resolve()
     ]);
   } catch (error) {
     console.error("Error loading dashboard data:", error);
