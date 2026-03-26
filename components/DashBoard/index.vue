@@ -482,7 +482,7 @@ const isPrivilegedUser = computed(() =>
   DASHBOARD_PRIVILEGED_ROLE_IDS.includes(Number(user.value?.roleId))
 );
 const taskListLink = computed(() =>
-  isPrivilegedUser.value ? "/tasks/teamtasks" : "/tasks/mytasks"
+  "/tasks/mytasks"
 );
 
 // Filtered categories excluding Compliance and child categories — mirrors tasks page visibility
