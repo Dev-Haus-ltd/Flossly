@@ -1039,8 +1039,35 @@ const sendMessage = async () => {
     if (response.success) {
       console.log('Message sent successfully');
       
-      // Don't remove temp message here - let websocket handler do it when real message arrives
-      // currentMessages.value = currentMessages.value.filter(m => m.id !== tempUserMessage.id);
+      // Remove temp message and add the real user message
+      currentMessages.value = currentMessages.value.filter(m => m.id !== tempUserMessage.id);
+      currentMessages.value.push(response.data);
+      
+      // For ask-question flow, handle bot response directly from API
+      if (selectedOption.value?.id === 'ask-question') {
+        if (response.botResponse) {
+          console.log('Bot response received directly from API:', response.botResponse);
+          
+          // Add bot response to messages
+          currentMessages.value.push(response.botResponse);
+          
+          // Hide typing indicator
+          isWaitingForResponse.value = false;
+          
+          // Scroll to show bot response
+          await nextTick();
+          await scrollToBottomSoon();
+        } else {
+          // If no bot response received, hide typing indicator after a timeout
+          console.warn('No bot response received from API for ask-question flow');
+          setTimeout(() => {
+            if (isWaitingForResponse.value) {
+              isWaitingForResponse.value = false;
+              console.log('Typing indicator hidden after timeout');
+            }
+          }, 30000); // 30 second timeout
+        }
+      }
       
       // Upload attachments if any
       if (attachedFiles.value.length > 0) {
@@ -1063,8 +1090,6 @@ const sendMessage = async () => {
       
       // Re-enable input immediately after successful message send
       isSubmitting.value = false;
-      
-      // FCM will handle real-time updates for bot responses - no polling needed
     } else {
       throw new Error('Failed to send message');
     }
