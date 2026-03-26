@@ -27,17 +27,8 @@
           </ClientOnly>
           <div v-if="showEditorOverlay" class="docx-editor-loading">
             <div class="docx-editor-loading-inner">
-              <div class="docx-editor-spinner-row">
-                <div class="docx-editor-spinner"></div>
-                <div class="docx-editor-loading-text">
-                  <span v-if="downloadProgress > 0 && downloadProgress < 100">Downloading… {{ downloadProgress }}%</span>
-                  <span v-else-if="downloadProgress >= 100">Preparing document…</span>
-                  <span v-else>Loading document…</span>
-                </div>
-              </div>
-              <div v-if="downloadProgress > 0" class="docx-progress-bar-track">
-                <div class="docx-progress-bar-fill" :style="{ width: downloadProgress + '%' }"></div>
-              </div>
+              <div class="docx-editor-spinner"></div>
+              <div class="docx-editor-loading-text">Loading document…</div>
             </div>
           </div>
         </div>
@@ -85,7 +76,6 @@ const isPreloading = ref(false)
 const isEditorReady = ref(false)
 const isEditorErrored = ref(false)
 const preloadedUrl = ref(null)
-const downloadProgress = ref(0)
 const documentEditorRef = ref(null)
 const mainStore = useMainStore()
 const docStore = useDocStore()
@@ -114,7 +104,6 @@ const resetEditorState = () => {
   isEditorReady.value = false
   isEditorErrored.value = false
   preloadedUrl.value = null
-  downloadProgress.value = 0
   if (editorBlobUrl.value) {
     try {
       URL.revokeObjectURL(editorBlobUrl.value)
@@ -180,28 +169,7 @@ const preloadDocument = async () => {
       throw new Error(`Failed to load document (${res.status})`)
     }
     const cloneForCache = res.clone()
-
-    // Stream the response to track download progress
-    const contentLength = res.headers.get('content-length')
-    const total = contentLength ? parseInt(contentLength, 10) : 0
-    const reader = res.body.getReader()
-    const chunks = []
-    let loaded = 0
-    downloadProgress.value = 0
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      chunks.push(value)
-      loaded += value.length
-      if (total > 0) {
-        downloadProgress.value = Math.round((loaded / total) * 100)
-      }
-    }
-
-    const blob = new Blob(chunks, {
-      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    })
+    const blob = await res.blob()
     if (editorBlobUrl.value) {
       try {
         URL.revokeObjectURL(editorBlobUrl.value)
@@ -447,31 +415,10 @@ const close = () => {
 
 .docx-editor-loading-inner {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  color: #444;
-}
-
-.docx-editor-spinner-row {
-  display: flex;
   align-items: center;
   gap: 12px;
-}
-
-.docx-progress-bar-track {
-  width: 220px;
-  height: 4px;
-  background: #e0e0e0;
-  border-radius: 2px;
-}
-
-.docx-progress-bar-fill {
-  height: 100%;
-  background: #3b82f6;
-  border-radius: 2px;
-  transition: width 0.15s ease;
+  font-size: 14px;
+  color: #444;
 }
 
 .docx-editor-spinner {
