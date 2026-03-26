@@ -3025,7 +3025,8 @@ export const teamTasksCountByCategory = async (event) => {
 
     return success(result);
   } catch (err) {
-    return error(500, err.message);
+    const statusCode = Number(err?.statusCode || err?.status) || 500;
+    return error(statusCode, err?.message || "Something went wrong while counting tasks.");
   }
 };
 
@@ -3400,7 +3401,8 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
       upcoming: todo || 0, // Keep for backward compatibility
     });
   } catch (err) {
-    return error(500, err.message);
+    const statusCode = Number(err?.statusCode || err?.status) || 500;
+    return error(statusCode, err?.message || "Failed to fetch team task stats.");
   }
 };
 
