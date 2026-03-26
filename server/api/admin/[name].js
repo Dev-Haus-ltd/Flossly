@@ -34,7 +34,20 @@ import {
   createDefaultPriority,
   updateDefaultPriority,
   createDefaultStatus,
-  updateDefaultStatus
+  updateDefaultStatus,
+  getChecklists,
+  getChecklistById,
+  createChecklist,
+  updateChecklist,
+  deleteChecklist,
+  bulkUploadChecklists,
+  downloadChecklistTemplate,
+  getTaskCategories,
+  getTaskCategoryById,
+  getTaskSubcategories,
+  createTaskCategory,
+  updateTaskCategory,
+  deleteTaskCategory
 } from '../../controllers/admin';
 
 export default defineEventHandler(async (event) => {
@@ -159,6 +172,47 @@ export default defineEventHandler(async (event) => {
     
     case 'updateDefaultStatus':
       return await updateDefaultStatus(event);
+
+    // Task Checklist Management
+    case 'getChecklists':
+      return await getChecklists(event);
+    
+    case 'getChecklistById':
+      return await getChecklistById(event);
+    
+    case 'createChecklist':
+      return await createChecklist(event);
+    
+    case 'updateChecklist':
+      return await updateChecklist(event);
+    
+    case 'deleteChecklist':
+      return await deleteChecklist(event);
+    
+    case 'bulkUploadChecklists':
+      return await bulkUploadChecklists(event);
+    
+    case 'downloadChecklistTemplate':
+      return await downloadChecklistTemplate(event);
+
+    // Task Category Management
+    case 'getTaskCategories':
+      return await getTaskCategories(event);
+    
+    case 'getTaskCategoryById':
+      return await getTaskCategoryById(event);
+    
+    case 'getTaskSubcategories':
+      return await getTaskSubcategories(event);
+    
+    case 'createTaskCategory':
+      return await createTaskCategory(event);
+    
+    case 'updateTaskCategory':
+      return await updateTaskCategory(event);
+    
+    case 'deleteTaskCategory':
+      return await deleteTaskCategory(event);
 
     // 404 for unknown endpoints
     default:

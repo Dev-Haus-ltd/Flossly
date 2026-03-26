@@ -1064,6 +1064,478 @@
       "description": "Manage global task pool and bulk task uploads"
     },
     {
+      "name": "Task Checklists",
+      "item": [
+        {
+          "name": "Get All Checklists",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getChecklists?limit=100&offset=0",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getChecklists"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Results per page (default: 100)"
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "description": "Pagination offset (default: 0)"
+                },
+                {
+                  "key": "taskId",
+                  "value": "123",
+                  "description": "Filter by task ID (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "fire",
+                  "description": "Search in question or category (optional)",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get all task checklist items with optional filtering by task ID or search term."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Checklist By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getChecklistById?id=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getChecklistById"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "Checklist item ID (required)"
+                }
+              ]
+            },
+            "description": "Get a specific checklist item by ID with associated task details."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Checklist",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"taskId\": 123,\n  \"question\": \"Check fire alarm\",\n  \"category\": \"Safety\",\n  \"fieldOneTitle\": \"Comments / Notes\",\n  \"fieldOneValue\": \"Last checked on 2026-01-15\",\n  \"fieldTwoTitle\": null,\n  \"fieldTwoValue\": null,\n  \"showRadio\": true,\n  \"showTime\": false,\n  \"showDate\": false,\n  \"radioValue\": \"N/A\",\n  \"timeValue\": null,\n  \"dateValue\": null\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/createChecklist",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "createChecklist"
+              ]
+            },
+            "description": "Create a new checklist item for a task. Required fields: taskId, question."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Checklist",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"question\": \"Check fire alarm (updated)\",\n  \"category\": \"Safety\",\n  \"fieldOneTitle\": \"Comments / Notes\",\n  \"fieldOneValue\": \"Updated comment\",\n  \"showRadio\": true,\n  \"radioValue\": \"Yes\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/updateChecklist",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "updateChecklist"
+              ]
+            },
+            "description": "Update an existing checklist item. Only provided fields will be updated."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Checklist",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/deleteChecklist",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "deleteChecklist"
+              ]
+            },
+            "description": "Delete a checklist item by ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk Upload Checklists",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "public/samples/checklist-sample.csv",
+                  "description": "CSV file with format: taskTitle,itemTitle,showRadio,defaultComment"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/bulkUploadChecklists",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "bulkUploadChecklists"
+              ]
+            },
+            "description": "Upload multiple checklist items from CSV file. Automatically creates tasks if they don't exist (as system tasks). Groups checklist items by taskTitle. Use downloadChecklistTemplate to get sample CSV format."
+          },
+          "response": []
+        },
+        {
+          "name": "Download Checklist Template",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/downloadChecklistTemplate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "downloadChecklistTemplate"
+              ]
+            },
+            "description": "Download CSV template for bulk checklist upload with sample data."
+          },
+          "response": []
+        }
+      ],
+      "description": "Manage task checklists with CRUD operations and bulk upload functionality"
+    },
+    {
+      "name": "Task Categories",
+      "item": [
+        {
+          "name": "Get All Task Categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getTaskCategories?includeSubcategories=true&includeTaskCount=true",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getTaskCategories"
+              ],
+              "query": [
+                {
+                  "key": "includeSubcategories",
+                  "value": "true",
+                  "description": "Include subcategories (default: true)"
+                },
+                {
+                  "key": "includeTaskCount",
+                  "value": "true",
+                  "description": "Include task count (default: true)"
+                }
+              ]
+            },
+            "description": "Get all system task categories (parent categories only). System categories have organisationId = NULL and isDeleted = false."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Task Category By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getTaskCategoryById?id=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getTaskCategoryById"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "Category ID (required)"
+                }
+              ]
+            },
+            "description": "Get a specific task category by ID with its subcategories and parent (if subcategory)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Task Subcategories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getTaskSubcategories?parentId=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getTaskSubcategories"
+              ],
+              "query": [
+                {
+                  "key": "parentId",
+                  "value": "1",
+                  "description": "Parent category ID (required)"
+                }
+              ]
+            },
+            "description": "Get all subcategories for a specific parent category."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Task Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Category\",\n  \"description\": \"Category description\",\n  \"color\": \"#3498db\",\n  \"parentId\": null\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/createTaskCategory",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "createTaskCategory"
+              ]
+            },
+            "description": "Create a new task category or subcategory. Set parentId to create a subcategory, or null for parent category. Name must be unique at the same level."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Task Category",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"name\": \"Updated Category Name\",\n  \"description\": \"Updated description\",\n  \"color\": \"#e74c3c\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/updateTaskCategory",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "updateTaskCategory"
+              ]
+            },
+            "description": "Update an existing task category. Only provided fields will be updated. Name must be unique at the same level."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Task Category",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/deleteTaskCategory",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "deleteTaskCategory"
+              ]
+            },
+            "description": "Soft delete a task category (sets isDeleted = true). Cannot delete if category has tasks or subcategories assigned."
+          },
+          "response": []
+        }
+      ],
+      "description": "Manage system task categories and subcategories. Only shows categories where organisationId is NULL and isDeleted is false."
+    },
+    {
       "name": "Default Priorities & Statuses",
       "item": [
         {
