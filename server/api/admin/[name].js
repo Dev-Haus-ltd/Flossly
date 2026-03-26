@@ -31,7 +31,9 @@ import {
   downloadAdminTaskTemplate,
   getDefaultPriorities,
   getDefaultStatuses,
+  createDefaultPriority,
   updateDefaultPriority,
+  createDefaultStatus,
   updateDefaultStatus
 } from '../../controllers/admin';
 
@@ -142,12 +144,18 @@ export default defineEventHandler(async (event) => {
     case 'getDefaultPriorities':
       return await getDefaultPriorities(event);
     
+    case 'createDefaultPriority':
+      return await createDefaultPriority(event);
+    
     case 'updateDefaultPriority':
       return await updateDefaultPriority(event);
 
     // Default Statuses Management
     case 'getDefaultStatuses':
       return await getDefaultStatuses(event);
+    
+    case 'createDefaultStatus':
+      return await createDefaultStatus(event);
     
     case 'updateDefaultStatus':
       return await updateDefaultStatus(event);

@@ -145,7 +145,7 @@
           "response": []
         },
         {
-          "name": "Update User Status",
+          "name": "Update User Status (Organisation Specific)",
           "request": {
             "method": "POST",
             "header": [
@@ -156,7 +156,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"userId\": 123,\n  \"status\": \"Active\"\n}"
+              "raw": "{\n  \"userId\": 123,\n  \"organisationId\": 45,\n  \"status\": \"Disabled\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/admin/updateUserStatus",
@@ -169,7 +169,7 @@
                 "updateUserStatus"
               ]
             },
-            "description": "Update a user's status. Options: Active, Inactive, Suspended."
+            "description": "Update a user's status within a specific organisation (UserOrganisations table). This controls whether the user can access that particular organisation. Valid options: Active, Disabled, Invited, Expired."
           },
           "response": []
         },
@@ -1107,6 +1107,35 @@
           "response": []
         },
         {
+          "name": "Create Default Priority",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"custom_priority\",\n  \"name\": \"Custom Priority\",\n  \"color\": \"#FF5722\",\n  \"sortOrder\": 5\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/createDefaultPriority",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "createDefaultPriority"
+              ]
+            },
+            "description": "Create a new default priority. This will be available for all organisations to use."
+          },
+          "response": []
+        },
+        {
           "name": "Update Default Priority",
           "request": {
             "method": "PUT",
@@ -1132,6 +1161,35 @@
               ]
             },
             "description": "Update a default priority. Changes cascade to ALL organisation priorities with the same key."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Default Status",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"custom_status\",\n  \"name\": \"Custom Status\",\n  \"color\": \"#9C27B0\",\n  \"description\": \"A custom status for special cases\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/createDefaultStatus",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "createDefaultStatus"
+              ]
+            },
+            "description": "Create a new default status. This will be available for all organisations to use."
           },
           "response": []
         },

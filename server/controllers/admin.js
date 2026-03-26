@@ -198,36 +198,59 @@ export const updateUserStatus = async (event) => {
   }
 
   const body = await readBody(event);
-  const { userId, status } = body;
+  const { userId, organisationId, status } = body;
 
-  if (!userId || !status) {
-    return error(400, "userId and status are required");
+  if (!userId || !organisationId || !status) {
+    return error(400, "userId, organisationId, and status are required");
   }
 
-  if (!['Active', 'Inactive', 'Suspended'].includes(status)) {
-    return error(400, "Invalid status. Must be Active, Inactive, or Suspended");
+  // Valid status values matching the UserOrganisation model enum
+  if (!['Active', 'Disabled', 'Invited', 'Expired'].includes(status)) {
+    return error(400, "Invalid status. Must be Active, Disabled, Invited, or Expired");
   }
 
   try {
-    const user = await User.findByPk(userId);
+    const { UserOrganisation } = await import('../models/index.js');
+    
+    // Find the UserOrganisation record
+    const userOrg = await UserOrganisation.findOne({
+      where: {
+        userId,
+        organisationId
+      },
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'email', 'fullName']
+        },
+        {
+          model: Organisation,
+          as: 'organisation',
+          attributes: ['id', 'name']
+        }
+      ]
+    });
 
-    if (!user) {
-      return error(404, "User not found");
+    if (!userOrg) {
+      return error(404, "User not found in the specified organisation");
     }
 
-    user.status = status;
-    await user.save();
+    userOrg.status = status;
+    await userOrg.save();
 
     return success({
-      message: `User status updated to ${status}`,
-      user: {
-        id: user.id,
-        email: user.email,
-        status: user.status
+      message: `User status updated to ${status} for organisation ${userOrg.organisation.name}`,
+      userOrganisation: {
+        userId: userOrg.userId,
+        organisationId: userOrg.organisationId,
+        status: userOrg.status,
+        user: userOrg.user,
+        organisation: userOrg.organisation
       }
     });
   } catch (err) {
-    console.error('Update user status error:', err);
+    console.error('Update user organisation status error:', err);
     return error(500, err.message);
   }
 };
@@ -2850,6 +2873,54 @@ export const getDefaultStatuses = async (event) => {
 };
 
 /**
+ * Create a new default priority
+ */
+export const createDefaultPriority = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const { DefaultPriority } = await import('../models/index.js');
+    const body = await readBody(event);
+    const { key, name, color, sortOrder } = typeof body === 'string' ? JSON.parse(body) : body;
+
+    if (!key || !name) {
+      return error(400, "Key and name are required");
+    }
+
+    if (sortOrder === undefined) {
+      return error(400, "Sort order is required");
+    }
+
+    // Check if key already exists
+    const existingPriority = await DefaultPriority.findOne({ where: { key } });
+    if (existingPriority) {
+      return error(400, "A priority with this key already exists");
+    }
+
+    // Create the default priority
+    const priority = await DefaultPriority.create({
+      key,
+      name,
+      color: color || null,
+      sortOrder
+    });
+
+    return success({
+      message: "Default priority created successfully",
+      priority
+    });
+
+  } catch (err) {
+    console.error('Create default priority error:', err);
+    return error(500, err.message || "Failed to create default priority");
+  }
+};
+
+/**
  * Update a default priority and cascade to all organisations
  */
 export const updateDefaultPriority = async (event) => {
@@ -2907,6 +2978,50 @@ export const updateDefaultPriority = async (event) => {
   } catch (err) {
     console.error('Update default priority error:', err);
     return error(500, err.message || "Failed to update default priority");
+  }
+};
+
+/**
+ * Create a new default status
+ */
+export const createDefaultStatus = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const { DefaultStatus } = await import('../models/index.js');
+    const body = await readBody(event);
+    const { key, name, color, description } = typeof body === 'string' ? JSON.parse(body) : body;
+
+    if (!key || !name) {
+      return error(400, "Key and name are required");
+    }
+
+    // Check if key already exists
+    const existingStatus = await DefaultStatus.findOne({ where: { key } });
+    if (existingStatus) {
+      return error(400, "A status with this key already exists");
+    }
+
+    // Create the default status
+    const status = await DefaultStatus.create({
+      key,
+      name,
+      color: color || null,
+      description: description || null
+    });
+
+    return success({
+      message: "Default status created successfully",
+      status
+    });
+
+  } catch (err) {
+    console.error('Create default status error:', err);
+    return error(500, err.message || "Failed to create default status");
   }
 };
 
