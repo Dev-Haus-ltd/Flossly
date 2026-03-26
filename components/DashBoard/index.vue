@@ -44,12 +44,12 @@
                 slider-color="primary"
               >
                 <v-tab
-                  v-for="(category, index) in filteredCategories"
-                  :key="category.id"
-                  :value="index + 1"
+                  v-for="category in filteredCategories"
+                  :key="category.categoryId"
+                  :value="category.categoryId"
                   class="tab-text"
                 >
-                  {{ category.name }}
+                  {{ category.categoryName }}
                 </v-tab>
               </v-tabs>
 
@@ -336,6 +336,22 @@
         </v-col>
       </v-row>
 
+      <!-- File viewer dialogs for Recently Accessed -->
+      <template v-if="selectedDoc">
+        <DocsMyDocsDocxEditorDialog
+          v-if="isDocxFile(selectedDoc)"
+          v-model="viewDocDialog"
+          :doc="selectedDoc"
+          :is-system="false"
+        />
+        <DocsMyDocsViewFileDialog
+          v-else
+          v-model="viewDocDialog"
+          :doc="selectedDoc"
+          :is-system="false"
+        />
+      </template>
+
       <!-- Toolbox Dialog -->
       <DashBoardToolBoxDialog v-model="showToolboxDialog" @close="showToolboxDialog = false" />
       <MyProfileLoyaltyPointsRewardsContentRecommendPracticeDialog
@@ -347,6 +363,7 @@
 
 <script setup>
 import { useDisplay } from "vuetify";
+import { downloadFile } from "~/lib/misc";
 
 const { mdAndDown } = useDisplay();
 const showToolboxDialog = ref(false);
@@ -360,6 +377,8 @@ const orgStore = useOrgStore();
 const showReferralDialog = ref(false);
 const docStore = useDocStore();
 const recentFiles = ref([]);
+const selectedDoc = ref(null);
+const viewDocDialog = ref(false);
 const user = ref({});
 const value = ref(null);
 const crmLeads = ref([]);
@@ -454,19 +473,17 @@ const flosslyItems = ref([
     colors:"rgba(255, 255, 255, 0.2);"
   },
 ]);
-const tab = ref(1);
+const tab = ref(null);
 const categoryList = ref([]);
 const stats = ref([]);
 
-// Filtered categories excluding Compliance
+// Filtered categories excluding Compliance and child categories — mirrors tasks page visibility
 const filteredCategories = computed(() => {
-  const filtered = categoryList.value.filter((x) => {
+  return categoryList.value.filter((x) => {
     if (x.parentId) return false;
-    const name = (x.name || '').trim().toLowerCase();
+    const name = (x.categoryName || '').trim().toLowerCase();
     return name !== 'compliance';
   });
-
-  return filtered;
 });
 const getRecentDocs = () => {
   return docStore
@@ -484,16 +501,16 @@ const getRecentDocs = () => {
 };
 const fetchListCategories = async () => {
   try {
-    const res = await taskStore.listCategories();
+    const res = await taskStore.getTeamTaskStatsByCategory();
     if (res.code === 0) {
-      categoryList.value = res.data;
-      if (categoryList.value.length > 0) {
-        tab.value = 1; // Set to first tab index
+      categoryList.value = res.data || [];
+      if (filteredCategories.value.length > 0) {
+        tab.value = filteredCategories.value[0].categoryId;
         await fetchDummyStats();
       }
     } else {
       mainStore.setSnackbar({
-        title: res.data.message || res.message,
+        title: res.data?.message || res.message || "Failed to load categories",
         type: "Error",
       });
     }
@@ -504,121 +521,53 @@ const fetchListCategories = async () => {
     });
   }
 };
+const isDocxFile = (file) => (file?.name || '').toLowerCase().endsWith('.docx')
+const isXlsxFile = (file) => {
+  const name = (file?.name || '').toLowerCase()
+  return name.endsWith('.xlsx') || name.endsWith('.xls')
+}
+
 const openFile = async (file) => {
-  await docStore.viewDoc({ id: file.id });
-  const config = useRuntimeConfig();
-  if (file.name.split(".")[1] === "pdf") {
-    pdfurl.value = `${config.public.BASE_URL}${file.link}`;
-    showPdf.value = true;
+  await docStore.viewDoc({ id: file.id }).catch(() => {})
+  if (isXlsxFile(file)) {
+    downloadFile(file)
+    return
   }
+  selectedDoc.value = file
+  viewDocDialog.value = true
 };
+const buildZeroStats = () => [
+  { status: "Completed",       key: "completed", total: 0, link: "/tasks/teamtasks", image: "/images/open-icon.svg" },
+  { status: "Overdue Tasks",   key: "overdue",   total: 0, link: "/tasks/teamtasks", image: "/images/inprogress-icon.svg" },
+  { status: "In Progress Tasks", key: "progress", total: 0, link: "/tasks/teamtasks", image: "/images/completed-icon.svg" },
+  { status: "To do",           key: "todo",      total: 0, link: "/tasks/teamtasks", image: "/images/completed-icon.svg" },
+];
+
 const fetchDummyStats = async () => {
   try {
-    // Filter to only parent categories (same as tabs), excluding Compliance
-    const parentCategories = filteredCategories.value;
-    // Find the selected category based on tab index
-    const selectedCategory = parentCategories[tab.value - 1];
-    const categoryId = selectedCategory?.id || null;
-    
+    const categoryId = tab.value || null;
     const res = await taskStore.getTeamTaskStatsByStatusAndCategory(categoryId);
     if (res && res.code === 0) {
       const data = res.data || {};
       stats.value = [
-        {
-          status: "Completed",
-          key: "completed",
-          total: data.completed || 0,
-          link: "/tasks/teamtasks",
-          image: "/images/open-icon.svg",
-        },
-        {
-          status: "Overdue Tasks",
-          key: "overdue",
-          total: data.overdue || 0,
-          link: "/tasks/teamtasks",
-          image: "/images/inprogress-icon.svg",
-        },
-        {
-          status: "In Progress Tasks",
-          key: "progress",
-          total: data.progress || 0,
-          link: "/tasks/teamtasks",
-          image: "/images/completed-icon.svg",
-        },
-        {
-          status: "To do",
-          key: "todo",
-          total: data.todo || data.upcoming || 0,
-          link: "/tasks/teamtasks",
-          image: "/images/completed-icon.svg",
-        },
+        { status: "Completed",         key: "completed", total: data.completed || 0, link: "/tasks/teamtasks", image: "/images/open-icon.svg" },
+        { status: "Overdue Tasks",     key: "overdue",   total: data.overdue || 0,   link: "/tasks/teamtasks", image: "/images/inprogress-icon.svg" },
+        { status: "In Progress Tasks", key: "progress",  total: data.progress || 0,  link: "/tasks/teamtasks", image: "/images/completed-icon.svg" },
+        { status: "To do",             key: "todo",      total: data.todo || data.upcoming || 0, link: "/tasks/teamtasks", image: "/images/completed-icon.svg" },
       ];
     } else {
-      // Fallback to zeros if API fails
-      stats.value = [
-        {
-          status: "Completed",
-          key: "completed",
-          total: 0,
-          link: "/tasks/teamtasks",
-          image: "/images/open-icon.svg",
-        },
-        {
-          status: "Overdue Tasks",
-          key: "overdue",
-          total: 0,
-          link: "/tasks/teamtasks",
-          image: "/images/inprogress-icon.svg",
-        },
-        {
-          status: "In Progress Tasks",
-          key: "progress",
-          total: 0,
-          link: "/tasks/teamtasks",
-          image: "/images/completed-icon.svg",
-        },
-        {
-          status: "To do",
-          key: "todo",
-          total: 0,
-          link: "/tasks/teamtasks",
-          image: "/images/completed-icon.svg",
-        },
-      ];
+      stats.value = buildZeroStats();
+      mainStore.setSnackbar({
+        title: res?.data?.message || res?.message || "Failed to load task stats",
+        type: "Error",
+      });
     }
   } catch (err) {
-    console.error("Error fetching task stats:", err);
-    // Fallback to zeros on error
-    stats.value = [
-      {
-        status: "Completed",
-        key: "completed",
-        total: 0,
-        link: "/tasks/teamtasks",
-        image: "/images/open-icon.svg",
-      },
-      {
-        status: "Overdue Tasks",
-        key: "overdue",
-        total: 0,
-        link: "/tasks/teamtasks",
-        image: "/images/inprogress-icon.svg",
-      },
-      {
-        status: "In Progress Tasks",
-        key: "progress",
-        total: 0,
-        link: "/tasks/teamtasks",
-        image: "/images/completed-icon.svg",
-      },
-      {
-        status: "To do",
-        key: "todo",
-        total: 0,
-        link: "/tasks/teamtasks",
-        image: "/images/completed-icon.svg",
-      },
-    ];
+    stats.value = buildZeroStats();
+    mainStore.setSnackbar({
+      title: err.message || "Failed to load task stats",
+      type: "Error",
+    });
   }
 };
 const loadCrmLeads = async () => {
@@ -699,7 +648,7 @@ watch(showReferralDialog, (isOpen) => {
 
 
 watch(tab, async (newId) => {
-  if (newId && categoryList.value.length > 0) {
+  if (newId) {
     await fetchDummyStats();
   }
 });

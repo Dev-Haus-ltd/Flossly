@@ -253,7 +253,16 @@ const isDocxFile = (doc) => {
   return fileName.endsWith('.docx')
 }
 
+const isXlsxFile = (file) => {
+  const name = (file?.name || '').toLowerCase()
+  return name.endsWith('.xlsx') || name.endsWith('.xls')
+}
+
 const openFile = (file) => {
+  if (isXlsxFile(file)) {
+    handleDownload(file)
+    return
+  }
   selectedDoc.value = file;
   viewFileDialog.value = true;
 };
