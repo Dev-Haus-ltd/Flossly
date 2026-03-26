@@ -89,22 +89,13 @@ export const CONDITION_CATEGORIES = ['Decay', 'Restorations', 'Prosthetics', 'En
 
 // ─── Default Tooth State Factory ─────────────────────────────────────────
 export function createDefaultTooth(fdi) {
-  const meta = TEETH_BY_FDI[fdi]
-  const isAnterior = meta?.type === TOOTH_TYPE.CANINE || meta?.type === TOOTH_TYPE.INCISOR
-  const surfaces = isAnterior
-    ? {
-        buccal:  { condition: null, status: 'existing' },
-        lingual: { condition: null, status: 'existing' },
-        mesial:  { condition: null, status: 'existing' },
-        distal:  { condition: null, status: 'existing' },
-      }
-    : {
-        buccal:   { condition: null, status: 'existing' },
-        lingual:  { condition: null, status: 'existing' },
-        mesial:   { condition: null, status: 'existing' },
-        distal:   { condition: null, status: 'existing' },
-        occlusal: { condition: null, status: 'existing' },
-      }
+  const surfaces = {
+    buccal:   { condition: null, status: 'existing' },
+    lingual:  { condition: null, status: 'existing' },
+    mesial:   { condition: null, status: 'existing' },
+    distal:   { condition: null, status: 'existing' },
+    occlusal: { condition: null, status: 'existing' },
+  }
   return {
     fdi,
     missing: false,
