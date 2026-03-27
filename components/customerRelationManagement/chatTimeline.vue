@@ -4,89 +4,59 @@
       <CommonWhatsAppNotConnectedAlert />
     </div>
     <template v-else>
-      <v-card-title class="d-flex align-center justify-end">
+      <v-card-title class="d-flex align-center justify-space-between">
+        <v-btn
+          size="small"
+          variant="text"
+          :disabled="!messageHasMore || loadingMore"
+          @click="loadMore"
+        >
+          {{ loadingMore ? "Loading..." : messageHasMore ? "Load older" : "No more" }}
+        </v-btn>
         <v-btn size="small" variant="text" :loading="loading" @click="loadLogs">
           Refresh
         </v-btn>
       </v-card-title>
       <v-divider />
       <v-card-text class="chat-timeline-body">
-        <div v-if="loading" class="text-caption text-medium-emphasis">
-          Loading messages...
-        </div>
-        <div v-else-if="!chatItems.length" class="text-caption text-medium-emphasis">
-          {{ emptyMessage }}
-        </div>
-        <div v-else class="chat-timeline-list">
-          <template v-for="group in groupedChatItems" :key="group.key">
-            <div class="chat-day-pill">{{ group.label }}</div>
-            <CommonChatBubble
-              v-for="row in group.items"
-              :key="row.id"
-              :is-outbound="row.isOutbound"
-              :sender="row.sender"
-              :message="row.message"
-              :timestamp="row.timeLabel"
-              :status-icon="row.statusIcon"
-              :avatar-url="row.avatarUrl"
-              :avatar-text="row.avatarText"
-              :automated="row.automated"
-            />
-          </template>
-        </div>
+        <CommonChatThread
+          :groups="groupedChatItems"
+          :loading="loading"
+          :empty-message="emptyMessage"
+        />
       </v-card-text>
       <v-divider />
-      <div class="chat-input-bar">
-        <div class="chat-input-left">
-          <v-menu v-model="emojiMenu" offset-y>
-            <template #activator="{ props: menuProps }">
-              <v-btn v-bind="menuProps" icon variant="text" size="small">
-                <v-icon size="18">mdi-emoticon-outline</v-icon>
-              </v-btn>
-            </template>
-            <ClientOnly>
-              <div class="emoji-menu">
-                <emoji-picker
-                  class="emoji-picker"
-                  @emoji-click="onEmojiClick"
-                />
-              </div>
-            </ClientOnly>
-          </v-menu>
-        </div>
-        <v-text-field
-          v-model="draftMessage"
-          placeholder="Type here..."
-          variant="solo"
-          density="compact"
-          hide-details
-          flat
-          bg-color="#FFFFFF"
-          class="chat-input-field"
-          @keydown.enter.prevent="sendMessage"
-        />
-        <v-btn
-          icon
-          color="primary"
-          variant="flat"
-          class="chat-send-btn"
-          :loading="sending"
-          :disabled="!canSend"
-          @click="sendMessage"
+      <div v-if="pendingFiles.length" class="chat-timeline-attachments">
+        <div
+          v-for="(file, idx) in pendingFiles"
+          :key="`${file.name}-${idx}`"
+          class="chat-timeline-attachment-chip"
         >
-          <v-icon size="20">mdi-send</v-icon>
-        </v-btn>
+          <v-icon size="16" class="mr-1">mdi-paperclip</v-icon>
+          <span class="chat-timeline-attachment-name">{{ file.name }}</span>
+          <v-btn icon variant="text" size="x-small" @click="removePendingFile(idx)">
+            <v-icon size="14">mdi-close</v-icon>
+          </v-btn>
+        </div>
       </div>
+      <CommonChatInputBar
+        v-model="draftMessage"
+        :can-send="canSend"
+        :loading="sending"
+        :allow-attachments="true"
+        @files-selected="onFilesSelected"
+        @send="sendMessage"
+      />
     </template>
   </v-card>
 </template>
 
 <script setup>
-import { parsedDate } from "@/lib/dateFormatter";
-import CommonChatBubble from "@/components/Common/chatBubble.vue";
-import CommonWhatsAppNotConnectedAlert from "@/components/Common/WhatsAppNotConnectedAlert.vue";
+import { groupChatItems } from "@/lib/chatThread";
+import { mapWhatsAppLogToChatItem } from "@/lib/chatMappers";
+import CommonChatThread from "@/components/Common/ChatThread.vue";
+import CommonChatInputBar from "@/components/Common/ChatInputBar.vue";
 import { useMainStore } from "@/stores/index";
-import { useCrmStore } from "@/stores/crm";
 
 const props = defineProps({
   leadId: {
@@ -133,16 +103,65 @@ const loading = ref(false);
 const logs = ref([]);
 const draftMessage = ref("");
 const sending = ref(false);
-const emojiMenu = ref(false);
 const pendingFiles = ref([]);
 const messageCursor = ref(null);
 const messageHasMore = ref(true);
 const loadingMore = ref(false);
 
+let whapiEventSource = null;
+let whapiPollTimer = null;
+
+const startWhapiStream = () => {
+  if (!props.connected || !props.leadId) return;
+  if (whapiEventSource) return;
+  if (typeof window === "undefined" || !("EventSource" in window)) {
+    startWhapiPoll();
+    return;
+  }
+  whapiEventSource = new EventSource("/api/whapi/stream");
+  whapiEventSource.addEventListener("message", (evt) => {
+    try {
+      const payload = JSON.parse(evt.data || "{}");
+      if (Number(payload.leadId) === Number(props.leadId) && !loading.value) {
+        loadLogs();
+      }
+    } catch {}
+  });
+  whapiEventSource.onerror = () => {
+    stopWhapiStream();
+    startWhapiPoll();
+  };
+};
+
+const stopWhapiStream = () => {
+  if (whapiEventSource) {
+    whapiEventSource.close();
+    whapiEventSource = null;
+  }
+};
+
+const startWhapiPoll = () => {
+  if (whapiPollTimer || !props.connected || !props.leadId) return;
+  whapiPollTimer = setInterval(() => {
+    if (!loading.value) loadLogs();
+  }, 15000);
+};
+
+const stopWhapiPoll = () => {
+  if (whapiPollTimer) {
+    clearInterval(whapiPollTimer);
+    whapiPollTimer = null;
+  }
+};
+
+onBeforeUnmount(() => {
+  stopWhapiStream();
+  stopWhapiPoll();
+});
+
 
 const resolvedOrg = ref({ name: "", logo: "" });
 const resolvedLead = ref({ name: "", avatar: "" });
-let whapiPollTimer = null;
 
 const canSend = computed(() => {
   const hasText = String(draftMessage.value || "").trim().length > 0;
@@ -155,86 +174,17 @@ const chatItems = computed(() => {
   return [...logs.value]
     .reverse()
     .map((row) => {
-      const isOutbound = String(row?.direction || "").toLowerCase() === "outbound";
-      const content = String(row?.content || "").trim();
-      const templateName = String(row?.templateName || "").trim();
-      const type = String(row?.type || "").trim();
-      const message =
-        content ||
-        (templateName ? `Template: ${templateName}` : "") ||
-        (type ? `${type} message` : "");
-      if (!message) return null;
-      const statusRaw = String(row?.status || "").trim().toLowerCase();
-      const statusIcon = resolveStatusIcon(statusRaw);
-      const automated = String(row?.type || "").toLowerCase() === "template" || !!row?.templateName;
-      const avatarUrl = isOutbound ? resolvedOrg.value.logo : resolvedLead.value.avatar;
-      const avatarText = isOutbound
-        ? getInitials(resolvedOrg.value.name || props.outboundSenderLabel)
-        : getInitials(resolvedLead.value.name || props.inboundSenderLabel);
-      return {
-        id: row?.id || `${row?.providerMessageId || "na"}-${row?.createdAt || Date.now()}`,
-        isOutbound,
-        sender: isOutbound ? props.outboundSenderLabel : props.inboundSenderLabel,
-        message,
-        timeLabel: formatTimestamp(row?.createdAt),
-        statusIcon,
-        automated,
-        avatarUrl,
-        avatarText,
-        dayKey: buildDayKey(row?.createdAt),
-        dayLabel: buildDayLabel(row?.createdAt),
-      };
+      return mapWhatsAppLogToChatItem(row, {
+        inboundLabel: props.inboundSenderLabel,
+        outboundLabel: props.outboundSenderLabel,
+        inboundAvatarUrl: resolvedLead.value.avatar,
+        outboundAvatarUrl: resolvedOrg.value.logo,
+      });
     })
     .filter(Boolean);
 });
 
-const groupedChatItems = computed(() => {
-  const groups = [];
-  const map = new Map();
-  chatItems.value.forEach((item) => {
-    const key = item.dayKey || "unknown";
-    if (!map.has(key)) {
-      const group = { key, label: item.dayLabel || "Unknown", items: [] };
-      map.set(key, group);
-      groups.push(group);
-    }
-    map.get(key).items.push(item);
-  });
-  return groups;
-});
-
-const buildDayKey = (value) => {
-  const date = value ? new Date(value) : null;
-  if (!date || Number.isNaN(date.valueOf())) return "unknown";
-  return date.toISOString().slice(0, 10);
-};
-
-const buildDayLabel = (value) => {
-  const date = value ? new Date(value) : null;
-  if (!date || Number.isNaN(date.valueOf())) return "Unknown";
-  const today = new Date();
-  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const startDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const diffDays = Math.round((startDate - startToday) / 86400000);
-  if (diffDays === 0) return "Today";
-  if (diffDays === -1) return "Yesterday";
-  return date.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
-};
-
-const resolveStatusIcon = (raw) => {
-  if (!raw) return "";
-  if (raw.includes("read")) return "mdi-check-all";
-  if (raw.includes("delivered")) return "mdi-check-all";
-  if (raw.includes("sent")) return "mdi-check";
-  return "";
-};
-
-const formatTimestamp = (value) => {
-  if (!value) return "N/A";
-  const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) return parsedDate(value) || "N/A";
-  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-};
+const groupedChatItems = computed(() => groupChatItems(chatItems.value));
 
 const loadLogs = async () => {
   if (!props.leadId) {
@@ -243,14 +193,9 @@ const loadLogs = async () => {
   }
   try {
     loading.value = true;
-    const res = await crmStore.getLeadWhatsAppLogs(props.leadId, 100);
-    const rows = Array.isArray(res?.data?.data)
-      ? res.data.data
-      : Array.isArray(res?.data)
-        ? res.data
-        : [];
-    if (res?.code === 0) {
-      logs.value = rows;
+    const res = await crmStore.getLeadWhatsAppLogs({ leadId: props.leadId, limit: 100 });
+    if (res?.code === 0 && Array.isArray(res.data?.data)) {
+      logs.value = res.data.data;
       messageCursor.value = res.data?.nextCursor || null;
       messageHasMore.value = !!res.data?.nextCursor;
       return;
@@ -267,7 +212,11 @@ const loadMore = async () => {
   if (!props.leadId || !messageHasMore.value || loadingMore.value) return;
   try {
     loadingMore.value = true;
-    const res = await crmStore.getLeadWhatsAppLogs(props.leadId, 100);
+    const res = await crmStore.getLeadWhatsAppLogs({
+      leadId: props.leadId,
+      limit: 100,
+      before: messageCursor.value || undefined,
+    });
     if (res?.code === 0 && Array.isArray(res.data?.data)) {
       const older = res.data.data;
       logs.value = [...logs.value, ...older];
@@ -291,7 +240,7 @@ const sendMessage = async () => {
       for (const file of pendingFiles.value) {
         const form = new FormData();
         form.append("file", file);
-        const resUpload = await crmStore.uploadLeadAttachment(form);
+        const resUpload = await crmStore.uploadLeadWhatsAppAttachment(form);
         if (resUpload?.code !== 0) {
           const msg = resUpload?.error || resUpload?.message || "Failed to upload attachment";
           mainStore?.setSnackbar?.({ title: msg, type: "error" });
@@ -322,27 +271,12 @@ const sendMessage = async () => {
   }
 };
 
-const onEmojiClick = (event) => {
-  const symbol = event?.detail?.unicode || event?.detail?.emoji?.unicode || "";
-  if (!symbol) return;
-  draftMessage.value = `${draftMessage.value || ""}${symbol}`;
-  emojiMenu.value = false;
+const onFilesSelected = (files) => {
+  pendingFiles.value = [...pendingFiles.value, ...files];
 };
 
-const stopWhapiPoll = () => {
-  if (!whapiPollTimer) return;
-  clearInterval(whapiPollTimer);
-  whapiPollTimer = null;
-};
-
-const stopWhapiStream = () => {};
-
-const startWhapiStream = () => {
-  stopWhapiPoll();
-  if (!props.connected || !props.leadId) return;
-  whapiPollTimer = setInterval(() => {
-    loadLogs();
-  }, 15000);
+const removePendingFile = (idx) => {
+  pendingFiles.value = pendingFiles.value.filter((_, i) => i !== idx);
 };
 
 const resolveContext = () => {
@@ -370,27 +304,18 @@ const resolveContext = () => {
 };
 
 watch(
-  () => [props.leadId, props.leadName, props.leadAvatar, props.orgName, props.orgLogo, props.connected],
+  () => [props.leadId, props.leadName, props.leadAvatar, props.orgName, props.orgLogo],
   () => {
     resolveContext();
     messageCursor.value = null;
     messageHasMore.value = true;
     stopWhapiStream();
     stopWhapiPoll();
-    if (!props.connected) {
-      logs.value = [];
-      return;
-    }
     loadLogs();
     startWhapiStream();
   },
   { immediate: true }
 );
-
-onBeforeUnmount(() => {
-  stopWhapiPoll();
-  stopWhapiStream();
-});
 </script>
 
 <style scoped>
@@ -402,62 +327,30 @@ onBeforeUnmount(() => {
   background: #f7f8fb;
 }
 
-.chat-timeline-list {
+.chat-timeline-attachments {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-height: 420px;
-  overflow-y: auto;
-  padding-right: 8px;
-}
-
-.chat-day-pill {
-  align-self: center;
-  background: #eef2f7;
-  color: #64748b;
-  font-size: 12px;
-  padding: 6px 14px;
-  border-radius: 999px;
-  margin: 6px 0 2px;
-}
-
-.chat-input-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 16px 0 16px;
   background: #ffffff;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-.chat-input-left {
-  display: flex;
+.chat-timeline-attachment-chip {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+  background: rgba(15, 23, 42, 0.06);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #0f172a;
 }
 
-.chat-input-field {
-  flex: 1;
-}
-
-.chat-send-btn {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-}
-
-.emoji-menu {
-  background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 12px;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+.chat-timeline-attachment-name {
+  max-width: 160px;
   overflow: hidden;
-}
-
-.emoji-picker {
-  --emoji-picker-height: 320px;
-  --emoji-picker-width: 300px;
-  --emoji-size: 20px;
-  --emoji-padding: 0.4rem;
-  --num-columns: 8;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

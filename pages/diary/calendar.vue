@@ -9,7 +9,27 @@
       <div class="d-flex align-center" style="gap: 8px">
         <v-btn icon variant="text" @click="prevDay"><v-icon>mdi-chevron-left</v-icon></v-btn>
         <v-btn icon variant="text" @click="nextDay"><v-icon>mdi-chevron-right</v-icon></v-btn>
-        <div class="text-subtitle-1 font-weight-600 ml-2">{{ dayLabel }}</div>
+
+        <!-- Clicking the date label opens an inline date picker -->
+        <v-menu v-model="datePickerOpen" :close-on-content-click="false" location="bottom start">
+          <template #activator="{ props: menuProps }">
+            <button
+              v-bind="menuProps"
+              class="date-label-btn ml-2"
+            >
+              <span class="text-subtitle-1 font-weight-600">{{ dayLabel }}</span>
+              <v-icon size="16" class="ml-1" style="opacity:0.5">mdi-calendar</v-icon>
+            </button>
+          </template>
+          <v-card elevation="4" rounded="lg" style="overflow:hidden">
+            <v-date-picker
+              :model-value="dateStr"
+              color="primary"
+              show-adjacent-months
+              @update:model-value="onPickerDate"
+            />
+          </v-card>
+        </v-menu>
       
         <v-btn-toggle v-model="view" mandatory class="custom-toggle ml-6">
           <v-btn value="day" class="toggle-btn">
@@ -99,7 +119,7 @@
       <template v-if="dentists && dentists.length > 0">
         <AddAppointment
           v-model="showAppointment"
-          :initial-date="dateLabel"
+          :initial-date="dateStr"
           :initial-time="modalTime"
           :initial-practitioner="modalDentist?.name || ''"
           :practitioner-options="dentists.map(d=>d.name)"
@@ -135,7 +155,7 @@ import NotesModal from '@/components/diary/NotesModal.vue'
 import { useDiaryStore } from '@/stores/diary'
 import { useMainStore } from '@/stores/index'
 import { useOrgStore } from '@/stores/organisation'
-import { clinicBuildDateTime, clinicMinutesFromTime } from '@/lib/dateFormatter'
+import { clinicMinutesFromTime, dateToLocalYMD } from '@/lib/dateFormatter'
 import listicon from "@/assets/icons/listView/listicon.svg";
 import calendericon from "@/assets/icons/listView/calendericon.svg";
 import { formatDateDDMMYYYY } from '@/lib/dateFormatter'
@@ -163,14 +183,18 @@ const mainStore = useMainStore()
 function showError(message) { mainStore?.setSnackbar?.({ title: message || 'Something went wrong', type: 'error' }) }
 function showSuccess(message) { mainStore?.setSnackbar?.({ title: message || 'Done', type: 'success' }) }
 
-const dateStr = computed(() => date.value.toISOString().slice(0,10))
+const dateStr = computed(() => dateToLocalYMD(date.value))
 const dateLabel = computed(() => formatDateDDMMYYYY(date.value))
 const dayLabel = computed(() => formatDateDDMMYYYY(date.value))
 
 const prevDay = () => { const d = new Date(date.value); d.setDate(d.getDate()-1); date.value = d }
 const nextDay = () => { const d = new Date(date.value); d.setDate(d.getDate()+1); date.value = d }
-const dateMenu = ref(false)
-const onPickDate = (d) => { date.value = new Date(d); dateMenu.value = false }
+const datePickerOpen = ref(false)
+const onPickerDate = (val) => {
+  // v-date-picker emits a YYYY-MM-DD string
+  if (val) date.value = new Date(val)
+  datePickerOpen.value = false
+}
 const filters = ref({})
 function onFilters(f){
   filters.value = f || {}
@@ -261,16 +285,16 @@ function onAddPatientFromAppointment() {
 
 function onSaveAppointment(appt) {
   if (appt.id) {
-    const startTime = clinicBuildDateTime(appt.date || dateStr.value, appt.time || modalTime.value)
-    const endMinutes = (clinicMinutesFromTime(appt.time || modalTime.value) || 0) + Number(appt.duration || 15)
-    const endStr = `${String(Math.floor(endMinutes / 60)).padStart(2,'0')}:${String(endMinutes % 60).padStart(2,'0')}`
-    const endTime = clinicBuildDateTime(appt.date || dateStr.value, endStr)
+    const apptDate = appt.date || dateStr.value
+    const apptTime = appt.time || modalTime.value
+    const apptDuration = Number(appt.duration || 15)
     const dentistId = modalDentist.value?.id || editingAppointment.value?.dentistId || appt.dentistId
     diaryStore.updateAppointment({
       id: appt.id,
       dentistId,
-      startTime,
-      endTime,
+      date: apptDate,
+      time: apptTime,
+      duration: apptDuration,
       status: appt.status,
       notes: appt.notes,
       treatmentName: appt.treatmentName || appt.exam,
@@ -288,7 +312,7 @@ function onSaveAppointment(appt) {
       dentistId,
       patientId: appt.patientId || preselectedPatientId.value || null,
       patientName: appt.patient || preselectedPatientName.value,
-      date: dateStr.value,
+      date: appt.date || dateStr.value,
       time: appt.time || modalTime.value,
       duration: appt.duration || 10,
       treatmentId: appt.treatmentId || null,
@@ -321,7 +345,7 @@ function buildWeekDates() {
   const start = new Date(base); start.setDate(base.getDate() - diff)
   const days = []
   for (let i=0;i<7;i++) { const d = new Date(start); d.setDate(start.getDate()+i); days.push(d) }
-  return days.map(d => d.toISOString().slice(0,10))
+  return days.map(d => dateToLocalYMD(d))
 }
 
 function loadAppointments() {
@@ -422,17 +446,19 @@ function onMoveAppointment(move) {
     return
   }
   const targetDate = target.date || dateStr.value
-  const startTime = clinicBuildDateTime(targetDate, target.start)
-  const endTime = clinicBuildDateTime(targetDate, target.end)
-  if (!startTime || !endTime) {
+  const startMinutes = clinicMinutesFromTime(target.start)
+  const endMinutes = clinicMinutesFromTime(target.end)
+  if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes) {
     showError('Unable to move appointment: invalid target time')
     return
   }
+  const duration = endMinutes - startMinutes
   diaryStore.updateAppointment({
     id,
     dentistId: target.dentistId,
-    startTime,
-    endTime,
+    date: targetDate,
+    time: target.start,
+    duration,
   })
     .then(() => {
       applyLocalMove(move)
@@ -525,5 +551,19 @@ onMounted(() => {
   box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.08);
 
   border-radius: 6px;
+}
+
+.date-label-btn {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  &:hover {
+    background: #f0f4fa;
+  }
 }
 </style>

@@ -1,5 +1,5 @@
 import { Op } from 'sequelize'
-import { DiaryTreatment, DiaryPatient, DiaryAppointment, DiaryNote, DiaryPatientComfort, DiaryPatientSurvey, DiaryPatientForm, User, RotaShift, Rota, OrganisationTreatment, Role, UserOrganisation } from '../models'
+import { DiaryPatient, DiaryAppointment, DiaryNote, DiaryPatientComfort, DiaryPatientSurvey, DiaryPatientForm, DiaryPatientChart, DiaryTreatmentPlan, DiaryTreatmentPlanItem, User, RotaShift, Rota, OrganisationTreatment, Role, UserOrganisation } from '../models'
 import { success, error } from '../utils/response'
 import { readBody, getQuery, createError } from 'h3'
 import formidable from 'formidable'
@@ -7,6 +7,7 @@ import path from 'path'
 import os from "os";
 import { uploadTempFile } from "../utils/storage";
 import { parseJsonBody } from "../utils/body";
+import { DEFAULT_ORGANISATION_TREATMENTS } from '~/shared/defaults/charting/treatmentDefaults.js'
 
 const pad2 = (n) => String(n).padStart(2, '0')
 const resolveTimeMode = () => {
@@ -72,24 +73,131 @@ const getUtcRangeForDate = (dateStr) => {
     end: buildUtcDate(parts, 23, 59, 59, 999),
   }
 }
+const requirePatientInOrg = async (orgId, patientId) => {
+  if (!patientId) return null
+  return await DiaryPatient.findOne({
+    where: { id: Number(patientId), organisationId: Number(orgId) },
+    attributes: ['id', 'organisationId'],
+  })
+}
+const parsePositiveIntOrNull = (value) => {
+  if (value === undefined || value === null || value === '') return null
+  const num = Number(value)
+  if (!Number.isInteger(num) || num <= 0) return null
+  return num
+}
+const overlapWindowClause = (start, end, excludeAppointmentId = null) => {
+  const clause = {
+    [Op.and]: [{ startTime: { [Op.lt]: end } }, { endTime: { [Op.gt]: start } }],
+  }
+  if (excludeAppointmentId) clause.id = { [Op.ne]: Number(excludeAppointmentId) }
+  return clause
+}
+const normalizeTreatmentPlanItem = (row) => ({
+  id: row.id,
+  organisationId: row.organisationId,
+  patientId: row.patientId,
+  planId: row.planId || null,
+  planName: row.planName || null,
+  appointmentGroupId: row.appointmentGroupId || null,
+  appointmentId: row.appointmentId,
+  fdi: row.fdi,
+  surface: row.surface,
+  condition: row.condition,
+  conditionLabel: row.conditionLabel,
+  treatmentId: row.treatmentId || null,
+  treatmentCode: row.treatmentCode || null,
+  treatmentName: row.treatmentName || null,
+  treatmentCategory: row.treatmentCategory || null,
+  status: row.status,
+  priority: row.priority,
+  cost: Number(row.cost || 0),
+  duration: Number(row.duration || 0),
+  notes: row.notes || '',
+  clinicianName: row.clinicianName || '',
+  practitionerId: row.practitionerId || null,
+  practitionerName: row.practitionerName || row.clinicianName || '',
+  completedAt: row.completedAt || null,
+  completedByPractitionerId: row.completedByPractitionerId || null,
+  paymentPlan: row.paymentPlan || 'private',
+  referrerId: row.referrerId || null,
+  referrerName: row.referrerName || '',
+  invoiceDesc: row.invoiceDesc || '',
+  showOnInvoice: row.showOnInvoice !== false,
+  completedByPractitionerName: row.completedByPractitionerName || null,
+  createdAt: row.createdAt,
+  updatedAt: row.updatedAt,
+})
+const normalizeTreatmentPlan = (row) => ({
+  id: row.id,
+  organisationId: row.organisationId,
+  patientId: row.patientId,
+  planKey: row.planKey,
+  name: row.name,
+  color: row.color || null,
+  priority: Number(row.priority || 1),
+  appointments: Array.isArray(row.appointmentsJson) ? row.appointmentsJson : [],
+  createdAt: row.createdAt,
+  updatedAt: row.updatedAt,
+})
+const sanitizeChartMeta = (meta = {}) => {
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) {
+    return { images: [], history: [], links: {}, favoriteCodeIds: [], softTissue: {}, riskAssessment: {} }
+  }
+  const images = Array.isArray(meta.images) ? meta.images.slice(0, 100) : []
+  const history = Array.isArray(meta.history) ? meta.history.slice(0, 200) : []
+  const links = (meta.links && typeof meta.links === 'object' && !Array.isArray(meta.links)) ? meta.links : {}
+  const favoriteCodeIds = Array.isArray(meta.favoriteCodeIds) ? meta.favoriteCodeIds : []
+  const softTissue = (meta.softTissue && typeof meta.softTissue === 'object' && !Array.isArray(meta.softTissue)) ? meta.softTissue : {}
+  const riskAssessment = (meta.riskAssessment && typeof meta.riskAssessment === 'object' && !Array.isArray(meta.riskAssessment)) ? meta.riskAssessment : {}
+  return { images, history, links, favoriteCodeIds, softTissue, riskAssessment }
+}
+
+// Fix #15 — seed default treatments once per org per server process lifetime, not on every request
+const _seededOrgs = new Set()
 
 // --- Treatments ---
 export const listTreatments = async (event) => {
   try {
     const { orgId } = event.context.user
-    const rows = await OrganisationTreatment.findAll({ where: { organisationId: Number(orgId), active: true }, order: [['name','ASC']] })
-    // Seed a few defaults on first run
-    if (!rows.length) {
-      const seed = [
-        { code: 'EXAM', name: 'Exam', amount: 60, defaultDuration: 20 },
-        { code: 'SCALE', name: 'Scale & Polish', amount: 80, defaultDuration: 30 },
-        { code: 'WHIT', name: 'Teeth Whitening', amount: 200, defaultDuration: 45 },
-      ]
-      await OrganisationTreatment.bulkCreate(seed.map(s => ({ ...s, organisationId: Number(orgId) })))
-      const seeded = await OrganisationTreatment.findAll({ where: { organisationId: Number(orgId) }, order: [['name','ASC']] })
-      return success(seeded)
+    const orgIdNum = Number(orgId)
+
+    if (!_seededOrgs.has(orgIdNum)) {
+      const existingAll = await OrganisationTreatment.findAll({
+        where: { organisationId: orgIdNum },
+        attributes: ['id', 'code', 'name'],
+        order: [['name', 'ASC']],
+      })
+      const existingCodes = new Set(
+        existingAll.map((t) => String(t.code || '').trim().toUpperCase()).filter(Boolean)
+      )
+      const existingNames = new Set(
+        existingAll.map((t) => String(t.name || '').trim().toLowerCase()).filter(Boolean)
+      )
+      const missingDefaults = DEFAULT_ORGANISATION_TREATMENTS.filter((seed) => {
+        const codeKey = String(seed.code || '').trim().toUpperCase()
+        const nameKey = String(seed.name || '').trim().toLowerCase()
+        if (codeKey && existingCodes.has(codeKey)) return false
+        if (nameKey && existingNames.has(nameKey)) return false
+        return true
+      })
+      if (missingDefaults.length) {
+        await OrganisationTreatment.bulkCreate(missingDefaults.map((s) => ({
+          ...s,
+          price: s.price ?? 0,
+          organisationId: orgIdNum,
+        })))
+      }
+      _seededOrgs.add(orgIdNum)
     }
-    return success(rows)
+
+    const rows = await OrganisationTreatment.findAll({ where: { organisationId: orgIdNum, active: true }, order: [['name','ASC']] })
+    return success(
+      rows.map((t) => ({
+        ...t.toJSON(),
+        amount: Number(t.price ?? 0),
+      }))
+    )
   } catch (e) {
     const msg = e?.message || e?.data?.message || e?.original?.detail || 'Internal server error'
     return error(500, msg)
@@ -367,14 +475,14 @@ export const createAppointment = async (event) => {
       if (patientOverlap > 0) return error(409, 'Patient already has an appointment at this time')
     }
     let amount = 0
-    let treatmentId = null // keep null to avoid FK mismatch with DiaryTreatments
+    let treatmentId = null // kept null; appointment currently uses treatmentName/amount snapshot
     let treatmentName = payload.treatmentName || null
     const incomingOrgTreatmentId = payload.treatmentId ? Number(payload.treatmentId) : null
     if (incomingOrgTreatmentId) {
       const t = await OrganisationTreatment.findOne({ where: { id: incomingOrgTreatmentId, organisationId: Number(orgId) } })
       if (t) {
         // Use dictionary amount unless explicitly overridden in payload
-        amount = Number(t.amount || 0)
+        amount = Number(t.price ?? 0)
         if (!treatmentName) treatmentName = t.name
         else treatmentName = treatmentName || t.name
       }
@@ -429,6 +537,644 @@ export const getPatient = async (event) => {
   } catch (e) { const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'; return error(500, msg) }
 }
 
+// --- Patient Charting ---
+export const getPatientChart = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const q = getQuery(event) || {}
+    const patientId = Number(q.patientId || 0)
+    if (!patientId) return error(400, 'patientId is required')
+    const patient = await requirePatientInOrg(orgId, patientId)
+    if (!patient) return error(404, 'Patient not found')
+    const row = await DiaryPatientChart.findOne({
+      where: { organisationId: Number(orgId), patientId },
+    })
+    return success({ chart: row?.chartJson || {}, meta: sanitizeChartMeta(row?.metaJson || {}) })
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const savePatientChart = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const patientId = Number(payload?.patientId || 0)
+    if (!patientId) return error(400, 'patientId is required')
+    if (!payload || typeof payload.chart !== 'object' || Array.isArray(payload.chart)) {
+      return error(400, 'chart must be an object')
+    }
+    const hasMeta = payload?.meta !== undefined
+    if (hasMeta && (typeof payload.meta !== 'object' || Array.isArray(payload.meta))) {
+      return error(400, 'meta must be an object')
+    }
+    const patient = await requirePatientInOrg(orgId, patientId)
+    if (!patient) return error(404, 'Patient not found')
+    const existing = await DiaryPatientChart.findOne({
+      where: { organisationId: Number(orgId), patientId },
+    })
+    if (!existing) {
+      const created = await DiaryPatientChart.create({
+        organisationId: Number(orgId),
+        patientId,
+        chartJson: payload.chart,
+        metaJson: hasMeta ? sanitizeChartMeta(payload.meta) : {},
+      })
+      return success({ id: created.id, chart: created.chartJson, meta: sanitizeChartMeta(created.metaJson || {}) })
+    }
+    existing.chartJson = payload.chart
+    if (hasMeta) existing.metaJson = sanitizeChartMeta(payload.meta)
+    await existing.save()
+    return success({ id: existing.id, chart: existing.chartJson, meta: sanitizeChartMeta(existing.metaJson || {}) })
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const savePatientChartTooth = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const patientId = Number(payload?.patientId || 0)
+    const fdi = Number(payload?.fdi || 0)
+    if (!patientId) return error(400, 'patientId is required')
+    if (!fdi) return error(400, 'fdi is required')
+    if (!payload || typeof payload.toothData !== 'object' || Array.isArray(payload.toothData)) {
+      return error(400, 'toothData must be an object')
+    }
+    const patient = await requirePatientInOrg(orgId, patientId)
+    if (!patient) return error(404, 'Patient not found')
+    let row = await DiaryPatientChart.findOne({
+      where: { organisationId: Number(orgId), patientId },
+    })
+    if (!row) {
+      row = await DiaryPatientChart.create({
+        organisationId: Number(orgId),
+        patientId,
+        chartJson: {},
+      })
+    }
+    const nextChart = { ...(row.chartJson || {}) }
+    nextChart[String(fdi)] = payload.toothData
+    row.chartJson = nextChart
+    await row.save()
+    return success({ id: row.id, fdi, toothData: nextChart[String(fdi)] })
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const getPatientChartMeta = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const q = getQuery(event) || {}
+    const patientId = Number(q.patientId || 0)
+    if (!patientId) return error(400, 'patientId is required')
+    const patient = await requirePatientInOrg(orgId, patientId)
+    if (!patient) return error(404, 'Patient not found')
+    const row = await DiaryPatientChart.findOne({
+      where: { organisationId: Number(orgId), patientId },
+      attributes: ['id', 'metaJson'],
+    })
+    return success({ meta: sanitizeChartMeta(row?.metaJson || {}) })
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const savePatientChartMeta = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const patientId = Number(payload?.patientId || 0)
+    if (!patientId) return error(400, 'patientId is required')
+    if (!payload || typeof payload.meta !== 'object' || Array.isArray(payload.meta)) {
+      return error(400, 'meta must be an object')
+    }
+    const patient = await requirePatientInOrg(orgId, patientId)
+    if (!patient) return error(404, 'Patient not found')
+    let row = await DiaryPatientChart.findOne({
+      where: { organisationId: Number(orgId), patientId },
+    })
+    if (!row) {
+      row = await DiaryPatientChart.create({
+        organisationId: Number(orgId),
+        patientId,
+        chartJson: {},
+        metaJson: sanitizeChartMeta(payload.meta),
+      })
+    } else {
+      row.metaJson = sanitizeChartMeta(payload.meta)
+      await row.save()
+    }
+    return success({ id: row.id, meta: sanitizeChartMeta(row.metaJson || {}) })
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+// --- Treatment Plan Containers ---
+export const listTreatmentPlans = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const q = getQuery(event) || {}
+    const patientId = Number(q.patientId || 0)
+    if (!patientId) return error(400, 'patientId is required')
+    const patient = await requirePatientInOrg(orgId, patientId)
+    if (!patient) return error(404, 'Patient not found')
+    const rows = await DiaryTreatmentPlan.findAll({
+      where: { organisationId: Number(orgId), patientId },
+      order: [['priority', 'ASC'], ['id', 'ASC']],
+    })
+    return success((rows || []).map(normalizeTreatmentPlan))
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const createTreatmentPlan = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const patientId = Number(payload?.patientId || 0)
+    if (!patientId) return error(400, 'patientId is required')
+    const patient = await requirePatientInOrg(orgId, patientId)
+    if (!patient) return error(404, 'Patient not found')
+    const planKey = String(payload?.planKey || '').trim() || `plan-${Date.now()}`
+    const name = String(payload?.name || '').trim() || 'Treatment Plan'
+    const existing = await DiaryTreatmentPlan.findOne({
+      where: { organisationId: Number(orgId), patientId, planKey },
+    })
+    if (existing) return success(normalizeTreatmentPlan(existing))
+    const count = await DiaryTreatmentPlan.count({ where: { organisationId: Number(orgId), patientId } })
+    const created = await DiaryTreatmentPlan.create({
+      organisationId: Number(orgId),
+      patientId,
+      planKey,
+      name,
+      color: payload?.color || null,
+      priority: Number(payload?.priority || 0) || (count + 1),
+      appointmentsJson: Array.isArray(payload?.appointments) ? payload.appointments : [],
+    })
+    return success(normalizeTreatmentPlan(created))
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const updateTreatmentPlan = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const patientId = Number(payload?.patientId || 0)
+    const planKey = String(payload?.planKey || '').trim()
+    if (!patientId) return error(400, 'patientId is required')
+    if (!planKey) return error(400, 'planKey is required')
+    const row = await DiaryTreatmentPlan.findOne({
+      where: { organisationId: Number(orgId), patientId, planKey },
+    })
+    if (!row) return error(404, 'Treatment plan not found')
+    if (payload.name !== undefined) row.name = String(payload.name || '').trim() || row.name
+    if (payload.color !== undefined) row.color = payload.color || null
+    if (payload.priority !== undefined) row.priority = Number(payload.priority || row.priority)
+    if (payload.appointments !== undefined) row.appointmentsJson = Array.isArray(payload.appointments) ? payload.appointments : []
+    await row.save()
+    if (payload.name !== undefined) {
+      await DiaryTreatmentPlanItem.update(
+        { planName: row.name },
+        { where: { organisationId: Number(orgId), patientId, planId: planKey } }
+      )
+    }
+    return success(normalizeTreatmentPlan(row))
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const deleteTreatmentPlan = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const patientId = Number(payload?.patientId || 0)
+    const planKey = String(payload?.planKey || '').trim()
+    if (!patientId) return error(400, 'patientId is required')
+    if (!planKey) return error(400, 'planKey is required')
+    const row = await DiaryTreatmentPlan.findOne({
+      where: { organisationId: Number(orgId), patientId, planKey },
+    })
+    if (!row) return error(404, 'Treatment plan not found')
+    await DiaryTreatmentPlanItem.destroy({
+      where: { organisationId: Number(orgId), patientId, planId: planKey },
+    })
+    await row.destroy()
+    return success({ planKey })
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+// --- Treatment Plan ---
+export const listTreatmentPlanItems = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const q = getQuery(event) || {}
+    const patientId = Number(q.patientId || 0)
+    if (!patientId) return error(400, 'patientId is required')
+    const patient = await requirePatientInOrg(orgId, patientId)
+    if (!patient) return error(404, 'Patient not found')
+    const rows = await DiaryTreatmentPlanItem.findAll({
+      where: { organisationId: Number(orgId), patientId },
+      order: [['priority', 'ASC'], ['id', 'ASC']],
+    })
+    return success((rows || []).map(normalizeTreatmentPlanItem))
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const createTreatmentPlanItem = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const patientId = Number(payload?.patientId || 0)
+    if (!patientId) return error(400, 'patientId is required')
+    const patient = await requirePatientInOrg(orgId, patientId)
+    if (!patient) return error(404, 'Patient not found')
+    const incomingPlanId = payload?.planId || null
+    let resolvedPlanName = payload?.planName || null
+    if (incomingPlanId && !resolvedPlanName) {
+      const plan = await DiaryTreatmentPlan.findOne({
+        where: { organisationId: Number(orgId), patientId, planKey: incomingPlanId },
+        attributes: ['name'],
+      })
+      resolvedPlanName = plan?.name || null
+    }
+    const count = await DiaryTreatmentPlanItem.count({ where: { organisationId: Number(orgId), patientId } })
+    const appointmentId = parsePositiveIntOrNull(payload?.appointmentId)
+    const practitionerId = parsePositiveIntOrNull(payload?.practitionerId)
+    const practitionerName = payload?.practitionerName || payload?.clinicianName || null
+    const status = String(payload?.status || 'planned')
+    const isCompleted = status.toLowerCase() === 'completed'
+    const completedAt = payload?.completedAt ? new Date(payload.completedAt) : (isCompleted ? new Date() : null)
+    const completedByPractitionerId = parsePositiveIntOrNull(payload?.completedByPractitionerId) || (isCompleted ? practitionerId : null)
+    const completedByPractitionerName = payload?.completedByPractitionerName || (isCompleted ? practitionerName : null)
+    const created = await DiaryTreatmentPlanItem.create({
+      organisationId: Number(orgId),
+      patientId,
+      planId: incomingPlanId,
+      planName: resolvedPlanName,
+      appointmentGroupId: payload?.appointmentGroupId || null,
+      appointmentId,
+      fdi: payload?.fdi ? Number(payload.fdi) : null,
+      surface: payload?.surface || null,
+      condition: payload?.condition || null,
+      conditionLabel: payload?.conditionLabel || null,
+      treatmentId: payload?.treatmentId ? Number(payload.treatmentId) : null,
+      treatmentCode: payload?.treatmentCode || null,
+      treatmentName: payload?.treatmentName || null,
+      treatmentCategory: payload?.treatmentCategory || null,
+      status,
+      priority: Number(payload?.priority || 0) || (count + 1),
+      cost: Number(payload?.cost || 0),
+      duration: Number(payload?.duration || 0),
+      notes: payload?.notes || null,
+      clinicianName: practitionerName,
+      practitionerId,
+      practitionerName,
+      completedAt,
+      completedByPractitionerId,
+      completedByPractitionerName,
+    })
+    return success(normalizeTreatmentPlanItem(created))
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const updateTreatmentPlanItem = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const id = Number(payload?.id || 0)
+    if (!id) return error(400, 'id is required')
+    const row = await DiaryTreatmentPlanItem.findOne({
+      where: { id, organisationId: Number(orgId) },
+    })
+    if (!row) return error(404, 'Treatment plan item not found')
+    const patient = await requirePatientInOrg(orgId, row.patientId)
+    if (!patient) return error(404, 'Patient not found')
+    if (payload.status !== undefined) row.status = payload.status
+    if (payload.planId !== undefined) row.planId = payload.planId || null
+    if (payload.planName !== undefined) row.planName = payload.planName || null
+    if (payload.appointmentGroupId !== undefined) row.appointmentGroupId = payload.appointmentGroupId || null
+    if (payload.priority !== undefined) row.priority = Number(payload.priority || row.priority)
+    if (payload.cost !== undefined) row.cost = Number(payload.cost || 0)
+    if (payload.duration !== undefined) row.duration = Number(payload.duration || 0)
+    if (payload.notes !== undefined) row.notes = payload.notes || null
+    if (payload.clinicianName !== undefined || payload.practitionerName !== undefined) {
+      const practitionerName = payload.practitionerName || payload.clinicianName || null
+      row.clinicianName = practitionerName
+      row.practitionerName = practitionerName
+    }
+    if (payload.practitionerId !== undefined) row.practitionerId = parsePositiveIntOrNull(payload.practitionerId)
+    if (payload.completedAt !== undefined) row.completedAt = payload.completedAt ? new Date(payload.completedAt) : null
+    if (payload.completedByPractitionerId !== undefined) {
+      row.completedByPractitionerId = parsePositiveIntOrNull(payload.completedByPractitionerId)
+    }
+    if (payload.completedByPractitionerName !== undefined) {
+      row.completedByPractitionerName = payload.completedByPractitionerName || null
+    }
+    if (payload.conditionLabel !== undefined) row.conditionLabel = payload.conditionLabel || null
+    if (payload.treatmentId !== undefined) row.treatmentId = payload.treatmentId ? Number(payload.treatmentId) : null
+    if (payload.treatmentCode !== undefined) row.treatmentCode = payload.treatmentCode || null
+    if (payload.treatmentName !== undefined) row.treatmentName = payload.treatmentName || null
+    if (payload.treatmentCategory !== undefined) row.treatmentCategory = payload.treatmentCategory || null
+    if (payload.surface !== undefined) row.surface = payload.surface || null
+    if (payload.condition !== undefined) row.condition = payload.condition || null
+    if (payload.fdi !== undefined) row.fdi = payload.fdi ? Number(payload.fdi) : null
+    if (payload.appointmentId !== undefined) {
+      row.appointmentId = parsePositiveIntOrNull(payload.appointmentId)
+    }
+    if (payload.paymentPlan !== undefined) row.paymentPlan = payload.paymentPlan || 'private'
+    if (payload.referrerId !== undefined) row.referrerId = parsePositiveIntOrNull(payload.referrerId)
+    if (payload.referrerName !== undefined) row.referrerName = payload.referrerName || null
+    if (payload.invoiceDesc !== undefined) row.invoiceDesc = payload.invoiceDesc || null
+    if (payload.showOnInvoice !== undefined) row.showOnInvoice = payload.showOnInvoice !== false
+    const normalizedStatus = String(row.status || '').toLowerCase()
+    if (normalizedStatus === 'completed') {
+      if (!row.completedAt) row.completedAt = new Date()
+      if (!row.completedByPractitionerId && row.practitionerId) row.completedByPractitionerId = row.practitionerId
+      if (!row.completedByPractitionerName) row.completedByPractitionerName = row.practitionerName || row.clinicianName || null
+    } else if (
+      payload.status !== undefined &&
+      payload.completedAt === undefined &&
+      payload.completedByPractitionerId === undefined &&
+      payload.completedByPractitionerName === undefined
+    ) {
+      row.completedAt = null
+      row.completedByPractitionerId = null
+      row.completedByPractitionerName = null
+    }
+    await row.save()
+    return success(normalizeTreatmentPlanItem(row))
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const deleteTreatmentPlanItem = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const id = Number(payload?.id || 0)
+    if (!id) return error(400, 'id is required')
+    const row = await DiaryTreatmentPlanItem.findOne({
+      where: { id, organisationId: Number(orgId) },
+    })
+    if (!row) return error(404, 'Treatment plan item not found')
+    const patient = await requirePatientInOrg(orgId, row.patientId)
+    if (!patient) return error(404, 'Patient not found')
+    await row.destroy()
+    return success({ id })
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const reorderTreatmentPlanItems = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const patientId = Number(payload?.patientId || 0)
+    const orderedIds = Array.isArray(payload?.orderedIds) ? payload.orderedIds.map((v) => Number(v)).filter(Boolean) : []
+    const appointmentIdRaw = payload?.appointmentId
+    const appointmentId = Number(appointmentIdRaw)
+    const appointmentGroupId = payload?.appointmentGroupId || null
+    if (!patientId) return error(400, 'patientId is required')
+    if (!orderedIds.length) return error(400, 'orderedIds is required')
+    const patient = await requirePatientInOrg(orgId, patientId)
+    if (!patient) return error(404, 'Patient not found')
+    const existing = await DiaryTreatmentPlanItem.findAll({
+      where: { organisationId: Number(orgId), patientId },
+      order: [['priority', 'ASC'], ['id', 'ASC']],
+    })
+    const idToRow = new Map(existing.map((r) => [r.id, r]))
+    const selectedRows = orderedIds.map((id) => idToRow.get(id)).filter(Boolean)
+    if (selectedRows.length !== orderedIds.length) return error(400, 'orderedIds contains invalid items')
+
+    let finalOrder = existing
+    if (appointmentIdRaw !== undefined || appointmentGroupId !== null) {
+      const expectedAppointmentId = Number.isFinite(appointmentId) ? appointmentId : null
+      for (const row of selectedRows) {
+        const byIdValid = appointmentIdRaw === undefined ? true : ((row.appointmentId || null) === expectedAppointmentId)
+        const byGroupValid = appointmentGroupId === null ? true : ((row.appointmentGroupId || null) === appointmentGroupId)
+        if (!byIdValid || !byGroupValid) {
+          return error(400, 'orderedIds must belong to the same appointment group')
+        }
+      }
+      const selectedIdSet = new Set(orderedIds)
+      let cursor = 0
+      finalOrder = existing.map((row) => {
+        if (!selectedIdSet.has(row.id)) return row
+        const replacement = selectedRows[cursor]
+        cursor += 1
+        return replacement
+      })
+    } else {
+      if (orderedIds.length !== existing.length) {
+        return error(400, 'orderedIds must include all treatment plan items when appointmentId is not provided')
+      }
+      finalOrder = orderedIds.map((id) => idToRow.get(id)).filter(Boolean)
+    }
+
+    let priority = 1
+    for (const row of finalOrder) {
+      row.priority = priority
+      priority += 1
+      await row.save()
+    }
+    const reloaded = await DiaryTreatmentPlanItem.findAll({
+      where: { organisationId: Number(orgId), patientId },
+      order: [['priority', 'ASC'], ['id', 'ASC']],
+    })
+    return success(reloaded.map(normalizeTreatmentPlanItem))
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+// --- Treatment Plan -> Appointment Integration ---
+export const appointmentConflictCheck = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const date = payload?.date
+    const startTime = payload?.startTime
+    const endTime = payload?.endTime
+    const payloadDentistId = parsePositiveIntOrNull(payload?.dentistId)
+    const patientId = payload?.patientId ? Number(payload.patientId) : null
+    const excludeAppointmentId = payload?.excludeAppointmentId ? Number(payload.excludeAppointmentId) : null
+    const start = parseLocalDateTime(date, startTime)
+    const end = parseLocalDateTime(date, endTime)
+    if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return error(400, 'Invalid date/time')
+    if (end <= start) return error(400, 'Invalid booking time range')
+    const workStart = new Date(start); setClinicHours(workStart, 9, 0, 0, 0)
+    const workEnd = new Date(start); setClinicHours(workEnd, 17, 0, 0, 0)
+    if (start < workStart) return error(400, 'Appointment must start at or after 09:00')
+    if (end > workEnd) return error(400, 'Appointment must end by 17:00')
+    const where = {
+      organisationId: Number(orgId),
+      status: { [Op.ne]: 'Cancelled' },
+      ...overlapWindowClause(start, end, excludeAppointmentId),
+    }
+    if (payloadDentistId) where.dentistId = payloadDentistId
+    if (patientId) where.patientId = patientId
+    const overlaps = await DiaryAppointment.findAll({
+      where,
+      include: [{ model: DiaryPatient, as: 'patient', attributes: ['id', 'firstName', 'lastName'] }],
+      order: [['startTime', 'ASC']],
+      limit: 10,
+    })
+    return success({
+      hasConflict: overlaps.length > 0,
+      conflicts: overlaps.map((row) => ({
+        id: row.id,
+        patientName: row.patient ? `${row.patient.firstName || ''} ${row.patient.lastName || ''}`.trim() : null,
+        startTime: toLocalHM(row.startTime),
+        endTime: toLocalHM(row.endTime),
+        status: row.status,
+      })),
+    })
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
+export const bookFromTreatmentPlan = async (event) => {
+  try {
+    const { orgId } = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const patientId = Number(payload?.patientId || 0)
+    const treatmentItemIds = Array.isArray(payload?.treatmentItemIds)
+      ? payload.treatmentItemIds.map((v) => Number(v)).filter(Boolean)
+      : []
+    const date = payload?.date
+    const startTime = payload?.startTime
+    const endTime = payload?.endTime
+    const payloadDentistId = parsePositiveIntOrNull(payload?.dentistId)
+    const notes = payload?.notes || null
+    if (!patientId) return error(400, 'patientId is required')
+    if (!treatmentItemIds.length) return error(400, 'No treatment items selected for booking')
+    const patient = await requirePatientInOrg(orgId, patientId)
+    if (!patient) return error(404, 'Patient not found')
+
+    const selectedItems = await DiaryTreatmentPlanItem.findAll({
+      where: {
+        organisationId: Number(orgId),
+        patientId,
+        id: { [Op.in]: treatmentItemIds },
+      },
+      order: [['priority', 'ASC'], ['id', 'ASC']],
+    })
+    if (!selectedItems.length || selectedItems.length !== treatmentItemIds.length) {
+      return error(400, 'Selected treatment items are invalid')
+    }
+    const fallbackDentistId = selectedItems.find((item) => Number(item.practitionerId || 0) > 0)?.practitionerId || null
+    const dentistId = payloadDentistId || fallbackDentistId
+    if (!dentistId) return error(400, 'dentistId is required')
+
+    const start = parseLocalDateTime(date, startTime)
+    const end = parseLocalDateTime(date, endTime)
+    if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+      return error(400, 'Invalid booking time range')
+    }
+    const workStart = new Date(start); setClinicHours(workStart, 9, 0, 0, 0)
+    const workEnd = new Date(start); setClinicHours(workEnd, 17, 0, 0, 0)
+    if (start < workStart) return error(400, 'Appointment must start at or after 09:00')
+    if (end > workEnd) return error(400, 'Appointment must end by 17:00')
+
+    const overlapWhere = {
+      organisationId: Number(orgId),
+      status: { [Op.ne]: 'Cancelled' },
+      ...overlapWindowClause(start, end),
+    }
+    const dentistOverlap = await DiaryAppointment.count({ where: { ...overlapWhere, dentistId } })
+    if (dentistOverlap > 0) return error(409, 'Dentist already has an appointment at this time')
+    const patientOverlap = await DiaryAppointment.count({ where: { ...overlapWhere, patientId } })
+    if (patientOverlap > 0) return error(409, 'Patient already has an appointment at this time')
+
+    const treatmentName = selectedItems
+      .map((item) => item.treatmentName || item.conditionLabel || item.condition || `Tooth ${item.fdi || ''}`.trim())
+      .filter(Boolean)
+      .join(', ')
+      .slice(0, 120) || 'Treatment Plan'
+    const amount = selectedItems.reduce((sum, item) => sum + Number(item.cost || 0), 0)
+
+    const created = await DiaryAppointment.create({
+      organisationId: Number(orgId),
+      patientId,
+      dentistId,
+      treatmentId: null,
+      treatmentName,
+      status: 'Pending',
+      startTime: start,
+      endTime: end,
+      notes,
+      amount,
+    })
+
+    for (const item of selectedItems) {
+      item.appointmentId = created.id
+      if (String(item.status || '').toLowerCase() !== 'completed') item.status = 'scheduled'
+      await item.save()
+    }
+
+    return success({
+      id: created.id,
+      patientId: created.patientId,
+      dentistId: created.dentistId,
+      treatmentName: created.treatmentName,
+      status: created.status,
+      startTime: created.startTime,
+      endTime: created.endTime,
+      date: toLocalYMD(created.startTime),
+      time: toLocalHM(created.startTime),
+      amount: Number(created.amount || 0),
+      linkedTreatmentItemIds: selectedItems.map((item) => item.id),
+    })
+  } catch (e) {
+    const msg = (e && (e.message || (e.data && e.data.message) || (e.original && e.original.detail))) || 'Internal server error'
+    return error(500, msg)
+  }
+}
+
 export const updateAppointment = async (event) => {
   try {
     const { orgId } = event.context.user
@@ -438,6 +1184,23 @@ export const updateAppointment = async (event) => {
     if (!id) return error(400, 'id is required')
     const row = await DiaryAppointment.findOne({ where: { id: Number(id), organisationId: Number(orgId) } })
     if (!row) return error(404, 'Appointment not found')
+
+    // Prefer date+time+duration updates to keep create/update validation semantics aligned.
+    if (payload?.date && payload?.time) {
+      const start = parseLocalDateTime(payload.date, payload.time)
+      if (!start || Number.isNaN(start.getTime())) return error(400, 'Invalid date/time')
+      const currentStart = row.startTime instanceof Date ? row.startTime : new Date(row.startTime)
+      const currentEnd = row.endTime instanceof Date ? row.endTime : new Date(row.endTime)
+      const currentDuration = (!Number.isNaN(currentStart?.getTime?.()) && !Number.isNaN(currentEnd?.getTime?.()))
+        ? Math.max(1, Math.round((currentEnd.getTime() - currentStart.getTime()) / 60000))
+        : 15
+      const duration = Number(payload.duration || currentDuration || 15)
+      const end = new Date(start)
+      end.setMinutes(end.getMinutes() + duration)
+      row.startTime = start
+      row.endTime = end
+    }
+
     const fields = ['status','notes','startTime','endTime','amount','treatmentName','dentistId','patientId']
     for (const f of fields) if (payload[f] !== undefined) row[f] = payload[f]
 
@@ -1702,3 +2465,40 @@ export const deletePatientForm = async (event) => {
   }
 }
 
+export const uploadChartImage = async (event) => {
+  try {
+    const { orgId } = event.context.user
+
+    const form = formidable({
+      multiples: false,
+      uploadDir: os.tmpdir(),
+      keepExtensions: true,
+    })
+
+    const { files, fields } = await new Promise((resolve, reject) => {
+      form.parse(event.node.req, (err, fields, files) => {
+        if (err) reject(err)
+        resolve({ files, fields })
+      })
+    })
+
+    const patientId = Number(fields.patientId?.[0] || 0)
+    if (!patientId) return error(400, 'patientId is required')
+
+    const file = Array.isArray(files.file) ? files.file[0] : files.file
+    if (!file) return error(400, 'file is required')
+
+    const ext = path.extname(file.originalFilename || file.newFilename || '')
+    const baseName = `chart-${Date.now()}-${Math.random().toString(36).substring(7)}${ext}`
+    const link = await uploadTempFile({
+      filepath: file.filepath,
+      filename: baseName,
+      contentType: file.mimetype || file.type,
+      baseDir: 'chart-images',
+    })
+
+    return success({ url: link, name: file.originalFilename || baseName })
+  } catch (e) {
+    return error(500, (e && e.message) || 'Internal server error')
+  }
+}

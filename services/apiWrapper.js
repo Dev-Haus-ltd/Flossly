@@ -46,7 +46,13 @@ export const PostFormData = (url, body, onProgress) => {
     return fetch(APIURL + url, {
       method: "POST",
       body,
-    }).then((response) => response.json());
+    }).then(async (response) => {
+      const data = await response.json();
+      if (!response.ok) {
+        throw data;
+      }
+      return data;
+    });
   }
 
   return new Promise((resolve, reject) => {

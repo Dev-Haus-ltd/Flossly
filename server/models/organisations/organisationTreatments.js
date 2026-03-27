@@ -10,7 +10,7 @@ export const OrganisationTreatment = sequelize.define(
     name: { type: DataTypes.STRING(120), allowNull: false },
     category: { type: DataTypes.STRING(80), allowNull: true },
     defaultDuration: { type: DataTypes.INTEGER, allowNull: true, defaultValue: 30 },
-    amount: { type: DataTypes.DECIMAL(10,2), allowNull: true, defaultValue: 0 },
+    price: { type: DataTypes.DECIMAL(10,2), allowNull: true, defaultValue: 0 },
     active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
   },
   { tableName: 'OrganisationTreatments', timestamps: true }

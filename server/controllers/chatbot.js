@@ -406,7 +406,7 @@ export const createAppointmentViaChatbot = async (event) => {
         }
       });
       if (treatment) {
-        amount = Number(treatment.amount || 0);
+        amount = Number(treatment.price ?? 0);
         if (!treatmentName) {
           treatmentName = treatment.name;
         }

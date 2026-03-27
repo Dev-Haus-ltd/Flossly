@@ -69,6 +69,20 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  uploadDmAttachment(formData, onProgress) {
+    return new Promise((resolve, reject) => {
+      PostFormData("/dms/uploadAttachment", formData, onProgress)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  refreshDmProfile(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/dms/refreshProfile", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   connectionStatus() {
     return new Promise((resolve, reject) => {
       Get("/meta/connection")
@@ -92,6 +106,19 @@ export default {
     const qs = q.toString();
     return new Promise((resolve, reject) => {
       Get(`/meta/fetchLeads${qs ? `?${qs}` : ""}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  fetchDmHistoryNow(params = {}) {
+    const q = new URLSearchParams();
+    Object.entries(params || {}).forEach(([k, v]) => {
+      if (v === undefined || v === null || v === "") return;
+      q.append(k, v);
+    });
+    const qs = q.toString();
+    return new Promise((resolve, reject) => {
+      Get(`/meta/fetchDmHistory${qs ? `?${qs}` : ""}`)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -292,7 +319,7 @@ export default {
             params.append(k, `${yyyy}-${mm}-${dd}`);
             return;
           }
-        } catch {}
+        } catch { }
       }
       params.append(k, v);
     });
@@ -387,9 +414,34 @@ export default {
         .catch((err) => reject(err));
     });
   },
-  getLeadWhatsAppLogs(leadId, limit = 100) {
+  getLeadWhatsAppLogs(leadIdOrParams, limit = 100) {
+    const payload =
+      typeof leadIdOrParams === "object"
+        ? leadIdOrParams
+        : { leadId: leadIdOrParams, limit };
     return new Promise((resolve, reject) => {
-      Post("/lead/whatsappLogs", { leadId, limit })
+      Post("/lead/whatsappLogs", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  uploadLeadWhatsAppAttachment(formData, onProgress) {
+    return new Promise((resolve, reject) => {
+      PostFormData("/lead/whatsappUploadAttachment", formData, onProgress)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  uploadLeadAttachment(formData, onProgress) {
+    return new Promise((resolve, reject) => {
+      PostFormData("/lead/uploadAttachment", formData, onProgress)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getLeadPriceAttachmentRecent(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/priceAttachmentRecent", payload)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -450,19 +502,6 @@ export default {
   saveAutomationBatch(payload) {
     return new Promise((resolve, reject) => {
       Post('/lead/automationSaveBatch', payload)
-        .then((res) => resolve(res))
-        .catch((err) => reject(err));
-    });
-  },
-  getAutomationSendNowStatus(params = {}) {
-    const q = new URLSearchParams();
-    Object.entries(params || {}).forEach(([k, v]) => {
-      if (v === undefined || v === null || v === "") return;
-      q.append(k, v);
-    });
-    const qs = q.toString();
-    return new Promise((resolve, reject) => {
-      Get(`/lead/automationSendNowStatus${qs ? `?${qs}` : ""}`)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -531,16 +570,160 @@ export default {
         .catch((err) => reject(err));
     });
   },
-  uploadLeadAttachment(formData) {
+
+  // =====================================================
+  // GOOGLE SEARCH CONSOLE
+  // =====================================================
+
+  // Start Google OAuth flow
+  startGoogleAuth() {
     return new Promise((resolve, reject) => {
-      PostFormData('/lead/uploadAttachment', formData)
+      Get('/google/authStart')
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
   },
-  getLeadPriceAttachmentRecent(payload) {
+
+  // Get Google connection status
+  googleConnectionStatus() {
     return new Promise((resolve, reject) => {
-      Post('/lead/priceAttachmentRecent', payload)
+      Get('/google/connection')
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+
+  // Disconnect Google account
+  disconnectGoogle(tokenId = null) {
+    return new Promise((resolve, reject) => {
+      Post('/google/disconnect', { tokenId })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+
+  // Fetch available GSC sites
+  fetchGoogleSites() {
+    return new Promise((resolve, reject) => {
+      Get('/google/sites')
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+
+  // Select/activate a GSC site for tracking
+  selectGoogleSite(
+    siteUrl,
+    tokenId = null,
+    startDate,
+    endDate,
+    country,
+    device
+  ) {
+    return new Promise((resolve, reject) => {
+      Post('/google/selectSite', {
+        siteUrl,
+        tokenId,
+        startDate,
+        endDate,
+        country,
+        device
+      })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err))
+    })
+  },
+
+  // Trigger page fetching for a site (manual resync)
+  fetchGoogleSitePages(
+    siteId,
+    startDate,
+    endDate,
+    country,
+    device
+  ) {
+    return new Promise((resolve, reject) => {
+      Post('/google/fetchPages', {
+        siteId,
+        startDate,
+        endDate,
+        country,
+        device
+      })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+
+  // Fetch analytics for a specific page
+  // fetchGooglePageAnalytics(payload) {
+  //   // payload: { siteId, pageUrl, country?, device?, startDate?, endDate? }
+  //   return new Promise((resolve, reject) => {
+  //     Post('/google/fetchAnalytics', payload)
+  //       .then((res) => resolve(res))
+  //       .catch((err) => reject(err));
+  //   });
+  // },
+
+  // Get site pages with analytics (paginated)
+  getGoogleSitePages(siteId, page = 1, limit = 50) {
+    const params = new URLSearchParams({
+      siteId: String(siteId),
+      page: String(page),
+      limit: String(limit)
+    });
+    return new Promise((resolve, reject) => {
+      Get(`/google/getSitePages?${params.toString()}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+
+  // Search site pages with analytics (paginated)
+  searchGoogleSitePages(siteId, searchQuery, page = 1, limit = 50) {
+    const params = new URLSearchParams({
+      siteId: String(siteId),
+      searchQuery,
+      page: String(page),
+      limit: String(limit)
+    });
+    return new Promise((resolve, reject) => {
+      Get(`/google/searchSitePages?${params.toString()}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+
+  getGoogleSearchConsoleAnalytics(siteId, days = 30) {
+    const params = new URLSearchParams({
+      siteId: siteId ? String(siteId) : '',
+      days: String(days)
+    });
+    return new Promise((resolve, reject) => {
+      Get(`/google/getAnalytics?${params.toString()}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+
+  // Google Ads endpoints
+  fetchGoogleAdsCustomers() {
+    return new Promise((resolve, reject) => {
+      Get('/google/fetchAdsCustomers')
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  selectGoogleAdsAccount(accountId) {
+    return new Promise((resolve, reject) => {
+      Post('/google/selectAdsAccount', { accountId })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getGoogleAdsPerformance(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/google/getAdsPerformance', payload)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });

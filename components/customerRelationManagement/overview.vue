@@ -201,7 +201,6 @@
           :error="metaChartError"
         />
 
-        <!-- GOOGLE ANALYTICS CHART — hidden until Google integration is live on prod
         <CrmCharts
           :chartType="'line'"
           :chartTitle="gscChartConfig.chartTitle"
@@ -215,7 +214,6 @@
           :showFallback="!gscChartLoading && (!isGoogleConnected || gscChartConfig.chartData.datasets.length === 0)"
           :error="gscChartError"
         />
-        -->
       </div>
     </div>
 
@@ -234,6 +232,13 @@
       message="Disconnecting Meta will stop new leads, page subscriptions, and future analytics syncs for this organisation. Existing historical analytics will remain visible until new data is synced again after reconnecting."
       @cancel="metaDisconnectDialog = false"
       @confirm="disconnectMeta"
+    />
+
+    <!-- GOOGLE HEALTH DIALOG -->
+    <CustomerRelationManagementGoogleAnalyticsGoogleHealthDialog
+      v-model="googleHealthDialog"
+      :loading="googleHealthLoading"
+      :data="googleHealthData"
     />
 
     <v-dialog v-model="whapiDialog" max-width="560">
@@ -452,6 +457,7 @@ import { useCrmStore } from '@/stores/crm'
 import { useMainStore } from '@/stores/index'
 import { useAuthStore } from '@/stores/auth'
 import CustomerRelationManagementMetaHealthDialog from '@/components/customerRelationManagement/metaHealthDialog.vue'
+import CustomerRelationManagementGoogleAnalyticsGoogleHealthDialog from '@/components/customerRelationManagement/googleanalytics/googleHealthDialog.vue'
 import ConfirmDialog from '@/components/Common/ConfirmDialog.vue'
 import IntegrationCard from '@/components/customerRelationManagement/IntegrationCard.vue'
 import CrmCharts from '@/components/customerRelationManagement/CrmCharts.vue'
@@ -600,17 +606,16 @@ const integrationCards = computed(() => ([
     icon: whatsappLogo,
     iconClass: 'whatsapp',
   },
-  // GOOGLE ANALYTICS CARD — hidden until Google integration is live on prod
-  // {
-  //   key: 'google',
-  //   title: 'Google',
-  //   subtitlePrimary: googleStatus.email || userEmail.value || '-',
-  //   subtitleSecondary: currentOrgName.value || '-',
-  //   statusLabel: googleStatusLabel.value,
-  //   statusColor: googleStatusColor.value,
-  //   icon: googleLogo,
-  //   iconClass: 'google',
-  // },
+  {
+    key: 'google',
+    title: 'Google',
+    subtitlePrimary: googleStatus.email || userEmail.value || '-',
+    subtitleSecondary: currentOrgName.value || '-',
+    statusLabel: googleStatusLabel.value,
+    statusColor: googleStatusColor.value,
+    icon: googleLogo,
+    iconClass: 'google',
+  },
   {
     key: 'chatbot',
     title: 'Chatbot',

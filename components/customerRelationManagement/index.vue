@@ -4,8 +4,21 @@
 
   >
     <div class="cust-border d-flex align-center">
-      <p class="mr-1">CRM</p>
+      <p
+        class="mr-1"
+        :style="showForms ? 'color: #0061FB; cursor: pointer;' : ''"
+        @click="showForms = false"
+      >CRM</p>
+      <p v-if="showForms" style="font-size:12px; color:#c3c3c3;">/ Lead Capture Forms</p>
     </div>
+
+    <!-- Forms view -->
+    <div v-if="showForms">
+      <CustomerRelationManagementFormsFormList />
+    </div>
+
+    <!-- Default CRM view -->
+    <div v-else>
     <div class="mt-5 px-5">
       <v-row class="stat-row" align="stretch">
         <v-col style="flex: 1 1 0;" v-for="(stat, i) in leadStats" :key="i">
@@ -83,6 +96,19 @@
               <v-icon size="18">mdi-refresh</v-icon>
             </template>
             Refresh Meta Leads
+          </v-btn>
+
+          <v-btn
+            color="secondary"
+            variant="flat"
+            rounded="lg"
+            class="add-task-btn"
+            @click="showForms = true"
+          >
+            <template #prepend>
+              <v-icon size="18">mdi-form-select</v-icon>
+            </template>
+            Lead Forms
           </v-btn>
 
           <v-btn
@@ -440,8 +466,9 @@
           </v-card-actions>
         </v-card>
       </v-dialog>
-      
+
     </div>
+    </div><!-- end v-else CRM default view -->
   </v-sheet>
 </template>
 
@@ -465,6 +492,7 @@ const route = useRoute();
 const router = useRouter();
 const diaryStore = useDiaryStore();
 const mainStore = useMainStore();
+const showForms = ref(false);
 const addLeadDrawer = ref(false);
 const bulkLeadUploadDialog = ref(false);
 const metaMenu = ref(false);
@@ -1499,14 +1527,9 @@ const handleLeadsRefresh = async () => {
 const initLeads = async (metaConnected = false) => {
   if (metaConnected) {
     try {
-      // 1️⃣ Sync Meta structure + budgets
-      await crmStore.fetchMetaStructure();
-      // 2️⃣ Sync Meta analytics (daily insights / backfill)
-      await crmStore.fetchMetaInsights();
-      // 3️⃣ Fetch last 30 days leads on first connect
       await crmStore.fetchLeadsNow({ days: 30 });
     } catch (e) {
-      console.error('[CRM] Meta post-connect sync failed', e);
+      console.error('[CRM] Meta lead sync failed', e);
     }
   }
   // Pre-filter by campaign if navigated from the analytics page

@@ -1,4 +1,7 @@
 import { Op } from "sequelize";
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { readMultipartFormData } from 'h3';
 import { readBody, getQuery, setResponseStatus, readRawBody } from 'h3';
 import { $fetch } from 'ofetch';
@@ -12,7 +15,7 @@ import {
 
 import { isSupportAgent, getSupportAgentUserIds } from '../utils/supportAgents.js';
 import { parseJsonBody } from "../utils/body";
-import {
+import { 
   sendNotificationToUser,
   sendSupportTicketSubmittedNotification,
   sendSupportReplyNotification
@@ -23,7 +26,7 @@ import { uploadBufferFile } from '../utils/storage.js';
 const notifyNewMessage = async (conversationId, message, recipientUserId) => {
   try {
     if (!recipientUserId) return;
-
+    
     if (message.senderType === 'support' || message.senderType === 'admin') {
       await sendSupportReplyNotification({
         userId: recipientUserId,
@@ -70,16 +73,17 @@ const notifyNewMessage = async (conversationId, message, recipientUserId) => {
 const notifySupportAgents = async (conversationId, message, conversation) => {
   try {
     const supportAgentIds = await getSupportAgentUserIds();
-
+    
     if (!supportAgentIds || supportAgentIds.length === 0) {
       console.log('No support agents to notify');
       return;
     }
-
+    
     const userName = conversation.user?.fullName || 'A user';
     const title = `New Message from ${userName}`;
     const body = message.message?.substring(0, 100) || 'New message in support chat';
-
+    
+    // Send notification to each support agent
     for (const agentUserId of supportAgentIds) {
       await sendNotificationToUser({
         userId: agentUserId,
@@ -96,7 +100,7 @@ const notifySupportAgents = async (conversationId, message, conversation) => {
         priority: 'high'
       });
     }
-
+    
     console.log(`Notified ${supportAgentIds.length} support agents about new message`);
   } catch (error) {
     console.error('Error notifying support agents:', error);
@@ -107,16 +111,16 @@ const notifySupportAgents = async (conversationId, message, conversation) => {
 const notifyStatusUpdate = async (conversationId, status, recipientUserId) => {
   try {
     if (!recipientUserId) return;
-
+    
     const statusLabels = {
       'active': 'Submitted',
       'in-progress': 'In Progress',
       'resolved': 'Resolved',
       'closed': 'Closed'
     };
-
+    
     const statusLabel = statusLabels[status] || status;
-
+    
     await sendNotificationToUser({
       userId: recipientUserId,
       title: 'Conversation Status Updated',

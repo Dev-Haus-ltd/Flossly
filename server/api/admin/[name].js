@@ -1,0 +1,227 @@
+import {
+  searchUsers,
+  getUserById,
+  getAllRoles,
+  updateUserStatus,
+  getUserLoginHistory,
+  resendInvite,
+  resetUserPassword,
+  getOrgsTrialsExpiringInXDays,
+  getPastDueOrgs,
+  getOrgsAboveSeatLimit,
+  getOrgsByPlanType,
+  getUsageMetrics,
+  exportOrgTasks,
+  exportAllTasks,
+  getTaskPool,
+  getGlobalAutomationLibrary,
+  getPracticeAutomationLibrary,
+  toggleAutomationTemplate,
+  getStorageUsagePerPractice,
+  broadcastNotification,
+  getNotificationDeliveryStats,
+  deductPoints,
+  awardPoints,
+  getPointsIssuedByAdmin,
+  getPointsTotalsByPractice,
+  searchOrganisations,
+  getOrganisationById,
+  searchRoles,
+  adminBulkUploadTasks,
+  downloadAdminTaskTemplate,
+  getDefaultPriorities,
+  getDefaultStatuses,
+  createDefaultPriority,
+  updateDefaultPriority,
+  createDefaultStatus,
+  updateDefaultStatus,
+  getChecklists,
+  getChecklistById,
+  createChecklist,
+  updateChecklist,
+  deleteChecklist,
+  bulkUploadChecklists,
+  downloadChecklistTemplate,
+  getTaskCategories,
+  getTaskCategoryById,
+  getTaskSubcategories,
+  createTaskCategory,
+  updateTaskCategory,
+  deleteTaskCategory
+} from '../../controllers/admin';
+
+export default defineEventHandler(async (event) => {
+  const { name } = event.context.params;
+
+  switch (name) {
+    // User Management
+    case 'searchUsers':
+      return await searchUsers(event);
+    
+    case 'getUserById':
+      return await getUserById(event);
+    
+    case 'updateUserStatus':
+      return await updateUserStatus(event);
+    
+    case 'searchOrganisations':
+      return await searchOrganisations(event);
+    
+    case 'getOrganisationById':
+      return await getOrganisationById(event);
+    
+    case 'searchRoles':
+      return await searchRoles(event);
+    
+    case 'getUserLoginHistory':
+      return await getUserLoginHistory(event);
+    
+    case 'resendInvite':
+      return await resendInvite(event);
+    
+    case 'resetUserPassword':
+      return await resetUserPassword(event);
+
+    // Organisation Monitoring
+    case 'getOrgsTrialsExpiringInXDays':
+      return await getOrgsTrialsExpiringInXDays(event);
+    
+    case 'getPastDueOrgs':
+      return await getPastDueOrgs(event);
+    
+    case 'getOrgsAboveSeatLimit':
+      return await getOrgsAboveSeatLimit(event);
+    
+    case 'getOrgsByPlanType':
+      return await getOrgsByPlanType(event);
+
+    // System Data
+    case 'getAllRoles':
+      return await getAllRoles(event);
+    
+    case 'getUsageMetrics':
+      return await getUsageMetrics(event);
+    
+    case 'getStorageUsagePerPractice':
+      return await getStorageUsagePerPractice(event);
+    
+    // Notifications
+    case 'broadcastNotification':
+      return await broadcastNotification(event);
+    
+    case 'getNotificationDeliveryStats':
+      return await getNotificationDeliveryStats(event);
+    
+    // Export Data
+    case 'exportOrgTasks':
+      return await exportOrgTasks(event);
+    
+    case 'exportAllTasks':
+      return await exportAllTasks(event);
+    
+    // Task Pool
+    case 'getTaskPool':
+      return await getTaskPool(event);
+    
+    // CRM Automation Library
+    case 'getGlobalAutomationLibrary':
+      return await getGlobalAutomationLibrary(event);
+    
+    case 'getPracticeAutomationLibrary':
+      return await getPracticeAutomationLibrary(event);
+    
+    case 'toggleAutomationTemplate':
+      return await toggleAutomationTemplate(event);
+    
+    // Points Management
+    case 'deductPoints':
+      return await deductPoints(event);
+    
+    case 'awardPoints':
+      return await awardPoints(event);
+    
+    case 'pointsIssuedByAdmin':
+      return await getPointsIssuedByAdmin(event);
+    
+    case 'pointsTotalsByPractice':
+      return await getPointsTotalsByPractice(event);
+
+    // Admin Bulk Task Upload
+    case 'bulkUploadTasks':
+      return await adminBulkUploadTasks(event);
+    
+    case 'downloadTaskTemplate':
+      return await downloadAdminTaskTemplate(event);
+
+    // Default Priorities Management
+    case 'getDefaultPriorities':
+      return await getDefaultPriorities(event);
+    
+    case 'createDefaultPriority':
+      return await createDefaultPriority(event);
+    
+    case 'updateDefaultPriority':
+      return await updateDefaultPriority(event);
+
+    // Default Statuses Management
+    case 'getDefaultStatuses':
+      return await getDefaultStatuses(event);
+    
+    case 'createDefaultStatus':
+      return await createDefaultStatus(event);
+    
+    case 'updateDefaultStatus':
+      return await updateDefaultStatus(event);
+
+    // Task Checklist Management
+    case 'getChecklists':
+      return await getChecklists(event);
+    
+    case 'getChecklistById':
+      return await getChecklistById(event);
+    
+    case 'createChecklist':
+      return await createChecklist(event);
+    
+    case 'updateChecklist':
+      return await updateChecklist(event);
+    
+    case 'deleteChecklist':
+      return await deleteChecklist(event);
+    
+    case 'bulkUploadChecklists':
+      return await bulkUploadChecklists(event);
+    
+    case 'downloadChecklistTemplate':
+      return await downloadChecklistTemplate(event);
+
+    // Task Category Management
+    case 'getTaskCategories':
+      return await getTaskCategories(event);
+    
+    case 'getTaskCategoryById':
+      return await getTaskCategoryById(event);
+    
+    case 'getTaskSubcategories':
+      return await getTaskSubcategories(event);
+    
+    case 'createTaskCategory':
+      return await createTaskCategory(event);
+    
+    case 'updateTaskCategory':
+      return await updateTaskCategory(event);
+    
+    case 'deleteTaskCategory':
+      return await deleteTaskCategory(event);
+
+    // 404 for unknown endpoints
+    default:
+      return {
+        statusCode: 404,
+        body: {
+          status: 'error',
+          message: `Admin endpoint '${name}' not found`
+        }
+      };
+  }
+});
