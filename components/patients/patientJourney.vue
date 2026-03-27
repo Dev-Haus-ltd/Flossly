@@ -74,6 +74,7 @@
               :editing="isEditing"
             />
           </div>
+
           <div v-else-if="section === 'automations'">
             <v-card class="content-card" :elevation="0">
               <template v-if="!activeAutomation">
@@ -591,7 +592,7 @@ const saveContent = async () => {
   }
 }
 
-watch(section, (val) => {
+watch(section, (val, prev) => {
   if (val === 'automations' && !automationGroups.value.length && patientId.value) {
     fetchAutomationGroups()
   }
