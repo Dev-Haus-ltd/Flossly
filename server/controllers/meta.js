@@ -808,8 +808,9 @@ export const igAuthStart = async (event) => {
   })
 
   const scope = [
-    'instagram_business_basic',
-    'instagram_business_manage_messages',
+    'instagram_basic',
+    'instagram_manage_messages',
+    'pages_show_list',
   ].join(',')
 
   const url = `https://www.facebook.com/${META_VERSION}/dialog/oauth?client_id=${encodeURIComponent(
@@ -867,16 +868,37 @@ export const igAuthCallback = async (event) => {
       appSecret
     )}&code=${encodeURIComponent(code)}`
     const shortResp = await $fetch(tokenUrl, { method: 'GET' })
-    const accessToken = shortResp.access_token
-    if (!accessToken) return error(500, 'Failed to get access token')
+    const shortToken = shortResp.access_token
+    if (!shortToken) return error(500, 'Failed to get access token')
 
-    const meUrl = `https://graph.facebook.com/${META_VERSION}/me?fields=id,username&access_token=${encodeURIComponent(accessToken)}`
-    const meResp = await $fetch(meUrl, { method: 'GET' })
-    const igAccountId = String(meResp?.id || '')
-    const igUsername = meResp?.username || null
-    if (!igAccountId) throw new Error('Instagram account not found')
+    // Exchange short-lived user token for long-lived token (60-day expiry)
+    const longLivedUrl = `https://graph.facebook.com/${META_VERSION}/oauth/access_token?grant_type=fb_exchange_token&client_id=${encodeURIComponent(appId)}&client_secret=${encodeURIComponent(appSecret)}&fb_exchange_token=${encodeURIComponent(shortToken)}`
+    let accessToken = shortToken
+    let expiresIn = Number(shortResp?.expires_in || 0)
+    try {
+      const longResp = await $fetch(longLivedUrl, { method: 'GET' })
+      if (longResp?.access_token) {
+        accessToken = longResp.access_token
+        expiresIn = Number(longResp?.expires_in || 0)
+      }
+    } catch (e) {
+      console.warn('[META IG AUTH] Failed to exchange long-lived token, using short-lived:', e?.message)
+    }
 
-    const expiresIn = Number(shortResp?.expires_in || 0)
+    const pagesUrl = `https://graph.facebook.com/${META_VERSION}/me/accounts?fields=id,name,instagram_business_account&access_token=${encodeURIComponent(accessToken)}`
+    const pagesResp = await $fetch(pagesUrl, { method: 'GET' })
+    const pages = Array.isArray(pagesResp?.data) ? pagesResp.data : []
+    const withIg = pages.find((p) => p?.instagram_business_account?.id)
+    const igAccountId = String(withIg?.instagram_business_account?.id || '')
+    if (!igAccountId) throw new Error('Instagram business account not found')
+
+    let igUsername = null
+    try {
+      const igUrl = `https://graph.facebook.com/${META_VERSION}/${igAccountId}?fields=id,username&access_token=${encodeURIComponent(accessToken)}`
+      const igResp = await $fetch(igUrl, { method: 'GET' })
+      igUsername = igResp?.username || null
+    } catch (e) {}
+
     const expiry = expiresIn ? new Date(Date.now() + expiresIn * 1000) : null
 
     await upsertDmAccount({
@@ -884,10 +906,35 @@ export const igAuthCallback = async (event) => {
       connectedByUserId: userId,
       platform: 'instagram',
       accountId: igAccountId,
-      accountName: igUsername,
+      accountName: igUsername || withIg?.name || null,
       accessToken,
       tokenExpiresAt: expiry,
+      metadata: {
+        pageId: String(withIg?.id || ''),
+        igAccountId,
+      },
     })
+
+    // Subscribe the linked Facebook page to Instagram webhook fields
+    const pageId = String(withIg?.id || '')
+    if (pageId) {
+      try {
+        const pageTokenUrl = `https://graph.facebook.com/${META_VERSION}/${pageId}?fields=access_token&access_token=${encodeURIComponent(accessToken)}`
+        const pageTokenResp = await $fetch(pageTokenUrl, { method: 'GET' })
+        const pageToken = pageTokenResp?.access_token || accessToken
+        const subscribeUrl = `https://graph.facebook.com/${META_VERSION}/${pageId}/subscribed_apps`
+        await $fetch(subscribeUrl, {
+          method: 'POST',
+          body: new URLSearchParams({
+            subscribed_fields: META_SUBSCRIBED_FIELDS,
+            access_token: pageToken,
+          }).toString(),
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        })
+      } catch (e) {
+        console.warn('[META IG AUTH] Failed to subscribe page to Instagram webhooks:', e?.message)
+      }
+    }
 
     setCookie(event, 'meta_ig_oauth_state', '', { maxAge: -1 })
     return sendRedirect(event, `/crm?meta=ig_connected&account=${encodeURIComponent(igUsername || igAccountId)}`)
