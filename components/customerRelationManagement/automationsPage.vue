@@ -55,6 +55,37 @@
             Add Automation
           </v-btn>
         </div>
+
+        <!-- AI Automation Generator Input -->
+        <div class="ai-generator-section mt-4">
+          <v-text-field
+            v-model="aiIdea"
+            variant="solo"
+            placeholder="Tell AI your idea (e.g., 'Create follow-up emails for new dental patients')"
+            hide-details
+            density="comfortable"
+            bg-color="#F3F4F6"
+            flat
+            :elevation="0"
+            class="ai-input-field"
+            @keyup.enter="handleAIGenerate"
+          >
+            <template #append-inner>
+              <v-btn
+                color="primary"
+                variant="flat"
+                rounded="lg"
+                class="ai-generate-btn"
+                :loading="generatingAI"
+                :disabled="!aiIdea.trim()"
+                @click="handleAIGenerate"
+              >
+                <v-icon size="18" class="mr-1">mdi-auto-fix</v-icon>
+                Generate with AI
+              </v-btn>
+            </template>
+          </v-text-field>
+        </div>
       </div>
 
       <v-card class="automation-library-card" elevation="0">
@@ -96,6 +127,11 @@
         v-model="showBulkUploadDialog"
         @onUpdate="refreshAll"
       />
+      <CustomerRelationManagementAiAutomationGenerator
+        ref="aiGeneratorRef"
+        v-model="showAIPreview"
+        @success="handleAIAutomationsCreated"
+      />
     </ClientOnly>
 
     <v-dialog v-model="showGroupDelete" max-width="480">
@@ -129,6 +165,7 @@ import CustomerRelationManagementAutomation from '@/components/customerRelationM
 import CustomerRelationManagementAddAutomationGroup from '@/components/customerRelationManagement/addAutomationGroup.vue'
 import CustomerRelationManagementAddAutomation from '@/components/customerRelationManagement/addAutomation.vue'
 import CustomerRelationManagementBulkAutomationUploadDialog from '@/components/customerRelationManagement/bulkAutomationUploadDialog.vue'
+import CustomerRelationManagementAiAutomationGenerator from '@/components/customerRelationManagement/aiAutomationGenerator.vue'
 import CommonFeatureCard from '@/components/Common/featureCard.vue'
 import automationFeatureCardIcon from '@/assets/icons/crm/automation-feature-card.svg'
 
@@ -150,6 +187,10 @@ const groupToDelete = ref(null)
 const whatsappEnabled = ref(false)
 const whatsappProvider = ref('meta')
 const whatsappRequiresTemplates = ref(true)
+const aiIdea = ref('')
+const showAIPreview = ref(false)
+const generatingAI = ref(false)
+const aiGeneratorRef = ref(null)
 
 const isPrivileged = computed(() => [1, 8].includes(Number(user.value?.roleId)))
 
@@ -256,6 +297,21 @@ const deleteGroup = async () => {
   }
 }
 
+const handleAIGenerate = async () => {
+  if (!aiIdea.value.trim()) return
+  generatingAI.value = true
+  try {
+    await aiGeneratorRef.value?.generateAutomations(aiIdea.value.trim())
+  } finally {
+    generatingAI.value = false
+  }
+}
+
+const handleAIAutomationsCreated = async () => {
+  aiIdea.value = ''
+  await refreshAll()
+}
+
 onMounted(async () => {
   if (!isPrivileged.value) {
     mainStore.setSnackbar({
@@ -346,5 +402,43 @@ onMounted(async () => {
 
 .library-body {
   padding: 16px;
+}
+
+.ai-generator-section {
+  width: 100%;
+}
+
+.ai-input-field {
+  border-radius: 12px;
+}
+
+.ai-input-field :deep(.v-field) {
+  border-radius: 12px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.ai-generate-btn {
+  padding: 0 24px !important;
+  height: 40px !important;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0.3px;
+  box-shadow: 0 2px 8px rgba(0, 97, 255, 0.2);
+  transition: all 0.3s ease;
+}
+
+.ai-generate-btn:hover {
+  box-shadow: 0 4px 12px rgba(0, 97, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.ai-generate-btn:active {
+  transform: translateY(0);
+}
+
+.ai-generate-btn.v-btn--disabled {
+  opacity: 0.5;
+  box-shadow: none;
 }
 </style>

@@ -203,6 +203,7 @@ export const useCrmStore = defineStore("crmStore", {
     resetAutomationOverride(payload) { return this._wrap(() => crmService.resetAutomationOverride(payload)); },
     deleteAutomation(payload) { return this._wrap(() => crmService.deleteAutomation(payload)); },
     bulkUploadAutomations(payload) { return this._wrap(() => crmService.bulkUploadAutomations(payload)); },
+    generateAutomationsWithAI(payload) { return this._wrap(() => crmService.generateAutomationsWithAI(payload)); },
     listAutomationGroups() { return this._wrap(() => crmService.listAutomationGroups()); },
     async saveAutomationGroup(payload) {
       const res = await this._wrap(() => crmService.saveAutomationGroup(payload));
