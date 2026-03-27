@@ -5,6 +5,14 @@ export default defineNuxtConfig({
   alias: {
     "@shared": resolve(__dirname, "shared"),
   },
+  routeRules: {
+    '/form/**': {
+      headers: {
+        'X-Frame-Options': 'ALLOWALL',
+        'Content-Security-Policy': "frame-ancestors *",
+      },
+    },
+  },
   router: {
     prefetchLinks: true,
   },

@@ -53,6 +53,8 @@ const isPublicPath = (path) => {
     "/api/whapi/webhook",
     "/api/chatbot/createAppointment",
     "/api/chatbot/createLead",
+    "/api/form/meta",
+    "/api/form/submit",
   ];
   
   const isPublic = publicPaths.some(publicPath => 
