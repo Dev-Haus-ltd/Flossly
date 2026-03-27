@@ -100,6 +100,8 @@ export const authStart = async (event) => {
     'ads_read',
     'business_management',
     'pages_messaging',
+    'instagram_basic',
+    'instagram_manage_messages',
   ].join(',')
 
   // ✅ FIX: Add auth_type=rerequest to force fresh login
@@ -186,7 +188,7 @@ export const authCallback = async (event) => {
     const fbUserName = meResp.name
 
     // Fetch pages with page access tokens
-    const pagesUrl = `https://graph.facebook.com/${META_VERSION}/me/accounts?fields=id,name,access_token&access_token=${encodeURIComponent(userToken)}`
+    const pagesUrl = `https://graph.facebook.com/${META_VERSION}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username}&access_token=${encodeURIComponent(userToken)}`
     const pagesResp = await $fetch(pagesUrl, { method: 'GET' })
     const pages = Array.isArray(pagesResp?.data) ? pagesResp.data : []
 
@@ -302,6 +304,30 @@ export const authCallback = async (event) => {
         accountName: p.name || null,
         accessToken: p.access_token,
       })
+
+      let igAccount = p?.instagram_business_account || null
+      if (!igAccount?.id) {
+        try {
+          const pageInfoUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(p.id)}?fields=instagram_business_account{id,username}&access_token=${encodeURIComponent(p.access_token)}`
+          const pageInfo = await $fetch(pageInfoUrl, { method: 'GET' })
+          igAccount = pageInfo?.instagram_business_account || null
+        } catch {}
+      }
+      const igAccountId = String(igAccount?.id || '')
+      if (igAccountId) {
+        await upsertDmAccount({
+          organisationId: orgId,
+          connectedByUserId: userId,
+          platform: 'instagram',
+          accountId: igAccountId,
+          accountName: igAccount?.username || p.name || null,
+          accessToken: p.access_token,
+          metadata: {
+            pageId: String(p.id),
+            igAccountId,
+          },
+        })
+      }
     }
 
     // Auto-subscribe pages to leadgen + messaging webhooks
