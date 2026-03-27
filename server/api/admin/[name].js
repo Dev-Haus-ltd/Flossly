@@ -14,6 +14,7 @@ import {
   exportOrgTasks,
   exportAllTasks,
   getTaskPool,
+  getTaskById,
   getGlobalAutomationLibrary,
   getPracticeAutomationLibrary,
   toggleAutomationTemplate,
@@ -122,6 +123,9 @@ export default defineEventHandler(async (event) => {
     // Task Pool
     case 'getTaskPool':
       return await getTaskPool(event);
+    
+    case 'getTaskById':
+      return await getTaskById(event);
     
     // CRM Automation Library
     case 'getGlobalAutomationLibrary':
