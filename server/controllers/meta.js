@@ -1444,39 +1444,7 @@ export const igAuthCallback = async (event) => {
       accountName: igUsername || withIg?.name || null,
       accessToken,
       tokenExpiresAt: expiry,
-      metadata: {
-        pageId: String(withIg?.id || ''),
-        igAccountId,
-      },
     })
-
-    // Subscribe the linked Facebook page to Instagram webhook fields using the page access token.
-    // The page access token is needed (not user token) for subscribed_apps endpoint.
-    const pageId = String(withIg?.id || '')
-    if (pageId) {
-      try {
-        const pageTokenUrl = `https://graph.facebook.com/${META_VERSION}/${pageId}?fields=access_token&access_token=${encodeURIComponent(accessToken)}`
-        const pageTokenResp = await $fetch(pageTokenUrl, { method: 'GET' })
-        const pageToken = pageTokenResp?.access_token || accessToken
-        const subscribeUrl = `https://graph.facebook.com/${META_VERSION}/${pageId}/subscribed_apps`
-        await $fetch(subscribeUrl, {
-          method: 'POST',
-          body: new URLSearchParams({
-            subscribed_fields: META_SUBSCRIBED_FIELDS,
-            access_token: pageToken,
-          }).toString(),
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        })
-      } catch (e) {
-        console.warn('[META IG AUTH] Failed to subscribe page to Instagram webhooks:', e?.message)
-      }
-    }
-
-    // Fire-and-forget backfill to keep callback response fast.
-    void fetchDmHistoryForOrg(orgId, {
-      days: 30,
-      platforms: ['instagram'],
-    }).catch(() => {})
 
     setCookie(event, 'meta_ig_oauth_state', '', { maxAge: -1 })
     return sendRedirect(event, `/crm?meta=ig_connected&account=${encodeURIComponent(igUsername || igAccountId)}`)
