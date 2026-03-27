@@ -1,4 +1,5 @@
 import crmService from "../services/crmService";
+import webFormService from "../services/webFormService";
 
 export const useCrmStore = defineStore("crmStore", {
   state: () => ({
@@ -411,5 +412,12 @@ export const useCrmStore = defineStore("crmStore", {
         this.googleAdsLoading = false;
       }
     },
+
+    // Web Forms
+    listForms(params = {}) { return this._wrap(() => webFormService.listForms(params)); },
+    createForm(payload) { return this._wrap(() => webFormService.createForm(payload)); },
+    updateForm(payload) { return this._wrap(() => webFormService.updateForm(payload)); },
+    deleteForm(payload) { return this._wrap(() => webFormService.deleteForm(payload)); },
+    getAvailableFields() { return this._wrap(() => webFormService.getAvailableFields()); },
   },
 });
