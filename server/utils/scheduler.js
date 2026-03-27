@@ -177,7 +177,7 @@ export const startLeadAutomationScheduler = () => {
             if (!trigger) continue
             try {
               const { due, sentKey } = shouldSendCrmTemplate({ lead, tpl, trigger, today, org })
-              if (!due || !sentKey || hasCrmSent(raw, sentKey)) continue
+              if (!due || !sentKey || hasCrmSent(lead.rawData || {}, sentKey)) continue
               const type = String(tpl?.type || 'Email').toLowerCase()
               if (type === 'whatsapp') {
                 if (!lead?.telephone) continue
