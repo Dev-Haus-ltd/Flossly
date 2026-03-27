@@ -1003,6 +1003,39 @@
           "response": []
         },
         {
+          "name": "Get Task By ID (Super Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getTaskById?id=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getTaskById"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "Task ID (required)"
+                }
+              ]
+            },
+            "description": "Get a specific task by ID with full details including category, role, organisation, and creator information. Returns 404 if task not found."
+          },
+          "response": []
+        },
+        {
           "name": "Bulk Upload Tasks (Admin)",
           "request": {
             "method": "POST",

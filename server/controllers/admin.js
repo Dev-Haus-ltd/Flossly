@@ -1148,6 +1148,73 @@ export const getTaskPool = async (event) => {
   }
 };
 
+export const getTaskById = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  const query = getQuery(event);
+  const { id } = query;
+
+  if (!id) {
+    return error(400, "Task ID is required");
+  }
+
+  try {
+    const task = await Task.findOne({
+      where: { id: parseInt(id) },
+      include: [
+        {
+          model: TaskCategory,
+          as: 'category',
+          attributes: ['id', 'name', 'description', 'color', 'organisationId'],
+          required: false
+        },
+        {
+          model: Role,
+          as: 'role',
+          attributes: ['id', 'title', 'roleType'],
+          required: false
+        }
+      ]
+    });
+
+    if (!task) {
+      return error(404, "Task not found");
+    }
+
+    return success({
+      task: {
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        categoryId: task.categoryId,
+        category: task.category ? {
+          id: task.category.id,
+          name: task.category.name,
+          description: task.category.description,
+          color: task.category.color
+        } : null,
+        roleId: task.roleId,
+        role: task.role ? {
+          id: task.role.id,
+          title: task.role.title,
+          roleType: task.role.roleType
+        } : null,
+        defaultFrequency: task.defaultFrequency,
+        isSystemTask: task.isSystemTask,
+        createdAt: task.createdAt,
+        updatedAt: task.updatedAt
+      }
+    });
+  } catch (err) {
+    console.error('Get task by ID error:', err);
+    return error(500, err.message);
+  }
+};
+
 /**
  * Get global default CRM automation library
  * View all system automation templates available to all practices
