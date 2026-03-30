@@ -1595,45 +1595,6 @@ export const healthCheck = async (event) => {
     order: [['updatedAt', 'DESC']],
   })
   const pageIds = pages.map((p) => p.pageId).filter(Boolean)
-  const igByPage = new Map()
-  const messengerByPage = new Map()
-  for (const acc of dmAccounts) {
-    const platform = String(acc.platform || '').toLowerCase()
-    const pageId = String(acc?.metadata?.pageId || '')
-    if (platform === 'messenger') {
-      const pid = String(acc.accountId || '')
-      if (pid) messengerByPage.set(pid, acc)
-      continue
-    }
-    if (platform === 'instagram' && pageId && !igByPage.has(pageId)) {
-      igByPage.set(pageId, acc)
-    }
-  }
-
-  let permissionEntries = []
-  let permissionsError = null
-  try {
-    const tokenRow = await MetaUserToken.findOne({
-      where: { organisationId: orgId },
-      order: [['updatedAt', 'DESC']],
-    })
-    const userToken = tokenRow?.userTokenEnc ? decrypt(tokenRow.userTokenEnc) : null
-    if (userToken) {
-      const url = `https://graph.facebook.com/${META_VERSION}/me/permissions?access_token=${encodeURIComponent(userToken)}`
-      const resp = await $fetch(url, { method: 'GET' })
-      permissionEntries = Array.isArray(resp?.data) ? resp.data : []
-    }
-  } catch (e) {
-    permissionsError = e?.data?.error?.message || e?.message || 'Failed to check permissions'
-  }
-  const grantedPermissions = new Set(
-    permissionEntries
-      .filter((perm) => String(perm?.status || '').toLowerCase() === 'granted')
-      .map((perm) => String(perm?.permission || '').trim())
-      .filter(Boolean)
-  )
-  const hasPermissionSnapshot = permissionEntries.length > 0 && !permissionsError
-
   const leadStatsByPage = new Map()
   if (pageIds.length) {
     const leadStats = await CrmLead.findAll({
@@ -1668,9 +1629,6 @@ export const healthCheck = async (event) => {
 
     let subscribed = false
     let appMatched = false
-    let subscribedFields = []
-    let messagesSubscribed = false
-    let leadgenSubscribed = false
     let errorMsg = null
 
     if (tokenPresent && appId) {
@@ -1680,15 +1638,20 @@ export const healthCheck = async (event) => {
         const data = Array.isArray(resp?.data) ? resp.data : []
         subscribed = data.length > 0
         appMatched = data.some((a) => String(a.id) === String(appId))
-        const appEntry = (appId ? data.find((a) => String(a?.id) === String(appId)) : data[0]) || null
-        subscribedFields = Array.isArray(appEntry?.subscribed_fields)
-          ? appEntry.subscribed_fields.map((field) => String(field || '').trim()).filter(Boolean)
-          : []
-        messagesSubscribed = subscribedFields.includes('messages')
-        leadgenSubscribed = subscribedFields.includes('leadgen')
       } catch (e) {
         errorMsg = e?.data?.error?.message || e?.message || 'Failed to check subscription'
       }
+    }
+
+    const igAccount = igByPage.get(String(pageId)) || null
+
+    let instagramProfilePicture = null
+    if (igAccount && token) {
+      try {
+        const igPicUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(igAccount.accountId)}?fields=profile_picture_url&access_token=${encodeURIComponent(token)}`
+        const igPicResp = await $fetch(igPicUrl, { method: 'GET' })
+        instagramProfilePicture = igPicResp?.profile_picture_url || null
+      } catch {}
     }
 
     const igAccount = igByPage.get(String(pageId)) || null
@@ -1719,12 +1682,6 @@ export const healthCheck = async (event) => {
       messagesSubscribed,
       leadgenSubscribed,
       appMatched,
-      instagramConnected: !!igAccount,
-      instagramAccountId: igAccount?.accountId || null,
-      instagramAccountName: igAccount?.accountName || null,
-      messagingAccessStatus,
-      missingMessagingPermissions,
-      leadAccessStatus,
       connectedAt: page.connectedAt || page.updatedAt || page.createdAt || null,
       leadCount: leadStatsByPage.get(String(pageId))?.leadCount || 0,
       lastLeadAt: leadStatsByPage.get(String(pageId))?.lastLeadAt || null,
@@ -1737,11 +1694,6 @@ export const healthCheck = async (event) => {
     verifyTokenSet,
     totalPages: pages.length,
     activePages: pages.filter((p) => p.status === 'Active').length,
-    totalDmAccounts: dmAccounts.length,
-    totalInstagramAccounts: dmAccounts.filter((acc) => String(acc.platform || '').toLowerCase() === 'instagram').length,
-    requiredPermissions,
-    permissions: permissionEntries,
-    permissionsError,
     pages: results,
   })
 }

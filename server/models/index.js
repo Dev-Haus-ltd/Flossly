@@ -650,6 +650,7 @@ export {
   CourseQuestionaire,
   UserCourseHistory,
   // CRM
+  CrmDmAccount,
   MetaPage,
   CrmLead,
   CrmLeadTreatment,
@@ -662,7 +663,6 @@ export {
   CrmAutomationGroupTemplate,
   FormConfig,
   CrmWhatsAppMessageLog,
-  CrmDmAccount,
   CrmDmConversation,
   CrmDmMessage,
   MetaUserToken,

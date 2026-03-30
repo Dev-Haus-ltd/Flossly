@@ -152,6 +152,8 @@ export const useCrmStore = defineStore("crmStore", {
     disconnectMeta() { return this._wrap(() => crmService.disconnectMeta()); },
     metaHealth() { return this._wrap(() => crmService.metaHealth()); },
     metaPermissions() { return this._wrap(() => crmService.metaPermissions()); },
+    metaHealthSilent() { return crmService.metaHealth(); },
+    metaPermissionsSilent() { return crmService.metaPermissions(); },
     listMetaBusinesses() { return this._wrap(() => crmService.listMetaBusinesses()); },
     connectMetaPages(payload) { return this._wrap(() => crmService.connectMetaPages(payload)); },
     completeWhatsAppEmbedded(payload) { return this._wrap(() => crmService.completeWhatsAppEmbedded(payload)); },

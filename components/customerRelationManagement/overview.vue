@@ -51,8 +51,7 @@
                 variant="outlined"
                 rounded="lg"
                 class="action-btn"
-                :loading="metaDisconnecting"
-                @click="metaDisconnectDialog = true"
+                @click="disconnectMeta"
               >
                 Disconnect
               </v-btn>
@@ -171,6 +170,19 @@
           </template>
         </IntegrationCard>
       </div>
+
+      <v-alert
+        v-if="isMetaConnected && metaHealthIssues.length"
+        type="warning"
+        variant="tonal"
+        class="mt-0"
+      >
+        <div class="font-weight-medium mb-1">Meta connection has issues — new leads may not be arriving</div>
+        <ul style="padding-left: 18px; margin: 4px 0 8px;">
+          <li v-for="(issue, i) in metaHealthIssues" :key="i" style="font-size: 13px;">{{ issue }}</li>
+        </ul>
+        <v-btn size="small" variant="outlined" @click="openMetaHealth">View Details & Fix</v-btn>
+      </v-alert>
 
       <div class="conversion-grid mt-8">
         <CrmCharts
@@ -448,6 +460,14 @@
       </v-card>
     </v-dialog>
 
+    <CommonConfirmDialog
+      v-model="confirmDisconnectMeta"
+      title="Disconnect Meta?"
+      message="This will remove the Meta integration. New leads from Facebook forms will stop arriving until you reconnect."
+      confirm-text="Disconnect"
+      @confirm="doDisconnectMeta"
+      @cancel="confirmDisconnectMeta = false"
+    />
   </v-sheet>
 </template>
 
@@ -539,26 +559,6 @@ const gscChartConfig = reactive({
 const metaHealthDialog = ref(false)
 const metaHealthLoading = ref(false)
 const metaHealthData = ref(null)
-const metaDisconnectDialog = ref(false)
-const metaDisconnecting = ref(false)
-
-const isGoogleConnected = ref(false)
-const googleConnecting = ref(false)
-const googleDisconnecting = ref(false)
-const googleHealthDialog = ref(false)
-const googleHealthLoading = ref(false)
-const googleHealthData = ref(null)
-const googleErrorDialog = ref(false)
-const googleErrorMessage = ref('')
-const googleStatus = reactive({
-  connected: false,
-  email: '',
-  tokenId: '',
-  tokenValid: false,
-  connectedAt: '',
-  expiresAt: '',
-  scopes: [],
-})
 
 
 const userEmail = computed(() => user.value?.email || '')
@@ -816,16 +816,35 @@ const handleMetaQuery = () => {
     const msg = 'Meta could not be connected. You need full access to the page you are trying to connect.'
     mainStore?.setSnackbar?.({ title: msg, type: 'error' })
   } else if (metaConnected) {
+    metaHealthData.value = null
     mainStore?.setSnackbar?.({ title: 'Meta connected successfully', type: 'success' })
   } else if (igConnected) {
+    metaHealthData.value = null
     const label = igAccount ? `Instagram connected: ${igAccount}` : 'Instagram connected successfully'
     mainStore?.setSnackbar?.({ title: label, type: 'success' })
   }
   if (metaConnected || metaError || igConnected) clearMetaQuery()
 }
 
+const metaHealthIssues = computed(() => {
+  const data = metaHealthData.value
+  if (!data || data.error) return []
+  const issues = []
+  if (!data.verifyTokenSet) issues.push('Verify token is not configured')
+  if (data.permissionsError) issues.push(`Permissions issue: ${data.permissionsError}`)
+  const pages = (Array.isArray(data.pages) ? data.pages : [])
+    .filter((p) => String(p?.status || '').toLowerCase() === 'active')
+  const noToken = pages.filter((p) => !p.tokenPresent).length
+  const noSub = pages.filter((p) => !p.subscribed).length
+  if (noToken) issues.push(`${noToken} active page(s) are missing an access token`)
+  if (noSub) issues.push(`${noSub} active page(s) are not subscribed to webhooks — new leads from these pages will not arrive`)
+  return issues
+})
+
 const openMetaHealth = async () => {
   metaHealthDialog.value = true
+  // Use cached data if already fetched and valid (no error)
+  if (metaHealthData.value && !metaHealthData.value.error) return
   metaHealthLoading.value = true
   try {
     const res = await crmStore.metaHealth()
@@ -875,13 +894,11 @@ const integrateMeta = async () => {
 }
 
 const disconnectMeta = async () => {
-  if (metaDisconnecting.value) return
-  metaDisconnecting.value = true
   try {
     const res = await crmStore.disconnectMeta()
     if (res?.code === 0) {
+      metaHealthData.value = null
       await checkMetaConnection()
-      metaDisconnectDialog.value = false
       mainStore?.setSnackbar?.({ title: 'Meta disconnected', type: 'success' })
     } else {
       mainStore?.setSnackbar?.({ title: res?.message || 'Failed to disconnect Meta', type: 'error' })
@@ -891,6 +908,16 @@ const disconnectMeta = async () => {
   } finally {
     metaDisconnecting.value = false
   }
+}
+
+const fetchMetaHealthSilent = async () => {
+  if (!isMetaConnected.value) return
+  try {
+    const res = await crmStore.metaHealth()
+    if (res?.code === 0) {
+      metaHealthData.value = res.data || null
+    }
+  } catch {}
 }
 
 const loadWhapiStatus = async () => {
@@ -1383,22 +1410,12 @@ const loadGscAnalytics = async () => {
 onMounted(async () => {
   loadUser()
   handleMetaQuery()
-  handleGoogleCallback()
-  startWhapiStatusStream()
+  await Promise.all([checkMetaConnection(), loadWhapiStatus(), loadLeads()])
+})
 
-  // Wait for connections first
-  await Promise.all([
-    checkMetaConnection(),
-    loadWhapiStatus(),
-    checkGoogleConnection()
-  ])
-
-  // Now load data - connections will be correct
-  await Promise.all([
-    loadLeads(),
-    loadMetaAnalytics(),
-    loadGscAnalytics()
-  ])
+watch(activeLeads, async () => {
+  await nextTick()
+  renderLeadChart()
 })
 
 onBeforeUnmount(() => {
