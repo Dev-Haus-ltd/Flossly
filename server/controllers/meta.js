@@ -1654,7 +1654,6 @@ export const healthCheck = async (event) => {
       } catch {}
     }
 
-    const igAccount = igByPage.get(String(pageId)) || null
     const requiredForPage = igAccount
       ? ['pages_messaging', 'instagram_manage_messages', 'instagram_basic']
       : ['pages_messaging']
