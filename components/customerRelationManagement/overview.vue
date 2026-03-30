@@ -811,8 +811,10 @@ const handleMetaQuery = () => {
     const msg = 'Meta could not be connected. You need full access to the page you are trying to connect.'
     mainStore?.setSnackbar?.({ title: msg, type: 'error' })
   } else if (metaConnected) {
+    metaHealthData.value = null
     mainStore?.setSnackbar?.({ title: 'Meta connected successfully', type: 'success' })
   } else if (igConnected) {
+    metaHealthData.value = null
     const label = igAccount ? `Instagram connected: ${igAccount}` : 'Instagram connected successfully'
     mainStore?.setSnackbar?.({ title: label, type: 'success' })
   }
@@ -836,6 +838,8 @@ const metaHealthIssues = computed(() => {
 
 const openMetaHealth = async () => {
   metaHealthDialog.value = true
+  // Use cached data if already fetched and valid (no error)
+  if (metaHealthData.value && !metaHealthData.value.error) return
   metaHealthLoading.value = true
   try {
     const res = await crmStore.metaHealth()
@@ -888,6 +892,7 @@ const disconnectMeta = async () => {
   try {
     const res = await crmStore.disconnectMeta()
     if (res?.code === 0) {
+      metaHealthData.value = null
       await checkMetaConnection()
       mainStore?.setSnackbar?.({ title: 'Meta disconnected', type: 'success' })
     } else {

@@ -1043,6 +1043,7 @@ const handleMetaQuery = async (metaConnected, metaError) => {
   } else if (metaConnected && mainStore?.setSnackbar) {
     mainStore.setSnackbar({ title: 'Meta connected successfully', type: 'success' });
   }
+  if (metaConnected) metaHealthData.value = null;
   if (metaConnected || metaError) clearMetaQuery();
   if (metaConnected && (pagesCount > 0 || tokenOnly)) await loadBusinessPortfolios(true);
 };
@@ -1532,11 +1533,12 @@ const onReconnectMeta = () => {
 
 const openMetaHealth = async () => {
   metaHealthDialog.value = true;
+  if (metaHealthData.value || metaHealthLoading.value) return;
   metaHealthLoading.value = true;
   try {
     const [healthRes, permsRes] = await Promise.all([
-      crmStore.metaHealth(),
-      crmStore.metaPermissions(),
+      crmStore.metaHealthSilent(),
+      crmStore.metaPermissionsSilent(),
     ]);
     if (healthRes?.code === 0) {
       const permsPayload = permsRes?.code === 0 ? (permsRes.data || null) : null;
@@ -1618,6 +1620,7 @@ const disconnectMeta = async () => {
     disconnecting.value = true;
     const res = await crmStore.disconnectMeta();
     if (res?.code === 0) {
+      metaHealthData.value = null;
       await checkConnection();
       mainStore?.setSnackbar?.({ title: 'Meta disconnected', type: 'success' });
     } else {

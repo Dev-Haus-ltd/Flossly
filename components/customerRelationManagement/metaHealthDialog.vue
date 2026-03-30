@@ -18,7 +18,7 @@
 
       <div class="mh-body">
         <div v-if="loading" class="mh-loading">
-          <v-progress-circular indeterminate size="22" color="#0061FB" />
+          <v-progress-circular indeterminate size="28" width="2" color="#0061FB" />
         </div>
         <template v-else>
           <v-alert v-if="data?.error" type="error" variant="tonal" density="compact" class="mb-3">
@@ -331,9 +331,9 @@ const onAvatarError = (e) => {
 
 .mh-loading {
   padding: 32px 0;
-  text-align: center;
+  display: flex;
+  justify-content: center;
 }
-
 
 /* Pages section */
 .mh-pages {
