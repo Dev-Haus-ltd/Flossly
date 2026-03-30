@@ -11,7 +11,7 @@ export const generateAutomationsWithAI = async (event) => {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
-    const { idea } = payload || {}
+    const { idea, followUp, existingAutomations } = payload || {}
 
     if (!orgId) return error(401, 'Unauthenticated')
     if (!idea || typeof idea !== 'string' || !idea.trim()) {
@@ -30,6 +30,8 @@ export const generateAutomationsWithAI = async (event) => {
       organisationName: org.name,
       organisationType: org.type || 'Dental',
       userIdea: idea.trim(),
+      followUp: followUp?.trim() || null,
+      existingAutomations: existingAutomations || null,
     }
 
     // Generate automations using OpenAI GPT-4o
@@ -37,7 +39,9 @@ export const generateAutomationsWithAI = async (event) => {
 
     return success({
       automations,
-      message: `Generated ${automations.length} automations based on your idea`,
+      message: followUp 
+        ? `Refined ${automations.length} automations based on your feedback`
+        : `Generated ${automations.length} automations based on your idea`,
     })
   } catch (e) {
     console.error('AI automation generation error:', e)
@@ -49,10 +53,11 @@ export const generateAutomationsWithAI = async (event) => {
  * Generate automations using OpenAI GPT-4o
  */
 async function generateAutomationsWithOpenAI(context) {
-  const { organisationName, organisationType, userIdea } = context
+  const { organisationName, organisationType, userIdea, followUp, existingAutomations } = context
   
-  // Check if API key is configured
-  const apiKey = process.env.OPENAI_API_KEY
+  // Check if API key is configured using runtime config
+  const config = useRuntimeConfig()
+  const apiKey = config.OPENAI_API_KEY
   if (!apiKey) {
     throw new Error('OpenAI API key is not configured. Please add OPENAI_API_KEY to your .env file.')
   }
@@ -122,7 +127,38 @@ Example output structure:
   ]
 }`
 
-    const userPrompt = `Practice Name: "${organisationName}"
+    let userPrompt = ''
+    
+    if (followUp && existingAutomations) {
+      // Follow-up request: Modify existing automations based on user feedback
+      userPrompt = `Practice Name: "${organisationName}"
+Practice Type: ${organisationType}
+
+Original Request: "${userIdea}"
+
+EXISTING AUTOMATIONS (JSON):
+${JSON.stringify(existingAutomations, null, 2)}
+
+USER'S FOLLOW-UP REQUEST: "${followUp}"
+
+CRITICAL INSTRUCTIONS:
+1. You MUST modify the existing automations based on the user's follow-up request
+2. DO NOT create new automations unless explicitly requested
+3. Only apply the specific changes mentioned in the follow-up request
+4. Keep all other fields unchanged unless they need to change to fulfill the request
+5. Maintain the same structure: groupName, type, name, subject (for Email), content
+6. Return ALL automations (modified and unmodified) in the response
+7. Common follow-up requests:
+   - "Make it more friendly" → Adjust tone in content/subject
+   - "Add emojis" → Add appropriate emojis to content
+   - "Shorter" → Reduce content length while keeping key points
+   - "Change subject line" → Modify email subjects
+   - "More professional" → Adjust language and tone
+
+Return ONLY the JSON object with the updated "automations" array. No other text.`
+    } else {
+      // Initial request: Generate new automations
+      userPrompt = `Practice Name: "${organisationName}"
 Practice Type: ${organisationType}
 
 User Request: "${userIdea}"
@@ -144,6 +180,7 @@ REQUIREMENTS:
 9. Be creative but practical - generate what the user actually needs, not more or less
 
 Return ONLY the JSON object with "automations" array. No other text.`
+    }
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
