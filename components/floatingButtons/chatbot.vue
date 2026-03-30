@@ -613,16 +613,17 @@ const handleFCMNotification = (notification) => {
   const notifData = notification.data || {};
   const type = notifData.type;
   
-  // Handle new chatbot messages
-  if (type === 'chatbot_message' || type === 'chatbot_status_update') {
-    const convId = notifData.conversationId ? parseInt(notifData.conversationId) : null;
+  // Handle new chatbot messages and support replies
+  if (type === 'chatbot_message' || type === 'chatbot_status_update' || type === 'support_reply') {
+    const convId = notifData.conversationId || notifData.ticketId;
+    const parsedConvId = convId ? parseInt(convId) : null;
     
-    if (type === 'chatbot_message') {
+    if (type === 'chatbot_message' || type === 'support_reply') {
       const message = notifData.message ? JSON.parse(notifData.message) : null;
       
-      if (convId && message) {
+      if (parsedConvId && message) {
         // Update currently open conversation in realtime
-        if (currentConversationId.value === convId) {
+        if (currentConversationId.value === parsedConvId) {
           const exists = currentMessages.value?.some(m => m.id === message.id);
           if (!exists) {
             // Remove temp message if this is the user's message coming back from server
@@ -634,6 +635,12 @@ const handleFCMNotification = (notification) => {
             currentMessages.value = [...currentMessages.value].sort(
               (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
             );
+            
+            // Hide typing indicator when bot/AI responds
+            if (message.senderType === 'bot' || message.senderType === 'ai') {
+              isWaitingForResponse.value = false;
+            }
+            
             nextTick(() => scrollToBottom());
           }
         }
@@ -644,14 +651,14 @@ const handleFCMNotification = (notification) => {
     } else if (type === 'chatbot_status_update') {
       const status = notifData.status;
       
-      if (convId && status) {
+      if (parsedConvId && status) {
         // Update current conversation data
-        if (currentConversationId.value === convId && currentConversationData.value) {
+        if (currentConversationId.value === parsedConvId && currentConversationData.value) {
           currentConversationData.value.status = status;
         }
         
         // Update in conversations list
-        const conv = allConversations.value.find(c => c.id === convId);
+        const conv = allConversations.value.find(c => c.id === parsedConvId);
         if (conv) {
           conv.status = status;
         }
@@ -660,13 +667,22 @@ const handleFCMNotification = (notification) => {
   }
 };
 
+// Watch for FCM notifications at the component level (not inside onMounted)
+let stopWatchingNotifications = null;
+
 onMounted(() => {
-  // Watch for FCM notifications
-  watch(lastNotification, handleFCMNotification, { immediate: true });
+  // Set up FCM notification watcher
+  stopWatchingNotifications = watch(lastNotification, handleFCMNotification, { immediate: true });
+  
+  // Fetch conversations when component mounts
+  fetchConversations();
 });
 
 onUnmounted(() => {
-  // Cleanup handled by useFCM composable
+  // Stop watching notifications
+  if (stopWatchingNotifications) {
+    stopWatchingNotifications();
+  }
 });
 
 const isSubmitting = ref(false);
@@ -1023,8 +1039,35 @@ const sendMessage = async () => {
     if (response.success) {
       console.log('Message sent successfully');
       
-      // Don't remove temp message here - let websocket handler do it when real message arrives
-      // currentMessages.value = currentMessages.value.filter(m => m.id !== tempUserMessage.id);
+      // Remove temp message and add the real user message
+      currentMessages.value = currentMessages.value.filter(m => m.id !== tempUserMessage.id);
+      currentMessages.value.push(response.data);
+      
+      // For ask-question flow, handle bot response directly from API
+      if (selectedOption.value?.id === 'ask-question') {
+        if (response.botResponse) {
+          console.log('Bot response received directly from API:', response.botResponse);
+          
+          // Add bot response to messages
+          currentMessages.value.push(response.botResponse);
+          
+          // Hide typing indicator
+          isWaitingForResponse.value = false;
+          
+          // Scroll to show bot response
+          await nextTick();
+          await scrollToBottomSoon();
+        } else {
+          // If no bot response received, hide typing indicator after a timeout
+          console.warn('No bot response received from API for ask-question flow');
+          setTimeout(() => {
+            if (isWaitingForResponse.value) {
+              isWaitingForResponse.value = false;
+              console.log('Typing indicator hidden after timeout');
+            }
+          }, 30000); // 30 second timeout
+        }
+      }
       
       // Upload attachments if any
       if (attachedFiles.value.length > 0) {
@@ -1047,11 +1090,6 @@ const sendMessage = async () => {
       
       // Re-enable input immediately after successful message send
       isSubmitting.value = false;
-      
-      // Poll for bot response (wait up to 30 seconds) - but keep input enabled
-      if (selectedOption.value?.id === 'ask-question') {
-        await pollForBotResponse(currentConversationId.value, response.data.id);
-      }
     } else {
       throw new Error('Failed to send message');
     }
@@ -1063,56 +1101,7 @@ const sendMessage = async () => {
   }
 };
 
-const pollForBotResponse = async (conversationId, lastMessageId) => {
-  const maxAttempts = 30; // Poll for up to 30 seconds
-  let attempts = 0;
-  
-  const poll = async () => {
-    if (attempts >= maxAttempts) {
-      console.log('Polling timeout - no bot response received');
-      isWaitingForResponse.value = false;
-      return;
-    }
-    
-    try {
-      // Fetch latest messages for this conversation
-      const response = await supportChatService.getConversationById(conversationId);
-      
-      if (response.success && response.data.messages) {
-        // Check if there's a new bot/AI message after our last message
-        const botMessages = response.data.messages.filter(
-          m => (m.senderType === 'bot' || m.senderType === 'ai') && m.id > lastMessageId
-        );
-        
-        if (botMessages.length > 0) {
-          // Add bot messages to current messages
-          botMessages.forEach(botMsg => {
-            const exists = currentMessages.value.find(m => m.id === botMsg.id);
-            if (!exists) {
-              currentMessages.value.push(botMsg);
-            }
-          });
-          
-          // Wait for UI to update before hiding typing indicator
-          await scrollToBottomSoon();
-          isWaitingForResponse.value = false;
-          await scrollToBottomSoon();
-          return; // Stop polling
-        }
-      }
-      
-      // Continue polling
-      attempts++;
-      setTimeout(poll, 1000); // Poll every second
-    } catch (error) {
-      console.error('Error polling for bot response:', error);
-      isWaitingForResponse.value = false;
-    }
-  };
-  
-  // Start polling after a short delay
-  setTimeout(poll, 1000);
-};
+// Polling removed - FCM handles real-time message updates
 
 // Bug reports and feature requests are now stored as conversation metadata
 // when the conversation is created - no separate functions needed

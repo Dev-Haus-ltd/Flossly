@@ -1,4 +1,4 @@
-import { webhook, connect, qr, status, disconnect, deleteChannel, extendChannel, listChannels } from "../../controllers/whapi";
+import { webhook, connect, qr, status, disconnect, deleteChannel, extendChannel, listChannels, stream } from "../../controllers/whapi";
 
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, "name");
@@ -19,6 +19,8 @@ export default defineEventHandler(async (event) => {
       return await deleteChannel(event);
     case "extend":
       return await extendChannel(event);
+    case "stream":
+      return await stream(event);
     default:
       return { code: 0, error: "Not found" };
   }

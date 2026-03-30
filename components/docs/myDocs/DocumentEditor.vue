@@ -30,6 +30,8 @@ const editor = ref(null)
 const documentKey = ref(0)
 let pendingInit = null
 let isDestroyed = false
+const MAX_RENDER_WAIT_MS = 20000
+const RENDER_POLL_MS = 150
 
 // Method to export document as blob
 const exportDocument = async () => {
@@ -111,6 +113,34 @@ const cancelScheduledInit = () => {
   pendingInit = null
 }
 
+const hasVisibleDocumentContent = () => {
+  if (typeof document === 'undefined') return false
+  const editorEl = document.getElementById(editorId.value)
+  if (!editorEl) return false
+
+  if (
+    editorEl.querySelector(
+      "canvas, svg, iframe, [contenteditable='true'], .ProseMirror, .page, .document"
+    )
+  ) {
+    return true
+  }
+
+  const text = editorEl.textContent?.trim() || ''
+  if (text.length > 0) return true
+
+  return editorEl.childElementCount > 0 && editorEl.scrollHeight > 180
+}
+
+const waitForRenderedDocument = async () => {
+  const start = Date.now()
+  while (!isDestroyed && Date.now() - start < MAX_RENDER_WAIT_MS) {
+    if (hasVisibleDocumentContent()) return true
+    await new Promise((resolve) => setTimeout(resolve, RENDER_POLL_MS))
+  }
+  return false
+}
+
 // Function to initialize editor
 const initializeEditor = async () => {
   try {
@@ -139,9 +169,10 @@ const initializeEditor = async () => {
         documentMode: props.readOnly ? 'viewing' : 'editing',
         pagination: false,
         rulers: false,
-        onReady: (event) => {
+        onReady: async (event) => {
           console.log('SuperDoc is ready', event)
-          emit('editor-ready', editor.value)
+          const rendered = await waitForRenderedDocument()
+          emit('editor-ready', { editor: editor.value, rendered })
         },
         onEditorCreate: (event) => {
           console.log('Editor is created', event)

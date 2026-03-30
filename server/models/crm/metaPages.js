@@ -10,6 +10,7 @@ export const MetaPage = sequelize.define(
     pageId: { type: DataTypes.STRING(50), allowNull: false },
     pageName: { type: DataTypes.STRING(200), allowNull: true },
     accessTokenEnc: { type: DataTypes.TEXT, allowNull: false },
+    businessId: { type: DataTypes.STRING(50), allowNull: true },
     connectedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     status: { type: DataTypes.ENUM('Active','Revoked'), allowNull: false, defaultValue: 'Active' },
   },

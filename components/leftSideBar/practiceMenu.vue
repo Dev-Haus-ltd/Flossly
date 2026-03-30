@@ -70,7 +70,9 @@ const { currentOrg, rail } = defineProps({
   rail: Boolean,
 });
 const router = useRouter();
+const route = useRoute();
 const authStore = useAuthStore();
+const crmStore = useCrmStore();
 const mainStore = useMainStore();
 const orgStore = useOrgStore();
 const { user, canAddWorkspace, setUser } = useUser();
@@ -134,7 +136,10 @@ const handleOrgClick = async (org) => {
         title: "Organisation switched successfully",
       });
       menu.value = false;
-      getProfile();
+      crmStore.resetMetaAnalyticsState();
+      // Clear all query params so stale leadId/campaignId from previous org don't trigger warnings
+      await router.replace({ path: route.path, query: {} });
+      await getProfile();
     } else {
       mainStore.setSnackbar({
         type: "error",

@@ -1,88 +1,92 @@
 <template>
   <v-card class="chat-timeline-card mt-5" variant="outlined">
-  <v-card-title class="d-flex align-center justify-end">
-    <v-btn size="small" variant="text" :loading="loading" @click="loadLogs">
-      Refresh
-    </v-btn>
-  </v-card-title>
-    <v-divider />
-    <v-card-text class="chat-timeline-body">
-      <div v-if="loading" class="text-caption text-medium-emphasis">
-        Loading messages...
-      </div>
-      <div v-else-if="!chatItems.length" class="text-caption text-medium-emphasis">
-        {{ emptyMessage }}
-      </div>
-      <div v-else class="chat-timeline-list">
-        <template v-for="group in groupedChatItems" :key="group.key">
-          <div class="chat-day-pill">{{ group.label }}</div>
-          <CommonChatBubble
-            v-for="row in group.items"
-            :key="row.id"
-            :is-outbound="row.isOutbound"
-            :sender="row.sender"
-            :message="row.message"
-            :timestamp="row.timeLabel"
-            :status-icon="row.statusIcon"
-            :avatar-url="row.avatarUrl"
-            :avatar-text="row.avatarText"
-            :automated="row.automated"
-          />
-        </template>
-      </div>
-    </v-card-text>
-    <v-divider />
-    <div class="chat-input-bar">
-      <div class="chat-input-left">
-        <v-menu v-model="emojiMenu" offset-y>
-          <template #activator="{ props: menuProps }">
-            <v-btn v-bind="menuProps" icon variant="text" size="small">
-              <v-icon size="18">mdi-emoticon-outline</v-icon>
-            </v-btn>
-          </template>
-          <ClientOnly>
-            <div class="emoji-menu">
-              <emoji-picker
-                class="emoji-picker"
-                @emoji-click="onEmojiClick"
-              />
-            </div>
-          </ClientOnly>
-        </v-menu>
-      </div>
-      <v-text-field
-        v-model="draftMessage"
-        placeholder="Type here..."
-        variant="solo"
-        density="compact"
-        hide-details
-        flat
-        bg-color="#FFFFFF"
-        class="chat-input-field"
-        @keydown.enter.prevent="sendMessage"
-      />
-      <v-btn
-        icon
-        color="primary"
-        variant="flat"
-        class="chat-send-btn"
-        :loading="sending"
-        :disabled="!canSend"
-        @click="sendMessage"
-      >
-        <v-icon size="20">mdi-send</v-icon>
-      </v-btn>
+    <div v-if="!connected" class="ma-4">
+      <CommonWhatsAppNotConnectedAlert />
     </div>
+    <template v-else>
+      <v-card-title class="d-flex align-center justify-end">
+        <v-btn size="small" variant="text" :loading="loading" @click="loadLogs">
+          Refresh
+        </v-btn>
+      </v-card-title>
+      <v-divider />
+      <v-card-text class="chat-timeline-body">
+        <div v-if="loading" class="text-caption text-medium-emphasis">
+          Loading messages...
+        </div>
+        <div v-else-if="!chatItems.length" class="text-caption text-medium-emphasis">
+          {{ emptyMessage }}
+        </div>
+        <div v-else class="chat-timeline-list">
+          <template v-for="group in groupedChatItems" :key="group.key">
+            <div class="chat-day-pill">{{ group.label }}</div>
+            <CommonChatBubble
+              v-for="row in group.items"
+              :key="row.id"
+              :is-outbound="row.isOutbound"
+              :sender="row.sender"
+              :message="row.message"
+              :timestamp="row.timeLabel"
+              :status-icon="row.statusIcon"
+              :avatar-url="row.avatarUrl"
+              :avatar-text="row.avatarText"
+              :automated="row.automated"
+            />
+          </template>
+        </div>
+      </v-card-text>
+      <v-divider />
+      <div class="chat-input-bar">
+        <div class="chat-input-left">
+          <v-menu v-model="emojiMenu" offset-y>
+            <template #activator="{ props: menuProps }">
+              <v-btn v-bind="menuProps" icon variant="text" size="small">
+                <v-icon size="18">mdi-emoticon-outline</v-icon>
+              </v-btn>
+            </template>
+            <ClientOnly>
+              <div class="emoji-menu">
+                <emoji-picker
+                  class="emoji-picker"
+                  @emoji-click="onEmojiClick"
+                />
+              </div>
+            </ClientOnly>
+          </v-menu>
+        </div>
+        <v-text-field
+          v-model="draftMessage"
+          placeholder="Type here..."
+          variant="solo"
+          density="compact"
+          hide-details
+          flat
+          bg-color="#FFFFFF"
+          class="chat-input-field"
+          @keydown.enter.prevent="sendMessage"
+        />
+        <v-btn
+          icon
+          color="primary"
+          variant="flat"
+          class="chat-send-btn"
+          :loading="sending"
+          :disabled="!canSend"
+          @click="sendMessage"
+        >
+          <v-icon size="20">mdi-send</v-icon>
+        </v-btn>
+      </div>
+    </template>
   </v-card>
 </template>
 
 <script setup>
 import { parsedDate } from "@/lib/dateFormatter";
 import CommonChatBubble from "@/components/Common/chatBubble.vue";
+import CommonWhatsAppNotConnectedAlert from "@/components/Common/WhatsAppNotConnectedAlert.vue";
 import { useMainStore } from "@/stores/index";
-if (process.client) {
-  import("emoji-picker-element");
-}
+import { useCrmStore } from "@/stores/crm";
 
 const props = defineProps({
   leadId: {
@@ -117,6 +121,10 @@ const props = defineProps({
     type: String,
     default: "Flossly",
   },
+  connected: {
+    type: Boolean,
+    default: true,
+  },
 });
 
 const crmStore = useCrmStore();
@@ -126,22 +134,21 @@ const logs = ref([]);
 const draftMessage = ref("");
 const sending = ref(false);
 const emojiMenu = ref(false);
+const pendingFiles = ref([]);
+const messageCursor = ref(null);
+const messageHasMore = ref(true);
+const loadingMore = ref(false);
 
 
 const resolvedOrg = ref({ name: "", logo: "" });
 const resolvedLead = ref({ name: "", avatar: "" });
+let whapiPollTimer = null;
 
 const canSend = computed(() => {
-  return !!props.leadId && String(draftMessage.value || "").trim().length > 0 && !sending.value;
+  const hasText = String(draftMessage.value || "").trim().length > 0;
+  const hasFiles = pendingFiles.value.length > 0;
+  return !!props.leadId && (hasText || hasFiles) && !sending.value;
 });
-
-const getInitials = (value) => {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-  const parts = raw.split(/\s+/).filter(Boolean);
-  const letters = parts.slice(0, 2).map((p) => p[0]?.toUpperCase() || "");
-  return letters.join("");
-};
 
 const chatItems = computed(() => {
   if (!Array.isArray(logs.value)) return [];
@@ -237,8 +244,15 @@ const loadLogs = async () => {
   try {
     loading.value = true;
     const res = await crmStore.getLeadWhatsAppLogs(props.leadId, 100);
-    if (res?.code === 0 && Array.isArray(res.data)) {
-      logs.value = res.data;
+    const rows = Array.isArray(res?.data?.data)
+      ? res.data.data
+      : Array.isArray(res?.data)
+        ? res.data
+        : [];
+    if (res?.code === 0) {
+      logs.value = rows;
+      messageCursor.value = res.data?.nextCursor || null;
+      messageHasMore.value = !!res.data?.nextCursor;
       return;
     }
     logs.value = [];
@@ -249,18 +263,52 @@ const loadLogs = async () => {
   }
 };
 
+const loadMore = async () => {
+  if (!props.leadId || !messageHasMore.value || loadingMore.value) return;
+  try {
+    loadingMore.value = true;
+    const res = await crmStore.getLeadWhatsAppLogs(props.leadId, 100);
+    if (res?.code === 0 && Array.isArray(res.data?.data)) {
+      const older = res.data.data;
+      logs.value = [...logs.value, ...older];
+      messageCursor.value = res.data?.nextCursor || null;
+      if (!older.length || !res.data?.nextCursor) messageHasMore.value = false;
+    } else {
+      messageHasMore.value = false;
+    }
+  } finally {
+    loadingMore.value = false;
+  }
+};
+
 const sendMessage = async () => {
   if (!canSend.value) return;
   const message = String(draftMessage.value || "").trim();
-  if (!message) return;
   try {
     sending.value = true;
+    let attachments = [];
+    if (pendingFiles.value.length) {
+      for (const file of pendingFiles.value) {
+        const form = new FormData();
+        form.append("file", file);
+        const resUpload = await crmStore.uploadLeadAttachment(form);
+        if (resUpload?.code !== 0) {
+          const msg = resUpload?.error || resUpload?.message || "Failed to upload attachment";
+          mainStore?.setSnackbar?.({ title: msg, type: "error" });
+          sending.value = false;
+          return;
+        }
+        if (resUpload?.data) attachments.push(resUpload.data);
+      }
+    }
     const res = await crmStore.sendLeadWhatsApp({
       leadIds: [Number(props.leadId)],
       message,
+      attachments,
     });
     if (res?.code === 0) {
       draftMessage.value = "";
+      pendingFiles.value = [];
       await loadLogs();
       return;
     }
@@ -279,6 +327,22 @@ const onEmojiClick = (event) => {
   if (!symbol) return;
   draftMessage.value = `${draftMessage.value || ""}${symbol}`;
   emojiMenu.value = false;
+};
+
+const stopWhapiPoll = () => {
+  if (!whapiPollTimer) return;
+  clearInterval(whapiPollTimer);
+  whapiPollTimer = null;
+};
+
+const stopWhapiStream = () => {};
+
+const startWhapiStream = () => {
+  stopWhapiPoll();
+  if (!props.connected || !props.leadId) return;
+  whapiPollTimer = setInterval(() => {
+    loadLogs();
+  }, 15000);
 };
 
 const resolveContext = () => {
@@ -306,13 +370,27 @@ const resolveContext = () => {
 };
 
 watch(
-  () => [props.leadId, props.leadName, props.leadAvatar, props.orgName, props.orgLogo],
+  () => [props.leadId, props.leadName, props.leadAvatar, props.orgName, props.orgLogo, props.connected],
   () => {
     resolveContext();
+    messageCursor.value = null;
+    messageHasMore.value = true;
+    stopWhapiStream();
+    stopWhapiPoll();
+    if (!props.connected) {
+      logs.value = [];
+      return;
+    }
     loadLogs();
+    startWhapiStream();
   },
   { immediate: true }
 );
+
+onBeforeUnmount(() => {
+  stopWhapiPoll();
+  stopWhapiStream();
+});
 </script>
 
 <style scoped>

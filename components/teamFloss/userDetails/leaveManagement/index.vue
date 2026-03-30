@@ -157,7 +157,7 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import Annual from "@/assets/icons/teamfloss/total.svg";
 import Sick from "@/assets/icons/teamfloss/birthday.svg";
 import Training from "@/assets/icons/teamfloss/pending.svg";
-import { parsedDate } from "~/lib/dateFormatter";
+import { formatDateDDMMYYYY } from "~/lib/dateFormatter";
 
 const { user } = defineProps({
   user: Object,
@@ -207,7 +207,7 @@ const filteredLeaves = computed(() => {
 });
 
 const formatDate = (date) => {
-  return parsedDate(date);
+  return formatDateDDMMYYYY(date);
 };
 // status chip styling
 const statusChipClass = (status) => {
@@ -286,6 +286,16 @@ watch([leaveHistory, entitlementStats], () => {
     // Force re-render of cards
   });
 }, { deep: true });
+
+watch(
+  () => userStore.currentLeaveEntitlement,
+  (newEntitlement) => {
+    if (newEntitlement && newEntitlement.userId === user?.id) {
+      entitlementStats.value = { ...entitlementStats.value, ...newEntitlement };
+    }
+  },
+  { deep: true }
+);
 
 const handleSuccess = (data) => {
   openDrawer.value = false;

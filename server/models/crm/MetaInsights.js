@@ -9,7 +9,6 @@ export const MetaInsight = sequelize.define(
     organisationId: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      references: { model: 'Organisations', key: 'id' },
     },
 
     entityType: {
@@ -23,8 +22,11 @@ export const MetaInsight = sequelize.define(
 
     impressions: { type: DataTypes.INTEGER, allowNull: true },
     clicks: { type: DataTypes.INTEGER, allowNull: true },
-    spend: { type: DataTypes.INTEGER, allowNull: true }, // minor units
+    spend: { type: DataTypes.INTEGER, allowNull: true }, // minor units (pence/cents)
     leads: { type: DataTypes.INTEGER, allowNull: true },
+    reach: { type: DataTypes.INTEGER, allowNull: true },
+    frequency: { type: DataTypes.FLOAT, allowNull: true },
+    purchase_roas: { type: DataTypes.FLOAT, allowNull: true },
 
     cpc: { type: DataTypes.FLOAT, allowNull: true },
     ctr: { type: DataTypes.FLOAT, allowNull: true },
@@ -34,7 +36,8 @@ export const MetaInsight = sequelize.define(
     modelName: 'MetaInsights',
     timestamps: true,
     indexes: [
-      { fields: ['organisationId', 'entityType', 'entityId', 'date'] },
+      // Unique: one row per entity per day — prevents duplicate inserts on every sync run
+      { unique: true, fields: ['organisationId', 'entityType', 'entityId', 'date'] },
       { fields: ['organisationId', 'date'] },
     ],
   }

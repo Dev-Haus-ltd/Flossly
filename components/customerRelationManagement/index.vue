@@ -21,6 +21,18 @@
       </v-row>
     </div>
     <div class="mt-5 px-5">
+      <v-alert
+        v-if="activeCampaignFilter"
+        type="info"
+        variant="tonal"
+        density="compact"
+        rounded="lg"
+        class="mb-3"
+        closable
+        @click:close="clearCampaignFilter"
+      >
+        Showing leads filtered by campaign: <strong>{{ activeCampaignFilter }}</strong>
+      </v-alert>
       <div class="d-flex align-center mb-2" style="flex-wrap: nowrap; justify-content: space-between; overflow-x: auto;">
         <!-- Left: Search + Filters -->
         <div class="d-inline-flex align-center toolbar-wrapper" style="flex-wrap: nowrap;">
@@ -51,6 +63,7 @@
           <CustomerRelationManagementFilterMenu
             :leadSources="leadSources"
             :treatmentSources="treatmentSources"
+            :alertOptions="alertOptions.length ? alertOptions : DEFAULT_ALERT_OPTIONS"
             @update:filters="onLeadsFilterUpdate"
           />
         </div>
@@ -103,7 +116,7 @@
 
       <!-- List View (child) -->
       <CustomerRelationManagementListView
-        v-if="!isLoading && (activeLeads.length || archivedLeads.length)"
+        v-if="!isLoading && (activeLeads.length || archivedLeads.length || route.query.leadId)"
         :active-leads="activeLeads"
         :archived-leads="archivedLeads"
         :active-total="activeTotal"
@@ -116,9 +129,12 @@
         :leadSources="leadSources"
         :treatmentSources="treatmentSources"
         :users="userList"
+        :alert-options="alertOptions"
+        :whatsapp-connected="isAnyWhatsAppConnected"
         @select="onSelect"
-        @delete="onDeleteSelected"
         @book="onBookLeads"
+        @refresh="handleLeadsRefresh"
+        @alert-options-saved="onAlertOptionsSaved"
         @update:activePage="onActivePageChange"
         @update:archivedPage="onArchivedPageChange"
         @update:itemsPerPage="onItemsPerPageChange"
@@ -210,6 +226,7 @@
         :loading="metaHealthLoading"
         :data="metaHealthData"
       />
+
 
       <v-dialog v-model="whapiDialog" max-width="520">
         <v-card class="pa-4">
@@ -438,6 +455,7 @@ import { useCrmStore } from '@/stores/crm'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
 import searchicon from "@/assets/icons/listView/serach-icon.svg";
+import crmService from '@/services/crmService'
 const crmStore = useCrmStore();
 const userStore = useUserStore();
 const { users: storeUsers } = storeToRefs(userStore);
@@ -494,6 +512,9 @@ const whapiActivationPending = ref(false);
 const whapiActivationMessage = ref('');
 const whapiCooldown = ref(0);
 let whapiCooldownTimer = null;
+const isAnyWhatsAppConnected = computed(() =>
+  whatsappProvider.provider === 'whapi' ? whapiStatus.connected : isWhatsAppConnected.value
+);
 const whapiStatusLabel = computed(() => {
   const raw = String(whapiStatus.status || '').trim().toLowerCase();
   const hasPhone = !!(whapiStatus.phoneNumber || whapiStatus.displayName);
@@ -566,7 +587,7 @@ const whatsAppStatus = reactive({
   verifiedName: '',
 });
 const whatsAppUsage = reactive({ count: 0, limit: 0 });
-const isLoading = ref(false);
+const isLoading = ref(true);
 const showBookingDrawer = ref(false);
 const bookingLead = ref(null);
 const bookingDateInput = ref(new Date().toISOString().slice(0,10));
@@ -666,6 +687,11 @@ const headers = [
 const leadSources = ref([]);
 const treatmentSources = ref([]);
 const activeFilters = ref({});
+const activeCampaignFilter = computed(() => activeFilters.value?.campaignId || null);
+const clearCampaignFilter = async () => {
+  activeFilters.value = {};
+  await fetchLeads({});
+};
 const onLeadsFilterUpdate = async (filters) => {
   activeFilters.value = filters || {};
   activePage.value = 1;
@@ -1166,15 +1192,32 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stopMetaStream();
 });
+const alertOptions = ref([])
+
+const DEFAULT_ALERT_OPTIONS = [
+  { key: 'hot',      label: 'Hot lead alerts',          emoji: '🔥', color: 'error' },
+  { key: 'time',     label: 'Time-sensitive deadlines',  emoji: '⏰', color: 'warning' },
+  { key: 'value',    label: 'High-value opportunity',    emoji: '💸', color: 'tertiary' },
+  { key: 'follow',   label: 'Follow-up reminders',       emoji: '🔄', color: 'info' },
+  { key: 'callback', label: 'Callback scheduled',        emoji: '📞', color: 'success' },
+  { key: 'none',     label: 'No response warnings',      emoji: '🚨', color: 'on-surface' },
+]
+
 const initOptions = async () => {
   try {
-    const [src, tr] = await Promise.all([
+    const [src, tr, al] = await Promise.all([
       crmStore.listOptions('lead_source'),
       crmStore.listOptions('treatment'),
+      crmService.getAlertOptions(),
     ])
     if (src?.code === 0) leadSources.value = (src.data || []).map(o => ({ id: o.id, name: o.name }))
     if (tr?.code === 0) treatmentSources.value = (tr.data || []).map(o => ({ id: o.id, name: o.name }))
+    if (al?.code === 0 && al.data?.length) alertOptions.value = al.data
   } catch (e) {}
+}
+
+const onAlertOptionsSaved = (options) => {
+  alertOptions.value = options
 }
 
 const normalizeDateInput = (value) => {
@@ -1422,6 +1465,13 @@ const fetchLeads = async (filters = {}) => {
   }
 };
 
+// Background refresh — does NOT toggle isLoading so the table stays mounted
+const silentRefreshLeads = async (filters = {}) => {
+  try {
+    await Promise.all([fetchActiveLeads(filters), fetchArchivedLeads(filters)]);
+  } catch {}
+};
+
 const onActivePageChange = async (val) => {
   if (activePage.value === val) return;
   activePage.value = val;
@@ -1442,6 +1492,10 @@ const onItemsPerPageChange = async (val) => {
   await fetchLeads(activeFilters.value);
 };
 
+const handleLeadsRefresh = async () => {
+  await fetchLeads(activeFilters.value);
+};
+
 const initLeads = async (metaConnected = false) => {
   if (metaConnected) {
     try {
@@ -1455,7 +1509,13 @@ const initLeads = async (metaConnected = false) => {
       console.error('[CRM] Meta post-connect sync failed', e);
     }
   }
-  await fetchLeads()
+  // Pre-filter by campaign if navigated from the analytics page
+  const campaignId = route.query.campaignId || null;
+  if (campaignId) {
+    activeFilters.value = { campaignId };
+  }
+  await fetchLeads(activeFilters.value)
+
 };
 
 const integrateMeta = async () => {
@@ -1508,7 +1568,7 @@ const startLeadsPolling = () => {
   if (leadsPollTimer) return;
   leadsPollTimer = setInterval(async () => {
     if (!isConnected.value || isLoading.value) return;
-    await fetchLeads(activeFilters.value);
+    await silentRefreshLeads(activeFilters.value);
   }, 20000);
 };
 const stopLeadsPolling = () => {
@@ -1527,7 +1587,7 @@ const startMetaStream = () => {
   metaEventSource = new EventSource('/api/meta/stream');
   metaEventSource.addEventListener('lead', async () => {
     if (isLoading.value) return;
-    await fetchLeads(activeFilters.value);
+    await silentRefreshLeads(activeFilters.value);
   });
   metaEventSource.onerror = () => {
     stopMetaStream();
@@ -1625,15 +1685,6 @@ watch(selectedBusinessId, () => {
   selectedPageIds.value = [];
   businessPageSearch.value = '';
 })
-
-const onDeleteSelected = async (ids) => {
-  try {
-    const res = await crmStore.deleteLeads(ids)
-    if (res && res.code === 0) {
-      await fetchLeads(activeFilters.value)
-    }
-  } catch (e) {}
-}
 
 watch(isConnected, (val) => {
   if (val) startMetaStream();

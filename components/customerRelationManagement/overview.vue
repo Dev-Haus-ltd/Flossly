@@ -37,16 +37,26 @@
               </v-btn>
               <v-btn
                 v-if="isMetaConnected"
+                color="primary"
+                variant="outlined"
+                rounded="lg"
+                class="action-btn"
+                @click="integrateMeta"
+              >
+                Reconnect
+              </v-btn>
+              <v-btn
+                v-if="isMetaConnected"
                 color="grey-darken-1"
                 variant="outlined"
                 rounded="lg"
                 class="action-btn"
-                @click="startDisconnectMeta"
+                @click="disconnectMeta"
               >
                 Disconnect
               </v-btn>
               <v-btn
-                v-else
+                v-if="!isMetaConnected"
                 color="primary"
                 variant="flat"
                 rounded="lg"
@@ -98,6 +108,54 @@
                 WhatsApp is available on paid plans only.
               </span>
             </template>
+            <!-- GOOGLE 
+            <template v-else-if="card.key === 'google'">
+              <v-btn
+                color="primary"
+                variant="outlined"
+                rounded="lg"
+                class="action-btn"
+                :disabled="!isGoogleConnected"
+                @click="openGoogleHealth"
+              >
+                Google Health
+              </v-btn>
+              <v-btn
+                v-if="isGoogleConnected"
+                color="grey-darken-1"
+                variant="outlined"
+                rounded="lg"
+                class="action-btn"
+                @click="disconnectGoogle"
+                :loading="googleDisconnecting"
+              >
+                Disconnect
+              </v-btn>
+              <v-btn
+                v-else
+                color="primary"
+                variant="flat"
+                rounded="lg"
+                class="action-btn action-btn--primary"
+                :loading="googleConnecting"
+                @click="connectGoogle"
+              >
+                Connect
+              </v-btn>
+            </template> 
+            -->
+            <!-- GOOGLE placed temperory above implementation is functional -->
+            <template v-else-if="card.key === 'google'">
+              <v-btn
+                color="primary"
+                variant="flat"
+                rounded="lg"
+                class="action-btn action-btn--primary"
+                disabled
+              >
+                Coming Soon
+              </v-btn>
+            </template>
             <template v-else>
               <v-btn
                 color="primary"
@@ -127,46 +185,49 @@
       </v-alert>
 
       <div class="conversion-grid mt-8">
-        <v-card class="conversion-card" elevation="0" rounded="lg">
-          <h4 class="card-head">Leads Conversion</h4>
-          <div class="card-body">
-            <div class="chart-shell">
-              <canvas ref="leadChartRef" />
-            </div>
-            <div class="chart-legend">
-              <div class="legend-item">
-                <span class="dot total"></span>
-                <span>Total Lead</span>
-              </div>
-              <div class="legend-item">
-                <span class="dot converted"></span>
-                <span>Converted Leads</span>
-              </div>
-            </div>
-            <div class="lead-stats">
-              <div class="stat-row">
-                <span>Total Leads (this month)</span>
-                <span>{{ monthlySummary.total }}</span>
-              </div>
-              <div class="stat-row">
-                <span>New Leads</span>
-                <span>{{ monthlySummary.new }}</span>
-              </div>
-              <div class="stat-row">
-                <span>Converted</span>
-                <span>{{ monthlySummary.converted }}</span>
-              </div>
-              <div class="stat-row">
-                <span>Contacted</span>
-                <span>{{ monthlySummary.contacted }}</span>
-              </div>
-              <div class="stat-row">
-                <span>Lost</span>
-                <span>{{ monthlySummary.lost }}</span>
-              </div>
-            </div>
-          </div>
-        </v-card>
+        <CrmCharts
+          :chartType="leadsChartType"
+          :chartTitle="leadsChartConfig.chartTitle"
+          :chartSubtitle="leadsChartConfig.chartSubtitle"
+          :chartData="leadsChartConfig.chartData"
+          :summaryStats="leadsChartConfig.summaryStats"
+          :chartHeight="'320px'"
+          :showLegend="true"
+          :legendPosition="'bottom'"
+          :isLoading="leadsChartLoading"
+          :showFallback="!leadsChartLoading && leadRows.length === 0"
+          :error="leadsChartError"
+        />
+
+        <CrmCharts
+          :chartType="'bar'"
+          :chartTitle="metaChartConfig.chartTitle"
+          :chartSubtitle="metaChartConfig.chartSubtitle"
+          :chartData="metaChartConfig.chartData"
+          :summaryStats="metaChartConfig.summaryStats"
+          :chartHeight="'320px'"
+          :showLegend="true"
+          :legendPosition="'bottom'"
+          :isLoading="metaChartLoading"
+          :showFallback="!metaChartLoading && (!isMetaConnected || metaChartConfig.chartData.datasets.length === 0)"
+          :error="metaChartError"
+        />
+
+        <!-- GOOGLE ANALYTICS CHART — hidden until Google integration is live on prod
+        <CrmCharts
+          :chartType="'line'"
+          :chartTitle="gscChartConfig.chartTitle"
+          :chartSubtitle="gscChartConfig.chartSubtitle"
+          :chartData="gscChartConfig.chartData"
+          :summaryStats="gscChartConfig.summaryStats"
+          :chartHeight="'320px'"
+          :showLegend="true"
+          :legendPosition="'bottom'"
+          :isLoading="gscChartLoading"
+          :showFallback="!gscChartLoading && (!isGoogleConnected || gscChartConfig.chartData.datasets.length === 0)"
+          :error="gscChartError"
+        />
+        -->
       </div>
     </div>
 
@@ -174,6 +235,17 @@
       v-model="metaHealthDialog"
       :loading="metaHealthLoading"
       :data="metaHealthData"
+    />
+
+    <ConfirmDialog
+      v-model="metaDisconnectDialog"
+      title="Disconnect Meta?"
+      confirm-text="Disconnect"
+      icon="mdi-link-off"
+      :loading="metaDisconnecting"
+      message="Disconnecting Meta will stop new leads, page subscriptions, and future analytics syncs for this organisation. Existing historical analytics will remain visible until new data is synced again after reconnecting."
+      @cancel="metaDisconnectDialog = false"
+      @confirm="disconnectMeta"
     />
 
     <v-dialog v-model="whapiDialog" max-width="560">
@@ -196,48 +268,55 @@
         </v-card-title>
         <v-card-text class="pa-0">
           <v-alert
-            v-if="!isWhatsAppConnected"
-            type="warning"
-            variant="tonal"
-            class="mb-3"
-          >
-            This channel is not active. Messaging will fail until the WhatsApp channel is active.
-          </v-alert>
-          <v-alert
-            v-else-if="whapiQrWarning"
+            v-if="whapiQrWarning"
             type="warning"
             variant="tonal"
             class="mb-3"
           >
             {{ whapiQrWarning }}
           </v-alert>
-          <div v-if="whapiQr" class="d-flex flex-column align-center gap-2">
-            <img :src="whapiQr" alt="WhatsApp QR" style="max-width: 260px;" />
-            <div class="text-caption text-medium-emphasis">
-              Scan this QR code using WhatsApp on the phone you want to connect or switch to.
+
+          <!-- QR ready: show code + instructions -->
+          <div v-if="whapiQr" class="d-flex flex-column align-center gap-3">
+            <img :src="whapiQr" alt="WhatsApp QR" style="max-width: 240px; border-radius: 12px;" />
+            <div class="whapi-scan-instructions">
+              <p class="text-caption font-weight-medium mb-2">How to scan:</p>
+              <ol class="text-caption text-medium-emphasis whapi-steps">
+                <li>Open WhatsApp on your phone</li>
+                <li>Tap <strong>⋮</strong> (Android) or <strong>Settings</strong> (iPhone)</li>
+                <li>Select <strong>Linked Devices → Link a Device</strong></li>
+                <li>Point your camera at this QR code</li>
+              </ol>
             </div>
           </div>
-          <v-alert
-            v-else-if="whapiDisplayLabel"
-            type="info"
-            variant="tonal"
-            class="mb-2"
-          >
-            Connected phone: {{ whapiDisplayLabel }}
-          </v-alert>
-          <v-alert v-else type="info" variant="tonal" class="mb-2">
-            QR code not ready yet. Please refresh in a moment.
-          </v-alert>
+
+          <!-- Already connected: show phone label -->
+          <div v-else-if="whapiDisplayLabel && isWhatsAppConnected" class="d-flex flex-column align-center gap-2 py-4">
+            <v-icon color="success" size="40">mdi-check-circle</v-icon>
+            <p class="text-body-2 font-weight-medium">Connected</p>
+            <p class="text-caption text-medium-emphasis">{{ whapiDisplayLabel }}</p>
+          </div>
+
+          <!-- Waiting for QR: auto-polling in progress -->
+          <div v-else class="d-flex flex-column align-center gap-3 py-4">
+            <v-progress-circular indeterminate color="primary" size="48" />
+            <p class="text-body-2 font-weight-medium">Setting up your WhatsApp channel…</p>
+            <p class="text-caption text-medium-emphasis text-center">
+              This usually takes up to 60 seconds.<br />
+              The QR code will appear here automatically — no need to refresh.
+            </p>
+          </div>
         </v-card-text>
         <v-card-actions class="pa-0 mt-4">
           <v-spacer />
           <v-btn
+            v-if="whapiQr"
             :loading="whapiLoading"
-            variant="flat"
-            color="primary"
+            variant="outlined"
+            color="grey-darken-1"
             @click="refreshWhapiQr"
           >
-            {{ whapiQrCtaLabel }}
+            Refresh QR
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -326,6 +405,17 @@
       </v-card>
     </v-dialog>
 
+    <ConfirmDialog
+      v-model="whapiSingleLogoutConfirm"
+      title="Disconnect WhatsApp?"
+      confirm-text="Disconnect"
+      icon="mdi-whatsapp"
+      :loading="whapiDisconnecting"
+      message="This will log out the connected WhatsApp number from this organisation. You will need to reconnect and scan a new QR code to use WhatsApp messaging again."
+      @cancel="whapiSingleLogoutConfirm = false"
+      @confirm="confirmWhapiSingleLogout"
+    />
+
     <v-dialog v-model="whapiLogoutConfirm" max-width="560">
       <v-card class="pa-5 rounded-xl">
         <v-card-title class="text-subtitle-1 pa-0 mb-2 d-flex align-center justify-space-between">
@@ -382,9 +472,13 @@ import { useCrmStore } from '@/stores/crm'
 import { useMainStore } from '@/stores/index'
 import { useAuthStore } from '@/stores/auth'
 import CustomerRelationManagementMetaHealthDialog from '@/components/customerRelationManagement/metaHealthDialog.vue'
+import ConfirmDialog from '@/components/Common/ConfirmDialog.vue'
 import IntegrationCard from '@/components/customerRelationManagement/IntegrationCard.vue'
+import CrmCharts from '@/components/customerRelationManagement/CrmCharts.vue'
+import { transformLeadsConversionData, transformMetaInsightsData, transformGoogleSearchConsoleData } from '@/composables/useChartAdapters'
 import metaLogo from '@/assets/crm/meta-logo.svg'
 import whatsappLogo from '@/assets/crm/whatsapp-logo.svg'
+import googleLogo from '@/assets/crm/google-logo.svg'
 import chatbotLogo from '@/assets/crm/chatbot-logo.svg'
 
 const crmStore = useCrmStore()
@@ -409,6 +503,7 @@ const whapiShareConfirm = ref(false)
 const whapiShareOrgNames = ref([])
 const whapiLogoutConfirm = ref(false)
 const whapiShareMode = ref('change')
+const whapiSingleLogoutConfirm = ref(false)
 const whapiStatus = reactive({
   connected: false,
   channelId: '',
@@ -418,13 +513,46 @@ const whapiStatus = reactive({
 })
 
 const leadRows = ref([])
-const leadChartRef = ref(null)
-let leadChartInstance = null
+const leadsChartType = ref('line')
+const leadsChartLoading = ref(false)
+const leadsChartError = ref(null)
+const leadsChartConfig = reactive({
+  chartTitle: 'Leads Conversion',
+  chartSubtitle: 'Last 30 days',
+  chartData: {
+    labels: [],
+    datasets: []
+  },
+  summaryStats: []
+})
+
+const metaChartLoading = ref(false)
+const metaChartError = ref(null)
+const metaChartConfig = reactive({
+  chartTitle: 'Meta Analytics',
+  chartSubtitle: 'Last 30 days',
+  chartData: {
+    labels: [],
+    datasets: []
+  },
+  summaryStats: []
+})
+
+const gscChartLoading = ref(false)
+const gscChartError = ref(null)
+const gscChartConfig = reactive({
+  chartTitle: 'Google Search Console',
+  chartSubtitle: 'Last 30 days',
+  chartData: {
+    labels: [],
+    datasets: []
+  },
+  summaryStats: []
+})
 
 const metaHealthDialog = ref(false)
 const metaHealthLoading = ref(false)
 const metaHealthData = ref(null)
-const confirmDisconnectMeta = ref(false)
 
 
 const userEmail = computed(() => user.value?.email || '')
@@ -472,6 +600,17 @@ const integrationCards = computed(() => ([
     icon: whatsappLogo,
     iconClass: 'whatsapp',
   },
+  // GOOGLE ANALYTICS CARD — hidden until Google integration is live on prod
+  // {
+  //   key: 'google',
+  //   title: 'Google',
+  //   subtitlePrimary: googleStatus.email || userEmail.value || '-',
+  //   subtitleSecondary: currentOrgName.value || '-',
+  //   statusLabel: googleStatusLabel.value,
+  //   statusColor: googleStatusColor.value,
+  //   icon: googleLogo,
+  //   iconClass: 'google',
+  // },
   {
     key: 'chatbot',
     title: 'Chatbot',
@@ -499,7 +638,8 @@ const whapiStatusLabel = computed(() => {
 
 const whapiStatusColor = computed(() => {
   const label = String(whapiStatusLabel.value || '').toLowerCase()
-  if (label.includes('active') || label.includes('connected') || label.includes('authorized')) return 'success'
+  if (label === 'not connected') return 'grey-lighten-1'
+  if (label === 'connected' || label.includes('active') || label.includes('authorized')) return 'success'
   if (label.includes('pending') || label.includes('activating')) return 'warning'
   if (label.includes('stopped') || label.includes('overdue') || label.includes('logged')) return 'error'
   return 'grey-lighten-1'
@@ -509,6 +649,19 @@ const whapiQrCtaLabel = computed(() => {
   if (whapiLoading.value) return 'Generating QR...'
   if (!whapiQr.value) return 'Refresh QR (wait ~1 min)'
   return 'Refresh QR'
+})
+
+const googleStatusLabel = computed(() => {
+  if (!isGoogleConnected.value) return 'Not Connected'
+  if (!googleStatus.tokenValid) return 'Token Expired'
+  return 'Connected'
+})
+
+const googleStatusColor = computed(() => {
+  const label = String(googleStatusLabel.value || '').toLowerCase()
+  if (label.includes('connected')) return 'success'
+  if (label.includes('expired')) return 'error'
+  return 'grey-lighten-1'
 })
 
 const whapiChannelOptions = computed(() => {
@@ -539,6 +692,64 @@ const whapiChannelMap = computed(() => {
   })
   return map
 })
+
+let whapiEventSource = null;
+let qrPollTimer = null;
+
+const startWhapiStatusStream = () => {
+  if (typeof window === "undefined" || !("EventSource" in window)) return;
+  if (whapiEventSource) return;
+  whapiEventSource = new EventSource("/api/whapi/stream");
+  whapiEventSource.addEventListener("status", (evt) => {
+    try {
+      const payload = JSON.parse(evt.data || "{}");
+      whapiStatus.status = payload.status || whapiStatus.status;
+      whapiStatus.connected = !!payload.connected;
+      if (payload.phoneNumber) whapiStatus.phoneNumber = payload.phoneNumber;
+      if (payload.displayName) whapiStatus.displayName = payload.displayName;
+      if (payload.channelId) whapiStatus.channelId = payload.channelId;
+      isWhatsAppConnected.value = !!payload.connected;
+      if (whapiDialog.value && payload.connected) {
+        whapiDialog.value = false;
+        stopQrPoll();
+        mainStore?.setSnackbar?.({ title: "WhatsApp connected successfully!", type: "success" });
+      }
+    } catch {}
+  });
+  whapiEventSource.onerror = () => {
+    if (whapiEventSource) {
+      whapiEventSource.close();
+      whapiEventSource = null;
+    }
+  };
+};
+
+const stopWhapiStatusStream = () => {
+  if (whapiEventSource) {
+    whapiEventSource.close();
+    whapiEventSource = null;
+  }
+};
+
+const startQrPoll = () => {
+  if (qrPollTimer) return;
+  qrPollTimer = setInterval(async () => {
+    if (!whapiDialog.value) { stopQrPoll(); return; }
+    if (whapiQr.value) { stopQrPoll(); return; }
+    if (!whapiLoading.value) await refreshWhapiQr();
+  }, 5000);
+};
+
+const stopQrPoll = () => {
+  if (qrPollTimer) {
+    clearInterval(qrPollTimer);
+    qrPollTimer = null;
+  }
+};
+
+watch(whapiDialog, (open) => {
+  if (!open) stopQrPoll();
+});
 
 const normalizeMetaMessage = (message) => {
   if (!message) return ''
@@ -580,6 +791,7 @@ const clearMetaQuery = () => {
   delete nextQuery.meta
   delete nextQuery.pages
   delete nextQuery.user
+  delete nextQuery.account
   delete nextQuery.error
   delete nextQuery.warning
   router.replace({ query: nextQuery })
@@ -587,8 +799,10 @@ const clearMetaQuery = () => {
 
 const handleMetaQuery = () => {
   const metaConnected = route.query.meta === 'connected'
+  const igConnected = route.query.meta === 'ig_connected'
   const metaError = route.query.error
   const pagesCount = Number(route.query.pages || 0)
+  const igAccount = route.query.account
 
   if (metaError) {
     const msg = mapMetaErrorMessage(metaError) || 'Meta connection failed. Please try again.'
@@ -598,8 +812,11 @@ const handleMetaQuery = () => {
     mainStore?.setSnackbar?.({ title: msg, type: 'error' })
   } else if (metaConnected) {
     mainStore?.setSnackbar?.({ title: 'Meta connected successfully', type: 'success' })
+  } else if (igConnected) {
+    const label = igAccount ? `Instagram connected: ${igAccount}` : 'Instagram connected successfully'
+    mainStore?.setSnackbar?.({ title: label, type: 'success' })
   }
-  if (metaConnected || metaError) clearMetaQuery()
+  if (metaConnected || metaError || igConnected) clearMetaQuery()
 }
 
 const metaHealthIssues = computed(() => {
@@ -667,23 +884,19 @@ const integrateMeta = async () => {
   mainStore?.setSnackbar?.({ title: res?.message || 'Unable to start Meta connection', type: 'error' })
 }
 
-const startDisconnectMeta = () => {
-  confirmDisconnectMeta.value = true
-}
-
-const doDisconnectMeta = async () => {
-  confirmDisconnectMeta.value = false
+const disconnectMeta = async () => {
   try {
     const res = await crmStore.disconnectMeta()
     if (res?.code === 0) {
       await checkMetaConnection()
-      metaHealthData.value = null
       mainStore?.setSnackbar?.({ title: 'Meta disconnected', type: 'success' })
     } else {
       mainStore?.setSnackbar?.({ title: res?.message || 'Failed to disconnect Meta', type: 'error' })
     }
   } catch (e) {
     mainStore?.setSnackbar?.({ title: e?.message || 'Failed to disconnect Meta', type: 'error' })
+  } finally {
+    metaDisconnecting.value = false
   }
 }
 
@@ -733,15 +946,10 @@ const connectWhapi = async (channelId = null) => {
     const res = await crmStore.startWhapiConnect(payload)
     if (res?.code === 0 && res.data) {
       whapiQr.value = res.data.qr || ''
-      whapiQrWarning.value = res.data.warning || (!whapiQr.value ? 'QR is being generated. Please wait about 1 minute, then refresh.' : '')
+      whapiQrWarning.value = res.data.warning || ''
       whapiDialog.value = true
       await loadWhapiStatus()
-      if (!whapiQr.value) {
-        mainStore?.setSnackbar?.({
-          title: whapiQrWarning.value,
-          type: 'info',
-        })
-      }
+      if (!whapiQr.value) startQrPoll()
       return
     }
     const msg = res?.error || res?.message || 'Failed to connect WhatsApp'
@@ -847,6 +1055,7 @@ const forceWhapiLogoutAndShowQr = async () => {
       await loadWhapiStatus()
       whapiDialog.value = true
       await refreshWhapiQr()
+      if (!whapiQr.value) startQrPoll()
       return
     }
     const msg = res?.error || res?.message || 'Failed to logout WhatsApp'
@@ -883,6 +1092,11 @@ const disconnectWhapi = async () => {
     whapiLogoutConfirm.value = true
     return
   }
+  whapiSingleLogoutConfirm.value = true
+}
+
+const confirmWhapiSingleLogout = async () => {
+  whapiSingleLogoutConfirm.value = false
   if (whapiDisconnecting.value) return
   whapiDisconnecting.value = true
   try {
@@ -905,7 +1119,24 @@ const disconnectWhapi = async () => {
 
 const confirmWhapiLogout = async () => {
   whapiLogoutConfirm.value = false
-  await disconnectWhapi()
+  if (whapiDisconnecting.value) return
+  whapiDisconnecting.value = true
+  try {
+    const res = await crmStore.disconnectWhapi()
+    if (res?.code === 0) {
+      whapiQr.value = ''
+      await loadWhapiStatus()
+      mainStore?.setSnackbar?.({ title: 'WhatsApp logged out', type: 'success' })
+      return
+    }
+    const msg = res?.error || res?.message || 'Failed to logout WhatsApp'
+    mainStore?.setSnackbar?.({ title: msg, type: 'error' })
+  } catch (e) {
+    const msg = e?.data?.message || e?.message || 'Failed to logout WhatsApp'
+    mainStore?.setSnackbar?.({ title: msg, type: 'error' })
+  } finally {
+    whapiDisconnecting.value = false
+  }
 }
 
 const onConnectChatbot = async () => {
@@ -927,139 +1158,249 @@ const onConnectChatbot = async () => {
 
 const activeLeads = computed(() => (leadRows.value || []).filter((lead) => !lead?.softDeleted))
 
-const monthlySummary = computed(() => {
-  const start = startOfMonth(new Date())
-  const scoped = activeLeads.value.filter((lead) => {
-    const date = new Date(lead?.inquiryDate || lead?.createdAt || 0)
-    return !Number.isNaN(date.valueOf()) && date >= start
-  })
-  const byStatus = (status) =>
-    scoped.filter((lead) => (lead.leadStatus || '').toLowerCase() === status).length
+const transformGoogleHealthData = (data) => {
+  if (!data || !data.connected || !data.account) {
+    return { connected: false }
+  }
+
+  const account = data.account
+  const now = new Date()
+  const expires = account.expiresAt ? new Date(account.expiresAt) : null
+
   return {
-    total: scoped.length,
-    new: byStatus('new'),
-    converted: byStatus('converted'),
-    contacted: byStatus('contacted'),
-    lost: byStatus('lost'),
+    connected: true,
+    tokenId: account.id,
+    email: account.email,
+    tokenValid: expires ? expires > now : false,
+    connectedAt: account.connectedAt,
+    expiresAt: account.expiresAt,
+    scopes: account.scopes || [],
+    hasSearchConsole: account.hasSearchConsole,
+    hasBusinessProfile: account.hasBusinessProfile,
+    hasGoogleAds: account.hasGoogleAds,
+    scopeStatus: account.scopeStatus || [],
+    selectedSite: data.selectedSite || null,
   }
-})
-
-const buildLeadSeries = (days = 30) => {
-  const today = startOfDay(new Date())
-  const labels = []
-  const totalCounts = []
-  const convertedCounts = []
-  const indexByDate = new Map()
-
-  for (let i = days - 1; i >= 0; i -= 1) {
-    const d = subDays(today, i)
-    const key = format(d, 'yyyy-MM-dd')
-    indexByDate.set(key, labels.length)
-    labels.push(format(d, 'd MMM'))
-    totalCounts.push(0)
-    convertedCounts.push(0)
-  }
-
-  activeLeads.value.forEach((lead) => {
-    const date = new Date(lead?.inquiryDate || lead?.createdAt || 0)
-    if (Number.isNaN(date.valueOf())) return
-    const key = format(startOfDay(date), 'yyyy-MM-dd')
-    const idx = indexByDate.get(key)
-    if (idx == null) return
-    totalCounts[idx] += 1
-    if ((lead.leadStatus || '').toLowerCase() === 'converted') {
-      convertedCounts[idx] += 1
-    }
-  })
-
-  return { labels, totalCounts, convertedCounts }
 }
 
-const renderLeadChart = async () => {
-  if (!leadChartRef.value) return
-  const { labels, totalCounts, convertedCounts } = buildLeadSeries(30)
-  const { Chart } = await import('chart.js/auto')
+const checkGoogleConnection = async () => {
+  try {
+    const res = await crmStore.googleConnectionStatus()
+    if (res?.code === 0 && res?.data?.connected) {
+      isGoogleConnected.value = true
+      const transformed = transformGoogleHealthData(res.data)
+      googleStatus.connected = transformed.connected
+      googleStatus.email = transformed.email || ''
+      googleStatus.tokenId = transformed.tokenId || ''
+      googleStatus.tokenValid = transformed.tokenValid || false
+      googleStatus.connectedAt = transformed.connectedAt || ''
+      googleStatus.expiresAt = transformed.expiresAt || ''
+      googleStatus.scopes = transformed.scopes || []
+      googleHealthData.value = transformed
+    } else {
+      isGoogleConnected.value = false
+      googleStatus.connected = false
+      googleStatus.email = ''
+      googleStatus.tokenId = ''
+      googleStatus.tokenValid = false
+      googleHealthData.value = null
+    }
+  } catch (e) {
+    isGoogleConnected.value = false
+    googleStatus.connected = false
+    googleHealthData.value = null
+  }
+}
 
-  if (leadChartInstance) {
-    leadChartInstance.destroy()
+const connectGoogle = async () => {
+  googleConnecting.value = true
+  try {
+    const res = await crmStore.startGoogleAuth()
+    if (res?.code === 0 && res?.data?.url) {
+      window.location.href = res.data.url
+    } else {
+      googleErrorMessage.value = res?.error || 'Failed to start Google auth'
+      googleErrorDialog.value = true
+    }
+  } catch (e) {
+    googleErrorMessage.value = e?.message || 'Failed to start Google auth'
+    googleErrorDialog.value = true
+  } finally {
+    googleConnecting.value = false
+  }
+}
+
+const disconnectGoogle = async () => {
+  googleDisconnecting.value = true
+  try {
+    const tokenId = googleStatus.tokenId || null
+    const res = await crmStore.disconnectGoogle(tokenId)
+    if (res?.code === 0) {
+      isGoogleConnected.value = false
+      googleStatus.connected = false
+      googleStatus.email = ''
+      googleStatus.tokenId = ''
+      googleStatus.tokenValid = false
+      googleHealthData.value = null
+      mainStore?.setSnackbar?.({ title: 'Google disconnected', type: 'success' })
+    } else {
+      mainStore?.setSnackbar?.({ title: res?.message || 'Failed to disconnect Google', type: 'error' })
+    }
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || 'Failed to disconnect Google', type: 'error' })
+  } finally {
+    googleDisconnecting.value = false
+  }
+}
+
+const openGoogleHealth = async () => {
+  googleHealthDialog.value = true
+  googleHealthLoading.value = true
+  try {
+    const res = await crmStore.googleConnectionStatus()
+    if (res?.code === 0) {
+      googleHealthData.value = transformGoogleHealthData(res.data)
+    } else {
+      googleHealthData.value = { error: res?.error || res?.message || 'Failed to load health status' }
+    }
+  } catch (e) {
+    googleHealthData.value = { error: e?.data?.message || e?.message || 'Failed to load health status' }
+  } finally {
+    googleHealthLoading.value = false
+  }
+}
+
+const handleGoogleCallback = () => {
+  const googleConnected = route.query.google === 'connected'
+  const googleError = route.query.error
+
+  if (googleConnected) {
+    checkGoogleConnection()
+    mainStore?.setSnackbar?.({ title: 'Google connected successfully', type: 'success' })
+  } else if (googleError) {
+    googleErrorMessage.value = decodeURIComponent(googleError)
+    googleErrorDialog.value = true
   }
 
-  leadChartInstance = new Chart(leadChartRef.value, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'Total Lead',
-          data: totalCounts,
-          borderColor: '#3B82F6',
-          backgroundColor: 'rgba(59, 130, 246, 0.12)',
-          fill: false,
-          tension: 0.35,
-          pointRadius: 0,
-        },
-        {
-          label: 'Converted Leads',
-          data: convertedCounts,
-          borderColor: '#F97316',
-          backgroundColor: 'rgba(249, 115, 22, 0.12)',
-          fill: false,
-          tension: 0.35,
-          pointRadius: 0,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          mode: 'index',
-          intersect: false,
-        },
-      },
-      scales: {
-        x: {
-          grid: { display: false },
-          ticks: {
-            maxTicksLimit: 6,
-            color: '#9CA3AF',
-          },
-        },
-        y: {
-          grid: { color: '#E5E7EB' },
-          beginAtZero: true,
-          suggestedMin: 0,
-          ticks: { color: '#9CA3AF' },
-        },
-      },
-    },
-  })
+  // Clear query params
+  if (googleConnected || googleError) {
+    const nextQuery = { ...route.query }
+    delete nextQuery.google
+    delete nextQuery.error
+    router.replace({ query: nextQuery })
+  }
+}
+
+
+const updateLeadsChartData = async () => {
+  try {
+    leadsChartError.value = null
+
+    if (!activeLeads.value || activeLeads.value.length === 0) {
+      console.warn('⚠️ No active leads to display')
+      leadsChartConfig.chartData = {
+        labels: [],
+        datasets: []
+      }
+      leadsChartConfig.summaryStats = []
+      leadsChartConfig.chartSubtitle = 'No data available'
+      return
+    }
+
+    // Use the adapter to transform raw leads data
+    const normalizedData = transformLeadsConversionData(
+      activeLeads.value,
+      {
+        metricLabels: ['Total Leads', 'Converted Leads'],
+        summaryLabels: ['Total Leads (this month)', 'New Leads', 'Converted', 'Contacted', 'Lost'],
+        chartType: 'line',
+        colors: ['#3B82F6', '#F97316']
+      }
+    )
+
+    // Important: Update the entire chartData object at once to trigger reactivity
+    leadsChartConfig.chartData = {
+      labels: normalizedData.chartData?.labels || [],
+      datasets: normalizedData.chartData?.datasets || []
+    }
+    
+    leadsChartConfig.summaryStats = normalizedData.summary || []
+    leadsChartConfig.chartSubtitle = `${activeLeads.value.length} leads • Last 30 days`
+
+
+  } catch (error) {
+    console.error('❌ Error updating leads chart:', error)
+    leadsChartError.value = 'Failed to render chart: ' + error.message
+  }
 }
 
 const loadLeads = async () => {
+  leadsChartLoading.value = true
+  leadsChartError.value = null
+
   try {
     const res = await crmStore.listLeads({ includeArchived: true })
+    
     if (res?.code === 0) {
       leadRows.value = res.data || []
     } else {
       leadRows.value = []
+      leadsChartError.value = res?.message || 'Failed to load leads'
     }
   } catch (e) {
     leadRows.value = []
+    leadsChartError.value = e?.message || 'Error loading leads'
+    console.error('❌ Error loading leads:', e)
   } finally {
-    await nextTick()
-    renderLeadChart()
+    leadsChartLoading.value = false
   }
 }
 
+const loadMetaAnalytics = async () => {
+  if (!isMetaConnected.value) return
+  metaChartLoading.value = true
+  metaChartError.value = null
+  try {
+    const res = await crmStore.getMetaInsights()
+    if (res?.code === 0) {
+      const currency = crmStore.metaAdAccounts?.[0]?.currency || 'GBP'
+      const normalized = transformMetaInsightsData(res.data || [], { currency })
+      metaChartConfig.chartData = normalized.chartData
+      metaChartConfig.summaryStats = normalized.summary
+    } else {
+      metaChartError.value = res?.message || 'Failed to load Meta analytics'
+    }
+  } catch (e) {
+    metaChartError.value = e?.message || 'Failed to load Meta analytics'
+  } finally {
+    metaChartLoading.value = false
+  }
+}
+
+const loadGscAnalytics = async () => {
+  if (!isGoogleConnected.value) return
+  gscChartLoading.value = true
+  gscChartError.value = null
+  try {
+    const res = await crmStore.getGoogleSearchConsoleAnalytics()
+    if (res?.code === 0) {
+      const normalized = transformGoogleSearchConsoleData(res)
+      gscChartConfig.chartData = normalized.chartData
+      gscChartConfig.summaryStats = normalized.summary
+    } else {
+      gscChartError.value = res?.message || 'Failed to load GSC analytics'
+    }
+  } catch (e) {
+    gscChartError.value = e?.message || 'Failed to load GSC analytics'
+  } finally {
+    gscChartLoading.value = false
+  }
+}
 
 onMounted(async () => {
   loadUser()
   handleMetaQuery()
   await Promise.all([checkMetaConnection(), loadWhapiStatus(), loadLeads()])
-  await fetchMetaHealthSilent()
 })
 
 watch(activeLeads, async () => {
@@ -1068,11 +1409,19 @@ watch(activeLeads, async () => {
 })
 
 onBeforeUnmount(() => {
-  if (leadChartInstance) {
-    leadChartInstance.destroy()
-    leadChartInstance = null
-  }
+  stopWhapiStatusStream()
+  stopQrPoll()
 })
+
+watch(
+  () => activeLeads.value,
+  async () => {
+    await nextTick()
+    updateLeadsChartData()
+  },
+  { deep: true }
+)
+
 </script>
 
 <style scoped>
@@ -1129,7 +1478,15 @@ onBeforeUnmount(() => {
 
 .conversion-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+
+@media (min-width: 1400px) {
+  .conversion-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 .conversion-card {
@@ -1206,5 +1563,20 @@ onBeforeUnmount(() => {
   .chart-shell {
     height: 260px;
   }
+}
+
+.whapi-scan-instructions {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 16px;
+  width: 100%;
+  max-width: 300px;
+}
+
+.whapi-steps {
+  padding-left: 16px;
+  margin: 0;
+  line-height: 1.8;
 }
 </style>

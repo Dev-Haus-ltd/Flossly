@@ -229,6 +229,7 @@
                 No active Meta page is currently connected for this organisation.
               </div>
             </div>
+
           </template>
         </template>
       </div>

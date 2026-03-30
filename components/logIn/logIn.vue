@@ -276,6 +276,12 @@ const getProfile = () => {
         const user = res.data;
         setUser(user)
         localStorage.setItem("user", JSON.stringify(user));
+        
+        // Dispatch event for FCM token save retry
+        if (process.client) {
+          window.dispatchEvent(new Event('user-authenticated'));
+        }
+        
         store.setSnackbar({
           title: "Login Successful",
           subtitle: `Welcome back, ${user.fullName}!`,

@@ -1,7 +1,4 @@
 import { Op } from "sequelize";
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
 import { readMultipartFormData } from 'h3';
 import { readBody, getQuery, setResponseStatus, readRawBody } from 'h3';
 import { $fetch } from 'ofetch';
@@ -15,43 +12,55 @@ import {
 
 import { isSupportAgent, getSupportAgentUserIds } from '../utils/supportAgents.js';
 import { parseJsonBody } from "../utils/body";
-import { sendNotificationToUser } from '../utils/fcmNotification.js';
+import {
+  sendNotificationToUser,
+  sendSupportTicketSubmittedNotification,
+  sendSupportReplyNotification
+} from '../utils/fcmNotification.js';
 import { uploadBufferFile } from '../utils/storage.js';
 
 // Send FCM notification for new chatbot message
 const notifyNewMessage = async (conversationId, message, recipientUserId) => {
   try {
     if (!recipientUserId) return;
-    
-    // Determine notification title and body based on sender type
-    let title = 'New Message';
-    let body = message.message;
-    
+
     if (message.senderType === 'support' || message.senderType === 'admin') {
-      title = 'Support Team replied';
-      body = message.message?.substring(0, 100) || 'You have a new reply';
+      await sendSupportReplyNotification({
+        userId: recipientUserId,
+        ticketId: conversationId,
+        replyPreview: message.message?.substring(0, 100)
+      });
     } else if (message.senderType === 'ai' || message.senderType === 'bot') {
-      title = 'Flossly Assistant';
-      body = message.message?.substring(0, 100) || 'You have a new response';
+      await sendNotificationToUser({
+        userId: recipientUserId,
+        title: 'Flossly Assistant',
+        body: message.message?.substring(0, 100) || 'You have a new response',
+        type: 'chatbot_message',
+        referenceType: 'chatbot_conversation',
+        referenceId: conversationId,
+        data: {
+          conversationId: String(conversationId),
+          message: JSON.stringify(message),
+          url: '/support-chat'
+        },
+        priority: 'high'
+      });
     } else if (message.senderType === 'user') {
-      title = 'New User Message';
-      body = message.message?.substring(0, 100) || 'New message received';
+      await sendNotificationToUser({
+        userId: recipientUserId,
+        title: 'New User Message',
+        body: message.message?.substring(0, 100) || 'New message received',
+        type: 'chatbot_message',
+        referenceType: 'chatbot_conversation',
+        referenceId: conversationId,
+        data: {
+          conversationId: String(conversationId),
+          message: JSON.stringify(message),
+          url: '/support-chat'
+        },
+        priority: 'high'
+      });
     }
-    
-    await sendNotificationToUser({
-      userId: recipientUserId,
-      title,
-      body,
-      type: 'chatbot_message',
-      referenceType: 'chatbot_conversation',
-      referenceId: conversationId,
-      data: {
-        conversationId: String(conversationId),
-        message: JSON.stringify(message),
-        url: '/support-chat'
-      },
-      priority: 'high'
-    });
   } catch (error) {
     console.error('Error sending chatbot message notification:', error);
   }
@@ -61,17 +70,16 @@ const notifyNewMessage = async (conversationId, message, recipientUserId) => {
 const notifySupportAgents = async (conversationId, message, conversation) => {
   try {
     const supportAgentIds = await getSupportAgentUserIds();
-    
+
     if (!supportAgentIds || supportAgentIds.length === 0) {
       console.log('No support agents to notify');
       return;
     }
-    
+
     const userName = conversation.user?.fullName || 'A user';
     const title = `New Message from ${userName}`;
     const body = message.message?.substring(0, 100) || 'New message in support chat';
-    
-    // Send notification to each support agent
+
     for (const agentUserId of supportAgentIds) {
       await sendNotificationToUser({
         userId: agentUserId,
@@ -88,7 +96,7 @@ const notifySupportAgents = async (conversationId, message, conversation) => {
         priority: 'high'
       });
     }
-    
+
     console.log(`Notified ${supportAgentIds.length} support agents about new message`);
   } catch (error) {
     console.error('Error notifying support agents:', error);
@@ -99,16 +107,16 @@ const notifySupportAgents = async (conversationId, message, conversation) => {
 const notifyStatusUpdate = async (conversationId, status, recipientUserId) => {
   try {
     if (!recipientUserId) return;
-    
+
     const statusLabels = {
       'active': 'Submitted',
       'in-progress': 'In Progress',
       'resolved': 'Resolved',
       'closed': 'Closed'
     };
-    
+
     const statusLabel = statusLabels[status] || status;
-    
+
     await sendNotificationToUser({
       userId: recipientUserId,
       title: 'Conversation Status Updated',
@@ -176,6 +184,17 @@ export const createConversation = async (event) => {
       status: 'active',
       lastMessageAt: new Date()
     });
+
+    // Skip notification for ask-question flow
+    if (conversationType !== 'ask-question') {
+      await sendSupportTicketSubmittedNotification({
+        userId,
+        ticketId: conversation.id,
+        ticketSubject: subject || 'Support Request'
+      });
+    } else {
+      console.log('>>> Skipping ticket submitted notification for ask-question flow');
+    }
 
     setResponseStatus(event, 201);
     return {
@@ -461,13 +480,18 @@ export const createMessage = async (event) => {
     });
 
     // Send FCM notification to the conversation participant
+    // Skip FCM for ask-question flow (response is returned directly in API)
     // If message is from support, notify the user. If from user, notify support agents.
-    if (senderType === 'support' || senderType === 'admin') {
-      // Notify the user who created the conversation
-      await notifyNewMessage(conversationId, newMessage.toJSON(), conversation.userId);
-    } else if (senderType === 'user') {
-      // Notify all support agents about the new user message
-      await notifySupportAgents(conversationId, newMessage.toJSON(), conversation);
+    if (conversation.conversationType !== 'ask-question') {
+      if (senderType === 'support' || senderType === 'admin') {
+        // Notify the user who created the conversation
+        await notifyNewMessage(conversationId, newMessage.toJSON(), conversation.userId);
+      } else if (senderType === 'user') {
+        // Notify all support agents about the new user message
+        await notifySupportAgents(conversationId, newMessage.toJSON(), conversation);
+      }
+    } else {
+      console.log('>>> Skipping FCM notification for ask-question flow');
     }
 
     // Update conversation lastMessageAt
@@ -537,11 +561,16 @@ export const createMessage = async (event) => {
             isRead: false
           });
 
-          // Send FCM notification to user
-          await notifyNewMessage(conversationId, botMessage.toJSON(), conversation.userId);
-
           console.log('>>> Bot response message created:', botMessage.id);
           console.log('>>> Bot message text:', messageText);
+          
+          // Return BOTH user message and bot response for ask-question flow
+          setResponseStatus(event, 201);
+          return {
+            success: true,
+            data: newMessage,
+            botResponse: botMessage.toJSON() // Include bot response in the API response
+          };
         }
 
       } catch (webhookError) {
@@ -557,8 +586,13 @@ export const createMessage = async (event) => {
           isRead: false
         });
 
-        // Send FCM notification to user
-        await notifyNewMessage(conversationId, errMsg.toJSON(), conversation.userId);
+        // Return error response
+        setResponseStatus(event, 201);
+        return {
+          success: true,
+          data: newMessage,
+          botResponse: errMsg.toJSON() // Include error message in the API response
+        };
       }
     } else {
       console.log('>>> Webhook NOT triggered (condition not met)');

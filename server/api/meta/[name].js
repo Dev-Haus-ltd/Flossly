@@ -1,4 +1,4 @@
-import { authStart, authCallback, listLeads, fetchLeadsNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck, stream, getWhatsAppConfig, saveWhatsAppConfig, whatsappEmbeddedComplete, fetchWhatsAppTemplates, fetchMetaStructureAndBudgets, fetchDailyMetaInsights, listBusinessPortfolios, connectBusinessPages, debugMetaStatus, listMetaPermissions } from "../../controllers/meta";
+import { authStart, authCallback, igAuthStart, igAuthCallback, listLeads, fetchLeadsNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck, stream, getWhatsAppConfig, saveWhatsAppConfig, whatsappEmbeddedComplete, fetchWhatsAppTemplates, fetchMetaStructureAndBudgets, fetchDailyMetaInsights, listBusinessPortfolios, connectBusinessPages, debugMetaStatus, listMetaPermissions, getMetaInsights, getMetaStructure, getCampaignLeadCounts, getSyncJobStatus, getVideoSource, getAllLeadCounts, deauthorize, dataDeletion, dataDeletionStatus } from "../../controllers/meta";
 
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, 'name')
@@ -7,6 +7,10 @@ export default defineEventHandler(async (event) => {
       return await authStart(event)
     case 'callback':
       return await authCallback(event)
+    case 'igAuthStart':
+      return await igAuthStart(event)
+    case 'igCallback':
+      return await igAuthCallback(event)
     case 'leads':
       return await listLeads(event)
     case 'fetchLeads':
@@ -34,6 +38,10 @@ export default defineEventHandler(async (event) => {
       return await fetchMetaStructureAndBudgets(event)
     case 'syncInsights':
       return await fetchDailyMetaInsights(event)
+    case 'getInsights':
+      return await getMetaInsights(event)
+    case 'getStructure':
+      return await getMetaStructure(event)
     case 'businesses':
       return await listBusinessPortfolios(event)
     case 'connectPages':
@@ -42,6 +50,20 @@ export default defineEventHandler(async (event) => {
       return await debugMetaStatus(event)
     case 'permissions':
       return await listMetaPermissions(event)
+    case 'syncStatus':
+      return await getSyncJobStatus(event)
+    case 'campaignLeadCounts':
+      return await getCampaignLeadCounts(event)
+    case 'videoSource':
+      return await getVideoSource(event)
+    case 'allLeadCounts':
+      return await getAllLeadCounts(event)
+    case 'deauthorize':
+      return await deauthorize(event)
+    case 'dataDeletion':
+      return await dataDeletion(event)
+    case 'dataDeletionStatus':
+      return await dataDeletionStatus(event)
     default:
       return { code: 0, error: 'Not found' }
   }

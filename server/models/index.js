@@ -56,6 +56,9 @@ import { MetaUserToken } from "./crm/metaUserTokens";
 import { MetaWhatsAppConfig } from "./crm/metaWhatsAppConfigs";
 import { CrmWhatsAppMessageLog } from "./crm/whatsappMessageLogs";
 import { WhapiChannelConfig } from "./crm/whapiChannelConfigs";
+import { CrmDmAccount } from "./crm/dmAccounts";
+import { CrmDmConversation } from "./crm/dmConversations";
+import { CrmDmMessage } from "./crm/dmMessages";
 import { FcmToken } from "./notifications/fcmTokens";
 import { UserNotification } from "./notifications/userNotifications";
 import { ChatbotConfig } from "./crm/chatbotConfig";
@@ -338,6 +341,18 @@ Organisation.hasMany(CrmWhatsAppMessageLog, { foreignKey: 'organisationId', as: 
 CrmWhatsAppMessageLog.belongsTo(CrmLead, { foreignKey: 'leadId', as: 'lead', onDelete: 'SET NULL', hooks: true });
 CrmLead.hasMany(CrmWhatsAppMessageLog, { foreignKey: 'leadId', as: 'whatsappMessageLogs', onDelete: 'SET NULL', hooks: true });
 
+// CRM DMs
+CrmDmAccount.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+CrmDmAccount.belongsTo(User, { foreignKey: 'connectedByUserId', as: 'connectedBy', onDelete: 'SET NULL' });
+Organisation.hasMany(CrmDmAccount, { foreignKey: 'organisationId', as: 'dmAccounts', onDelete: 'CASCADE', hooks: true });
+
+CrmDmConversation.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+Organisation.hasMany(CrmDmConversation, { foreignKey: 'organisationId', as: 'dmConversations', onDelete: 'CASCADE', hooks: true });
+
+CrmDmConversation.hasMany(CrmDmMessage, { foreignKey: 'conversationId', as: 'messages' });
+CrmDmMessage.belongsTo(CrmDmConversation, { foreignKey: 'conversationId', as: 'conversation', onDelete: 'CASCADE', hooks: true });
+CrmDmMessage.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+
 CrmLead.hasOne(CrmLeadTreatment, { foreignKey: 'leadId', as: 'treatmentInfo' });
 CrmLeadTreatment.belongsTo(CrmLead, { foreignKey: 'leadId', as: 'lead', onDelete: 'CASCADE', hooks: true });
 
@@ -552,6 +567,9 @@ export {
   CrmAutomationGroup,
   CrmAutomationGroupTemplate,
   CrmWhatsAppMessageLog,
+  CrmDmAccount,
+  CrmDmConversation,
+  CrmDmMessage,
   MetaUserToken,
   MetaWhatsAppConfig,
   WhapiChannelConfig,

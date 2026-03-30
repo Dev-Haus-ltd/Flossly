@@ -8,6 +8,67 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  startInstagramAuth() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/igAuthStart")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  listDmConversations(params = {}) {
+    const q = new URLSearchParams();
+    Object.entries(params || {}).forEach(([k, v]) => {
+      if (v === undefined || v === null || v === "") return;
+      q.append(k, v);
+    });
+    const qs = q.toString();
+    return new Promise((resolve, reject) => {
+      Get(`/dms/conversations${qs ? `?${qs}` : ""}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  listDmMessages(params = {}) {
+    const q = new URLSearchParams();
+    Object.entries(params || {}).forEach(([k, v]) => {
+      if (v === undefined || v === null || v === "") return;
+      q.append(k, v);
+    });
+    const qs = q.toString();
+    return new Promise((resolve, reject) => {
+      Get(`/dms/messages${qs ? `?${qs}` : ""}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  sendDmMessage(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/dms/send", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  markDmRead(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/dms/read", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  processDmQueue(payload = {}) {
+    return new Promise((resolve, reject) => {
+      Post("/dms/processQueue", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getDmConnectionStatus() {
+    return new Promise((resolve, reject) => {
+      Get("/dms/status")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   connectionStatus() {
     return new Promise((resolve, reject) => {
       Get("/meta/connection")
@@ -42,10 +103,56 @@ export default {
         .catch((err) => reject(err));
     });
   },
-  // Fetch daily Meta analytics (insights)
-  fetchMetaInsights() {
+  // Fetch Meta analytics (insights)
+  fetchMetaInsights(params = {}) {
+    const q = new URLSearchParams();
+    Object.entries(params || {}).forEach(([k, v]) => {
+      if (v === undefined || v === null || v === "") return;
+      q.append(k, v);
+    });
+    const qs = q.toString();
     return new Promise((resolve, reject) => {
-      Get("/meta/syncInsights")
+      Get(`/meta/syncInsights${qs ? `?${qs}` : ""}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getMetaInsights() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/getInsights")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getCampaignLeadCounts() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/campaignLeadCounts")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getAllLeadCounts() {
+    return new Promise((resolve, reject) => {
+      Get("/meta/allLeadCounts")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getMetaVideoSource(videoId) {
+    return new Promise((resolve, reject) => {
+      Post("/meta/videoSource", { videoId })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getMetaStructure(params = {}) {
+    const qs = Object.entries(params)
+      .filter(([, v]) => v != null && v !== '')
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+      .join('&');
+    const url = qs ? `/meta/getStructure?${qs}` : '/meta/getStructure';
+    return new Promise((resolve, reject) => {
+      Get(url)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -252,6 +359,20 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  getAlertOptions() {
+    return new Promise((resolve, reject) => {
+      Get("/lead/alertOptions")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  saveAlertOptions(options) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/alertOptionsSave", { options })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   addLeadNote(payload) {
     return new Promise((resolve, reject) => {
       Post("/lead/notesAdd", payload)
@@ -329,6 +450,19 @@ export default {
   saveAutomationBatch(payload) {
     return new Promise((resolve, reject) => {
       Post('/lead/automationSaveBatch', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getAutomationSendNowStatus(params = {}) {
+    const q = new URLSearchParams();
+    Object.entries(params || {}).forEach(([k, v]) => {
+      if (v === undefined || v === null || v === "") return;
+      q.append(k, v);
+    });
+    const qs = q.toString();
+    return new Promise((resolve, reject) => {
+      Get(`/lead/automationSendNowStatus${qs ? `?${qs}` : ""}`)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });

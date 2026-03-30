@@ -1,31 +1,76 @@
 <template>
   <div class="campaign-card">
-    <!-- Header with Platform Icon and Meta Info -->
+    <div v-if="statusConfig" class="status-chip" :style="{ color: statusConfig.color, background: statusConfig.bg }">
+      <span class="status-dot" :style="{ background: statusConfig.color }"></span>
+      {{ statusConfig.label }}
+    </div>
     <div class="card-header">
       <div class="platform-badge">
         <img src="@/assets/crm/flossly-analytics.png" alt="Flossly Analytics" class="flossly-icon" />
       </div>
       <div class="meta-info">
-        <div class="d-flex align-center">
+        <div class="d-flex align-start">
           <img :src="platformIcon" :alt="platform" class="small-platform-icon" />
-          <span class="campaign-title">{{ title }}</span>
+          <v-tooltip location="top" :text="title" max-width="360" open-on-click :open-on-hover="false">
+            <template #activator="{ props: tipProps }">
+              <span v-bind="tipProps" class="campaign-title title-clamp">{{ title }}</span>
+            </template>
+          </v-tooltip>
         </div>
         <span class="campaign-date">{{ date }}</span>
       </div>
     </div>
 
-    <!-- Campaign Description -->
-    <p class="campaign-description">{{ description }}</p>
-
-    <!-- Campaign Preview Image/Video -->
-    <div class="campaign-preview">
-      <img :src="previewImage" :alt="title" class="preview-image" />
-      <div v-if="hasVideo" class="play-button-overlay">
-        <img src="@/assets/crm/play.svg" alt="Play" class="play-button-svg" />
-      </div>
+    <div class="description-block">
+      <p class="campaign-description">{{ description }}</p>
+      <v-tooltip
+        v-if="showDescriptionToggle"
+        location="top"
+        :text="description"
+        max-width="360"
+        open-on-click
+        :open-on-hover="false"
+      >
+        <template #activator="{ props: tipProps }">
+          <button v-bind="tipProps" type="button" class="see-more-btn">Read more</button>
+        </template>
+      </v-tooltip>
     </div>
 
-    <!-- Campaign Stats -->
+    <div class="campaign-preview">
+      <!-- Video player — shown once source URL is fetched -->
+      <video
+        v-if="videoSrc"
+        :src="videoSrc"
+        class="preview-image"
+        controls
+        autoplay
+        @ended="videoSrc = null"
+      />
+      <!-- Thumbnail + play/loading overlay -->
+      <template v-else>
+        <img :src="previewImage" :alt="title" class="preview-image" />
+        <div v-if="hasVideo && !videoPermalink" class="play-button-overlay" @click="playVideo">
+          <v-progress-circular v-if="videoLoading" indeterminate color="white" size="48" />
+          <img v-else src="@/assets/crm/play.svg" alt="Play" class="play-button-svg" />
+        </div>
+        <div v-if="videoError" class="video-error-overlay">
+          <span>{{ videoError }}</span>
+        </div>
+        <!-- Permalink overlay — shown when inline playback is unavailable -->
+        <a
+          v-if="videoPermalink"
+          :href="videoPermalink"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="permalink-overlay"
+        >
+          <v-icon size="20" color="white">mdi-open-in-new</v-icon>
+          <span>Open on Facebook</span>
+        </a>
+      </template>
+    </div>
+
     <div class="campaign-stats">
       <div class="stat-item">
         <span class="stat-label">Cost</span>
@@ -43,12 +88,50 @@
         <span class="stat-label">Reach</span>
         <span class="stat-value">{{ reach }}</span>
       </div>
+      <div class="stat-item">
+        <span class="stat-label">Leads</span>
+        <span class="stat-value">{{ leads }}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Cost Per Lead</span>
+        <span class="stat-value">{{ cpl }}</span>
+      </div>
+    </div>
+
+    <div class="card-actions">
+      <v-btn
+        v-if="leads > 0"
+        color="primary"
+        variant="flat"
+        rounded="lg"
+        size="small"
+        class="view-leads-btn"
+        :href="`/crm/leads?campaignId=${campaignId}`"
+        target="_blank"
+        append-icon="mdi-open-in-new"
+      >
+        View {{ leads }} Lead{{ leads === 1 ? '' : 's' }}
+      </v-btn>
+      <v-btn
+        v-if="drillLabel"
+        variant="outlined"
+        rounded="lg"
+        size="small"
+        class="view-leads-btn"
+        append-icon="mdi-chevron-right"
+        @click="emit('drill')"
+      >
+        {{ drillLabel }}
+      </v-btn>
     </div>
   </div>
 </template>
 
 <script setup>
-defineProps({
+import { computed, ref } from 'vue';
+import crmService from '@/services/crmService';
+
+const props = defineProps({
   platform: {
     type: String,
     required: true,
@@ -77,6 +160,10 @@ defineProps({
     type: Boolean,
     default: false,
   },
+  videoId: {
+    type: String,
+    default: null,
+  },
   cost: {
     type: String,
     required: true,
@@ -93,7 +180,69 @@ defineProps({
     type: [String, Number],
     required: true,
   },
+  leads: {
+    type: [String, Number],
+    default: 0,
+  },
+  cpl: {
+    type: String,
+    default: '—',
+  },
+  campaignId: {
+    type: String,
+    default: null,
+  },
+  drillLabel: {
+    type: String,
+    default: null,
+  },
+  status: {
+    type: String,
+    default: null,
+  },
 });
+
+const emit = defineEmits(['drill']);
+
+const statusConfig = computed(() => {
+  const s = String(props.status || '').toUpperCase();
+  if (s === 'ACTIVE') return { label: 'Active', color: '#16a34a', bg: '#dcfce7' };
+  if (s === 'PAUSED') return { label: 'Paused', color: '#d97706', bg: '#fef3c7' };
+  if (s === 'WITH_ISSUES') return { label: 'Issues', color: '#dc2626', bg: '#fee2e2' };
+  if (s === 'ARCHIVED') return { label: 'Archived', color: '#6b7280', bg: '#f3f4f6' };
+  if (s === 'DELETED') return { label: 'Deleted', color: '#6b7280', bg: '#f3f4f6' };
+  if (s === 'IN_PROCESS') return { label: 'Processing', color: '#2563eb', bg: '#dbeafe' };
+  return null;
+});
+
+const showDescriptionToggle = computed(() => String(props.description || '').trim().length > 120);
+
+const videoSrc = ref(null);
+const videoPermalink = ref(null);
+const videoLoading = ref(false);
+const videoError = ref(null);
+
+const playVideo = async () => {
+  if (!props.videoId || videoLoading.value) return;
+  if (videoSrc.value) { videoSrc.value = null; videoPermalink.value = null; return; }
+  videoError.value = null;
+  videoPermalink.value = null;
+  videoLoading.value = true;
+  try {
+    const res = await crmService.getMetaVideoSource(props.videoId);
+    if (res?.code === 0 && res.data?.source) {
+      videoSrc.value = res.data.source;
+    } else if (res?.code === 0 && res.data?.permalink) {
+      videoPermalink.value = res.data.permalink;
+    } else {
+      videoError.value = res?.error || res?.message || 'Video not available';
+    }
+  } catch (e) {
+    videoError.value = e?.message || 'Failed to load video';
+  } finally {
+    videoLoading.value = false;
+  }
+};
 </script>
 
 <style scoped lang="scss">
@@ -106,6 +255,7 @@ defineProps({
   flex-direction: column;
   gap: 16px;
   transition: box-shadow 0.3s ease;
+  width: 100%;
   height: 100%;
   position: relative;
   background-clip: padding-box;
@@ -118,6 +268,7 @@ defineProps({
     padding: 1px;
     background: linear-gradient(43.6deg, #68ECE6 8.01%, #7D77FF 34.47%, #FF85DA 64.25%, #FFA977 90.72%);
     -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
     pointer-events: none;
@@ -128,10 +279,34 @@ defineProps({
   }
 }
 
+.status-chip {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 .card-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
+  min-height: 72px;
+  padding-right: 72px; /* prevent title overlapping status chip */
 }
 
 .platform-badge {
@@ -163,6 +338,8 @@ defineProps({
   width: 16px;
   height: 16px;
   margin-right: 6px;
+  margin-top: 2px;
+  flex-shrink: 0;
 }
 
 .campaign-title {
@@ -173,6 +350,9 @@ defineProps({
   line-height: 150%;
   letter-spacing: 0%;
   color: hsla(0, 0%, 0%, 1);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .campaign-date {
@@ -194,6 +374,46 @@ defineProps({
   letter-spacing: 0%;
   color: hsla(0, 0%, 45%, 1);
   margin: 0;
+  /* Fixed height = 3 lines × 18px line-height */
+  height: 54px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+.title-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.description-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.description-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  line-clamp: 3;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.see-more-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: #3f51b5;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .campaign-preview {
@@ -220,6 +440,47 @@ defineProps({
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.15);
+  transition: background 0.2s ease;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.3);
+  }
+}
+
+.permalink-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 10px;
+  text-decoration: none;
+  transition: background 0.2s ease;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.8);
+  }
+}
+
+.video-error-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 11px;
+  padding: 6px 10px;
+  text-align: center;
 }
 
 .play-button-svg {
@@ -239,6 +500,19 @@ defineProps({
   gap: 8px;
   padding-top: 8px;
   border-top: 1px solid #f0f0f0;
+}
+
+.card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.view-leads-btn {
+  width: 100%;
+  text-transform: none;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .stat-item {

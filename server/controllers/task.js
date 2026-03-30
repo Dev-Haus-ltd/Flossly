@@ -402,18 +402,28 @@ export const assignBulkTasks = async (event) => {
       });
     }
 
+    const todoStatusId =
+      orgStatuses.find((x) => x.key === "todo")?.id || orgStatuses?.[0]?.id;
+    const defaultPriorityId =
+      orgPriorities.find((x) => x.key === "low")?.id || orgPriorities?.[0]?.id;
+
     const userTasks = newTasks
       .map((t) => {
+        const frequency = t.frequency ?? t.defaultFrequency ?? null;
+        const priorityId = t.priorityId ?? t.priority?.id ?? defaultPriorityId;
+        const statusId = t.statusId ?? t.status?.id ?? todoStatusId;
+        const dueDate = t.dueDate ? new Date(t.dueDate) : getDueDate(frequency);
+
         return {
           userId,
           organisationId,
           taskId: t.id,
-          statusId: orgStatuses.find((x) => x.key === "todo").id,
-          priorityId: orgPriorities.find((x) => x.key === "low").id,
+          statusId,
+          priorityId,
           title: t.title,
           documentLink: "",
-          frequency: t.defaultFrequency,
-          dueDate: getDueDate(t.defaultFrequency),
+          frequency,
+          dueDate,
           comments: "",
           assignedBy: loggedUser.userId,
         };
@@ -480,6 +490,48 @@ const addDays = (date, days) => {
   return result;
 };
 
+// Helper function to delete next recurring instance when task is moved back from completed
+const deleteNextRecurringTask = async (task, orgStatuses) => {
+  try {
+    if (!task.frequency || task.frequency === "One off") {
+      return;
+    }
+
+    // Find the most recently created recurring task for this user/task/org
+    // that was created AFTER this current task was created
+    // This ensures we only delete instances that were auto-generated after this task
+    const futureTasks = await UserTask.findAll({
+      where: {
+        userId: task.userId,
+        taskId: task.taskId,
+        organisationId: task.organisationId,
+        id: { [Op.ne]: task.id }, // Don't find the current task itself
+        createdAt: {
+          [Op.gt]: task.createdAt, // Find tasks created AFTER this task was created
+        },
+      },
+      order: [['createdAt', 'DESC']], // Most recently created first
+      limit: 1,
+    });
+
+    if (futureTasks && futureTasks.length > 0) {
+      const nextTask = futureTasks[0];
+      
+      // Delete checklists for the next recurring task
+      await UserTaskChecklist.destroy({
+        where: { userTaskId: nextTask.id },
+      });
+
+      // Delete the next recurring task
+      await UserTask.destroy({
+        where: { id: nextTask.id },
+      });
+    }
+  } catch (err) {
+    // Silent fail for recurring task deletion
+  }
+};
+
 const generateNextRecurringTask = async (completedTask, orgStatuses, orgPriorities) => {
   try {
     const currentDueDate = completedTask.dueDate || new Date();
@@ -491,7 +543,22 @@ const generateNextRecurringTask = async (completedTask, orgStatuses, orgPrioriti
                           orgStatuses.find(s => s.key === "todo") ||
                           orgStatuses[0];
 
-    await UserTask.create({
+    // Check if a task already exists for this user, task, and due date to prevent duplicates
+    const existingTask = await UserTask.findOne({
+      where: {
+        userId: completedTask.userId,
+        taskId: completedTask.taskId,
+        organisationId: completedTask.organisationId,
+        dueDate: nextDueDate,
+      },
+    });
+
+    if (existingTask) {
+      // Task already exists for this period, don't create a duplicate
+      return;
+    }
+
+    const newTask = await UserTask.create({
       userId: completedTask.userId,
       taskId: completedTask.taskId,
       organisationId: completedTask.organisationId,
@@ -504,7 +571,37 @@ const generateNextRecurringTask = async (completedTask, orgStatuses, orgPrioriti
       comments: "",
       assignedBy: completedTask.assignedBy,
     });
+
+    // Copy checklists from the completed task to the new recurring task
+    // Preserve previous answers to show on the next task
+    const existingChecklists = await UserTaskChecklist.findAll({
+      where: {
+        userTaskId: completedTask.id,
+      },
+    });
+
+    if (existingChecklists?.length) {
+      const checklistToCreate = existingChecklists.map((checklist) => ({
+        userTaskId: newTask.id,
+        question: checklist.question,
+        category: checklist.category || null,
+        fieldOneTitle: checklist.fieldOneTitle || null,
+        fieldOneValue: checklist.fieldOneValue || null,
+        fieldTwoTitle: checklist.fieldTwoTitle || null,
+        fieldTwoValue: checklist.fieldTwoValue || null,
+        showRadio: checklist.showRadio || false,
+        showTime: checklist.showTime || false,
+        showDate: checklist.showDate || false,
+        radioValue: checklist.radioValue || "N/A", // Preserve previous answer
+        timeValue: checklist.timeValue || null, // Preserve previous time
+        dateValue: checklist.dateValue || null, // Preserve previous date
+        isCompleted: false, // Reset checklist for the new task
+      }));
+
+      await UserTaskChecklist.bulkCreate(checklistToCreate);
+    }
   } catch (err) {
+    // Silent fail for recurring task generation
   }
 };
 
@@ -608,6 +705,10 @@ export const updateTask = async (event) => {
         throw createError({ message: "PriorityId not found for this org" });
       }
 
+      const oldStatusId = userTask.statusId;
+      const oldStatus = orgStatuses.find((x) => x.id === oldStatusId);
+      const oldStatusKey = oldStatus?.key;
+
       if (frequency !== undefined) userTask.frequency = frequency;
       if (priorityId !== undefined) userTask.priorityId = priorityId;
       if (statusId !== undefined) userTask.statusId = statusId;
@@ -618,6 +719,19 @@ export const updateTask = async (event) => {
         userTask.dueDate = dueDate ? new Date(dueDate) : null;
       if (isArchieved !== undefined) userTask.isArchieved = isArchieved;
       await userTask.save();
+
+      const newStatus = orgStatuses.find((x) => x.id === statusId);
+      const newStatusKey = newStatus?.key;
+
+      const wasCompleted = oldStatusKey === "completed";
+      const isNowCompleted = newStatusKey === "completed";
+      const statusChangedFromCompleted = statusId !== undefined && wasCompleted && !isNowCompleted;
+      const hasFrequency = userTask.frequency && userTask.frequency !== "One off";
+      
+      if (statusChangedFromCompleted && hasFrequency) {
+        // Delete the next recurring instance when status changes from completed to something else
+        await deleteNextRecurringTask(userTask, orgStatuses);
+      }
 
       if (taskDetails && taskId) {
         const task = await Task.findByPk(taskId);
@@ -689,7 +803,8 @@ export const updateTask = async (event) => {
             await sendTaskCompletionNotification({
               task: userTask,
               completedBy: user,
-              notifyUsers: [await User.findByPk(userTask.assignedBy)]
+              notifyUsers: [await User.findByPk(userTask.assignedBy)],
+              organisationId: Number(loggedUser.orgId)
             });
           }
         } catch (fcmError) {
@@ -824,10 +939,24 @@ export const unAssignTask = async (event) => {
     const isAssigner = userTask.assignedBy === loggedUser.userId;
     const isPrivileged = isManagerOrOwner(loggedUser.roleId);
     
+    const userIdsToFetch = [loggedUser.userId, userTask.userId];
+    if (userTask.assignedBy && userTask.assignedBy !== loggedUser.userId && userTask.assignedBy !== userTask.userId) {
+      userIdsToFetch.push(userTask.assignedBy);
+    }
+    
+    const users = await User.findAll({
+      where: { id: [...new Set(userIdsToFetch)] },
+      attributes: ['id', 'fullName', 'email', 'roleId'],
+    });
+    const usersMap = new Map(users.map(u => [u.id, u]));
+    
+    const removedByUser = usersMap.get(loggedUser.userId);
+    const removedUser = usersMap.get(userTask.userId);
+    
     // Check if task was assigned by Practice Profile (Admin)
     let wasAssignedByPracticeProfile = false;
     if (userTask.assignedBy) {
-      const assignerUser = await User.findByPk(userTask.assignedBy);
+      const assignerUser = usersMap.get(userTask.assignedBy);
       if (assignerUser && isManagerOrOwner(assignerUser.roleId)) {
         wasAssignedByPracticeProfile = true;
       }
@@ -847,12 +976,25 @@ export const unAssignTask = async (event) => {
         message: "Not authorized to delete this task",
       });
     }
-    const removedByUser = await User.findByPk(loggedUser.userId);
-    const removedUser = await User.findByPk(userTask.userId);
     const taskTitle =
       userTask.title || (await Task.findByPk(userTask.taskId))?.title;
 
-    await userTask.destroy();
+    
+    await Promise.all([
+      UserTaskChecklist.destroy({ where: { userTaskId: userTask.id }, individualHooks: false }),
+      UserTaskComment.destroy({ where: { userTaskId: userTask.id }, individualHooks: false }),
+      UserTaskAttachment.destroy({ where: { userTaskId: userTask.id }, individualHooks: false }),
+      UserTaskCustomField.destroy({ where: { userTaskId: userTask.id }, individualHooks: false }),
+    ]);
+    
+    await UserTask.destroy({
+      where: {
+        id: userTask.id,
+        organisationId: organisationId,
+      },
+      force: true,
+      hooks: false,
+    });
 
     if (removedUser?.email) {
       await sendTaskUnassignmentEmail({
@@ -867,9 +1009,11 @@ export const unAssignTask = async (event) => {
     try {
       if (removedUser && removedUser.id !== loggedUser.userId) {
         await sendTaskUnassignmentNotification({
+          taskId: userTask?.taskId,
           taskTitle: taskTitle || 'Task',
           removedBy: removedByUser,
           removedUser,
+          organisationId: Number(loggedUser.orgId),
         });
       }
     } catch (fcmError) {
@@ -1019,16 +1163,24 @@ export const unAssignBulkTask = async (event) => {
     }
     const isPrivileged = isManagerOrOwner(loggedUser.roleId);
     
-    // Check for tasks assigned by Practice Profile (Admin)
-    const tasksAssignedByPracticeProfile = [];
-    for (const task of tasks) {
-      if (task.assignedBy) {
-        const assignerUser = await User.findByPk(task.assignedBy);
-        if (assignerUser && isManagerOrOwner(assignerUser.roleId)) {
-          tasksAssignedByPracticeProfile.push(task);
-        }
-      }
+    // Check for tasks assigned by Practice Profile (Admin) - OPTIMIZED
+    // Collect all unique assignedBy IDs and fetch them in ONE query
+    const assignedByIds = [...new Set(tasks.map(t => t.assignedBy).filter(Boolean))];
+    let assignerUsersMap = new Map();
+    
+    if (assignedByIds.length > 0) {
+      const assignerUsers = await User.findAll({
+        where: { id: assignedByIds },
+        attributes: ['id', 'roleId'],
+      });
+      assignerUsersMap = new Map(assignerUsers.map(u => [u.id, u]));
     }
+    
+    const tasksAssignedByPracticeProfile = tasks.filter(task => {
+      if (!task.assignedBy) return false;
+      const assignerUser = assignerUsersMap.get(task.assignedBy);
+      return assignerUser && isManagerOrOwner(assignerUser.roleId);
+    });
     
     // Prevent normal users from deleting tasks assigned by Practice Profile
     if (tasksAssignedByPracticeProfile.length > 0 && !isPrivileged) {
@@ -1164,10 +1316,11 @@ export const addUserTaskComment = async (event) => {
         recipients.push(userTask.assignedUser);
       }
       await sendTaskCommentNotification({
-        task: { id: userTask.id, title: userTask.taskDetails?.title || userTask.title || 'Task' },
+        task: { id: userTask.id, title: userTask.taskDetails?.title || userTask.title || 'Task', organisationId },
         comment,
         commentedBy: commenter,
         notifyUsers: recipients,
+        organisationId,
       });
     } catch (fcmError) {
       console.error('Failed to send FCM notification:', fcmError);
@@ -1184,11 +1337,13 @@ export const listUserTaskComments = async (event) => {
     const loggedUser = event.context.user;
     const organisationId = loggedUser.orgId;
     const body = await readBody(event);
-    const { userTaskId } = parseJsonBody(body);
+    const { userTaskId, limit, offset } = parseJsonBody(body);
     if (!userTaskId) {
       throw createError({ message: "userTaskId is required" });
     }
-    const comments = await UserTaskComment.findAll({
+    const parsedLimit = Number.isFinite(Number(limit)) ? Number(limit) : null;
+    const parsedOffset = Number.isFinite(Number(offset)) ? Number(offset) : null;
+    const query = {
       where: { userTaskId, organisationId },
       include: [
         {
@@ -1198,7 +1353,10 @@ export const listUserTaskComments = async (event) => {
         },
       ],
       order: [["createdAt", "DESC"]],
-    });
+    };
+    if (parsedLimit !== null) query.limit = parsedLimit;
+    if (parsedOffset !== null) query.offset = parsedOffset;
+    const comments = await UserTaskComment.findAll(query);
     return success(comments);
   } catch (err) {
     return error(500, err.message);
@@ -1318,7 +1476,7 @@ export const addAttachments = async (event) => {
       uploadedFiles.map(async (file) => {
         const link = await uploadTempFile({
           filepath: file.filepath,
-          filename: path.basename(file.filepath),
+          filename: `${Date.now()}-${file.originalFilename}`,
           contentType: file.mimetype || file.type,
           baseDir: "uploads",
         });
@@ -1542,7 +1700,8 @@ export const createNewTask = async (event) => {
               await sendTaskAssignmentNotification({
                 task: userTaskForAssignee,
                 assignedUser: assignee,
-                assignedBy: assignerUser
+                assignedBy: assignerUser,
+                organisationId: Number(loggedUser.orgId)
               });
             }
           } catch (fcmError) {
@@ -1729,6 +1888,9 @@ export const uploadBulkTasks = async (event) => {
         (x) => x.key === "progress"
       )?.id;
 
+      
+      const userIds = [...new Set(tasksWithUsers.map((t) => t.userId))];
+
       const userTaskData = tasksWithUsers.map((t, userTaskIndex) => {
         const taskIndex = validTasks.findIndex((vt) => vt.index === t.index);
         return {
@@ -1787,7 +1949,6 @@ export const uploadBulkTasks = async (event) => {
         });
       }
 
-      const userIds = [...new Set(tasksWithUsers.map((t) => t.userId))];
       const users = await User.findAll({
         where: { id: userIds },
       });
@@ -2133,9 +2294,12 @@ export const groupTeamTasksByTaskId = async (event) => {
 
   const buildTasksResponse = (tasks) =>
     tasks.map((task) => {
-      const assignments = task.userTasks || [];
+      const assignments = Array.isArray(task.userTasks) ? [...task.userTasks] : [];
+      // Ensure deterministic ordering so display fields (priority/frequency) don't "flip"
+      // when new assignments are added.
+      assignments.sort((a, b) => (a.id || 0) - (b.id || 0));
       const firstAssignment = assignments[0];
-      
+
       // Check if any assignment was made by Practice Profile (Admin)
       const hasPracticeProfileAssignment = assignments.some((assignment) => {
         const assignerRoleId = assignment.assigner?.roleId;
@@ -2185,6 +2349,7 @@ export const groupTeamTasksByTaskId = async (event) => {
           as: "userTasks",
           where: buildAssignmentWhere(false, status.id),
           required: true,
+          order: [["id", "ASC"]],
           attributes: [
             "id",
             "userId",
@@ -2267,6 +2432,7 @@ export const groupTeamTasksByTaskId = async (event) => {
         as: "userTasks",
         where: buildAssignmentWhere(true),
         required: true,
+        order: [["id", "ASC"]],
         attributes: [
           "id",
           "userId",
@@ -2859,7 +3025,8 @@ export const teamTasksCountByCategory = async (event) => {
 
     return success(result);
   } catch (err) {
-    return error(500, err.message);
+    const statusCode = Number(err?.statusCode || err?.status) || 500;
+    return error(statusCode, err?.message || "Something went wrong while counting tasks.");
   }
 };
 
@@ -3234,7 +3401,8 @@ export const getTeamTaskStatsByStatusAndCategory = async (event) => {
       upcoming: todo || 0, // Keep for backward compatibility
     });
   } catch (err) {
-    return error(500, err.message);
+    const statusCode = Number(err?.statusCode || err?.status) || 500;
+    return error(statusCode, err?.message || "Failed to fetch team task stats.");
   }
 };
 

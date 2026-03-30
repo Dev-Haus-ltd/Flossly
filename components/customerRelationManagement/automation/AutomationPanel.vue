@@ -143,7 +143,7 @@
             <v-col
               cols="12"
               md="6"
-              v-if="triggerForm.triggerType !== 'black_friday' && triggerForm.triggerType !== 'month_day' && triggerForm.triggerType !== 'weekday_of_month' && triggerForm.triggerType !== 'birthday_month_start' && triggerForm.triggerType !== 'practice_anniversary'"
+              v-if="triggerForm.triggerType !== 'black_friday' && triggerForm.triggerType !== 'month_day' && triggerForm.triggerType !== 'weekday_of_month' && triggerForm.triggerType !== 'birthday_month_start' && triggerForm.triggerType !== 'practice_anniversary' && triggerForm.triggerType !== 'send_now'"
             >
               <label class="mb-1 fld-lbl">Days Offset</label>
               <v-text-field
@@ -357,8 +357,11 @@ const props = defineProps({
   allowGroupEdit: { type: Boolean, default: false },
   showPreviewAction: { type: Boolean, default: true },
   disableToggle: { type: Boolean, default: false },
+  showTriggerColumn: { type: Boolean, default: true },
+  showStatusColumn: { type: Boolean, default: true },
 })
 const crmStore = useCrmStore()
+const mainStore = useMainStore()
 const orgStore = useOrgStore()
 const emit = defineEmits(['update:rows','save','edit-group','delete-group'])
 
@@ -378,15 +381,23 @@ const defaultGroupKeySet = new Set(crmAutomationGroups.map(group => group.key))
 const whatsappTemplates = ref([])
 const whatsappTemplatesLoading = ref(false)
 
-const tableHeaders = [
-  { title: 'Type', key: 'type', sortable: false },
-  { title: 'Automation Name', key: 'name', sortable: false },
-  { title: 'Trigger', key: 'sending', sortable: false },
-  { title: 'Actions', key: 'actions', sortable: false, align: 'center' },
-  { title: 'Status', key: 'enabled', sortable: false, align: 'center' },
-]
+const tableHeaders = computed(() => {
+  const headers = [
+    { title: 'Type', key: 'type', sortable: false },
+    { title: 'Automation Name', key: 'name', sortable: false },
+  ]
+  if (props.showTriggerColumn) {
+    headers.push({ title: 'Trigger', key: 'sending', sortable: false })
+  }
+  headers.push({ title: 'Actions', key: 'actions', sortable: false, align: 'center' })
+  if (props.showStatusColumn) {
+    headers.push({ title: 'Status', key: 'enabled', sortable: false, align: 'center' })
+  }
+  return headers
+})
 
 const triggerTypes = [
+  { label: 'Send Now', value: 'send_now' },
   { label: 'After enquiry', value: 'inquiry_days' },
   { label: 'Birthday offset', value: 'birthday_offset' },
   { label: 'Birthday month start', value: 'birthday_month_start' },
@@ -518,6 +529,9 @@ const sanitizeNumber = (value, fallback = 0) => {
 
 const buildTriggerFromForm = () => {
   const triggerType = triggerForm.triggerType
+  if (triggerType === 'send_now') {
+    return { type: 'send_now' }
+  }
   if (triggerType === 'black_friday') {
     return { type: 'black_friday', offsetDays: sanitizeNumber(triggerForm.triggerOffsetDays, 0) }
   }
@@ -547,9 +561,17 @@ const buildTriggerFromForm = () => {
   return { type: triggerType, days: sanitizeNumber(triggerForm.triggerDays, 0) }
 }
 
-const triggerPreviewText = computed(() =>
-  formatCrmTriggerPreview(buildTriggerFromForm())
-)
+const triggerPreviewText = computed(() => {
+  const nextTrigger = buildTriggerFromForm()
+  if (nextTrigger?.type !== 'send_now') {
+    return formatCrmTriggerPreview(nextTrigger)
+  }
+  const channel = String(triggerEditingRow.value?.type || 'Email').toLowerCase()
+  if (channel === 'whatsapp') {
+    return 'Message will be sent immediately when you click Save Trigger.'
+  }
+  return 'Email will be sent immediately when you click Save Trigger.'
+})
 
 const hydrateTriggerForm = (trigger = {}) => {
   const type = String(trigger?.type || 'inquiry_days')
@@ -1018,23 +1040,186 @@ const onToggleEnabled = async (row, val) => {
     sending: row.sending || def.sending || '',
     enabled: row.enabled,
     template: (row.template && row.template.trim()) ? row.template : (def.template || ''),
+    trigger: row.trigger || def.trigger || undefined,
   })
   try { await crmStore.saveAutomation(payload) } catch (e) {}
+}
+
+const sendImmediateLeadMail = async (row) => {
+  if (!resolvedLeadId.value) return null
+  if (String(row?.type || 'Email').toLowerCase() === 'whatsapp') return null
+  const def = resolveDefault(row || {})
+  const rawSubject = row?.subject || def.subject || def.name || row?.name || 'Automation'
+  const rawTemplate = row?.template && String(row.template).trim()
+    ? row.template
+    : (def.template || '')
+  const subject = applyCrmPlaceholders(rawSubject, {
+    lead: props.lead || null,
+    recipient: previewRecipient.value,
+    practiceName: practiceName.value,
+    org: resolveOrgDetails(),
+  })
+  const html = applyCrmPlaceholders(rawTemplate, {
+    lead: props.lead || null,
+    recipient: previewRecipient.value,
+    practiceName: practiceName.value,
+    org: resolveOrgDetails(),
+  })
+  return crmStore.sendLeadMail({
+    leadIds: [resolvedLeadId.value],
+    subject,
+    html,
+    key: `automation_${row?.key || 'send_now'}`,
+  })
 }
 
 const saveTrigger = async () => {
   if (!triggerEditingRow.value) return
   try {
+    const selectedRow = triggerEditingRow.value
     triggerSaving.value = true
     const nextTrigger = buildTriggerFromForm()
-    triggerEditingRow.value.trigger = nextTrigger
-    triggerEditingRow.value.sending = formatCrmTriggerPreview(nextTrigger)
-    const payload = buildPayload(triggerEditingRow.value)
-    await crmStore.saveAutomation(payload)
+    const isSendNow = nextTrigger?.type === 'send_now'
+    selectedRow.trigger = nextTrigger
+    selectedRow.sending = formatCrmTriggerPreview(nextTrigger)
+    if (isSendNow) {
+      // "Send Now" should dispatch immediately, so ensure row is enabled.
+      selectedRow.enabled = true
+    }
+    const payload = buildPayload(selectedRow)
+    const isLeadSendNowEmail =
+      isSendNow &&
+      !!resolvedLeadId.value &&
+      String(selectedRow?.type || 'Email').toLowerCase() !== 'whatsapp'
+    if (isSendNow && !isLeadSendNowEmail) payload.awaitSendNow = true
+    let res = await crmStore.saveAutomation(payload)
+    if (res?.code !== 0) {
+      mainStore?.setSnackbar?.({
+        title: res?.error || res?.message || 'Failed to save trigger',
+        type: 'error',
+      })
+      return
+    }
+    if (isSendNow && !isLeadSendNowEmail && res?.data?.sendNowConfirmationRequired) {
+      const preview = res?.data?.sendNowPreview || {}
+      const alreadySent = Number(preview?.alreadySent || 0)
+      const sendable = Number(preview?.sendable || 0)
+      const confirmResend = typeof window !== 'undefined'
+        ? window.confirm(
+            `This automation was already sent to ${alreadySent} lead(s). ` +
+            `There are ${sendable} new eligible lead(s). ` +
+            `Do you want to resend to previously-sent leads as well?`
+          )
+        : false
+      if (!confirmResend) {
+        mainStore?.setSnackbar?.({
+          title: 'Send now cancelled',
+          type: 'info',
+        })
+        return
+      }
+      res = await crmStore.saveAutomation({ ...payload, forceResend: true })
+      if (res?.code !== 0) {
+        mainStore?.setSnackbar?.({
+          title: res?.error || res?.message || 'Failed to resend automation',
+          type: 'error',
+        })
+        return
+      }
+    }
     closeTriggerDialog()
+    if (!isSendNow) return
+    if (isLeadSendNowEmail) {
+      const sendRes = await sendImmediateLeadMail(selectedRow)
+      if (sendRes?.code === 0) {
+        const sent = Number(sendRes?.data?.sent || 0)
+        mainStore?.setSnackbar?.({
+          title: sent ? `Mail sent to ${sent} recipient(s)` : 'Mail sent successfully',
+          type: 'success',
+        })
+        return
+      }
+      mainStore?.setSnackbar?.({
+        title: sendRes?.error || sendRes?.message || 'Failed to send email',
+        type: 'error',
+      })
+      return
+    }
+    const immediate = res?.data?.sendNowResult
+    if (immediate) {
+      const sent = Number(immediate?.sent || 0)
+      const resent = Number(immediate?.resent || 0)
+      const failed = Number(immediate?.failed || 0)
+      const skipped = Number(immediate?.skippedAlreadySent || 0) + Number(immediate?.skippedMissingRecipient || 0)
+      const chunks = []
+      if (sent) chunks.push(`${sent} sent`)
+      if (resent) chunks.push(`${resent} resent`)
+      if (failed) chunks.push(`${failed} failed`)
+      if (skipped) chunks.push(`${skipped} skipped`)
+      mainStore?.setSnackbar?.({
+        title: chunks.length ? chunks.join(' - ') : 'Send now completed',
+        type: failed ? 'warning' : 'success',
+      })
+      return
+    }
+    const jobId = String(res?.data?.sendNowJob?.jobId || '').trim()
+    if (!jobId) {
+      mainStore?.setSnackbar?.({
+        title: 'Send now is running. Please check again in a moment.',
+        type: 'info',
+      })
+      return
+    }
+    mainStore?.setSnackbar?.({
+      title: 'Send now started. Checking delivery status...',
+      type: 'info',
+    })
+    const done = await pollSendNowStatus(jobId)
+    if (done?.status === 'completed') {
+      const sent = Number(done?.result?.sent || 0)
+      const failed = Number(done?.result?.failed || 0)
+      const skipped = Number(done?.result?.skippedAlreadySent || 0) + Number(done?.result?.skippedMissingRecipient || 0)
+      const chunks = []
+      if (sent) chunks.push(`${sent} sent`)
+      if (failed) chunks.push(`${failed} failed`)
+      if (skipped) chunks.push(`${skipped} skipped`)
+      mainStore?.setSnackbar?.({
+        title: chunks.length ? chunks.join(' - ') : 'Send now completed',
+        type: failed ? 'warning' : 'success',
+      })
+      return
+    }
+    const errMsg = done?.error || 'Send now failed. Please try again.'
+    mainStore?.setSnackbar?.({
+      title: errMsg,
+      type: 'error',
+    })
+  } catch (e) {
+    mainStore?.setSnackbar?.({
+      title: e?.data?.message || e?.message || 'Failed to save trigger',
+      type: 'error',
+    })
   } finally {
     triggerSaving.value = false
   }
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const pollSendNowStatus = async (jobId) => {
+  const maxAttempts = 40
+  const intervalMs = 1500
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const res = await crmStore.getAutomationSendNowStatus({ jobId })
+    if (res?.code === 0 && res?.data) {
+      const status = String(res.data.status || '').toLowerCase()
+      if (status === 'completed' || status === 'failed') return res.data
+    } else if (res?.code === 404) {
+      return { status: 'failed', error: 'Send now status expired. Please check email logs.' }
+    }
+    await sleep(intervalMs)
+  }
+  return { status: 'failed', error: 'Send now is taking longer than expected. Please check again shortly.' }
 }
 
 const onNameUpdate = async (item) => {

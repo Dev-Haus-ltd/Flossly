@@ -8,6 +8,8 @@ import {
 } from "../models";
 import { normalizeWhatsAppNumber, logWhatsAppMessage } from "../utils/whatsapp";
 import { success, error } from "../utils/response";
+import { addWhapiClient, broadcastWhapiEvent } from "../utils/whapiStream";
+import { sendNotificationToMultipleUsers } from "../utils/fcmNotification";
 import { encrypt, decrypt } from "../utils/crypto";
 import { getWhapiEnvConfig, getWhapiPartnerConfig } from "../utils/whatsappProvider";
 
@@ -805,6 +807,16 @@ export const webhook = async (event) => {
         if (connected) updates.connectedAt = new Date();
         updates.lastSeenAt = new Date();
         await updateChannelRows(channelRows, updates);
+        for (const cfg of channelRows) {
+          broadcastWhapiEvent("status", {
+            orgId: cfg.organisationId,
+            channelId: String(channelId),
+            status: updates.status,
+            connected,
+            phoneNumber: updates.phoneNumber || cfg.phoneNumber || null,
+            displayName: updates.displayName || cfg.displayName || null,
+          });
+        }
       }
     }
     const messages = collectMessages(body);
@@ -868,10 +880,60 @@ export const webhook = async (event) => {
         providerMessageId: msg?.id || msg?.message_id || msg?.messageId || null,
         content,
       });
+      broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+
+      // Push notification to all org members
+      try {
+        const orgUsers = await UserOrganisation.findAll({
+          where: { organisationId: orgId },
+          attributes: ["userId"],
+        });
+        const userIds = orgUsers.map((u) => u.userId).filter(Boolean);
+        if (userIds.length) {
+          const senderLabel = lead.name || lead.telephone || fromDigits;
+          const preview = String(content?.text || content?.caption || "[Media]").slice(0, 80);
+          await sendNotificationToMultipleUsers({
+            userIds,
+            organisationId: orgId,
+            title: `New WhatsApp message from ${senderLabel}`,
+            body: preview,
+            type: "whatsapp_message",
+            referenceType: "lead",
+            referenceId: lead.id,
+            data: {
+              leadId: String(lead.id),
+              leadName: String(senderLabel),
+              url: `/crm/leads?leadId=${lead.id}&tab=communication`,
+            },
+            priority: "high",
+          });
+        }
+      } catch {}
     }
 
     return success({ received: true });
   }
 
   return success("ok");
+};
+
+export const stream = async (event) => {
+  const { orgId } = event.context.user || {};
+  if (!orgId) return error(401, "Unauthenticated");
+
+  const res = event.node.res;
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  res.write(`event: ready\ndata: "ok"\n\n`);
+
+  const cleanup = addWhapiClient(res, orgId);
+  event.node.req.on("close", () => {
+    cleanup();
+  });
+
+  return new Promise(() => {});
 };

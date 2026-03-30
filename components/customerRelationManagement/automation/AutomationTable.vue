@@ -22,33 +22,50 @@
       {{ infoText }}
     </v-alert>
 
-    <div class="d-flex flex-wrap justify-space-between align-center mb-3 automation-toolbar">
-      <div class="d-flex align-center gap-2">
-        <v-text-field
-          :model-value="search"
-          placeholder="Search automations..."
-          append-inner-icon="mdi-magnify"
-          variant="solo"
-          :elevation="0"
-          density="compact"
-          hide-details
-          bg-color="#FFFFFF"
-          flat
-          class="custom-search"
-          style="width: 280px"
-          @update:model-value="$emit('update:search', $event)"
-        />
+    <div class="d-flex align-center mb-2" style="flex-wrap: nowrap; justify-content: space-between; overflow-x: auto;">
+      <div class="d-inline-flex align-center toolbar-wrapper" style="flex-wrap: nowrap;">
+        <div style="width: 180px">
+          <v-text-field
+            :model-value="search"
+            placeholder="Search"
+            clearable
+            variant="solo"
+            :elevation="0"
+            density="compact"
+            hide-details
+            bg-color="#F3F4F6"
+            flat
+            class="custom-search"
+            @update:model-value="$emit('update:search', $event)"
+          >
+            <template #append-inner>
+              <img
+                :src="searchicon"
+                alt="search icon"
+                width="14"
+                height="14"
+              />
+            </template>
+          </v-text-field>
+        </div>
 
-        <v-menu :close-on-content-click="false">
+        <v-menu v-if="hasStatusColumn" :close-on-content-click="false">
           <template #activator="{ props }">
             <v-btn
               v-bind="props"
               variant="flat"
               density="compact"
-              class="filter-btn"
+              class="tbl-top-btn ml-2"
+              style="width: 110px"
             >
-              <v-icon class="mr-2" size="18">mdi-filter-variant</v-icon>
-              Filter
+              <span>Filter</span>
+              <img
+                :src="filtericon"
+                alt="filter icon"
+                class="ml-2"
+                width="14"
+                height="14"
+              />
               <v-badge
                 v-if="activeFilters > 0"
                 :content="activeFilters"
@@ -98,6 +115,10 @@
         :search="search"
         item-value="key"
         class="automation-data-table full-width-table"
+        :class="{
+          'has-trigger-column': hasTriggerColumn,
+          'has-status-column': hasStatusColumn,
+        }"
         density="comfortable"
         hover
         :items-per-page="15"
@@ -117,7 +138,7 @@
           </div>
         </template>
 
-        <template #item.sending="{ item }">
+        <template v-if="hasTriggerColumn" #item.sending="{ item }">
           <div class="d-flex  align-center justify-space-between trigger-cell">
             <div class="d-flex align-center">
               <v-icon size="16" color="grey-darken-1" class="mr-2">mdi-clock-outline</v-icon>
@@ -190,7 +211,7 @@
           </div>
         </template>
 
-        <template #item.enabled="{ item }">
+        <template v-if="hasStatusColumn" #item.enabled="{ item }">
           <div class="d-flex align-center justify-center">
             <v-switch
               v-model="item.enabled"
@@ -220,7 +241,7 @@
 </template>
 
 <script setup>
-defineProps({
+const props = defineProps({
   title: {
     type: String,
     default: '',
@@ -275,6 +296,15 @@ defineProps({
   },
 })
 
+import searchicon from "@/assets/icons/listView/serach-icon.svg"
+import filtericon from "@/assets/icons/listView/filter-icon.svg"
+
+const hasHeaderKey = (key) =>
+  Array.isArray(props.headers) && props.headers.some((h) => h?.key === key)
+
+const hasTriggerColumn = computed(() => hasHeaderKey('sending'))
+const hasStatusColumn = computed(() => hasHeaderKey('enabled'))
+
 defineEmits([
   'update:search',
   'update:filterEnabled',
@@ -296,31 +326,34 @@ defineEmits([
   color: rgb(var(--v-theme-on-surface));
 }
 
-.automation-toolbar {
-  background: #f6f6f6;
-  border: 1px solid rgba(var(--v-theme-outline), 0.3);
-  border-radius: 10px;
-  padding: 10px 12px;
+.toolbar-wrapper {
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .with-border {
   border: 1px solid rgba(var(--v-theme-outline), 0.12);
 }
 
-.custom-search {
+.custom-search,
+.tbl-top-btn {
   height: 40px;
   border-radius: 8px;
   font-size: 14px;
+  background-color: #F3F4F6 !important;
+  text-transform: none;
   box-shadow: none;
+  color: #737373;
 }
 
-.filter-btn,
-.action-btn {
-  height: 40px;
-  text-transform: none;
-  font-weight: 500;
-  font-size: 14px;
-  box-shadow: none;
+.tbl-top-btn {
+  margin-left: 16px !important;
+}
+
+.custom-search :deep(input::placeholder) {
+  color: #737373;
+  opacity: 1;
 }
 
 .automation-data-table {
@@ -362,9 +395,15 @@ defineEmits([
 
 .full-width-table :deep(th:nth-child(1)) { width: 120px; }
 .full-width-table :deep(th:nth-child(2)) { width: auto; min-width: 260px; }
-.full-width-table :deep(th:nth-child(3)) { width: 260px; }
-.full-width-table :deep(th:nth-child(4)) { width: 140px; }
-.full-width-table :deep(th:nth-child(5)) { width: 120px; }
+
+.full-width-table.has-trigger-column :deep(th:nth-child(3)) { width: 260px; }
+.full-width-table.has-trigger-column.has-status-column :deep(th:nth-child(4)) { width: 140px; }
+.full-width-table.has-trigger-column.has-status-column :deep(th:nth-child(5)) { width: 120px; }
+.full-width-table.has-trigger-column:not(.has-status-column) :deep(th:nth-child(4)) { width: 140px; }
+
+.full-width-table:not(.has-trigger-column).has-status-column :deep(th:nth-child(3)) { width: 140px; }
+.full-width-table:not(.has-trigger-column).has-status-column :deep(th:nth-child(4)) { width: 120px; }
+.full-width-table:not(.has-trigger-column):not(.has-status-column) :deep(th:nth-child(3)) { width: 140px; }
 
 .automation-data-table :deep(thead) {
   background: #f6f6f6;
