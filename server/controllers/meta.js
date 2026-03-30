@@ -1,5 +1,5 @@
 import { Op, fn, col } from 'sequelize'
-import { CrmLead, MetaPage, Organisation, User, UserOrganisation, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight } from '../models'
+import { CrmLead, MetaPage, Organisation, User, UserOrganisation, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight, CrmDmAccount } from '../models'
 import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
 import { addMetaClient, broadcastMetaEvent } from '../utils/metaStream'
@@ -776,7 +776,20 @@ export const healthCheck = async (event) => {
   const verifyTokenSet = Boolean(config.META_VERIFY_TOKEN)
 
   const pages = await MetaPage.findAll({ where: { organisationId: orgId } })
+  const dmAccounts = await CrmDmAccount.findAll({
+    where: { organisationId: orgId, status: 'Active' },
+    order: [['updatedAt', 'DESC']],
+  })
   const pageIds = pages.map((p) => p.pageId).filter(Boolean)
+  const igByPage = new Map()
+  for (const acc of dmAccounts) {
+    const platform = String(acc.platform || '').toLowerCase()
+    const pageId = String(acc?.metadata?.pageId || '')
+    if (platform === 'instagram' && pageId && !igByPage.has(pageId)) {
+      igByPage.set(pageId, acc)
+    }
+  }
+
   const leadStatsByPage = new Map()
   if (pageIds.length) {
     const leadStats = await CrmLead.findAll({
@@ -811,18 +824,35 @@ export const healthCheck = async (event) => {
 
     let subscribed = false
     let appMatched = false
+    let messagesSubscribed = false
     let errorMsg = null
 
     if (tokenPresent && appId) {
       try {
-        const url = `https://graph.facebook.com/${META_VERSION}/${pageId}/subscribed_apps?access_token=${encodeURIComponent(token)}`
+        const url = `https://graph.facebook.com/${META_VERSION}/${pageId}/subscribed_apps?fields=id,subscribed_fields&access_token=${encodeURIComponent(token)}`
         const resp = await $fetch(url, { method: 'GET' })
         const data = Array.isArray(resp?.data) ? resp.data : []
         subscribed = data.length > 0
         appMatched = data.some((a) => String(a.id) === String(appId))
+        const appEntry = (appId ? data.find((a) => String(a?.id) === String(appId)) : data[0]) || null
+        const subscribedFields = Array.isArray(appEntry?.subscribed_fields)
+          ? appEntry.subscribed_fields.map((f) => String(f || '').trim()).filter(Boolean)
+          : []
+        messagesSubscribed = subscribedFields.includes('messages')
       } catch (e) {
         errorMsg = e?.data?.error?.message || e?.message || 'Failed to check subscription'
       }
+    }
+
+    const igAccount = igByPage.get(String(pageId)) || null
+
+    let instagramProfilePicture = null
+    if (igAccount && token) {
+      try {
+        const igPicUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(igAccount.accountId)}?fields=profile_picture_url&access_token=${encodeURIComponent(token)}`
+        const igPicResp = await $fetch(igPicUrl, { method: 'GET' })
+        instagramProfilePicture = igPicResp?.profile_picture_url || null
+      } catch {}
     }
 
     results.push({
@@ -832,6 +862,11 @@ export const healthCheck = async (event) => {
       tokenPresent,
       subscribed,
       appMatched,
+      messagesSubscribed,
+      instagramConnected: !!igAccount,
+      instagramAccountId: igAccount?.accountId || null,
+      instagramAccountName: igAccount?.accountName || null,
+      instagramProfilePicture,
       connectedAt: page.connectedAt || page.updatedAt || page.createdAt || null,
       leadCount: leadStatsByPage.get(String(pageId))?.leadCount || 0,
       lastLeadAt: leadStatsByPage.get(String(pageId))?.lastLeadAt || null,
@@ -844,6 +879,7 @@ export const healthCheck = async (event) => {
     verifyTokenSet,
     totalPages: pages.length,
     activePages: pages.filter((p) => p.status === 'Active').length,
+    totalInstagramAccounts: dmAccounts.filter((acc) => String(acc.platform || '').toLowerCase() === 'instagram').length,
     pages: results,
   })
 }

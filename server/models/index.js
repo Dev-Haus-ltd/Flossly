@@ -64,6 +64,7 @@ import { MetaCampaign } from "./crm/MetaCampaign";
 import { MetaAdSet } from "./crm/MetaAdSet";
 import { MetaAd } from "./crm/MetaAd";
 import { MetaInsight } from "./crm/MetaInsights";
+import { CrmDmAccount } from "./crm/dmAccounts";
 
 // Chatbot Support
 import { ChatbotConversation } from "./chatbot/chatbotConversations";
@@ -539,6 +540,7 @@ export {
   CourseQuestionaire,
   UserCourseHistory,
   // CRM
+  CrmDmAccount,
   MetaPage,
   CrmLead,
   CrmLeadTreatment,
