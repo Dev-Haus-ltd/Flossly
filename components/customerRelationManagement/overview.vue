@@ -568,6 +568,16 @@ const gscChartConfig = reactive({
   summaryStats: []
 })
 
+const googleStatus = reactive({
+  connected: false,
+  email: '',
+  tokenId: '',
+  tokenValid: false,
+  connectedAt: '',
+  expiresAt: '',
+  scopes: [],
+})
+
 const metaHealthDialog = ref(false)
 const metaHealthLoading = ref(false)
 const metaHealthData = ref(null)
