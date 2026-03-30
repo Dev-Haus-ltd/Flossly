@@ -24,7 +24,39 @@
           </v-alert>
         </div>
 
-        <div style="max-height: 500px; overflow-y: auto">
+        <!-- Follow-up refinement section -->
+        <div class="mb-4">
+          <v-card variant="outlined" class="pa-3">
+            <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px">
+              <v-icon size="18" class="mr-1">mdi-pencil-outline</v-icon>
+              Refine Automations
+            </div>
+            <v-textarea
+              v-model="followUpRequest"
+              placeholder="e.g., 'Make the emails more friendly', 'Add emojis to WhatsApp messages', 'Change the birthday email subject line'"
+              variant="outlined"
+              density="compact"
+              rows="2"
+              hide-details
+              :disabled="isRefining"
+            />
+            <div class="d-flex justify-end mt-2">
+              <v-btn
+                size="small"
+                color="primary"
+                variant="flat"
+                :loading="isRefining"
+                :disabled="!followUpRequest.trim()"
+                @click="refineAutomations"
+              >
+                <v-icon size="16" class="mr-1">mdi-auto-fix</v-icon>
+                Apply Changes
+              </v-btn>
+            </div>
+          </v-card>
+        </div>
+
+        <div style="max-height: 400px; overflow-y: auto">
           <div v-for="(group, groupKey) in groupedAutomations" :key="groupKey" class="mb-4">
             <div class="group-header">
               <v-icon size="20" class="mr-2">mdi-folder-outline</v-icon>
@@ -110,8 +142,10 @@ const previewDialog = ref(props.modelValue)
 const isGenerating = ref(false)
 const isCreating = ref(false)
 const isRegenerating = ref(false)
+const isRefining = ref(false)
 const generatedAutomations = ref([])
 const currentIdea = ref('')
+const followUpRequest = ref('')
 
 watch(
   () => props.modelValue,
@@ -165,6 +199,7 @@ const generateAutomations = async (userIdea) => {
 const retryGeneration = async () => {
   isRegenerating.value = true
   generatedAutomations.value = []
+  followUpRequest.value = ''
 
   try {
     const res = await crmStore.generateAutomationsWithAI({ idea: currentIdea.value })
@@ -187,6 +222,42 @@ const retryGeneration = async () => {
     })
   } finally {
     isRegenerating.value = false
+  }
+}
+
+const refineAutomations = async () => {
+  if (!followUpRequest.value.trim()) return
+
+  isRefining.value = true
+  const previousAutomations = [...generatedAutomations.value]
+
+  try {
+    const res = await crmStore.generateAutomationsWithAI({ 
+      idea: currentIdea.value,
+      followUp: followUpRequest.value.trim(),
+      existingAutomations: previousAutomations
+    })
+    
+    if (res?.code === 0 && Array.isArray(res.data?.automations)) {
+      generatedAutomations.value = res.data.automations
+      followUpRequest.value = ''
+      mainStore.setSnackbar({
+        type: 'success',
+        title: 'Automations refined successfully',
+      })
+    } else {
+      mainStore.setSnackbar({
+        type: 'error',
+        title: res?.message || 'Failed to refine automations',
+      })
+    }
+  } catch (err) {
+    mainStore.setSnackbar({
+      type: 'error',
+      title: err.message || 'Failed to refine automations',
+    })
+  } finally {
+    isRefining.value = false
   }
 }
 
@@ -231,7 +302,9 @@ const closePreview = () => {
   isGenerating.value = false
   isCreating.value = false
   isRegenerating.value = false
+  isRefining.value = false
   currentIdea.value = ''
+  followUpRequest.value = ''
   previewDialog.value = false
   emit('close')
 }
