@@ -1733,6 +1733,335 @@ export const broadcastNotification = async (event) => {
  * Get notification delivery statistics
  * Track notification delivery success/failure rates
  */
+export const extendOrganisationTrial = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  const body = await readBody(event);
+  const { organisationId, extensionDays } = body;
+
+  if (!organisationId || !extensionDays || extensionDays <= 0) {
+    return error(400, "organisationId and valid extensionDays are required");
+  }
+
+  try {
+    // Get all users in the organisation with Trial license
+    const userPreferences = await UserPreference.findAll({
+      where: {
+        organisationId,
+        licenseType: 'Trial'
+      },
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'email', 'fullName']
+        }
+      ]
+    });
+
+    if (userPreferences.length === 0) {
+      return error(404, "No users with Trial license found in this organisation");
+    }
+
+    // Extend renewal date for all trial users
+    const updates = [];
+    for (const pref of userPreferences) {
+      const currentRenewalDate = new Date(pref.licenseRenewalDate);
+      const newRenewalDate = new Date(currentRenewalDate.getTime() + (extensionDays * 24 * 60 * 60 * 1000));
+      
+      pref.licenseRenewalDate = newRenewalDate;
+      await pref.save();
+      
+      updates.push({
+        userId: pref.userId,
+        email: pref.user?.email,
+        fullName: pref.user?.fullName,
+        previousRenewalDate: currentRenewalDate,
+        newRenewalDate: newRenewalDate
+      });
+    }
+
+    return success({
+      message: `Extended trial period by ${extensionDays} days for ${updates.length} user(s)`,
+      organisationId,
+      extensionDays,
+      usersUpdated: updates.length,
+      updates
+    });
+  } catch (err) {
+    console.error('Extend organisation trial error:', err);
+    return error(500, err.message);
+  }
+};
+
+export const updateOrganisationInfo = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  const body = await readBody(event);
+  const { organisationId, updates } = body;
+
+  if (!organisationId || !updates || typeof updates !== 'object') {
+    return error(400, "organisationId and updates object are required");
+  }
+
+  // Define allowed fields that can be updated
+  const allowedFields = [
+    'name', 'address', 'description', 'postalCode', 'surgeryCount', 
+    'teamCount', 'currentApp', 'contact', 'type', 'managerId', 
+    'logo', 'cqcInspectionDate', 'status', 'practiceAnniversaryDate',
+    'automationPlaceholders'
+  ];
+
+  // Filter updates to only allowed fields
+  const filteredUpdates = {};
+  for (const [key, value] of Object.entries(updates)) {
+    if (allowedFields.includes(key)) {
+      filteredUpdates[key] = value;
+    }
+  }
+
+  if (Object.keys(filteredUpdates).length === 0) {
+    return error(400, `No valid fields to update. Allowed fields: ${allowedFields.join(', ')}`);
+  }
+
+  // Validate type if provided
+  if (filteredUpdates.type) {
+    const validTypes = ['Dental', 'General Practice', 'Dermatology', 'Physiotherapy'];
+    if (!validTypes.includes(filteredUpdates.type)) {
+      return error(400, `Invalid type. Must be one of: ${validTypes.join(', ')}`);
+    }
+  }
+
+  // Validate status if provided
+  if (filteredUpdates.status) {
+    const validStatuses = ['Invited', 'Active', 'InActive'];
+    if (!validStatuses.includes(filteredUpdates.status)) {
+      return error(400, `Invalid status. Must be one of: ${validStatuses.join(', ')}`);
+    }
+  }
+
+  try {
+    // Find the organisation
+    const organisation = await Organisation.findByPk(organisationId);
+
+    if (!organisation) {
+      return error(404, "Organisation not found");
+    }
+
+    const previousData = { ...organisation.dataValues };
+
+    // Update the organisation
+    await organisation.update(filteredUpdates);
+
+    return success({
+      message: `Organisation updated successfully`,
+      update: {
+        organisationId: organisation.id,
+        updatedFields: Object.keys(filteredUpdates),
+        previous: previousData,
+        current: organisation.dataValues
+      }
+    });
+  } catch (err) {
+    console.error('Update organisation error:', err);
+    return error(500, err.message);
+  }
+};
+
+export const updateUserInfo = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  const body = await readBody(event);
+  const { userId, updates } = body;
+
+  if (!userId || !updates || typeof updates !== 'object') {
+    return error(400, "userId and updates object are required");
+  }
+
+  // Define allowed fields that can be updated
+  const allowedFields = [
+    'fullName', 'email', 'dob', 'phone', 'photo', 'address', 
+    'status', 'gender', 'nextOfKin', 'nextOfKinContact', 
+    'requiredCpdHours', 'roleId'
+  ];
+
+  // Filter updates to only allowed fields
+  const filteredUpdates = {};
+  for (const [key, value] of Object.entries(updates)) {
+    if (allowedFields.includes(key)) {
+      filteredUpdates[key] = value;
+    }
+  }
+
+  if (Object.keys(filteredUpdates).length === 0) {
+    return error(400, `No valid fields to update. Allowed fields: ${allowedFields.join(', ')}`);
+  }
+
+  // Validate status if provided
+  if (filteredUpdates.status) {
+    const validStatuses = ['Active', 'Disabled', 'Invited', 'Expired'];
+    if (!validStatuses.includes(filteredUpdates.status)) {
+      return error(400, `Invalid status. Must be one of: ${validStatuses.join(', ')}`);
+    }
+  }
+
+  // Validate gender if provided
+  if (filteredUpdates.gender) {
+    const validGenders = ['Male', 'Female', 'Other'];
+    if (!validGenders.includes(filteredUpdates.gender)) {
+      return error(400, `Invalid gender. Must be one of: ${validGenders.join(', ')}`);
+    }
+  }
+
+  // Validate roleId if provided
+  if (filteredUpdates.roleId) {
+    const role = await Role.findByPk(filteredUpdates.roleId);
+    if (!role) {
+      return error(400, 'Invalid roleId - role does not exist');
+    }
+  }
+
+  try {
+    // Find the user
+    const user = await User.findByPk(userId, {
+      include: [
+        {
+          model: Role,
+          as: 'role',
+          attributes: ['id', 'title']
+        }
+      ]
+    });
+
+    if (!user) {
+      return error(404, "User not found");
+    }
+
+    const previousData = { ...user.dataValues };
+
+    // Update the user
+    await user.update(filteredUpdates);
+
+    // Reload to get updated role if changed
+    await user.reload({
+      include: [
+        {
+          model: Role,
+          as: 'role',
+          attributes: ['id', 'title']
+        }
+      ]
+    });
+
+    return success({
+      message: `User updated successfully`,
+      update: {
+        userId: user.id,
+        updatedFields: Object.keys(filteredUpdates),
+        previous: previousData,
+        current: user.dataValues
+      }
+    });
+  } catch (err) {
+    console.error('Update user error:', err);
+    return error(500, err.message);
+  }
+};
+
+export const updateUserLicense = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  const body = await readBody(event);
+  const { userId, organisationId, licenseType, renewalDate } = body;
+
+  if (!userId || !organisationId || !licenseType || !renewalDate) {
+    return error(400, "userId, organisationId, licenseType, and renewalDate are required");
+  }
+
+  // Validate license type
+  const validLicenseTypes = ['System', 'Trial', 'Drift', 'Glide', 'Soar'];
+  if (!validLicenseTypes.includes(licenseType)) {
+    return error(400, `Invalid licenseType. Must be one of: ${validLicenseTypes.join(', ')}`);
+  }
+
+  // Validate renewal date
+  const renewalDateObj = new Date(renewalDate);
+  if (isNaN(renewalDateObj.getTime())) {
+    return error(400, "Invalid renewalDate format. Use ISO 8601 format (e.g., 2026-12-31)");
+  }
+
+  try {
+    // Find the user preference record
+    const userPref = await UserPreference.findOne({
+      where: {
+        userId,
+        organisationId
+      },
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'email', 'fullName']
+        },
+        {
+          model: Organisation,
+          as: 'organisation',
+          attributes: ['id', 'name']
+        }
+      ]
+    });
+
+    if (!userPref) {
+      return error(404, "User preference not found for the specified user and organisation");
+    }
+
+    const previousLicenseType = userPref.licenseType;
+    const previousRenewalDate = userPref.licenseRenewalDate;
+
+    // Update license type and renewal date
+    userPref.licenseType = licenseType;
+    userPref.licenseRenewalDate = renewalDateObj;
+    await userPref.save();
+
+    return success({
+      message: `License updated successfully for ${userPref.user?.fullName || 'user'}`,
+      update: {
+        userId: userPref.userId,
+        organisationId: userPref.organisationId,
+        user: userPref.user,
+        organisation: userPref.organisation,
+        previous: {
+          licenseType: previousLicenseType,
+          renewalDate: previousRenewalDate
+        },
+        current: {
+          licenseType: userPref.licenseType,
+          renewalDate: userPref.licenseRenewalDate
+        }
+      }
+    });
+  } catch (err) {
+    console.error('Update user license error:', err);
+    return error(500, err.message);
+  }
+};
+
 export const getNotificationDeliveryStats = async (event) => {
   const admin = event.context.admin;
   

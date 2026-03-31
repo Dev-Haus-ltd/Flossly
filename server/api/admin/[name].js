@@ -21,6 +21,10 @@ import {
   getStorageUsagePerPractice,
   broadcastNotification,
   getNotificationDeliveryStats,
+  extendOrganisationTrial,
+  updateUserLicense,
+  updateOrganisationInfo,
+  updateUserInfo,
   deductPoints,
   awardPoints,
   getPointsIssuedByAdmin,
@@ -112,6 +116,19 @@ export default defineEventHandler(async (event) => {
     
     case 'getNotificationDeliveryStats':
       return await getNotificationDeliveryStats(event);
+    
+    // User Preferences / License Management
+    case 'extendOrganisationTrial':
+      return await extendOrganisationTrial(event);
+    
+    case 'updateUserLicense':
+      return await updateUserLicense(event);
+    
+    case 'updateOrganisationInfo':
+      return await updateOrganisationInfo(event);
+    
+    case 'updateUserInfo':
+      return await updateUserInfo(event);
     
     // Export Data
     case 'exportOrgTasks':

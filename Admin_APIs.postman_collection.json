@@ -21,7 +21,7 @@
                   "    if (jsonData.data && jsonData.data.token) {",
                   "        pm.cookies.set('accessToken', jsonData.data.token);",
                   "        pm.environment.set('admin_token', jsonData.data.token);",
-                  "        console.log('✅ Admin token saved');",
+                  "        console.log('\u2705 Admin token saved');",
                   "    }",
                   "}"
                 ],
@@ -1729,6 +1729,182 @@
         }
       ],
       "description": "Manage default priorities and statuses that cascade to all organisations"
+    },
+    {
+      "name": "User Preferences / License Management",
+      "item": [
+        {
+          "name": "Get User By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getUserById?userId=123",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getUserById"
+              ],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "123",
+                  "description": "The ID of the user to retrieve"
+                }
+              ]
+            },
+            "description": "Get detailed user information by ID. Returns user details (excluding password), role, all organisations, and last 20 login history records."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Organisation By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getOrganisationById?id=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getOrganisationById"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "The ID of the organisation to retrieve"
+                }
+              ]
+            },
+            "description": "Get detailed organisation information by ID. Returns organisation details and related data."
+          },
+          "response": []
+        },
+        {
+          "name": "Extend Organisation Trial",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"extensionDays\": 30\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/extendOrganisationTrial",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "extendOrganisationTrial"
+              ]
+            },
+            "description": "Extend the trial period for all users with Trial license in a specific organisation by specified number of days"
+          },
+          "response": []
+        },
+        {
+          "name": "Update User License",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 123,\n  \"organisationId\": 1,\n  \"licenseType\": \"Glide\",\n  \"renewalDate\": \"2027-03-30T00:00:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/updateUserLicense",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "updateUserLicense"
+              ]
+            },
+            "description": "Manually update a user's license type and renewal date. Valid license types: System, Trial, Drift, Glide, Soar"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Organisation Info",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"updates\": {\n    \"name\": \"Updated Practice Name\",\n    \"address\": \"123 Main Street\",\n    \"postalCode\": \"SW1A 1AA\",\n    \"contact\": \"+44 20 1234 5678\",\n    \"type\": \"Dental\",\n    \"status\": \"Active\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/updateOrganisationInfo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "updateOrganisationInfo"
+              ]
+            },
+            "description": "Update general information of an organisation. Allowed fields: name, address, description, postalCode, surgeryCount, teamCount, currentApp, contact, type, managerId, logo, cqcInspectionDate, status, practiceAnniversaryDate, automationPlaceholders"
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Info",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 123,\n  \"updates\": {\n    \"fullName\": \"John Updated Doe\",\n    \"email\": \"john.updated@example.com\",\n    \"phone\": \"+44 7700 900000\",\n    \"address\": \"456 New Street, London\",\n    \"status\": \"Active\",\n    \"gender\": \"Male\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/updateUserInfo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "updateUserInfo"
+              ]
+            },
+            "description": "Update general information of a user. Allowed fields: fullName, email, dob, phone, photo, address, status, gender, nextOfKin, nextOfKinContact, requiredCpdHours, roleId"
+          },
+          "response": []
+        }
+      ],
+      "description": "Manage user licenses and trial periods"
     }
   ],
   "event": [
@@ -1747,7 +1923,7 @@
         "type": "text/javascript",
         "exec": [
           "if (pm.response.code === 401 || pm.response.code === 403) {",
-          "    console.log('⚠️ Authentication error. Please login again.');",
+          "    console.log('\u26a0\ufe0f Authentication error. Please login again.');",
           "}"
         ]
       }
