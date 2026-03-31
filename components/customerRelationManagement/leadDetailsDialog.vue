@@ -448,6 +448,8 @@
                   :whatsapp-enabled="whatsappEnabled"
                   :whatsapp-requires-templates="whatsappRequiresTemplates"
                   :disable-toggle="false"
+                  :show-sent-status-column="true"
+                  :show-resend-action="true"
                 />
               </div>
             </v-tabs-window-item>
@@ -461,67 +463,89 @@
                   :whatsapp-enabled="whatsappEnabled"
                   :whatsapp-requires-templates="whatsappRequiresTemplates"
                   :disable-toggle="false"
+                  :show-sent-status-column="true"
+                  :show-resend-action="true"
                 />
               </div>
             </v-tabs-window-item>
 
             <v-tabs-window-item value="automation-log">
               <div class="pa-6">
-                <v-card variant="outlined" rounded="lg" class="overflow-hidden">
-                  <v-data-table-server
-                    :items="automationLogRows"
-                    :headers="automationLogHeaders"
-                    :loading="automationLogLoading"
-                    :items-length="automationLogTotal"
-                    :page="automationLogPage"
-                    :items-per-page="automationLogItemsPerPage"
-                    :items-per-page-options="[10, 25, 50]"
-                    density="compact"
-                    hover
-                    item-value="key"
-                    @update:page="onAutomationLogPageChange"
-                    @update:items-per-page="onAutomationLogLimitChange"
-                  >
-                    <template #headers="{ columns }">
-                      <tr>
-                        <th
-                          v-for="col in columns"
-                          :key="col.key"
-                          :style="{ backgroundColor: '#F6F6F6', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#4b5563', padding: '8px 12px' }"
-                        >
-                          {{ col.title }}
-                        </th>
-                      </tr>
-                    </template>
-                    <template #item.type="{ item }">
-                      <div class="d-flex align-center" style="gap:6px;">
-                        <v-chip size="small" variant="tonal" color="primary" class="font-weight-medium">
-                          <v-icon size="14" class="mr-1">
-                            {{ item.type === 'WhatsApp' ? 'mdi-whatsapp' : 'mdi-email-outline' }}
-                          </v-icon>
-                          {{ item.type }}
-                        </v-chip>
-                        <v-chip v-if="item.source === 'manual'" size="x-small" variant="tonal" color="grey">Manual</v-chip>
-                      </div>
-                    </template>
-                    <template #item.name="{ item }">
-                      <span class="text-body-2 font-weight-medium">{{ item.name }}</span>
-                    </template>
-                    <template #item.sentAt="{ item }">
-                      <span class="text-body-2">
-                        {{ formatDate(item.sentAt) }}
-                        <span class="text-caption text-medium-emphasis ml-1">
-                          {{ item.sentAt ? new Date(item.sentAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '' }}
-                        </span>
+                <v-card class="rounded-lg overflow-hidden" style="border: 1px solid rgba(0,0,0,0.12);" :elevation="0">
+                <v-data-table-server
+                  :items="automationLogRows"
+                  :headers="automationLogHeaders"
+                  :loading="automationLogLoading"
+                  :items-length="automationLogTotal"
+                  :page="automationLogPage"
+                  :items-per-page="automationLogItemsPerPage"
+                  :items-per-page-options="[10, 25, 50]"
+                  class="automation-log-table"
+                  :elevation="0"
+                  density="compact"
+                  hover
+                  item-value="key"
+                  @update:page="onAutomationLogPageChange"
+                  @update:items-per-page="onAutomationLogLimitChange"
+                >
+                  <template #headers="{ columns }">
+                    <tr>
+                      <th
+                        v-for="col in columns"
+                        :key="col.key"
+                        :style="{
+                          backgroundColor: '#F6F6F6',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          color: '#4b5563',
+                          padding: '0px 10px',
+                          height: '40px',
+                          width: col.width || undefined,
+                          minWidth: col.width || undefined,
+                          whiteSpace: 'nowrap',
+                        }"
+                      >
+                        {{ col.title }}
+                      </th>
+                    </tr>
+                  </template>
+                  <template #item.type="{ item }">
+                    <div class="d-flex align-center" style="gap:6px;">
+                      <v-chip size="small" variant="tonal" color="primary" class="font-weight-medium">
+                        <v-icon size="14" class="mr-1">
+                          {{ item.type === 'WhatsApp' ? 'mdi-whatsapp' : 'mdi-email-outline' }}
+                        </v-icon>
+                        {{ item.type }}
+                      </v-chip>
+                      <v-chip v-if="item.source === 'manual'" size="x-small" variant="tonal" color="grey">Manual</v-chip>
+                    </div>
+                  </template>
+                  <template #item.name="{ item }">
+                    <span class="text-body-2 font-weight-medium">{{ item.name }}</span>
+                  </template>
+                  <template #item.sentAt="{ item }">
+                    <span class="text-body-2">
+                      {{ formatDate(item.sentAt) }}
+                      <span class="text-caption text-medium-emphasis ml-1">
+                        {{ item.sentAt ? new Date(item.sentAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '' }}
                       </span>
-                    </template>
-                    <template #no-data>
-                      <div class="text-center py-8">
-                        <v-icon size="48" color="grey-lighten-1">mdi-email-check-outline</v-icon>
-                        <p class="text-body-2 mt-3 text-medium-emphasis">No automations sent to this lead yet</p>
-                      </div>
-                    </template>
-                  </v-data-table-server>
+                    </span>
+                  </template>
+                  <template #item.logStatus>
+                    <v-chip size="x-small" variant="tonal" color="success" class="font-weight-medium">
+                      <v-icon size="11" class="mr-1">mdi-check-circle-outline</v-icon>
+                      Sent
+                    </v-chip>
+                  </template>
+                  <template #no-data>
+                    <div class="text-center py-8">
+                      <v-icon size="48" color="grey-lighten-1">mdi-email-check-outline</v-icon>
+                      <p class="text-body-2 mt-3 text-medium-emphasis">No automations sent to this lead yet</p>
+                    </div>
+                  </template>
+                </v-data-table-server>
                 </v-card>
               </div>
             </v-tabs-window-item>
@@ -658,9 +682,10 @@ const automationLogTotal = ref(0)
 const automationLogPage = ref(1)
 const automationLogItemsPerPage = ref(25)
 const automationLogHeaders = [
-  { title: 'Type', key: 'type', width: '160px', sortable: false },
-  { title: 'Automation Name', key: 'name', sortable: false },
-  { title: 'Sent At', key: 'sentAt', width: '200px', sortable: false },
+  { title: 'Type', key: 'type', sortable: false },
+  { title: 'Automation', key: 'name', sortable: false },
+  { title: 'Message Sent', key: 'sentAt', width: '200px', sortable: false },
+  { title: 'Status', key: 'logStatus', width: '110px', sortable: false },
 ]
 
 const loadAutomationLog = async (leadId) => {
@@ -916,5 +941,38 @@ const savePreferences = async () => {
   background: #ffffff !important;
   color: rgba(0, 0, 0, 0.87) !important;
   border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+.automation-log-table :deep(tbody tr) {
+  height: 44px;
+  transition: background-color 0.15s ease;
+}
+
+.automation-log-table :deep(tbody tr:hover) {
+  background: #f5f5f5 !important;
+}
+
+.automation-log-table :deep(tbody td) {
+  padding: 0 10px !important;
+  font-size: 13px;
+  vertical-align: middle !important;
+}
+
+.automation-log-table :deep(tbody tr:nth-child(2n)) {
+  background: #fcfcfc;
+}
+
+.automation-log-table :deep(table) {
+  border-collapse: collapse !important;
+  width: 100%;
+}
+
+.automation-log-table :deep(th),
+.automation-log-table :deep(td) {
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+}
+
+.automation-log-table :deep(.v-table__wrapper) {
+  border: none !important;
 }
 </style>

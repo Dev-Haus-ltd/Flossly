@@ -129,14 +129,35 @@
         :search="search"
         item-value="key"
         class="automation-data-table full-width-table"
-        :class="{
-          'has-trigger-column': hasTriggerColumn,
-          'has-status-column': hasStatusColumn,
-        }"
-        density="comfortable"
+        :elevation="0"
+        density="compact"
         hover
         :items-per-page="15"
       >
+        <template #headers="{ columns }">
+          <tr>
+            <th
+              v-for="col in columns"
+              :key="col.key"
+              :style="{
+                backgroundColor: '#F6F6F6',
+                fontSize: '12px',
+                fontWeight: '600',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                color: '#4b5563',
+                padding: '0px 10px',
+                height: '40px',
+                width: col.width || undefined,
+                minWidth: col.width || undefined,
+                textAlign: col.align === 'center' ? 'center' : 'left',
+                whiteSpace: 'nowrap',
+              }"
+            >
+              {{ col.title }}
+            </th>
+          </tr>
+        </template>
         <template #item.type="{ item }">
           <v-chip
             size="small"
@@ -186,7 +207,31 @@
         </template>
 
         <template #item.actions="{ item }">
-          <div class="d-flex align-center justify-center" style="gap: 16px;">
+          <div class="d-flex align-center justify-center" style="gap: 10px;">
+            <v-tooltip v-if="showResendAction && String(item.type || 'Email').toLowerCase() !== 'whatsapp'" location="top">
+              <template #activator="{ props }">
+                <v-progress-circular
+                  v-if="resendingKey === item.key"
+                  v-bind="props"
+                  size="16"
+                  width="2"
+                  indeterminate
+                  color="primary"
+                  class="action-icon-btn"
+                />
+                <v-icon
+                  v-else
+                  v-bind="props"
+                  size="18"
+                  color="primary"
+                  class="action-icon-btn"
+                  :class="{ 'action-icon-disabled': !!resendingKey }"
+                  @click="resendingKey ? null : $emit('resend', item)"
+                >mdi-email-sync-outline</v-icon>
+              </template>
+              <span>{{ item.lastSentAt ? 'Resend' : 'Send now' }}</span>
+            </v-tooltip>
+
             <v-tooltip v-if="showPreviewAction" location="top">
               <template #activator="{ props }">
                 <img
@@ -278,6 +323,29 @@
           <v-chip v-else size="x-small" variant="tonal" color="grey">Never sent</v-chip>
         </template>
 
+        <template v-if="hasSentStatusColumn" #item.sentStatus="{ item }">
+          <v-chip
+            v-if="item.lastSentAt"
+            size="x-small"
+            variant="tonal"
+            color="success"
+            class="font-weight-medium"
+          >
+            <v-icon size="11" class="mr-1">mdi-check-circle-outline</v-icon>
+            Sent
+          </v-chip>
+          <v-chip
+            v-else
+            size="x-small"
+            variant="tonal"
+            color="grey"
+            class="font-weight-medium"
+          >
+            <v-icon size="11" class="mr-1">mdi-clock-outline</v-icon>
+            Pending
+          </v-chip>
+        </template>
+
         <template #no-data>
           <div class="text-center py-8">
             <v-icon size="64" color="grey-lighten-1">mdi-email-off-outline</v-icon>
@@ -354,6 +422,14 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  showResendAction: {
+    type: Boolean,
+    default: false,
+  },
+  resendingKey: {
+    type: String,
+    default: null,
+  },
 })
 
 import searchicon from "@/assets/icons/listView/serach-icon.svg"
@@ -365,6 +441,7 @@ const hasHeaderKey = (key) =>
 const hasTriggerColumn = computed(() => hasHeaderKey('sending'))
 const hasStatusColumn = computed(() => hasHeaderKey('enabled'))
 const hasLastSentColumn = computed(() => hasHeaderKey('lastSentAt'))
+const hasSentStatusColumn = computed(() => hasHeaderKey('sentStatus'))
 
 const formatRelativeTime = (dateStr) => {
   if (!dateStr) return ''
@@ -391,6 +468,7 @@ defineEmits([
   'openEdit',
   'deleteRow',
   'toggleEnabled',
+  'resend',
 ])
 </script>
 
@@ -465,42 +543,12 @@ defineEmits([
 
 .full-width-table :deep(table) {
   width: 100% !important;
-  table-layout: fixed;
-}
-
-.full-width-table :deep(th:nth-child(1)) { width: 120px; }
-.full-width-table :deep(th:nth-child(2)) { width: auto; min-width: 260px; }
-
-.full-width-table.has-trigger-column :deep(th:nth-child(3)) { width: 260px; }
-.full-width-table.has-trigger-column.has-status-column :deep(th:nth-child(4)) { width: 140px; }
-.full-width-table.has-trigger-column.has-status-column :deep(th:nth-child(5)) { width: 120px; }
-.full-width-table.has-trigger-column:not(.has-status-column) :deep(th:nth-child(4)) { width: 140px; }
-
-.full-width-table:not(.has-trigger-column).has-status-column :deep(th:nth-child(3)) { width: 140px; }
-.full-width-table:not(.has-trigger-column).has-status-column :deep(th:nth-child(4)) { width: 120px; }
-.full-width-table:not(.has-trigger-column):not(.has-status-column) :deep(th:nth-child(3)) { width: 140px; }
-
-.automation-data-table :deep(thead) {
-  background: #f6f6f6;
-}
-
-.automation-data-table :deep(thead th) {
-  font-weight: 600 !important;
-  font-size: 12px !important;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #4b5563 !important;
-  padding: 8px 12px !important;
-}
-
-.automation-data-table :deep(.v-data-table-header__content) {
-  color: #4b5563;
-  font-weight: 600;
+  table-layout: auto;
 }
 
 .automation-data-table :deep(tbody tr) {
-  transition: background-color 0.2s ease;
-  height: 48px;
+  transition: background-color 0.15s ease;
+  height: 44px;
 }
 
 .automation-data-table :deep(tbody tr:hover) {
@@ -508,8 +556,8 @@ defineEmits([
 }
 
 .automation-data-table :deep(tbody td) {
-  padding: 4px 8px !important;
-  font-size: 14px;
+  padding: 0 10px !important;
+  font-size: 13px;
   vertical-align: middle !important;
   white-space: nowrap;
   overflow: hidden;

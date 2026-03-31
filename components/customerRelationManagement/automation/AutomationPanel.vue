@@ -31,6 +31,8 @@
         :whatsapp-enabled="props.whatsappEnabled"
         :disable-toggle="props.disableToggle"
         :show-preview-action="props.showPreviewAction"
+        :show-resend-action="props.showResendAction"
+        :resending-key="resendingKey"
         :default-automation-key-set="defaultAutomationKeySet"
         @back="clearAutomationSelection"
         @update:search="(val) => (search = val)"
@@ -43,6 +45,7 @@
         @openEdit="openEdit"
         @deleteRow="confirmDeleteAutomation"
         @toggleEnabled="onToggleEnabled"
+        @resend="handleResend"
       />
     </template>
 
@@ -83,6 +86,8 @@
             :whatsapp-enabled="props.whatsappEnabled"
             :disable-toggle="props.disableToggle"
             :show-preview-action="props.showPreviewAction"
+            :show-resend-action="props.showResendAction"
+            :resending-key="resendingKey"
             :default-automation-key-set="defaultAutomationKeySet"
             @update:search="(val) => (search = val)"
             @update:filterEnabled="(val) => (filterEnabled = val)"
@@ -94,6 +99,7 @@
             @openEdit="openEdit"
             @deleteRow="confirmDeleteAutomation"
             @toggleEnabled="onToggleEnabled"
+            @resend="handleResend"
           />
         </div>
       </v-card>
@@ -517,6 +523,8 @@ const props = defineProps({
   showTriggerColumn: { type: Boolean, default: true },
   showStatusColumn: { type: Boolean, default: true },
   showLastSentColumn: { type: Boolean, default: false },
+  showSentStatusColumn: { type: Boolean, default: false },
+  showResendAction: { type: Boolean, default: false },
 })
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
@@ -551,9 +559,12 @@ const tableHeaders = computed(() => {
   if (props.showLastSentColumn) {
     headers.push({ title: 'Last Sent', key: 'lastSentAt', sortable: false })
   }
-  headers.push({ title: 'Actions', key: 'actions', sortable: false, align: 'center' })
+  if (props.showSentStatusColumn) {
+    headers.push({ title: 'Status', key: 'sentStatus', sortable: false, align: 'center', width: '110px' })
+  }
+  headers.push({ title: 'Actions', key: 'actions', sortable: false, align: 'center', width: '120px' })
   if (props.showStatusColumn) {
-    headers.push({ title: 'Status', key: 'enabled', sortable: false, align: 'center' })
+    headers.push({ title: 'Enable / Disable', key: 'enabled', sortable: false, align: 'center', width: '120px' })
   }
   return headers
 })
@@ -1295,6 +1306,26 @@ const sendImmediateLeadMail = async (row) => {
     html,
     key: `automation_${row?.key || 'send_now'}`,
   })
+}
+
+const resendingKey = ref(null)
+
+const handleResend = async (row) => {
+  if (resendingKey.value) return
+  resendingKey.value = row.key
+  try {
+    const res = await sendImmediateLeadMail(row)
+    if (res?.code === 0 || res?.sent > 0) {
+      row.lastSentAt = new Date().toISOString()
+      mainStore?.setSnackbar?.({ title: 'Automation resent successfully', type: 'success' })
+    } else {
+      mainStore?.setSnackbar?.({ title: res?.message || 'Failed to resend automation', type: 'error' })
+    }
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || 'Failed to resend automation', type: 'error' })
+  } finally {
+    resendingKey.value = null
+  }
 }
 
 const saveTrigger = async () => {
