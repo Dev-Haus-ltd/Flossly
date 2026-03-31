@@ -7,6 +7,7 @@
         :show-card-toggle="props.showCardToggle"
         :allow-group-edit="props.allowGroupEdit"
         :active-key="activeAutomation?.key || ''"
+        :whatsapp-enabled="props.whatsappEnabled"
         @select="selectAutomation"
         @toggle="toggleAutomationGroup"
         @edit="(card) => emit('edit-group', card)"
@@ -26,6 +27,8 @@
         :filter-enabled="filterEnabled"
         :filter-disabled="filterDisabled"
         :active-filters="activeFilters"
+        :filter-sent="filterSent"
+        :whatsapp-enabled="props.whatsappEnabled"
         :disable-toggle="props.disableToggle"
         :show-preview-action="props.showPreviewAction"
         :default-automation-key-set="defaultAutomationKeySet"
@@ -33,6 +36,7 @@
         @update:search="(val) => (search = val)"
         @update:filterEnabled="(val) => (filterEnabled = val)"
         @update:filterDisabled="(val) => (filterDisabled = val)"
+        @update:filterSent="(val) => (filterSent = val)"
         @clearFilters="clearFilters"
         @openTrigger="openTriggerEditor"
         @openPreview="openPreview"
@@ -75,12 +79,15 @@
             :filter-enabled="filterEnabled"
             :filter-disabled="filterDisabled"
             :active-filters="activeFilters"
+            :filter-sent="filterSent"
+            :whatsapp-enabled="props.whatsappEnabled"
             :disable-toggle="props.disableToggle"
             :show-preview-action="props.showPreviewAction"
             :default-automation-key-set="defaultAutomationKeySet"
             @update:search="(val) => (search = val)"
             @update:filterEnabled="(val) => (filterEnabled = val)"
             @update:filterDisabled="(val) => (filterDisabled = val)"
+            @update:filterSent="(val) => (filterSent = val)"
             @clearFilters="clearFilters"
             @openTrigger="openTriggerEditor"
             @openPreview="openPreview"
@@ -108,130 +115,280 @@
       @confirm="deleteAutomationNow"
     />
 
-    <v-dialog v-model="showTriggerDialog" max-width="720px">
-      <v-card class="rounded-lg elevation-8">
-        <div class="modal-header">
-          <div>
-            <h5 class="modal-title">Edit Trigger</h5>
-            <div class="text-caption text-medium-emphasis">
-              {{ triggerPreviewText }}
+    <v-dialog v-model="showTriggerDialog" max-width="600px" :persistent="triggerSaving">
+      <v-card class="trigger-dialog rounded-xl overflow-hidden" elevation="16">
+
+        <!-- Header -->
+        <div class="trigger-dialog__header">
+          <div class="d-flex align-center gap-3">
+            <div class="trigger-dialog__header-icon">
+              <v-icon size="20" color="white">mdi-lightning-bolt</v-icon>
+            </div>
+            <div>
+              <div class="trigger-dialog__title">Set Trigger</div>
+              <div class="trigger-dialog__subtitle" v-if="triggerEditingRow?.name">
+                {{ triggerEditingRow.name }}
+              </div>
             </div>
           </div>
-          <v-btn icon variant="text" @click="closeTriggerDialog">
-            <v-icon>mdi-close</v-icon>
+          <v-btn icon variant="text" size="small" color="white" @click="closeTriggerDialog">
+            <v-icon size="18">mdi-close</v-icon>
           </v-btn>
         </div>
 
-        <v-divider />
-
-        <div class="modal-body">
-          <v-row>
-            <v-col cols="12" md="6">
-              <label class="mb-1 fld-lbl">Trigger Type</label>
-              <v-select
-                v-model="triggerForm.triggerType"
-                :items="triggerTypes"
-                item-title="label"
-                item-value="value"
-                variant="solo"
-                density="compact"
-                class="mb-1 input-bordered"
-                flat
-              />
-            </v-col>
-
-            <v-col
-              cols="12"
-              md="6"
-              v-if="triggerForm.triggerType !== 'black_friday' && triggerForm.triggerType !== 'month_day' && triggerForm.triggerType !== 'weekday_of_month' && triggerForm.triggerType !== 'birthday_month_start' && triggerForm.triggerType !== 'practice_anniversary' && triggerForm.triggerType !== 'send_now'"
-            >
-              <label class="mb-1 fld-lbl">Days Offset</label>
-              <v-text-field
-                v-model="triggerForm.triggerDays"
-                type="number"
-                min="0"
-                variant="solo"
-                density="compact"
-                class="mb-1 input-bordered"
-                flat
-              />
-            </v-col>
-
-            <v-col cols="12" md="6" v-if="triggerForm.triggerType === 'black_friday' || triggerForm.triggerType === 'month_day' || triggerForm.triggerType === 'weekday_of_month' || triggerForm.triggerType === 'birthday_month_start' || triggerForm.triggerType === 'practice_anniversary'">
-              <label class="mb-1 fld-lbl">Offset Days (before/after)</label>
-              <v-text-field
-                v-model="triggerForm.triggerOffsetDays"
-                type="number"
-                variant="solo"
-                density="compact"
-                class="mb-1 input-bordered"
-                flat
-              />
-            </v-col>
-
-            <v-col cols="12" md="6" v-if="triggerForm.triggerType === 'month_day' || triggerForm.triggerType === 'weekday_of_month'">
-              <label class="mb-1 fld-lbl">Month (1-12)</label>
-              <v-text-field
-                v-model="triggerForm.triggerMonth"
-                type="number"
-                min="1"
-                max="12"
-                variant="solo"
-                density="compact"
-                class="mb-1 input-bordered"
-                flat
-              />
-            </v-col>
-
-            <v-col cols="12" md="6" v-if="triggerForm.triggerType === 'month_day'">
-              <label class="mb-1 fld-lbl">Day of Month</label>
-              <v-text-field
-                v-model="triggerForm.triggerDay"
-                type="number"
-                min="1"
-                max="31"
-                variant="solo"
-                density="compact"
-                class="mb-1 input-bordered"
-                flat
-              />
-            </v-col>
-
-            <v-col cols="12" md="6" v-if="triggerForm.triggerType === 'weekday_of_month'">
-              <label class="mb-1 fld-lbl">Weekday</label>
-              <v-select
-                v-model="triggerForm.triggerWeekday"
-                :items="weekdayOptions"
-                item-title="label"
-                item-value="value"
-                variant="solo"
-                density="compact"
-                class="mb-1 input-bordered"
-                flat
-              />
-            </v-col>
-
-            <v-col cols="12" md="6" v-if="triggerForm.triggerType === 'weekday_of_month'">
-              <label class="mb-1 fld-lbl">Week in Month</label>
-              <v-select
-                v-model="triggerForm.triggerWeekIndex"
-                :items="weekIndexOptions"
-                item-title="label"
-                item-value="value"
-                variant="solo"
-                density="compact"
-                class="mb-1 input-bordered"
-                flat
-              />
-            </v-col>
-          </v-row>
+        <!-- Live preview bar -->
+        <div class="trigger-dialog__preview">
+          <v-icon size="15" color="#0061FB" class="mr-2 flex-shrink-0">mdi-eye-outline</v-icon>
+          <span class="trigger-dialog__preview-label">Preview:</span>
+          <span class="trigger-dialog__preview-text ml-1">{{ triggerPreviewText }}</span>
         </div>
 
-        <v-divider />
+        <!-- Body -->
+        <div class="trigger-dialog__body">
 
-        <div class="modal-footer">
-          <v-btn variant="text" @click="closeTriggerDialog">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" :loading="triggerSaving" @click="saveTrigger">
+          <!-- Trigger type chip grid -->
+          <div class="trigger-section-label mb-2">Trigger Type</div>
+          <div class="trigger-type-grid">
+            <button
+              v-for="t in triggerTypes"
+              :key="t.value"
+              type="button"
+              class="trigger-type-chip"
+              :class="{ 'trigger-type-chip--active': triggerForm.triggerType === t.value }"
+              @click="triggerForm.triggerType = t.value"
+            >
+              <v-icon size="15" class="mr-1">{{ t.icon }}</v-icon>
+              {{ t.label }}
+            </button>
+          </div>
+
+          <!-- Config section — only shown when a type is selected -->
+          <template v-if="triggerForm.triggerType">
+            <v-divider class="my-4" />
+            <div class="trigger-section-label mb-3">Configuration</div>
+
+            <v-row dense>
+
+              <!-- inquiry_days: days number + date picker -->
+              <template v-if="triggerForm.triggerType === 'inquiry_days'">
+                <v-col cols="12" sm="6">
+                  <div class="trig-field-label">Days after enquiry</div>
+                  <v-text-field
+                    v-model="triggerForm.triggerDays"
+                    type="number"
+                    min="0"
+                    variant="outlined"
+                    density="compact"
+                    rounded="lg"
+                    hide-details
+                    class="trig-input"
+                    prefix="+"
+                    suffix="days"
+                  />
+                </v-col>
+                <v-col cols="12" sm="6">
+                  <div class="trig-field-label">Or pick a target date <span class="trig-field-hint">(calculates days from today)</span></div>
+                  <v-text-field
+                    :model-value="triggerInquiryDatePickerValue"
+                    type="date"
+                    :min="todayIso"
+                    variant="outlined"
+                    density="compact"
+                    rounded="lg"
+                    hide-details
+                    class="trig-input"
+                    @update:model-value="onInquiryDatePick"
+                  />
+                </v-col>
+              </template>
+
+              <!-- birthday_offset: days number -->
+              <template v-else-if="triggerForm.triggerType === 'birthday_offset'">
+                <v-col cols="12" sm="6">
+                  <div class="trig-field-label">Days offset from birthday</div>
+                  <v-text-field
+                    v-model="triggerForm.triggerDays"
+                    type="number"
+                    variant="outlined"
+                    density="compact"
+                    rounded="lg"
+                    hide-details
+                    class="trig-input"
+                    :prefix="triggerForm.triggerDays >= 0 ? '+' : ''"
+                    suffix="days"
+                  />
+                </v-col>
+              </template>
+
+              <!-- month_day: date picker + offset -->
+              <template v-else-if="triggerForm.triggerType === 'month_day'">
+                <v-col cols="12" sm="6">
+                  <div class="trig-field-label">Annual date <span class="trig-field-hint">(year ignored)</span></div>
+                  <v-text-field
+                    :model-value="triggerDatePickerValue"
+                    type="date"
+                    variant="outlined"
+                    density="compact"
+                    rounded="lg"
+                    hide-details
+                    class="trig-input"
+                    @update:model-value="onMonthDayDatePick"
+                  />
+                </v-col>
+                <v-col cols="12" sm="3">
+                  <div class="trig-field-label">Month</div>
+                  <v-text-field
+                    v-model="triggerForm.triggerMonth"
+                    type="number"
+                    min="1"
+                    max="12"
+                    variant="outlined"
+                    density="compact"
+                    rounded="lg"
+                    hide-details
+                    class="trig-input"
+                  />
+                </v-col>
+                <v-col cols="12" sm="3">
+                  <div class="trig-field-label">Day</div>
+                  <v-text-field
+                    v-model="triggerForm.triggerDay"
+                    type="number"
+                    min="1"
+                    max="31"
+                    variant="outlined"
+                    density="compact"
+                    rounded="lg"
+                    hide-details
+                    class="trig-input"
+                  />
+                </v-col>
+                <v-col cols="12" sm="6">
+                  <div class="trig-field-label">Offset days <span class="trig-field-hint">(negative = before)</span></div>
+                  <v-text-field
+                    v-model="triggerForm.triggerOffsetDays"
+                    type="number"
+                    variant="outlined"
+                    density="compact"
+                    rounded="lg"
+                    hide-details
+                    class="trig-input"
+                    :prefix="triggerForm.triggerOffsetDays > 0 ? '+' : ''"
+                    suffix="days"
+                  />
+                </v-col>
+              </template>
+
+              <!-- weekday_of_month -->
+              <template v-else-if="triggerForm.triggerType === 'weekday_of_month'">
+                <v-col cols="12" sm="4">
+                  <div class="trig-field-label">Month</div>
+                  <v-text-field
+                    v-model="triggerForm.triggerMonth"
+                    type="number"
+                    min="1"
+                    max="12"
+                    variant="outlined"
+                    density="compact"
+                    rounded="lg"
+                    hide-details
+                    class="trig-input"
+                  />
+                </v-col>
+                <v-col cols="12" sm="4">
+                  <div class="trig-field-label">Weekday</div>
+                  <v-select
+                    v-model="triggerForm.triggerWeekday"
+                    :items="weekdayOptions"
+                    item-title="label"
+                    item-value="value"
+                    variant="outlined"
+                    density="compact"
+                    rounded="lg"
+                    hide-details
+                    class="trig-input"
+                  />
+                </v-col>
+                <v-col cols="12" sm="4">
+                  <div class="trig-field-label">Which week</div>
+                  <v-select
+                    v-model="triggerForm.triggerWeekIndex"
+                    :items="weekIndexOptions"
+                    item-title="label"
+                    item-value="value"
+                    variant="outlined"
+                    density="compact"
+                    rounded="lg"
+                    hide-details
+                    class="trig-input"
+                  />
+                </v-col>
+                <v-col cols="12" sm="6">
+                  <div class="trig-field-label">Offset days <span class="trig-field-hint">(negative = before)</span></div>
+                  <v-text-field
+                    v-model="triggerForm.triggerOffsetDays"
+                    type="number"
+                    variant="outlined"
+                    density="compact"
+                    rounded="lg"
+                    hide-details
+                    class="trig-input"
+                    :prefix="triggerForm.triggerOffsetDays > 0 ? '+' : ''"
+                    suffix="days"
+                  />
+                </v-col>
+              </template>
+
+              <!-- black_friday / birthday_month_start / practice_anniversary: offset only -->
+              <template v-else-if="['black_friday','birthday_month_start','practice_anniversary'].includes(triggerForm.triggerType)">
+                <v-col cols="12" sm="6">
+                  <div class="trig-field-label">Offset days <span class="trig-field-hint">(negative = before event)</span></div>
+                  <v-text-field
+                    v-model="triggerForm.triggerOffsetDays"
+                    type="number"
+                    variant="outlined"
+                    density="compact"
+                    rounded="lg"
+                    hide-details
+                    class="trig-input"
+                    :prefix="triggerForm.triggerOffsetDays > 0 ? '+' : ''"
+                    suffix="days"
+                  />
+                </v-col>
+              </template>
+
+              <!-- send_now: info only -->
+              <template v-else-if="triggerForm.triggerType === 'send_now'">
+                <v-col cols="12">
+                  <div class="trig-send-now-info">
+                    <v-icon size="16" color="#0061FB" class="mr-2">mdi-send-circle-outline</v-icon>
+                    This automation will be dispatched immediately to all eligible leads when you save.
+                  </div>
+                </v-col>
+              </template>
+
+            </v-row>
+          </template>
+        </div>
+
+        <!-- Footer -->
+        <div class="trigger-dialog__footer">
+          <v-btn
+            variant="text"
+            class="trigger-dialog__cancel"
+            @click="closeTriggerDialog"
+          >
+            Cancel
+          </v-btn>
+          <v-btn
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            class="trigger-dialog__save"
+            :loading="triggerSaving"
+            @click="saveTrigger"
+          >
+            <v-icon size="16" class="mr-1">mdi-check</v-icon>
             Save Trigger
           </v-btn>
         </div>
@@ -359,6 +516,7 @@ const props = defineProps({
   disableToggle: { type: Boolean, default: false },
   showTriggerColumn: { type: Boolean, default: true },
   showStatusColumn: { type: Boolean, default: true },
+  showLastSentColumn: { type: Boolean, default: false },
 })
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
@@ -370,6 +528,7 @@ const rows = reactive([])
 const search = ref('')
 const filterEnabled = ref(false)
 const filterDisabled = ref(false)
+const filterSent = ref('all')
 const saving = ref(false)
 const activeAutomation = ref(null)
 const showGroupDialog = ref(false)
@@ -389,6 +548,9 @@ const tableHeaders = computed(() => {
   if (props.showTriggerColumn) {
     headers.push({ title: 'Trigger', key: 'sending', sortable: false })
   }
+  if (props.showLastSentColumn) {
+    headers.push({ title: 'Last Sent', key: 'lastSentAt', sortable: false })
+  }
   headers.push({ title: 'Actions', key: 'actions', sortable: false, align: 'center' })
   if (props.showStatusColumn) {
     headers.push({ title: 'Status', key: 'enabled', sortable: false, align: 'center' })
@@ -397,14 +559,14 @@ const tableHeaders = computed(() => {
 })
 
 const triggerTypes = [
-  { label: 'Send Now', value: 'send_now' },
-  { label: 'After enquiry', value: 'inquiry_days' },
-  { label: 'Birthday offset', value: 'birthday_offset' },
-  { label: 'Birthday month start', value: 'birthday_month_start' },
-  { label: 'Black Friday', value: 'black_friday' },
-  { label: 'Fixed date (annual)', value: 'month_day' },
-  { label: 'Nth weekday (annual)', value: 'weekday_of_month' },
-  { label: 'Practice anniversary', value: 'practice_anniversary' },
+  { label: 'Send Now', value: 'send_now', icon: 'mdi-send-circle-outline' },
+  { label: 'After Enquiry', value: 'inquiry_days', icon: 'mdi-calendar-clock' },
+  { label: 'Birthday', value: 'birthday_offset', icon: 'mdi-cake-variant-outline' },
+  { label: 'Birthday Month', value: 'birthday_month_start', icon: 'mdi-cake-layered' },
+  { label: 'Black Friday', value: 'black_friday', icon: 'mdi-tag-outline' },
+  { label: 'Fixed Date', value: 'month_day', icon: 'mdi-calendar-star' },
+  { label: 'Nth Weekday', value: 'weekday_of_month', icon: 'mdi-calendar-week' },
+  { label: 'Anniversary', value: 'practice_anniversary', icon: 'mdi-office-building-outline' },
 ]
 
 const weekdayOptions = [
@@ -429,6 +591,7 @@ const activeFilters = computed(() => {
   let count = 0
   if (filterEnabled.value) count++
   if (filterDisabled.value) count++
+  if (filterSent.value !== 'all') count++
   return count
 })
 
@@ -444,12 +607,15 @@ const filteredRows = computed(() => {
   }
   if (filterEnabled.value && !filterDisabled.value) result = result.filter(r => r.enabled === true)
   if (filterDisabled.value && !filterEnabled.value) result = result.filter(r => r.enabled === false)
+  if (filterSent.value === 'sent') result = result.filter(r => !!r.lastSentAt)
+  if (filterSent.value === 'never') result = result.filter(r => !r.lastSentAt)
   return result
 })
 
 const clearFilters = () => {
   filterEnabled.value = false
   filterDisabled.value = false
+  filterSent.value = 'all'
 }
 
 const resolvedGroups = computed(() => {
@@ -489,6 +655,7 @@ const automationCards = computed(() => {
       enabled: groupRows.some(r => r.enabled),
       author: resolveGroupAuthor(group),
       isDefault: isDefaultGroup(group),
+      hasWhatsApp: groupRows.some(r => String(r.type || 'Email').toLowerCase() === 'whatsapp'),
     }
   })
 })
@@ -584,6 +751,43 @@ const hydrateTriggerForm = (trigger = {}) => {
   triggerForm.triggerWeekIndex = sanitizeNumber(trigger?.weekIndex, 1)
 }
 
+// Date picker helpers for trigger editor
+const todayIso = new Date().toISOString().split('T')[0]
+
+const triggerDatePickerValue = computed(() => {
+  const m = String(triggerForm.triggerMonth || '').padStart(2, '0')
+  const d = String(triggerForm.triggerDay || '').padStart(2, '0')
+  if (!triggerForm.triggerMonth || !triggerForm.triggerDay) return ''
+  return `${new Date().getFullYear()}-${m}-${d}`
+})
+
+const triggerInquiryDatePickerValue = computed(() => {
+  const days = Number(triggerForm.triggerDays || 0)
+  if (days <= 0) return ''
+  const target = new Date()
+  target.setDate(target.getDate() + days)
+  return target.toISOString().split('T')[0]
+})
+
+const onMonthDayDatePick = (val) => {
+  if (!val) return
+  const d = new Date(val)
+  if (isNaN(d.getTime())) return
+  triggerForm.triggerMonth = d.getMonth() + 1
+  triggerForm.triggerDay = d.getDate()
+}
+
+const onInquiryDatePick = (val) => {
+  if (!val) return
+  const picked = new Date(val)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  picked.setHours(0, 0, 0, 0)
+  if (isNaN(picked.getTime())) return
+  const days = Math.max(0, Math.round((picked - today) / 86400000))
+  triggerForm.triggerDays = days
+}
+
 const openTriggerEditor = (row) => {
   triggerEditingRow.value = row
   hydrateTriggerForm(row?.trigger || {})
@@ -636,7 +840,9 @@ const toggleAutomationGroup = async (card, val) => {
   if (!updates.length) return
   try {
     await crmStore.saveAutomationBatch({ items: updates })
-  } catch (e) {}
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || 'Failed to update automations', type: 'error' })
+  }
 }
 
 const loadRows = async () => {
@@ -661,8 +867,10 @@ const loadGroups = async () => {
   }
 }
 
-const refresh = async () => {
-  await Promise.all([loadGroups(), loadRows()])
+const refresh = async ({ skipGroups = false } = {}) => {
+  const tasks = [loadRows()]
+  if (!skipGroups) tasks.push(loadGroups())
+  await Promise.all(tasks)
 }
 
 defineExpose({ refresh })
@@ -815,8 +1023,12 @@ const deleteAutomationNow = async () => {
       showDeleteAutomation.value = false
       deleteAutomationTarget.value = null
       await refresh()
+      mainStore?.setSnackbar?.({ title: 'Automation deleted', type: 'success' })
       return
     }
+    mainStore?.setSnackbar?.({ title: res?.message || 'Failed to delete automation', type: 'error' })
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || 'Failed to delete automation', type: 'error' })
   } finally {
     deletingAutomation.value = false
   }
@@ -1021,9 +1233,16 @@ const saveContent = async () => {
     }
     emit('update:rows', rows)
     const payload = buildPayload(active.value || {})
-    await crmStore.saveAutomation(payload)
+    const res = await crmStore.saveAutomation(payload)
+    if (res?.code !== 0) {
+      mainStore?.setSnackbar?.({ title: res?.message || 'Failed to save automation', type: 'error' })
+      return
+    }
     emit('save', payload)
     show.value = false
+    mainStore?.setSnackbar?.({ title: 'Automation saved successfully', type: 'success' })
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || 'Failed to save automation', type: 'error' })
   } finally {
     saving.value = false
   }
@@ -1042,7 +1261,12 @@ const onToggleEnabled = async (row, val) => {
     template: (row.template && row.template.trim()) ? row.template : (def.template || ''),
     trigger: row.trigger || def.trigger || undefined,
   })
-  try { await crmStore.saveAutomation(payload) } catch (e) {}
+  try {
+    await crmStore.saveAutomation(payload)
+  } catch (e) {
+    row.enabled = !row.enabled
+    mainStore?.setSnackbar?.({ title: e?.message || 'Failed to update automation', type: 'error' })
+  }
 }
 
 const sendImmediateLeadMail = async (row) => {
@@ -1080,6 +1304,12 @@ const saveTrigger = async () => {
     triggerSaving.value = true
     const nextTrigger = buildTriggerFromForm()
     const isSendNow = nextTrigger?.type === 'send_now'
+    const isWhatsAppRow = String(selectedRow?.type || 'Email').toLowerCase() === 'whatsapp'
+    if (isSendNow && isWhatsAppRow && !props.whatsappEnabled) {
+      mainStore?.setSnackbar?.({ title: 'WhatsApp is not connected — this automation cannot be sent.', type: 'warning' })
+      triggerSaving.value = false
+      return
+    }
     selectedRow.trigger = nextTrigger
     selectedRow.sending = formatCrmTriggerPreview(nextTrigger)
     if (isSendNow) {
@@ -1242,7 +1472,184 @@ watch(showGroupDialog, (v) => {
   gap: 8px;
 }
 
-/* Modal Styles */
+/* ═══════ Trigger Dialog ═══════ */
+.trigger-dialog {
+  overflow: hidden;
+}
+
+.trigger-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  background: linear-gradient(135deg, #0061FB 0%, #1a73ff 100%);
+}
+
+.trigger-dialog__header-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.trigger-dialog__title {
+  font-weight: 700;
+  font-size: 16px;
+  color: #ffffff;
+  line-height: 1.2;
+}
+
+.trigger-dialog__subtitle {
+  font-size: 12px;
+  color: rgba(255,255,255,0.75);
+  margin-top: 2px;
+  max-width: 340px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trigger-dialog__preview {
+  display: flex;
+  align-items: center;
+  padding: 10px 20px;
+  background: #EFF6FF;
+  border-bottom: 1px solid #DBEAFE;
+  min-height: 38px;
+}
+
+.trigger-dialog__preview-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0061FB;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.trigger-dialog__preview-text {
+  font-size: 12px;
+  color: #1e40af;
+  font-style: italic;
+}
+
+.trigger-dialog__body {
+  padding: 20px;
+  background: #fafafa;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.trigger-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: #9ca3af;
+}
+
+/* Trigger type chip grid */
+.trigger-type-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.trigger-type-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 6px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+  font-size: 11px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.trigger-type-chip:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #0061FB;
+}
+
+.trigger-type-chip--active {
+  border-color: #0061FB;
+  background: #eff6ff;
+  color: #0061FB;
+  font-weight: 600;
+  box-shadow: 0 0 0 3px rgba(0, 97, 251, 0.1);
+}
+
+/* Config fields */
+.trig-field-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  margin-bottom: 5px;
+}
+
+.trig-field-hint {
+  font-size: 11px;
+  font-weight: 400;
+  color: #9ca3af;
+}
+
+.trig-input :deep(.v-field) {
+  border-radius: 8px !important;
+  font-size: 13px;
+}
+
+.trig-send-now-info {
+  display: flex;
+  align-items: flex-start;
+  padding: 12px 14px;
+  background: #eff6ff;
+  border: 1px solid #DBEAFE;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #1e40af;
+  line-height: 1.5;
+}
+
+/* Footer */
+.trigger-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  background: #ffffff;
+  border-top: 1px solid #f3f4f6;
+}
+
+.trigger-dialog__cancel {
+  font-size: 13px;
+  color: #6b7280;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.trigger-dialog__save {
+  min-height: 36px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 0 18px;
+}
+
+/* ═══════ Modal Styles (edit/preview) ═══════ */
 .modal-header {
   display: flex;
   justify-content: space-between;

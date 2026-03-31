@@ -562,10 +562,6 @@ export const createLead = async (event) => {
       })
       created.setDataValue('preferredContact', payload.contactMethod)
     }
-    try {
-      await sendImmediateCrmAutomationsForLead(created)
-    } catch (e) {}
-    
     // Send FCM push notification to assigned users
     try {
       if (assignedUsers.length) {
@@ -866,10 +862,6 @@ export const bulkUploadAutomations = async (event) => {
     const organisationId = Number(orgId)
     const results = []
     const defaultKeySet = new Set((crmAutomationDefaults || []).map((d) => d.key))
-
-    try { await CrmAutomationGroup.sync() } catch {}
-    try { await CrmAutomationTemplate.sync() } catch {}
-    try { await CrmAutomationGroupTemplate.sync() } catch {}
 
     const existingTemplates = await CrmAutomationTemplate.findAll({
       where: { organisationId },
@@ -1384,9 +1376,6 @@ export const listAutomationGroups = async (event) => {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
 
-    try { await CrmAutomationGroup.sync() } catch {}
-    try { await CrmAutomationGroupTemplate.sync() } catch {}
-
     const groups = await seedAutomationGroups(orgId)
     const mappings = await CrmAutomationGroupTemplate.findAll({
       where: { organisationId: Number(orgId) },
@@ -1420,8 +1409,6 @@ export const saveAutomationGroup = async (event) => {
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { id, key, title, description, enabled } = payload || {}
-
-    try { await CrmAutomationGroup.sync() } catch {}
 
     if (!title && !key) return error(400, 'title or key required')
 
@@ -1488,6 +1475,7 @@ export const deleteAutomationGroup = async (event) => {
     await group.destroy()
     return success('deleted')
   } catch (e) {
+    console.error('[deleteAutomationGroup]', e?.message || e)
     return error(500, e.message)
   }
 }
@@ -1502,17 +1490,17 @@ export const listAutomation = async (event) => {
     const dbRows = rows.map((tpl) => (typeof tpl?.toJSON === 'function' ? tpl.toJSON() : tpl))
     const dbMap = new Map(dbRows.map((r) => [r.key, r]))
     let overrides = {}
+    let sentKeys = {}
     if (leadId) {
       const lead = await CrmLead.findOne({ where: { organisationId: Number(orgId), id: leadId } })
       if (!lead) return error(404, 'Lead not found')
       overrides = lead?.rawData?.crmAutomationOverrides || {}
+      sentKeys = lead?.rawData?.automationSentKeys || {}
     }
 
     let groupMappings = []
     let groups = []
     try {
-      await CrmAutomationGroup.sync()
-      await CrmAutomationGroupTemplate.sync()
       groupMappings = await CrmAutomationGroupTemplate.findAll({
         where: { organisationId: Number(orgId) },
       })
@@ -1561,6 +1549,12 @@ export const listAutomation = async (event) => {
       if (!combined.groupKey) combined.groupKey = groupKeyByTemplate.get(key)
       merged.push(combined)
     })
+
+    if (leadId) {
+      merged.forEach((item) => {
+        item.lastSentAt = sentKeys[item.key] || null
+      })
+    }
 
     return success(merged)
   } catch (e) {
@@ -1612,8 +1606,6 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
   }
 
   if (groupKey) {
-    try { await CrmAutomationGroup.sync() } catch {}
-    try { await CrmAutomationGroupTemplate.sync() } catch {}
     const group = await CrmAutomationGroup.findOne({
       where: { organisationId: Number(orgId), key: String(groupKey) },
       transaction,
@@ -1843,9 +1835,6 @@ export const deleteAutomation = async (event) => {
       return error(400, 'Default automations cannot be deleted')
     }
 
-    try { await CrmAutomationTemplate.sync() } catch {}
-    try { await CrmAutomationGroupTemplate.sync() } catch {}
-
     await CrmAutomationGroupTemplate.destroy({
       where: { organisationId: Number(orgId), templateKey: key },
     })
@@ -1913,26 +1902,30 @@ export const sendLeadMail = async (event) => {
       attachments: normalizedAttachments,
     })
 
-    if (String(key || '') === 'manual_sendPrice') {
-      const selectionKey = buildLeadSelectionKey(leadIds)
-      const attachmentMeta = normalizedAttachments[0] || null
-      const priceLink = String(metadata?.priceLink || '').trim()
-      const sentAt = new Date().toISOString()
-      for (const lead of leads) {
-        const raw = getLeadRawData(lead)
+    const sentAt = new Date().toISOString()
+    const isSendPrice = String(key || '') === 'manual_sendPrice'
+    const selectionKey = isSendPrice ? buildLeadSelectionKey(leadIds) : null
+    const attachmentMeta = isSendPrice ? (normalizedAttachments[0] || null) : null
+    const priceLink = isSendPrice ? String(metadata?.priceLink || '').trim() : null
+
+    for (const lead of leads) {
+      const raw = getLeadRawData(lead)
+      const updatedRaw = { ...raw }
+
+      const log = Array.isArray(raw.manualSentLog) ? [...raw.manualSentLog] : []
+      log.push({ type: 'Email', subject: safeSubject, sentAt })
+      updatedRaw.manualSentLog = log
+
+      if (isSendPrice) {
         const manual = raw.manualSendAssets && typeof raw.manualSendAssets === 'object'
           ? raw.manualSendAssets
           : {}
-        manual.sendPriceRecent = {
-          attachment: attachmentMeta,
-          priceLink,
-          subject: safeSubject,
-          selectionKey,
-          updatedAt: sentAt,
-        }
-        lead.rawData = { ...raw, manualSendAssets: manual }
-        await lead.save()
+        manual.sendPriceRecent = { attachment: attachmentMeta, priceLink, subject: safeSubject, selectionKey, updatedAt: sentAt }
+        updatedRaw.manualSendAssets = manual
       }
+
+      lead.rawData = updatedRaw
+      await lead.save()
     }
 
     return success({ sent: result.sent })
@@ -2072,6 +2065,11 @@ export const sendLeadWhatsApp = async (event) => {
           providerMessageId,
           content: useTemplate ? null : String(resolvedText || ''),
         })
+        const waRaw = lead.rawData || {}
+        const waLog = Array.isArray(waRaw.manualSentLog) ? [...waRaw.manualSentLog] : []
+        waLog.push({ type: 'WhatsApp', subject: String(resolvedText || '').slice(0, 100) || 'WhatsApp Message', sentAt: new Date().toISOString() })
+        lead.rawData = { ...waRaw, manualSentLog: waLog }
+        await lead.save()
         sent += 1
       } catch (e) {
         failed += 1
@@ -2103,6 +2101,67 @@ export const getWhatsAppUsage = async (event) => {
     if (!orgId) return error(401, 'Unauthenticated')
     const usage = await isWhatsAppLimitExceeded(orgId, userId)
     return success({ count: usage.count, limit: usage.limit })
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const getLeadAutomationLog = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const { leadId, page = 1, limit = 25 } = getQuery(event)
+    if (!leadId) return error(400, 'leadId required')
+
+    const lead = await CrmLead.findOne({ where: { id: leadId, organisationId: orgId } })
+    if (!lead) return error(404, 'Lead not found')
+
+    const sentKeys = lead.rawData?.automationSentKeys || {}
+    const manualLog = Array.isArray(lead.rawData?.manualSentLog) ? lead.rawData.manualSentLog : []
+
+    if (!Object.keys(sentKeys).length && !manualLog.length) return success({ rows: [], total: 0 })
+
+    const allRows = []
+
+    if (Object.keys(sentKeys).length) {
+      const templates = await CrmAutomationTemplate.findAll({
+        where: { organisationId: orgId },
+        attributes: ['key', 'name', 'type'],
+      })
+      const templateMap = new Map(templates.map((t) => [t.key, t]))
+      const defaultMap = new Map(crmAutomationDefaults.map((d) => [d.key, d]))
+
+      Object.entries(sentKeys).forEach(([key, sentAt]) => {
+        const tpl = templateMap.get(key)
+        const def = defaultMap.get(key)
+        allRows.push({
+          key,
+          name: tpl?.name || def?.name || key,
+          type: tpl?.type || def?.type || 'Email',
+          sentAt,
+          source: 'automation',
+        })
+      })
+    }
+
+    manualLog.forEach((entry) => {
+      allRows.push({
+        key: '',
+        name: entry.subject || 'Manual Send',
+        type: entry.type || 'Email',
+        sentAt: entry.sentAt,
+        source: 'manual',
+      })
+    })
+
+    allRows.sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt))
+
+    const total = allRows.length
+    const pageNum = Math.max(1, Number(page))
+    const limitNum = Math.min(100, Math.max(1, Number(limit)))
+    const rows = allRows.slice((pageNum - 1) * limitNum, pageNum * limitNum)
+
+    return success({ rows, total })
   } catch (e) {
     return error(500, e.message)
   }

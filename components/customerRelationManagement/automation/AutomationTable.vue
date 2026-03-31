@@ -92,6 +92,20 @@
               hide-details
               @update:model-value="$emit('update:filterDisabled', $event)"
             />
+            <template v-if="hasLastSentColumn">
+              <v-divider class="my-3" />
+              <p class="text-subtitle-2 font-weight-bold mb-3">Filter by Sent Status</p>
+              <v-radio-group
+                :model-value="filterSent"
+                density="compact"
+                hide-details
+                @update:model-value="$emit('update:filterSent', $event)"
+              >
+                <v-radio label="All" value="all" density="compact" />
+                <v-radio label="Sent at least once" value="sent" density="compact" />
+                <v-radio label="Never sent" value="never" density="compact" />
+              </v-radio-group>
+            </template>
             <v-divider class="my-3" />
             <v-btn
               size="small"
@@ -124,9 +138,16 @@
         :items-per-page="15"
       >
         <template #item.type="{ item }">
-          <v-chip size="small" variant="tonal" color="primary" class="font-weight-medium">
+          <v-chip
+            size="small"
+            variant="tonal"
+            :color="String(item.type || 'Email').toLowerCase() === 'whatsapp' && !whatsappEnabled ? 'warning' : 'primary'"
+            class="font-weight-medium"
+          >
             <v-icon size="14" class="mr-1">
-              {{ String(item.type || 'Email').toLowerCase() === 'whatsapp' ? 'mdi-whatsapp' : 'mdi-email-outline' }}
+              {{ String(item.type || 'Email').toLowerCase() === 'whatsapp'
+                ? (!whatsappEnabled ? 'mdi-wifi-off' : 'mdi-whatsapp')
+                : 'mdi-email-outline' }}
             </v-icon>
             {{ item.type }}
           </v-chip>
@@ -141,8 +162,11 @@
         <template v-if="hasTriggerColumn" #item.sending="{ item }">
           <div class="d-flex  align-center justify-space-between trigger-cell">
             <div class="d-flex align-center">
-              <v-icon size="16" color="grey-darken-1" class="mr-2">mdi-clock-outline</v-icon>
-              <span class="text-body-2 text-medium-emphasis trigger-text">{{ item.sending }}</span>
+              <v-icon size="16" :color="item.sending ? 'grey-darken-1' : 'warning'" class="mr-2">
+                {{ item.sending ? 'mdi-clock-outline' : 'mdi-alert-circle-outline' }}
+              </v-icon>
+              <span v-if="item.sending" class="text-body-2 text-medium-emphasis trigger-text">{{ item.sending }}</span>
+              <span v-else class="text-body-2 trigger-text trigger-text--unset">Set trigger</span>
             </div>
             <v-tooltip location="top">
               <template #activator="{ props }">
@@ -212,8 +236,29 @@
         </template>
 
         <template v-if="hasStatusColumn" #item.enabled="{ item }">
-          <div class="d-flex align-center justify-center">
+          <div class="d-flex align-center justify-center flex-column" style="gap:4px;">
+            <v-tooltip
+              v-if="String(item.type || 'Email').toLowerCase() === 'whatsapp' && !whatsappEnabled"
+              location="top"
+            >
+              <template #activator="{ props: tp }">
+                <div v-bind="tp" class="d-flex align-center" style="gap:6px;">
+                  <v-switch
+                    v-model="item.enabled"
+                    inset
+                    hide-details
+                    color="success"
+                    density="compact"
+                    :disabled="true"
+                    @update:model-value="$emit('toggleEnabled', item, $event)"
+                  />
+                  <v-icon size="16" color="warning">mdi-wifi-off</v-icon>
+                </div>
+              </template>
+              <span>WhatsApp not connected — automation will not fire</span>
+            </v-tooltip>
             <v-switch
+              v-else
               v-model="item.enabled"
               inset
               hide-details
@@ -224,6 +269,13 @@
               @update:model-value="$emit('toggleEnabled', item, $event)"
             />
           </div>
+        </template>
+
+        <template v-if="hasLastSentColumn" #item.lastSentAt="{ item }">
+          <span v-if="item.lastSentAt" class="text-caption text-medium-emphasis">
+            {{ formatRelativeTime(item.lastSentAt) }}
+          </span>
+          <v-chip v-else size="x-small" variant="tonal" color="grey">Never sent</v-chip>
         </template>
 
         <template #no-data>
@@ -294,6 +346,14 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  filterSent: {
+    type: String,
+    default: 'all',
+  },
+  whatsappEnabled: {
+    type: Boolean,
+    default: true,
+  },
 })
 
 import searchicon from "@/assets/icons/listView/serach-icon.svg"
@@ -304,11 +364,26 @@ const hasHeaderKey = (key) =>
 
 const hasTriggerColumn = computed(() => hasHeaderKey('sending'))
 const hasStatusColumn = computed(() => hasHeaderKey('enabled'))
+const hasLastSentColumn = computed(() => hasHeaderKey('lastSentAt'))
+
+const formatRelativeTime = (dateStr) => {
+  if (!dateStr) return ''
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 60) return mins <= 1 ? 'Just now' : `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  if (days < 30) return `${days}d ago`
+  const months = Math.floor(days / 30)
+  return `${months}mo ago`
+}
 
 defineEmits([
   'update:search',
   'update:filterEnabled',
   'update:filterDisabled',
+  'update:filterSent',
   'clearFilters',
   'back',
   'openTrigger',
@@ -465,6 +540,12 @@ defineEmits([
   text-overflow: ellipsis;
   max-width: 180px;
   display: inline-block;
+}
+
+.trigger-text--unset {
+  color: #f59e0b;
+  font-style: italic;
+  font-weight: 500;
 }
 
 .switch-active :deep(.v-selection-control__input) {

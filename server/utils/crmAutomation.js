@@ -267,6 +267,12 @@ export const markCrmSent = async (lead, raw, key) => {
   map[key] = new Date().toISOString();
   lead.rawData = { ...raw, automationSentKeys: map };
   await lead.save();
+  try {
+    await CrmAutomationTemplate.update(
+      { lastSentAt: new Date() },
+      { where: { organisationId: lead.organisationId, key } }
+    );
+  } catch {}
 };
 
 const daysSince = (today, date) => {
@@ -313,7 +319,7 @@ export const shouldSendCrmTemplate = ({ lead, tpl, trigger, today, org }) => {
   if (trigger.type === "inquiry_days") {
     if (!lead?.inquiryDate) return { due: false, sentKey: tpl.key };
     const d = daysSince(today, lead.inquiryDate);
-    return { due: d !== null && d >= trigger.days, sentKey: tpl.key };
+    return { due: d !== null && d === trigger.days, sentKey: tpl.key };
   }
   if (trigger.type === "birthday_offset") {
     if (!lead?.dob) return { due: false, sentKey: `${tpl.key}_${today.getFullYear()}` };

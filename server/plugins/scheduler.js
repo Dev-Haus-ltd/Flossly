@@ -40,7 +40,7 @@ export default defineNitroPlugin(async (nitroApp) => {
     startTaskOverDueScheduler();
     startTaskDueReminderScheduler();
     startOnboardingScheduler();
-    startDmQueueScheduler();
+    await startDmQueueScheduler();
     startMetaSyncScheduler();
     startShiftReminderScheduler();
     console.log("Scheduler Started");

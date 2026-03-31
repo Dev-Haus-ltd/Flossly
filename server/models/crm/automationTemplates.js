@@ -16,6 +16,7 @@ export const CrmAutomationTemplate = sequelize.define(
     whatsappTemplateName: { type: DataTypes.STRING(150), allowNull: true },
     whatsappTemplateLanguage: { type: DataTypes.STRING(10), allowNull: true },
     trigger: { type: DataTypes.JSONB, allowNull: true },
+    lastSentAt: { type: DataTypes.DATE, allowNull: true, defaultValue: null },
   },
   { modelName: 'CrmAutomationTemplates', timestamps: true }
 )
