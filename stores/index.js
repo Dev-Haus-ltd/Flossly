@@ -216,6 +216,7 @@ export const useMainStore = defineStore("mainStore", {
               imgPath: crmIcon,
               to: "/crm/dms",
               featureKey: "crm",
+              beta: true,
             },
             {
               title: "My Automations",
