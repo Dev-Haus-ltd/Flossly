@@ -1552,7 +1552,13 @@ export const listAutomation = async (event) => {
 
     if (leadId) {
       merged.forEach((item) => {
-        item.lastSentAt = sentKeys[item.key] || null
+        const direct = sentKeys[item.key]
+        if (direct) {
+          item.lastSentAt = direct
+        } else {
+          const compound = Object.entries(sentKeys).find(([k]) => k.startsWith(item.key + '_'))
+          item.lastSentAt = compound ? compound[1] : null
+        }
       })
     }
 

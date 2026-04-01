@@ -166,7 +166,6 @@ export const startLeadAutomationScheduler = () => {
         if (!leads.length) break
         for (const lead of leads) {
           const org = orgMap.get(Number(lead.organisationId)) || null;
-          const raw = lead.rawData || {}
           const effectiveTemplates = buildEffectiveCrmTemplates(lead, templatesByOrg)
           for (const tpl of effectiveTemplates) {
             if (!tpl?.enabled) continue
@@ -184,12 +183,12 @@ export const startLeadAutomationScheduler = () => {
                 }
                 const message = buildCrmWhatsAppMessage(lead, tpl, org)
                 await sendCrmAutomationWhatsApp(lead, message, templatePayload)
-                await markCrmSent(lead, raw, sentKey)
+                await markCrmSent(lead, lead.rawData || {}, sentKey)
               } else {
                 if (!lead?.email) continue
                 const { subject, html } = buildCrmEmail(lead, tpl, org)
                 await sendCrmAutomationEmail(lead, subject, html)
-                await markCrmSent(lead, raw, sentKey)
+                await markCrmSent(lead, lead.rawData || {}, sentKey)
               }
             } catch (e) {
               console.error('[CRM] automation send failed', e?.message)
