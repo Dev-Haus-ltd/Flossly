@@ -22,16 +22,16 @@
     </div>
     <div class="mt-5 px-5">
       <v-alert
-        v-if="activeCampaignFilter"
+        v-if="activeMetaFilter"
         type="info"
         variant="tonal"
         density="compact"
         rounded="lg"
         class="mb-3"
         closable
-        @click:close="clearCampaignFilter"
+        @click:close="clearMetaFilter"
       >
-        Showing leads filtered by campaign: <strong>{{ activeCampaignFilter }}</strong>
+        Showing leads filtered by {{ activeMetaFilter.type }}: <strong>{{ activeMetaFilter.id }}</strong>
       </v-alert>
       <div class="d-flex align-center mb-2" style="flex-wrap: nowrap; justify-content: space-between; overflow-x: auto;">
         <!-- Left: Search + Filters -->
@@ -689,8 +689,14 @@ const headers = [
 const leadSources = ref([]);
 const treatmentSources = ref([]);
 const activeFilters = ref({});
-const activeCampaignFilter = computed(() => activeFilters.value?.campaignId || null);
-const clearCampaignFilter = async () => {
+const activeMetaFilter = computed(() => {
+  const f = activeFilters.value;
+  if (f?.adId) return { type: 'Ad', id: f.adId };
+  if (f?.adSetId) return { type: 'Ad Set', id: f.adSetId };
+  if (f?.campaignId) return { type: 'Campaign', id: f.campaignId };
+  return null;
+});
+const clearMetaFilter = async () => {
   activeFilters.value = {};
   await fetchLeads({});
 };
@@ -1513,11 +1519,13 @@ const initLeads = async (metaConnected = false) => {
       console.error('[CRM] Meta post-connect sync failed', e);
     }
   }
-  // Pre-filter by campaign if navigated from the analytics page
+  // Pre-filter by campaign / ad set / ad if navigated from the analytics page
+  const adId = route.query.adId || null;
+  const adSetId = route.query.adSetId || null;
   const campaignId = route.query.campaignId || null;
-  if (campaignId) {
-    activeFilters.value = { campaignId };
-  }
+  if (adId) activeFilters.value = { adId };
+  else if (adSetId) activeFilters.value = { adSetId };
+  else if (campaignId) activeFilters.value = { campaignId };
   await fetchLeads(activeFilters.value)
 
 };

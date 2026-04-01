@@ -114,6 +114,7 @@ export default defineNuxtConfig({
   css: [
     "vuetify/lib/styles/main.sass",
     "@/assets/css/fonts.css",
+    "@/assets/css/global.css",
     "v-phone-input/styles",
     "flag-icons/css/flag-icons.min.css",
   ],
