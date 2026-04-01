@@ -15,12 +15,12 @@
           :is-outbound="row.isOutbound"
           :sender="row.sender"
           :message="row.message"
-          :attachments="row.attachments"
           :timestamp="row.timeLabel"
           :status-icon="row.statusIcon"
           :avatar-url="row.avatarUrl"
           :avatar-text="row.avatarText"
           :automated="row.automated"
+          :attachments="row.attachments"
         />
       </template>
     </div>

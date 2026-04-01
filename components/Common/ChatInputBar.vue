@@ -14,6 +14,18 @@
         </ClientOnly>
       </v-menu>
     </div>
+    <div v-if="allowAttachments" class="chat-input-left">
+      <v-btn icon variant="text" size="small" @click="triggerFileInput">
+        <v-icon size="18">mdi-paperclip</v-icon>
+      </v-btn>
+      <input
+        ref="fileInput"
+        type="file"
+        class="hidden-input"
+        multiple
+        @change="onFilesChange"
+      />
+    </div>
     <v-text-field
       v-model="draft"
       :placeholder="placeholder"
@@ -52,14 +64,16 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   canSend: { type: Boolean, default: true },
   showEmoji: { type: Boolean, default: true },
+  allowAttachments: { type: Boolean, default: false },
   sendIcon: { type: String, default: "mdi-send" },
   sendColor: { type: String, default: "primary" },
   bgColor: { type: String, default: "#FFFFFF" },
 });
 
-const emit = defineEmits(["update:modelValue", "send"]);
+const emit = defineEmits(["update:modelValue", "send", "files-selected"]);
 
 const emojiMenu = ref(false);
+const fileInput = ref(null);
 
 const draft = computed({
   get: () => props.modelValue,
@@ -75,6 +89,15 @@ const onEmojiClick = (event) => {
   if (!symbol) return;
   draft.value = `${draft.value || ""}${symbol}`;
   emojiMenu.value = false;
+};
+
+const triggerFileInput = () => fileInput.value?.click();
+
+const onFilesChange = (event) => {
+  const files = Array.from(event?.target?.files || []);
+  if (!files.length) return;
+  emit("files-selected", files);
+  if (fileInput.value) fileInput.value.value = "";
 };
 </script>
 
@@ -117,5 +140,9 @@ const onEmojiClick = (event) => {
   --emoji-size: 20px;
   --emoji-padding: 0.4rem;
   --num-columns: 8;
+}
+
+.hidden-input {
+  display: none;
 }
 </style>

@@ -12,6 +12,7 @@ import { addWhapiClient, broadcastWhapiEvent } from "../utils/whapiStream";
 import { sendNotificationToMultipleUsers } from "../utils/fcmNotification";
 import { encrypt, decrypt } from "../utils/crypto";
 import { getWhapiEnvConfig, getWhapiPartnerConfig } from "../utils/whatsappProvider";
+import { uploadBufferFile } from "../utils/storage";
 
 const extractTimestamp = (value) => {
   if (!value) return Date.now();
@@ -109,6 +110,79 @@ const getMessageContent = (msg) => {
   if (typeof msg?.message?.body === "string") return msg.message.body;
   if (typeof msg?.content === "string") return msg.content;
   return "";
+};
+
+const inferExtension = (mimeType = "") => {
+  const lower = String(mimeType || "").toLowerCase();
+  if (lower.includes("jpeg")) return ".jpg";
+  if (lower.includes("png")) return ".png";
+  if (lower.includes("gif")) return ".gif";
+  if (lower.includes("mp4")) return ".mp4";
+  if (lower.includes("mpeg")) return ".mpeg";
+  if (lower.includes("mp3")) return ".mp3";
+  if (lower.includes("pdf")) return ".pdf";
+  return "";
+};
+
+const buildAttachmentFilename = ({ originalName, mimeType }) => {
+  const base = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+  if (originalName && originalName.includes(".")) return originalName;
+  const ext = inferExtension(mimeType);
+  return `${base}${ext}`;
+};
+
+const downloadWhapiMediaToS3 = async ({ url, token, mimeType, filename }) => {
+  if (!url) return null;
+  const data = await $fetch(url, {
+    method: "GET",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    responseType: "arrayBuffer",
+  });
+  const fileName = buildAttachmentFilename({ originalName: filename, mimeType });
+  const s3Path = await uploadBufferFile({
+    data: Buffer.from(data),
+    filename: fileName,
+    contentType: mimeType || undefined,
+    baseDir: "chat-attachments",
+  });
+  return s3Path;
+};
+
+const extractWhapiAttachments = async ({ msg, token }) => {
+  const candidates = [
+    msg?.media,
+    msg?.image,
+    msg?.video,
+    msg?.audio,
+    msg?.document,
+    msg?.file,
+    msg?.attachment,
+  ].filter(Boolean);
+
+  for (const item of candidates) {
+    const url =
+      item?.link ||
+      item?.url ||
+      item?.file ||
+      item?.mediaUrl ||
+      item?.media_url ||
+      item?.payload?.url ||
+      null;
+    const mimeType = item?.mime_type || item?.mimeType || item?.mimetype || null;
+    const name = item?.filename || item?.file_name || item?.name || null;
+    const type =
+      item?.type ||
+      (mimeType?.startsWith("image/") ? "image" :
+        mimeType?.startsWith("video/") ? "video" :
+          mimeType?.startsWith("audio/") ? "audio" : "document");
+
+    if (!url) continue;
+    const s3Url = await downloadWhapiMediaToS3({ url, token, mimeType, filename: name });
+    if (!s3Url) continue;
+    return [{ url: s3Url, type, mimeType: mimeType || null, name: name || null }];
+  }
+
+  return null;
 };
 
 const resolveWebhookUrl = () => {
@@ -865,6 +939,8 @@ export const webhook = async (event) => {
         msg?.messageType ||
         (msg?.text ? "text" : null) ||
         "text";
+      const token = channelRows?.[0]?.tokenEnc ? decrypt(channelRows[0].tokenEnc) : null;
+      const attachments = await extractWhapiAttachments({ msg, token });
       await updateLeadWhatsAppMeta(lead, {
         lastInboundAt: new Date(extractTimestamp(msg?.timestamp || msg?.time || msg?.sent)).toISOString(),
         lastInboundFrom: fromDigits,
@@ -875,10 +951,11 @@ export const webhook = async (event) => {
         leadId: lead.id,
         to: fromDigits,
         direction: "inbound",
-        type: String(msgType || "text"),
+        type: String((attachments?.[0]?.type || msgType) || "text"),
         status: "received",
         providerMessageId: msg?.id || msg?.message_id || msg?.messageId || null,
         content,
+        attachments,
       });
       broadcastWhapiEvent("message", { orgId, leadId: lead.id });
 
