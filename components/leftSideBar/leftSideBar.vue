@@ -2,6 +2,7 @@
   <v-navigation-drawer
     v-model="drawerModel"
     :rail="rail"
+    :rail-width="70"
     :temporary="smAndDown"
     :permanent="!smAndDown"
     :style="drawerStyle"

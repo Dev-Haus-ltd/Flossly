@@ -96,7 +96,7 @@ const handleDrawer = () => {
   margin-left: 20px; /* spacing from logo */
 }
 .logo-parent-sm {
-  width: 56px;
+  width: 70px;
   /* background-color: black; */
   height: 100%;
 }
