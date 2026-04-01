@@ -32,6 +32,7 @@
             hover
             class="resizable-table"
             density="compact"
+            :loading="props.loading"
             :items-length="props.activeTotal || activeLeads.length"
             :page="props.activePage"
             :items-per-page="props.itemsPerPage"
@@ -416,6 +417,7 @@
             class="resizable-table"
             density="compact"
             show-select
+            :loading="props.loading"
             :items-length="props.archivedTotal || archivedLeads.length"
             :page="props.archivedPage"
             :items-per-page="props.itemsPerPage"
@@ -835,6 +837,7 @@ const props = defineProps({
   activePage: { type: Number, default: 1 },
   archivedPage: { type: Number, default: 1 },
   itemsPerPage: { type: Number, default: 25 },
+  loading: { type: Boolean, default: false },
   headers: { type: Array, required: true },
   search: { type: String, default: '' },
   leadSources: { type: Array, required: true },

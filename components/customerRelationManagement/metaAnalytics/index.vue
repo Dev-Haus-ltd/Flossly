@@ -12,7 +12,10 @@
             :label="stat.label"
             :value="stat.value"
             :uid="i"
+            :select="stat.select"
+            :select-items="stat.selectItems || []"
             hide-chip
+            @update:select="(v) => onCardSelect(i, v)"
           />
         </v-col>
       </v-row>
@@ -122,7 +125,9 @@
             :reach="card.reach"
             :leads="card.leads"
             :cpl="card.cpl"
-            :campaign-id="card.campaignId"
+            :campaign-id="card.campaignId ?? null"
+            :ad-set-id="card.adSetId ?? null"
+            :ad-id="card.adId ?? null"
             :drill-label="card.drillLabel"
             @drill="onDrill(card)"
           />
@@ -134,6 +139,64 @@
         <p class="text-grey empty-state-copy">{{ drillEmptyCopy }}</p>
       </v-sheet>
     </div>
+
+    <!-- Spend date range picker dialog -->
+    <v-dialog v-model="showSpendDateRange" max-width="360" persistent>
+      <v-card rounded="xl" class="pa-4">
+        <p class="font-weight-bold mb-3" style="font-size:15px">Total Spend — Date Range</p>
+        <v-text-field
+          v-model="spendDateFrom"
+          label="From"
+          type="date"
+          density="compact"
+          variant="outlined"
+          hide-details
+          class="mb-3"
+        />
+        <v-text-field
+          v-model="spendDateTo"
+          label="To"
+          type="date"
+          density="compact"
+          variant="outlined"
+          hide-details
+          class="mb-4"
+        />
+        <div class="d-flex justify-end gap-2">
+          <v-btn variant="text" @click="showSpendDateRange = false; spendPeriod = 'This month'">Cancel</v-btn>
+          <v-btn color="primary" variant="flat" rounded="lg" :disabled="!spendDateFrom || !spendDateTo" @click="confirmSpendDateRange">Apply</v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
+
+    <!-- Leads date range picker dialog -->
+    <v-dialog v-model="showLeadsDateRange" max-width="360" persistent>
+      <v-card rounded="xl" class="pa-4">
+        <p class="font-weight-bold mb-3" style="font-size:15px">Number of Leads — Date Range</p>
+        <v-text-field
+          v-model="leadsDateFrom"
+          label="From"
+          type="date"
+          density="compact"
+          variant="outlined"
+          hide-details
+          class="mb-3"
+        />
+        <v-text-field
+          v-model="leadsDateTo"
+          label="To"
+          type="date"
+          density="compact"
+          variant="outlined"
+          hide-details
+          class="mb-4"
+        />
+        <div class="d-flex justify-end gap-2">
+          <v-btn variant="text" @click="showLeadsDateRange = false; leadsPeriod = 'This month'">Cancel</v-btn>
+          <v-btn color="primary" variant="flat" rounded="lg" :disabled="!leadsDateFrom || !leadsDateTo" @click="confirmLeadsDateRange">Apply</v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
   </v-sheet>
 </template>
 
@@ -142,6 +205,7 @@ import { computed, ref, watch } from 'vue';
 import { useCrmStore } from '@/stores/crm';
 import { useMainStore } from '@/stores';
 import { useUser } from '@/composables/useUser';
+import crmService from '@/services/crmService';
 import instagramIcon from '@/assets/crm/instagram.svg';
 import facebookIcon from '@/assets/crm/facebook.svg';
 import reference1 from '@/assets/crm/placeholder/reference-1.png';
@@ -156,6 +220,113 @@ const isFiltering = ref(false);
 const activeFilters = ref({ platform: null, dateFrom: null, dateTo: null });
 const currentOrgId = computed(() => Number(user.value?.currentLoggedInOrgId || 0) || null);
 const metaConnection = ref({ count: 0, pages: [] });
+
+// Stat card per-card filter state
+const campaignStatusFilter = ref('All')
+const spendPeriod = ref('This month')
+const spendDateFrom = ref(null)
+const spendDateTo = ref(null)
+const showSpendDateRange = ref(false)
+const leadsPeriod = ref('This month')
+const leadsDateFrom = ref(null)
+const leadsDateTo = ref(null)
+const showLeadsDateRange = ref(false)
+const statSpend = ref(0)
+const statLeads = ref(0)
+const statSpendLoading = ref(false)
+const statLeadsLoading = ref(false)
+
+const getPeriodDates = (period, from = null, to = null) => {
+  const now = new Date()
+  if (period === 'This week') {
+    const dow = now.getDay()
+    const monday = new Date(now)
+    monday.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1))
+    return { dateFrom: monday.toISOString().split('T')[0], dateTo: now.toISOString().split('T')[0] }
+  }
+  if (period === 'This month') {
+    return {
+      dateFrom: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
+      dateTo: now.toISOString().split('T')[0],
+    }
+  }
+  // Custom date range — period is a formatted label; use stored from/to directly
+  if (from && to) {
+    return {
+      dateFrom: new Date(from).toISOString().split('T')[0],
+      dateTo: new Date(to).toISOString().split('T')[0],
+    }
+  }
+  return {}
+}
+
+const formatDateRangeLabel = (from, to) => {
+  const fmt = (d) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+  return `${fmt(from)} – ${fmt(to)}`
+}
+
+const loadStatSpend = async () => {
+  const params = getPeriodDates(spendPeriod.value, spendDateFrom.value, spendDateTo.value)
+  if (!params.dateFrom) return
+  statSpendLoading.value = true
+  try {
+    const res = await crmService.getMetaInsights(params)
+    if (res?.code === 0) {
+      const campaignInsights = (res.data || []).filter(i => i.entityType === 'campaign')
+      statSpend.value = campaignInsights.reduce((sum, i) => sum + Number(i.spend || 0), 0)
+    }
+  } finally {
+    statSpendLoading.value = false
+  }
+}
+
+const loadStatLeads = async () => {
+  const params = getPeriodDates(leadsPeriod.value, leadsDateFrom.value, leadsDateTo.value)
+  if (!params.dateFrom) return
+  statLeadsLoading.value = true
+  try {
+    const res = await crmService.getAllLeadCounts(params)
+    if (res?.code === 0) {
+      statLeads.value = Object.values(res.data?.campaignLeads || {}).reduce((sum, n) => sum + Number(n), 0)
+    }
+  } finally {
+    statLeadsLoading.value = false
+  }
+}
+
+const onCardSelect = (index, value) => {
+  if (index === 0) {
+    campaignStatusFilter.value = value
+    return
+  }
+  if (index === 1) {
+    if (value === 'Date range') { showSpendDateRange.value = true; return }
+    spendPeriod.value = value
+    spendDateFrom.value = null
+    spendDateTo.value = null
+    loadStatSpend()
+    return
+  }
+  if (index === 2) {
+    if (value === 'Date range') { showLeadsDateRange.value = true; return }
+    leadsPeriod.value = value
+    leadsDateFrom.value = null
+    leadsDateTo.value = null
+    loadStatLeads()
+  }
+}
+
+const confirmSpendDateRange = () => {
+  showSpendDateRange.value = false
+  spendPeriod.value = formatDateRangeLabel(spendDateFrom.value, spendDateTo.value)
+  loadStatSpend()
+}
+
+const confirmLeadsDateRange = () => {
+  showLeadsDateRange.value = false
+  leadsPeriod.value = formatDateRangeLabel(leadsDateFrom.value, leadsDateTo.value)
+  loadStatLeads()
+}
 
 // Drill-down state: level 0 = campaigns, 1 = ad sets, 2 = ads
 const drill = reactive({ level: 0, campaign: null, adSet: null });
@@ -262,6 +433,8 @@ watch(
     }
 
     await hydrateMetaAnalytics({ syncIfInsightsMissing: true });
+    loadStatSpend();
+    loadStatLeads();
   },
   { immediate: true }
 );
@@ -359,6 +532,8 @@ const resync = async () => {
       });
     })();
     await analyticsLoadPromise;
+    loadStatSpend();
+    loadStatLeads();
   } catch (error) {
     mainStore.setSnackbar({
       type: 'error',
@@ -398,23 +573,40 @@ const emptyStateCopy = computed(() =>
     : 'Connect a Meta page for this organisation first. Once connected, run Sync Now to start importing campaign analytics.'
 );
 
+const filteredCampaignCount = computed(() => {
+  if (campaignStatusFilter.value === 'All') return stats.value.campaigns
+  return crmStore.metaCampaigns.filter(
+    (c) => c.status?.toUpperCase() === campaignStatusFilter.value.toUpperCase()
+  ).length
+})
+
 const analyticsStats = computed(() => {
   const sym = currencySymbol.value;
   return [
     {
       icon: 'https://cdn.lordicon.com/nocovwne.json',
       label: 'Number of Campaigns',
-      value: String(stats.value.campaigns).padStart(2, '0'),
+      value: String(filteredCampaignCount.value).padStart(2, '0'),
+      select: campaignStatusFilter.value,
+      selectItems: ['All', 'Active', 'Paused'],
     },
     {
       icon: 'https://cdn.lordicon.com/tzynxkwl.json',
       label: 'Total Spend',
-      value: `${sym}${(stats.value.spend / 100).toFixed(2)}`,
+      value: statSpendLoading.value ? '...' : `${sym}${(statSpend.value / 100).toFixed(2)}`,
+      select: spendPeriod.value,
+      selectItems: spendDateFrom.value
+        ? ['This week', 'This month', spendPeriod.value, 'Date range']
+        : ['This week', 'This month', 'Date range'],
     },
     {
       icon: 'https://cdn.lordicon.com/tzynxkwl.json',
       label: 'Number of Leads',
-      value: String(stats.value.leads).padStart(2, '0'),
+      value: statLeadsLoading.value ? '...' : String(statLeads.value).padStart(2, '0'),
+      select: leadsPeriod.value,
+      selectItems: leadsDateFrom.value
+        ? ['This week', 'This month', leadsPeriod.value, 'Date range']
+        : ['This week', 'This month', 'Date range'],
     },
     {
       icon: 'https://cdn.lordicon.com/tzynxkwl.json',

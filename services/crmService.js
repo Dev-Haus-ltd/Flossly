@@ -144,9 +144,12 @@ export default {
         .catch((err) => reject(err));
     });
   },
-  getMetaInsights() {
+  getMetaInsights(params = {}) {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => { if (v != null && v !== '') q.append(k, v); });
+    const qs = q.toString();
     return new Promise((resolve, reject) => {
-      Get("/meta/getInsights")
+      Get(`/meta/getInsights${qs ? `?${qs}` : ''}`)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -158,9 +161,12 @@ export default {
         .catch((err) => reject(err));
     });
   },
-  getAllLeadCounts() {
+  getAllLeadCounts(params = {}) {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => { if (v != null && v !== '') q.append(k, v); });
+    const qs = q.toString();
     return new Promise((resolve, reject) => {
-      Get("/meta/allLeadCounts")
+      Get(`/meta/allLeadCounts${qs ? `?${qs}` : ''}`)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
