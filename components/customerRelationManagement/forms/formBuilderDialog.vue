@@ -1,111 +1,99 @@
 <template>
-  <v-dialog
-    :model-value="modelValue"
-    @update:model-value="$emit('update:modelValue', $event)"
-    fullscreen
-    transition="dialog-bottom-transition"
-    scrollable
-  >
-    <v-card style="background: #f5f7fa;">
-      <!-- Top toolbar -->
-      <v-toolbar color="white" elevation="1" style="z-index:2;">
-        <v-btn icon @click="confirmClose">
-          <v-icon>mdi-arrow-left</v-icon>
-        </v-btn>
+  <div style="background: #f5f7fa; display: flex; flex-direction: column; height: calc(100vh - 160px);">
+    <!-- Standalone toolbar — only shown when not embedded via CRM index (no bridge available) -->
+    <v-toolbar v-if="!bridge" color="white" elevation="1" style="z-index:2; flex-shrink: 0;">
+      <v-btn icon variant="text" @click="confirmClose">
+        <v-icon>mdi-arrow-left</v-icon>
+      </v-btn>
+      <v-text-field
+        v-model="formName"
+        variant="plain"
+        density="compact"
+        hide-details
+        class="font-weight-medium ml-1"
+        style="max-width: 300px; font-size: 15px;"
+        placeholder="Form name..."
+      />
+      <v-spacer />
+      <v-btn variant="text" :loading="saving" @click="saveOnly">
+        <v-icon start>mdi-content-save-outline</v-icon>
+        Save
+      </v-btn>
+      <v-btn
+        color="primary"
+        variant="flat"
+        rounded="lg"
+        class="mr-3"
+        :loading="saving"
+        :disabled="!canPublish"
+        @click="saveAndShare"
+      >
+        <v-icon start>mdi-share-variant</v-icon>
+        Save & Share
+      </v-btn>
+    </v-toolbar>
 
-        <v-text-field
-          v-model="formName"
-          variant="plain"
-          density="compact"
-          hide-details
-          class="ml-2 font-weight-medium"
-          style="max-width: 300px; font-size: 15px;"
-          placeholder="Form name..."
-        />
-
-        <v-spacer />
-
-        <v-btn variant="text" :loading="saving" @click="saveOnly">
-          <v-icon start>mdi-content-save-outline</v-icon>
-          Save
-        </v-btn>
-
-        <v-btn
-          color="primary"
-          variant="flat"
-          rounded="lg"
-          class="mr-3"
-          :loading="saving"
-          :disabled="!canPublish"
-          @click="saveAndShare"
+    <div style="flex: 1; overflow: hidden; min-height: 0;">
+      <v-row no-gutters style="height: 100%;">
+        <!-- Left: Field Palette -->
+        <v-col
+          cols="12"
+          sm="3"
+          style="background: white; border-right: 1px solid #e5e7eb; overflow-y: auto; height: 100%;"
         >
-          <v-icon start>mdi-share-variant</v-icon>
-          Save & Share
-        </v-btn>
-      </v-toolbar>
+          <CustomerRelationManagementFormsFormBuilderFieldPalette
+            :available-fields="availableFields"
+            :canvas-keys="canvasKeys"
+            @add-field="addField"
+          />
+        </v-col>
 
-      <v-card-text class="pa-0" style="overflow: hidden;">
-        <v-row no-gutters style="height: calc(100vh - 64px);">
-          <!-- Left: Field Palette -->
-          <v-col
-            cols="12"
-            sm="3"
-            style="background: white; border-right: 1px solid #e5e7eb; overflow-y: auto; height: 100%;"
-          >
-            <CustomerRelationManagementFormsFormBuilderFieldPalette
-              :available-fields="availableFields"
-              :canvas-keys="canvasKeys"
-              @add-field="addField"
-            />
-          </v-col>
+        <!-- Centre: Canvas -->
+        <v-col
+          cols="12"
+          sm="5"
+          style="overflow-y: auto; height: 100%;"
+          class="pa-4"
+        >
+          <div class="text-caption text-medium-emphasis mb-3 text-center">
+            Drag to reorder • Click to configure • Remove with ✕
+          </div>
+          <CustomerRelationManagementFormsFormBuilderCanvas
+            v-model="canvasFields"
+            :selected-key="selectedFieldKey"
+            @select="selectedFieldKey = $event"
+            @remove="removeField"
+          />
+        </v-col>
 
-          <!-- Centre: Canvas -->
-          <v-col
-            cols="12"
-            sm="5"
-            style="overflow-y: auto; height: 100%;"
-            class="pa-4"
-          >
-            <div class="text-caption text-medium-emphasis mb-3 text-center">
-              Drag to reorder • Click to configure • Remove with ✕
-            </div>
-            <CustomerRelationManagementFormsFormBuilderCanvas
-              v-model="canvasFields"
-              :selected-key="selectedFieldKey"
-              @select="selectedFieldKey = $event"
-              @remove="removeField"
-            />
-          </v-col>
+        <!-- Right: Field Editor + Preview toggle -->
+        <v-col
+          cols="12"
+          sm="4"
+          style="border-left: 1px solid #e5e7eb; overflow-y: auto; height: 100%; background: white;"
+        >
+          <v-tabs v-model="rightTab" color="primary" density="compact" class="border-b">
+            <v-tab value="editor">Configure</v-tab>
+            <v-tab value="preview">Preview</v-tab>
+          </v-tabs>
 
-          <!-- Right: Field Editor + Preview toggle -->
-          <v-col
-            cols="12"
-            sm="4"
-            style="border-left: 1px solid #e5e7eb; overflow-y: auto; height: 100%; background: white;"
-          >
-            <v-tabs v-model="rightTab" color="primary" density="compact" class="border-b">
-              <v-tab value="editor">Configure</v-tab>
-              <v-tab value="preview">Preview</v-tab>
-            </v-tabs>
-
-            <v-window v-model="rightTab">
-              <v-window-item value="editor">
-                <CustomerRelationManagementFormsFormBuilderFieldEditor
-                  :field="selectedField"
-                  @update="updateField"
-                />
-              </v-window-item>
-              <v-window-item value="preview">
-                <CustomerRelationManagementFormsFormPreviewPanel
-                  :form-name="formName"
-                  :fields="canvasFields"
-                />
-              </v-window-item>
-            </v-window>
-          </v-col>
-        </v-row>
-      </v-card-text>
-    </v-card>
+          <v-window v-model="rightTab">
+            <v-window-item value="editor">
+              <CustomerRelationManagementFormsFormBuilderFieldEditor
+                :field="selectedField"
+                @update="updateField"
+              />
+            </v-window-item>
+            <v-window-item value="preview">
+              <CustomerRelationManagementFormsFormPreviewPanel
+                :form-name="formName"
+                :fields="canvasFields"
+              />
+            </v-window-item>
+          </v-window>
+        </v-col>
+      </v-row>
+    </div>
 
     <!-- Share panel after save -->
     <v-dialog v-model="shareOpen" max-width="560">
@@ -128,7 +116,7 @@
       @confirm="forceClose"
       @cancel="discardDialog = false"
     />
-  </v-dialog>
+  </div>
 </template>
 
 <script setup>
@@ -136,13 +124,16 @@ import { useCrmStore } from '@/stores/crm'
 import { useMainStore } from '@/stores/index'
 
 const props = defineProps({
-  modelValue: Boolean,
   form: { type: Object, default: null },
 })
-const emit = defineEmits(['update:modelValue', 'saved'])
+const emit = defineEmits(['go-back', 'saved'])
 
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
+
+// Inject the breadcrumb bridge provided by CustomerRelationManagement/index.vue
+// If null, the component is being used standalone and renders its own toolbar
+const bridge = inject('crm-builder-bridge', null)
 
 const formName = ref(props.form?.name || 'New Form')
 const canvasFields = ref(JSON.parse(JSON.stringify(props.form?.fields || [])))
@@ -154,17 +145,30 @@ const shareOpen = ref(false)
 const savedForm = ref(null)
 const discardDialog = ref(false)
 
-// Dirty tracking — only set to true after initial setup completes
-let initialized = false
-const isDirty = ref(false)
+// Track the saved form ID internally so repeated "Save" calls update rather than create duplicates
+const formId = ref(props.form?.id || null)
+
+// Snapshot of state at the point of last save (or initial load) — used for dirty detection
+let cleanSnapshot = ''
+
+const isDirty = computed(() => {
+  if (!cleanSnapshot) return false
+  return JSON.stringify({ name: formName.value, fields: canvasFields.value }) !== cleanSnapshot
+})
 
 const canvasKeys = computed(() => canvasFields.value.map((f) => f.key))
 const selectedField = computed(() => canvasFields.value.find((f) => f.key === selectedFieldKey.value) || null)
 const canPublish = computed(() => formName.value.trim() && canvasFields.value.length >= 1)
 
-// Watch for user changes AFTER initialization
-watch(formName, () => { if (initialized) isDirty.value = true })
-watch(canvasFields, () => { if (initialized) isDirty.value = true }, { deep: true })
+// Keep bridge state in sync when bridge is available
+if (bridge) {
+  watch(saving, v => { bridge.saving = v })
+  watch(canPublish, v => { bridge.canPublish = v })
+  // When user edits form name in the breadcrumb, reflect it here
+  watch(() => bridge.formName, (v) => {
+    if (v !== undefined && v !== formName.value) formName.value = v
+  })
+}
 
 const addField = (field) => {
   canvasFields.value.push({ ...field })
@@ -190,13 +194,14 @@ const doSave = async () => {
   saving.value = true
   try {
     let res
-    if (props.form?.id) {
-      res = await crmStore.updateForm({ id: props.form.id, name, fields: canvasFields.value })
+    if (formId.value) {
+      res = await crmStore.updateForm({ id: formId.value, name, fields: canvasFields.value })
     } else {
       res = await crmStore.createForm({ name, fields: canvasFields.value })
     }
     if (res?.code === 0) {
-      isDirty.value = false  // reset — changes are now saved
+      if (res.data?.id) formId.value = res.data.id
+      cleanSnapshot = JSON.stringify({ name: formName.value, fields: canvasFields.value })
       mainStore.setSnackbar({ title: 'Form saved', type: 'success' })
       emit('saved')
       return res.data
@@ -231,7 +236,7 @@ const onRegenerated = (updated) => {
 
 const confirmClose = () => {
   if (!isDirty.value) {
-    emit('update:modelValue', false)
+    emit('go-back')
     return
   }
   discardDialog.value = true
@@ -239,8 +244,7 @@ const confirmClose = () => {
 
 const forceClose = () => {
   discardDialog.value = false
-  isDirty.value = false
-  emit('update:modelValue', false)
+  emit('go-back')
 }
 
 onMounted(async () => {
@@ -253,8 +257,32 @@ onMounted(async () => {
   }
   if (canvasFields.value.length) selectedFieldKey.value = canvasFields.value[0].key
 
-  // Mark as initialized AFTER setup — changes from here on are user-driven
   await nextTick()
-  initialized = true
+  cleanSnapshot = JSON.stringify({ name: formName.value, fields: canvasFields.value })
+
+  // Register with the breadcrumb bridge
+  if (bridge) {
+    bridge.active = true
+    bridge.formName = formName.value
+    bridge.canPublish = canPublish.value
+    bridge.saving = false
+    bridge.saveOnly = saveOnly
+    bridge.saveAndShare = saveAndShare
+    bridge.confirmClose = confirmClose
+  }
+})
+
+onUnmounted(() => {
+  if (bridge) {
+    Object.assign(bridge, {
+      active: false,
+      formName: '',
+      canPublish: false,
+      saving: false,
+      saveOnly: null,
+      saveAndShare: null,
+      confirmClose: null,
+    })
+  }
 })
 </script>

@@ -6,7 +6,7 @@ import {
   getAvailableFields,
   getFormMeta,
   submitFormLead,
-} from '~/server/controllers/webForm'
+} from '../../controllers/webForm'
 
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, 'name')

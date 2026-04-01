@@ -9,7 +9,44 @@
         :style="showForms ? 'color: #0061FB; cursor: pointer;' : ''"
         @click="showForms = false"
       >CRM</p>
-      <p v-if="showForms" style="font-size:12px; color:#c3c3c3;">/ Lead Capture Forms</p>
+      <template v-if="showForms">
+        <p
+          class="mr-1"
+          :style="builderBridge.active ? 'font-size:12px; color: #0061FB; cursor: pointer;' : 'font-size:12px; color:#c3c3c3;'"
+          @click="builderBridge.confirmClose?.()"
+        >/ Lead Capture Forms</p>
+        <template v-if="builderBridge.active">
+          <p class="mr-1" style="font-size:12px; color:#c3c3c3;">/</p>
+          <v-text-field
+            :model-value="builderBridge.formName"
+            @update:model-value="builderBridge.formName = $event"
+            variant="plain"
+            density="compact"
+            hide-details
+            class="crm-breadcrumb-input"
+            placeholder="Form name..."
+          />
+        </template>
+      </template>
+      <v-spacer v-if="builderBridge.active && showForms" />
+      <template v-if="builderBridge.active && showForms">
+        <v-btn variant="text" :loading="builderBridge.saving" @click="builderBridge.saveOnly?.()">
+          <v-icon start>mdi-content-save-outline</v-icon>
+          Save
+        </v-btn>
+        <v-btn
+          color="primary"
+          variant="flat"
+          rounded="lg"
+          class="mr-2"
+          :loading="builderBridge.saving"
+          :disabled="!builderBridge.canPublish"
+          @click="builderBridge.saveAndShare?.()"
+        >
+          <v-icon start>mdi-share-variant</v-icon>
+          Save & Share
+        </v-btn>
+      </template>
     </div>
 
     <!-- Forms view -->
@@ -493,6 +530,16 @@ const router = useRouter();
 const diaryStore = useDiaryStore();
 const mainStore = useMainStore();
 const showForms = ref(false);
+const builderBridge = reactive({
+  active: false,
+  formName: '',
+  canPublish: false,
+  saving: false,
+  saveOnly: null,
+  saveAndShare: null,
+  confirmClose: null,
+})
+provide('crm-builder-bridge', builderBridge)
 const addLeadDrawer = ref(false);
 const bulkLeadUploadDialog = ref(false);
 const metaMenu = ref(false);
@@ -1732,6 +1779,22 @@ watch(isConnected, (val) => {
 :deep(.v-breadcrumbs) {
   font-weight: 400;
   font-size: 14px;
+}
+
+.crm-breadcrumb-input {
+  max-width: 220px;
+
+  :deep(.v-field__input) {
+    font-size: 12px;
+    font-weight: 400;
+    color: #c3c3c3;
+    padding: 0;
+    min-height: unset;
+  }
+
+  :deep(.v-field) {
+    padding: 0;
+  }
 }
 
 /* Stats Container - Fill available space */
