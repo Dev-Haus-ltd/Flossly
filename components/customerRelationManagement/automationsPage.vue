@@ -194,18 +194,10 @@ const aiGeneratorRef = ref(null)
 
 const isPrivileged = computed(() => [1, 8].includes(Number(user.value?.roleId)))
 
-const isWhatsAppGroup = (group) => {
-  const key = String(group?.key || '').toLowerCase()
-  const title = String(group?.title || '').toLowerCase()
-  return key.includes('whatsapp') || title.includes('whatsapp')
-}
-
 const loadGroups = async () => {
   const res = await crmStore.listAutomationGroups()
   if (res?.code === 0 && Array.isArray(res.data)) {
-    automationGroups.value = whatsappEnabled.value
-      ? res.data
-      : res.data.filter((group) => !isWhatsAppGroup(group))
+    automationGroups.value = res.data
   }
 }
 
@@ -245,13 +237,20 @@ const refreshAll = async () => {
   }
 }
 
+const refreshGroupsAndRows = async () => {
+  await loadGroups()
+  if (automationRef.value?.refresh) {
+    await automationRef.value.refresh({ skipGroups: true })
+  }
+}
+
 const handleGroupSaved = async () => {
   editingGroup.value = null
-  await refreshAll()
+  await refreshGroupsAndRows()
 }
 
 const handleAutomationSaved = async () => {
-  await refreshAll()
+  await refreshGroupsAndRows()
 }
 
 const openGroupCreate = () => {
@@ -280,7 +279,7 @@ const deleteGroup = async () => {
     if (res?.code === 0) {
       showGroupDelete.value = false
       groupToDelete.value = null
-      await refreshAll()
+      await loadGroups()
       return
     }
     mainStore.setSnackbar({

@@ -267,6 +267,12 @@ export const markCrmSent = async (lead, raw, key) => {
   map[key] = new Date().toISOString();
   lead.rawData = { ...raw, automationSentKeys: map };
   await lead.save();
+  try {
+    await CrmAutomationTemplate.update(
+      { lastSentAt: new Date() },
+      { where: { organisationId: lead.organisationId, key } }
+    );
+  } catch {}
 };
 
 const daysSince = (today, date) => {
@@ -313,7 +319,7 @@ export const shouldSendCrmTemplate = ({ lead, tpl, trigger, today, org }) => {
   if (trigger.type === "inquiry_days") {
     if (!lead?.inquiryDate) return { due: false, sentKey: tpl.key };
     const d = daysSince(today, lead.inquiryDate);
-    return { due: d !== null && d >= trigger.days, sentKey: tpl.key };
+    return { due: d !== null && d === trigger.days, sentKey: tpl.key };
   }
   if (trigger.type === "birthday_offset") {
     if (!lead?.dob) return { due: false, sentKey: `${tpl.key}_${today.getFullYear()}` };
@@ -564,13 +570,16 @@ export const sendImmediateCrmAutomationsForLead = async (lead) => {
   const templatesByOrg = buildCrmTemplatesByOrg(templates);
   const effectiveTemplates = buildEffectiveCrmTemplates(lead, templatesByOrg);
   const today = new Date();
-  const raw = lead.rawData || {};
   for (const tpl of effectiveTemplates) {
     if (!tpl?.enabled) continue;
     const trigger = resolveCrmTrigger(tpl);
-    if (!trigger || trigger.type !== "inquiry_days" || trigger.days !== 0) continue;
+    if (!trigger) continue;
+    const isImmediate =
+      (trigger.type === "inquiry_days" && trigger.days === 0) ||
+      trigger.type === "send_now";
+    if (!isImmediate) continue;
     const { due, sentKey } = shouldSendCrmTemplate({ lead, tpl, trigger, today, org });
-    if (!due || hasCrmSent(raw, sentKey)) continue;
+    if (!due || hasCrmSent(lead.rawData || {}, sentKey)) continue;
     if (String(tpl?.type || "Email").toLowerCase() === "whatsapp") {
       if (!lead?.telephone) continue;
       const message = buildCrmWhatsAppMessage(lead, tpl, org);
@@ -582,12 +591,12 @@ export const sendImmediateCrmAutomationsForLead = async (lead) => {
         throw new Error("WhatsApp template name is required for automation");
       }
       await sendCrmAutomationWhatsApp(lead, message, templatePayload, tpl?.name);
-      await markCrmSent(lead, raw, sentKey);
+      await markCrmSent(lead, lead.rawData || {}, sentKey);
     } else {
       if (!lead?.email) continue;
       const { subject, html } = buildCrmEmail(lead, tpl, org);
       await sendCrmAutomationEmail(lead, subject, html, tpl?.name);
-      await markCrmSent(lead, raw, sentKey);
+      await markCrmSent(lead, lead.rawData || {}, sentKey);
     }
   }
 };

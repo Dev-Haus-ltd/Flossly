@@ -70,6 +70,11 @@
               />
               My Automations
             </v-tab>
+
+            <v-tab value="automation-log" class="tab-text">
+              <v-icon size="18" class="mr-2">mdi-history</v-icon>
+              Automation History
+            </v-tab>
           </v-tabs>
 
           <v-tabs-window v-model="tab">
@@ -443,6 +448,8 @@
                   :whatsapp-enabled="whatsappEnabled"
                   :whatsapp-requires-templates="whatsappRequiresTemplates"
                   :disable-toggle="false"
+                  :show-sent-status-column="true"
+                  :show-resend-action="true"
                 />
               </div>
             </v-tabs-window-item>
@@ -456,7 +463,90 @@
                   :whatsapp-enabled="whatsappEnabled"
                   :whatsapp-requires-templates="whatsappRequiresTemplates"
                   :disable-toggle="false"
+                  :show-sent-status-column="true"
+                  :show-resend-action="true"
                 />
+              </div>
+            </v-tabs-window-item>
+
+            <v-tabs-window-item value="automation-log">
+              <div class="pa-6">
+                <v-card class="rounded-lg overflow-hidden" style="border: 1px solid rgba(0,0,0,0.12);" :elevation="0">
+                <v-data-table-server
+                  :items="automationLogRows"
+                  :headers="automationLogHeaders"
+                  :loading="automationLogLoading"
+                  :items-length="automationLogTotal"
+                  :page="automationLogPage"
+                  :items-per-page="automationLogItemsPerPage"
+                  :items-per-page-options="[10, 25, 50]"
+                  class="automation-log-table"
+                  :elevation="0"
+                  density="compact"
+                  hover
+                  item-value="key"
+                  @update:page="onAutomationLogPageChange"
+                  @update:items-per-page="onAutomationLogLimitChange"
+                >
+                  <template #headers="{ columns }">
+                    <tr>
+                      <th
+                        v-for="col in columns"
+                        :key="col.key"
+                        :style="{
+                          backgroundColor: '#F6F6F6',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          color: '#4b5563',
+                          padding: '0px 10px',
+                          height: '40px',
+                          width: col.width || undefined,
+                          minWidth: col.width || undefined,
+                          whiteSpace: 'nowrap',
+                        }"
+                      >
+                        {{ col.title }}
+                      </th>
+                    </tr>
+                  </template>
+                  <template #item.type="{ item }">
+                    <div class="d-flex align-center" style="gap:6px;">
+                      <v-chip size="small" variant="tonal" color="primary" class="font-weight-medium">
+                        <v-icon size="14" class="mr-1">
+                          {{ item.type === 'WhatsApp' ? 'mdi-whatsapp' : 'mdi-email-outline' }}
+                        </v-icon>
+                        {{ item.type }}
+                      </v-chip>
+                      <v-chip v-if="item.source === 'manual'" size="x-small" variant="tonal" color="grey">Manual</v-chip>
+                    </div>
+                  </template>
+                  <template #item.name="{ item }">
+                    <span class="text-body-2 font-weight-medium">{{ item.name }}</span>
+                  </template>
+                  <template #item.sentAt="{ item }">
+                    <span class="text-body-2">
+                      {{ formatDate(item.sentAt) }}
+                      <span class="text-caption text-medium-emphasis ml-1">
+                        {{ item.sentAt ? new Date(item.sentAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '' }}
+                      </span>
+                    </span>
+                  </template>
+                  <template #item.logStatus>
+                    <v-chip size="x-small" variant="tonal" color="success" class="font-weight-medium">
+                      <v-icon size="11" class="mr-1">mdi-check-circle-outline</v-icon>
+                      Sent
+                    </v-chip>
+                  </template>
+                  <template #no-data>
+                    <div class="text-center py-8">
+                      <v-icon size="48" color="grey-lighten-1">mdi-email-check-outline</v-icon>
+                      <p class="text-body-2 mt-3 text-medium-emphasis">No automations sent to this lead yet</p>
+                    </div>
+                  </template>
+                </v-data-table-server>
+                </v-card>
               </div>
             </v-tabs-window-item>
           </v-tabs-window>
@@ -471,6 +561,7 @@ import { formatDateOnly } from "@/lib/dateFormatter";
 import { getLeadDisplayName } from "@/lib/normalizers/lead";
 import { crmAutomationDefaults } from '@shared/defaults/crmAutomationDefaults'
 import { useCrmStore } from '@/stores/crm'
+import { useMainStore } from '@/stores/index'
 import CustomerRelationManagementChatTimeline from "@/components/customerRelationManagement/chatTimeline.vue";
 
 const props = defineProps({
@@ -481,6 +572,7 @@ const emit = defineEmits(['close','update:modelValue'])
 const onClose = () => { emit('update:modelValue', false); emit('close') }
 const tab = ref("lead-info");
 const crmStore = useCrmStore()
+const mainStore = useMainStore()
 const whatsappEnabled = ref(false)
 const whatsappRequiresTemplates = ref(true)
 const leadTitle = computed(() => {
@@ -584,6 +676,48 @@ const assignedUsers = computed(() => {
     .filter(Boolean);
 });
 
+const automationLogRows = ref([])
+const automationLogLoading = ref(false)
+const automationLogTotal = ref(0)
+const automationLogPage = ref(1)
+const automationLogItemsPerPage = ref(25)
+const automationLogHeaders = [
+  { title: 'Type', key: 'type', sortable: false },
+  { title: 'Automation', key: 'name', sortable: false },
+  { title: 'Message Sent', key: 'sentAt', width: '200px', sortable: false },
+  { title: 'Status', key: 'logStatus', width: '110px', sortable: false },
+]
+
+const loadAutomationLog = async (leadId) => {
+  if (!leadId) return
+  automationLogLoading.value = true
+  try {
+    const res = await crmStore.getLeadAutomationLog(leadId, {
+      page: automationLogPage.value,
+      limit: automationLogItemsPerPage.value,
+    })
+    const payload = res?.data || {}
+    automationLogRows.value = Array.isArray(payload.rows) ? payload.rows : []
+    automationLogTotal.value = Number(payload.total || 0)
+  } catch {
+    automationLogRows.value = []
+    automationLogTotal.value = 0
+  } finally {
+    automationLogLoading.value = false
+  }
+}
+
+const onAutomationLogPageChange = (page) => {
+  automationLogPage.value = page
+  if (props.selectedLead?.id) loadAutomationLog(props.selectedLead.id)
+}
+
+const onAutomationLogLimitChange = (limit) => {
+  automationLogItemsPerPage.value = limit
+  automationLogPage.value = 1
+  if (props.selectedLead?.id) loadAutomationLog(props.selectedLead.id)
+}
+
 const automationRows = ref([])
 const automationLoading = ref(false)
 const loadLeadAutomations = async (leadId) => {
@@ -622,6 +756,7 @@ watch(
   () => props.selectedLead,
   async (lead) => {
     if (!lead?.id) return
+    automationLogRows.value = []
     try {
       const res = await crmStore.getLeadTreatment(lead.id)
       if (res && res.code === 0) selectedTreatment.value = res.data || {}
@@ -637,13 +772,25 @@ watch(
   { immediate: true }
 )
 
+watch(tab, (val) => {
+  if (val === 'automation-log' && props.selectedLead?.id) {
+    automationLogPage.value = 1
+    loadAutomationLog(props.selectedLead.id)
+  }
+})
+
 const onTreatmentSave = async (updatedTreatment) => {
   try {
     const res = await crmStore.saveLeadTreatment(props.selectedLead.id, updatedTreatment)
     if (res && res.code === 0) {
       selectedTreatment.value = res.data
+      mainStore.setSnackbar({ title: 'Treatment interest saved', type: 'success' })
+    } else {
+      mainStore.setSnackbar({ title: res?.message || 'Failed to save treatment interest', type: 'error' })
     }
-  } catch (e) {}
+  } catch (e) {
+    mainStore.setSnackbar({ title: e?.message || 'Failed to save treatment interest', type: 'error' })
+  }
 };
 const onPreferencesUpdated = (newPreferences) => {
   pendingPrefs.value = newPreferences
@@ -654,7 +801,14 @@ const savingComment = ref(false)
 const saveComment = async () => {
   try {
     savingComment.value = true
-    await crmStore.updateLead({ id: props.selectedLead.id, comments: props.selectedLead.comments })
+    const res = await crmStore.updateLead({ id: props.selectedLead.id, comments: props.selectedLead.comments })
+    if (res?.code === 0) {
+      mainStore.setSnackbar({ title: 'Comment saved', type: 'success' })
+    } else {
+      mainStore.setSnackbar({ title: res?.message || 'Failed to save comment', type: 'error' })
+    }
+  } catch (e) {
+    mainStore.setSnackbar({ title: e?.message || 'Failed to save comment', type: 'error' })
   } finally { savingComment.value = false }
 }
 
@@ -665,7 +819,14 @@ const savePreferences = async () => {
     savingPrefs.value = true
     const prefs = pendingPrefs.value || commPrefs.value || {}
     const res = await crmStore.saveLeadCommunication({ leadId: props.selectedLead.id, ...prefs })
-    if (res && res.code === 0) commPrefs.value = res.data
+    if (res && res.code === 0) {
+      commPrefs.value = res.data
+      mainStore.setSnackbar({ title: 'Communication preferences saved', type: 'success' })
+    } else {
+      mainStore.setSnackbar({ title: res?.message || 'Failed to save preferences', type: 'error' })
+    }
+  } catch (e) {
+    mainStore.setSnackbar({ title: e?.message || 'Failed to save preferences', type: 'error' })
   } finally { savingPrefs.value = false }
 }
 </script>
@@ -780,5 +941,38 @@ const savePreferences = async () => {
   background: #ffffff !important;
   color: rgba(0, 0, 0, 0.87) !important;
   border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+.automation-log-table :deep(tbody tr) {
+  height: 44px;
+  transition: background-color 0.15s ease;
+}
+
+.automation-log-table :deep(tbody tr:hover) {
+  background: #f5f5f5 !important;
+}
+
+.automation-log-table :deep(tbody td) {
+  padding: 0 10px !important;
+  font-size: 13px;
+  vertical-align: middle !important;
+}
+
+.automation-log-table :deep(tbody tr:nth-child(2n)) {
+  background: #fcfcfc;
+}
+
+.automation-log-table :deep(table) {
+  border-collapse: collapse !important;
+  width: 100%;
+}
+
+.automation-log-table :deep(th),
+.automation-log-table :deep(td) {
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+}
+
+.automation-log-table :deep(.v-table__wrapper) {
+  border: none !important;
 }
 </style>

@@ -22,6 +22,8 @@ import { processQueuedMessages } from "../controllers/dms.js";
 import { ONBOARDING_EMAIL_TEMPLATES } from "@shared/defaults/onboardingCampaign.js";
 import { buildOnboardingContext, sendOnboardingEmail } from "./onboardingCampaign.js";
 import { renderPatientTokens } from "./templateTokens.js";
+import { template as EMAIL_TEMPLATE } from "./emailTemplate.js";
+import { transporter } from "./nodeMailer.js";
 import {
   ensureOnboardingEventsTable,
   getDiffDaysFromStart,
@@ -39,16 +41,10 @@ const frequencyMap = {
   Yearly: "0 0 1 1 *", // Jan 1st every year
 };
 
-function addDays(date, days) {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-}
-
 export const startTaskScheduler = () => {
   Object.keys(frequencyMap).forEach((frequency) => {
     if (!frequencyMap[frequency]) return;
-    
+
     cron.schedule(frequencyMap[frequency], async () => {
       console.log(`Running scheduler for ${frequency} tasks...`);
       try {
@@ -63,22 +59,22 @@ export const startTaskScheduler = () => {
           let nextDueDate = null;
           switch (frequency) {
             case "Daily":
-              nextDueDate = addDays(new Date(), 1);
+              nextDueDate = addDaysSafe(new Date(), 1);
               break;
             case "Weekly":
-              nextDueDate = addDays(new Date(), 7);
+              nextDueDate = addDaysSafe(new Date(), 7);
               break;
             case "Fortnightly":
-              nextDueDate = addDays(new Date(), 14);
+              nextDueDate = addDaysSafe(new Date(), 14);
               break;
             case "Monthly":
-              nextDueDate = addDays(new Date(), 30);
+              nextDueDate = addDaysSafe(new Date(), 30);
               break;
             case "6 Monthly":
-              nextDueDate = addDays(new Date(), 180);
+              nextDueDate = addDaysSafe(new Date(), 180);
               break;
             case "Yearly":
-              nextDueDate = addDays(new Date(), 365);
+              nextDueDate = addDaysSafe(new Date(), 365);
               break;
           }
           const statuses = await OrganisationStatus.findAll({
@@ -106,11 +102,11 @@ export const startTaskScheduler = () => {
   });
 }
 
-export const startDmQueueScheduler = () => {
+export const startDmQueueScheduler = async () => {
+  try { await CrmDmConversation.sync(); } catch {}
   const pattern = process.env.DM_QUEUE_SCHEDULE || "*/1 * * * *";
   cron.schedule(pattern, async () => {
     try {
-      try { await CrmDmConversation.sync(); } catch {}
       const orgIds = await CrmDmConversation.findAll({
         attributes: ["organisationId"],
         group: ["organisationId"],
@@ -153,6 +149,12 @@ export const startLeadAutomationScheduler = () => {
       const templatesByOrg = buildCrmTemplatesByOrg(templates)
       const today = new Date()
 
+      const allOrgIds = [...new Set(templates.map((t) => Number(t.organisationId)).filter(Boolean))]
+      const orgRows = allOrgIds.length
+        ? await Organisation.findAll({ where: { id: { [Op.in]: allOrgIds } } })
+        : []
+      const orgMap = new Map(orgRows.map((o) => [Number(o.id), o]))
+
       let offset = 0
       while (true) {
         const leads = await CrmLead.findAll({
@@ -162,14 +164,8 @@ export const startLeadAutomationScheduler = () => {
           order: [['createdAt','DESC']],
         })
         if (!leads.length) break
-        const orgIds = [...new Set(leads.map((l) => Number(l.organisationId)).filter(Boolean))];
-        const orgRows = orgIds.length
-          ? await Organisation.findAll({ where: { id: { [Op.in]: orgIds } } })
-          : [];
-        const orgMap = new Map(orgRows.map((o) => [Number(o.id), o]));
         for (const lead of leads) {
           const org = orgMap.get(Number(lead.organisationId)) || null;
-          const raw = lead.rawData || {}
           const effectiveTemplates = buildEffectiveCrmTemplates(lead, templatesByOrg)
           for (const tpl of effectiveTemplates) {
             if (!tpl?.enabled) continue
@@ -187,12 +183,12 @@ export const startLeadAutomationScheduler = () => {
                 }
                 const message = buildCrmWhatsAppMessage(lead, tpl, org)
                 await sendCrmAutomationWhatsApp(lead, message, templatePayload)
-                await markCrmSent(lead, raw, sentKey)
+                await markCrmSent(lead, lead.rawData || {}, sentKey)
               } else {
                 if (!lead?.email) continue
                 const { subject, html } = buildCrmEmail(lead, tpl, org)
                 await sendCrmAutomationEmail(lead, subject, html)
-                await markCrmSent(lead, raw, sentKey)
+                await markCrmSent(lead, lead.rawData || {}, sentKey)
               }
             } catch (e) {
               console.error('[CRM] automation send failed', e?.message)

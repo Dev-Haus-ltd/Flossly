@@ -292,6 +292,7 @@
                   :on-open-menu="onAutomationMenuOpen"
                   :saving="!!automationSaving[item.id]"
                   :groups-loading="automationGroupsLoading"
+                  :whatsapp-enabled="props.whatsappConnected"
                 />
               </template>
               <template v-else-if="col.key === 'leadSource'">
@@ -503,6 +504,7 @@
                   :on-open-menu="onAutomationMenuOpen"
                   :saving="!!automationSaving[item.id]"
                   :groups-loading="automationGroupsLoading"
+                  :whatsapp-enabled="props.whatsappConnected"
                   readonly
                 />
               </template>

@@ -555,6 +555,15 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  getLeadAutomationLog(leadId, params = {}) {
+    const page = params.page || 1
+    const limit = params.limit || 25
+    return new Promise((resolve, reject) => {
+      Get(`/lead/automationSentLog?leadId=${encodeURIComponent(leadId)}&page=${page}&limit=${limit}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   // Mail
   sendLeadMail(payload) {
     return new Promise((resolve, reject) => {

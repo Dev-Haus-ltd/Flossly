@@ -95,7 +95,7 @@
             <v-col
               cols="12"
               md="6"
-              v-if="form.triggerType !== 'black_friday' && form.triggerType !== 'month_day' && form.triggerType !== 'weekday_of_month' && form.triggerType !== 'birthday_month_start' && form.triggerType !== 'practice_anniversary'"
+              v-if="form.triggerType && form.triggerType !== 'black_friday' && form.triggerType !== 'month_day' && form.triggerType !== 'weekday_of_month' && form.triggerType !== 'birthday_month_start' && form.triggerType !== 'practice_anniversary'"
             >
               <label class="mb-1 fld-lbl">Days Offset</label>
               <v-text-field
@@ -241,6 +241,7 @@ const saving = ref(false)
 const requiredRule = [(v) => !!v || 'This field is required']
 const types = ['Email', 'WhatsApp']
 const triggerTypes = [
+  { label: '— Select trigger type —', value: null },
   { label: 'After enquiry', value: 'inquiry_days' },
   { label: 'Birthday offset', value: 'birthday_offset' },
   { label: 'Birthday month start', value: 'birthday_month_start' },
@@ -274,7 +275,7 @@ const form = ref({
   name: '',
   subject: '',
   template: '',
-  triggerType: 'inquiry_days',
+  triggerType: null,
   triggerDays: 0,
   triggerOffsetDays: 0,
   triggerMonth: 1,
@@ -296,7 +297,7 @@ const resetForm = () => {
     name: '',
     subject: '',
     template: '',
-    triggerType: 'inquiry_days',
+    triggerType: null,
     triggerDays: 0,
     triggerOffsetDays: 0,
     triggerMonth: 1,
@@ -377,6 +378,7 @@ const sanitizeNumber = (value, fallback = 0) => {
 
 const buildTriggerFromForm = () => {
   const triggerType = form.value.triggerType
+  if (!triggerType) return null
   if (triggerType === 'black_friday') {
     return {
       type: 'black_friday',
@@ -418,7 +420,11 @@ const buildTriggerFromForm = () => {
   }
 }
 
-const sendingPreview = computed(() => formatCrmTriggerPreview(buildTriggerFromForm()))
+const sendingPreview = computed(() => {
+  const trigger = buildTriggerFromForm()
+  if (!trigger) return 'No trigger set — automation will not fire automatically'
+  return formatCrmTriggerPreview(trigger)
+})
 
 
 const onSubmit = async () => {
@@ -439,10 +445,10 @@ const onSubmit = async () => {
       type: form.value.type || 'Email',
       name: form.value.name,
       subject: form.value.type === 'Email' ? (form.value.subject || form.value.name) : '',
-      sending: formatCrmTriggerPreview(trigger),
+      sending: trigger ? formatCrmTriggerPreview(trigger) : '',
       enabled: false,
       template: form.value.template,
-      trigger,
+      ...(trigger ? { trigger } : {}),
     }
     const res = await crmStore.saveAutomation(payload)
     if (res?.code === 0) {

@@ -1,4 +1,4 @@
-import { createLead, deleteLeads, listLeads, updateLead, getLeadTreatment, saveLeadTreatment, deleteLeadTreatment, listLeadNotes, addLeadNote, deleteLeadNote, listOptions, addOption, deleteOption, getAlertOptions, saveAlertOptions, getLeadCommunication, saveLeadCommunication, listAutomation, saveAutomation, saveAutomationBatch, resetAutomationOverride, deleteAutomation, sendLeadMail, sendLeadWhatsApp, bulkUploadLeads, bulkUploadAutomations, listAutomationGroups, saveAutomationGroup, deleteAutomationGroup, getWhatsAppUsage, listLeadWhatsAppLogs, uploadWhatsAppAttachment, uploadLeadAttachment, getLeadPriceAttachmentRecent, getAutomationSendNowStatus } from '~/server/controllers/crm'
+import { createLead, deleteLeads, listLeads, updateLead, getLeadTreatment, saveLeadTreatment, deleteLeadTreatment, listLeadNotes, addLeadNote, deleteLeadNote, listOptions, addOption, deleteOption, getAlertOptions, saveAlertOptions, getLeadCommunication, saveLeadCommunication, listAutomation, saveAutomation, saveAutomationBatch, resetAutomationOverride, deleteAutomation, sendLeadMail, sendLeadWhatsApp, bulkUploadLeads, bulkUploadAutomations, listAutomationGroups, saveAutomationGroup, deleteAutomationGroup, getWhatsAppUsage, listLeadWhatsAppLogs, uploadWhatsAppAttachment, uploadLeadAttachment, getLeadPriceAttachmentRecent, getAutomationSendNowStatus, getLeadAutomationLog } from '~/server/controllers/crm'
 
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, 'name')
@@ -73,6 +73,8 @@ export default defineEventHandler(async (event) => {
       return await uploadLeadAttachment(event)
     case 'priceAttachmentRecent':
       return await getLeadPriceAttachmentRecent(event)
+    case 'automationSentLog':
+      return await getLeadAutomationLog(event)
     default:
       return { code: 1, message: 'Not found' }
   }
