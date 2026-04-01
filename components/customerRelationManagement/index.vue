@@ -116,7 +116,7 @@
 
       <!-- List View (child) -->
       <CustomerRelationManagementListView
-        v-if="!isLoading && (activeLeads.length || archivedLeads.length || route.query.leadId)"
+        v-if="hasFetched && (activeLeads.length || archivedLeads.length || route.query.leadId)"
         :active-leads="activeLeads"
         :archived-leads="archivedLeads"
         :active-total="activeTotal"
@@ -124,6 +124,7 @@
         :active-page="activePage"
         :archived-page="archivedPage"
         :items-per-page="itemsPerPage"
+        :loading="isLoading"
         :headers="headers"
         :search="search"
         :leadSources="leadSources"
@@ -140,7 +141,7 @@
         @update:itemsPerPage="onItemsPerPageChange"
       />
 
-      <div v-else-if="!isLoading && !activeLeads.length && !archivedLeads.length" class="d-flex justify-center mt-5">
+      <div v-else-if="hasFetched && !activeLeads.length && !archivedLeads.length" class="d-flex justify-center mt-5">
         <p class="mt-7">No leads found.</p>
       </div>
 
@@ -588,6 +589,7 @@ const whatsAppStatus = reactive({
 });
 const whatsAppUsage = reactive({ count: 0, limit: 0 });
 const isLoading = ref(true);
+const hasFetched = ref(false);
 const showBookingDrawer = ref(false);
 const bookingLead = ref(null);
 const bookingDateInput = ref(new Date().toISOString().slice(0,10));
@@ -1463,6 +1465,7 @@ const fetchLeads = async (filters = {}) => {
     await Promise.all([fetchActiveLeads(filters), fetchArchivedLeads(filters)]);
   } finally {
     isLoading.value = false;
+    hasFetched.value = true;
   }
 };
 
