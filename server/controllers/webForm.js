@@ -81,19 +81,19 @@ export const listForms = async (event) => {
 }
 
 export const createForm = async (event) => {
+  const orgId = Number(event.context.user.orgId)
+  const body = await readBody(event)
+  const payload = typeof body === 'string' ? parseJsonBody(body) : body
+
+  const name = String(payload?.name || '').trim()
+  if (!name) return error(400, 'Form name is required')
+
+  const token = generateToken()
+  const fields = Array.isArray(payload?.fields) && payload.fields.length > 0
+    ? payload.fields
+    : DEFAULT_FIELDS
+
   try {
-    const orgId = Number(event.context.user.orgId)
-    const body = await readBody(event)
-    const payload = typeof body === 'string' ? parseJsonBody(body) : body
-
-    const name = String(payload?.name || '').trim()
-    if (!name) return error(400, 'Form name is required')
-
-    const token = generateToken()
-    const fields = Array.isArray(payload?.fields) && payload.fields.length > 0
-      ? payload.fields
-      : DEFAULT_FIELDS
-
     const form = await FormConfig.create({ organisationId: orgId, name, token, fields, active: true })
     return success(form)
   } catch (e) {
@@ -102,14 +102,14 @@ export const createForm = async (event) => {
 }
 
 export const updateForm = async (event) => {
+  const orgId = Number(event.context.user.orgId)
+  const body = await readBody(event)
+  const payload = typeof body === 'string' ? parseJsonBody(body) : body
+
+  const formId = Number(payload?.id)
+  if (!formId) return error(400, 'Form id is required')
+
   try {
-    const orgId = Number(event.context.user.orgId)
-    const body = await readBody(event)
-    const payload = typeof body === 'string' ? parseJsonBody(body) : body
-
-    const formId = Number(payload?.id)
-    if (!formId) return error(400, 'Form id is required')
-
     const form = await FormConfig.findOne({ where: { id: formId, organisationId: orgId } })
     if (!form) return error(404, 'Form not found')
 
@@ -127,14 +127,14 @@ export const updateForm = async (event) => {
 }
 
 export const deleteForm = async (event) => {
+  const orgId = Number(event.context.user.orgId)
+  const body = await readBody(event)
+  const payload = typeof body === 'string' ? parseJsonBody(body) : body
+
+  const formId = Number(payload?.id)
+  if (!formId) return error(400, 'Form id is required')
+
   try {
-    const orgId = Number(event.context.user.orgId)
-    const body = await readBody(event)
-    const payload = typeof body === 'string' ? parseJsonBody(body) : body
-
-    const formId = Number(payload?.id)
-    if (!formId) return error(400, 'Form id is required')
-
     const form = await FormConfig.findOne({ where: { id: formId, organisationId: orgId } })
     if (!form) return error(404, 'Form not found')
 

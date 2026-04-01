@@ -1,5 +1,15 @@
 <template>
   <div>
+    <!-- ── Inline Form Builder ── -->
+    <CustomerRelationManagementFormsFormBuilderDialog
+      v-if="builderOpen"
+      :form="selectedForm"
+      @go-back="closeBuilder"
+      @saved="onFormSaved"
+    />
+
+    <!-- ── List View ── -->
+    <template v-else>
     <!-- Toolbar: Search + Filter + New Form -->
     <div
       class="d-flex align-center mb-4 mt-4 px-5"
@@ -241,14 +251,6 @@
       </v-card>
     </div>
 
-    <!-- Builder dialog -->
-    <CustomerRelationManagementFormsFormBuilderDialog
-      v-if="builderOpen"
-      v-model="builderOpen"
-      :form="selectedForm"
-      @saved="onFormSaved"
-    />
-
     <!-- Share panel dialog -->
     <v-dialog v-model="shareOpen" max-width="560">
       <CustomerRelationManagementFormsFormSharePanel
@@ -271,6 +273,7 @@
       @confirm="doDelete"
       @cancel="deleteDialog = false"
     />
+    </template>
   </div>
 </template>
 
@@ -278,6 +281,8 @@
 import draggable from 'vuedraggable'
 import { useCrmStore } from '@/stores/crm'
 import { useMainStore } from '@/stores/index'
+
+const emit = defineEmits(['builder-open', 'builder-close'])
 
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
@@ -497,6 +502,15 @@ const clearFilter = () => {
 const openBuilder = (form) => {
   selectedForm.value = form || null
   builderOpen.value = true
+  emit('builder-open', form?.name || 'New Form')
+}
+
+const closeBuilder = () => {
+  builderOpen.value = false
+  selectedForm.value = null
+  emit('builder-close')
+  // Refresh list so any saves made in the builder are reflected
+  loadForms()
 }
 
 const openShare = (form) => {
@@ -515,8 +529,11 @@ const confirmDelete = (form) => {
 }
 
 const doDelete = async () => {
+  if (!deleteTarget.value) return
+
   deleting.value = true
   let deleted = false
+
   try {
     const res = await crmStore.deleteForm({ id: deleteTarget.value.id })
     if (res?.code === 0) {
@@ -530,9 +547,9 @@ const doDelete = async () => {
   } catch (e) {
     mainStore.setSnackbar({ title: e?.message || 'Failed to delete form', type: 'error' })
   } finally {
-    // Always clear loading BEFORE reloading so the spinner never gets stuck
     deleting.value = false
   }
+
   if (deleted) await loadForms()
 }
 
