@@ -935,7 +935,10 @@ const fetchDmHistoryForOrg = async (
     const accountId = String(acc.accountId || '')
     const accountMeta = acc?.metadata || {}
     let pageIdFromMeta = String(accountMeta?.pageId || '')
-    if (platform === 'instagram' && !pageIdFromMeta) {
+    if (platform === 'messenger' && !pageIdFromMeta) {
+      pageIdFromMeta = accountId
+    }
+    if (!pageIdFromMeta) {
       const fallbackPage = await MetaPage.findOne({
         where: { organisationId: orgId, status: 'Active' },
         order: [['updatedAt', 'DESC']],
@@ -943,32 +946,30 @@ const fetchDmHistoryForOrg = async (
       pageIdFromMeta = String(fallbackPage?.pageId || '')
     }
     const accessToken = acc.accessTokenEnc ? decrypt(acc.accessTokenEnc) : null
-    if (!accountId || !accessToken) continue
+    if (!accountId) continue
 
-    // For Instagram: Messenger API for Instagram requires a PAGE access token when querying
-    // /{page-id}/conversations?platform=instagram. The IG user token stored in CrmDmAccount
-    // is not sufficient. Look up the page token from MetaPage table.
-    let pageAccessToken = accessToken
-    if (platform === 'instagram' && pageIdFromMeta) {
+    // Always prefer the freshest page access token from MetaPage table over the
+    // potentially stale token stored in CrmDmAccount at connection time.
+    let pageAccessToken = accessToken || ''
+    if (pageIdFromMeta) {
       try {
         const pageRow = await MetaPage.findOne({
           where: { organisationId: orgId, pageId: pageIdFromMeta, status: 'Active' },
         })
         if (pageRow?.accessTokenEnc) {
-          pageAccessToken = decrypt(pageRow.accessTokenEnc) || accessToken
+          pageAccessToken = decrypt(pageRow.accessTokenEnc) || pageAccessToken
         }
       } catch {}
     }
+    if (!pageAccessToken) continue
 
     const selfIds = new Set([accountId])
     if (pageIdFromMeta) selfIds.add(pageIdFromMeta)
     const platformParam = platform === 'instagram' ? 'instagram' : 'messenger'
-    // For Instagram: Messenger API for Instagram uses /{page-id}/conversations?platform=instagram
-    // with a page access token. The IG account node requires separate Instagram Graph API
-    // capabilities and is not supported in this setup.
+    // Both platforms use /{page-id}/conversations?platform=<platform> with a page access token.
     const nodeCandidates = platform === 'instagram'
       ? [...new Set([String(pageIdFromMeta || '')].filter(Boolean))]
-      : [accountId]
+      : [...new Set([String(pageIdFromMeta || accountId)].filter(Boolean))]
     const accountDebug = {
       platform,
       accountId,
@@ -995,9 +996,7 @@ const fetchDmHistoryForOrg = async (
       }
       accountDebug.nodesTried.push(nodeDebug)
       const conversationPageSize = platform === 'instagram' ? 50 : 25
-      const tokenForNode = (platform === 'instagram' && conversationNodeId === pageIdFromMeta)
-        ? pageAccessToken
-        : accessToken
+      const tokenForNode = pageAccessToken
       let nextConversationsUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationNodeId)}/conversations?platform=${encodeURIComponent(platformParam)}&fields=id,updated_time,participants.limit(10){id,name,username,profile_pic,profile_picture_url}&limit=${conversationPageSize}&access_token=${encodeURIComponent(tokenForNode)}`
       trace('list_conversations:start', JSON.stringify({
         orgId: Number(orgId),
