@@ -287,7 +287,7 @@ const loadStatLeads = async () => {
   try {
     const res = await crmService.getAllLeadCounts(params)
     if (res?.code === 0) {
-      statLeads.value = Object.values(res.data?.campaignLeads || {}).reduce((sum, n) => sum + Number(n), 0)
+      statLeads.value = Object.values(res.data?.byCampaign || {}).reduce((sum, n) => sum + Number(n), 0)
     }
   } finally {
     statLeadsLoading.value = false
@@ -767,7 +767,10 @@ const campaignsWithDrill = computed(() =>
 
 // Replace filtered campaigns with drill-aware version
 const filteredCampaigns = computed(() => {
-  const base = campaignsWithDrill.value;
+  let base = campaignsWithDrill.value;
+  if (campaignStatusFilter.value !== 'All') {
+    base = base.filter((c) => c.status?.toUpperCase() === campaignStatusFilter.value.toUpperCase());
+  }
   if (!search.value) return base;
   const q = search.value.toLowerCase();
   return base.filter((c) => c.title.toLowerCase().includes(q) || c.description.toLowerCase().includes(q));

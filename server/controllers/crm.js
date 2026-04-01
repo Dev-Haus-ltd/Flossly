@@ -407,6 +407,12 @@ export const listLeads = async (event) => {
     if (q.campaignId) {
       where.campaignId = q.campaignId
     }
+    if (q.adSetId) {
+      where.adSetId = q.adSetId
+    }
+    if (q.adId) {
+      where.adId = q.adId
+    }
 
     // Exact lead lookup for route-driven dialog opening
     const exactLeadId = Number(q.id || q.leadId || 0)
