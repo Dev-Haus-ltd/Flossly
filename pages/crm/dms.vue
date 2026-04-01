@@ -16,7 +16,22 @@
       <div class="dms-body">
         <v-card class="dms-list-card" variant="outlined">
           <div class="dms-list-header">
-            <div class="dms-list-title">Conversations</div>
+            <div class="d-flex align-center justify-space-between">
+              <div class="dms-list-title">Conversations</div>
+              <v-btn
+                variant="text"
+                density="compact"
+                size="small"
+                :loading="syncingHistory"
+                :disabled="syncingHistory"
+                class="text-none text-caption"
+                color="primary"
+                @click="syncHistory"
+              >
+                <v-icon size="14" class="mr-1">mdi-refresh</v-icon>
+                Sync history
+              </v-btn>
+            </div>
             <div class="d-inline-flex align-center py-1 dms-toolbar">
               <div style="width: 120px">
                 <v-text-field
@@ -235,6 +250,7 @@ const dmConnectionStatus = ref({
 });
 const messageCache = ref(new Map());
 const MESSAGE_CACHE_TTL_MS = 45000;
+const syncingHistory = ref(false);
 let searchTimer = null;
 
 const crmStore = useCrmStore();
@@ -361,6 +377,25 @@ const canSend = computed(() => {
 
 const clearFilters = () => {
   showUnreadOnly.value = false;
+};
+
+const syncHistory = async () => {
+  if (syncingHistory.value) return;
+  syncingHistory.value = true;
+  mainStore?.setSnackbar?.({ title: "Syncing DM history, this may take a minute…", type: "info" });
+  try {
+    const res = await crmStore.fetchDmHistory({ days: 30 });
+    if (res?.code === 0) {
+      mainStore?.setSnackbar?.({ title: `Synced ${res.data?.conversationsUpserted ?? 0} conversations, ${res.data?.messagesImported ?? 0} messages`, type: "success" });
+      await loadConversations(true);
+    } else {
+      mainStore?.setSnackbar?.({ title: res?.message || "Sync failed", type: "error" });
+    }
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || "Sync failed", type: "error" });
+  } finally {
+    syncingHistory.value = false;
+  }
 };
 
 const readConversationCache = (conversationId) => {
@@ -512,8 +547,14 @@ const sendMessage = async () => {
   }
 };
 
+const isRawId = (str) => /^\d{10,}$/.test(String(str || "").trim());
+
 const buildConversationRow = (row) => {
-  const name = row?.participantName || row?.metadata?.participantName || row?.threadId || "Unknown";
+  const rawName = row?.participantName || row?.metadata?.participantName || row?.threadId || "";
+  const platform = String(row?.platform || "").toLowerCase();
+  const name = rawName && !isRawId(rawName)
+    ? rawName
+    : platform === "instagram" ? "Instagram User" : platform === "messenger" ? "Messenger User" : "Unknown";
   const avatarUrl = row?.participantAvatar || "";
   const initials = String(name || "")
     .split(/\s+/)
@@ -521,10 +562,12 @@ const buildConversationRow = (row) => {
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase() || "")
     .join("");
+  const rawPreview = row?.metadata?.lastMessagePreview || "";
+  const preview = rawPreview === "[Attachment]" ? "📎 Attachment" : rawPreview;
   return {
     id: row?.id,
     title: name,
-    preview: row?.metadata?.lastMessagePreview || "",
+    preview,
     avatarUrl,
     avatarText: initials || "U",
     platform: row?.platform,

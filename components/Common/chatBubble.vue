@@ -17,6 +17,10 @@
         <div class="chat-bubble">
           <div v-if="automated" class="chat-bubble-badge">Automated</div>
           <p v-if="showMessage" class="mb-1 chat-bubble-text">{{ message }}</p>
+          <div v-if="showAttachmentPlaceholder" class="chat-attachment-placeholder">
+            <v-icon size="14" class="mr-1">mdi-paperclip</v-icon>
+            <span>Attachment</span>
+          </div>
           <div v-if="hasAttachments" class="chat-attachments">
             <div v-if="imageAttachments.length" class="chat-attachments-grid">
               <a
@@ -160,9 +164,13 @@ const hasRenderableAttachments = computed(() => normalizedAttachments.value.leng
 const showMessage = computed(() => {
   const text = String(props.message || "").trim();
   if (!text) return false;
-  // Hide attachment placeholder only when we can actually render attachment(s).
-  if (text === "[Attachment]" && hasRenderableAttachments.value) return false;
+  if (text === "[Attachment]") return false;
   return true;
+});
+
+const showAttachmentPlaceholder = computed(() => {
+  const text = String(props.message || "").trim();
+  return text === "[Attachment]" && !hasRenderableAttachments.value;
 });
 
 const imageAttachments = computed(() =>
@@ -337,6 +345,14 @@ const hasAttachments = computed(() => hasRenderableAttachments.value);
 
 .chat-status-icon {
   color: rgba(0, 0, 0, 0.55);
+}
+
+.chat-attachment-placeholder {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+  font-style: italic;
 }
 
 .chat-bubble-badge {
