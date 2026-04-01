@@ -1595,6 +1595,14 @@ export const healthCheck = async (event) => {
     order: [['updatedAt', 'DESC']],
   })
   const pageIds = pages.map((p) => p.pageId).filter(Boolean)
+  const igByPage = new Map()
+  for (const acc of dmAccounts) {
+    const platform = String(acc.platform || '').toLowerCase()
+    const pageId = String(acc?.metadata?.pageId || '')
+    if (platform === 'instagram' && pageId && !igByPage.has(pageId)) {
+      igByPage.set(pageId, acc)
+    }
+  }
   const leadStatsByPage = new Map()
   if (pageIds.length) {
     const leadStats = await CrmLead.findAll({
@@ -1629,6 +1637,7 @@ export const healthCheck = async (event) => {
 
     let subscribed = false
     let appMatched = false
+    let messagesSubscribed = false
     let errorMsg = null
 
     if (tokenPresent && appId) {
@@ -1638,6 +1647,11 @@ export const healthCheck = async (event) => {
         const data = Array.isArray(resp?.data) ? resp.data : []
         subscribed = data.length > 0
         appMatched = data.some((a) => String(a.id) === String(appId))
+        const appEntry = (appId ? data.find((a) => String(a?.id) === String(appId)) : data[0]) || null
+        const subscribedFields = Array.isArray(appEntry?.subscribed_fields)
+          ? appEntry.subscribed_fields.map((f) => String(f || '').trim()).filter(Boolean)
+          : []
+        messagesSubscribed = subscribedFields.includes('messages')
       } catch (e) {
         errorMsg = e?.data?.error?.message || e?.message || 'Failed to check subscription'
       }
@@ -1654,33 +1668,18 @@ export const healthCheck = async (event) => {
       } catch {}
     }
 
-    const requiredForPage = igAccount
-      ? ['pages_messaging', 'instagram_manage_messages', 'instagram_basic']
-      : ['pages_messaging']
-    const missingMessagingPermissions = hasPermissionSnapshot
-      ? requiredForPage.filter((perm) => !grantedPermissions.has(perm))
-      : []
-    const messagingAccessStatus = !hasPermissionSnapshot
-      ? 'unknown'
-      : missingMessagingPermissions.length
-        ? 'missing'
-        : 'ok'
-    const leadAccessStatus = !hasPermissionSnapshot
-      ? 'unknown'
-      : grantedPermissions.has('leads_retrieval')
-        ? 'ok'
-        : 'missing'
-
     results.push({
       pageId,
       pageName,
       status,
       tokenPresent,
       subscribed,
-      subscribedFields,
-      messagesSubscribed,
-      leadgenSubscribed,
       appMatched,
+      messagesSubscribed,
+      instagramConnected: !!igAccount,
+      instagramAccountId: igAccount?.accountId || null,
+      instagramAccountName: igAccount?.accountName || null,
+      instagramProfilePicture,
       connectedAt: page.connectedAt || page.updatedAt || page.createdAt || null,
       leadCount: leadStatsByPage.get(String(pageId))?.leadCount || 0,
       lastLeadAt: leadStatsByPage.get(String(pageId))?.lastLeadAt || null,
