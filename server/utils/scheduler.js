@@ -138,7 +138,7 @@ import {
 } from "./crmAutomation.js";
 
 export const startLeadAutomationScheduler = () => {
-  const pattern = process.env.CRM_LEAD_AUTOMATION_SCHEDULE || "0 0 * * *";
+  const pattern = process.env.CRM_LEAD_AUTOMATION_SCHEDULE || "30 2 * * *";
   if (!pattern) return;
   const batchSize = Number(process.env.CRM_LEAD_AUTOMATION_BATCH || 500)
   try { CrmAutomationTemplate.sync() } catch {}
