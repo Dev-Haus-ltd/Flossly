@@ -528,6 +528,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  generateAutomationsWithAI(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/generateAutomationsWithAI', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   saveAutomationGroup(payload) {
     return new Promise((resolve, reject) => {
       Post('/lead/automationGroupSave', payload)

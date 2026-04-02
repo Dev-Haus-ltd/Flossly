@@ -1,4 +1,5 @@
 import crmService from "../services/crmService";
+import webFormService from "../services/webFormService";
 
 export const useCrmStore = defineStore("crmStore", {
   state: () => ({
@@ -188,6 +189,7 @@ export const useCrmStore = defineStore("crmStore", {
     deleteAutomation(payload) { return this._wrap(() => crmService.deleteAutomation(payload)); },
     bulkUploadAutomations(payload) { return this._wrap(() => crmService.bulkUploadAutomations(payload)); },
     listAutomationGroups() { return this._wrap(() => crmService.listAutomationGroups()); },
+    generateAutomationsWithAI(payload) { return this._wrap(() => crmService.generateAutomationsWithAI(payload)); },
     async saveAutomationGroup(payload) {
       const res = await this._wrap(() => crmService.saveAutomationGroup(payload));
       if (res?.code === 0 && typeof window !== 'undefined') {
