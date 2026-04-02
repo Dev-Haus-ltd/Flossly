@@ -67,6 +67,37 @@
                 <span>{{ att.name || 'Attachment' }}</span>
               </a>
             </div>
+            <div v-if="storyAttachments.length" class="chat-attachments-stories">
+              <a
+                v-for="(att, idx) in storyAttachments"
+                :key="`story-${idx}`"
+                :href="att.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="chat-attachment-story"
+              >
+                <v-icon size="14" class="mr-1">mdi-instagram</v-icon>
+                <span>Story reply</span>
+                <v-icon size="12" class="ml-1 opacity-60">mdi-open-in-new</v-icon>
+              </a>
+            </div>
+            <div v-if="shareAttachments.length" class="chat-attachments-shares">
+              <a
+                v-for="(att, idx) in shareAttachments"
+                :key="`share-${idx}`"
+                :href="att.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="chat-attachment-share"
+              >
+                <div class="share-header">
+                  <v-icon size="14" class="mr-1">mdi-link-variant</v-icon>
+                  <span class="share-title">{{ att.name || 'Shared post' }}</span>
+                </div>
+                <div v-if="att.description" class="share-description">{{ att.description }}</div>
+                <span class="share-cta">View post</span>
+              </a>
+            </div>
           </div>
           <div class="chat-bubble-meta">
             <span>{{ timestamp || "N/A" }}</span>
@@ -191,12 +222,22 @@ const audioAttachments = computed(() =>
   )
 );
 
+const storyAttachments = computed(() =>
+  normalizedAttachments.value.filter((a) => a.type === "story")
+);
+
+const shareAttachments = computed(() =>
+  normalizedAttachments.value.filter((a) => a.type === "share")
+);
+
 const fileAttachments = computed(() =>
   normalizedAttachments.value.filter(
     (a) =>
       !imageAttachments.value.includes(a) &&
       !videoAttachments.value.includes(a) &&
-      !audioAttachments.value.includes(a)
+      !audioAttachments.value.includes(a) &&
+      !storyAttachments.value.includes(a) &&
+      !shareAttachments.value.includes(a)
   )
 );
 
@@ -353,6 +394,85 @@ const hasAttachments = computed(() => hasRenderableAttachments.value);
   font-size: 12px;
   color: rgba(0, 0, 0, 0.45);
   font-style: italic;
+}
+
+.chat-attachments-stories {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.chat-attachment-story {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #c13584;
+  text-decoration: none;
+  background: rgba(193, 53, 132, 0.08);
+  padding: 6px 10px;
+  border-radius: 999px;
+  width: fit-content;
+  border: 1px solid rgba(193, 53, 132, 0.2);
+}
+
+.chat-attachment-story:hover {
+  background: rgba(193, 53, 132, 0.14);
+}
+
+.chat-attachments-shares {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.chat-attachment-share {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-decoration: none;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.chat-attachment-share:hover {
+  background: #f1f5f9;
+}
+
+.share-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #374151;
+}
+
+.share-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.share-description {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.share-cta {
+  font-size: 12px;
+  color: #0061FB;
+  font-weight: 500;
 }
 
 .chat-bubble-badge {
