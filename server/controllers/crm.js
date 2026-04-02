@@ -1469,10 +1469,16 @@ export const deleteAutomationGroup = async (event) => {
     })
     if (!group) return error(404, 'Group not found')
 
-    await CrmAutomationGroupTemplate.destroy({
-      where: { organisationId: Number(orgId), groupId: group.id },
+    await DB.transaction(async (transaction) => {
+      await CrmAutomationGroupTemplate.destroy({
+        where: { organisationId: Number(orgId), groupId: group.id },
+        transaction,
+      })
+      await CrmAutomationGroup.destroy({
+        where: { organisationId: Number(orgId), id: group.id },
+        transaction,
+      })
     })
-    await group.destroy()
     return success('deleted')
   } catch (e) {
     console.error('[deleteAutomationGroup]', e?.message || e)

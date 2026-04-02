@@ -238,7 +238,11 @@ const deleteGroup = async () => {
     if (res?.code === 0) {
       showGroupDelete.value = false
       groupToDelete.value = null
-      await loadGroups()
+      await refreshGroupsAndRows()
+      mainStore.setSnackbar({
+        title: 'Automation category deleted',
+        type: 'success',
+      })
       return
     }
     mainStore.setSnackbar({
