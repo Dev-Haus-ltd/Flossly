@@ -211,5 +211,14 @@ export const useCrmStore = defineStore("crmStore", {
     getWhatsAppUsage() { return this._wrap(() => crmService.getWhatsAppUsage()); },
     uploadLeadAttachment(formData) { return this._wrap(() => crmService.uploadLeadAttachment(formData)); },
     getLeadPriceAttachmentRecent(payload) { return this._wrap(() => crmService.getLeadPriceAttachmentRecent(payload)); },
+
+    // Web Forms
+    listForms(params = {}) { return this._wrap(() => webFormService.listForms(params)); },
+    createForm(payload) { return this._wrap(() => webFormService.createForm(payload)); },
+    updateForm(payload) { return this._wrap(() => webFormService.updateForm(payload)); },
+    archiveForms(payload) { return this._wrap(() => webFormService.archiveForms(payload)); },
+    restoreForms(payload) { return this._wrap(() => webFormService.restoreForms(payload)); },
+    deleteForm(payload) { return this._wrap(() => webFormService.deleteForm(payload)); },
+    getAvailableFields() { return this._wrap(() => webFormService.getAvailableFields()); },
   },
 });

@@ -3,6 +3,7 @@ import { Op } from 'sequelize'
 import { parsePhoneNumber } from 'awesome-phonenumber'
 import { readBody, getQuery } from 'h3'
 import { FormConfig, CrmLead, CrmOption, CrmLeadCommunication, UserOrganisation, Organisation } from '../models'
+import sequelize from '../utils/db'
 import { success, error } from '../utils/response'
 import { parseJsonBody } from '../utils/body'
 import { sendImmediateCrmAutomationsForLead } from '../utils/crmAutomation.js'
@@ -61,11 +62,14 @@ export const listForms = async (event) => {
     const offset = (page - 1) * limit
     const search = String(query?.search || '').trim()
     const activeFilter = query?.active
+    const archived = String(query?.archived || 'false').toLowerCase() === 'true'
 
-    const where = { organisationId: orgId }
+    const where = { organisationId: orgId, softDeleted: archived }
     if (search) where.name = { [Op.iLike]: `%${search}%` }
-    if (activeFilter === 'true') where.active = true
-    else if (activeFilter === 'false') where.active = false
+    if (!archived) {
+      if (activeFilter === 'true') where.active = true
+      else if (activeFilter === 'false') where.active = false
+    }
 
     const { count, rows } = await FormConfig.findAndCountAll({
       where,
@@ -94,7 +98,15 @@ export const createForm = async (event) => {
     : DEFAULT_FIELDS
 
   try {
-    const form = await FormConfig.create({ organisationId: orgId, name, token, fields, active: true })
+    const form = await FormConfig.create({
+      organisationId: orgId,
+      name,
+      token,
+      fields,
+      active: true,
+      softDeleted: false,
+      deletedAt: null,
+    })
     return success(form)
   } catch (e) {
     return error(500, e?.message || 'Failed to create form')
@@ -110,7 +122,7 @@ export const updateForm = async (event) => {
   if (!formId) return error(400, 'Form id is required')
 
   try {
-    const form = await FormConfig.findOne({ where: { id: formId, organisationId: orgId } })
+    const form = await FormConfig.findOne({ where: { id: formId, organisationId: orgId, softDeleted: false } })
     if (!form) return error(404, 'Form not found')
 
     const updates = {}
@@ -131,17 +143,90 @@ export const deleteForm = async (event) => {
   const body = await readBody(event)
   const payload = typeof body === 'string' ? parseJsonBody(body) : body
 
-  const formId = Number(payload?.id)
-  if (!formId) return error(400, 'Form id is required')
+  const idsInput = Array.isArray(payload?.ids)
+    ? payload.ids
+    : payload?.id !== undefined
+      ? [payload.id]
+      : []
+  const ids = [...new Set(idsInput.map((id) => Number(id)).filter(Boolean))]
+  if (!ids.length) return error(400, 'Form id(s) are required')
 
   try {
-    const form = await FormConfig.findOne({ where: { id: formId, organisationId: orgId } })
-    if (!form) return error(404, 'Form not found')
+    const forms = await FormConfig.findAll({
+      where: { id: { [Op.in]: ids }, organisationId: orgId, softDeleted: true },
+    })
+    if (!forms.length) return error(404, 'Archived form(s) not found')
 
-    await form.destroy()
-    return success({ deleted: true })
+    await sequelize.transaction(async (transaction) => {
+      // Prevent a locked row from keeping the request pending indefinitely.
+      await sequelize.query(`SET LOCAL lock_timeout = '5s'`, { transaction })
+
+      // Keep historical leads but clear this form reference before delete.
+      await CrmLead.update(
+        { formId: null },
+        {
+          where: {
+            organisationId: orgId,
+            formId: { [Op.in]: ids.map(String) },
+          },
+          transaction,
+        }
+      )
+
+      await FormConfig.destroy({
+        where: { id: { [Op.in]: ids }, organisationId: orgId, softDeleted: true },
+        transaction,
+      })
+    })
+
+    return success({ deleted: true, count: forms.length })
   } catch (e) {
-    return error(500, e?.message || 'Failed to delete form')
+    if (e?.statusCode && e?.data?.code === 1) {
+      throw e
+    }
+    const msg = String(e?.message || '')
+    if (msg.toLowerCase().includes('lock timeout')) {
+      return error(409, 'Delete is currently blocked by another operation. Please retry in a few seconds.')
+    }
+    return error(500, msg || 'Failed to delete form')
+  }
+}
+
+export const archiveForms = async (event) => {
+  const orgId = Number(event.context.user.orgId)
+  const body = await readBody(event)
+  const payload = typeof body === 'string' ? parseJsonBody(body) : body
+
+  const ids = [...new Set((payload?.ids || []).map((id) => Number(id)).filter(Boolean))]
+  if (!ids.length) return error(400, 'Form id(s) are required')
+
+  try {
+    const [count] = await FormConfig.update(
+      { softDeleted: true, deletedAt: new Date() },
+      { where: { organisationId: orgId, id: { [Op.in]: ids }, softDeleted: false } }
+    )
+    return success({ archived: true, count: Number(count || 0) })
+  } catch (e) {
+    return error(500, e?.message || 'Failed to archive forms')
+  }
+}
+
+export const restoreForms = async (event) => {
+  const orgId = Number(event.context.user.orgId)
+  const body = await readBody(event)
+  const payload = typeof body === 'string' ? parseJsonBody(body) : body
+
+  const ids = [...new Set((payload?.ids || []).map((id) => Number(id)).filter(Boolean))]
+  if (!ids.length) return error(400, 'Form id(s) are required')
+
+  try {
+    const [count] = await FormConfig.update(
+      { softDeleted: false, deletedAt: null },
+      { where: { organisationId: orgId, id: { [Op.in]: ids }, softDeleted: true } }
+    )
+    return success({ restored: true, count: Number(count || 0) })
+  } catch (e) {
+    return error(500, e?.message || 'Failed to restore forms')
   }
 }
 
@@ -158,7 +243,7 @@ export const getFormMeta = async (event) => {
     if (!token) return error(400, 'Token is required')
 
     const form = await FormConfig.findOne({
-      where: { token, active: true },
+      where: { token, active: true, softDeleted: false },
       include: [{ model: Organisation, as: 'organisation', attributes: ['id', 'name', 'logo'] }],
     })
     if (!form) return error(404, 'Form not found')
@@ -200,7 +285,7 @@ export const submitFormLead = async (event) => {
 
     if (!checkRateLimit(token, ip)) return error(429, 'Too many submissions. Please try again later.')
 
-    const form = await FormConfig.findOne({ where: { token, active: true } })
+    const form = await FormConfig.findOne({ where: { token, active: true, softDeleted: false } })
     if (!form) return error(404, 'Form not found')
 
     const orgId = form.organisationId
