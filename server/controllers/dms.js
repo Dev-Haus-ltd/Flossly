@@ -5,6 +5,7 @@ import { parseJsonBody } from "../utils/body";
 import { CrmDmConversation, CrmDmMessage, CrmDmAccount, MetaPage } from "../models";
 import { decrypt } from "../utils/crypto";
 import { uploadBufferFile } from "../utils/storage";
+import { deriveAttachmentPreview } from "../utils/dmAttachments.js";
 
 const ensureDmTables = async () => {
   try { await CrmDmConversation.sync(); } catch {}
@@ -100,11 +101,11 @@ const resolveProfile = async ({ platform, senderId, accessToken }) => {
       };
     }
     if (platform === "instagram") {
-      const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(senderId)}?fields=username,profile_picture_url&access_token=${encodeURIComponent(accessToken)}`;
+      const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(senderId)}?fields=name,username,profile_pic&access_token=${encodeURIComponent(accessToken)}`;
       const resp = await $fetch(url, { method: "GET" });
       return {
-        name: resp?.username || null,
-        avatar: resp?.profile_picture_url || null,
+        name: resp?.name || resp?.username || null,
+        avatar: resp?.profile_pic || null,
       };
     }
   } catch {}
@@ -198,8 +199,7 @@ export const processQueuedMessages = async ({ organisationId, limit = 20, messag
 
       let resp = null;
       const text = String(msg.message || "").trim();
-      const hasOnlyAttachment = text === "[Attachment]" && Array.isArray(msg.attachments) && msg.attachments.length;
-      if (text && !hasOnlyAttachment) {
+      if (text) {
         resp = await sendMetaMessage({
           accessToken,
           senderId,
@@ -383,21 +383,25 @@ export const sendDmMessage = async (event) => {
     });
     if (!conversation) return error(404, "Conversation not found");
 
+    const outboundText = String(message || "").trim() || null;
+    const outboundAttachments = hasAttachments ? attachments : null;
+    const outboundPreview = deriveAttachmentPreview(outboundAttachments || [], outboundText) || "";
+
     const newMessage = await CrmDmMessage.create({
       organisationId: orgId,
       conversationId: conversation.id,
       platform: conversation.platform,
       direction: "outbound",
       senderName: "Flossly",
-      message: String(message || "").trim() || "[Attachment]",
-      attachments: hasAttachments ? attachments : null,
+      message: outboundText,
+      attachments: outboundAttachments,
       status: "queued",
     });
 
     conversation.lastMessageAt = new Date();
     conversation.metadata = {
       ...(conversation.metadata || {}),
-      lastMessagePreview: String(message || "").trim().slice(0, 120),
+      lastMessagePreview: outboundPreview.slice(0, 120),
     };
     await conversation.save();
 
@@ -557,6 +561,80 @@ export const getDmConnectionStatus = async (event) => {
     });
   } catch (err) {
     return error(500, err.message || "Failed to load DM connection status");
+  }
+};
+
+export const refreshAllDmProfiles = async (event) => {
+  try {
+    await ensureDmTables();
+    const { orgId } = event.context.user || {};
+    if (!orgId) return error(401, "Unauthenticated");
+
+    // Fetch recent conversations — filter in JS to catch raw numeric IDs too
+    const recentConvs = await CrmDmConversation.findAll({
+      where: { organisationId: orgId },
+      order: [["lastMessageAt", "DESC"]],
+      limit: 150,
+    });
+
+    const toRefresh = recentConvs.filter((c) => {
+      const nameIsRaw = /^\d{10,}$/.test(String(c.participantName || "").trim());
+      return !c.participantAvatar || !c.participantName || nameIsRaw;
+    });
+
+    let updated = 0;
+    for (const conversation of toRefresh) {
+      // Small delay to avoid hammering the Meta API
+      await new Promise((r) => setTimeout(r, 60));
+
+      let account = await CrmDmAccount.findOne({
+        where: {
+          organisationId: orgId,
+          platform: conversation.platform,
+          accountId: String(conversation.accountId),
+          status: "Active",
+        },
+      });
+      if (!account?.accessTokenEnc) {
+        account = await CrmDmAccount.findOne({
+          where: {
+            organisationId: orgId,
+            platform: conversation.platform,
+            status: "Active",
+            accessTokenEnc: { [Op.ne]: null },
+          },
+          order: [["updatedAt", "DESC"]],
+        });
+      }
+      if (!account?.accessTokenEnc) continue;
+
+      const accessToken = decrypt(account.accessTokenEnc);
+      const profile = await resolveProfile({
+        platform: conversation.platform,
+        senderId: conversation.threadId,
+        accessToken,
+      });
+      if (!profile) continue;
+
+      const nameChanged = profile.name && profile.name !== conversation.participantName;
+      const avatarChanged = profile.avatar && profile.avatar !== conversation.participantAvatar;
+      if (nameChanged || avatarChanged) {
+        conversation.participantName = profile.name || conversation.participantName;
+        conversation.participantAvatar = profile.avatar || conversation.participantAvatar;
+        conversation.metadata = {
+          ...(conversation.metadata || {}),
+          participantName: conversation.participantName,
+          participantAvatar: conversation.participantAvatar,
+          profileFetchedAt: new Date().toISOString(),
+        };
+        await conversation.save();
+        updated++;
+      }
+    }
+
+    return success({ updated, checked: toRefresh.length });
+  } catch (err) {
+    return error(500, err.message || "Failed to refresh profiles");
   }
 };
 

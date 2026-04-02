@@ -15,6 +15,11 @@ import {
   getStructureSyncStatus,
   getInsightsSyncStatus,
 } from '../utils/metaSync.js'
+import {
+  normalizeMetaApiAttachments,
+  normalizeWebhookAttachments,
+  deriveAttachmentPreview,
+} from '../utils/dmAttachments.js'
 
 const META_VERSION = 'v24.0'
 const META_SUBSCRIBED_FIELDS = 'leadgen,messages,messaging_postbacks'
@@ -32,11 +37,11 @@ const resolveDmParticipantProfile = async ({ platform, senderId, accessToken }) 
       }
     }
     if (platform === 'instagram') {
-      const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(senderId)}?fields=username,profile_picture_url&access_token=${encodeURIComponent(accessToken)}`
+      const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(senderId)}?fields=name,username,profile_pic&access_token=${encodeURIComponent(accessToken)}`
       const resp = await $fetch(url, { method: 'GET' })
       return {
-        name: resp?.username || null,
-        avatar: resp?.profile_picture_url || null,
+        name: resp?.name || resp?.username || null,
+        avatar: resp?.profile_pic || null,
       }
     }
   } catch {}
@@ -998,7 +1003,7 @@ const fetchDmHistoryForOrg = async (
       accountDebug.nodesTried.push(nodeDebug)
       const conversationPageSize = platform === 'instagram' ? 50 : 25
       const tokenForNode = pageAccessToken
-      let nextConversationsUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationNodeId)}/conversations?platform=${encodeURIComponent(platformParam)}&fields=id,updated_time,participants.limit(10){id,name,username,profile_pic,profile_picture_url}&limit=${conversationPageSize}&access_token=${encodeURIComponent(tokenForNode)}`
+      let nextConversationsUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationNodeId)}/conversations?platform=${encodeURIComponent(platformParam)}&fields=id,updated_time,participants.limit(10){id,name,username,profile_pic}&limit=${conversationPageSize}&access_token=${encodeURIComponent(tokenForNode)}`
       trace('list_conversations:start', JSON.stringify({
         orgId: Number(orgId),
         platform,
@@ -1082,20 +1087,23 @@ const fetchDmHistoryForOrg = async (
             where: { organisationId: orgId, platform, threadId },
           })
 
+          const participantNameFromApi = otherParticipant?.name || otherParticipant?.username || null
+          const participantAvatarFromApi = otherParticipant?.profile_pic || null
+
           if (!conversation) {
             conversation = await CrmDmConversation.create({
               organisationId: orgId,
               platform,
               accountId,
               threadId,
-              participantName: otherParticipant?.name || otherParticipant?.username || threadId,
-              participantAvatar: otherParticipant?.profile_pic || otherParticipant?.profile_picture_url || null,
+              participantName: participantNameFromApi || threadId,
+              participantAvatar: participantAvatarFromApi || null,
               lastMessageAt: convUpdated && !Number.isNaN(convUpdated.getTime()) ? convUpdated : new Date(),
               unreadCount: 0,
               metadata: {
                 inboxConversationId: conv?.id || null,
-                participantName: otherParticipant?.name || otherParticipant?.username || threadId,
-                participantAvatar: otherParticipant?.profile_pic || otherParticipant?.profile_picture_url || null,
+                participantName: participantNameFromApi || threadId,
+                participantAvatar: participantAvatarFromApi || null,
                 assignedUserId: acc.connectedByUserId || null,
                 sourceNodeId: conversationNodeId,
               },
@@ -1104,8 +1112,12 @@ const fetchDmHistoryForOrg = async (
             debug.conversationsUpserted += 1
             accountDebug.conversationsUpserted += 1
           } else {
-            const nextName = conversation.participantName || otherParticipant?.name || otherParticipant?.username || threadId
-            const nextAvatar = conversation.participantAvatar || otherParticipant?.profile_pic || otherParticipant?.profile_picture_url || null
+            // Only overwrite name/avatar if the current value is missing or is a raw numeric ID
+            const currentNameIsRaw = /^\d{10,}$/.test(String(conversation.participantName || '').trim())
+            const nextName = (!conversation.participantName || currentNameIsRaw)
+              ? (participantNameFromApi || conversation.participantName || threadId)
+              : conversation.participantName
+            const nextAvatar = conversation.participantAvatar || participantAvatarFromApi || null
             conversation.participantName = nextName
             conversation.participantAvatar = nextAvatar
             if (convUpdated && !Number.isNaN(convUpdated.getTime())) {
@@ -1120,6 +1132,38 @@ const fetchDmHistoryForOrg = async (
               sourceNodeId: conversationNodeId,
             }
             await conversation.save()
+          }
+
+          // If name or avatar is still missing/raw after the upsert, fire an async profile
+          // refresh using the Meta Graph API (doesn't block the sync loop).
+          const nameStillRaw = /^\d{10,}$/.test(String(conversation.participantName || '').trim())
+          const needsProfileFetch = nameStillRaw || !conversation.participantAvatar
+          if (needsProfileFetch && pageAccessToken) {
+            ;(async () => {
+              try {
+                const profileResp = await $fetch(
+                  platform === 'instagram'
+                    ? `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(threadId)}?fields=name,username,profile_pic&access_token=${encodeURIComponent(pageAccessToken)}`
+                    : `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(threadId)}?fields=first_name,last_name,profile_pic&access_token=${encodeURIComponent(pageAccessToken)}`,
+                  { method: 'GET' }
+                )
+                const resolvedName = platform === 'instagram'
+                  ? (profileResp?.name || profileResp?.username || null)
+                  : ([profileResp?.first_name, profileResp?.last_name].filter(Boolean).join(' ').trim() || profileResp?.name || null)
+                const resolvedAvatar = profileResp?.profile_pic || null
+                if (resolvedName || resolvedAvatar) {
+                  conversation.participantName = resolvedName || conversation.participantName
+                  conversation.participantAvatar = resolvedAvatar || conversation.participantAvatar
+                  conversation.metadata = {
+                    ...(conversation.metadata || {}),
+                    participantName: conversation.participantName,
+                    participantAvatar: conversation.participantAvatar,
+                    profileFetchedAt: new Date().toISOString(),
+                  }
+                  await conversation.save()
+                }
+              } catch {}
+            })()
           }
 
           let latestImportedAt = null
@@ -1138,12 +1182,14 @@ const fetchDmHistoryForOrg = async (
 
               const fromId = String(m?.from?.id || '')
               const isOutbound = !!fromId && selfIds.has(fromId)
-              const attachments = m?.attachments || null
-              const normalizedMessage = deriveDmMessageText({
-                message: m?.message,
-                attachments,
-              })
-              if (!normalizedMessage) continue
+
+              // Normalise attachments from the API's field-expanded format
+              const normalizedAttachments = normalizeMetaApiAttachments(m)
+              const messageText = String(m?.message || '').trim()
+              const hasContent = messageText || normalizedAttachments.length > 0
+              if (!hasContent) continue
+
+              const preview = deriveAttachmentPreview(normalizedAttachments, messageText) || ''
 
               const platformMessageId = String(m?.id || '').trim() || null
               if (platformMessageId) {
@@ -1155,10 +1201,13 @@ const fetchDmHistoryForOrg = async (
                   },
                 })
                 if (already) {
-                  const current = String(already.message || '').trim()
-                  if ((current === '[Attachment]' || !current) && normalizedMessage !== '[Attachment]') {
-                    already.message = normalizedMessage
-                    already.attachments = already.attachments || attachments || null
+                  // Upgrade placeholder records: fill in proper text + normalised attachments
+                  const currentMsg = String(already.message || '').trim()
+                  const hasPlaceholder = !currentMsg || currentMsg === '[Attachment]'
+                  const hasNoAttachments = !already.attachments || (Array.isArray(already.attachments) && !already.attachments.length)
+                  if (hasPlaceholder || hasNoAttachments) {
+                    if (messageText) already.message = messageText
+                    if (normalizedAttachments.length) already.attachments = normalizedAttachments
                     already.metadata = { ...(already.metadata || {}), ...(m || {}) }
                     await already.save()
                   }
@@ -1170,7 +1219,7 @@ const fetchDmHistoryForOrg = async (
                     where: {
                       organisationId: orgId,
                       conversationId: conversation.id,
-                      message: normalizedMessage,
+                      message: messageText || null,
                       direction: isOutbound ? 'outbound' : 'inbound',
                       createdAt,
                     },
@@ -1185,9 +1234,9 @@ const fetchDmHistoryForOrg = async (
                 platform,
                 platformMessageId,
                 direction: isOutbound ? 'outbound' : 'inbound',
-                senderName: m?.from?.name || conversation.participantName || threadId,
-                message: normalizedMessage,
-                attachments,
+                senderName: m?.from?.name || m?.from?.username || conversation.participantName || threadId,
+                message: messageText || null,
+                attachments: normalizedAttachments.length ? normalizedAttachments : null,
                 status: isOutbound ? 'sent' : 'received',
                 metadata: m,
                 createdAt: createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt : undefined,
@@ -1202,7 +1251,7 @@ const fetchDmHistoryForOrg = async (
               if (insertedAt && !Number.isNaN(insertedAt.getTime())) {
                 if (!latestImportedAt || insertedAt > latestImportedAt) {
                   latestImportedAt = insertedAt
-                  latestImportedPreview = normalizedMessage
+                  latestImportedPreview = preview
                   latestImportedMessageId = inserted.id
                 }
                 if (!isOutbound && (!latestInboundAt || insertedAt > latestInboundAt)) {
@@ -1214,8 +1263,9 @@ const fetchDmHistoryForOrg = async (
 
           const conversationIdForMessages = String(conv?.id || '')
           const messagePageSize = platform === 'instagram' ? 20 : 50
+          const msgFields = 'id,created_time,message,from,to,attachments{id,name,image_data,video_data,file_url,mime_type},story,shares'
           let nextMessagesUrl = conversationIdForMessages
-            ? `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationIdForMessages)}/messages?fields=id,created_time,message,from,to,attachments&limit=${messagePageSize}&access_token=${encodeURIComponent(tokenForNode)}`
+            ? `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationIdForMessages)}/messages?fields=${encodeURIComponent(msgFields)}&limit=${messagePageSize}&access_token=${encodeURIComponent(tokenForNode)}`
             : null
           let processedMessages = 0
           while (nextMessagesUrl && processedMessages < maxMessagesPerThread) {
@@ -1297,6 +1347,12 @@ const fetchDmHistoryForOrg = async (
         nextConversationsUrl = convResp?.paging?.next || null
       }
     }
+    // Record when this account was last successfully synced for incremental future syncs
+    try {
+      acc.metadata = { ...(acc.metadata || {}), lastSyncedAt: new Date().toISOString() }
+      await acc.save()
+    } catch {}
+
     trace('account:complete', JSON.stringify({
       platform,
       accountId,
@@ -1945,7 +2001,8 @@ export const webhook = async (event) => {
             const orgId = account.organisationId
             const platform = account.platform
             const threadId = senderId
-            const attachments = msgEvent?.message?.attachments || null
+            const rawAttachments = msgEvent?.message?.attachments || null
+            const normalizedAttachments = normalizeWebhookAttachments(rawAttachments)
             const timestamp = msgEvent?.timestamp ? new Date(msgEvent.timestamp) : new Date()
             const accessToken = account?.accessTokenEnc ? decrypt(account.accessTokenEnc) : null
 
@@ -1995,11 +2052,9 @@ export const webhook = async (event) => {
               await conversation.save()
             }
 
-            const messageText = deriveDmMessageText({
-              message: msgEvent?.message?.text,
-              attachments,
-            })
-            if (!messageText) {
+            const messageText = String(msgEvent?.message?.text || '').trim()
+            const hasContent = messageText || normalizedAttachments.length > 0
+            if (!hasContent) {
               webhookTrace('message:skipped_empty', JSON.stringify({
                 senderId,
                 recipientId,
@@ -2007,6 +2062,7 @@ export const webhook = async (event) => {
               }))
               continue
             }
+            const messagePreview = deriveAttachmentPreview(normalizedAttachments, messageText) || ''
 
             const platformMessageId = msgEvent?.message?.mid || null
             if (platformMessageId) {
@@ -2034,8 +2090,8 @@ export const webhook = async (event) => {
               platformMessageId,
               direction: 'inbound',
               senderName: conversation.participantName || senderId,
-              message: messageText,
-              attachments,
+              message: messageText || null,
+              attachments: normalizedAttachments.length ? normalizedAttachments : null,
               status: 'received',
               metadata: msgEvent,
             })
@@ -2044,7 +2100,7 @@ export const webhook = async (event) => {
             conversation.unreadCount = Number(conversation.unreadCount || 0) + 1
             conversation.metadata = {
               ...(conversation.metadata || {}),
-              lastMessagePreview: messageText.slice(0, 120),
+              lastMessagePreview: messagePreview.slice(0, 120),
               lastMessageId: newMessage.id,
               lastInboundAt: timestamp.toISOString(),
             }
@@ -2073,7 +2129,7 @@ export const webhook = async (event) => {
                 await sendNotificationToMultipleUsers({
                   userIds,
                   title: `New ${platform === 'instagram' ? 'Instagram' : 'Messenger'} DM`,
-                  body: messageText.length > 80 ? `${messageText.slice(0, 80)}...` : messageText,
+                  body: messagePreview.length > 80 ? `${messagePreview.slice(0, 80)}...` : messagePreview,
                   type: 'meta_dm',
                   referenceType: 'dm_conversation',
                   referenceId: conversation.id,

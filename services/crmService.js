@@ -69,6 +69,20 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  refreshDmProfile(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/dms/refreshProfile", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  refreshAllDmProfiles(payload = {}) {
+    return new Promise((resolve, reject) => {
+      Post("/dms/refreshAllProfiles", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   fetchDmHistory(params = {}) {
     const q = new URLSearchParams();
     Object.entries(params || {}).forEach(([k, v]) => {

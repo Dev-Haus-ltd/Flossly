@@ -99,6 +99,9 @@ export const useCrmStore = defineStore("crmStore", {
     markDmRead(payload) { return this._wrap(() => crmService.markDmRead(payload)); },
     processDmQueue(payload = {}) { return this._wrap(() => crmService.processDmQueue(payload)); },
     getDmConnectionStatus() { return this._wrap(() => crmService.getDmConnectionStatus()); },
+    // Fire-and-forget — don't wrap with _wrap so it doesn't block the loading state
+    refreshDmProfile(payload) { return crmService.refreshDmProfile(payload); },
+    refreshAllDmProfiles(payload = {}) { return this._wrap(() => crmService.refreshAllDmProfiles(payload)); },
     fetchDmHistory(params = {}) { return this._wrap(() => crmService.fetchDmHistory(params)); },
     connectionStatus() { return this._wrap(() => crmService.connectionStatus()); },
     fetchLeadsNow(params = {}) { return this._wrap(() => crmService.fetchLeadsNow(params)); },

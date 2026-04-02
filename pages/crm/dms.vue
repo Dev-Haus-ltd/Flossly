@@ -143,10 +143,18 @@
                 @click="selectConversation(conv.id)"
               >
                 <template #prepend>
-                  <v-avatar size="40" class="mr-2">
-                    <img v-if="conv.avatarUrl" :src="conv.avatarUrl" alt="Avatar" @error="(e) => e.target.style.display = 'none'" />
-                    <span v-else>{{ conv.avatarText }}</span>
-                  </v-avatar>
+                  <div class="dm-avatar-wrap mr-2">
+                    <v-avatar size="40">
+                      <img v-if="conv.avatarUrl" :src="conv.avatarUrl" alt="Avatar" @error="(e) => e.target.style.display = 'none'" />
+                      <span v-else>{{ conv.avatarText }}</span>
+                    </v-avatar>
+                    <span
+                      class="dm-platform-dot"
+                      :class="conv.platform === 'instagram' ? 'dm-platform-dot--ig' : 'dm-platform-dot--messenger'"
+                    >
+                      <v-icon size="9" color="white">{{ conv.platform === 'instagram' ? 'mdi-instagram' : 'mdi-facebook-messenger' }}</v-icon>
+                    </span>
+                  </div>
                 </template>
                 <v-list-item-title class="text-body-2 dm-item-title">
                   {{ conv.title }}
@@ -171,11 +179,47 @@
 
         <v-card class="dms-thread-card" variant="outlined">
           <div class="dms-thread-header">
-            <div class="dms-thread-title">
-              {{ activeConversation?.title || "Select a conversation" }}
-            </div>
-            <div class="text-caption text-medium-emphasis">
-              {{ activeConversation ? (activeConversation.platform === 'instagram' ? 'Instagram' : 'Messenger') : 'No conversation selected' }}
+            <div class="d-flex align-center justify-space-between">
+              <div>
+                <div class="dms-thread-title">
+                  {{ activeConversation?.title || "Select a conversation" }}
+                </div>
+                <div class="text-caption text-medium-emphasis">
+                  {{ activeConversation ? (activeConversation.platform === 'instagram' ? 'Instagram' : 'Messenger') : 'No conversation selected' }}
+                </div>
+              </div>
+              <div class="d-flex align-center gap-2">
+                <v-chip
+                  v-if="withinMessageWindow && windowTimeRemaining"
+                  size="x-small"
+                  color="warning"
+                  variant="tonal"
+                  class="text-caption"
+                >
+                  <v-icon start size="12">mdi-clock-alert-outline</v-icon>
+                  {{ windowTimeRemaining }}
+                </v-chip>
+                <v-chip
+                  v-else-if="withinMessageWindow && activeConversationId"
+                  size="x-small"
+                  color="success"
+                  variant="tonal"
+                  class="text-caption"
+                >
+                  <v-icon start size="12">mdi-check-circle-outline</v-icon>
+                  Window open
+                </v-chip>
+                <v-chip
+                  v-else-if="activeConversationId && !withinMessageWindow"
+                  size="x-small"
+                  color="error"
+                  variant="tonal"
+                  class="text-caption"
+                >
+                  <v-icon start size="12">mdi-clock-remove-outline</v-icon>
+                  Window closed
+                </v-chip>
+              </div>
             </div>
           </div>
           <v-divider />
@@ -249,7 +293,7 @@ const dmConnectionStatus = ref({
   instagramConnected: false,
 });
 const messageCache = ref(new Map());
-const MESSAGE_CACHE_TTL_MS = 45000;
+const MESSAGE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const syncingHistory = ref(false);
 let searchTimer = null;
 
@@ -366,6 +410,18 @@ const lastInboundAgo = computed(() => {
   return `${m}m ago`;
 });
 
+// Show a countdown badge when the messaging window has < 6 hours remaining
+const windowTimeRemaining = computed(() => {
+  if (!lastInboundAt.value || !withinMessageWindow.value) return null;
+  const msLeft = 24 * 60 * 60 * 1000 - (Date.now() - lastInboundAt.value.getTime());
+  if (msLeft <= 0) return null;
+  const hLeft = Math.floor(msLeft / 3600000);
+  const mLeft = Math.floor((msLeft % 3600000) / 60000);
+  if (hLeft >= 6) return null; // plenty of time — don't show
+  if (hLeft > 0) return `${hLeft}h ${mLeft}m left`;
+  return `${mLeft}m left`;
+});
+
 const canSend = computed(() => {
   return (
     !!activeConversationId.value &&
@@ -387,6 +443,12 @@ const syncHistory = async () => {
     const res = await crmStore.fetchDmHistory({ days: 30 });
     if (res?.code === 0) {
       mainStore?.setSnackbar?.({ title: `Synced ${res.data?.conversationsUpserted ?? 0} conversations, ${res.data?.messagesImported ?? 0} messages`, type: "success" });
+      // Refresh missing profiles in the background — don't await so it doesn't block the UI
+      crmStore.refreshAllDmProfiles().then((profileRes) => {
+        if (profileRes?.code === 0 && profileRes.data?.updated > 0) {
+          loadConversations(true);
+        }
+      }).catch(() => {});
       await loadConversations(true);
     } else {
       mainStore?.setSnackbar?.({ title: res?.message || "Sync failed", type: "error" });
@@ -421,6 +483,24 @@ const selectConversation = (id, options = {}) => {
   activeConversationId.value = id;
   draftMessage.value = "";
   loadMessages(true, { forceRefresh });
+
+  // Silently refresh profile if name is a raw ID or avatar is missing
+  const conv = conversations.value.find((c) => c.id === id);
+  const needsRefresh = conv && (!conv.avatarUrl || isRawId(conv.title) || conv.title === "Instagram User" || conv.title === "Messenger User");
+  if (needsRefresh) {
+    crmStore.refreshDmProfile({ conversationId: id }).then((res) => {
+      if (res?.code === 0 && res.data?.updated) {
+        const idx = conversations.value.findIndex((c) => c.id === id);
+        if (idx !== -1) {
+          conversations.value[idx] = {
+            ...conversations.value[idx],
+            title: res.data.participantName || conversations.value[idx].title,
+            avatarUrl: res.data.participantAvatar || conversations.value[idx].avatarUrl,
+          };
+        }
+      }
+    }).catch(() => {});
+  }
 };
 
 const clearActiveConversation = () => {
@@ -818,6 +898,33 @@ onMounted(async () => {
   font-weight: 600;
   min-width: 24px;
   justify-content: center;
+}
+
+/* Avatar + platform indicator badge */
+.dm-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.dm-platform-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #fff;
+}
+
+.dm-platform-dot--ig {
+  background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285AEB 90%);
+}
+
+.dm-platform-dot--messenger {
+  background: linear-gradient(135deg, #0084ff 0%, #a033ff 100%);
 }
 
 .dms-empty-state {
