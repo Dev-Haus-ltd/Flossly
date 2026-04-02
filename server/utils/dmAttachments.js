@@ -136,12 +136,24 @@ export const resolveDmParticipantProfile = async ({ platform, senderId, accessTo
   if (!senderId || !accessToken) return {}
   try {
     if (platform === 'messenger') {
-      const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(senderId)}?fields=first_name,last_name,profile_pic&access_token=${encodeURIComponent(accessToken)}`
-      const resp = await $fetch(url, { method: 'GET' })
-      const name = [resp?.first_name, resp?.last_name].filter(Boolean).join(' ').trim()
+      const primaryUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(senderId)}?fields=first_name,last_name,profile_pic,name&access_token=${encodeURIComponent(accessToken)}`
+      const primaryResp = await $fetch(primaryUrl, { method: 'GET' })
+      const primaryName = [primaryResp?.first_name, primaryResp?.last_name].filter(Boolean).join(' ').trim()
+      const primaryAvatar = primaryResp?.profile_pic || null
+
+      if (primaryName || primaryAvatar || primaryResp?.name) {
+        return {
+          name: primaryName || primaryResp?.name || null,
+          avatar: primaryAvatar,
+        }
+      }
+
+      // Some page-scoped IDs only expose minimal fields in one call shape.
+      const fallbackUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(senderId)}?fields=name,profile_pic&access_token=${encodeURIComponent(accessToken)}`
+      const fallbackResp = await $fetch(fallbackUrl, { method: 'GET' })
       return {
-        name: name || resp?.name || null,
-        avatar: resp?.profile_pic || null,
+        name: fallbackResp?.name || null,
+        avatar: fallbackResp?.profile_pic || null,
       }
     }
     if (platform === 'instagram') {

@@ -15,6 +15,28 @@ const ensureDmTables = async () => {
 
 const META_VERSION = "v24.0";
 const STANDARD_MESSAGING_WINDOW_MS = 24 * 60 * 60 * 1000;
+const RAW_DM_ID_REGEX = /^\d{10,}$/;
+
+const isRawDmIdentifier = (value) => RAW_DM_ID_REGEX.test(String(value || "").trim());
+
+const fallbackDmParticipantName = (platform) => {
+  const normalized = String(platform || "").toLowerCase();
+  if (normalized === "instagram") return "Instagram User";
+  if (normalized === "messenger") return "Messenger User";
+  return "Unknown";
+};
+
+const resolveDmParticipantName = ({ platform, preferredName, currentName, threadId }) => {
+  const candidates = [preferredName, currentName]
+    .map((v) => String(v || "").trim())
+    .filter(Boolean);
+  const firstHuman = candidates.find((name) => !isRawDmIdentifier(name));
+  if (firstHuman) return firstHuman;
+
+  const thread = String(threadId || "").trim();
+  if (thread && !isRawDmIdentifier(thread)) return thread;
+  return fallbackDmParticipantName(platform);
+};
 
 const toAbsoluteUrl = (value) => {
   const raw = String(value || "").trim();
@@ -322,11 +344,22 @@ export const listDmMessages = async (event) => {
 
     const rows = await CrmDmMessage.findAll({
       where,
-      order: [["createdAt", "DESC"]],
+      order: [["createdAt", "DESC"], ["id", "DESC"]],
       limit: Number.isFinite(limit) ? limit : 30,
     });
 
-    const sorted = rows.slice().reverse();
+    const sorted = rows.slice().sort((a, b) => {
+      const aTs = new Date(a.createdAt).getTime();
+      const bTs = new Date(b.createdAt).getTime();
+      if (aTs !== bTs) return aTs - bTs;
+
+      // Keep inbound before outbound when timestamps are identical.
+      const aInbound = String(a.direction || "").toLowerCase() === "inbound";
+      const bInbound = String(b.direction || "").toLowerCase() === "inbound";
+      if (aInbound !== bInbound) return aInbound ? -1 : 1;
+
+      return Number(a.id || 0) - Number(b.id || 0);
+    });
     const nextCursor = rows.length ? rows[rows.length - 1].createdAt : null;
 
     return success({
@@ -488,11 +521,17 @@ export const refreshDmProfile = async (event) => {
     });
     if (!profile) return success({ updated: false });
 
-    conversation.participantName = profile.name || conversation.participantName;
+    const nextName = resolveDmParticipantName({
+      platform: conversation.platform,
+      preferredName: profile?.name,
+      currentName: conversation.participantName,
+      threadId: conversation.threadId,
+    });
+    conversation.participantName = nextName;
     conversation.participantAvatar = profile.avatar || conversation.participantAvatar;
     conversation.metadata = {
       ...(conversation.metadata || {}),
-      participantName: conversation.participantName,
+      participantName: nextName,
       participantAvatar: conversation.participantAvatar,
     };
     await conversation.save();
@@ -592,14 +631,20 @@ export const refreshAllDmProfiles = async (event) => {
       });
       if (!profile) continue;
 
-      const nameChanged = profile.name && profile.name !== conversation.participantName;
+      const nextName = resolveDmParticipantName({
+        platform: conversation.platform,
+        preferredName: profile?.name,
+        currentName: conversation.participantName,
+        threadId: conversation.threadId,
+      });
+      const nameChanged = nextName !== conversation.participantName;
       const avatarChanged = profile.avatar && profile.avatar !== conversation.participantAvatar;
       if (nameChanged || avatarChanged) {
-        conversation.participantName = profile.name || conversation.participantName;
+        conversation.participantName = nextName;
         conversation.participantAvatar = profile.avatar || conversation.participantAvatar;
         conversation.metadata = {
           ...(conversation.metadata || {}),
-          participantName: conversation.participantName,
+          participantName: nextName,
           participantAvatar: conversation.participantAvatar,
           profileFetchedAt: new Date().toISOString(),
         };

@@ -2036,6 +2036,8 @@ export const webhook = async (event) => {
               attachments: normalizedAttachments.length ? normalizedAttachments : null,
               status: 'received',
               metadata: msgEvent,
+              createdAt: timestamp,
+              updatedAt: timestamp,
             })
 
             conversation.lastMessageAt = timestamp
@@ -2070,6 +2072,7 @@ export const webhook = async (event) => {
               if (userIds.length) {
                 await sendNotificationToMultipleUsers({
                   userIds,
+                  organisationId: orgId,
                   title: `New ${platform === 'instagram' ? 'Instagram' : 'Messenger'} DM`,
                   body: messagePreview.length > 80 ? `${messagePreview.slice(0, 80)}...` : messagePreview,
                   type: 'meta_dm',
