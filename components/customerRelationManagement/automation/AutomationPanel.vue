@@ -114,11 +114,15 @@
       :whatsapp-text="previewWhatsAppText"
     />
 
-    <AutomationDeleteDialog
+    <ConfirmDialog
       v-model="showDeleteAutomation"
-      :target-name="deleteAutomationTarget?.name || 'this automation'"
+      title="Delete Automation"
+      :message="`Are you sure you want to delete ${deleteAutomationTarget?.name || 'this automation'}? This cannot be undone.`"
+      confirm-text="Delete"
+      icon="mdi-delete-outline"
       :loading="deletingAutomation"
       @confirm="deleteAutomationNow"
+      @cancel="showDeleteAutomation = false"
     />
 
     <v-dialog v-model="showTriggerDialog" max-width="600px" :persistent="triggerSaving">
@@ -497,7 +501,7 @@ import emailLogo from '@/assets/emails/email-logo.png'
 import AutomationCards from '@/components/customerRelationManagement/automation/AutomationCards.vue'
 import AutomationTable from '@/components/customerRelationManagement/automation/AutomationTable.vue'
 import AutomationPreviewDialog from '@/components/customerRelationManagement/automation/AutomationPreviewDialog.vue'
-import AutomationDeleteDialog from '@/components/customerRelationManagement/automation/AutomationDeleteDialog.vue'
+import ConfirmDialog from '@/components/Common/ConfirmDialog.vue'
 import { getTemplateParamExamples, buildTemplatePreviewLines } from '@/lib/whatsappTemplatePreview'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults'
 import addFolderIcon from '@/assets/icons/crm/add-folder.svg'
