@@ -17,6 +17,14 @@ const baseOptions = {
     ssl: {
       rejectUnauthorized: false,
     },
+    keepAlive: true,
+  },
+  pool: {
+    max: 10,
+    min: 0,
+    acquire: 15000, // fail in 15s, not 60s (prevents nginx gateway timeout)
+    idle: 10000,
+    evict: 5000,   // check for dead connections every 5s
   },
   define: {
     timestamps: false,

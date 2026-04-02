@@ -16,6 +16,7 @@
           :show-actions="allowGroupEdit"
           :disable-actions="card.isDefault"
           :selected="activeKey === card.key"
+          :whatsapp-warning="!whatsappEnabled && !!card.hasWhatsApp"
           @select="$emit('select', card)"
           @toggle="(val) => $emit('toggle', card, val)"
           @edit="$emit('edit', card)"
@@ -57,6 +58,10 @@ defineProps({
   activeKey: {
     type: String,
     default: '',
+  },
+  whatsappEnabled: {
+    type: Boolean,
+    default: true,
   },
 })
 

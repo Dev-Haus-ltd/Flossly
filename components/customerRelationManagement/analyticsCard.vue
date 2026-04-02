@@ -100,13 +100,13 @@
 
     <div class="card-actions">
       <v-btn
-        v-if="leads > 0"
+        v-if="leads > 0 && viewLeadsHref"
         color="primary"
         variant="flat"
         rounded="lg"
         size="small"
         class="view-leads-btn"
-        :href="`/crm/leads?campaignId=${campaignId}`"
+        :href="viewLeadsHref"
         target="_blank"
         append-icon="mdi-open-in-new"
       >
@@ -192,6 +192,14 @@ const props = defineProps({
     type: String,
     default: null,
   },
+  adSetId: {
+    type: String,
+    default: null,
+  },
+  adId: {
+    type: String,
+    default: null,
+  },
   drillLabel: {
     type: String,
     default: null,
@@ -216,6 +224,13 @@ const statusConfig = computed(() => {
 });
 
 const showDescriptionToggle = computed(() => String(props.description || '').trim().length > 120);
+
+const viewLeadsHref = computed(() => {
+  if (props.adId) return `/crm/leads?adId=${props.adId}`;
+  if (props.adSetId) return `/crm/leads?adSetId=${props.adSetId}`;
+  if (props.campaignId) return `/crm/leads?campaignId=${props.campaignId}`;
+  return null;
+});
 
 const videoSrc = ref(null);
 const videoPermalink = ref(null);

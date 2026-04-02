@@ -39,6 +39,10 @@
     </div>
     <span class="automation-sub mb-1 d-block">by {{ authorLabel }}</span>
     <div class="automation-desc clamp-2">{{ description }}</div>
+    <div class="wa-warning-chip mt-2" :style="{ visibility: whatsappWarning ? 'visible' : 'hidden' }">
+      <v-icon size="13" class="mr-1">mdi-wifi-off</v-icon>
+      WhatsApp not connected
+    </div>
     <div class="d-flex align-center justify-space-between mt-3">
       <div class="d-flex align-center text-grey">
         <v-icon size="16" class="mr-1">mdi-format-list-bulleted</v-icon>
@@ -83,6 +87,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  whatsappWarning: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 defineEmits(['select', 'toggle', 'edit', 'delete'])
@@ -117,6 +125,17 @@ const authorLabel = computed(() => {
 .automation-desc { font-size:12px; color:#636363; }
 .automation-sub { font-size:11px; color:#8b8b8b; }
 .count { color:#737373; font-size:14px; }
+.wa-warning-chip {
+  display: inline-flex;
+  align-items: center;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #c2410c;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+}
 .clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;

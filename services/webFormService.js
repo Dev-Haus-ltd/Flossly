@@ -22,6 +22,16 @@ export default {
       Post('/form/update', payload).then(resolve).catch(reject)
     })
   },
+  archiveForms(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/form/archive', payload).then(resolve).catch(reject)
+    })
+  },
+  restoreForms(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/form/restore', payload).then(resolve).catch(reject)
+    })
+  },
   deleteForm(payload) {
     return new Promise((resolve, reject) => {
       Post('/form/delete', payload).then(resolve).catch(reject)

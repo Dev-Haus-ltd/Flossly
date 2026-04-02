@@ -18,6 +18,8 @@ export const FormConfig = sequelize.define(
       defaultValue: [],
     },
     active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    softDeleted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    deletedAt: { type: DataTypes.DATE, allowNull: true },
   },
   { modelName: 'FormConfigs', timestamps: true }
 )

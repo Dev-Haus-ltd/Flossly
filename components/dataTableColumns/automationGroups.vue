@@ -97,7 +97,28 @@
                 {{ group.description }}
               </div>
             </div>
+            <v-tooltip
+              v-if="isWaGroup(group) && !whatsappEnabled"
+              location="top"
+            >
+              <template #activator="{ props: tp }">
+                <div v-bind="tp" class="d-flex align-center" style="gap:4px;">
+                  <v-switch
+                    inset
+                    density="compact"
+                    hide-details
+                    color="primary"
+                    class="automation-group-switch"
+                    :disabled="true"
+                    :model-value="isGroupEnabled(lead, group)"
+                  />
+                  <v-icon size="14" color="warning">mdi-wifi-off</v-icon>
+                </div>
+              </template>
+              <span>WhatsApp not connected</span>
+            </v-tooltip>
             <v-switch
+              v-else
               inset
               density="compact"
               hide-details
@@ -133,7 +154,14 @@ const props = defineProps({
   saving: { type: Boolean, default: false },
   groupsLoading: { type: Boolean, default: false },
   readonly: { type: Boolean, default: false },
+  whatsappEnabled: { type: Boolean, default: true },
 })
+
+const isWaGroup = (group) => {
+  const key = String(group?.key || '').toLowerCase()
+  const title = String(group?.title || '').toLowerCase()
+  return key.includes('whatsapp') || title.includes('whatsapp')
+}
 
 const menu = ref(false)
 const currentActivator = ref(null)
