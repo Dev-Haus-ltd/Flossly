@@ -446,6 +446,12 @@ export const useMainStore = defineStore("mainStore", {
           width: 200,
         },
         {
+          key: "dueDate",
+          title: "Due Date",
+          sortable: true,
+          width: 200,
+        },
+        {
           key: "documentLink",
           title: "Template Link",
           sortable: true,
