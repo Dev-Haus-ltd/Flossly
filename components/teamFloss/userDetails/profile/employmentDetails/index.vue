@@ -65,9 +65,11 @@ onMounted(() => {
       if (res.code === 0) {
         userDetails.value = res.data;
         userDetails.value.organisationId = user.organisationId;
-        userList.value = userStore.orgUsers.find(
+        const allOrgUsers = userStore.orgUsers.find(
           (x) => x.organisation.id === user.organisationId
-        )?.orgUsers;
+        )?.orgUsers || [];
+        // Filter to show only active members in the "Reports to" dropdown
+        userList.value = allOrgUsers.filter(u => u.isActive);
       }
     });
 });
