@@ -1462,37 +1462,44 @@ export const fetchLeadsNow = async (event) => {
 }
 
 export const fetchDmHistoryNow = async (event) => {
-  const { orgId } = event.context.user || {}
-  if (!orgId) return error(401, 'Unauthenticated')
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
 
-  const q = getQuery(event) || {}
-  const days = Number(q.days || 30)
-  const maxThreads = Number(q.maxThreads || 60)
-  const maxMessagesPerThread = Number(q.maxMessagesPerThread || 120)
-  const debugEnabled = String(q.debug || '').toLowerCase() === 'true'
-  const traceEnabled = String(q.trace || '').toLowerCase() === 'true'
-  const platformRaw = String(q.platform || 'all').toLowerCase()
-  const platforms =
-    platformRaw === 'messenger' ? ['messenger'] :
-    platformRaw === 'instagram' ? ['instagram'] :
-    ['messenger', 'instagram']
+    const q = getQuery(event) || {}
+    // Optional JSON payload support (e.g. /meta/fetchDmHistory?options={...})
+    // parsed through our safe parser to avoid request-shape errors.
+    const options = parseJsonBody(q.options) || {}
+    const days = Number(options.days ?? q.days ?? 30)
+    const maxThreads = Number(options.maxThreads ?? q.maxThreads ?? 60)
+    const maxMessagesPerThread = Number(options.maxMessagesPerThread ?? q.maxMessagesPerThread ?? 120)
+    const debugEnabled = String(options.debug ?? q.debug ?? '').toLowerCase() === 'true'
+    const traceEnabled = String(options.trace ?? q.trace ?? '').toLowerCase() === 'true'
+    const platformRaw = String(options.platform ?? q.platform ?? 'all').toLowerCase()
+    const platforms =
+      platformRaw === 'messenger' ? ['messenger'] :
+      platformRaw === 'instagram' ? ['instagram'] :
+      ['messenger', 'instagram']
 
-  const result = await fetchDmHistoryForOrg(orgId, {
-    days,
-    maxThreads,
-    maxMessagesPerThread,
-    platforms,
-    debugEnabled,
-    traceEnabled,
-  })
-  if (!result.ok) return error(400, result.error || 'Failed to sync DM history')
-  if (debugEnabled) {
-    return success(result.debug)
+    const result = await fetchDmHistoryForOrg(orgId, {
+      days,
+      maxThreads,
+      maxMessagesPerThread,
+      platforms,
+      debugEnabled,
+      traceEnabled,
+    })
+    if (!result.ok) return error(400, result.error || 'Failed to sync DM history')
+    if (debugEnabled) {
+      return success(result.debug)
+    }
+    return success({
+      conversationsUpserted: result.conversationsUpserted || 0,
+      messagesImported: result.messagesImported || 0,
+    })
+  } catch (e) {
+    return error(500, e?.message || 'Failed to sync DM history')
   }
-  return success({
-    conversationsUpserted: result.conversationsUpserted || 0,
-    messagesImported: result.messagesImported || 0,
-  })
 }
 
 
