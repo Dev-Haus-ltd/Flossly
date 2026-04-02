@@ -3,6 +3,8 @@ import {
   createForm,
   updateForm,
   deleteForm,
+  archiveForms,
+  restoreForms,
   getAvailableFields,
   getFormMeta,
   submitFormLead,
@@ -14,6 +16,8 @@ export default defineEventHandler(async (event) => {
     case 'list':           return await listForms(event)
     case 'create':         return await createForm(event)
     case 'update':         return await updateForm(event)
+    case 'archive':        return await archiveForms(event)
+    case 'restore':        return await restoreForms(event)
     case 'delete':         return await deleteForm(event)
     case 'availableFields': return await getAvailableFields(event)
     case 'meta':           return await getFormMeta(event)
