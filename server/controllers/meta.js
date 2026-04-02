@@ -872,9 +872,9 @@ const fetchDmHistoryForOrg = async (
     const lastSyncedAtRaw = accountMeta?.lastSyncedAt || null
     const lastSyncedAt = lastSyncedAtRaw ? new Date(lastSyncedAtRaw) : null
     const hasLastSyncedAt = !!(lastSyncedAt && !Number.isNaN(lastSyncedAt.getTime()))
-    const effectiveSinceDate = hasLastSyncedAt
-      ? (lookbackSinceDate && lookbackSinceDate > lastSyncedAt ? lookbackSinceDate : lastSyncedAt)
-      : lookbackSinceDate
+    // If an explicit lookback window is requested (e.g. days=30), honor it.
+    // Only fall back to lastSyncedAt when no explicit lookback is provided.
+    const effectiveSinceDate = lookbackSinceDate || (hasLastSyncedAt ? lastSyncedAt : null)
     // For messenger: accountId IS the page ID. For instagram: pageId is stored in metadata.
     let pageIdFromMeta = String(accountMeta?.pageId || '')
     if (platform === 'messenger' && !pageIdFromMeta) {
@@ -940,8 +940,9 @@ const fetchDmHistoryForOrg = async (
       accountDebug.nodesTried.push(nodeDebug)
       const conversationPageSize = platform === 'instagram' ? 50 : 25
       const tokenForNode = pageAccessToken
-      const sinceParam = effectiveSinceDate ? `&since=${Math.floor(effectiveSinceDate.getTime() / 1000)}` : ''
-      let nextConversationsUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationNodeId)}/conversations?platform=${encodeURIComponent(platformParam)}&fields=id,updated_time,participants.limit(10){id,name,username,profile_pic}&limit=${conversationPageSize}${sinceParam}&access_token=${encodeURIComponent(tokenForNode)}`
+      // Avoid API-level since filtering here to prevent missing conversations on some Messenger accounts.
+      // We still apply effectiveSinceDate filtering in-process and at message fetch level.
+      let nextConversationsUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationNodeId)}/conversations?platform=${encodeURIComponent(platformParam)}&fields=id,updated_time,participants.limit(10){id,name,username,profile_pic}&limit=${conversationPageSize}&access_token=${encodeURIComponent(tokenForNode)}`
       trace('list_conversations:start', JSON.stringify({
         orgId: Number(orgId),
         platform,
