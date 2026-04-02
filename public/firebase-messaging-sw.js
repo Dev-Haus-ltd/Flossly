@@ -181,7 +181,9 @@ self.addEventListener('notificationclick', (event) => {
           : '/crm/leads';
         break;
       case 'meta_dm':
-        urlToOpen = '/crm/analytics';
+        urlToOpen = notificationData.url || (notificationData.conversationId
+          ? `/crm/dms?conversationId=${notificationData.conversationId}`
+          : '/crm/dms');
         break;
       default:
         urlToOpen = notificationData.url || '/';
