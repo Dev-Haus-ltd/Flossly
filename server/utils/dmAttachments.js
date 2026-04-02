@@ -14,6 +14,8 @@
  *   [{ type, url, name?, mimeType?, description? }]
  */
 
+const META_VERSION = 'v24.0'
+
 /**
  * Normalise a single raw Meta API attachment object from the history-sync endpoint.
  */
@@ -125,4 +127,31 @@ export const deriveAttachmentPreview = (normalizedAttachments, messageText) => {
     case 'share': return `🔗 ${first.name || 'Shared post'}`
     default:      return `📎 ${first.name || 'Attachment'}`
   }
+}
+
+/**
+ * Resolve participant profile data for a Meta DM sender.
+ */
+export const resolveDmParticipantProfile = async ({ platform, senderId, accessToken }) => {
+  if (!senderId || !accessToken) return {}
+  try {
+    if (platform === 'messenger') {
+      const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(senderId)}?fields=first_name,last_name,profile_pic&access_token=${encodeURIComponent(accessToken)}`
+      const resp = await $fetch(url, { method: 'GET' })
+      const name = [resp?.first_name, resp?.last_name].filter(Boolean).join(' ').trim()
+      return {
+        name: name || resp?.name || null,
+        avatar: resp?.profile_pic || null,
+      }
+    }
+    if (platform === 'instagram') {
+      const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(senderId)}?fields=name,username,profile_pic&access_token=${encodeURIComponent(accessToken)}`
+      const resp = await $fetch(url, { method: 'GET' })
+      return {
+        name: resp?.name || resp?.username || null,
+        avatar: resp?.profile_pic || null,
+      }
+    }
+  } catch {}
+  return {}
 }

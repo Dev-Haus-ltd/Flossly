@@ -19,81 +19,11 @@ import {
   normalizeMetaApiAttachments,
   normalizeWebhookAttachments,
   deriveAttachmentPreview,
+  resolveDmParticipantProfile,
 } from '../utils/dmAttachments.js'
 
 const META_VERSION = 'v24.0'
 const META_SUBSCRIBED_FIELDS = 'leadgen,messages,messaging_postbacks'
-
-const resolveDmParticipantProfile = async ({ platform, senderId, accessToken }) => {
-  if (!senderId || !accessToken) return {}
-  try {
-    if (platform === 'messenger') {
-      const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(senderId)}?fields=first_name,last_name,profile_pic&access_token=${encodeURIComponent(accessToken)}`
-      const resp = await $fetch(url, { method: 'GET' })
-      const name = [resp?.first_name, resp?.last_name].filter(Boolean).join(' ').trim()
-      return {
-        name: name || resp?.name || null,
-        avatar: resp?.profile_pic || null,
-      }
-    }
-    if (platform === 'instagram') {
-      const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(senderId)}?fields=name,username,profile_pic&access_token=${encodeURIComponent(accessToken)}`
-      const resp = await $fetch(url, { method: 'GET' })
-      return {
-        name: resp?.name || resp?.username || null,
-        avatar: resp?.profile_pic || null,
-      }
-    }
-  } catch {}
-  return {}
-}
-
-const deriveDmMessageText = ({ message = '', attachments = null }) => {
-  const text = String(message || '').trim()
-  if (text) return text
-  const list = Array.isArray(attachments) ? attachments : (attachments ? [attachments] : [])
-  if (!list.length) return ''
-
-  const walkPayloadForText = (value, depth = 0) => {
-    if (!value || depth > 4) return ''
-    if (typeof value === 'string') {
-      const s = value.trim()
-      if (!s) return ''
-      if (/^https?:\/\//i.test(s)) return ''
-      return s
-    }
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        const v = walkPayloadForText(item, depth + 1)
-        if (v) return v
-      }
-      return ''
-    }
-    if (typeof value === 'object') {
-      const preferred = ['text', 'title', 'subtitle', 'caption', 'name']
-      for (const key of preferred) {
-        const v = walkPayloadForText(value?.[key], depth + 1)
-        if (v) return v
-      }
-      for (const key of Object.keys(value || {})) {
-        if (preferred.includes(key)) continue
-        const v = walkPayloadForText(value[key], depth + 1)
-        if (v) return v
-      }
-    }
-    return ''
-  }
-
-  // Try to surface meaningful text from attachment payloads before using generic placeholder.
-  for (const att of list) {
-    const payload = att?.payload || {}
-    const normalized = walkPayloadForText(payload)
-    if (normalized) return normalized
-    const typeLabel = String(att?.type || '').trim()
-    if (typeLabel) return `[${typeLabel}]`
-  }
-  return '[Attachment]'
-}
 
 const normalizeBaseUrl = (value = '') => String(value || '').replace(/\/+$/, '')
 
@@ -906,7 +836,7 @@ const fetchDmHistoryForOrg = async (
   try { await CrmDmConversation.sync() } catch {}
   try { await CrmDmMessage.sync() } catch {}
 
-  const sinceDate = Number.isFinite(days) && days > 0
+  const lookbackSinceDate = Number.isFinite(days) && days > 0
     ? new Date(Date.now() - days * 24 * 60 * 60 * 1000)
     : null
 
@@ -939,6 +869,12 @@ const fetchDmHistoryForOrg = async (
     const platform = String(acc.platform || '').toLowerCase()
     const accountId = String(acc.accountId || '')
     const accountMeta = acc?.metadata || {}
+    const lastSyncedAtRaw = accountMeta?.lastSyncedAt || null
+    const lastSyncedAt = lastSyncedAtRaw ? new Date(lastSyncedAtRaw) : null
+    const hasLastSyncedAt = !!(lastSyncedAt && !Number.isNaN(lastSyncedAt.getTime()))
+    const effectiveSinceDate = hasLastSyncedAt
+      ? (lookbackSinceDate && lookbackSinceDate > lastSyncedAt ? lookbackSinceDate : lastSyncedAt)
+      : lookbackSinceDate
     // For messenger: accountId IS the page ID. For instagram: pageId is stored in metadata.
     let pageIdFromMeta = String(accountMeta?.pageId || '')
     if (platform === 'messenger' && !pageIdFromMeta) {
@@ -980,6 +916,7 @@ const fetchDmHistoryForOrg = async (
       platform,
       accountId,
       pageId: pageIdFromMeta || null,
+      since: effectiveSinceDate ? effectiveSinceDate.toISOString() : null,
       nodeCandidates,
       nodesTried: [],
       conversationsSeen: 0,
@@ -1003,7 +940,8 @@ const fetchDmHistoryForOrg = async (
       accountDebug.nodesTried.push(nodeDebug)
       const conversationPageSize = platform === 'instagram' ? 50 : 25
       const tokenForNode = pageAccessToken
-      let nextConversationsUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationNodeId)}/conversations?platform=${encodeURIComponent(platformParam)}&fields=id,updated_time,participants.limit(10){id,name,username,profile_pic}&limit=${conversationPageSize}&access_token=${encodeURIComponent(tokenForNode)}`
+      const sinceParam = effectiveSinceDate ? `&since=${Math.floor(effectiveSinceDate.getTime() / 1000)}` : ''
+      let nextConversationsUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationNodeId)}/conversations?platform=${encodeURIComponent(platformParam)}&fields=id,updated_time,participants.limit(10){id,name,username,profile_pic}&limit=${conversationPageSize}${sinceParam}&access_token=${encodeURIComponent(tokenForNode)}`
       trace('list_conversations:start', JSON.stringify({
         orgId: Number(orgId),
         platform,
@@ -1074,7 +1012,7 @@ const fetchDmHistoryForOrg = async (
           nodeDebug.conversationsSeen += 1
 
           const convUpdated = conv?.updated_time ? new Date(conv.updated_time) : null
-          if (sinceDate && convUpdated && !Number.isNaN(convUpdated.getTime()) && convUpdated < sinceDate) {
+          if (effectiveSinceDate && convUpdated && !Number.isNaN(convUpdated.getTime()) && convUpdated < effectiveSinceDate) {
             continue
           }
 
@@ -1141,19 +1079,14 @@ const fetchDmHistoryForOrg = async (
           if (needsProfileFetch && pageAccessToken) {
             ;(async () => {
               try {
-                const profileResp = await $fetch(
-                  platform === 'instagram'
-                    ? `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(threadId)}?fields=name,username,profile_pic&access_token=${encodeURIComponent(pageAccessToken)}`
-                    : `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(threadId)}?fields=first_name,last_name,profile_pic&access_token=${encodeURIComponent(pageAccessToken)}`,
-                  { method: 'GET' }
-                )
-                const resolvedName = platform === 'instagram'
-                  ? (profileResp?.name || profileResp?.username || null)
-                  : ([profileResp?.first_name, profileResp?.last_name].filter(Boolean).join(' ').trim() || profileResp?.name || null)
-                const resolvedAvatar = profileResp?.profile_pic || null
-                if (resolvedName || resolvedAvatar) {
-                  conversation.participantName = resolvedName || conversation.participantName
-                  conversation.participantAvatar = resolvedAvatar || conversation.participantAvatar
+                const profile = await resolveDmParticipantProfile({
+                  platform,
+                  senderId: threadId,
+                  accessToken: pageAccessToken,
+                })
+                if (profile?.name || profile?.avatar) {
+                  conversation.participantName = profile?.name || conversation.participantName
+                  conversation.participantAvatar = profile?.avatar || conversation.participantAvatar
                   conversation.metadata = {
                     ...(conversation.metadata || {}),
                     participantName: conversation.participantName,
@@ -1176,7 +1109,7 @@ const fetchDmHistoryForOrg = async (
             for (const m of msgItems) {
               debug.messagesScanned += 1
               const createdAt = m?.created_time ? new Date(m.created_time) : null
-              if (sinceDate && createdAt && !Number.isNaN(createdAt.getTime()) && createdAt < sinceDate) {
+              if (effectiveSinceDate && createdAt && !Number.isNaN(createdAt.getTime()) && createdAt < effectiveSinceDate) {
                 continue
               }
 
@@ -1264,8 +1197,9 @@ const fetchDmHistoryForOrg = async (
           const conversationIdForMessages = String(conv?.id || '')
           const messagePageSize = platform === 'instagram' ? 20 : 50
           const msgFields = 'id,created_time,message,from,to,attachments{id,name,image_data,video_data,file_url,mime_type},story,shares'
+          const messageSinceParam = effectiveSinceDate ? `&since=${Math.floor(effectiveSinceDate.getTime() / 1000)}` : ''
           let nextMessagesUrl = conversationIdForMessages
-            ? `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationIdForMessages)}/messages?fields=${encodeURIComponent(msgFields)}&limit=${messagePageSize}&access_token=${encodeURIComponent(tokenForNode)}`
+            ? `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(conversationIdForMessages)}/messages?fields=${encodeURIComponent(msgFields)}&limit=${messagePageSize}${messageSinceParam}&access_token=${encodeURIComponent(tokenForNode)}`
             : null
           let processedMessages = 0
           while (nextMessagesUrl && processedMessages < maxMessagesPerThread) {

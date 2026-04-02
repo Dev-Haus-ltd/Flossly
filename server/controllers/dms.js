@@ -5,7 +5,7 @@ import { parseJsonBody } from "../utils/body";
 import { CrmDmConversation, CrmDmMessage, CrmDmAccount, MetaPage } from "../models";
 import { decrypt } from "../utils/crypto";
 import { uploadBufferFile } from "../utils/storage";
-import { deriveAttachmentPreview } from "../utils/dmAttachments.js";
+import { deriveAttachmentPreview, resolveDmParticipantProfile } from "../utils/dmAttachments.js";
 
 const ensureDmTables = async () => {
   try { await CrmDmConversation.sync(); } catch {}
@@ -86,30 +86,6 @@ const getLatestInboundMessageAt = async ({ organisationId, conversationId }) => 
 const isWithinStandardMessagingWindow = (lastInboundAt) => {
   if (!lastInboundAt || Number.isNaN(lastInboundAt.getTime())) return false;
   return Date.now() - lastInboundAt.getTime() <= STANDARD_MESSAGING_WINDOW_MS;
-};
-
-const resolveProfile = async ({ platform, senderId, accessToken }) => {
-  if (!senderId || !accessToken) return null;
-  try {
-    if (platform === "messenger") {
-      const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(senderId)}?fields=first_name,last_name,profile_pic&access_token=${encodeURIComponent(accessToken)}`;
-      const resp = await $fetch(url, { method: "GET" });
-      const name = [resp?.first_name, resp?.last_name].filter(Boolean).join(" ").trim();
-      return {
-        name: name || resp?.name || null,
-        avatar: resp?.profile_pic || null,
-      };
-    }
-    if (platform === "instagram") {
-      const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(senderId)}?fields=name,username,profile_pic&access_token=${encodeURIComponent(accessToken)}`;
-      const resp = await $fetch(url, { method: "GET" });
-      return {
-        name: resp?.name || resp?.username || null,
-        avatar: resp?.profile_pic || null,
-      };
-    }
-  } catch {}
-  return null;
 };
 
 export const processQueuedMessages = async ({ organisationId, limit = 20, messageIds = null }) => {
@@ -505,7 +481,7 @@ export const refreshDmProfile = async (event) => {
     if (!account?.accessTokenEnc) return success({ updated: false, reason: "account_token_missing" });
 
     const accessToken = decrypt(account.accessTokenEnc);
-    const profile = await resolveProfile({
+    const profile = await resolveDmParticipantProfile({
       platform: conversation.platform,
       senderId: conversation.threadId,
       accessToken,
@@ -609,7 +585,7 @@ export const refreshAllDmProfiles = async (event) => {
       if (!account?.accessTokenEnc) continue;
 
       const accessToken = decrypt(account.accessTokenEnc);
-      const profile = await resolveProfile({
+      const profile = await resolveDmParticipantProfile({
         platform: conversation.platform,
         senderId: conversation.threadId,
         accessToken,
