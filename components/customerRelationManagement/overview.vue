@@ -67,42 +67,42 @@
               </v-btn>
             </template>
             <template v-else-if="card.key === 'whatsapp'">
-              <v-btn
-                v-if="isWhatsAppConnected"
-                color="grey-darken-1"
-                variant="outlined"
-                rounded="lg"
-                class="action-btn"
-                :disabled="!canManageWhapi"
-                @click="startWhapiChangeNumber"
-              >
-                Change Number
-              </v-btn>
-              <v-btn
-                v-if="isWhatsAppConnected"
-                color="error"
-                variant="outlined"
-                rounded="lg"
-                class="action-btn"
-                :loading="whapiDisconnecting"
-                @click="disconnectWhapi"
-              >
-                Logout
-              </v-btn>
+              <template v-if="!whapiStatusLoading && isWhatsAppConnected">
+                <v-btn
+                  color="grey-darken-1"
+                  variant="outlined"
+                  rounded="lg"
+                  class="action-btn"
+                  :disabled="!canManageWhapi"
+                  @click="startWhapiChangeNumber"
+                >
+                  Change Number
+                </v-btn>
+                <v-btn
+                  color="error"
+                  variant="outlined"
+                  rounded="lg"
+                  class="action-btn"
+                  :loading="whapiDisconnecting"
+                  @click="disconnectWhapi"
+                >
+                  Logout
+                </v-btn>
+              </template>
               <v-btn
                 v-else
                 color="primary"
                 variant="flat"
                 rounded="lg"
                 class="action-btn action-btn--primary"
-                :loading="whapiLoading"
-                :disabled="!canManageWhapi"
+                :loading="whapiLoading || whapiStatusLoading"
+                :disabled="whapiStatusLoading || !canManageWhapi"
                 @click="openWhapiConnectDialog"
               >
                 Connect
               </v-btn>
               <span
-                v-if="!canManageWhapi"
+                v-if="!whapiStatusLoading && !canManageWhapi"
                 class="text-caption text-medium-emphasis mt-1"
               >
                 WhatsApp is available on paid plans only.
@@ -248,77 +248,94 @@
       @confirm="disconnectMeta"
     />
 
-    <v-dialog v-model="whapiDialog" max-width="560">
-      <v-card class="pa-5 rounded-xl">
-        <v-card-title class="text-subtitle-1 pa-0 mb-2 d-flex justify-space-between align-center">
-          <div class="d-flex align-center">
-            <span>WhatsApp Connection</span>
-            <v-chip
-              class="ml-2"
-              :color="whapiStatusColor"
-              size="small"
-              label
-            >
-              {{ whapiStatusLabel }}
-            </v-chip>
+    <v-dialog v-model="whapiDialog" max-width="460">
+      <v-card class="rounded-xl" elevation="2">
+        <!-- Header -->
+        <div class="d-flex align-center justify-space-between px-5 pt-4 pb-3">
+          <div class="d-flex align-center gap-2">
+            <v-icon size="18" color="#25D366">mdi-whatsapp</v-icon>
+            <span class="text-subtitle-2 font-weight-semibold">WhatsApp Connection</span>
+            <v-chip :color="whapiStatusColor" size="x-small" label class="ml-1">{{ whapiStatusLabel }}</v-chip>
           </div>
-          <v-btn icon variant="text" size="small" @click="whapiDialog = false">
-            <v-icon size="18">mdi-close</v-icon>
+          <v-btn icon variant="text" size="small" density="compact" @click="whapiDialog = false">
+            <v-icon size="16">mdi-close</v-icon>
           </v-btn>
-        </v-card-title>
-        <v-card-text class="pa-0">
-          <v-alert
-            v-if="whapiQrWarning"
-            type="warning"
-            variant="tonal"
-            class="mb-3"
-          >
-            {{ whapiQrWarning }}
-          </v-alert>
+        </div>
 
-          <!-- QR ready: show code + instructions -->
+        <v-divider />
+
+        <div class="px-5 py-4">
+          <!-- QR ready: show code + compact instructions -->
           <div v-if="whapiQr" class="d-flex flex-column align-center gap-3">
-            <img :src="whapiQr" alt="WhatsApp QR" style="max-width: 240px; border-radius: 12px;" />
-            <div class="whapi-scan-instructions">
-              <p class="text-caption font-weight-medium mb-2">How to scan:</p>
-              <ol class="text-caption text-medium-emphasis whapi-steps">
-                <li>Open WhatsApp on your phone</li>
-                <li>Tap <strong>⋮</strong> (Android) or <strong>Settings</strong> (iPhone)</li>
-                <li>Select <strong>Linked Devices → Link a Device</strong></li>
-                <li>Point your camera at this QR code</li>
-              </ol>
+            <div style="position:relative;display:inline-block">
+              <img
+                :src="whapiQr"
+                alt="WhatsApp QR"
+                style="width:200px;height:200px;border-radius:10px;border:1px solid rgba(0,0,0,0.08);display:block"
+              />
             </div>
+            <div class="text-center">
+              <p class="text-body-2 font-weight-medium mb-1">Scan with WhatsApp</p>
+              <p class="text-caption text-medium-emphasis" style="max-width:300px">
+                Open WhatsApp → <strong>⋮</strong> Menu (or Settings) →
+                <strong>Linked Devices</strong> → <strong>Link a Device</strong>
+              </p>
+            </div>
+            <v-alert type="info" variant="tonal" density="compact" class="w-100 text-caption py-2">
+              QR code refreshes automatically — keep this window open while scanning
+            </v-alert>
           </div>
 
-          <!-- Already connected: show phone label -->
-          <div v-else-if="whapiDisplayLabel && isWhatsAppConnected" class="d-flex flex-column align-center gap-2 py-4">
-            <v-icon color="success" size="40">mdi-check-circle</v-icon>
-            <p class="text-body-2 font-weight-medium">Connected</p>
+          <!-- Already connected state (shown when re-opening on a connected channel) -->
+          <div v-else-if="whapiDisplayLabel && isWhatsAppConnected" class="d-flex flex-column align-center gap-2 py-3">
+            <div
+              class="d-flex align-center justify-center rounded-circle"
+              style="width:52px;height:52px;background:#e8f5e9"
+            >
+              <v-icon color="success" size="26">mdi-check</v-icon>
+            </div>
+            <p class="text-body-2 font-weight-semibold mt-1">WhatsApp Connected</p>
             <p class="text-caption text-medium-emphasis">{{ whapiDisplayLabel }}</p>
           </div>
 
-          <!-- Waiting for QR: auto-polling in progress -->
-          <div v-else class="d-flex flex-column align-center gap-3 py-4">
-            <v-progress-circular indeterminate color="primary" size="48" />
-            <p class="text-body-2 font-weight-medium">Setting up your WhatsApp channel…</p>
-            <p class="text-caption text-medium-emphasis text-center">
-              This usually takes up to 60 seconds.<br />
-              The QR code will appear here automatically — no need to refresh.
-            </p>
+          <!-- Waiting / activating: spinner + contextual message -->
+          <div v-else class="d-flex flex-column align-center gap-3 py-3">
+            <v-progress-circular indeterminate color="primary" size="44" width="3" />
+            <div class="text-center">
+              <p class="text-body-2 font-weight-medium mb-1">
+                {{ String(whapiStatus.status || '').toLowerCase() === 'activating' ? 'Activating channel…' : 'Preparing WhatsApp channel…' }}
+              </p>
+              <p class="text-caption text-medium-emphasis">
+                QR code will appear here shortly — usually within 30 seconds
+              </p>
+            </div>
+            <v-alert
+              v-if="whapiQrWarning"
+              type="warning"
+              variant="tonal"
+              density="compact"
+              class="w-100 text-caption py-2"
+            >
+              {{ whapiQrWarning }}
+            </v-alert>
           </div>
-        </v-card-text>
-        <v-card-actions class="pa-0 mt-4">
-          <v-spacer />
-          <v-btn
-            v-if="whapiQr"
-            :loading="whapiLoading"
-            variant="outlined"
-            color="grey-darken-1"
-            @click="refreshWhapiQr"
-          >
-            Refresh QR
-          </v-btn>
-        </v-card-actions>
+        </div>
+
+        <template v-if="whapiQr">
+          <v-divider />
+          <div class="d-flex justify-end px-5 py-3">
+            <v-btn
+              size="small"
+              variant="outlined"
+              color="grey-darken-1"
+              :loading="whapiLoading"
+              @click="refreshWhapiQr"
+            >
+              <v-icon size="13" class="mr-1">mdi-refresh</v-icon>
+              Refresh QR
+            </v-btn>
+          </div>
+        </template>
       </v-card>
     </v-dialog>
 
@@ -511,6 +528,7 @@ const whapiStatus = reactive({
   displayName: '',
   status: '',
 })
+const whapiStatusLoading = ref(true)
 
 const leadRows = ref([])
 const leadsChartType = ref('line')
@@ -593,10 +611,10 @@ const integrationCards = computed(() => ([
   {
     key: 'whatsapp',
     title: 'WhatsApp',
-    subtitlePrimary: whapiDisplayLabel.value || userEmail.value || '-',
+    subtitlePrimary: whapiStatusLoading.value ? '-' : (whapiDisplayLabel.value || userEmail.value || '-'),
     subtitleSecondary: currentOrgName.value || '-',
-    statusLabel: whapiStatusLabel.value,
-    statusColor: whapiStatusColor.value,
+    statusLabel: whapiStatusLoading.value ? 'Loading…' : whapiStatusLabel.value,
+    statusColor: whapiStatusLoading.value ? 'grey-lighten-2' : whapiStatusColor.value,
     icon: whatsappLogo,
     iconClass: 'whatsapp',
   },
@@ -629,6 +647,7 @@ const whapiStatusLabel = computed(() => {
   if (raw.includes('stopped')) return 'Stopped'
   if (raw.includes('overdue')) return 'Overdue'
   if (raw.includes('loggedout') || raw.includes('disconnected')) return 'Logged Out'
+  if (raw === 'qr' || raw.includes('awaiting')) return 'Awaiting Scan'
   if (raw.includes('pending') || raw.includes('created')) return 'Pending'
   if (raw.includes('activating')) return 'Activating'
   if (raw.includes('auth')) return 'Authorized'
@@ -640,7 +659,7 @@ const whapiStatusColor = computed(() => {
   const label = String(whapiStatusLabel.value || '').toLowerCase()
   if (label === 'not connected') return 'grey-lighten-1'
   if (label === 'connected' || label.includes('active') || label.includes('authorized')) return 'success'
-  if (label.includes('pending') || label.includes('activating')) return 'warning'
+  if (label.includes('pending') || label.includes('activating') || label.includes('awaiting')) return 'warning'
   if (label.includes('stopped') || label.includes('overdue') || label.includes('logged')) return 'error'
   return 'grey-lighten-1'
 })
@@ -695,60 +714,119 @@ const whapiChannelMap = computed(() => {
 
 let whapiEventSource = null;
 let qrPollTimer = null;
+let qrRefreshTimer = null;
+let statusFallbackTimer = null;
+let sseActive = false;
+let sseRetryDelay = 2000;
+let qrPollAttempts = 0;
+const MAX_QR_POLL = 12; // ~60s at 5s intervals
+
+const stopQrPoll = () => {
+  if (qrPollTimer) { clearInterval(qrPollTimer); qrPollTimer = null; }
+};
+const stopQrAutoRefresh = () => {
+  if (qrRefreshTimer) { clearInterval(qrRefreshTimer); qrRefreshTimer = null; }
+};
+const stopStatusFallback = () => {
+  if (statusFallbackTimer) { clearInterval(statusFallbackTimer); statusFallbackTimer = null; }
+};
+
+const _onWhapiConnected = () => {
+  whapiQr.value = '';
+  whapiDialog.value = false;
+  stopQrPoll();
+  stopQrAutoRefresh();
+  stopStatusFallback();
+  loadWhapiChannels(false);
+  mainStore?.setSnackbar?.({ title: 'WhatsApp connected successfully!', type: 'success' });
+};
 
 const startWhapiStatusStream = () => {
-  if (typeof window === "undefined" || !("EventSource" in window)) return;
+  if (typeof window === 'undefined' || !('EventSource' in window)) return;
   if (whapiEventSource) return;
-  whapiEventSource = new EventSource("/api/whapi/stream");
-  whapiEventSource.addEventListener("status", (evt) => {
+  sseActive = true;
+  whapiEventSource = new EventSource('/api/whapi/stream');
+  whapiEventSource.addEventListener('status', (evt) => {
+    sseRetryDelay = 2000;
     try {
-      const payload = JSON.parse(evt.data || "{}");
+      const payload = JSON.parse(evt.data || '{}');
       whapiStatus.status = payload.status || whapiStatus.status;
       whapiStatus.connected = !!payload.connected;
       if (payload.phoneNumber) whapiStatus.phoneNumber = payload.phoneNumber;
       if (payload.displayName) whapiStatus.displayName = payload.displayName;
       if (payload.channelId) whapiStatus.channelId = payload.channelId;
       isWhatsAppConnected.value = !!payload.connected;
-      if (whapiDialog.value && payload.connected) {
-        whapiDialog.value = false;
-        stopQrPoll();
-        mainStore?.setSnackbar?.({ title: "WhatsApp connected successfully!", type: "success" });
-      }
+      if (whapiDialog.value && payload.connected) _onWhapiConnected();
     } catch {}
   });
   whapiEventSource.onerror = () => {
-    if (whapiEventSource) {
-      whapiEventSource.close();
-      whapiEventSource = null;
-    }
+    whapiEventSource?.close();
+    whapiEventSource = null;
+    if (!sseActive) return;
+    setTimeout(() => {
+      sseRetryDelay = Math.min(sseRetryDelay * 2, 30000);
+      if (sseActive) startWhapiStatusStream();
+    }, sseRetryDelay);
   };
 };
 
 const stopWhapiStatusStream = () => {
-  if (whapiEventSource) {
-    whapiEventSource.close();
-    whapiEventSource = null;
-  }
+  sseActive = false;
+  sseRetryDelay = 2000;
+  if (whapiEventSource) { whapiEventSource.close(); whapiEventSource = null; }
 };
 
 const startQrPoll = () => {
+  qrPollAttempts = 0;
   if (qrPollTimer) return;
   qrPollTimer = setInterval(async () => {
     if (!whapiDialog.value) { stopQrPoll(); return; }
     if (whapiQr.value) { stopQrPoll(); return; }
+    if (qrPollAttempts >= MAX_QR_POLL) {
+      stopQrPoll();
+      whapiQrWarning.value = 'QR code is taking longer than expected. The channel may still be activating — try refreshing, or contact support if this persists.';
+      return;
+    }
+    qrPollAttempts++;
     if (!whapiLoading.value) await refreshWhapiQr();
   }, 5000);
 };
 
-const stopQrPoll = () => {
-  if (qrPollTimer) {
-    clearInterval(qrPollTimer);
-    qrPollTimer = null;
-  }
+const startQrAutoRefresh = () => {
+  stopQrAutoRefresh();
+  qrRefreshTimer = setInterval(async () => {
+    if (!whapiDialog.value || !whapiQr.value) { stopQrAutoRefresh(); return; }
+    if (!whapiLoading.value) await refreshWhapiQr();
+  }, 28000);
+};
+
+const startStatusFallback = () => {
+  stopStatusFallback();
+  statusFallbackTimer = setInterval(async () => {
+    if (!whapiDialog.value) { stopStatusFallback(); return; }
+    await loadWhapiStatus();
+    if (whapiStatus.connected) _onWhapiConnected();
+  }, 10000);
 };
 
 watch(whapiDialog, (open) => {
-  if (!open) stopQrPoll();
+  if (!open) {
+    stopQrPoll();
+    stopQrAutoRefresh();
+    stopStatusFallback();
+    whapiQr.value = '';
+    whapiQrWarning.value = '';
+  }
+});
+
+watch(whapiQr, (qr) => {
+  if (qr) {
+    startQrAutoRefresh();
+    startStatusFallback();
+  } else {
+    stopQrAutoRefresh();
+    stopStatusFallback();
+  }
 });
 
 const normalizeMetaMessage = (message) => {
@@ -940,6 +1018,8 @@ const loadWhapiStatus = async () => {
     whapiStatus.displayName = ''
     whapiStatus.status = ''
     isWhatsAppConnected.value = false
+  } finally {
+    whapiStatusLoading.value = false
   }
 }
 
@@ -953,7 +1033,8 @@ const connectWhapi = async (channelId = null) => {
       whapiQr.value = res.data.qr || ''
       whapiQrWarning.value = res.data.warning || ''
       whapiDialog.value = true
-      await loadWhapiStatus()
+      loadWhapiStatus()
+      loadWhapiChannels(false)
       if (!whapiQr.value) startQrPoll()
       return
     }
@@ -967,8 +1048,8 @@ const connectWhapi = async (channelId = null) => {
   }
 }
 
-const loadWhapiChannels = async () => {
-  whapiChannelsLoading.value = true
+const loadWhapiChannels = async (showLoading = true) => {
+  if (showLoading) whapiChannelsLoading.value = true
   try {
     const res = await crmStore.getWhapiChannels()
     if (res?.code === 0) {
@@ -979,14 +1060,14 @@ const loadWhapiChannels = async () => {
   } catch (e) {
     whapiChannels.value = []
   } finally {
-    whapiChannelsLoading.value = false
+    if (showLoading) whapiChannelsLoading.value = false
   }
 }
 
 const openWhapiConnectDialog = async () => {
   whapiSelectedChannel.value = 'new'
   whapiConnectDialog.value = true
-  await loadWhapiChannels()
+  await loadWhapiChannels(true)
 }
 
 const confirmWhapiConnect = async () => {
@@ -1007,13 +1088,6 @@ const refreshWhapiQr = async () => {
     if (res?.code === 0 && res.data) {
       whapiQr.value = res.data.qr || ''
       whapiQrWarning.value = res.data.warning || ''
-      await loadWhapiStatus()
-      if (!whapiQr.value && whapiQrWarning.value) {
-        mainStore?.setSnackbar?.({
-          title: whapiQrWarning.value,
-          type: 'info',
-        })
-      }
       return
     }
     const msg = res?.error || res?.message || 'Unable to refresh QR'
@@ -1405,7 +1479,9 @@ const loadGscAnalytics = async () => {
 onMounted(async () => {
   loadUser()
   handleMetaQuery()
+  startWhapiStatusStream()
   await Promise.all([checkMetaConnection(), loadWhapiStatus(), loadLeads()])
+  loadWhapiChannels(false)
 })
 
 watch(activeLeads, async () => {
@@ -1416,6 +1492,8 @@ watch(activeLeads, async () => {
 onBeforeUnmount(() => {
   stopWhapiStatusStream()
   stopQrPoll()
+  stopQrAutoRefresh()
+  stopStatusFallback()
 })
 
 watch(
