@@ -91,6 +91,9 @@
           Sync Now
         </v-btn>
       </div>
+      <p v-if="insightsCoverageLabel" class="insights-coverage mb-3">
+        {{ insightsCoverageLabel }}
+      </p>
 
       <v-row v-if="displayCards.length" class="campaign-grid" align="stretch">
         <v-col
@@ -194,7 +197,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { useCrmStore } from '@/stores/crm';
 import { useMainStore } from '@/stores';
 import { useUser } from '@/composables/useUser';
@@ -212,6 +215,7 @@ const isSyncing = ref(false);
 const activeFilters = ref({ platform: null, dateFrom: null, dateTo: null });
 const currentOrgId = computed(() => Number(user.value?.currentLoggedInOrgId || 0) || null);
 const metaConnection = ref({ count: 0, pages: [] });
+const INSIGHTS_SYNC_DAYS = 30;
 
 // Stat card per-card filter state
 const campaignStatusFilter = ref('All')
@@ -228,63 +232,93 @@ const statLeads = ref(0)
 const statSpendLoading = ref(false)
 const statLeadsLoading = ref(false)
 
+const toYmd = (value) => {
+  if (!value) return null;
+  const d = value instanceof Date ? new Date(value) : new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseLocalDate = (value, endOfDay = false) => {
+  if (!value) return null;
+  if (value instanceof Date) {
+    const d = new Date(value);
+    d.setHours(endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
+    return d;
+  }
+  if (typeof value === 'string') {
+    const normalized = /^\d{4}-\d{2}-\d{2}$/.test(value)
+      ? `${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}`
+      : value;
+    const d = new Date(normalized);
+    if (Number.isNaN(d.getTime())) return null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      d.setHours(endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
+    }
+    return d;
+  }
+  return null;
+};
+
 const getPeriodDates = (period, from = null, to = null) => {
-  const now = new Date()
+  const now = new Date();
   if (period === 'This week') {
-    const dow = now.getDay()
-    const monday = new Date(now)
-    monday.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1))
-    return { dateFrom: monday.toISOString().split('T')[0], dateTo: now.toISOString().split('T')[0] }
+    const dow = now.getDay();
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1));
+    return { dateFrom: toYmd(monday), dateTo: toYmd(now) };
   }
   if (period === 'This month') {
     return {
-      dateFrom: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
-      dateTo: now.toISOString().split('T')[0],
-    }
+      dateFrom: toYmd(new Date(now.getFullYear(), now.getMonth(), 1)),
+      dateTo: toYmd(now),
+    };
   }
-  // Custom date range — period is a formatted label; use stored from/to directly
   if (from && to) {
     return {
-      dateFrom: new Date(from).toISOString().split('T')[0],
-      dateTo: new Date(to).toISOString().split('T')[0],
-    }
+      dateFrom: toYmd(from),
+      dateTo: toYmd(to),
+    };
   }
-  return {}
-}
+  return {};
+};
 
 const formatDateRangeLabel = (from, to) => {
-  const fmt = (d) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-  return `${fmt(from)} – ${fmt(to)}`
-}
+  const fmt = (d) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return `${fmt(from)} - ${fmt(to)}`;
+};
 
 const loadStatSpend = async () => {
-  const params = getPeriodDates(spendPeriod.value, spendDateFrom.value, spendDateTo.value)
-  if (!params.dateFrom) return
-  statSpendLoading.value = true
+  const params = getPeriodDates(spendPeriod.value, spendDateFrom.value, spendDateTo.value);
+  if (!params.dateFrom) return;
+  statSpendLoading.value = true;
   try {
-    const res = await crmService.getMetaInsights(params)
+    const res = await crmService.getMetaInsights(params);
     if (res?.code === 0) {
-      const campaignInsights = (res.data || []).filter(i => i.entityType === 'campaign')
-      statSpend.value = campaignInsights.reduce((sum, i) => sum + Number(i.spend || 0), 0)
+      const campaignInsights = (res.data || []).filter(i => i.entityType === 'campaign');
+      statSpend.value = campaignInsights.reduce((sum, i) => sum + Number(i.spend || 0), 0);
     }
   } finally {
-    statSpendLoading.value = false
+    statSpendLoading.value = false;
   }
-}
+};
 
 const loadStatLeads = async () => {
-  const params = getPeriodDates(leadsPeriod.value, leadsDateFrom.value, leadsDateTo.value)
-  if (!params.dateFrom) return
-  statLeadsLoading.value = true
+  const params = getPeriodDates(leadsPeriod.value, leadsDateFrom.value, leadsDateTo.value);
+  if (!params.dateFrom) return;
+  statLeadsLoading.value = true;
   try {
-    const res = await crmService.getAllLeadCounts(params)
+    const res = await crmService.getAllLeadCounts(params);
     if (res?.code === 0) {
-      statLeads.value = Object.values(res.data?.byCampaign || {}).reduce((sum, n) => sum + Number(n), 0)
+      statLeads.value = Object.values(res.data?.byCampaign || {}).reduce((sum, n) => sum + Number(n), 0);
     }
   } finally {
-    statLeadsLoading.value = false
+    statLeadsLoading.value = false;
   }
-}
+};
 
 const onCardSelect = (index, value) => {
   if (index === 0) {
@@ -383,7 +417,7 @@ const hydrateMetaAnalytics = async ({ syncIfInsightsMissing = false, force = fal
         insightCount === 0 &&
         currentOrgId.value === orgId
       ) {
-        await crmStore.fetchMetaInsights({ days: 30 }, orgId);
+        await crmStore.fetchMetaInsights({ days: INSIGHTS_SYNC_DAYS }, orgId);
       }
     } catch (err) {
       mainStore.setSnackbar({
@@ -437,7 +471,7 @@ const resync = async () => {
 
       const [structureRes, insightsRes] = await Promise.all([
         crmStore.fetchMetaStructure(orgId),
-        crmStore.fetchMetaInsights({ days: 30 }, orgId),
+        crmStore.fetchMetaInsights({ days: INSIGHTS_SYNC_DAYS }, orgId),
       ]);
       await crmStore.getAllLeadCounts(orgId);
 
@@ -457,7 +491,7 @@ const resync = async () => {
           type: 'info',
           color: 'warning',
           title: 'Meta sync completed with no analytics data',
-          subtitle: 'No campaigns or insights were returned for the last 30 days.',
+          subtitle: `No campaigns or insights were returned for the last ${INSIGHTS_SYNC_DAYS} days.`,
         });
         return;
       }
@@ -477,10 +511,10 @@ const resync = async () => {
       mainStore.setSnackbar({
         type: 'success',
         color: 'success',
-        title: newCampaigns > 0 ? 'Meta analytics synced — new campaigns found' : 'Meta analytics synced',
+        title: newCampaigns > 0 ? 'Meta analytics synced - new campaigns found' : 'Meta analytics synced',
         subtitle: newCampaigns > 0
-          ? `+${newCampaigns} new campaign${newCampaigns === 1 ? '' : 's'} (${campaignCount} total). Insights updated for the last 30 days.`
-          : `${campaignCount} campaign${campaignCount === 1 ? '' : 's'} — insights updated for the last 30 days.`,
+          ? `+${newCampaigns} new campaign${newCampaigns === 1 ? '' : 's'} (${campaignCount} total). Insights updated for the last ${INSIGHTS_SYNC_DAYS} days.`
+          : `${campaignCount} campaign${campaignCount === 1 ? '' : 's'} - insights updated for the last ${INSIGHTS_SYNC_DAYS} days.`,
       });
     })();
     await analyticsLoadPromise;
@@ -526,28 +560,84 @@ const emptyStateCopy = computed(() =>
 const selectedPlatform = computed(() => activeFilters.value?.platform || null);
 const hasDateFilter = computed(() => Boolean(activeFilters.value?.dateFrom || activeFilters.value?.dateTo));
 const filterDateFrom = computed(() => {
-  const v = activeFilters.value?.dateFrom;
-  if (!v) return null;
-  const d = new Date(v);
-  d.setHours(0, 0, 0, 0);
-  return d;
+  return parseLocalDate(activeFilters.value?.dateFrom, false);
 });
 const filterDateTo = computed(() => {
-  const v = activeFilters.value?.dateTo;
-  if (!v) return null;
-  const d = new Date(v);
-  d.setHours(23, 59, 59, 999);
-  return d;
+  return parseLocalDate(activeFilters.value?.dateTo, true);
 });
 const insightsInRange = computed(() =>
   crmStore.metaInsights.filter((insight) => {
-    const rowDate = new Date(insight.date);
+    const rowDate = parseLocalDate(insight.date, false);
+    if (!rowDate) return false;
     if (Number.isNaN(rowDate.getTime())) return false;
     if (filterDateFrom.value && rowDate < filterDateFrom.value) return false;
     if (filterDateTo.value && rowDate > filterDateTo.value) return false;
     return true;
   })
 );
+
+const formatShortDate = (value) => {
+  const d = parseLocalDate(value, false);
+  return d ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+};
+
+const syncedInsightsBounds = computed(() => {
+  if (!crmStore.metaInsights.length) return null;
+  let min = null;
+  let max = null;
+  for (const row of crmStore.metaInsights) {
+    const d = parseLocalDate(row?.date, false);
+    if (!d) continue;
+    if (!min || d < min) min = d;
+    if (!max || d > max) max = d;
+  }
+  if (!min || !max) return null;
+  return { min, max };
+});
+
+const insightsCoverageLabel = computed(() => {
+  const bounds = syncedInsightsBounds.value;
+  if (!bounds) return '';
+  const syncedRange = `${formatShortDate(bounds.min)} - ${formatShortDate(bounds.max)}`;
+  if (hasDateFilter.value) {
+    const from = activeFilters.value?.dateFrom ? formatShortDate(activeFilters.value.dateFrom) : 'Start';
+    const to = activeFilters.value?.dateTo ? formatShortDate(activeFilters.value.dateTo) : 'Today';
+    return `Filtered view: ${from} - ${to}. Synced coverage: ${syncedRange}.`;
+  }
+  return `Synced coverage: ${syncedRange}. Sync Now refreshes a rolling ${INSIGHTS_SYNC_DAYS}-day window.`;
+});
+
+const latestReachForSingleEntity = (rows = []) => {
+  if (!Array.isArray(rows) || rows.length === 0) return 0;
+  let latestRow = null;
+  for (const row of rows) {
+    const rowDate = parseLocalDate(row?.date, false);
+    if (!rowDate) continue;
+    if (!latestRow || rowDate > latestRow.date) {
+      latestRow = { date: rowDate, reach: Number(row?.reach || 0) };
+    }
+  }
+  return latestRow?.reach || 0;
+};
+
+const sumLatestReachByEntity = (rows = []) => {
+  if (!Array.isArray(rows) || rows.length === 0) return 0;
+  const latestByEntity = new Map();
+  for (const row of rows) {
+    const entityId = String(row?.entityId || '');
+    if (!entityId) continue;
+    const rowDate = parseLocalDate(row?.date, false);
+    if (!rowDate) continue;
+    const reach = Number(row?.reach || 0);
+    const found = latestByEntity.get(entityId);
+    if (!found || rowDate > found.date) {
+      latestByEntity.set(entityId, { date: rowDate, reach });
+    }
+  }
+  let total = 0;
+  for (const entry of latestByEntity.values()) total += Number(entry.reach || 0);
+  return total;
+};
 
 const STATUS_SORT_ORDER = { ACTIVE: 0, PAUSED: 1 };
 const sortCardsByStatus = (cards) =>
@@ -569,7 +659,7 @@ const analyticsStats = computed(() => {
   const sym = currencySymbol.value;
   const campaignInsights = insightsInRange.value.filter((i) => i.entityType === 'campaign');
   const totalImpressions = campaignInsights.reduce((sum, i) => sum + Number(i.impressions || 0), 0);
-  const totalReach = campaignInsights.reduce((sum, i) => sum + Number(i.reach || 0), 0);
+  const totalReach = sumLatestReachByEntity(campaignInsights);
   return [
     {
       icon: 'https://cdn.lordicon.com/nocovwne.json',
@@ -621,7 +711,7 @@ const drillCampaignStats = computed(() => {
   );
   const totalSpend = insights.reduce((sum, i) => sum + Number(i.spend || 0), 0);
   const totalImpressions = insights.reduce((sum, i) => sum + Number(i.impressions || 0), 0);
-  const totalReach = insights.reduce((sum, i) => sum + Number(i.reach || 0), 0);
+  const totalReach = sumLatestReachByEntity(insights);
   const totalLeads = adSetIds.reduce((sum, id) => sum + Number(crmStore.metaAdSetLeadCounts[id] || 0), 0);
   return [
     { icon: 'https://cdn.lordicon.com/nocovwne.json', label: 'Ad Sets', value: String(adSetIds.length).padStart(2, '0') },
@@ -643,7 +733,7 @@ const drillAdSetStats = computed(() => {
   );
   const totalSpend = insights.reduce((sum, i) => sum + Number(i.spend || 0), 0);
   const totalImpressions = insights.reduce((sum, i) => sum + Number(i.impressions || 0), 0);
-  const totalReach = insights.reduce((sum, i) => sum + Number(i.reach || 0), 0);
+  const totalReach = sumLatestReachByEntity(insights);
   const totalLeads = adIds.reduce((sum, id) => sum + Number(crmStore.metaAdLeadCounts[id] || 0), 0);
   return [
     { icon: 'https://cdn.lordicon.com/nocovwne.json', label: 'Ads', value: String(ads.length).padStart(2, '0') },
@@ -677,7 +767,7 @@ const campaigns = computed(() =>
     const totalImpressions = campaignInsights.reduce((acc, insight) => acc + Number(insight.impressions || 0), 0);
     const totalClicks = campaignInsights.reduce((acc, insight) => acc + Number(insight.clicks || 0), 0);
     // Reach is deduplicated — summing daily rows inflates it. Use the most recent day's value.
-    const totalReach = campaignInsights.reduce((acc, i) => acc + Number(i.reach || 0), 0);
+    const totalReach = latestReachForSingleEntity(campaignInsights);
     // Use CRM lead count for this campaign — single source of truth
     const crmLeads = Number(crmStore.metaCampaignLeadCounts[campaign.campaignId] || 0);
     const spendMajor = totalSpend / 100;
@@ -724,7 +814,7 @@ const adSetCards = computed(() => {
     const totalSpend = insights.reduce((acc, i) => acc + Number(i.spend || 0), 0);
     const totalImpressions = insights.reduce((acc, i) => acc + Number(i.impressions || 0), 0);
     const totalClicks = insights.reduce((acc, i) => acc + Number(i.clicks || 0), 0);
-    const totalReach = insights.reduce((acc, i) => acc + Number(i.reach || 0), 0);
+    const totalReach = latestReachForSingleEntity(insights);
     const spendMajor = totalSpend / 100;
     const firstAd = crmStore.metaAds.find((a) => a.adSetId === adSet.adSetId);
     const adSetPlatform = firstAd?.platform || drill.campaign.platform;
@@ -771,7 +861,7 @@ const adCards = computed(() => {
     const totalSpend = insights.reduce((acc, i) => acc + Number(i.spend || 0), 0);
     const totalImpressions = insights.reduce((acc, i) => acc + Number(i.impressions || 0), 0);
     const totalClicks = insights.reduce((acc, i) => acc + Number(i.clicks || 0), 0);
-    const totalReach = insights.reduce((acc, i) => acc + Number(i.reach || 0), 0);
+    const totalReach = latestReachForSingleEntity(insights);
     const spendMajor = totalSpend / 100;
     const adLeads = Number(crmStore.metaAdLeadCounts[ad.adId] || 0);
     const adCpl = adLeads > 0 ? spendMajor / adLeads : 0;
@@ -848,6 +938,12 @@ const drillEmptyCopy = computed(() => {
   font-size: 12px;
   color: #c3c3c3;
   margin: 0 4px;
+}
+
+.insights-coverage {
+  margin: 0;
+  color: #6b7280;
+  font-size: 12px;
 }
 
 .toolbar-wrapper {
