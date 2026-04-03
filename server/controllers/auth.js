@@ -476,6 +476,11 @@ export const profile = async (event) => {
     // Check if user is the organisation creator (managerId)
     const currentOrganisation = await Organisation.findByPk(loggedUser.orgId);
     userObj.isOrganisationCreator = currentOrganisation && currentOrganisation.managerId === loggedUser.userId;
+    userObj.crmFeatureAccess = {
+      meta: currentOrganisation?.automationPlaceholders?.crmFeatureAccess?.meta !== false,
+      whatsapp: currentOrganisation?.automationPlaceholders?.crmFeatureAccess?.whatsapp !== false,
+      chatbot: currentOrganisation?.automationPlaceholders?.crmFeatureAccess?.chatbot !== false,
+    };
     
     if (
       userObj.preferences &&

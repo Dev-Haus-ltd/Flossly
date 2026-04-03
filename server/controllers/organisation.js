@@ -400,7 +400,13 @@ export const getdetails = async (event) => {
         },
       ],
     });
-    return success(organisation);
+    const orgJson = organisation?.toJSON ? organisation.toJSON() : organisation;
+    orgJson.crmFeatureAccess = {
+      meta: orgJson?.automationPlaceholders?.crmFeatureAccess?.meta !== false,
+      whatsapp: orgJson?.automationPlaceholders?.crmFeatureAccess?.whatsapp !== false,
+      chatbot: orgJson?.automationPlaceholders?.crmFeatureAccess?.chatbot !== false,
+    };
+    return success(orgJson);
   } catch (err) {
     return error(500, err.message);
   }

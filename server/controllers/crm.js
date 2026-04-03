@@ -702,13 +702,24 @@ export const deleteLeads = async (event) => {
 export const bulkUploadLeads = async (event) => {
   try {
     const { orgId } = event.context.user || {}
-    const body = await readBody(event)
-    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const admin = event.context.admin || null
+    const preParsedPayload = event.context.adminBulkLeadPayload || null
+    const body = preParsedPayload ? null : await readBody(event)
+    const payload = preParsedPayload || (typeof body === 'string' ? parseJsonBody(body) : body)
     const leads = payload?.leads || []
-    if (!orgId) return error(401, 'Unauthenticated')
-    if (!Array.isArray(leads) || !leads.length) return error(400, 'leads required')
+    const requestedOrganisationId = Number(payload?.organisationId || payload?.orgId || 0)
+    const organisationId = Number(admin ? (requestedOrganisationId || orgId) : orgId)
 
-    const organisationId = Number(orgId)
+    if (!organisationId) {
+      return admin ? error(400, 'organisationId is required') : error(401, 'Unauthenticated')
+    }
+
+    if (admin) {
+      const organisation = await Organisation.findByPk(organisationId, { attributes: ['id'] })
+      if (!organisation) return error(404, 'Organisation not found')
+    }
+
+    if (!Array.isArray(leads) || !leads.length) return error(400, 'leads required')
     const statusMap = new Map([
       ['new', 'New'],
       ['converted', 'Converted'],
@@ -859,13 +870,24 @@ export const bulkUploadLeads = async (event) => {
 export const bulkUploadAutomations = async (event) => {
   try {
     const { orgId } = event.context.user || {}
-    const body = await readBody(event)
-    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const admin = event.context.admin || null
+    const preParsedPayload = event.context.adminBulkAutomationPayload || null
+    const body = preParsedPayload ? null : await readBody(event)
+    const payload = preParsedPayload || (typeof body === 'string' ? parseJsonBody(body) : body)
     const items = Array.isArray(payload?.items) ? payload.items : []
-    if (!orgId) return error(401, 'Unauthenticated')
-    if (!items.length) return error(400, 'items required')
+    const requestedOrganisationId = Number(payload?.organisationId || payload?.orgId || 0)
+    const organisationId = Number(admin ? (requestedOrganisationId || orgId) : orgId)
 
-    const organisationId = Number(orgId)
+    if (!organisationId) {
+      return admin ? error(400, 'organisationId is required') : error(401, 'Unauthenticated')
+    }
+
+    if (admin) {
+      const organisation = await Organisation.findByPk(organisationId, { attributes: ['id'] })
+      if (!organisation) return error(404, 'Organisation not found')
+    }
+
+    if (!items.length) return error(400, 'items required')
     const results = []
     const defaultKeySet = new Set((crmAutomationDefaults || []).map((d) => d.key))
 

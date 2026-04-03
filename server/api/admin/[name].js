@@ -18,6 +18,32 @@ import {
   getGlobalAutomationLibrary,
   getPracticeAutomationLibrary,
   toggleAutomationTemplate,
+  adminBulkUploadAutomations,
+  adminBulkUploadLeads,
+  downloadAdminAutomationTemplate,
+  downloadAdminLeadTemplate,
+  listScriptsPool,
+  getScriptPoolItemById,
+  createScriptPoolItem,
+  updateScriptPoolItem,
+  deleteScriptPoolItem,
+  getOrganisationCrmFeatureFlags,
+  updateOrganisationCrmFeatureFlags,
+  listCrmTreatments,
+  getCrmTreatmentById,
+  createCrmTreatment,
+  updateCrmTreatment,
+  deleteCrmTreatment,
+  listLeadSources,
+  getLeadSourceById,
+  createLeadSource,
+  updateLeadSource,
+  deleteLeadSource,
+  listCrmAlerts,
+  getCrmAlertByKey,
+  createCrmAlert,
+  updateCrmAlert,
+  deleteCrmAlert,
   getStorageUsagePerPractice,
   broadcastNotification,
   getNotificationDeliveryStats,
@@ -153,6 +179,84 @@ export default defineEventHandler(async (event) => {
     
     case 'toggleAutomationTemplate':
       return await toggleAutomationTemplate(event);
+
+    case 'bulkUploadAutomations':
+      return await adminBulkUploadAutomations(event);
+
+    case 'bulkUploadLeads':
+      return await adminBulkUploadLeads(event);
+
+    case 'downloadAutomationTemplate':
+      return await downloadAdminAutomationTemplate(event);
+
+    case 'downloadLeadTemplate':
+      return await downloadAdminLeadTemplate(event);
+
+    case 'listScriptsPool':
+      return await listScriptsPool(event);
+
+    case 'getScriptPoolItemById':
+      return await getScriptPoolItemById(event);
+
+    case 'createScriptPoolItem':
+      return await createScriptPoolItem(event);
+
+    case 'updateScriptPoolItem':
+      return await updateScriptPoolItem(event);
+
+    case 'deleteScriptPoolItem':
+      return await deleteScriptPoolItem(event);
+
+    case 'getOrganisationCrmFeatureFlags':
+      return await getOrganisationCrmFeatureFlags(event);
+
+    case 'updateOrganisationCrmFeatureFlags':
+      return await updateOrganisationCrmFeatureFlags(event);
+
+    case 'listCrmTreatments':
+      return await listCrmTreatments(event);
+
+    case 'getCrmTreatmentById':
+      return await getCrmTreatmentById(event);
+
+    case 'createCrmTreatment':
+      return await createCrmTreatment(event);
+
+    case 'updateCrmTreatment':
+      return await updateCrmTreatment(event);
+
+    case 'deleteCrmTreatment':
+      return await deleteCrmTreatment(event);
+
+    case 'listLeadSources':
+      return await listLeadSources(event);
+
+    case 'getLeadSourceById':
+      return await getLeadSourceById(event);
+
+    case 'createLeadSource':
+      return await createLeadSource(event);
+
+    case 'updateLeadSource':
+      return await updateLeadSource(event);
+
+    case 'deleteLeadSource':
+      return await deleteLeadSource(event);
+
+    case 'listCrmAlerts':
+      return await listCrmAlerts(event);
+
+    case 'getCrmAlertByKey':
+      return await getCrmAlertByKey(event);
+
+    case 'createCrmAlert':
+      return await createCrmAlert(event);
+
+    case 'updateCrmAlert':
+      return await updateCrmAlert(event);
+
+    case 'deleteCrmAlert':
+      return await deleteCrmAlert(event);
     
     // Points Management
     case 'deductPoints':

@@ -2,7 +2,8 @@ import { success, error } from '../utils/response';
 import { 
   User, UserOrganisation, Organisation, Role, LoginHistory, UserSubscription, UserPreference,
   UserDocument, CrmLead, UserTask, DiaryAppointment, UserNotification, Task, TaskCategory,
-  CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, FcmToken, UserPoint, UserPointsHistory, RewardPoint
+  CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, FcmToken, UserPoint, UserPointsHistory, RewardPoint,
+  CrmOption, DictionaryScript
 } from '../models';
 import { Op } from 'sequelize';
 import sequelize from '../utils/db';
@@ -11,7 +12,451 @@ import { v4 as uuidv4 } from 'uuid';
 import stripe from '../utils/stripe';
 import { getS3Object } from '../utils/s3';
 import { sendNotificationToMultipleUsers } from '../utils/fcmNotification';
+import { bulkUploadAutomations as crmBulkUploadAutomations, bulkUploadLeads as crmBulkUploadLeads } from './crm';
+import { readFile } from 'node:fs/promises';
+import { join, extname } from 'node:path';
+import * as XLSX from 'xlsx';
 
+const CRM_OPTION_CATEGORY_LABELS = {
+  treatment: 'Treatment',
+  lead_source: 'Lead source',
+};
+const DEFAULT_ADMIN_ALERT_OPTIONS = [
+  { key: 'hot', label: 'Hot lead alerts', emoji: '🔥', color: 'error' },
+  { key: 'time', label: 'Time-sensitive deadlines', emoji: '⏰', color: 'warning' },
+  { key: 'value', label: 'High-value opportunity', emoji: '💸', color: 'tertiary' },
+  { key: 'follow', label: 'Follow-up reminders', emoji: '🔄', color: 'info' },
+  { key: 'callback', label: 'Callback scheduled', emoji: '📞', color: 'success' },
+  { key: 'none', label: 'No response warnings', emoji: '🚨', color: 'on-surface' },
+];
+const DEFAULT_CRM_FEATURE_ACCESS = {
+  meta: true,
+  whatsapp: true,
+  chatbot: true,
+};
+const ADMIN_UPLOAD_ALLOWED_EXTENSIONS = new Set(['csv', 'xls', 'xlsx']);
+const ADMIN_AUTOMATION_ALLOWED_EXTENSIONS = ADMIN_UPLOAD_ALLOWED_EXTENSIONS;
+const ADMIN_LEAD_REQUIRED_COLUMNS = ['name', 'email', 'telephone'];
+const ADMIN_AUTOMATION_REQUIRED_COLUMNS = ['group_name', 'type', 'name', 'content'];
+const ADMIN_AUTOMATION_COLUMN_ALIASES = {
+  group_name: ['group', 'group name', 'automation group', 'category', 'automation category', 'group_name', 'groupname'],
+  type: ['type', 'automation type'],
+  name: ['name', 'automation name', 'title'],
+  subject: ['subject', 'email subject'],
+  content: ['content', 'message', 'body', 'template', 'automation content'],
+};
+
+const normalizeAdminAutomationHeaderKey = (key) =>
+  String(key || '')
+    .toLowerCase()
+    .replace(/[\u200B\uFEFF]/g, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const resolveAdminAutomationHeaderKey = (header) => {
+  const normalized = normalizeAdminAutomationHeaderKey(header);
+  for (const [canonical, aliases] of Object.entries(ADMIN_AUTOMATION_COLUMN_ALIASES)) {
+    if (aliases.includes(normalized)) return canonical;
+  }
+  return normalized;
+};
+
+const normalizeAdminAutomationType = (value) => {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return 'Email';
+  if (raw.includes('whatsapp') || raw === 'wa' || raw === 'whats app') return 'WhatsApp';
+  return 'Email';
+};
+
+const adminAutomationHasHtml = (value) => /<\s*\/?[^>]+>/.test(String(value || ''));
+
+const normalizeAdminAutomationUploadRow = (row = {}) => {
+  const normalized = {};
+  Object.entries(row || {}).forEach(([key, value]) => {
+    const canonical = resolveAdminAutomationHeaderKey(key);
+    if (!canonical) return;
+    normalized[canonical] = value ?? '';
+  });
+
+  const groupName = String(normalized.group_name || '').trim();
+  const type = normalizeAdminAutomationType(normalized.type);
+  const name = String(normalized.name || '').trim();
+  const subject = String(normalized.subject || '').trim();
+  const content = String(normalized.content || '').trim();
+
+  return {
+    groupName,
+    type,
+    name,
+    subject: type === 'Email' ? (subject || name) : '',
+    content,
+  };
+};
+
+const validateAdminAutomationUploadRow = (row, rowNum) => {
+  const errors = [];
+
+  if (!row.groupName?.trim()) errors.push(`Row ${rowNum}: Group name is required`);
+  if (!row.name?.trim()) errors.push(`Row ${rowNum}: Name is required`);
+  if (!row.content?.trim()) errors.push(`Row ${rowNum}: Content is required`);
+  if (adminAutomationHasHtml(row.content)) errors.push(`Row ${rowNum}: Content must be plain text (no HTML)`);
+  if (!['Email', 'WhatsApp'].includes(row.type)) errors.push(`Row ${rowNum}: Invalid type`);
+
+  return errors;
+};
+
+const parseAdminAutomationUploadFile = (filePart) => {
+  if (!filePart?.data?.length) {
+    throw new Error('No file uploaded');
+  }
+
+  const originalName = filePart.filename || 'automation-upload.csv';
+  const extension = extname(originalName).replace('.', '').toLowerCase();
+
+  if (!ADMIN_AUTOMATION_ALLOWED_EXTENSIONS.has(extension)) {
+    throw new Error('Unsupported file format. Please upload a CSV, XLS, or XLSX file');
+  }
+
+  const workbook = extension === 'csv'
+    ? XLSX.read(filePart.data.toString('utf8'), { type: 'string' })
+    : XLSX.read(filePart.data, { type: 'buffer' });
+
+  if (!workbook.SheetNames?.length) {
+    throw new Error('Invalid file - no sheets found');
+  }
+
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const sheetRows = XLSX.utils.sheet_to_json(sheet, {
+    header: 1,
+    defval: '',
+    raw: false,
+  });
+
+  if (!sheetRows.length) {
+    throw new Error('No rows found in the file');
+  }
+
+  const headers = (sheetRows[0] || []).map((header) => String(header || '').trim());
+  if (!headers.some((header) => header)) {
+    throw new Error('Invalid file - header row is empty');
+  }
+
+  const normalizedKeys = headers.map((header) => resolveAdminAutomationHeaderKey(header));
+  const missingColumns = ADMIN_AUTOMATION_REQUIRED_COLUMNS.filter((column) => !normalizedKeys.includes(column));
+  if (missingColumns.length) {
+    throw new Error(`Invalid file structure - missing required columns: ${missingColumns.join(', ')}`);
+  }
+
+  const rawRows = sheetRows.slice(1).map((row) => {
+    const record = {};
+    headers.forEach((header, index) => {
+      if (!header) return;
+      record[header] = row?.[index] ?? '';
+    });
+    return record;
+  }).filter((row) => Object.values(row).some((value) => String(value || '').trim() !== ''));
+
+  if (!rawRows.length) {
+    throw new Error('No rows found in the file');
+  }
+
+  const items = [];
+  const validationErrors = [];
+
+  rawRows.forEach((row, index) => {
+    const rowNum = index + 2;
+    const normalizedRow = normalizeAdminAutomationUploadRow(row);
+    validationErrors.push(...validateAdminAutomationUploadRow(normalizedRow, rowNum));
+    items.push(normalizedRow);
+  });
+
+  if (validationErrors.length) {
+    throw new Error(validationErrors.join('; '));
+  }
+
+  return items;
+};
+
+const normalizeAdminLeadHeaderKey = (key) =>
+  String(key || '')
+    .toLowerCase()
+    .replace(/[\u200B\uFEFF]/g, '')
+    .replace(/[_-]+/g, '')
+    .replace(/[^\w]/g, '')
+    .trim();
+
+const parseAdminLeadUploadFile = async ({ filePart, organisationId }) => {
+  if (!filePart?.data?.length) {
+    throw new Error('No file uploaded');
+  }
+
+  const originalName = filePart.filename || 'lead-upload.csv';
+  const extension = extname(originalName).replace('.', '').toLowerCase();
+
+  if (!ADMIN_UPLOAD_ALLOWED_EXTENSIONS.has(extension)) {
+    throw new Error('Unsupported file format. Please upload a CSV, XLS, or XLSX file');
+  }
+
+  const workbook = extension === 'csv'
+    ? XLSX.read(filePart.data.toString('utf8'), { type: 'string' })
+    : XLSX.read(filePart.data, { type: 'buffer' });
+
+  if (!workbook.SheetNames?.length) {
+    throw new Error('Invalid file - no sheets found');
+  }
+
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const sheetRows = XLSX.utils.sheet_to_json(sheet, {
+    header: 1,
+    defval: '',
+    raw: false,
+  });
+
+  if (!sheetRows.length) {
+    throw new Error('No rows found in the file');
+  }
+
+  const headers = (sheetRows[0] || []).map((header) => String(header || '').trim());
+  if (!headers.some((header) => header)) {
+    throw new Error('Invalid file - header row is empty');
+  }
+
+  const normalizedKeys = headers.map((header) => normalizeAdminLeadHeaderKey(header));
+  const missingColumns = ADMIN_LEAD_REQUIRED_COLUMNS.filter((column) => !normalizedKeys.includes(column));
+  if (missingColumns.length) {
+    throw new Error(`Invalid file structure - missing required columns: ${missingColumns.join(', ')}`);
+  }
+
+  const users = await User.findAll({
+    attributes: ['id', 'fullName', 'email'],
+    include: [{
+      model: UserOrganisation,
+      as: 'userOrganisations',
+      where: { organisationId: Number(organisationId) },
+      attributes: ['status'],
+      required: true,
+    }],
+  });
+
+  const activeUsers = users.filter((user) => {
+    const membership = Array.isArray(user.userOrganisations) ? user.userOrganisations[0] : null;
+    return membership?.status === 'Active';
+  });
+
+  const findAssignedUserId = (value) => {
+    const assigned = String(value || '').trim().toLowerCase();
+    if (!assigned) return null;
+    const match = activeUsers.find((user) => {
+      const fullName = String(user.fullName || '').trim().toLowerCase();
+      const email = String(user.email || '').trim().toLowerCase();
+      return fullName === assigned || email === assigned;
+    });
+    return match?.id || null;
+  };
+
+  const rawRows = sheetRows.slice(1).map((row) => {
+    const record = {};
+    headers.forEach((header, index) => {
+      if (!header) return;
+      record[header] = row?.[index] ?? '';
+    });
+    return record;
+  }).filter((row) => Object.values(row).some((value) => String(value || '').trim() !== ''));
+
+  if (!rawRows.length) {
+    throw new Error('No rows found in the file');
+  }
+
+  const leads = [];
+  const validationErrors = [];
+  const seenEmails = new Set();
+
+  rawRows.forEach((row, index) => {
+    const rowNum = index + 2;
+    const normalized = {};
+    Object.entries(row || {}).forEach(([key, value]) => {
+      normalized[normalizeAdminLeadHeaderKey(key)] = value ?? '';
+    });
+
+    const lead = {
+      name: String(normalized.name || '').trim(),
+      email: String(normalized.email || '').trim(),
+      telephone: String(normalized.telephone || '').trim(),
+      leadSource: String(normalized.leadsource || '').trim() || 'Manual',
+      leadStatus: String(normalized.leadstatus || '').trim() || 'New',
+      treatment: String(normalized.treatment || '').trim() || null,
+      assignedUserId: findAssignedUserId(normalized.assigned),
+      inquiryDate: String(normalized.inquirydate || '').trim() || null,
+      followUpDate: String(normalized.followupdate || '').trim() || null,
+      comments: String(normalized.comments || '').trim() || '',
+    };
+
+    if (!lead.name) validationErrors.push(`Row ${rowNum}: Name is required`);
+    if (!lead.email) validationErrors.push(`Row ${rowNum}: Email is required`);
+    if (!lead.telephone) validationErrors.push(`Row ${rowNum}: Telephone is required`);
+    if (lead.email) {
+      const emailKey = lead.email.toLowerCase();
+      if (seenEmails.has(emailKey)) validationErrors.push(`Row ${rowNum}: Duplicate email in upload`);
+      seenEmails.add(emailKey);
+    }
+
+    leads.push(lead);
+  });
+
+  if (validationErrors.length) {
+    throw new Error(validationErrors.join('; '));
+  }
+
+  return leads;
+};
+
+const requireAdmin = (event) => {
+  const admin = event.context.admin;
+  if (!admin) error(403, 'Admin access required');
+  return admin;
+};
+
+const parseRequestPayload = async (event) => {
+  const body = await readBody(event);
+  return typeof body === 'string' ? parseJsonBody(body) : body;
+};
+
+const readOrganisationId = async (event, payload = null) => {
+  const query = getQuery(event) || {};
+  const source = payload || query || {};
+  const organisationId = Number(source.organisationId || source.orgId || 0);
+  if (!organisationId) error(400, 'organisationId is required');
+  const organisation = await Organisation.findByPk(organisationId, { attributes: ['id', 'automationPlaceholders'] });
+  if (!organisation) error(404, 'Organisation not found');
+  return organisation;
+};
+
+const validateCrmOptionCategory = (category) => {
+  if (!CRM_OPTION_CATEGORY_LABELS[category]) error(400, 'Unsupported CRM option category');
+  return category;
+};
+
+const normalizeCrmOptionName = (value) => String(value || '').trim();
+
+const listAdminCrmOptionsByCategory = async (organisationId, category) => {
+  return await CrmOption.findAll({
+    where: { organisationId: Number(organisationId), category },
+    order: [['ordering', 'ASC'], ['name', 'ASC'], ['id', 'ASC']],
+  });
+};
+
+const getAdminCrmOptionById = async ({ organisationId, category, id }) => {
+  const row = await CrmOption.findOne({
+    where: { id: Number(id), organisationId: Number(organisationId), category },
+  });
+  if (!row) error(404, `${CRM_OPTION_CATEGORY_LABELS[category]} not found`);
+  return row;
+};
+
+const ensureUniqueAdminCrmOptionName = async ({ organisationId, category, name, excludeId = null }) => {
+  const where = {
+    organisationId: Number(organisationId),
+    category,
+  };
+
+  if (excludeId) {
+    where.id = { [Op.ne]: Number(excludeId) };
+  }
+
+  const existing = await CrmOption.findOne({
+    where: {
+      ...where,
+      [Op.and]: [
+        sequelize.where(
+          sequelize.fn('LOWER', sequelize.col('name')),
+          String(name || '').trim().toLowerCase()
+        ),
+      ],
+    },
+  });
+
+  if (existing) error(409, `${CRM_OPTION_CATEGORY_LABELS[category]} already exists`);
+};
+
+const sanitizeAlertOptionInput = (payload = {}, existingKey = null) => {
+  const key = String(payload.key || existingKey || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 50);
+  const label = String(payload.label || '').trim();
+  const emoji = payload.emoji == null ? '' : String(payload.emoji).trim();
+  const color = payload.color == null ? '' : String(payload.color).trim();
+
+  if (!key) error(400, 'key is required');
+  if (!label) error(400, 'label is required');
+  if (label.length > 100) error(400, 'label cannot exceed 100 characters');
+
+  return { key, label, emoji, color };
+};
+
+const sanitizeDictionaryScriptPayload = (payload = {}, existingKey = null) => {
+  const key = String(payload.key || existingKey || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 100);
+  const title = String(payload.title || '').trim();
+  const content = String(payload.content || '').trim();
+  const sortOrder = payload.sortOrder == null || payload.sortOrder === '' ? 0 : Number(payload.sortOrder);
+
+  if (!key) error(400, 'key is required');
+  if (!title) error(400, 'title is required');
+  if (!content) error(400, 'content is required');
+  if (!Number.isFinite(sortOrder)) error(400, 'sortOrder must be a valid number');
+
+  return { key, title, content, sortOrder };
+};
+
+const getOrganisationAlertOptions = (organisation) => {
+  const stored = organisation?.automationPlaceholders?.alertOptions;
+  return Array.isArray(stored) && stored.length ? [...stored] : [...DEFAULT_ADMIN_ALERT_OPTIONS];
+};
+
+const saveOrganisationAlertOptions = async (organisation, options) => {
+  organisation.automationPlaceholders = {
+    ...(organisation.automationPlaceholders || {}),
+    alertOptions: options,
+  };
+  await organisation.save();
+  return options;
+};
+
+const getOrganisationCrmFeatureAccess = (organisation) => {
+  const stored = organisation?.automationPlaceholders?.crmFeatureAccess;
+  return {
+    ...DEFAULT_CRM_FEATURE_ACCESS,
+    ...(stored && typeof stored === 'object' ? stored : {}),
+  };
+};
+
+const sanitizeCrmFeatureAccessInput = (payload = {}) => ({
+  meta: payload.meta !== undefined ? Boolean(payload.meta) : undefined,
+  whatsapp: payload.whatsapp !== undefined ? Boolean(payload.whatsapp) : undefined,
+  chatbot: payload.chatbot !== undefined ? Boolean(payload.chatbot) : undefined,
+});
+
+const saveOrganisationCrmFeatureAccess = async (organisation, updates = {}) => {
+  const next = {
+    ...getOrganisationCrmFeatureAccess(organisation),
+    ...Object.fromEntries(Object.entries(updates).filter(([, value]) => value !== undefined)),
+  };
+  organisation.automationPlaceholders = {
+    ...(organisation.automationPlaceholders || {}),
+    crmFeatureAccess: next,
+  };
+  await organisation.save();
+  return next;
+};
 
 /**
  * Search users with advanced filters
@@ -1471,6 +1916,512 @@ export const toggleAutomationTemplate = async (event) => {
   } catch (err) {
     console.error('Toggle automation template error:', err);
     return error(500, err.message);
+  }
+};
+
+/**
+ * Bulk upload CRM automations into a target organisation as superadmin
+ */
+export const adminBulkUploadAutomations = async (event) => {
+  const admin = event.context.admin;
+
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const contentType = String(getHeader(event, 'content-type') || '').toLowerCase();
+
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await readMultipartFormData(event);
+      if (!formData?.length) {
+        return error(400, 'No file uploaded');
+      }
+
+      const filePart = formData.find((part) => part.name === 'file');
+      if (!filePart?.data?.length) {
+        return error(400, 'Missing file');
+      }
+
+      const organisationPart = formData.find((part) => part.name === 'organisationId' || part.name === 'orgId');
+      const organisationId = String(organisationPart?.data || '').trim();
+      if (!organisationId) {
+        return error(400, 'organisationId is required');
+      }
+
+      const items = parseAdminAutomationUploadFile(filePart);
+      event.context.adminBulkAutomationPayload = {
+        organisationId,
+        items,
+      };
+    }
+
+    return await crmBulkUploadAutomations(event);
+  } catch (err) {
+    console.error('Admin bulk upload automations error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to bulk upload automations');
+  }
+};
+
+export const adminBulkUploadLeads = async (event) => {
+  const admin = event.context.admin;
+
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const contentType = String(getHeader(event, 'content-type') || '').toLowerCase();
+
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await readMultipartFormData(event);
+      if (!formData?.length) {
+        return error(400, 'No file uploaded');
+      }
+
+      const filePart = formData.find((part) => part.name === 'file');
+      if (!filePart?.data?.length) {
+        return error(400, 'Missing file');
+      }
+
+      const organisationPart = formData.find((part) => part.name === 'organisationId' || part.name === 'orgId');
+      const organisationId = String(organisationPart?.data || '').trim();
+      if (!organisationId) {
+        return error(400, 'organisationId is required');
+      }
+
+      const leads = await parseAdminLeadUploadFile({ filePart, organisationId });
+      event.context.adminBulkLeadPayload = {
+        organisationId,
+        leads,
+      };
+    }
+
+    return await crmBulkUploadLeads(event);
+  } catch (err) {
+    console.error('Admin bulk upload leads error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to bulk upload leads');
+  }
+};
+
+/**
+ * Download CRM automation bulk upload sample CSV for superadmin use
+ */
+export const downloadAdminAutomationTemplate = async (event) => {
+  const admin = event.context.admin;
+
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const templatePath = join(process.cwd(), 'public', 'samples', 'automation-sample.csv');
+    const csvContent = await readFile(templatePath, 'utf8');
+
+    setResponseHeader(event, 'Content-Type', 'text/csv; charset=utf-8');
+    setResponseHeader(event, 'Content-Disposition', 'attachment; filename="automation-sample.csv"');
+
+    return csvContent;
+  } catch (err) {
+    console.error('Download admin automation template error:', err);
+    return error(500, err.message || 'Failed to download automation template');
+  }
+};
+
+export const downloadAdminLeadTemplate = async (event) => {
+  const admin = event.context.admin;
+
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const templatePath = join(process.cwd(), 'public', 'samples', 'lead-sample.csv');
+    const csvContent = await readFile(templatePath, 'utf8');
+
+    setResponseHeader(event, 'Content-Type', 'text/csv; charset=utf-8');
+    setResponseHeader(event, 'Content-Disposition', 'attachment; filename="lead-sample.csv"');
+
+    return csvContent;
+  } catch (err) {
+    console.error('Download admin lead template error:', err);
+    return error(500, err.message || 'Failed to download lead template');
+  }
+};
+
+export const listScriptsPool = async (event) => {
+  requireAdmin(event);
+  try {
+    const items = await DictionaryScript.findAll({ order: [['sortOrder', 'ASC'], ['title', 'ASC'], ['id', 'ASC']] });
+    return success(items);
+  } catch (err) {
+    console.error('List scripts pool error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to list scripts pool');
+  }
+};
+
+export const getScriptPoolItemById = async (event) => {
+  requireAdmin(event);
+  try {
+    const query = getQuery(event) || {};
+    if (!query.id) return error(400, 'id is required');
+    const item = await DictionaryScript.findByPk(Number(query.id));
+    if (!item) return error(404, 'Script not found');
+    return success(item);
+  } catch (err) {
+    console.error('Get script pool item error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to get script');
+  }
+};
+
+export const createScriptPoolItem = async (event) => {
+  requireAdmin(event);
+  try {
+    const payload = await parseRequestPayload(event);
+    const next = sanitizeDictionaryScriptPayload(payload);
+    const existing = await DictionaryScript.findOne({ where: { key: next.key } });
+    if (existing) return error(409, 'Script key already exists');
+    const created = await DictionaryScript.create(next);
+    return success(created);
+  } catch (err) {
+    console.error('Create script pool item error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to create script');
+  }
+};
+
+export const updateScriptPoolItem = async (event) => {
+  requireAdmin(event);
+  try {
+    const payload = await parseRequestPayload(event);
+    if (!payload?.id) return error(400, 'id is required');
+    const item = await DictionaryScript.findByPk(Number(payload.id));
+    if (!item) return error(404, 'Script not found');
+
+    const next = sanitizeDictionaryScriptPayload(payload, item.key);
+    const duplicate = await DictionaryScript.findOne({
+      where: {
+        key: next.key,
+        id: { [Op.ne]: item.id },
+      },
+    });
+    if (duplicate) return error(409, 'Script key already exists');
+
+    item.key = next.key;
+    item.title = next.title;
+    item.content = next.content;
+    item.sortOrder = next.sortOrder;
+    await item.save();
+
+    return success(item);
+  } catch (err) {
+    console.error('Update script pool item error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to update script');
+  }
+};
+
+export const deleteScriptPoolItem = async (event) => {
+  requireAdmin(event);
+  try {
+    const payload = await parseRequestPayload(event);
+    if (!payload?.id) return error(400, 'id is required');
+    const item = await DictionaryScript.findByPk(Number(payload.id));
+    if (!item) return error(404, 'Script not found');
+    await item.destroy();
+    return success({ deletedId: item.id });
+  } catch (err) {
+    console.error('Delete script pool item error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to delete script');
+  }
+};
+
+export const getOrganisationCrmFeatureFlags = async (event) => {
+  requireAdmin(event);
+  try {
+    const organisation = await readOrganisationId(event);
+    return success({
+      organisationId: organisation.id,
+      crmFeatureAccess: getOrganisationCrmFeatureAccess(organisation),
+    });
+  } catch (err) {
+    console.error('Get organisation CRM feature flags error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to get CRM feature flags');
+  }
+};
+
+export const updateOrganisationCrmFeatureFlags = async (event) => {
+  requireAdmin(event);
+  try {
+    const payload = await parseRequestPayload(event);
+    const organisation = await readOrganisationId(event, payload);
+    const updates = sanitizeCrmFeatureAccessInput(payload);
+    if (Object.values(updates).every((value) => value === undefined)) {
+      return error(400, 'At least one of meta, whatsapp, chatbot is required');
+    }
+    const crmFeatureAccess = await saveOrganisationCrmFeatureAccess(organisation, updates);
+    return success({
+      organisationId: organisation.id,
+      crmFeatureAccess,
+    });
+  } catch (err) {
+    console.error('Update organisation CRM feature flags error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to update CRM feature flags');
+  }
+};
+
+export const listCrmTreatments = async (event) => {
+  requireAdmin(event);
+  try {
+    const organisation = await readOrganisationId(event);
+    const items = await listAdminCrmOptionsByCategory(organisation.id, 'treatment');
+    return success(items);
+  } catch (err) {
+    console.error('List CRM treatments error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to list CRM treatments');
+  }
+};
+
+export const getCrmTreatmentById = async (event) => {
+  requireAdmin(event);
+  try {
+    const query = getQuery(event) || {};
+    const organisation = await readOrganisationId(event);
+    if (!query.id) return error(400, 'id is required');
+    const item = await getAdminCrmOptionById({ organisationId: organisation.id, category: 'treatment', id: query.id });
+    return success(item);
+  } catch (err) {
+    console.error('Get CRM treatment error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to get CRM treatment');
+  }
+};
+
+export const createCrmTreatment = async (event) => {
+  requireAdmin(event);
+  try {
+    const payload = await parseRequestPayload(event);
+    const organisation = await readOrganisationId(event, payload);
+    const name = normalizeCrmOptionName(payload?.name);
+    const color = payload?.color ? String(payload.color).trim() : null;
+    const ordering = payload?.ordering == null || payload.ordering === '' ? null : Number(payload.ordering);
+    if (!name) return error(400, 'name is required');
+    await ensureUniqueAdminCrmOptionName({ organisationId: organisation.id, category: 'treatment', name });
+    const created = await CrmOption.create({ organisationId: organisation.id, category: 'treatment', name, color, ordering, active: payload?.active !== false });
+    return success(created);
+  } catch (err) {
+    console.error('Create CRM treatment error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to create CRM treatment');
+  }
+};
+
+export const updateCrmTreatment = async (event) => {
+  requireAdmin(event);
+  try {
+    const payload = await parseRequestPayload(event);
+    const organisation = await readOrganisationId(event, payload);
+    if (!payload?.id) return error(400, 'id is required');
+    const item = await getAdminCrmOptionById({ organisationId: organisation.id, category: 'treatment', id: payload.id });
+    if (payload?.name !== undefined) {
+      const name = normalizeCrmOptionName(payload.name);
+      if (!name) return error(400, 'name cannot be empty');
+      await ensureUniqueAdminCrmOptionName({ organisationId: organisation.id, category: 'treatment', name, excludeId: item.id });
+      item.name = name;
+    }
+    if (payload?.color !== undefined) item.color = payload.color ? String(payload.color).trim() : null;
+    if (payload?.ordering !== undefined) item.ordering = payload.ordering == null || payload.ordering === '' ? null : Number(payload.ordering);
+    if (payload?.active !== undefined) item.active = Boolean(payload.active);
+    await item.save();
+    return success(item);
+  } catch (err) {
+    console.error('Update CRM treatment error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to update CRM treatment');
+  }
+};
+
+export const deleteCrmTreatment = async (event) => {
+  requireAdmin(event);
+  try {
+    const payload = await parseRequestPayload(event);
+    const organisation = await readOrganisationId(event, payload);
+    if (!payload?.id) return error(400, 'id is required');
+    const item = await getAdminCrmOptionById({ organisationId: organisation.id, category: 'treatment', id: payload.id });
+    await item.destroy();
+    return success({ deletedId: item.id });
+  } catch (err) {
+    console.error('Delete CRM treatment error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to delete CRM treatment');
+  }
+};
+
+export const listLeadSources = async (event) => {
+  requireAdmin(event);
+  try {
+    const organisation = await readOrganisationId(event);
+    const items = await listAdminCrmOptionsByCategory(organisation.id, 'lead_source');
+    return success(items);
+  } catch (err) {
+    console.error('List lead sources error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to list lead sources');
+  }
+};
+
+export const getLeadSourceById = async (event) => {
+  requireAdmin(event);
+  try {
+    const query = getQuery(event) || {};
+    const organisation = await readOrganisationId(event);
+    if (!query.id) return error(400, 'id is required');
+    const item = await getAdminCrmOptionById({ organisationId: organisation.id, category: 'lead_source', id: query.id });
+    return success(item);
+  } catch (err) {
+    console.error('Get lead source error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to get lead source');
+  }
+};
+
+export const createLeadSource = async (event) => {
+  requireAdmin(event);
+  try {
+    const payload = await parseRequestPayload(event);
+    const organisation = await readOrganisationId(event, payload);
+    const name = normalizeCrmOptionName(payload?.name);
+    const color = payload?.color ? String(payload.color).trim() : null;
+    const ordering = payload?.ordering == null || payload.ordering === '' ? null : Number(payload.ordering);
+    if (!name) return error(400, 'name is required');
+    await ensureUniqueAdminCrmOptionName({ organisationId: organisation.id, category: 'lead_source', name });
+    const created = await CrmOption.create({ organisationId: organisation.id, category: 'lead_source', name, color, ordering, active: payload?.active !== false });
+    return success(created);
+  } catch (err) {
+    console.error('Create lead source error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to create lead source');
+  }
+};
+
+export const updateLeadSource = async (event) => {
+  requireAdmin(event);
+  try {
+    const payload = await parseRequestPayload(event);
+    const organisation = await readOrganisationId(event, payload);
+    if (!payload?.id) return error(400, 'id is required');
+    const item = await getAdminCrmOptionById({ organisationId: organisation.id, category: 'lead_source', id: payload.id });
+    if (payload?.name !== undefined) {
+      const name = normalizeCrmOptionName(payload.name);
+      if (!name) return error(400, 'name cannot be empty');
+      await ensureUniqueAdminCrmOptionName({ organisationId: organisation.id, category: 'lead_source', name, excludeId: item.id });
+      item.name = name;
+    }
+    if (payload?.color !== undefined) item.color = payload.color ? String(payload.color).trim() : null;
+    if (payload?.ordering !== undefined) item.ordering = payload.ordering == null || payload.ordering === '' ? null : Number(payload.ordering);
+    if (payload?.active !== undefined) item.active = Boolean(payload.active);
+    await item.save();
+    return success(item);
+  } catch (err) {
+    console.error('Update lead source error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to update lead source');
+  }
+};
+
+export const deleteLeadSource = async (event) => {
+  requireAdmin(event);
+  try {
+    const payload = await parseRequestPayload(event);
+    const organisation = await readOrganisationId(event, payload);
+    if (!payload?.id) return error(400, 'id is required');
+    const item = await getAdminCrmOptionById({ organisationId: organisation.id, category: 'lead_source', id: payload.id });
+    await item.destroy();
+    return success({ deletedId: item.id });
+  } catch (err) {
+    console.error('Delete lead source error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to delete lead source');
+  }
+};
+
+export const listCrmAlerts = async (event) => {
+  requireAdmin(event);
+  try {
+    const organisation = await readOrganisationId(event);
+    const items = getOrganisationAlertOptions(organisation);
+    return success(items);
+  } catch (err) {
+    console.error('List CRM alerts error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to list CRM alerts');
+  }
+};
+
+export const getCrmAlertByKey = async (event) => {
+  requireAdmin(event);
+  try {
+    const query = getQuery(event) || {};
+    const organisation = await readOrganisationId(event);
+    const key = String(query.key || '').trim().toLowerCase();
+    if (!key) return error(400, 'key is required');
+    const item = getOrganisationAlertOptions(organisation).find((alert) => String(alert.key || '').trim().toLowerCase() === key);
+    if (!item) return error(404, 'Alert not found');
+    return success(item);
+  } catch (err) {
+    console.error('Get CRM alert error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to get CRM alert');
+  }
+};
+
+export const createCrmAlert = async (event) => {
+  requireAdmin(event);
+  try {
+    const payload = await parseRequestPayload(event);
+    const organisation = await readOrganisationId(event, payload);
+    const items = getOrganisationAlertOptions(organisation);
+    if (items.length >= 30) return error(400, 'Cannot exceed 30 alert options');
+    const next = sanitizeAlertOptionInput(payload);
+    const duplicateKey = items.find((item) => String(item.key || '').trim().toLowerCase() === next.key);
+    if (duplicateKey) return error(409, 'Alert key already exists');
+    const duplicateLabel = items.find((item) => String(item.label || '').trim().toLowerCase() === next.label.toLowerCase());
+    if (duplicateLabel) return error(409, 'Alert label already exists');
+    items.push(next);
+    await saveOrganisationAlertOptions(organisation, items);
+    return success(next);
+  } catch (err) {
+    console.error('Create CRM alert error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to create CRM alert');
+  }
+};
+
+export const updateCrmAlert = async (event) => {
+  requireAdmin(event);
+  try {
+    const payload = await parseRequestPayload(event);
+    const organisation = await readOrganisationId(event, payload);
+    const currentKey = String(payload?.currentKey || payload?.key || '').trim().toLowerCase();
+    if (!currentKey) return error(400, 'currentKey or key is required');
+    const items = getOrganisationAlertOptions(organisation);
+    const index = items.findIndex((item) => String(item.key || '').trim().toLowerCase() === currentKey);
+    if (index === -1) return error(404, 'Alert not found');
+    const next = sanitizeAlertOptionInput(payload, currentKey);
+    const duplicateKey = items.find((item, itemIndex) => itemIndex !== index && String(item.key || '').trim().toLowerCase() === next.key);
+    if (duplicateKey) return error(409, 'Alert key already exists');
+    const duplicateLabel = items.find((item, itemIndex) => itemIndex !== index && String(item.label || '').trim().toLowerCase() === next.label.toLowerCase());
+    if (duplicateLabel) return error(409, 'Alert label already exists');
+    items[index] = next;
+    await saveOrganisationAlertOptions(organisation, items);
+    return success(next);
+  } catch (err) {
+    console.error('Update CRM alert error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to update CRM alert');
+  }
+};
+
+export const deleteCrmAlert = async (event) => {
+  requireAdmin(event);
+  try {
+    const payload = await parseRequestPayload(event);
+    const organisation = await readOrganisationId(event, payload);
+    const key = String(payload?.key || '').trim().toLowerCase();
+    if (!key) return error(400, 'key is required');
+    const items = getOrganisationAlertOptions(organisation);
+    const next = items.filter((item) => String(item.key || '').trim().toLowerCase() !== key);
+    if (next.length === items.length) return error(404, 'Alert not found');
+    await saveOrganisationAlertOptions(organisation, next);
+    return success({ deletedKey: key });
+  } catch (err) {
+    console.error('Delete CRM alert error:', err);
+    return error(err?.statusCode || 500, err.message || 'Failed to delete CRM alert');
   }
 };
 
