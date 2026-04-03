@@ -193,6 +193,64 @@
         </div>
       </v-card>
     </v-dialog>
+
+    <!-- Impressions date range picker dialog -->
+    <v-dialog v-model="showImpressionsDateRange" max-width="360" persistent>
+      <v-card rounded="xl" class="pa-4">
+        <p class="font-weight-bold mb-3" style="font-size:15px">Total Impressions — Date Range</p>
+        <v-text-field
+          v-model="impressionsDateFrom"
+          label="From"
+          type="date"
+          density="compact"
+          variant="outlined"
+          hide-details
+          class="mb-3"
+        />
+        <v-text-field
+          v-model="impressionsDateTo"
+          label="To"
+          type="date"
+          density="compact"
+          variant="outlined"
+          hide-details
+          class="mb-4"
+        />
+        <div class="d-flex justify-end gap-2">
+          <v-btn variant="text" @click="showImpressionsDateRange = false; impressionsPeriod = 'This month'">Cancel</v-btn>
+          <v-btn color="primary" variant="flat" rounded="lg" :disabled="!impressionsDateFrom || !impressionsDateTo" @click="confirmImpressionsDateRange">Apply</v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
+
+    <!-- Reach date range picker dialog -->
+    <v-dialog v-model="showReachDateRange" max-width="360" persistent>
+      <v-card rounded="xl" class="pa-4">
+        <p class="font-weight-bold mb-3" style="font-size:15px">Total Reach — Date Range</p>
+        <v-text-field
+          v-model="reachDateFrom"
+          label="From"
+          type="date"
+          density="compact"
+          variant="outlined"
+          hide-details
+          class="mb-3"
+        />
+        <v-text-field
+          v-model="reachDateTo"
+          label="To"
+          type="date"
+          density="compact"
+          variant="outlined"
+          hide-details
+          class="mb-4"
+        />
+        <div class="d-flex justify-end gap-2">
+          <v-btn variant="text" @click="showReachDateRange = false; reachPeriod = 'This month'">Cancel</v-btn>
+          <v-btn color="primary" variant="flat" rounded="lg" :disabled="!reachDateFrom || !reachDateTo" @click="confirmReachDateRange">Apply</v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
   </v-sheet>
 </template>
 
@@ -231,6 +289,14 @@ const statSpend = ref(0)
 const statLeads = ref(0)
 const statSpendLoading = ref(false)
 const statLeadsLoading = ref(false)
+const impressionsPeriod = ref('This month')
+const impressionsDateFrom = ref(null)
+const impressionsDateTo = ref(null)
+const showImpressionsDateRange = ref(false)
+const reachPeriod = ref('This month')
+const reachDateFrom = ref(null)
+const reachDateTo = ref(null)
+const showReachDateRange = ref(false)
 
 const toYmd = (value) => {
   if (!value) return null;
@@ -320,6 +386,47 @@ const loadStatLeads = async () => {
   }
 };
 
+const impressionsPeriodInsights = computed(() => {
+  const { dateFrom, dateTo } = getPeriodDates(impressionsPeriod.value, impressionsDateFrom.value, impressionsDateTo.value);
+  const fromDate = dateFrom ? parseLocalDate(dateFrom, false) : null;
+  const toDate = dateTo ? parseLocalDate(dateTo, true) : null;
+  return crmStore.metaInsights.filter((i) => {
+    if (i.entityType !== 'campaign') return false;
+    const rowDate = parseLocalDate(i.date, false);
+    if (!rowDate) return false;
+    if (fromDate && rowDate < fromDate) return false;
+    if (toDate && rowDate > toDate) return false;
+    return true;
+  });
+});
+const statImpressions = computed(() =>
+  impressionsPeriodInsights.value.reduce((sum, i) => sum + Number(i.impressions || 0), 0)
+);
+
+const reachPeriodInsights = computed(() => {
+  const { dateFrom, dateTo } = getPeriodDates(reachPeriod.value, reachDateFrom.value, reachDateTo.value);
+  const fromDate = dateFrom ? parseLocalDate(dateFrom, false) : null;
+  const toDate = dateTo ? parseLocalDate(dateTo, true) : null;
+  return crmStore.metaInsights.filter((i) => {
+    if (i.entityType !== 'campaign') return false;
+    const rowDate = parseLocalDate(i.date, false);
+    if (!rowDate) return false;
+    if (fromDate && rowDate < fromDate) return false;
+    if (toDate && rowDate > toDate) return false;
+    return true;
+  });
+});
+const statReach = computed(() => sumLatestReachByEntity(reachPeriodInsights.value));
+
+const confirmImpressionsDateRange = () => {
+  showImpressionsDateRange.value = false
+  impressionsPeriod.value = formatDateRangeLabel(impressionsDateFrom.value, impressionsDateTo.value)
+}
+const confirmReachDateRange = () => {
+  showReachDateRange.value = false
+  reachPeriod.value = formatDateRangeLabel(reachDateFrom.value, reachDateTo.value)
+}
+
 const onCardSelect = (index, value) => {
   if (index === 0) {
     campaignStatusFilter.value = value
@@ -339,6 +446,20 @@ const onCardSelect = (index, value) => {
     leadsDateFrom.value = null
     leadsDateTo.value = null
     loadStatLeads()
+    return
+  }
+  if (index === 3) {
+    if (value === 'Date range') { showImpressionsDateRange.value = true; return }
+    impressionsPeriod.value = value
+    impressionsDateFrom.value = null
+    impressionsDateTo.value = null
+    return
+  }
+  if (index === 4) {
+    if (value === 'Date range') { showReachDateRange.value = true; return }
+    reachPeriod.value = value
+    reachDateFrom.value = null
+    reachDateTo.value = null
   }
 }
 
@@ -557,6 +678,21 @@ const emptyStateCopy = computed(() =>
     : 'Connect a Meta page for this organisation first. Once connected, run Sync Now to start importing campaign analytics.'
 );
 
+// When the global date filter changes, refresh per-campaign lead counts so campaign card
+// CPL stays consistent with the spend shown (both should reflect the same date window).
+watch(
+  () => ({ dateFrom: activeFilters.value?.dateFrom, dateTo: activeFilters.value?.dateTo }),
+  (filters) => {
+    const orgId = currentOrgId.value;
+    if (!orgId) return;
+    const params = {};
+    if (filters.dateFrom) params.dateFrom = toYmd(filters.dateFrom);
+    if (filters.dateTo) params.dateTo = toYmd(filters.dateTo);
+    crmStore.getAllLeadCounts(orgId, params);
+  },
+  { deep: true }
+);
+
 const selectedPlatform = computed(() => activeFilters.value?.platform || null);
 const hasDateFilter = computed(() => Boolean(activeFilters.value?.dateFrom || activeFilters.value?.dateTo));
 const filterDateFrom = computed(() => {
@@ -657,9 +793,6 @@ const filteredCampaignCount = computed(() => {
 
 const analyticsStats = computed(() => {
   const sym = currencySymbol.value;
-  const campaignInsights = insightsInRange.value.filter((i) => i.entityType === 'campaign');
-  const totalImpressions = campaignInsights.reduce((sum, i) => sum + Number(i.impressions || 0), 0);
-  const totalReach = sumLatestReachByEntity(campaignInsights);
   return [
     {
       icon: 'https://cdn.lordicon.com/nocovwne.json',
@@ -689,12 +822,20 @@ const analyticsStats = computed(() => {
     {
       icon: 'https://cdn.lordicon.com/tzynxkwl.json',
       label: 'Total Impressions',
-      value: totalImpressions.toLocaleString(),
+      value: statImpressions.value.toLocaleString(),
+      select: impressionsPeriod.value,
+      selectItems: impressionsDateFrom.value
+        ? ['This week', 'This month', impressionsPeriod.value, 'Date range']
+        : ['This week', 'This month', 'Date range'],
     },
     {
       icon: 'https://cdn.lordicon.com/tzynxkwl.json',
       label: 'Total Reach',
-      value: totalReach.toLocaleString(),
+      value: statReach.value.toLocaleString(),
+      select: reachPeriod.value,
+      selectItems: reachDateFrom.value
+        ? ['This week', 'This month', reachPeriod.value, 'Date range']
+        : ['This week', 'This month', 'Date range'],
     },
   ];
 });
