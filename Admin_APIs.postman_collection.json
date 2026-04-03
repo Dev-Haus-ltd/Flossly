@@ -732,8 +732,472 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Bulk Upload Automations",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "organisationId",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "public/samples/automation-sample.csv"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/bulkUploadAutomations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "bulkUploadAutomations"
+              ]
+            },
+            "description": "Bulk upload CRM automations into a target organisation as superadmin using a CSV/XLS/XLSX file upload. Include organisationId and a file field that matches the application template columns."
+          },
+          "response": []
+        },
+        {
+          "name": "Download Automation Template",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/downloadAutomationTemplate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "downloadAutomationTemplate"
+              ]
+            },
+            "description": "Download the CRM automation bulk upload sample CSV for admin/superadmin use."
+          },
+          "response": []
         }
       ]
+    },
+    {
+      "name": "CRM",
+      "item": [
+        {
+          "name": "Get Organisation CRM Feature Flags",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getOrganisationCrmFeatureFlags?organisationId=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "getOrganisationCrmFeatureFlags"],
+              "query": [{ "key": "organisationId", "value": "1" }]
+            },
+            "description": "Get organisation-level CRM feature access flags for Meta, WhatsApp, and Chatbot."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Organisation CRM Feature Flags",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"meta\": true,\n  \"whatsapp\": false,\n  \"chatbot\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/updateOrganisationCrmFeatureFlags",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "updateOrganisationCrmFeatureFlags"]
+            },
+            "description": "Allow or restrict CRM Meta, WhatsApp, and Chatbot features for a specific organisation."
+          },
+          "response": []
+        },
+        {
+          "name": "List CRM Treatments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/listCrmTreatments?organisationId=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "listCrmTreatments"],
+              "query": [{ "key": "organisationId", "value": "1" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get CRM Treatment By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getCrmTreatmentById?organisationId=1&id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "getCrmTreatmentById"],
+              "query": [{ "key": "organisationId", "value": "1" }, { "key": "id", "value": "1" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create CRM Treatment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"name\": \"Composite Bonding\",\n  \"ordering\": 1,\n  \"active\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/createCrmTreatment",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "createCrmTreatment"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update CRM Treatment",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"id\": 1,\n  \"name\": \"Composite Bonding Updated\",\n  \"ordering\": 2,\n  \"active\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/updateCrmTreatment",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "updateCrmTreatment"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete CRM Treatment",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/deleteCrmTreatment",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "deleteCrmTreatment"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Lead Sources",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/listLeadSources?organisationId=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "listLeadSources"],
+              "query": [{ "key": "organisationId", "value": "1" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Lead Source By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getLeadSourceById?organisationId=1&id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "getLeadSourceById"],
+              "query": [{ "key": "organisationId", "value": "1" }, { "key": "id", "value": "1" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Lead Source",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"name\": \"Google Ads\",\n  \"ordering\": 1,\n  \"active\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/createLeadSource",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "createLeadSource"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Lead Source",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"id\": 1,\n  \"name\": \"Google Ads Updated\",\n  \"ordering\": 2,\n  \"active\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/updateLeadSource",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "updateLeadSource"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Lead Source",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/deleteLeadSource",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "deleteLeadSource"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List CRM Alerts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/listCrmAlerts?organisationId=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "listCrmAlerts"],
+              "query": [{ "key": "organisationId", "value": "1" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get CRM Alert By Key",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getCrmAlertByKey?organisationId=1&key=hot",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "getCrmAlertByKey"],
+              "query": [{ "key": "organisationId", "value": "1" }, { "key": "key", "value": "hot" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create CRM Alert",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"key\": \"vip\",\n  \"label\": \"VIP lead\",\n  \"emoji\": \"⭐\",\n  \"color\": \"warning\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/createCrmAlert",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "createCrmAlert"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update CRM Alert",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"currentKey\": \"vip\",\n  \"key\": \"vip\",\n  \"label\": \"VIP lead updated\",\n  \"emoji\": \"⭐\",\n  \"color\": \"error\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/updateCrmAlert",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "updateCrmAlert"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete CRM Alert",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"key\": \"vip\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/deleteCrmAlert",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "deleteCrmAlert"]
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "Admin CRM endpoints for treatments, lead sources, and alerts"
+    },
+    {
+      "name": "CRM Leads",
+      "item": [
+        {
+          "name": "Download Lead Template",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/downloadLeadTemplate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "downloadLeadTemplate"]
+            },
+            "description": "Download the CRM leads bulk upload sample CSV for admin/superadmin use."
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk Upload Leads",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "organisationId",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "public/samples/lead-sample.csv"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/bulkUploadLeads",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "bulkUploadLeads"]
+            },
+            "description": "Bulk upload CRM leads into a target organisation as superadmin using a CSV/XLS/XLSX file upload. Include organisationId and a file field that matches the lead sample columns."
+          },
+          "response": []
+        }
+      ],
+      "description": "Admin CRM lead bulk upload endpoints"
+    },
+    {
+      "name": "CRM Scripts Pool",
+      "item": [
+        {
+          "name": "List Scripts Pool",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/listScriptsPool",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "listScriptsPool"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Script Pool Item By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getScriptPoolItemById?id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "getScriptPoolItemById"],
+              "query": [{ "key": "id", "value": "1" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Script Pool Item",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"new_patient_intro\",\n  \"title\": \"New Patient Intro\",\n  \"content\": \"Hello [Practice Name], thank you for contacting us.\",\n  \"sortOrder\": 10\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/createScriptPoolItem",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "createScriptPoolItem"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Script Pool Item",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"key\": \"new_patient_intro\",\n  \"title\": \"New Patient Intro Updated\",\n  \"content\": \"Hello [Practice Name], thank you for getting in touch.\",\n  \"sortOrder\": 11\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/updateScriptPoolItem",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "updateScriptPoolItem"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Script Pool Item",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/deleteScriptPoolItem",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "deleteScriptPoolItem"]
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "Admin CRUD endpoints for global CRM Scripts Pool dictionary items"
     },
     {
       "name": "Notifications",
