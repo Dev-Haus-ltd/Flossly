@@ -1,12 +1,27 @@
 <template>
   <v-sheet color="background">
     <div class="cust-border d-flex align-center">
-      <p class="mr-1">CRM Meta Analytics</p>
+      <p
+        class="mr-1"
+        :style="drill.level > 0 ? 'color: #0061FB; cursor: pointer;' : ''"
+        @click="drillBack(0)"
+      >CRM Meta Analytics</p>
+      <template v-if="drill.level > 0">
+        <span class="header-sep"> / </span>
+        <p
+          :style="drill.level > 1 ? 'color: #0061FB; cursor: pointer;' : ''"
+          @click="drill.level > 1 ? drillBack(1) : null"
+        >{{ drill.campaign?.title }}</p>
+      </template>
+      <template v-if="drill.level > 1">
+        <span class="header-sep"> / </span>
+        <p>{{ drill.adSet?.title }}</p>
+      </template>
     </div>
 
     <div class="mt-5 px-5">
       <v-row align="stretch">
-        <v-col v-for="(stat, i) in analyticsStats" :key="i" style="flex: 1 1 0; min-width: 0;">
+        <v-col v-for="(stat, i) in currentStats" :key="i" style="flex: 1 1 0; min-width: 0;">
           <CommonStatCard
             :icon="stat.icon"
             :label="stat.label"
@@ -75,27 +90,6 @@
           </template>
           Sync Now
         </v-btn>
-      </div>
-
-      <!-- Breadcrumb drill path -->
-      <div v-if="drill.level > 0" class="drill-breadcrumb mb-3">
-        <v-btn variant="text" size="small" class="breadcrumb-btn" @click="drillBack(0)">
-          <v-icon size="16" class="mr-1">mdi-view-grid</v-icon>Campaigns
-        </v-btn>
-        <v-icon size="14" class="breadcrumb-sep">mdi-chevron-right</v-icon>
-        <v-btn
-          variant="text"
-          size="small"
-          class="breadcrumb-btn"
-          :class="{ 'breadcrumb-active': drill.level === 1 }"
-          @click="drill.level > 1 ? drillBack(1) : null"
-        >
-          {{ drill.campaign?.title }}
-        </v-btn>
-        <template v-if="drill.level === 2">
-          <v-icon size="14" class="breadcrumb-sep">mdi-chevron-right</v-icon>
-          <span class="breadcrumb-active">{{ drill.adSet?.title }}</span>
-        </template>
       </div>
 
       <v-row v-if="displayCards.length" class="campaign-grid" align="stretch">
@@ -565,7 +559,7 @@ const sortCardsByStatus = (cards) =>
   });
 
 const filteredCampaignCount = computed(() => {
-  if (campaignStatusFilter.value === 'All') return stats.value.campaigns
+  if (campaignStatusFilter.value === 'All') return crmStore.metaCampaigns.length
   return crmStore.metaCampaigns.filter(
     (c) => c.status?.toUpperCase() === campaignStatusFilter.value.toUpperCase()
   ).length
@@ -575,13 +569,7 @@ const analyticsStats = computed(() => {
   const sym = currencySymbol.value;
   const campaignInsights = insightsInRange.value.filter((i) => i.entityType === 'campaign');
   const totalImpressions = campaignInsights.reduce((sum, i) => sum + Number(i.impressions || 0), 0);
-  const latestByEntity = Object.values(
-    campaignInsights.reduce((map, i) => {
-      if (!map[i.entityId] || new Date(i.date) > new Date(map[i.entityId].date)) map[i.entityId] = i;
-      return map;
-    }, {})
-  );
-  const totalReach = latestByEntity.reduce((sum, i) => sum + Number(i.reach || 0), 0);
+  const totalReach = campaignInsights.reduce((sum, i) => sum + Number(i.reach || 0), 0);
   return [
     {
       icon: 'https://cdn.lordicon.com/nocovwne.json',
@@ -621,6 +609,57 @@ const analyticsStats = computed(() => {
   ];
 });
 
+// Stat cards for adset drill level (inside a campaign)
+const drillCampaignStats = computed(() => {
+  if (!drill.campaign) return null;
+  const sym = currencySymbol.value;
+  const adSetIds = crmStore.metaAdSets
+    .filter((as) => as.campaignId === drill.campaign.campaignId)
+    .map((as) => as.adSetId);
+  const insights = insightsInRange.value.filter(
+    (i) => i.entityType === 'adset' && adSetIds.includes(i.entityId)
+  );
+  const totalSpend = insights.reduce((sum, i) => sum + Number(i.spend || 0), 0);
+  const totalImpressions = insights.reduce((sum, i) => sum + Number(i.impressions || 0), 0);
+  const totalReach = insights.reduce((sum, i) => sum + Number(i.reach || 0), 0);
+  const totalLeads = adSetIds.reduce((sum, id) => sum + Number(crmStore.metaAdSetLeadCounts[id] || 0), 0);
+  return [
+    { icon: 'https://cdn.lordicon.com/nocovwne.json', label: 'Ad Sets', value: String(adSetIds.length).padStart(2, '0') },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Spend', value: `${sym}${(totalSpend / 100).toFixed(2)}` },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Number of Leads', value: String(totalLeads).padStart(2, '0') },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Impressions', value: totalImpressions.toLocaleString() },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Reach', value: totalReach.toLocaleString() },
+  ];
+});
+
+// Stat cards for ads drill level (inside an adset)
+const drillAdSetStats = computed(() => {
+  if (!drill.adSet) return null;
+  const sym = currencySymbol.value;
+  const ads = crmStore.metaAds.filter((a) => a.adSetId === drill.adSet.adSetId);
+  const adIds = ads.map((a) => a.adId);
+  const insights = insightsInRange.value.filter(
+    (i) => i.entityType === 'ad' && adIds.includes(i.entityId)
+  );
+  const totalSpend = insights.reduce((sum, i) => sum + Number(i.spend || 0), 0);
+  const totalImpressions = insights.reduce((sum, i) => sum + Number(i.impressions || 0), 0);
+  const totalReach = insights.reduce((sum, i) => sum + Number(i.reach || 0), 0);
+  const totalLeads = adIds.reduce((sum, id) => sum + Number(crmStore.metaAdLeadCounts[id] || 0), 0);
+  return [
+    { icon: 'https://cdn.lordicon.com/nocovwne.json', label: 'Ads', value: String(ads.length).padStart(2, '0') },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Spend', value: `${sym}${(totalSpend / 100).toFixed(2)}` },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Number of Leads', value: String(totalLeads).padStart(2, '0') },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Impressions', value: totalImpressions.toLocaleString() },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Reach', value: totalReach.toLocaleString() },
+  ];
+});
+
+const currentStats = computed(() => {
+  if (drill.level === 2) return drillAdSetStats.value || analyticsStats.value;
+  if (drill.level === 1) return drillCampaignStats.value || analyticsStats.value;
+  return analyticsStats.value;
+});
+
 const campaigns = computed(() =>
   sortCardsByStatus(crmStore.metaCampaigns.map((campaign) => {
     const campaignInsights = insightsInRange.value.filter(
@@ -638,8 +677,7 @@ const campaigns = computed(() =>
     const totalImpressions = campaignInsights.reduce((acc, insight) => acc + Number(insight.impressions || 0), 0);
     const totalClicks = campaignInsights.reduce((acc, insight) => acc + Number(insight.clicks || 0), 0);
     // Reach is deduplicated — summing daily rows inflates it. Use the most recent day's value.
-    const latestInsight = campaignInsights.slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-    const totalReach = Number(latestInsight?.reach || 0);
+    const totalReach = campaignInsights.reduce((acc, i) => acc + Number(i.reach || 0), 0);
     // Use CRM lead count for this campaign — single source of truth
     const crmLeads = Number(crmStore.metaCampaignLeadCounts[campaign.campaignId] || 0);
     const spendMajor = totalSpend / 100;
@@ -686,8 +724,7 @@ const adSetCards = computed(() => {
     const totalSpend = insights.reduce((acc, i) => acc + Number(i.spend || 0), 0);
     const totalImpressions = insights.reduce((acc, i) => acc + Number(i.impressions || 0), 0);
     const totalClicks = insights.reduce((acc, i) => acc + Number(i.clicks || 0), 0);
-    const latestInsight = insights.slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-    const totalReach = Number(latestInsight?.reach || 0);
+    const totalReach = insights.reduce((acc, i) => acc + Number(i.reach || 0), 0);
     const spendMajor = totalSpend / 100;
     const firstAd = crmStore.metaAds.find((a) => a.adSetId === adSet.adSetId);
     const adSetPlatform = firstAd?.platform || drill.campaign.platform;
@@ -734,8 +771,7 @@ const adCards = computed(() => {
     const totalSpend = insights.reduce((acc, i) => acc + Number(i.spend || 0), 0);
     const totalImpressions = insights.reduce((acc, i) => acc + Number(i.impressions || 0), 0);
     const totalClicks = insights.reduce((acc, i) => acc + Number(i.clicks || 0), 0);
-    const latestInsight = insights.slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-    const totalReach = Number(latestInsight?.reach || 0);
+    const totalReach = insights.reduce((acc, i) => acc + Number(i.reach || 0), 0);
     const spendMajor = totalSpend / 100;
     const adLeads = Number(crmStore.metaAdLeadCounts[ad.adId] || 0);
     const adCpl = adLeads > 0 ? spendMajor / adLeads : 0;
@@ -803,7 +839,15 @@ const drillEmptyCopy = computed(() => {
 
   p {
     font-size: 12px;
+    color: #c3c3c3;
+    margin: 0;
   }
+}
+
+.header-sep {
+  font-size: 12px;
+  color: #c3c3c3;
+  margin: 0 4px;
 }
 
 .toolbar-wrapper {
@@ -833,31 +877,6 @@ const drillEmptyCopy = computed(() => {
   font-size: 14px;
 }
 
-.drill-breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex-wrap: wrap;
-}
-
-.breadcrumb-btn {
-  text-transform: none;
-  font-size: 13px;
-  color: #6b7280;
-  padding: 0 6px;
-  min-width: 0;
-}
-
-.breadcrumb-sep {
-  color: #9ca3af;
-}
-
-.breadcrumb-active {
-  font-size: 13px;
-  font-weight: 600;
-  color: #111827;
-  padding: 0 6px;
-}
 
 .disconnected-banner {
   border: 1px solid #fdba74;
