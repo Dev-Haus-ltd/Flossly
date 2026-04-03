@@ -1,12 +1,27 @@
 <template>
   <v-sheet color="background">
     <div class="cust-border d-flex align-center">
-      <p class="mr-1">CRM Meta Analytics</p>
+      <p
+        class="mr-1"
+        :style="drill.level > 0 ? 'color: #0061FB; cursor: pointer;' : ''"
+        @click="drillBack(0)"
+      >CRM Meta Analytics</p>
+      <template v-if="drill.level > 0">
+        <span class="header-sep"> / </span>
+        <p
+          :style="drill.level > 1 ? 'color: #0061FB; cursor: pointer;' : ''"
+          @click="drill.level > 1 ? drillBack(1) : null"
+        >{{ drill.campaign?.title }}</p>
+      </template>
+      <template v-if="drill.level > 1">
+        <span class="header-sep"> / </span>
+        <p>{{ drill.adSet?.title }}</p>
+      </template>
     </div>
 
     <div class="mt-5 px-5">
       <v-row align="stretch">
-        <v-col v-for="(stat, i) in analyticsStats" :key="i" style="flex: 1 1 0; min-width: 0;">
+        <v-col v-for="(stat, i) in currentStats" :key="i" style="flex: 1 1 0; min-width: 0;">
           <CommonStatCard
             :icon="stat.icon"
             :label="stat.label"
@@ -56,7 +71,6 @@
             </v-text-field>
           </div>
           <CustomerRelationManagementMetaAnalyticsFilterMenu
-            :loading="isFiltering"
             @update:filters="activeFilters = $event"
           />
         </div>
@@ -76,27 +90,6 @@
           </template>
           Sync Now
         </v-btn>
-      </div>
-
-      <!-- Breadcrumb drill path -->
-      <div v-if="drill.level > 0" class="drill-breadcrumb mb-3">
-        <v-btn variant="text" size="small" class="breadcrumb-btn" @click="drillBack(0)">
-          <v-icon size="16" class="mr-1">mdi-view-grid</v-icon>Campaigns
-        </v-btn>
-        <v-icon size="14" class="breadcrumb-sep">mdi-chevron-right</v-icon>
-        <v-btn
-          variant="text"
-          size="small"
-          class="breadcrumb-btn"
-          :class="{ 'breadcrumb-active': drill.level === 1 }"
-          @click="drill.level > 1 ? drillBack(1) : null"
-        >
-          {{ drill.campaign?.title }}
-        </v-btn>
-        <template v-if="drill.level === 2">
-          <v-icon size="14" class="breadcrumb-sep">mdi-chevron-right</v-icon>
-          <span class="breadcrumb-active">{{ drill.adSet?.title }}</span>
-        </template>
       </div>
 
       <v-row v-if="displayCards.length" class="campaign-grid" align="stretch">
@@ -216,7 +209,6 @@ const mainStore = useMainStore();
 const { user } = useUser();
 const search = ref('');
 const isSyncing = ref(false);
-const isFiltering = ref(false);
 const activeFilters = ref({ platform: null, dateFrom: null, dateTo: null });
 const currentOrgId = computed(() => Number(user.value?.currentLoggedInOrgId || 0) || null);
 const metaConnection = ref({ count: 0, pages: [] });
@@ -350,15 +342,6 @@ const onDrill = (card) => {
 let analyticsLoadPromise = null;
 let analyticsLoadOrgId = null;
 
-const buildFilterParams = () => {
-  const f = activeFilters.value;
-  const params = {};
-  if (f.platform) params.platform = f.platform;
-  if (f.dateFrom) params.dateFrom = new Date(f.dateFrom).toISOString().split('T')[0];
-  if (f.dateTo) params.dateTo = new Date(f.dateTo).toISOString().split('T')[0];
-  return params;
-};
-
 const hydrateMetaAnalytics = async ({ syncIfInsightsMissing = false, force = false } = {}) => {
   const orgId = currentOrgId.value;
   if (!orgId) return;
@@ -372,7 +355,7 @@ const hydrateMetaAnalytics = async ({ syncIfInsightsMissing = false, force = fal
     try {
       const [connectionRes, structureRes, insightsRes] = await Promise.all([
         crmStore.connectionStatus(),
-        crmStore.getMetaStructure(orgId, buildFilterParams()),
+        crmStore.getMetaStructure(orgId),
         crmStore.getMetaInsights(orgId),
         crmStore.getAllLeadCounts(orgId), // updates store; result intentionally unused here
       ]);
@@ -437,37 +420,6 @@ watch(
     loadStatLeads();
   },
   { immediate: true }
-);
-
-// Re-fetch structure from backend whenever platform/date filters change
-watch(
-  activeFilters,
-  async () => {
-    const orgId = currentOrgId.value;
-    if (!orgId) return;
-    isFiltering.value = true;
-    try {
-      const res = await crmStore.getMetaStructure(orgId, buildFilterParams());
-      if (res?.code !== 0) {
-        mainStore.setSnackbar({
-          type: 'error',
-          color: 'error',
-          title: 'Filter failed',
-          subtitle: res?.error || 'Could not apply the selected filters. Please try again.',
-        });
-      }
-    } catch (err) {
-      mainStore.setSnackbar({
-        type: 'error',
-        color: 'error',
-        title: 'Filter failed',
-        subtitle: err?.message || 'An unexpected error occurred while filtering.',
-      });
-    } finally {
-      isFiltering.value = false;
-    }
-  },
-  { deep: true }
 );
 
 const resync = async () => {
@@ -550,8 +502,6 @@ const resync = async () => {
   }
 };
 
-const stats = computed(() => crmStore.metaStats);
-
 // Derive currency symbol from the first synced ad account.
 // Falls back to £ since all current orgs are UK-based.
 const CURRENCY_SYMBOLS = { GBP: '£', USD: '$', EUR: '€', AUD: 'A$', CAD: 'C$' };
@@ -573,8 +523,43 @@ const emptyStateCopy = computed(() =>
     : 'Connect a Meta page for this organisation first. Once connected, run Sync Now to start importing campaign analytics.'
 );
 
+const selectedPlatform = computed(() => activeFilters.value?.platform || null);
+const hasDateFilter = computed(() => Boolean(activeFilters.value?.dateFrom || activeFilters.value?.dateTo));
+const filterDateFrom = computed(() => {
+  const v = activeFilters.value?.dateFrom;
+  if (!v) return null;
+  const d = new Date(v);
+  d.setHours(0, 0, 0, 0);
+  return d;
+});
+const filterDateTo = computed(() => {
+  const v = activeFilters.value?.dateTo;
+  if (!v) return null;
+  const d = new Date(v);
+  d.setHours(23, 59, 59, 999);
+  return d;
+});
+const insightsInRange = computed(() =>
+  crmStore.metaInsights.filter((insight) => {
+    const rowDate = new Date(insight.date);
+    if (Number.isNaN(rowDate.getTime())) return false;
+    if (filterDateFrom.value && rowDate < filterDateFrom.value) return false;
+    if (filterDateTo.value && rowDate > filterDateTo.value) return false;
+    return true;
+  })
+);
+
+const STATUS_SORT_ORDER = { ACTIVE: 0, PAUSED: 1 };
+const sortCardsByStatus = (cards) =>
+  cards.filter(Boolean).slice().sort((a, b) => {
+    const aRank = STATUS_SORT_ORDER[String(a.status || '').toUpperCase()] ?? 2;
+    const bRank = STATUS_SORT_ORDER[String(b.status || '').toUpperCase()] ?? 2;
+    if (aRank !== bRank) return aRank - bRank;
+    return String(a.title || '').localeCompare(String(b.title || ''), undefined, { sensitivity: 'base' });
+  });
+
 const filteredCampaignCount = computed(() => {
-  if (campaignStatusFilter.value === 'All') return stats.value.campaigns
+  if (campaignStatusFilter.value === 'All') return crmStore.metaCampaigns.length
   return crmStore.metaCampaigns.filter(
     (c) => c.status?.toUpperCase() === campaignStatusFilter.value.toUpperCase()
   ).length
@@ -582,6 +567,9 @@ const filteredCampaignCount = computed(() => {
 
 const analyticsStats = computed(() => {
   const sym = currencySymbol.value;
+  const campaignInsights = insightsInRange.value.filter((i) => i.entityType === 'campaign');
+  const totalImpressions = campaignInsights.reduce((sum, i) => sum + Number(i.impressions || 0), 0);
+  const totalReach = campaignInsights.reduce((sum, i) => sum + Number(i.reach || 0), 0);
   return [
     {
       icon: 'https://cdn.lordicon.com/nocovwne.json',
@@ -611,32 +599,85 @@ const analyticsStats = computed(() => {
     {
       icon: 'https://cdn.lordicon.com/tzynxkwl.json',
       label: 'Total Impressions',
-      value: stats.value.impressions.toLocaleString(),
+      value: totalImpressions.toLocaleString(),
     },
     {
       icon: 'https://cdn.lordicon.com/tzynxkwl.json',
       label: 'Total Reach',
-      value: stats.value.reach.toLocaleString(),
+      value: totalReach.toLocaleString(),
     },
   ];
 });
 
+// Stat cards for adset drill level (inside a campaign)
+const drillCampaignStats = computed(() => {
+  if (!drill.campaign) return null;
+  const sym = currencySymbol.value;
+  const adSetIds = crmStore.metaAdSets
+    .filter((as) => as.campaignId === drill.campaign.campaignId)
+    .map((as) => as.adSetId);
+  const insights = insightsInRange.value.filter(
+    (i) => i.entityType === 'adset' && adSetIds.includes(i.entityId)
+  );
+  const totalSpend = insights.reduce((sum, i) => sum + Number(i.spend || 0), 0);
+  const totalImpressions = insights.reduce((sum, i) => sum + Number(i.impressions || 0), 0);
+  const totalReach = insights.reduce((sum, i) => sum + Number(i.reach || 0), 0);
+  const totalLeads = adSetIds.reduce((sum, id) => sum + Number(crmStore.metaAdSetLeadCounts[id] || 0), 0);
+  return [
+    { icon: 'https://cdn.lordicon.com/nocovwne.json', label: 'Ad Sets', value: String(adSetIds.length).padStart(2, '0') },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Spend', value: `${sym}${(totalSpend / 100).toFixed(2)}` },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Number of Leads', value: String(totalLeads).padStart(2, '0') },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Impressions', value: totalImpressions.toLocaleString() },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Reach', value: totalReach.toLocaleString() },
+  ];
+});
+
+// Stat cards for ads drill level (inside an adset)
+const drillAdSetStats = computed(() => {
+  if (!drill.adSet) return null;
+  const sym = currencySymbol.value;
+  const ads = crmStore.metaAds.filter((a) => a.adSetId === drill.adSet.adSetId);
+  const adIds = ads.map((a) => a.adId);
+  const insights = insightsInRange.value.filter(
+    (i) => i.entityType === 'ad' && adIds.includes(i.entityId)
+  );
+  const totalSpend = insights.reduce((sum, i) => sum + Number(i.spend || 0), 0);
+  const totalImpressions = insights.reduce((sum, i) => sum + Number(i.impressions || 0), 0);
+  const totalReach = insights.reduce((sum, i) => sum + Number(i.reach || 0), 0);
+  const totalLeads = adIds.reduce((sum, id) => sum + Number(crmStore.metaAdLeadCounts[id] || 0), 0);
+  return [
+    { icon: 'https://cdn.lordicon.com/nocovwne.json', label: 'Ads', value: String(ads.length).padStart(2, '0') },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Spend', value: `${sym}${(totalSpend / 100).toFixed(2)}` },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Number of Leads', value: String(totalLeads).padStart(2, '0') },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Impressions', value: totalImpressions.toLocaleString() },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Reach', value: totalReach.toLocaleString() },
+  ];
+});
+
+const currentStats = computed(() => {
+  if (drill.level === 2) return drillAdSetStats.value || analyticsStats.value;
+  if (drill.level === 1) return drillCampaignStats.value || analyticsStats.value;
+  return analyticsStats.value;
+});
+
 const campaigns = computed(() =>
-  crmStore.metaCampaigns.map((campaign) => {
-    const campaignInsights = crmStore.metaInsights.filter(
+  sortCardsByStatus(crmStore.metaCampaigns.map((campaign) => {
+    const campaignInsights = insightsInRange.value.filter(
       (insight) => insight.entityType === 'campaign' && insight.entityId === campaign.campaignId
     );
+    if (hasDateFilter.value && campaignInsights.length === 0) return null;
     const campaignAdSetIds = crmStore.metaAdSets
       .filter((adSet) => adSet.campaignId === campaign.campaignId)
       .map((adSet) => adSet.adSetId);
     const ad = crmStore.metaAds.find((item) => campaignAdSetIds.includes(item.adSetId));
+    const platform = ad?.platform || 'Facebook';
+    if (selectedPlatform.value && platform !== selectedPlatform.value) return null;
 
     const totalSpend = campaignInsights.reduce((acc, insight) => acc + Number(insight.spend || 0), 0);
     const totalImpressions = campaignInsights.reduce((acc, insight) => acc + Number(insight.impressions || 0), 0);
     const totalClicks = campaignInsights.reduce((acc, insight) => acc + Number(insight.clicks || 0), 0);
     // Reach is deduplicated — summing daily rows inflates it. Use the most recent day's value.
-    const latestInsight = campaignInsights.slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-    const totalReach = Number(latestInsight?.reach || 0);
+    const totalReach = campaignInsights.reduce((acc, i) => acc + Number(i.reach || 0), 0);
     // Use CRM lead count for this campaign — single source of truth
     const crmLeads = Number(crmStore.metaCampaignLeadCounts[campaign.campaignId] || 0);
     const spendMajor = totalSpend / 100;
@@ -645,8 +686,8 @@ const campaigns = computed(() =>
 
     return {
       campaignId: campaign.campaignId,
-      platform: ad?.platform || 'Facebook',
-      platformIcon: ad?.platform === 'Instagram' ? instagramIcon : facebookIcon,
+      platform,
+      platformIcon: platform === 'Instagram' ? instagramIcon : facebookIcon,
       title: campaign.name || 'Untitled Campaign',
       date: new Date(campaign.createdAt).toLocaleDateString('en-GB', {
         day: 'numeric',
@@ -666,7 +707,7 @@ const campaigns = computed(() =>
       leads: crmLeads,
       cpl: cpl > 0 ? `${sym}${cpl.toFixed(2)}` : '—',
     };
-  })
+  }))
 );
 
 const adSetCards = computed(() => {
@@ -675,25 +716,27 @@ const adSetCards = computed(() => {
   const campaignAdSets = crmStore.metaAdSets.filter(
     (as) => as.campaignId === drill.campaign.campaignId
   );
-  return campaignAdSets.map((adSet) => {
-    const insights = crmStore.metaInsights.filter(
+  return sortCardsByStatus(campaignAdSets.map((adSet) => {
+    const insights = insightsInRange.value.filter(
       (i) => i.entityType === 'adset' && i.entityId === adSet.adSetId
     );
+    if (hasDateFilter.value && insights.length === 0) return null;
     const totalSpend = insights.reduce((acc, i) => acc + Number(i.spend || 0), 0);
     const totalImpressions = insights.reduce((acc, i) => acc + Number(i.impressions || 0), 0);
     const totalClicks = insights.reduce((acc, i) => acc + Number(i.clicks || 0), 0);
-    const latestInsight = insights.slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-    const totalReach = Number(latestInsight?.reach || 0);
+    const totalReach = insights.reduce((acc, i) => acc + Number(i.reach || 0), 0);
     const spendMajor = totalSpend / 100;
     const firstAd = crmStore.metaAds.find((a) => a.adSetId === adSet.adSetId);
+    const adSetPlatform = firstAd?.platform || drill.campaign.platform;
+    if (selectedPlatform.value && adSetPlatform !== selectedPlatform.value) return null;
     const adSetLeads = Number(crmStore.metaAdSetLeadCounts[adSet.adSetId] || 0);
     const adSetCpl = adSetLeads > 0 ? spendMajor / adSetLeads : 0;
     return {
       id: adSet.adSetId,
       adSetId: adSet.adSetId,
       campaignId: null,
-      platform: firstAd?.platform || drill.campaign.platform,
-      platformIcon: firstAd?.platform === 'Instagram' ? instagramIcon : facebookIcon,
+      platform: adSetPlatform,
+      platformIcon: adSetPlatform === 'Instagram' ? instagramIcon : facebookIcon,
       title: adSet.name || 'Untitled Ad Set',
       date: new Date(adSet.createdAt || drill.campaign.rawDate).toLocaleDateString('en-GB', {
         day: 'numeric', month: 'long', year: 'numeric',
@@ -711,22 +754,24 @@ const adSetCards = computed(() => {
       cpl: adSetCpl > 0 ? `${sym}${adSetCpl.toFixed(2)}` : '—',
       drillLabel: 'View Ads',
     };
-  });
+  }));
 });
 
 const adCards = computed(() => {
   if (!drill.adSet) return [];
   const sym = currencySymbol.value;
   const adSetAds = crmStore.metaAds.filter((a) => a.adSetId === drill.adSet.adSetId);
-  return adSetAds.map((ad) => {
-    const insights = crmStore.metaInsights.filter(
+  return sortCardsByStatus(adSetAds.map((ad) => {
+    const insights = insightsInRange.value.filter(
       (i) => i.entityType === 'ad' && i.entityId === ad.adId
     );
+    if (hasDateFilter.value && insights.length === 0) return null;
+    const adPlatform = ad.platform || drill.campaign?.platform;
+    if (selectedPlatform.value && adPlatform !== selectedPlatform.value) return null;
     const totalSpend = insights.reduce((acc, i) => acc + Number(i.spend || 0), 0);
     const totalImpressions = insights.reduce((acc, i) => acc + Number(i.impressions || 0), 0);
     const totalClicks = insights.reduce((acc, i) => acc + Number(i.clicks || 0), 0);
-    const latestInsight = insights.slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-    const totalReach = Number(latestInsight?.reach || 0);
+    const totalReach = insights.reduce((acc, i) => acc + Number(i.reach || 0), 0);
     const spendMajor = totalSpend / 100;
     const adLeads = Number(crmStore.metaAdLeadCounts[ad.adId] || 0);
     const adCpl = adLeads > 0 ? spendMajor / adLeads : 0;
@@ -734,8 +779,8 @@ const adCards = computed(() => {
       id: ad.adId,
       adId: ad.adId,
       campaignId: null,
-      platform: ad.platform || drill.campaign?.platform,
-      platformIcon: ad.platform === 'Instagram' ? instagramIcon : facebookIcon,
+      platform: adPlatform,
+      platformIcon: adPlatform === 'Instagram' ? instagramIcon : facebookIcon,
       title: ad.name || 'Untitled Ad',
       date: drill.adSet?.date || '',
       description: ad.body || `Ad in "${drill.adSet?.title}"`,
@@ -751,7 +796,7 @@ const adCards = computed(() => {
       cpl: adCpl > 0 ? `${sym}${adCpl.toFixed(2)}` : '—',
       drillLabel: null,
     };
-  });
+  }));
 });
 
 const displayCards = computed(() => {
@@ -794,7 +839,15 @@ const drillEmptyCopy = computed(() => {
 
   p {
     font-size: 12px;
+    color: #c3c3c3;
+    margin: 0;
   }
+}
+
+.header-sep {
+  font-size: 12px;
+  color: #c3c3c3;
+  margin: 0 4px;
 }
 
 .toolbar-wrapper {
@@ -824,31 +877,6 @@ const drillEmptyCopy = computed(() => {
   font-size: 14px;
 }
 
-.drill-breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex-wrap: wrap;
-}
-
-.breadcrumb-btn {
-  text-transform: none;
-  font-size: 13px;
-  color: #6b7280;
-  padding: 0 6px;
-  min-width: 0;
-}
-
-.breadcrumb-sep {
-  color: #9ca3af;
-}
-
-.breadcrumb-active {
-  font-size: 13px;
-  font-weight: 600;
-  color: #111827;
-  padding: 0 6px;
-}
 
 .disconnected-banner {
   border: 1px solid #fdba74;
