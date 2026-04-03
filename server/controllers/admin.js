@@ -15,7 +15,6 @@ import { sendNotificationToMultipleUsers } from '../utils/fcmNotification';
 import { bulkUploadAutomations as crmBulkUploadAutomations, bulkUploadLeads as crmBulkUploadLeads } from './crm';
 import { readFile } from 'node:fs/promises';
 import { join, extname } from 'node:path';
-import * as XLSX from 'xlsx';
 
 const CRM_OPTION_CATEGORY_LABELS = {
   treatment: 'Treatment',
@@ -107,7 +106,8 @@ const validateAdminAutomationUploadRow = (row, rowNum) => {
   return errors;
 };
 
-const parseAdminAutomationUploadFile = (filePart) => {
+const parseAdminAutomationUploadFile = async (filePart) => {
+  const XLSX = await import('xlsx');
   if (!filePart?.data?.length) {
     throw new Error('No file uploaded');
   }
@@ -188,6 +188,7 @@ const normalizeAdminLeadHeaderKey = (key) =>
     .trim();
 
 const parseAdminLeadUploadFile = async ({ filePart, organisationId }) => {
+  const XLSX = await import('xlsx');
   if (!filePart?.data?.length) {
     throw new Error('No file uploaded');
   }
@@ -1949,7 +1950,7 @@ export const adminBulkUploadAutomations = async (event) => {
         return error(400, 'organisationId is required');
       }
 
-      const items = parseAdminAutomationUploadFile(filePart);
+      const items = await parseAdminAutomationUploadFile(filePart);
       event.context.adminBulkAutomationPayload = {
         organisationId,
         items,
