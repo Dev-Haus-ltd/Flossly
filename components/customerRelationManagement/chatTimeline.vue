@@ -83,6 +83,7 @@
 
 <script setup>
 import { parsedDate } from "@/lib/dateFormatter";
+import { getInitials } from "@/lib/chatShared";
 import CommonChatBubble from "@/components/Common/chatBubble.vue";
 import CommonWhatsAppNotConnectedAlert from "@/components/Common/WhatsAppNotConnectedAlert.vue";
 import { useMainStore } from "@/stores/index";
