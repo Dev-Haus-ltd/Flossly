@@ -492,9 +492,15 @@ const selectConversation = (id, options = {}) => {
       if (res?.code === 0 && res.data?.updated) {
         const idx = conversations.value.findIndex((c) => c.id === id);
         if (idx !== -1) {
+          const resolvedTitle = resolveConversationTitle({
+            platform: conversations.value[idx]?.platform,
+            participantName: res.data.participantName,
+            metadataName: conversations.value[idx]?.title,
+            threadId: "",
+          });
           conversations.value[idx] = {
             ...conversations.value[idx],
-            title: res.data.participantName || conversations.value[idx].title,
+            title: resolvedTitle,
             avatarUrl: res.data.participantAvatar || conversations.value[idx].avatarUrl,
           };
         }
@@ -629,13 +635,34 @@ const sendMessage = async () => {
 
 const isRawId = (str) => /^\d{10,}$/.test(String(str || "").trim());
 
+const fallbackParticipantName = (platform) => {
+  if (platform === "instagram") return "Instagram User";
+  if (platform === "messenger") return "Messenger User";
+  return "Unknown";
+};
+
+const resolveConversationTitle = ({ platform, participantName, metadataName, threadId }) => {
+  const candidates = [participantName, metadataName]
+    .map((v) => String(v || "").trim())
+    .filter(Boolean);
+
+  const firstHumanName = candidates.find((name) => !isRawId(name));
+  if (firstHumanName) return firstHumanName;
+
+  const thread = String(threadId || "").trim();
+  if (thread && !isRawId(thread)) return thread;
+  return fallbackParticipantName(String(platform || "").toLowerCase());
+};
+
 const buildConversationRow = (row) => {
-  const rawName = row?.participantName || row?.metadata?.participantName || row?.threadId || "";
   const platform = String(row?.platform || "").toLowerCase();
-  const name = rawName && !isRawId(rawName)
-    ? rawName
-    : platform === "instagram" ? "Instagram User" : platform === "messenger" ? "Messenger User" : "Unknown";
-  const avatarUrl = row?.participantAvatar || "";
+  const name = resolveConversationTitle({
+    platform,
+    participantName: row?.participantName,
+    metadataName: row?.metadata?.participantName,
+    threadId: row?.threadId,
+  });
+  const avatarUrl = row?.participantAvatar || row?.metadata?.participantAvatar || "";
   const initials = String(name || "")
     .split(/\s+/)
     .filter(Boolean)

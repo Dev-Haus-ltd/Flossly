@@ -251,8 +251,7 @@ const isWhapiConnected = (status, phoneNumber, displayName) => {
     raw.includes("trial") ||
     raw.includes("launched") ||
     raw.includes("auth") ||
-    raw.includes("authorized") ||
-    raw.includes("qr")
+    raw.includes("authorized")
   );
 };
 
@@ -449,12 +448,20 @@ const deletePartnerChannel = async (channelId) => {
   });
 };
 
+const _partnerStatusCache = new Map();
+const PARTNER_CACHE_TTL = 60_000;
+
 const fetchPartnerChannelStatus = async (channelId) => {
   const partner = getWhapiPartnerConfig();
-  if (!partner.partnerToken || !partner.projectId) {
-    return null;
-  }
+  if (!partner.partnerToken || !partner.projectId) return null;
   if (!channelId) return null;
+
+  const cached = _partnerStatusCache.get(channelId);
+  if (cached && Date.now() - cached._ts < PARTNER_CACHE_TTL) {
+    const { _ts, ...rest } = cached;
+    return rest;
+  }
+
   const base = String(partner.managerBaseUrl || "").replace(/\/+$/, "");
   const url = `${base}/channels/${encodeURIComponent(String(channelId))}`;
   try {
@@ -477,11 +484,9 @@ const fetchPartnerChannelStatus = async (channelId) => {
         : typeof resp?.channel?.stopped === "boolean"
           ? resp.channel.stopped
           : null;
-    return {
-      status: status ? String(status) : null,
-      stopped,
-      raw: resp,
-    };
+    const result = { status: status ? String(status) : null, stopped, raw: resp };
+    _partnerStatusCache.set(channelId, { ...result, _ts: Date.now() });
+    return result;
   } catch {
     return null;
   }
@@ -586,6 +591,9 @@ export const connect = async (event) => {
   }
 
   const webhookUrl = resolveWebhookUrl();
+  if (!webhookUrl) {
+    console.warn("[Whapi] WARNING: No webhook URL configured (WHAPI_WEBHOOK_URL / BASE_URL not set). Incoming messages will not be received.");
+  }
   const created = await createPartnerChannel({
     name: `Flossly Org ${orgId}`,
     webhookUrl,

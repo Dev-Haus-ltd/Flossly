@@ -2036,6 +2036,8 @@ export const webhook = async (event) => {
               attachments: normalizedAttachments.length ? normalizedAttachments : null,
               status: 'received',
               metadata: msgEvent,
+              createdAt: timestamp,
+              updatedAt: timestamp,
             })
 
             conversation.lastMessageAt = timestamp
@@ -2070,6 +2072,7 @@ export const webhook = async (event) => {
               if (userIds.length) {
                 await sendNotificationToMultipleUsers({
                   userIds,
+                  organisationId: orgId,
                   title: `New ${platform === 'instagram' ? 'Instagram' : 'Messenger'} DM`,
                   body: messagePreview.length > 80 ? `${messagePreview.slice(0, 80)}...` : messagePreview,
                   type: 'meta_dm',
@@ -2135,8 +2138,41 @@ export const getSyncJobStatus = async (event) => {
 export const getMetaInsights = async (event) => {
   const { orgId } = event.context.user || {}
   if (!orgId) return error(401, 'Unauthenticated')
-  const rows = await MetaInsight.findAll({ where: { organisationId: orgId }, order: [['date', 'DESC']] })
-  return success(rows)
+  try {
+    const q = getQuery(event) || {}
+    const where = { organisationId: orgId }
+
+    if (q.entityType) {
+      const allowedEntityTypes = new Set(['campaign', 'adset', 'ad'])
+      const entityType = String(q.entityType || '').toLowerCase()
+      if (allowedEntityTypes.has(entityType)) where.entityType = entityType
+    }
+
+    if (q.entityId) where.entityId = String(q.entityId)
+
+    const parseDate = (value) => {
+      if (!value) return null
+      const d = new Date(value)
+      return Number.isNaN(d.getTime()) ? null : d
+    }
+
+    const from = parseDate(q.dateFrom)
+    const to = parseDate(q.dateTo)
+    if (from || to) {
+      where.date = {}
+      if (from) where.date[Op.gte] = from
+      if (to) {
+        to.setHours(23, 59, 59, 999)
+        where.date[Op.lte] = to
+      }
+    }
+
+    const rows = await MetaInsight.findAll({ where, order: [['date', 'DESC']] })
+    return success(rows)
+  } catch (err) {
+    console.error('[getMetaInsights]', err)
+    return error(500, 'Failed to fetch Meta insights')
+  }
 }
 
 export const getCampaignLeadCounts = async (event) => {
@@ -2493,15 +2529,34 @@ export const getAllLeadCounts = async (event) => {
   const { orgId } = event.context.user || {}
   if (!orgId) return error(401, 'Unauthenticated')
   try {
+    const q = getQuery(event) || {}
+    const parseDate = (value) => {
+      if (!value) return null
+      const d = new Date(value)
+      return Number.isNaN(d.getTime()) ? null : d
+    }
+    const dateFrom = parseDate(q.dateFrom)
+    const dateTo = parseDate(q.dateTo)
+
+    const where = {
+      organisationId: orgId,
+      [Op.or]: [
+        { campaignId: { [Op.ne]: null } },
+        { adSetId: { [Op.ne]: null } },
+        { adId: { [Op.ne]: null } },
+      ],
+    }
+    if (dateFrom || dateTo) {
+      where.createdAt = {}
+      if (dateFrom) where.createdAt[Op.gte] = dateFrom
+      if (dateTo) {
+        dateTo.setHours(23, 59, 59, 999)
+        where.createdAt[Op.lte] = dateTo
+      }
+    }
+
     const rows = await CrmLead.findAll({
-      where: {
-        organisationId: orgId,
-        [Op.or]: [
-          { campaignId: { [Op.ne]: null } },
-          { adSetId: { [Op.ne]: null } },
-          { adId: { [Op.ne]: null } },
-        ],
-      },
+      where,
       attributes: ['campaignId', 'adSetId', 'adId', [fn('COUNT', col('id')), 'count']],
       group: ['campaignId', 'adSetId', 'adId'],
       raw: true,

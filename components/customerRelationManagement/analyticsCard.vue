@@ -226,9 +226,10 @@ const statusConfig = computed(() => {
 const showDescriptionToggle = computed(() => String(props.description || '').trim().length > 120);
 
 const viewLeadsHref = computed(() => {
-  if (props.adId) return `/crm/leads?adId=${props.adId}`;
-  if (props.adSetId) return `/crm/leads?adSetId=${props.adSetId}`;
-  if (props.campaignId) return `/crm/leads?campaignId=${props.campaignId}`;
+  const name = encodeURIComponent(props.title || '');
+  if (props.adId) return `/crm/leads?adId=${props.adId}&adName=${name}`;
+  if (props.adSetId) return `/crm/leads?adSetId=${props.adSetId}&adSetName=${name}`;
+  if (props.campaignId) return `/crm/leads?campaignId=${props.campaignId}&campaignName=${name}`;
   return null;
 });
 

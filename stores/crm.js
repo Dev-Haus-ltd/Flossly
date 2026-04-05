@@ -72,8 +72,8 @@ export const useCrmStore = defineStore("crmStore", {
       }
       return res;
     },
-    async getAllLeadCounts(orgId = null) {
-      const res = await this._wrap(() => crmService.getAllLeadCounts());
+    async getAllLeadCounts(orgId = null, params = {}) {
+      const res = await this._wrap(() => crmService.getAllLeadCounts(params));
       if (res?.code === 0 && res.data && this._isCurrentAnalyticsOrg(orgId)) {
         this.metaCampaignLeadCounts = res.data.byCampaign || {};
         this.metaAdSetLeadCounts = res.data.byAdSet || {};
@@ -125,8 +125,8 @@ export const useCrmStore = defineStore("crmStore", {
       if (res?.code === 0) await this.getMetaInsights(orgId);
       return res;
     },
-    async getMetaInsights(orgId = null) {
-      const res = await this._wrap(() => crmService.getMetaInsights());
+    async getMetaInsights(orgId = null, params = {}) {
+      const res = await this._wrap(() => crmService.getMetaInsights(params));
       if (res?.code === 0 && this._isCurrentAnalyticsOrg(orgId)) {
         this.metaInsights = res.data || [];
       }
@@ -187,6 +187,7 @@ export const useCrmStore = defineStore("crmStore", {
     resetAutomationOverride(payload) { return this._wrap(() => crmService.resetAutomationOverride(payload)); },
     deleteAutomation(payload) { return this._wrap(() => crmService.deleteAutomation(payload)); },
     bulkUploadAutomations(payload) { return this._wrap(() => crmService.bulkUploadAutomations(payload)); },
+    generateAutomationsWithAI(payload) { return this._wrap(() => crmService.generateAutomationsWithAI(payload)); },
     listAutomationGroups() { return this._wrap(() => crmService.listAutomationGroups()); },
     async saveAutomationGroup(payload) {
       const res = await this._wrap(() => crmService.saveAutomationGroup(payload));

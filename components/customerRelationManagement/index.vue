@@ -31,7 +31,7 @@
         closable
         @click:close="clearMetaFilter"
       >
-        Showing leads filtered by {{ activeMetaFilter.type }}: <strong>{{ activeMetaFilter.id }}</strong>
+        Showing leads filtered by {{ activeMetaFilter.type }}: <strong>{{ activeMetaFilter.label }}</strong>
       </v-alert>
       <div class="d-flex align-center mb-2" style="flex-wrap: nowrap; justify-content: space-between; overflow-x: auto;">
         <!-- Left: Search + Filters -->
@@ -691,9 +691,9 @@ const treatmentSources = ref([]);
 const activeFilters = ref({});
 const activeMetaFilter = computed(() => {
   const f = activeFilters.value;
-  if (f?.adId) return { type: 'Ad', id: f.adId };
-  if (f?.adSetId) return { type: 'Ad Set', id: f.adSetId };
-  if (f?.campaignId) return { type: 'Campaign', id: f.campaignId };
+  if (f?.adId) return { type: 'Ad', label: f.adName || f.adId };
+  if (f?.adSetId) return { type: 'Ad Set', label: f.adSetName || f.adSetId };
+  if (f?.campaignId) return { type: 'Campaign', label: f.campaignName || f.campaignId };
   return null;
 });
 const clearMetaFilter = async () => {
@@ -1523,9 +1523,9 @@ const initLeads = async (metaConnected = false) => {
   const adId = route.query.adId || null;
   const adSetId = route.query.adSetId || null;
   const campaignId = route.query.campaignId || null;
-  if (adId) activeFilters.value = { adId };
-  else if (adSetId) activeFilters.value = { adSetId };
-  else if (campaignId) activeFilters.value = { campaignId };
+  if (adId) activeFilters.value = { adId, adName: route.query.adName || null };
+  else if (adSetId) activeFilters.value = { adSetId, adSetName: route.query.adSetName || null };
+  else if (campaignId) activeFilters.value = { campaignId, campaignName: route.query.campaignName || null };
   await fetchLeads(activeFilters.value)
 
 };
