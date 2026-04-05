@@ -1,28 +1,30 @@
 <template>
   <div class="text-center">
-    <!-- Chatbot Activator Button -->
-    <div class="chatbot-container">
-      <img
-        src="@/assets/icons/Support/Chat.svg"
-        alt="Chat Icon"
-        class="chatbot-icon"
-        @click="toggleChat"
-      />
-      <v-badge
-        v-if="unreadCount > 0"
-        :content="unreadCount"
-        color="error"
-        class="chatbot-badge"
-      />
-    </div>
-
-    <!-- Chat Dialog -->
-    <v-dialog
+    <v-menu
       v-model="isOpen"
-      max-width="380"
+      location="top end"
+      offset="10"
+      :close-on-content-click="false"
       :scrim="false"
-      content-class="chatbot-dialog-wrapper"
+      :min-width="380"
+      content-class="chatbot-menu-content"
     >
+      <!-- Activator Button -->
+      <template #activator="{ props }">
+        <div class="chatbot-container" v-bind="props">
+          <img
+            src="@/assets/icons/Support/Chat.svg"
+            alt="Chat Icon"
+            class="chatbot-icon"
+          />
+          <v-badge
+            v-if="unreadCount > 0"
+            :content="unreadCount"
+            color="error"
+            class="chatbot-badge"
+          />
+        </div>
+      </template>
       <v-card class="chatbot-dialog" elevation="12">
         <!-- Header Container -->
         <div class="chatbot-header-container">
@@ -559,7 +561,7 @@
         </div>
   
       </v-card>
-    </v-dialog>
+    </v-menu>
 
     <!-- Bug Annotation Dialog -->
     <BugAnnotation 
@@ -878,11 +880,13 @@ const scrollToBottomSoon = async () => {
   setTimeout(() => scrollToBottom(), 0);
 };
 
+// v-menu toggles isOpen via activator; fetch conversations when opened
+watch(isOpen, (val) => {
+  if (val) fetchConversations();
+});
+
 const toggleChat = () => {
-  isOpen.value = !isOpen.value;
-  if (isOpen.value) {
-    fetchConversations();
-  }
+  isOpen.value = false;
 };
 
 const isConversationLoading = ref(false);
@@ -2647,24 +2651,16 @@ watch(showBugAnnotation, (val) => {
 }
 
 
-/* Position dialog in bottom right */
-:deep(.chatbot-dialog-wrapper) {
-  position: fixed !important;
-  bottom: 100px !important;
-  right: 24px !important;
-  top: auto !important;
-  left: auto !important;
-  margin: 0 !important;
+:deep(.chatbot-menu-content) {
+  border-radius: 20px !important;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18) !important;
+  max-height: 600px !important;
   transform: none !important;
 }
 
-:deep(.v-overlay__content) {
-  position: fixed !important;
-  bottom: 100px !important;
-  right: 24px !important;
-  top: auto !important;
-  left: auto !important;
-  margin: 0 !important;
+:deep(.chatbot-menu-content .v-overlay__content) {
+  max-height: 600px !important;
   transform: none !important;
 }
 </style>
