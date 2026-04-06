@@ -17,6 +17,7 @@ export const FormConfig = sequelize.define(
       allowNull: false,
       defaultValue: [],
     },
+    color: { type: DataTypes.STRING(20), allowNull: true, defaultValue: '#0061FB' },
     active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     softDeleted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     deletedAt: { type: DataTypes.DATE, allowNull: true },

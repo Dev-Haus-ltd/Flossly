@@ -16,7 +16,7 @@
 
     <!-- Thank you state -->
     <v-card v-else-if="submitted" max-width="480" width="100%" rounded="xl" class="overflow-hidden">
-      <div class="pa-4" style="background: #0061FB;">
+      <div class="pa-4" :style="{ background: meta.color || '#0061FB' }">
         <div class="d-flex align-center">
           <v-img v-if="meta.logo" :src="meta.logo" max-height="40" max-width="120" contain />
           <span v-else class="text-white font-weight-bold text-subtitle-1">{{ meta.practiceName }}</span>
@@ -34,7 +34,7 @@
     <!-- Form -->
     <v-card v-else max-width="560" width="100%" rounded="xl" class="overflow-hidden">
       <!-- Practice header -->
-      <div class="pa-4" style="background: #0061FB;">
+      <div class="pa-4" :style="{ background: meta.color || '#0061FB' }">
         <div class="d-flex align-center">
           <v-img v-if="meta.logo" :src="meta.logo" max-height="40" max-width="120" contain class="mr-2" />
           <span class="text-white font-weight-bold text-subtitle-1">{{ meta.practiceName }}</span>
@@ -120,13 +120,13 @@
 
           <v-btn
             type="submit"
-            color="primary"
             variant="flat"
             block
             size="large"
             rounded="lg"
             :loading="submitting"
             :disabled="submitting"
+            :style="{ background: meta.color || '#0061FB', color: 'white' }"
           >
             Send Enquiry
           </v-btn>
@@ -162,6 +162,7 @@ const meta = ref({
   practiceName: '',
   logo: null,
   fields: [],
+  color: '#0061FB',
 })
 
 const formData = ref({})
