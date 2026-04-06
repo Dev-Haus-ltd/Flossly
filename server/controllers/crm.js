@@ -2188,13 +2188,11 @@ export const sendLeadWhatsApp = async (event) => {
                 type === 'image' ? 'image' :
                   type === 'video' ? 'video' :
                     type === 'audio' ? 'audio' : 'document'
+              const mediaObj = { url }
+              if (endpoint === 'document' && name) mediaObj.filename = name
               const bodyPayload = {
                 to,
-                type: 'url',
-                ...(endpoint === 'image' ? { image: url } : {}),
-                ...(endpoint === 'video' ? { video: url } : {}),
-                ...(endpoint === 'audio' ? { audio: url } : {}),
-                ...(endpoint === 'document' ? { document: url, filename: name || undefined } : {}),
+                media: mediaObj,
               }
               resp = await $fetch(`${whapiBase}/messages/${endpoint}`, {
                 method: 'POST',
