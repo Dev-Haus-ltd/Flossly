@@ -6,8 +6,7 @@
 
     <v-card rounded="xl" elevation="0" border class="overflow-hidden">
       <!-- Practice header -->
-      <div class="pa-3 d-flex align-center" style="background: #0061FB;">
-        <v-icon color="white" size="18" class="mr-2">mdi-tooth-outline</v-icon>
+      <div class="pa-3 d-flex align-center" :style="{ background: color }">
         <span class="text-white text-body-2 font-weight-medium">{{ formName || 'Your Practice Name' }}</span>
       </div>
 
@@ -47,7 +46,7 @@
             </div>
           </div>
 
-          <div class="mt-4 py-2 rounded-lg text-center text-body-2 font-weight-medium text-white" style="background:#0061FB;">
+          <div class="mt-4 py-2 rounded-lg text-center text-body-2 font-weight-medium text-white" :style="{ background: color }">
             Send Enquiry
           </div>
           <p class="text-caption text-medium-emphasis mt-2 text-center">
@@ -63,6 +62,7 @@
 defineProps({
   formName: { type: String, default: '' },
   fields: { type: Array, default: () => [] },
+  color: { type: String, default: '#0061FB' },
 })
 </script>
 

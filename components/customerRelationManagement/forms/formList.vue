@@ -156,14 +156,23 @@
                   </template>
 
                   <template #item.name="{ item }">
-                    <div class="pa-1 d-flex align-center">
-                      <span
-                        class="font-weight-medium"
-                        style="font-size: 14px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
-                        @click="openBuilder(item)"
-                      >
-                        {{ item.name }}
-                      </span>
+                    <div class="d-flex align-center" style="gap: 8px; min-width: 0;">
+                      <div
+                        class="form-color-dot flex-shrink-0"
+                        :style="{ background: item.color || '#0061FB' }"
+                      />
+                      <v-text-field
+                        v-model="item.name"
+                        :variant="isFocused(item.id, 'name') ? 'outlined' : 'plain'"
+                        density="compact"
+                        hide-details
+                        class="form-name-input"
+                        @focus="onNameFocus(item)"
+                        @blur="onNameBlur(item)"
+                        @keyup.enter="(e) => e.target.blur()"
+                        @keyup.escape="onNameEscape(item)"
+                        @click.stop
+                      />
                     </div>
                   </template>
 
@@ -306,7 +315,8 @@
                   </template>
 
                   <template #item.name="{ item }">
-                    <div class="pa-1 d-flex align-center">
+                    <div class="d-flex align-center" style="gap: 8px;">
+                      <div class="form-color-dot flex-shrink-0" :style="{ background: item.color || '#0061FB' }" />
                       <span class="font-weight-medium" style="font-size: 14px">{{ item.name }}</span>
                     </div>
                   </template>
@@ -387,6 +397,7 @@
           v-if="previewForm"
           :form-name="previewForm?.name || ''"
           :fields="previewForm?.fields || []"
+          :color="previewForm?.color || '#0061FB'"
         />
       </v-dialog>
 
@@ -488,6 +499,43 @@ const confirmBulkDelete = ref(false)
 const archiving = ref(false)
 const restoring = ref(false)
 const deleting = ref(false)
+
+// Inline name editing
+const focusedCells = ref({})
+const nameOriginals = {}
+
+const isFocused = (id, key) => !!focusedCells.value[`${id}:${key}`]
+
+const onNameFocus = (item) => {
+  focusedCells.value[`${item.id}:name`] = true
+  nameOriginals[item.id] = item.name
+}
+
+const onNameBlur = async (item) => {
+  focusedCells.value[`${item.id}:name`] = false
+  const trimmed = (item.name || '').trim()
+  if (!trimmed || trimmed === nameOriginals[item.id]) {
+    if (!trimmed) item.name = nameOriginals[item.id]
+    return
+  }
+  try {
+    const res = await crmStore.updateForm({ id: item.id, name: trimmed })
+    if (res?.code === 0) {
+      item.name = trimmed
+    } else {
+      item.name = nameOriginals[item.id]
+      mainStore.setSnackbar({ title: res?.message || 'Failed to rename form', type: 'error' })
+    }
+  } catch (e) {
+    item.name = nameOriginals[item.id]
+    mainStore.setSnackbar({ title: e?.message || 'Failed to rename form', type: 'error' })
+  }
+}
+
+const onNameEscape = (item) => {
+  item.name = nameOriginals[item.id] ?? item.name
+  focusedCells.value[`${item.id}:name`] = false
+}
 
 const formatDate = (d) => {
   if (!d) return '--'
@@ -863,5 +911,22 @@ onBeforeUnmount(() => {
 .action-icon {
   width: 20px;
   height: 20px;
+}
+
+.form-color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.form-name-input :deep(.v-field__input) {
+  font-size: 14px;
+  font-weight: 500;
+  padding-top: 0;
+  padding-bottom: 0;
+  min-height: unset;
+}
+.form-name-input :deep(.v-field) {
+  min-height: unset;
 }
 </style>

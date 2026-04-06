@@ -122,6 +122,7 @@ export const createForm = async (event) => {
       name,
       token,
       fields,
+      color: payload?.color || '#0061FB',
       active: true,
     }
     if (softDeleteSupported) {
@@ -154,6 +155,7 @@ export const updateForm = async (event) => {
     if (payload.name !== undefined) updates.name = String(payload.name || '').trim()
     if (payload.active !== undefined) updates.active = Boolean(payload.active)
     if (Array.isArray(payload.fields)) updates.fields = payload.fields
+    if (payload.color !== undefined) updates.color = String(payload.color || '#0061FB').trim()
     if (payload.regenerateToken) updates.token = generateToken()
 
     await form.update(updates)
@@ -307,6 +309,7 @@ export const getFormMeta = async (event) => {
       formName: form.name,
       practiceName: form.organisation?.name || '',
       logo: form.organisation?.logo || null,
+      color: form.color || '#0061FB',
       fields,
     })
   } catch (e) {
