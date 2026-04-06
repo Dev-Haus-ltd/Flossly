@@ -211,6 +211,7 @@ export const useCrmStore = defineStore("crmStore", {
     sendLeadWhatsApp(payload) { return this._wrap(() => crmService.sendLeadWhatsApp(payload)); },
     getWhatsAppUsage() { return this._wrap(() => crmService.getWhatsAppUsage()); },
     uploadLeadAttachment(formData) { return this._wrap(() => crmService.uploadLeadAttachment(formData)); },
+    uploadLeadWhatsAppMedia(formData) { return this._wrap(() => crmService.uploadLeadWhatsAppMedia(formData)); },
     getLeadPriceAttachmentRecent(payload) { return this._wrap(() => crmService.getLeadPriceAttachmentRecent(payload)); },
   },
 });

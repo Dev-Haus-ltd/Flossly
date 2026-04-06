@@ -587,6 +587,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  uploadLeadWhatsAppMedia(formData) {
+    return new Promise((resolve, reject) => {
+      PostFormData('/lead/whatsappUploadMedia', formData)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   getLeadPriceAttachmentRecent(payload) {
     return new Promise((resolve, reject) => {
       Post('/lead/priceAttachmentRecent', payload)
