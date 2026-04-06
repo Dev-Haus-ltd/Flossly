@@ -20,17 +20,36 @@
         </div>
       </v-card-text>
       <v-divider />
-      <div v-if="pendingFiles.length" class="chat-timeline-attachments">
+      <div v-if="pendingFiles.length" class="chat-pending-files">
         <div
           v-for="(file, idx) in pendingFiles"
           :key="`${file.name}-${idx}`"
-          class="chat-timeline-attachment-chip"
+          class="chat-pending-file"
         >
-          <v-icon size="16" class="mr-1">mdi-paperclip</v-icon>
-          <span class="chat-timeline-attachment-name">{{ file.name }}</span>
-          <v-btn icon variant="text" size="x-small" @click="removePendingFile(idx)">
-            <v-icon size="14">mdi-close</v-icon>
-          </v-btn>
+          <!-- Image preview -->
+          <template v-if="isImageFile(file)">
+            <div class="chat-pending-image">
+              <img :src="getObjectUrl(file)" :alt="file.name" />
+              <button class="chat-pending-remove" @click="removePendingFile(idx)">
+                <v-icon size="12" color="white">mdi-close</v-icon>
+              </button>
+            </div>
+          </template>
+          <!-- Non-image file card -->
+          <template v-else>
+            <div class="chat-pending-doc">
+              <v-icon size="20" :color="fileIconColor(file)" class="chat-pending-doc-icon">
+                {{ fileIcon(file) }}
+              </v-icon>
+              <div class="chat-pending-doc-info">
+                <span class="chat-pending-doc-name">{{ file.name }}</span>
+                <span class="chat-pending-doc-size">{{ formatBytes(file.size) }}</span>
+              </div>
+              <button class="chat-pending-doc-remove" @click="removePendingFile(idx)">
+                <v-icon size="14">mdi-close</v-icon>
+              </button>
+            </div>
+          </template>
         </div>
       </div>
       <ChatInputBar
@@ -156,11 +175,59 @@ const sendMessage = async () => {
   }
 };
 
+const objectUrls = ref([]);
+
+const getObjectUrl = (file) => {
+  const existing = objectUrls.value.find((e) => e.file === file);
+  if (existing) return existing.url;
+  const url = URL.createObjectURL(file);
+  objectUrls.value.push({ file, url });
+  return url;
+};
+
+const revokeObjectUrls = () => {
+  objectUrls.value.forEach((e) => URL.revokeObjectURL(e.url));
+  objectUrls.value = [];
+};
+
+const isImageFile = (file) => file?.type?.startsWith("image/");
+
+const fileIcon = (file) => {
+  const type = String(file?.type || "").toLowerCase();
+  if (type.startsWith("video/")) return "mdi-file-video-outline";
+  if (type.startsWith("audio/")) return "mdi-file-music-outline";
+  if (type.includes("pdf")) return "mdi-file-pdf-box";
+  if (type.includes("word") || type.includes("document")) return "mdi-file-word-outline";
+  if (type.includes("sheet") || type.includes("excel")) return "mdi-file-excel-outline";
+  return "mdi-file-outline";
+};
+
+const fileIconColor = (file) => {
+  const type = String(file?.type || "").toLowerCase();
+  if (type.includes("pdf")) return "#e53935";
+  if (type.includes("word") || type.includes("document")) return "#1565c0";
+  if (type.includes("sheet") || type.includes("excel")) return "#2e7d32";
+  return "#546e7a";
+};
+
+const formatBytes = (bytes) => {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
+};
+
 const onFilesSelected = (files) => {
   pendingFiles.value = [...pendingFiles.value, ...files];
 };
 
 const removePendingFile = (idx) => {
+  const removed = pendingFiles.value[idx];
+  objectUrls.value = objectUrls.value.filter((e) => e.file !== removed);
+  if (removed) {
+    const entry = objectUrls.value.find((e) => e.file === removed);
+    if (entry) URL.revokeObjectURL(entry.url);
+  }
   pendingFiles.value = pendingFiles.value.filter((_, i) => i !== idx);
 };
 
@@ -206,7 +273,10 @@ watch(
   { immediate: true }
 );
 
-onBeforeUnmount(() => stopWhapiPoll());
+onBeforeUnmount(() => {
+  stopWhapiPoll();
+  revokeObjectUrls();
+});
 </script>
 
 <style scoped>
@@ -225,30 +295,106 @@ onBeforeUnmount(() => stopWhapiPoll());
   padding: 12px 16px;
 }
 
-.chat-timeline-attachments {
+.chat-pending-files {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 8px 16px 0;
+  padding: 8px 16px;
   background: #ffffff;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-.chat-timeline-attachment-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(15, 23, 42, 0.06);
-  border-radius: 999px;
-  padding: 4px 8px;
-  font-size: 12px;
-  color: #0f172a;
+.chat-pending-file {
+  flex: 0 0 auto;
 }
 
-.chat-timeline-attachment-name {
-  max-width: 160px;
+/* Image thumbnail */
+.chat-pending-image {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #f1f5f9;
+}
+
+.chat-pending-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.chat-pending-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.chat-pending-remove:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+/* Non-image file card */
+.chat-pending-doc {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fafc;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  padding: 8px 10px;
+  max-width: 220px;
+}
+
+.chat-pending-doc-icon {
+  flex: 0 0 auto;
+}
+
+.chat-pending-doc-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.chat-pending-doc-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #1e293b;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.chat-pending-doc-size {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.chat-pending-doc-remove {
+  flex: 0 0 auto;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  color: #94a3b8;
+}
+
+.chat-pending-doc-remove:hover {
+  color: #ef4444;
 }
 </style>
