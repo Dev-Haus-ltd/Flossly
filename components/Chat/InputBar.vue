@@ -1,54 +1,66 @@
 <template>
-  <div class="chat-input-bar">
-    <div v-if="showEmoji" class="chat-input-left">
-      <v-menu v-model="emojiMenu" offset-y>
-        <template #activator="{ props: menuProps }">
-          <v-btn v-bind="menuProps" icon variant="text" size="small">
-            <v-icon size="18">mdi-emoticon-outline</v-icon>
-          </v-btn>
-        </template>
-        <ClientOnly>
-          <div class="emoji-menu">
-            <emoji-picker class="emoji-picker" @emoji-click="onEmojiClick" />
-          </div>
-        </ClientOnly>
-      </v-menu>
+  <div
+    class="chat-input-bar"
+    :class="{ 'chat-input-bar--dragging': isDragging }"
+    @dragover.prevent="onDragOver"
+    @dragleave.prevent="onDragLeave"
+    @drop.prevent="onDrop"
+  >
+    <div v-if="isDragging" class="chat-input-drop-overlay">
+      <v-icon size="28" color="primary">mdi-cloud-upload-outline</v-icon>
+      <span>Drop files to attach</span>
     </div>
-    <div v-if="allowAttachments" class="chat-input-left">
-      <v-btn icon variant="text" size="small" @click="triggerFileInput">
-        <v-icon size="18">mdi-paperclip</v-icon>
-      </v-btn>
-      <input
-        ref="fileInput"
-        type="file"
-        class="hidden-input"
-        multiple
-        @change="onFilesChange"
+    <template v-else>
+      <div v-if="showEmoji" class="chat-input-left">
+        <v-menu v-model="emojiMenu" offset-y>
+          <template #activator="{ props: menuProps }">
+            <v-btn v-bind="menuProps" icon variant="text" size="small">
+              <v-icon size="18">mdi-emoticon-outline</v-icon>
+            </v-btn>
+          </template>
+          <ClientOnly>
+            <div class="emoji-menu">
+              <emoji-picker class="emoji-picker" @emoji-click="onEmojiClick" />
+            </div>
+          </ClientOnly>
+        </v-menu>
+      </div>
+      <div v-if="allowAttachments" class="chat-input-left">
+        <v-btn icon variant="text" size="small" @click="triggerFileInput">
+          <v-icon size="18">mdi-paperclip</v-icon>
+        </v-btn>
+        <input
+          ref="fileInput"
+          type="file"
+          class="hidden-input"
+          multiple
+          @change="onFilesChange"
+        />
+      </div>
+      <v-text-field
+        v-model="draft"
+        :placeholder="placeholder"
+        variant="solo"
+        density="compact"
+        hide-details
+        flat
+        :disabled="disabled"
+        :bg-color="bgColor"
+        class="chat-input-field"
+        @keydown.enter.prevent="emitSend"
       />
-    </div>
-    <v-text-field
-      v-model="draft"
-      :placeholder="placeholder"
-      variant="solo"
-      density="compact"
-      hide-details
-      flat
-      :disabled="disabled"
-      :bg-color="bgColor"
-      class="chat-input-field"
-      @keydown.enter.prevent="emitSend"
-    />
-    <v-btn
-      icon
-      :color="sendColor"
-      variant="flat"
-      class="chat-send-btn"
-      :loading="loading"
-      :disabled="disabled || !canSend"
-      @click="emitSend"
-    >
-      <v-icon size="20">{{ sendIcon }}</v-icon>
-    </v-btn>
+      <v-btn
+        icon
+        :color="sendColor"
+        variant="flat"
+        class="chat-send-btn"
+        :loading="loading"
+        :disabled="disabled || !canSend"
+        @click="emitSend"
+      >
+        <v-icon size="20">{{ sendIcon }}</v-icon>
+      </v-btn>
+    </template>
   </div>
 </template>
 
@@ -74,15 +86,15 @@ const emit = defineEmits(["update:modelValue", "send", "files-selected"]);
 
 const emojiMenu = ref(false);
 const fileInput = ref(null);
+const isDragging = ref(false);
+let dragCounter = 0;
 
 const draft = computed({
   get: () => props.modelValue,
   set: (value) => emit("update:modelValue", value),
 });
 
-const emitSend = () => {
-  emit("send");
-};
+const emitSend = () => emit("send");
 
 const onEmojiClick = (event) => {
   const symbol = event?.detail?.unicode || event?.detail?.emoji?.unicode || "";
@@ -93,11 +105,38 @@ const onEmojiClick = (event) => {
 
 const triggerFileInput = () => fileInput.value?.click();
 
-const onFilesChange = (event) => {
-  const files = Array.from(event?.target?.files || []);
+const emitFiles = (files) => {
   if (!files.length) return;
   emit("files-selected", files);
+};
+
+const onFilesChange = (event) => {
+  const files = Array.from(event?.target?.files || []);
+  emitFiles(files);
   if (fileInput.value) fileInput.value.value = "";
+};
+
+const onDragOver = () => {
+  if (!props.allowAttachments) return;
+  dragCounter++;
+  isDragging.value = true;
+};
+
+const onDragLeave = () => {
+  if (!props.allowAttachments) return;
+  dragCounter--;
+  if (dragCounter <= 0) {
+    dragCounter = 0;
+    isDragging.value = false;
+  }
+};
+
+const onDrop = (event) => {
+  dragCounter = 0;
+  isDragging.value = false;
+  if (!props.allowAttachments) return;
+  const files = Array.from(event?.dataTransfer?.files || []);
+  emitFiles(files);
 };
 </script>
 
@@ -108,6 +147,26 @@ const onFilesChange = (event) => {
   gap: 12px;
   padding: 12px 16px;
   background: #ffffff;
+  position: relative;
+  min-height: 56px;
+  transition: background 0.15s, border-top 0.15s;
+}
+
+.chat-input-bar--dragging {
+  background: #eef5ff;
+  border-top: 2px dashed #0061fb;
+}
+
+.chat-input-drop-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  font-size: 14px;
+  font-weight: 500;
+  color: #0061fb;
+  pointer-events: none;
 }
 
 .chat-input-left {

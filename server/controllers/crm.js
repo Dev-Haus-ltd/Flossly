@@ -2106,7 +2106,12 @@ export const sendLeadWhatsApp = async (event) => {
       }
 
       try {
-        if (useTemplate || resolvedText) {
+        // For Whapi: if attachments are present, fold the text into the first
+        // attachment as a caption (one WhatsApp message instead of two).
+        // For Meta / templates: always send text first, then attachments separately.
+        const whapiWithAttachments = waConfig.provider === 'whapi' && hasAttachments
+
+        if ((useTemplate || resolvedText) && !whapiWithAttachments) {
           const bodyPayload = waConfig.provider === 'meta'
             ? {
                 messaging_product: 'whatsapp',
@@ -2121,24 +2126,12 @@ export const sendLeadWhatsApp = async (event) => {
           const resp = await $fetch(waConfig.provider === 'meta' ? metaUrl : `${whapiBase}/messages/text`, {
             method: 'POST',
             headers: waConfig.provider === 'meta'
-              ? {
-                  Authorization: `Bearer ${waConfig.accessToken}`,
-                  'Content-Type': 'application/json',
-                }
-              : {
-                  Authorization: `Bearer ${waConfig.token}`,
-                  'Content-Type': 'application/json',
-                },
+              ? { Authorization: `Bearer ${waConfig.accessToken}`, 'Content-Type': 'application/json' }
+              : { Authorization: `Bearer ${waConfig.token}`, 'Content-Type': 'application/json' },
             body: bodyPayload,
           })
-          const providerMessageId =
-            resp?.messages?.[0]?.id ||
-            resp?.message?.id ||
-            resp?.id ||
-            null
-          if (typeof lead?.save === 'function') {
-            await markWhatsAppOutbound(lead, to)
-          }
+          const providerMessageId = resp?.messages?.[0]?.id || resp?.message?.id || resp?.id || null
+          if (typeof lead?.save === 'function') await markWhatsAppOutbound(lead, to)
           await logWhatsAppMessage({
             organisationId: orgId,
             leadId: lead.id || null,
@@ -2153,9 +2146,23 @@ export const sendLeadWhatsApp = async (event) => {
         }
 
         if (hasAttachments) {
-          for (const att of attachments) {
+          for (let attIdx = 0; attIdx < attachments.length; attIdx++) {
+            const att = attachments[attIdx]
             const url = toAbsoluteUrl(att?.url)
-            if (!url) continue
+            if (!url || !/^https?:\/\//i.test(url)) {
+              failed += 1
+              await logWhatsAppMessage({
+                organisationId: orgId,
+                leadId: lead.id || null,
+                to,
+                type: 'image',
+                status: 'failed',
+                error: 'Attachment URL is not a public URL. Ensure BASE_URL is configured.',
+                content: att?.name || null,
+              })
+              failures.push({ leadId: lead.id, error: 'Attachment URL is not publicly accessible' })
+              continue
+            }
             const mime = String(att?.mimeType || '').toLowerCase()
             const name = att?.name || null
             const type =
@@ -2163,6 +2170,9 @@ export const sendLeadWhatsApp = async (event) => {
               (mime.startsWith('image/') ? 'image' :
                 mime.startsWith('video/') ? 'video' :
                   mime.startsWith('audio/') ? 'audio' : 'document')
+
+            // Caption: only attach text to the first attachment (Whapi path only)
+            const caption = (whapiWithAttachments && attIdx === 0 && resolvedText) ? resolvedText : null
 
             let resp = null
             if (waConfig.provider === 'meta') {
@@ -2177,10 +2187,7 @@ export const sendLeadWhatsApp = async (event) => {
               }
               resp = await $fetch(metaUrl, {
                 method: 'POST',
-                headers: {
-                  Authorization: `Bearer ${waConfig.accessToken}`,
-                  'Content-Type': 'application/json',
-                },
+                headers: { Authorization: `Bearer ${waConfig.accessToken}`, 'Content-Type': 'application/json' },
                 body: bodyPayload,
               })
             } else {
@@ -2188,30 +2195,22 @@ export const sendLeadWhatsApp = async (event) => {
                 type === 'image' ? 'image' :
                   type === 'video' ? 'video' :
                     type === 'audio' ? 'audio' : 'document'
-              const mediaObj = { url }
-              if (endpoint === 'document' && name) mediaObj.filename = name
+              // Whapi: media is a flat string URL, caption carries the text
               const bodyPayload = {
                 to,
-                media: mediaObj,
+                media: url,
+                ...(caption ? { caption } : {}),
+                ...(endpoint === 'document' && name ? { filename: name } : {}),
               }
               resp = await $fetch(`${whapiBase}/messages/${endpoint}`, {
                 method: 'POST',
-                headers: {
-                  Authorization: `Bearer ${waConfig.token}`,
-                  'Content-Type': 'application/json',
-                },
+                headers: { Authorization: `Bearer ${waConfig.token}`, 'Content-Type': 'application/json' },
                 body: bodyPayload,
               })
             }
 
-            const providerMessageId =
-              resp?.messages?.[0]?.id ||
-              resp?.message?.id ||
-              resp?.id ||
-              null
-            if (typeof lead?.save === 'function') {
-              await markWhatsAppOutbound(lead, to)
-            }
+            const providerMessageId = resp?.messages?.[0]?.id || resp?.message?.id || resp?.id || null
+            if (typeof lead?.save === 'function') await markWhatsAppOutbound(lead, to)
             await logWhatsAppMessage({
               organisationId: orgId,
               leadId: lead.id || null,
@@ -2219,7 +2218,7 @@ export const sendLeadWhatsApp = async (event) => {
               type,
               status: 'sent',
               providerMessageId,
-              content: name || null,
+              content: caption || name || null,
               attachments: [{ ...att, url }],
             })
             sent += 1
