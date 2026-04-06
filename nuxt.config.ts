@@ -222,6 +222,11 @@ export default defineNuxtConfig({
   pinia: {
     autoImports: ["defineStore", "acceptHMRUpdate"],
   },
+  nitro: {
+    externals: {
+      inline: ['xlsx'],
+    },
+  },
   vite: {
     ssr: {
       noExternal: ["vuetify", "v-phone-input"], // add the vuetify vite plugin

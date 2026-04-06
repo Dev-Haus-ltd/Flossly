@@ -15,9 +15,7 @@ import { sendNotificationToMultipleUsers } from '../utils/fcmNotification';
 import { bulkUploadAutomations as crmBulkUploadAutomations, bulkUploadLeads as crmBulkUploadLeads } from './crm';
 import { readFile } from 'node:fs/promises';
 import { join, extname } from 'node:path';
-import { createRequire } from 'node:module';
-const _require = createRequire(import.meta.url);
-const XLSX = _require('xlsx');
+import * as XLSX from 'xlsx';
 
 const CRM_OPTION_CATEGORY_LABELS = {
   treatment: 'Treatment',
