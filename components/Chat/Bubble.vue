@@ -4,7 +4,6 @@
     :class="isOutbound ? 'chat-bubble-row--outbound' : 'chat-bubble-row--inbound'"
   >
     <div class="chat-bubble-wrap">
-      
       <div class="chat-bubble-content">
         <div
           v-if="!isOutbound"
@@ -31,7 +30,7 @@
                 rel="noopener noreferrer"
                 class="chat-attachment-image"
               >
-                <img :src="att.url" :alt="att.name || 'Image attachment'" />
+                <img :src="att.url" :alt="att.name || 'Image'" />
               </a>
             </div>
             <div v-if="videoAttachments.length" class="chat-attachments-media">
@@ -101,7 +100,12 @@
           </div>
           <div class="chat-bubble-meta">
             <span>{{ timestamp || "N/A" }}</span>
-            <v-icon v-if="statusIcon" size="14" class="chat-status-icon">
+            <v-icon
+              v-if="statusIcon"
+              size="14"
+              class="chat-status-icon"
+              :color="statusColor || undefined"
+            >
               {{ statusIcon }}
             </v-icon>
           </div>
@@ -126,6 +130,7 @@ const props = defineProps({
   message: { type: String, default: "" },
   timestamp: { type: String, default: "" },
   statusIcon: { type: String, default: "" },
+  statusColor: { type: String, default: "" },
   avatarUrl: { type: String, default: "" },
   avatarText: { type: String, default: "" },
   automated: { type: Boolean, default: false },
@@ -261,10 +266,6 @@ const hasAttachments = computed(() => hasRenderableAttachments.value);
   max-width: 78%;
 }
 
-.chat-bubble-sender {
-  margin: 0 8px 4px;
-}
-
 .chat-bubble-content {
   display: flex;
   align-items: flex-end;
@@ -385,7 +386,7 @@ const hasAttachments = computed(() => hasRenderableAttachments.value);
 }
 
 .chat-status-icon {
-  color: rgba(0, 0, 0, 0.55);
+  opacity: 0.8;
 }
 
 .chat-attachment-placeholder {

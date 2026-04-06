@@ -224,7 +224,7 @@
           </div>
           <v-divider />
           <div ref="threadBodyRef" class="dms-thread-body" @scroll="onThreadScroll">
-            <CommonChatThread
+            <ChatThread
               :groups="groupedMessages"
               :loading="loadingMessages"
               :empty-message="emptyMessage"
@@ -238,7 +238,7 @@
               <template v-if="lastInboundAgo"> Last received {{ lastInboundAgo }}.</template>
             </span>
           </div>
-          <CommonChatInputBar
+          <ChatInputBar
             v-model="draftMessage"
             :can-send="canSend"
             :disabled="!activeConversationId || !withinMessageWindow"
@@ -253,9 +253,10 @@
 </template>
 
 <script setup>
-import CommonChatThread from "@/components/Common/ChatThread.vue";
-import CommonChatInputBar from "@/components/Common/ChatInputBar.vue";
+import ChatThread from "@/components/Chat/Thread.vue";
+import ChatInputBar from "@/components/Chat/InputBar.vue";
 import { groupChatItems, formatChatTimestamp, buildDayKey, buildDayLabel } from "@/lib/chatThread";
+import { resolveDmStatusIcon, resolveDmStatusColor } from "@/lib/chatShared";
 import { useCrmStore } from "@/stores/crm";
 import { useMainStore } from "@/stores/index";
 import { useRoute } from "vue-router";
@@ -367,7 +368,8 @@ const messageItems = computed(() => {
       message: row.message,
       attachments: row.attachments || null,
       timeLabel: formatChatTimestamp(row.createdAt),
-      statusIcon: row.status,
+      statusIcon: isOutbound ? resolveDmStatusIcon(row?.status) : "",
+      statusColor: isOutbound ? resolveDmStatusColor(row?.status) : "",
       automated: false,
       avatarUrl: isOutbound ? "" : (conv?.avatarUrl || ""),
       avatarText: isOutbound ? "F" : (conv?.avatarText || "C"),

@@ -702,24 +702,13 @@ export const deleteLeads = async (event) => {
 export const bulkUploadLeads = async (event) => {
   try {
     const { orgId } = event.context.user || {}
-    const admin = event.context.admin || null
-    const preParsedPayload = event.context.adminBulkLeadPayload || null
-    const body = preParsedPayload ? null : await readBody(event)
-    const payload = preParsedPayload || (typeof body === 'string' ? parseJsonBody(body) : body)
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const leads = payload?.leads || []
-    const requestedOrganisationId = Number(payload?.organisationId || payload?.orgId || 0)
-    const organisationId = Number(admin ? (requestedOrganisationId || orgId) : orgId)
-
-    if (!organisationId) {
-      return admin ? error(400, 'organisationId is required') : error(401, 'Unauthenticated')
-    }
-
-    if (admin) {
-      const organisation = await Organisation.findByPk(organisationId, { attributes: ['id'] })
-      if (!organisation) return error(404, 'Organisation not found')
-    }
-
+    if (!orgId) return error(401, 'Unauthenticated')
     if (!Array.isArray(leads) || !leads.length) return error(400, 'leads required')
+
+    const organisationId = Number(orgId)
     const statusMap = new Map([
       ['new', 'New'],
       ['converted', 'Converted'],
@@ -870,24 +859,13 @@ export const bulkUploadLeads = async (event) => {
 export const bulkUploadAutomations = async (event) => {
   try {
     const { orgId } = event.context.user || {}
-    const admin = event.context.admin || null
-    const preParsedPayload = event.context.adminBulkAutomationPayload || null
-    const body = preParsedPayload ? null : await readBody(event)
-    const payload = preParsedPayload || (typeof body === 'string' ? parseJsonBody(body) : body)
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const items = Array.isArray(payload?.items) ? payload.items : []
-    const requestedOrganisationId = Number(payload?.organisationId || payload?.orgId || 0)
-    const organisationId = Number(admin ? (requestedOrganisationId || orgId) : orgId)
-
-    if (!organisationId) {
-      return admin ? error(400, 'organisationId is required') : error(401, 'Unauthenticated')
-    }
-
-    if (admin) {
-      const organisation = await Organisation.findByPk(organisationId, { attributes: ['id'] })
-      if (!organisation) return error(404, 'Organisation not found')
-    }
-
+    if (!orgId) return error(401, 'Unauthenticated')
     if (!items.length) return error(400, 'items required')
+
+    const organisationId = Number(orgId)
     const results = []
     const defaultKeySet = new Set((crmAutomationDefaults || []).map((d) => d.key))
 
@@ -1213,17 +1191,7 @@ export const saveLeadTreatment = async (event) => {
     if (!orgId) return error(401, 'Unauthenticated')
     if (!leadId) return error(400, 'leadId required')
     const exists = await CrmLeadTreatment.findOne({ where: { organisationId: Number(orgId), leadId: Number(leadId) } })
-    const fields = [
-      'primaryTreatment',
-      'primaryTreatmentPrice',
-      'secondaryTreatments',
-      'secondaryTreatmentPrices',
-      'concerns',
-      'treatmentAreas',
-      'previousExperience',
-      'budget',
-      'specialOccasion',
-    ]
+    const fields = ['primaryTreatment', 'secondaryTreatments', 'concerns', 'treatmentAreas', 'previousExperience', 'budget', 'specialOccasion']
     if (exists) {
       for (const f of fields) if (data?.[f] !== undefined) exists[f] = data[f]
       await exists.save()
@@ -1272,68 +1240,20 @@ export const listLeadWhatsAppLogs = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const { leadId, limit = 100, before = null } = typeof body === 'string' ? parseJsonBody(body) : body
+    const { leadId, limit = 100 } = typeof body === 'string' ? parseJsonBody(body) : body
     if (!orgId) return error(401, 'Unauthenticated')
     if (!leadId) return error(400, 'leadId required')
-    const where = {
-      organisationId: Number(orgId),
-      leadId: Number(leadId),
-    }
-    if (before) {
-      where.createdAt = { [Op.lt]: new Date(before) }
-    }
     const rows = await CrmWhatsAppMessageLog.findAll({
-      where,
+      where: {
+        organisationId: Number(orgId),
+        leadId: Number(leadId),
+      },
       order: [['createdAt', 'DESC']],
       limit: Math.min(Math.max(Number(limit) || 100, 1), 500),
     })
-    const nextCursor = rows.length ? rows[rows.length - 1].createdAt : null
-    return success({ data: rows, nextCursor, limit: Math.min(Math.max(Number(limit) || 100, 1), 500) })
+    return success(rows)
   } catch (e) {
     return error(500, e.message)
-  }
-}
-
-export const uploadWhatsAppAttachment = async (event) => {
-  try {
-    const { orgId, userId } = event.context.user || {}
-    if (!orgId || !userId) return error(401, 'Unauthenticated')
-
-    const formData = await readMultipartFormData(event)
-    if (!formData || !formData.length) return error(400, 'No file uploaded')
-
-    const fileData = formData.find((item) => item.name === 'file')
-    if (!fileData) return error(400, 'Missing file')
-
-    const originalName = fileData.filename || 'file'
-    const fileExt = originalName.includes('.') ? originalName.slice(originalName.lastIndexOf('.')) : ''
-    const uniqueFileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExt}`
-    const mimeType = fileData.type || 'application/octet-stream'
-
-    const s3Path = await uploadBufferFile({
-      data: fileData.data,
-      filename: uniqueFileName,
-      contentType: mimeType,
-      baseDir: 'chat-attachments',
-    })
-
-    const attachmentType = mimeType.startsWith('image/')
-      ? 'image'
-      : mimeType.startsWith('video/')
-        ? 'video'
-        : mimeType.startsWith('audio/')
-          ? 'audio'
-          : 'document'
-
-    return success({
-      url: s3Path,
-      name: originalName,
-      mimeType,
-      type: attachmentType,
-      size: fileData.data?.length || null,
-    })
-  } catch (e) {
-    return error(500, e.message || 'Failed to upload attachment')
   }
 }
 
@@ -1411,6 +1331,52 @@ export const uploadLeadAttachment = async (event) => {
     return error(500, e.message || 'Failed to upload attachment')
   }
 }
+
+export const uploadLeadWhatsAppMedia = async (event) => {
+  try {
+    const { orgId, userId } = event.context.user || {}
+    if (!orgId || !userId) return error(401, 'Unauthenticated')
+
+    const formData = await readMultipartFormData(event)
+    if (!formData || !formData.length) return error(400, 'No file uploaded')
+
+    const fileData = formData.find((item) => item.name === 'file')
+    if (!fileData) return error(400, 'Missing file')
+
+    const originalName = fileData.filename || 'file'
+    const fileExt = originalName.includes('.') ? originalName.slice(originalName.lastIndexOf('.')) : ''
+    const uniqueFileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExt}`
+    const mimeType = fileData.type || 'application/octet-stream'
+
+    const s3Path = await uploadBufferFile({
+      data: fileData.data,
+      filename: uniqueFileName,
+      contentType: mimeType,
+      baseDir: 'chat-attachments',
+    })
+
+    const attachmentType = mimeType.startsWith('image/')
+      ? 'image'
+      : mimeType.startsWith('video/')
+        ? 'video'
+        : mimeType.startsWith('audio/')
+          ? 'audio'
+          : 'document'
+
+    return success({
+      url: s3Path,
+      name: originalName,
+      mimeType,
+      type: attachmentType,
+      size: fileData.data?.length || null,
+    })
+  } catch (e) {
+    return error(500, e.message || 'Failed to upload media')
+  }
+}
+
+// Alias so legacy route 'whatsappUploadAttachment' still works
+export const uploadWhatsAppAttachment = uploadLeadWhatsAppMedia
 
 export const getLeadPriceAttachmentRecent = async (event) => {
   try {
@@ -1953,23 +1919,11 @@ export const sendLeadMail = async (event) => {
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
-    const { leadIds = [], recipients = [], subject, html, key, attachments = [], metadata = {} } = payload || {}
+    const { leadIds = [], subject, html, key, attachments = [], metadata = {} } = payload || {}
     const safeSubject = String(subject || '').trim()
     const safeHtml = typeof html === 'string' ? html : ''
     if (!safeSubject) return error(400, 'subject required')
-    const normalizedRecipients = Array.isArray(recipients)
-      ? recipients
-          .map((item) => ({
-            id: item?.id ? Number(item.id) : null,
-            name: String(item?.name || item?.fullName || '').trim(),
-            email: String(item?.email || '').trim(),
-            telephone: String(item?.telephone || item?.phone || item?.mobile || '').trim(),
-            location: String(item?.location || '').trim(),
-            treatment: item?.treatment || null,
-          }))
-          .filter((item) => item.email)
-      : []
-    if ((!Array.isArray(leadIds) || !leadIds.length) && !normalizedRecipients.length) return error(400, 'leadIds or recipients required')
+    if (!Array.isArray(leadIds) || !leadIds.length) return error(400, 'leadIds required')
     const normalizedAttachments = Array.isArray(attachments)
       ? attachments
           .map((item) => ({
@@ -2003,9 +1957,7 @@ export const sendLeadMail = async (event) => {
       }
     }
 
-    const leads = Array.isArray(leadIds) && leadIds.length
-      ? await CrmLead.findAll({ where: { id: { [Op.in]: leadIds }, organisationId: Number(orgId), softDeleted: false } })
-      : normalizedRecipients
+    const leads = await CrmLead.findAll({ where: { id: { [Op.in]: leadIds }, organisationId: Number(orgId), softDeleted: false } })
     const result = await sendLeadBulkEmail({
       leads,
       subject: safeSubject,
@@ -2046,7 +1998,7 @@ export const sendLeadMail = async (event) => {
   }
 }
 
-// Send WhatsApp message to selected leads
+// Send WhatsApp message to selected leads (supports leadIds or direct recipients array)
 export const sendLeadWhatsApp = async (event) => {
   try {
     const { orgId } = event.context.user || {}
@@ -2099,7 +2051,7 @@ export const sendLeadWhatsApp = async (event) => {
       ? `https://graph.facebook.com/v24.0/${waConfig.phoneNumberId}/messages`
       : null
     const whapiBase = waConfig.provider === 'whapi'
-      ? `${String(waConfig.baseUrl || '').replace(/\/+$/, '')}`
+      ? String(waConfig.baseUrl || '').replace(/\/+$/, '')
       : null
     let sent = 0
     let failed = 0
@@ -2150,12 +2102,9 @@ export const sendLeadWhatsApp = async (event) => {
           to,
           type: 'text',
           status: 'failed',
-          error: 'Whapi requires a text message',
+          error: 'Nothing to send (no message text or attachments)',
         })
-        failures.push({
-          leadId: lead.id,
-          error: 'Whapi requires a text message',
-        })
+        failures.push({ leadId: lead.id, error: 'Nothing to send' })
         continue
       }
 

@@ -1,15 +1,15 @@
 <template>
   <div class="chat-thread">
-    <div v-if="loading" class="text-caption text-medium-emphasis">
+    <div v-if="loading" class="chat-thread-state text-caption text-medium-emphasis">
       {{ loadingMessage }}
     </div>
-    <div v-else-if="!hasItems" class="text-caption text-medium-emphasis">
+    <div v-else-if="!hasItems" class="chat-thread-state text-caption text-medium-emphasis">
       {{ emptyMessage }}
     </div>
-    <div v-else class="chat-thread-list">
+    <div v-else ref="listEl" class="chat-thread-list">
       <template v-for="group in groups" :key="group.key">
         <div class="chat-day-pill">{{ group.label }}</div>
-        <CommonChatBubble
+        <ChatBubble
           v-for="row in group.items"
           :key="row.id"
           :is-outbound="row.isOutbound"
@@ -17,6 +17,7 @@
           :message="row.message"
           :timestamp="row.timeLabel"
           :status-icon="row.statusIcon"
+          :status-color="row.statusColor || ''"
           :avatar-url="row.avatarUrl"
           :avatar-text="row.avatarText"
           :automated="row.automated"
@@ -28,7 +29,7 @@
 </template>
 
 <script setup>
-import CommonChatBubble from "@/components/Common/chatBubble.vue";
+import ChatBubble from "@/components/Chat/Bubble.vue";
 
 const props = defineProps({
   groups: { type: Array, default: () => [] },
@@ -37,12 +38,27 @@ const props = defineProps({
   loadingMessage: { type: String, default: "Loading messages..." },
 });
 
-const hasItems = computed(() => Array.isArray(props.groups) && props.groups.some((g) => g?.items?.length));
+const listEl = ref(null);
+
+const hasItems = computed(() =>
+  Array.isArray(props.groups) && props.groups.some((g) => g?.items?.length)
+);
+
+const scrollToBottom = () => {
+  const el = listEl.value;
+  if (el) el.scrollTop = el.scrollHeight;
+};
+
+defineExpose({ scrollToBottom });
 </script>
 
 <style scoped>
 .chat-thread {
   min-height: 120px;
+}
+
+.chat-thread-state {
+  padding: 16px;
 }
 
 .chat-thread-list {

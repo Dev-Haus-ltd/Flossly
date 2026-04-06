@@ -4,26 +4,20 @@
       <CommonWhatsAppNotConnectedAlert />
     </div>
     <template v-else>
-      <v-card-title class="d-flex align-center justify-space-between">
-        <v-btn
-          size="small"
-          variant="text"
-          :disabled="!messageHasMore || loadingMore"
-          @click="loadMore"
-        >
-          {{ loadingMore ? "Loading..." : messageHasMore ? "Load older" : "No more" }}
-        </v-btn>
+      <v-card-title class="d-flex align-center justify-end">
         <v-btn size="small" variant="text" :loading="loading" @click="loadLogs">
           Refresh
         </v-btn>
       </v-card-title>
       <v-divider />
       <v-card-text class="chat-timeline-body">
-        <CommonChatThread
-          :groups="groupedChatItems"
-          :loading="loading"
-          :empty-message="emptyMessage"
-        />
+        <div ref="scrollEl" class="chat-timeline-scroll">
+          <ChatThread
+            :groups="groupedChatItems"
+            :loading="loading"
+            :empty-message="emptyMessage"
+          />
+        </div>
       </v-card-text>
       <v-divider />
       <div v-if="pendingFiles.length" class="chat-timeline-attachments">
@@ -39,7 +33,7 @@
           </v-btn>
         </div>
       </div>
-      <CommonChatInputBar
+      <ChatInputBar
         v-model="draftMessage"
         :can-send="canSend"
         :loading="sending"
@@ -54,114 +48,37 @@
 <script setup>
 import { groupChatItems } from "@/lib/chatThread";
 import { mapWhatsAppLogToChatItem } from "@/lib/chatMappers";
-import CommonChatThread from "@/components/Common/ChatThread.vue";
-import CommonChatInputBar from "@/components/Common/ChatInputBar.vue";
+import ChatThread from "@/components/Chat/Thread.vue";
+import ChatInputBar from "@/components/Chat/InputBar.vue";
+import CommonWhatsAppNotConnectedAlert from "@/components/Common/WhatsAppNotConnectedAlert.vue";
 import { useMainStore } from "@/stores/index";
+import { useCrmStore } from "@/stores/crm";
 
 const props = defineProps({
-  leadId: {
-    type: [Number, String],
-    default: null,
-  },
-  leadName: {
-    type: String,
-    default: "",
-  },
-  leadAvatar: {
-    type: String,
-    default: "",
-  },
-  orgName: {
-    type: String,
-    default: "",
-  },
-  orgLogo: {
-    type: String,
-    default: "",
-  },
-  emptyMessage: {
-    type: String,
-    default: "No WhatsApp messages logged yet.",
-  },
-  inboundSenderLabel: {
-    type: String,
-    default: "Lead",
-  },
-  outboundSenderLabel: {
-    type: String,
-    default: "Flossly",
-  },
-  connected: {
-    type: Boolean,
-    default: true,
-  },
+  leadId: { type: [Number, String], default: null },
+  leadName: { type: String, default: "" },
+  leadAvatar: { type: String, default: "" },
+  orgName: { type: String, default: "" },
+  orgLogo: { type: String, default: "" },
+  emptyMessage: { type: String, default: "No WhatsApp messages logged yet." },
+  inboundSenderLabel: { type: String, default: "Lead" },
+  outboundSenderLabel: { type: String, default: "Flossly" },
+  connected: { type: Boolean, default: true },
 });
 
 const crmStore = useCrmStore();
 const mainStore = useMainStore();
+
 const loading = ref(false);
 const logs = ref([]);
 const draftMessage = ref("");
 const sending = ref(false);
 const pendingFiles = ref([]);
-const messageCursor = ref(null);
-const messageHasMore = ref(true);
-const loadingMore = ref(false);
-
-let whapiEventSource = null;
-let whapiPollTimer = null;
-
-const startWhapiStream = () => {
-  if (!props.connected || !props.leadId) return;
-  if (whapiEventSource) return;
-  if (typeof window === "undefined" || !("EventSource" in window)) {
-    startWhapiPoll();
-    return;
-  }
-  whapiEventSource = new EventSource("/api/whapi/stream");
-  whapiEventSource.addEventListener("message", (evt) => {
-    try {
-      const payload = JSON.parse(evt.data || "{}");
-      if (Number(payload.leadId) === Number(props.leadId) && !loading.value) {
-        loadLogs();
-      }
-    } catch {}
-  });
-  whapiEventSource.onerror = () => {
-    stopWhapiStream();
-    startWhapiPoll();
-  };
-};
-
-const stopWhapiStream = () => {
-  if (whapiEventSource) {
-    whapiEventSource.close();
-    whapiEventSource = null;
-  }
-};
-
-const startWhapiPoll = () => {
-  if (whapiPollTimer || !props.connected || !props.leadId) return;
-  whapiPollTimer = setInterval(() => {
-    if (!loading.value) loadLogs();
-  }, 15000);
-};
-
-const stopWhapiPoll = () => {
-  if (whapiPollTimer) {
-    clearInterval(whapiPollTimer);
-    whapiPollTimer = null;
-  }
-};
-
-onBeforeUnmount(() => {
-  stopWhapiStream();
-  stopWhapiPoll();
-});
-
-
 const resolvedOrg = ref({ name: "", logo: "" });
 const resolvedLead = ref({ name: "", avatar: "" });
+const scrollEl = ref(null);
+
+let whapiPollTimer = null;
 
 const canSend = computed(() => {
   const hasText = String(draftMessage.value || "").trim().length > 0;
@@ -173,31 +90,31 @@ const chatItems = computed(() => {
   if (!Array.isArray(logs.value)) return [];
   return [...logs.value]
     .reverse()
-    .map((row) => {
-      return mapWhatsAppLogToChatItem(row, {
-        inboundLabel: props.inboundSenderLabel,
-        outboundLabel: props.outboundSenderLabel,
-        inboundAvatarUrl: resolvedLead.value.avatar,
-        outboundAvatarUrl: resolvedOrg.value.logo,
-      });
-    })
+    .map((row) => mapWhatsAppLogToChatItem(row, {
+      inboundLabel: props.inboundSenderLabel,
+      outboundLabel: props.outboundSenderLabel,
+      inboundAvatarUrl: resolvedLead.value.avatar,
+      outboundAvatarUrl: resolvedOrg.value.logo,
+    }))
     .filter(Boolean);
 });
 
 const groupedChatItems = computed(() => groupChatItems(chatItems.value));
 
+// Auto-scroll to bottom whenever new messages arrive
+watch(groupedChatItems, async () => {
+  await nextTick();
+  const el = scrollEl.value;
+  if (el) el.scrollTop = el.scrollHeight;
+});
+
 const loadLogs = async () => {
-  if (!props.leadId) {
-    logs.value = [];
-    return;
-  }
+  if (!props.leadId) { logs.value = []; return; }
   try {
     loading.value = true;
-    const res = await crmStore.getLeadWhatsAppLogs({ leadId: props.leadId, limit: 100 });
-    if (res?.code === 0 && Array.isArray(res.data?.data)) {
-      logs.value = res.data.data;
-      messageCursor.value = res.data?.nextCursor || null;
-      messageHasMore.value = !!res.data?.nextCursor;
+    const res = await crmStore.getLeadWhatsAppLogs(props.leadId, 100);
+    if (res?.code === 0) {
+      logs.value = Array.isArray(res.data) ? res.data : [];
       return;
     }
     logs.value = [];
@@ -208,64 +125,32 @@ const loadLogs = async () => {
   }
 };
 
-const loadMore = async () => {
-  if (!props.leadId || !messageHasMore.value || loadingMore.value) return;
-  try {
-    loadingMore.value = true;
-    const res = await crmStore.getLeadWhatsAppLogs({
-      leadId: props.leadId,
-      limit: 100,
-      before: messageCursor.value || undefined,
-    });
-    if (res?.code === 0 && Array.isArray(res.data?.data)) {
-      const older = res.data.data;
-      logs.value = [...logs.value, ...older];
-      messageCursor.value = res.data?.nextCursor || null;
-      if (!older.length || !res.data?.nextCursor) messageHasMore.value = false;
-    } else {
-      messageHasMore.value = false;
-    }
-  } finally {
-    loadingMore.value = false;
-  }
-};
-
 const sendMessage = async () => {
   if (!canSend.value) return;
   const message = String(draftMessage.value || "").trim();
   try {
     sending.value = true;
     let attachments = [];
-    if (pendingFiles.value.length) {
-      for (const file of pendingFiles.value) {
-        const form = new FormData();
-        form.append("file", file);
-        const resUpload = await crmStore.uploadLeadWhatsAppAttachment(form);
-        if (resUpload?.code !== 0) {
-          const msg = resUpload?.error || resUpload?.message || "Failed to upload attachment";
-          mainStore?.setSnackbar?.({ title: msg, type: "error" });
-          sending.value = false;
-          return;
-        }
-        if (resUpload?.data) attachments.push(resUpload.data);
+    for (const file of pendingFiles.value) {
+      const form = new FormData();
+      form.append("file", file);
+      const resUpload = await crmStore.uploadLeadWhatsAppMedia(form);
+      if (resUpload?.code !== 0) {
+        mainStore?.setSnackbar?.({ title: resUpload?.error || "Failed to upload attachment", type: "error" });
+        return;
       }
+      if (resUpload?.data) attachments.push(resUpload.data);
     }
-    const res = await crmStore.sendLeadWhatsApp({
-      leadIds: [Number(props.leadId)],
-      message,
-      attachments,
-    });
+    const res = await crmStore.sendLeadWhatsApp({ leadIds: [Number(props.leadId)], message, attachments });
     if (res?.code === 0) {
       draftMessage.value = "";
       pendingFiles.value = [];
       await loadLogs();
       return;
     }
-    const msg = res?.error || res?.message || "Failed to send WhatsApp message";
-    mainStore?.setSnackbar?.({ title: msg, type: "error" });
+    mainStore?.setSnackbar?.({ title: res?.error || res?.message || "Failed to send message", type: "error" });
   } catch (e) {
-    const msg = e?.data?.message || e?.message || "Failed to send WhatsApp message";
-    mainStore?.setSnackbar?.({ title: msg, type: "error" });
+    mainStore?.setSnackbar?.({ title: e?.data?.message || e?.message || "Failed to send message", type: "error" });
   } finally {
     sending.value = false;
   }
@@ -285,8 +170,7 @@ const resolveContext = () => {
     try {
       const user = JSON.parse(stored);
       const orgId = user?.currentLoggedInOrgId;
-      const list = user?.userOrganisations || [];
-      const match = list.find((row) => row.organisationId === orgId);
+      const match = (user?.userOrganisations || []).find((r) => r.organisationId === orgId);
       resolvedOrg.value = {
         name: props.orgName || match?.organisation?.name || "",
         logo: props.orgLogo || match?.organisation?.logo || "",
@@ -297,25 +181,32 @@ const resolveContext = () => {
   } else {
     resolvedOrg.value = { name: props.orgName || "", logo: props.orgLogo || "" };
   }
-  resolvedLead.value = {
-    name: props.leadName || "",
-    avatar: props.leadAvatar || "",
-  };
+  resolvedLead.value = { name: props.leadName || "", avatar: props.leadAvatar || "" };
+};
+
+const stopWhapiPoll = () => {
+  if (whapiPollTimer) { clearInterval(whapiPollTimer); whapiPollTimer = null; }
+};
+
+const startWhapiPoll = () => {
+  stopWhapiPoll();
+  if (!props.connected || !props.leadId) return;
+  whapiPollTimer = setInterval(() => { if (!loading.value) loadLogs(); }, 15000);
 };
 
 watch(
-  () => [props.leadId, props.leadName, props.leadAvatar, props.orgName, props.orgLogo],
+  () => [props.leadId, props.leadName, props.leadAvatar, props.orgName, props.orgLogo, props.connected],
   () => {
     resolveContext();
-    messageCursor.value = null;
-    messageHasMore.value = true;
-    stopWhapiStream();
     stopWhapiPoll();
+    if (!props.connected) { logs.value = []; return; }
     loadLogs();
-    startWhapiStream();
+    startWhapiPoll();
   },
   { immediate: true }
 );
+
+onBeforeUnmount(() => stopWhapiPoll());
 </script>
 
 <style scoped>
@@ -325,13 +216,20 @@ watch(
 
 .chat-timeline-body {
   background: #f7f8fb;
+  padding: 0 !important;
+}
+
+.chat-timeline-scroll {
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 12px 16px;
 }
 
 .chat-timeline-attachments {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 8px 16px 0 16px;
+  padding: 8px 16px 0;
   background: #ffffff;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
