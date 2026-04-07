@@ -1124,11 +1124,11 @@ export const webhook = async (event) => {
 // ── Resolve org channel token (shared helper for message actions) ──
 const resolveOrgWhapiToken = async (orgId) => {
   const channel = await findOrgChannel(orgId);
-  if (!channel?.token) return null;
+  if (!channel?.tokenEnc) return null;
   try {
-    return decrypt(channel.token);
+    return decrypt(channel.tokenEnc);
   } catch {
-    return channel.token;
+    return channel.tokenEnc;
   }
 };
 
