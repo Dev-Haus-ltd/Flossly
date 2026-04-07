@@ -42,28 +42,28 @@
             <template v-else>
               <!-- Image-first layout (WhatsApp style) -->
               <template v-if="leadImage">
-                <!-- v-viewer: clicking the image opens the full viewer (zoom, rotate, etc.) -->
-                <div
-                  v-viewer="{ toolbar: true, navbar: allImageAttachments.length > 1 }"
+                <viewer
+                  :options="{ toolbar: true, navbar: allImageAttachments.length > 1, title: false }"
                   class="chat-bubble-image-wrap"
                 >
+                  <!-- Lead image is shown in the bubble; extras are hidden but included for gallery nav -->
                   <img
                     v-for="att in allImageAttachments"
                     :key="att.url"
                     :src="att.url"
                     :alt="att.name || 'Image'"
-                    :style="att !== leadImage ? 'display:none' : ''"
-                    class="chat-bubble-image"
+                    :class="att === leadImage ? 'chat-bubble-image' : 'chat-viewer-hidden'"
                   />
+                  <!-- Zoom hint overlay — pointer-events:none so clicks reach the img -->
                   <div class="chat-bubble-image-zoom" aria-hidden="true">
-                    <v-icon size="16" color="white">mdi-magnify-plus-outline</v-icon>
+                    <v-icon size="18" color="white">mdi-magnify-plus-outline</v-icon>
                   </div>
                   <!-- Timestamp overlaid on image when no text below -->
-                  <div v-if="!showMessage" class="chat-bubble-image-meta">
+                  <div v-if="!showMessage" class="chat-bubble-image-meta" style="pointer-events:none">
                     <span>{{ timestamp || 'N/A' }}</span>
                     <v-icon v-if="statusIcon" size="12" :color="statusColor || undefined">{{ statusIcon }}</v-icon>
                   </div>
-                </div>
+                </viewer>
                 <!-- Caption below image -->
                 <div v-if="showMessage" class="chat-bubble-caption">
                   <span>{{ message }}</span>
@@ -133,7 +133,7 @@
             </template>
           </div>
 
-          <!-- Action chevron (hover) — only when providerMessageId is available -->
+          <!-- Action chevron — overlaid on bubble, WhatsApp-style -->
           <v-menu v-if="providerMessageId" v-model="menuOpen" location="bottom end" :close-on-content-click="false">
             <template #activator="{ props: menuProps }">
               <button
@@ -142,11 +142,11 @@
                 :class="isOutbound ? 'chat-bubble-action-btn--outbound' : 'chat-bubble-action-btn--inbound'"
                 @click.stop
               >
-                <v-icon size="16">mdi-chevron-down</v-icon>
+                <v-icon size="14">mdi-chevron-down</v-icon>
               </button>
             </template>
 
-            <v-card class="chat-action-menu" elevation="3" rounded="lg" min-width="200">
+            <v-card class="chat-action-menu" elevation="4" rounded="lg" min-width="200">
               <!-- Quick emoji reactions + "more" button -->
               <div class="chat-action-emoji-row">
                 <button
@@ -156,7 +156,7 @@
                   @click="sendReaction(em)"
                 >{{ em }}</button>
                 <button class="chat-action-emoji-btn chat-action-emoji-more" @click="emojiPickerOpen = !emojiPickerOpen">
-                  <v-icon size="18">mdi-emoticon-plus-outline</v-icon>
+                  <v-icon size="18">mdi-plus</v-icon>
                 </button>
               </div>
 
@@ -168,7 +168,6 @@
               </div>
 
               <v-divider />
-              <!-- Menu items -->
               <v-list density="compact" nav>
                 <v-list-item
                   v-if="canEdit"
@@ -268,7 +267,7 @@ const sendReaction = async (emoji) => {
   menuOpen.value = false;
   emojiPickerOpen.value = false;
   try {
-    await Post("/api/whapi/reactToMessage", {
+    await Post("/whapi/reactToMessage", {
       providerMessageId: props.providerMessageId,
       emoji,
     });
@@ -300,7 +299,7 @@ const submitEdit = async () => {
   if (!newText || newText === props.message) { cancelEdit(); return; }
   editState.saving = true;
   try {
-    await Post("/api/whapi/editMessage", {
+    await Post("/whapi/editMessage", {
       providerMessageId: props.providerMessageId,
       newText,
       to: props.recipientPhone,
@@ -323,7 +322,7 @@ const openDeleteConfirm = () => {
 const confirmDelete = async () => {
   deleteConfirm.deleting = true;
   try {
-    await Post("/api/whapi/deleteMessage", { providerMessageId: props.providerMessageId });
+    await Post("/whapi/deleteMessage", { providerMessageId: props.providerMessageId });
     emit("message-deleted", { providerMessageId: props.providerMessageId });
     deleteConfirm.open = false;
   } catch {}
@@ -648,41 +647,44 @@ const bubbleClass = computed(() => ({
 
 .chat-avatar--image { background: transparent; }
 
-/* ── Hover group: bubble + action btn ── */
+/* ── Hover group: bubble + overlaid action btn ── */
 .chat-bubble-hover-group {
   position: relative;
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
+  display: inline-flex;
 }
 
+/* Action button — overlaid top-right corner of bubble, WhatsApp-style */
 .chat-bubble-action-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
   display: none;
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.07);
+  background: rgba(0, 0, 0, 0.35);
   border: none;
   cursor: pointer;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  color: #fff;
   transition: background 0.15s;
-  margin-bottom: 4px;
+  backdrop-filter: blur(2px);
+}
+
+.chat-bubble-action-btn--inbound {
+  right: auto;
+  left: 4px;
 }
 
 .chat-bubble-action-btn:hover {
-  background: rgba(0, 0, 0, 0.14);
+  background: rgba(0, 0, 0, 0.55);
 }
 
 .chat-bubble-hover-group:hover .chat-bubble-action-btn,
 .chat-bubble-action-btn[aria-expanded="true"] {
   display: flex;
-}
-
-/* Position: outbound → left of bubble, inbound → right of bubble */
-.chat-bubble-row--outbound .chat-bubble-hover-group {
-  flex-direction: row-reverse;
 }
 
 /* ── Action menu card ── */
@@ -777,17 +779,22 @@ const bubbleClass = computed(() => ({
   cursor: zoom-in;
 }
 
+/* Extra gallery images — invisible in bubble but included for v-viewer gallery nav */
+.chat-viewer-hidden {
+  display: none;
+}
+
 .chat-bubble-image-zoom {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0);
-  transition: background 0.18s;
   border-radius: inherit;
   opacity: 0;
-  transition: opacity 0.18s;
+  background: rgba(0, 0, 0, 0);
+  transition: opacity 0.18s, background 0.18s;
+  pointer-events: none; /* let clicks pass through to the img for v-viewer */
 }
 
 .chat-bubble-image-wrap:hover .chat-bubble-image-zoom {
