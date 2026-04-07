@@ -288,6 +288,12 @@ export default defineNuxtConfig({
       inline: ['xlsx'],
     },
   },
+  vue: {
+    compilerOptions: {
+      // emoji-picker is a native web component — suppress Vue unknown-element warnings
+      isCustomElement: (tag) => tag === "emoji-picker",
+    },
+  },
   vite: {
     ssr: {
       noExternal: ["vuetify", "v-phone-input"], // add the vuetify vite plugin

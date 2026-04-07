@@ -15,89 +15,176 @@
           <span v-else>{{ avatarText }}</span>
         </div>
 
-        <div class="chat-bubble" :class="bubbleClass">
-          <div v-if="automated" class="chat-bubble-badge">Automated</div>
+        <!-- Hover group: bubble + action chevron -->
+        <div class="chat-bubble-hover-group">
+          <div class="chat-bubble" :class="bubbleClass">
+            <div v-if="automated" class="chat-bubble-badge">Automated</div>
 
-          <!-- Image-first layout (WhatsApp style) -->
-          <template v-if="leadImage">
-            <a
-              class="chat-bubble-image-wrap"
-              :href="leadImage.url"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <img :src="leadImage.url" :alt="leadImage.name || 'Image'" class="chat-bubble-image" />
-              <!-- Timestamp overlaid on image when no text below -->
-              <div v-if="!showMessage" class="chat-bubble-image-meta">
-                <span>{{ timestamp || 'N/A' }}</span>
-                <v-icon v-if="statusIcon" size="12" :color="statusColor || undefined">{{ statusIcon }}</v-icon>
-              </div>
-            </a>
-            <!-- Caption below image -->
-            <div v-if="showMessage" class="chat-bubble-caption">
-              <span>{{ message }}</span>
-              <div class="chat-bubble-meta">
-                <span>{{ timestamp || 'N/A' }}</span>
-                <v-icon v-if="statusIcon" size="12" :color="statusColor || undefined">{{ statusIcon }}</v-icon>
+            <!-- Edit mode (inline text editor) -->
+            <div v-if="editState.active" class="chat-bubble-edit-wrap">
+              <textarea
+                ref="editTextarea"
+                v-model="editState.text"
+                class="chat-bubble-edit-textarea"
+                rows="3"
+                @keydown.enter.exact.prevent="submitEdit"
+                @keydown.escape="cancelEdit"
+              />
+              <div class="chat-bubble-edit-actions">
+                <button class="cbe-btn cbe-btn--cancel" @click="cancelEdit">Cancel</button>
+                <button class="cbe-btn cbe-btn--save" :disabled="editState.saving" @click="submitEdit">
+                  {{ editState.saving ? 'Saving…' : 'Save' }}
+                </button>
               </div>
             </div>
-          </template>
 
-          <!-- Text-only layout -->
-          <template v-else>
-            <div v-if="showMessage" class="chat-bubble-text-wrap">
-              <p class="chat-bubble-text">{{ message }}</p>
-            </div>
-            <div v-if="showAttachmentPlaceholder" class="chat-attachment-placeholder">
-              <v-icon size="14" class="mr-1">mdi-paperclip</v-icon>
-              <span>Attachment</span>
-            </div>
+            <!-- Normal content -->
+            <template v-else>
+              <!-- Image-first layout (WhatsApp style) -->
+              <template v-if="leadImage">
+                <!-- v-viewer: clicking the image opens the full viewer (zoom, rotate, etc.) -->
+                <div
+                  v-viewer="{ toolbar: true, navbar: allImageAttachments.length > 1 }"
+                  class="chat-bubble-image-wrap"
+                >
+                  <img
+                    v-for="att in allImageAttachments"
+                    :key="att.url"
+                    :src="att.url"
+                    :alt="att.name || 'Image'"
+                    :style="att !== leadImage ? 'display:none' : ''"
+                    class="chat-bubble-image"
+                  />
+                  <div class="chat-bubble-image-zoom" aria-hidden="true">
+                    <v-icon size="16" color="white">mdi-magnify-plus-outline</v-icon>
+                  </div>
+                  <!-- Timestamp overlaid on image when no text below -->
+                  <div v-if="!showMessage" class="chat-bubble-image-meta">
+                    <span>{{ timestamp || 'N/A' }}</span>
+                    <v-icon v-if="statusIcon" size="12" :color="statusColor || undefined">{{ statusIcon }}</v-icon>
+                  </div>
+                </div>
+                <!-- Caption below image -->
+                <div v-if="showMessage" class="chat-bubble-caption">
+                  <span>{{ message }}</span>
+                  <div class="chat-bubble-meta">
+                    <span>{{ timestamp || 'N/A' }}</span>
+                    <v-icon v-if="statusIcon" size="12" :color="statusColor || undefined">{{ statusIcon }}</v-icon>
+                  </div>
+                </div>
+              </template>
 
-            <!-- Video attachments -->
-            <div v-if="videoAttachments.length" class="chat-media-stack">
-              <video
-                v-for="(att, idx) in videoAttachments"
-                :key="`video-${idx}`"
-                class="chat-attachment-video"
-                controls
+              <!-- Text-only layout -->
+              <template v-else>
+                <div v-if="showMessage" class="chat-bubble-text-wrap">
+                  <p class="chat-bubble-text">{{ message }}</p>
+                </div>
+                <div v-if="showAttachmentPlaceholder" class="chat-attachment-placeholder">
+                  <v-icon size="14" class="mr-1">mdi-paperclip</v-icon>
+                  <span>Attachment</span>
+                </div>
+
+                <!-- Video attachments -->
+                <div v-if="videoAttachments.length" class="chat-media-stack">
+                  <video
+                    v-for="(att, idx) in videoAttachments"
+                    :key="`video-${idx}`"
+                    class="chat-attachment-video"
+                    controls
+                  >
+                    <source :src="att.url" :type="att.mimeType || 'video/mp4'" />
+                  </video>
+                </div>
+
+                <!-- Audio attachments -->
+                <div v-if="audioAttachments.length" class="chat-media-stack">
+                  <audio
+                    v-for="(att, idx) in audioAttachments"
+                    :key="`audio-${idx}`"
+                    class="chat-attachment-audio"
+                    controls
+                  >
+                    <source :src="att.url" :type="att.mimeType || 'audio/mpeg'" />
+                  </audio>
+                </div>
+
+                <!-- File attachments -->
+                <div v-if="fileAttachments.length" class="chat-attachments-files">
+                  <a
+                    v-for="(att, idx) in fileAttachments"
+                    :key="`file-${idx}`"
+                    :href="att.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="chat-attachment-file"
+                  >
+                    <v-icon size="16">mdi-file-outline</v-icon>
+                    <span>{{ att.name || 'Attachment' }}</span>
+                    <v-icon size="14" class="ml-auto opacity-60">mdi-open-in-new</v-icon>
+                  </a>
+                </div>
+
+                <div class="chat-bubble-meta">
+                  <span v-if="editedAt" class="chat-bubble-edited">edited</span>
+                  <span>{{ timestamp || 'N/A' }}</span>
+                  <v-icon v-if="statusIcon" size="12" :color="statusColor || undefined">{{ statusIcon }}</v-icon>
+                </div>
+              </template>
+            </template>
+          </div>
+
+          <!-- Action chevron (hover) — only when providerMessageId is available -->
+          <v-menu v-if="providerMessageId" v-model="menuOpen" location="bottom end" :close-on-content-click="false">
+            <template #activator="{ props: menuProps }">
+              <button
+                v-bind="menuProps"
+                class="chat-bubble-action-btn"
+                :class="isOutbound ? 'chat-bubble-action-btn--outbound' : 'chat-bubble-action-btn--inbound'"
+                @click.stop
               >
-                <source :src="att.url" :type="att.mimeType || 'video/mp4'" />
-              </video>
-            </div>
+                <v-icon size="16">mdi-chevron-down</v-icon>
+              </button>
+            </template>
 
-            <!-- Audio attachments -->
-            <div v-if="audioAttachments.length" class="chat-media-stack">
-              <audio
-                v-for="(att, idx) in audioAttachments"
-                :key="`audio-${idx}`"
-                class="chat-attachment-audio"
-                controls
-              >
-                <source :src="att.url" :type="att.mimeType || 'audio/mpeg'" />
-              </audio>
-            </div>
+            <v-card class="chat-action-menu" elevation="3" rounded="lg" min-width="200">
+              <!-- Quick emoji reactions + "more" button -->
+              <div class="chat-action-emoji-row">
+                <button
+                  v-for="em in QUICK_EMOJIS"
+                  :key="em"
+                  class="chat-action-emoji-btn"
+                  @click="sendReaction(em)"
+                >{{ em }}</button>
+                <button class="chat-action-emoji-btn chat-action-emoji-more" @click="emojiPickerOpen = !emojiPickerOpen">
+                  <v-icon size="18">mdi-emoticon-plus-outline</v-icon>
+                </button>
+              </div>
 
-            <!-- File attachments -->
-            <div v-if="fileAttachments.length" class="chat-attachments-files">
-              <a
-                v-for="(att, idx) in fileAttachments"
-                :key="`file-${idx}`"
-                :href="att.url"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="chat-attachment-file"
-              >
-                <v-icon size="16">mdi-file-outline</v-icon>
-                <span>{{ att.name || 'Attachment' }}</span>
-                <v-icon size="14" class="ml-auto opacity-60">mdi-open-in-new</v-icon>
-              </a>
-            </div>
+              <!-- Full emoji picker (web component) -->
+              <div v-if="emojiPickerOpen" class="chat-action-emoji-picker-wrap">
+                <ClientOnly>
+                  <emoji-picker @emoji-click="onEmojiPickerSelect" />
+                </ClientOnly>
+              </div>
 
-            <div class="chat-bubble-meta">
-              <span>{{ timestamp || 'N/A' }}</span>
-              <v-icon v-if="statusIcon" size="12" :color="statusColor || undefined">{{ statusIcon }}</v-icon>
-            </div>
-          </template>
+              <v-divider />
+              <!-- Menu items -->
+              <v-list density="compact" nav>
+                <v-list-item
+                  v-if="canEdit"
+                  prepend-icon="mdi-pencil-outline"
+                  title="Edit message"
+                  @click="startEdit"
+                />
+                <v-list-item
+                  prepend-icon="mdi-trash-can-outline"
+                  title="Delete message"
+                  base-color="error"
+                  @click="openDeleteConfirm"
+                />
+              </v-list>
+            </v-card>
+          </v-menu>
         </div>
 
         <!-- Outbound avatar -->
@@ -112,9 +199,28 @@
       </div>
     </div>
   </div>
+
+  <!-- Delete confirm dialog -->
+  <v-dialog v-model="deleteConfirm.open" max-width="360" persistent>
+    <v-card rounded="xl">
+      <v-card-title class="text-body-1 font-weight-bold pt-5 px-5">Delete message?</v-card-title>
+      <v-card-text class="text-body-2 text-medium-emphasis px-5">
+        This will revoke the message for everyone. This action cannot be undone.
+      </v-card-text>
+      <v-card-actions class="px-4 pb-4 gap-2">
+        <v-spacer />
+        <v-btn variant="text" @click="deleteConfirm.open = false">Cancel</v-btn>
+        <v-btn color="error" variant="flat" :loading="deleteConfirm.deleting" @click="confirmDelete">Delete</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
 </template>
 
 <script setup>
+import { Post } from "@/services/apiWrapper";
+import "emoji-picker-element";
+
 const props = defineProps({
   isOutbound: { type: Boolean, default: false },
   sender: { type: String, default: "" },
@@ -126,10 +232,105 @@ const props = defineProps({
   avatarText: { type: String, default: "" },
   automated: { type: Boolean, default: false },
   attachments: { type: [Array, Object, String, null], default: null },
+  providerMessageId: { type: String, default: null },
+  createdAt: { type: [String, Number, null], default: null },
+  recipientPhone: { type: String, default: null },
 });
 
-const showAvatarImage = ref(false);
+const emit = defineEmits(["message-deleted", "message-edited", "message-reacted"]);
 
+// ── Quick reaction emojis ──
+const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+
+// ── Edit within 15 min (900 000 ms) ──
+const EDIT_WINDOW_MS = 15 * 60 * 1000;
+const canEdit = computed(() => {
+  if (!props.isOutbound || !props.providerMessageId) return false;
+  if (!props.createdAt) return false;
+  const ts = typeof props.createdAt === "number"
+    ? (props.createdAt < 1e12 ? props.createdAt * 1000 : props.createdAt)
+    : new Date(props.createdAt).getTime();
+  return Date.now() - ts < EDIT_WINDOW_MS;
+});
+
+// shows "(edited)" label — set to true after a successful edit
+const editedAt = ref(false);
+
+// ── Action menu ──
+const menuOpen = ref(false);
+const emojiPickerOpen = ref(false);
+
+// close emoji picker when menu closes
+watch(menuOpen, (v) => { if (!v) emojiPickerOpen.value = false; });
+
+// ── Reaction ──
+const sendReaction = async (emoji) => {
+  menuOpen.value = false;
+  emojiPickerOpen.value = false;
+  try {
+    await Post("/api/whapi/reactToMessage", {
+      providerMessageId: props.providerMessageId,
+      emoji,
+    });
+    emit("message-reacted", { providerMessageId: props.providerMessageId, emoji });
+  } catch {}
+};
+
+// emoji-picker-element fires a CustomEvent with detail.unicode
+const onEmojiPickerSelect = (event) => {
+  const emoji = event.detail?.unicode;
+  if (emoji) sendReaction(emoji);
+};
+
+// ── Edit ──
+const editTextarea = ref(null);
+const editState = reactive({ active: false, text: "", saving: false });
+
+const startEdit = () => {
+  menuOpen.value = false;
+  editState.text = props.message;
+  editState.active = true;
+  nextTick(() => editTextarea.value?.focus());
+};
+
+const cancelEdit = () => { editState.active = false; };
+
+const submitEdit = async () => {
+  const newText = editState.text.trim();
+  if (!newText || newText === props.message) { cancelEdit(); return; }
+  editState.saving = true;
+  try {
+    await Post("/api/whapi/editMessage", {
+      providerMessageId: props.providerMessageId,
+      newText,
+      to: props.recipientPhone,
+    });
+    editedAt.value = true;
+    emit("message-edited", { providerMessageId: props.providerMessageId, newText });
+    editState.active = false;
+  } catch {}
+  editState.saving = false;
+};
+
+// ── Delete ──
+const deleteConfirm = reactive({ open: false, deleting: false });
+
+const openDeleteConfirm = () => {
+  menuOpen.value = false;
+  deleteConfirm.open = true;
+};
+
+const confirmDelete = async () => {
+  deleteConfirm.deleting = true;
+  try {
+    await Post("/api/whapi/deleteMessage", { providerMessageId: props.providerMessageId });
+    emit("message-deleted", { providerMessageId: props.providerMessageId });
+    deleteConfirm.open = false;
+  } catch {}
+  deleteConfirm.deleting = false;
+};
+
+const showAvatarImage = ref(false);
 const updateAvatarVisibility = () => { showAvatarImage.value = !!props.avatarUrl; };
 const onAvatarError = () => { showAvatarImage.value = false; };
 
@@ -175,12 +376,13 @@ const normalizedAttachments = computed(() => {
     .filter(Boolean);
 });
 
+const isImageAtt = (a) => a.type.includes("image") || /\.(png|jpe?g|gif|webp|bmp|sticker|webp)$/i.test(a.url);
+
+// All images in this bubble — used for lightbox navigation
+const allImageAttachments = computed(() => normalizedAttachments.value.filter(isImageAtt));
+
 // The primary image (first image attachment) gets WhatsApp-style full-bleed treatment
-const leadImage = computed(() => {
-  return normalizedAttachments.value.find(
-    (a) => a.type.includes("image") || /\.(png|jpe?g|gif|webp|bmp)$/i.test(a.url)
-  ) || null;
-});
+const leadImage = computed(() => allImageAttachments.value[0] || null);
 
 const videoAttachments = computed(() =>
   normalizedAttachments.value.filter((a) => a.type.includes("video") || /\.(mp4|mov|webm|avi|mkv)$/i.test(a.url))
@@ -445,4 +647,152 @@ const bubbleClass = computed(() => ({
 }
 
 .chat-avatar--image { background: transparent; }
+
+/* ── Hover group: bubble + action btn ── */
+.chat-bubble-hover-group {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.chat-bubble-action-btn {
+  display: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.07);
+  border: none;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s;
+  margin-bottom: 4px;
+}
+
+.chat-bubble-action-btn:hover {
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.chat-bubble-hover-group:hover .chat-bubble-action-btn,
+.chat-bubble-action-btn[aria-expanded="true"] {
+  display: flex;
+}
+
+/* Position: outbound → left of bubble, inbound → right of bubble */
+.chat-bubble-row--outbound .chat-bubble-hover-group {
+  flex-direction: row-reverse;
+}
+
+/* ── Action menu card ── */
+.chat-action-menu { min-width: 180px; }
+
+.chat-action-emoji-row {
+  display: flex;
+  justify-content: space-around;
+  padding: 8px 6px 6px;
+}
+
+.chat-action-emoji-btn {
+  font-size: 20px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s;
+}
+.chat-action-emoji-btn:hover { background: rgba(0,0,0,0.07); }
+
+.chat-action-emoji-more {
+  color: rgba(0,0,0,0.5);
+}
+
+.chat-action-emoji-picker-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0;
+}
+
+/* Constrain the web component size */
+.chat-action-emoji-picker-wrap emoji-picker {
+  --num-columns: 7;
+  width: 300px;
+  height: 300px;
+}
+
+/* ── Inline edit ── */
+.chat-bubble-edit-wrap {
+  padding: 8px 10px 6px;
+}
+
+.chat-bubble-edit-textarea {
+  width: 100%;
+  font-size: 14px;
+  line-height: 1.45;
+  resize: none;
+  border: 1.5px solid #0061fb;
+  border-radius: 8px;
+  padding: 6px 8px;
+  outline: none;
+  font-family: inherit;
+  background: #fff;
+  color: rgba(0,0,0,0.88);
+}
+
+.chat-bubble-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.cbe-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+}
+.cbe-btn--cancel { background: rgba(0,0,0,0.07); color: #333; }
+.cbe-btn--save { background: #0061fb; color: #fff; }
+.cbe-btn--save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Edited label ── */
+.chat-bubble-edited {
+  font-size: 10px;
+  color: rgba(0,0,0,0.38);
+  margin-right: 2px;
+  font-style: italic;
+}
+
+/* ── Image zoom hint ── */
+.chat-bubble-image-wrap {
+  cursor: zoom-in;
+}
+
+.chat-bubble-image-zoom {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0);
+  transition: background 0.18s;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.18s;
+}
+
+.chat-bubble-image-wrap:hover .chat-bubble-image-zoom {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.22);
+}
+
 </style>

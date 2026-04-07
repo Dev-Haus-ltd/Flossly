@@ -98,17 +98,96 @@ const collectMessages = (body) => {
 
 const getMessageContent = (msg) => {
   if (!msg || typeof msg !== "object") return "";
-  const direct =
-    msg?.text ||
-    msg?.body ||
-    msg?.message ||
-    msg?.caption ||
-    msg?.data?.text ||
-    "";
-  if (typeof direct === "string") return direct;
-  if (typeof msg?.text?.body === "string") return msg.text.body;
-  if (typeof msg?.message?.body === "string") return msg.message.body;
-  if (typeof msg?.content === "string") return msg.content;
+  const type = String(msg?.type || "").toLowerCase();
+
+  // Plain text / caption
+  const textBody = msg?.text?.body || msg?.text || msg?.body || msg?.caption || msg?.data?.text || msg?.message?.body || msg?.message || msg?.content || "";
+  if (typeof textBody === "string" && textBody) return textBody;
+
+  // Action (reaction, vote, label change, etc.)
+  if (type === "action" || msg?.action) {
+    const action = msg?.action || {};
+    const actionType = String(action?.type || "").toLowerCase();
+    if (actionType === "reaction" && action?.emoji) return `Reacted ${action.emoji}`;
+    if (actionType === "vote") return "Voted on a poll";
+    if (actionType === "label_change") return "Changed a label";
+    if (actionType === "media_notify") return "Shared media";
+    if (actionType) return `${actionType}`;
+    return "";
+  }
+
+  // Location
+  if (type === "location" && msg?.location) {
+    const loc = msg.location;
+    const caption = loc?.caption || loc?.name || "";
+    const coords = (loc?.latitude && loc?.longitude) ? `${loc.latitude}, ${loc.longitude}` : "";
+    return caption || (coords ? `📍 ${coords}` : "📍 Location");
+  }
+  if (type === "live_location" && msg?.live_location) {
+    return msg.live_location?.caption || "📍 Live Location";
+  }
+
+  // Contact
+  if (type === "contact" && msg?.contact) {
+    return msg.contact?.name || "👤 Contact";
+  }
+  if (type === "contact_list" && msg?.contact_list) {
+    const names = (msg.contact_list?.list || []).map((c) => c?.name).filter(Boolean);
+    return names.length ? `👤 ${names.join(", ")}` : "👤 Contacts";
+  }
+
+  // Poll
+  if (type === "poll" && msg?.poll) {
+    return msg.poll?.title ? `📊 ${msg.poll.title}` : "📊 Poll";
+  }
+
+  // Revoked / deleted
+  if (type === "revoked") return "🚫 This message was deleted";
+
+  // System / encryption notices
+  if (type === "e2e_notification") return "🔒 Messages are end-to-end encrypted";
+  if (type === "system") return msg?.body || msg?.text || "System message";
+
+  // Link preview
+  if (type === "link_preview" && msg?.link_preview) {
+    return msg.link_preview?.body || msg.link_preview?.url || "🔗 Link";
+  }
+
+  // Group invite
+  if (type === "group_invite" && msg?.group_invite) {
+    return msg.group_invite?.title ? `👥 Group invite: ${msg.group_invite.title}` : "👥 Group invite";
+  }
+
+  // Product / Catalog / Order
+  if (type === "product") return "🛍️ Product";
+  if (type === "catalog" && msg?.catalog) {
+    return msg.catalog?.title ? `📦 ${msg.catalog.title}` : "📦 Catalog";
+  }
+  if (type === "order" && msg?.order) {
+    return msg.order?.title ? `🧾 Order: ${msg.order.title}` : "🧾 Order";
+  }
+
+  // Reply (button/list response)
+  if (type === "reply" && msg?.reply) {
+    return msg.reply?.buttons_reply?.title || msg.reply?.list_reply?.title || "↩️ Reply";
+  }
+
+  // Carousel
+  if (type === "carousel" && msg?.carousel) {
+    return msg.carousel?.text || "🎠 Carousel";
+  }
+
+  // Album
+  if (type === "album") return "🖼️ Album";
+
+  // Admin / newsletter invite
+  if (type === "admin_invite" && msg?.admin_invite) {
+    return msg.admin_invite?.newsletter_name ? `📢 ${msg.admin_invite.newsletter_name}` : "📢 Newsletter invite";
+  }
+
+  // HSM (template)
+  if (type === "hsm") return "📋 Template message";
+
   return "";
 };
 
@@ -1016,7 +1095,7 @@ export const webhook = async (event) => {
         const userIds = orgUsers.map((u) => u.userId).filter(Boolean);
         if (userIds.length) {
           const senderLabel = lead.name || lead.telephone || fromDigits;
-          const preview = String(content?.text || content?.caption || "[Media]").slice(0, 80);
+          const preview = (content ? String(content).slice(0, 80) : null) || (attachments?.length ? "📎 Media" : "New message");
           await sendNotificationToMultipleUsers({
             userIds,
             organisationId: orgId,
@@ -1028,7 +1107,7 @@ export const webhook = async (event) => {
             data: {
               leadId: String(lead.id),
               leadName: String(senderLabel),
-              url: `/crm/leads?leadId=${lead.id}&tab=communication`,
+              url: `/crm/leads?leadId=${lead.id}&tab=whatsapp`,
             },
             priority: "high",
           });
@@ -1040,6 +1119,99 @@ export const webhook = async (event) => {
   }
 
   return success("ok");
+};
+
+// ── Resolve org channel token (shared helper for message actions) ──
+const resolveOrgWhapiToken = async (orgId) => {
+  const channel = await findOrgChannel(orgId);
+  if (!channel?.token) return null;
+  try {
+    return decrypt(channel.token);
+  } catch {
+    return channel.token;
+  }
+};
+
+// ── Edit a sent message (text only, within 15 min) ──
+export const editMessage = async (event) => {
+  const { orgId } = event.context.user || {};
+  if (!orgId) return error(401, "Unauthenticated");
+
+  const body = await readBody(event);
+  const { providerMessageId, newText, to } = body || {};
+  if (!providerMessageId || !newText || !to) {
+    return error(400, "providerMessageId, newText, and to are required");
+  }
+
+  const token = await resolveOrgWhapiToken(orgId);
+  if (!token) return error(400, "Whapi not configured for this organisation");
+
+  const env = getWhapiEnvConfig();
+  const base = String(env.baseUrl || "").replace(/\/+$/, "");
+
+  try {
+    const resp = await $fetch(`${base}/messages/text`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: { to, body: newText, edit: providerMessageId },
+    });
+    return success({ messageId: resp?.message?.id || resp?.id || null });
+  } catch (err) {
+    return error(500, err?.message || "Failed to edit message");
+  }
+};
+
+// ── Delete / revoke a sent message ──
+export const deleteMessage = async (event) => {
+  const { orgId } = event.context.user || {};
+  if (!orgId) return error(401, "Unauthenticated");
+
+  const body = await readBody(event);
+  const { providerMessageId } = body || {};
+  if (!providerMessageId) return error(400, "providerMessageId is required");
+
+  const token = await resolveOrgWhapiToken(orgId);
+  if (!token) return error(400, "Whapi not configured for this organisation");
+
+  const env = getWhapiEnvConfig();
+  const base = String(env.baseUrl || "").replace(/\/+$/, "");
+
+  try {
+    await $fetch(`${base}/messages/${encodeURIComponent(String(providerMessageId))}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return success({ deleted: true });
+  } catch (err) {
+    return error(500, err?.message || "Failed to delete message");
+  }
+};
+
+// ── React to a message with an emoji ──
+export const reactToMessage = async (event) => {
+  const { orgId } = event.context.user || {};
+  if (!orgId) return error(401, "Unauthenticated");
+
+  const body = await readBody(event);
+  const { providerMessageId, emoji } = body || {};
+  if (!providerMessageId || !emoji) return error(400, "providerMessageId and emoji are required");
+
+  const token = await resolveOrgWhapiToken(orgId);
+  if (!token) return error(400, "Whapi not configured for this organisation");
+
+  const env = getWhapiEnvConfig();
+  const base = String(env.baseUrl || "").replace(/\/+$/, "");
+
+  try {
+    await $fetch(`${base}/messages/${encodeURIComponent(String(providerMessageId))}/reaction`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: { emoji },
+    });
+    return success({ reacted: true });
+  } catch (err) {
+    return error(500, err?.message || "Failed to react to message");
+  }
 };
 
 export const stream = async (event) => {

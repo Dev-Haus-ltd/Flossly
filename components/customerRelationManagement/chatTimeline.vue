@@ -4,11 +4,6 @@
       <CommonWhatsAppNotConnectedAlert />
     </div>
     <template v-else>
-      <v-card-title class="d-flex align-center justify-end">
-        <v-btn size="small" variant="text" :loading="loading" @click="loadLogs">
-          Refresh
-        </v-btn>
-      </v-card-title>
       <v-divider />
       <v-card-text class="chat-timeline-body">
         <div ref="scrollEl" class="chat-timeline-scroll">
@@ -16,6 +11,9 @@
             :groups="groupedChatItems"
             :loading="loading"
             :empty-message="emptyMessage"
+            @message-deleted="onMessageDeleted"
+            @message-edited="onMessageEdited"
+            @message-reacted="onMessageReacted"
           />
         </div>
       </v-card-text>
@@ -93,7 +91,9 @@ const resolvedOrg = ref({ name: "", logo: "" });
 const resolvedLead = ref({ name: "", avatar: "" });
 const scrollEl = ref(null);
 
-let whapiPollTimer = null;
+let whapiEventSource = null;
+let sseActive = false;
+let sseRetryDelay = 2000;
 
 const canSend = computed(() => {
   const hasText = String(draftMessage.value || "").trim().length > 0;
@@ -123,10 +123,24 @@ watch(groupedChatItems, async () => {
   if (el) el.scrollTop = el.scrollHeight;
 });
 
-const loadLogs = async () => {
+// ── Message action handlers (optimistic local updates) ──
+const onMessageDeleted = ({ providerMessageId }) => {
+  logs.value = logs.value.filter((r) => r.providerMessageId !== providerMessageId);
+};
+
+const onMessageEdited = ({ providerMessageId, newText }) => {
+  const row = logs.value.find((r) => r.providerMessageId === providerMessageId);
+  if (row) row.content = newText;
+};
+
+const onMessageReacted = () => {
+  // reactions don't change local state visually — no-op for now
+};
+
+const loadLogs = async (silent = false) => {
   if (!props.leadId) { logs.value = []; return; }
   try {
-    loading.value = true;
+    if (!silent) loading.value = true;
     const res = await crmStore.getLeadWhatsAppLogs(props.leadId, 100);
     if (res?.code === 0) {
       logs.value = Array.isArray(res.data) ? res.data : [];
@@ -136,7 +150,7 @@ const loadLogs = async () => {
   } catch {
     logs.value = [];
   } finally {
-    loading.value = false;
+    if (!silent) loading.value = false;
   }
 };
 
@@ -247,30 +261,60 @@ const resolveContext = () => {
   resolvedLead.value = { name: props.leadName || "", avatar: props.leadAvatar || "" };
 };
 
-const stopWhapiPoll = () => {
-  if (whapiPollTimer) { clearInterval(whapiPollTimer); whapiPollTimer = null; }
+const stopWhapiStream = () => {
+  sseActive = false;
+  sseRetryDelay = 2000;
+  if (whapiEventSource) { whapiEventSource.close(); whapiEventSource = null; }
 };
 
-const startWhapiPoll = () => {
-  stopWhapiPoll();
+const startWhapiStream = () => {
+  stopWhapiStream();
   if (!props.connected || !props.leadId) return;
-  whapiPollTimer = setInterval(() => { if (!loading.value) loadLogs(); }, 15000);
+  if (typeof window === "undefined" || !("EventSource" in window)) return;
+  sseActive = true;
+
+  const connect = () => {
+    if (!sseActive) return;
+    whapiEventSource = new EventSource("/api/whapi/stream");
+
+    whapiEventSource.addEventListener("message", (evt) => {
+      sseRetryDelay = 2000;
+      try {
+        const payload = JSON.parse(evt.data || "{}");
+        if (String(payload.leadId) === String(props.leadId) && !loading.value) {
+          loadLogs(true);
+        }
+      } catch {}
+    });
+
+    whapiEventSource.onerror = () => {
+      whapiEventSource?.close();
+      whapiEventSource = null;
+      if (!sseActive) return;
+      setTimeout(() => {
+        sseRetryDelay = Math.min(sseRetryDelay * 2, 30000);
+        connect();
+      }, sseRetryDelay);
+    };
+  };
+
+  connect();
 };
 
 watch(
   () => [props.leadId, props.leadName, props.leadAvatar, props.orgName, props.orgLogo, props.connected],
   () => {
     resolveContext();
-    stopWhapiPoll();
+    stopWhapiStream();
     if (!props.connected) { logs.value = []; return; }
     loadLogs();
-    startWhapiPoll();
+    startWhapiStream();
   },
   { immediate: true }
 );
 
 onBeforeUnmount(() => {
-  stopWhapiPoll();
+  stopWhapiStream();
   revokeObjectUrls();
 });
 </script>
