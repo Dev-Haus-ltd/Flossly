@@ -4,42 +4,49 @@
       <CommonWhatsAppNotConnectedAlert />
     </div>
     <template v-else>
-      <v-card-title class="d-flex align-center justify-space-between">
-        <v-btn
-          size="small"
-          variant="text"
-          :disabled="!messageHasMore || loadingMore"
-          @click="loadMore"
-        >
-          {{ loadingMore ? "Loading..." : messageHasMore ? "Load older" : "No more" }}
-        </v-btn>
-        <v-btn size="small" variant="text" :loading="loading" @click="loadLogs">
-          Refresh
-        </v-btn>
-      </v-card-title>
       <v-divider />
       <v-card-text class="chat-timeline-body">
-        <CommonChatThread
-          :groups="groupedChatItems"
-          :loading="loading"
-          :empty-message="emptyMessage"
-        />
+        <div ref="scrollEl" class="chat-timeline-scroll">
+          <ChatThread
+            :groups="groupedChatItems"
+            :loading="loading"
+            :empty-message="emptyMessage"
+            @message-deleted="onMessageDeleted"
+            @message-edited="onMessageEdited"
+            @message-reacted="onMessageReacted"
+          />
+        </div>
       </v-card-text>
       <v-divider />
-      <div v-if="pendingFiles.length" class="chat-timeline-attachments">
+      <div v-if="pendingFiles.length" class="chat-pending-files">
         <div
           v-for="(file, idx) in pendingFiles"
           :key="`${file.name}-${idx}`"
-          class="chat-timeline-attachment-chip"
+          class="chat-pending-file"
         >
-          <v-icon size="16" class="mr-1">mdi-paperclip</v-icon>
-          <span class="chat-timeline-attachment-name">{{ file.name }}</span>
-          <v-btn icon variant="text" size="x-small" @click="removePendingFile(idx)">
-            <v-icon size="14">mdi-close</v-icon>
-          </v-btn>
+          <template v-if="isImageFile(file)">
+            <div class="chat-pending-image">
+              <img :src="getObjectUrl(file)" :alt="file.name" />
+              <button class="chat-pending-remove" @click="removePendingFile(idx)">
+                <v-icon size="10" color="white">mdi-close</v-icon>
+              </button>
+            </div>
+          </template>
+          <template v-else>
+            <div class="chat-pending-doc">
+              <v-icon size="18" :color="fileIconColor(file)">{{ fileIcon(file) }}</v-icon>
+              <div class="chat-pending-doc-info">
+                <span class="chat-pending-doc-name">{{ file.name }}</span>
+                <span class="chat-pending-doc-size">{{ formatBytes(file.size) }}</span>
+              </div>
+              <button class="chat-pending-doc-remove" @click="removePendingFile(idx)">
+                <v-icon size="13">mdi-close</v-icon>
+              </button>
+            </div>
+          </template>
         </div>
       </div>
-      <CommonChatInputBar
+      <ChatInputBar
         v-model="draftMessage"
         :can-send="canSend"
         :loading="sending"
@@ -54,114 +61,39 @@
 <script setup>
 import { groupChatItems } from "@/lib/chatThread";
 import { mapWhatsAppLogToChatItem } from "@/lib/chatMappers";
-import CommonChatThread from "@/components/Common/ChatThread.vue";
-import CommonChatInputBar from "@/components/Common/ChatInputBar.vue";
+import ChatThread from "@/components/Chat/Thread.vue";
+import ChatInputBar from "@/components/Chat/InputBar.vue";
+import CommonWhatsAppNotConnectedAlert from "@/components/Common/WhatsAppNotConnectedAlert.vue";
 import { useMainStore } from "@/stores/index";
+import { useCrmStore } from "@/stores/crm";
 
 const props = defineProps({
-  leadId: {
-    type: [Number, String],
-    default: null,
-  },
-  leadName: {
-    type: String,
-    default: "",
-  },
-  leadAvatar: {
-    type: String,
-    default: "",
-  },
-  orgName: {
-    type: String,
-    default: "",
-  },
-  orgLogo: {
-    type: String,
-    default: "",
-  },
-  emptyMessage: {
-    type: String,
-    default: "No WhatsApp messages logged yet.",
-  },
-  inboundSenderLabel: {
-    type: String,
-    default: "Lead",
-  },
-  outboundSenderLabel: {
-    type: String,
-    default: "Flossly",
-  },
-  connected: {
-    type: Boolean,
-    default: true,
-  },
+  leadId: { type: [Number, String], default: null },
+  leadName: { type: String, default: "" },
+  leadAvatar: { type: String, default: "" },
+  orgName: { type: String, default: "" },
+  orgLogo: { type: String, default: "" },
+  emptyMessage: { type: String, default: "No WhatsApp messages logged yet." },
+  inboundSenderLabel: { type: String, default: "Lead" },
+  outboundSenderLabel: { type: String, default: "Flossly" },
+  connected: { type: Boolean, default: true },
 });
 
 const crmStore = useCrmStore();
 const mainStore = useMainStore();
+
 const loading = ref(false);
 const logs = ref([]);
 const draftMessage = ref("");
 const sending = ref(false);
 const pendingFiles = ref([]);
-const messageCursor = ref(null);
-const messageHasMore = ref(true);
-const loadingMore = ref(false);
-
-let whapiEventSource = null;
-let whapiPollTimer = null;
-
-const startWhapiStream = () => {
-  if (!props.connected || !props.leadId) return;
-  if (whapiEventSource) return;
-  if (typeof window === "undefined" || !("EventSource" in window)) {
-    startWhapiPoll();
-    return;
-  }
-  whapiEventSource = new EventSource("/api/whapi/stream");
-  whapiEventSource.addEventListener("message", (evt) => {
-    try {
-      const payload = JSON.parse(evt.data || "{}");
-      if (Number(payload.leadId) === Number(props.leadId) && !loading.value) {
-        loadLogs();
-      }
-    } catch {}
-  });
-  whapiEventSource.onerror = () => {
-    stopWhapiStream();
-    startWhapiPoll();
-  };
-};
-
-const stopWhapiStream = () => {
-  if (whapiEventSource) {
-    whapiEventSource.close();
-    whapiEventSource = null;
-  }
-};
-
-const startWhapiPoll = () => {
-  if (whapiPollTimer || !props.connected || !props.leadId) return;
-  whapiPollTimer = setInterval(() => {
-    if (!loading.value) loadLogs();
-  }, 15000);
-};
-
-const stopWhapiPoll = () => {
-  if (whapiPollTimer) {
-    clearInterval(whapiPollTimer);
-    whapiPollTimer = null;
-  }
-};
-
-onBeforeUnmount(() => {
-  stopWhapiStream();
-  stopWhapiPoll();
-});
-
-
 const resolvedOrg = ref({ name: "", logo: "" });
 const resolvedLead = ref({ name: "", avatar: "" });
+const scrollEl = ref(null);
+
+let whapiEventSource = null;
+let sseActive = false;
+let sseRetryDelay = 2000;
 
 const canSend = computed(() => {
   const hasText = String(draftMessage.value || "").trim().length > 0;
@@ -173,60 +105,52 @@ const chatItems = computed(() => {
   if (!Array.isArray(logs.value)) return [];
   return [...logs.value]
     .reverse()
-    .map((row) => {
-      return mapWhatsAppLogToChatItem(row, {
-        inboundLabel: props.inboundSenderLabel,
-        outboundLabel: props.outboundSenderLabel,
-        inboundAvatarUrl: resolvedLead.value.avatar,
-        outboundAvatarUrl: resolvedOrg.value.logo,
-      });
-    })
+    .map((row) => mapWhatsAppLogToChatItem(row, {
+      inboundLabel: props.inboundSenderLabel,
+      outboundLabel: props.outboundSenderLabel,
+      inboundAvatarUrl: resolvedLead.value.avatar,
+      outboundAvatarUrl: resolvedOrg.value.logo,
+    }))
     .filter(Boolean);
 });
 
 const groupedChatItems = computed(() => groupChatItems(chatItems.value));
 
-const loadLogs = async () => {
-  if (!props.leadId) {
-    logs.value = [];
-    return;
-  }
+// Auto-scroll to bottom whenever new messages arrive
+watch(groupedChatItems, async () => {
+  await nextTick();
+  const el = scrollEl.value;
+  if (el) el.scrollTop = el.scrollHeight;
+});
+
+// ── Message action handlers (optimistic local updates) ──
+const onMessageDeleted = ({ providerMessageId }) => {
+  logs.value = logs.value.filter((r) => r.providerMessageId !== providerMessageId);
+};
+
+const onMessageEdited = ({ providerMessageId, newText }) => {
+  const row = logs.value.find((r) => r.providerMessageId === providerMessageId);
+  if (row) row.content = newText;
+};
+
+const onMessageReacted = () => {
+  // reactions don't change local state visually — no-op for now
+};
+
+const loadLogs = async (silent = false) => {
+  if (!props.leadId) { logs.value = []; return; }
   try {
-    loading.value = true;
-    const res = await crmStore.getLeadWhatsAppLogs({ leadId: props.leadId, limit: 100 });
-    if (res?.code === 0 && Array.isArray(res.data?.data)) {
-      logs.value = res.data.data;
-      messageCursor.value = res.data?.nextCursor || null;
-      messageHasMore.value = !!res.data?.nextCursor;
+    if (!silent) loading.value = true;
+    const res = await crmStore.getLeadWhatsAppLogs(props.leadId, 100);
+    if (res?.code === 0) {
+      logs.value = Array.isArray(res.data) ? res.data : [];
       return;
     }
     logs.value = [];
   } catch {
     logs.value = [];
   } finally {
-    loading.value = false;
-  }
-};
-
-const loadMore = async () => {
-  if (!props.leadId || !messageHasMore.value || loadingMore.value) return;
-  try {
-    loadingMore.value = true;
-    const res = await crmStore.getLeadWhatsAppLogs({
-      leadId: props.leadId,
-      limit: 100,
-      before: messageCursor.value || undefined,
-    });
-    if (res?.code === 0 && Array.isArray(res.data?.data)) {
-      const older = res.data.data;
-      logs.value = [...logs.value, ...older];
-      messageCursor.value = res.data?.nextCursor || null;
-      if (!older.length || !res.data?.nextCursor) messageHasMore.value = false;
-    } else {
-      messageHasMore.value = false;
-    }
-  } finally {
-    loadingMore.value = false;
+    if (!silent) loading.value = false;
   }
 };
 
@@ -236,39 +160,71 @@ const sendMessage = async () => {
   try {
     sending.value = true;
     let attachments = [];
-    if (pendingFiles.value.length) {
-      for (const file of pendingFiles.value) {
-        const form = new FormData();
-        form.append("file", file);
-        const resUpload = await crmStore.uploadLeadWhatsAppAttachment(form);
-        if (resUpload?.code !== 0) {
-          const msg = resUpload?.error || resUpload?.message || "Failed to upload attachment";
-          mainStore?.setSnackbar?.({ title: msg, type: "error" });
-          sending.value = false;
-          return;
-        }
-        if (resUpload?.data) attachments.push(resUpload.data);
+    for (const file of pendingFiles.value) {
+      const form = new FormData();
+      form.append("file", file);
+      const resUpload = await crmStore.uploadLeadWhatsAppMedia(form);
+      if (resUpload?.code !== 0) {
+        mainStore?.setSnackbar?.({ title: resUpload?.error || "Failed to upload attachment", type: "error" });
+        return;
       }
+      if (resUpload?.data) attachments.push(resUpload.data);
     }
-    const res = await crmStore.sendLeadWhatsApp({
-      leadIds: [Number(props.leadId)],
-      message,
-      attachments,
-    });
+    const res = await crmStore.sendLeadWhatsApp({ leadIds: [Number(props.leadId)], message, attachments });
     if (res?.code === 0) {
       draftMessage.value = "";
       pendingFiles.value = [];
       await loadLogs();
       return;
     }
-    const msg = res?.error || res?.message || "Failed to send WhatsApp message";
-    mainStore?.setSnackbar?.({ title: msg, type: "error" });
+    mainStore?.setSnackbar?.({ title: res?.error || res?.message || "Failed to send message", type: "error" });
   } catch (e) {
-    const msg = e?.data?.message || e?.message || "Failed to send WhatsApp message";
-    mainStore?.setSnackbar?.({ title: msg, type: "error" });
+    mainStore?.setSnackbar?.({ title: e?.data?.message || e?.message || "Failed to send message", type: "error" });
   } finally {
     sending.value = false;
   }
+};
+
+const objectUrls = ref([]);
+
+const getObjectUrl = (file) => {
+  const existing = objectUrls.value.find((e) => e.file === file);
+  if (existing) return existing.url;
+  const url = URL.createObjectURL(file);
+  objectUrls.value.push({ file, url });
+  return url;
+};
+
+const revokeObjectUrls = () => {
+  objectUrls.value.forEach((e) => URL.revokeObjectURL(e.url));
+  objectUrls.value = [];
+};
+
+const isImageFile = (file) => file?.type?.startsWith("image/");
+
+const fileIcon = (file) => {
+  const type = String(file?.type || "").toLowerCase();
+  if (type.startsWith("video/")) return "mdi-file-video-outline";
+  if (type.startsWith("audio/")) return "mdi-file-music-outline";
+  if (type.includes("pdf")) return "mdi-file-pdf-box";
+  if (type.includes("word") || type.includes("document")) return "mdi-file-word-outline";
+  if (type.includes("sheet") || type.includes("excel")) return "mdi-file-excel-outline";
+  return "mdi-file-outline";
+};
+
+const fileIconColor = (file) => {
+  const type = String(file?.type || "").toLowerCase();
+  if (type.includes("pdf")) return "#e53935";
+  if (type.includes("word") || type.includes("document")) return "#1565c0";
+  if (type.includes("sheet") || type.includes("excel")) return "#2e7d32";
+  return "#546e7a";
+};
+
+const formatBytes = (bytes) => {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
 };
 
 const onFilesSelected = (files) => {
@@ -276,6 +232,12 @@ const onFilesSelected = (files) => {
 };
 
 const removePendingFile = (idx) => {
+  const removed = pendingFiles.value[idx];
+  objectUrls.value = objectUrls.value.filter((e) => e.file !== removed);
+  if (removed) {
+    const entry = objectUrls.value.find((e) => e.file === removed);
+    if (entry) URL.revokeObjectURL(entry.url);
+  }
   pendingFiles.value = pendingFiles.value.filter((_, i) => i !== idx);
 };
 
@@ -285,8 +247,7 @@ const resolveContext = () => {
     try {
       const user = JSON.parse(stored);
       const orgId = user?.currentLoggedInOrgId;
-      const list = user?.userOrganisations || [];
-      const match = list.find((row) => row.organisationId === orgId);
+      const match = (user?.userOrganisations || []).find((r) => r.organisationId === orgId);
       resolvedOrg.value = {
         name: props.orgName || match?.organisation?.name || "",
         logo: props.orgLogo || match?.organisation?.logo || "",
@@ -297,25 +258,65 @@ const resolveContext = () => {
   } else {
     resolvedOrg.value = { name: props.orgName || "", logo: props.orgLogo || "" };
   }
-  resolvedLead.value = {
-    name: props.leadName || "",
-    avatar: props.leadAvatar || "",
+  resolvedLead.value = { name: props.leadName || "", avatar: props.leadAvatar || "" };
+};
+
+const stopWhapiStream = () => {
+  sseActive = false;
+  sseRetryDelay = 2000;
+  if (whapiEventSource) { whapiEventSource.close(); whapiEventSource = null; }
+};
+
+const startWhapiStream = () => {
+  stopWhapiStream();
+  if (!props.connected || !props.leadId) return;
+  if (typeof window === "undefined" || !("EventSource" in window)) return;
+  sseActive = true;
+
+  const connect = () => {
+    if (!sseActive) return;
+    whapiEventSource = new EventSource("/api/whapi/stream");
+
+    whapiEventSource.addEventListener("message", (evt) => {
+      sseRetryDelay = 2000;
+      try {
+        const payload = JSON.parse(evt.data || "{}");
+        if (String(payload.leadId) === String(props.leadId) && !loading.value) {
+          loadLogs(true);
+        }
+      } catch {}
+    });
+
+    whapiEventSource.onerror = () => {
+      whapiEventSource?.close();
+      whapiEventSource = null;
+      if (!sseActive) return;
+      setTimeout(() => {
+        sseRetryDelay = Math.min(sseRetryDelay * 2, 30000);
+        connect();
+      }, sseRetryDelay);
+    };
   };
+
+  connect();
 };
 
 watch(
-  () => [props.leadId, props.leadName, props.leadAvatar, props.orgName, props.orgLogo],
+  () => [props.leadId, props.leadName, props.leadAvatar, props.orgName, props.orgLogo, props.connected],
   () => {
     resolveContext();
-    messageCursor.value = null;
-    messageHasMore.value = true;
     stopWhapiStream();
-    stopWhapiPoll();
+    if (!props.connected) { logs.value = []; return; }
     loadLogs();
     startWhapiStream();
   },
   { immediate: true }
 );
+
+onBeforeUnmount(() => {
+  stopWhapiStream();
+  revokeObjectUrls();
+});
 </script>
 
 <style scoped>
@@ -324,33 +325,104 @@ watch(
 }
 
 .chat-timeline-body {
-  background: #f7f8fb;
+  background: #efeae2;
+  padding: 0 !important;
 }
 
-.chat-timeline-attachments {
+.chat-timeline-scroll {
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 12px 16px;
+}
+
+.chat-pending-files {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 8px 16px 0 16px;
-  background: #ffffff;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #f0f2f5;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-.chat-timeline-attachment-chip {
+.chat-pending-file { flex: 0 0 auto; }
+
+.chat-pending-image {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #e2e8f0;
+}
+
+.chat-pending-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.chat-pending-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.chat-pending-remove:hover { background: rgba(0, 0, 0, 0.85); }
+
+.chat-pending-doc {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(15, 23, 42, 0.06);
-  border-radius: 999px;
-  padding: 4px 8px;
-  font-size: 12px;
-  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 6px 8px;
+  max-width: 200px;
 }
 
-.chat-timeline-attachment-name {
-  max-width: 160px;
+.chat-pending-doc-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.chat-pending-doc-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: #1e293b;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
+
+.chat-pending-doc-size {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.chat-pending-doc-remove {
+  flex: 0 0 auto;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  color: #94a3b8;
+}
+
+.chat-pending-doc-remove:hover { color: #ef4444; }
 </style>

@@ -583,6 +583,17 @@ const googleStatus = reactive({
   expiresAt: '',
   scopes: [],
 })
+const isGoogleConnected = ref(false)
+const googleConnecting = ref(false)
+const googleDisconnecting = ref(false)
+const googleHealthDialog = ref(false)
+const googleHealthLoading = ref(false)
+const googleHealthData = ref(null)
+const googleErrorMessage = ref('')
+const googleErrorDialog = ref(false)
+const metaDisconnecting = ref(false)
+const metaDisconnectDialog = ref(false)
+const confirmDisconnectMeta = ref(false)
 
 const metaHealthDialog = ref(false)
 const metaHealthLoading = ref(false)
@@ -996,6 +1007,12 @@ const disconnectMeta = async () => {
   } finally {
     metaDisconnecting.value = false
   }
+}
+
+const doDisconnectMeta = async () => {
+  confirmDisconnectMeta.value = false
+  metaDisconnecting.value = true
+  await disconnectMeta()
 }
 
 const fetchMetaHealthSilent = async () => {
@@ -1494,14 +1511,10 @@ const loadGscAnalytics = async () => {
 onMounted(async () => {
   loadUser()
   handleMetaQuery()
+  handleGoogleCallback()
   startWhapiStatusStream()
-  await Promise.all([checkMetaConnection(), loadWhapiStatus(), loadLeads()])
+  await Promise.all([checkMetaConnection(), loadWhapiStatus(), loadLeads(), checkGoogleConnection()])
   loadWhapiChannels(false)
-})
-
-watch(activeLeads, async () => {
-  await nextTick()
-  renderLeadChart()
 })
 
 onBeforeUnmount(() => {

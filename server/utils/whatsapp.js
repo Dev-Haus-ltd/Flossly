@@ -66,7 +66,6 @@ export const logWhatsAppMessage = async ({
   error = null,
 }) => {
   try {
-    await CrmWhatsAppMessageLog.sync();
     await CrmWhatsAppMessageLog.create({
       organisationId: Number(organisationId),
       leadId: leadId ? Number(leadId) : null,
@@ -77,7 +76,7 @@ export const logWhatsAppMessage = async ({
       status,
       providerMessageId,
       content: content != null ? String(content) : null,
-      attachments: attachments || null,
+      attachments: attachments ?? null,
       error,
     });
   } catch {

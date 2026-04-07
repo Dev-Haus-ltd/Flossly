@@ -13,6 +13,7 @@ import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWh
 import { renderLeadTokens } from '../utils/templateTokens'
 import { resolveWhatsAppProviderConfig } from '../utils/whatsappProvider'
 import { uploadBufferFile } from '../utils/storage'
+import { getS3Object } from '../utils/s3'
 import DB from '../utils/db'
 import { parseJsonBody } from "../utils/body";
 
@@ -702,24 +703,13 @@ export const deleteLeads = async (event) => {
 export const bulkUploadLeads = async (event) => {
   try {
     const { orgId } = event.context.user || {}
-    const admin = event.context.admin || null
-    const preParsedPayload = event.context.adminBulkLeadPayload || null
-    const body = preParsedPayload ? null : await readBody(event)
-    const payload = preParsedPayload || (typeof body === 'string' ? parseJsonBody(body) : body)
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const leads = payload?.leads || []
-    const requestedOrganisationId = Number(payload?.organisationId || payload?.orgId || 0)
-    const organisationId = Number(admin ? (requestedOrganisationId || orgId) : orgId)
-
-    if (!organisationId) {
-      return admin ? error(400, 'organisationId is required') : error(401, 'Unauthenticated')
-    }
-
-    if (admin) {
-      const organisation = await Organisation.findByPk(organisationId, { attributes: ['id'] })
-      if (!organisation) return error(404, 'Organisation not found')
-    }
-
+    if (!orgId) return error(401, 'Unauthenticated')
     if (!Array.isArray(leads) || !leads.length) return error(400, 'leads required')
+
+    const organisationId = Number(orgId)
     const statusMap = new Map([
       ['new', 'New'],
       ['converted', 'Converted'],
@@ -870,24 +860,13 @@ export const bulkUploadLeads = async (event) => {
 export const bulkUploadAutomations = async (event) => {
   try {
     const { orgId } = event.context.user || {}
-    const admin = event.context.admin || null
-    const preParsedPayload = event.context.adminBulkAutomationPayload || null
-    const body = preParsedPayload ? null : await readBody(event)
-    const payload = preParsedPayload || (typeof body === 'string' ? parseJsonBody(body) : body)
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const items = Array.isArray(payload?.items) ? payload.items : []
-    const requestedOrganisationId = Number(payload?.organisationId || payload?.orgId || 0)
-    const organisationId = Number(admin ? (requestedOrganisationId || orgId) : orgId)
-
-    if (!organisationId) {
-      return admin ? error(400, 'organisationId is required') : error(401, 'Unauthenticated')
-    }
-
-    if (admin) {
-      const organisation = await Organisation.findByPk(organisationId, { attributes: ['id'] })
-      if (!organisation) return error(404, 'Organisation not found')
-    }
-
+    if (!orgId) return error(401, 'Unauthenticated')
     if (!items.length) return error(400, 'items required')
+
+    const organisationId = Number(orgId)
     const results = []
     const defaultKeySet = new Set((crmAutomationDefaults || []).map((d) => d.key))
 
@@ -1213,17 +1192,7 @@ export const saveLeadTreatment = async (event) => {
     if (!orgId) return error(401, 'Unauthenticated')
     if (!leadId) return error(400, 'leadId required')
     const exists = await CrmLeadTreatment.findOne({ where: { organisationId: Number(orgId), leadId: Number(leadId) } })
-    const fields = [
-      'primaryTreatment',
-      'primaryTreatmentPrice',
-      'secondaryTreatments',
-      'secondaryTreatmentPrices',
-      'concerns',
-      'treatmentAreas',
-      'previousExperience',
-      'budget',
-      'specialOccasion',
-    ]
+    const fields = ['primaryTreatment', 'secondaryTreatments', 'concerns', 'treatmentAreas', 'previousExperience', 'budget', 'specialOccasion']
     if (exists) {
       for (const f of fields) if (data?.[f] !== undefined) exists[f] = data[f]
       await exists.save()
@@ -1272,68 +1241,20 @@ export const listLeadWhatsAppLogs = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     const body = await readBody(event)
-    const { leadId, limit = 100, before = null } = typeof body === 'string' ? parseJsonBody(body) : body
+    const { leadId, limit = 100 } = typeof body === 'string' ? parseJsonBody(body) : body
     if (!orgId) return error(401, 'Unauthenticated')
     if (!leadId) return error(400, 'leadId required')
-    const where = {
-      organisationId: Number(orgId),
-      leadId: Number(leadId),
-    }
-    if (before) {
-      where.createdAt = { [Op.lt]: new Date(before) }
-    }
     const rows = await CrmWhatsAppMessageLog.findAll({
-      where,
+      where: {
+        organisationId: Number(orgId),
+        leadId: Number(leadId),
+      },
       order: [['createdAt', 'DESC']],
       limit: Math.min(Math.max(Number(limit) || 100, 1), 500),
     })
-    const nextCursor = rows.length ? rows[rows.length - 1].createdAt : null
-    return success({ data: rows, nextCursor, limit: Math.min(Math.max(Number(limit) || 100, 1), 500) })
+    return success(rows)
   } catch (e) {
     return error(500, e.message)
-  }
-}
-
-export const uploadWhatsAppAttachment = async (event) => {
-  try {
-    const { orgId, userId } = event.context.user || {}
-    if (!orgId || !userId) return error(401, 'Unauthenticated')
-
-    const formData = await readMultipartFormData(event)
-    if (!formData || !formData.length) return error(400, 'No file uploaded')
-
-    const fileData = formData.find((item) => item.name === 'file')
-    if (!fileData) return error(400, 'Missing file')
-
-    const originalName = fileData.filename || 'file'
-    const fileExt = originalName.includes('.') ? originalName.slice(originalName.lastIndexOf('.')) : ''
-    const uniqueFileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExt}`
-    const mimeType = fileData.type || 'application/octet-stream'
-
-    const s3Path = await uploadBufferFile({
-      data: fileData.data,
-      filename: uniqueFileName,
-      contentType: mimeType,
-      baseDir: 'chat-attachments',
-    })
-
-    const attachmentType = mimeType.startsWith('image/')
-      ? 'image'
-      : mimeType.startsWith('video/')
-        ? 'video'
-        : mimeType.startsWith('audio/')
-          ? 'audio'
-          : 'document'
-
-    return success({
-      url: s3Path,
-      name: originalName,
-      mimeType,
-      type: attachmentType,
-      size: fileData.data?.length || null,
-    })
-  } catch (e) {
-    return error(500, e.message || 'Failed to upload attachment')
   }
 }
 
@@ -1411,6 +1332,52 @@ export const uploadLeadAttachment = async (event) => {
     return error(500, e.message || 'Failed to upload attachment')
   }
 }
+
+export const uploadLeadWhatsAppMedia = async (event) => {
+  try {
+    const { orgId, userId } = event.context.user || {}
+    if (!orgId || !userId) return error(401, 'Unauthenticated')
+
+    const formData = await readMultipartFormData(event)
+    if (!formData || !formData.length) return error(400, 'No file uploaded')
+
+    const fileData = formData.find((item) => item.name === 'file')
+    if (!fileData) return error(400, 'Missing file')
+
+    const originalName = fileData.filename || 'file'
+    const fileExt = originalName.includes('.') ? originalName.slice(originalName.lastIndexOf('.')) : ''
+    const uniqueFileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExt}`
+    const mimeType = fileData.type || 'application/octet-stream'
+
+    const s3Path = await uploadBufferFile({
+      data: fileData.data,
+      filename: uniqueFileName,
+      contentType: mimeType,
+      baseDir: 'chat-attachments',
+    })
+
+    const attachmentType = mimeType.startsWith('image/')
+      ? 'image'
+      : mimeType.startsWith('video/')
+        ? 'video'
+        : mimeType.startsWith('audio/')
+          ? 'audio'
+          : 'document'
+
+    return success({
+      url: s3Path,
+      name: originalName,
+      mimeType,
+      type: attachmentType,
+      size: fileData.data?.length || null,
+    })
+  } catch (e) {
+    return error(500, e.message || 'Failed to upload media')
+  }
+}
+
+// Alias so legacy route 'whatsappUploadAttachment' still works
+export const uploadWhatsAppAttachment = uploadLeadWhatsAppMedia
 
 export const getLeadPriceAttachmentRecent = async (event) => {
   try {
@@ -1953,23 +1920,11 @@ export const sendLeadMail = async (event) => {
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
-    const { leadIds = [], recipients = [], subject, html, key, attachments = [], metadata = {} } = payload || {}
+    const { leadIds = [], subject, html, key, attachments = [], metadata = {} } = payload || {}
     const safeSubject = String(subject || '').trim()
     const safeHtml = typeof html === 'string' ? html : ''
     if (!safeSubject) return error(400, 'subject required')
-    const normalizedRecipients = Array.isArray(recipients)
-      ? recipients
-          .map((item) => ({
-            id: item?.id ? Number(item.id) : null,
-            name: String(item?.name || item?.fullName || '').trim(),
-            email: String(item?.email || '').trim(),
-            telephone: String(item?.telephone || item?.phone || item?.mobile || '').trim(),
-            location: String(item?.location || '').trim(),
-            treatment: item?.treatment || null,
-          }))
-          .filter((item) => item.email)
-      : []
-    if ((!Array.isArray(leadIds) || !leadIds.length) && !normalizedRecipients.length) return error(400, 'leadIds or recipients required')
+    if (!Array.isArray(leadIds) || !leadIds.length) return error(400, 'leadIds required')
     const normalizedAttachments = Array.isArray(attachments)
       ? attachments
           .map((item) => ({
@@ -2003,15 +1958,14 @@ export const sendLeadMail = async (event) => {
       }
     }
 
-    const leads = Array.isArray(leadIds) && leadIds.length
-      ? await CrmLead.findAll({ where: { id: { [Op.in]: leadIds }, organisationId: Number(orgId), softDeleted: false } })
-      : normalizedRecipients
+    const leads = await CrmLead.findAll({ where: { id: { [Op.in]: leadIds }, organisationId: Number(orgId), softDeleted: false } })
     const result = await sendLeadBulkEmail({
       leads,
       subject: safeSubject,
       html: safeHtml,
       senderName: fullName,
       attachments: normalizedAttachments,
+      orgId: Number(orgId),
     })
 
     const sentAt = new Date().toISOString()
@@ -2046,7 +2000,7 @@ export const sendLeadMail = async (event) => {
   }
 }
 
-// Send WhatsApp message to selected leads
+// Send WhatsApp message to selected leads (supports leadIds or direct recipients array)
 export const sendLeadWhatsApp = async (event) => {
   try {
     const { orgId } = event.context.user || {}
@@ -2099,7 +2053,7 @@ export const sendLeadWhatsApp = async (event) => {
       ? `https://graph.facebook.com/v24.0/${waConfig.phoneNumberId}/messages`
       : null
     const whapiBase = waConfig.provider === 'whapi'
-      ? `${String(waConfig.baseUrl || '').replace(/\/+$/, '')}`
+      ? String(waConfig.baseUrl || '').replace(/\/+$/, '')
       : null
     let sent = 0
     let failed = 0
@@ -2150,17 +2104,19 @@ export const sendLeadWhatsApp = async (event) => {
           to,
           type: 'text',
           status: 'failed',
-          error: 'Whapi requires a text message',
+          error: 'Nothing to send (no message text or attachments)',
         })
-        failures.push({
-          leadId: lead.id,
-          error: 'Whapi requires a text message',
-        })
+        failures.push({ leadId: lead.id, error: 'Nothing to send' })
         continue
       }
 
       try {
-        if (useTemplate || resolvedText) {
+        // For Whapi: if attachments are present, fold the text into the first
+        // attachment as a caption (one WhatsApp message instead of two).
+        // For Meta / templates: always send text first, then attachments separately.
+        const whapiWithAttachments = waConfig.provider === 'whapi' && hasAttachments
+
+        if ((useTemplate || resolvedText) && !whapiWithAttachments) {
           const bodyPayload = waConfig.provider === 'meta'
             ? {
                 messaging_product: 'whatsapp',
@@ -2175,24 +2131,12 @@ export const sendLeadWhatsApp = async (event) => {
           const resp = await $fetch(waConfig.provider === 'meta' ? metaUrl : `${whapiBase}/messages/text`, {
             method: 'POST',
             headers: waConfig.provider === 'meta'
-              ? {
-                  Authorization: `Bearer ${waConfig.accessToken}`,
-                  'Content-Type': 'application/json',
-                }
-              : {
-                  Authorization: `Bearer ${waConfig.token}`,
-                  'Content-Type': 'application/json',
-                },
+              ? { Authorization: `Bearer ${waConfig.accessToken}`, 'Content-Type': 'application/json' }
+              : { Authorization: `Bearer ${waConfig.token}`, 'Content-Type': 'application/json' },
             body: bodyPayload,
           })
-          const providerMessageId =
-            resp?.messages?.[0]?.id ||
-            resp?.message?.id ||
-            resp?.id ||
-            null
-          if (typeof lead?.save === 'function') {
-            await markWhatsAppOutbound(lead, to)
-          }
+          const providerMessageId = resp?.messages?.[0]?.id || resp?.message?.id || resp?.id || null
+          if (typeof lead?.save === 'function') await markWhatsAppOutbound(lead, to)
           await logWhatsAppMessage({
             organisationId: orgId,
             leadId: lead.id || null,
@@ -2207,9 +2151,23 @@ export const sendLeadWhatsApp = async (event) => {
         }
 
         if (hasAttachments) {
-          for (const att of attachments) {
+          for (let attIdx = 0; attIdx < attachments.length; attIdx++) {
+            const att = attachments[attIdx]
             const url = toAbsoluteUrl(att?.url)
-            if (!url) continue
+            if (!url || !/^https?:\/\//i.test(url)) {
+              failed += 1
+              await logWhatsAppMessage({
+                organisationId: orgId,
+                leadId: lead.id || null,
+                to,
+                type: 'image',
+                status: 'failed',
+                error: 'Attachment URL is not a public URL. Ensure BASE_URL is configured.',
+                content: att?.name || null,
+              })
+              failures.push({ leadId: lead.id, error: 'Attachment URL is not publicly accessible' })
+              continue
+            }
             const mime = String(att?.mimeType || '').toLowerCase()
             const name = att?.name || null
             const type =
@@ -2217,6 +2175,9 @@ export const sendLeadWhatsApp = async (event) => {
               (mime.startsWith('image/') ? 'image' :
                 mime.startsWith('video/') ? 'video' :
                   mime.startsWith('audio/') ? 'audio' : 'document')
+
+            // Caption: only attach text to the first attachment (Whapi path only)
+            const caption = (whapiWithAttachments && attIdx === 0 && resolvedText) ? resolvedText : null
 
             let resp = null
             if (waConfig.provider === 'meta') {
@@ -2231,10 +2192,7 @@ export const sendLeadWhatsApp = async (event) => {
               }
               resp = await $fetch(metaUrl, {
                 method: 'POST',
-                headers: {
-                  Authorization: `Bearer ${waConfig.accessToken}`,
-                  'Content-Type': 'application/json',
-                },
+                headers: { Authorization: `Bearer ${waConfig.accessToken}`, 'Content-Type': 'application/json' },
                 body: bodyPayload,
               })
             } else {
@@ -2242,32 +2200,36 @@ export const sendLeadWhatsApp = async (event) => {
                 type === 'image' ? 'image' :
                   type === 'video' ? 'video' :
                     type === 'audio' ? 'audio' : 'document'
+
+              // Whapi: send media as base64 data URI so we don't need a public URL.
+              // att.url is the S3 key (relative path like /chat-attachments/file.png).
+              const s3Key = String(att?.url || '').replace(/^\/+/, '')
+              let mediaValue = url // fallback to absolute URL if base64 fails
+              try {
+                const s3Obj = await getS3Object(s3Key)
+                const chunks = []
+                for await (const chunk of s3Obj.body) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+                const b64 = Buffer.concat(chunks).toString('base64')
+                mediaValue = `data:${mime || 'application/octet-stream'};base64,${b64}`
+              } catch {
+                // fall back to absolute URL — requires BASE_URL + s3-proxy
+              }
+
               const bodyPayload = {
                 to,
-                type: 'url',
-                ...(endpoint === 'image' ? { image: url } : {}),
-                ...(endpoint === 'video' ? { video: url } : {}),
-                ...(endpoint === 'audio' ? { audio: url } : {}),
-                ...(endpoint === 'document' ? { document: url, filename: name || undefined } : {}),
+                media: mediaValue,
+                ...(caption ? { caption } : {}),
+                ...(endpoint === 'document' && name ? { filename: name } : {}),
               }
               resp = await $fetch(`${whapiBase}/messages/${endpoint}`, {
                 method: 'POST',
-                headers: {
-                  Authorization: `Bearer ${waConfig.token}`,
-                  'Content-Type': 'application/json',
-                },
+                headers: { Authorization: `Bearer ${waConfig.token}`, 'Content-Type': 'application/json' },
                 body: bodyPayload,
               })
             }
 
-            const providerMessageId =
-              resp?.messages?.[0]?.id ||
-              resp?.message?.id ||
-              resp?.id ||
-              null
-            if (typeof lead?.save === 'function') {
-              await markWhatsAppOutbound(lead, to)
-            }
+            const providerMessageId = resp?.messages?.[0]?.id || resp?.message?.id || resp?.id || null
+            if (typeof lead?.save === 'function') await markWhatsAppOutbound(lead, to)
             await logWhatsAppMessage({
               organisationId: orgId,
               leadId: lead.id || null,
@@ -2275,8 +2237,8 @@ export const sendLeadWhatsApp = async (event) => {
               type,
               status: 'sent',
               providerMessageId,
-              content: name || null,
-              attachments: [{ ...att, url }],
+              content: caption || name || null,
+              attachments: [{ ...att, url: att?.url || url }],
             })
             sent += 1
           }

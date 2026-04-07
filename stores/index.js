@@ -6,6 +6,7 @@ import teamIcon from "@/assets/icons/mainDrawerIcons/team.svg";
 import flosslyDocs from '@/assets/icons/mainDrawerIcons/docs.svg'
 import crmIcon from '@/assets/icons/mainDrawerIcons/crm.svg'
 import academyIcon from '@/assets/icons/mainDrawerIcons/academy.svg'
+import settingsIcon from '@/assets/icons/mainDrawerIcons/settings.svg'
 import { DEVELOPER_EMAILS } from '@/composables/useDeveloperAccess';
 
 const LICENSE_TYPES = {
@@ -113,6 +114,9 @@ export const useMainStore = defineStore("mainStore", {
       const authStore = useAuthStore();
 
       const isDeveloper = authStore.getIsDeveloper;
+
+      const { user } = useUser();
+      const userRoleId = user.value?.roleId;
 
       const menuItems = [
         {
@@ -315,10 +319,21 @@ export const useMainStore = defineStore("mainStore", {
       if (isDeveloper) {
         menuItems.push({
           title: "Support Chat",
-          imgPath: teamIcon, // Using team icon temporarily, can be replaced with chat icon
+          imgPath: teamIcon,
           value: "supportChat",
           to: "/support-chat",
-          featureKey: "dashboard", // Use dashboard feature key so it's always visible
+          featureKey: "dashboard",
+        });
+      }
+
+      // Add Settings menu item for roleId 16 and roleId 1
+      if (userRoleId === 16 || userRoleId === 1) {
+        menuItems.push({
+          title: "Settings",
+          imgPath: settingsIcon,
+          value: "settings",
+          to: "/settings",
+          featureKey: "dashboard",
         });
       }
 
@@ -327,6 +342,11 @@ export const useMainStore = defineStore("mainStore", {
     },
     getuserOptions() {
       const licenseType = getLicenseTypeFromStorage();
+      
+      // Get user data to check roleId
+      const { user } = useUser();
+      const userRoleId = user.value?.roleId;
+      
       const menuItems = [
         {
           title: "DashBoard",
@@ -409,6 +429,17 @@ export const useMainStore = defineStore("mainStore", {
         //   ],
         // },
       ];
+
+      // Add Settings menu item for roleId 16 and roleId 1
+      if (userRoleId === 16 || userRoleId === 1) {
+        menuItems.push({
+          title: "Settings",
+          imgPath: settingsIcon,
+          value: "settings",
+          to: "/settings",
+          featureKey: "dashboard", // Use dashboard feature key so it's always visible
+        });
+      }
 
       return filterMenuByLicense(menuItems, licenseType);
     },

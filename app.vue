@@ -4,7 +4,14 @@
     <CommonLoader />
     <Snackbar />
     <ClientOnly>
-    <div class="floating-buttons" v-if="showFloatingButtons">
+    <div
+      ref="floatingEl"
+      class="floating-buttons"
+      v-if="showFloatingButtons"
+      :style="dragStyle"
+      :class="{ 'floating-buttons--dragging': isDragging }"
+      @click.capture="onFloatingClick"
+    >
       <FloatingButtonsQuickActions
         @create-task="handleCreateTask"
         @add-staff="handleAddStaff"
@@ -98,6 +105,7 @@
 import { CommonLoader } from "#components";
 import { isAuthenticated } from "./lib/auth.js";
 import { useFCM } from '~/composables/useFCM';
+import { useDraggable, useStorage } from '@vueuse/core';
 
 const authStore = useAuthStore();
 const { user, setUser } = useUser();
@@ -533,6 +541,35 @@ const showFloatingButtons = computed(() => {
   return loggedIn.value && !excludedRoutes.includes(route.name);
 });
 
+// Draggable floating buttons
+const floatingEl = ref(null);
+const savedPos = useStorage('floating-buttons-pos', null);
+
+const defaultPos = savedPos.value ?? (
+  process.client
+    ? { x: window.innerWidth - 148, y: window.innerHeight - 88 }
+    : { x: 0, y: 0 }
+);
+
+let _dragMoved = false;
+const { x, y, style: dragStyle, isDragging } = useDraggable(floatingEl, {
+  initialValue: defaultPos,
+  onMove() { _dragMoved = true; },
+  onEnd(pos) {
+    savedPos.value = { x: pos.x, y: pos.y };
+  },
+});
+
+// Suppress the click that fires after drag-release so menus don't open
+const onFloatingClick = (e) => {
+  if (_dragMoved) {
+    e.stopPropagation();
+    _dragMoved = false;
+  }
+};
+
+
+
 const showChatbot = computed(() => {
   const excludedRoutes = ["onboarding", "login", "signup"];
   return loggedIn.value && !excludedRoutes.includes(route.name);
@@ -641,7 +678,15 @@ watch(
   flex-direction: row;
   gap: 2px;
   z-index: 1000;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
 }
+
+.floating-buttons--dragging {
+  cursor: grabbing;
+}
+
 .video-wrapper {
   position: relative;
   padding-bottom: 56.25%;

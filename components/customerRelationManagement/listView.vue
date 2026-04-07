@@ -584,6 +584,7 @@
       v-if="showLeadDetailDialog"
       v-model="showLeadDetailDialog"
       :selected-lead="selectedLead"
+      :initial-tab="dialogInitialTab"
       @close="handleLeadDialogClose"
     />
 
@@ -853,6 +854,7 @@ const selectedArchivedLeads = ref([]);
 const isAllArchived = ref(false);
 const showLeadDetailDialog = ref(false);
 const selectedLead = ref({});
+const dialogInitialTab = ref(null);
 const commentMenus = reactive({});
 const leadRouteRequestId = ref(0);
 
@@ -970,6 +972,8 @@ const syncLeadDialogWithRoute = async (rawLeadId = route.query.leadId) => {
       }
     }
   }
+
+  dialogInitialTab.value = route.query.tab || null;
 
   const visibleLead = findVisibleLeadById(numericLeadId);
   if (visibleLead) {
@@ -1573,11 +1577,13 @@ const openLeadDialog = (lead) => {
 
 const handleLeadDialogClose = () => {
   showLeadDetailDialog.value = false;
+  dialogInitialTab.value = null;
 
   if (route.query.leadId || route.query.orgId) {
     const newQuery = { ...route.query };
     delete newQuery.leadId;
     delete newQuery.orgId;
+    delete newQuery.tab;
     router.replace({ query: newQuery });
   }
 };

@@ -188,6 +188,7 @@ export const useCrmStore = defineStore("crmStore", {
     resetAutomationOverride(payload) { return this._wrap(() => crmService.resetAutomationOverride(payload)); },
     deleteAutomation(payload) { return this._wrap(() => crmService.deleteAutomation(payload)); },
     bulkUploadAutomations(payload) { return this._wrap(() => crmService.bulkUploadAutomations(payload)); },
+    generateAutomationsWithAI(payload) { return this._wrap(() => crmService.generateAutomationsWithAI(payload)); },
     listAutomationGroups() { return this._wrap(() => crmService.listAutomationGroups()); },
     generateAutomationsWithAI(payload) { return this._wrap(() => crmService.generateAutomationsWithAI(payload)); },
     async saveAutomationGroup(payload) {
@@ -212,6 +213,7 @@ export const useCrmStore = defineStore("crmStore", {
     sendLeadWhatsApp(payload) { return this._wrap(() => crmService.sendLeadWhatsApp(payload)); },
     getWhatsAppUsage() { return this._wrap(() => crmService.getWhatsAppUsage()); },
     uploadLeadAttachment(formData) { return this._wrap(() => crmService.uploadLeadAttachment(formData)); },
+    uploadLeadWhatsAppMedia(formData) { return this._wrap(() => crmService.uploadLeadWhatsAppMedia(formData)); },
     getLeadPriceAttachmentRecent(payload) { return this._wrap(() => crmService.getLeadPriceAttachmentRecent(payload)); },
 
     // Web Forms
