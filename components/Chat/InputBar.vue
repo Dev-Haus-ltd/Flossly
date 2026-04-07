@@ -7,29 +7,43 @@
     @drop.prevent="onDrop"
   >
     <div v-if="isDragging" class="chat-input-drop-overlay">
-      <v-icon size="28" color="primary">mdi-cloud-upload-outline</v-icon>
+      <v-icon size="22" color="primary">mdi-cloud-upload-outline</v-icon>
       <span>Drop files to attach</span>
     </div>
     <template v-else>
-      <div v-if="showEmoji" class="chat-input-left">
-        <v-menu v-model="emojiMenu" offset-y>
-          <template #activator="{ props: menuProps }">
-            <v-btn v-bind="menuProps" icon variant="text" size="small">
-              <v-icon size="18">mdi-emoticon-outline</v-icon>
-            </v-btn>
-          </template>
+      <!-- Left actions -->
+      <div class="chat-input-actions">
+        <v-btn
+          v-if="showEmoji"
+          icon
+          variant="text"
+          size="x-small"
+          class="chat-input-icon-btn"
+          @click="emojiMenu = !emojiMenu"
+        >
+          <v-icon size="20">mdi-emoticon-outline</v-icon>
+        </v-btn>
+        <v-menu v-if="showEmoji" v-model="emojiMenu" offset-y :close-on-content-click="false">
+          <template #activator="{ props: _ }" />
           <ClientOnly>
             <div class="emoji-menu">
               <emoji-picker class="emoji-picker" @emoji-click="onEmojiClick" />
             </div>
           </ClientOnly>
         </v-menu>
-      </div>
-      <div v-if="allowAttachments" class="chat-input-left">
-        <v-btn icon variant="text" size="small" @click="triggerFileInput">
-          <v-icon size="18">mdi-paperclip</v-icon>
+
+        <v-btn
+          v-if="allowAttachments"
+          icon
+          variant="text"
+          size="x-small"
+          class="chat-input-icon-btn"
+          @click="triggerFileInput"
+        >
+          <v-icon size="20">mdi-paperclip</v-icon>
         </v-btn>
         <input
+          v-if="allowAttachments"
           ref="fileInput"
           type="file"
           class="hidden-input"
@@ -37,28 +51,36 @@
           @change="onFilesChange"
         />
       </div>
-      <v-text-field
-        v-model="draft"
-        :placeholder="placeholder"
-        variant="solo"
-        density="compact"
-        hide-details
-        flat
-        :disabled="disabled"
-        :bg-color="bgColor"
-        class="chat-input-field"
-        @keydown.enter.prevent="emitSend"
-      />
+
+      <!-- Text field -->
+      <div class="chat-input-field-wrap">
+        <v-text-field
+          v-model="draft"
+          :placeholder="placeholder"
+          variant="solo"
+          density="compact"
+          hide-details
+          flat
+          :disabled="disabled"
+          bg-color="transparent"
+          class="chat-input-field"
+          @keydown.enter.prevent="emitSend"
+        />
+      </div>
+
+      <!-- Send button -->
       <v-btn
         icon
-        :color="sendColor"
+        :color="canSend ? sendColor : undefined"
         variant="flat"
+        size="small"
         class="chat-send-btn"
+        :class="{ 'chat-send-btn--active': canSend }"
         :loading="loading"
         :disabled="disabled || !canSend"
         @click="emitSend"
       >
-        <v-icon size="20">{{ sendIcon }}</v-icon>
+        <v-icon size="18">{{ sendIcon }}</v-icon>
       </v-btn>
     </template>
   </div>
@@ -71,7 +93,7 @@ if (process.client) {
 
 const props = defineProps({
   modelValue: { type: String, default: "" },
-  placeholder: { type: String, default: "Type here..." },
+  placeholder: { type: String, default: "Message..." },
   disabled: { type: Boolean, default: false },
   loading: { type: Boolean, default: false },
   canSend: { type: Boolean, default: true },
@@ -79,7 +101,6 @@ const props = defineProps({
   allowAttachments: { type: Boolean, default: false },
   sendIcon: { type: String, default: "mdi-send" },
   sendColor: { type: String, default: "primary" },
-  bgColor: { type: String, default: "#FFFFFF" },
 });
 
 const emit = defineEmits(["update:modelValue", "send", "files-selected"]);
@@ -125,10 +146,7 @@ const onDragOver = () => {
 const onDragLeave = () => {
   if (!props.allowAttachments) return;
   dragCounter--;
-  if (dragCounter <= 0) {
-    dragCounter = 0;
-    isDragging.value = false;
-  }
+  if (dragCounter <= 0) { dragCounter = 0; isDragging.value = false; }
 };
 
 const onDrop = (event) => {
@@ -144,12 +162,12 @@ const onDrop = (event) => {
 .chat-input-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: #ffffff;
+  gap: 4px;
+  padding: 8px 12px;
+  background: #f0f2f5;
   position: relative;
-  min-height: 56px;
-  transition: background 0.15s, border-top 0.15s;
+  min-height: 52px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .chat-input-bar--dragging {
@@ -161,28 +179,77 @@ const onDrop = (event) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: #0061fb;
   pointer-events: none;
 }
 
-.chat-input-left {
+/* Left action icons */
+.chat-input-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.chat-input-icon-btn {
+  color: #54656f !important;
+  width: 36px !important;
+  height: 36px !important;
+}
+
+.chat-input-icon-btn:hover {
+  color: #0061fb !important;
+  background: rgba(0, 97, 251, 0.06) !important;
+}
+
+/* Text field pill */
+.chat-input-field-wrap {
+  flex: 1;
+  background: #ffffff;
+  border-radius: 21px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
 }
 
 .chat-input-field {
   flex: 1;
 }
 
+/* Remove Vuetify's inner box shadow / outline */
+.chat-input-field :deep(.v-field) {
+  box-shadow: none !important;
+  border-radius: 21px !important;
+}
+
+.chat-input-field :deep(.v-field__input) {
+  font-size: 14px;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  min-height: unset !important;
+}
+
+/* Send button */
 .chat-send-btn {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 50% !important;
+  flex: 0 0 auto;
+  color: #54656f !important;
+  background: transparent !important;
+  transition: background 0.15s, color 0.15s;
+}
+
+.chat-send-btn--active {
+  background: #0061fb !important;
+  color: #ffffff !important;
 }
 
 .emoji-menu {
@@ -201,7 +268,5 @@ const onDrop = (event) => {
   --num-columns: 8;
 }
 
-.hidden-input {
-  display: none;
-}
+.hidden-input { display: none; }
 </style>
