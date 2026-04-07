@@ -64,17 +64,19 @@ defineExpose({ scrollToBottom });
 .chat-thread-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 3px;
   padding-right: 8px;
 }
 
 .chat-day-pill {
   align-self: center;
-  background: #eef2f7;
-  color: #64748b;
+  background: #d1f4cc;
+  color: #4a4a4a;
   font-size: 12px;
-  padding: 6px 14px;
+  font-weight: 500;
+  padding: 4px 12px;
   border-radius: 999px;
-  margin: 6px 0 2px;
+  margin: 10px 0 6px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 </style>

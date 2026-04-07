@@ -26,27 +26,23 @@
           :key="`${file.name}-${idx}`"
           class="chat-pending-file"
         >
-          <!-- Image preview -->
           <template v-if="isImageFile(file)">
             <div class="chat-pending-image">
               <img :src="getObjectUrl(file)" :alt="file.name" />
               <button class="chat-pending-remove" @click="removePendingFile(idx)">
-                <v-icon size="12" color="white">mdi-close</v-icon>
+                <v-icon size="10" color="white">mdi-close</v-icon>
               </button>
             </div>
           </template>
-          <!-- Non-image file card -->
           <template v-else>
             <div class="chat-pending-doc">
-              <v-icon size="20" :color="fileIconColor(file)" class="chat-pending-doc-icon">
-                {{ fileIcon(file) }}
-              </v-icon>
+              <v-icon size="18" :color="fileIconColor(file)">{{ fileIcon(file) }}</v-icon>
               <div class="chat-pending-doc-info">
                 <span class="chat-pending-doc-name">{{ file.name }}</span>
                 <span class="chat-pending-doc-size">{{ formatBytes(file.size) }}</span>
               </div>
               <button class="chat-pending-doc-remove" @click="removePendingFile(idx)">
-                <v-icon size="14">mdi-close</v-icon>
+                <v-icon size="13">mdi-close</v-icon>
               </button>
             </div>
           </template>
@@ -285,7 +281,7 @@ onBeforeUnmount(() => {
 }
 
 .chat-timeline-body {
-  background: #f7f8fb;
+  background: #efeae2;
   padding: 0 !important;
 }
 
@@ -298,25 +294,22 @@ onBeforeUnmount(() => {
 .chat-pending-files {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 8px 16px;
-  background: #ffffff;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #f0f2f5;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-.chat-pending-file {
-  flex: 0 0 auto;
-}
+.chat-pending-file { flex: 0 0 auto; }
 
-/* Image thumbnail */
 .chat-pending-image {
   position: relative;
-  width: 72px;
-  height: 72px;
-  border-radius: 10px;
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
   overflow: hidden;
   border: 1px solid rgba(0, 0, 0, 0.1);
-  background: #f1f5f9;
+  background: #e2e8f0;
 }
 
 .chat-pending-image img {
@@ -328,12 +321,12 @@ onBeforeUnmount(() => {
 
 .chat-pending-remove {
   position: absolute;
-  top: 3px;
-  right: 3px;
-  width: 18px;
-  height: 18px;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.6);
   border: none;
   cursor: pointer;
   display: flex;
@@ -342,24 +335,17 @@ onBeforeUnmount(() => {
   padding: 0;
 }
 
-.chat-pending-remove:hover {
-  background: rgba(0, 0, 0, 0.8);
-}
+.chat-pending-remove:hover { background: rgba(0, 0, 0, 0.85); }
 
-/* Non-image file card */
 .chat-pending-doc {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  background: #f8fafc;
+  gap: 6px;
+  background: #ffffff;
   border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 10px;
-  padding: 8px 10px;
-  max-width: 220px;
-}
-
-.chat-pending-doc-icon {
-  flex: 0 0 auto;
+  border-radius: 8px;
+  padding: 6px 8px;
+  max-width: 200px;
 }
 
 .chat-pending-doc-info {
@@ -370,7 +356,7 @@ onBeforeUnmount(() => {
 }
 
 .chat-pending-doc-name {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   color: #1e293b;
   white-space: nowrap;
@@ -379,7 +365,7 @@ onBeforeUnmount(() => {
 }
 
 .chat-pending-doc-size {
-  font-size: 11px;
+  font-size: 10px;
   color: #94a3b8;
 }
 
@@ -394,7 +380,5 @@ onBeforeUnmount(() => {
   color: #94a3b8;
 }
 
-.chat-pending-doc-remove:hover {
-  color: #ef4444;
-}
+.chat-pending-doc-remove:hover { color: #ef4444; }
 </style>

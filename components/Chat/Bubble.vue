@@ -5,6 +5,7 @@
   >
     <div class="chat-bubble-wrap">
       <div class="chat-bubble-content">
+        <!-- Inbound avatar -->
         <div
           v-if="!isOutbound"
           class="chat-avatar"
@@ -13,27 +14,47 @@
           <img v-if="showAvatarImage" :src="avatarUrl" alt="Lead" @error="onAvatarError" />
           <span v-else>{{ avatarText }}</span>
         </div>
-        <div class="chat-bubble">
+
+        <div class="chat-bubble" :class="bubbleClass">
           <div v-if="automated" class="chat-bubble-badge">Automated</div>
-          <p v-if="showMessage" class="mb-1 chat-bubble-text">{{ message }}</p>
-          <div v-if="showAttachmentPlaceholder" class="chat-attachment-placeholder">
-            <v-icon size="14" class="mr-1">mdi-paperclip</v-icon>
-            <span>Attachment</span>
-          </div>
-          <div v-if="hasAttachments" class="chat-attachments">
-            <div v-if="imageAttachments.length" class="chat-attachments-grid">
-              <a
-                v-for="(att, idx) in imageAttachments"
-                :key="`img-${idx}`"
-                :href="att.url"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="chat-attachment-image"
-              >
-                <img :src="att.url" :alt="att.name || 'Image'" />
-              </a>
+
+          <!-- Image-first layout (WhatsApp style) -->
+          <template v-if="leadImage">
+            <a
+              class="chat-bubble-image-wrap"
+              :href="leadImage.url"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img :src="leadImage.url" :alt="leadImage.name || 'Image'" class="chat-bubble-image" />
+              <!-- Timestamp overlaid on image when no text below -->
+              <div v-if="!showMessage" class="chat-bubble-image-meta">
+                <span>{{ timestamp || 'N/A' }}</span>
+                <v-icon v-if="statusIcon" size="12" :color="statusColor || undefined">{{ statusIcon }}</v-icon>
+              </div>
+            </a>
+            <!-- Caption below image -->
+            <div v-if="showMessage" class="chat-bubble-caption">
+              <span>{{ message }}</span>
+              <div class="chat-bubble-meta">
+                <span>{{ timestamp || 'N/A' }}</span>
+                <v-icon v-if="statusIcon" size="12" :color="statusColor || undefined">{{ statusIcon }}</v-icon>
+              </div>
             </div>
-            <div v-if="videoAttachments.length" class="chat-attachments-media">
+          </template>
+
+          <!-- Text-only layout -->
+          <template v-else>
+            <div v-if="showMessage" class="chat-bubble-text-wrap">
+              <p class="chat-bubble-text">{{ message }}</p>
+            </div>
+            <div v-if="showAttachmentPlaceholder" class="chat-attachment-placeholder">
+              <v-icon size="14" class="mr-1">mdi-paperclip</v-icon>
+              <span>Attachment</span>
+            </div>
+
+            <!-- Video attachments -->
+            <div v-if="videoAttachments.length" class="chat-media-stack">
               <video
                 v-for="(att, idx) in videoAttachments"
                 :key="`video-${idx}`"
@@ -43,7 +64,9 @@
                 <source :src="att.url" :type="att.mimeType || 'video/mp4'" />
               </video>
             </div>
-            <div v-if="audioAttachments.length" class="chat-attachments-media">
+
+            <!-- Audio attachments -->
+            <div v-if="audioAttachments.length" class="chat-media-stack">
               <audio
                 v-for="(att, idx) in audioAttachments"
                 :key="`audio-${idx}`"
@@ -53,6 +76,8 @@
                 <source :src="att.url" :type="att.mimeType || 'audio/mpeg'" />
               </audio>
             </div>
+
+            <!-- File attachments -->
             <div v-if="fileAttachments.length" class="chat-attachments-files">
               <a
                 v-for="(att, idx) in fileAttachments"
@@ -62,54 +87,20 @@
                 rel="noopener noreferrer"
                 class="chat-attachment-file"
               >
-                <v-icon size="16" class="mr-1">mdi-paperclip</v-icon>
+                <v-icon size="16">mdi-file-outline</v-icon>
                 <span>{{ att.name || 'Attachment' }}</span>
+                <v-icon size="14" class="ml-auto opacity-60">mdi-open-in-new</v-icon>
               </a>
             </div>
-            <div v-if="storyAttachments.length" class="chat-attachments-stories">
-              <a
-                v-for="(att, idx) in storyAttachments"
-                :key="`story-${idx}`"
-                :href="att.url"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="chat-attachment-story"
-              >
-                <v-icon size="14" class="mr-1">mdi-instagram</v-icon>
-                <span>Story reply</span>
-                <v-icon size="12" class="ml-1 opacity-60">mdi-open-in-new</v-icon>
-              </a>
+
+            <div class="chat-bubble-meta">
+              <span>{{ timestamp || 'N/A' }}</span>
+              <v-icon v-if="statusIcon" size="12" :color="statusColor || undefined">{{ statusIcon }}</v-icon>
             </div>
-            <div v-if="shareAttachments.length" class="chat-attachments-shares">
-              <a
-                v-for="(att, idx) in shareAttachments"
-                :key="`share-${idx}`"
-                :href="att.url"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="chat-attachment-share"
-              >
-                <div class="share-header">
-                  <v-icon size="14" class="mr-1">mdi-link-variant</v-icon>
-                  <span class="share-title">{{ att.name || 'Shared post' }}</span>
-                </div>
-                <div v-if="att.description" class="share-description">{{ att.description }}</div>
-                <span class="share-cta">View post</span>
-              </a>
-            </div>
-          </div>
-          <div class="chat-bubble-meta">
-            <span>{{ timestamp || "N/A" }}</span>
-            <v-icon
-              v-if="statusIcon"
-              size="14"
-              class="chat-status-icon"
-              :color="statusColor || undefined"
-            >
-              {{ statusIcon }}
-            </v-icon>
-          </div>
+          </template>
         </div>
+
+        <!-- Outbound avatar -->
         <div
           v-if="isOutbound"
           class="chat-avatar"
@@ -139,19 +130,10 @@ const props = defineProps({
 
 const showAvatarImage = ref(false);
 
-const updateAvatarVisibility = () => {
-  showAvatarImage.value = !!props.avatarUrl;
-};
+const updateAvatarVisibility = () => { showAvatarImage.value = !!props.avatarUrl; };
+const onAvatarError = () => { showAvatarImage.value = false; };
 
-const onAvatarError = () => {
-  showAvatarImage.value = false;
-};
-
-watch(
-  () => props.avatarUrl,
-  () => updateAvatarVisibility(),
-  { immediate: true }
-);
+watch(() => props.avatarUrl, () => updateAvatarVisibility(), { immediate: true });
 
 const normalizeAttachments = (raw) => {
   if (!raw) return [];
@@ -178,9 +160,7 @@ const extractAttachmentName = (att, url) => {
   try {
     const part = url.split("/").pop() || "";
     return decodeURIComponent(part.split("?")[0] || "");
-  } catch {
-    return "";
-  }
+  } catch { return ""; }
 };
 
 const normalizedAttachments = computed(() => {
@@ -190,313 +170,269 @@ const normalizedAttachments = computed(() => {
       if (!url) return null;
       const type = extractAttachmentType(att);
       const name = extractAttachmentName(att, url);
-      return { url, type, name };
+      return { url, type, name, mimeType: att?.mimeType || att?.mime_type || null };
     })
     .filter(Boolean);
 });
 
-const hasRenderableAttachments = computed(() => normalizedAttachments.value.length > 0);
-
-const showMessage = computed(() => {
-  const text = String(props.message || "").trim();
-  if (!text) return false;
-  if (text === "[Attachment]") return false;
-  return true;
+// The primary image (first image attachment) gets WhatsApp-style full-bleed treatment
+const leadImage = computed(() => {
+  return normalizedAttachments.value.find(
+    (a) => a.type.includes("image") || /\.(png|jpe?g|gif|webp|bmp)$/i.test(a.url)
+  ) || null;
 });
-
-const showAttachmentPlaceholder = computed(() => {
-  const text = String(props.message || "").trim();
-  return text === "[Attachment]" && !hasRenderableAttachments.value;
-});
-
-const imageAttachments = computed(() =>
-  normalizedAttachments.value.filter((a) =>
-    a.type.includes("image") || /\.(png|jpe?g|gif|webp|bmp)$/i.test(a.url)
-  )
-);
 
 const videoAttachments = computed(() =>
-  normalizedAttachments.value.filter((a) =>
-    a.type.includes("video") || /\.(mp4|mov|webm|avi|mkv)$/i.test(a.url)
-  )
+  normalizedAttachments.value.filter((a) => a.type.includes("video") || /\.(mp4|mov|webm|avi|mkv)$/i.test(a.url))
 );
 
 const audioAttachments = computed(() =>
-  normalizedAttachments.value.filter((a) =>
-    a.type.includes("audio") || /\.(mp3|wav|ogg|m4a)$/i.test(a.url)
-  )
-);
-
-const storyAttachments = computed(() =>
-  normalizedAttachments.value.filter((a) => a.type === "story")
-);
-
-const shareAttachments = computed(() =>
-  normalizedAttachments.value.filter((a) => a.type === "share")
+  normalizedAttachments.value.filter((a) => a.type.includes("audio") || /\.(mp3|wav|ogg|m4a)$/i.test(a.url))
 );
 
 const fileAttachments = computed(() =>
   normalizedAttachments.value.filter(
     (a) =>
-      !imageAttachments.value.includes(a) &&
+      !leadImage.value || a !== leadImage.value &&
       !videoAttachments.value.includes(a) &&
-      !audioAttachments.value.includes(a) &&
-      !storyAttachments.value.includes(a) &&
-      !shareAttachments.value.includes(a)
+      !audioAttachments.value.includes(a)
+  ).filter(
+    (a) => !a.type.includes("image") && !/\.(png|jpe?g|gif|webp|bmp)$/i.test(a.url)
   )
 );
 
-const hasAttachments = computed(() => hasRenderableAttachments.value);
+const showMessage = computed(() => {
+  const text = String(props.message || "").trim();
+  if (!text || text === "[Attachment]") return false;
+  return true;
+});
+
+const showAttachmentPlaceholder = computed(() => {
+  const text = String(props.message || "").trim();
+  return text === "[Attachment]" && !normalizedAttachments.value.length;
+});
+
+const bubbleClass = computed(() => ({
+  "chat-bubble--has-image": !!leadImage.value,
+  "chat-bubble--outbound": props.isOutbound,
+  "chat-bubble--inbound": !props.isOutbound,
+}));
 </script>
 
 <style scoped>
 .chat-bubble-row {
   display: flex;
+  margin-bottom: 2px;
 }
 
-.chat-bubble-row--inbound {
-  justify-content: flex-start;
-}
+.chat-bubble-row--inbound { justify-content: flex-start; }
+.chat-bubble-row--outbound { justify-content: flex-end; }
 
-.chat-bubble-row--outbound {
-  justify-content: flex-end;
-}
-
-.chat-bubble-wrap {
-  max-width: 78%;
-}
+.chat-bubble-wrap { max-width: 72%; }
 
 .chat-bubble-content {
   display: flex;
   align-items: flex-end;
-  gap: 10px;
+  gap: 8px;
 }
 
+/* ── Bubble shell ── */
 .chat-bubble {
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: #fff;
   position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  min-width: 80px;
 }
 
-.chat-bubble-row--outbound .chat-bubble {
-  background: #e6f0ff;
-  border-color: #d6e4ff;
+.chat-bubble--inbound {
+  background: #ffffff;
+  border-bottom-left-radius: 4px;
 }
 
-.chat-bubble-row--inbound .chat-bubble::before {
+.chat-bubble--outbound {
+  background: #e7f8ee;
+  border-bottom-right-radius: 4px;
+}
+
+/* Tails */
+.chat-bubble--inbound::before {
   content: "";
   position: absolute;
-  left: 12px;
-  top: -6px;
-  border-right: 6px solid #fff;
-  border-left: 6px solid transparent;
-  border-bottom: 6px solid transparent;
+  bottom: 0;
+  left: -7px;
+  width: 0;
+  height: 0;
+  border-right: 8px solid #ffffff;
+  border-top: 8px solid transparent;
 }
 
-.chat-bubble-row--outbound .chat-bubble::after {
+.chat-bubble--outbound::after {
   content: "";
   position: absolute;
-  right: 12px;
-  top: -6px;
-  border-left: 6px solid #e6f0ff;
-  border-right: 6px solid transparent;
-  border-bottom: 6px solid transparent;
+  bottom: 0;
+  right: -7px;
+  width: 0;
+  height: 0;
+  border-left: 8px solid #e7f8ee;
+  border-top: 8px solid transparent;
+}
+
+/* ── Image layout (full-bleed) ── */
+.chat-bubble--has-image {
+  padding: 0;
+}
+
+.chat-bubble-image-wrap {
+  display: block;
+  position: relative;
+  line-height: 0;
+}
+
+.chat-bubble-image {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  min-width: 180px;
+  height: auto;
+  max-height: 320px;
+  object-fit: cover;
+  border-radius: 16px;
+}
+
+.chat-bubble--inbound .chat-bubble-image {
+  border-bottom-left-radius: 4px;
+}
+.chat-bubble--outbound .chat-bubble-image {
+  border-bottom-right-radius: 4px;
+}
+
+/* Timestamp overlaid on image (no caption) */
+.chat-bubble-image-meta {
+  position: absolute;
+  bottom: 6px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.38);
+  border-radius: 8px;
+  padding: 2px 6px;
+  line-height: 1.4;
+}
+
+/* Caption below image */
+.chat-bubble-caption {
+  padding: 6px 10px 6px 10px;
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.88);
+  word-break: break-word;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+/* ── Text layout ── */
+.chat-bubble-text-wrap {
+  padding: 8px 10px 2px 10px;
 }
 
 .chat-bubble-text {
+  margin: 0;
+  font-size: 14px;
   white-space: pre-wrap;
   word-break: break-word;
-  font-size: 14px;
+  line-height: 1.45;
   color: rgba(0, 0, 0, 0.88);
 }
 
 .chat-bubble-meta {
   display: flex;
-  gap: 10px;
+  gap: 4px;
   align-items: center;
-  font-size: 11px;
-  color: rgba(0, 0, 0, 0.55);
   justify-content: flex-end;
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.45);
+  padding: 2px 10px 6px 10px;
+  line-height: 1;
 }
 
-.chat-attachments {
+/* ── Media ── */
+.chat-media-stack {
+  padding: 4px 8px;
   display: grid;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.chat-attachments-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-  gap: 8px;
-}
-
-.chat-attachment-image {
-  display: block;
-  border-radius: 10px;
-  overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: #f8fafc;
-}
-
-.chat-attachment-image img {
-  width: 100%;
-  height: 90px;
-  object-fit: cover;
-  display: block;
-}
-
-.chat-attachments-files {
-  display: flex;
-  flex-direction: column;
   gap: 6px;
-}
-
-.chat-attachments-media {
-  display: grid;
-  gap: 8px;
 }
 
 .chat-attachment-video {
   width: 100%;
   max-width: 320px;
   border-radius: 10px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
   background: #000;
 }
 
 .chat-attachment-audio {
   width: 100%;
-  max-width: 320px;
+  max-width: 300px;
+}
+
+/* ── File attachments ── */
+.chat-attachments-files {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
 }
 
 .chat-attachment-file {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 8px;
+  font-size: 13px;
   color: #1d4ed8;
   text-decoration: none;
-  background: rgba(29, 78, 216, 0.08);
-  padding: 6px 10px;
-  border-radius: 999px;
-  width: fit-content;
+  background: rgba(29, 78, 216, 0.06);
+  border: 1px solid rgba(29, 78, 216, 0.14);
+  padding: 8px 10px;
+  border-radius: 10px;
 }
 
-.chat-status-icon {
-  opacity: 0.8;
-}
+.chat-attachment-file:hover { background: rgba(29, 78, 216, 0.1); }
 
+/* ── Placeholder ── */
 .chat-attachment-placeholder {
   display: inline-flex;
   align-items: center;
   font-size: 12px;
   color: rgba(0, 0, 0, 0.45);
   font-style: italic;
+  padding: 8px 10px 4px;
 }
 
-.chat-attachments-stories {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 6px;
-}
-
-.chat-attachment-story {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: #c13584;
-  text-decoration: none;
-  background: rgba(193, 53, 132, 0.08);
-  padding: 6px 10px;
-  border-radius: 999px;
-  width: fit-content;
-  border: 1px solid rgba(193, 53, 132, 0.2);
-}
-
-.chat-attachment-story:hover {
-  background: rgba(193, 53, 132, 0.14);
-}
-
-.chat-attachments-shares {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 6px;
-}
-
-.chat-attachment-share {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  text-decoration: none;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 10px 12px;
-}
-
-.chat-attachment-share:hover {
-  background: #f1f5f9;
-}
-
-.share-header {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: #374151;
-}
-
-.share-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1f2937;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.share-description {
-  font-size: 12px;
-  color: #6b7280;
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.share-cta {
-  font-size: 12px;
-  color: #0061FB;
-  font-weight: 500;
-}
-
+/* ── Automated badge ── */
 .chat-bubble-badge {
   display: inline-flex;
   align-self: flex-start;
-  background: rgba(15, 23, 42, 0.08);
-  color: rgba(15, 23, 42, 0.75);
-  padding: 2px 6px;
+  background: rgba(15, 23, 42, 0.07);
+  color: rgba(15, 23, 42, 0.6);
+  padding: 2px 7px;
   border-radius: 999px;
   font-size: 10px;
-  margin-bottom: 6px;
+  margin: 6px 8px 0;
 }
 
+/* ── Avatar ── */
 .chat-avatar {
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   background: #e2e8f0;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12px;
   color: #1e293b;
   overflow: hidden;
   flex: 0 0 auto;
@@ -508,7 +444,5 @@ const hasAttachments = computed(() => hasRenderableAttachments.value);
   object-fit: cover;
 }
 
-.chat-avatar--image {
-  background: transparent;
-}
+.chat-avatar--image { background: transparent; }
 </style>
