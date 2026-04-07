@@ -22,6 +22,12 @@
           :avatar-text="row.avatarText"
           :automated="row.automated"
           :attachments="row.attachments"
+          :provider-message-id="row.providerMessageId || null"
+          :created-at="row.createdAt || null"
+          :recipient-phone="row.recipientPhone || null"
+          @message-deleted="$emit('message-deleted', $event)"
+          @message-edited="$emit('message-edited', $event)"
+          @message-reacted="$emit('message-reacted', $event)"
         />
       </template>
     </div>
@@ -49,6 +55,7 @@ const scrollToBottom = () => {
   if (el) el.scrollTop = el.scrollHeight;
 };
 
+defineEmits(["message-deleted", "message-edited", "message-reacted"]);
 defineExpose({ scrollToBottom });
 </script>
 

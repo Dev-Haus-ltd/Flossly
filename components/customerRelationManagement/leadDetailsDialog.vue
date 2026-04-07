@@ -567,13 +567,14 @@ import CustomerRelationManagementChatTimeline from "@/components/customerRelatio
 const props = defineProps({
   modelValue: Boolean,
   selectedLead: Object,
+  initialTab: { type: String, default: null },
 });
 const emit = defineEmits(['close','update:modelValue'])
 const onClose = () => { emit('update:modelValue', false); emit('close') }
-const tab = ref("lead-info");
+const tab = ref(props.initialTab || "lead-info");
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
-const whatsappEnabled = ref(false)
+const whatsappEnabled = ref(true) // optimistic: show chat immediately, corrected by status check
 const whatsappRequiresTemplates = ref(true)
 const leadTitle = computed(() => {
   const lead = props.selectedLead || {};
