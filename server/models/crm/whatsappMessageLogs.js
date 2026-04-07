@@ -22,7 +22,7 @@ export const CrmWhatsAppMessageLog = sequelize.define(
     status: { type: DataTypes.STRING(16), allowNull: false, defaultValue: "sent" },
     providerMessageId: { type: DataTypes.STRING(128), allowNull: true },
     content: { type: DataTypes.TEXT, allowNull: true },
-    attachments: { type: DataTypes.JSONB, allowNull: true },
+    attachments: { type: DataTypes.JSON, allowNull: true },
     error: { type: DataTypes.TEXT, allowNull: true },
   },
   { modelName: "CrmWhatsAppMessageLogs", timestamps: true }
