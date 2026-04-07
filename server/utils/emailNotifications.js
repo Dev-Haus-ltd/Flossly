@@ -1,7 +1,22 @@
-import { transporter } from "./nodeMailer";
+import { getOrgTransporter, getFromAddress } from "./nodeMailer";
 import { template } from "./emailTemplate";
 import { buildLeadContext, renderTokens } from './tokenRenderer.js'
 const config = useRuntimeConfig();
+
+async function sendEmail(orgId, mailOptions) {
+  const mailer = await getOrgTransporter(orgId);
+  const from = getFromAddress(orgId);
+  return mailer.sendMail({
+    from: mailOptions.from || from,
+    to: mailOptions.to,
+    cc: mailOptions.cc,
+    bcc: mailOptions.bcc,
+    subject: mailOptions.subject,
+    html: mailOptions.html,
+    text: mailOptions.text,
+    attachments: mailOptions.attachments,
+  });
+}
 
 /** These notifications are configured */
 
@@ -24,8 +39,7 @@ export const paymentSuccessNotification = async (data) => {
   .replaceAll("{subject}", subject)
   .replace("{content}", content);
 
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject,
     html,
@@ -45,8 +59,7 @@ export const accountCreationNotification = async (data) => {
   const html = template
     .replaceAll("{subject}", subject)
     .replace("{content}", content);
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject,
     html,
@@ -67,8 +80,7 @@ export const sendOtpForPasswordReset = async (data) => {
   const html = template
     .replaceAll("{subject}", subject)
     .replace("{content}", content);
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject,
     html,
@@ -91,8 +103,7 @@ export const portalReadyTrainingInvite = async (data) => {
   const html = template
     .replaceAll("{subject}", subject)
     .replace("{content}", content);
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject,
     html,
@@ -113,8 +124,7 @@ export const taskCompletedNotification = async (data) => {
   const html = template
     .replaceAll("{subject}", subject)
     .replace("{content}", content);
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject,
     html,
@@ -132,8 +142,7 @@ export const sendTaskAssignmentEmail = async (data) => {
   const html = template
     .replaceAll("{subject}", subject)
     .replace("{content}", content);
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject,
     html,
@@ -154,8 +163,7 @@ export const sendTaskDueReminderEmail = async (data) => {
   const html = template
     .replaceAll("{subject}", subject)
     .replace("{content}", content);
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject,
     html,
@@ -174,8 +182,7 @@ export const sendTaskCommentNotificationEmail = async (data) => {
   const html = template
     .replaceAll("{subject}", subject)
     .replace("{content}", content);
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject,
     html,
@@ -195,8 +202,7 @@ export const sendTaskUnassignmentEmail = async (data) => {
   const html = template
     .replaceAll("{subject}", subject)
     .replace("{content}", content);
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject,
     html,
@@ -214,8 +220,7 @@ export const newRotaAvailableNotification = async (data) => {
   const html = template
     .replaceAll("{subject}", subject)
     .replace("{content}", content);
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject,
     html,
@@ -240,8 +245,7 @@ export const leaveRequestApprovedNotification = async (data) => {
   const html = template
     .replaceAll("{subject}", subject)
     .replace("{content}", content);
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject,
     html,
@@ -266,8 +270,7 @@ export const leaveRequestDeniedNotification = async (data) => {
   const html = template
     .replaceAll("{subject}", subject)
     .replace("{content}", content);
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject,
     html,
@@ -291,8 +294,7 @@ export const sendEmailVerificationEmail = async (data) => {
   const html = template
     .replaceAll("{subject}", subject)
     .replace("{content}", content);
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject,
     html,
@@ -326,8 +328,7 @@ export const sendOrgnisationAddedToRegisteredUsers = async (data) => {
     .replaceAll("{subject}", subject)
     .replace("{content}", content);
     
-    return transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+    return sendEmail(data.orgId, {
       to: userData.email,
     subject,
     html,
@@ -356,8 +357,7 @@ export const sendInvitationEmail = async (data) => {
   const html = template
     .replaceAll("{subject}", subject)
     .replace("{content}", content);
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject,
     html,
@@ -368,9 +368,12 @@ export const sendInvitationEmail = async (data) => {
 // Performs light-weight placeholder replacement and wraps with the app template.
 // Placeholders supported:
 // - [Patient Name], [First Name], [Your Name]
-export const sendLeadBulkEmail = async ({ leads = [], subject, html, from, senderName, attachments = [] }) => {
+export const sendLeadBulkEmail = async ({ leads = [], subject, html, from, senderName, attachments = [], orgId }) => {
   if (!Array.isArray(leads) || !leads.length) return { sent: 0 };
-  const fromAddress = from || process.env.MAIL_FROM || "helloflossly@gmail.com";
+  
+  // Get orgId from first lead if not provided
+  const effectiveOrgId = orgId || leads[0]?.organisationId;
+  
   const baseUrl = String(config?.public?.BASE_URL || '').replace(/\/+$/, '');
   const normalizedAttachments = Array.isArray(attachments)
     ? attachments
@@ -399,9 +402,9 @@ export const sendLeadBulkEmail = async ({ leads = [], subject, html, from, sende
       const wrapped = template
         .replaceAll("{subject}", renderedSubject || "")
         .replace("{content}", content);
-      await transporter.sendMail({
+      await sendEmail(effectiveOrgId, {
         to: lead.email,
-        from: fromAddress,
+        from: from,
         subject: renderedSubject,
         html: wrapped,
         attachments: normalizedAttachments.length ? normalizedAttachments : undefined,
@@ -418,8 +421,7 @@ export const sendLeadBulkEmail = async ({ leads = [], subject, html, from, sende
 /** These notifications are pending */
 
 export const sendOnBoardingMail = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "Welcome to Flossly!",
     html: `<html>
@@ -435,8 +437,7 @@ export const sendOnBoardingMail = async (data) => {
 };
 
 export const sendFeedBack = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "Feedback recevied",
     html: `<html>
@@ -451,8 +452,7 @@ export const sendFeedBack = async (data) => {
 };
 
 export const completeProfileReminder = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "Complete Profile Reminder",
     html: `<html>
@@ -467,8 +467,7 @@ export const completeProfileReminder = async (data) => {
   });
 };
 export const inviteStaffMemberPrompt = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "Invite Staff Member Prompt",
     html: `<html>
@@ -483,8 +482,7 @@ export const inviteStaffMemberPrompt = async (data) => {
   });
 };
 export const staffInvitationAcceptedNotification = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "Staff Invitation Accepted 🎉",
     html: `
@@ -504,8 +502,7 @@ export const staffInvitationAcceptedNotification = async (data) => {
 };
 
 export const teamSetupCompletionReminder = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "Complete Your Team Setup 🚦",
     html: `
@@ -524,8 +521,7 @@ export const teamSetupCompletionReminder = async (data) => {
 };
 
 export const passwordChangedConfirmation = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "Password Changed Confirmation 🔒",
     html: `
@@ -540,8 +536,7 @@ export const passwordChangedConfirmation = async (data) => {
 };
 
 export const firstTimeLoginPrompt = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "First Time Login 👋",
     html: `
@@ -558,8 +553,7 @@ export const firstTimeLoginPrompt = async (data) => {
 };
 
 export const inactiveUserReactivationNudge = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "We Miss You 💌",
     html: `
@@ -577,8 +571,7 @@ export const inactiveUserReactivationNudge = async (data) => {
 // billing
 
 export const paymentFailedAlert = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "Payment Failed Alert 🚫",
     html: `
@@ -595,8 +588,7 @@ export const paymentFailedAlert = async (data) => {
 };
 
 export const subscriptionRenewalReminder = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "Subscription Renewal Reminder ⏳",
     html: `
@@ -613,8 +605,7 @@ export const subscriptionRenewalReminder = async (data) => {
 };
 
 export const freeTrialEndingSoon = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "Free Trial Ending Soon 🎁",
     html: `
@@ -632,8 +623,7 @@ export const freeTrialEndingSoon = async (data) => {
 
 // community notifications
 export const newFeatureAnnouncement = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "New Feature Announcement 🚀",
     html: `
@@ -651,8 +641,7 @@ export const newFeatureAnnouncement = async (data) => {
 };
 
 export const tipOfTheWeek = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "Tip of the Week 💡",
     html: `
@@ -669,8 +658,7 @@ export const tipOfTheWeek = async (data) => {
 };
 
 export const webinarInvite = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "Webinar Invite 🎙",
     html: `
@@ -687,8 +675,7 @@ export const webinarInvite = async (data) => {
 };
 
 export const customerSuccessCheckIn = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "Customer Success Check-in 🤝",
     html: `
@@ -708,8 +695,7 @@ export const customerSuccessCheckIn = async (data) => {
 // USER NOTIFICATIONS
 
 export const taskDueReminderTeam = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "Task Due Reminder",
     html: `
@@ -731,8 +717,7 @@ export const taskDueReminderTeam = async (data) => {
 };
 
 export const teamProgressMilestone = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "Team Progress Milestone 📊",
     html: `
@@ -749,8 +734,7 @@ export const teamProgressMilestone = async (data) => {
 };
 
 export const teamRecognitionNudge = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "Team Recognition Nudge 💬",
     html: `
@@ -768,8 +752,7 @@ export const teamRecognitionNudge = async (data) => {
 
 // cpd notifications
 export const newCpdCourseAvailable = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "New CPD Course Available 🎓",
     html: `
@@ -787,8 +770,7 @@ export const newCpdCourseAvailable = async (data) => {
 };
 
 export const newCpdActivityAssigned = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "New CPD Activity Assigned",
     html: `
@@ -812,8 +794,7 @@ export const newCpdActivityAssigned = async (data) => {
 };
 
 export const cpdEnrollmentConfirmation = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "CPD Enrollment Confirmation ✅",
     html: `
@@ -830,8 +811,7 @@ export const cpdEnrollmentConfirmation = async (data) => {
 };
 
 export const incompleteCpdModuleReminder = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "Incomplete CPD Module Reminder 🕒",
     html: `
@@ -848,8 +828,7 @@ export const incompleteCpdModuleReminder = async (data) => {
 };
 
 export const cpdCompletionCertificate = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "CPD Completion Certificate 🎉",
     html: `
@@ -866,8 +845,7 @@ export const cpdCompletionCertificate = async (data) => {
 };
 
 export const cpdExpiryReminder = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "CPD Expiry Reminder ⏳",
     html: `
@@ -884,8 +862,7 @@ export const cpdExpiryReminder = async (data) => {
 };
 
 export const mandatoryTrainingAlert = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: "Mandatory Training Alert 🚨",
     html: `
@@ -906,8 +883,7 @@ export const mandatoryTrainingAlert = async (data) => {
 // rota
 
 export const upcomingRotaShiftReminder = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: `Upcoming Shift Reminder – ${data.date}`,
     html: `
@@ -938,8 +914,7 @@ export const upcomingRotaShiftReminder = async (data) => {
 
 //  CRM (Leads) Notifications
 export const newLeadAddedNotification = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: `New Lead Added - ${data.leadName}`,
     html: `
@@ -962,8 +937,7 @@ export const newLeadAddedNotification = async (data) => {
   });
 };
 export const leadStatusChangedNotification = async (data) => {
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject: `Lead Status Changed - ${data.leadName}`,
     html: `
@@ -1070,8 +1044,7 @@ export const sendTaskDetailsEmail = async (data) => {
     .replaceAll("{subject}", subject)
     .replace("{content}", content);
 
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [email],
     subject,
     html,
@@ -1122,8 +1095,7 @@ export const sendTrialActivatedEmail = async (data) => {
     .replaceAll("{subject}", subject)
     .replace("{content}", content);
 
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: [data.email],
     subject,
     html,
@@ -1162,8 +1134,7 @@ export const sendOrganisationCreatedInternalNotification = async (data) => {
     .replaceAll("{subject}", subject)
     .replace("{content}", content);
 
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: ["helloflossly@gmail.com"],
     subject,
     html,
@@ -1201,8 +1172,7 @@ export const sendOrganisationReferralEmail = async (data) => {
     .replaceAll("{subject}", subject)
     .replace("{content}", content);
 
-  await transporter.sendMail({
-    from: "Flossly <helloflossly@gmail.com>",
+  await sendEmail(data.orgId, {
     to: ["helloflossly@gmail.com"],
     subject,
     html,

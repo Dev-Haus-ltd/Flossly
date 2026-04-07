@@ -1962,6 +1962,7 @@ export const sendLeadMail = async (event) => {
       html: safeHtml,
       senderName: fullName,
       attachments: normalizedAttachments,
+      orgId: Number(orgId),
     })
 
     const sentAt = new Date().toISOString()

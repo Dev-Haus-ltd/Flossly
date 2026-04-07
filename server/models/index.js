@@ -3,6 +3,7 @@ import { DefaultStatus } from "./defaultStatuses";
 import { DictionaryScript } from "./dictionaryScripts";
 import { OrganisationPriority } from "./organisations/organisationPriorities";
 import { Organisation } from "./organisations/organisations";
+import { OrganisationSmtp } from "./organisations/organisationSmtp";
 import { OrganisationStatus } from "./organisations/organisationStatuses";
 import { Role } from "./roles";
 import { TaskCategory } from "./tasks/taskCategories";
@@ -263,6 +264,9 @@ OrganisationSurgery.belongsTo(Organisation, { foreignKey: "organisationId", as: 
 
 Organisation.hasMany(OrganisationGroup, { foreignKey: "organisationId", as: "groups" });
 OrganisationGroup.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", onDelete: "CASCADE", hooks: true });
+
+Organisation.hasOne(OrganisationSmtp, { foreignKey: "organisationId", as: "smtpConfig" });
+OrganisationSmtp.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", onDelete: "CASCADE", hooks: true });
 
 OrganisationGroup.hasMany(OrganisationGroupUser, { foreignKey: "groupId", as: "groupUsers" });
 OrganisationGroupUser.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", hooks: true });
@@ -526,6 +530,7 @@ export {
   Organisation,
   OrganisationPriority,
   OrganisationStatus,
+  OrganisationSmtp,
   OrganisationContact,
   OrganisationPeople,
   OrganisationEquipment,

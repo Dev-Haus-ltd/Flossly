@@ -23,7 +23,7 @@ import { ONBOARDING_EMAIL_TEMPLATES } from "@shared/defaults/onboardingCampaign.
 import { buildOnboardingContext, sendOnboardingEmail } from "./onboardingCampaign.js";
 import { renderPatientTokens } from "./templateTokens.js";
 import { template as EMAIL_TEMPLATE } from "./emailTemplate.js";
-import { transporter } from "./nodeMailer.js";
+import { getOrgTransporter, getFromAddress } from "./nodeMailer.js";
 import {
   ensureOnboardingEventsTable,
   getDiffDaysFromStart,
@@ -353,9 +353,11 @@ export const startPatientJourneyAutomationScheduler = () => {
               const subject = renderPatientTokens(baseSubject, ctx)
               const html = renderPatientTokens(bodyRaw, ctx)
               const wrap = (inner) => EMAIL_TEMPLATE.replaceAll('{subject}', subject).replace('{content}', inner)
-              await transporter.sendMail({
+              const orgTransporter = await getOrgTransporter(Number(orgId));
+              const orgFrom = getFromAddress(Number(orgId));
+              await orgTransporter.sendMail({
                 to: patient.email,
-                from: process.env.MAIL_FROM || 'helloflossly@gmail.com',
+                from: orgFrom,
                 subject,
                 html: wrap(html),
               })
@@ -381,9 +383,11 @@ export const startPatientJourneyAutomationScheduler = () => {
               const subject = renderPatientTokens(baseSubject, ctx)
               const html = renderPatientTokens(bodyRaw, ctx)
               const wrap = (inner) => EMAIL_TEMPLATE.replaceAll('{subject}', subject).replace('{content}', inner)
-              await transporter.sendMail({
+              const orgTransporter = await getOrgTransporter(Number(orgId));
+              const orgFrom = getFromAddress(Number(orgId));
+              await orgTransporter.sendMail({
                 to: patient.email,
-                from: process.env.MAIL_FROM || 'helloflossly@gmail.com',
+                from: orgFrom,
                 subject,
                 html: wrap(html),
               })
@@ -408,9 +412,11 @@ export const startPatientJourneyAutomationScheduler = () => {
               const subject = renderPatientTokens(baseSubject, ctx)
               const html = renderPatientTokens(bodyRaw, ctx)
               const wrap = (inner) => EMAIL_TEMPLATE.replaceAll('{subject}', subject).replace('{content}', inner)
-              await transporter.sendMail({
+              const orgTransporter = await getOrgTransporter(Number(orgId));
+              const orgFrom = getFromAddress(Number(orgId));
+              await orgTransporter.sendMail({
                 to: patient.email,
-                from: process.env.MAIL_FROM || 'helloflossly@gmail.com',
+                from: orgFrom,
                 subject,
                 html: wrap(html),
               })
@@ -443,9 +449,11 @@ export const startPatientJourneyAutomationScheduler = () => {
               const subject = renderPatientTokens(baseSubject, ctx)
               const html = renderPatientTokens(bodyRaw, ctx)
               const wrap = (inner) => EMAIL_TEMPLATE.replaceAll('{subject}', subject).replace('{content}', inner)
-              await transporter.sendMail({
+              const orgTransporter = await getOrgTransporter(Number(orgId));
+              const orgFrom = getFromAddress(Number(orgId));
+              await orgTransporter.sendMail({
                 to: patient.email,
-                from: process.env.MAIL_FROM || 'helloflossly@gmail.com',
+                from: orgFrom,
                 subject,
                 html: wrap(html),
               })
@@ -723,6 +731,7 @@ export const startOnboardingScheduler = () => {
               key: tpl.key,
               to: user.email,
               ctx,
+              orgId: evt.organisationId,
             });
             await recordOnboardingEvent({
               userId: evt.userId,
