@@ -148,19 +148,49 @@ const downloadWhapiMediaToS3 = async ({ url, token, mimeType, filename }) => {
   return s3Path;
 };
 
-const extractWhapiAttachments = async ({ msg, token }) => {
-  const candidates = [
-    msg?.media,
-    msg?.image,
-    msg?.video,
-    msg?.audio,
-    msg?.document,
-    msg?.file,
-    msg?.attachment,
-  ].filter(Boolean);
+const fetchWhapiMediaById = async ({ mediaId, token }) => {
+  if (!mediaId || !token) return null;
+  const env = getWhapiEnvConfig();
+  const base = String(env.baseUrl || "").replace(/\/+$/, "");
+  try {
+    const data = await $fetch(`${base}/media/${encodeURIComponent(String(mediaId))}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      responseType: "arrayBuffer",
+    });
+    return data ? Buffer.from(data) : null;
+  } catch {
+    return null;
+  }
+};
 
-  for (const item of candidates) {
-    const url =
+const extractWhapiAttachments = async ({ msg, token }) => {
+  const mediaKeyMap = [
+    { key: "image", defaultType: "image" },
+    { key: "video", defaultType: "video" },
+    { key: "audio", defaultType: "audio" },
+    { key: "voice", defaultType: "audio" },
+    { key: "document", defaultType: "document" },
+    { key: "media", defaultType: null },
+    { key: "file", defaultType: "document" },
+    { key: "attachment", defaultType: "document" },
+  ];
+
+  for (const { key, defaultType } of mediaKeyMap) {
+    const item = msg?.[key];
+    if (!item || typeof item !== "object") continue;
+
+    const mimeType = item?.mime_type || item?.mimeType || item?.mimetype || null;
+    const name = item?.filename || item?.file_name || item?.name || null;
+    const type =
+      defaultType ||
+      item?.type ||
+      (mimeType?.startsWith("image/") ? "image" :
+        mimeType?.startsWith("video/") ? "video" :
+          mimeType?.startsWith("audio/") ? "audio" : "document");
+
+    // Prefer direct link (Auto Download enabled)
+    const directUrl =
       item?.link ||
       item?.url ||
       item?.file ||
@@ -168,18 +198,28 @@ const extractWhapiAttachments = async ({ msg, token }) => {
       item?.media_url ||
       item?.payload?.url ||
       null;
-    const mimeType = item?.mime_type || item?.mimeType || item?.mimetype || null;
-    const name = item?.filename || item?.file_name || item?.name || null;
-    const type =
-      item?.type ||
-      (mimeType?.startsWith("image/") ? "image" :
-        mimeType?.startsWith("video/") ? "video" :
-          mimeType?.startsWith("audio/") ? "audio" : "document");
 
-    if (!url) continue;
-    const s3Url = await downloadWhapiMediaToS3({ url, token, mimeType, filename: name });
-    if (!s3Url) continue;
-    return [{ url: s3Url, type, mimeType: mimeType || null, name: name || null }];
+    if (directUrl) {
+      const s3Url = await downloadWhapiMediaToS3({ url: directUrl, token, mimeType, filename: name });
+      if (s3Url) return [{ url: s3Url, type, mimeType: mimeType || null, name: name || null }];
+      continue;
+    }
+
+    // Fallback: fetch by media ID (Auto Download disabled)
+    const mediaId = item?.id || null;
+    if (mediaId && token) {
+      const buf = await fetchWhapiMediaById({ mediaId, token });
+      if (buf) {
+        const filename = buildAttachmentFilename({ originalName: name, mimeType });
+        const s3Url = await uploadBufferFile({
+          data: buf,
+          filename,
+          contentType: mimeType || undefined,
+          baseDir: "chat-attachments",
+        });
+        if (s3Url) return [{ url: s3Url, type, mimeType: mimeType || null, name: name || null }];
+      }
+    }
   }
 
   return null;

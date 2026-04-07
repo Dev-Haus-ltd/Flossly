@@ -13,6 +13,7 @@ import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWh
 import { renderLeadTokens } from '../utils/templateTokens'
 import { resolveWhatsAppProviderConfig } from '../utils/whatsappProvider'
 import { uploadBufferFile } from '../utils/storage'
+import { getS3Object } from '../utils/s3'
 import DB from '../utils/db'
 import { parseJsonBody } from "../utils/body";
 
@@ -2195,10 +2196,24 @@ export const sendLeadWhatsApp = async (event) => {
                 type === 'image' ? 'image' :
                   type === 'video' ? 'video' :
                     type === 'audio' ? 'audio' : 'document'
-              // Whapi: media is a flat string URL, caption carries the text
+
+              // Whapi: send media as base64 data URI so we don't need a public URL.
+              // att.url is the S3 key (relative path like /chat-attachments/file.png).
+              const s3Key = String(att?.url || '').replace(/^\/+/, '')
+              let mediaValue = url // fallback to absolute URL if base64 fails
+              try {
+                const s3Obj = await getS3Object(s3Key)
+                const chunks = []
+                for await (const chunk of s3Obj.body) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+                const b64 = Buffer.concat(chunks).toString('base64')
+                mediaValue = `data:${mime || 'application/octet-stream'};base64,${b64}`
+              } catch {
+                // fall back to absolute URL — requires BASE_URL + s3-proxy
+              }
+
               const bodyPayload = {
                 to,
-                media: url,
+                media: mediaValue,
                 ...(caption ? { caption } : {}),
                 ...(endpoint === 'document' && name ? { filename: name } : {}),
               }
@@ -2219,7 +2234,7 @@ export const sendLeadWhatsApp = async (event) => {
               status: 'sent',
               providerMessageId,
               content: caption || name || null,
-              attachments: [{ ...att, url }],
+              attachments: [{ ...att, url: att?.url || url }],
             })
             sent += 1
           }
