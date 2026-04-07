@@ -202,6 +202,7 @@ export default defineNuxtConfig({
       meta: [
         { charset: "utf-8" },
         { name: "viewport", content: "width=device-width, initial-scale=1" },
+        { name: "theme-color", content: "#0061FB" },
         {
           hid: "description",
           name: "description",
@@ -211,6 +212,8 @@ export default defineNuxtConfig({
       link: [
         // Favicon
         { rel: "icon", type: "image/png", href: "/Logoicon2.svg" },
+        // PWA manifest
+        { rel: "manifest", href: "/manifest.webmanifest" },
 
         { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon-180x180.png" },
       { rel: "apple-touch-icon", sizes: "152x152", href: "/apple-touch-icon-152x152.png" },
