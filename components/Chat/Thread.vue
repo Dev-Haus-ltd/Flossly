@@ -78,8 +78,8 @@ defineExpose({ scrollToBottom });
 
 .chat-day-pill {
   align-self: center;
-  background: #d1f4cc;
-  color: #4a4a4a;
+  background: #dceeff;
+  color: #0047b8;
   font-size: 12px;
   font-weight: 500;
   padding: 4px 12px;

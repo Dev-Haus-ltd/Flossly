@@ -153,6 +153,7 @@
                   v-for="em in QUICK_EMOJIS"
                   :key="em"
                   class="chat-action-emoji-btn"
+                  :class="{ 'chat-action-emoji-btn--active': em === effectiveReaction }"
                   @click="sendReaction(em)"
                 >{{ em }}</button>
                 <button class="chat-action-emoji-btn chat-action-emoji-more" @click="emojiPickerOpen = !emojiPickerOpen">
@@ -176,7 +177,7 @@
                   @click="startEdit"
                 />
                 <v-list-item
-                  v-if="isOutbound"
+                  v-if="canEdit"
                   prepend-icon="mdi-trash-can-outline"
                   title="Delete message"
                   base-color="error"
@@ -291,17 +292,20 @@ watch(menuOpen, (v) => { if (!v) emojiPickerOpen.value = false; });
 const sendReaction = async (emoji) => {
   menuOpen.value = false;
   emojiPickerOpen.value = false;
+  // Tapping the active reaction again removes it
+  const isToggleOff = emoji === effectiveReaction.value;
+  const targetEmoji = isToggleOff ? "" : emoji;
   try {
     const res = await crmStore.reactWhatsAppMessage({
       providerMessageId: localProviderMessageId.value,
-      emoji,
+      emoji: targetEmoji,
     });
     if (res?.code !== 0) {
       mainStore.setSnackbar({ title: res?.error || "Failed to send reaction", type: "error" });
       return;
     }
-    localReaction.value = emoji;
-    emit("message-reacted", { providerMessageId: localProviderMessageId.value, emoji });
+    localReaction.value = isToggleOff ? null : emoji;
+    emit("message-reacted", { providerMessageId: localProviderMessageId.value, emoji: targetEmoji || null });
   } catch (e) {
     mainStore.setSnackbar({ title: e?.message || "Failed to send reaction", type: "error" });
   }
@@ -504,7 +508,7 @@ const bubbleClass = computed(() => ({
 }
 
 .chat-bubble--outbound {
-  background: #e7f8ee;
+  background: #dceeff;
   border-bottom-right-radius: 4px;
 }
 
@@ -527,7 +531,7 @@ const bubbleClass = computed(() => ({
   right: -7px;
   width: 0;
   height: 0;
-  border-left: 8px solid #e7f8ee;
+  border-left: 8px solid #dceeff;
   border-top: 8px solid transparent;
 }
 
@@ -762,6 +766,10 @@ const bubbleClass = computed(() => ({
   transition: background 0.12s;
 }
 .chat-action-emoji-btn:hover { background: rgba(0,0,0,0.07); }
+.chat-action-emoji-btn--active {
+  background: rgba(0, 97, 251, 0.1);
+  box-shadow: 0 0 0 2px #0061fb;
+}
 
 .chat-action-emoji-more {
   color: rgba(0,0,0,0.5);
