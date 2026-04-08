@@ -1,4 +1,4 @@
-import { authStart, authCallback, igAuthStart, igAuthCallback, listLeads, fetchLeadsNow, fetchDmHistoryNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck, stream, getWhatsAppConfig, saveWhatsAppConfig, whatsappEmbeddedComplete, fetchWhatsAppTemplates, fetchMetaStructureAndBudgets, fetchDailyMetaInsights, listBusinessPortfolios, connectBusinessPages, debugMetaStatus, listMetaPermissions, getMetaInsights, getMetaStructure, getCampaignLeadCounts, deauthorize, dataDeletion, dataDeletionStatus, getSyncJobStatus, getVideoSource, getAllLeadCounts } from "../../controllers/meta";
+import { authStart, authCallback, igAuthStart, igAuthCallback, listLeads, fetchLeadsNow, fetchDmHistoryNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck, stream, fetchMetaStructureAndBudgets, fetchDailyMetaInsights, listBusinessPortfolios, connectBusinessPages, debugMetaStatus, listMetaPermissions, getMetaInsights, getMetaStructure, getCampaignLeadCounts, deauthorize, dataDeletion, dataDeletionStatus, getSyncJobStatus, getVideoSource, getAllLeadCounts } from "../../controllers/meta";
 
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, 'name')
@@ -25,13 +25,6 @@ export default defineEventHandler(async (event) => {
       return await healthCheck(event)
     case 'disconnect':
       return await disconnect(event)
-    case 'whatsappConfig':
-      if (getMethod(event) === 'GET') return await getWhatsAppConfig(event)
-      return await saveWhatsAppConfig(event)
-    case 'whatsappEmbedded':
-      return await whatsappEmbeddedComplete(event)
-    case 'whatsappTemplates':
-      return await fetchWhatsAppTemplates(event)
     case 'stream':
       return await stream(event)
     case 'webhook':

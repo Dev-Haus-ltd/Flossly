@@ -25,6 +25,7 @@
           :provider-message-id="row.providerMessageId || null"
           :created-at="row.createdAt || null"
           :recipient-phone="row.recipientPhone || null"
+          :reaction="row.reaction || null"
           @message-deleted="$emit('message-deleted', $event)"
           @message-edited="$emit('message-edited', $event)"
           @message-reacted="$emit('message-reacted', $event)"

@@ -141,10 +141,6 @@ export const useCrmStore = defineStore("crmStore", {
     metaPermissionsSilent() { return crmService.metaPermissions(); },
     listMetaBusinesses() { return this._wrap(() => crmService.listMetaBusinesses()); },
     connectMetaPages(payload) { return this._wrap(() => crmService.connectMetaPages(payload)); },
-    completeWhatsAppEmbedded(payload) { return this._wrap(() => crmService.completeWhatsAppEmbedded(payload)); },
-    getWhatsAppConfig() { return this._wrap(() => crmService.getWhatsAppConfig()); },
-    saveWhatsAppConfig(payload) { return this._wrap(() => crmService.saveWhatsAppConfig(payload)); },
-    getWhatsAppTemplates() { return this._wrap(() => crmService.getWhatsAppTemplates()); },
     startWhapiConnect(payload = {}) { return this._wrap(() => crmService.startWhapiConnect(payload)); },
     getWhapiQr() { return this._wrap(() => crmService.getWhapiQr()); },
     getWhapiStatus() { return this._wrap(() => crmService.getWhapiStatus()); },
@@ -214,6 +210,9 @@ export const useCrmStore = defineStore("crmStore", {
     getWhatsAppUsage() { return this._wrap(() => crmService.getWhatsAppUsage()); },
     uploadLeadAttachment(formData) { return this._wrap(() => crmService.uploadLeadAttachment(formData)); },
     uploadLeadWhatsAppMedia(formData) { return this._wrap(() => crmService.uploadLeadWhatsAppMedia(formData)); },
+    editWhatsAppMessage(payload) { return this._wrap(() => crmService.editWhatsAppMessage(payload)); },
+    deleteWhatsAppMessage(payload) { return this._wrap(() => crmService.deleteWhatsAppMessage(payload)); },
+    reactWhatsAppMessage(payload) { return this._wrap(() => crmService.reactWhatsAppMessage(payload)); },
     getLeadPriceAttachmentRecent(payload) { return this._wrap(() => crmService.getLeadPriceAttachmentRecent(payload)); },
 
     // Web Forms

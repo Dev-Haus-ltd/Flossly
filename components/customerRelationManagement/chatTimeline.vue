@@ -128,13 +128,16 @@ const onMessageDeleted = ({ providerMessageId }) => {
   logs.value = logs.value.filter((r) => r.providerMessageId !== providerMessageId);
 };
 
-const onMessageEdited = ({ providerMessageId, newText }) => {
+const onMessageEdited = ({ providerMessageId, newProviderMessageId, newText }) => {
   const row = logs.value.find((r) => r.providerMessageId === providerMessageId);
-  if (row) row.content = newText;
+  if (!row) return;
+  row.content = newText;
+  if (newProviderMessageId) row.providerMessageId = newProviderMessageId;
 };
 
-const onMessageReacted = () => {
-  // reactions don't change local state visually — no-op for now
+const onMessageReacted = ({ providerMessageId, emoji }) => {
+  const row = logs.value.find((r) => r.providerMessageId === providerMessageId);
+  if (row) row.reaction = emoji;
 };
 
 const loadLogs = async (silent = false) => {
@@ -233,10 +236,10 @@ const onFilesSelected = (files) => {
 
 const removePendingFile = (idx) => {
   const removed = pendingFiles.value[idx];
-  objectUrls.value = objectUrls.value.filter((e) => e.file !== removed);
   if (removed) {
     const entry = objectUrls.value.find((e) => e.file === removed);
     if (entry) URL.revokeObjectURL(entry.url);
+    objectUrls.value = objectUrls.value.filter((e) => e.file !== removed);
   }
   pendingFiles.value = pendingFiles.value.filter((_, i) => i !== idx);
 };

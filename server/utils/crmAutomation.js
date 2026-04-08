@@ -6,7 +6,7 @@ import { getOrgTransporter, getFromAddress } from "./nodeMailer.js";
 import { buildLeadContext, renderTokens } from "./tokenRenderer.js";
 import { CrmAutomationTemplate, CrmLead, Organisation, CrmLeadAssignee, User } from "../models/index.js";
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from "./whatsapp.js";
-import { resolveWhatsAppProviderConfig } from "./whatsappProvider.js";
+import { resolveWhapiConfig } from "./whatsappProvider.js";
 import { sendCrmAutomationSentNotification, sendCrmAutomationFailedNotification } from "./fcmNotification.js";
 
 const crmTriggersByKey = new Map(
@@ -146,61 +146,31 @@ export const sendCrmAutomationEmail = async (lead, subject, html, automationName
 export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload = null, automationName = null) => {
   const to = normalizeWhatsAppNumber(lead?.telephone);
   if (!to) throw new Error("Missing or invalid phone number");
-  const waConfig = await resolveWhatsAppProviderConfig(lead.organisationId);
-  if (!waConfig?.provider) throw new Error("WhatsApp provider not configured");
-  if (waConfig.provider === "meta" && (!waConfig?.phoneNumberId || !waConfig?.accessToken)) {
-    throw new Error("WhatsApp is not configured");
-  }
-  if (waConfig.provider === "whapi" && !waConfig?.token) {
-    throw new Error("Whapi token is missing");
-  }
-  if (waConfig.provider === "whapi" && !waConfig?.connected) {
-    throw new Error("Whapi channel is not connected");
-  }
+  const whapiConfig = await resolveWhapiConfig(lead.organisationId);
+  if (!whapiConfig?.token) throw new Error("Whapi token is missing");
+  if (!whapiConfig?.connected) throw new Error("Whapi channel is not connected");
   const limitStatus = await isWhatsAppLimitExceeded(lead.organisationId);
   if (limitStatus.exceeded) {
     throw new Error(`WhatsApp monthly limit reached (${limitStatus.count}/${limitStatus.limit})`);
   }
-  const metaUrl = waConfig.provider === "meta"
-    ? `https://graph.facebook.com/v24.0/${waConfig.phoneNumberId}/messages`
-    : null;
-  const whapiUrl = waConfig.provider === "whapi"
-    ? `${String(waConfig.baseUrl || "").replace(/\/+$/, "")}/messages/text`
-    : null;
+  const whapiUrl = `${String(whapiConfig.baseUrl || "").replace(/\/+$/, "")}/messages/text`;
+  const headers = { Authorization: `Bearer ${whapiConfig.token}`, "Content-Type": "application/json" };
   try {
-    const body =
-      waConfig.provider === "meta"
-        ? (
-          templatePayload
-            ? { messaging_product: "whatsapp", to, type: "template", template: templatePayload }
-            : { messaging_product: "whatsapp", to, type: "text", text: { body: message || "" } }
-        )
-        : { to, body: String(message || "") };
-    const resp = await $fetch(waConfig.provider === "meta" ? metaUrl : whapiUrl, {
+    const resp = await $fetch(whapiUrl, {
       method: "POST",
-      headers: waConfig.provider === "meta"
-        ? {
-            Authorization: `Bearer ${waConfig.accessToken}`,
-            "Content-Type": "application/json",
-          }
-        : {
-            Authorization: `Bearer ${waConfig.token}`,
-            "Content-Type": "application/json",
-          },
-      body,
+      headers,
+      body: { to, body: String(message || "") },
     });
-    const providerMessageId =
-      resp?.messages?.[0]?.id || resp?.message?.id || resp?.id || null;
+    const providerMessageId = resp?.message?.id || resp?.id || null;
     await markWhatsAppOutbound(lead, to);
     await logWhatsAppMessage({
       organisationId: lead.organisationId,
       leadId: lead.id,
       to,
-      type: waConfig.provider === "meta" && templatePayload ? "template" : "text",
-      templateName: waConfig.provider === "meta" ? (templatePayload?.name || null) : null,
+      type: "text",
       status: "sent",
       providerMessageId,
-      content: waConfig.provider === "meta" && templatePayload ? null : String(message || ""),
+      content: String(message || ""),
     });
 
     // Send push notification to lead assignees on success
@@ -229,8 +199,7 @@ export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload =
       organisationId: lead.organisationId,
       leadId: lead.id,
       to,
-      type: waConfig.provider === "meta" && templatePayload ? "template" : "text",
-      templateName: waConfig.provider === "meta" ? (templatePayload?.name || null) : null,
+      type: "text",
       status: "failed",
       error: e?.data?.error?.message || e?.message || "Failed to send",
     });
@@ -246,7 +215,7 @@ export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload =
         await sendCrmAutomationFailedNotification({
           userId,
           lead,
-          automationName: automationName || templatePayload?.name || 'WhatsApp',
+          automationName: automationName || 'WhatsApp',
           channel: 'WhatsApp',
           errorMessage: e?.data?.error?.message || e?.message || "Failed to send"
         });
@@ -450,7 +419,7 @@ export const dispatchSendNowAutomationWithOptions = async (orgId, tpl, options =
     options?.forceResend === true ||
     String(options?.forceResend || "").toLowerCase() === "true";
   const org = await Organisation.findByPk(Number(orgId));
-  const waConfig = await resolveWhatsAppProviderConfig(orgId);
+  const waConfig = await resolveWhapiConfig(orgId);
   const batchSize = 500;
   const summary = {
     orgId: Number(orgId),
@@ -488,15 +457,7 @@ export const dispatchSendNowAutomationWithOptions = async (orgId, tpl, options =
             continue;
           }
           const message = buildCrmWhatsAppMessage(lead, tpl, org);
-          const templatePayload =
-            waConfig?.provider === "meta"
-              ? buildCrmWhatsAppTemplatePayload(lead, tpl)
-              : null;
-          if (waConfig?.provider === "meta" && !templatePayload) {
-            summary.skippedMissingRecipient += 1;
-            continue;
-          }
-          await sendCrmAutomationWhatsApp(lead, message, templatePayload, tpl?.name);
+          await sendCrmAutomationWhatsApp(lead, message, null, tpl?.name);
           await markCrmSent(lead, raw, sentKey);
           if (wasAlreadySent && forceResend) summary.resent += 1;
           else summary.sent += 1;
@@ -569,7 +530,7 @@ export const sendImmediateCrmAutomationsForLead = async (lead) => {
   });
   if (!templates.length) return;
   const org = await Organisation.findByPk(Number(lead.organisationId));
-  const waConfig = await resolveWhatsAppProviderConfig(lead.organisationId);
+  const waConfig = await resolveWhapiConfig(lead.organisationId);
   const templatesByOrg = buildCrmTemplatesByOrg(templates);
   const effectiveTemplates = buildEffectiveCrmTemplates(lead, templatesByOrg);
   const today = new Date();
@@ -586,14 +547,7 @@ export const sendImmediateCrmAutomationsForLead = async (lead) => {
     if (String(tpl?.type || "Email").toLowerCase() === "whatsapp") {
       if (!lead?.telephone) continue;
       const message = buildCrmWhatsAppMessage(lead, tpl, org);
-      const templatePayload =
-        waConfig?.provider === "meta"
-          ? buildCrmWhatsAppTemplatePayload(lead, tpl)
-          : null;
-      if (waConfig?.provider === "meta" && !templatePayload) {
-        throw new Error("WhatsApp template name is required for automation");
-      }
-      await sendCrmAutomationWhatsApp(lead, message, templatePayload, tpl?.name);
+      await sendCrmAutomationWhatsApp(lead, message, null, tpl?.name);
       await markCrmSent(lead, lead.rawData || {}, sentKey);
     } else {
       if (!lead?.email) continue;
