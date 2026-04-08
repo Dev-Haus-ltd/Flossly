@@ -502,7 +502,6 @@ import AutomationCards from '@/components/customerRelationManagement/automation/
 import AutomationTable from '@/components/customerRelationManagement/automation/AutomationTable.vue'
 import AutomationPreviewDialog from '@/components/customerRelationManagement/automation/AutomationPreviewDialog.vue'
 import ConfirmDialog from '@/components/Common/ConfirmDialog.vue'
-import { getTemplateParamExamples, buildTemplatePreviewLines } from '@/lib/whatsappTemplatePreview'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults'
 import addFolderIcon from '@/assets/icons/crm/add-folder.svg'
 import { getCurrentUserName } from '@/lib/helpers/storage'
@@ -548,9 +547,6 @@ const infoAlertText = "Most content is tailored to your practice profile. Please
 const groupRows = ref([])
 const defaultAutomationKeySet = new Set(crmAutomationDefaults.map(item => item.key))
 const defaultGroupKeySet = new Set(crmAutomationGroups.map(group => group.key))
-
-const whatsappTemplates = ref([])
-const whatsappTemplatesLoading = ref(false)
 
 const tableHeaders = computed(() => {
   const headers = [
@@ -891,7 +887,6 @@ const refresh = async ({ skipGroups = false } = {}) => {
 defineExpose({ refresh })
 
 onMounted(async () => {
-  await loadWhatsAppTemplates()
   await refresh()
 })
 
@@ -908,72 +903,6 @@ const active = ref(null)
 const showDeleteAutomation = ref(false)
 const deletingAutomation = ref(false)
 const deleteAutomationTarget = ref(null)
-const whatsappTemplateNameOptions = computed(() => {
-  const set = new Set()
-  ;(whatsappTemplates.value || []).forEach((t) => {
-    if (t?.name) set.add(String(t.name))
-  })
-  return Array.from(set)
-})
-
-const whatsappTemplateLanguageOptions = computed(() => {
-  const name = String(active.value?.whatsappTemplateName || '').trim()
-  if (!name) return []
-  const langs = (whatsappTemplates.value || [])
-    .filter((t) => String(t?.name || '') === name)
-    .map((t) => t?.language || t?.language?.code || t?.language_code)
-    .filter(Boolean)
-  return Array.from(new Set(langs))
-})
-
-const resolveSelectedTemplate = () => {
-  const name = String(active.value?.whatsappTemplateName || '').trim()
-  if (!name) return null
-  const lang = String(active.value?.whatsappTemplateLanguage || '').trim()
-  const list = whatsappTemplates.value || []
-  if (lang) {
-    const matched = list.find((t) => String(t?.name || '') === name && String(t?.language || t?.language?.code || t?.language_code || '') === lang)
-    if (matched) return matched
-  }
-  return list.find((t) => String(t?.name || '') === name) || null
-}
-
-const whatsappTemplatePreviewLines = computed(() => {
-  if (!props.whatsappRequiresTemplates) return null
-  const template = resolveSelectedTemplate()
-  if (!template) return null
-  const params = getTemplateParamExamples(template).map((v, i) => String(v || `{{${i + 1}}}`))
-  return buildTemplatePreviewLines(template, params)
-})
-
-const loadWhatsAppTemplates = async () => {
-  if (!props.whatsappRequiresTemplates) {
-    whatsappTemplates.value = []
-    return
-  }
-  if (whatsappTemplatesLoading.value) return
-  try {
-    whatsappTemplatesLoading.value = true
-    const res = await crmStore.getWhatsAppTemplates()
-    if (res?.code === 0 && res.data?.templates) {
-      whatsappTemplates.value = res.data.templates
-    }
-  } catch (e) {
-    // ignore if WhatsApp is not configured
-  } finally {
-    whatsappTemplatesLoading.value = false
-  }
-}
-
-watch(
-  () => [active.value?.whatsappTemplateName, whatsappTemplateLanguageOptions.value.length],
-  () => {
-    if (!active.value) return
-    if (!active.value.whatsappTemplateLanguage && whatsappTemplateLanguageOptions.value.length) {
-      active.value.whatsappTemplateLanguage = whatsappTemplateLanguageOptions.value[0]
-    }
-  }
-)
 let ej = null
 let EditorCtor = null
 let Header = null

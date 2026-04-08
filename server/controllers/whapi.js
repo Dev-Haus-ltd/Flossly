@@ -1,6 +1,7 @@
 import { Op } from "sequelize";
 import {
   CrmLead,
+  CrmWhatsAppMessageLog,
   WhapiChannelConfig,
   UserOrganisation,
   Organisation,
@@ -1059,13 +1060,45 @@ export const webhook = async (event) => {
         }
       }
       if (!lead || !orgId) continue;
-      const content = getMessageContent(msg);
       const msgType =
         msg?.type ||
         msg?.message_type ||
         msg?.messageType ||
         (msg?.text ? "text" : null) ||
         "text";
+      const normalizedMsgType = String(msgType).toLowerCase();
+
+      // ── Revoked message: update existing row, never create a new inbound ghost ──
+      if (normalizedMsgType === "revoked") {
+        const revokedId = msg?.id || msg?.message_id || msg?.messageId;
+        if (revokedId) {
+          await CrmWhatsAppMessageLog.update(
+            { type: "revoked", content: "🚫 This message was deleted" },
+            { where: { providerMessageId: revokedId, organisationId: orgId } }
+          );
+        }
+        broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+        continue;
+      }
+
+      // ── Reaction action: update the target message row's reaction field ──
+      if (
+        normalizedMsgType === "action" &&
+        String(msg?.action?.type || "").toLowerCase() === "reaction"
+      ) {
+        const targetId = msg?.action?.message_id || msg?.action?.messageId || msg?.action?.id;
+        const emoji = msg?.action?.emoji;
+        if (targetId) {
+          await CrmWhatsAppMessageLog.update(
+            { reaction: emoji || null },
+            { where: { providerMessageId: targetId, organisationId: orgId } }
+          );
+        }
+        broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+        continue;
+      }
+
+      const content = getMessageContent(msg);
       const token = channelRows?.[0]?.tokenEnc ? decrypt(channelRows[0].tokenEnc) : null;
       const attachments = await extractWhapiAttachments({ msg, token });
       await updateLeadWhatsAppMeta(lead, {
@@ -1141,6 +1174,19 @@ export const editMessage = async (event) => {
   const { providerMessageId, newText, to } = body || {};
   if (!providerMessageId || !newText || !to) {
     return error(400, "providerMessageId, newText, and to are required");
+  }
+
+  // Server-side 15-minute edit window check
+  const EDIT_WINDOW_MS = 15 * 60 * 1000;
+  const logRow = await CrmWhatsAppMessageLog.findOne({
+    where: { providerMessageId, organisationId: orgId },
+    attributes: ["createdAt"],
+  });
+  if (logRow) {
+    const age = Date.now() - new Date(logRow.createdAt).getTime();
+    if (age > EDIT_WINDOW_MS) {
+      return error(400, "Message can no longer be edited (15-minute window has passed)");
+    }
   }
 
   const token = await resolveOrgWhapiToken(orgId);
