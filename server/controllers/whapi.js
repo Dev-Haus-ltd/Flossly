@@ -1240,7 +1240,8 @@ export const reactToMessage = async (event) => {
 
   const body = await readBody(event);
   const { providerMessageId, emoji } = body || {};
-  if (!providerMessageId || !emoji) return error(400, "providerMessageId and emoji are required");
+  // emoji may be "" to remove a reaction — only providerMessageId is strictly required
+  if (!providerMessageId) return error(400, "providerMessageId is required");
 
   const token = await resolveOrgWhapiToken(orgId);
   if (!token) return error(400, "Whapi not configured for this organisation");
@@ -1252,8 +1253,16 @@ export const reactToMessage = async (event) => {
     await $fetch(`${base}/messages/${encodeURIComponent(String(providerMessageId))}/reaction`, {
       method: "PUT",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: { emoji },
+      body: { emoji: emoji || "" },
     });
+
+    // Write to DB directly so the reaction is visible on next open without
+    // waiting for the Whapi webhook to echo back
+    await CrmWhatsAppMessageLog.update(
+      { reaction: emoji || null },
+      { where: { providerMessageId, organisationId: orgId } }
+    );
+
     return success({ reacted: true });
   } catch (err) {
     return error(500, err?.message || "Failed to react to message");
