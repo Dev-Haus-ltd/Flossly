@@ -153,6 +153,7 @@
                   v-for="em in QUICK_EMOJIS"
                   :key="em"
                   class="chat-action-emoji-btn"
+                  :class="{ 'chat-action-emoji-btn--active': em === effectiveReaction }"
                   @click="sendReaction(em)"
                 >{{ em }}</button>
                 <button class="chat-action-emoji-btn chat-action-emoji-more" @click="emojiPickerOpen = !emojiPickerOpen">
@@ -176,6 +177,7 @@
                   @click="startEdit"
                 />
                 <v-list-item
+                  v-if="canEdit"
                   prepend-icon="mdi-trash-can-outline"
                   title="Delete message"
                   base-color="error"
@@ -195,6 +197,11 @@
           <img v-if="showAvatarImage" :src="avatarUrl" alt="Practice" @error="onAvatarError" />
           <span v-else>{{ avatarText }}</span>
         </div>
+      </div>
+
+      <!-- Reaction badge -->
+      <div v-if="effectiveReaction" class="chat-bubble-reaction" :class="isOutbound ? 'chat-bubble-reaction--outbound' : 'chat-bubble-reaction--inbound'">
+        {{ effectiveReaction }}
       </div>
     </div>
   </div>
@@ -217,8 +224,12 @@
 </template>
 
 <script setup>
-import { Post } from "@/services/apiWrapper";
 import "emoji-picker-element";
+import { useCrmStore } from "@/stores/crm";
+import { useMainStore } from "@/stores/index";
+
+const crmStore = useCrmStore();
+const mainStore = useMainStore();
 
 const props = defineProps({
   isOutbound: { type: Boolean, default: false },
@@ -234,6 +245,7 @@ const props = defineProps({
   providerMessageId: { type: String, default: null },
   createdAt: { type: [String, Number, null], default: null },
   recipientPhone: { type: String, default: null },
+  reaction: { type: String, default: null },
 });
 
 const emit = defineEmits(["message-deleted", "message-edited", "message-reacted"]);
@@ -241,15 +253,29 @@ const emit = defineEmits(["message-deleted", "message-edited", "message-reacted"
 // ── Quick reaction emojis ──
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
+// ── Local providerMessageId — updated after a successful edit (Whapi assigns new ID) ──
+const localProviderMessageId = ref(props.providerMessageId);
+watch(() => props.providerMessageId, (v) => { localProviderMessageId.value = v; });
+
+// ── Optimistic reaction — shown immediately before SSE refresh ──
+const localReaction = ref(null);
+const effectiveReaction = computed(() => localReaction.value || props.reaction || null);
+
+// ── Reactive clock for the 15-min edit window ──
+const now = ref(Date.now());
+let _nowTimer = null;
+onMounted(() => { _nowTimer = setInterval(() => { now.value = Date.now(); }, 30_000); });
+onUnmounted(() => { clearInterval(_nowTimer); });
+
 // ── Edit within 15 min (900 000 ms) ──
 const EDIT_WINDOW_MS = 15 * 60 * 1000;
 const canEdit = computed(() => {
-  if (!props.isOutbound || !props.providerMessageId) return false;
+  if (!props.isOutbound || !localProviderMessageId.value) return false;
   if (!props.createdAt) return false;
   const ts = typeof props.createdAt === "number"
     ? (props.createdAt < 1e12 ? props.createdAt * 1000 : props.createdAt)
     : new Date(props.createdAt).getTime();
-  return Date.now() - ts < EDIT_WINDOW_MS;
+  return now.value - ts < EDIT_WINDOW_MS;
 });
 
 // shows "(edited)" label — set to true after a successful edit
@@ -266,13 +292,23 @@ watch(menuOpen, (v) => { if (!v) emojiPickerOpen.value = false; });
 const sendReaction = async (emoji) => {
   menuOpen.value = false;
   emojiPickerOpen.value = false;
+  // Tapping the active reaction again removes it
+  const isToggleOff = emoji === effectiveReaction.value;
+  const targetEmoji = isToggleOff ? "" : emoji;
   try {
-    await Post("/whapi/reactToMessage", {
-      providerMessageId: props.providerMessageId,
-      emoji,
+    const res = await crmStore.reactWhatsAppMessage({
+      providerMessageId: localProviderMessageId.value,
+      emoji: targetEmoji,
     });
-    emit("message-reacted", { providerMessageId: props.providerMessageId, emoji });
-  } catch {}
+    if (res?.code !== 0) {
+      mainStore.setSnackbar({ title: res?.error || "Failed to send reaction", type: "error" });
+      return;
+    }
+    localReaction.value = isToggleOff ? null : emoji;
+    emit("message-reacted", { providerMessageId: localProviderMessageId.value, emoji: targetEmoji || null });
+  } catch (e) {
+    mainStore.setSnackbar({ title: e?.message || "Failed to send reaction", type: "error" });
+  }
 };
 
 // emoji-picker-element fires a CustomEvent with detail.unicode
@@ -299,15 +335,28 @@ const submitEdit = async () => {
   if (!newText || newText === props.message) { cancelEdit(); return; }
   editState.saving = true;
   try {
-    await Post("/whapi/editMessage", {
-      providerMessageId: props.providerMessageId,
+    const res = await crmStore.editWhatsAppMessage({
+      providerMessageId: localProviderMessageId.value,
       newText,
       to: props.recipientPhone,
     });
+    if (res?.code !== 0) {
+      mainStore.setSnackbar({ title: res?.error || "Failed to edit message", type: "error" });
+      editState.saving = false;
+      return;
+    }
+    const newId = res?.data?.messageId || null;
+    if (newId) localProviderMessageId.value = newId;
     editedAt.value = true;
-    emit("message-edited", { providerMessageId: props.providerMessageId, newText });
+    emit("message-edited", {
+      providerMessageId: props.providerMessageId,
+      newProviderMessageId: newId,
+      newText,
+    });
     editState.active = false;
-  } catch {}
+  } catch (e) {
+    mainStore.setSnackbar({ title: e?.message || "Failed to edit message", type: "error" });
+  }
   editState.saving = false;
 };
 
@@ -322,10 +371,17 @@ const openDeleteConfirm = () => {
 const confirmDelete = async () => {
   deleteConfirm.deleting = true;
   try {
-    await Post("/whapi/deleteMessage", { providerMessageId: props.providerMessageId });
+    const res = await crmStore.deleteWhatsAppMessage({ providerMessageId: localProviderMessageId.value });
+    if (res?.code !== 0) {
+      mainStore.setSnackbar({ title: res?.error || "Failed to delete message", type: "error" });
+      deleteConfirm.deleting = false;
+      return;
+    }
     emit("message-deleted", { providerMessageId: props.providerMessageId });
     deleteConfirm.open = false;
-  } catch {}
+  } catch (e) {
+    mainStore.setSnackbar({ title: e?.message || "Failed to delete message", type: "error" });
+  }
   deleteConfirm.deleting = false;
 };
 
@@ -452,7 +508,7 @@ const bubbleClass = computed(() => ({
 }
 
 .chat-bubble--outbound {
-  background: #e7f8ee;
+  background: #dceeff;
   border-bottom-right-radius: 4px;
 }
 
@@ -475,7 +531,7 @@ const bubbleClass = computed(() => ({
   right: -7px;
   width: 0;
   height: 0;
-  border-left: 8px solid #e7f8ee;
+  border-left: 8px solid #dceeff;
   border-top: 8px solid transparent;
 }
 
@@ -710,6 +766,10 @@ const bubbleClass = computed(() => ({
   transition: background 0.12s;
 }
 .chat-action-emoji-btn:hover { background: rgba(0,0,0,0.07); }
+.chat-action-emoji-btn--active {
+  background: rgba(0, 97, 251, 0.1);
+  box-shadow: 0 0 0 2px #0061fb;
+}
 
 .chat-action-emoji-more {
   color: rgba(0,0,0,0.5);
@@ -773,6 +833,22 @@ const bubbleClass = computed(() => ({
   margin-right: 2px;
   font-style: italic;
 }
+
+/* ── Reaction badge ── */
+.chat-bubble-reaction {
+  font-size: 16px;
+  line-height: 1;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 999px;
+  padding: 2px 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  margin-top: 4px;
+  display: inline-block;
+}
+
+.chat-bubble-reaction--inbound { margin-left: 42px; }
+.chat-bubble-reaction--outbound { margin-left: auto; margin-right: 42px; }
 
 /* ── Image zoom hint ── */
 .chat-bubble-image-wrap {

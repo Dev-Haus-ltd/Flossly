@@ -1,6 +1,7 @@
 import { Op } from "sequelize";
 import {
   CrmLead,
+  CrmWhatsAppMessageLog,
   WhapiChannelConfig,
   UserOrganisation,
   Organisation,
@@ -1059,15 +1060,64 @@ export const webhook = async (event) => {
         }
       }
       if (!lead || !orgId) continue;
-      const content = getMessageContent(msg);
       const msgType =
         msg?.type ||
         msg?.message_type ||
         msg?.messageType ||
         (msg?.text ? "text" : null) ||
         "text";
+      const normalizedMsgType = String(msgType).toLowerCase();
+
+      // ── Revoked message: update existing row, never create a new inbound ghost ──
+      if (normalizedMsgType === "revoked") {
+        const revokedId = msg?.id || msg?.message_id || msg?.messageId;
+        if (revokedId) {
+          await CrmWhatsAppMessageLog.update(
+            { type: "revoked", content: "🚫 This message was deleted" },
+            { where: { providerMessageId: revokedId, organisationId: orgId } }
+          );
+        }
+        broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+        continue;
+      }
+
+      // ── Reaction action: update the target message row's reaction field ──
+      if (
+        normalizedMsgType === "action" &&
+        String(msg?.action?.type || "").toLowerCase() === "reaction"
+      ) {
+        const targetId = msg?.action?.message_id || msg?.action?.messageId || msg?.action?.id;
+        const emoji = msg?.action?.emoji;
+        if (targetId) {
+          await CrmWhatsAppMessageLog.update(
+            { reaction: emoji || null },
+            { where: { providerMessageId: targetId, organisationId: orgId } }
+          );
+        }
+        broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+        continue;
+      }
+
+      const content = getMessageContent(msg);
       const token = channelRows?.[0]?.tokenEnc ? decrypt(channelRows[0].tokenEnc) : null;
       const attachments = await extractWhapiAttachments({ msg, token });
+      const providerId = msg?.id || msg?.message_id || msg?.messageId || null;
+
+      // ── Edited inbound message: update existing row instead of creating a duplicate ──
+      if (providerId) {
+        const existing = await CrmWhatsAppMessageLog.findOne({
+          where: { providerMessageId: providerId, organisationId: orgId },
+        });
+        if (existing) {
+          await existing.update({
+            content,
+            ...(attachments ? { attachments } : {}),
+          });
+          broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+          continue;
+        }
+      }
+
       await updateLeadWhatsAppMeta(lead, {
         lastInboundAt: new Date(extractTimestamp(msg?.timestamp || msg?.time || msg?.sent)).toISOString(),
         lastInboundFrom: fromDigits,
@@ -1080,7 +1130,7 @@ export const webhook = async (event) => {
         direction: "inbound",
         type: String((attachments?.[0]?.type || msgType) || "text"),
         status: "received",
-        providerMessageId: msg?.id || msg?.message_id || msg?.messageId || null,
+        providerMessageId: providerId,
         content,
         attachments,
       });
@@ -1143,6 +1193,19 @@ export const editMessage = async (event) => {
     return error(400, "providerMessageId, newText, and to are required");
   }
 
+  // Server-side 15-minute edit window check
+  const EDIT_WINDOW_MS = 15 * 60 * 1000;
+  const logRow = await CrmWhatsAppMessageLog.findOne({
+    where: { providerMessageId, organisationId: orgId },
+    attributes: ["createdAt"],
+  });
+  if (logRow) {
+    const age = Date.now() - new Date(logRow.createdAt).getTime();
+    if (age > EDIT_WINDOW_MS) {
+      return error(400, "Message can no longer be edited (15-minute window has passed)");
+    }
+  }
+
   const token = await resolveOrgWhapiToken(orgId);
   if (!token) return error(400, "Whapi not configured for this organisation");
 
@@ -1194,7 +1257,8 @@ export const reactToMessage = async (event) => {
 
   const body = await readBody(event);
   const { providerMessageId, emoji } = body || {};
-  if (!providerMessageId || !emoji) return error(400, "providerMessageId and emoji are required");
+  // emoji may be "" to remove a reaction — only providerMessageId is strictly required
+  if (!providerMessageId) return error(400, "providerMessageId is required");
 
   const token = await resolveOrgWhapiToken(orgId);
   if (!token) return error(400, "Whapi not configured for this organisation");
@@ -1206,8 +1270,16 @@ export const reactToMessage = async (event) => {
     await $fetch(`${base}/messages/${encodeURIComponent(String(providerMessageId))}/reaction`, {
       method: "PUT",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: { emoji },
+      body: { emoji: emoji || "" },
     });
+
+    // Write to DB directly so the reaction is visible on next open without
+    // waiting for the Whapi webhook to echo back
+    await CrmWhatsAppMessageLog.update(
+      { reaction: emoji || null },
+      { where: { providerMessageId, organisationId: orgId } }
+    );
+
     return success({ reacted: true });
   } catch (err) {
     return error(500, err?.message || "Failed to react to message");

@@ -575,7 +575,7 @@ const tab = ref(props.initialTab || "lead-info");
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
 const whatsappEnabled = ref(true) // optimistic: show chat immediately, corrected by status check
-const whatsappRequiresTemplates = ref(true)
+const whatsappRequiresTemplates = ref(false)
 const leadTitle = computed(() => {
   const lead = props.selectedLead || {};
   const name = String(displayLeadName.value || '').trim();
@@ -640,27 +640,13 @@ const extraAnswers = computed(() => {
 
 const loadWhatsAppAvailability = async () => {
   try {
-    const res = await crmStore.getWhatsAppConfig()
-    if (res?.code === 0 && res.data) {
-      const provider = String(res.data.provider || '').toLowerCase()
-      const hasToken = Boolean(res.data.hasToken)
-      if (provider === 'whapi') {
-        const statusRes = await crmStore.getWhapiStatus()
-        const statusRaw = String(statusRes?.data?.status || '').toLowerCase()
-        const stopped = statusRaw === 'stopped' || statusRaw === 'blocked'
-        whatsappEnabled.value = Boolean(statusRes?.data?.connected) && !stopped
-        whatsappRequiresTemplates.value = false
-        return
-      }
-      if (provider === 'meta') {
-        whatsappEnabled.value = hasToken
-        whatsappRequiresTemplates.value = true
-        return
-      }
-    }
-  } catch {}
-  whatsappEnabled.value = false
-  whatsappRequiresTemplates.value = true
+    const res = await crmStore.getWhapiStatus()
+    const statusRaw = String(res?.data?.status || '').toLowerCase()
+    const stopped = statusRaw === 'stopped' || statusRaw === 'blocked'
+    whatsappEnabled.value = Boolean(res?.data?.connected) && !stopped
+  } catch {
+    whatsappEnabled.value = false
+  }
 }
 
 onMounted(() => {

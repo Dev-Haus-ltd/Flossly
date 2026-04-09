@@ -25,6 +25,7 @@
           :provider-message-id="row.providerMessageId || null"
           :created-at="row.createdAt || null"
           :recipient-phone="row.recipientPhone || null"
+          :reaction="row.reaction || null"
           @message-deleted="$emit('message-deleted', $event)"
           @message-edited="$emit('message-edited', $event)"
           @message-reacted="$emit('message-reacted', $event)"
@@ -77,8 +78,8 @@ defineExpose({ scrollToBottom });
 
 .chat-day-pill {
   align-self: center;
-  background: #d1f4cc;
-  color: #4a4a4a;
+  background: #dceeff;
+  color: #0047b8;
   font-size: 12px;
   font-weight: 500;
   padding: 4px 12px;

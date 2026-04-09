@@ -25,6 +25,8 @@ export const MetaInsight = sequelize.define(
     spend: { type: DataTypes.INTEGER, allowNull: true }, // minor units (pence/cents)
     leads: { type: DataTypes.INTEGER, allowNull: true },
     reach: { type: DataTypes.INTEGER, allowNull: true },
+    lifetimeReach: { type: DataTypes.INTEGER, allowNull: true },
+    linkClicks: { type: DataTypes.INTEGER, allowNull: true },
     frequency: { type: DataTypes.FLOAT, allowNull: true },
     purchase_roas: { type: DataTypes.FLOAT, allowNull: true },
 
