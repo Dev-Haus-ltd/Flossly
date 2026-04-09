@@ -6,7 +6,12 @@
         :key="group.key"
         class="avatar-trigger me-n2"
       >
-        <div class="group-avatar" :title="group.title || group.key">
+        <div
+          class="group-avatar"
+          :class="{ 'group-avatar--palette': !!group.avatarColor }"
+          :style="groupAvatarStyle(group)"
+          :title="group.title || group.key"
+        >
           {{ groupInitials(group) }}
         </div>
       </div>
@@ -177,6 +182,26 @@ const groupInitials = (group) => {
   return letters.toUpperCase()
 }
 
+const contrastTextOnHex = (hex) => {
+  const s = String(hex || '').trim()
+  if (!/^#[0-9A-Fa-f]{6}$/.test(s)) return '#FFFFFF'
+  const r = parseInt(s.slice(1, 3), 16)
+  const g = parseInt(s.slice(3, 5), 16)
+  const b = parseInt(s.slice(5, 7), 16)
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return lum > 0.62 ? '#1E1E1E' : '#FFFFFF'
+}
+
+const groupAvatarStyle = (group) => {
+  const bg = group?.avatarColor
+  if (!bg) return {}
+  return {
+    backgroundColor: bg,
+    color: contrastTextOnHex(bg),
+    borderColor: bg,
+  }
+}
+
 const filteredGroups = computed(() => {
   const q = String(search.value || '').trim().toLowerCase()
   if (!q) return props.groups || []
@@ -260,6 +285,11 @@ const onTriggerClick = (event, item) => {
   background: #f0f0f0;
   color: #555;
   border-color: #e0e0e0;
+}
+
+.group-avatar--palette {
+  border-width: 1px;
+  border-style: solid;
 }
 
 .automation-list {
