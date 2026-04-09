@@ -517,6 +517,7 @@ const updateWebhook = async (token, webhookUrl) => {
         mode: "body",
         events: [
           { type: "messages", method: "post" },
+          { type: "messages", method: "patch" },
           { type: "statuses", method: "post" },
           { type: "users", method: "post" },
           { type: "channel", method: "post" },
@@ -1021,6 +1022,30 @@ export const webhook = async (event) => {
         }
       }
     }
+    // ── Handle message edits (messages_updates, event.event === "patch") ──
+    // Whapi sends edits in a separate messages_updates array, not in messages.
+    // Structure: { id, after_update: { text: { body: "new text" } }, trigger: { type: "edit" } }
+    if (Array.isArray(body?.messages_updates)) {
+      for (const update of body.messages_updates) {
+        if (String(update?.trigger?.type || "").toLowerCase() !== "edit") continue;
+        const msgId = update?.id || update?.after_update?.id;
+        const newText = update?.after_update?.text?.body || update?.after_update?.caption || "";
+        if (!msgId || !newText) continue;
+
+        // Find the org for this update via channel_id
+        if (!channelRows.length) continue;
+        for (const cfg of channelRows) {
+          const logRow = await CrmWhatsAppMessageLog.findOne({
+            where: { providerMessageId: String(msgId), organisationId: cfg.organisationId },
+            attributes: ["id", "leadId"],
+          });
+          if (!logRow) continue;
+          await logRow.update({ content: newText });
+          broadcastWhapiEvent("message", { orgId: cfg.organisationId, leadId: logRow.leadId });
+        }
+      }
+    }
+
     const messages = collectMessages(body);
 
     for (const msg of messages) {
@@ -1098,12 +1123,12 @@ export const webhook = async (event) => {
         continue;
       }
 
-      const content = getMessageContent(msg);
       const token = channelRows?.[0]?.tokenEnc ? decrypt(channelRows[0].tokenEnc) : null;
       const attachments = await extractWhapiAttachments({ msg, token });
       const providerId = msg?.id || msg?.message_id || msg?.messageId || null;
+      const content = getMessageContent(msg);
 
-      // ── Edited inbound message: update existing row instead of creating a duplicate ──
+      // ── Same-ID update: update existing row instead of creating a duplicate ──
       if (providerId) {
         const existing = await CrmWhatsAppMessageLog.findOne({
           where: { providerMessageId: providerId, organisationId: orgId },
