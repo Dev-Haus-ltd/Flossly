@@ -28,6 +28,10 @@
             :value="stat.value"
             :uid="i"
             hide-chip
+            :select="stat.select ?? null"
+            :select-items="stat.selectItems ?? []"
+            :info-text="stat.infoText ?? ''"
+            @update:select="(v) => { if (stat.selectItems?.length) statPeriod = v }"
           />
         </v-col>
       </v-row>
@@ -132,6 +136,92 @@
         <p class="text-grey empty-state-copy">{{ drillEmptyCopy }}</p>
       </v-sheet>
     </div>
+
+    <!-- Custom date range picker dialog -->
+    <v-dialog v-model="showCustomRangeDialog" max-width="400" persistent>
+      <v-card rounded="xl" class="pa-2">
+        <v-card-title class="text-subtitle-1 font-weight-semibold px-4 pt-4 pb-2">
+          Custom date range
+        </v-card-title>
+        <v-card-text class="px-4 pb-2">
+          <p class="text-caption text-grey mb-4">
+            All stat cards and campaign data will update to the selected window.
+          </p>
+          <v-row dense>
+            <v-col cols="6">
+              <p class="date-label mb-1">From</p>
+              <v-menu v-model="fromMenu" :close-on-content-click="false">
+                <template #activator="{ props }">
+                  <v-text-field
+                    v-bind="props"
+                    :model-value="customDateFromTemp ? formatShortDate(customDateFromTemp) : ''"
+                    placeholder="Select date"
+                    readonly
+                    variant="solo"
+                    density="compact"
+                    hide-details
+                    flat
+                    bg-color="#F3F4F6"
+                    class="date-field"
+                  >
+                    <template #append-inner>
+                      <v-icon size="16" class="cursor-pointer">mdi-calendar</v-icon>
+                    </template>
+                  </v-text-field>
+                </template>
+                <v-date-picker
+                  v-model="customDateFromTemp"
+                  color="primary"
+                  :max="customDateToTemp ? toYmd(customDateToTemp) : undefined"
+                  @update:model-value="fromMenu = false"
+                />
+              </v-menu>
+            </v-col>
+            <v-col cols="6">
+              <p class="date-label mb-1">To</p>
+              <v-menu v-model="toMenu" :close-on-content-click="false">
+                <template #activator="{ props }">
+                  <v-text-field
+                    v-bind="props"
+                    :model-value="customDateToTemp ? formatShortDate(customDateToTemp) : ''"
+                    placeholder="Select date"
+                    readonly
+                    variant="solo"
+                    density="compact"
+                    hide-details
+                    flat
+                    bg-color="#F3F4F6"
+                    class="date-field"
+                  >
+                    <template #append-inner>
+                      <v-icon size="16" class="cursor-pointer">mdi-calendar</v-icon>
+                    </template>
+                  </v-text-field>
+                </template>
+                <v-date-picker
+                  v-model="customDateToTemp"
+                  color="primary"
+                  :min="customDateFromTemp ? toYmd(customDateFromTemp) : undefined"
+                  @update:model-value="toMenu = false"
+                />
+              </v-menu>
+            </v-col>
+          </v-row>
+        </v-card-text>
+        <v-card-actions class="px-4 pb-4 pt-0">
+          <v-spacer />
+          <v-btn variant="text" size="small" @click="cancelCustomRange">Cancel</v-btn>
+          <v-btn
+            color="primary"
+            variant="flat"
+            size="small"
+            rounded="lg"
+            :disabled="!customRangeValid"
+            @click="applyCustomRange"
+          >Apply</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
   </v-sheet>
 </template>
@@ -411,18 +501,111 @@ const emptyStateCopy = computed(() =>
 
 const selectedPlatform = computed(() => activeFilters.value?.platform || null);
 const selectedStatus = computed(() => activeFilters.value?.status || null);
-const filterDateFrom = computed(() => parseLocalDate(activeFilters.value?.dateFrom, false));
-const filterDateTo = computed(() => parseLocalDate(activeFilters.value?.dateTo, true));
-const insightsInRange = computed(() =>
-  crmStore.metaInsights.filter((insight) => {
+
+// Shared period selector for all campaign-level stat cards
+const statPeriod = ref('30d');
+const PERIOD_ITEMS = [
+  { title: 'This week', value: 'week' },
+  { title: 'This month', value: 'month' },
+  { title: 'Last 30 days', value: '30d' },
+  { title: 'Last 90 days', value: '90d' },
+  { title: 'Custom range', value: 'custom' },
+];
+
+// Custom date range state
+const showCustomRangeDialog = ref(false);
+const customDateFrom = ref(null);  // Date | null — committed value
+const customDateTo = ref(null);    // Date | null — committed value
+const customDateFromTemp = ref(null); // Date | null — in-dialog draft
+const customDateToTemp = ref(null);
+const fromMenu = ref(false);
+const toMenu = ref(false);
+const prevStatPeriod = ref('30d');
+
+watch(statPeriod, (val, prev) => {
+  if (val === 'custom') {
+    prevStatPeriod.value = prev;
+    customDateFromTemp.value = customDateFrom.value;
+    customDateToTemp.value = customDateTo.value;
+    showCustomRangeDialog.value = true;
+  }
+});
+
+const applyCustomRange = () => {
+  customDateFrom.value = customDateFromTemp.value;
+  customDateTo.value = customDateToTemp.value;
+  showCustomRangeDialog.value = false;
+};
+
+const cancelCustomRange = () => {
+  statPeriod.value = prevStatPeriod.value;
+  showCustomRangeDialog.value = false;
+};
+
+const customRangeValid = computed(() =>
+  customDateFromTemp.value instanceof Date &&
+  customDateToTemp.value instanceof Date &&
+  customDateFromTemp.value <= customDateToTemp.value
+);
+
+const statPeriodDates = computed(() => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (statPeriod.value === 'custom') {
+    return { from: customDateFrom.value ?? null, to: customDateTo.value ?? null };
+  }
+  if (statPeriod.value === 'week') {
+    const dayOfWeek = today.getDay();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+    return { from: monday, to: today };
+  }
+  if (statPeriod.value === 'month') {
+    return { from: new Date(today.getFullYear(), today.getMonth(), 1), to: today };
+  }
+  if (statPeriod.value === '90d') {
+    const from = new Date(today);
+    from.setDate(today.getDate() - 89);
+    return { from, to: today };
+  }
+  // default: 30d
+  const from = new Date(today);
+  from.setDate(today.getDate() - 29);
+  return { from, to: today };
+});
+
+const insightsInRange = computed(() => {
+  const { from, to } = statPeriodDates.value;
+  const endOfTo = to ? new Date(to.getTime()) : null;
+  if (endOfTo) endOfTo.setHours(23, 59, 59, 999);
+  return crmStore.metaInsights.filter((insight) => {
     const rowDate = parseLocalDate(insight.date, false);
     if (!rowDate) return false;
     if (Number.isNaN(rowDate.getTime())) return false;
-    if (filterDateFrom.value && rowDate < filterDateFrom.value) return false;
-    if (filterDateTo.value && rowDate > filterDateTo.value) return false;
+    if (from && rowDate < from) return false;
+    if (endOfTo && rowDate > endOfTo) return false;
     return true;
-  })
-);
+  });
+});
+
+const periodLabel = computed(() => {
+  if (statPeriod.value === 'custom') {
+    if (customDateFrom.value && customDateTo.value) {
+      return `${formatShortDate(customDateFrom.value)} – ${formatShortDate(customDateTo.value)}`;
+    }
+    return 'custom range';
+  }
+  const labels = { week: 'this week', month: 'this month', '30d': 'last 30 days', '90d': 'last 90 days' };
+  return labels[statPeriod.value] || 'last 30 days';
+});
+
+const drillInfoText = computed(() => {
+  const parts = [`Date range: ${periodLabel.value}`];
+  if (selectedStatus.value) parts.push(`Status: ${selectedStatus.value}`);
+  if (selectedPlatform.value) parts.push(`Platform: ${selectedPlatform.value}`);
+  if (drill.level >= 1 && drill.campaign?.title) parts.push(`Campaign: "${drill.campaign.title}"`);
+  return parts.join(' · ');
+});
 
 const formatShortDate = (value) => {
   const d = parseLocalDate(value, false);
@@ -524,21 +707,29 @@ const analyticsStats = computed(() => {
       icon: 'https://cdn.lordicon.com/tzynxkwl.json',
       label: 'Total Spend',
       value: `${sym}${(statSpend.value / 100).toFixed(2)}`,
+      select: statPeriod.value,
+      selectItems: PERIOD_ITEMS,
     },
     {
       icon: 'https://cdn.lordicon.com/tzynxkwl.json',
       label: 'Number of Leads',
       value: String(statMetaLeads.value).padStart(2, '0'),
+      select: statPeriod.value,
+      selectItems: PERIOD_ITEMS,
     },
     {
       icon: 'https://cdn.lordicon.com/tzynxkwl.json',
       label: 'Total Impressions',
       value: statImpressions.value.toLocaleString(),
+      select: statPeriod.value,
+      selectItems: PERIOD_ITEMS,
     },
     {
       icon: 'https://cdn.lordicon.com/tzynxkwl.json',
       label: 'Total Reach',
       value: statReach.value.toLocaleString(),
+      select: statPeriod.value,
+      selectItems: PERIOD_ITEMS,
     },
   ];
 });
@@ -557,12 +748,13 @@ const drillCampaignStats = computed(() => {
   const totalImpressions = insights.reduce((sum, i) => sum + Number(i.impressions || 0), 0);
   const totalReach = sumLifetimeReachByEntity(insights);
   const totalLeads = insights.reduce((sum, i) => sum + Number(i.leads || 0), 0);
+  const info = drillInfoText.value;
   return [
-    { icon: 'https://cdn.lordicon.com/nocovwne.json', label: 'Ad Sets', value: String(adSetIds.length).padStart(2, '0') },
-    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Spend', value: `${sym}${(totalSpend / 100).toFixed(2)}` },
-    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Number of Leads', value: String(totalLeads).padStart(2, '0') },
-    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Impressions', value: totalImpressions.toLocaleString() },
-    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Reach', value: totalReach.toLocaleString() },
+    { icon: 'https://cdn.lordicon.com/nocovwne.json', label: 'Ad Sets', value: String(adSetIds.length).padStart(2, '0'), infoText: info },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Spend', value: `${sym}${(totalSpend / 100).toFixed(2)}`, infoText: info },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Number of Leads', value: String(totalLeads).padStart(2, '0'), infoText: info },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Impressions', value: totalImpressions.toLocaleString(), infoText: info },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Reach', value: totalReach.toLocaleString(), infoText: info },
   ];
 });
 
@@ -579,12 +771,13 @@ const drillAdSetStats = computed(() => {
   const totalImpressions = insights.reduce((sum, i) => sum + Number(i.impressions || 0), 0);
   const totalReach = sumLifetimeReachByEntity(insights);
   const totalLeads = insights.reduce((sum, i) => sum + Number(i.leads || 0), 0);
+  const info = drillInfoText.value;
   return [
-    { icon: 'https://cdn.lordicon.com/nocovwne.json', label: 'Ads', value: String(ads.length).padStart(2, '0') },
-    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Spend', value: `${sym}${(totalSpend / 100).toFixed(2)}` },
-    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Number of Leads', value: String(totalLeads).padStart(2, '0') },
-    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Impressions', value: totalImpressions.toLocaleString() },
-    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Reach', value: totalReach.toLocaleString() },
+    { icon: 'https://cdn.lordicon.com/nocovwne.json', label: 'Ads', value: String(ads.length).padStart(2, '0'), infoText: info },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Spend', value: `${sym}${(totalSpend / 100).toFixed(2)}`, infoText: info },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Number of Leads', value: String(totalLeads).padStart(2, '0'), infoText: info },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Impressions', value: totalImpressions.toLocaleString(), infoText: info },
+    { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Reach', value: totalReach.toLocaleString(), infoText: info },
   ];
 });
 
@@ -837,5 +1030,16 @@ const drillEmptyCopy = computed(() => {
 
 .campaign-col {
   padding: 10px !important;
+}
+
+.date-label {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.date-field {
+  font-size: 13px;
+  border-radius: 8px;
 }
 </style>
