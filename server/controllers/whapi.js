@@ -110,6 +110,7 @@ const getMessageContent = (msg) => {
     const action = msg?.action || {};
     const actionType = String(action?.type || "").toLowerCase();
     if (actionType === "reaction" && action?.emoji) return `Reacted ${action.emoji}`;
+    if (actionType === "edit") return "";  // handled separately in webhook; never log "edit" as content
     if (actionType === "vote") return "Voted on a poll";
     if (actionType === "label_change") return "Changed a label";
     if (actionType === "media_notify") return "Shared media";
@@ -1116,6 +1117,23 @@ export const webhook = async (event) => {
         if (targetId) {
           await CrmWhatsAppMessageLog.update(
             { reaction: emoji || null },
+            { where: { providerMessageId: targetId, organisationId: orgId } }
+          );
+        }
+        broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+        continue;
+      }
+
+      // ── Edit action: update the original message with the new text ──
+      if (
+        normalizedMsgType === "action" &&
+        String(msg?.action?.type || "").toLowerCase() === "edit"
+      ) {
+        const targetId = msg?.action?.message_id || msg?.action?.messageId || msg?.action?.id;
+        const newText = msg?.action?.body || msg?.action?.text || msg?.action?.content || "";
+        if (targetId && newText) {
+          await CrmWhatsAppMessageLog.update(
+            { content: newText },
             { where: { providerMessageId: targetId, organisationId: orgId } }
           );
         }
