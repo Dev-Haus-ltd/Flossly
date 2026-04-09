@@ -11,8 +11,9 @@ import { sendLeadCreatedNotification, sendLeadAssignedNotification, sendLeadUnas
 import { decrypt } from '../utils/crypto'
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from '../utils/whatsapp'
 import { renderLeadTokens } from '../utils/templateTokens'
-import { resolveWhatsAppProviderConfig } from '../utils/whatsappProvider'
+import { resolveWhapiConfig } from '../utils/whatsappProvider'
 import { uploadBufferFile } from '../utils/storage'
+import { getS3Object } from '../utils/s3'
 import DB from '../utils/db'
 import { parseJsonBody } from "../utils/body";
 
@@ -1332,6 +1333,49 @@ export const uploadLeadAttachment = async (event) => {
   }
 }
 
+export const uploadLeadWhatsAppMedia = async (event) => {
+  try {
+    const { orgId, userId } = event.context.user || {}
+    if (!orgId || !userId) return error(401, 'Unauthenticated')
+
+    const formData = await readMultipartFormData(event)
+    if (!formData || !formData.length) return error(400, 'No file uploaded')
+
+    const fileData = formData.find((item) => item.name === 'file')
+    if (!fileData) return error(400, 'Missing file')
+
+    const originalName = fileData.filename || 'file'
+    const fileExt = originalName.includes('.') ? originalName.slice(originalName.lastIndexOf('.')) : ''
+    const uniqueFileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExt}`
+    const mimeType = fileData.type || 'application/octet-stream'
+
+    const s3Path = await uploadBufferFile({
+      data: fileData.data,
+      filename: uniqueFileName,
+      contentType: mimeType,
+      baseDir: 'chat-attachments',
+    })
+
+    const attachmentType = mimeType.startsWith('image/')
+      ? 'image'
+      : mimeType.startsWith('video/')
+        ? 'video'
+        : mimeType.startsWith('audio/')
+          ? 'audio'
+          : 'document'
+
+    return success({
+      url: s3Path,
+      name: originalName,
+      mimeType,
+      type: attachmentType,
+      size: fileData.data?.length || null,
+    })
+  } catch (e) {
+    return error(500, e.message || 'Failed to upload media')
+  }
+}
+
 export const getLeadPriceAttachmentRecent = async (event) => {
   try {
     const { orgId } = event.context.user || {}
@@ -1952,48 +1996,46 @@ export const sendLeadMail = async (event) => {
   }
 }
 
-// Send WhatsApp message to selected leads
+// Send WhatsApp message to selected leads via Whapi
 export const sendLeadWhatsApp = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
-    const { leadIds = [], template, message } = payload || {}
-    if (!Array.isArray(leadIds) || !leadIds.length) return error(400, 'leadIds required')
+    const { leadIds = [], recipients = [], message, attachments = [] } = payload || {}
+    const normalizedRecipients = Array.isArray(recipients)
+      ? recipients
+          .map((item) => ({
+            id: item?.id ? Number(item.id) : null,
+            name: String(item?.name || item?.fullName || '').trim(),
+            email: String(item?.email || '').trim(),
+            telephone: String(item?.telephone || item?.phone || item?.mobile || '').trim(),
+          }))
+          .filter((item) => item.telephone)
+      : []
+    if ((!Array.isArray(leadIds) || !leadIds.length) && !normalizedRecipients.length) return error(400, 'leadIds or recipients required')
     const messageText = String(message || '').trim()
-    const hasTemplate = !!template
-    if (!hasTemplate && !messageText) return error(400, 'template or message required for WhatsApp outbound')
+    const hasAttachments = Array.isArray(attachments) && attachments.length > 0
+    if (!messageText && !hasAttachments) return error(400, 'message or attachments required')
 
-    const waConfig = await resolveWhatsAppProviderConfig(orgId)
-    if (!waConfig?.provider) {
-      return error(400, 'WhatsApp provider not configured')
-    }
-    if (waConfig.provider === 'meta' && (!waConfig.phoneNumberId || !waConfig.accessToken)) {
-      return error(400, 'WhatsApp is not configured')
-    }
-    if (waConfig.provider === 'whapi' && !waConfig.token) {
-      return error(400, 'Whapi token is missing')
-    }
+    const whapiConfig = await resolveWhapiConfig(orgId)
+    if (!whapiConfig?.token) return error(400, 'Whapi channel not configured or token missing')
 
     const limitStatus = await isWhatsAppLimitExceeded(orgId, event.context.user?.userId)
     if (limitStatus.exceeded) {
       return error(402, `WhatsApp monthly limit reached (${limitStatus.count}/${limitStatus.limit})`)
     }
 
-    const useTemplate = waConfig.provider === 'meta' && hasTemplate
-
-    const leads = await CrmLead.findAll({
-      where: { id: { [Op.in]: leadIds }, organisationId: Number(orgId), softDeleted: false },
-    })
+    const leads = Array.isArray(leadIds) && leadIds.length
+      ? await CrmLead.findAll({
+          where: { id: { [Op.in]: leadIds }, organisationId: Number(orgId), softDeleted: false },
+        })
+      : normalizedRecipients
     if (!leads.length) return error(404, 'No leads found')
 
-    const metaUrl = waConfig.provider === 'meta'
-      ? `https://graph.facebook.com/v24.0/${waConfig.phoneNumberId}/messages`
-      : null
-    const whapiUrl = waConfig.provider === 'whapi'
-      ? `${String(waConfig.baseUrl || '').replace(/\/+$/, '')}/messages/text`
-      : null
+    const whapiBase = String(whapiConfig.baseUrl || '').replace(/\/+$/, '')
+    const headers = { Authorization: `Bearer ${whapiConfig.token}`, 'Content-Type': 'application/json' }
     let sent = 0
     let failed = 0
     let skipped = 0
@@ -2004,12 +2046,8 @@ export const sendLeadWhatsApp = async (event) => {
       if (!to) {
         skipped += 1
         await logWhatsAppMessage({
-          organisationId: orgId,
-          leadId: lead.id,
-          to: lead.telephone || null,
-          type: useTemplate ? 'template' : 'text',
-          templateName: useTemplate ? (template?.name || template?.namespace || null) : null,
-          status: 'skipped',
+          organisationId: orgId, leadId: lead.id || null,
+          to: lead.telephone || null, type: 'text', status: 'skipped',
           error: 'Missing or invalid phone number',
         })
         failures.push({ leadId: lead.id, error: 'Missing or invalid phone number' })
@@ -2019,91 +2057,75 @@ export const sendLeadWhatsApp = async (event) => {
       const leadName = lead?.name || lead?.fullName || lead?.email || 'there'
       const senderName = event.context.user?.fullName || event.context.user?.name || 'Team'
       const resolvedText = renderLeadTokens(messageText, {
-        name: leadName,
-        email: lead?.email || '',
-        telephone: lead?.telephone || '',
-        yourName: senderName,
+        name: leadName, email: lead?.email || '', telephone: lead?.telephone || '', yourName: senderName,
       })
 
-      if (waConfig.provider === 'whapi' && !messageText) {
-        failed += 1
-        await logWhatsAppMessage({
-          organisationId: orgId,
-          leadId: lead.id,
-          to,
-          type: 'text',
-          status: 'failed',
-          error: 'Whapi requires a text message',
-        })
-        failures.push({
-          leadId: lead.id,
-          error: 'Whapi requires a text message',
-        })
-        continue
-      }
-
-      const bodyPayload = waConfig.provider === 'meta'
-        ? {
-            messaging_product: 'whatsapp',
-            to,
-            type: useTemplate ? 'template' : 'text',
-            ...(useTemplate
-              ? { template }
-              : { text: { body: String(resolvedText || '') } }),
-          }
-        : { to, body: String(resolvedText || '') }
-
       try {
-        const resp = await $fetch(waConfig.provider === 'meta' ? metaUrl : whapiUrl, {
-          method: 'POST',
-          headers: waConfig.provider === 'meta'
-            ? {
-                Authorization: `Bearer ${waConfig.accessToken}`,
-                'Content-Type': 'application/json',
-              }
-            : {
-                Authorization: `Bearer ${waConfig.token}`,
-                'Content-Type': 'application/json',
-              },
-          body: bodyPayload,
-        })
-        const providerMessageId =
-          resp?.messages?.[0]?.id ||
-          resp?.message?.id ||
-          resp?.id ||
-          null
-        await markWhatsAppOutbound(lead, to)
-        await logWhatsAppMessage({
-          organisationId: orgId,
-          leadId: lead.id,
-          to,
-          type: useTemplate ? 'template' : 'text',
-          templateName: useTemplate ? (template?.name || template?.namespace || null) : null,
-          status: 'sent',
-          providerMessageId,
-          content: useTemplate ? null : String(resolvedText || ''),
-        })
-        const waRaw = lead.rawData || {}
-        const waLog = Array.isArray(waRaw.manualSentLog) ? [...waRaw.manualSentLog] : []
-        waLog.push({ type: 'WhatsApp', subject: String(resolvedText || '').slice(0, 100) || 'WhatsApp Message', sentAt: new Date().toISOString() })
-        lead.rawData = { ...waRaw, manualSentLog: waLog }
-        await lead.save()
-        sent += 1
+        // If attachments present, fold text as caption on the first one (single WA message)
+        const withAttachments = hasAttachments
+
+        if (resolvedText && !withAttachments) {
+          const resp = await $fetch(`${whapiBase}/messages/text`, {
+            method: 'POST', headers, body: { to, body: resolvedText },
+          })
+          const providerMessageId = resp?.message?.id || resp?.id || null
+          if (typeof lead?.save === 'function') await markWhatsAppOutbound(lead, to)
+          await logWhatsAppMessage({
+            organisationId: orgId, leadId: lead.id || null, to,
+            type: 'text', status: 'sent', providerMessageId, content: resolvedText,
+          })
+          sent += 1
+        }
+
+        if (hasAttachments) {
+          for (let attIdx = 0; attIdx < attachments.length; attIdx++) {
+            const att = attachments[attIdx]
+            const mime = String(att?.mimeType || '').toLowerCase()
+            const name = att?.name || null
+            const type =
+              att?.type ||
+              (mime.startsWith('image/') ? 'image' :
+                mime.startsWith('video/') ? 'video' :
+                  mime.startsWith('audio/') ? 'audio' : 'document')
+            const endpoint = type === 'image' ? 'image' : type === 'video' ? 'video' : type === 'audio' ? 'audio' : 'document'
+            // Caption only on first attachment
+            const caption = (attIdx === 0 && resolvedText) ? resolvedText : null
+
+            // Prefer base64 data URI from S3 (avoids needing a public URL)
+            const s3Key = String(att?.url || '').replace(/^\/+/, '')
+            let mediaValue = att?.url || ''
+            try {
+              const s3Obj = await getS3Object(s3Key)
+              const chunks = []
+              for await (const chunk of s3Obj.body) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+              mediaValue = `data:${mime || 'application/octet-stream'};base64,${Buffer.concat(chunks).toString('base64')}`
+            } catch {
+              // fall back to stored URL
+            }
+
+            const resp = await $fetch(`${whapiBase}/messages/${endpoint}`, {
+              method: 'POST', headers,
+              body: { to, media: mediaValue, ...(caption ? { caption } : {}), ...(endpoint === 'document' && name ? { filename: name } : {}) },
+            })
+            const providerMessageId = resp?.message?.id || resp?.id || null
+            if (typeof lead?.save === 'function') await markWhatsAppOutbound(lead, to)
+            await logWhatsAppMessage({
+              organisationId: orgId, leadId: lead.id || null, to,
+              type, status: 'sent', providerMessageId,
+              content: caption || name || null,
+              attachments: [{ ...att }],
+            })
+            sent += 1
+          }
+        }
       } catch (e) {
         failed += 1
         await logWhatsAppMessage({
-          organisationId: orgId,
-          leadId: lead.id,
-          to,
-          type: useTemplate ? 'template' : 'text',
-          templateName: useTemplate ? (template?.name || template?.namespace || null) : null,
-          status: 'failed',
+          organisationId: orgId, leadId: lead.id || null, to,
+          type: 'text', status: 'failed',
           error: e?.data?.error?.message || e?.message || 'Failed to send',
         })
-        failures.push({
-          leadId: lead.id,
-          error: e?.data?.error?.message || e?.message || 'Failed to send',
-        })
+        failures.push({ leadId: lead.id || null, error: e?.data?.error?.message || e?.message || 'Failed to send' })
       }
     }
 

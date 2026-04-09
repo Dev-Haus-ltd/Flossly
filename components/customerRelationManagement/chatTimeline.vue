@@ -4,145 +4,96 @@
       <CommonWhatsAppNotConnectedAlert />
     </div>
     <template v-else>
-      <v-card-title class="d-flex align-center justify-end">
-        <v-btn size="small" variant="text" :loading="loading" @click="loadLogs">
-          Refresh
-        </v-btn>
-      </v-card-title>
       <v-divider />
       <v-card-text class="chat-timeline-body">
-        <div v-if="loading" class="text-caption text-medium-emphasis">
-          Loading messages...
-        </div>
-        <div v-else-if="!chatItems.length" class="text-caption text-medium-emphasis">
-          {{ emptyMessage }}
-        </div>
-        <div v-else class="chat-timeline-list">
-          <template v-for="group in groupedChatItems" :key="group.key">
-            <div class="chat-day-pill">{{ group.label }}</div>
-            <CommonChatBubble
-              v-for="row in group.items"
-              :key="row.id"
-              :is-outbound="row.isOutbound"
-              :sender="row.sender"
-              :message="row.message"
-              :timestamp="row.timeLabel"
-              :status-icon="row.statusIcon"
-              :avatar-url="row.avatarUrl"
-              :avatar-text="row.avatarText"
-              :automated="row.automated"
-            />
-          </template>
+        <div ref="scrollEl" class="chat-timeline-scroll">
+          <ChatThread
+            :groups="groupedChatItems"
+            :loading="loading"
+            :empty-message="emptyMessage"
+            @message-deleted="onMessageDeleted"
+            @message-edited="onMessageEdited"
+            @message-reacted="onMessageReacted"
+          />
         </div>
       </v-card-text>
       <v-divider />
-      <div class="chat-input-bar">
-        <div class="chat-input-left">
-          <v-menu v-model="emojiMenu" offset-y>
-            <template #activator="{ props: menuProps }">
-              <v-btn v-bind="menuProps" icon variant="text" size="small">
-                <v-icon size="18">mdi-emoticon-outline</v-icon>
-              </v-btn>
-            </template>
-            <ClientOnly>
-              <div class="emoji-menu">
-                <emoji-picker
-                  class="emoji-picker"
-                  @emoji-click="onEmojiClick"
-                />
-              </div>
-            </ClientOnly>
-          </v-menu>
-        </div>
-        <v-text-field
-          v-model="draftMessage"
-          placeholder="Type here..."
-          variant="solo"
-          density="compact"
-          hide-details
-          flat
-          bg-color="#FFFFFF"
-          class="chat-input-field"
-          @keydown.enter.prevent="sendMessage"
-        />
-        <v-btn
-          icon
-          color="primary"
-          variant="flat"
-          class="chat-send-btn"
-          :loading="sending"
-          :disabled="!canSend"
-          @click="sendMessage"
+      <div v-if="pendingFiles.length" class="chat-pending-files">
+        <div
+          v-for="(file, idx) in pendingFiles"
+          :key="`${file.name}-${idx}`"
+          class="chat-pending-file"
         >
-          <v-icon size="20">mdi-send</v-icon>
-        </v-btn>
+          <template v-if="isImageFile(file)">
+            <div class="chat-pending-image">
+              <img :src="getObjectUrl(file)" :alt="file.name" />
+              <button class="chat-pending-remove" @click="removePendingFile(idx)">
+                <v-icon size="10" color="white">mdi-close</v-icon>
+              </button>
+            </div>
+          </template>
+          <template v-else>
+            <div class="chat-pending-doc">
+              <v-icon size="18" :color="fileIconColor(file)">{{ fileIcon(file) }}</v-icon>
+              <div class="chat-pending-doc-info">
+                <span class="chat-pending-doc-name">{{ file.name }}</span>
+                <span class="chat-pending-doc-size">{{ formatBytes(file.size) }}</span>
+              </div>
+              <button class="chat-pending-doc-remove" @click="removePendingFile(idx)">
+                <v-icon size="13">mdi-close</v-icon>
+              </button>
+            </div>
+          </template>
+        </div>
       </div>
+      <ChatInputBar
+        v-model="draftMessage"
+        :can-send="canSend"
+        :loading="sending"
+        :allow-attachments="true"
+        @files-selected="onFilesSelected"
+        @send="sendMessage"
+      />
     </template>
   </v-card>
 </template>
 
 <script setup>
-import { parsedDate } from "@/lib/dateFormatter";
-import CommonChatBubble from "@/components/Common/chatBubble.vue";
+import { groupChatItems } from "@/lib/chatThread";
+import { mapWhatsAppLogToChatItem } from "@/lib/chatMappers";
+import ChatThread from "@/components/Chat/Thread.vue";
+import ChatInputBar from "@/components/Chat/InputBar.vue";
 import CommonWhatsAppNotConnectedAlert from "@/components/Common/WhatsAppNotConnectedAlert.vue";
 import { useMainStore } from "@/stores/index";
 import { useCrmStore } from "@/stores/crm";
 
 const props = defineProps({
-  leadId: {
-    type: [Number, String],
-    default: null,
-  },
-  leadName: {
-    type: String,
-    default: "",
-  },
-  leadAvatar: {
-    type: String,
-    default: "",
-  },
-  orgName: {
-    type: String,
-    default: "",
-  },
-  orgLogo: {
-    type: String,
-    default: "",
-  },
-  emptyMessage: {
-    type: String,
-    default: "No WhatsApp messages logged yet.",
-  },
-  inboundSenderLabel: {
-    type: String,
-    default: "Lead",
-  },
-  outboundSenderLabel: {
-    type: String,
-    default: "Flossly",
-  },
-  connected: {
-    type: Boolean,
-    default: true,
-  },
+  leadId: { type: [Number, String], default: null },
+  leadName: { type: String, default: "" },
+  leadAvatar: { type: String, default: "" },
+  orgName: { type: String, default: "" },
+  orgLogo: { type: String, default: "" },
+  emptyMessage: { type: String, default: "No WhatsApp messages logged yet." },
+  inboundSenderLabel: { type: String, default: "Lead" },
+  outboundSenderLabel: { type: String, default: "Flossly" },
+  connected: { type: Boolean, default: true },
 });
 
 const crmStore = useCrmStore();
 const mainStore = useMainStore();
+
 const loading = ref(false);
 const logs = ref([]);
 const draftMessage = ref("");
 const sending = ref(false);
-const emojiMenu = ref(false);
 const pendingFiles = ref([]);
-const messageCursor = ref(null);
-const messageHasMore = ref(true);
-const loadingMore = ref(false);
-
-
 const resolvedOrg = ref({ name: "", logo: "" });
 const resolvedLead = ref({ name: "", avatar: "" });
-let whapiPollTimer = null;
+const scrollEl = ref(null);
+
+let whapiEventSource = null;
+let sseActive = false;
+let sseRetryDelay = 2000;
 
 const canSend = computed(() => {
   const hasText = String(draftMessage.value || "").trim().length > 0;
@@ -154,130 +105,55 @@ const chatItems = computed(() => {
   if (!Array.isArray(logs.value)) return [];
   return [...logs.value]
     .reverse()
-    .map((row) => {
-      const isOutbound = String(row?.direction || "").toLowerCase() === "outbound";
-      const content = String(row?.content || "").trim();
-      const templateName = String(row?.templateName || "").trim();
-      const type = String(row?.type || "").trim();
-      const message =
-        content ||
-        (templateName ? `Template: ${templateName}` : "") ||
-        (type ? `${type} message` : "");
-      if (!message) return null;
-      const statusRaw = String(row?.status || "").trim().toLowerCase();
-      const statusIcon = resolveStatusIcon(statusRaw);
-      const automated = String(row?.type || "").toLowerCase() === "template" || !!row?.templateName;
-      const avatarUrl = isOutbound ? resolvedOrg.value.logo : resolvedLead.value.avatar;
-      const avatarText = isOutbound
-        ? getInitials(resolvedOrg.value.name || props.outboundSenderLabel)
-        : getInitials(resolvedLead.value.name || props.inboundSenderLabel);
-      return {
-        id: row?.id || `${row?.providerMessageId || "na"}-${row?.createdAt || Date.now()}`,
-        isOutbound,
-        sender: isOutbound ? props.outboundSenderLabel : props.inboundSenderLabel,
-        message,
-        timeLabel: formatTimestamp(row?.createdAt),
-        statusIcon,
-        automated,
-        avatarUrl,
-        avatarText,
-        dayKey: buildDayKey(row?.createdAt),
-        dayLabel: buildDayLabel(row?.createdAt),
-      };
-    })
+    .map((row) => mapWhatsAppLogToChatItem(row, {
+      inboundLabel: props.inboundSenderLabel,
+      outboundLabel: props.outboundSenderLabel,
+      inboundAvatarUrl: resolvedLead.value.avatar,
+      outboundAvatarUrl: resolvedOrg.value.logo,
+    }))
     .filter(Boolean);
 });
 
-const groupedChatItems = computed(() => {
-  const groups = [];
-  const map = new Map();
-  chatItems.value.forEach((item) => {
-    const key = item.dayKey || "unknown";
-    if (!map.has(key)) {
-      const group = { key, label: item.dayLabel || "Unknown", items: [] };
-      map.set(key, group);
-      groups.push(group);
-    }
-    map.get(key).items.push(item);
-  });
-  return groups;
+const groupedChatItems = computed(() => groupChatItems(chatItems.value));
+
+// Auto-scroll to bottom whenever new messages arrive
+watch(groupedChatItems, async () => {
+  await nextTick();
+  const el = scrollEl.value;
+  if (el) el.scrollTop = el.scrollHeight;
 });
 
-const buildDayKey = (value) => {
-  const date = value ? new Date(value) : null;
-  if (!date || Number.isNaN(date.valueOf())) return "unknown";
-  return date.toISOString().slice(0, 10);
+// ── Message action handlers (optimistic local updates) ──
+const onMessageDeleted = ({ providerMessageId }) => {
+  logs.value = logs.value.filter((r) => r.providerMessageId !== providerMessageId);
 };
 
-const buildDayLabel = (value) => {
-  const date = value ? new Date(value) : null;
-  if (!date || Number.isNaN(date.valueOf())) return "Unknown";
-  const today = new Date();
-  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const startDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const diffDays = Math.round((startDate - startToday) / 86400000);
-  if (diffDays === 0) return "Today";
-  if (diffDays === -1) return "Yesterday";
-  return date.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+const onMessageEdited = ({ providerMessageId, newProviderMessageId, newText }) => {
+  const row = logs.value.find((r) => r.providerMessageId === providerMessageId);
+  if (!row) return;
+  row.content = newText;
+  if (newProviderMessageId) row.providerMessageId = newProviderMessageId;
 };
 
-const resolveStatusIcon = (raw) => {
-  if (!raw) return "";
-  if (raw.includes("read")) return "mdi-check-all";
-  if (raw.includes("delivered")) return "mdi-check-all";
-  if (raw.includes("sent")) return "mdi-check";
-  return "";
+const onMessageReacted = ({ providerMessageId, emoji }) => {
+  const row = logs.value.find((r) => r.providerMessageId === providerMessageId);
+  if (row) row.reaction = emoji;
 };
 
-const formatTimestamp = (value) => {
-  if (!value) return "N/A";
-  const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) return parsedDate(value) || "N/A";
-  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-};
-
-const loadLogs = async () => {
-  if (!props.leadId) {
-    logs.value = [];
-    return;
-  }
+const loadLogs = async (silent = false) => {
+  if (!props.leadId) { logs.value = []; return; }
   try {
-    loading.value = true;
+    if (!silent) loading.value = true;
     const res = await crmStore.getLeadWhatsAppLogs(props.leadId, 100);
-    const rows = Array.isArray(res?.data?.data)
-      ? res.data.data
-      : Array.isArray(res?.data)
-        ? res.data
-        : [];
     if (res?.code === 0) {
-      logs.value = rows;
-      messageCursor.value = res.data?.nextCursor || null;
-      messageHasMore.value = !!res.data?.nextCursor;
+      logs.value = Array.isArray(res.data) ? res.data : [];
       return;
     }
     logs.value = [];
   } catch {
     logs.value = [];
   } finally {
-    loading.value = false;
-  }
-};
-
-const loadMore = async () => {
-  if (!props.leadId || !messageHasMore.value || loadingMore.value) return;
-  try {
-    loadingMore.value = true;
-    const res = await crmStore.getLeadWhatsAppLogs(props.leadId, 100);
-    if (res?.code === 0 && Array.isArray(res.data?.data)) {
-      const older = res.data.data;
-      logs.value = [...logs.value, ...older];
-      messageCursor.value = res.data?.nextCursor || null;
-      if (!older.length || !res.data?.nextCursor) messageHasMore.value = false;
-    } else {
-      messageHasMore.value = false;
-    }
-  } finally {
-    loadingMore.value = false;
+    if (!silent) loading.value = false;
   }
 };
 
@@ -287,62 +163,85 @@ const sendMessage = async () => {
   try {
     sending.value = true;
     let attachments = [];
-    if (pendingFiles.value.length) {
-      for (const file of pendingFiles.value) {
-        const form = new FormData();
-        form.append("file", file);
-        const resUpload = await crmStore.uploadLeadAttachment(form);
-        if (resUpload?.code !== 0) {
-          const msg = resUpload?.error || resUpload?.message || "Failed to upload attachment";
-          mainStore?.setSnackbar?.({ title: msg, type: "error" });
-          sending.value = false;
-          return;
-        }
-        if (resUpload?.data) attachments.push(resUpload.data);
+    for (const file of pendingFiles.value) {
+      const form = new FormData();
+      form.append("file", file);
+      const resUpload = await crmStore.uploadLeadWhatsAppMedia(form);
+      if (resUpload?.code !== 0) {
+        mainStore?.setSnackbar?.({ title: resUpload?.error || "Failed to upload attachment", type: "error" });
+        return;
       }
+      if (resUpload?.data) attachments.push(resUpload.data);
     }
-    const res = await crmStore.sendLeadWhatsApp({
-      leadIds: [Number(props.leadId)],
-      message,
-      attachments,
-    });
+    const res = await crmStore.sendLeadWhatsApp({ leadIds: [Number(props.leadId)], message, attachments });
     if (res?.code === 0) {
       draftMessage.value = "";
       pendingFiles.value = [];
       await loadLogs();
       return;
     }
-    const msg = res?.error || res?.message || "Failed to send WhatsApp message";
-    mainStore?.setSnackbar?.({ title: msg, type: "error" });
+    mainStore?.setSnackbar?.({ title: res?.error || res?.message || "Failed to send message", type: "error" });
   } catch (e) {
-    const msg = e?.data?.message || e?.message || "Failed to send WhatsApp message";
-    mainStore?.setSnackbar?.({ title: msg, type: "error" });
+    mainStore?.setSnackbar?.({ title: e?.data?.message || e?.message || "Failed to send message", type: "error" });
   } finally {
     sending.value = false;
   }
 };
 
-const onEmojiClick = (event) => {
-  const symbol = event?.detail?.unicode || event?.detail?.emoji?.unicode || "";
-  if (!symbol) return;
-  draftMessage.value = `${draftMessage.value || ""}${symbol}`;
-  emojiMenu.value = false;
+const objectUrls = ref([]);
+
+const getObjectUrl = (file) => {
+  const existing = objectUrls.value.find((e) => e.file === file);
+  if (existing) return existing.url;
+  const url = URL.createObjectURL(file);
+  objectUrls.value.push({ file, url });
+  return url;
 };
 
-const stopWhapiPoll = () => {
-  if (!whapiPollTimer) return;
-  clearInterval(whapiPollTimer);
-  whapiPollTimer = null;
+const revokeObjectUrls = () => {
+  objectUrls.value.forEach((e) => URL.revokeObjectURL(e.url));
+  objectUrls.value = [];
 };
 
-const stopWhapiStream = () => {};
+const isImageFile = (file) => file?.type?.startsWith("image/");
 
-const startWhapiStream = () => {
-  stopWhapiPoll();
-  if (!props.connected || !props.leadId) return;
-  whapiPollTimer = setInterval(() => {
-    loadLogs();
-  }, 15000);
+const fileIcon = (file) => {
+  const type = String(file?.type || "").toLowerCase();
+  if (type.startsWith("video/")) return "mdi-file-video-outline";
+  if (type.startsWith("audio/")) return "mdi-file-music-outline";
+  if (type.includes("pdf")) return "mdi-file-pdf-box";
+  if (type.includes("word") || type.includes("document")) return "mdi-file-word-outline";
+  if (type.includes("sheet") || type.includes("excel")) return "mdi-file-excel-outline";
+  return "mdi-file-outline";
+};
+
+const fileIconColor = (file) => {
+  const type = String(file?.type || "").toLowerCase();
+  if (type.includes("pdf")) return "#e53935";
+  if (type.includes("word") || type.includes("document")) return "#1565c0";
+  if (type.includes("sheet") || type.includes("excel")) return "#2e7d32";
+  return "#546e7a";
+};
+
+const formatBytes = (bytes) => {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
+};
+
+const onFilesSelected = (files) => {
+  pendingFiles.value = [...pendingFiles.value, ...files];
+};
+
+const removePendingFile = (idx) => {
+  const removed = pendingFiles.value[idx];
+  if (removed) {
+    const entry = objectUrls.value.find((e) => e.file === removed);
+    if (entry) URL.revokeObjectURL(entry.url);
+    objectUrls.value = objectUrls.value.filter((e) => e.file !== removed);
+  }
+  pendingFiles.value = pendingFiles.value.filter((_, i) => i !== idx);
 };
 
 const resolveContext = () => {
@@ -351,8 +250,7 @@ const resolveContext = () => {
     try {
       const user = JSON.parse(stored);
       const orgId = user?.currentLoggedInOrgId;
-      const list = user?.userOrganisations || [];
-      const match = list.find((row) => row.organisationId === orgId);
+      const match = (user?.userOrganisations || []).find((r) => r.organisationId === orgId);
       resolvedOrg.value = {
         name: props.orgName || match?.organisation?.name || "",
         logo: props.orgLogo || match?.organisation?.logo || "",
@@ -363,24 +261,55 @@ const resolveContext = () => {
   } else {
     resolvedOrg.value = { name: props.orgName || "", logo: props.orgLogo || "" };
   }
-  resolvedLead.value = {
-    name: props.leadName || "",
-    avatar: props.leadAvatar || "",
+  resolvedLead.value = { name: props.leadName || "", avatar: props.leadAvatar || "" };
+};
+
+const stopWhapiStream = () => {
+  sseActive = false;
+  sseRetryDelay = 2000;
+  if (whapiEventSource) { whapiEventSource.close(); whapiEventSource = null; }
+};
+
+const startWhapiStream = () => {
+  stopWhapiStream();
+  if (!props.connected || !props.leadId) return;
+  if (typeof window === "undefined" || !("EventSource" in window)) return;
+  sseActive = true;
+
+  const connect = () => {
+    if (!sseActive) return;
+    whapiEventSource = new EventSource("/api/whapi/stream");
+
+    whapiEventSource.addEventListener("message", (evt) => {
+      sseRetryDelay = 2000;
+      try {
+        const payload = JSON.parse(evt.data || "{}");
+        if (String(payload.leadId) === String(props.leadId) && !loading.value) {
+          loadLogs(true);
+        }
+      } catch {}
+    });
+
+    whapiEventSource.onerror = () => {
+      whapiEventSource?.close();
+      whapiEventSource = null;
+      if (!sseActive) return;
+      setTimeout(() => {
+        sseRetryDelay = Math.min(sseRetryDelay * 2, 30000);
+        connect();
+      }, sseRetryDelay);
+    };
   };
+
+  connect();
 };
 
 watch(
   () => [props.leadId, props.leadName, props.leadAvatar, props.orgName, props.orgLogo, props.connected],
   () => {
     resolveContext();
-    messageCursor.value = null;
-    messageHasMore.value = true;
     stopWhapiStream();
-    stopWhapiPoll();
-    if (!props.connected) {
-      logs.value = [];
-      return;
-    }
+    if (!props.connected) { logs.value = []; return; }
     loadLogs();
     startWhapiStream();
   },
@@ -388,8 +317,8 @@ watch(
 );
 
 onBeforeUnmount(() => {
-  stopWhapiPoll();
   stopWhapiStream();
+  revokeObjectUrls();
 });
 </script>
 
@@ -399,65 +328,104 @@ onBeforeUnmount(() => {
 }
 
 .chat-timeline-body {
-  background: #f7f8fb;
+  background: #efeae2;
+  padding: 0 !important;
 }
 
-.chat-timeline-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.chat-timeline-scroll {
   max-height: 420px;
   overflow-y: auto;
-  padding-right: 8px;
+  padding: 12px 16px;
 }
 
-.chat-day-pill {
-  align-self: center;
-  background: #eef2f7;
-  color: #64748b;
-  font-size: 12px;
-  padding: 6px 14px;
-  border-radius: 999px;
-  margin: 6px 0 2px;
+.chat-pending-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #f0f2f5;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-.chat-input-bar {
+.chat-pending-file { flex: 0 0 auto; }
+
+.chat-pending-image {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #e2e8f0;
+}
+
+.chat-pending-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.chat-pending-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: #ffffff;
+  justify-content: center;
+  padding: 0;
 }
 
-.chat-input-left {
-  display: flex;
+.chat-pending-remove:hover { background: rgba(0, 0, 0, 0.85); }
+
+.chat-pending-doc {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 6px 8px;
+  max-width: 200px;
 }
 
-.chat-input-field {
+.chat-pending-doc-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   flex: 1;
 }
 
-.chat-send-btn {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-}
-
-.emoji-menu {
-  background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 12px;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+.chat-pending-doc-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: #1e293b;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.emoji-picker {
-  --emoji-picker-height: 320px;
-  --emoji-picker-width: 300px;
-  --emoji-size: 20px;
-  --emoji-padding: 0.4rem;
-  --num-columns: 8;
+.chat-pending-doc-size {
+  font-size: 10px;
+  color: #94a3b8;
 }
+
+.chat-pending-doc-remove {
+  flex: 0 0 auto;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  color: #94a3b8;
+}
+
+.chat-pending-doc-remove:hover { color: #ef4444; }
 </style>

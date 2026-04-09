@@ -232,27 +232,6 @@ export default {
         .catch((err) => reject(err));
     });
   },
-  completeWhatsAppEmbedded(payload) {
-    return new Promise((resolve, reject) => {
-      Post("/meta/whatsappEmbedded", payload)
-        .then((res) => resolve(res))
-        .catch((err) => reject(err));
-    });
-  },
-  getWhatsAppConfig() {
-    return new Promise((resolve, reject) => {
-      Get("/meta/whatsappConfig")
-        .then((res) => resolve(res))
-        .catch((err) => reject(err));
-    });
-  },
-  saveWhatsAppConfig(payload) {
-    return new Promise((resolve, reject) => {
-      Post("/meta/whatsappConfig", payload)
-        .then((res) => resolve(res))
-        .catch((err) => reject(err));
-    });
-  },
   startWhapiConnect(payload = {}) {
     return new Promise((resolve, reject) => {
       Post("/whapi/connect", payload)
@@ -298,13 +277,6 @@ export default {
   extendWhapiChannel(payload = {}) {
     return new Promise((resolve, reject) => {
       Post("/whapi/extend", payload)
-        .then((res) => resolve(res))
-        .catch((err) => reject(err));
-    });
-  },
-  getWhatsAppTemplates() {
-    return new Promise((resolve, reject) => {
-      Get("/meta/whatsappTemplates")
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -583,6 +555,34 @@ export default {
   uploadLeadAttachment(formData) {
     return new Promise((resolve, reject) => {
       PostFormData('/lead/uploadAttachment', formData)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  uploadLeadWhatsAppMedia(formData) {
+    return new Promise((resolve, reject) => {
+      PostFormData('/lead/whatsappUploadMedia', formData)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  editWhatsAppMessage(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/whapi/editMessage', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteWhatsAppMessage(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/whapi/deleteMessage', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  reactWhatsAppMessage(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/whapi/reactToMessage', payload)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });

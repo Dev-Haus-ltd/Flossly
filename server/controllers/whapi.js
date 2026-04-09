@@ -1,6 +1,7 @@
 import { Op } from "sequelize";
 import {
   CrmLead,
+  CrmWhatsAppMessageLog,
   WhapiChannelConfig,
   UserOrganisation,
   Organisation,
@@ -98,17 +99,96 @@ const collectMessages = (body) => {
 
 const getMessageContent = (msg) => {
   if (!msg || typeof msg !== "object") return "";
-  const direct =
-    msg?.text ||
-    msg?.body ||
-    msg?.message ||
-    msg?.caption ||
-    msg?.data?.text ||
-    "";
-  if (typeof direct === "string") return direct;
-  if (typeof msg?.text?.body === "string") return msg.text.body;
-  if (typeof msg?.message?.body === "string") return msg.message.body;
-  if (typeof msg?.content === "string") return msg.content;
+  const type = String(msg?.type || "").toLowerCase();
+
+  // Plain text / caption
+  const textBody = msg?.text?.body || msg?.text || msg?.body || msg?.caption || msg?.data?.text || msg?.message?.body || msg?.message || msg?.content || "";
+  if (typeof textBody === "string" && textBody) return textBody;
+
+  // Action (reaction, vote, label change, etc.)
+  if (type === "action" || msg?.action) {
+    const action = msg?.action || {};
+    const actionType = String(action?.type || "").toLowerCase();
+    if (actionType === "reaction" && action?.emoji) return `Reacted ${action.emoji}`;
+    if (actionType === "vote") return "Voted on a poll";
+    if (actionType === "label_change") return "Changed a label";
+    if (actionType === "media_notify") return "Shared media";
+    if (actionType) return `${actionType}`;
+    return "";
+  }
+
+  // Location
+  if (type === "location" && msg?.location) {
+    const loc = msg.location;
+    const caption = loc?.caption || loc?.name || "";
+    const coords = (loc?.latitude && loc?.longitude) ? `${loc.latitude}, ${loc.longitude}` : "";
+    return caption || (coords ? `📍 ${coords}` : "📍 Location");
+  }
+  if (type === "live_location" && msg?.live_location) {
+    return msg.live_location?.caption || "📍 Live Location";
+  }
+
+  // Contact
+  if (type === "contact" && msg?.contact) {
+    return msg.contact?.name || "👤 Contact";
+  }
+  if (type === "contact_list" && msg?.contact_list) {
+    const names = (msg.contact_list?.list || []).map((c) => c?.name).filter(Boolean);
+    return names.length ? `👤 ${names.join(", ")}` : "👤 Contacts";
+  }
+
+  // Poll
+  if (type === "poll" && msg?.poll) {
+    return msg.poll?.title ? `📊 ${msg.poll.title}` : "📊 Poll";
+  }
+
+  // Revoked / deleted
+  if (type === "revoked") return "🚫 This message was deleted";
+
+  // System / encryption notices
+  if (type === "e2e_notification") return "🔒 Messages are end-to-end encrypted";
+  if (type === "system") return msg?.body || msg?.text || "System message";
+
+  // Link preview
+  if (type === "link_preview" && msg?.link_preview) {
+    return msg.link_preview?.body || msg.link_preview?.url || "🔗 Link";
+  }
+
+  // Group invite
+  if (type === "group_invite" && msg?.group_invite) {
+    return msg.group_invite?.title ? `👥 Group invite: ${msg.group_invite.title}` : "👥 Group invite";
+  }
+
+  // Product / Catalog / Order
+  if (type === "product") return "🛍️ Product";
+  if (type === "catalog" && msg?.catalog) {
+    return msg.catalog?.title ? `📦 ${msg.catalog.title}` : "📦 Catalog";
+  }
+  if (type === "order" && msg?.order) {
+    return msg.order?.title ? `🧾 Order: ${msg.order.title}` : "🧾 Order";
+  }
+
+  // Reply (button/list response)
+  if (type === "reply" && msg?.reply) {
+    return msg.reply?.buttons_reply?.title || msg.reply?.list_reply?.title || "↩️ Reply";
+  }
+
+  // Carousel
+  if (type === "carousel" && msg?.carousel) {
+    return msg.carousel?.text || "🎠 Carousel";
+  }
+
+  // Album
+  if (type === "album") return "🖼️ Album";
+
+  // Admin / newsletter invite
+  if (type === "admin_invite" && msg?.admin_invite) {
+    return msg.admin_invite?.newsletter_name ? `📢 ${msg.admin_invite.newsletter_name}` : "📢 Newsletter invite";
+  }
+
+  // HSM (template)
+  if (type === "hsm") return "📋 Template message";
+
   return "";
 };
 
@@ -148,19 +228,49 @@ const downloadWhapiMediaToS3 = async ({ url, token, mimeType, filename }) => {
   return s3Path;
 };
 
-const extractWhapiAttachments = async ({ msg, token }) => {
-  const candidates = [
-    msg?.media,
-    msg?.image,
-    msg?.video,
-    msg?.audio,
-    msg?.document,
-    msg?.file,
-    msg?.attachment,
-  ].filter(Boolean);
+const fetchWhapiMediaById = async ({ mediaId, token }) => {
+  if (!mediaId || !token) return null;
+  const env = getWhapiEnvConfig();
+  const base = String(env.baseUrl || "").replace(/\/+$/, "");
+  try {
+    const data = await $fetch(`${base}/media/${encodeURIComponent(String(mediaId))}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      responseType: "arrayBuffer",
+    });
+    return data ? Buffer.from(data) : null;
+  } catch {
+    return null;
+  }
+};
 
-  for (const item of candidates) {
-    const url =
+const extractWhapiAttachments = async ({ msg, token }) => {
+  const mediaKeyMap = [
+    { key: "image", defaultType: "image" },
+    { key: "video", defaultType: "video" },
+    { key: "audio", defaultType: "audio" },
+    { key: "voice", defaultType: "audio" },
+    { key: "document", defaultType: "document" },
+    { key: "media", defaultType: null },
+    { key: "file", defaultType: "document" },
+    { key: "attachment", defaultType: "document" },
+  ];
+
+  for (const { key, defaultType } of mediaKeyMap) {
+    const item = msg?.[key];
+    if (!item || typeof item !== "object") continue;
+
+    const mimeType = item?.mime_type || item?.mimeType || item?.mimetype || null;
+    const name = item?.filename || item?.file_name || item?.name || null;
+    const type =
+      defaultType ||
+      item?.type ||
+      (mimeType?.startsWith("image/") ? "image" :
+        mimeType?.startsWith("video/") ? "video" :
+          mimeType?.startsWith("audio/") ? "audio" : "document");
+
+    // Prefer direct link (Auto Download enabled)
+    const directUrl =
       item?.link ||
       item?.url ||
       item?.file ||
@@ -168,18 +278,28 @@ const extractWhapiAttachments = async ({ msg, token }) => {
       item?.media_url ||
       item?.payload?.url ||
       null;
-    const mimeType = item?.mime_type || item?.mimeType || item?.mimetype || null;
-    const name = item?.filename || item?.file_name || item?.name || null;
-    const type =
-      item?.type ||
-      (mimeType?.startsWith("image/") ? "image" :
-        mimeType?.startsWith("video/") ? "video" :
-          mimeType?.startsWith("audio/") ? "audio" : "document");
 
-    if (!url) continue;
-    const s3Url = await downloadWhapiMediaToS3({ url, token, mimeType, filename: name });
-    if (!s3Url) continue;
-    return [{ url: s3Url, type, mimeType: mimeType || null, name: name || null }];
+    if (directUrl) {
+      const s3Url = await downloadWhapiMediaToS3({ url: directUrl, token, mimeType, filename: name });
+      if (s3Url) return [{ url: s3Url, type, mimeType: mimeType || null, name: name || null }];
+      continue;
+    }
+
+    // Fallback: fetch by media ID (Auto Download disabled)
+    const mediaId = item?.id || null;
+    if (mediaId && token) {
+      const buf = await fetchWhapiMediaById({ mediaId, token });
+      if (buf) {
+        const filename = buildAttachmentFilename({ originalName: name, mimeType });
+        const s3Url = await uploadBufferFile({
+          data: buf,
+          filename,
+          contentType: mimeType || undefined,
+          baseDir: "chat-attachments",
+        });
+        if (s3Url) return [{ url: s3Url, type, mimeType: mimeType || null, name: name || null }];
+      }
+    }
   }
 
   return null;
@@ -397,6 +517,7 @@ const updateWebhook = async (token, webhookUrl) => {
         mode: "body",
         events: [
           { type: "messages", method: "post" },
+          { type: "messages", method: "patch" },
           { type: "statuses", method: "post" },
           { type: "users", method: "post" },
           { type: "channel", method: "post" },
@@ -901,6 +1022,30 @@ export const webhook = async (event) => {
         }
       }
     }
+    // ── Handle message edits (messages_updates, event.event === "patch") ──
+    // Whapi sends edits in a separate messages_updates array, not in messages.
+    // Structure: { id, after_update: { text: { body: "new text" } }, trigger: { type: "edit" } }
+    if (Array.isArray(body?.messages_updates)) {
+      for (const update of body.messages_updates) {
+        if (String(update?.trigger?.type || "").toLowerCase() !== "edit") continue;
+        const msgId = update?.id || update?.after_update?.id;
+        const newText = update?.after_update?.text?.body || update?.after_update?.caption || "";
+        if (!msgId || !newText) continue;
+
+        // Find the org for this update via channel_id
+        if (!channelRows.length) continue;
+        for (const cfg of channelRows) {
+          const logRow = await CrmWhatsAppMessageLog.findOne({
+            where: { providerMessageId: String(msgId), organisationId: cfg.organisationId },
+            attributes: ["id", "leadId"],
+          });
+          if (!logRow) continue;
+          await logRow.update({ content: newText });
+          broadcastWhapiEvent("message", { orgId: cfg.organisationId, leadId: logRow.leadId });
+        }
+      }
+    }
+
     const messages = collectMessages(body);
 
     for (const msg of messages) {
@@ -940,15 +1085,64 @@ export const webhook = async (event) => {
         }
       }
       if (!lead || !orgId) continue;
-      const content = getMessageContent(msg);
       const msgType =
         msg?.type ||
         msg?.message_type ||
         msg?.messageType ||
         (msg?.text ? "text" : null) ||
         "text";
+      const normalizedMsgType = String(msgType).toLowerCase();
+
+      // ── Revoked message: update existing row, never create a new inbound ghost ──
+      if (normalizedMsgType === "revoked") {
+        const revokedId = msg?.id || msg?.message_id || msg?.messageId;
+        if (revokedId) {
+          await CrmWhatsAppMessageLog.update(
+            { type: "revoked", content: "🚫 This message was deleted" },
+            { where: { providerMessageId: revokedId, organisationId: orgId } }
+          );
+        }
+        broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+        continue;
+      }
+
+      // ── Reaction action: update the target message row's reaction field ──
+      if (
+        normalizedMsgType === "action" &&
+        String(msg?.action?.type || "").toLowerCase() === "reaction"
+      ) {
+        const targetId = msg?.action?.message_id || msg?.action?.messageId || msg?.action?.id;
+        const emoji = msg?.action?.emoji;
+        if (targetId) {
+          await CrmWhatsAppMessageLog.update(
+            { reaction: emoji || null },
+            { where: { providerMessageId: targetId, organisationId: orgId } }
+          );
+        }
+        broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+        continue;
+      }
+
       const token = channelRows?.[0]?.tokenEnc ? decrypt(channelRows[0].tokenEnc) : null;
       const attachments = await extractWhapiAttachments({ msg, token });
+      const providerId = msg?.id || msg?.message_id || msg?.messageId || null;
+      const content = getMessageContent(msg);
+
+      // ── Same-ID update: update existing row instead of creating a duplicate ──
+      if (providerId) {
+        const existing = await CrmWhatsAppMessageLog.findOne({
+          where: { providerMessageId: providerId, organisationId: orgId },
+        });
+        if (existing) {
+          await existing.update({
+            content,
+            ...(attachments ? { attachments } : {}),
+          });
+          broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+          continue;
+        }
+      }
+
       await updateLeadWhatsAppMeta(lead, {
         lastInboundAt: new Date(extractTimestamp(msg?.timestamp || msg?.time || msg?.sent)).toISOString(),
         lastInboundFrom: fromDigits,
@@ -961,7 +1155,7 @@ export const webhook = async (event) => {
         direction: "inbound",
         type: String((attachments?.[0]?.type || msgType) || "text"),
         status: "received",
-        providerMessageId: msg?.id || msg?.message_id || msg?.messageId || null,
+        providerMessageId: providerId,
         content,
         attachments,
       });
@@ -976,7 +1170,7 @@ export const webhook = async (event) => {
         const userIds = orgUsers.map((u) => u.userId).filter(Boolean);
         if (userIds.length) {
           const senderLabel = lead.name || lead.telephone || fromDigits;
-          const preview = String(content?.text || content?.caption || "[Media]").slice(0, 80);
+          const preview = (content ? String(content).slice(0, 80) : null) || (attachments?.length ? "📎 Media" : "New message");
           await sendNotificationToMultipleUsers({
             userIds,
             organisationId: orgId,
@@ -988,7 +1182,7 @@ export const webhook = async (event) => {
             data: {
               leadId: String(lead.id),
               leadName: String(senderLabel),
-              url: `/crm/leads?leadId=${lead.id}&tab=communication`,
+              url: `/crm/leads?leadId=${lead.id}&tab=whatsapp`,
             },
             priority: "high",
           });
@@ -1000,6 +1194,121 @@ export const webhook = async (event) => {
   }
 
   return success("ok");
+};
+
+// ── Resolve org channel token (shared helper for message actions) ──
+const resolveOrgWhapiToken = async (orgId) => {
+  const channel = await findOrgChannel(orgId);
+  if (!channel?.tokenEnc) return null;
+  try {
+    return decrypt(channel.tokenEnc);
+  } catch {
+    return channel.tokenEnc;
+  }
+};
+
+// ── Edit a sent message (text only, within 15 min) ──
+export const editMessage = async (event) => {
+  const { orgId } = event.context.user || {};
+  if (!orgId) return error(401, "Unauthenticated");
+
+  const body = await readBody(event);
+  const { providerMessageId, newText, to } = body || {};
+  if (!providerMessageId || !newText || !to) {
+    return error(400, "providerMessageId, newText, and to are required");
+  }
+
+  // Server-side 15-minute edit window check
+  const EDIT_WINDOW_MS = 15 * 60 * 1000;
+  const logRow = await CrmWhatsAppMessageLog.findOne({
+    where: { providerMessageId, organisationId: orgId },
+    attributes: ["createdAt"],
+  });
+  if (logRow) {
+    const age = Date.now() - new Date(logRow.createdAt).getTime();
+    if (age > EDIT_WINDOW_MS) {
+      return error(400, "Message can no longer be edited (15-minute window has passed)");
+    }
+  }
+
+  const token = await resolveOrgWhapiToken(orgId);
+  if (!token) return error(400, "Whapi not configured for this organisation");
+
+  const env = getWhapiEnvConfig();
+  const base = String(env.baseUrl || "").replace(/\/+$/, "");
+
+  try {
+    const resp = await $fetch(`${base}/messages/text`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: { to, body: newText, edit: providerMessageId },
+    });
+    return success({ messageId: resp?.message?.id || resp?.id || null });
+  } catch (err) {
+    return error(500, err?.message || "Failed to edit message");
+  }
+};
+
+// ── Delete / revoke a sent message ──
+export const deleteMessage = async (event) => {
+  const { orgId } = event.context.user || {};
+  if (!orgId) return error(401, "Unauthenticated");
+
+  const body = await readBody(event);
+  const { providerMessageId } = body || {};
+  if (!providerMessageId) return error(400, "providerMessageId is required");
+
+  const token = await resolveOrgWhapiToken(orgId);
+  if (!token) return error(400, "Whapi not configured for this organisation");
+
+  const env = getWhapiEnvConfig();
+  const base = String(env.baseUrl || "").replace(/\/+$/, "");
+
+  try {
+    await $fetch(`${base}/messages/${encodeURIComponent(String(providerMessageId))}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return success({ deleted: true });
+  } catch (err) {
+    return error(500, err?.message || "Failed to delete message");
+  }
+};
+
+// ── React to a message with an emoji ──
+export const reactToMessage = async (event) => {
+  const { orgId } = event.context.user || {};
+  if (!orgId) return error(401, "Unauthenticated");
+
+  const body = await readBody(event);
+  const { providerMessageId, emoji } = body || {};
+  // emoji may be "" to remove a reaction — only providerMessageId is strictly required
+  if (!providerMessageId) return error(400, "providerMessageId is required");
+
+  const token = await resolveOrgWhapiToken(orgId);
+  if (!token) return error(400, "Whapi not configured for this organisation");
+
+  const env = getWhapiEnvConfig();
+  const base = String(env.baseUrl || "").replace(/\/+$/, "");
+
+  try {
+    await $fetch(`${base}/messages/${encodeURIComponent(String(providerMessageId))}/reaction`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: { emoji: emoji || "" },
+    });
+
+    // Write to DB directly so the reaction is visible on next open without
+    // waiting for the Whapi webhook to echo back
+    await CrmWhatsAppMessageLog.update(
+      { reaction: emoji || null },
+      { where: { providerMessageId, organisationId: orgId } }
+    );
+
+    return success({ reacted: true });
+  } catch (err) {
+    return error(500, err?.message || "Failed to react to message");
+  }
 };
 
 export const stream = async (event) => {

@@ -416,32 +416,6 @@
         </v-card>
       </v-dialog>
 
-      <!-- <!-- WhatsApp connect dialog (temporarily hidden until complete) -->
-      <v-dialog v-model="whatsAppDialog" max-width="640">
-        <v-card class="pa-4">
-          <v-card-title class="text-subtitle-1 pa-0 mb-2 d-flex justify-space-between align-center">
-            <span>WhatsApp Connection</span>
-            <v-chip v-if="isWhatsAppConnected" color="success" size="small" label>Connected</v-chip>
-          </v-card-title>
-          <v-card-text class="pa-0">
-            <v-alert
-              v-if="whatsAppStatus.phoneNumberId"
-              type="info"
-              variant="tonal"
-              class="mb-3"
-            >
-              Connected phone: {{ whatsAppStatus.displayPhoneNumber || whatsAppStatus.phoneNumberId }}
-              <span v-if="whatsAppStatus.verifiedName"> ({{ whatsAppStatus.verifiedName }})</span>
-            </v-alert>
-            <p class="text-caption mb-0">Use the button above to connect via Meta embedded signup.</p>
-          </v-card-text>
-          <v-card-actions class="pa-0 mt-4">
-            <v-spacer />
-            <v-btn variant="text" @click="whatsAppDialog = false">Close</v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
-      
     </div>
   </v-sheet>
 </template>
@@ -485,14 +459,6 @@ const businessPortfolios = ref([]);
 const selectedBusinessId = ref(null);
 const selectedPageIds = ref([]);
 const businessPageSearch = ref('');
-const whatsAppDialog = ref(false);
-const whatsAppSaving = ref(false);
-const isWhatsAppConnected = ref(false);
-const whatsappProvider = reactive({
-  provider: 'meta',
-  supportsTemplates: true,
-  requiresTemplateOutside24h: true,
-});
 const whapiDialog = ref(false);
 const whapiMenu = ref(false);
 const confirmWhapiDisconnect = ref(false);
@@ -513,9 +479,7 @@ const whapiActivationPending = ref(false);
 const whapiActivationMessage = ref('');
 const whapiCooldown = ref(0);
 let whapiCooldownTimer = null;
-const isAnyWhatsAppConnected = computed(() =>
-  whatsappProvider.provider === 'whapi' ? whapiStatus.connected : isWhatsAppConnected.value
-);
+const isAnyWhatsAppConnected = computed(() => whapiStatus.connected);
 const whapiStatusLabel = computed(() => {
   const raw = String(whapiStatus.status || '').trim().toLowerCase();
   const hasPhone = !!(whapiStatus.phoneNumber || whapiStatus.displayName);
@@ -707,44 +671,6 @@ const onLeadsFilterUpdate = async (filters) => {
   await fetchLeads(activeFilters.value)
 };
 
-const loadWhatsAppConfig = async () => {
-  try {
-    const res = await crmStore.getWhatsAppConfig();
-    if (res?.code === 0 && res.data) {
-      const data = res.data;
-      whatsappProvider.provider = data.provider || 'meta';
-      whatsappProvider.supportsTemplates = data.supportsTemplates !== false;
-      whatsappProvider.requiresTemplateOutside24h = data.requiresTemplateOutside24h !== false;
-
-      if (whatsappProvider.provider === 'whapi') {
-        whapiStatus.connected = !!data.hasToken;
-        whapiStatus.channelId = data.channelId || '';
-      } else {
-        whatsAppStatus.phoneNumberId = data.phoneNumberId || '';
-        whatsAppStatus.wabaId = data.wabaId || '';
-        whatsAppStatus.displayPhoneNumber = data.displayPhoneNumber || '';
-        whatsAppStatus.verifiedName = data.verifiedName || '';
-        isWhatsAppConnected.value = !!data.hasToken;
-      }
-    } else {
-      whatsappProvider.provider = 'meta';
-      whatsAppStatus.phoneNumberId = '';
-      whatsAppStatus.wabaId = '';
-      whatsAppStatus.displayPhoneNumber = '';
-      whatsAppStatus.verifiedName = '';
-      isWhatsAppConnected.value = false;
-      whapiStatus.connected = false;
-    }
-  } catch (e) {
-    whatsappProvider.provider = 'meta';
-    whatsAppStatus.phoneNumberId = '';
-    whatsAppStatus.wabaId = '';
-    whatsAppStatus.displayPhoneNumber = '';
-    whatsAppStatus.verifiedName = '';
-    isWhatsAppConnected.value = false;
-    whapiStatus.connected = false;
-  }
-};
 
 const loadWhapiStatus = async () => {
   try {
@@ -938,77 +864,6 @@ const loadFacebookSdk = () => {
   })
 }
 
-const connectWhatsAppEmbedded = async () => {
-  const config = useRuntimeConfig()
-  const appId = config.public?.META_APP_ID || config.public?.META_APPID || ''
-  const configId = 913675551081181
-
-  if (!appId || !configId) {
-    mainStore?.setSnackbar?.({ title: 'Meta app config is missing', type: 'error' })
-    return
-  }
-
-  try {
-    whatsAppSaving.value = true
-    const fb = await loadFacebookSdk()
-    fb.init({ appId, xfbml: false, version: 'v24.0' })
-
-    let pending = { wabaId: null, phoneNumberId: null, displayPhoneNumber: null, verifiedName: null }
-    const onMessage = (event) => {
-      if (!event?.origin?.includes('facebook.com')) return
-      const data = event.data || {}
-      if (data?.type !== 'WA_EMBEDDED_SIGNUP') return
-      if (data?.event === 'FINISH' || data?.event === 'FINISH_ONLY_WABA') {
-        pending = {
-          wabaId: data?.waba_id || data?.wabaId || pending.wabaId,
-          phoneNumberId: data?.phone_number_id || data?.phoneNumberId || pending.phoneNumberId,
-          displayPhoneNumber: data?.display_phone_number || data?.displayPhoneNumber || pending.displayPhoneNumber,
-          verifiedName: data?.verified_name || data?.verifiedName || pending.verifiedName,
-        }
-      }
-    }
-    window.addEventListener('message', onMessage)
-
-    const handleLogin = async (response) => {
-      window.removeEventListener('message', onMessage)
-      if (!response?.authResponse) {
-        mainStore?.setSnackbar?.({ title: 'Meta login cancelled', type: 'error' })
-        return
-      }
-      const accessToken = response.authResponse.accessToken || null
-      const code = response.authResponse.code || null
-      const payload = {
-        accessToken,
-        code,
-        wabaId: pending.wabaId,
-        phoneNumberId: pending.phoneNumberId,
-        displayPhoneNumber: pending.displayPhoneNumber,
-        verifiedName: pending.verifiedName,
-      }
-      const res = await crmStore.completeWhatsAppEmbedded(payload)
-      if (res?.code === 0) {
-        await loadWhatsAppConfig()
-        await loadWhatsAppUsage()
-        mainStore?.setSnackbar?.({ title: 'WhatsApp connected', type: 'success' })
-      } else {
-        const msg = res?.error || res?.message || 'Failed to connect WhatsApp'
-        mainStore?.setSnackbar?.({ title: msg, type: 'error' })
-      }
-    }
-
-    fb.login((response) => { handleLogin(response) }, {
-      config_id: configId,
-      response_type: 'code',
-      override_default_response_type: true,
-      scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management',
-    })
-  } catch (e) {
-    const msg = e?.message || 'Failed to connect WhatsApp'
-    mainStore?.setSnackbar?.({ title: msg, type: 'error' })
-  } finally {
-    whatsAppSaving.value = false
-  }
-}
 
 const normalizeMetaMessage = (message) => {
   if (!message) return '';
@@ -1190,7 +1045,6 @@ onMounted(() => {
   const metaError = route.query.error;
   initLeads(metaConnected);
   checkConnection();
-  loadWhatsAppConfig();
   loadWhatsAppUsage();
   loadWhapiStatus();
   initOptions();
