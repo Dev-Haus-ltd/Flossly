@@ -182,15 +182,21 @@
           :patient-name="patientName"
           :practice-name="practiceName"
           :practitioner-name="activePractitionerName"
+          :practitioners="planPractitioners"
           :base-items="baseChartItems"
           :sections="planSections"
+          :organisation-email="organisationEmail"
+          :organisation-branding="organisationPdfBranding"
+          :diagnosis-chart="diagnosisSnapshotChart"
+          :treatment-chart="treatmentSnapshotChart"
+          :tooth-statuses="store.toothStatuses"
+          :teeth-type="store.teethType"
         />
         <PlanSectionsPanel
           v-model:sections="planSections"
           :base-items="baseChartItems"
           :items="store.treatmentItems"
           :notation="store.notation"
-          :practitioners="store.practitioners"
         />
       </div>
 
@@ -204,8 +210,15 @@
           :patient-name="patientName"
           :practice-name="practiceName"
           :practitioner-name="activePractitionerName"
+          :practitioners="planPractitioners"
           :base-items="baseChartItems"
           :sections="planSections"
+          :organisation-email="organisationEmail"
+          :organisation-branding="organisationPdfBranding"
+          :diagnosis-chart="diagnosisSnapshotChart"
+          :treatment-chart="treatmentSnapshotChart"
+          :tooth-statuses="store.toothStatuses"
+          :teeth-type="store.teethType"
           :show-actions="true"
           :whatsapp-enabled="whatsAppAvailable"
           @share-email="onSharePlanByChannel('email')"
@@ -350,6 +363,26 @@ const planSections = reactive({
   consentForm: false,
   testimonial: false,
 })
+const organisationPdfBranding = computed(() => {
+  const org = orgStore?.organisation || {}
+  const ap = org.automationPlaceholders || {}
+  return {
+    coverImageUrl: ap.coverImageUrl || '',
+    clinicImageUrl: ap.clinicImageUrl || '',
+    dentistImageUrl: ap.dentistImageUrl || '',
+    coverSubtitle: ap.coverSubtitle || '',
+    website: ap.website || ap.bookingLink || '',
+    clinicAbout: ap.clinicAbout || org.description || '',
+  }
+})
+const organisationEmail = computed(() =>
+  String(
+    orgStore?.organisation?.email
+      || orgStore?.organisation?.contactEmail
+      || orgStore?.organisation?.automationPlaceholders?.email
+      || ''
+  ).trim()
+)
 
 // Base chart items (status=existing) — shown in DiagnosePanel findings
 const baseChartItems = computed(() =>
@@ -359,6 +392,20 @@ const baseChartItems = computed(() =>
 const plannedItems = computed(() =>
   (store.treatmentItems || []).filter(i => String(i.status || '').toLowerCase() !== 'existing')
 )
+const planPractitioners = computed(() => {
+  const map = new Map()
+  ;(store.treatmentItems || []).forEach((item) => {
+    const idKey = item.practitionerId ? `id:${item.practitionerId}` : ''
+    const nameKey = String(item.practitionerName || item.clinicianName || '').trim().toLowerCase()
+    const key = idKey || (nameKey ? `name:${nameKey}` : '')
+    if (!key || map.has(key)) return
+    map.set(key, {
+      id: item.practitionerId || null,
+      name: String(item.practitionerName || item.clinicianName || '').trim(),
+    })
+  })
+  return [...map.values()].filter((p) => p.name)
+})
 
 const patientEmail = computed(() => String(props.patient?.email || '').trim())
 const patientPhone = computed(() => String(props.patient?.preferredPhone || props.patient?.mobile || '').trim())
@@ -373,10 +420,8 @@ const diagnosisConditions = computed(() =>
   }))
 )
 
-// Display chart filtered by scope
-const displayChart = computed(() => {
+function buildChartByScope(scope = 'both') {
   const raw = store.chart
-  const scope = currentStep.value === 1 ? 'base' : store.chartScope
   if (scope === 'both') return raw
 
   const activePlanId = store.activePlanId || DEFAULT_PLAN_ID
@@ -391,14 +436,29 @@ const displayChart = computed(() => {
   Object.entries(raw).forEach(([fdiStr, tooth]) => {
     const fdi = Number(fdiStr)
     const t = { ...tooth }
-    if (t.toothConditionStatus && t.toothConditionStatus !== 'existing') {
-      const keep = scope === 'plan' && activePlanKeys.has(`${fdi}::${t.toothCondition || ''}`)
+    if (scope === 'plan') {
+      const keepPlannedToothCondition = !!(t.toothCondition && activePlanKeys.has(`${fdi}::${t.toothCondition || ''}`))
+      if (!keepPlannedToothCondition) {
+        t.toothCondition = null
+        t.toothConditionStatus = null
+      }
+      // Hide baseline status overlays in treatment scope so only selected plan treatment is shown.
+      t.unerupted = false
+      t.partiallyErupted = false
+      t.retainedRoot = false
+      t.missing = keepPlannedToothCondition && (t.toothCondition === 'missing' || t.toothCondition === 'extraction-planned')
+      t.implant = keepPlannedToothCondition && t.toothCondition === 'implant'
+    } else if (t.toothConditionStatus && t.toothConditionStatus !== 'existing') {
+      const keep = activePlanKeys.has(`${fdi}::${t.toothCondition || ''}`)
       if (!keep) { t.toothCondition = null; t.toothConditionStatus = null }
     }
     if (tooth.surfaces) {
       const ns = {}
       Object.entries(tooth.surfaces).forEach(([s, sv]) => {
-        if (!sv.status || sv.status === 'existing') ns[s] = { ...sv }
+        if (scope === 'plan') {
+          const keep = activePlanKeys.has(`${fdi}:${s}:${sv.condition || ''}`)
+          ns[s] = keep ? { ...sv } : { condition: null, status: 'existing' }
+        } else if (!sv.status || sv.status === 'existing') ns[s] = { ...sv }
         else {
           const keep = scope === 'plan' && activePlanKeys.has(`${fdi}:${s}:${sv.condition || ''}`)
           ns[s] = keep ? { ...sv } : { condition: null, status: 'existing' }
@@ -409,7 +469,15 @@ const displayChart = computed(() => {
     result[fdi] = t
   })
   return result
+}
+
+// Display chart filtered by scope
+const displayChart = computed(() => {
+  const scope = currentStep.value === 1 ? 'base' : store.chartScope
+  return buildChartByScope(scope)
 })
+const diagnosisSnapshotChart = computed(() => buildChartByScope('base'))
+const treatmentSnapshotChart = computed(() => buildChartByScope('plan'))
 
 // Load chart
 watch(() => props.patientId, async (id, prevId) => {

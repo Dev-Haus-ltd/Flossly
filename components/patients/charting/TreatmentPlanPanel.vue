@@ -989,6 +989,8 @@ watch(activeView, async () => {
   border-radius: 12px;
   overflow: hidden;
   min-height: 0;
+  /* Keep treatment list panel visually aligned with the tooth chart area. */
+  height: clamp(360px, 56vh, 460px);
 }
 
 .tp-header {
@@ -1148,13 +1150,14 @@ watch(activeView, async () => {
 /* Fix #9 — 92px bottom padding was dead space (footer sits outside this scroll container) */
 .tp-body {
   flex: 1;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 10px 14px 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-height: 420px;
-  max-height: calc(100vh - 250px);
+  min-height: 0;
+  max-height: none;
 }
 
 .tp-empty {

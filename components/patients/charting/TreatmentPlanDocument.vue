@@ -3,153 +3,149 @@
     <div v-if="showActions" class="tpd-topbar no-print">
       <v-menu location="bottom start" offset="8">
         <template #activator="{ props: menuProps }">
-          <v-btn v-bind="menuProps" class="tpd-action-btn tpd-action-btn--share" rounded="lg" prepend-icon="mdi-send-outline">
-            Share
-          </v-btn>
+          <v-btn v-bind="menuProps" class="tpd-action-btn tpd-action-btn--share" rounded="lg" prepend-icon="mdi-send-outline">Share</v-btn>
         </template>
         <v-list density="compact" min-width="180">
           <v-list-item title="Email" prepend-icon="mdi-email-outline" @click="emit('share-email')" />
-          <v-list-item
-            v-if="whatsappEnabled"
-            title="WhatsApp"
-            prepend-icon="mdi-whatsapp"
-            @click="emit('share-whatsapp')"
-          />
+          <v-list-item v-if="whatsappEnabled" title="WhatsApp" prepend-icon="mdi-whatsapp" @click="emit('share-whatsapp')" />
         </v-list>
       </v-menu>
       <v-btn class="tpd-action-btn" rounded="lg" prepend-icon="mdi-printer-outline" @click="printDoc">Print</v-btn>
       <v-btn class="tpd-action-btn tpd-action-btn--download" rounded="lg" prepend-icon="mdi-download-outline" @click="emit('download')">Download</v-btn>
     </div>
 
-    <!-- Document card -->
     <div ref="docEl" class="tpd-doc">
-      <!-- Header always shown -->
-      <div class="tpd-doc__header">
-        <div class="tpd-doc__header-left">
-          <div class="tpd-doc__practice">{{ practiceName || 'Dental Practice' }}</div>
-          <div class="tpd-doc__title">Treatment Plan</div>
-          <div class="tpd-doc__ref">{{ planRef }}</div>
+      <section class="tpd-page tpd-page--cover">
+        <div class="tpd-cover-photo">
+          <img :src="coverImage" alt="Clinic cover" />
         </div>
-        <div class="tpd-doc__header-right">
-          <div class="tpd-doc__meta-row"><span>Patient:</span> <strong>{{ patientName || '—' }}</strong></div>
-          <div class="tpd-doc__meta-row"><span>Date:</span> <strong>{{ today }}</strong></div>
-          <div class="tpd-doc__meta-row"><span>Plan:</span> <strong>{{ activePlan?.name || 'Treatment Plan' }}</strong></div>
-          <div v-if="practitionerName" class="tpd-doc__meta-row"><span>Practitioner:</span> <strong>{{ practitionerName }}</strong></div>
+        <div class="tpd-cover-title-wrap">
+          <div class="tpd-cover-title">{{ practiceName || 'Dental Practice' }}</div>
+          <div class="tpd-cover-subtitle">{{ organisationBranding.coverSubtitle || 'Personalised Treatment Plan' }}</div>
         </div>
-      </div>
+        <div class="tpd-footer-email">{{ footerEmail }}</div>
+      </section>
 
-      <!-- About the Clinic -->
-      <div v-if="sections.clinicInfo" class="tpd-section">
-        <div class="tpd-section__title">About the Practice</div>
-        <div class="tpd-section__body tpd-placeholder">{{ practiceName || 'Practice details will appear here.' }}</div>
-      </div>
-
-      <!-- About the Dentist -->
-      <div v-if="sections.dentistInfo" class="tpd-section">
-        <div class="tpd-section__title">About the Dentist</div>
-        <div class="tpd-section__body tpd-placeholder">{{ practitionerName || 'Practitioner details will appear here.' }}</div>
-      </div>
-
-      <!-- Diagnosis findings -->
-      <div v-if="sections.diagnosis && baseItems.length" class="tpd-section">
-        <div class="tpd-section__title">Diagnosis</div>
-        <table class="tpd-table">
-          <thead>
-            <tr>
-              <th>Tooth</th>
-              <th>Condition</th>
-              <th>Surface</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in baseItems" :key="item.id || item._tempId">
-              <td>{{ toothLabel(item) }}</td>
-              <td>{{ item.conditionLabel || item.condition || '—' }}</td>
-              <td>{{ item.surface || 'Full tooth' }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Treatment Plan items -->
-      <div v-if="sections.treatmentPlan">
-        <template v-if="appointments.length">
-          <div v-for="appt in appointmentsWithItems" :key="appt.id" class="tpd-appt-section">
-            <div class="tpd-appt-title">{{ appt.name }}</div>
-            <table class="tpd-table">
-              <thead>
-                <tr>
-                  <th>Tooth</th>
-                  <th>Treatment</th>
-                  <th>Duration</th>
-                  <th class="tpd-th--right">Fee (£)</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="item in appt.items" :key="item.id || item._tempId">
-                  <td>{{ toothLabel(item) }}</td>
-                  <td>{{ item.treatmentName || item.conditionLabel || item.condition || '—' }}</td>
-                  <td>{{ item.duration ? `${item.duration} min` : '—' }}</td>
-                  <td class="tpd-td--right">{{ formatCost(item.cost) }}</td>
-                </tr>
-              </tbody>
-            </table>
+      <section v-if="sections.clinicInfo || sections.dentistInfo" class="tpd-page">
+        <div v-if="sections.clinicInfo" class="tpd-two-col">
+          <div>
+            <h2 class="tpd-h2">About the Clinic</h2>
+            <p class="tpd-body">{{ clinicAbout }}</p>
           </div>
-        </template>
-        <div v-else class="tpd-empty">No treatment plan items added yet.</div>
+          <div class="tpd-media-wrap"><img :src="clinicImage" alt="Clinic" /></div>
+        </div>
 
-        <!-- Footer totals always with treatment plan -->
-        <div class="tpd-footer">
-          <div v-if="nhsBand" class="tpd-nhs-note">
-            NHS Band {{ nhsBand }} charge may apply. Please confirm at reception.
+        <div v-if="sections.dentistInfo && dentistsToShow.length" class="tpd-dentists">
+          <div v-for="(dentist, idx) in dentistsToShow" :key="`${dentist.id || dentist.name}-${idx}`" class="tpd-dentist-card">
+            <div class="tpd-media-wrap"><img :src="dentistImage" alt="Dentist" /></div>
+            <div class="tpd-dentist-content">
+              <h2 class="tpd-h2">About the Dentist</h2>
+              <div class="tpd-dentist-name">{{ dentist.name }}</div>
+              <p class="tpd-body">Assigned clinician for this treatment plan.</p>
+            </div>
           </div>
-          <div class="tpd-total-row">
-            <span class="tpd-total-label">Total estimated fee</span>
-            <span class="tpd-total-value">£{{ totalFormatted }}</span>
+        </div>
+        <div class="tpd-footer-email">{{ footerEmail }}</div>
+      </section>
+
+      <section v-if="sections.diagnosis" class="tpd-page">
+        <h2 class="tpd-h2">Diagnoses</h2>
+        <div class="tpd-chart-shot">
+          <ToothChart
+            :chart="diagnosisChart || {}"
+            :notation="notation"
+            :active-condition="null"
+            :selected-tooth-fdi="null"
+            :chart-scope="'base'"
+            :bridge-select-mode="false"
+            :bridge-start-fdi="null"
+            :tooth-statuses="toothStatuses || {}"
+            :treatment-items="[]"
+            :teeth-type="teethType"
+          />
+        </div>
+        <p class="tpd-body">
+          After a detailed dental examination and digital X-ray analysis, the following conditions have been identified:
+        </p>
+        <ul v-if="baseItems.length" class="tpd-list">
+          <li v-for="item in baseItems" :key="item.id || item._tempId">
+            <strong>{{ toothLabel(item) }}</strong> {{ item.conditionLabel || item.condition || 'Finding' }}
+          </li>
+        </ul>
+        <p v-else class="tpd-body">No diagnosis findings recorded yet.</p>
+        <p class="tpd-body">Early treatment is recommended to prevent further complications and ensure long-term oral health.</p>
+        <div class="tpd-footer-email">{{ footerEmail }}</div>
+      </section>
+
+      <section v-if="sections.treatmentPlan" class="tpd-page">
+        <h2 class="tpd-h2">Treatment Plan</h2>
+        <div class="tpd-chart-shot">
+          <ToothChart
+            :chart="treatmentChart || {}"
+            :notation="notation"
+            :active-condition="null"
+            :selected-tooth-fdi="null"
+            :chart-scope="'plan'"
+            :bridge-select-mode="false"
+            :bridge-start-fdi="null"
+            :tooth-statuses="toothStatuses || {}"
+            :treatment-items="planItems"
+            :teeth-type="teethType"
+          />
+        </div>
+        <div v-for="appt in appointmentsWithItems" :key="appt.id" class="tpd-appt-block">
+          <div class="tpd-appt-head">
+            <span>{{ appt.name }}</span>
+            <span>£{{ appt.subtotal }}</span>
           </div>
-          <div class="tpd-total-note">* Fees are estimates and may vary based on clinical findings.</div>
+          <div v-for="item in appt.items" :key="item.id || item._tempId" class="tpd-appt-row">
+            <span>{{ item.treatmentName || item.conditionLabel || item.condition || 'Treatment' }}</span>
+            <span>£{{ formatCost(item.cost) }}</span>
+          </div>
         </div>
-      </div>
+        <div class="tpd-footer-email">{{ footerEmail }}</div>
+      </section>
 
-      <!-- Payment Plan -->
-      <div v-if="sections.paymentPlan" class="tpd-section">
-        <div class="tpd-section__title">Payment Plan</div>
-        <div class="tpd-section__body tpd-placeholder">Payment arrangement details will be confirmed at reception.</div>
-      </div>
-
-      <!-- Consent Form -->
-      <div v-if="sections.consentForm" class="tpd-section">
-        <div class="tpd-consent__title">Patient Agreement</div>
-        <div v-for="item in consentItems" :key="item" class="tpd-consent-row">
-          <span class="tpd-consent-box" :class="{ 'tpd-consent-box--checked': checkedConsent.has(item) }" @click="toggleConsent(item)">
-            <v-icon v-if="checkedConsent.has(item)" size="12" color="white">mdi-check</v-icon>
-          </span>
-          <span class="tpd-consent-text">{{ item }}</span>
+      <section v-if="sections.paymentPlan || sections.consentForm" class="tpd-page">
+        <div v-if="sections.paymentPlan">
+          <h2 class="tpd-h2">Payment Plan</h2>
+          <div class="tpd-pay-table">
+            <div class="tpd-pay-head"><span>Treatment</span><span>Cost</span></div>
+            <div v-for="item in planItems" :key="`pay-${item.id || item._tempId}`" class="tpd-pay-row">
+              <span>{{ item.treatmentName || item.conditionLabel || item.condition || 'Treatment' }}</span>
+              <span>£{{ formatCost(item.cost) }}</span>
+            </div>
+            <div class="tpd-pay-total"><span>Total Estimated Cost:</span><span>£{{ totalFormatted }}</span></div>
+          </div>
+          <p class="tpd-body">Flexible payment options are available. Patients may choose installment plans based on the treatment schedule.</p>
         </div>
-      </div>
 
-      <!-- Testimonial -->
-      <div v-if="sections.testimonial" class="tpd-section">
-        <div class="tpd-section__title">Patient Feedback</div>
-        <div class="tpd-section__body tpd-placeholder">I am very happy with the care and treatment I received...</div>
-      </div>
+        <div v-if="sections.consentForm" class="tpd-consent">
+          <h2 class="tpd-h2">Consent Form</h2>
+          <p class="tpd-body">I confirm that I have been informed about my dental condition and the recommended treatment plan. The procedures, possible risks, benefits, and alternative treatment options have been explained to me.</p>
+          <div class="tpd-signatures">
+            <div class="tpd-signature"><div class="line" /><div>Patient signature &amp; date</div></div>
+            <div class="tpd-signature"><div class="line" /><div>Clinician signature &amp; date</div></div>
+          </div>
+        </div>
+        <div class="tpd-footer-email">{{ footerEmail }}</div>
+      </section>
 
-      <!-- Signature always shown -->
-      <div class="tpd-signatures">
-        <div class="tpd-sig">
-          <div class="tpd-sig__line" />
-          <div class="tpd-sig__label">Patient signature &amp; date</div>
+      <section v-if="sections.testimonial" class="tpd-page">
+        <h2 class="tpd-h2">Testimonials</h2>
+        <div class="tpd-testimonials">
+          <div v-for="(quote, idx) in testimonials" :key="idx" class="tpd-testimonial">
+            "{{ quote }}"
+          </div>
         </div>
-        <div class="tpd-sig">
-          <div class="tpd-sig__line" />
-          <div class="tpd-sig__label">Clinician signature &amp; date</div>
-        </div>
-      </div>
+        <div class="tpd-footer-email">{{ footerEmail }}</div>
+      </section>
     </div>
   </div>
 </template>
 
 <script setup>
+import ToothChart from './ToothChart.vue'
 import { getToothLabel } from './toothData.js'
 
 const props = defineProps({
@@ -161,68 +157,46 @@ const props = defineProps({
   patientName: { type: String, default: '' },
   practiceName: { type: String, default: '' },
   practitionerName: { type: String, default: '' },
+  practitioners: { type: Array, default: () => [] },
   showActions: { type: Boolean, default: false },
   whatsappEnabled: { type: Boolean, default: false },
-  sections: { type: Object, default: () => ({
-    clinicInfo: true, dentistInfo: true, diagnosis: true,
-    treatmentPlan: true, paymentPlan: true, consentForm: false, testimonial: false
-  }) },
+  sections: { type: Object, default: () => ({ clinicInfo: true, dentistInfo: true, diagnosis: true, treatmentPlan: true, paymentPlan: true, consentForm: false, testimonial: false }) },
   baseItems: { type: Array, default: () => [] },
+  organisationEmail: { type: String, default: '' },
+  organisationBranding: { type: Object, default: () => ({}) },
+  diagnosisChart: { type: Object, default: () => ({}) },
+  treatmentChart: { type: Object, default: () => ({}) },
+  toothStatuses: { type: Object, default: () => ({}) },
+  teethType: { type: String, default: 'permanent' },
 })
 
 const emit = defineEmits(['share-email', 'share-whatsapp', 'download'])
-
 const docEl = ref(null)
 
-const today = computed(() => {
-  const d = new Date()
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
+const footerEmail = computed(() => props.organisationEmail || 'info@clinic.com')
+const coverImage = computed(() => props.organisationBranding?.coverImageUrl || props.organisationBranding?.clinicImageUrl || '/assets/images/loginBanner.svg')
+const clinicImage = computed(() => props.organisationBranding?.clinicImageUrl || coverImage.value)
+const dentistImage = computed(() => props.organisationBranding?.dentistImageUrl || coverImage.value)
+const clinicAbout = computed(() => props.organisationBranding?.clinicAbout || `${props.practiceName || 'Our clinic'} provides modern, patient-focused dental care.`)
+const sections = computed(() => ({ clinicInfo: true, dentistInfo: true, diagnosis: true, treatmentPlan: true, paymentPlan: true, consentForm: false, testimonial: false, ...(props.sections || {}) }))
+const planItems = computed(() => props.items.filter((i) => String(i.status || '') !== 'existing'))
+const dentistsToShow = computed(() => props.practitioners?.length ? props.practitioners : (props.practitionerName ? [{ id: null, name: props.practitionerName }] : []))
+const testimonials = computed(() => {
+  const raw = props.organisationBranding?.testimonials
+  if (Array.isArray(raw) && raw.length) return raw.slice(0, 6)
+  return ['Excellent service and very professional staff.', 'The treatment process was clear and comfortable.']
 })
-
-const planItems = computed(() => props.items.filter(i => String(i.status || '') !== 'existing'))
 
 const appointmentsWithItems = computed(() =>
   props.appointments
-    .map(appt => ({
-      ...appt,
-      items: planItems.value.filter(i => (i.appointmentGroupId || 'appt-1') === appt.id),
-    }))
-    .filter(a => a.items.length)
+    .map((appt) => {
+      const items = planItems.value.filter((i) => (i.appointmentGroupId || 'appt-1') === appt.id)
+      const subtotal = items.reduce((sum, i) => sum + Number(i.cost || 0), 0)
+      return { ...appt, items, subtotal: subtotal.toFixed(2) }
+    })
+    .filter((a) => a.items.length)
 )
-
-const totalFormatted = computed(() =>
-  planItems.value.reduce((sum, i) => sum + Number(i.cost || 0), 0).toFixed(2)
-)
-
-const NHS_BAND3_KEYS = ['crown', 'bridge', 'denture', 'veneer', 'implant', 'onlay', 'inlay']
-const NHS_BAND2_KEYS = ['fill', 'extract', 'root canal', 'rct', 'composite', 'amalgam', 'deep scale', 'periodon', 'surgery']
-
-const nhsBand = computed(() => {
-  const items = planItems.value
-  if (!items.length) return null
-  const text = items.map(i => `${i.treatmentName || ''} ${i.treatmentCode || ''} ${i.condition || ''}`).join(' ').toLowerCase()
-  if (NHS_BAND3_KEYS.some(k => text.includes(k))) return 3
-  if (NHS_BAND2_KEYS.some(k => text.includes(k))) return 2
-  return 1
-})
-
-const CONSENT_ITEMS = [
-  'The proposed treatment has been explained to me including risks and alternatives.',
-  'I understand the estimated fees and payment terms.',
-  'I consent to the treatment plan outlined above.',
-  'I have been given the opportunity to ask questions.',
-]
-
-const checkedConsent = ref(new Set())
-
-function toggleConsent(item) {
-  const s = new Set(checkedConsent.value)
-  if (s.has(item)) s.delete(item)
-  else s.add(item)
-  checkedConsent.value = s
-}
-
-const consentItems = CONSENT_ITEMS
+const totalFormatted = computed(() => planItems.value.reduce((sum, i) => sum + Number(i.cost || 0), 0).toFixed(2))
 
 function toothLabel(item) {
   const base = getToothLabel(item.fdi, props.notation)
@@ -234,38 +208,14 @@ function formatCost(val) {
 }
 
 function printDoc() {
-  _openPrintWindow()
-}
-
-function _openPrintWindow() {
   const el = docEl.value
   if (!el) return
   const html = el.outerHTML
-  const win = window.open('', '_blank', 'width=820,height=700')
-  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Treatment Plan</title><style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:Arial,sans-serif;padding:24px;background:#fff;color:#222}
-    table{width:100%;border-collapse:collapse;margin-bottom:12px}
-    th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;font-size:13px}
-    th{font-weight:600;background:#f9fafb;color:#374151}
-    .tpd-td--right,.tpd-th--right{text-align:right}
-    .tpd-doc__header{display:flex;justify-content:space-between;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #e5e7eb}
-    .tpd-doc__practice{font-size:18px;font-weight:700;color:#0061FB;margin-bottom:4px}
-    .tpd-doc__title{font-size:14px;font-weight:600;color:#374151}
-    .tpd-doc__ref{font-size:12px;color:#6b7280}
-    .tpd-doc__meta-row{font-size:13px;color:#374151;margin-bottom:3px}
-    .tpd-appt-title{font-size:13px;font-weight:600;color:#374151;padding:10px 0 6px;border-bottom:1px solid #f0f0f0;margin-bottom:6px}
-    .tpd-footer{margin-top:20px;padding-top:12px;border-top:2px solid #e5e7eb}
-    .tpd-total-row{display:flex;justify-content:space-between;font-size:15px;font-weight:700;color:#111827;margin:8px 0}
-    .tpd-total-note,.tpd-nhs-note{font-size:11px;color:#6b7280;margin-top:4px}
-    .tpd-consent{margin-top:20px}.tpd-consent__title{font-size:13px;font-weight:600;margin-bottom:8px}
-    .tpd-consent-row{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#374151;margin-bottom:6px}
-    .tpd-consent-box{width:14px;height:14px;border:2px solid #9ca3af;border-radius:3px;flex-shrink:0;display:inline-block}
-    .tpd-signatures{display:flex;gap:40px;margin-top:32px}
-    .tpd-sig__line{height:1px;background:#374151;margin-bottom:6px}
-    .tpd-sig__label{font-size:11px;color:#6b7280}
-    .tpd-actions,.no-print{display:none!important}
-  </style></head><body>${html}</body></html>`)
+  const styles = Array.from(document.styleSheets).reduce((acc, ss) => {
+    try { return acc + Array.from(ss.cssRules).map((r) => r.cssText).join('\n') } catch { return acc }
+  }, '')
+  const win = window.open('', '_blank', 'width=1024,height=900')
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Treatment Plan</title><style>${styles}</style></head><body>${html}</body></html>`)
   win.document.close()
   win.focus()
   setTimeout(() => { win.print() }, 500)
@@ -275,298 +225,65 @@ function getDocumentHtml() {
   return docEl.value?.outerHTML || ''
 }
 
-defineExpose({
-  getDocumentHtml,
-  printDoc,
-})
+defineExpose({ getDocumentHtml, printDoc })
 </script>
 
 <style scoped>
-.tpd-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  flex: 1;
-  min-width: 0;
-}
+.tpd-wrap { display: flex; flex-direction: column; gap: 16px; flex: 1; min-width: 0; }
+.tpd-topbar { display: flex; justify-content: flex-end; gap: 8px; }
+.tpd-action-btn { min-width: 108px; background: #0f63ff; color: #fff; box-shadow: none; text-transform: none; }
+.tpd-action-btn--share { background: #7f73ff; }
+.tpd-action-btn--download { background: #18296f; }
 
-.tpd-topbar {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
+.tpd-doc { display: flex; flex-direction: column; gap: 20px; }
+.tpd-page { background: #ececec; border: 1px solid #d8d8d8; min-height: 1122px; width: 794px; margin: 0 auto; padding: 28px 34px 56px; position: relative; break-after: page; }
+.tpd-page--cover { padding: 0 0 56px; overflow: hidden; }
+.tpd-footer-email { position: absolute; bottom: 22px; left: 0; right: 0; text-align: center; font-size: 18px; letter-spacing: 0.02em; color: #111; }
 
-.tpd-action-btn {
-  min-width: 108px;
-  background: #0f63ff;
-  color: #fff;
-  box-shadow: none;
-  text-transform: none;
-}
+.tpd-cover-photo img { width: 100%; height: 760px; object-fit: cover; display: block; }
+.tpd-cover-title-wrap { background: linear-gradient(90deg, #b7852b 0%, #7f5415 100%); color: #fff; margin: 0 88px; transform: translateY(-38px) skewX(-20deg); padding: 26px 34px; }
+.tpd-cover-title-wrap > * { transform: skewX(20deg); }
+.tpd-cover-title { font-size: 54px; font-weight: 700; line-height: 1.1; }
+.tpd-cover-subtitle { font-size: 24px; margin-top: 8px; }
 
-.tpd-action-btn--share {
-  background: #7f73ff;
-}
+.tpd-h2 { font-size: 56px; font-weight: 700; margin: 0 0 18px; color: #1f1f23; line-height: 1.05; }
+.tpd-body { font-size: 33px; line-height: 1.45; color: #23252c; margin: 0 0 18px; white-space: pre-line; }
 
-.tpd-action-btn--download {
-  background: #18296f;
-}
+.tpd-two-col { display: grid; grid-template-columns: 1.2fr 1fr; gap: 22px; align-items: start; margin-bottom: 24px; }
+.tpd-media-wrap { border-radius: 28px; overflow: hidden; background: #ddd; min-height: 240px; }
+.tpd-media-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-/* ── Document card ──────────────────────────────────────────────── */
-.tpd-doc {
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 12px;
-  padding: 32px 36px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-}
+.tpd-dentists { display: flex; flex-direction: column; gap: 18px; }
+.tpd-dentist-card { display: grid; grid-template-columns: 1fr 1.2fr; gap: 18px; align-items: stretch; border-top: 1px solid #d3d3d3; padding-top: 18px; }
+.tpd-dentist-content { display: flex; flex-direction: column; }
+.tpd-dentist-name { font-size: 44px; font-weight: 700; color: #fff; background: #8a651a; padding: 8px 16px; width: fit-content; margin-bottom: 14px; }
 
-/* ── Header ─────────────────────────────────────────────────────── */
-.tpd-doc__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 28px;
-  padding-bottom: 20px;
-  border-bottom: 2px solid #0061FB;
-  gap: 16px;
-  flex-wrap: wrap;
-}
+.tpd-chart-shot { background: #fff; border: 1px solid #d3d3d3; border-radius: 20px; padding: 10px; margin: 8px 0 18px; overflow: hidden; }
+.tpd-chart-shot :deep(.tooth-chart) { pointer-events: none; transform: scale(0.86); transform-origin: top left; width: 115%; margin-bottom: -64px; }
 
-.tpd-doc__practice {
-  font-size: 15px;
-  font-weight: 700;
-  color: #0061FB;
-  margin-bottom: 4px;
-}
+.tpd-list { font-size: 34px; color: #23252c; padding-left: 30px; line-height: 1.55; margin: 0 0 16px; }
+.tpd-list li { margin-bottom: 6px; }
 
-.tpd-doc__title {
-  font-size: 22px;
-  font-weight: 700;
-  color: #111;
-  margin-bottom: 2px;
-}
+.tpd-appt-block { margin-top: 16px; }
+.tpd-appt-head { display: flex; justify-content: space-between; background: #d1d1d1; font-size: 37px; font-weight: 700; padding: 12px 18px; }
+.tpd-appt-row { display: flex; justify-content: space-between; font-size: 36px; padding: 10px 18px; border-bottom: 1px solid #dedede; }
 
-.tpd-doc__ref {
-  font-size: 12px;
-  color: #888;
-  font-weight: 500;
-}
+.tpd-pay-table { margin: 12px 0 16px; }
+.tpd-pay-head, .tpd-pay-row, .tpd-pay-total { display: grid; grid-template-columns: 1fr auto; gap: 16px; padding: 10px 14px; font-size: 35px; }
+.tpd-pay-head { font-weight: 700; }
+.tpd-pay-total { background: #d1d1d1; font-weight: 700; margin-top: 8px; }
 
-.tpd-doc__meta-row {
-  font-size: 13px;
-  color: #555;
-  text-align: right;
-  line-height: 1.7;
-}
+.tpd-consent { margin-top: 24px; }
+.tpd-signatures { display: flex; gap: 40px; margin-top: 28px; }
+.tpd-signature { flex: 1; font-size: 24px; color: #555; }
+.tpd-signature .line { height: 1px; background: #333; margin-bottom: 6px; }
 
-.tpd-doc__meta-row span {
-  color: #999;
-  margin-right: 4px;
-}
-
-/* ── Appointment sections ────────────────────────────────────────── */
-.tpd-appt-section {
-  margin-bottom: 20px;
-}
-
-.tpd-appt-title {
-  font-size: 12px;
-  font-weight: 700;
-  color: #0061FB;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 6px;
-}
-
-/* ── Table ──────────────────────────────────────────────────────── */
-.tpd-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.tpd-table th {
-  font-size: 11px;
-  font-weight: 600;
-  color: #888;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  padding: 6px 10px;
-  background: #f8f9fb;
-  border-bottom: 1px solid #e8e8e8;
-  text-align: left;
-}
-
-.tpd-th--right,
-.tpd-td--right {
-  text-align: right;
-}
-
-.tpd-table td {
-  padding: 8px 10px;
-  color: #333;
-  border-bottom: 1px solid #f2f2f2;
-}
-
-/* ── Footer totals ──────────────────────────────────────────────── */
-.tpd-footer {
-  margin-top: 20px;
-  padding-top: 14px;
-  border-top: 1px solid #e8e8e8;
-}
-
-.tpd-nhs-note {
-  font-size: 12px;
-  color: #2563eb;
-  margin-bottom: 8px;
-  padding: 6px 10px;
-  background: #eff6ff;
-  border-radius: 6px;
-}
-
-.tpd-total-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 0;
-}
-
-.tpd-total-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: #111;
-}
-
-.tpd-total-value {
-  font-size: 18px;
-  font-weight: 700;
-  color: #0061FB;
-}
-
-.tpd-total-note {
-  font-size: 11px;
-  color: #aaa;
-  margin-top: 2px;
-}
-
-/* ── Consent ────────────────────────────────────────────────────── */
-.tpd-consent {
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid #e8e8e8;
-}
-
-.tpd-consent__title {
-  font-size: 12px;
-  font-weight: 700;
-  color: #444;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 10px;
-}
-
-.tpd-consent-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.tpd-consent-box {
-  width: 16px;
-  height: 16px;
-  border: 1.5px solid #ccc;
-  border-radius: 3px;
-  flex-shrink: 0;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 2px;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.tpd-consent-box--checked {
-  background: #0061FB;
-  border-color: #0061FB;
-}
-
-.tpd-consent-text {
-  font-size: 12px;
-  color: #555;
-  line-height: 1.5;
-}
-
-/* ── Signatures ─────────────────────────────────────────────────── */
-.tpd-signatures {
-  display: flex;
-  gap: 40px;
-  margin-top: 28px;
-  padding-top: 20px;
-  border-top: 1px solid #e8e8e8;
-}
-
-.tpd-sig {
-  flex: 1;
-}
-
-.tpd-sig__line {
-  height: 1px;
-  background: #333;
-  margin-bottom: 6px;
-}
-
-.tpd-sig__label {
-  font-size: 11px;
-  color: #888;
-}
-
-/* ── Action bar ─────────────────────────────────────────────────── */
-.tpd-empty {
-  text-align: center;
-  padding: 32px;
-  font-size: 13px;
-  color: #bbb;
-}
-
-/* ── Print styles ───────────────────────────────────────────────── */
-.tpd-section {
-  margin-bottom: 24px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.tpd-section__title {
-  font-size: 13px;
-  font-weight: 700;
-  color: #374151;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 10px;
-}
-
-.tpd-section__body {
-  font-size: 13px;
-  color: #374151;
-  line-height: 1.6;
-}
-
-.tpd-placeholder {
-  color: #9ca3af;
-  font-style: italic;
-}
+.tpd-testimonials { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; }
+.tpd-testimonial { background: #fff; border-radius: 18px; border: 1px solid #ddd; padding: 18px; font-size: 31px; line-height: 1.4; }
 
 @media print {
   .no-print { display: none !important; }
-  .tpd-doc {
-    border: none;
-    box-shadow: none;
-    border-radius: 0;
-    padding: 0;
-  }
-  .tpd-consent-box {
-    cursor: default;
-  }
+  .tpd-doc { gap: 0; }
+  .tpd-page { width: 210mm; min-height: 297mm; margin: 0; border: none; box-shadow: none; page-break-after: always; }
 }
 </style>

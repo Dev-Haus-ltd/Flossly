@@ -1,6 +1,6 @@
 import patientChartingService from '~/services/patientChartingService'
 import diaryService from '~/services/diaryService'
-import { createDefaultTooth, UPPER_ARCH, LOWER_ARCH, DECIDUOUS_UPPER_ARCH, DECIDUOUS_LOWER_ARCH, CONDITIONS } from '~/components/patients/charting/toothData.js'
+import { createDefaultTooth, UPPER_ARCH, LOWER_ARCH, DECIDUOUS_UPPER_ARCH, DECIDUOUS_LOWER_ARCH, CONDITIONS, TOOTH_STATUSES } from '~/components/patients/charting/toothData.js'
 import {
   DEFAULT_APPOINTMENT_ID,
   DEFAULT_PLAN_ID,
@@ -14,6 +14,17 @@ import {
 
 // Module-level timer map — not reactive, just for debouncing
 const _saveTimers = {}
+const STATUS_ANNOTATION_CODE = '__STATUS_ANNOTATION__'
+const DIAGNOSIS_ANNOTATION_CODE = '__DIAGNOSIS_ANNOTATION__'
+const DIAGNOSIS_LABELS = {
+  drifted_mesially: 'Drifted Mesially',
+  drifted_distally: 'Drifted Distally',
+  rotated_mesially: 'Rotated Mesially',
+  rotated_distally: 'Rotated Distally',
+  over_erupted: 'Over Erupted',
+  impacted: 'Impacted',
+  mobile: 'Mobile',
+}
 
 export const usePatientChartingStore = defineStore('patientChartingStore', {
   state: () => ({
@@ -665,6 +676,80 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       if (!['base', 'plan', 'both'].includes(scope)) return
       this.chartScope = scope
     },
+    _statusLabel(status) {
+      if (!status) return ''
+      return TOOTH_STATUSES.find((s) => s.value === status)?.label || String(status).replace(/_/g, ' ')
+    },
+    _diagnosisLabel(diagnosis) {
+      if (!diagnosis) return ''
+      return DIAGNOSIS_LABELS[diagnosis] || String(diagnosis).replace(/_/g, ' ')
+    },
+    _syncBaseAnnotationItem(fdi, markerCode, condition, conditionLabel) {
+      const idx = this.treatmentPlan.findIndex((i) =>
+        Number(i.fdi) === Number(fdi)
+        && !i.surface
+        && String(i.status || '') === 'existing'
+        && String(i.treatmentCode || '') === markerCode
+      )
+
+      if (!condition) {
+        if (idx === -1) return
+        const item = this.treatmentPlan[idx]
+        this.treatmentPlan.splice(idx, 1)
+        if (item?.id) {
+          patientChartingService.deleteTreatmentPlanItem(item.id).catch((error) => this._logError('deleteAnnotationItem', error))
+        }
+        return
+      }
+
+      if (idx !== -1) {
+        const item = this.treatmentPlan[idx]
+        item.condition = condition
+        item.conditionLabel = conditionLabel
+        if (item.id) {
+          patientChartingService.updateTreatmentPlanItem({
+            id: item.id,
+            condition,
+            conditionLabel,
+            status: 'existing',
+          }).catch((error) => this._logError('updateAnnotationItem', error))
+        }
+        return
+      }
+
+      const item = {
+        _tempId: `${Date.now()}-${fdi}-${markerCode}`,
+        planId: this.activePlanId || DEFAULT_PLAN_ID,
+        planName: this.plans.find((p) => p.id === (this.activePlanId || DEFAULT_PLAN_ID))?.name || DEFAULT_PLAN_NAME,
+        fdi: Number(fdi),
+        surface: null,
+        condition,
+        conditionLabel,
+        treatmentId: null,
+        treatmentCode: markerCode,
+        treatmentName: null,
+        treatmentCategory: null,
+        cost: 0,
+        priority: this.treatmentPlan.length + 1,
+        status: 'existing',
+        notes: '',
+        appointmentGroupId: null,
+        appointmentId: null,
+        clinicianName: '',
+        practitionerId: null,
+        practitionerName: '',
+        duration: 0,
+        createdAt: new Date().toISOString(),
+      }
+      this.treatmentPlan.push(item)
+      if (this.patientId) {
+        patientChartingService.createTreatmentPlanItem({ patientId: this.patientId, ...item })
+          .then((res) => {
+            if (res?.code === 0 && res.data?.id) item.id = res.data.id
+          })
+          .catch((error) => this._logError('createAnnotationItem', error))
+      }
+    },
     setToothStatus(fdi, status, rowId = 'base') {
       const key = `${rowId}:${fdi}`
       const prev = this.toothStatuses[key]
@@ -673,6 +758,8 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       if (String(rowId).includes('base')) {
         if (!this.chart[fdi]) this.chart[fdi] = createDefaultTooth(fdi)
         applyBaseToothStatus(this.chart[fdi], status)
+        const normalized = status && status !== 'present' ? status : null
+        this._syncBaseAnnotationItem(fdi, STATUS_ANNOTATION_CODE, normalized, this._statusLabel(normalized))
         this._scheduleSave(fdi)
       }
     },
@@ -684,6 +771,8 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       if (String(rowId).includes('base')) {
         if (!this.chart[fdi]) this.chart[fdi] = createDefaultTooth(fdi)
         this.chart[fdi].diagnosis = diagnosis || null
+        const normalized = diagnosis || null
+        this._syncBaseAnnotationItem(fdi, DIAGNOSIS_ANNOTATION_CODE, normalized, this._diagnosisLabel(normalized))
         this._scheduleSave(fdi)
       }
     },

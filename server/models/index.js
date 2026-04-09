@@ -279,6 +279,7 @@ DiaryTreatmentPlan.belongsTo(Organisation, { foreignKey: 'organisationId', as: '
 
 // OrganisationTreatment
 OrganisationTreatment.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+Organisation.hasMany(OrganisationTreatment, { foreignKey: 'organisationId', as: 'organisationTreatments', onDelete: 'CASCADE', hooks: true });
 
 // Organisation Contacts / Equipment / Surgeries / Groups / Scripts (ORG_DELETE)
 Organisation.hasMany(OrganisationContact, { foreignKey: "organisationId", as: "contacts" });
