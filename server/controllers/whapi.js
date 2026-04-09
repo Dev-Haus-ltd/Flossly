@@ -1101,6 +1101,23 @@ export const webhook = async (event) => {
       const content = getMessageContent(msg);
       const token = channelRows?.[0]?.tokenEnc ? decrypt(channelRows[0].tokenEnc) : null;
       const attachments = await extractWhapiAttachments({ msg, token });
+      const providerId = msg?.id || msg?.message_id || msg?.messageId || null;
+
+      // ── Edited inbound message: update existing row instead of creating a duplicate ──
+      if (providerId) {
+        const existing = await CrmWhatsAppMessageLog.findOne({
+          where: { providerMessageId: providerId, organisationId: orgId },
+        });
+        if (existing) {
+          await existing.update({
+            content,
+            ...(attachments ? { attachments } : {}),
+          });
+          broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+          continue;
+        }
+      }
+
       await updateLeadWhatsAppMeta(lead, {
         lastInboundAt: new Date(extractTimestamp(msg?.timestamp || msg?.time || msg?.sent)).toISOString(),
         lastInboundFrom: fromDigits,
@@ -1113,7 +1130,7 @@ export const webhook = async (event) => {
         direction: "inbound",
         type: String((attachments?.[0]?.type || msgType) || "text"),
         status: "received",
-        providerMessageId: msg?.id || msg?.message_id || msg?.messageId || null,
+        providerMessageId: providerId,
         content,
         attachments,
       });
