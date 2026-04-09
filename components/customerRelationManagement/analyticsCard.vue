@@ -47,9 +47,18 @@
         autoplay
         @ended="videoSrc = null"
       />
-      <!-- Thumbnail + play/loading overlay -->
+      <!-- Thumbnail + overlays -->
       <template v-else>
-        <img :src="previewImage" :alt="title" class="preview-image" />
+        <!-- Image: wrap in viewer for fullscreen zoom on click (non-video only) -->
+        <viewer
+          v-if="!hasVideo"
+          :options="{ toolbar: false, navbar: false, title: false, movable: true, zoomable: true }"
+          class="preview-viewer"
+        >
+          <img :src="previewImage" :alt="title" class="preview-image preview-image--clickable" />
+        </viewer>
+        <img v-else :src="previewImage" :alt="title" class="preview-image" />
+
         <div v-if="hasVideo && !videoPermalink" class="play-button-overlay" @click="playVideo">
           <v-progress-circular v-if="videoLoading" indeterminate color="white" size="48" />
           <img v-else src="@/assets/crm/play.svg" alt="Play" class="play-button-svg" />
@@ -441,10 +450,20 @@ const playVideo = async () => {
   background: #f5f5f5;
 }
 
+.preview-viewer {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 .preview-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.preview-image--clickable {
+  cursor: zoom-in;
 }
 
 .play-button-overlay {

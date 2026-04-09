@@ -27,10 +27,7 @@
             :label="stat.label"
             :value="stat.value"
             :uid="i"
-            :select="stat.select"
-            :select-items="stat.selectItems || []"
             hide-chip
-            @update:select="(v) => onCardSelect(i, v)"
           />
         </v-col>
       </v-row>
@@ -136,121 +133,6 @@
       </v-sheet>
     </div>
 
-    <!-- Spend date range picker dialog -->
-    <v-dialog v-model="showSpendDateRange" max-width="360" persistent>
-      <v-card rounded="xl" class="pa-4">
-        <p class="font-weight-bold mb-3" style="font-size:15px">Total Spend — Date Range</p>
-        <v-text-field
-          v-model="spendDateFrom"
-          label="From"
-          type="date"
-          density="compact"
-          variant="outlined"
-          hide-details
-          class="mb-3"
-        />
-        <v-text-field
-          v-model="spendDateTo"
-          label="To"
-          type="date"
-          density="compact"
-          variant="outlined"
-          hide-details
-          class="mb-4"
-        />
-        <div class="d-flex justify-end gap-2">
-          <v-btn variant="text" @click="showSpendDateRange = false; spendPeriod = 'This month'">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" rounded="lg" :disabled="!spendDateFrom || !spendDateTo" @click="confirmSpendDateRange">Apply</v-btn>
-        </div>
-      </v-card>
-    </v-dialog>
-
-    <!-- Leads date range picker dialog -->
-    <v-dialog v-model="showLeadsDateRange" max-width="360" persistent>
-      <v-card rounded="xl" class="pa-4">
-        <p class="font-weight-bold mb-3" style="font-size:15px">Number of Leads — Date Range</p>
-        <v-text-field
-          v-model="leadsDateFrom"
-          label="From"
-          type="date"
-          density="compact"
-          variant="outlined"
-          hide-details
-          class="mb-3"
-        />
-        <v-text-field
-          v-model="leadsDateTo"
-          label="To"
-          type="date"
-          density="compact"
-          variant="outlined"
-          hide-details
-          class="mb-4"
-        />
-        <div class="d-flex justify-end gap-2">
-          <v-btn variant="text" @click="showLeadsDateRange = false; leadsPeriod = 'This month'">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" rounded="lg" :disabled="!leadsDateFrom || !leadsDateTo" @click="confirmLeadsDateRange">Apply</v-btn>
-        </div>
-      </v-card>
-    </v-dialog>
-
-    <!-- Impressions date range picker dialog -->
-    <v-dialog v-model="showImpressionsDateRange" max-width="360" persistent>
-      <v-card rounded="xl" class="pa-4">
-        <p class="font-weight-bold mb-3" style="font-size:15px">Total Impressions — Date Range</p>
-        <v-text-field
-          v-model="impressionsDateFrom"
-          label="From"
-          type="date"
-          density="compact"
-          variant="outlined"
-          hide-details
-          class="mb-3"
-        />
-        <v-text-field
-          v-model="impressionsDateTo"
-          label="To"
-          type="date"
-          density="compact"
-          variant="outlined"
-          hide-details
-          class="mb-4"
-        />
-        <div class="d-flex justify-end gap-2">
-          <v-btn variant="text" @click="showImpressionsDateRange = false; impressionsPeriod = 'This month'">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" rounded="lg" :disabled="!impressionsDateFrom || !impressionsDateTo" @click="confirmImpressionsDateRange">Apply</v-btn>
-        </div>
-      </v-card>
-    </v-dialog>
-
-    <!-- Reach date range picker dialog -->
-    <v-dialog v-model="showReachDateRange" max-width="360" persistent>
-      <v-card rounded="xl" class="pa-4">
-        <p class="font-weight-bold mb-3" style="font-size:15px">Total Reach — Date Range</p>
-        <v-text-field
-          v-model="reachDateFrom"
-          label="From"
-          type="date"
-          density="compact"
-          variant="outlined"
-          hide-details
-          class="mb-3"
-        />
-        <v-text-field
-          v-model="reachDateTo"
-          label="To"
-          type="date"
-          density="compact"
-          variant="outlined"
-          hide-details
-          class="mb-4"
-        />
-        <div class="d-flex justify-end gap-2">
-          <v-btn variant="text" @click="showReachDateRange = false; reachPeriod = 'This month'">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" rounded="lg" :disabled="!reachDateFrom || !reachDateTo" @click="confirmReachDateRange">Apply</v-btn>
-        </div>
-      </v-card>
-    </v-dialog>
   </v-sheet>
 </template>
 
@@ -259,7 +141,6 @@ import { computed, reactive, ref, watch } from 'vue';
 import { useCrmStore } from '@/stores/crm';
 import { useMainStore } from '@/stores';
 import { useUser } from '@/composables/useUser';
-import crmService from '@/services/crmService';
 import instagramIcon from '@/assets/crm/instagram.svg';
 import facebookIcon from '@/assets/crm/facebook.svg';
 import reference1 from '@/assets/crm/placeholder/reference-1.png';
@@ -270,33 +151,11 @@ const mainStore = useMainStore();
 const { user } = useUser();
 const search = ref('');
 const isSyncing = ref(false);
-const activeFilters = ref({ platform: null, dateFrom: null, dateTo: null });
+const activeFilters = ref({ platform: null, status: null });
 const currentOrgId = computed(() => Number(user.value?.currentLoggedInOrgId || 0) || null);
 const metaConnection = ref({ count: 0, pages: [] });
 const INSIGHTS_SYNC_DAYS = 30;
 
-// Stat card per-card filter state
-const campaignStatusFilter = ref('All')
-const spendPeriod = ref('This month')
-const spendDateFrom = ref(null)
-const spendDateTo = ref(null)
-const showSpendDateRange = ref(false)
-const leadsPeriod = ref('This month')
-const leadsDateFrom = ref(null)
-const leadsDateTo = ref(null)
-const showLeadsDateRange = ref(false)
-const statSpend = ref(0)
-const statLeads = ref(0)
-const statSpendLoading = ref(false)
-const statLeadsLoading = ref(false)
-const impressionsPeriod = ref('This month')
-const impressionsDateFrom = ref(null)
-const impressionsDateTo = ref(null)
-const showImpressionsDateRange = ref(false)
-const reachPeriod = ref('This month')
-const reachDateFrom = ref(null)
-const reachDateTo = ref(null)
-const showReachDateRange = ref(false)
 
 const toYmd = (value) => {
   if (!value) return null;
@@ -329,151 +188,26 @@ const parseLocalDate = (value, endOfDay = false) => {
   return null;
 };
 
-const getPeriodDates = (period, from = null, to = null) => {
-  const now = new Date();
-  if (period === 'This week') {
-    const dow = now.getDay();
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1));
-    return { dateFrom: toYmd(monday), dateTo: toYmd(now) };
-  }
-  if (period === 'This month') {
-    return {
-      dateFrom: toYmd(new Date(now.getFullYear(), now.getMonth(), 1)),
-      dateTo: toYmd(now),
-    };
-  }
-  if (from && to) {
-    return {
-      dateFrom: toYmd(from),
-      dateTo: toYmd(to),
-    };
-  }
-  return {};
-};
 
-const formatDateRangeLabel = (from, to) => {
-  const fmt = (d) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-  return `${fmt(from)} - ${fmt(to)}`;
-};
 
-const loadStatSpend = async () => {
-  const params = getPeriodDates(spendPeriod.value, spendDateFrom.value, spendDateTo.value);
-  if (!params.dateFrom) return;
-  statSpendLoading.value = true;
-  try {
-    const res = await crmService.getMetaInsights(params);
-    if (res?.code === 0) {
-      const campaignInsights = (res.data || []).filter(i => i.entityType === 'campaign');
-      statSpend.value = campaignInsights.reduce((sum, i) => sum + Number(i.spend || 0), 0);
-    }
-  } finally {
-    statSpendLoading.value = false;
-  }
-};
-
-const loadStatLeads = async () => {
-  const params = getPeriodDates(leadsPeriod.value, leadsDateFrom.value, leadsDateTo.value);
-  if (!params.dateFrom) return;
-  statLeadsLoading.value = true;
-  try {
-    const res = await crmService.getAllLeadCounts(params);
-    if (res?.code === 0) {
-      statLeads.value = Object.values(res.data?.byCampaign || {}).reduce((sum, n) => sum + Number(n), 0);
-    }
-  } finally {
-    statLeadsLoading.value = false;
-  }
-};
-
-const impressionsPeriodInsights = computed(() => {
-  const { dateFrom, dateTo } = getPeriodDates(impressionsPeriod.value, impressionsDateFrom.value, impressionsDateTo.value);
-  const fromDate = dateFrom ? parseLocalDate(dateFrom, false) : null;
-  const toDate = dateTo ? parseLocalDate(dateTo, true) : null;
-  return crmStore.metaInsights.filter((i) => {
-    if (i.entityType !== 'campaign') return false;
-    const rowDate = parseLocalDate(i.date, false);
-    if (!rowDate) return false;
-    if (fromDate && rowDate < fromDate) return false;
-    if (toDate && rowDate > toDate) return false;
-    return true;
-  });
-});
-const statImpressions = computed(() =>
-  impressionsPeriodInsights.value.reduce((sum, i) => sum + Number(i.impressions || 0), 0)
+// All stat card metrics derive from insightsInRange (same date window as campaign cards).
+// The global FilterMenu date range is the single control for the entire page.
+const campaignInsightsInRange = computed(() =>
+  insightsInRange.value.filter((i) => i.entityType === 'campaign')
 );
 
-const reachPeriodInsights = computed(() => {
-  const { dateFrom, dateTo } = getPeriodDates(reachPeriod.value, reachDateFrom.value, reachDateTo.value);
-  const fromDate = dateFrom ? parseLocalDate(dateFrom, false) : null;
-  const toDate = dateTo ? parseLocalDate(dateTo, true) : null;
-  return crmStore.metaInsights.filter((i) => {
-    if (i.entityType !== 'campaign') return false;
-    const rowDate = parseLocalDate(i.date, false);
-    if (!rowDate) return false;
-    if (fromDate && rowDate < fromDate) return false;
-    if (toDate && rowDate > toDate) return false;
-    return true;
-  });
-});
-const statReach = computed(() => sumLatestReachByEntity(reachPeriodInsights.value));
+const statSpend = computed(() =>
+  campaignInsightsInRange.value.reduce((sum, i) => sum + Number(i.spend || 0), 0)
+);
+const statImpressions = computed(() =>
+  campaignInsightsInRange.value.reduce((sum, i) => sum + Number(i.impressions || 0), 0)
+);
+// Meta platform leads (actions[lead]) — matches what Meta Ads Manager reports
+const statMetaLeads = computed(() =>
+  campaignInsightsInRange.value.reduce((sum, i) => sum + Number(i.leads || 0), 0)
+);
+const statReach = computed(() => sumLifetimeReachByEntity(campaignInsightsInRange.value));
 
-const confirmImpressionsDateRange = () => {
-  showImpressionsDateRange.value = false
-  impressionsPeriod.value = formatDateRangeLabel(impressionsDateFrom.value, impressionsDateTo.value)
-}
-const confirmReachDateRange = () => {
-  showReachDateRange.value = false
-  reachPeriod.value = formatDateRangeLabel(reachDateFrom.value, reachDateTo.value)
-}
-
-const onCardSelect = (index, value) => {
-  if (index === 0) {
-    campaignStatusFilter.value = value
-    return
-  }
-  if (index === 1) {
-    if (value === 'Date range') { showSpendDateRange.value = true; return }
-    spendPeriod.value = value
-    spendDateFrom.value = null
-    spendDateTo.value = null
-    loadStatSpend()
-    return
-  }
-  if (index === 2) {
-    if (value === 'Date range') { showLeadsDateRange.value = true; return }
-    leadsPeriod.value = value
-    leadsDateFrom.value = null
-    leadsDateTo.value = null
-    loadStatLeads()
-    return
-  }
-  if (index === 3) {
-    if (value === 'Date range') { showImpressionsDateRange.value = true; return }
-    impressionsPeriod.value = value
-    impressionsDateFrom.value = null
-    impressionsDateTo.value = null
-    return
-  }
-  if (index === 4) {
-    if (value === 'Date range') { showReachDateRange.value = true; return }
-    reachPeriod.value = value
-    reachDateFrom.value = null
-    reachDateTo.value = null
-  }
-}
-
-const confirmSpendDateRange = () => {
-  showSpendDateRange.value = false
-  spendPeriod.value = formatDateRangeLabel(spendDateFrom.value, spendDateTo.value)
-  loadStatSpend()
-}
-
-const confirmLeadsDateRange = () => {
-  showLeadsDateRange.value = false
-  leadsPeriod.value = formatDateRangeLabel(leadsDateFrom.value, leadsDateTo.value)
-  loadStatLeads()
-}
 
 // Drill-down state: level 0 = campaigns, 1 = ad sets, 2 = ads
 const drill = reactive({ level: 0, campaign: null, adSet: null });
@@ -571,8 +305,6 @@ watch(
     }
 
     await hydrateMetaAnalytics({ syncIfInsightsMissing: true });
-    loadStatSpend();
-    loadStatLeads();
   },
   { immediate: true }
 );
@@ -639,8 +371,6 @@ const resync = async () => {
       });
     })();
     await analyticsLoadPromise;
-    loadStatSpend();
-    loadStatLeads();
   } catch (error) {
     mainStore.setSnackbar({
       type: 'error',
@@ -678,29 +408,11 @@ const emptyStateCopy = computed(() =>
     : 'Connect a Meta page for this organisation first. Once connected, run Sync Now to start importing campaign analytics.'
 );
 
-// When the global date filter changes, refresh per-campaign lead counts so campaign card
-// CPL stays consistent with the spend shown (both should reflect the same date window).
-watch(
-  () => ({ dateFrom: activeFilters.value?.dateFrom, dateTo: activeFilters.value?.dateTo }),
-  (filters) => {
-    const orgId = currentOrgId.value;
-    if (!orgId) return;
-    const params = {};
-    if (filters.dateFrom) params.dateFrom = toYmd(filters.dateFrom);
-    if (filters.dateTo) params.dateTo = toYmd(filters.dateTo);
-    crmStore.getAllLeadCounts(orgId, params);
-  },
-  { deep: true }
-);
 
 const selectedPlatform = computed(() => activeFilters.value?.platform || null);
-const hasDateFilter = computed(() => Boolean(activeFilters.value?.dateFrom || activeFilters.value?.dateTo));
-const filterDateFrom = computed(() => {
-  return parseLocalDate(activeFilters.value?.dateFrom, false);
-});
-const filterDateTo = computed(() => {
-  return parseLocalDate(activeFilters.value?.dateTo, true);
-});
+const selectedStatus = computed(() => activeFilters.value?.status || null);
+const filterDateFrom = computed(() => parseLocalDate(activeFilters.value?.dateFrom, false));
+const filterDateTo = computed(() => parseLocalDate(activeFilters.value?.dateTo, true));
 const insightsInRange = computed(() =>
   crmStore.metaInsights.filter((insight) => {
     const rowDate = parseLocalDate(insight.date, false);
@@ -735,16 +447,17 @@ const insightsCoverageLabel = computed(() => {
   const bounds = syncedInsightsBounds.value;
   if (!bounds) return '';
   const syncedRange = `${formatShortDate(bounds.min)} - ${formatShortDate(bounds.max)}`;
-  if (hasDateFilter.value) {
-    const from = activeFilters.value?.dateFrom ? formatShortDate(activeFilters.value.dateFrom) : 'Start';
-    const to = activeFilters.value?.dateTo ? formatShortDate(activeFilters.value.dateTo) : 'Today';
-    return `Filtered view: ${from} - ${to}. Synced coverage: ${syncedRange}.`;
-  }
   return `Synced coverage: ${syncedRange}. Sync Now refreshes a rolling ${INSIGHTS_SYNC_DAYS}-day window.`;
 });
 
-const latestReachForSingleEntity = (rows = []) => {
+// Prefer lifetimeReach (deduplicated over the sync window) over daily reach.
+// lifetimeReach is stamped on all rows for an entity after each sync.
+const lifetimeReachForSingleEntity = (rows = []) => {
   if (!Array.isArray(rows) || rows.length === 0) return 0;
+  for (const row of rows) {
+    if (row?.lifetimeReach != null) return Number(row.lifetimeReach);
+  }
+  // fallback: most recent daily reach (less accurate but better than 0)
   let latestRow = null;
   for (const row of rows) {
     const rowDate = parseLocalDate(row?.date, false);
@@ -756,22 +469,30 @@ const latestReachForSingleEntity = (rows = []) => {
   return latestRow?.reach || 0;
 };
 
-const sumLatestReachByEntity = (rows = []) => {
+const sumLifetimeReachByEntity = (rows = []) => {
   if (!Array.isArray(rows) || rows.length === 0) return 0;
-  const latestByEntity = new Map();
+  // Group rows by entityId, pick lifetimeReach if available or latest daily reach
+  const reachByEntity = new Map();
   for (const row of rows) {
     const entityId = String(row?.entityId || '');
     if (!entityId) continue;
+    if (!reachByEntity.has(entityId)) {
+      reachByEntity.set(entityId, { lifetimeReach: null, latestDate: null, latestReach: 0 });
+    }
+    const entry = reachByEntity.get(entityId);
+    if (row?.lifetimeReach != null && entry.lifetimeReach === null) {
+      entry.lifetimeReach = Number(row.lifetimeReach);
+    }
     const rowDate = parseLocalDate(row?.date, false);
-    if (!rowDate) continue;
-    const reach = Number(row?.reach || 0);
-    const found = latestByEntity.get(entityId);
-    if (!found || rowDate > found.date) {
-      latestByEntity.set(entityId, { date: rowDate, reach });
+    if (rowDate && (!entry.latestDate || rowDate > entry.latestDate)) {
+      entry.latestDate = rowDate;
+      entry.latestReach = Number(row?.reach || 0);
     }
   }
   let total = 0;
-  for (const entry of latestByEntity.values()) total += Number(entry.reach || 0);
+  for (const entry of reachByEntity.values()) {
+    total += entry.lifetimeReach !== null ? entry.lifetimeReach : entry.latestReach;
+  }
   return total;
 };
 
@@ -785,10 +506,10 @@ const sortCardsByStatus = (cards) =>
   });
 
 const filteredCampaignCount = computed(() => {
-  if (campaignStatusFilter.value === 'All') return crmStore.metaCampaigns.length
+  if (!selectedStatus.value) return crmStore.metaCampaigns.length;
   return crmStore.metaCampaigns.filter(
-    (c) => c.status?.toUpperCase() === campaignStatusFilter.value.toUpperCase()
-  ).length
+    (c) => c.status?.toUpperCase() === selectedStatus.value.toUpperCase()
+  ).length;
 })
 
 const analyticsStats = computed(() => {
@@ -798,44 +519,26 @@ const analyticsStats = computed(() => {
       icon: 'https://cdn.lordicon.com/nocovwne.json',
       label: 'Number of Campaigns',
       value: String(filteredCampaignCount.value).padStart(2, '0'),
-      select: campaignStatusFilter.value,
-      selectItems: ['All', 'Active', 'Paused'],
     },
     {
       icon: 'https://cdn.lordicon.com/tzynxkwl.json',
       label: 'Total Spend',
-      value: statSpendLoading.value ? '...' : `${sym}${(statSpend.value / 100).toFixed(2)}`,
-      select: spendPeriod.value,
-      selectItems: spendDateFrom.value
-        ? ['This week', 'This month', spendPeriod.value, 'Date range']
-        : ['This week', 'This month', 'Date range'],
+      value: `${sym}${(statSpend.value / 100).toFixed(2)}`,
     },
     {
       icon: 'https://cdn.lordicon.com/tzynxkwl.json',
       label: 'Number of Leads',
-      value: statLeadsLoading.value ? '...' : String(statLeads.value).padStart(2, '0'),
-      select: leadsPeriod.value,
-      selectItems: leadsDateFrom.value
-        ? ['This week', 'This month', leadsPeriod.value, 'Date range']
-        : ['This week', 'This month', 'Date range'],
+      value: String(statMetaLeads.value).padStart(2, '0'),
     },
     {
       icon: 'https://cdn.lordicon.com/tzynxkwl.json',
       label: 'Total Impressions',
       value: statImpressions.value.toLocaleString(),
-      select: impressionsPeriod.value,
-      selectItems: impressionsDateFrom.value
-        ? ['This week', 'This month', impressionsPeriod.value, 'Date range']
-        : ['This week', 'This month', 'Date range'],
     },
     {
       icon: 'https://cdn.lordicon.com/tzynxkwl.json',
       label: 'Total Reach',
       value: statReach.value.toLocaleString(),
-      select: reachPeriod.value,
-      selectItems: reachDateFrom.value
-        ? ['This week', 'This month', reachPeriod.value, 'Date range']
-        : ['This week', 'This month', 'Date range'],
     },
   ];
 });
@@ -852,8 +555,8 @@ const drillCampaignStats = computed(() => {
   );
   const totalSpend = insights.reduce((sum, i) => sum + Number(i.spend || 0), 0);
   const totalImpressions = insights.reduce((sum, i) => sum + Number(i.impressions || 0), 0);
-  const totalReach = sumLatestReachByEntity(insights);
-  const totalLeads = adSetIds.reduce((sum, id) => sum + Number(crmStore.metaAdSetLeadCounts[id] || 0), 0);
+  const totalReach = sumLifetimeReachByEntity(insights);
+  const totalLeads = insights.reduce((sum, i) => sum + Number(i.leads || 0), 0);
   return [
     { icon: 'https://cdn.lordicon.com/nocovwne.json', label: 'Ad Sets', value: String(adSetIds.length).padStart(2, '0') },
     { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Spend', value: `${sym}${(totalSpend / 100).toFixed(2)}` },
@@ -874,8 +577,8 @@ const drillAdSetStats = computed(() => {
   );
   const totalSpend = insights.reduce((sum, i) => sum + Number(i.spend || 0), 0);
   const totalImpressions = insights.reduce((sum, i) => sum + Number(i.impressions || 0), 0);
-  const totalReach = sumLatestReachByEntity(insights);
-  const totalLeads = adIds.reduce((sum, id) => sum + Number(crmStore.metaAdLeadCounts[id] || 0), 0);
+  const totalReach = sumLifetimeReachByEntity(insights);
+  const totalLeads = insights.reduce((sum, i) => sum + Number(i.leads || 0), 0);
   return [
     { icon: 'https://cdn.lordicon.com/nocovwne.json', label: 'Ads', value: String(ads.length).padStart(2, '0') },
     { icon: 'https://cdn.lordicon.com/tzynxkwl.json', label: 'Total Spend', value: `${sym}${(totalSpend / 100).toFixed(2)}` },
@@ -896,7 +599,7 @@ const campaigns = computed(() =>
     const campaignInsights = insightsInRange.value.filter(
       (insight) => insight.entityType === 'campaign' && insight.entityId === campaign.campaignId
     );
-    if (hasDateFilter.value && campaignInsights.length === 0) return null;
+    if (selectedStatus.value && campaign.status?.toUpperCase() !== selectedStatus.value.toUpperCase()) return null;
     const campaignAdSetIds = crmStore.metaAdSets
       .filter((adSet) => adSet.campaignId === campaign.campaignId)
       .map((adSet) => adSet.adSetId);
@@ -906,13 +609,13 @@ const campaigns = computed(() =>
 
     const totalSpend = campaignInsights.reduce((acc, insight) => acc + Number(insight.spend || 0), 0);
     const totalImpressions = campaignInsights.reduce((acc, insight) => acc + Number(insight.impressions || 0), 0);
-    const totalClicks = campaignInsights.reduce((acc, insight) => acc + Number(insight.clicks || 0), 0);
-    // Reach is deduplicated — summing daily rows inflates it. Use the most recent day's value.
-    const totalReach = latestReachForSingleEntity(campaignInsights);
-    // Use CRM lead count for this campaign — single source of truth
-    const crmLeads = Number(crmStore.metaCampaignLeadCounts[campaign.campaignId] || 0);
+    const totalLinkClicks = campaignInsights.reduce((acc, insight) => acc + Number(insight.linkClicks || 0), 0);
+    // Prefer lifetimeReach (deduplicated over sync window) — matches Meta Ads Manager
+    const totalReach = lifetimeReachForSingleEntity(campaignInsights);
+    // Use Meta platform lead count from insights — matches what Ads Manager reports
+    const metaLeads = campaignInsights.reduce((acc, insight) => acc + Number(insight.leads || 0), 0);
     const spendMajor = totalSpend / 100;
-    const cpl = crmLeads > 0 ? spendMajor / crmLeads : 0;
+    const cpl = metaLeads > 0 ? spendMajor / metaLeads : 0;
     const sym = currencySymbol.value;
 
     return {
@@ -933,9 +636,9 @@ const campaigns = computed(() =>
       status: campaign.status || null,
       cost: `${sym}${spendMajor.toFixed(2)}`,
       impressions: totalImpressions,
-      linkClicks: totalClicks,
+      linkClicks: totalLinkClicks,
       reach: totalReach,
-      leads: crmLeads,
+      leads: metaLeads,
       cpl: cpl > 0 ? `${sym}${cpl.toFixed(2)}` : '—',
     };
   }))
@@ -951,16 +654,16 @@ const adSetCards = computed(() => {
     const insights = insightsInRange.value.filter(
       (i) => i.entityType === 'adset' && i.entityId === adSet.adSetId
     );
-    if (hasDateFilter.value && insights.length === 0) return null;
+    if (selectedStatus.value && adSet.status?.toUpperCase() !== selectedStatus.value.toUpperCase()) return null;
     const totalSpend = insights.reduce((acc, i) => acc + Number(i.spend || 0), 0);
     const totalImpressions = insights.reduce((acc, i) => acc + Number(i.impressions || 0), 0);
-    const totalClicks = insights.reduce((acc, i) => acc + Number(i.clicks || 0), 0);
-    const totalReach = latestReachForSingleEntity(insights);
+    const totalLinkClicks = insights.reduce((acc, i) => acc + Number(i.linkClicks || 0), 0);
+    const totalReach = lifetimeReachForSingleEntity(insights);
     const spendMajor = totalSpend / 100;
     const firstAd = crmStore.metaAds.find((a) => a.adSetId === adSet.adSetId);
     const adSetPlatform = firstAd?.platform || drill.campaign.platform;
     if (selectedPlatform.value && adSetPlatform !== selectedPlatform.value) return null;
-    const adSetLeads = Number(crmStore.metaAdSetLeadCounts[adSet.adSetId] || 0);
+    const adSetLeads = insights.reduce((acc, i) => acc + Number(i.leads || 0), 0);
     const adSetCpl = adSetLeads > 0 ? spendMajor / adSetLeads : 0;
     return {
       id: adSet.adSetId,
@@ -979,7 +682,7 @@ const adSetCards = computed(() => {
       status: adSet.status || null,
       cost: `${sym}${spendMajor.toFixed(2)}`,
       impressions: totalImpressions,
-      linkClicks: totalClicks,
+      linkClicks: totalLinkClicks,
       reach: totalReach,
       leads: adSetLeads,
       cpl: adSetCpl > 0 ? `${sym}${adSetCpl.toFixed(2)}` : '—',
@@ -996,15 +699,15 @@ const adCards = computed(() => {
     const insights = insightsInRange.value.filter(
       (i) => i.entityType === 'ad' && i.entityId === ad.adId
     );
-    if (hasDateFilter.value && insights.length === 0) return null;
+    if (selectedStatus.value && ad.status?.toUpperCase() !== selectedStatus.value.toUpperCase()) return null;
     const adPlatform = ad.platform || drill.campaign?.platform;
     if (selectedPlatform.value && adPlatform !== selectedPlatform.value) return null;
     const totalSpend = insights.reduce((acc, i) => acc + Number(i.spend || 0), 0);
     const totalImpressions = insights.reduce((acc, i) => acc + Number(i.impressions || 0), 0);
-    const totalClicks = insights.reduce((acc, i) => acc + Number(i.clicks || 0), 0);
-    const totalReach = latestReachForSingleEntity(insights);
+    const totalLinkClicks = insights.reduce((acc, i) => acc + Number(i.linkClicks || 0), 0);
+    const totalReach = lifetimeReachForSingleEntity(insights);
     const spendMajor = totalSpend / 100;
-    const adLeads = Number(crmStore.metaAdLeadCounts[ad.adId] || 0);
+    const adLeads = insights.reduce((acc, i) => acc + Number(i.leads || 0), 0);
     const adCpl = adLeads > 0 ? spendMajor / adLeads : 0;
     return {
       id: ad.adId,
@@ -1021,7 +724,7 @@ const adCards = computed(() => {
       status: ad.status || null,
       cost: `${sym}${spendMajor.toFixed(2)}`,
       impressions: totalImpressions,
-      linkClicks: totalClicks,
+      linkClicks: totalLinkClicks,
       reach: totalReach,
       leads: adLeads,
       cpl: adCpl > 0 ? `${sym}${adCpl.toFixed(2)}` : '—',
@@ -1043,13 +746,9 @@ const campaignsWithDrill = computed(() =>
 
 // Replace filtered campaigns with drill-aware version
 const filteredCampaigns = computed(() => {
-  let base = campaignsWithDrill.value;
-  if (campaignStatusFilter.value !== 'All') {
-    base = base.filter((c) => c.status?.toUpperCase() === campaignStatusFilter.value.toUpperCase());
-  }
-  if (!search.value) return base;
+  if (!search.value) return campaignsWithDrill.value;
   const q = search.value.toLowerCase();
-  return base.filter((c) => c.title.toLowerCase().includes(q) || c.description.toLowerCase().includes(q));
+  return campaignsWithDrill.value.filter((c) => c.title.toLowerCase().includes(q) || c.description.toLowerCase().includes(q));
 });
 
 const drillEmptyTitle = computed(() => {
