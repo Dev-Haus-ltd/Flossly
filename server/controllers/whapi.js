@@ -494,7 +494,7 @@ const fetchQrBase64 = async (token) => {
   }
 };
 
-const fetchQrWithRetry = async (token, attempts = 2, delayMs = 1200) => {
+const fetchQrWithRetry = async (token, attempts = 3, delayMs = 1500) => {
   let last = null;
   for (let i = 0; i < attempts; i += 1) {
     last = await fetchQrBase64(token);
@@ -749,30 +749,23 @@ export const connect = async (event) => {
       });
   if (existingOrg) await row.save();
 
-  const webhookResp = await updateWebhook(created.token, webhookUrl);
-  const qr = await fetchQrWithRetry(created.token);
-  if (qr) {
-    row.lastQrAt = new Date();
-    await row.save();
-  }
-  if (extendResp && !qr) {
-    row.status = "Activating";
-    await row.save();
-  }
+  // New channels take up to 90 seconds to fully initialize (Whapi docs).
+  // Attempting updateWebhook or fetchQr immediately will always fail on an
+  // unactivated channel — skip both and let the client poll for the QR instead.
+  row.status = "Activating";
+  await row.save();
 
   return success({
     channelId: row.channelId,
     status: row.status,
-    qr,
-    qrReady: Boolean(qr),
-    canActivate: !extendResp,
-    activationPending: !!extendResp,
-    warning: qr
-      ? null
-      : "QR not ready. If the channel is Stopped/Overdue, activate it with at least 1 day, wait ~1 minute, then refresh.",
+    qr: null,
+    qrReady: false,
+    canActivate: false,
+    activationPending: true,
+    warning: null,
     mode: requestedMode,
     modeUpdated: !!modeResp,
-    webhookUpdated: !!webhookResp,
+    webhookUpdated: false,
     extended: !!extendResp,
     extendedDays: extendDays,
   });
