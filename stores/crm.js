@@ -212,5 +212,7 @@ export const useCrmStore = defineStore("crmStore", {
     deleteWhatsAppMessage(payload) { return this._wrap(() => crmService.deleteWhatsAppMessage(payload)); },
     reactWhatsAppMessage(payload) { return this._wrap(() => crmService.reactWhatsAppMessage(payload)); },
     getLeadPriceAttachmentRecent(payload) { return this._wrap(() => crmService.getLeadPriceAttachmentRecent(payload)); },
+    getAutoReplySettings() { return this._wrap(() => crmService.getAutoReplySettings()); },
+    updateAutoReplySettings(payload) { return this._wrap(() => crmService.updateAutoReplySettings(payload)); },
   },
 });

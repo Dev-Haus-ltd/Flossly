@@ -1,11 +1,12 @@
 import { Op, fn, col } from 'sequelize'
 import crypto from 'crypto'
-import { CrmLead, MetaPage, Organisation, User, UserOrganisation, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight, CrmDmAccount, CrmDmConversation, CrmDmMessage } from '../models'
+import { CrmLead, MetaPage, Organisation, User, UserOrganisation, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight, CrmDmAccount, CrmDmConversation, CrmDmMessage, OrganisationTreatment } from '../models'
 import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
 import { addMetaClient, broadcastMetaEvent } from '../utils/metaStream'
 import { sendNotificationToMultipleUsers } from '../utils/fcmNotification'
 import { parseJsonBody } from "../utils/body"
+import { chat } from '../utils/aiWrapper'
 import {
   runStructureSync,
   runInsightsSync,
@@ -70,6 +71,81 @@ const upsertDmAccount = async ({ organisationId, connectedByUserId, platform, ac
     metadata: metadata || null,
   })
 }
+
+const sendAutoReply = async ({ orgId, conversation, messageText, accessToken, senderId, recipientId }) => {
+  try {
+    const org = await Organisation.findOne({
+      where: { id: orgId },
+      attributes: ['name', 'type', 'autoReplyEnabled'],
+    });
+
+    if (!org || !org.autoReplyEnabled) return;
+
+    const treatments = await OrganisationTreatment.findAll({
+      where: { organisationId: orgId, active: true },
+      attributes: ['name', 'category'],
+      limit: 20,
+    });
+
+    const treatmentList = treatments.length
+      ? treatments.map((t) => `${t.name}${t.category ? ` (${t.category})` : ''}`).join(', ')
+      : 'various treatments';
+
+    const systemPrompt = `You are a friendly assistant for a ${org.type || 'healthcare'} practice called "${org.name}". 
+
+CRITICAL RULES - NEVER BREAK THESE:
+1. NEVER book, schedule, or confirm appointments - always say "A team member will reach out once confirmed"
+2. NEVER make up prices, availability, or any information not provided in the available treatments list
+3. If you don't have clear context to answer a question confidently, say "A team member will let you know about this"
+4. Keep responses brief and friendly (1-2 sentences max)
+5. Be warm and professional
+
+AVAILABLE TREATMENTS at this practice: ${treatmentList || 'Please ask about specific treatments'}`;
+
+    const replyText = await chat({
+      prompt: `A patient/customer sent this message: "${messageText}". Generate a brief, helpful auto-reply (1-2 sentences max). Be friendly and professional.`,
+      systemPrompt,
+      temperature: 0.4,
+      maxTokens: 300,
+    });
+
+    if (!replyText) return;
+
+    const targetNode = encodeURIComponent(String(senderId || 'me'));
+    const url = `https://graph.facebook.com/${META_VERSION}/${targetNode}/messages`;
+    await $fetch(url, {
+      method: 'POST',
+      body: {
+        recipient: { id: recipientId },
+        messaging_type: 'RESPONSE',
+        message: { text: replyText },
+      },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    await CrmDmMessage.create({
+      organisationId: orgId,
+      conversationId: conversation.id,
+      platform: conversation.platform,
+      platformMessageId: null,
+      direction: 'outbound',
+      senderName: 'Flossly',
+      message: replyText,
+      attachments: null,
+      status: 'sent',
+      metadata: { autoReply: true },
+    });
+
+    conversation.lastMessageAt = new Date();
+    await conversation.save();
+
+    console.log(`[Meta AutoReply] Sent auto-reply for org ${orgId}: ${replyText.slice(0, 50)}...`);
+  } catch (err) {
+    console.error(`[Meta AutoReply] Failed for org ${orgId}:`, err?.message || err);
+  }
+};
 
 export const authStart = async (event) => {
   const config = useRuntimeConfig()
@@ -1818,6 +1894,17 @@ export const webhook = async (event) => {
               lastInboundAt: timestamp.toISOString(),
             }
             await conversation.save()
+
+            if (messageText && accessToken) {
+              sendAutoReply({
+                orgId,
+                conversation,
+                messageText,
+                accessToken,
+                senderId,
+                recipientId,
+              }).catch((err) => console.error('[Meta AutoReply] Error:', err?.message || err));
+            }
 
             broadcastMetaEvent('dm', {
               orgId,

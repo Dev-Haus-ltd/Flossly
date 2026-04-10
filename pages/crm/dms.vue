@@ -10,7 +10,26 @@
           <v-tab value="messenger">Messenger</v-tab>
           <v-tab value="instagram">Instagram</v-tab>
         </v-tabs>
-        <v-divider />
+        <v-spacer />
+        <div class="d-flex align-center mr-4">
+          <v-tooltip location="bottom" text="Auto-reply with AI when enabled">
+            <template #activator="{ props: tooltipProps }">
+              <div v-bind="tooltipProps" class="d-flex align-center">
+                <v-icon size="14" :color="autoReplyEnabled ? 'success' : 'grey'" class="mr-1">{{ autoReplyEnabled ? 'mdi-robot' : 'mdi-robot-outline' }}</v-icon>
+                <span class="text-caption text-medium-emphasis mr-1">Auto-reply</span>
+                <v-switch
+                  v-model="autoReplyEnabled"
+                  color="success"
+                  density="compact"
+                  hide-details
+                  inset
+                  style="transform: scale(0.8);"
+                  @update:model-value="toggleAutoReply"
+                />
+              </div>
+            </template>
+          </v-tooltip>
+        </div>
       </div>
 
       <div class="dms-body">
@@ -296,6 +315,8 @@ const dmConnectionStatus = ref({
 const messageCache = ref(new Map());
 const MESSAGE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const syncingHistory = ref(false);
+const autoReplyEnabled = ref(false);
+const autoReplyLoading = ref(false);
 let searchTimer = null;
 
 const crmStore = useCrmStore();
@@ -459,6 +480,38 @@ const syncHistory = async () => {
     mainStore?.setSnackbar?.({ title: e?.message || "Sync failed", type: "error" });
   } finally {
     syncingHistory.value = false;
+  }
+};
+
+const loadAutoReplySettings = async () => {
+  try {
+    const res = await crmStore.getAutoReplySettings();
+    if (res?.code === 0) {
+      autoReplyEnabled.value = !!res.data?.autoReplyEnabled;
+    }
+  } catch {}
+};
+
+const toggleAutoReply = async (newValue) => {
+  if (autoReplyLoading.value) return;
+  autoReplyLoading.value = true;
+  try {
+    const res = await crmStore.updateAutoReplySettings({ autoReplyEnabled: newValue });
+    if (res?.code === 0) {
+      autoReplyEnabled.value = !!res.data?.autoReplyEnabled;
+      mainStore?.setSnackbar?.({ 
+        title: newValue ? "Auto-reply enabled" : "Auto-reply disabled", 
+        type: "success" 
+      });
+    } else {
+      autoReplyEnabled.value = !newValue;
+      mainStore?.setSnackbar?.({ title: res?.message || "Failed to update auto-reply settings", type: "error" });
+    }
+  } catch (e) {
+    autoReplyEnabled.value = !newValue;
+    mainStore?.setSnackbar?.({ title: e?.message || "Failed to update auto-reply settings", type: "error" });
+  } finally {
+    autoReplyLoading.value = false;
   }
 };
 
@@ -772,6 +825,7 @@ onMounted(async () => {
 
   await loadConversations(true);
   await loadDmConnectionStatus();
+  await loadAutoReplySettings();
 
   if (convoId) {
     selectConversation(convoId);
@@ -810,6 +864,10 @@ onMounted(async () => {
 
 .dms-top-bar {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .dms-tabs {
