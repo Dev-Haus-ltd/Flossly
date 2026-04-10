@@ -56,6 +56,12 @@
         <v-list-item @click="goToMyProfile">
           <v-list-item-title class="menu-option">My Profile</v-list-item-title>
         </v-list-item>
+        <v-list-item v-if="canInstall" @click="handleInstall">
+          <template #prepend>
+            <v-icon size="18" color="#0061FB" class="me-2">mdi-download-outline</v-icon>
+          </template>
+          <v-list-item-title class="menu-option">Install App</v-list-item-title>
+        </v-list-item>
       </v-list>
 
       <v-divider class="mt-2" />
@@ -76,11 +82,12 @@
 const { user } = defineProps({
   user: Object,
 });
-console.log(user)
 const showProfileDialog = ref(false);
 const showPracticeProfileDialog = ref(false);
 const menu = ref(false);
 const router = useRouter();
+
+const { canInstall, install } = usePWAInstall();
 
 const goToPracticeProfile = () => {
   showPracticeProfileDialog.value = true;
@@ -91,7 +98,12 @@ const goToMyProfile = () => {
   showProfileDialog.value = true;
   menu.value = false;
 };
- 
+
+const handleInstall = async () => {
+  menu.value = false;
+  await install();
+};
+
 const handleLogout = () => {
   router.push("/logout");
 };
