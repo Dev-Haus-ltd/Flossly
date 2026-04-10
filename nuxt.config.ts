@@ -82,8 +82,13 @@ export default defineNuxtConfig({
     MAX_FILE_SIZE_FOR_LOGO: process.env.MAX_FILE_SIZE_FOR_LOGO || 5 * 1024 * 1024, // Default 5MB in bytes
     // Google Cloud Speech-to-Text credentials
     GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-    // OpenAI API key for summarization
+    // AI / LLM Configuration
+    AI_LLM_PROVIDER: process.env.NUXT_AI_LLM_PROVIDER || process.env.AI_LLM_PROVIDER || "openai",
     OPENAI_API_KEY: process.env.NUXT_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
+    AI_OPENAI_MODEL: process.env.NUXT_AI_OPENAI_MODEL || process.env.AI_OPENAI_MODEL || "gpt-4o-mini",
+    ANTHROPIC_API_KEY: process.env.NUXT_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY,
+    AI_ANTHROPIC_MODEL: process.env.NUXT_AI_ANTHROPIC_MODEL || process.env.AI_ANTHROPIC_MODEL || "claude-sonnet-4-20250514",
+    CLAUDE_API_KEY: process.env.NUXT_CLAUDE_API_KEY || process.env.CLAUDE_API_KEY,
 
     // Redis connection URL for centralized session management
     REDIS_URL: process.env.REDIS_URL,
