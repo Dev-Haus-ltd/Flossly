@@ -831,10 +831,11 @@ const startWhapiStatusStream = () => {
         // Only fire if we're actively in a connect flow (dialog open OR activation banner showing)
         _onWhapiConnected();
       } else if (isNewChannel.value && whapiActivating.value && !whapiQr.value) {
-        // Channel became active (not yet connected) — QR is likely available now.
-        // Trigger an immediate fetch instead of waiting for the next poll tick.
+        // Channel status changed while activation banner is showing.
+        // 'qr' is Whapi's primary signal that the channel is ready to scan.
+        // Also react to 'active', 'auth', 'awaiting' as QR-ready states.
         const raw = String(payload.status || '').toLowerCase()
-        if (raw.includes('active') || raw.includes('auth')) {
+        if (raw === 'qr' || raw.includes('awaiting') || raw.includes('active') || raw.includes('auth')) {
           refreshWhapiQr()
         }
       }
@@ -1141,21 +1142,26 @@ const dismissActivation = () => {
   whapiQrWarning.value = '';
 }
 
-const connectWhapi = async (channelId = null) => {
+const connectWhapi = async (channelId = null, forceNew = false) => {
   if (whapiLoading.value) return
   whapiLoading.value = true
   try {
-    const payload = channelId ? { channelId } : {}
+    const payload = channelId ? { channelId } : (forceNew ? { forceNew: true } : {})
     const res = await crmStore.startWhapiConnect(payload)
     if (res?.code === 0 && res.data) {
+      // Extend failed — channel is blocked and couldn't be reactivated
+      if (res.data.canActivate && !res.data.activationPending) {
+        const msg = res.data.warning || 'Unable to reactivate WhatsApp. Please contact support.'
+        mainStore?.setSnackbar?.({ title: msg, type: 'error' })
+        return
+      }
       whapiQr.value = res.data.qr || ''
-      whapiQrWarning.value = res.data.warning || ''
+      whapiQrWarning.value = ''
       isNewChannel.value = !!res.data.activationPending
       loadWhapiStatus()
       loadWhapiChannels(false)
       if (isNewChannel.value) {
-        // New channel: don't block with a modal — show a floating banner instead
-        // and open the QR dialog automatically when it's ready
+        // Channel activating — show floating banner, open QR dialog automatically when ready
         whapiActivating.value = true
         startActivationProgress()
         mainStore?.setSnackbar?.({ title: 'WhatsApp is being set up — QR code will appear in about 1–2 minutes', type: 'info' })
@@ -1207,7 +1213,8 @@ const confirmWhapiConnect = async () => {
   if (value && value !== 'new') {
     await connectWhapi(value)
   } else {
-    await connectWhapi()
+    // forceNew: true tells the server to create a brand new channel even if one exists
+    await connectWhapi(null, true)
   }
 }
 

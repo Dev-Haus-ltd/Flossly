@@ -378,7 +378,9 @@ const isWhapiConnected = (status, phoneNumber, displayName) => {
 const isWhapiActivationBlocked = (status) => {
   const raw = String(status || "").trim().toLowerCase();
   if (!raw) return true;
-  if (raw.includes("activating")) return false;
+  // Explicitly ready states — channel API is reachable, QR may be available
+  if (raw === "qr" || raw.includes("awaiting") || raw.includes("activating")) return false;
+  // Blocked states — channel API will hang or error
   if (raw.includes("stopped") || raw.includes("overdue")) return true;
   if (raw.includes("pending") || raw.includes("created")) return true;
   return false;
@@ -632,9 +634,42 @@ export const connect = async (event) => {
     }
   }
   const requestedChannelId = String(body?.channelId || "").trim() || null;
+  const forceNew = !!body?.forceNew;
 
   const existingOrg = await findOrgChannel(orgId);
-  if (existingOrg && !requestedChannelId) {
+  if (existingOrg && !requestedChannelId && !forceNew) {
+    if (isWhapiActivationBlocked(existingOrg.status)) {
+      // Channel is stopped/overdue/pending — calling its API will hang.
+      // Extend it via the partner API (manager.whapi.cloud, always reachable)
+      // to reactivate it, then let the client poll for the QR once it's live.
+      const extendDays = resolveWhapiExtendDays();
+      const extendResp = await extendPartnerChannel(existingOrg.channelId, extendDays, "Auto extend on reconnect");
+      if (extendResp) {
+        existingOrg.status = "Activating";
+        await existingOrg.save();
+        return success({
+          channelId: existingOrg.channelId,
+          status: existingOrg.status,
+          qr: null,
+          qrReady: false,
+          canActivate: false,
+          activationPending: true,
+          extended: true,
+          extendedDays: extendDays,
+          warning: null,
+        });
+      }
+      // Extend failed — return blocked state so client shows a useful message
+      return success({
+        channelId: existingOrg.channelId,
+        status: existingOrg.status,
+        qr: null,
+        qrReady: false,
+        canActivate: true,
+        activationPending: false,
+        warning: "Failed to reactivate the WhatsApp connection. Please contact support.",
+      });
+    }
     const token = decrypt(existingOrg.tokenEnc);
     const webhookUrl = resolveWebhookUrl();
     const webhookResp = await updateWebhook(token, webhookUrl);
@@ -660,11 +695,9 @@ export const connect = async (event) => {
     const channelRows = await findChannelRows(requestedChannelId);
     const selected = pickLatestChannel(channelRows);
     if (!selected) return error(404, "Whapi channel not found");
-    const token = decrypt(selected.tokenEnc);
-    const webhookUrl = resolveWebhookUrl();
-    const webhookResp = await updateWebhook(token, webhookUrl);
-    const qr = await fetchQrWithRetry(token);
 
+    // Ensure the org row points to this channel (create or update)
+    const webhookUrl = resolveWebhookUrl();
     let target = existingOrg;
     if (!target) {
       await syncWhapiConfig();
@@ -688,6 +721,40 @@ export const connect = async (event) => {
       target.webhookUrl = selected.webhookUrl || webhookUrl || target.webhookUrl;
       await target.save();
     }
+
+    // Stopped/overdue channels will hang if we call their API — extend first
+    if (isWhapiActivationBlocked(target.status)) {
+      const extendDays = resolveWhapiExtendDays();
+      const extendResp = await extendPartnerChannel(target.channelId, extendDays, "Auto extend on reconnect");
+      if (extendResp) {
+        target.status = "Activating";
+        await target.save();
+        return success({
+          channelId: target.channelId,
+          status: target.status,
+          qr: null,
+          qrReady: false,
+          canActivate: false,
+          activationPending: true,
+          extended: true,
+          extendedDays: extendDays,
+          warning: null,
+        });
+      }
+      return success({
+        channelId: target.channelId,
+        status: target.status,
+        qr: null,
+        qrReady: false,
+        canActivate: true,
+        activationPending: false,
+        warning: "Failed to reactivate the WhatsApp connection. Please contact support.",
+      });
+    }
+
+    const token = decrypt(target.tokenEnc);
+    const webhookResp = await updateWebhook(token, webhookUrl);
+    const qr = await fetchQrWithRetry(token);
 
     if (qr) {
       target.lastQrAt = new Date();
