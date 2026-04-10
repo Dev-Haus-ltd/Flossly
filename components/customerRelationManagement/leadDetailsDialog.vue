@@ -2,81 +2,93 @@
   <div>
     <v-dialog :model-value="props.modelValue" max-width="1300px" persistent :z-index="11000">
       <v-card class="d-flex flex-column rounded-xl" style="min-height: 75vh">
-        <!-- Header -->
-        <div
-          class="pa-4 d-flex justify-space-between align-center"
-          style="background-color: rgb(var(--v-theme-surface))"
-        >
-          <h3 class="title ml-4">{{ leadTitle }}</h3>
-          <v-btn flat icon size="32" @click="onClose">
-            <v-icon size="20">mdi-close</v-icon>
-          </v-btn>
-        </div>
+        <!-- Header: title row + tabs + divider -->
+        <div class="lead-dialog-header flex-shrink-0">
+          <div class="pa-4 pb-0 d-flex justify-space-between align-center">
+            <h3 class="title ml-4" style="font-size: 20px;">{{ leadTitle }}</h3>
+            <v-btn flat icon size="32" @click="onClose">
+              <v-icon size="20">mdi-close</v-icon>
+            </v-btn>
+          </div>
 
-        <!-- Scrollable content -->
-        <div class="flex-grow-1 px-4 py-2" style="overflow-y: auto">
-          <v-tabs v-model="tab" class="custom-tabs px-4" slider-color="primary">
+          <div class="lead-dialog-header-tabs px-4">
+            <v-tabs
+              v-model="tab"
+              class="custom-tabs"
+              hide-slider
+              density="comfortable"
+              :show-arrows="false"
+            >
             <v-tab value="lead-info" class="tab-text">
               <img
                 src="@/assets/icons/crm/info.svg"
-                width="18"
-                height="18"
-                class="mr-2"
+                width="26"
+                height="26"
+                alt=""
               />
-              Lead Information
+              <span class="tab-label">Lead Information</span>
             </v-tab>
 
             <v-tab value="treatment" class="tab-text">
               <img
                 src="@/assets/icons/crm/treatment.svg"
-                width="18"
-                height="18"
-                class="mr-2"
+                width="26"
+                height="26"
+                alt=""
               />
-              Treatment Interest
+              <span class="tab-label">Treatment Interest</span>
             </v-tab>
 
             <v-tab value="communication" class="tab-text">
               <img
                 src="@/assets/icons/crm/communication.svg"
-                width="18"
-                height="18"
-                class="mr-2"
+                width="26"
+                height="26"
+                alt=""
               />
-              Communication Tracking / Log
+              <span class="tab-label">Communication Tracking / Log</span>
             </v-tab>
 
             <v-tab value="whatsapp" class="tab-text">
-              <v-icon size="18" class="mr-2">mdi-whatsapp</v-icon>
-              WhatsApp Timeline
+              <img
+                src="@/assets/icons/crm/WhatsAppTimeline.svg"
+                width="26"
+                height="26"
+                alt=""
+              />
+              <span class="tab-label">WhatsApp Timeline</span>
             </v-tab>
 
             <v-tab value="automation" class="tab-text">
               <img
                 src="@/assets/icons/crm/settings.svg"
-                width="18"
-                height="18"
-                class="mr-2"
+                width="26"
+                height="26"
+                alt=""
               />
-              Flossly Automation
+              <span class="tab-label">Flossly Automation</span>
             </v-tab>
 
             <v-tab value="my-automations" class="tab-text">
               <img
                 src="@/assets/icons/crm/settings.svg"
-                width="18"
-                height="18"
-                class="mr-2"
+                width="26"
+                height="26"
+                alt=""
               />
-              My Automations
+              <span class="tab-label">My Automations</span>
             </v-tab>
 
             <v-tab value="automation-log" class="tab-text">
-              <v-icon size="18" class="mr-2">mdi-history</v-icon>
-              Automation History
+              <v-icon class="tab-leading-icon" size="26">mdi-history</v-icon>
+              <span class="tab-label">Automation History</span>
             </v-tab>
-          </v-tabs>
+            </v-tabs>
+          </div>
+        </div>
 
+        <!-- Scrollable body -->
+        <div class="flex-grow-1 px-4 py-2" style="overflow-y: auto">
           <v-tabs-window v-model="tab">
             <v-tabs-window-item value="lead-info">
               <div class="pa-6">
@@ -827,14 +839,116 @@ const savePreferences = async () => {
   text-overflow: ellipsis;
   max-width: calc(100% - 48px);
 }
+
+.lead-dialog-header {
+  background-color: rgb(var(--v-theme-surface));
+  /* Visible on light surfaces; theme outline can match surface and disappear */
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.lead-dialog-header-tabs {
+  padding-top: 21px;
+  padding-bottom: 21px;
+}
+
 .custom-tabs {
-  border-bottom: 1px solid rgb(var(--v-theme-outline));
+  --lead-tab-accent: #ff7c00;
+  --lead-tab-text: #1e1e1e;
+  --lead-tab-text-on-accent: #ffffff;
+  font-family: 'Inter', sans-serif;
+  max-width: 100%;
+  background: transparent !important;
 }
-.custom-tabs .v-tab {
-  color: inherit !important;
+
+.custom-tabs :deep(.v-slide-group__prev),
+.custom-tabs :deep(.v-slide-group__next) {
+  display: none !important;
 }
-.custom-tabs .v-tab.v-tab--selected {
-  font-weight: 500;
+
+.custom-tabs :deep(.v-slide-group__content) {
+  gap: 10px;
+  align-items: stretch;
+}
+
+.custom-tabs :deep(.v-slide-group__container) {
+  contain: none;
+}
+
+.custom-tabs :deep(.v-tab) {
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 42px;
+  height: auto;
+  border-radius: 28px;
+  padding: 8px clamp(8px, 2vw, 16px);
+  margin: 0;
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 130%;
+  border: none !important;
+  box-shadow: none !important;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.custom-tabs :deep(.v-tab:not(.v-tab--selected)) {
+  background-color: transparent !important;
+}
+
+.custom-tabs :deep(.v-tab .v-btn__content) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 26px;
+}
+
+/* Remove Vuetify hover/focus overlay on selected pill (avoids double “box” on orange) */
+.custom-tabs :deep(.v-tab.v-tab--selected .v-btn__overlay) {
+  opacity: 0 !important;
+}
+
+.custom-tabs :deep(.v-tab.v-tab--selected:focus-visible) {
+  outline: none;
+}
+
+.custom-tabs :deep(.v-tab.v-tab--selected) {
+  background-color: var(--lead-tab-accent) !important;
+  color: var(--lead-tab-text-on-accent) !important;
+}
+
+.custom-tabs :deep(.tab-label) {
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 130%;
+  letter-spacing: 0;
+  color: var(--lead-tab-text);
+  white-space: normal;
+  text-align: center;
+}
+
+.custom-tabs :deep(.v-tab.v-tab--selected .tab-label) {
+  color: var(--lead-tab-text-on-accent);
+}
+
+.custom-tabs :deep(.tab-leading-icon) {
+  flex-shrink: 0;
+  color: rgba(30, 30, 30, 0.55) !important;
+}
+
+.custom-tabs :deep(.v-tab.v-tab--selected .tab-leading-icon) {
+  color: var(--lead-tab-text-on-accent) !important;
+}
+
+@media (max-width: 959px) {
+  .custom-tabs :deep(.v-slide-group__content) {
+    flex-wrap: wrap;
+  }
 }
 .cust-lbl {
   
