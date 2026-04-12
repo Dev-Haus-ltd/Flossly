@@ -6,6 +6,7 @@ import {
   UserOrganisation,
   Organisation,
   UserPreference,
+  OrganisationTreatment,
 } from "../models";
 import { normalizeWhatsAppNumber, logWhatsAppMessage } from "../utils/whatsapp";
 import { success, error } from "../utils/response";
@@ -14,6 +15,7 @@ import { sendNotificationToMultipleUsers } from "../utils/fcmNotification";
 import { encrypt, decrypt } from "../utils/crypto";
 import { getWhapiEnvConfig, getWhapiPartnerConfig } from "../utils/whatsappProvider";
 import { uploadBufferFile } from "../utils/storage";
+import { chat } from "../utils/aiWrapper";
 
 const extractTimestamp = (value) => {
   if (!value) return Date.now();
@@ -110,6 +112,7 @@ const getMessageContent = (msg) => {
     const action = msg?.action || {};
     const actionType = String(action?.type || "").toLowerCase();
     if (actionType === "reaction" && action?.emoji) return `Reacted ${action.emoji}`;
+    if (actionType === "edit") return "";  // handled separately in webhook; never log "edit" as content
     if (actionType === "vote") return "Voted on a poll";
     if (actionType === "label_change") return "Changed a label";
     if (actionType === "media_notify") return "Shared media";
@@ -1032,6 +1035,75 @@ export const listChannels = async (event) => {
   return success({ channels });
 };
 
+const sendWhatsAppAutoReply = async ({ orgId, lead, content, token, channelId }) => {
+  try {
+    const org = await Organisation.findOne({
+      where: { id: orgId },
+      attributes: ['name', 'type', 'autoReplyEnabled'],
+    });
+
+    if (!org || !org.autoReplyEnabled) return;
+
+    const treatments = await OrganisationTreatment.findAll({
+      where: { organisationId: orgId, active: true },
+      attributes: ['name', 'category'],
+      limit: 20,
+    });
+
+    const treatmentList = treatments.length
+      ? treatments.map((t) => `${t.name}${t.category ? ` (${t.category})` : ''}`).join(', ')
+      : 'various treatments';
+
+    const systemPrompt = `You are a friendly assistant for a ${org.type || 'healthcare'} practice called "${org.name}". 
+
+CRITICAL RULES - NEVER BREAK THESE:
+1. NEVER book, schedule, or confirm appointments - always say "A team member will reach out once confirmed"
+2. NEVER make up prices, availability, or any information not provided in the available treatments list
+3. If you don't have clear context to answer a question confidently, say "A team member will let you know about this"
+4. Keep responses brief and friendly (1-2 sentences max)
+5. Be warm and professional
+
+AVAILABLE TREATMENTS at this practice: ${treatmentList || 'Please ask about specific treatments'}`;
+
+    const replyText = await chat({
+      prompt: `A patient/customer sent this message: "${content}". Generate a brief, helpful auto-reply (1-2 sentences max). Be friendly and professional.`,
+      systemPrompt,
+      temperature: 0.4,
+      maxTokens: 300,
+    });
+
+    if (!replyText) return;
+
+    const url = 'https://gate.whapi.cloud/messages/text';
+    await $fetch(url, {
+      method: 'POST',
+      body: {
+        to: lead.telephone || lead.mobile || lead.phone,
+        body: replyText,
+      },
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    await logWhatsAppMessage({
+      organisationId: orgId,
+      leadId: lead.id,
+      to: lead.telephone || lead.mobile || lead.phone,
+      direction: 'outbound',
+      type: 'text',
+      status: 'sent',
+      providerMessageId: null,
+      content: replyText,
+      attachments: null,
+    });
+
+    console.log(`[WhatsApp AutoReply] Sent auto-reply for org ${orgId}: ${replyText.slice(0, 50)}...`);
+  } catch (err) {
+    console.error(`[WhatsApp AutoReply] Failed for org ${orgId}:`, err?.message || err);
+  }
+};
+
 export const webhook = async (event) => {
   if (getMethod(event) === "HEAD") return send(event, "ok");
   if (getMethod(event) === "GET") return send(event, "ok");
@@ -1183,6 +1255,23 @@ export const webhook = async (event) => {
         continue;
       }
 
+      // ── Edit action: update the original message with the new text ──
+      if (
+        normalizedMsgType === "action" &&
+        String(msg?.action?.type || "").toLowerCase() === "edit"
+      ) {
+        const targetId = msg?.action?.message_id || msg?.action?.messageId || msg?.action?.id;
+        const newText = msg?.action?.body || msg?.action?.text || msg?.action?.content || "";
+        if (targetId && newText) {
+          await CrmWhatsAppMessageLog.update(
+            { content: newText },
+            { where: { providerMessageId: targetId, organisationId: orgId } }
+          );
+        }
+        broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+        continue;
+      }
+
       const token = channelRows?.[0]?.tokenEnc ? decrypt(channelRows[0].tokenEnc) : null;
       const attachments = await extractWhapiAttachments({ msg, token });
       const providerId = msg?.id || msg?.message_id || msg?.messageId || null;
@@ -1220,6 +1309,16 @@ export const webhook = async (event) => {
         attachments,
       });
       broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+
+      if (content && token) {
+        sendWhatsAppAutoReply({
+          orgId,
+          lead,
+          content,
+          token,
+          channelId: channelRows?.[0]?.channelId || null,
+        }).catch((err) => console.error('[WhatsApp AutoReply] Error:', err?.message || err));
+      }
 
       // Push notification to all org members
       try {

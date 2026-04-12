@@ -223,5 +223,7 @@ export const useCrmStore = defineStore("crmStore", {
     restoreForms(payload) { return this._wrap(() => webFormService.restoreForms(payload)); },
     deleteForm(payload) { return this._wrap(() => webFormService.deleteForm(payload)); },
     getAvailableFields() { return this._wrap(() => webFormService.getAvailableFields()); },
+    getAutoReplySettings() { return this._wrap(() => crmService.getAutoReplySettings()); },
+    updateAutoReplySettings(payload) { return this._wrap(() => crmService.updateAutoReplySettings(payload)); },
   },
 });
