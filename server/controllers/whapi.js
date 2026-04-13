@@ -935,16 +935,28 @@ export const qr = async (event) => {
   const existing = await findOrgChannel(orgId);
   if (!existing) return error(404, "Whapi channel not connected");
   const token = decrypt(existing.tokenEnc);
-  const qr = await fetchQrWithRetry(token);
-  if (qr) {
+  // For channels still in the activation window, attempt webhook setup on every poll.
+  // This is a no-op if the channel is not ready yet (it will just fail silently),
+  // but once the channel IS ready, it ensures SSE events start flowing immediately.
+  if (existing.status === "Activating") {
+    const webhookUrl = resolveWebhookUrl();
+    if (webhookUrl) {
+      await updateWebhook(token, webhookUrl);
+    }
+  }
+  const qrData = await fetchQrWithRetry(token);
+  if (qrData) {
     existing.lastQrAt = new Date();
+    if (existing.status === "Activating") {
+      existing.status = "qr";
+    }
     await existing.save();
   }
   return success({
     channelId: existing.channelId,
-    qr,
-    qrReady: Boolean(qr),
-    warning: qr
+    qr: qrData,
+    qrReady: Boolean(qrData),
+    warning: qrData
       ? null
       : "QR not ready. If the channel is Stopped/Overdue, activate it with at least 1 day, wait ~1 minute, then refresh.",
   });

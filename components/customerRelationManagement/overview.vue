@@ -90,17 +90,26 @@
                 </v-btn>
               </template>
               <v-btn
-                v-else
+                v-else-if="!whapiActivating"
                 color="primary"
                 variant="flat"
                 rounded="lg"
                 class="action-btn action-btn--primary"
-                :loading="whapiLoading || whapiStatusLoading"
                 :disabled="whapiStatusLoading || !canManageWhapi"
                 @click="openWhapiConnectDialog"
               >
                 Connect
               </v-btn>
+              <v-chip
+                v-else-if="whapiActivating"
+                color="warning"
+                variant="flat"
+                size="small"
+                class="action-btn"
+                prepend-icon="mdi-loading mdi-spin"
+              >
+                Setting up...
+              </v-chip>
               <span
                 v-if="!whapiStatusLoading && !canManageWhapi"
                 class="text-caption text-medium-emphasis mt-1"

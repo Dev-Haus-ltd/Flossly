@@ -78,6 +78,7 @@ let whapiEventSource = null
 let qrPollTimer = null
 let qrRefreshTimer = null
 let statusFallbackTimer = null
+let activationStatusTimer = null
 let sseActive = false
 let sseRetryDelay = 2000
 let qrPollAttempts = 0
@@ -91,7 +92,8 @@ const connectedCallbacks = new Set()
 const _stopQrPoll = () => { if (qrPollTimer) { clearInterval(qrPollTimer); qrPollTimer = null } }
 const _stopQrAutoRefresh = () => { if (qrRefreshTimer) { clearInterval(qrRefreshTimer); qrRefreshTimer = null } }
 const _stopStatusFallback = () => { if (statusFallbackTimer) { clearInterval(statusFallbackTimer); statusFallbackTimer = null } }
-const _stopAllQrTimers = () => { _stopQrPoll(); _stopQrAutoRefresh(); _stopStatusFallback() }
+const _stopActivationStatusPoll = () => { if (activationStatusTimer) { clearInterval(activationStatusTimer); activationStatusTimer = null } }
+const _stopAllQrTimers = () => { _stopQrPoll(); _stopQrAutoRefresh(); _stopStatusFallback(); _stopActivationStatusPoll() }
 
 const _stopActivationProgress = () => {
   if (activationProgressTimer) { clearInterval(activationProgressTimer); activationProgressTimer = null }
@@ -101,6 +103,7 @@ const _resetActivationState = () => {
   isNewChannel.value = false
   whapiActivating.value = false
   _stopActivationProgress()
+  _stopActivationStatusPoll()
 }
 
 // Lazily resolved so stores are available by the time any call happens.
@@ -173,6 +176,30 @@ const _startStatusFallback = () => {
   }, 10000)
 }
 
+// ── Activation-phase status poller ───────────────────────────────────────────
+// Runs while the banner is showing (whapiActivating = true, whapiDialog = false).
+// Polls /api/whapi/status every 10 s via the Partner API to detect when the
+// channel transitions from "Activating"/"Pending" to "qr"/"auth"/"active".
+// When ready, triggers a QR fetch so the dialog opens automatically.
+const _startActivationStatusPoll = () => {
+  _stopActivationStatusPoll()
+  activationStatusTimer = setInterval(async () => {
+    if (!whapiActivating.value) { _stopActivationStatusPoll(); return }
+    if (whapiQr.value) { _stopActivationStatusPoll(); return }
+    await _loadWhapiStatus()
+    if (whapiStatus.connected) {
+      _onWhapiConnected()
+      _stopActivationStatusPoll()
+      return
+    }
+    const raw = String(whapiStatus.status || '').toLowerCase()
+    if (raw === 'qr' || raw.includes('awaiting') || raw.includes('auth') ||
+        (raw.includes('active') && !raw.includes('inactive'))) {
+      if (!whapiLoading.value) await _refreshWhapiQr()
+    }
+  }, 10000)
+}
+
 const _onWhapiConnected = () => {
   whapiQr.value = ''
   whapiDialog.value = false
@@ -194,6 +221,14 @@ const _setupWatchers = () => {
       whapiQr.value = ''
       whapiQrWarning.value = ''
       if (!whapiActivating.value) isNewChannel.value = false
+    }
+  })
+
+  watch(whapiActivating, (active) => {
+    if (active) {
+      _startActivationStatusPoll()
+    } else {
+      _stopActivationStatusPoll()
     }
   })
 
