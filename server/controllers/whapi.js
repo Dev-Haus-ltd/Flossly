@@ -1,10 +1,12 @@
 import { Op } from "sequelize";
 import {
   CrmLead,
+  CrmWhatsAppMessageLog,
   WhapiChannelConfig,
   UserOrganisation,
   Organisation,
   UserPreference,
+  OrganisationTreatment,
 } from "../models";
 import { normalizeWhatsAppNumber, logWhatsAppMessage } from "../utils/whatsapp";
 import { success, error } from "../utils/response";
@@ -13,6 +15,7 @@ import { sendNotificationToMultipleUsers } from "../utils/fcmNotification";
 import { encrypt, decrypt } from "../utils/crypto";
 import { getWhapiEnvConfig, getWhapiPartnerConfig } from "../utils/whatsappProvider";
 import { uploadBufferFile } from "../utils/storage";
+import { chat } from "../utils/aiWrapper";
 
 const extractTimestamp = (value) => {
   if (!value) return Date.now();
@@ -109,6 +112,7 @@ const getMessageContent = (msg) => {
     const action = msg?.action || {};
     const actionType = String(action?.type || "").toLowerCase();
     if (actionType === "reaction" && action?.emoji) return `Reacted ${action.emoji}`;
+    if (actionType === "edit") return "";  // handled separately in webhook; never log "edit" as content
     if (actionType === "vote") return "Voted on a poll";
     if (actionType === "label_change") return "Changed a label";
     if (actionType === "media_notify") return "Shared media";
@@ -377,7 +381,9 @@ const isWhapiConnected = (status, phoneNumber, displayName) => {
 const isWhapiActivationBlocked = (status) => {
   const raw = String(status || "").trim().toLowerCase();
   if (!raw) return true;
-  if (raw.includes("activating")) return false;
+  // Explicitly ready states — channel API is reachable, QR may be available
+  if (raw === "qr" || raw.includes("awaiting") || raw.includes("activating")) return false;
+  // Blocked states — channel API will hang or error
   if (raw.includes("stopped") || raw.includes("overdue")) return true;
   if (raw.includes("pending") || raw.includes("created")) return true;
   return false;
@@ -493,7 +499,7 @@ const fetchQrBase64 = async (token) => {
   }
 };
 
-const fetchQrWithRetry = async (token, attempts = 2, delayMs = 1200) => {
+const fetchQrWithRetry = async (token, attempts = 3, delayMs = 1500) => {
   let last = null;
   for (let i = 0; i < attempts; i += 1) {
     last = await fetchQrBase64(token);
@@ -516,6 +522,7 @@ const updateWebhook = async (token, webhookUrl) => {
         mode: "body",
         events: [
           { type: "messages", method: "post" },
+          { type: "messages", method: "patch" },
           { type: "statuses", method: "post" },
           { type: "users", method: "post" },
           { type: "channel", method: "post" },
@@ -630,9 +637,42 @@ export const connect = async (event) => {
     }
   }
   const requestedChannelId = String(body?.channelId || "").trim() || null;
+  const forceNew = !!body?.forceNew;
 
   const existingOrg = await findOrgChannel(orgId);
-  if (existingOrg && !requestedChannelId) {
+  if (existingOrg && !requestedChannelId && !forceNew) {
+    if (isWhapiActivationBlocked(existingOrg.status)) {
+      // Channel is stopped/overdue/pending — calling its API will hang.
+      // Extend it via the partner API (manager.whapi.cloud, always reachable)
+      // to reactivate it, then let the client poll for the QR once it's live.
+      const extendDays = resolveWhapiExtendDays();
+      const extendResp = await extendPartnerChannel(existingOrg.channelId, extendDays, "Auto extend on reconnect");
+      if (extendResp) {
+        existingOrg.status = "Activating";
+        await existingOrg.save();
+        return success({
+          channelId: existingOrg.channelId,
+          status: existingOrg.status,
+          qr: null,
+          qrReady: false,
+          canActivate: false,
+          activationPending: true,
+          extended: true,
+          extendedDays: extendDays,
+          warning: null,
+        });
+      }
+      // Extend failed — return blocked state so client shows a useful message
+      return success({
+        channelId: existingOrg.channelId,
+        status: existingOrg.status,
+        qr: null,
+        qrReady: false,
+        canActivate: true,
+        activationPending: false,
+        warning: "Failed to reactivate the WhatsApp connection. Please contact support.",
+      });
+    }
     const token = decrypt(existingOrg.tokenEnc);
     const webhookUrl = resolveWebhookUrl();
     const webhookResp = await updateWebhook(token, webhookUrl);
@@ -658,11 +698,9 @@ export const connect = async (event) => {
     const channelRows = await findChannelRows(requestedChannelId);
     const selected = pickLatestChannel(channelRows);
     if (!selected) return error(404, "Whapi channel not found");
-    const token = decrypt(selected.tokenEnc);
-    const webhookUrl = resolveWebhookUrl();
-    const webhookResp = await updateWebhook(token, webhookUrl);
-    const qr = await fetchQrWithRetry(token);
 
+    // Ensure the org row points to this channel (create or update)
+    const webhookUrl = resolveWebhookUrl();
     let target = existingOrg;
     if (!target) {
       await syncWhapiConfig();
@@ -686,6 +724,40 @@ export const connect = async (event) => {
       target.webhookUrl = selected.webhookUrl || webhookUrl || target.webhookUrl;
       await target.save();
     }
+
+    // Stopped/overdue channels will hang if we call their API — extend first
+    if (isWhapiActivationBlocked(target.status)) {
+      const extendDays = resolveWhapiExtendDays();
+      const extendResp = await extendPartnerChannel(target.channelId, extendDays, "Auto extend on reconnect");
+      if (extendResp) {
+        target.status = "Activating";
+        await target.save();
+        return success({
+          channelId: target.channelId,
+          status: target.status,
+          qr: null,
+          qrReady: false,
+          canActivate: false,
+          activationPending: true,
+          extended: true,
+          extendedDays: extendDays,
+          warning: null,
+        });
+      }
+      return success({
+        channelId: target.channelId,
+        status: target.status,
+        qr: null,
+        qrReady: false,
+        canActivate: true,
+        activationPending: false,
+        warning: "Failed to reactivate the WhatsApp connection. Please contact support.",
+      });
+    }
+
+    const token = decrypt(target.tokenEnc);
+    const webhookResp = await updateWebhook(token, webhookUrl);
+    const qr = await fetchQrWithRetry(token);
 
     if (qr) {
       target.lastQrAt = new Date();
@@ -747,30 +819,23 @@ export const connect = async (event) => {
       });
   if (existingOrg) await row.save();
 
-  const webhookResp = await updateWebhook(created.token, webhookUrl);
-  const qr = await fetchQrWithRetry(created.token);
-  if (qr) {
-    row.lastQrAt = new Date();
-    await row.save();
-  }
-  if (extendResp && !qr) {
-    row.status = "Activating";
-    await row.save();
-  }
+  // New channels take up to 90 seconds to fully initialize (Whapi docs).
+  // Attempting updateWebhook or fetchQr immediately will always fail on an
+  // unactivated channel — skip both and let the client poll for the QR instead.
+  row.status = "Activating";
+  await row.save();
 
   return success({
     channelId: row.channelId,
     status: row.status,
-    qr,
-    qrReady: Boolean(qr),
-    canActivate: !extendResp,
-    activationPending: !!extendResp,
-    warning: qr
-      ? null
-      : "QR not ready. If the channel is Stopped/Overdue, activate it with at least 1 day, wait ~1 minute, then refresh.",
+    qr: null,
+    qrReady: false,
+    canActivate: false,
+    activationPending: true,
+    warning: null,
     mode: requestedMode,
     modeUpdated: !!modeResp,
-    webhookUpdated: !!webhookResp,
+    webhookUpdated: false,
     extended: !!extendResp,
     extendedDays: extendDays,
   });
@@ -873,16 +938,28 @@ export const qr = async (event) => {
   const existing = await findOrgChannel(orgId);
   if (!existing) return error(404, "Whapi channel not connected");
   const token = decrypt(existing.tokenEnc);
-  const qr = await fetchQrWithRetry(token);
-  if (qr) {
+  // For channels still in the activation window, attempt webhook setup on every poll.
+  // This is a no-op if the channel is not ready yet (it will just fail silently),
+  // but once the channel IS ready, it ensures SSE events start flowing immediately.
+  if (existing.status === "Activating") {
+    const webhookUrl = resolveWebhookUrl();
+    if (webhookUrl) {
+      await updateWebhook(token, webhookUrl);
+    }
+  }
+  const qrData = await fetchQrWithRetry(token);
+  if (qrData) {
     existing.lastQrAt = new Date();
+    if (existing.status === "Activating") {
+      existing.status = "qr";
+    }
     await existing.save();
   }
   return success({
     channelId: existing.channelId,
-    qr,
-    qrReady: Boolean(qr),
-    warning: qr
+    qr: qrData,
+    qrReady: Boolean(qrData),
+    warning: qrData
       ? null
       : "QR not ready. If the channel is Stopped/Overdue, activate it with at least 1 day, wait ~1 minute, then refresh.",
   });
@@ -970,6 +1047,75 @@ export const listChannels = async (event) => {
   return success({ channels });
 };
 
+const sendWhatsAppAutoReply = async ({ orgId, lead, content, token, channelId }) => {
+  try {
+    const org = await Organisation.findOne({
+      where: { id: orgId },
+      attributes: ['name', 'type', 'autoReplyEnabled'],
+    });
+
+    if (!org || !org.autoReplyEnabled) return;
+
+    const treatments = await OrganisationTreatment.findAll({
+      where: { organisationId: orgId, active: true },
+      attributes: ['name', 'category'],
+      limit: 20,
+    });
+
+    const treatmentList = treatments.length
+      ? treatments.map((t) => `${t.name}${t.category ? ` (${t.category})` : ''}`).join(', ')
+      : 'various treatments';
+
+    const systemPrompt = `You are a friendly assistant for a ${org.type || 'healthcare'} practice called "${org.name}". 
+
+CRITICAL RULES - NEVER BREAK THESE:
+1. NEVER book, schedule, or confirm appointments - always say "A team member will reach out once confirmed"
+2. NEVER make up prices, availability, or any information not provided in the available treatments list
+3. If you don't have clear context to answer a question confidently, say "A team member will let you know about this"
+4. Keep responses brief and friendly (1-2 sentences max)
+5. Be warm and professional
+
+AVAILABLE TREATMENTS at this practice: ${treatmentList || 'Please ask about specific treatments'}`;
+
+    const replyText = await chat({
+      prompt: `A patient/customer sent this message: "${content}". Generate a brief, helpful auto-reply (1-2 sentences max). Be friendly and professional.`,
+      systemPrompt,
+      temperature: 0.4,
+      maxTokens: 300,
+    });
+
+    if (!replyText) return;
+
+    const url = 'https://gate.whapi.cloud/messages/text';
+    await $fetch(url, {
+      method: 'POST',
+      body: {
+        to: lead.telephone || lead.mobile || lead.phone,
+        body: replyText,
+      },
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    await logWhatsAppMessage({
+      organisationId: orgId,
+      leadId: lead.id,
+      to: lead.telephone || lead.mobile || lead.phone,
+      direction: 'outbound',
+      type: 'text',
+      status: 'sent',
+      providerMessageId: null,
+      content: replyText,
+      attachments: null,
+    });
+
+    console.log(`[WhatsApp AutoReply] Sent auto-reply for org ${orgId}: ${replyText.slice(0, 50)}...`);
+  } catch (err) {
+    console.error(`[WhatsApp AutoReply] Failed for org ${orgId}:`, err?.message || err);
+  }
+};
+
 export const webhook = async (event) => {
   if (getMethod(event) === "HEAD") return send(event, "ok");
   if (getMethod(event) === "GET") return send(event, "ok");
@@ -1020,6 +1166,30 @@ export const webhook = async (event) => {
         }
       }
     }
+    // ── Handle message edits (messages_updates, event.event === "patch") ──
+    // Whapi sends edits in a separate messages_updates array, not in messages.
+    // Structure: { id, after_update: { text: { body: "new text" } }, trigger: { type: "edit" } }
+    if (Array.isArray(body?.messages_updates)) {
+      for (const update of body.messages_updates) {
+        if (String(update?.trigger?.type || "").toLowerCase() !== "edit") continue;
+        const msgId = update?.id || update?.after_update?.id;
+        const newText = update?.after_update?.text?.body || update?.after_update?.caption || "";
+        if (!msgId || !newText) continue;
+
+        // Find the org for this update via channel_id
+        if (!channelRows.length) continue;
+        for (const cfg of channelRows) {
+          const logRow = await CrmWhatsAppMessageLog.findOne({
+            where: { providerMessageId: String(msgId), organisationId: cfg.organisationId },
+            attributes: ["id", "leadId"],
+          });
+          if (!logRow) continue;
+          await logRow.update({ content: newText });
+          broadcastWhapiEvent("message", { orgId: cfg.organisationId, leadId: logRow.leadId });
+        }
+      }
+    }
+
     const messages = collectMessages(body);
 
     for (const msg of messages) {
@@ -1059,15 +1229,81 @@ export const webhook = async (event) => {
         }
       }
       if (!lead || !orgId) continue;
-      const content = getMessageContent(msg);
       const msgType =
         msg?.type ||
         msg?.message_type ||
         msg?.messageType ||
         (msg?.text ? "text" : null) ||
         "text";
+      const normalizedMsgType = String(msgType).toLowerCase();
+
+      // ── Revoked message: update existing row, never create a new inbound ghost ──
+      if (normalizedMsgType === "revoked") {
+        const revokedId = msg?.id || msg?.message_id || msg?.messageId;
+        if (revokedId) {
+          await CrmWhatsAppMessageLog.update(
+            { type: "revoked", content: "🚫 This message was deleted" },
+            { where: { providerMessageId: revokedId, organisationId: orgId } }
+          );
+        }
+        broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+        continue;
+      }
+
+      // ── Reaction action: update the target message row's reaction field ──
+      if (
+        normalizedMsgType === "action" &&
+        String(msg?.action?.type || "").toLowerCase() === "reaction"
+      ) {
+        const targetId = msg?.action?.message_id || msg?.action?.messageId || msg?.action?.id;
+        const emoji = msg?.action?.emoji;
+        if (targetId) {
+          await CrmWhatsAppMessageLog.update(
+            { reaction: emoji || null },
+            { where: { providerMessageId: targetId, organisationId: orgId } }
+          );
+        }
+        broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+        continue;
+      }
+
+      // ── Edit action: update the original message with the new text ──
+      if (
+        normalizedMsgType === "action" &&
+        String(msg?.action?.type || "").toLowerCase() === "edit"
+      ) {
+        const targetId = msg?.action?.message_id || msg?.action?.messageId || msg?.action?.id;
+        const newText = msg?.action?.body || msg?.action?.text || msg?.action?.content || "";
+        if (targetId && newText) {
+          await CrmWhatsAppMessageLog.update(
+            { content: newText },
+            { where: { providerMessageId: targetId, organisationId: orgId } }
+          );
+        }
+        broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+        continue;
+      }
+
       const token = channelRows?.[0]?.tokenEnc ? decrypt(channelRows[0].tokenEnc) : null;
       const attachments = await extractWhapiAttachments({ msg, token });
+      const providerId = msg?.id || msg?.message_id || msg?.messageId || null;
+      const content = getMessageContent(msg);
+
+      // ── Same-ID update: update existing row instead of creating a duplicate ──
+      if (providerId) {
+        const existing = await CrmWhatsAppMessageLog.findOne({
+          where: { providerMessageId: providerId, organisationId: orgId },
+        });
+        if (existing) {
+          await existing.update({
+            content,
+            ...(attachments ? { attachments } : {}),
+          });
+          broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+          continue;
+        }
+      }
+
       await updateLeadWhatsAppMeta(lead, {
         lastInboundAt: new Date(extractTimestamp(msg?.timestamp || msg?.time || msg?.sent)).toISOString(),
         lastInboundFrom: fromDigits,
@@ -1080,11 +1316,21 @@ export const webhook = async (event) => {
         direction: "inbound",
         type: String((attachments?.[0]?.type || msgType) || "text"),
         status: "received",
-        providerMessageId: msg?.id || msg?.message_id || msg?.messageId || null,
+        providerMessageId: providerId,
         content,
         attachments,
       });
       broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+
+      if (content && token) {
+        sendWhatsAppAutoReply({
+          orgId,
+          lead,
+          content,
+          token,
+          channelId: channelRows?.[0]?.channelId || null,
+        }).catch((err) => console.error('[WhatsApp AutoReply] Error:', err?.message || err));
+      }
 
       // Push notification to all org members
       try {
@@ -1124,11 +1370,11 @@ export const webhook = async (event) => {
 // ── Resolve org channel token (shared helper for message actions) ──
 const resolveOrgWhapiToken = async (orgId) => {
   const channel = await findOrgChannel(orgId);
-  if (!channel?.token) return null;
+  if (!channel?.tokenEnc) return null;
   try {
-    return decrypt(channel.token);
+    return decrypt(channel.tokenEnc);
   } catch {
-    return channel.token;
+    return channel.tokenEnc;
   }
 };
 
@@ -1141,6 +1387,19 @@ export const editMessage = async (event) => {
   const { providerMessageId, newText, to } = body || {};
   if (!providerMessageId || !newText || !to) {
     return error(400, "providerMessageId, newText, and to are required");
+  }
+
+  // Server-side 15-minute edit window check
+  const EDIT_WINDOW_MS = 15 * 60 * 1000;
+  const logRow = await CrmWhatsAppMessageLog.findOne({
+    where: { providerMessageId, organisationId: orgId },
+    attributes: ["createdAt"],
+  });
+  if (logRow) {
+    const age = Date.now() - new Date(logRow.createdAt).getTime();
+    if (age > EDIT_WINDOW_MS) {
+      return error(400, "Message can no longer be edited (15-minute window has passed)");
+    }
   }
 
   const token = await resolveOrgWhapiToken(orgId);
@@ -1194,7 +1453,8 @@ export const reactToMessage = async (event) => {
 
   const body = await readBody(event);
   const { providerMessageId, emoji } = body || {};
-  if (!providerMessageId || !emoji) return error(400, "providerMessageId and emoji are required");
+  // emoji may be "" to remove a reaction — only providerMessageId is strictly required
+  if (!providerMessageId) return error(400, "providerMessageId is required");
 
   const token = await resolveOrgWhapiToken(orgId);
   if (!token) return error(400, "Whapi not configured for this organisation");
@@ -1206,8 +1466,16 @@ export const reactToMessage = async (event) => {
     await $fetch(`${base}/messages/${encodeURIComponent(String(providerMessageId))}/reaction`, {
       method: "PUT",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: { emoji },
+      body: { emoji: emoji || "" },
     });
+
+    // Write to DB directly so the reaction is visible on next open without
+    // waiting for the Whapi webhook to echo back
+    await CrmWhatsAppMessageLog.update(
+      { reaction: emoji || null },
+      { where: { providerMessageId, organisationId: orgId } }
+    );
+
     return success({ reacted: true });
   } catch (err) {
     return error(500, err?.message || "Failed to react to message");

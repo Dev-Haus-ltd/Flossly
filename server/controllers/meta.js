@@ -1,12 +1,12 @@
 import { Op, fn, col } from 'sequelize'
 import crypto from 'crypto'
-import { CrmLead, MetaPage, Organisation, User, UserOrganisation, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight, CrmDmAccount, CrmDmConversation, CrmDmMessage } from '../models'
+import { CrmLead, MetaPage, Organisation, User, UserOrganisation, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight, CrmDmAccount, CrmDmConversation, CrmDmMessage, OrganisationTreatment } from '../models'
 import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
 import { addMetaClient, broadcastMetaEvent } from '../utils/metaStream'
-import { getWhatsAppProviderKey, getWhapiEnvConfig, resolveWhapiConfig } from '../utils/whatsappProvider'
 import { sendNotificationToMultipleUsers } from '../utils/fcmNotification'
 import { parseJsonBody } from "../utils/body"
+import { chat } from '../utils/aiWrapper'
 import {
   runStructureSync,
   runInsightsSync,
@@ -71,6 +71,81 @@ const upsertDmAccount = async ({ organisationId, connectedByUserId, platform, ac
     metadata: metadata || null,
   })
 }
+
+const sendAutoReply = async ({ orgId, conversation, messageText, accessToken, senderId, recipientId }) => {
+  try {
+    const org = await Organisation.findOne({
+      where: { id: orgId },
+      attributes: ['name', 'type', 'autoReplyEnabled'],
+    });
+
+    if (!org || !org.autoReplyEnabled) return;
+
+    const treatments = await OrganisationTreatment.findAll({
+      where: { organisationId: orgId, active: true },
+      attributes: ['name', 'category'],
+      limit: 20,
+    });
+
+    const treatmentList = treatments.length
+      ? treatments.map((t) => `${t.name}${t.category ? ` (${t.category})` : ''}`).join(', ')
+      : 'various treatments';
+
+    const systemPrompt = `You are a friendly assistant for a ${org.type || 'healthcare'} practice called "${org.name}". 
+
+CRITICAL RULES - NEVER BREAK THESE:
+1. NEVER book, schedule, or confirm appointments - always say "A team member will reach out once confirmed"
+2. NEVER make up prices, availability, or any information not provided in the available treatments list
+3. If you don't have clear context to answer a question confidently, say "A team member will let you know about this"
+4. Keep responses brief and friendly (1-2 sentences max)
+5. Be warm and professional
+
+AVAILABLE TREATMENTS at this practice: ${treatmentList || 'Please ask about specific treatments'}`;
+
+    const replyText = await chat({
+      prompt: `A patient/customer sent this message: "${messageText}". Generate a brief, helpful auto-reply (1-2 sentences max). Be friendly and professional.`,
+      systemPrompt,
+      temperature: 0.4,
+      maxTokens: 300,
+    });
+
+    if (!replyText) return;
+
+    const targetNode = encodeURIComponent(String(senderId || 'me'));
+    const url = `https://graph.facebook.com/${META_VERSION}/${targetNode}/messages`;
+    await $fetch(url, {
+      method: 'POST',
+      body: {
+        recipient: { id: recipientId },
+        messaging_type: 'RESPONSE',
+        message: { text: replyText },
+      },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    await CrmDmMessage.create({
+      organisationId: orgId,
+      conversationId: conversation.id,
+      platform: conversation.platform,
+      platformMessageId: null,
+      direction: 'outbound',
+      senderName: 'Flossly',
+      message: replyText,
+      attachments: null,
+      status: 'sent',
+      metadata: { autoReply: true },
+    });
+
+    conversation.lastMessageAt = new Date();
+    await conversation.save();
+
+    console.log(`[Meta AutoReply] Sent auto-reply for org ${orgId}: ${replyText.slice(0, 50)}...`);
+  } catch (err) {
+    console.error(`[Meta AutoReply] Failed for org ${orgId}:`, err?.message || err);
+  }
+};
 
 export const authStart = async (event) => {
   const config = useRuntimeConfig()
@@ -408,236 +483,6 @@ export const disconnect = async (event) => {
   }
 }
 
-const normalizeWaConfigValue = (value) => {
-  const raw = String(value || '').trim()
-  return raw || null
-}
-
-const resolvePhoneNumberFromWaba = async (accessToken, wabaId) => {
-  if (!accessToken || !wabaId) return null
-  try {
-    const url = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(wabaId)}/phone_numbers?fields=id,display_phone_number,verified_name`
-    const resp = await $fetch(url, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
-    const list = Array.isArray(resp?.data) ? resp.data : []
-    if (!list.length) return null
-    return list[0]
-  } catch {
-    return null
-  }
-}
-
-const exchangeCodeForAccessToken = async ({ code, redirectUri, appId, appSecret }) => {
-  if (!code || !appId || !appSecret) return null
-  const url = `https://graph.facebook.com/${META_VERSION}/oauth/access_token?client_id=${encodeURIComponent(
-    appId
-  )}&client_secret=${encodeURIComponent(appSecret)}&code=${encodeURIComponent(code)}${
-    redirectUri ? `&redirect_uri=${encodeURIComponent(redirectUri)}` : ''
-  }`
-  const resp = await $fetch(url, { method: 'GET' })
-  return resp?.access_token || null
-}
-
-export const getWhatsAppConfig = async (event) => {
-  const { orgId } = event.context.user || {}
-  if (!orgId) return error(401, 'Unauthenticated')
-
-  const provider = getWhatsAppProviderKey()
-  if (provider === 'whapi') {
-    const whapi = await resolveWhapiConfig(orgId)
-    return success({
-      provider: 'whapi',
-      hasToken: !!whapi?.token,
-      supportsTemplates: false,
-      requiresTemplateOutside24h: false,
-      baseUrl: whapi?.baseUrl || getWhapiEnvConfig().baseUrl,
-      channelId: whapi?.channelId || null,
-    })
-  }
-
-  try { await MetaWhatsAppConfig.sync() } catch {}
-  const row = await MetaWhatsAppConfig.findOne({ where: { organisationId: orgId } })
-  if (!row) {
-    return success({
-      provider: 'meta',
-      hasToken: false,
-      supportsTemplates: true,
-      requiresTemplateOutside24h: true,
-    })
-  }
-
-  return success({
-    id: row.id,
-    organisationId: row.organisationId,
-    userId: row.userId,
-    phoneNumberId: row.phoneNumberId,
-    wabaId: row.wabaId || null,
-    displayPhoneNumber: row.displayPhoneNumber || null,
-    verifiedName: row.verifiedName || null,
-    hasToken: !!row.accessTokenEnc,
-    hasVerifyToken: !!row.verifyTokenEnc,
-    tokenExpiresAt: row.tokenExpiresAt || null,
-    status: row.status || 'Active',
-    provider: 'meta',
-    supportsTemplates: true,
-    requiresTemplateOutside24h: true,
-  })
-}
-
-export const saveWhatsAppConfig = async (event) => {
-  const { orgId, userId } = event.context.user || {}
-  if (!orgId || !userId) return error(401, 'Unauthenticated')
-
-  const body = await readBody(event)
-  const payload = typeof body === 'string' ? parseJsonBody(body) : body
-  const phoneNumberId = normalizeWaConfigValue(payload?.phoneNumberId)
-  const wabaId = normalizeWaConfigValue(payload?.wabaId)
-  const displayPhoneNumber = normalizeWaConfigValue(payload?.displayPhoneNumber)
-  const verifiedName = normalizeWaConfigValue(payload?.verifiedName)
-  const accessToken = normalizeWaConfigValue(payload?.accessToken)
-  const verifyToken = normalizeWaConfigValue(payload?.verifyToken)
-  const tokenExpiresAt = payload?.tokenExpiresAt ? new Date(payload.tokenExpiresAt) : null
-
-  if (!phoneNumberId) return error(400, 'phoneNumberId required')
-  if (!accessToken) return error(400, 'accessToken required')
-
-  try { await MetaWhatsAppConfig.sync() } catch {}
-
-  const encAccessToken = encrypt(accessToken)
-  const encVerifyToken = verifyToken ? encrypt(verifyToken) : null
-  const existing = await MetaWhatsAppConfig.findOne({ where: { organisationId: orgId } })
-
-  if (existing) {
-    existing.phoneNumberId = phoneNumberId
-    existing.wabaId = wabaId
-    existing.displayPhoneNumber = displayPhoneNumber
-    existing.verifiedName = verifiedName
-    existing.accessTokenEnc = encAccessToken
-    existing.verifyTokenEnc = encVerifyToken
-    existing.tokenExpiresAt = tokenExpiresAt
-    existing.status = 'Active'
-    existing.userId = userId
-    existing.connectedByUserId = userId
-    await existing.save()
-    return success({ updated: true })
-  }
-
-  await MetaWhatsAppConfig.create({
-    organisationId: Number(orgId),
-    userId: Number(userId),
-    phoneNumberId,
-    wabaId,
-    displayPhoneNumber,
-    verifiedName,
-    accessTokenEnc: encAccessToken,
-    verifyTokenEnc: encVerifyToken,
-    tokenExpiresAt,
-    status: 'Active',
-    connectedByUserId: Number(userId),
-  })
-  return success({ created: true })
-}
-
-export const whatsappEmbeddedComplete = async (event) => {
-  const { orgId, userId } = event.context.user || {}
-  if (!orgId || !userId) return error(401, 'Unauthenticated')
-
-  const config = useRuntimeConfig()
-  const appId = config.META_APP_ID
-  const appSecret = config.META_APP_SECRET
-  const redirectUri = getRedirectUri(config)
-
-  const body = await readBody(event)
-  const payload = typeof body === 'string' ? parseJsonBody(body) : body
-  const code = normalizeWaConfigValue(payload?.code)
-  const accessToken = normalizeWaConfigValue(payload?.accessToken)
-  let token = accessToken
-
-  if (!token && code) {
-    token = await exchangeCodeForAccessToken({ code, redirectUri, appId, appSecret })
-  }
-  if (!token) return error(400, 'accessToken or code required')
-
-  let phoneNumberId = normalizeWaConfigValue(payload?.phoneNumberId)
-  let wabaId = normalizeWaConfigValue(payload?.wabaId)
-  let displayPhoneNumber = normalizeWaConfigValue(payload?.displayPhoneNumber)
-  let verifiedName = normalizeWaConfigValue(payload?.verifiedName)
-
-  if (!phoneNumberId && wabaId) {
-    const phone = await resolvePhoneNumberFromWaba(token, wabaId)
-    if (phone?.id) phoneNumberId = String(phone.id)
-    if (!displayPhoneNumber && phone?.display_phone_number) displayPhoneNumber = phone.display_phone_number
-    if (!verifiedName && phone?.verified_name) verifiedName = phone.verified_name
-  }
-
-  if (!phoneNumberId) return error(400, 'phoneNumberId required')
-
-  try { await MetaWhatsAppConfig.sync() } catch {}
-
-  const encAccessToken = encrypt(token)
-  const existing = await MetaWhatsAppConfig.findOne({ where: { organisationId: orgId } })
-  if (existing) {
-    existing.phoneNumberId = phoneNumberId
-    existing.wabaId = wabaId
-    existing.displayPhoneNumber = displayPhoneNumber
-    existing.verifiedName = verifiedName
-    existing.accessTokenEnc = encAccessToken
-    existing.status = 'Active'
-    existing.userId = userId
-    existing.connectedByUserId = userId
-    await existing.save()
-    return success({ updated: true })
-  }
-
-  await MetaWhatsAppConfig.create({
-    organisationId: Number(orgId),
-    userId: Number(userId),
-    phoneNumberId,
-    wabaId,
-    displayPhoneNumber,
-    verifiedName,
-    accessTokenEnc: encAccessToken,
-    status: 'Active',
-    connectedByUserId: Number(userId),
-  })
-
-  return success({ created: true })
-}
-
-export const fetchWhatsAppTemplates = async (event) => {
-  const { orgId } = event.context.user || {}
-  if (!orgId) return error(401, 'Unauthenticated')
-
-  try { await MetaWhatsAppConfig.sync() } catch {}
-  const row = await MetaWhatsAppConfig.findOne({ where: { organisationId: orgId } })
-  if (!row) return error(400, 'WhatsApp is not configured')
-
-  const accessToken = decrypt(row.accessTokenEnc)
-  const wabaId = row.wabaId
-  if (!accessToken) return error(400, 'WhatsApp token missing')
-  if (!wabaId) return error(400, 'wabaId is required to fetch templates')
-
-  const templates = []
-  let nextUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(wabaId)}/message_templates?fields=name,language,category,components,status,quality_score,parameter_format&limit=200`
-  while (nextUrl) {
-    const resp = await $fetch(nextUrl, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
-    const data = Array.isArray(resp?.data) ? resp.data : []
-    templates.push(...data)
-    nextUrl = resp?.paging?.next || null
-  }
-
-  return success({
-    count: templates.length,
-    templates,
-  })
-}
-
-// Rest of your functions remain the same...
 export const listLeads = async (event) => {
   const { orgId } = event.context.user || {}
   if (!orgId) return error(401, 'Unauthenticated')
@@ -2049,6 +1894,17 @@ export const webhook = async (event) => {
               lastInboundAt: timestamp.toISOString(),
             }
             await conversation.save()
+
+            if (messageText && accessToken) {
+              sendAutoReply({
+                orgId,
+                conversation,
+                messageText,
+                accessToken,
+                senderId,
+                recipientId,
+              }).catch((err) => console.error('[Meta AutoReply] Error:', err?.message || err));
+            }
 
             broadcastMetaEvent('dm', {
               orgId,

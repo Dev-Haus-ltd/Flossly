@@ -1196,8 +1196,34 @@ const getLeadAutomationGroups = (lead) =>
 const getLeadAutomationGroupNames = (lead) =>
   getLeadAutomationGroups(lead).map((group) => group?.title || group?.key || 'Automation Group');
 
+/** Stable “random” color per group (same key → same color across rows and renders). */
+const AUTOMATION_GROUP_DISPLAY_COLORS = [
+  '#00D07E',
+  '#6D6CFF',
+  '#FE65CB',
+  '#007EED',
+  '#ECB313',
+  '#923CF6',
+  '#FF2531',
+  '#A22984',
+  '#D114CF',
+];
+
+const automationGroupDisplayColor = (group) => {
+  const k = String(group?.key ?? group?.title ?? '');
+  let h = 0;
+  for (let i = 0; i < k.length; i += 1) {
+    h = (h * 31 + k.charCodeAt(i)) | 0;
+  }
+  const idx = Math.abs(h) % AUTOMATION_GROUP_DISPLAY_COLORS.length;
+  return AUTOMATION_GROUP_DISPLAY_COLORS[idx];
+};
+
 const getLeadAutomationGroupDisplay = (lead) => {
-  const groups = getLeadAutomationGroups(lead);
+  const groups = getLeadAutomationGroups(lead).map((group) => ({
+    ...group,
+    avatarColor: automationGroupDisplayColor(group),
+  }));
   return {
     visible: groups.slice(0, 3),
     overflow: groups.slice(3),

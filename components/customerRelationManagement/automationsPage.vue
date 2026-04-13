@@ -185,8 +185,7 @@ const showGroupDelete = ref(false)
 const deletingGroup = ref(false)
 const groupToDelete = ref(null)
 const whatsappEnabled = ref(false)
-const whatsappProvider = ref('meta')
-const whatsappRequiresTemplates = ref(true)
+const whatsappRequiresTemplates = ref(false)
 const aiIdea = ref('')
 const showAIPreview = ref(false)
 const generatingAI = ref(false)
@@ -203,30 +202,13 @@ const loadGroups = async () => {
 
 const loadWhatsAppAvailability = async () => {
   try {
-    const res = await crmStore.getWhatsAppConfig()
-    if (res?.code === 0 && res.data) {
-      const provider = String(res.data.provider || '').toLowerCase()
-      const hasToken = Boolean(res.data.hasToken)
-      if (provider === 'whapi') {
-        const statusRes = await crmStore.getWhapiStatus()
-        const statusRaw = String(statusRes?.data?.status || '').toLowerCase()
-        const stopped = statusRaw === 'stopped' || statusRaw === 'blocked'
-        whatsappEnabled.value = Boolean(statusRes?.data?.connected) && !stopped
-        whatsappProvider.value = 'whapi'
-        whatsappRequiresTemplates.value = false
-        return
-      }
-      if (provider === 'meta') {
-        whatsappEnabled.value = hasToken
-        whatsappProvider.value = 'meta'
-        whatsappRequiresTemplates.value = true
-        return
-      }
-    }
-  } catch {}
-  whatsappEnabled.value = false
-  whatsappProvider.value = 'meta'
-  whatsappRequiresTemplates.value = true
+    const res = await crmStore.getWhapiStatus()
+    const statusRaw = String(res?.data?.status || '').toLowerCase()
+    const stopped = statusRaw === 'stopped' || statusRaw === 'blocked'
+    whatsappEnabled.value = Boolean(res?.data?.connected) && !stopped
+  } catch {
+    whatsappEnabled.value = false
+  }
 }
 
 const refreshAll = async () => {

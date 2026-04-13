@@ -31,6 +31,12 @@
         />
       </template>
 
+      <v-tooltip v-else-if="infoText" :text="infoText" location="bottom" max-width="300">
+        <template #activator="{ props }">
+          <v-icon v-bind="props" size="18" color="#6b7280" style="flex-shrink: 0; cursor: help;">mdi-information-outline</v-icon>
+        </template>
+      </v-tooltip>
+
       <v-tooltip v-else :text="tooltip">
         <template #activator="{ props }">
           <v-chip
@@ -66,6 +72,7 @@ const props = defineProps({
   uid: { type: [String, Number], required: true },
   select: { type: [String, Number], default: null },
   selectItems: { type: Array, default: () => [] },
+  infoText: { type: String, default: '' },
 });
 
 const emit = defineEmits(['update:select']);

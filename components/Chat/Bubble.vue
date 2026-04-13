@@ -42,28 +42,28 @@
             <template v-else>
               <!-- Image-first layout (WhatsApp style) -->
               <template v-if="leadImage">
-                <!-- v-viewer: clicking the image opens the full viewer (zoom, rotate, etc.) -->
-                <div
-                  v-viewer="{ toolbar: true, navbar: allImageAttachments.length > 1 }"
+                <viewer
+                  :options="{ toolbar: true, navbar: allImageAttachments.length > 1, title: false }"
                   class="chat-bubble-image-wrap"
                 >
+                  <!-- Lead image is shown in the bubble; extras are hidden but included for gallery nav -->
                   <img
                     v-for="att in allImageAttachments"
                     :key="att.url"
                     :src="att.url"
                     :alt="att.name || 'Image'"
-                    :style="att !== leadImage ? 'display:none' : ''"
-                    class="chat-bubble-image"
+                    :class="att === leadImage ? 'chat-bubble-image' : 'chat-viewer-hidden'"
                   />
+                  <!-- Zoom hint overlay — pointer-events:none so clicks reach the img -->
                   <div class="chat-bubble-image-zoom" aria-hidden="true">
-                    <v-icon size="16" color="white">mdi-magnify-plus-outline</v-icon>
+                    <v-icon size="18" color="white">mdi-magnify-plus-outline</v-icon>
                   </div>
                   <!-- Timestamp overlaid on image when no text below -->
-                  <div v-if="!showMessage" class="chat-bubble-image-meta">
+                  <div v-if="!showMessage" class="chat-bubble-image-meta" style="pointer-events:none">
                     <span>{{ timestamp || 'N/A' }}</span>
                     <v-icon v-if="statusIcon" size="12" :color="statusColor || undefined">{{ statusIcon }}</v-icon>
                   </div>
-                </div>
+                </viewer>
                 <!-- Caption below image -->
                 <div v-if="showMessage" class="chat-bubble-caption">
                   <span>{{ message }}</span>
@@ -133,7 +133,7 @@
             </template>
           </div>
 
-          <!-- Action chevron (hover) — only when providerMessageId is available -->
+          <!-- Action chevron — overlaid on bubble, WhatsApp-style -->
           <v-menu v-if="providerMessageId" v-model="menuOpen" location="bottom end" :close-on-content-click="false">
             <template #activator="{ props: menuProps }">
               <button
@@ -142,21 +142,22 @@
                 :class="isOutbound ? 'chat-bubble-action-btn--outbound' : 'chat-bubble-action-btn--inbound'"
                 @click.stop
               >
-                <v-icon size="16">mdi-chevron-down</v-icon>
+                <v-icon size="14">mdi-chevron-down</v-icon>
               </button>
             </template>
 
-            <v-card class="chat-action-menu" elevation="3" rounded="lg" min-width="200">
+            <v-card class="chat-action-menu" elevation="4" rounded="lg" min-width="200">
               <!-- Quick emoji reactions + "more" button -->
               <div class="chat-action-emoji-row">
                 <button
                   v-for="em in QUICK_EMOJIS"
                   :key="em"
                   class="chat-action-emoji-btn"
+                  :class="{ 'chat-action-emoji-btn--active': em === effectiveReaction }"
                   @click="sendReaction(em)"
                 >{{ em }}</button>
                 <button class="chat-action-emoji-btn chat-action-emoji-more" @click="emojiPickerOpen = !emojiPickerOpen">
-                  <v-icon size="18">mdi-emoticon-plus-outline</v-icon>
+                  <v-icon size="18">mdi-plus</v-icon>
                 </button>
               </div>
 
@@ -168,7 +169,6 @@
               </div>
 
               <v-divider />
-              <!-- Menu items -->
               <v-list density="compact" nav>
                 <v-list-item
                   v-if="canEdit"
@@ -177,6 +177,7 @@
                   @click="startEdit"
                 />
                 <v-list-item
+                  v-if="canEdit"
                   prepend-icon="mdi-trash-can-outline"
                   title="Delete message"
                   base-color="error"
@@ -196,6 +197,11 @@
           <img v-if="showAvatarImage" :src="avatarUrl" alt="Practice" @error="onAvatarError" />
           <span v-else>{{ avatarText }}</span>
         </div>
+      </div>
+
+      <!-- Reaction badge -->
+      <div v-if="effectiveReaction" class="chat-bubble-reaction" :class="isOutbound ? 'chat-bubble-reaction--outbound' : 'chat-bubble-reaction--inbound'">
+        {{ effectiveReaction }}
       </div>
     </div>
   </div>
@@ -218,8 +224,12 @@
 </template>
 
 <script setup>
-import { Post } from "@/services/apiWrapper";
 import "emoji-picker-element";
+import { useCrmStore } from "@/stores/crm";
+import { useMainStore } from "@/stores/index";
+
+const crmStore = useCrmStore();
+const mainStore = useMainStore();
 
 const props = defineProps({
   isOutbound: { type: Boolean, default: false },
@@ -235,6 +245,7 @@ const props = defineProps({
   providerMessageId: { type: String, default: null },
   createdAt: { type: [String, Number, null], default: null },
   recipientPhone: { type: String, default: null },
+  reaction: { type: String, default: null },
 });
 
 const emit = defineEmits(["message-deleted", "message-edited", "message-reacted"]);
@@ -242,15 +253,29 @@ const emit = defineEmits(["message-deleted", "message-edited", "message-reacted"
 // ── Quick reaction emojis ──
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
+// ── Local providerMessageId — updated after a successful edit (Whapi assigns new ID) ──
+const localProviderMessageId = ref(props.providerMessageId);
+watch(() => props.providerMessageId, (v) => { localProviderMessageId.value = v; });
+
+// ── Optimistic reaction — shown immediately before SSE refresh ──
+const localReaction = ref(null);
+const effectiveReaction = computed(() => localReaction.value || props.reaction || null);
+
+// ── Reactive clock for the 15-min edit window ──
+const now = ref(Date.now());
+let _nowTimer = null;
+onMounted(() => { _nowTimer = setInterval(() => { now.value = Date.now(); }, 30_000); });
+onUnmounted(() => { clearInterval(_nowTimer); });
+
 // ── Edit within 15 min (900 000 ms) ──
 const EDIT_WINDOW_MS = 15 * 60 * 1000;
 const canEdit = computed(() => {
-  if (!props.isOutbound || !props.providerMessageId) return false;
+  if (!props.isOutbound || !localProviderMessageId.value) return false;
   if (!props.createdAt) return false;
   const ts = typeof props.createdAt === "number"
     ? (props.createdAt < 1e12 ? props.createdAt * 1000 : props.createdAt)
     : new Date(props.createdAt).getTime();
-  return Date.now() - ts < EDIT_WINDOW_MS;
+  return now.value - ts < EDIT_WINDOW_MS;
 });
 
 // shows "(edited)" label — set to true after a successful edit
@@ -267,13 +292,23 @@ watch(menuOpen, (v) => { if (!v) emojiPickerOpen.value = false; });
 const sendReaction = async (emoji) => {
   menuOpen.value = false;
   emojiPickerOpen.value = false;
+  // Tapping the active reaction again removes it
+  const isToggleOff = emoji === effectiveReaction.value;
+  const targetEmoji = isToggleOff ? "" : emoji;
   try {
-    await Post("/api/whapi/reactToMessage", {
-      providerMessageId: props.providerMessageId,
-      emoji,
+    const res = await crmStore.reactWhatsAppMessage({
+      providerMessageId: localProviderMessageId.value,
+      emoji: targetEmoji,
     });
-    emit("message-reacted", { providerMessageId: props.providerMessageId, emoji });
-  } catch {}
+    if (res?.code !== 0) {
+      mainStore.setSnackbar({ title: res?.error || "Failed to send reaction", type: "error" });
+      return;
+    }
+    localReaction.value = isToggleOff ? null : emoji;
+    emit("message-reacted", { providerMessageId: localProviderMessageId.value, emoji: targetEmoji || null });
+  } catch (e) {
+    mainStore.setSnackbar({ title: e?.message || "Failed to send reaction", type: "error" });
+  }
 };
 
 // emoji-picker-element fires a CustomEvent with detail.unicode
@@ -300,15 +335,28 @@ const submitEdit = async () => {
   if (!newText || newText === props.message) { cancelEdit(); return; }
   editState.saving = true;
   try {
-    await Post("/api/whapi/editMessage", {
-      providerMessageId: props.providerMessageId,
+    const res = await crmStore.editWhatsAppMessage({
+      providerMessageId: localProviderMessageId.value,
       newText,
       to: props.recipientPhone,
     });
+    if (res?.code !== 0) {
+      mainStore.setSnackbar({ title: res?.error || "Failed to edit message", type: "error" });
+      editState.saving = false;
+      return;
+    }
+    const newId = res?.data?.messageId || null;
+    if (newId) localProviderMessageId.value = newId;
     editedAt.value = true;
-    emit("message-edited", { providerMessageId: props.providerMessageId, newText });
+    emit("message-edited", {
+      providerMessageId: props.providerMessageId,
+      newProviderMessageId: newId,
+      newText,
+    });
     editState.active = false;
-  } catch {}
+  } catch (e) {
+    mainStore.setSnackbar({ title: e?.message || "Failed to edit message", type: "error" });
+  }
   editState.saving = false;
 };
 
@@ -323,10 +371,17 @@ const openDeleteConfirm = () => {
 const confirmDelete = async () => {
   deleteConfirm.deleting = true;
   try {
-    await Post("/api/whapi/deleteMessage", { providerMessageId: props.providerMessageId });
+    const res = await crmStore.deleteWhatsAppMessage({ providerMessageId: localProviderMessageId.value });
+    if (res?.code !== 0) {
+      mainStore.setSnackbar({ title: res?.error || "Failed to delete message", type: "error" });
+      deleteConfirm.deleting = false;
+      return;
+    }
     emit("message-deleted", { providerMessageId: props.providerMessageId });
     deleteConfirm.open = false;
-  } catch {}
+  } catch (e) {
+    mainStore.setSnackbar({ title: e?.message || "Failed to delete message", type: "error" });
+  }
   deleteConfirm.deleting = false;
 };
 
@@ -453,7 +508,7 @@ const bubbleClass = computed(() => ({
 }
 
 .chat-bubble--outbound {
-  background: #e7f8ee;
+  background: #dceeff;
   border-bottom-right-radius: 4px;
 }
 
@@ -476,7 +531,7 @@ const bubbleClass = computed(() => ({
   right: -7px;
   width: 0;
   height: 0;
-  border-left: 8px solid #e7f8ee;
+  border-left: 8px solid #dceeff;
   border-top: 8px solid transparent;
 }
 
@@ -648,41 +703,44 @@ const bubbleClass = computed(() => ({
 
 .chat-avatar--image { background: transparent; }
 
-/* ── Hover group: bubble + action btn ── */
+/* ── Hover group: bubble + overlaid action btn ── */
 .chat-bubble-hover-group {
   position: relative;
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
+  display: inline-flex;
 }
 
+/* Action button — overlaid top-right corner of bubble, WhatsApp-style */
 .chat-bubble-action-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
   display: none;
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.07);
+  background: rgba(0, 0, 0, 0.35);
   border: none;
   cursor: pointer;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  color: #fff;
   transition: background 0.15s;
-  margin-bottom: 4px;
+  backdrop-filter: blur(2px);
+}
+
+.chat-bubble-action-btn--inbound {
+  right: auto;
+  left: 4px;
 }
 
 .chat-bubble-action-btn:hover {
-  background: rgba(0, 0, 0, 0.14);
+  background: rgba(0, 0, 0, 0.55);
 }
 
 .chat-bubble-hover-group:hover .chat-bubble-action-btn,
 .chat-bubble-action-btn[aria-expanded="true"] {
   display: flex;
-}
-
-/* Position: outbound → left of bubble, inbound → right of bubble */
-.chat-bubble-row--outbound .chat-bubble-hover-group {
-  flex-direction: row-reverse;
 }
 
 /* ── Action menu card ── */
@@ -708,6 +766,10 @@ const bubbleClass = computed(() => ({
   transition: background 0.12s;
 }
 .chat-action-emoji-btn:hover { background: rgba(0,0,0,0.07); }
+.chat-action-emoji-btn--active {
+  background: rgba(0, 97, 251, 0.1);
+  box-shadow: 0 0 0 2px #0061fb;
+}
 
 .chat-action-emoji-more {
   color: rgba(0,0,0,0.5);
@@ -772,9 +834,30 @@ const bubbleClass = computed(() => ({
   font-style: italic;
 }
 
+/* ── Reaction badge ── */
+.chat-bubble-reaction {
+  font-size: 16px;
+  line-height: 1;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 999px;
+  padding: 2px 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  margin-top: 4px;
+  display: inline-block;
+}
+
+.chat-bubble-reaction--inbound { margin-left: 42px; }
+.chat-bubble-reaction--outbound { margin-left: auto; margin-right: 42px; }
+
 /* ── Image zoom hint ── */
 .chat-bubble-image-wrap {
   cursor: zoom-in;
+}
+
+/* Extra gallery images — invisible in bubble but included for v-viewer gallery nav */
+.chat-viewer-hidden {
+  display: none;
 }
 
 .chat-bubble-image-zoom {
@@ -783,11 +866,11 @@ const bubbleClass = computed(() => ({
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0);
-  transition: background 0.18s;
   border-radius: inherit;
   opacity: 0;
-  transition: opacity 0.18s;
+  background: rgba(0, 0, 0, 0);
+  transition: opacity 0.18s, background 0.18s;
+  pointer-events: none; /* let clicks pass through to the img for v-viewer */
 }
 
 .chat-bubble-image-wrap:hover .chat-bubble-image-zoom {

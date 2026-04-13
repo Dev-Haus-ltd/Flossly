@@ -246,7 +246,8 @@ export const runStructureSync = async (orgId) => {
       const ids = Array.from(creativeIds.keys())
       const creativeBatchReqs = ids.map((cid) => ({
         method: 'GET',
-        relative_url: `${cid}?fields=image_url,thumbnail_url,body,instagram_permalink_url,video_id`,
+        // picture = higher-quality frame thumbnail for video creatives (better than thumbnail_url)
+        relative_url: `${cid}?fields=image_url,thumbnail_url,picture,body,instagram_permalink_url,video_id`,
       }))
       const creativeBatchRes = await metaBatch(creativeBatchReqs, userToken)
 
@@ -256,7 +257,8 @@ export const runStructureSync = async (orgId) => {
         const adId = creativeIds.get(ids[i])
         await MetaAd.update(
           {
-            imageUrl: cr.image_url || cr.thumbnail_url || null,
+            // Prefer image_url (full quality), then picture (good quality frame for videos), then thumbnail_url (low-res fallback)
+            imageUrl: cr.image_url || cr.picture || cr.thumbnail_url || null,
             videoId: cr.video_id || null,
             body: cr.body || null,
             platform: cr.instagram_permalink_url ? 'Instagram' : 'Facebook',
@@ -329,6 +331,7 @@ export const runInsightsSync = async (orgId, days = 1) => {
       clicks: Number(insight.clicks) || 0,
       spend: Math.round(Number(insight.spend || 0) * 100),
       leads: Number(insight.actions?.find((a) => a.action_type === 'lead')?.value) || 0,
+      linkClicks: Number(insight.actions?.find((a) => a.action_type === 'link_click')?.value) || 0,
       reach: Number(insight.reach) || 0,
       frequency: Number(insight.frequency) || 0,
       purchase_roas: Number(insight.purchase_roas?.[0]?.value) || 0,
@@ -383,6 +386,35 @@ export const runInsightsSync = async (orgId, days = 1) => {
       for (let i = 0; i < ads.length; i++) {
         const rows = Array.isArray(results[i]?.data) ? results[i].data : []
         await upsertInsights('ad', ads[i].adId, rows)
+      }
+    }
+
+    // ── Lifetime reach pass ───────────────────────────────────────────────────
+    // Reach is not additive across days — we must query with time_increment=lifetime
+    // to get the true deduplicated reach for the sync window, matching Ads Manager.
+    const lifetimeTimeParams = `time_range[since]=${since}&time_range[until]=${until}`
+
+    const allEntities = [
+      ...campaigns.map((c) => ({ type: 'campaign', id: c.campaignId })),
+      ...adSets.map((s) => ({ type: 'adset', id: s.adSetId })),
+      ...ads.map((a) => ({ type: 'ad', id: a.adId })),
+    ]
+
+    if (allEntities.length) {
+      const lifetimeReqs = allEntities.map((e) => ({
+        method: 'GET',
+        relative_url: `${e.id}/insights?fields=reach&${lifetimeTimeParams}`,
+      }))
+      const lifetimeResults = await metaBatch(lifetimeReqs, userToken)
+
+      for (let i = 0; i < allEntities.length; i++) {
+        const rows = Array.isArray(lifetimeResults[i]?.data) ? lifetimeResults[i].data : []
+        const lifetimeReach = rows.length > 0 ? Number(rows[0]?.reach || 0) : null
+        if (lifetimeReach === null) continue
+        await MetaInsight.update(
+          { lifetimeReach },
+          { where: { organisationId: orgId, entityType: allEntities[i].type, entityId: allEntities[i].id } }
+        )
       }
     }
 

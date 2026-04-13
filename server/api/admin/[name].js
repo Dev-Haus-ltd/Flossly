@@ -78,7 +78,36 @@ import {
   getTaskSubcategories,
   createTaskCategory,
   updateTaskCategory,
-  deleteTaskCategory
+  deleteTaskCategory,
+  listOrgsRotas,
+  getRotaById,
+  createRota,
+  updateRota,
+  deleteRota,
+  publishRota,
+  unpublishRota,
+  listRotaShifts,
+  getRotaShiftById,
+  createRotaShift,
+  updateRotaShift,
+  deleteRotaShift,
+  startRotaShift,
+  completeRotaShift,
+  listHrDocuments,
+  getHrDocumentById,
+  createHrDocument,
+  updateHrDocument,
+  deleteHrDocument,
+  getUserHrDocumentStatus,
+  listOrgUsersHrDocumentStatus,
+  updateUserHrDocument,
+  listOrgDocumentFolders,
+  getOrgDocumentFolderById,
+  listOrgDocuments,
+  getOrgDocumentById,
+  listLeaveRequests,
+  approveLeave,
+  rejectLeave
 } from '../../controllers/admin';
 
 export default defineEventHandler(async (event) => {
@@ -338,6 +367,98 @@ export default defineEventHandler(async (event) => {
     
     case 'deleteTaskCategory':
       return await deleteTaskCategory(event);
+
+    // Rota Management
+    case 'listOrgsRotas':
+      return await listOrgsRotas(event);
+    
+    case 'getRotaById':
+      return await getRotaById(event);
+    
+    case 'createRota':
+      return await createRota(event);
+    
+    case 'updateRota':
+      return await updateRota(event);
+    
+    case 'deleteRota':
+      return await deleteRota(event);
+    
+    case 'publishRota':
+      return await publishRota(event);
+    
+    case 'unpublishRota':
+      return await unpublishRota(event);
+
+    // Rota Shift Management
+    case 'listRotaShifts':
+      return await listRotaShifts(event);
+    
+    case 'getRotaShiftById':
+      return await getRotaShiftById(event);
+    
+    case 'createRotaShift':
+      return await createRotaShift(event);
+    
+    case 'updateRotaShift':
+      return await updateRotaShift(event);
+    
+    case 'deleteRotaShift':
+      return await deleteRotaShift(event);
+    
+    case 'startRotaShift':
+      return await startRotaShift(event);
+    
+    case 'completeRotaShift':
+      return await completeRotaShift(event);
+
+    // HR Document Management (Recruitment/Onboarding)
+    case 'listHrDocuments':
+      return await listHrDocuments(event);
+    
+    case 'getHrDocumentById':
+      return await getHrDocumentById(event);
+    
+    case 'createHrDocument':
+      return await createHrDocument(event);
+    
+    case 'updateHrDocument':
+      return await updateHrDocument(event);
+    
+    case 'deleteHrDocument':
+      return await deleteHrDocument(event);
+    
+    case 'getUserHrDocumentStatus':
+      return await getUserHrDocumentStatus(event);
+    
+    case 'listOrgUsersHrDocumentStatus':
+      return await listOrgUsersHrDocumentStatus(event);
+    
+    case 'updateUserHrDocument':
+      return await updateUserHrDocument(event);
+
+    // Document Management (Admin View)
+    case 'listOrgDocumentFolders':
+      return await listOrgDocumentFolders(event);
+    
+    case 'getOrgDocumentFolderById':
+      return await getOrgDocumentFolderById(event);
+    
+    case 'listOrgDocuments':
+      return await listOrgDocuments(event);
+    
+    case 'getOrgDocumentById':
+      return await getOrgDocumentById(event);
+
+    // Leave Management
+    case 'listLeaveRequests':
+      return await listLeaveRequests(event);
+    
+    case 'approveLeave':
+      return await approveLeave(event);
+    
+    case 'rejectLeave':
+      return await rejectLeave(event);
 
     // 404 for unknown endpoints
     default:

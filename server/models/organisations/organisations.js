@@ -95,6 +95,11 @@ export const Organisation = sequelize.define(
       type: DataTypes.JSONB,
       allowNull: true,
     },
+    autoReplyEnabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
     },
   {
     modelName: "Organisations",
