@@ -556,13 +556,12 @@ const bubbleClass = computed(() => ({
 .chat-bubble-image {
   display: block;
   width: 100%;
-  max-width: 320px;
-  min-width: 180px;
   height: auto;
-  max-height: 320px;
+  max-height: 360px;
   object-fit: cover;
-  /* No border-radius here — the parent bubble's overflow:hidden + border-radius
-     handles corner clipping, giving a true full-bleed appearance */
+  /* No border-radius or max-width — the parent bubble's overflow:hidden +
+     border-radius clips corners, and width:100% ensures the image always
+     fills the full bubble width so no background bleeds through on long captions */
 }
 
 /* Timestamp overlaid on image (no caption) */
