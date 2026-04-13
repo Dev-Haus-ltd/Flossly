@@ -23,6 +23,7 @@ import {
 } from '../utils/dmAttachments.js'
 
 const META_VERSION = 'v24.0'
+const STANDARD_MESSAGING_WINDOW_MS = 24 * 60 * 60 * 1000
 const META_SUBSCRIBED_FIELDS = 'leadgen,messages,messaging_postbacks'
 
 const normalizeBaseUrl = (value = '') => String(value || '').replace(/\/+$/, '')
@@ -72,6 +73,41 @@ const upsertDmAccount = async ({ organisationId, connectedByUserId, platform, ac
   })
 }
 
+const getLatestInboundMessageAt = async ({ organisationId, conversationId }) => {
+  const lastInbound = await CrmDmMessage.findOne({
+    where: {
+      organisationId,
+      conversationId,
+      direction: 'inbound',
+    },
+    order: [['createdAt', 'DESC']],
+  });
+  return lastInbound?.createdAt || null;
+};
+
+const isWithinStandardMessagingWindow = (lastInboundAt) => {
+  if (!lastInboundAt) return false;
+  return Date.now() - lastInboundAt.getTime() <= STANDARD_MESSAGING_WINDOW_MS;
+};
+
+const sendMetaMessage = async ({ accessToken, senderId, recipientId, message, messagingType = 'RESPONSE', tag = null }) => {
+  const targetNode = encodeURIComponent(String(senderId || 'me'));
+  const url = `https://graph.facebook.com/${META_VERSION}/${targetNode}/messages`;
+  const body = {
+    recipient: { id: recipientId },
+    messaging_type: messagingType,
+    message: { text: message },
+  };
+  if (tag) body.tag = tag;
+  return await $fetch(url, {
+    method: 'POST',
+    body,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+};
+
 const sendAutoReply = async ({ orgId, conversation, messageText, accessToken, senderId, recipientId }) => {
   try {
     const org = await Organisation.findOne({
@@ -111,18 +147,36 @@ AVAILABLE TREATMENTS at this practice: ${treatmentList || 'Please ask about spec
 
     if (!replyText) return;
 
-    const targetNode = encodeURIComponent(String(senderId || 'me'));
-    const url = `https://graph.facebook.com/${META_VERSION}/${targetNode}/messages`;
-    await $fetch(url, {
-      method: 'POST',
-      body: {
-        recipient: { id: recipientId },
-        messaging_type: 'RESPONSE',
-        message: { text: replyText },
-      },
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
+    let resolvedAccessToken = accessToken;
+    let resolvedSenderId = String(conversation.accountId || senderId || 'me');
+
+    if (conversation.platform === 'instagram') {
+      try {
+        const metaPage = await MetaPage.findOne({
+          where: { organisationId: orgId, status: 'Active' },
+          order: [['updatedAt', 'DESC']],
+        });
+        if (metaPage?.accessTokenEnc) resolvedAccessToken = decrypt(metaPage.accessTokenEnc);
+        if (metaPage?.pageId) resolvedSenderId = String(metaPage.pageId);
+      } catch {}
+    }
+
+    const lastInboundAt = await getLatestInboundMessageAt({
+      organisationId: orgId,
+      conversationId: conversation.id,
+    });
+
+    if (!isWithinStandardMessagingWindow(lastInboundAt)) {
+      console.warn(`[Meta AutoReply] Blocked for org ${orgId}: outside 24-hour messaging window`);
+      return;
+    }
+
+    await sendMetaMessage({
+      accessToken: resolvedAccessToken,
+      senderId: resolvedSenderId,
+      recipientId: String(conversation.threadId),
+      message: replyText,
+      messagingType: 'RESPONSE',
     });
 
     await CrmDmMessage.create({
