@@ -12,6 +12,7 @@ export const OrganisationTreatment = sequelize.define(
     defaultDuration: { type: DataTypes.INTEGER, allowNull: true, defaultValue: 30 },
     price: { type: DataTypes.DECIMAL(10,2), allowNull: true, defaultValue: 0 },
     active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    color:{ type: DataTypes.STRING(20), allowNull: true, defaultValue: '#0061FB' },
   },
   { tableName: 'OrganisationTreatments', timestamps: true }
 )
