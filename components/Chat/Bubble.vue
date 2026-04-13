@@ -68,6 +68,7 @@
                 <div v-if="showMessage" class="chat-bubble-caption">
                   <span>{{ message }}</span>
                   <div class="chat-bubble-meta">
+                    <span v-if="editedAt" class="chat-bubble-edited">edited</span>
                     <span>{{ timestamp || 'N/A' }}</span>
                     <v-icon v-if="statusIcon" size="12" :color="statusColor || undefined">{{ statusIcon }}</v-icon>
                   </div>
@@ -199,10 +200,16 @@
         </div>
       </div>
 
-      <!-- Reaction badge -->
-      <div v-if="effectiveReaction" class="chat-bubble-reaction" :class="isOutbound ? 'chat-bubble-reaction--outbound' : 'chat-bubble-reaction--inbound'">
+      <!-- Reaction badge — click to remove -->
+      <button
+        v-if="effectiveReaction"
+        class="chat-bubble-reaction"
+        :class="isOutbound ? 'chat-bubble-reaction--outbound' : 'chat-bubble-reaction--inbound'"
+        :title="`Remove ${effectiveReaction} reaction`"
+        @click="sendReaction(effectiveReaction)"
+      >
         {{ effectiveReaction }}
-      </div>
+      </button>
     </div>
   </div>
 
@@ -554,14 +561,8 @@ const bubbleClass = computed(() => ({
   height: auto;
   max-height: 320px;
   object-fit: cover;
-  border-radius: 16px;
-}
-
-.chat-bubble--inbound .chat-bubble-image {
-  border-bottom-left-radius: 4px;
-}
-.chat-bubble--outbound .chat-bubble-image {
-  border-bottom-right-radius: 4px;
+  /* No border-radius here — the parent bubble's overflow:hidden + border-radius
+     handles corner clipping, giving a true full-bleed appearance */
 }
 
 /* Timestamp overlaid on image (no caption) */
@@ -845,6 +846,12 @@ const bubbleClass = computed(() => ({
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
   margin-top: 4px;
   display: inline-block;
+  cursor: pointer;
+  transition: background 0.12s, box-shadow 0.12s;
+}
+.chat-bubble-reaction:hover {
+  background: #f0f0f0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
 .chat-bubble-reaction--inbound { margin-left: 42px; }
