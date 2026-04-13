@@ -26,7 +26,7 @@
       </v-btn>
     </template>
 
-    <v-card style="min-width: 300px; border-radius: 12px; padding: 16px">
+    <v-card style="min-width: 280px; border-radius: 12px; padding: 16px">
       <v-list class="pa-0">
         <div class="pa-0 d-flex align-center justify-space-between">
           <div style="font-weight: 500; font-size: 14px">Filters by</div>
@@ -60,24 +60,14 @@
             Platform: {{ selectedPlatform }}
           </v-chip>
           <v-chip
-            v-if="dateFrom"
+            v-if="selectedStatus"
             size="small"
             variant="tonal"
             color="primary"
             closable
-            @click:close="dateFrom = null"
+            @click:close="selectedStatus = null"
           >
-            From: {{ formatDate(dateFrom) }}
-          </v-chip>
-          <v-chip
-            v-if="dateTo"
-            size="small"
-            variant="tonal"
-            color="primary"
-            closable
-            @click:close="dateTo = null"
-          >
-            To: {{ formatDate(dateTo) }}
+            Status: {{ selectedStatus }}
           </v-chip>
         </div>
 
@@ -95,71 +85,19 @@
           @click:clear="selectedPlatform = null"
         />
 
-        <!-- Date From -->
-        <v-label class="my-1" style="font-size: 14px">Date From</v-label>
-        <v-menu
-          v-model="dateFromMenu"
-          :close-on-content-click="false"
-          transition="scale-transition"
-          offset-y
-          min-width="auto"
-        >
-          <template #activator="{ props }">
-            <v-text-field
-              v-model="formattedDateFrom"
-              v-bind="props"
-              variant="solo"
-              density="compact"
-              class="mb-3 input-bordered"
-              bg-color="white"
-              flat
-              readonly
-              hide-details
-              clearable
-              @click:clear="dateFrom = null"
-            >
-              <template #append-inner>
-                <v-icon class="cursor-pointer" @click.stop="dateFromMenu = true">
-                  mdi-calendar
-                </v-icon>
-              </template>
-            </v-text-field>
-          </template>
-          <v-date-picker v-model="dateFrom" @update:model-value="dateFromMenu = false" />
-        </v-menu>
-
-        <!-- Date To -->
-        <v-label class="my-1" style="font-size: 14px">Date To</v-label>
-        <v-menu
-          v-model="dateToMenu"
-          :close-on-content-click="false"
-          transition="scale-transition"
-          offset-y
-          min-width="auto"
-        >
-          <template #activator="{ props }">
-            <v-text-field
-              v-model="formattedDateTo"
-              v-bind="props"
-              variant="solo"
-              density="compact"
-              class="input-bordered"
-              bg-color="white"
-              flat
-              readonly
-              hide-details
-              clearable
-              @click:clear="dateTo = null"
-            >
-              <template #append-inner>
-                <v-icon class="cursor-pointer" @click.stop="dateToMenu = true">
-                  mdi-calendar
-                </v-icon>
-              </template>
-            </v-text-field>
-          </template>
-          <v-date-picker v-model="dateTo" @update:model-value="dateToMenu = false" />
-        </v-menu>
+        <!-- Status -->
+        <v-label class="my-1" style="font-size: 14px">Status</v-label>
+        <v-select
+          v-model="selectedStatus"
+          :items="statusOptions"
+          variant="solo"
+          flat
+          density="compact"
+          hide-details
+          class="input-bordered"
+          clearable
+          @click:clear="selectedStatus = null"
+        />
       </v-list>
     </v-card>
   </v-menu>
@@ -177,42 +115,28 @@ const emit = defineEmits(['update:filters']);
 
 const filterMenu = ref(false);
 const selectedPlatform = ref(null);
-const dateFrom = ref(null);
-const dateTo = ref(null);
-const dateFromMenu = ref(false);
-const dateToMenu = ref(false);
+const selectedStatus = ref(null);
 
 const platformOptions = ['Facebook', 'Instagram'];
-
-const formatDate = (val) => {
-  if (!val) return '';
-  const d = new Date(val);
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-};
-
-const formattedDateFrom = computed(() => formatDate(dateFrom.value));
-const formattedDateTo = computed(() => formatDate(dateTo.value));
+const statusOptions = ['Active', 'Paused'];
 
 const activeFiltersCount = computed(() => {
   let c = 0;
   if (selectedPlatform.value) c++;
-  if (dateFrom.value) c++;
-  if (dateTo.value) c++;
+  if (selectedStatus.value) c++;
   return c;
 });
 
-watch([selectedPlatform, dateFrom, dateTo], () => {
+watch([selectedPlatform, selectedStatus], () => {
   emit('update:filters', {
     platform: selectedPlatform.value || null,
-    dateFrom: dateFrom.value || null,
-    dateTo: dateTo.value || null,
+    status: selectedStatus.value || null,
   });
 });
 
 const clearFilters = () => {
   selectedPlatform.value = null;
-  dateFrom.value = null;
-  dateTo.value = null;
+  selectedStatus.value = null;
 };
 </script>
 

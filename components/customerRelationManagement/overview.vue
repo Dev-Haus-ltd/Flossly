@@ -1494,11 +1494,6 @@ onMounted(async () => {
   loadWhapiChannels(false)
 })
 
-watch(activeLeads, async () => {
-  await nextTick()
-  renderLeadChart()
-})
-
 onBeforeUnmount(() => {
   stopWhapiStatusStream()
   stopQrPoll()
