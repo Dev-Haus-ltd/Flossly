@@ -1254,20 +1254,36 @@ export const webhook = async (event) => {
         continue;
       }
 
-      // ── Reaction action: update the target message row's reaction field ──
-      if (
-        normalizedMsgType === "action" &&
-        String(msg?.action?.type || "").toLowerCase() === "reaction"
-      ) {
-        const targetId = msg?.action?.message_id || msg?.action?.messageId || msg?.action?.id;
-        const emoji = msg?.action?.emoji;
-        if (targetId) {
-          await CrmWhatsAppMessageLog.update(
-            { reaction: emoji || null },
-            { where: { providerMessageId: targetId, organisationId: orgId } }
-          );
+      // ── Action messages: reactions, revokes, deletes — never create a new log row ──
+      if (normalizedMsgType === "action") {
+        const actionType = String(msg?.action?.type || "").toLowerCase();
+
+        if (actionType === "reaction") {
+          const targetId = msg?.action?.message_id || msg?.action?.messageId || msg?.action?.id;
+          const emoji = msg?.action?.emoji;
+          if (targetId) {
+            await CrmWhatsAppMessageLog.update(
+              { reaction: emoji || null },
+              { where: { providerMessageId: targetId, organisationId: orgId } }
+            );
+          }
+          broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+          continue;
         }
-        broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+
+        if (["revoke", "delete", "deleted", "revoked"].includes(actionType)) {
+          const targetId = msg?.action?.message_id || msg?.action?.messageId || msg?.action?.id || msg?.id;
+          if (targetId) {
+            await CrmWhatsAppMessageLog.update(
+              { type: "revoked", content: "🚫 This message was deleted" },
+              { where: { providerMessageId: targetId, organisationId: orgId } }
+            );
+          }
+          broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+          continue;
+        }
+
+        // All other action types — skip silently, never create a ghost inbound row
         continue;
       }
 
@@ -1456,6 +1472,14 @@ export const deleteMessage = async (event) => {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     });
+
+    // Persist the revoked state in the DB immediately so that when SSE triggers
+    // a reload of logs the message shows as deleted rather than reappearing.
+    await CrmWhatsAppMessageLog.update(
+      { type: "revoked", content: "🚫 This message was deleted" },
+      { where: { providerMessageId, organisationId: orgId } }
+    );
+
     return success({ deleted: true });
   } catch (err) {
     return error(500, err?.message || "Failed to delete message");
