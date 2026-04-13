@@ -272,6 +272,11 @@ export default defineNuxtConfig({
   pinia: {
     autoImports: ["defineStore", "acceptHMRUpdate"],
   },
+  nitro: {
+    externals: {
+      inline: ['xlsx'],
+    },
+  },
   vue: {
     compilerOptions: {
       // emoji-picker is a native web component — suppress Vue unknown-element warnings
