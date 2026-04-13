@@ -110,21 +110,32 @@ const _resetActivationState = () => {
 const _crmStore = () => useCrmStore()
 const _mainStore = () => useMainStore()
 
-const _refreshWhapiQr = async () => {
+const _refreshWhapiQr = async ({ silent = false } = {}) => {
   if (whapiLoading.value) return
   whapiLoading.value = true
   try {
-    const res = await _crmStore().getWhapiQr()
+    const res = await (silent ? _crmStore().getWhapiQrSilent() : _crmStore().getWhapiQr())
     if (res?.code === 0 && res.data) {
-      whapiQr.value = res.data.qr || ''
-      whapiQrWarning.value = res.data.warning || ''
+      if (res.data.qr) {
+        // Valid QR received — update both fields
+        whapiQr.value = res.data.qr
+        whapiQrWarning.value = ''
+      } else if (!whapiQr.value) {
+        // No QR and nothing currently shown — surface the warning
+        whapiQrWarning.value = res.data.warning || ''
+      }
+      // If no QR but we already have one displayed, keep it — user may be mid-scan
       return
     }
-    const msg = res?.error || res?.message || 'Unable to refresh QR'
-    _mainStore()?.setSnackbar?.({ title: msg, type: 'error' })
+    if (!silent) {
+      const msg = res?.error || res?.message || 'Unable to refresh QR'
+      _mainStore()?.setSnackbar?.({ title: msg, type: 'error' })
+    }
   } catch (e) {
-    const msg = e?.data?.message || e?.message || 'Unable to refresh QR'
-    _mainStore()?.setSnackbar?.({ title: msg, type: 'error' })
+    if (!silent) {
+      const msg = e?.data?.message || e?.message || 'Unable to refresh QR'
+      _mainStore()?.setSnackbar?.({ title: msg, type: 'error' })
+    }
   } finally {
     whapiLoading.value = false
   }
@@ -134,13 +145,13 @@ const _startQrAutoRefresh = () => {
   _stopQrAutoRefresh()
   qrRefreshTimer = setInterval(async () => {
     if (!whapiDialog.value || !whapiQr.value) { _stopQrAutoRefresh(); return }
-    if (!whapiLoading.value) await _refreshWhapiQr()
+    if (!whapiLoading.value) await _refreshWhapiQr({ silent: true })
   }, 28000)
 }
 
 const _loadWhapiStatus = async () => {
   try {
-    const res = await _crmStore().getWhapiStatus()
+    const res = await _crmStore().getWhapiStatusSilent()
     if (res?.code === 0 && res.data) {
       whapiStatus.connected = !!res.data.connected
       whapiStatus.channelId = res.data.channelId || ''
@@ -195,7 +206,7 @@ const _startActivationStatusPoll = () => {
     const raw = String(whapiStatus.status || '').toLowerCase()
     if (raw === 'qr' || raw.includes('awaiting') || raw.includes('auth') ||
         (raw.includes('active') && !raw.includes('inactive'))) {
-      if (!whapiLoading.value) await _refreshWhapiQr()
+      if (!whapiLoading.value) await _refreshWhapiQr({ silent: true })
     }
   }, 10000)
 }
@@ -273,7 +284,7 @@ const _startWhapiStatusStream = () => {
       } else if (isNewChannel.value && whapiActivating.value && !whapiQr.value) {
         const raw = String(payload.status || '').toLowerCase()
         if (raw === 'qr' || raw.includes('awaiting') || raw.includes('active') || raw.includes('auth')) {
-          _refreshWhapiQr()
+          _refreshWhapiQr({ silent: true })
         }
       }
     } catch {}
@@ -312,7 +323,7 @@ const _startQrPoll = () => {
       return
     }
     qrPollAttempts++
-    if (!whapiLoading.value) await _refreshWhapiQr()
+    if (!whapiLoading.value) await _refreshWhapiQr({ silent: true })
   }, 5000)
 }
 

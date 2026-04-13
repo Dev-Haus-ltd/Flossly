@@ -103,8 +103,12 @@ const getMessageContent = (msg) => {
   if (!msg || typeof msg !== "object") return "";
   const type = String(msg?.type || "").toLowerCase();
 
-  // Plain text / caption
-  const textBody = msg?.text?.body || msg?.text || msg?.body || msg?.caption || msg?.data?.text || msg?.message?.body || msg?.message || msg?.content || "";
+  // Plain text / caption (top-level or nested under the media type object)
+  // Whapi stores captions at msg.image.caption, msg.video.caption, msg.document.caption, etc.
+  const mediaCaption = ["image", "video", "document", "audio", "sticker"].includes(type)
+    ? (msg?.[type]?.caption || null)
+    : null;
+  const textBody = msg?.text?.body || msg?.text || msg?.body || msg?.caption || mediaCaption || msg?.data?.text || msg?.message?.body || msg?.message || msg?.content || "";
   if (typeof textBody === "string" && textBody) return textBody;
 
   // Action (reaction, vote, label change, etc.)
@@ -1414,7 +1418,19 @@ export const editMessage = async (event) => {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: { to, body: newText, edit: providerMessageId },
     });
-    return success({ messageId: resp?.message?.id || resp?.id || null });
+    const newMessageId = resp?.message?.id || resp?.id || null;
+
+    // Persist the edited text in the DB so the change survives a page reload.
+    // Also update the providerMessageId if Whapi issued a new one for the edit.
+    const dbUpdate = { content: newText };
+    if (newMessageId && newMessageId !== providerMessageId) {
+      dbUpdate.providerMessageId = newMessageId;
+    }
+    await CrmWhatsAppMessageLog.update(dbUpdate, {
+      where: { providerMessageId, organisationId: orgId },
+    });
+
+    return success({ messageId: newMessageId });
   } catch (err) {
     return error(500, err?.message || "Failed to edit message");
   }
