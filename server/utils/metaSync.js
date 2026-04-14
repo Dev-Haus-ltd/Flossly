@@ -257,7 +257,6 @@ export const runStructureSync = async (orgId) => {
         photoData?.picture ||
         photoData?.url ||
         templateData?.picture ||
-        creative?.picture ||
         creative?.thumbnail_url ||
         null
       )
@@ -287,7 +286,7 @@ export const runStructureSync = async (orgId) => {
         method: 'GET',
         // Include effective_object_story_id for boosted posts — those ads have no
         // direct image_url; the image lives on the underlying page post instead.
-        relative_url: `${cid}?fields=image_url,thumbnail_url,picture,body,instagram_permalink_url,video_id,object_story_spec,effective_object_story_id,effective_instagram_media_id`,
+        relative_url: `${cid}?fields=image_url,thumbnail_url,body,instagram_permalink_url,video_id,object_story_spec,effective_object_story_id,effective_instagram_story_id`,
       }))
       const creativeBatchRes = await metaBatch(creativeBatchReqs, userToken)
 
@@ -298,7 +297,7 @@ export const runStructureSync = async (orgId) => {
       for (let i = 0; i < ids.length; i++) {
         const cr = creativeBatchRes[i]
         if (!cr || pickCreativeImage(cr)) continue
-        const storyId = cr.effective_object_story_id || cr.effective_instagram_media_id
+        const storyId = cr.effective_object_story_id || cr.effective_instagram_story_id
         if (storyId) {
           storyRequests.push({ method: 'GET', relative_url: `${storyId}?fields=full_picture` })
           storyMeta.push({ creativeIndex: i, adId: creativeIds.get(ids[i]) })
