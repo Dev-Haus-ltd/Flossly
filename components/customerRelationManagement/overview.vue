@@ -504,26 +504,6 @@ const metaChartConfig = reactive({
   },
   summaryStats: []
 })
-const googleStatus = reactive({
-  connected: false,
-  email: '',
-  tokenId: '',
-  tokenValid: false,
-  connectedAt: '',
-  expiresAt: '',
-  scopes: [],
-})
-const isGoogleConnected = ref(false)
-const googleConnecting = ref(false)
-const googleDisconnecting = ref(false)
-const googleHealthDialog = ref(false)
-const googleHealthLoading = ref(false)
-const googleHealthData = ref(null)
-const googleErrorMessage = ref('')
-const googleErrorDialog = ref(false)
-const metaDisconnecting = ref(false)
-const metaDisconnectDialog = ref(false)
-const confirmDisconnectMeta = ref(false)
 const gscChartLoading = ref(false)
 const gscChartError = ref(null)
 const gscChartConfig = reactive({
