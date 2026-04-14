@@ -107,7 +107,7 @@ const validateAdminAutomationUploadRow = (row, rowNum) => {
   return errors;
 };
 
-const parseAdminAutomationUploadFile = async (filePart) => {
+const parseAdminAutomationUploadFile = (filePart) => {
   if (!filePart?.data?.length) {
     throw new Error('No file uploaded');
   }
@@ -1949,7 +1949,7 @@ export const adminBulkUploadAutomations = async (event) => {
         return error(400, 'organisationId is required');
       }
 
-      const items = await parseAdminAutomationUploadFile(filePart);
+      const items = parseAdminAutomationUploadFile(filePart);
       event.context.adminBulkAutomationPayload = {
         organisationId,
         items,

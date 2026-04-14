@@ -51,7 +51,7 @@
                 variant="outlined"
                 rounded="lg"
                 class="action-btn"
-                @click="disconnectMeta"
+                @click="metaDisconnectDialog = true"
               >
                 Disconnect
               </v-btn>
@@ -388,15 +388,6 @@
       </v-card>
     </v-dialog>
 
-    <CommonConfirmDialog
-      v-model="confirmDisconnectMeta"
-      title="Disconnect Meta?"
-      message="This will remove the Meta integration. New leads from Facebook forms will stop arriving until you reconnect."
-      confirm-text="Disconnect"
-      @confirm="doDisconnectMeta"
-      @cancel="confirmDisconnectMeta = false"
-    />
-
   </v-sheet>
 </template>
 
@@ -407,7 +398,6 @@ import { useMainStore } from '@/stores/index'
 import { useAuthStore } from '@/stores/auth'
 import { useWhapiStream } from '@/composables/useWhapiStream'
 import CustomerRelationManagementMetaHealthDialog from '@/components/customerRelationManagement/metaHealthDialog.vue'
-import CustomerRelationManagementGoogleAnalyticsGoogleHealthDialog from '@/components/customerRelationManagement/googleanalytics/googleHealthDialog.vue'
 import ConfirmDialog from '@/components/Common/ConfirmDialog.vue'
 import IntegrationCard from '@/components/customerRelationManagement/IntegrationCard.vue'
 import CrmCharts from '@/components/customerRelationManagement/CrmCharts.vue'
@@ -459,6 +449,8 @@ const {
 
 const user = ref(null)
 const isMetaConnected = ref(false)
+const metaDisconnectDialog = ref(false)
+const metaDisconnecting = ref(false)
 const whapiConnectDialog = ref(false)
 const whapiDisconnecting = ref(false)
 const whapiChannelsLoading = ref(false)
@@ -469,6 +461,23 @@ const whapiShareOrgNames = ref([])
 const whapiLogoutConfirm = ref(false)
 const whapiShareMode = ref('change')
 const whapiSingleLogoutConfirm = ref(false)
+const isGoogleConnected = ref(false)
+const googleHealthDialog = ref(false)
+const googleHealthLoading = ref(false)
+const googleHealthData = ref(null)
+const googleConnecting = ref(false)
+const googleDisconnecting = ref(false)
+const googleErrorDialog = ref(false)
+const googleErrorMessage = ref('')
+const googleStatus = reactive({
+  connected: false,
+  email: '',
+  tokenId: '',
+  tokenValid: false,
+  connectedAt: '',
+  expiresAt: '',
+  scopes: [],
+})
 
 const leadRows = ref([])
 const leadsChartType = ref('line')
@@ -495,19 +504,6 @@ const metaChartConfig = reactive({
   },
   summaryStats: []
 })
-
-const gscChartLoading = ref(false)
-const gscChartError = ref(null)
-const gscChartConfig = reactive({
-  chartTitle: 'Google Search Console',
-  chartSubtitle: 'Last 30 days',
-  chartData: {
-    labels: [],
-    datasets: []
-  },
-  summaryStats: []
-})
-
 const googleStatus = reactive({
   connected: false,
   email: '',
@@ -528,6 +524,17 @@ const googleErrorDialog = ref(false)
 const metaDisconnecting = ref(false)
 const metaDisconnectDialog = ref(false)
 const confirmDisconnectMeta = ref(false)
+const gscChartLoading = ref(false)
+const gscChartError = ref(null)
+const gscChartConfig = reactive({
+  chartTitle: 'Google Search Console',
+  chartSubtitle: 'Last 30 days',
+  chartData: {
+    labels: [],
+    datasets: []
+  },
+  summaryStats: []
+})
 
 const metaHealthDialog = ref(false)
 const metaHealthLoading = ref(false)
@@ -780,6 +787,7 @@ const integrateMeta = async () => {
 }
 
 const disconnectMeta = async () => {
+  metaDisconnectDialog.value = false
   try {
     const res = await crmStore.disconnectMeta()
     if (res?.code === 0) {
@@ -794,12 +802,6 @@ const disconnectMeta = async () => {
   } finally {
     metaDisconnecting.value = false
   }
-}
-
-const doDisconnectMeta = async () => {
-  confirmDisconnectMeta.value = false
-  metaDisconnecting.value = true
-  await disconnectMeta()
 }
 
 const fetchMetaHealthSilent = async () => {

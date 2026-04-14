@@ -2247,28 +2247,8 @@ export const savePatientComfort = async (event) => {
       });
     } catch (dbError) {
       // Handle case where table might not exist yet
-      if (dbError.message && dbError.message.includes("does not exist")) {
-        console.warn(
-          "DiaryPatientComforts table not found, attempting to sync:",
-          dbError.message,
-        );
-        try {
-          await DiaryPatientComfort.sync({ alter: true });
-          console.log("DiaryPatientComforts table synced successfully");
-        } catch (syncError) {
-          console.error(
-            "Failed to sync DiaryPatientComforts table:",
-            syncError,
-          );
-          return error(
-            500,
-            `Database table not found. Please ensure the DiaryPatientComforts table exists. Error: ${syncError.message || dbError.message}`,
-          );
-        }
-        // Retry the findOne after sync
-        comfort = await DiaryPatientComfort.findOne({
-          where: { patientId, organisationId: Number(orgId) },
-        });
+      if (dbError.message && dbError.message.includes('does not exist')) {
+        return error(500, `Database table not found. Please ensure the DiaryPatientComforts table exists. Error: ${dbError.message}`)
       } else {
         throw dbError;
       }
@@ -3182,23 +3162,8 @@ export const savePatientForm = async (event) => {
       created = await DiaryPatientForm.create(formData);
     } catch (dbError) {
       // Handle case where table might not exist yet
-      if (dbError.message && dbError.message.includes("does not exist")) {
-        console.warn(
-          "DiaryPatientForms table not found, attempting to sync:",
-          dbError.message,
-        );
-        try {
-          await DiaryPatientForm.sync({ alter: true });
-          console.log("DiaryPatientForms table synced successfully");
-          // Retry the create after sync
-          created = await DiaryPatientForm.create(formData);
-        } catch (syncError) {
-          console.error("Failed to sync DiaryPatientForms table:", syncError);
-          return error(
-            500,
-            `Database table not found. Please ensure the DiaryPatientForms table exists. Error: ${syncError.message || dbError.message}`,
-          );
-        }
+      if (dbError.message && dbError.message.includes('does not exist')) {
+        return error(500, `Database table not found. Please ensure the DiaryPatientForms table exists. Error: ${dbError.message}`)
       } else {
         throw dbError;
       }

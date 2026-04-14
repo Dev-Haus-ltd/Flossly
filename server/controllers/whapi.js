@@ -8,12 +8,12 @@ import {
   UserPreference,
   OrganisationTreatment,
 } from "../models";
-import { normalizeWhatsAppNumber, logWhatsAppMessage } from "../utils/whatsapp";
+import { normalizeWhatsAppNumber, logWhatsAppMessage, isWhatsAppLimitExceeded } from "../utils/whatsapp";
 import { success, error } from "../utils/response";
 import { addWhapiClient, broadcastWhapiEvent } from "../utils/whapiStream";
 import { sendNotificationToMultipleUsers } from "../utils/fcmNotification";
 import { encrypt, decrypt } from "../utils/crypto";
-import { getWhapiEnvConfig, getWhapiPartnerConfig } from "../utils/whatsappProvider";
+import { getWhapiEnvConfig, getWhapiPartnerConfig, resolveWhapiConfig } from "../utils/whatsappProvider";
 import { uploadBufferFile } from "../utils/storage";
 import { chat } from "../utils/aiWrapper";
 
@@ -324,11 +324,7 @@ const resolveWebhookUrl = () => {
   return base ? `${String(base).replace(/\/+$/, "")}/api/whapi/webhook` : "";
 };
 
-const syncWhapiConfig = async () => {
-  try {
-    await WhapiChannelConfig.sync();
-  } catch {}
-};
+const syncWhapiConfig = async () => {};
 
 const findOrgChannel = async (orgId) => {
   await syncWhapiConfig();
@@ -1090,26 +1086,38 @@ AVAILABLE TREATMENTS at this practice: ${treatmentList || 'Please ask about spec
 
     if (!replyText) return;
 
-    const url = 'https://gate.whapi.cloud/messages/text';
-    await $fetch(url, {
+    const whapiConfig = await resolveWhapiConfig(orgId);
+    if (!whapiConfig?.token) {
+      console.warn(`[WhatsApp AutoReply] No whapi config for org ${orgId}`);
+      return;
+    }
+
+    const limitStatus = await isWhatsAppLimitExceeded(orgId);
+    if (limitStatus.exceeded) {
+      console.warn(`[WhatsApp AutoReply] Limit exceeded for org ${orgId} (${limitStatus.count}/${limitStatus.limit})`);
+      return;
+    }
+
+    const whapiBase = String(whapiConfig.baseUrl || 'https://gate.whapi.cloud').replace(/\/+$/, '');
+    const headers = { Authorization: `Bearer ${whapiConfig.token}`, 'Content-Type': 'application/json' };
+    const to = normalizeWhatsAppNumber(lead.telephone);
+
+    const resp = await $fetch(`${whapiBase}/messages/text`, {
       method: 'POST',
-      body: {
-        to: lead.telephone || lead.mobile || lead.phone,
-        body: replyText,
-      },
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers,
+      body: { to, body: replyText },
     });
+
+    const providerMessageId = resp?.message?.id || resp?.id || null;
 
     await logWhatsAppMessage({
       organisationId: orgId,
       leadId: lead.id,
-      to: lead.telephone || lead.mobile || lead.phone,
+      to,
       direction: 'outbound',
       type: 'text',
       status: 'sent',
-      providerMessageId: null,
+      providerMessageId,
       content: replyText,
       attachments: null,
     });

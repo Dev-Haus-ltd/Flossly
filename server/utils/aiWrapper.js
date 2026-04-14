@@ -32,8 +32,6 @@ export async function chat({ prompt, systemPrompt, model = null, temperature = 0
   const client = await initializeAnthropicClient();
   const llmModel = model || getLlmModel();
 
-  console.log(`[AI Wrapper] Using model: ${llmModel}`);
-
   const messages = [];
   messages.push({ role: "user", content: systemPrompt + "\n\n" + prompt });
 
@@ -235,9 +233,6 @@ Return ONLY the JSON object with "automations" array. No other text.`;
     if (auto.type === 'Email' && !auto.subject) return false;
     return true;
   });
-
-  const uniqueGroups = [...new Set(automations.map(a => a.groupName))];
-  console.log(`[AI Wrapper] Generated ${automations.length} automations across ${uniqueGroups.length} groups:`, uniqueGroups);
 
   return automations;
 }
