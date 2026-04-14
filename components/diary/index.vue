@@ -3,13 +3,12 @@
     <div class="cust-border d-flex align-center">
       <p class="mr-1">Flossly Diary</p>
     </div>
-  
 
     <!-- Stats -->
     <div class="stats-section">
       <v-row class="stat-row" align="stretch">
         <v-col v-for="(card, i) in statCards" :key="i" class="stat-col">
-          <DiaryStatCard
+          <CommonStatCard
             :uid="i"
             :icon="card.icon"
             :label="card.label"
@@ -19,6 +18,7 @@
             :select="card.select"
             :select-items="card.selectItems"
             @update:select="(v) => onCardSelect(i, v)"
+            hide-chip
           />
         </v-col>
       </v-row>
@@ -26,7 +26,12 @@
 
     <!-- Tabs & actions -->
     <div class="content-section">
-      <v-tabs v-model="activeTab" bg-color="transparent" color="primary" class="custom-tabs">
+      <v-tabs
+        v-model="activeTab"
+        bg-color="transparent"
+        color="primary"
+        class="custom-tabs"
+      >
         <v-tab value="takings">Today's Taking</v-tab>
         <v-tab value="patients">Patient Coming Today</v-tab>
         <v-tab value="staff">Staff Working Today</v-tab>
@@ -34,14 +39,41 @@
 
       <div class="table-controls">
         <div class="controls-left">
-           <v-text-field v-model="search" placeholder="Search" append-inner-icon="mdi-magnify" variant="solo" density="compact" hide-details flat class="custom-search" />
-          <DiaryFilterMenu :dentists="dentists" :treatments="treatments" :init-date="todayStr" @update:filters="onFilters" />
+          <v-text-field
+            v-model="search"
+            placeholder="Search"
+            clearable
+            @click:clear="clearSearch"
+            variant="solo"
+            :elevation="0"
+            density="compact"
+            bg-color="#F3F4F6"
+            hide-details
+            flat
+            class="custom-search"
+          >
+            <template #append-inner>
+              <img :src="searchIcon" alt="search icon" width="14" height="14" />
+            </template>
+          </v-text-field>
+          <DiaryFilterMenu
+            :dentists="dentists"
+            :treatments="treatments"
+            :init-date="todayStr"
+            @update:filters="onFilters"
+          />
         </div>
 
-        <v-btn color="primary" variant="flat" rounded="lg" @click="showAddPatient = true">
+        <v-btn
+          color="primary"
+          variant="flat"
+          rounded="lg"
+          @click="showAddPatient = true"
+        >
           <v-icon start size="18">mdi-plus</v-icon>
           Add Patient
         </v-btn>
+        
       </div>
 
       <!-- Tables -->
@@ -243,217 +275,315 @@
 </template>
 
 <script setup>
-import DiaryStatCard from '@/components/diary/DiaryStatCard.vue'
-import DiaryFilterMenu from '@/components/diary/filterMenu.vue'
-import { useDiaryStore } from '@/stores/diary'
-import { useOrgStore } from '@/stores/organisation'
-import { useMainStore } from '@/stores/index'
-import AddPatient from '@/components/diary/addPatient.vue'
+import DiaryStatCard from "@/components/diary/DiaryStatCard.vue";
+import DiaryFilterMenu from "@/components/diary/filterMenu.vue";
+import { useDiaryStore } from "@/stores/diary";
+import { useOrgStore } from "@/stores/organisation";
+import { useMainStore } from "@/stores/index";
+import AddPatient from "@/components/diary/addPatient.vue";
 
-const activeTab = ref('takings')
-const search = ref('')
-const diaryStore = useDiaryStore()
-const mainStore = useMainStore()
-const debounce = (fn, ms=400) => { let t; return (...args) => { clearTimeout(t); t=setTimeout(()=>fn(...args), ms) } }
+// icon
+import searchIcon from "@/assets/icons/listView/serach-icon.svg";
+const activeTab = ref("takings");
+const search = ref("");
+const diaryStore = useDiaryStore();
+const mainStore = useMainStore();
+const debounce = (fn, ms = 400) => {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  };
+};
 
 // Stats cards (dynamic)
-const accountsPeriod = ref('Today')
+const accountsPeriod = ref("Today");
 const statCards = reactive([
-  { icon: 'https://cdn.lordicon.com/akqsdstj.json', label: 'Accounts', subtitle: 'Total', value: '£0.00', note: '', select: accountsPeriod.value, selectItems: ['Today','Week','Month'] },
-  { icon: 'https://cdn.lordicon.com/axteoudt.json', label: 'Highest Grossing Practitioner', subtitle: '', value: '£0.00', note: '', selectItems: [] },
-  { icon: 'https://cdn.lordicon.com/hjbrplhx.json', label: 'Total Patients Coming Today', subtitle: 'Patients', value: 0, note: '', selectItems: [] },
-  { icon: 'https://cdn.lordicon.com/vduvxizq.json', label: 'VIP Patients for the Day', subtitle: "VIP's", value: 0, note: '', selectItems: [] },
-])
+  {
+    icon: "https://cdn.lordicon.com/akqsdstj.json",
+    label: "Accounts",
+    subtitle: "Total",
+    value: "£0.00",
+    note: "",
+    select: accountsPeriod.value,
+    selectItems: ["Today", "Week", "Month"],
+  },
+  {
+    icon: "https://cdn.lordicon.com/axteoudt.json",
+    label: "Highest Grossing Practitioner",
+    subtitle: "",
+    value: "£0.00",
+    note: "",
+    selectItems: [],
+  },
+  {
+    icon: "https://cdn.lordicon.com/hjbrplhx.json",
+    label: "Total Patients Coming Today",
+    subtitle: "Patients",
+    value: 0,
+    note: "",
+    selectItems: [],
+  },
+  {
+    icon: "https://cdn.lordicon.com/vduvxizq.json",
+    label: "VIP Patients for the Day",
+    subtitle: "VIP's",
+    value: 0,
+    note: "",
+    selectItems: [],
+  },
+]);
 
 const takingsHeaders = [
-  { title: '', key: 'checkbox', sortable: false, width: 48 },
-  { title: 'Patient Name', key: 'name', align: 'start', width: 180 },
-  { title: 'Amount', key: 'amount', align: 'start', width: 120 },
-  { title: 'Practitioner', key: 'practitioner', align: 'start', width: 180 },
-  { title: 'Payment Method', key: 'payment', align: 'start', width: 180 },
-]
-const takings = ref([])
+  { title: "", key: "checkbox", sortable: false, width: 48 },
+  { title: "Patient Name", key: "name", align: "start", width: 180 },
+  { title: "Amount", key: "amount", align: "start", width: 120 },
+  { title: "Practitioner", key: "practitioner", align: "start", width: 180 },
+  { title: "Payment Method", key: "payment", align: "start", width: 180 },
+];
+const takings = ref([]);
 
 const patientsHeaders = [
-  { title: '', key: 'checkbox', sortable: false, width: 48 },
-  { title: 'Patient Name', key: 'name', align: 'start', width: 180 },
-  { title: 'Treatment', key: 'treatment', align: 'start', width: 180 },
-  { title: 'Time', key: 'time', align: 'start', width: 120 },
-  { title: 'Practitioner', key: 'practitioner', align: 'start', width: 180 },
-  { title: 'Alert', key: 'alert', align: 'start', width: 140 },
-]
-const patients = ref([])
+  { title: "", key: "checkbox", sortable: false, width: 48 },
+  { title: "Patient Name", key: "name", align: "start", width: 180 },
+  { title: "Treatment", key: "treatment", align: "start", width: 180 },
+  { title: "Time", key: "time", align: "start", width: 120 },
+  { title: "Practitioner", key: "practitioner", align: "start", width: 180 },
+  { title: "Alert", key: "alert", align: "start", width: 140 },
+];
+const patients = ref([]);
 
 const staffHeaders = [
-  { title: '', key: 'checkbox', sortable: false, width: 48 },
-  { title: 'Name of Staff', key: 'name', align: 'start', width: 180 },
-  { title: 'Role', key: 'role', align: 'start', width: 160 },
-  { title: 'Shift Start time', key: 'start', align: 'start', width: 150 },
-  { title: 'Shift End time', key: 'end', align: 'start', width: 150 },
-]
-const staff = ref([])
+  { title: "", key: "checkbox", sortable: false, width: 48 },
+  { title: "Name of Staff", key: "name", align: "start", width: 180 },
+  { title: "Role", key: "role", align: "start", width: 160 },
+  { title: "Shift Start time", key: "start", align: "start", width: 150 },
+  { title: "Shift End time", key: "end", align: "start", width: 150 },
+];
+const staff = ref([]);
 
-const todayStr = computed(() => new Date().toISOString().slice(0,10))
+const todayStr = computed(() => new Date().toISOString().slice(0, 10));
 
-function currency(n) { return `£${Number(n || 0).toFixed(2)}` }
+function currency(n) {
+  return `£${Number(n || 0).toFixed(2)}`;
+}
 
-const filters = ref({})
-const selectedTakings = ref([])
-const selectedPatients = ref([])
-const selectedStaff = ref([])
+const filters = ref({});
+const selectedTakings = ref([]);
+const selectedPatients = ref([]);
+const selectedStaff = ref([]);
 
 const tableRefs = {
   takings,
   patients,
   staff,
-}
+};
 const selectedRefs = {
   takings: selectedTakings,
   patients: selectedPatients,
   staff: selectedStaff,
-}
+};
 
 const isRowSelected = (type, row) =>
-  selectedRefs[type]?.value?.some((r) => r.id === row.id)
+  selectedRefs[type]?.value?.some((r) => r.id === row.id);
 
 const toggleRow = (type, row) => {
-  const target = selectedRefs[type]
-  if (!target) return
-  const exists = target.value.some((r) => r.id === row.id)
+  const target = selectedRefs[type];
+  if (!target) return;
+  const exists = target.value.some((r) => r.id === row.id);
   target.value = exists
     ? target.value.filter((r) => r.id !== row.id)
-    : [...target.value, row]
-}
+    : [...target.value, row];
+};
 
 const allSelectedState = (type) => {
-  const total = tableRefs[type]?.value?.length || 0
-  const selected = selectedRefs[type]?.value?.length || 0
-  return total > 0 && selected === total
-}
+  const total = tableRefs[type]?.value?.length || 0;
+  const selected = selectedRefs[type]?.value?.length || 0;
+  return total > 0 && selected === total;
+};
 
 const someSelectedState = (type) => {
-  const total = tableRefs[type]?.value?.length || 0
-  const selected = selectedRefs[type]?.value?.length || 0
-  return selected > 0 && selected < total
-}
+  const total = tableRefs[type]?.value?.length || 0;
+  const selected = selectedRefs[type]?.value?.length || 0;
+  return selected > 0 && selected < total;
+};
 
 const toggleAllRows = (type) => {
-  const all = tableRefs[type]?.value || []
-  const target = selectedRefs[type]
-  if (!target) return
+  const all = tableRefs[type]?.value || [];
+  const target = selectedRefs[type];
+  if (!target) return;
   if (allSelectedState(type)) {
-    target.value = []
+    target.value = [];
   } else {
-    target.value = [...all]
+    target.value = [...all];
   }
-}
+};
 async function loadAppointments() {
-  const payload = { date: (filters.value.date || todayStr.value), dentistId: filters.value.dentistId || null, status: filters.value.status || null, treatmentId: filters.value.treatmentId || null, search: search.value || '' }
-  const res = await diaryStore.listAppointments(payload)
+  const payload = {
+    date: filters.value.date || todayStr.value,
+    dentistId: filters.value.dentistId || null,
+    status: filters.value.status || null,
+    treatmentId: filters.value.treatmentId || null,
+    search: search.value || "",
+  };
+  const res = await diaryStore.listAppointments(payload);
   if (res?.code === 0) {
-    const rows = res.data || []
+    const rows = res.data || [];
     // Patients Coming Today -> Pending
-    const pending = rows.filter(r => (r.status || '').toLowerCase() === 'pending')
-    patients.value = pending.map((r, i) => ({ id: i + 1, name: r.patient, treatment: r.treatmentName || '-', time: r.start, practitioner: r.dentistName || '', alert: '-' }))
+    const pending = rows.filter(
+      (r) => (r.status || "").toLowerCase() === "pending",
+    );
+    patients.value = pending.map((r, i) => ({
+      id: i + 1,
+      name: r.patient,
+      treatment: r.treatmentName || "-",
+      time: r.start,
+      practitioner: r.dentistName || "",
+      alert: "-",
+    }));
     // Today's Takings -> Confirmed (or Complete)
-    const confirmed = rows.filter(r => ['confirmed','complete','arrived'].includes((r.status || '').toLowerCase()))
-    takings.value = confirmed.map((r, i) => ({ id: i + 1, name: r.patient, amount: currency(r.amount), practitioner: r.dentistName || '', payment: '-' }))
+    const confirmed = rows.filter((r) =>
+      ["confirmed", "complete", "arrived"].includes(
+        (r.status || "").toLowerCase(),
+      ),
+    );
+    takings.value = confirmed.map((r, i) => ({
+      id: i + 1,
+      name: r.patient,
+      amount: currency(r.amount),
+      practitioner: r.dentistName || "",
+      payment: "-",
+    }));
     // Stats based on rows
-    const totalAccounts = rows.reduce((sum, r) => sum + Number(r.amount || 0), 0)
-    statCards[0].value = currency(totalAccounts)
-    statCards[2].value = rows.length
+    const totalAccounts = rows.reduce(
+      (sum, r) => sum + Number(r.amount || 0),
+      0,
+    );
+    statCards[0].value = currency(totalAccounts);
+    statCards[2].value = rows.length;
     // Highest Grossing Practitioner (for current filter span)
     const perDent = rows.reduce((acc, r) => {
-      const key = r.dentistId || 'unknown'
-      acc[key] = (acc[key] || 0) + Number(r.amount || 0)
-      return acc
-    }, {})
-    let topDentistId = null; let topAmount = 0
-    for (const [k, v] of Object.entries(perDent)) { if (v > topAmount) { topAmount = v; topDentistId = k } }
-    const topName = (rows.find(r => String(r.dentistId) === String(topDentistId)) || {}).dentistName || ''
-    statCards[1].subtitle = topName || '—'
-    statCards[1].value = currency(topAmount)
+      const key = r.dentistId || "unknown";
+      acc[key] = (acc[key] || 0) + Number(r.amount || 0);
+      return acc;
+    }, {});
+    let topDentistId = null;
+    let topAmount = 0;
+    for (const [k, v] of Object.entries(perDent)) {
+      if (v > topAmount) {
+        topAmount = v;
+        topDentistId = k;
+      }
+    }
+    const topName =
+      (rows.find((r) => String(r.dentistId) === String(topDentistId)) || {})
+        .dentistName || "";
+    statCards[1].subtitle = topName || "—";
+    statCards[1].value = currency(topAmount);
   } else {
-    patients.value = []
-    takings.value = []
+    patients.value = [];
+    takings.value = [];
   }
-  selectedPatients.value = []
-  selectedTakings.value = []
+  selectedPatients.value = [];
+  selectedTakings.value = [];
 }
 
 async function loadAccounts() {
-  const map = { 'Today': 'day', 'Week': 'week', 'Month': 'month' }
-  const period = map[accountsPeriod.value] || 'day'
-  const res = await diaryStore.getStats({ period, date: todayStr.value })
-  if (res?.code === 0) statCards[0].value = currency(res.data?.accounts || 0)
+  const map = { Today: "day", Week: "week", Month: "month" };
+  const period = map[accountsPeriod.value] || "day";
+  const res = await diaryStore.getStats({ period, date: todayStr.value });
+  if (res?.code === 0) statCards[0].value = currency(res.data?.accounts || 0);
 }
 
 async function loadStaff() {
-  const res = await diaryStore.listDentists(todayStr.value)
+  const res = await diaryStore.listDentists(todayStr.value);
   if (res?.code === 0) {
-    staff.value = (res.data || []).map((d, i) => ({ id: d.id || i + 1, name: d.name, role: d.role || 'Dentist', start: d.start || '-', end: d.end || '-' }))
-  } else { staff.value = [] }
-  selectedStaff.value = []
+    staff.value = (res.data || []).map((d, i) => ({
+      id: d.id || i + 1,
+      name: d.name,
+      role: d.role || "Dentist",
+      start: d.start || "-",
+      end: d.end || "-",
+    }));
+  } else {
+    staff.value = [];
+  }
+  selectedStaff.value = [];
 }
 
-const dentists = ref([])
-const treatments = ref([])
-const organisationStore = useOrgStore()
+const dentists = ref([]);
+const treatments = ref([]);
+const organisationStore = useOrgStore();
 
 onMounted(async () => {
   const [d1, t1] = await Promise.all([
     diaryStore.listDentists(todayStr.value),
     organisationStore.listTreatments(),
-  ])
-  if (d1?.code === 0) dentists.value = d1.data || []
-  if (t1?.code === 0) treatments.value = t1.data || []
-  loadAppointments(); loadAccounts(); loadStaff()
-})
+  ]);
+  if (d1?.code === 0) dentists.value = d1.data || [];
+  if (t1?.code === 0) treatments.value = t1.data || [];
+  loadAppointments();
+  loadAccounts();
+  loadStaff();
+});
 
 function onCardSelect(index, value) {
-  const card = statCards[index]
-  if (!card) return
-  card.select = value
-  if (index === 0) { // Accounts card
-    accountsPeriod.value = value
-    loadAccounts()
+  const card = statCards[index];
+  if (!card) return;
+  card.select = value;
+  if (index === 0) {
+    // Accounts card
+    accountsPeriod.value = value;
+    loadAccounts();
   }
 }
 
-const showAddPatient = ref(false)
+const showAddPatient = ref(false);
 const onSavePatient = async (p) => {
   try {
-    const res = await diaryStore.createPatient(p)
+    const res = await diaryStore.createPatient(p);
     if (res?.code === 0) {
-      mainStore.setSnackbar({ title: 'Patient created', type: 'success' })
-      await loadAppointments()
+      mainStore.setSnackbar({ title: "Patient created", type: "success" });
+      await loadAppointments();
     } else {
-      mainStore.setSnackbar({ title: res?.message || 'Create failed', type: 'error' })
+      mainStore.setSnackbar({
+        title: res?.message || "Create failed",
+        type: "error",
+      });
     }
   } catch (err) {
-    mainStore.setSnackbar({ title: err?.message || 'Save failed', type: 'error' })
+    mainStore.setSnackbar({
+      title: err?.message || "Save failed",
+      type: "error",
+    });
   }
-}
+};
 
-const onFilters = (f) => { filters.value = f || {}; loadAppointments() }
+const onFilters = (f) => {
+  filters.value = f || {};
+  loadAppointments();
+};
 
 const startResize = (event, column) => {
-  if (typeof window === 'undefined') return
-  const startX = event.clientX || 0
-  const startWidth = Number(column.width) || 140
+  if (typeof window === "undefined") return;
+  const startX = event.clientX || 0;
+  const startWidth = Number(column.width) || 140;
   const onMouseMove = (e) => {
-    const delta = (e.clientX || 0) - startX
-    column.width = Math.max(80, startWidth + delta)
-  }
+    const delta = (e.clientX || 0) - startX;
+    column.width = Math.max(80, startWidth + delta);
+  };
   const onMouseUp = () => {
-    window.removeEventListener('mousemove', onMouseMove)
-    window.removeEventListener('mouseup', onMouseUp)
-  }
-  window.addEventListener('mousemove', onMouseMove)
-  window.addEventListener('mouseup', onMouseUp)
-}
+    window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("mouseup", onMouseUp);
+  };
+  window.addEventListener("mousemove", onMouseMove);
+  window.addEventListener("mouseup", onMouseUp);
+};
 
-watch(search, debounce(() => loadAppointments(), 400))
+watch(
+  search,
+  debounce(() => loadAppointments(), 400),
+);
 </script>
 
 <style scoped lang="scss">
@@ -596,6 +726,24 @@ watch(search, debounce(() => loadAppointments(), 400))
   width: 5px;
   cursor: col-resize;
 }
+
+.custom-search {
+  height: 46px;
+  border-radius: 8px;
+  font-size: 14px;
+  background-color: #f3f4f6 !important;
+  text-transform: none;
+  box-shadow: none;
+  color: #737373;
+  margin-left: 16px !important;
+  align-items: center;
+}
+
+.custom-search :deep(input::placeholder) {
+  color: #737373;
+  opacity: 1;
+}
+
 .cust-checkbox {
   width: 18px;
   height: 18px;
@@ -609,8 +757,8 @@ watch(search, debounce(() => loadAppointments(), 400))
   margin-top: 5px;
 }
 .cust-checkbox:checked {
-  background: #0061FB;
-  border-color: #0061FB;
+  background: #0061fb;
+  border-color: #0061fb;
 }
 .cust-checkbox:checked::after {
   content: "";

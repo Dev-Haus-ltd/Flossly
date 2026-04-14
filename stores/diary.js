@@ -23,6 +23,21 @@ export const useDiaryStore = defineStore("diaryStore", {
           });
       });
     },
+    addTreatment(payload) {
+  this.isLoading = true;
+  return new Promise((resolve, reject) => {
+    diaryService
+      .addTreatment(payload)
+      .then((res) => {
+        this.isLoading = false;
+        resolve(res);
+      })
+      .catch((err) => {
+        this.isLoading = false;
+        reject(err);
+      });
+  });
+},
     listPatients(search = "") {
       this.isLoading = true;
       return new Promise((resolve, reject) => {
@@ -116,6 +131,25 @@ export const useDiaryStore = defineStore("diaryStore", {
           });
       });
     },
+
+deletePatient(patientId) {
+  this.isLoading = true;
+  return new Promise((resolve, reject) => {
+    // Handle both formats: just ID or object with id property
+    const id = typeof patientId === 'object' ? patientId.id : patientId;
+    diaryService
+      .deletePatient(id)
+      .then((res) => {
+        this.isLoading = false;
+        resolve(res);
+      })
+      .catch((err) => {
+        this.isLoading = false;
+        reject(err);
+      });
+  });
+},
+
     listAppointments(params) {
       this.isLoading = true;
       return new Promise((resolve, reject) => {
