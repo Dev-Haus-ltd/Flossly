@@ -250,14 +250,14 @@ export const runStructureSync = async (orgId) => {
       const templateData = story?.template_data || {}
 
       return (
-        creative?.image_url ||
-        videoData?.image_url ||
-        linkData?.picture ||
-        photoData?.image_url ||
+        creative?.image_url ||          // full-res image upload — best quality
+        videoData?.image_url ||         // full-res video frame
+        photoData?.image_url ||         // full-res photo ad image
         photoData?.picture ||
         photoData?.url ||
         templateData?.picture ||
-        creative?.thumbnail_url ||
+        creative?.thumbnail_url ||      // video thumbnail — quality improved via thumbnail_width/height params
+        linkData?.picture ||            // last resort: link preview image (often small/low-res)
         null
       )
     }
@@ -286,7 +286,8 @@ export const runStructureSync = async (orgId) => {
         method: 'GET',
         // Include effective_object_story_id for boosted posts — those ads have no
         // direct image_url; the image lives on the underlying page post instead.
-        relative_url: `${cid}?fields=image_url,thumbnail_url,body,instagram_permalink_url,video_id,object_story_spec,effective_object_story_id,effective_instagram_story_id`,
+        // thumbnail_width/height lifts the default low-res video thumbnail to a proper HD frame.
+        relative_url: `${cid}?fields=image_url,thumbnail_url,body,instagram_permalink_url,video_id,object_story_spec,effective_object_story_id,effective_instagram_story_id&thumbnail_width=1280&thumbnail_height=720`,
       }))
       const creativeBatchRes = await metaBatch(creativeBatchReqs, userToken)
 
