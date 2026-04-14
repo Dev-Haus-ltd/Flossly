@@ -17,6 +17,7 @@ import { MetaUserToken, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsi
 import { decrypt } from './crypto.js'
 import { getRedisClient } from './redis.js'
 import { metaBatch, withRetry } from './metaBatch.js'
+import { downloadUrlToS3 } from './storage.js'
 
 const META_VERSION = 'v24.0'
 
@@ -294,11 +295,18 @@ export const runStructureSync = async (orgId) => {
         const cr = creativeBatchRes[i]
         if (!cr) continue
         const adId = creativeIds.get(ids[i])
+        const metaImageUrl = pickCreativeImage(cr)
+        // Strip query-string before extracting extension (Meta CDN URLs have long query params).
+        const urlExt = (metaImageUrl?.split('?')[0] || '').match(/\.(jpg|jpeg|png|gif|webp)/i)?.[1]?.toLowerCase() || 'jpg'
+        // Persist to S3 so the URL never expires; fall back to raw Meta URL if upload fails.
+        const cachedImageUrl = await downloadUrlToS3({
+          url: metaImageUrl,
+          filename: `${orgId}-${adId}.${urlExt}`,
+          baseDir: 'meta-creatives',
+        })
         await MetaAd.update(
           {
-            // Field priority is based on the creative payload Meta returns for link/video/photo ads.
-            // image_url is usually the sharpest asset; picture/thumbnail_url are lower-quality fallbacks.
-            imageUrl: pickCreativeImage(cr),
+            imageUrl: cachedImageUrl || metaImageUrl || null,
             videoId: cr.video_id || cr?.object_story_spec?.video_data?.video_id || null,
             body: pickCreativeBody(cr),
             platform: cr.instagram_permalink_url ? 'Instagram' : 'Facebook',
