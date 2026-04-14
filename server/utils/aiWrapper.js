@@ -24,7 +24,7 @@ export function getLlmModel() {
   return config.AI_ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
 }
 
-export async function chat({ prompt, systemPrompt, model = null, temperature = 0.3, maxTokens = 2000 }) {
+export async function chat({ prompt, systemPrompt, model = null, temperature = 0.3, maxTokens = 2000, history = [] }) {
   if (!systemPrompt) {
     throw new Error("systemPrompt is required");
   }
@@ -33,6 +33,14 @@ export async function chat({ prompt, systemPrompt, model = null, temperature = 0
   const llmModel = model || getLlmModel();
 
   const messages = [];
+
+  if (history.length > 0) {
+    console.log(`[AI Wrapper] Including ${history.length} prior messages in conversation history`);
+    for (const msg of history) {
+      messages.push({ role: msg.role || "user", content: msg.content });
+    }
+  }
+
   messages.push({ role: "user", content: systemPrompt + "\n\n" + prompt });
 
   const response = await client.messages.create({
@@ -43,6 +51,92 @@ export async function chat({ prompt, systemPrompt, model = null, temperature = 0
   });
 
   return response.content[0]?.text?.trim();
+}
+
+export async function generateAutoReply({ organisationName, organisationType, message, treatments = [], history = [] }) {
+  const treatmentList = treatments.length
+    ? treatments.map((t) => `${t.name}${t.category ? ` (${t.category})` : ''}`).join(', ')
+    : 'various treatments';
+
+  const systemPrompt = `You are a warm, friendly, and professional assistant for a ${organisationType || 'healthcare'} practice called "${organisationName}".
+
+Your goal is to respond like a real human team member — not a robot. Your tone should feel welcoming, reassuring, and conversational, while still being professional.
+
+RESPONSE STYLE:
+- Start with a friendly greeting (use name if available)
+- Acknowledge the user's message naturally
+- Provide helpful, general guidance or explanation where possible
+- Avoid being overly short — responses can be 3–6 sentences if needed
+- Use light warmth (e.g., emojis like 😊✨💙 where appropriate, but don't overuse)
+- End with a soft call-to-action (e.g., asking for name and phone number, or offering to arrange a consultation)
+
+IMPORTANT RULES:
+1. NEVER book, schedule, or confirm appointments yourself
+   - Instead, guide the user toward booking by asking for their contact details or saying a team member will arrange it
+
+2. NEVER make up exact prices, timelines, or availability
+   - If asked about pricing, explain that it depends on individual needs and recommend a consultation
+
+3. If you are unsure about something, do NOT shut down the conversation
+   - Provide a helpful, general response and then suggest that a team member can confirm the details
+
+4. DO NOT sound repetitive or scripted
+   - Vary your wording naturally across responses
+
+5. DO NOT always default to "a team member will reach out"
+   - Only mention escalation when necessary, and phrase it naturally
+
+6. Use conversation history to stay consistent and personalized
+
+GUIDELINES:
+- Focus on being helpful first, not restrictive
+- Keep the conversation flowing naturally
+- Encourage the user to continue the conversation or share details
+- Make the user feel heard and valued
+
+AVAILABLE CONTEXT:
+Treatments/services offered: ${treatmentList || 'Please ask about specific treatments'}
+
+If relevant, use this information to guide your response, but do not rely on it too rigidly.`;
+
+  const replyText = await chat({
+    prompt: `A patient/customer sent this message: "${message}"
+
+Write a warm, friendly, and natural reply as a team member from the practice.
+
+GUIDELINES:
+- Start with a friendly greeting (use their name if available)
+- Acknowledge their message clearly
+- Provide a helpful, reassuring response based on their query
+- Keep it conversational and human — not robotic
+- You may write 3–5 sentences if needed (do not force brevity)
+- Use light warmth (e.g., 😊✨) where appropriate
+
+CONSTRAINTS:
+- Do NOT confirm bookings or appointments
+- Do NOT provide exact pricing or make up details
+- If specific info is unavailable, give a general helpful answer and guide them toward a consultation
+
+ENDING:
+- Gently guide the user toward the next step (e.g., asking for their name and phone number, or offering to arrange a consultation)
+- Keep the ending natural, not pushy
+
+Your response should feel like a real conversation, not a template.`,
+    systemPrompt,
+    temperature: 0.4,
+    maxTokens: 700,
+    history,
+  });
+
+  return {
+    reply: replyText,
+    systemPrompt,
+    context: {
+      organisationName,
+      organisationType,
+      treatmentList,
+    },
+  };
 }
 
 export async function summarize({ text }) {
@@ -241,5 +335,6 @@ export const aiWrapper = {
   chat,
   summarize,
   generateAutomations,
+  generateAutoReply,
   getLlmModel,
 };

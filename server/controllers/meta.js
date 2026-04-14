@@ -6,7 +6,7 @@ import { success, error } from '../utils/response'
 import { addMetaClient, broadcastMetaEvent } from '../utils/metaStream'
 import { sendNotificationToMultipleUsers } from '../utils/fcmNotification'
 import { parseJsonBody } from "../utils/body"
-import { chat } from '../utils/aiWrapper'
+import { chat, generateAutoReply } from '../utils/aiWrapper'
 import {
   runStructureSync,
   runInsightsSync,
@@ -122,26 +122,29 @@ const sendAutoReply = async ({ orgId, conversation, messageText, accessToken, se
       limit: 20,
     });
 
-    const treatmentList = treatments.length
-      ? treatments.map((t) => `${t.name}${t.category ? ` (${t.category})` : ''}`).join(', ')
-      : 'various treatments';
+    const recentMessages = await CrmDmMessage.findAll({
+      where: { organisationId: orgId, conversationId: conversation.id },
+      order: [['createdAt', 'DESC']],
+      limit: 10,
+    });
 
-    const systemPrompt = `You are a friendly assistant for a ${org.type || 'healthcare'} practice called "${org.name}". 
+    const conversationHistory = recentMessages
+      .slice()
+      .reverse()
+      .filter(m => m.direction === 'inbound' || m.metadata?.autoReply)
+      .map(m => ({
+        role: m.direction === 'inbound' ? 'user' : 'assistant',
+        content: m.message,
+      }));
 
-CRITICAL RULES - NEVER BREAK THESE:
-1. NEVER book, schedule, or confirm appointments - always say "A team member will reach out once confirmed"
-2. NEVER make up prices, availability, or any information not provided in the available treatments list
-3. If you don't have clear context to answer a question confidently, say "A team member will let you know about this"
-4. Keep responses brief and friendly (1-2 sentences max)
-5. Be warm and professional
+    console.log(`[Meta AutoReply] Conversation history: ${conversationHistory.length} messages for org ${orgId}`);
 
-AVAILABLE TREATMENTS at this practice: ${treatmentList || 'Please ask about specific treatments'}`;
-
-    const replyText = await chat({
-      prompt: `A patient/customer sent this message: "${messageText}". Generate a brief, helpful auto-reply (1-2 sentences max). Be friendly and professional.`,
-      systemPrompt,
-      temperature: 0.4,
-      maxTokens: 300,
+    const { reply: replyText } = await generateAutoReply({
+      organisationName: org.name,
+      organisationType: org.type,
+      message: messageText,
+      treatments,
+      history: conversationHistory,
     });
 
     if (!replyText) return;
