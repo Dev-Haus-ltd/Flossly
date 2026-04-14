@@ -14,7 +14,7 @@ import { addWhapiClient, broadcastWhapiEvent } from "../utils/whapiStream";
 import { sendNotificationToMultipleUsers } from "../utils/fcmNotification";
 import { encrypt, decrypt } from "../utils/crypto";
 import { getWhapiEnvConfig, getWhapiPartnerConfig, resolveWhapiConfig } from "../utils/whatsappProvider";
-import { uploadBufferFile } from "../utils/storage";
+import { uploadBufferFile, downloadUrlToS3 } from "../utils/storage";
 import { chat } from "../utils/aiWrapper";
 
 const extractTimestamp = (value) => {
@@ -218,22 +218,14 @@ const buildAttachmentFilename = ({ originalName, mimeType }) => {
   return `${base}${ext}`;
 };
 
-const downloadWhapiMediaToS3 = async ({ url, token, mimeType, filename }) => {
-  if (!url) return null;
-  const data = await $fetch(url, {
-    method: "GET",
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    responseType: "arrayBuffer",
-  });
-  const fileName = buildAttachmentFilename({ originalName: filename, mimeType });
-  const s3Path = await uploadBufferFile({
-    data: Buffer.from(data),
-    filename: fileName,
+const downloadWhapiMediaToS3 = ({ url, token, mimeType, filename }) =>
+  downloadUrlToS3({
+    url,
+    filename: buildAttachmentFilename({ originalName: filename, mimeType }),
     contentType: mimeType || undefined,
-    baseDir: "chat-attachments",
+    baseDir: 'chat-attachments',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
-  return s3Path;
-};
 
 const fetchWhapiMediaById = async ({ mediaId, token }) => {
   if (!mediaId || !token) return null;
