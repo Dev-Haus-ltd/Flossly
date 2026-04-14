@@ -280,30 +280,58 @@ export const runStructureSync = async (orgId) => {
       )
     }
 
-    // ── Wave 5: Creatives (batch, only for ads that have a creative id) ───────
+    // ── Wave 5a: Creatives (batch, only for ads that have a creative id) ────────
     if (creativeIds.size) {
       const ids = Array.from(creativeIds.keys())
       const creativeBatchReqs = ids.map((cid) => ({
         method: 'GET',
-        // Prefer source image fields, but also inspect object_story_spec because many creatives keep
-        // link/video/photo preview data there instead of the shallow top-level fields.
-        relative_url: `${cid}?fields=image_url,thumbnail_url,picture,body,instagram_permalink_url,video_id,object_story_spec`,
+        // Include effective_object_story_id for boosted posts — those ads have no
+        // direct image_url; the image lives on the underlying page post instead.
+        relative_url: `${cid}?fields=image_url,thumbnail_url,picture,body,instagram_permalink_url,video_id,object_story_spec,effective_object_story_id,effective_instagram_media_id`,
       }))
       const creativeBatchRes = await metaBatch(creativeBatchReqs, userToken)
 
+      // ── Wave 5b: For creatives with no direct image, fetch full_picture from the story post ──
+      // Boosted posts / page-post ads store their image on the post, not in the creative spec.
+      const storyRequests = []  // batch sub-requests
+      const storyMeta = []      // parallel array: { creativeIndex, adId }
+      for (let i = 0; i < ids.length; i++) {
+        const cr = creativeBatchRes[i]
+        if (!cr || pickCreativeImage(cr)) continue
+        const storyId = cr.effective_object_story_id || cr.effective_instagram_media_id
+        if (storyId) {
+          storyRequests.push({ method: 'GET', relative_url: `${storyId}?fields=full_picture` })
+          storyMeta.push({ creativeIndex: i, adId: creativeIds.get(ids[i]) })
+        } else {
+          console.warn(`[MetaSync] No image URL and no story ID for creative ${ids[i]}, adId=${creativeIds.get(ids[i])}. Creative payload:`, JSON.stringify(cr))
+        }
+      }
+
+      const storyRes = storyRequests.length ? await metaBatch(storyRequests, userToken) : []
+      // Map story full_picture back to creative index
+      const storyImageByCreativeIndex = new Map()
+      for (let j = 0; j < storyMeta.length; j++) {
+        storyImageByCreativeIndex.set(storyMeta[j].creativeIndex, storyRes[j]?.full_picture || null)
+      }
+
+      // ── Wave 5c: Cache images to S3 and write DB ─────────────────────────────
       for (let i = 0; i < ids.length; i++) {
         const cr = creativeBatchRes[i]
         if (!cr) continue
         const adId = creativeIds.get(ids[i])
-        const metaImageUrl = pickCreativeImage(cr)
-        // Strip query-string before extracting extension (Meta CDN URLs have long query params).
+        const metaImageUrl = pickCreativeImage(cr) || storyImageByCreativeIndex.get(i) || null
+
+        console.log(`[MetaSync] Creative ${ids[i]} (adId=${adId}): imageUrl=${metaImageUrl || 'NONE'}`)
+
         const urlExt = (metaImageUrl?.split('?')[0] || '').match(/\.(jpg|jpeg|png|gif|webp)/i)?.[1]?.toLowerCase() || 'jpg'
         // Persist to S3 so the URL never expires; fall back to raw Meta URL if upload fails.
-        const cachedImageUrl = await downloadUrlToS3({
-          url: metaImageUrl,
-          filename: `${orgId}-${adId}.${urlExt}`,
-          baseDir: 'meta-creatives',
-        })
+        const cachedImageUrl = metaImageUrl
+          ? await downloadUrlToS3({ url: metaImageUrl, filename: `${orgId}-${adId}.${urlExt}`, baseDir: 'meta-creatives' })
+          : null
+        if (metaImageUrl && !cachedImageUrl) {
+          console.warn(`[MetaSync] S3 cache failed for adId=${adId}, storing raw Meta URL as fallback`)
+        }
+
         await MetaAd.update(
           {
             imageUrl: cachedImageUrl || metaImageUrl || null,
