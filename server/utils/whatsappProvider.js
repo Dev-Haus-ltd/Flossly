@@ -47,9 +47,6 @@ export const getWhapiPartnerConfig = () => {
 
 export const resolveWhapiConfig = async (orgId) => {
   let row = null;
-  try {
-    await WhapiChannelConfig.sync();
-  } catch {}
   if (orgId) {
     row = await WhapiChannelConfig.findOne({
       where: { organisationId: Number(orgId) },

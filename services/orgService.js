@@ -133,18 +133,39 @@ export default {
   },
   listTreatments() {
     return new Promise((resolve, reject) => {
-      Post("/diary/treamtments")
+      Get("/diary/treatments")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  addTreatment(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/treatments-create", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  updateTreatment(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/treatments-update", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteTreatment(id) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/treatments-delete", { id })
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
   },
   deleteAttribute(data) {
-  return new Promise((resolve, reject) => {
-    Post("/organisations/deleteAttribute", data)
-      .then(resolve)
-      .catch(reject);
-  });
-},
+    return new Promise((resolve, reject) => {
+      Post("/organisations/deleteAttribute", data)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
   listCustomColumns() {
     return new Promise((resolve, reject) => {
       Get("/tasks/listCustomColumns")

@@ -4,8 +4,6 @@ import { defaultTemplatesByGroup, defaultAutomationGroups, legacyAutomationGroup
 import { parseJsonBody } from "../utils/body";
 
 const ensureDictionarySeed = async () => {
-  await PatientAutomationDictionary.sync()
-  await PatientAutomationTemplate.sync()
   const items = defaultAutomationGroups.map((g) => ({
     ...g,
     templates: defaultTemplatesByGroup[g.key] || [],

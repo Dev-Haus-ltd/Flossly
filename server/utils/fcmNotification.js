@@ -5,6 +5,13 @@ import fs from 'fs';
 import path from 'path';
 
 let firebaseApp = null;
+let firebaseConfigWarningShown = false;
+
+const warnFirebaseConfigOnce = (message) => {
+  if (firebaseConfigWarningShown) return;
+  firebaseConfigWarningShown = true;
+  console.warn(message);
+};
 
 // Initialize Firebase Admin SDK
 export const initializeFirebaseAdmin = () => {
@@ -49,7 +56,7 @@ export const initializeFirebaseAdmin = () => {
     const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
     
     if (!serviceAccountPath) {
-      console.warn('Firebase not configured - neither environment variables nor service account path provided');
+      warnFirebaseConfigOnce('Firebase not configured - neither environment variables nor service account path provided');
       return null;
     }
 
@@ -94,7 +101,6 @@ export const sendNotificationToUser = async ({
     }
 
     if (!firebaseApp) {
-      console.warn('Firebase Admin SDK not initialized - skipping push notification');
       // Still create the notification record for in-app display
       const notification = await UserNotification.create({
         userId,

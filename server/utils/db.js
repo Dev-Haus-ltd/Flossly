@@ -11,8 +11,16 @@ const {
   DB_SCHEMA,
 } = config
 
+const shouldLogSql =
+  String(process.env.SEQUELIZE_LOG_SQL || '').toLowerCase() === 'true'
+
+const sqlLogger = shouldLogSql
+  ? (message) => console.log(message)
+  : false
+
 const baseOptions = {
   dialect: 'postgres',
+  logging: sqlLogger,
   dialectOptions: {
     ssl: {
       rejectUnauthorized: false,

@@ -143,7 +143,9 @@ export const useCrmStore = defineStore("crmStore", {
     connectMetaPages(payload) { return this._wrap(() => crmService.connectMetaPages(payload)); },
     startWhapiConnect(payload = {}) { return this._wrap(() => crmService.startWhapiConnect(payload)); },
     getWhapiQr() { return this._wrap(() => crmService.getWhapiQr()); },
+    getWhapiQrSilent() { return crmService.getWhapiQr(); },
     getWhapiStatus() { return this._wrap(() => crmService.getWhapiStatus()); },
+    getWhapiStatusSilent() { return crmService.getWhapiStatus(); },
     getWhapiChannels() { return this._wrap(() => crmService.getWhapiChannels()); },
     disconnectWhapi(payload = {}) { return this._wrap(() => crmService.disconnectWhapi(payload)); },
     deleteWhapiChannel() { return this._wrap(() => crmService.deleteWhapiChannel()); },
@@ -223,5 +225,7 @@ export const useCrmStore = defineStore("crmStore", {
     restoreForms(payload) { return this._wrap(() => webFormService.restoreForms(payload)); },
     deleteForm(payload) { return this._wrap(() => webFormService.deleteForm(payload)); },
     getAvailableFields() { return this._wrap(() => webFormService.getAvailableFields()); },
+    getAutoReplySettings() { return this._wrap(() => crmService.getAutoReplySettings()); },
+    updateAutoReplySettings(payload) { return this._wrap(() => crmService.updateAutoReplySettings(payload)); },
   },
 });

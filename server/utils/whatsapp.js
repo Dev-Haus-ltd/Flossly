@@ -94,7 +94,6 @@ export const getMonthlyWhatsAppUsage = async (organisationId, atDate = new Date(
 export const getWhatsAppUsageInWindow = async (organisationId, start, end) => {
   if (!organisationId || !start || !end) return { count: 0, start, end };
   try {
-    await CrmWhatsAppMessageLog.sync();
     const count = await CrmWhatsAppMessageLog.count({
       where: {
         organisationId: Number(organisationId),

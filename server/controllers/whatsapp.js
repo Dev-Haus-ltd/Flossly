@@ -150,7 +150,6 @@ const getMessageContent = (msg) => {
 const updateMessageStatus = async ({ providerMessageId, status }) => {
   if (!providerMessageId) return
   try {
-    await CrmWhatsAppMessageLog.sync()
     await CrmWhatsAppMessageLog.update(
       { status: String(status || '').toLowerCase() || 'sent' },
       { where: { providerMessageId: String(providerMessageId) } }
@@ -170,7 +169,6 @@ const matchesVerifyToken = async (verifyToken) => {
     ''
   if (expectedEnv && String(expectedEnv).trim() === String(verifyToken || '').trim()) return true
 
-  try { await MetaWhatsAppConfig.sync() } catch {}
   const rows = await MetaWhatsAppConfig.findAll({
     where: { verifyTokenEnc: { [Op.ne]: null }, status: 'Active' },
     limit: 50,
@@ -202,7 +200,6 @@ export const webhook = async (event) => {
 
   if (getMethod(event) === 'POST') {
     const body = await readBody(event)
-    try { await MetaWhatsAppConfig.sync() } catch {}
     const entries = Array.isArray(body?.entry) ? body.entry : []
 
     for (const entry of entries) {

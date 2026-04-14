@@ -1,11 +1,11 @@
 import { success, error } from '../utils/response';
 import { 
   User, UserOrganisation, Organisation, Role, LoginHistory, UserSubscription, UserPreference,
-  UserDocument, CrmLead, UserTask, DiaryAppointment, UserNotification, Task, TaskCategory,
+  UserDocument, UserDocumentFolder, CrmLead, UserTask, DiaryAppointment, UserNotification, Task, TaskCategory,
   CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, FcmToken, UserPoint, UserPointsHistory, RewardPoint,
-  CrmOption, DictionaryScript
+  CrmOption, DictionaryScript, Rota, RotaShift, RotaUser, UserLeaveHistory
 } from '../models';
-import { Op } from 'sequelize';
+import { Op, fn, col } from 'sequelize';
 import sequelize from '../utils/db';
 import { sendInvitationEmail } from '../utils/emailNotifications';
 import { v4 as uuidv4 } from 'uuid';
@@ -107,7 +107,7 @@ const validateAdminAutomationUploadRow = (row, rowNum) => {
   return errors;
 };
 
-const parseAdminAutomationUploadFile = async (filePart) => {
+const parseAdminAutomationUploadFile = (filePart) => {
   if (!filePart?.data?.length) {
     throw new Error('No file uploaded');
   }
@@ -1949,7 +1949,7 @@ export const adminBulkUploadAutomations = async (event) => {
         return error(400, 'organisationId is required');
       }
 
-      const items = await parseAdminAutomationUploadFile(filePart);
+      const items = parseAdminAutomationUploadFile(filePart);
       event.context.adminBulkAutomationPayload = {
         organisationId,
         items,
@@ -5334,5 +5334,1762 @@ export const deleteTaskCategory = async (event) => {
   } catch (err) {
     console.error('Delete task category error:', err);
     return error(500, err.message || "Failed to delete category");
+  }
+};
+
+// ============================================
+// Rota Management (Organisation Level)
+// ============================================
+
+/**
+ * List all rotas for an organisation
+ * GET /api/admin/listOrgsRotas?organisationId=1
+ */
+export const listOrgsRotas = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  const query = getQuery(event);
+  const { organisationId, includeShifts = 'false', limit = 100, offset = 0 } = query;
+
+  if (!organisationId) {
+    return error(400, "organisationId is required");
+  }
+
+  try {
+    // Verify organisation exists
+    const organisation = await Organisation.findByPk(parseInt(organisationId), {
+      attributes: ['id', 'name']
+    });
+
+    if (!organisation) {
+      return error(404, "Organisation not found");
+    }
+
+    const whereClause = {
+      organisationId: parseInt(organisationId),
+      isDeleted: false
+    };
+
+    const rotas = await Rota.findAndCountAll({
+      where: whereClause,
+      order: [['createdAt', 'DESC']],
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+    return success({
+      organisationId: organisation.id,
+      organisationName: organisation.name,
+      rotas: rotas.rows,
+      total: rotas.count,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+  } catch (err) {
+    console.error('List org rotas error:', err);
+    return error(500, err.message || "Failed to list rotas");
+  }
+};
+
+/**
+ * Get rota by ID
+ * GET /api/admin/getRotaById?id=1&organisationId=1
+ */
+export const getRotaById = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  const query = getQuery(event);
+  const { id, organisationId } = query;
+
+  if (!id) {
+    return error(400, "id is required");
+  }
+
+  if (!organisationId) {
+    return error(400, "organisationId is required");
+  }
+
+  try {
+    const rota = await Rota.findOne({
+      where: {
+        id: parseInt(id),
+        organisationId: parseInt(organisationId),
+        isDeleted: false
+      },
+      include: [
+        {
+          model: RotaShift,
+          as: "shifts",
+          where: { isDeleted: false },
+          required: false,
+          order: [['startDate', 'ASC']]
+        },
+        {
+          model: RotaUser,
+          as: "users",
+          required: false,
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "fullName", "email", "photo"]
+            }
+          ]
+        }
+      ]
+    });
+
+    if (!rota) {
+      return error(404, "Rota not found");
+    }
+
+    return success({ rota });
+
+  } catch (err) {
+    console.error('Get rota by ID error:', err);
+    return error(500, err.message || "Failed to get rota");
+  }
+};
+
+/**
+ * Create a new rota for an organisation
+ * POST /api/admin/createRota
+ */
+export const createRota = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const body = await readBody(event);
+    const { organisationId, name, startDate, endDate, duration, notes } = body;
+
+    if (!organisationId) {
+      return error(400, "organisationId is required");
+    }
+
+    if (!name || !name.trim()) {
+      return error(400, "name is required");
+    }
+
+    if (!startDate || !endDate) {
+      return error(400, "startDate and endDate are required");
+    }
+
+    if (new Date(endDate) < new Date(startDate)) {
+      return error(400, "End date cannot be before start date");
+    }
+
+    // Verify organisation exists
+    const organisation = await Organisation.findByPk(parseInt(organisationId), {
+      attributes: ['id', 'name']
+    });
+
+    if (!organisation) {
+      return error(404, "Organisation not found");
+    }
+
+    // Check for conflicting rotas
+    const conflictRota = await Rota.findOne({
+      where: {
+        organisationId: parseInt(organisationId),
+        isDeleted: false,
+        [Op.or]: [
+          { startDate: { [Op.between]: [startDate, endDate] } },
+          { endDate: { [Op.between]: [startDate, endDate] } },
+          {
+            [Op.and]: [
+              { startDate: { [Op.lte]: startDate } },
+              { endDate: { [Op.gte]: endDate } }
+            ]
+          }
+        ]
+      }
+    });
+
+    if (conflictRota) {
+      return error(409, "A rota already exists for this organisation in the given date range");
+    }
+
+    const rota = await Rota.create({
+      organisationId: parseInt(organisationId),
+      name: name.trim(),
+      startDate,
+      endDate,
+      duration: duration || null,
+      notes: notes || null
+    });
+
+    return success({
+      message: "Rota created successfully",
+      rota
+    });
+
+  } catch (err) {
+    console.error('Create rota error:', err);
+    return error(500, err.message || "Failed to create rota");
+  }
+};
+
+/**
+ * Update a rota
+ * PUT /api/admin/updateRota
+ */
+export const updateRota = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const body = await readBody(event);
+    const { id, organisationId, name, startDate, endDate, duration, notes } = body;
+
+    if (!id) {
+      return error(400, "id is required");
+    }
+
+    if (!organisationId) {
+      return error(400, "organisationId is required");
+    }
+
+    const rota = await Rota.findOne({
+      where: {
+        id: parseInt(id),
+        organisationId: parseInt(organisationId),
+        isDeleted: false
+      }
+    });
+
+    if (!rota) {
+      return error(404, "Rota not found");
+    }
+
+    if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
+      return error(400, "End date cannot be before start date");
+    }
+
+    // Build update object
+    const updateData = {};
+    if (name !== undefined) updateData.name = name.trim();
+    if (startDate !== undefined) updateData.startDate = startDate;
+    if (endDate !== undefined) updateData.endDate = endDate;
+    if (duration !== undefined) updateData.duration = duration;
+    if (notes !== undefined) updateData.notes = notes;
+
+    await rota.update(updateData);
+
+    return success({
+      message: "Rota updated successfully",
+      rota
+    });
+
+  } catch (err) {
+    console.error('Update rota error:', err);
+    return error(500, err.message || "Failed to update rota");
+  }
+};
+
+/**
+ * Delete (soft delete) a rota
+ * DELETE /api/admin/deleteRota
+ */
+export const deleteRota = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const body = await readBody(event);
+    const { id, organisationId } = body;
+
+    if (!id) {
+      return error(400, "id is required");
+    }
+
+    if (!organisationId) {
+      return error(400, "organisationId is required");
+    }
+
+    const rota = await Rota.findOne({
+      where: {
+        id: parseInt(id),
+        organisationId: parseInt(organisationId),
+        isDeleted: false
+      }
+    });
+
+    if (!rota) {
+      return error(404, "Rota not found");
+    }
+
+    // Soft delete the rota
+    await rota.update({ isDeleted: true });
+
+    // Also soft delete all shifts associated with the rota
+    await RotaShift.update(
+      { isDeleted: true },
+      { where: { rotaId: parseInt(id) } }
+    );
+
+    return success({
+      message: "Rota deleted successfully",
+      deletedId: parseInt(id)
+    });
+
+  } catch (err) {
+    console.error('Delete rota error:', err);
+    return error(500, err.message || "Failed to delete rota");
+  }
+};
+
+/**
+ * Publish a rota (make it visible to staff)
+ * POST /api/admin/publishRota
+ */
+export const publishRota = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const body = await readBody(event);
+    const { id, organisationId } = body;
+
+    if (!id) {
+      return error(400, "id is required");
+    }
+
+    if (!organisationId) {
+      return error(400, "organisationId is required");
+    }
+
+    const rota = await Rota.findOne({
+      where: {
+        id: parseInt(id),
+        organisationId: parseInt(organisationId),
+        isDeleted: false
+      }
+    });
+
+    if (!rota) {
+      return error(404, "Rota not found");
+    }
+
+    await rota.update({
+      isPublished: true,
+      publishedDate: new Date()
+    });
+
+    return success({
+      message: "Rota published successfully",
+      rota
+    });
+
+  } catch (err) {
+    console.error('Publish rota error:', err);
+    return error(500, err.message || "Failed to publish rota");
+  }
+};
+
+/**
+ * Unpublish a rota
+ * POST /api/admin/unpublishRota
+ */
+export const unpublishRota = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const body = await readBody(event);
+    const { id, organisationId } = body;
+
+    if (!id) {
+      return error(400, "id is required");
+    }
+
+    if (!organisationId) {
+      return error(400, "organisationId is required");
+    }
+
+    const rota = await Rota.findOne({
+      where: {
+        id: parseInt(id),
+        organisationId: parseInt(organisationId),
+        isDeleted: false
+      }
+    });
+
+    if (!rota) {
+      return error(404, "Rota not found");
+    }
+
+    await rota.update({
+      isPublished: false
+    });
+
+    return success({
+      message: "Rota unpublished successfully",
+      rota
+    });
+
+  } catch (err) {
+    console.error('Unpublish rota error:', err);
+    return error(500, err.message || "Failed to unpublish rota");
+  }
+};
+
+// ============================================
+// Document Management (Admin View)
+// ============================================
+
+/**
+ * List all folders in an organisation (flat list)
+ * GET /api/admin/listOrgDocumentFolders?organisationId=1
+ */
+export const listOrgDocumentFolders = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const query = getQuery(event);
+    const { organisationId, limit = 100, offset = 0 } = query;
+
+    if (!organisationId) {
+      return error(400, "organisationId is required");
+    }
+
+    const folders = await UserDocumentFolder.findAll({
+      where: {
+        organisationId: parseInt(organisationId)
+      },
+      order: [["createdAt", "DESC"]],
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+    const folderIds = folders.map(f => f.id);
+    const documentCounts = folderIds.length > 0
+      ? await UserDocument.findAll({
+          where: { folderId: { [Op.in]: folderIds } },
+          attributes: ["folderId", [fn("COUNT", col("id")), "count"]],
+          group: ["folderId"]
+        })
+      : [];
+
+    const countMap = {};
+    documentCounts.forEach(dc => {
+      countMap[dc.folderId] = parseInt(dc.get("count")) || 0;
+    });
+
+    const foldersWithCounts = folders.map(f => ({
+      ...f.toJSON(),
+      documentCount: countMap[f.id] || 0
+    }));
+
+    const total = await UserDocumentFolder.count({
+      where: {
+        organisationId: parseInt(organisationId)
+      }
+    });
+
+    return success({
+      organisationId: parseInt(organisationId),
+      folders: foldersWithCounts,
+      total,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+  } catch (err) {
+    console.error('List org document folders error:', err);
+    return error(500, err.message || "Failed to list document folders");
+  }
+};
+
+/**
+ * Get folder by ID with documents
+ * GET /api/admin/getOrgDocumentFolderById?id=1&organisationId=1
+ */
+export const getOrgDocumentFolderById = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const query = getQuery(event);
+    const { id, organisationId } = query;
+
+    if (!id) {
+      return error(400, "id is required");
+    }
+
+    if (!organisationId) {
+      return error(400, "organisationId is required");
+    }
+
+    const folder = await UserDocumentFolder.findOne({
+      where: {
+        id: parseInt(id),
+        organisationId: parseInt(organisationId)
+      },
+      include: [
+        {
+          model: UserDocument,
+          as: "documents",
+          required: false
+        },
+        {
+          model: UserDocumentFolder,
+          as: "parent",
+          attributes: ["id", "name", "color", "parentId"],
+          required: false
+        },
+        {
+          model: UserDocumentFolder,
+          as: "subfolders",
+          attributes: ["id", "name", "color", "parentId"],
+          required: false
+        }
+      ]
+    });
+
+    if (!folder) {
+      return error(404, "Folder not found");
+    }
+
+    return success({ folder });
+
+  } catch (err) {
+    console.error('Get org document folder by ID error:', err);
+    return error(500, err.message || "Failed to get folder");
+  }
+};
+
+/**
+ * List all documents in an organisation (optionally by folder or user)
+ * GET /api/admin/listOrgDocuments?organisationId=1&folderId=1&userId=1
+ */
+export const listOrgDocuments = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const query = getQuery(event);
+    const { organisationId, folderId, userId, search, limit = 100, offset = 0 } = query;
+
+    if (!organisationId) {
+      return error(400, "organisationId is required");
+    }
+
+    const whereClause = {
+      organisationId: parseInt(organisationId)
+    };
+
+    if (folderId) {
+      whereClause.folderId = parseInt(folderId);
+    }
+
+    if (userId) {
+      whereClause.userId = parseInt(userId);
+    }
+
+    if (search) {
+      whereClause[Op.or] = [
+        { name: { [Op.iLike]: `%${search}%` } },
+        { tags: { [Op.iLike]: `%${search}%` } }
+      ];
+    }
+
+    const documents = await UserDocument.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          model: UserDocumentFolder,
+          as: "folder",
+          attributes: ["id", "name", "color"],
+          required: false
+        }
+      ],
+      order: [["createdAt", "DESC"]],
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+    return success({
+      organisationId: parseInt(organisationId),
+      documents: documents.rows,
+      total: documents.count,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+  } catch (err) {
+    console.error('List org documents error:', err);
+    return error(500, err.message || "Failed to list documents");
+  }
+};
+
+/**
+ * Get document by ID
+ * GET /api/admin/getOrgDocumentById?id=1&organisationId=1
+ */
+export const getOrgDocumentById = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const query = getQuery(event);
+    const { id, organisationId } = query;
+
+    if (!id) {
+      return error(400, "id is required");
+    }
+
+    if (!organisationId) {
+      return error(400, "organisationId is required");
+    }
+
+    const document = await UserDocument.findOne({
+      where: {
+        id: parseInt(id),
+        organisationId: parseInt(organisationId)
+      },
+      include: [
+        {
+          model: UserDocumentFolder,
+          as: "folder",
+          attributes: ["id", "name", "color"],
+          required: false
+        }
+      ]
+    });
+
+    if (!document) {
+      return error(404, "Document not found");
+    }
+
+    return success({ document });
+
+  } catch (err) {
+    console.error('Get org document by ID error:', err);
+    return error(500, err.message || "Failed to get document");
+  }
+};
+
+// ============================================
+// HR Document Management (Recruitment/Onboarding)
+// ============================================
+
+/**
+ * List all HR document templates
+ * GET /api/admin/listHrDocuments?type=Recruitment
+ */
+export const listHrDocuments = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const { HrDocument } = await import('../models/hrDocuments');
+    const query = getQuery(event);
+    const { type, limit = 100, offset = 0 } = query;
+
+    const whereClause = {};
+    if (type) {
+      whereClause.type = type;
+    }
+
+    const documents = await HrDocument.findAndCountAll({
+      where: whereClause,
+      order: [['type', 'ASC'], ['name', 'ASC']],
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+    return success({
+      documents: documents.rows,
+      total: documents.count,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+  } catch (err) {
+    console.error('List HR documents error:', err);
+    return error(500, err.message || "Failed to list HR documents");
+  }
+};
+
+/**
+ * Get HR document template by ID
+ * GET /api/admin/getHrDocumentById?id=1
+ */
+export const getHrDocumentById = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const { HrDocument } = await import('../models/hrDocuments');
+    const query = getQuery(event);
+    const { id } = query;
+
+    if (!id) {
+      return error(400, "id is required");
+    }
+
+    const document = await HrDocument.findByPk(parseInt(id));
+
+    if (!document) {
+      return error(404, "HR document not found");
+    }
+
+    return success({ document });
+
+  } catch (err) {
+    console.error('Get HR document by ID error:', err);
+    return error(500, err.message || "Failed to get HR document");
+  }
+};
+
+/**
+ * Create a new HR document template
+ * POST /api/admin/createHrDocument
+ */
+export const createHrDocument = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const { HrDocument } = await import('../models/hrDocuments');
+    const body = await readBody(event);
+    const { name, type } = body;
+
+    if (!name || !name.trim()) {
+      return error(400, "name is required");
+    }
+
+    if (!type) {
+      return error(400, "type is required (Recruitment, Training, or Flossly)");
+    }
+
+    if (!['Recruitment', 'Training', 'Flossly'].includes(type)) {
+      return error(400, "type must be one of: Recruitment, Training, Flossly");
+    }
+
+    const document = await HrDocument.create({
+      name: name.trim(),
+      type
+    });
+
+    return success({
+      message: "HR document created successfully",
+      document
+    });
+
+  } catch (err) {
+    console.error('Create HR document error:', err);
+    return error(500, err.message || "Failed to create HR document");
+  }
+};
+
+/**
+ * Update an HR document template
+ * PUT /api/admin/updateHrDocument
+ */
+export const updateHrDocument = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const { HrDocument } = await import('../models/hrDocuments');
+    const body = await readBody(event);
+    const { id, name, type } = body;
+
+    if (!id) {
+      return error(400, "id is required");
+    }
+
+    const document = await HrDocument.findByPk(parseInt(id));
+
+    if (!document) {
+      return error(404, "HR document not found");
+    }
+
+    const updateData = {};
+    if (name !== undefined) updateData.name = name.trim();
+    if (type !== undefined) {
+      if (!['Recruitment', 'Training', 'Flossly'].includes(type)) {
+        return error(400, "type must be one of: Recruitment, Training, Flossly");
+      }
+      updateData.type = type;
+    }
+
+    await document.update(updateData);
+
+    return success({
+      message: "HR document updated successfully",
+      document
+    });
+
+  } catch (err) {
+    console.error('Update HR document error:', err);
+    return error(500, err.message || "Failed to update HR document");
+  }
+};
+
+/**
+ * Delete an HR document template
+ * DELETE /api/admin/deleteHrDocument
+ */
+export const deleteHrDocument = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const { HrDocument } = await import('../models/hrDocuments');
+    const body = await readBody(event);
+    const { id } = body;
+
+    if (!id) {
+      return error(400, "id is required");
+    }
+
+    const document = await HrDocument.findByPk(parseInt(id));
+
+    if (!document) {
+      return error(404, "HR document not found");
+    }
+
+    await document.destroy();
+
+    return success({
+      message: "HR document deleted successfully",
+      deletedId: parseInt(id)
+    });
+
+  } catch (err) {
+    console.error('Delete HR document error:', err);
+    return error(500, err.message || "Failed to delete HR document");
+  }
+};
+
+/**
+ * Get user's HR document completion status
+ * GET /api/admin/getUserHrDocumentStatus?userId=1
+ */
+export const getUserHrDocumentStatus = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const { UserHrDocument } = await import('../models/auth/userHrDocuments');
+    const { HrDocument } = await import('../models/hrDocuments');
+    const query = getQuery(event);
+    const { userId } = query;
+
+    if (!userId) {
+      return error(400, "userId is required");
+    }
+
+    const userDocs = await UserHrDocument.findAll({
+      where: { userId: parseInt(userId) },
+      order: [['type', 'ASC'], ['name', 'ASC']]
+    });
+
+    const completedCount = userDocs.filter(d => d.status === 'Completed').length;
+    const pendingCount = userDocs.filter(d => d.status === 'Pending').length;
+
+    return success({
+      userId: parseInt(userId),
+      documents: userDocs,
+      summary: {
+        total: userDocs.length,
+        completed: completedCount,
+        pending: pendingCount,
+        completionRate: userDocs.length > 0 ? ((completedCount / userDocs.length) * 100).toFixed(1) + '%' : '0%'
+      }
+    });
+
+  } catch (err) {
+    console.error('Get user HR document status error:', err);
+    return error(500, err.message || "Failed to get user HR document status");
+  }
+};
+
+/**
+ * List all users' HR document status for an organisation
+ * GET /api/admin/listOrgUsersHrDocumentStatus?organisationId=1&type=Recruitment
+ */
+export const listOrgUsersHrDocumentStatus = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const { UserHrDocument } = await import('../models/auth/userHrDocuments');
+    const query = getQuery(event);
+    const { organisationId, type, limit = 100, offset = 0 } = query;
+
+    if (!organisationId) {
+      return error(400, "organisationId is required");
+    }
+
+    const userIdsQuery = await UserOrganisation.findAll({
+      where: { organisationId: parseInt(organisationId) },
+      attributes: ['userId']
+    });
+    
+    const userIds = userIdsQuery.map(uo => uo.userId);
+    
+    if (userIds.length === 0) {
+      return success({
+        organisationId: parseInt(organisationId),
+        type: type || 'all',
+        users: [],
+        totalUsers: 0,
+        limit: parseInt(limit),
+        offset: parseInt(offset)
+      });
+    }
+
+    const whereClause = {
+      userId: { [Op.in]: userIds }
+    };
+
+    if (type) {
+      whereClause.type = type;
+    }
+
+    const userDocs = await UserHrDocument.findAll({
+      where: whereClause,
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'fullName', 'email']
+        }
+      ],
+      order: [['userId', 'ASC'], ['type', 'ASC'], ['name', 'ASC']]
+    });
+
+    const userStats = {};
+    userDocs.forEach(doc => {
+      const uid = doc.userId;
+      if (!userStats[uid]) {
+        userStats[uid] = {
+          userId: uid,
+          userName: doc.user?.fullName,
+          userEmail: doc.user?.email,
+          total: 0,
+          completed: 0,
+          pending: 0
+        };
+      }
+      userStats[uid].total++;
+      if (doc.status === 'Completed') userStats[uid].completed++;
+      else userStats[uid].pending++;
+    });
+
+    const resultUsers = Object.values(userStats).map(stat => ({
+      ...stat,
+      completionRate: stat.total > 0 ? ((stat.completed / stat.total) * 100).toFixed(1) + '%' : '0%'
+    }));
+
+    const paginatedUsers = resultUsers.slice(parseInt(offset), parseInt(offset) + parseInt(limit));
+
+    return success({
+      organisationId: parseInt(organisationId),
+      type: type || 'all',
+      users: paginatedUsers,
+      totalUsers: resultUsers.length,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+  } catch (err) {
+    console.error('List org users HR document status error:', err);
+    return error(500, err.message || "Failed to list users HR document status");
+  }
+};
+
+/**
+ * Update (mark complete/incomplete) a user's HR document
+ * PUT /api/admin/updateUserHrDocument
+ */
+export const updateUserHrDocument = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const { UserHrDocument } = await import('../models/auth/userHrDocuments');
+    const body = await readBody(event);
+    const { id, status, link } = body;
+
+    if (!id) {
+      return error(400, "id is required");
+    }
+
+    if (!status) {
+      return error(400, "status is required (Completed or Pending)");
+    }
+
+    if (!['Completed', 'Pending'].includes(status)) {
+      return error(400, "status must be either Completed or Pending");
+    }
+
+    const userDoc = await UserHrDocument.findByPk(parseInt(id));
+
+    if (!userDoc) {
+      return error(404, "User HR document not found");
+    }
+
+    const updateData = { status };
+    if (link !== undefined) updateData.link = link;
+    if (status === 'Completed') updateData.uploadedDate = new Date();
+
+    await userDoc.update(updateData);
+
+    return success({
+      message: "User HR document updated successfully",
+      userHrDocument: userDoc
+    });
+
+  } catch (err) {
+    console.error('Update user HR document error:', err);
+    return error(500, err.message || "Failed to update user HR document");
+  }
+};
+
+// ============================================
+// Rota Shift Management
+// ============================================
+
+/**
+ * List shifts for a rota
+ * GET /api/admin/listRotaShifts?rotaId=1&organisationId=1
+ */
+export const listRotaShifts = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  const query = getQuery(event);
+  const { rotaId, organisationId, limit = 500, offset = 0 } = query;
+
+  if (!rotaId) {
+    return error(400, "rotaId is required");
+  }
+
+  if (!organisationId) {
+    return error(400, "organisationId is required");
+  }
+
+  try {
+    // Verify rota exists and belongs to organisation
+    const rota = await Rota.findOne({
+      where: {
+        id: parseInt(rotaId),
+        organisationId: parseInt(organisationId),
+        isDeleted: false
+      },
+      attributes: ['id', 'name', 'organisationId']
+    });
+
+    if (!rota) {
+      return error(404, "Rota not found");
+    }
+
+    const shifts = await RotaShift.findAndCountAll({
+      where: {
+        rotaId: parseInt(rotaId),
+        isDeleted: false
+      },
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "fullName", "email"]
+        },
+        {
+          model: RotaUser,
+          as: "rotaUser",
+          attributes: ["id"],
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "fullName", "email"]
+            }
+          ]
+        }
+      ],
+      order: [['startDate', 'ASC']],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      distinct: true
+    });
+
+    return success({
+      rotaId: rota.id,
+      rotaName: rota.name,
+      shifts: shifts.rows,
+      total: shifts.count,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+  } catch (err) {
+    console.error('List rota shifts error:', err);
+    return error(500, err.message || "Failed to list rota shifts");
+  }
+};
+
+/**
+ * Get shift by ID
+ * GET /api/admin/getRotaShiftById?id=1&organisationId=1
+ */
+export const getRotaShiftById = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  const query = getQuery(event);
+  const { id, organisationId } = query;
+
+  if (!id) {
+    return error(400, "id is required");
+  }
+
+  if (!organisationId) {
+    return error(400, "organisationId is required");
+  }
+
+  try {
+    const shift = await RotaShift.findOne({
+      where: {
+        id: parseInt(id),
+        isDeleted: false
+      },
+      include: [
+        {
+          model: Rota,
+          as: 'rota',
+          where: { organisationId: parseInt(organisationId) },
+          attributes: ['id', 'name', 'organisationId'],
+          required: true
+        },
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "fullName", "email"]
+        },
+        {
+          model: RotaUser,
+          as: "rotaUser",
+          attributes: ["id"],
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "fullName", "email"]
+            }
+          ]
+        }
+      ]
+    });
+
+    if (!shift) {
+      return error(404, "Shift not found");
+    }
+
+    return success({ shift });
+
+  } catch (err) {
+    console.error('Get rota shift by ID error:', err);
+    return error(500, err.message || "Failed to get shift");
+  }
+};
+
+/**
+ * Create a new shift for a rota
+ * POST /api/admin/createRotaShift
+ */
+export const createRotaShift = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const body = await readBody(event);
+    const {
+      rotaId,
+      organisationId,
+      dentistId,
+      nurseId,
+      userId,
+      surgeryId,
+      label,
+      color,
+      startDate,
+      endDate,
+      breakTime,
+      isLocumShift,
+      locumUserId,
+      notes
+    } = body;
+
+    if (!rotaId) {
+      return error(400, "rotaId is required");
+    }
+
+    if (!organisationId) {
+      return error(400, "organisationId is required");
+    }
+
+    if (!label || !startDate || !endDate) {
+      return error(400, "label, startDate, and endDate are required");
+    }
+
+    // Verify rota exists and belongs to organisation
+    const rota = await Rota.findOne({
+      where: {
+        id: parseInt(rotaId),
+        organisationId: parseInt(organisationId),
+        isDeleted: false
+      }
+    });
+
+    if (!rota) {
+      return error(404, "Rota not found");
+    }
+
+    const hasUser = userId || locumUserId || dentistId || nurseId;
+    const hasSurgery = surgeryId;
+    
+    if (!hasUser && !hasSurgery) {
+      return error(400, "Dentist, nurse, user, or surgery is required");
+    }
+
+    const shift = await RotaShift.create({
+      rotaId: parseInt(rotaId),
+      dentistId: dentistId || null,
+      nurseId: nurseId || null,
+      userId: userId || null,
+      surgeryId: surgeryId || null,
+      label: label.trim(),
+      color: color || null,
+      startDate,
+      endDate,
+      breakTime: breakTime || null,
+      isLocumShift: isLocumShift || false,
+      locumUserId: locumUserId || null,
+      notes: notes || null
+    });
+
+    return success({
+      message: "Shift created successfully",
+      shift
+    });
+
+  } catch (err) {
+    console.error('Create rota shift error:', err);
+    return error(500, err.message || "Failed to create shift");
+  }
+};
+
+/**
+ * Update a shift
+ * PUT /api/admin/updateRotaShift
+ */
+export const updateRotaShift = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const body = await readBody(event);
+    const {
+      id,
+      organisationId,
+      dentistId,
+      nurseId,
+      userId,
+      surgeryId,
+      label,
+      color,
+      startDate,
+      endDate,
+      breakTime,
+      isLocumShift,
+      locumUserId,
+      notes,
+      forceCreate
+    } = body;
+
+    if (!id) {
+      return error(400, "id is required");
+    }
+
+    if (!organisationId) {
+      return error(400, "organisationId is required");
+    }
+
+    const shift = await RotaShift.findOne({
+      where: {
+        id: parseInt(id),
+        isDeleted: false
+      },
+      include: [{
+        model: Rota,
+        as: 'rota',
+        where: { organisationId: parseInt(organisationId) },
+        attributes: ['id', 'organisationId'],
+        required: true
+      }]
+    });
+
+    if (!shift) {
+      return error(404, "Shift not found");
+    }
+
+    // Build update object
+    const updateData = {};
+    if (label !== undefined) updateData.label = label.trim();
+    if (color !== undefined) updateData.color = color;
+    if (startDate !== undefined) updateData.startDate = startDate;
+    if (endDate !== undefined) updateData.endDate = endDate;
+    if (breakTime !== undefined) updateData.breakTime = breakTime;
+    if (notes !== undefined) updateData.notes = notes;
+    if (dentistId !== undefined) updateData.dentistId = dentistId;
+    if (nurseId !== undefined) updateData.nurseId = nurseId;
+    if (userId !== undefined) updateData.userId = userId;
+    if (surgeryId !== undefined) updateData.surgeryId = surgeryId;
+    if (isLocumShift !== undefined) updateData.isLocumShift = isLocumShift;
+    if (locumUserId !== undefined) updateData.locumUserId = locumUserId;
+
+    await shift.update(updateData);
+
+    return success({
+      message: "Shift updated successfully",
+      shift
+    });
+
+  } catch (err) {
+    console.error('Update rota shift error:', err);
+    return error(500, err.message || "Failed to update shift");
+  }
+};
+
+/**
+ * Delete (soft delete) a shift
+ * DELETE /api/admin/deleteRotaShift
+ */
+export const deleteRotaShift = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const body = await readBody(event);
+    const { id, organisationId } = body;
+
+    if (!id) {
+      return error(400, "id is required");
+    }
+
+    if (!organisationId) {
+      return error(400, "organisationId is required");
+    }
+
+    const shift = await RotaShift.findOne({
+      where: {
+        id: parseInt(id),
+        isDeleted: false
+      },
+      include: [{
+        model: Rota,
+        as: 'rota',
+        where: { organisationId: parseInt(organisationId) },
+        attributes: ['id', 'organisationId'],
+        required: true
+      }]
+    });
+
+    if (!shift) {
+      return error(404, "Shift not found");
+    }
+
+    // Soft delete the shift
+    await shift.update({ isDeleted: true });
+
+    return success({
+      message: "Shift deleted successfully",
+      deletedId: parseInt(id)
+    });
+
+  } catch (err) {
+    console.error('Delete rota shift error:', err);
+    return error(500, err.message || "Failed to delete shift");
+  }
+};
+
+/**
+ * Start a shift
+ * POST /api/admin/startRotaShift
+ */
+export const startRotaShift = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const body = await readBody(event);
+    const { id, organisationId } = body;
+
+    if (!id) {
+      return error(400, "id is required");
+    }
+
+    if (!organisationId) {
+      return error(400, "organisationId is required");
+    }
+
+    const shift = await RotaShift.findOne({
+      where: {
+        id: parseInt(id),
+        isDeleted: false
+      },
+      include: [{
+        model: Rota,
+        as: 'rota',
+        where: { organisationId: parseInt(organisationId) },
+        attributes: ['id', 'organisationId'],
+        required: true
+      }]
+    });
+
+    if (!shift) {
+      return error(404, "Shift not found");
+    }
+
+    if (shift.startedAt) {
+      return error(400, "Shift has already started");
+    }
+
+    await shift.update({ startedAt: new Date() });
+
+    return success({
+      message: "Shift started successfully",
+      shift
+    });
+
+  } catch (err) {
+    console.error('Start rota shift error:', err);
+    return error(500, err.message || "Failed to start shift");
+  }
+};
+
+/**
+ * Complete a shift
+ * POST /api/admin/completeRotaShift
+ */
+export const completeRotaShift = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const body = await readBody(event);
+    const { id, organisationId } = body;
+
+    if (!id) {
+      return error(400, "id is required");
+    }
+
+    if (!organisationId) {
+      return error(400, "organisationId is required");
+    }
+
+    const shift = await RotaShift.findOne({
+      where: {
+        id: parseInt(id),
+        isDeleted: false
+      },
+      include: [{
+        model: Rota,
+        as: 'rota',
+        where: { organisationId: parseInt(organisationId) },
+        attributes: ['id', 'organisationId'],
+        required: true
+      }]
+    });
+
+    if (!shift) {
+      return error(404, "Shift not found");
+    }
+
+    if (!shift.startedAt) {
+      return error(400, "Shift has not started yet");
+    }
+
+    if (shift.completedAt) {
+      return error(400, "Shift has already been completed");
+    }
+
+    await shift.update({ completedAt: new Date() });
+
+    return success({
+      message: "Shift completed successfully",
+      shift
+    });
+
+  } catch (err) {
+    console.error('Complete rota shift error:', err);
+    return error(500, err.message || "Failed to complete shift");
+  }
+};
+
+// ============================================
+// Leave Management (Admin Approvals)
+// ============================================
+
+/**
+ * List leave requests for an organisation
+ * GET /api/admin/listLeaveRequests?organisationId=1&status=Pending&userId=1&limit=100&offset=0
+ */
+export const listLeaveRequests = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  const query = getQuery(event);
+  const { organisationId, status, userId, limit = 100, offset = 0 } = query;
+
+  if (!organisationId) {
+    return error(400, "organisationId is required");
+  }
+
+  try {
+    const whereClause = {
+      organisationId: parseInt(organisationId)
+    };
+
+    if (status && ['Pending', 'Approved', 'Rejected', 'Cancelled'].includes(status)) {
+      whereClause.status = status;
+    }
+
+    if (userId) {
+      whereClause.userId = parseInt(userId);
+    }
+
+    const leaves = await UserLeaveHistory.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "fullName", "email", "photo"]
+        }
+      ],
+      order: [["createdAt", "DESC"]],
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+    return success({
+      organisationId: parseInt(organisationId),
+      leaves: leaves.rows,
+      total: leaves.count,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+  } catch (err) {
+    console.error('List leave requests error:', err);
+    return error(500, err.message || "Failed to list leave requests");
+  }
+};
+
+/**
+ * Approve a leave request
+ * POST /api/admin/approveLeave
+ */
+export const approveLeave = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const body = await readBody(event);
+    const { id, organisationId } = body;
+
+    if (!id) {
+      return error(400, "id is required");
+    }
+
+    if (!organisationId) {
+      return error(400, "organisationId is required");
+    }
+
+    const leave = await UserLeaveHistory.findOne({
+      where: {
+        id: parseInt(id),
+        organisationId: parseInt(organisationId),
+        status: 'Pending'
+      },
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "fullName", "email"]
+        }
+      ]
+    });
+
+    if (!leave) {
+      return error(404, "Pending leave request not found");
+    }
+
+    await leave.update({
+      status: 'Approved',
+      approvedBy: admin.userId
+    });
+
+    return success({
+      message: "Leave approved successfully",
+      leave
+    });
+
+  } catch (err) {
+    console.error('Approve leave error:', err);
+    return error(500, err.message || "Failed to approve leave");
+  }
+};
+
+/**
+ * Reject a leave request
+ * POST /api/admin/rejectLeave
+ */
+export const rejectLeave = async (event) => {
+  const admin = event.context.admin;
+  
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  try {
+    const body = await readBody(event);
+    const { id, organisationId } = body;
+
+    if (!id) {
+      return error(400, "id is required");
+    }
+
+    if (!organisationId) {
+      return error(400, "organisationId is required");
+    }
+
+    const leave = await UserLeaveHistory.findOne({
+      where: {
+        id: parseInt(id),
+        organisationId: parseInt(organisationId),
+        status: 'Pending'
+      },
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "fullName", "email"]
+        }
+      ]
+    });
+
+    if (!leave) {
+      return error(404, "Pending leave request not found");
+    }
+
+    await leave.update({
+      status: 'Rejected',
+      approvedBy: admin.userId
+    });
+
+    return success({
+      message: "Leave rejected successfully",
+      leave
+    });
+
+  } catch (err) {
+    console.error('Reject leave error:', err);
+    return error(500, err.message || "Failed to reject leave");
   }
 };

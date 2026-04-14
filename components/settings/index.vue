@@ -75,11 +75,12 @@
         <v-tabs-window-item value="smtp">
           <SettingsItSupport />
         </v-tabs-window-item>
-        <v-tabs-window-item value="diary">
-          <div class="pa-8 text-center">
+          <v-tabs-window-item value="diary">
+  <SettingsDiary />
+</v-tabs-window-item>
+          <!-- <div class="pa-8 text-center">
             <p class="text-h6 text-grey">Diary settings coming soon...</p>
-          </div>
-        </v-tabs-window-item>
+          </div> -->
       </v-tabs-window>
     </div>
   </div>

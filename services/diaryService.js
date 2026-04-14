@@ -8,6 +8,27 @@ export default {
         .catch(reject);
     });
   },
+  addTreatment(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/treatments-create", payload)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+  updateTreatment(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/treatments-update", payload)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+  deleteTreatment(id) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/treatments-delete", { id })
+        .then(resolve)
+        .catch(reject);
+    });
+  },
   listPatients(search = "") {
     const q = search ? `?search=${encodeURIComponent(search)}` : "";
     return new Promise((resolve, reject) => {
@@ -64,6 +85,14 @@ export default {
         .catch(reject);
     });
   },
+  
+  deletePatient(id) {
+  return new Promise((resolve, reject) => {
+    Post("/diary/patientDelete", { id: id })
+      .then(resolve)
+      .catch(reject);
+  });
+},
   listAppointments({ date, dentistId, status, treatmentId, search, patientId } = {}) {
     const params = new URLSearchParams();
     if (date) params.append("date", date);
