@@ -517,10 +517,8 @@ export const listLeads = async (event) => {
 }
 
 export const createLead = async (event) => {
-  console.log('[CRM] createLead API called - checking if endpoint is hit')
   try {
     const logged = event.context.user
-    console.log('[CRM] User context:', logged)
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const required = ['name', 'email', 'telephone']
@@ -589,7 +587,6 @@ export const createLead = async (event) => {
     // Send FCM push notification to all org users
     try {
       const leadSource = created.leadSource || 'Manual'
-      console.log('[CRM] Processing lead notification:', { leadId: created.id, leadSource, orgId: logged.orgId })
       const orgUsers = await UserOrganisation.findAll({
         where: {
           organisationId: logged.orgId,
@@ -598,7 +595,6 @@ export const createLead = async (event) => {
         attributes: ['userId'],
       })
       const userIds = [...new Set(orgUsers.map((u) => u.userId).filter(Boolean))]
-      console.log('[CRM] Found org users for notification:', { userIdsCount: userIds.length, userIds })
       if (userIds.length) {
         await sendNotificationToMultipleUsers({
           userIds,
@@ -615,9 +611,6 @@ export const createLead = async (event) => {
           },
           priority: 'high',
         })
-        console.log('[CRM] Lead notification sent successfully')
-      } else {
-        console.log('[CRM] No org users found for notification')
       }
     } catch (notifyErr) {
       console.error('[CRM] Lead creation notification failed:', notifyErr?.message, notifyErr?.stack);

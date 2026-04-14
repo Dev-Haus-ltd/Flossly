@@ -45,7 +45,6 @@ const getIgRedirectUri = (config) => {
 }
 
 const upsertDmAccount = async ({ organisationId, connectedByUserId, platform, accountId, accountName, accessToken, tokenExpiresAt, metadata }) => {
-  try { await CrmDmAccount.sync() } catch {}
   const existing = await CrmDmAccount.findOne({
     where: { organisationId, platform, accountId },
   })
@@ -331,13 +330,6 @@ export const authCallback = async (event) => {
     const pagesResp = await $fetch(pagesUrl, { method: 'GET' })
     const pages = Array.isArray(pagesResp?.data) ? pagesResp.data : []
 
-    // Ensure tables exist
-    try { 
-      await MetaPage.sync()
-      await CrmLead.sync()
-      await MetaUserToken.sync()
-    } catch (e) {}
-
     // Enforce one active org per page to avoid lead routing ambiguity
     const pageIds = pages.map((p) => p?.id).filter(Boolean)
     let conflictsById = new Set()
@@ -564,7 +556,6 @@ export const listLeads = async (event) => {
 
 const fetchLeadsForOrg = async (orgId, { days = 0, maxPerForm = 1000, debugEnabled = false } = {}) => {
   if (!orgId) return { ok: false, error: 'Unauthenticated' }
-  try { await CrmLead.sync() } catch (_) {}
 
   const sinceDate = Number.isFinite(days) && days > 0
     ? new Date(Date.now() - days * 24 * 60 * 60 * 1000)
@@ -731,9 +722,6 @@ const fetchDmHistoryForOrg = async (
   } = {}
 ) => {
   if (!orgId) return { ok: false, error: 'Unauthenticated' }
-  try { await CrmDmAccount.sync() } catch {}
-  try { await CrmDmConversation.sync() } catch {}
-  try { await CrmDmMessage.sync() } catch {}
 
   const lookbackSinceDate = Number.isFinite(days) && days > 0
     ? new Date(Date.now() - days * 24 * 60 * 60 * 1000)
@@ -1736,10 +1724,6 @@ export const webhook = async (event) => {
 
 
         if (messaging.length) {
-          try { await CrmDmConversation.sync() } catch {}
-          try { await CrmDmMessage.sync() } catch {}
-          try { await CrmDmAccount.sync() } catch {}
-
           const accountByEntryCandidates = await CrmDmAccount.findAll({
             where: { accountId: pageId, status: 'Active' },
             order: [['updatedAt', 'DESC']],

@@ -9,7 +9,7 @@
         <img src="@/assets/crm/flossly-analytics.png" alt="Flossly Analytics" class="flossly-icon" />
       </div>
       <div class="meta-info">
-        <div class="d-flex align-start">
+        <div class="title-row">
           <img :src="platformIcon" :alt="platform" class="small-platform-icon" />
           <v-tooltip location="top" :text="title" max-width="360" open-on-click :open-on-hover="false">
             <template #activator="{ props: tipProps }">
@@ -55,9 +55,9 @@
           :options="{ toolbar: false, navbar: false, title: false, movable: true, zoomable: true }"
           class="preview-viewer"
         >
-          <img :src="previewImage" :alt="title" class="preview-image preview-image--clickable" />
+          <img :src="resolvedPreviewImage" :alt="title" class="preview-image preview-image--clickable" @error="handleImageError" />
         </viewer>
-        <img v-else :src="previewImage" :alt="title" class="preview-image" />
+        <img v-else :src="resolvedPreviewImage" :alt="title" class="preview-image" @error="handleImageError" />
 
         <div v-if="hasVideo && !videoPermalink" class="play-button-overlay" @click="playVideo">
           <v-progress-circular v-if="videoLoading" indeterminate color="white" size="48" />
@@ -137,8 +137,9 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import crmService from '@/services/crmService';
+import previewFallback from '@/assets/crm/placeholder/reference-1.png';
 
 const props = defineProps({
   platform: {
@@ -242,10 +243,25 @@ const viewLeadsHref = computed(() => {
   return null;
 });
 
+const imageLoadFailed = ref(false);
+const resolvedPreviewImage = computed(() => {
+  if (imageLoadFailed.value) return previewFallback;
+  const raw = String(props.previewImage || '').trim();
+  return raw || previewFallback;
+});
+
+watch(() => props.previewImage, () => {
+  imageLoadFailed.value = false;
+});
+
 const videoSrc = ref(null);
 const videoPermalink = ref(null);
 const videoLoading = ref(false);
 const videoError = ref(null);
+
+const handleImageError = () => {
+  imageLoadFailed.value = true;
+};
 
 const playVideo = async () => {
   if (!props.videoId || videoLoading.value) return;
@@ -357,6 +373,7 @@ const playVideo = async () => {
   flex-direction: column;
   gap: 4px;
   flex: 1;
+  min-width: 0;
 }
 
 .small-platform-icon {
@@ -365,6 +382,12 @@ const playVideo = async () => {
   margin-right: 6px;
   margin-top: 2px;
   flex-shrink: 0;
+}
+
+.title-row {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
 }
 
 .campaign-title {
@@ -378,6 +401,9 @@ const playVideo = async () => {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .campaign-date {
@@ -460,6 +486,7 @@ const playVideo = async () => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .preview-image--clickable {
@@ -574,5 +601,45 @@ const playVideo = async () => {
   line-height: 150%;
   letter-spacing: 0%;
   color: hsla(0, 0%, 0%, 1);
+}
+
+@media (max-width: 959px) {
+  .campaign-card {
+    padding: 18px;
+    border-radius: 20px;
+  }
+
+  .card-header {
+    min-height: unset;
+    padding-right: 64px;
+  }
+}
+
+@media (max-width: 600px) {
+  .campaign-card {
+    padding: 16px;
+    gap: 14px;
+  }
+
+  .card-header {
+    gap: 10px;
+    padding-right: 0;
+  }
+
+  .status-chip {
+    top: 12px;
+    right: 12px;
+  }
+
+  .platform-badge,
+  .flossly-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .campaign-title {
+    font-size: 13px;
+    line-height: 1.45;
+  }
 }
 </style>

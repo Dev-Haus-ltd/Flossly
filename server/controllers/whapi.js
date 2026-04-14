@@ -320,11 +320,7 @@ const resolveWebhookUrl = () => {
   return base ? `${String(base).replace(/\/+$/, "")}/api/whapi/webhook` : "";
 };
 
-const syncWhapiConfig = async () => {
-  try {
-    await WhapiChannelConfig.sync();
-  } catch {}
-};
+const syncWhapiConfig = async () => {};
 
 const findOrgChannel = async (orgId) => {
   await syncWhapiConfig();

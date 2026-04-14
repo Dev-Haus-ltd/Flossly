@@ -65,10 +65,6 @@ export const resolveWhatsAppConfig = async (orgId) => {
     process.env.WHATSAPP_WABA_ID ||
     "";
 
-  try {
-    await MetaWhatsAppConfig.sync();
-  } catch {}
-
   const row = await MetaWhatsAppConfig.findOne({
     where: { organisationId: Number(orgId) },
   });

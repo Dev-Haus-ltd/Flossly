@@ -72,8 +72,7 @@ const notifySupportAgents = async (conversationId, message, conversation) => {
     const supportAgentIds = await getSupportAgentUserIds();
 
     if (!supportAgentIds || supportAgentIds.length === 0) {
-      console.log('No support agents to notify');
-      return;
+    return;
     }
 
     const userName = conversation.user?.fullName || 'A user';
@@ -97,7 +96,6 @@ const notifySupportAgents = async (conversationId, message, conversation) => {
       });
     }
 
-    console.log(`Notified ${supportAgentIds.length} support agents about new message`);
   } catch (error) {
     console.error('Error notifying support agents:', error);
   }
@@ -147,10 +145,6 @@ export const createConversation = async (event) => {
     // Read the request body - check if already parsed
     let body = event._requestBody || await readBody(event);
     
-    console.log('User from context:', user);
-    console.log('Request body:', body);
-    console.log('Body type:', typeof body);
-    
     // If body is a string, parse it
     const parsed = typeof body === 'string' ? JSON.parse(body || '{}') : body || {};
     
@@ -168,12 +162,8 @@ export const createConversation = async (event) => {
     const userId = user.userId;
     const organisationId = user.orgId;
 
-    console.log('Creating conversation with:', { userId, organisationId, conversationType, subject });
-    console.log('User object:', user);
-    
     // Check if user exists
     const userExists = await User.findByPk(userId);
-    console.log('User exists in DB?', !!userExists, userExists?.id);
 
     const conversation = await ChatbotConversation.create({
       userId,
@@ -192,8 +182,6 @@ export const createConversation = async (event) => {
         ticketId: conversation.id,
         ticketSubject: subject || 'Support Request'
       });
-    } else {
-      console.log('>>> Skipping ticket submitted notification for ask-question flow');
     }
 
     setResponseStatus(event, 201);
@@ -347,8 +335,6 @@ export const updateConversationStatus = async (event) => {
     let body = await readBody(event);
     const { id } = query;
     
-    console.log('Raw body type:', typeof body, 'Body:', body);
-    
     // If body is a string, parse it
     if (typeof body === 'string') {
       try {
@@ -362,8 +348,6 @@ export const updateConversationStatus = async (event) => {
     const status = body?.status;
     
     const user = event.context.user;
-    
-    console.log('After parsing - Status:', status, 'Body:', body);
     
     if (!user) {
       setResponseStatus(event, 401);
@@ -389,7 +373,6 @@ export const updateConversationStatus = async (event) => {
       };
     }
 
-    console.log('Current conversation status:', conversation.status, 'New status:', status);
     conversation.status = status;
     
     if (status === 'resolved') {
@@ -490,22 +473,14 @@ export const createMessage = async (event) => {
         // Notify all support agents about the new user message
         await notifySupportAgents(conversationId, newMessage.toJSON(), conversation);
       }
-    } else {
-      console.log('>>> Skipping FCM notification for ask-question flow');
     }
 
     // Update conversation lastMessageAt
     conversation.lastMessageAt = new Date();
     await conversation.save();
 
-    console.log('=== WEBHOOK CHECK ===');
-    console.log('Conversation type:', conversation.conversationType);
-    console.log('Sender type:', senderType);
-    console.log('Should trigger webhook?', conversation.conversationType === 'ask-question' && senderType === 'user');
-
     // Send to webhook if conversation type is 'ask-question' and wait for response
     if (conversation.conversationType === 'ask-question' && senderType === 'user') {
-      console.log('>>> Webhook condition met! Sending to n8n...');
       try {
         const webhookUrl = 'https://n8n.flossly.ai/webhook/27c316ad-0504-4357-bb8d-f7193472d3a0';
         
@@ -523,15 +498,11 @@ export const createMessage = async (event) => {
           timestamp: new Date().toISOString()
         };
 
-        console.log('>>> Webhook payload:', JSON.stringify(webhookPayload, null, 2));
-
         // Send to webhook and WAIT for response
         const webhookResponse = await $fetch(webhookUrl, {
           method: 'POST',
           body: webhookPayload
         });
-
-        console.log('>>> Webhook response received:', webhookResponse);
 
         // Create bot response message with the webhook response
         if (webhookResponse) {
@@ -561,9 +532,6 @@ export const createMessage = async (event) => {
             isRead: false
           });
 
-          console.log('>>> Bot response message created:', botMessage.id);
-          console.log('>>> Bot message text:', messageText);
-          
           // Return BOTH user message and bot response for ask-question flow
           setResponseStatus(event, 201);
           return {
@@ -594,8 +562,6 @@ export const createMessage = async (event) => {
           botResponse: errMsg.toJSON() // Include error message in the API response
         };
       }
-    } else {
-      console.log('>>> Webhook NOT triggered (condition not met)');
     }
 
     setResponseStatus(event, 201);

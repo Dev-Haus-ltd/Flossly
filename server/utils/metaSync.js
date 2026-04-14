@@ -241,13 +241,52 @@ export const runStructureSync = async (orgId) => {
     }
     await setState(key, { status: 'running', startedAt, progress })
 
+    const pickCreativeImage = (creative = {}) => {
+      const story = creative?.object_story_spec || {}
+      const linkData = story?.link_data || {}
+      const videoData = story?.video_data || {}
+      const photoData = story?.photo_data || {}
+      const templateData = story?.template_data || {}
+
+      return (
+        creative?.image_url ||
+        videoData?.image_url ||
+        linkData?.picture ||
+        photoData?.image_url ||
+        photoData?.picture ||
+        photoData?.url ||
+        templateData?.picture ||
+        creative?.picture ||
+        creative?.thumbnail_url ||
+        null
+      )
+    }
+
+    const pickCreativeBody = (creative = {}) => {
+      const story = creative?.object_story_spec || {}
+      const linkData = story?.link_data || {}
+      const videoData = story?.video_data || {}
+      const photoData = story?.photo_data || {}
+      const templateData = story?.template_data || {}
+
+      return (
+        creative?.body ||
+        linkData?.message ||
+        videoData?.message ||
+        photoData?.message ||
+        templateData?.message ||
+        null
+      )
+    }
+
     // ── Wave 5: Creatives (batch, only for ads that have a creative id) ───────
     if (creativeIds.size) {
       const ids = Array.from(creativeIds.keys())
       const creativeBatchReqs = ids.map((cid) => ({
         method: 'GET',
-        // picture = higher-quality frame thumbnail for video creatives (better than thumbnail_url)
-        relative_url: `${cid}?fields=image_url,thumbnail_url,picture,body,instagram_permalink_url,video_id`,
+        // Prefer source image fields, but also inspect object_story_spec because many creatives keep
+        // link/video/photo preview data there instead of the shallow top-level fields.
+        relative_url: `${cid}?fields=image_url,thumbnail_url,picture,body,instagram_permalink_url,video_id,object_story_spec`,
       }))
       const creativeBatchRes = await metaBatch(creativeBatchReqs, userToken)
 
@@ -257,10 +296,11 @@ export const runStructureSync = async (orgId) => {
         const adId = creativeIds.get(ids[i])
         await MetaAd.update(
           {
-            // Prefer image_url (full quality), then picture (good quality frame for videos), then thumbnail_url (low-res fallback)
-            imageUrl: cr.image_url || cr.picture || cr.thumbnail_url || null,
-            videoId: cr.video_id || null,
-            body: cr.body || null,
+            // Field priority is based on the creative payload Meta returns for link/video/photo ads.
+            // image_url is usually the sharpest asset; picture/thumbnail_url are lower-quality fallbacks.
+            imageUrl: pickCreativeImage(cr),
+            videoId: cr.video_id || cr?.object_story_spec?.video_data?.video_id || null,
+            body: pickCreativeBody(cr),
             platform: cr.instagram_permalink_url ? 'Instagram' : 'Facebook',
           },
           { where: { adId, organisationId: orgId } }

@@ -2,6 +2,7 @@ import { resolve } from "pathe";
 import vuetify from "vite-plugin-vuetify";
 
 export default defineNuxtConfig({
+  compatibilityDate: "2026-04-14",
   alias: {
     "@shared": resolve(__dirname, "shared"),
   },
@@ -274,18 +275,21 @@ export default defineNuxtConfig({
   },
   nitro: {
     externals: {
-      inline: ['xlsx'],
+      inline: ['xlsx', '@anthropic-ai/sdk'],
     },
   },
   vue: {
     compilerOptions: {
-      // emoji-picker is a native web component — suppress Vue unknown-element warnings
-      isCustomElement: (tag) => tag === "emoji-picker",
+      // Treat registered web components as custom elements during SSR/component resolution.
+      isCustomElement: (tag) =>
+        tag === "emoji-picker" ||
+        tag === "lord-icon" ||
+        tag === "lottie-player",
     },
   },
   vite: {
     ssr: {
-      noExternal: ["vuetify", "v-phone-input"], // add the vuetify vite plugin
+      noExternal: ["vuetify", "v-phone-input", "@anthropic-ai/sdk"], // add the vuetify vite plugin
     },
   },
   devServer: {
