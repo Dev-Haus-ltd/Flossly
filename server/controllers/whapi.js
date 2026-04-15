@@ -15,7 +15,7 @@ import { sendNotificationToMultipleUsers } from "../utils/fcmNotification";
 import { encrypt, decrypt } from "../utils/crypto";
 import { getWhapiEnvConfig, getWhapiPartnerConfig, resolveWhapiConfig } from "../utils/whatsappProvider";
 import { uploadBufferFile, downloadUrlToS3 } from "../utils/storage";
-import { chat } from "../utils/aiWrapper";
+import { chat, generateAutoReply } from "../utils/aiWrapper";
 
 const extractTimestamp = (value) => {
   if (!value) return Date.now();
@@ -1054,26 +1054,29 @@ const sendWhatsAppAutoReply = async ({ orgId, lead, content, token, channelId })
       limit: 20,
     });
 
-    const treatmentList = treatments.length
-      ? treatments.map((t) => `${t.name}${t.category ? ` (${t.category})` : ''}`).join(', ')
-      : 'various treatments';
+    const recentMessages = await CrmWhatsAppMessageLog.findAll({
+      where: { organisationId: orgId, leadId: lead.id },
+      order: [['createdAt', 'DESC']],
+      limit: 10,
+    });
 
-    const systemPrompt = `You are a friendly assistant for a ${org.type || 'healthcare'} practice called "${org.name}". 
+    const conversationHistory = recentMessages
+      .slice()
+      .reverse()
+      .filter(m => m.direction === 'inbound' || m.direction === 'outbound')
+      .map(m => ({
+        role: m.direction === 'inbound' ? 'user' : 'assistant',
+        content: m.content,
+      }));
 
-CRITICAL RULES - NEVER BREAK THESE:
-1. NEVER book, schedule, or confirm appointments - always say "A team member will reach out once confirmed"
-2. NEVER make up prices, availability, or any information not provided in the available treatments list
-3. If you don't have clear context to answer a question confidently, say "A team member will let you know about this"
-4. Keep responses brief and friendly (1-2 sentences max)
-5. Be warm and professional
+    console.log(`[WhatsApp AutoReply] Conversation history: ${conversationHistory.length} messages for org ${orgId}, lead ${lead.id}`);
 
-AVAILABLE TREATMENTS at this practice: ${treatmentList || 'Please ask about specific treatments'}`;
-
-    const replyText = await chat({
-      prompt: `A patient/customer sent this message: "${content}". Generate a brief, helpful auto-reply (1-2 sentences max). Be friendly and professional.`,
-      systemPrompt,
-      temperature: 0.4,
-      maxTokens: 300,
+    const { reply: replyText } = await generateAutoReply({
+      organisationName: org.name,
+      organisationType: org.type,
+      message: content,
+      treatments,
+      history: conversationHistory,
     });
 
     if (!replyText) return;
