@@ -888,7 +888,7 @@ const savePreferences = async () => {
   font-weight: 400;
   font-size: 14px;
   line-height: 130%;
-  border: none !important;
+  border: 1px solid #DBDBDB !important;
   box-shadow: none !important;
   transition:
     background-color 0.18s ease,
@@ -917,8 +917,9 @@ const savePreferences = async () => {
 }
 
 .custom-tabs :deep(.v-tab.v-tab--selected) {
-  background-color: var(--lead-tab-accent) !important;
+  background-color: #0061FB1A !important;
   color: var(--lead-tab-text-on-accent) !important;
+  border: 1px solid #0061FB !important;
 }
 
 .custom-tabs :deep(.tab-label) {
@@ -933,7 +934,7 @@ const savePreferences = async () => {
 }
 
 .custom-tabs :deep(.v-tab.v-tab--selected .tab-label) {
-  color: var(--lead-tab-text-on-accent);
+  color: #1E1E1E !important;
 }
 
 .custom-tabs :deep(.tab-leading-icon) {
