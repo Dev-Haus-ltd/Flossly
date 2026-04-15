@@ -6,14 +6,16 @@ import {
   UserOrganisation,
   Organisation,
   UserPreference,
+  OrganisationTreatment,
 } from "../models";
-import { normalizeWhatsAppNumber, logWhatsAppMessage } from "../utils/whatsapp";
+import { normalizeWhatsAppNumber, logWhatsAppMessage, isWhatsAppLimitExceeded } from "../utils/whatsapp";
 import { success, error } from "../utils/response";
 import { addWhapiClient, broadcastWhapiEvent } from "../utils/whapiStream";
 import { sendNotificationToMultipleUsers } from "../utils/fcmNotification";
 import { encrypt, decrypt } from "../utils/crypto";
-import { getWhapiEnvConfig, getWhapiPartnerConfig } from "../utils/whatsappProvider";
-import { uploadBufferFile } from "../utils/storage";
+import { getWhapiEnvConfig, getWhapiPartnerConfig, resolveWhapiConfig } from "../utils/whatsappProvider";
+import { uploadBufferFile, downloadUrlToS3 } from "../utils/storage";
+import { chat, generateAutoReply } from "../utils/aiWrapper";
 
 const extractTimestamp = (value) => {
   if (!value) return Date.now();
@@ -110,6 +112,7 @@ const getMessageContent = (msg) => {
     const action = msg?.action || {};
     const actionType = String(action?.type || "").toLowerCase();
     if (actionType === "reaction" && action?.emoji) return `Reacted ${action.emoji}`;
+    if (actionType === "edit") return "";  // handled separately in webhook; never log "edit" as content
     if (actionType === "vote") return "Voted on a poll";
     if (actionType === "label_change") return "Changed a label";
     if (actionType === "media_notify") return "Shared media";
@@ -211,22 +214,14 @@ const buildAttachmentFilename = ({ originalName, mimeType }) => {
   return `${base}${ext}`;
 };
 
-const downloadWhapiMediaToS3 = async ({ url, token, mimeType, filename }) => {
-  if (!url) return null;
-  const data = await $fetch(url, {
-    method: "GET",
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    responseType: "arrayBuffer",
-  });
-  const fileName = buildAttachmentFilename({ originalName: filename, mimeType });
-  const s3Path = await uploadBufferFile({
-    data: Buffer.from(data),
-    filename: fileName,
+const downloadWhapiMediaToS3 = ({ url, token, mimeType, filename }) =>
+  downloadUrlToS3({
+    url,
+    filename: buildAttachmentFilename({ originalName: filename, mimeType }),
     contentType: mimeType || undefined,
-    baseDir: "chat-attachments",
+    baseDir: 'chat-attachments',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
-  return s3Path;
-};
 
 const fetchWhapiMediaById = async ({ mediaId, token }) => {
   if (!mediaId || !token) return null;
@@ -317,11 +312,7 @@ const resolveWebhookUrl = () => {
   return base ? `${String(base).replace(/\/+$/, "")}/api/whapi/webhook` : "";
 };
 
-const syncWhapiConfig = async () => {
-  try {
-    await WhapiChannelConfig.sync();
-  } catch {}
-};
+const syncWhapiConfig = async () => {};
 
 const findOrgChannel = async (orgId) => {
   await syncWhapiConfig();
@@ -517,6 +508,7 @@ const updateWebhook = async (token, webhookUrl) => {
         mode: "body",
         events: [
           { type: "messages", method: "post" },
+          { type: "messages", method: "patch" },
           { type: "statuses", method: "post" },
           { type: "users", method: "post" },
           { type: "channel", method: "post" },
@@ -971,6 +963,90 @@ export const listChannels = async (event) => {
   return success({ channels });
 };
 
+const sendWhatsAppAutoReply = async ({ orgId, lead, content, token, channelId }) => {
+  try {
+    const org = await Organisation.findOne({
+      where: { id: orgId },
+      attributes: ['name', 'type', 'autoReplyEnabled'],
+    });
+
+    if (!org || !org.autoReplyEnabled) return;
+
+    const treatments = await OrganisationTreatment.findAll({
+      where: { organisationId: orgId, active: true },
+      attributes: ['name', 'category'],
+      limit: 20,
+    });
+
+    const recentMessages = await CrmWhatsAppMessageLog.findAll({
+      where: { organisationId: orgId, leadId: lead.id },
+      order: [['createdAt', 'DESC']],
+      limit: 10,
+    });
+
+    const conversationHistory = recentMessages
+      .slice()
+      .reverse()
+      .filter(m => m.direction === 'inbound' || m.direction === 'outbound')
+      .map(m => ({
+        role: m.direction === 'inbound' ? 'user' : 'assistant',
+        content: m.content,
+      }));
+
+    console.log(`[WhatsApp AutoReply] Conversation history: ${conversationHistory.length} messages for org ${orgId}, lead ${lead.id}`);
+
+    const { reply: replyText } = await generateAutoReply({
+      organisationName: org.name,
+      organisationType: org.type,
+      message: content,
+      treatments,
+      history: conversationHistory,
+    });
+
+    if (!replyText) return;
+
+    const whapiConfig = await resolveWhapiConfig(orgId);
+    if (!whapiConfig?.token) {
+      console.warn(`[WhatsApp AutoReply] No whapi config for org ${orgId}`);
+      return;
+    }
+
+    const limitStatus = await isWhatsAppLimitExceeded(orgId);
+    if (limitStatus.exceeded) {
+      console.warn(`[WhatsApp AutoReply] Limit exceeded for org ${orgId} (${limitStatus.count}/${limitStatus.limit})`);
+      return;
+    }
+
+    const whapiBase = String(whapiConfig.baseUrl || 'https://gate.whapi.cloud').replace(/\/+$/, '');
+    const headers = { Authorization: `Bearer ${whapiConfig.token}`, 'Content-Type': 'application/json' };
+    const to = normalizeWhatsAppNumber(lead.telephone);
+
+    const resp = await $fetch(`${whapiBase}/messages/text`, {
+      method: 'POST',
+      headers,
+      body: { to, body: replyText },
+    });
+
+    const providerMessageId = resp?.message?.id || resp?.id || null;
+
+    await logWhatsAppMessage({
+      organisationId: orgId,
+      leadId: lead.id,
+      to,
+      direction: 'outbound',
+      type: 'text',
+      status: 'sent',
+      providerMessageId,
+      content: replyText,
+      attachments: null,
+    });
+
+    console.log(`[WhatsApp AutoReply] Sent auto-reply for org ${orgId}: ${replyText.slice(0, 50)}...`);
+  } catch (err) {
+    console.error(`[WhatsApp AutoReply] Failed for org ${orgId}:`, err?.message || err);
+  }
+};
+
 export const webhook = async (event) => {
   if (getMethod(event) === "HEAD") return send(event, "ok");
   if (getMethod(event) === "GET") return send(event, "ok");
@@ -1021,6 +1097,30 @@ export const webhook = async (event) => {
         }
       }
     }
+    // ── Handle message edits (messages_updates, event.event === "patch") ──
+    // Whapi sends edits in a separate messages_updates array, not in messages.
+    // Structure: { id, after_update: { text: { body: "new text" } }, trigger: { type: "edit" } }
+    if (Array.isArray(body?.messages_updates)) {
+      for (const update of body.messages_updates) {
+        if (String(update?.trigger?.type || "").toLowerCase() !== "edit") continue;
+        const msgId = update?.id || update?.after_update?.id;
+        const newText = update?.after_update?.text?.body || update?.after_update?.caption || "";
+        if (!msgId || !newText) continue;
+
+        // Find the org for this update via channel_id
+        if (!channelRows.length) continue;
+        for (const cfg of channelRows) {
+          const logRow = await CrmWhatsAppMessageLog.findOne({
+            where: { providerMessageId: String(msgId), organisationId: cfg.organisationId },
+            attributes: ["id", "leadId"],
+          });
+          if (!logRow) continue;
+          await logRow.update({ content: newText });
+          broadcastWhapiEvent("message", { orgId: cfg.organisationId, leadId: logRow.leadId });
+        }
+      }
+    }
+
     const messages = collectMessages(body);
 
     for (const msg of messages) {
@@ -1098,12 +1198,29 @@ export const webhook = async (event) => {
         continue;
       }
 
-      const content = getMessageContent(msg);
+      // ── Edit action: update the original message with the new text ──
+      if (
+        normalizedMsgType === "action" &&
+        String(msg?.action?.type || "").toLowerCase() === "edit"
+      ) {
+        const targetId = msg?.action?.message_id || msg?.action?.messageId || msg?.action?.id;
+        const newText = msg?.action?.body || msg?.action?.text || msg?.action?.content || "";
+        if (targetId && newText) {
+          await CrmWhatsAppMessageLog.update(
+            { content: newText },
+            { where: { providerMessageId: targetId, organisationId: orgId } }
+          );
+        }
+        broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+        continue;
+      }
+
       const token = channelRows?.[0]?.tokenEnc ? decrypt(channelRows[0].tokenEnc) : null;
       const attachments = await extractWhapiAttachments({ msg, token });
       const providerId = msg?.id || msg?.message_id || msg?.messageId || null;
+      const content = getMessageContent(msg);
 
-      // ── Edited inbound message: update existing row instead of creating a duplicate ──
+      // ── Same-ID update: update existing row instead of creating a duplicate ──
       if (providerId) {
         const existing = await CrmWhatsAppMessageLog.findOne({
           where: { providerMessageId: providerId, organisationId: orgId },
@@ -1135,6 +1252,16 @@ export const webhook = async (event) => {
         attachments,
       });
       broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+
+      if (content && token) {
+        sendWhatsAppAutoReply({
+          orgId,
+          lead,
+          content,
+          token,
+          channelId: channelRows?.[0]?.channelId || null,
+        }).catch((err) => console.error('[WhatsApp AutoReply] Error:', err?.message || err));
+      }
 
       // Push notification to all org members
       try {

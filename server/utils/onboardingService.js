@@ -25,15 +25,8 @@ const ONBOARDING_PRIVILEGED_ROLE_IDS = [1, 8];
 export const isOnboardingRecipientRole = (roleId) =>
   ONBOARDING_PRIVILEGED_ROLE_IDS.includes(Number(roleId));
 
-let onboardingEventsSynced = false;
-
 export const ensureOnboardingEventsTable = async () => {
-  if (onboardingEventsSynced) return;
-  try {
-    await OnboardingEvent.sync();
-    onboardingEventsSynced = true;
-  } catch (err) {
-  }
+  return;
 };
 
 export const ensureOnboardingStartEvent = async ({ userId, organisationId }) => {

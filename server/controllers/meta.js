@@ -1,11 +1,12 @@
 import { Op, fn, col } from 'sequelize'
 import crypto from 'crypto'
-import { CrmLead, MetaPage, Organisation, User, UserOrganisation, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight, CrmDmAccount, CrmDmConversation, CrmDmMessage } from '../models'
+import { CrmLead, MetaPage, Organisation, User, UserOrganisation, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight, CrmDmAccount, CrmDmConversation, CrmDmMessage, OrganisationTreatment } from '../models'
 import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
 import { addMetaClient, broadcastMetaEvent } from '../utils/metaStream'
 import { sendNotificationToMultipleUsers } from '../utils/fcmNotification'
 import { parseJsonBody } from "../utils/body"
+import { chat, generateAutoReply } from '../utils/aiWrapper'
 import {
   runStructureSync,
   runInsightsSync,
@@ -22,6 +23,7 @@ import {
 } from '../utils/dmAttachments.js'
 
 const META_VERSION = 'v24.0'
+const STANDARD_MESSAGING_WINDOW_MS = 24 * 60 * 60 * 1000
 const META_SUBSCRIBED_FIELDS = 'leadgen,messages,messaging_postbacks'
 
 const normalizeBaseUrl = (value = '') => String(value || '').replace(/\/+$/, '')
@@ -43,7 +45,6 @@ const getIgRedirectUri = (config) => {
 }
 
 const upsertDmAccount = async ({ organisationId, connectedByUserId, platform, accountId, accountName, accessToken, tokenExpiresAt, metadata }) => {
-  try { await CrmDmAccount.sync() } catch {}
   const existing = await CrmDmAccount.findOne({
     where: { organisationId, platform, accountId },
   })
@@ -70,6 +71,137 @@ const upsertDmAccount = async ({ organisationId, connectedByUserId, platform, ac
     metadata: metadata || null,
   })
 }
+
+const getLatestInboundMessageAt = async ({ organisationId, conversationId }) => {
+  const lastInbound = await CrmDmMessage.findOne({
+    where: {
+      organisationId,
+      conversationId,
+      direction: 'inbound',
+    },
+    order: [['createdAt', 'DESC']],
+  });
+  return lastInbound?.createdAt || null;
+};
+
+const isWithinStandardMessagingWindow = (lastInboundAt) => {
+  if (!lastInboundAt) return false;
+  return Date.now() - lastInboundAt.getTime() <= STANDARD_MESSAGING_WINDOW_MS;
+};
+
+const sendMetaMessage = async ({ accessToken, senderId, recipientId, message, messagingType = 'RESPONSE', tag = null }) => {
+  const targetNode = encodeURIComponent(String(senderId || 'me'));
+  const url = `https://graph.facebook.com/${META_VERSION}/${targetNode}/messages`;
+  const body = {
+    recipient: { id: recipientId },
+    messaging_type: messagingType,
+    message: { text: message },
+  };
+  if (tag) body.tag = tag;
+  return await $fetch(url, {
+    method: 'POST',
+    body,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+};
+
+const sendAutoReply = async ({ orgId, conversation, messageText, accessToken, senderId, recipientId }) => {
+  try {
+    const org = await Organisation.findOne({
+      where: { id: orgId },
+      attributes: ['name', 'type', 'autoReplyEnabled'],
+    });
+
+    if (!org || !org.autoReplyEnabled) return;
+
+    const treatments = await OrganisationTreatment.findAll({
+      where: { organisationId: orgId, active: true },
+      attributes: ['name', 'category'],
+      limit: 20,
+    });
+
+    const recentMessages = await CrmDmMessage.findAll({
+      where: { organisationId: orgId, conversationId: conversation.id },
+      order: [['createdAt', 'DESC']],
+      limit: 10,
+    });
+
+    const conversationHistory = recentMessages
+      .slice()
+      .reverse()
+      .filter(m => m.direction === 'inbound' || m.metadata?.autoReply)
+      .map(m => ({
+        role: m.direction === 'inbound' ? 'user' : 'assistant',
+        content: m.message,
+      }));
+
+    console.log(`[Meta AutoReply] Conversation history: ${conversationHistory.length} messages for org ${orgId}`);
+
+    const { reply: replyText } = await generateAutoReply({
+      organisationName: org.name,
+      organisationType: org.type,
+      message: messageText,
+      treatments,
+      history: conversationHistory,
+    });
+
+    if (!replyText) return;
+
+    let resolvedAccessToken = accessToken;
+    let resolvedSenderId = String(conversation.accountId || senderId || 'me');
+
+    if (conversation.platform === 'instagram') {
+      try {
+        const metaPage = await MetaPage.findOne({
+          where: { organisationId: orgId, status: 'Active' },
+          order: [['updatedAt', 'DESC']],
+        });
+        if (metaPage?.accessTokenEnc) resolvedAccessToken = decrypt(metaPage.accessTokenEnc);
+        if (metaPage?.pageId) resolvedSenderId = String(metaPage.pageId);
+      } catch {}
+    }
+
+    const lastInboundAt = await getLatestInboundMessageAt({
+      organisationId: orgId,
+      conversationId: conversation.id,
+    });
+
+    if (!isWithinStandardMessagingWindow(lastInboundAt)) {
+      console.warn(`[Meta AutoReply] Blocked for org ${orgId}: outside 24-hour messaging window`);
+      return;
+    }
+
+    await sendMetaMessage({
+      accessToken: resolvedAccessToken,
+      senderId: resolvedSenderId,
+      recipientId: String(conversation.threadId),
+      message: replyText,
+      messagingType: 'RESPONSE',
+    });
+
+    await CrmDmMessage.create({
+      organisationId: orgId,
+      conversationId: conversation.id,
+      platform: conversation.platform,
+      platformMessageId: null,
+      direction: 'outbound',
+      senderName: 'Flossly',
+      message: replyText,
+      attachments: null,
+      status: 'sent',
+      metadata: { autoReply: true },
+    });
+
+    conversation.lastMessageAt = new Date();
+    await conversation.save();
+
+    console.log(`[Meta AutoReply] Sent auto-reply for org ${orgId}: ${replyText.slice(0, 50)}...`);
+  } catch (err) {
+    console.error(`[Meta AutoReply] Failed for org ${orgId}:`, err?.message || err);
+  }
+};
 
 export const authStart = async (event) => {
   const config = useRuntimeConfig()
@@ -200,13 +332,6 @@ export const authCallback = async (event) => {
     const pagesUrl = `https://graph.facebook.com/${META_VERSION}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username}&access_token=${encodeURIComponent(userToken)}`
     const pagesResp = await $fetch(pagesUrl, { method: 'GET' })
     const pages = Array.isArray(pagesResp?.data) ? pagesResp.data : []
-
-    // Ensure tables exist
-    try { 
-      await MetaPage.sync()
-      await CrmLead.sync()
-      await MetaUserToken.sync()
-    } catch (e) {}
 
     // Enforce one active org per page to avoid lead routing ambiguity
     const pageIds = pages.map((p) => p?.id).filter(Boolean)
@@ -434,7 +559,6 @@ export const listLeads = async (event) => {
 
 const fetchLeadsForOrg = async (orgId, { days = 0, maxPerForm = 1000, debugEnabled = false } = {}) => {
   if (!orgId) return { ok: false, error: 'Unauthenticated' }
-  try { await CrmLead.sync() } catch (_) {}
 
   const sinceDate = Number.isFinite(days) && days > 0
     ? new Date(Date.now() - days * 24 * 60 * 60 * 1000)
@@ -601,9 +725,6 @@ const fetchDmHistoryForOrg = async (
   } = {}
 ) => {
   if (!orgId) return { ok: false, error: 'Unauthenticated' }
-  try { await CrmDmAccount.sync() } catch {}
-  try { await CrmDmConversation.sync() } catch {}
-  try { await CrmDmMessage.sync() } catch {}
 
   const lookbackSinceDate = Number.isFinite(days) && days > 0
     ? new Date(Date.now() - days * 24 * 60 * 60 * 1000)
@@ -1606,10 +1727,6 @@ export const webhook = async (event) => {
 
 
         if (messaging.length) {
-          try { await CrmDmConversation.sync() } catch {}
-          try { await CrmDmMessage.sync() } catch {}
-          try { await CrmDmAccount.sync() } catch {}
-
           const accountByEntryCandidates = await CrmDmAccount.findAll({
             where: { accountId: pageId, status: 'Active' },
             order: [['updatedAt', 'DESC']],
@@ -1818,6 +1935,17 @@ export const webhook = async (event) => {
               lastInboundAt: timestamp.toISOString(),
             }
             await conversation.save()
+
+            if (messageText && accessToken) {
+              sendAutoReply({
+                orgId,
+                conversation,
+                messageText,
+                accessToken,
+                senderId,
+                recipientId,
+              }).catch((err) => console.error('[Meta AutoReply] Error:', err?.message || err));
+            }
 
             broadcastMetaEvent('dm', {
               orgId,

@@ -185,6 +185,7 @@ export const useCrmStore = defineStore("crmStore", {
     bulkUploadAutomations(payload) { return this._wrap(() => crmService.bulkUploadAutomations(payload)); },
     generateAutomationsWithAI(payload) { return this._wrap(() => crmService.generateAutomationsWithAI(payload)); },
     listAutomationGroups() { return this._wrap(() => crmService.listAutomationGroups()); },
+    generateAutomationsWithAI(payload) { return this._wrap(() => crmService.generateAutomationsWithAI(payload)); },
     async saveAutomationGroup(payload) {
       const res = await this._wrap(() => crmService.saveAutomationGroup(payload));
       if (res?.code === 0 && typeof window !== 'undefined') {
@@ -212,5 +213,7 @@ export const useCrmStore = defineStore("crmStore", {
     deleteWhatsAppMessage(payload) { return this._wrap(() => crmService.deleteWhatsAppMessage(payload)); },
     reactWhatsAppMessage(payload) { return this._wrap(() => crmService.reactWhatsAppMessage(payload)); },
     getLeadPriceAttachmentRecent(payload) { return this._wrap(() => crmService.getLeadPriceAttachmentRecent(payload)); },
+    getAutoReplySettings() { return this._wrap(() => crmService.getAutoReplySettings()); },
+    updateAutoReplySettings(payload) { return this._wrap(() => crmService.updateAutoReplySettings(payload)); },
   },
 });

@@ -507,6 +507,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  generateAutomationsWithAI(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/generateAutomationsWithAI', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   saveAutomationGroup(payload) {
     return new Promise((resolve, reject) => {
       Post('/lead/automationGroupSave', payload)
@@ -590,6 +597,20 @@ export default {
   getLeadPriceAttachmentRecent(payload) {
     return new Promise((resolve, reject) => {
       Post('/lead/priceAttachmentRecent', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getAutoReplySettings() {
+    return new Promise((resolve, reject) => {
+      Get("/dms/autoReply")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  updateAutoReplySettings(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/dms/autoReply", payload)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });

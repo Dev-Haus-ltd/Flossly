@@ -176,6 +176,7 @@ User.belongsTo(Role, { foreignKey: "roleId", as: "role", onDelete: "SET NULL" })
 // User -> Preference (USER_DELETE)
 User.hasMany(UserPreference, { foreignKey: "userId", as: "preferences" });
 UserPreference.belongsTo(User, { foreignKey: "userId", as: "user", onDelete: "CASCADE", hooks: true });
+UserPreference.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", onDelete: "CASCADE", hooks: true });
 
 // User -> OnboardingEvents (USER_DELETE)
 User.hasMany(OnboardingEvent, { foreignKey: "userId", as: "onboardingEvents" });

@@ -517,10 +517,8 @@ export const listLeads = async (event) => {
 }
 
 export const createLead = async (event) => {
-  console.log('[CRM] createLead API called - checking if endpoint is hit')
   try {
     const logged = event.context.user
-    console.log('[CRM] User context:', logged)
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const required = ['name', 'email', 'telephone']
@@ -589,7 +587,6 @@ export const createLead = async (event) => {
     // Send FCM push notification to all org users
     try {
       const leadSource = created.leadSource || 'Manual'
-      console.log('[CRM] Processing lead notification:', { leadId: created.id, leadSource, orgId: logged.orgId })
       const orgUsers = await UserOrganisation.findAll({
         where: {
           organisationId: logged.orgId,
@@ -598,7 +595,6 @@ export const createLead = async (event) => {
         attributes: ['userId'],
       })
       const userIds = [...new Set(orgUsers.map((u) => u.userId).filter(Boolean))]
-      console.log('[CRM] Found org users for notification:', { userIdsCount: userIds.length, userIds })
       if (userIds.length) {
         await sendNotificationToMultipleUsers({
           userIds,
@@ -615,9 +611,6 @@ export const createLead = async (event) => {
           },
           priority: 'high',
         })
-        console.log('[CRM] Lead notification sent successfully')
-      } else {
-        console.log('[CRM] No org users found for notification')
       }
     } catch (notifyErr) {
       console.error('[CRM] Lead creation notification failed:', notifyErr?.message, notifyErr?.stack);
@@ -703,13 +696,24 @@ export const deleteLeads = async (event) => {
 export const bulkUploadLeads = async (event) => {
   try {
     const { orgId } = event.context.user || {}
-    const body = await readBody(event)
-    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const admin = event.context.admin || null
+    const preParsedPayload = event.context.adminBulkLeadPayload || null
+    const body = preParsedPayload ? null : await readBody(event)
+    const payload = preParsedPayload || (typeof body === 'string' ? parseJsonBody(body) : body)
     const leads = payload?.leads || []
-    if (!orgId) return error(401, 'Unauthenticated')
-    if (!Array.isArray(leads) || !leads.length) return error(400, 'leads required')
+    const requestedOrganisationId = Number(payload?.organisationId || payload?.orgId || 0)
+    const organisationId = Number(admin ? (requestedOrganisationId || orgId) : orgId)
 
-    const organisationId = Number(orgId)
+    if (!organisationId) {
+      return admin ? error(400, 'organisationId is required') : error(401, 'Unauthenticated')
+    }
+
+    if (admin) {
+      const organisation = await Organisation.findByPk(organisationId, { attributes: ['id'] })
+      if (!organisation) return error(404, 'Organisation not found')
+    }
+
+    if (!Array.isArray(leads) || !leads.length) return error(400, 'leads required')
     const statusMap = new Map([
       ['new', 'New'],
       ['converted', 'Converted'],
@@ -860,13 +864,24 @@ export const bulkUploadLeads = async (event) => {
 export const bulkUploadAutomations = async (event) => {
   try {
     const { orgId } = event.context.user || {}
-    const body = await readBody(event)
-    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const admin = event.context.admin || null
+    const preParsedPayload = event.context.adminBulkAutomationPayload || null
+    const body = preParsedPayload ? null : await readBody(event)
+    const payload = preParsedPayload || (typeof body === 'string' ? parseJsonBody(body) : body)
     const items = Array.isArray(payload?.items) ? payload.items : []
-    if (!orgId) return error(401, 'Unauthenticated')
-    if (!items.length) return error(400, 'items required')
+    const requestedOrganisationId = Number(payload?.organisationId || payload?.orgId || 0)
+    const organisationId = Number(admin ? (requestedOrganisationId || orgId) : orgId)
 
-    const organisationId = Number(orgId)
+    if (!organisationId) {
+      return admin ? error(400, 'organisationId is required') : error(401, 'Unauthenticated')
+    }
+
+    if (admin) {
+      const organisation = await Organisation.findByPk(organisationId, { attributes: ['id'] })
+      if (!organisation) return error(404, 'Organisation not found')
+    }
+
+    if (!items.length) return error(400, 'items required')
     const results = []
     const defaultKeySet = new Set((crmAutomationDefaults || []).map((d) => d.key))
 

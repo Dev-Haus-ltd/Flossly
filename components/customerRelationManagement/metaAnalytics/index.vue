@@ -96,7 +96,7 @@
         {{ insightsCoverageLabel }}
       </p>
 
-      <v-row v-if="displayCards.length" class="campaign-grid" align="stretch">
+      <v-row v-if="displayCards.length" class="campaign-grid" align="stretch" dense>
         <v-col
           v-for="(card, index) in displayCards"
           :key="card.id || index"
@@ -104,6 +104,7 @@
           sm="6"
           md="4"
           lg="3"
+          xl="3"
           class="campaign-col d-flex"
         >
           <CustomerRelationManagementAnalyticsCard
@@ -1030,6 +1031,7 @@ const drillEmptyCopy = computed(() => {
 
 .campaign-col {
   padding: 10px !important;
+  min-width: 0;
 }
 
 .date-label {

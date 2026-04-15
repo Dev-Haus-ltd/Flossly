@@ -7,11 +7,7 @@ import { decrypt } from "../utils/crypto";
 import { uploadBufferFile } from "../utils/storage";
 import { deriveAttachmentPreview, resolveDmParticipantProfile } from "../utils/dmAttachments.js";
 
-const ensureDmTables = async () => {
-  try { await CrmDmConversation.sync(); } catch {}
-  try { await CrmDmMessage.sync(); } catch {}
-  try { await CrmDmAccount.sync(); } catch {}
-};
+const ensureDmTables = async () => {};
 
 const META_VERSION = "v24.0";
 const STANDARD_MESSAGING_WINDOW_MS = 24 * 60 * 60 * 1000;

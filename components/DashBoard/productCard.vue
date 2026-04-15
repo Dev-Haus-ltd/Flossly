@@ -39,7 +39,6 @@ const props = defineProps({
   uid: { type: [String, Number], required: true },
   isHovered: Boolean,
 });
-console.log(props);
 const handleClick = () => {
   if (!props.isToolBox && props.route) {
     router.push(props.route);

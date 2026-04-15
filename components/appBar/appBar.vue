@@ -85,13 +85,6 @@ const props = defineProps({
 const handleDrawer = () => {
   emit("small-screen-drawer",!props.rail);
 };
-console.log(props.drawer);
-watch(
-  () => props.drawer,
-  (newVal) => {
-    console.log("Drawer changed:", newVal);
-  }
-);
 
 </script>
 

@@ -103,7 +103,6 @@ export const startTaskScheduler = () => {
 }
 
 export const startDmQueueScheduler = async () => {
-  try { await CrmDmConversation.sync(); } catch {}
   const pattern = process.env.DM_QUEUE_SCHEDULE || "*/1 * * * *";
   cron.schedule(pattern, async () => {
     try {
@@ -141,7 +140,6 @@ export const startLeadAutomationScheduler = () => {
   const pattern = process.env.CRM_LEAD_AUTOMATION_SCHEDULE || "30 2 * * *";
   if (!pattern) return;
   const batchSize = Number(process.env.CRM_LEAD_AUTOMATION_BATCH || 500)
-  try { CrmAutomationTemplate.sync() } catch {}
   cron.schedule(pattern, async () => {
     try {
       const templates = await CrmAutomationTemplate.findAll({ order: [['createdAt','ASC']] })
@@ -269,9 +267,6 @@ export const startPatientJourneyAutomationScheduler = () => {
 
   cron.schedule(pattern, async () => {
     try {
-      try {
-        await PatientAutomationTemplate.sync()
-      } catch {}
       const templates = await PatientAutomationTemplate.findAll({ where: { enabled: true } })
       if (!templates.length) return
 

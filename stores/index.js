@@ -86,7 +86,6 @@ const createDocsItem = (imgPath) => ({
   featureKey: "docs",
 });
 
-
 export const useMainStore = defineStore("mainStore", {
   state: () => ({
     locale: "en",
