@@ -92,6 +92,7 @@ import { ref, watch } from 'vue';
 // Settings component for roleId 16
 const selectedSetting = ref(null); // null = primary view, 'smtp' or 'diary' = secondary view
 const currentTab = ref("smtp");
+const route = useRoute();
 
 // Get setting title for breadcrumb
 const getSettingTitle = (setting) => {
@@ -110,6 +111,21 @@ watch(selectedSetting, (newVal) => {
     currentTab.value = 'diary';
   }
 });
+
+watch(
+  () => route.query.setting,
+  (setting) => {
+    if (setting === 'smtp' || setting === 'diary') {
+      selectedSetting.value = setting;
+      currentTab.value = setting;
+      return;
+    }
+    if (!setting) {
+      selectedSetting.value = null;
+    }
+  },
+  { immediate: true }
+);
 </script>
 
 <style scoped lang="scss">

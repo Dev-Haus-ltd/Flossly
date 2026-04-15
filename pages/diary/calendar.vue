@@ -378,6 +378,7 @@ definePageMeta({ layout: "home" });
 
 const search = ref("");
 const view = ref("day");
+const route = useRoute();
 
 const date = ref(new Date());
 const selectedDentistIds = ref([]);
@@ -419,6 +420,28 @@ function showSuccess(message) {
 const dateStr = computed(() => dateToLocalYMD(date.value));
 const dateLabel = computed(() => formatDateDDMMYYYY(date.value));
 const dayLabel = computed(() => formatDateDDMMYYYY(date.value));
+
+function normalizeDentistQueryIds(value) {
+  const list = Array.isArray(value) ? value : value ? [value] : [];
+  return list
+    .map((id) => {
+      const normalized = String(id).trim();
+      return /^\d+$/.test(normalized) ? Number(normalized) : normalized;
+    })
+    .filter(Boolean);
+}
+
+function applyRouteQuery(query = {}) {
+  if (query?.date) {
+    const nextDate = new Date(String(query.date));
+    if (!Number.isNaN(nextDate.getTime())) {
+      date.value = nextDate;
+    }
+  }
+  if (query?.dentistId) {
+    selectedDentistIds.value = normalizeDentistQueryIds(query.dentistId);
+  }
+}
 
 const prevDay = () => {
   const d = new Date(date.value);
@@ -1023,6 +1046,7 @@ function clearSearch() {
 
 // Replace both onMounted blocks with this single one:
 onMounted(() => {
+  applyRouteQuery(route.query);
   loadDentists().then(loadAppointments);
   organisationStore.listTreatments().then((res) => {
     if (res?.code === 0) treatments.value = res.data || [];
@@ -1053,6 +1077,13 @@ watch(dateStr, () => {
 watch(view, () => {
   loadDentists().then(loadAppointments);
 });
+watch(
+  () => route.query,
+  (query) => {
+    applyRouteQuery(query);
+  },
+  { deep: true }
+);
 </script>
 
 <style scoped lang="scss">

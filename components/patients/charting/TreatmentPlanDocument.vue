@@ -238,16 +238,16 @@ defineExpose({ getDocumentHtml, printDoc })
 .tpd-doc { display: flex; flex-direction: column; gap: 20px; }
 .tpd-page { background: #ececec; border: 1px solid #d8d8d8; min-height: 1122px; width: 794px; margin: 0 auto; padding: 28px 34px 56px; position: relative; break-after: page; }
 .tpd-page--cover { padding: 0 0 56px; overflow: hidden; }
-.tpd-footer-email { position: absolute; bottom: 22px; left: 0; right: 0; text-align: center; font-size: 18px; letter-spacing: 0.02em; color: #111; }
+.tpd-footer-email { position: absolute; bottom: 22px; left: 0; right: 0; text-align: center; font-size: 11px; letter-spacing: 0.02em; color: #111; }
 
 .tpd-cover-photo img { width: 100%; height: 760px; object-fit: cover; display: block; }
 .tpd-cover-title-wrap { background: linear-gradient(90deg, #b7852b 0%, #7f5415 100%); color: #fff; margin: 0 88px; transform: translateY(-38px) skewX(-20deg); padding: 26px 34px; }
 .tpd-cover-title-wrap > * { transform: skewX(20deg); }
-.tpd-cover-title { font-size: 54px; font-weight: 700; line-height: 1.1; }
-.tpd-cover-subtitle { font-size: 24px; margin-top: 8px; }
+.tpd-cover-title { font-size: 34px; font-weight: 700; line-height: 1.1; }
+.tpd-cover-subtitle { font-size: 16px; margin-top: 8px; }
 
-.tpd-h2 { font-size: 56px; font-weight: 700; margin: 0 0 18px; color: #1f1f23; line-height: 1.05; }
-.tpd-body { font-size: 33px; line-height: 1.45; color: #23252c; margin: 0 0 18px; white-space: pre-line; }
+.tpd-h2 { font-size: 28px; font-weight: 700; margin: 0 0 18px; color: #1f1f23; line-height: 1.1; }
+.tpd-body { font-size: 14px; line-height: 1.6; color: #23252c; margin: 0 0 18px; white-space: pre-line; }
 
 .tpd-two-col { display: grid; grid-template-columns: 1.2fr 1fr; gap: 22px; align-items: start; margin-bottom: 24px; }
 .tpd-media-wrap { border-radius: 28px; overflow: hidden; background: #ddd; min-height: 240px; }
@@ -256,30 +256,30 @@ defineExpose({ getDocumentHtml, printDoc })
 .tpd-dentists { display: flex; flex-direction: column; gap: 18px; }
 .tpd-dentist-card { display: grid; grid-template-columns: 1fr 1.2fr; gap: 18px; align-items: stretch; border-top: 1px solid #d3d3d3; padding-top: 18px; }
 .tpd-dentist-content { display: flex; flex-direction: column; }
-.tpd-dentist-name { font-size: 44px; font-weight: 700; color: #fff; background: #8a651a; padding: 8px 16px; width: fit-content; margin-bottom: 14px; }
+.tpd-dentist-name { font-size: 22px; font-weight: 700; color: #fff; background: #8a651a; padding: 8px 16px; width: fit-content; margin-bottom: 14px; }
 
 .tpd-chart-shot { background: #fff; border: 1px solid #d3d3d3; border-radius: 20px; padding: 10px; margin: 8px 0 18px; overflow: hidden; }
 .tpd-chart-shot :deep(.tooth-chart) { pointer-events: none; transform: scale(0.86); transform-origin: top left; width: 115%; margin-bottom: -64px; }
 
-.tpd-list { font-size: 34px; color: #23252c; padding-left: 30px; line-height: 1.55; margin: 0 0 16px; }
+.tpd-list { font-size: 14px; color: #23252c; padding-left: 22px; line-height: 1.6; margin: 0 0 16px; }
 .tpd-list li { margin-bottom: 6px; }
 
 .tpd-appt-block { margin-top: 16px; }
-.tpd-appt-head { display: flex; justify-content: space-between; background: #d1d1d1; font-size: 37px; font-weight: 700; padding: 12px 18px; }
-.tpd-appt-row { display: flex; justify-content: space-between; font-size: 36px; padding: 10px 18px; border-bottom: 1px solid #dedede; }
+.tpd-appt-head { display: flex; justify-content: space-between; background: #d1d1d1; font-size: 16px; font-weight: 700; padding: 12px 18px; }
+.tpd-appt-row { display: flex; justify-content: space-between; font-size: 14px; padding: 10px 18px; border-bottom: 1px solid #dedede; }
 
 .tpd-pay-table { margin: 12px 0 16px; }
-.tpd-pay-head, .tpd-pay-row, .tpd-pay-total { display: grid; grid-template-columns: 1fr auto; gap: 16px; padding: 10px 14px; font-size: 35px; }
+.tpd-pay-head, .tpd-pay-row, .tpd-pay-total { display: grid; grid-template-columns: 1fr auto; gap: 16px; padding: 10px 14px; font-size: 14px; }
 .tpd-pay-head { font-weight: 700; }
 .tpd-pay-total { background: #d1d1d1; font-weight: 700; margin-top: 8px; }
 
 .tpd-consent { margin-top: 24px; }
 .tpd-signatures { display: flex; gap: 40px; margin-top: 28px; }
-.tpd-signature { flex: 1; font-size: 24px; color: #555; }
+.tpd-signature { flex: 1; font-size: 12px; color: #555; }
 .tpd-signature .line { height: 1px; background: #333; margin-bottom: 6px; }
 
 .tpd-testimonials { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; }
-.tpd-testimonial { background: #fff; border-radius: 18px; border: 1px solid #ddd; padding: 18px; font-size: 31px; line-height: 1.4; }
+.tpd-testimonial { background: #fff; border-radius: 18px; border: 1px solid #ddd; padding: 18px; font-size: 14px; line-height: 1.6; }
 
 @media print {
   .no-print { display: none !important; }

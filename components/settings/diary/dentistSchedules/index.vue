@@ -237,6 +237,13 @@ import DentistScheduleForm from "@/components/schedule/DentistScheduleForm.vue";
 import searchIcon from "@/assets/icons/listView/serach-icon.svg";
 import ScheduleDetailsCard from "~/components/schedule/ScheduleDetailsCard.vue";
 
+const props = defineProps({
+  initialDentistId: {
+    type: [String, Number],
+    default: null,
+  },
+});
+
 const diaryStore = useDiaryStore();
 const scheduleStore = useScheduleStore();
 const { user } = useUser();
@@ -259,6 +266,7 @@ const deleteDialog = ref({
   message: "",
   loading: false,
 });
+const initialSelectionApplied = ref(false);
 
 const dentistStats = computed(() => [
   {
@@ -408,7 +416,6 @@ const closeSchedulePanel = () => {
   selectedDentist.value = null;
   selectedDentistId.value = null;
   editingScheduleId.value = null;
-  activeTab.value = "list";
 };
 
 const handleScheduleSaved = async () => {
@@ -420,7 +427,6 @@ const handleScheduleSaved = async () => {
   selectedDentist.value = null;
   selectedDentistId.value = null;
   editingScheduleId.value = null;
-  activeTab.value = "list";
 };
 
 const toggleScheduleStatus = async (dentistId, scheduleId) => {
@@ -480,6 +486,7 @@ const fetchDentists = async () => {
       dentists.value = res.data || [];
       // Load schedules for all dentists
       await loadAllDentistsSchedules();
+      openInitialDentistSchedule();
     } else {
       dentists.value = [];
       console.error("Failed to fetch dentists:", res?.message);
@@ -492,9 +499,33 @@ const fetchDentists = async () => {
   }
 };
 
+function openInitialDentistSchedule() {
+  if (initialSelectionApplied.value || !props.initialDentistId || !dentists.value.length) {
+    return;
+  }
+  const normalizedId = Number(props.initialDentistId);
+  const dentist = dentists.value.find((entry) => Number(entry.id) === normalizedId);
+  if (!dentist) return;
+  initialSelectionApplied.value = true;
+  const schedulesForDentist = dentistSchedulesMap.value[dentist.id] || [];
+  if (schedulesForDentist.length) {
+    editSchedule(dentist, schedulesForDentist[0].id);
+    return;
+  }
+  createSchedule(dentist);
+}
+
 onMounted(() => {
   fetchDentists();
 });
+
+watch(
+  () => props.initialDentistId,
+  () => {
+    initialSelectionApplied.value = false;
+    openInitialDentistSchedule();
+  }
+);
 </script>
 
 <style scoped lang="scss">

@@ -46,11 +46,14 @@
             <button class="diag-row-toggle" :class="{ 'diag-row-toggle--open': isExpanded(item) }">
               <v-icon size="16">mdi-chevron-right</v-icon>
             </button>
-            <span class="diag-dot" :style="{ background: condColor(item.condition) }" />
+            <span class="diag-dot" :style="{ background: rowColor(item) }" />
             <span class="diag-col diag-col--date">{{ formatDate(item.createdAt) }}</span>
-            <span class="diag-col diag-col--tooth">{{ toothLabel(item) }}</span>
+            <span class="diag-col diag-col--tooth">
+              <span class="diag-tooth-label">{{ toothLabel(item).primary }}</span>
+              <span v-if="toothLabel(item).alias" class="diag-tooth-alias">{{ toothLabel(item).alias }}</span>
+            </span>
             <span class="diag-col diag-col--name">{{ item.conditionLabel || item.condition || 'Finding' }}</span>
-            <span class="diag-col diag-col--surface">{{ item.surface || 'Full tooth' }}</span>
+            <span class="diag-col diag-col--surface">{{ rowScopeLabel(item) }}</span>
             <button class="diag-icon-btn diag-icon-btn--danger" title="Remove" @click.stop="emit('remove', item.id || item._tempId)">
               <v-icon size="14">mdi-trash-can-outline</v-icon>
             </button>
@@ -58,28 +61,78 @@
 
           <div v-if="isExpanded(item)" class="diag-expand">
             <div class="diag-fields">
-              <label class="diag-field">
-                <span>Status</span>
-                <select v-model="draft.status">
-                  <option value="existing">Existing</option>
-                  <option value="completed">Completed</option>
-                </select>
-              </label>
-              <label class="diag-field">
-                <span>Completed on</span>
-                <input v-model="draft.completedOn" type="date" />
-              </label>
-              <label class="diag-field">
-                <span>Practitioner</span>
-                <select v-model.number="draft.practitionerId">
-                  <option :value="null">Select practitioner</option>
-                  <option v-for="p in practitioners" :key="p.id" :value="Number(p.id)">{{ p.name }}</option>
-                </select>
-              </label>
-              <label class="diag-field">
-                <span>Invoice desc.</span>
-                <input v-model="draft.invoiceDesc" type="text" placeholder="Optional description..." />
-              </label>
+              <div class="diag-field">
+                <span class="diag-field-label">Status</span>
+                <v-select
+                  v-model="draft.status"
+                  :items="diagnosisStatusOptions"
+                  item-title="title"
+                  item-value="value"
+                  variant="solo"
+                  density="compact"
+                  class="diag-input-bordered"
+                  bg-color="white"
+                  flat
+                  hide-details
+                />
+              </div>
+              <div class="diag-field">
+                <span class="diag-field-label">Completed on</span>
+                <v-text-field
+                  v-model="draft.completedOn"
+                  type="date"
+                  variant="solo"
+                  density="compact"
+                  class="diag-input-bordered"
+                  bg-color="white"
+                  flat
+                  hide-details
+                />
+              </div>
+              <div class="diag-field">
+                <span class="diag-field-label">Practitioner</span>
+                <v-select
+                  v-model="draft.practitionerId"
+                  :items="practitioners"
+                  item-title="name"
+                  item-value="id"
+                  variant="solo"
+                  density="compact"
+                  class="diag-input-bordered"
+                  bg-color="white"
+                  flat
+                  hide-details
+                  clearable
+                />
+              </div>
+              <div class="diag-field">
+                <span class="diag-field-label">Invoice desc.</span>
+                <v-text-field
+                  v-model="draft.invoiceDesc"
+                  type="text"
+                  placeholder="Optional description..."
+                  variant="solo"
+                  density="compact"
+                  class="diag-input-bordered"
+                  bg-color="white"
+                  flat
+                  hide-details
+                />
+              </div>
+            </div>
+
+            <div class="diag-notes-header">
+              <span class="diag-field-label">Notes</span>
+              <button
+                class="diag-transcribe-btn"
+                :class="{ 'diag-transcribe-btn--active': isTranscribing }"
+                :title="speechSupported ? (isTranscribing ? 'Stop transcribing' : 'Transcribe notes by voice') : 'Speech recognition not supported in this browser'"
+                :disabled="!speechSupported"
+                @click="toggleTranscribe"
+              >
+                <v-icon size="15">{{ isTranscribing ? 'mdi-microphone-off' : 'mdi-microphone' }}</v-icon>
+                <span>{{ isTranscribing ? 'Stop' : 'Transcribe notes' }}</span>
+              </button>
             </div>
 
             <ChartRichTextEditor
@@ -97,83 +150,13 @@
     </div>
 
     <div v-else-if="activeTab === 'images'" class="diag-body diag-body--images">
-      <div class="diag-upload-card">
-        <div class="diag-upload-form">
-          <label class="diag-field">
-            <span>Type</span>
-            <select v-model="imgForm.type">
-              <option v-for="t in IMAGE_TYPES" :key="t" :value="t">{{ t }}</option>
-            </select>
-          </label>
-          <label class="diag-field">
-            <span>Grade</span>
-            <select v-model="imgForm.grade">
-              <option v-for="g in IMAGE_GRADES" :key="g.value" :value="g.value">{{ g.label }}</option>
-            </select>
-          </label>
-          <label class="diag-field">
-            <span>Developed by</span>
-            <select v-model.number="imgForm.developedBy">
-              <option :value="null">-</option>
-              <option v-for="p in practitioners" :key="p.id" :value="Number(p.id)">{{ p.name }}</option>
-            </select>
-          </label>
-          <label class="diag-field">
-            <span>Taken by</span>
-            <select v-model.number="imgForm.takenBy">
-              <option :value="null">-</option>
-              <option v-for="p in practitioners" :key="p.id" :value="Number(p.id)">{{ p.name }}</option>
-            </select>
-          </label>
-          <label class="diag-field">
-            <span>Date taken</span>
-            <input v-model="imgForm.dateTaken" type="date" />
-          </label>
-          <label class="diag-field">
-            <span>Justification</span>
-            <select v-model="imgForm.justification">
-              <option v-for="j in IMAGE_JUSTIFICATIONS" :key="j" :value="j === '-' ? '' : j">{{ j }}</option>
-            </select>
-          </label>
-          <label class="diag-field diag-field--full">
-            <span>Description</span>
-            <textarea v-model="imgForm.description" rows="2" placeholder="Optional description..." />
-          </label>
-        </div>
-
-        <div class="diag-upload-drop">
-          <DirectFileUpload :disabled="imgUploading" @upload="onImagesSelected" />
-          <p v-if="imgUploading" class="diag-upload-state">Uploading {{ pendingImageName || 'image' }}...</p>
-          <p v-else-if="pendingImageName" class="diag-upload-state">{{ pendingImageName }} selected</p>
-        </div>
-      </div>
-
-      <div v-if="!images.length" class="diag-empty">No images uploaded yet</div>
-      <div v-else class="diag-images-grid">
-        <div v-for="img in images" :key="img.id" class="diag-image-card">
-          <a :href="img.url" target="_blank" rel="noopener">
-            <img :src="img.url" :alt="img.name" class="diag-image" />
-          </a>
-          <div class="diag-image-meta">
-            <div class="diag-image-badges">
-              <span v-if="img.type" class="diag-badge">{{ img.type }}</span>
-              <span v-if="img.grade" class="diag-badge diag-badge--grade">Grade {{ img.grade }}</span>
-            </div>
-            <div class="diag-image-info">
-              <span v-if="img.dateTaken" class="diag-image-sub">{{ img.dateTaken }}</span>
-              <span v-if="img.takenByName || img.developedByName" class="diag-image-sub">{{ img.takenByName || img.developedByName }}</span>
-              <span v-if="img.justification" class="diag-image-sub">{{ img.justification }}</span>
-              <span v-if="img.description" class="diag-image-desc">{{ img.description }}</span>
-            </div>
-            <div class="diag-image-actions">
-              <span class="diag-image-name">{{ img.name }}</span>
-              <button class="diag-icon-btn diag-icon-btn--danger" @click="emit('remove-image', img.id)">
-                <v-icon size="14">mdi-trash-can-outline</v-icon>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ChartImagesPanel
+        :images="images"
+        :practitioners="practitioners"
+        :uploading="imgUploading"
+        @add-image="onAddImage"
+        @remove-image="emit('remove-image', $event)"
+      />
     </div>
 
     <div v-else class="diag-body">
@@ -188,9 +171,9 @@
 </template>
 
 <script setup>
-import DirectFileUpload from '@/components/Common/directFileUpload.vue'
 import ChartRichTextEditor from './ChartRichTextEditor.vue'
-import { getToothLabel, CONDITIONS } from './toothData.js'
+import ChartImagesPanel from './ChartImagesPanel.vue'
+import { getToothLabel, CONDITIONS, TEETH_BY_FDI } from './toothData.js'
 
 const props = defineProps({
   baseItems: { type: Array, default: () => [] },
@@ -205,7 +188,25 @@ const emit = defineEmits(['remove', 'update', 'add-image', 'remove-image', 'save
 const activeTab = ref('findings')
 const expandedRowId = ref(null)
 const imgUploading = ref(false)
-const pendingImageName = ref('')
+const diagnosisStatusOptions = [
+  { title: 'Existing', value: 'existing' },
+  { title: 'Completed', value: 'completed' },
+]
+const STATUS_ANNOTATION_CODE = '__STATUS_ANNOTATION__'
+
+const toothTypeLabels = {
+  incisor: 'Incisor',
+  canine: 'Canine',
+  premolar: 'Premolar',
+  molar: 'Molar',
+}
+
+const quadrantLabels = {
+  1: 'Upper Right',
+  2: 'Upper Left',
+  3: 'Lower Left',
+  4: 'Lower Right',
+}
 
 const draft = reactive({
   id: null,
@@ -216,23 +217,12 @@ const draft = reactive({
   notes: '',
 })
 
-const imgForm = reactive({
-  type: 'Radiograph',
-  grade: '',
-  developedBy: null,
-  justification: '',
-  takenBy: null,
-  dateTaken: new Date().toISOString().slice(0, 10),
-  description: '',
-})
-
-const IMAGE_TYPES = ['Radiograph', 'Photograph', 'Study model', 'Other']
-const IMAGE_GRADES = [
-  { label: '-', value: '' },
-  { label: 'Acceptable (A)', value: 'A' },
-  { label: 'Not acceptable (N)', value: 'N' },
-]
-const IMAGE_JUSTIFICATIONS = ['-', 'Caries diagnosis', 'Investigation', 'Periodontal', 'Endodontic', 'Periapical Status', 'Surgical/Implant', 'Extraction', 'Orthodontics']
+const SpeechRecognition = typeof window !== 'undefined'
+  ? (window.SpeechRecognition || window.webkitSpeechRecognition)
+  : null
+const speechSupported = !!SpeechRecognition
+const isTranscribing = ref(false)
+let _recognition = null
 
 function rowKey(item) {
   return item.id || item._tempId
@@ -251,6 +241,27 @@ function resetDraft() {
   draft.notes = ''
 }
 
+function toggleTranscribe() {
+  if (!SpeechRecognition) return
+  if (isTranscribing.value) {
+    _recognition?.stop()
+    isTranscribing.value = false
+    return
+  }
+  _recognition = new SpeechRecognition()
+  _recognition.continuous = true
+  _recognition.interimResults = false
+  _recognition.lang = 'en-GB'
+  _recognition.onresult = (e) => {
+    const text = Array.from(e.results).map((result) => result[0].transcript).join(' ')
+    draft.notes = draft.notes ? `${draft.notes} ${text}` : text
+  }
+  _recognition.onerror = () => { isTranscribing.value = false }
+  _recognition.onend = () => { isTranscribing.value = false }
+  _recognition.start()
+  isTranscribing.value = true
+}
+
 async function openExpanded(item) {
   draft.id = rowKey(item)
   draft.status = item.status || 'existing'
@@ -262,6 +273,10 @@ async function openExpanded(item) {
 }
 
 function closeExpanded() {
+  if (isTranscribing.value) {
+    _recognition?.stop()
+    isTranscribing.value = false
+  }
   expandedRowId.value = null
   resetDraft()
 }
@@ -294,11 +309,30 @@ function saveExpanded() {
 
 function toothLabel(item) {
   const base = getToothLabel(item.fdi, props.notation)
-  return item.surface ? `${base}-${item.surface.charAt(0).toUpperCase()}` : base
+  const meta = TEETH_BY_FDI[item.fdi]
+  const surface = item.surface ? `-${item.surface.charAt(0).toUpperCase()}` : ''
+  return {
+    primary: `${base}${surface}`,
+    alias: meta?.palmer || '',
+  }
 }
 
 function condColor(key) {
   return CONDITIONS[key]?.color || '#9e9e9e'
+}
+
+function isStatusEntry(item) {
+  return String(item?.treatmentCode || '') === STATUS_ANNOTATION_CODE
+}
+
+function rowColor(item) {
+  if (isStatusEntry(item)) return '#64748b'
+  return condColor(item?.condition)
+}
+
+function rowScopeLabel(item) {
+  if (isStatusEntry(item)) return 'Tooth status'
+  return item?.surface || 'Full tooth'
 }
 
 function formatDate(iso) {
@@ -308,39 +342,11 @@ function formatDate(iso) {
   return d.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: '2-digit' })
 }
 
-async function onImagesSelected(files) {
-  const selected = Array.isArray(files) ? files.filter(Boolean) : [files].filter(Boolean)
-  if (!selected.length) return
+async function onAddImage(payload) {
   imgUploading.value = true
-  pendingImageName.value = selected.map((file) => file.name).join(', ')
-  const practitionerList = props.practitioners || []
-  const devPrac = practitionerList.find((p) => Number(p.id) === Number(imgForm.developedBy))
-  const takenPrac = practitionerList.find((p) => Number(p.id) === Number(imgForm.takenBy))
-  selected.forEach((file) => {
-    emit('add-image', {
-      file,
-      meta: {
-        type: imgForm.type,
-        grade: imgForm.grade,
-        developedBy: imgForm.developedBy,
-        developedByName: devPrac?.name || '',
-        justification: imgForm.justification,
-        takenBy: imgForm.takenBy,
-        takenByName: takenPrac?.name || '',
-        dateTaken: imgForm.dateTaken,
-        description: imgForm.description,
-      },
-    })
-  })
+  emit('add-image', payload)
   imgUploading.value = false
 }
-
-watch(
-  () => props.images.length,
-  () => {
-    pendingImageName.value = ''
-  }
-)
 </script>
 
 <style scoped>
@@ -493,10 +499,28 @@ watch(
 }
 
 .diag-col--date,
-.diag-col--tooth,
 .diag-col--surface {
   color: #6b7280;
   font-size: 12px;
+}
+
+.diag-col--tooth {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.diag-tooth-label {
+  color: inherit;
+}
+
+.diag-tooth-alias {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .diag-col--name {
@@ -510,8 +534,7 @@ watch(
   background: #f8fbff;
 }
 
-.diag-fields,
-.diag-upload-form {
+.diag-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
@@ -528,7 +551,8 @@ watch(
   grid-column: 1 / -1;
 }
 
-.diag-field span {
+.diag-field span,
+.diag-field-label {
   font-size: 11px;
   color: #6b7280;
 }
@@ -549,116 +573,62 @@ watch(
   height: 34px;
 }
 
+.diag-input-bordered :deep(.v-field) {
+  border: 1px solid #dfdfdf !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  min-height: 40px;
+  box-shadow: none !important;
+}
+
+.diag-input-bordered :deep(.v-field__input) {
+  font-size: 13px;
+  color: #334155;
+}
+
+.diag-notes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.diag-transcribe-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  background: #f0f6ff;
+  border: 1px solid #0061fb;
+  border-radius: 20px;
+  color: #0061fb;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.diag-transcribe-btn:hover:not(:disabled) {
+  background: #e0eeff;
+}
+
+.diag-transcribe-btn--active {
+  background: #0061fb;
+  color: #fff;
+}
+
+.diag-transcribe-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .diag-expand-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
   margin-top: 10px;
-}
-
-.diag-upload-card {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  background: #f8fbff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 16px;
-}
-
-.diag-upload-drop {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.diag-upload-state {
-  text-align: center;
-  font-size: 12px;
-  color: #0061fb;
-}
-
-.diag-images-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
-}
-
-.diag-image-card {
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  overflow: hidden;
-  background: #fff;
-  display: flex;
-  flex-direction: column;
-}
-
-.diag-image {
-  width: 100%;
-  height: 130px;
-  object-fit: cover;
-  display: block;
-}
-
-.diag-image-meta {
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.diag-image-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.diag-badge {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: #e0f2fe;
-  color: #0369a1;
-}
-
-.diag-badge--grade {
-  background: #fef9c3;
-  color: #854d0e;
-}
-
-.diag-image-info {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.diag-image-sub {
-  font-size: 11px;
-  color: #6b7280;
-}
-
-.diag-image-desc {
-  font-size: 11px;
-  color: #374151;
-  font-style: italic;
-}
-
-.diag-image-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  margin-top: 4px;
-}
-
-.diag-image-name {
-  flex: 1;
-  font-size: 11px;
-  color: #374151;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .diag-history-item {
@@ -687,9 +657,7 @@ watch(
 }
 
 @media (max-width: 900px) {
-  .diag-upload-card,
-  .diag-fields,
-  .diag-upload-form {
+  .diag-fields {
     grid-template-columns: 1fr;
   }
 

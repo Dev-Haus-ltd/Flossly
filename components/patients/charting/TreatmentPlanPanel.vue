@@ -222,6 +222,14 @@
             <button class="tp-appt-icon-btn tp-appt-icon-btn--danger" title="Delete appointment" @click="$emit('delete-appointment', appt.id)">
               <v-icon size="15">mdi-trash-can-outline</v-icon>
             </button>
+            <button
+              v-if="appt.diaryAppointmentId"
+              class="tp-appt-icon-btn tp-appt-icon-btn--scheduled"
+              title="Open in Diary calendar"
+              @click="openDiaryCalendar(appt)"
+            >
+              <v-icon size="15">mdi-calendar-arrow-right</v-icon>
+            </button>
             <button class="tp-appt-icon-btn" title="Link" @click="$emit('link-appointment', appt.id)">
               <v-icon size="15">mdi-link-variant</v-icon>
             </button>
@@ -233,6 +241,25 @@
             >
               <v-icon size="15" :color="(appt.status === 'scheduled' || appt.diaryAppointmentId) ? 'success' : undefined">mdi-calendar-outline</v-icon>
             </button>
+            <v-menu offset-y>
+              <template #activator="{ props: menuProps }">
+                <button class="tp-appt-icon-btn" title="Diary actions" v-bind="menuProps" @click.stop>
+                  <v-icon size="15">mdi-dots-horizontal</v-icon>
+                </button>
+              </template>
+              <v-list density="compact" min-width="220">
+                <v-list-item
+                  :disabled="!appt.diaryAppointmentId"
+                  title="Open In Diary Calendar"
+                  @click="openDiaryCalendar(appt)"
+                />
+                <v-list-item
+                  :disabled="!appointmentPractitioner(appt)?.id"
+                  title="Dentist Schedules"
+                  @click="openDentistSchedule(appt)"
+                />
+              </v-list>
+            </v-menu>
           </div>
         </div>
 
@@ -360,84 +387,13 @@
     </div>
 
     <div v-else-if="activeView === 'images'" class="tp-body tp-body--images">
-      <!-- Upload form -->
-      <div class="tp-img-upload-card">
-        <div class="tp-img-upload-form">
-          <label class="tp-field">
-            <span>Type</span>
-            <select v-model="imgForm.type">
-              <option v-for="t in IMAGE_TYPES" :key="t" :value="t">{{ t }}</option>
-            </select>
-          </label>
-          <label class="tp-field">
-            <span>Grade</span>
-            <select v-model="imgForm.grade">
-              <option v-for="g in IMAGE_GRADES" :key="g.value" :value="g.value">{{ g.label }}</option>
-            </select>
-          </label>
-          <label class="tp-field">
-            <span>Developed by</span>
-            <select v-model.number="imgForm.developedBy">
-              <option :value="null">—</option>
-              <option v-for="p in practitioners" :key="p.id" :value="Number(p.id)">{{ p.name }}</option>
-            </select>
-          </label>
-          <label class="tp-field">
-            <span>Justification</span>
-            <select v-model="imgForm.justification">
-              <option v-for="j in IMAGE_JUSTIFICATIONS" :key="j" :value="j === '-' ? '' : j">{{ j }}</option>
-            </select>
-          </label>
-          <label class="tp-field">
-            <span>Taken by</span>
-            <select v-model.number="imgForm.takenBy">
-              <option :value="null">—</option>
-              <option v-for="p in practitioners" :key="p.id" :value="Number(p.id)">{{ p.name }}</option>
-            </select>
-          </label>
-          <label class="tp-field">
-            <span>Date taken</span>
-            <input v-model="imgForm.dateTaken" type="date" />
-          </label>
-          <label class="tp-field tp-field--full">
-            <span>Description</span>
-            <textarea v-model="imgForm.description" rows="2" class="tp-notes-input tp-notes-input--sm" placeholder="Optional description..." />
-          </label>
-        </div>
-        <div class="tp-img-upload-drop">
-          <DirectFileUpload :disabled="imgUploading" @upload="onImagesSelected" />
-          <p v-if="imgUploading" class="tp-img-uploading">Uploading {{ pendingImageName || 'image' }}...</p>
-          <p v-else-if="pendingImageName" class="tp-img-uploading">{{ pendingImageName }} selected</p>
-        </div>
-      </div>
-
-      <!-- Image grid -->
-      <div v-if="!images.length" class="tp-appt-empty">No images uploaded yet</div>
-      <div v-else class="tp-images-grid">
-        <div v-for="img in images" :key="img.id" class="tp-image-card">
-          <a :href="img.url" target="_blank" rel="noopener">
-            <img :src="img.url" :alt="img.name" class="tp-image" />
-          </a>
-          <div class="tp-image-meta">
-            <div class="tp-image-badges">
-              <span v-if="img.type" class="tp-img-badge">{{ img.type }}</span>
-              <span v-if="img.grade" class="tp-img-badge tp-img-badge--grade">Grade {{ img.grade }}</span>
-            </div>
-            <div class="tp-image-info">
-              <span v-if="img.dateTaken" class="tp-image-sub">{{ img.dateTaken }}</span>
-              <span v-if="img.takenByName || img.developedByName" class="tp-image-sub">{{ img.takenByName || img.developedByName }}</span>
-              <span v-if="img.justification" class="tp-image-sub">{{ img.justification }}</span>
-              <span v-if="img.description" class="tp-image-desc">{{ img.description }}</span>
-            </div>
-            <div class="tp-image-actions">
-              <span class="tp-image-name">{{ img.name }}</span>
-              <button class="tp-icon-btn tp-icon-btn--danger" @click="$emit('remove-image', img.id)">
-                <v-icon size="14">mdi-trash-can-outline</v-icon>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ChartImagesPanel
+        :images="images"
+        :practitioners="practitioners"
+        :uploading="imgUploading"
+        @add-image="onAddImage"
+        @remove-image="$emit('remove-image', $event)"
+      />
     </div>
 
     <div v-else class="tp-body">
@@ -497,8 +453,8 @@
 
 <script setup>
 import { getToothLabel } from './toothData.js'
-import DirectFileUpload from '@/components/Common/directFileUpload.vue'
 import ChartRichTextEditor from './ChartRichTextEditor.vue'
+import ChartImagesPanel from './ChartImagesPanel.vue'
 import { makeTPName } from '~/shared/defaults/charting/chartingDefaults.js'
 
 const props = defineProps({
@@ -522,12 +478,12 @@ const emit = defineEmits([
   'add-image', 'remove-image', 'update-plan-color', 'chart-scope-change',
   'mark-complete', 'print-plan',
 ])
+const router = useRouter()
 
 const activeView = ref('plan')
 // Fix #10 — use £ not the verbose 'GBP ' prefix
 const currencySymbol = '£'
 const totalFormatted = computed(() => Number(props.total || 0).toFixed(2))
-const pendingImageName = ref('')
 
 const APPOINTMENT_STATUS_OPTIONS = [
   { value: 'pending', label: 'Pending', color: '#6b7280' },
@@ -590,6 +546,15 @@ function planItemsForAppt(apptId) {
   return planItemsByAppt.value[apptId] || []
 }
 
+function appointmentPractitioner(appt) {
+  const firstItem = planItemsForAppt(appt.id).find((item) => item.practitionerId || item.practitionerName || item.clinicianName)
+  if (!firstItem && !appt?.dentistId && !appt?.dentistName) return null
+  return {
+    id: firstItem?.practitionerId ? Number(firstItem.practitionerId) : (appt?.dentistId ? Number(appt.dentistId) : null),
+    name: firstItem?.practitionerName || firstItem?.clinicianName || appt?.dentistName || '',
+  }
+}
+
 function rowKey(item) {
   return item.id || item._tempId
 }
@@ -623,6 +588,32 @@ function appointmentChipStyle(appt) {
     background: meta.color,
     color: '#fff',
   }
+}
+
+function openDiaryCalendar(appt) {
+  if (!appt?.diaryAppointmentId) return
+  const practitioner = appointmentPractitioner(appt)
+  router.push({
+    path: '/diary/calendar',
+    query: {
+      date: appt.date || '',
+      dentistId: practitioner?.id ? String(practitioner.id) : '',
+      appointmentId: String(appt.diaryAppointmentId),
+    },
+  })
+}
+
+function openDentistSchedule(appt) {
+  const practitioner = appointmentPractitioner(appt)
+  if (!practitioner?.id) return
+  router.push({
+    path: '/settings',
+    query: {
+      setting: 'diary',
+      diarySection: 'Dentist Schedules',
+      dentistId: String(practitioner.id),
+    },
+  })
 }
 
 function formatDate(iso) {
@@ -789,60 +780,10 @@ async function cancelExpanded() {
 
 const planDrawerOpen = ref(false)
 
-// Image upload form
-const imgForm = reactive({
-  type: 'Radiograph',
-  grade: '',
-  developedBy: null,
-  justification: '',
-  takenBy: null,
-  dateTaken: new Date().toISOString().slice(0, 10),
-  description: '',
-})
 const imgUploading = ref(false)
-
-const IMAGE_TYPES = ['Radiograph', 'Photograph', 'Study model', 'Other']
-const IMAGE_GRADES = [
-  { label: '—', value: '' },
-  { label: 'Acceptable (A)', value: 'A' },
-  { label: 'Not acceptable (N)', value: 'N' },
-]
-const IMAGE_JUSTIFICATIONS = [
-  '—',
-  'Caries diagnosis',
-  'Investigation',
-  'Periodontal',
-  'Endodontic',
-  'Periapical Status',
-  'Surgical/Implant',
-  'Extraction',
-  'Orthodontics',
-]
-
-async function onImagesSelected(files) {
-  const selected = Array.isArray(files) ? files.filter(Boolean) : [files].filter(Boolean)
-  if (!selected.length) return
+async function onAddImage(payload) {
   imgUploading.value = true
-  pendingImageName.value = selected.map((file) => file.name).join(', ')
-  const practitionerList = props.practitioners || []
-  const devPrac = practitionerList.find(p => Number(p.id) === Number(imgForm.developedBy))
-  const takenPrac = practitionerList.find(p => Number(p.id) === Number(imgForm.takenBy))
-  selected.forEach((file) => {
-    emit('add-image', {
-      file,
-      meta: {
-        type: imgForm.type,
-        grade: imgForm.grade,
-        developedBy: imgForm.developedBy,
-        developedByName: devPrac?.name || '',
-        justification: imgForm.justification,
-        takenBy: imgForm.takenBy,
-        takenByName: takenPrac?.name || '',
-        dateTaken: imgForm.dateTaken,
-        description: imgForm.description,
-      },
-    })
-  })
+  emit('add-image', payload)
   imgUploading.value = false
 }
 
@@ -962,13 +903,6 @@ watch(
   async () => {
     await nextTick()
     updateScrollButtons()
-  }
-)
-
-watch(
-  () => props.images.length,
-  () => {
-    pendingImageName.value = ''
   }
 )
 
@@ -1354,18 +1288,22 @@ watch(activeView, async () => {
 }
 
 .tp-field span {
+  display: inline-block;
   font-size: 11px;
   color: #6b7280;
+  margin-bottom: 2px;
 }
 
 .tp-field input,
 .tp-field select {
-  height: 34px;
-  border: 1px solid #d1d5db;
+  height: 40px;
+  border: 1px solid #dfdfdf;
   border-radius: 8px;
-  padding: 0 10px;
-  font-size: 13px;
+  padding: 0 12px;
+  font-size: 14px;
   background: #fff;
+  color: #334155;
+  box-shadow: none;
 }
 
 .tp-notes-input {
@@ -1520,46 +1458,6 @@ watch(activeView, async () => {
   font-size: 12px;
   color: #9ca3af;
   font-style: italic;
-}
-
-.tp-images-toolbar {
-  margin-bottom: 10px;
-}
-
-.tp-images-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 10px;
-}
-
-.tp-image-card {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #fff;
-}
-
-.tp-image {
-  width: 100%;
-  height: 120px;
-  object-fit: cover;
-  display: block;
-}
-
-.tp-image-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px;
-}
-
-.tp-image-name {
-  font-size: 12px;
-  color: #374151;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .tp-history-item {
@@ -1771,142 +1669,4 @@ watch(activeView, async () => {
   overflow: visible;
 }
 
-.tp-img-upload-card {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  background: #f8fbff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 16px;
-  margin-bottom: 16px;
-}
-
-@media (max-width: 900px) {
-  .tp-expand-body {
-    grid-template-columns: 1fr;
-  }
-
-  .tp-img-upload-card {
-    grid-template-columns: 1fr;
-  }
-}
-
-.tp-img-upload-form {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  align-content: start;
-}
-
-.tp-field--full {
-  grid-column: 1 / -1;
-}
-
-.tp-img-upload-drop {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.tp-img-uploading {
-  font-size: 12px;
-  color: #0061FB;
-  text-align: center;
-}
-
-.tp-notes-input--sm {
-  min-height: 60px;
-  resize: none;
-}
-
-/* ── Image grid improvements ────────────────────────────────── */
-.tp-images-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
-}
-
-.tp-image-card {
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  overflow: hidden;
-  background: #fff;
-  display: flex;
-  flex-direction: column;
-}
-
-.tp-image {
-  width: 100%;
-  height: 130px;
-  object-fit: cover;
-  display: block;
-  transition: opacity 0.15s;
-}
-
-.tp-image:hover {
-  opacity: 0.9;
-}
-
-.tp-image-meta {
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1;
-}
-
-.tp-image-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.tp-img-badge {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: #e0f2fe;
-  color: #0369a1;
-}
-
-.tp-img-badge--grade {
-  background: #fef9c3;
-  color: #854d0e;
-}
-
-.tp-image-info {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.tp-image-sub {
-  font-size: 11px;
-  color: #6b7280;
-}
-
-.tp-image-desc {
-  font-size: 11px;
-  color: #374151;
-  font-style: italic;
-}
-
-.tp-image-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 4px;
-  gap: 6px;
-}
-
-.tp-image-name {
-  font-size: 11px;
-  color: #374151;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  flex: 1;
-}
 </style>

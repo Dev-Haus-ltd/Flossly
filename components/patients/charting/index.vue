@@ -84,8 +84,8 @@
               :chart-scope="currentStep === 1 ? 'base' : store.chartScope"
               :bridge-select-mode="store.bridgeSelectMode"
               :bridge-start-fdi="store.bridgeStartFdi"
-              :tooth-statuses="store.toothStatuses"
-              :treatment-items="store.treatmentPlan"
+              :tooth-statuses="toothChartStatuses"
+              :treatment-items="toothChartItems"
               :teeth-type="store.teethType"
               @surface-click="onSurfaceClick"
               @tooth-click="onToothClick"
@@ -193,10 +193,11 @@
           :teeth-type="store.teethType"
         />
         <PlanSectionsPanel
-          v-model:sections="planSections"
+          :sections="planSections"
           :base-items="baseChartItems"
           :items="store.treatmentItems"
           :notation="store.notation"
+          @update:sections="Object.assign(planSections, $event)"
         />
       </div>
 
@@ -383,15 +384,19 @@ const organisationEmail = computed(() =>
       || ''
   ).trim()
 )
-
 // Base chart items (status=existing) — shown in DiagnosePanel findings
 const baseChartItems = computed(() =>
-  (store.treatmentPlan || []).filter(i => String(i.status || '') === 'existing')
+  (store.treatmentPlan || [])
+    .filter(i => String(i.status || '') === 'existing')
 )
 
 const plannedItems = computed(() =>
   (store.treatmentItems || []).filter(i => String(i.status || '').toLowerCase() !== 'existing')
 )
+const toothChartItems = computed(() =>
+  currentStep.value === 1 ? baseChartItems.value : plannedItems.value
+)
+const toothChartStatuses = computed(() => (currentStep.value === 1 ? store.toothStatuses : {}))
 const planPractitioners = computed(() => {
   const map = new Map()
   ;(store.treatmentItems || []).forEach((item) => {
@@ -929,16 +934,20 @@ onMounted(() => {
 .charting-body {
   display: flex;
   gap: 12px;
-  align-items: flex-start; /* chart card drives height */
+  align-items: stretch;
+  --charting-panel-height: clamp(420px, 60vh, 520px);
 }
 
 /* ── Chart card ──────────────────────────────────────────────────── */
 .chart-card {
   flex: 1;
   min-width: 0;
+  height: var(--charting-panel-height);
   background: #fff;
   border: 1px solid #e8e8e8;
   border-radius: 12px;
+  display: flex;
+  flex-direction: column;
 }
 
 .chart-card__toolbar {
@@ -975,20 +984,23 @@ onMounted(() => {
 
 .chart-scroll {
   display: block;
+  flex: 1;
   width: 100%;
   padding: 12px 8px;
-  overflow-x: auto;
-  min-height: 320px;
+  overflow: auto;
+  min-height: 0;
 }
 
 /* ── Codes side ──────────────────────────────────────────────────── */
 .codes-side {
   width: 260px;
+  height: var(--charting-panel-height);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-self: stretch;
   overflow: hidden;
+  min-height: 0;
 }
 
 /* ── Treatment plan ──────────────────────────────────────────────── */

@@ -87,14 +87,61 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
           code: t.code || String(t.id),
           name: t.name || 'Treatment',
           category: t.category || 'Other',
+          active: t.active !== false,
+          color: t.color || '#0061FB',
           amount: Number(t.price ?? t.amount ?? 0),
           price: Number(t.price ?? t.amount ?? 0),
-          defaultDuration: Number(t.defaultDuration || 0),
+          defaultDuration: Number(t.defaultDuration ?? t.duration ?? 0),
           ...resolveTreatmentMapping(t),
         }))
+        this._hydrateTreatmentItemsFromCatalog()
       } catch (error) {
         this._logError('loadTreatmentCatalog', error)
       }
+    },
+    _hydrateTreatmentItemsFromCatalog() {
+      if (!Array.isArray(this.treatmentPlan) || !this.treatmentPlan.length || !Array.isArray(this.treatmentCatalog) || !this.treatmentCatalog.length) return
+      const byId = new Map(this.treatmentCatalog.map((item) => [Number(item.id), item]))
+      const byCode = new Map(
+        this.treatmentCatalog
+          .filter((item) => item.code)
+          .map((item) => [String(item.code).trim().toUpperCase(), item])
+      )
+      this.treatmentPlan = this.treatmentPlan.map((item) => {
+        if ([STATUS_ANNOTATION_CODE, DIAGNOSIS_ANNOTATION_CODE].includes(String(item.treatmentCode || ''))) return item
+        const catalogItem = byId.get(Number(item.treatmentId || 0))
+          || byCode.get(String(item.treatmentCode || '').trim().toUpperCase())
+        if (!catalogItem) return item
+        return {
+          ...item,
+          treatmentId: item.treatmentId || catalogItem.id,
+          treatmentCode: item.treatmentCode || catalogItem.code || null,
+          treatmentName: item.treatmentName || catalogItem.name || null,
+          treatmentCategory: item.treatmentCategory || catalogItem.category || null,
+          conditionLabel: item.conditionLabel || item.treatmentName || catalogItem.name || item.condition || null,
+          duration: Number(item.duration ?? catalogItem.defaultDuration ?? 0),
+          cost: Number(item.cost ?? catalogItem.price ?? 0),
+        }
+      })
+    },
+    _rebuildToothStatusesFromItems() {
+      const nextStatuses = {}
+      ;(this.treatmentPlan || []).forEach((item) => {
+        if (String(item.status || '').toLowerCase() !== 'existing') return
+        const fdi = Number(item.fdi || 0)
+        if (!fdi) return
+        if (!this.chart[fdi]) this.chart[fdi] = createDefaultTooth(fdi)
+        const prev = nextStatuses[fdi] && typeof nextStatuses[fdi] === 'object' ? nextStatuses[fdi] : {}
+        if (String(item.treatmentCode || '') === STATUS_ANNOTATION_CODE) {
+          nextStatuses[fdi] = { ...prev, status: item.condition || '' }
+          applyBaseToothStatus(this.chart[fdi], item.condition || null)
+        }
+        if (String(item.treatmentCode || '') === DIAGNOSIS_ANNOTATION_CODE) {
+          nextStatuses[fdi] = { ...prev, diagnosis: item.condition || '' }
+          this.chart[fdi].diagnosis = item.condition || null
+        }
+      })
+      this.toothStatuses = nextStatuses
     },
     async loadPractitioners(date = '') {
       try {
@@ -294,6 +341,8 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
           ),
         }))
         this.treatmentPlan = rows
+        this._hydrateTreatmentItemsFromCatalog()
+        this._rebuildToothStatusesFromItems()
         const existingPlanIds = new Set(this.plans.map((p) => p.id))
         rows.forEach((item) => {
           if (!existingPlanIds.has(item.planId)) {
@@ -754,7 +803,13 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       const key = `${rowId}:${fdi}`
       const prev = this.toothStatuses[key]
       const prevObj = (prev && typeof prev === 'object') ? prev : {}
-      this.toothStatuses = { ...this.toothStatuses, [key]: { ...prevObj, status } }
+      const legacyPrev = this.toothStatuses[fdi]
+      const legacyObj = (legacyPrev && typeof legacyPrev === 'object') ? legacyPrev : {}
+      this.toothStatuses = {
+        ...this.toothStatuses,
+        [key]: { ...prevObj, status },
+        [fdi]: { ...legacyObj, status },
+      }
       if (String(rowId).includes('base')) {
         if (!this.chart[fdi]) this.chart[fdi] = createDefaultTooth(fdi)
         applyBaseToothStatus(this.chart[fdi], status)
@@ -767,7 +822,13 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       const key = `${rowId}:${fdi}`
       const prev = this.toothStatuses[key]
       const prevObj = (prev && typeof prev === 'object') ? prev : {}
-      this.toothStatuses = { ...this.toothStatuses, [key]: { ...prevObj, diagnosis } }
+      const legacyPrev = this.toothStatuses[fdi]
+      const legacyObj = (legacyPrev && typeof legacyPrev === 'object') ? legacyPrev : {}
+      this.toothStatuses = {
+        ...this.toothStatuses,
+        [key]: { ...prevObj, diagnosis },
+        [fdi]: { ...legacyObj, diagnosis },
+      }
       if (String(rowId).includes('base')) {
         if (!this.chart[fdi]) this.chart[fdi] = createDefaultTooth(fdi)
         this.chart[fdi].diagnosis = diagnosis || null
@@ -1047,6 +1108,11 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
         if (res?.code === 0) {
           appt.diaryAppointmentId = res.data?.id
           appt.status = 'scheduled'
+          appt.date = date
+          appt.startTime = startTime
+          appt.endTime = endTime
+          appt.dentistId = dentistId || null
+          appt.dentistName = this.practitioners.find((p) => Number(p.id) === Number(dentistId))?.name || appt.dentistName || ''
           this._saveActivePlanAppointments()
           const linkedIds = new Set(res?.data?.linkedTreatmentItemIds || [])
           this.treatmentPlan.forEach((item) => {

@@ -25,7 +25,11 @@
 
         <!-- Dynamic Content -->
         <div class="flex-grow-1 mb-4">
-          <component :is="currentComponent" ref="diaryRef" />
+          <component
+            :is="currentComponent"
+            ref="diaryRef"
+            :initial-dentist-id="selectedSection === 'Dentist Schedules' ? route.query.dentistId : null"
+          />
         </div>
 
       </div>
@@ -34,11 +38,12 @@
   </v-card>
 </template>
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import AppointmentReason from './appointmentReason/index.vue'
 import DentistSchedule from './dentistSchedules/index.vue'
 const selectedSection = ref('Appointment Reasons')
 const diaryRef = ref(null)
+const route = useRoute()
 
 const menuItems = [
   // { key: 'diary', label: 'Diary Settings' },
@@ -65,6 +70,16 @@ const resetSettings = () => {
     diaryRef.value.resetSettings()
   }
 }
+
+watch(
+  () => route.query.diarySection,
+  (section) => {
+    if (section && componentsMap[section]) {
+      selectedSection.value = section
+    }
+  },
+  { immediate: true }
+)
 </script>
 <style scoped >
 .title {

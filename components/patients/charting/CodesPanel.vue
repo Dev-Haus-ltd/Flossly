@@ -130,7 +130,7 @@ const categoryOptions = computed(() => {
 })
 
 const filteredCodes = computed(() => {
-  let list = props.codes || []
+  let list = (props.codes || []).filter((code) => code.active !== false)
   if (selectedCategory.value !== 'All') {
     list = list.filter(c => c.category === selectedCategory.value)
   }
@@ -168,6 +168,8 @@ function toggleFavorite(codeId) {
   border-radius: 12px;
   overflow: hidden;
   flex: 1;
+  height: 100%;
+  min-height: 0;
 }
 
 /* ── Header ─────────────────────────────────────────────────────── */
@@ -200,6 +202,7 @@ function toggleFavorite(codeId) {
   flex: 1;
   overflow-y: auto;
   padding: 4px 0;
+  min-height: 0;
 }
 
 /* ── Item ───────────────────────────────────────────────────────── */

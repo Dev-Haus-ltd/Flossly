@@ -8,10 +8,10 @@
     <div class="psp-list">
       <div v-for="section in SECTIONS" :key="section.key" class="psp-item">
         <div class="psp-item__row" @click="toggleSection(section.key)">
-          <div class="psp-check" :class="{ 'psp-check--on': localSections[section.key] }">
-            <v-icon v-if="localSections[section.key]" size="12" color="white">mdi-check</v-icon>
+          <div class="psp-check" :class="{ 'psp-check--on': isSectionEnabled(section.key) }">
+            <v-icon v-if="isSectionEnabled(section.key)" size="12" color="white">mdi-check</v-icon>
           </div>
-          <span class="psp-item__label" :class="{ 'psp-item__label--on': localSections[section.key] }">{{ section.label }}</span>
+          <span class="psp-item__label" :class="{ 'psp-item__label--on': isSectionEnabled(section.key) }">{{ section.label }}</span>
           <button
             v-if="section.expandable"
             class="psp-expand-btn"
@@ -68,11 +68,6 @@ const props = defineProps({
 
 const emit = defineEmits(['update:sections'])
 
-const localSections = computed({
-  get: () => props.sections,
-  set: (v) => emit('update:sections', v),
-})
-
 const expanded = ref(null)
 const SECTIONS = [
   { key: 'clinicInfo', label: 'About the clinic', expandable: false },
@@ -86,6 +81,10 @@ const SECTIONS = [
 
 const planItems = computed(() => props.items.filter((i) => i.status !== 'existing'))
 const hasItems = computed(() => planItems.value.length > 0)
+
+function isSectionEnabled(key) {
+  return !!props.sections?.[key]
+}
 
 function toothLabel(item) {
   const base = getToothLabel(item.fdi, props.notation)
