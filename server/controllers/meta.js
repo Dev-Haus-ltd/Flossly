@@ -21,6 +21,7 @@ import {
   deriveAttachmentPreview,
   resolveDmParticipantProfile,
 } from '../utils/dmAttachments.js'
+import { normalizeMetaVideoPermalink } from '../utils/metaVideo.js'
 
 const META_VERSION = 'v24.0'
 const STANDARD_MESSAGING_WINDOW_MS = 24 * 60 * 60 * 1000
@@ -2389,6 +2390,12 @@ export const getVideoSource = async (event) => {
   const body = await readBody(event)
   const { videoId } = typeof body === 'string' ? JSON.parse(body) : (body || {})
   if (!videoId) return error(400, 'videoId required')
+  const adRow = await MetaAd.findOne({
+    where: { organisationId: orgId, videoId: String(videoId) },
+    attributes: ['platform'],
+    order: [['updatedAt', 'DESC']],
+  })
+  const adPlatform = String(adRow?.platform || '').trim()
 
   const fetchVideoFields = async (token) => {
     try {
@@ -2407,7 +2414,17 @@ export const getVideoSource = async (event) => {
     const userToken = decrypt(tokenRow.userTokenEnc)
     if (userToken) {
       const resp = await fetchVideoFields(userToken)
-      if (resp?.source) return success({ source: resp.source, permalink: resp.permalink_url || null, thumbnail: resp.picture || null })
+      if (resp?.source) {
+        return success({
+          source: resp.source,
+          permalink: normalizeMetaVideoPermalink({
+            permalink: resp.permalink_url,
+            videoId,
+            platform: adPlatform,
+          }),
+          thumbnail: resp.picture || null,
+        })
+      }
     }
   }
 
@@ -2417,8 +2434,27 @@ export const getVideoSource = async (event) => {
     const pageToken = decrypt(page.accessTokenEnc)
     if (!pageToken) continue
     const resp = await fetchVideoFields(pageToken)
-    if (resp?.source) return success({ source: resp.source, permalink: resp.permalink_url || null, thumbnail: resp.picture || null })
-    if (resp?.permalink_url) return success({ source: null, permalink: resp.permalink_url, thumbnail: resp.picture || null, warning: sourceUnavailableMessage, requiresPageRole: true })
+    const normalizedPermalink = normalizeMetaVideoPermalink({
+      permalink: resp?.permalink_url,
+      videoId,
+      platform: adPlatform,
+    })
+    if (resp?.source) {
+      return success({
+        source: resp.source,
+        permalink: normalizedPermalink,
+        thumbnail: resp.picture || null,
+      })
+    }
+    if (normalizedPermalink) {
+      return success({
+        source: null,
+        permalink: normalizedPermalink,
+        thumbnail: resp?.picture || null,
+        warning: sourceUnavailableMessage,
+        requiresPageRole: true,
+      })
+    }
   }
 
   return error(404, 'Video source not available — the video may require additional Meta permissions')
