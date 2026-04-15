@@ -1,7 +1,15 @@
 <template>
   <div>
     <template v-if="!activeAutomation || displayMode === 'modal'">
+      <div
+        v-if="isPatientJourney && patientJourneyGroupsLoading"
+        class="patient-journey-automation-loading d-flex flex-column align-center justify-center py-12"
+      >
+        <v-progress-circular indeterminate color="primary" size="48" width="4" class="mb-4" />
+        <div class="text-body-2 text-medium-emphasis">Loading automations...</div>
+      </div>
       <AutomationCards
+        v-else
         :cards="automationCards"
         :add-folder-icon="addFolderIcon"
         :show-card-toggle="props.showCardToggle"
@@ -34,6 +42,10 @@
         :show-resend-action="props.showResendAction"
         :resending-key="resendingKey"
         :default-automation-key-set="defaultAutomationKeySet"
+        :read-only-trigger="props.readOnlyTrigger"
+        :show-delete="!isPatientJourney"
+        :loading="patientTemplatesLoading"
+        :disable-edit-for-sent="isPatientJourney"
         @back="clearAutomationSelection"
         @update:search="(val) => (search = val)"
         @update:filterEnabled="(val) => (filterEnabled = val)"
@@ -89,6 +101,10 @@
             :show-resend-action="props.showResendAction"
             :resending-key="resendingKey"
             :default-automation-key-set="defaultAutomationKeySet"
+            :read-only-trigger="props.readOnlyTrigger"
+            :show-delete="!isPatientJourney"
+            :loading="patientTemplatesLoading"
+            :disable-edit-for-sent="isPatientJourney"
             @update:search="(val) => (search = val)"
             @update:filterEnabled="(val) => (filterEnabled = val)"
             @update:filterDisabled="(val) => (filterDisabled = val)"
@@ -446,7 +462,10 @@
                 Use [First Name] for personalization
               </v-chip>
             </div>
-            <div class="mb-4" v-if="String(active?.type || 'Email').toLowerCase() !== 'whatsapp'">
+            <div
+              class="mb-4"
+              v-if="String(active?.type || 'Email').toLowerCase() !== 'whatsapp' && !isPatientJourney"
+            >
               <div class="text-subtitle-2 font-weight-bold text-grey-darken-2 mb-2">
                 <v-icon size="18" class="mr-2">mdi-email-outline</v-icon>
                 Email Subject
@@ -509,6 +528,7 @@ import { isDefaultAutomationGroup, resolveAutomationGroupAuthor } from '@/lib/cr
 import { buildRecipientContext } from '@/lib/crm/previewContext'
 import { applyCrmPlaceholders } from '@/lib/crm/placeholders'
 import { htmlToPlainText } from '@/lib/format/text'
+import patientJourneyService from '@/services/patientJourneyService'
 
 const props = defineProps({
   leadId: { type: [Number, String], default: null },
@@ -528,11 +548,49 @@ const props = defineProps({
   showLastSentColumn: { type: Boolean, default: false },
   showSentStatusColumn: { type: Boolean, default: false },
   showResendAction: { type: Boolean, default: false },
+  patientId: { type: [Number, String], default: null },
+  patient: { type: Object, default: null },
+  readOnlyTrigger: { type: Boolean, default: false },
 })
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
 const orgStore = useOrgStore()
 const emit = defineEmits(['update:rows','save','edit-group','delete-group'])
+
+const resolvedPatientId = computed(() => {
+  const raw = props.patientId ?? props.patient?.id
+  if (raw === null || raw === undefined || raw === '') return null
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : null
+})
+
+const isPatientJourney = computed(() => resolvedPatientId.value != null)
+
+const patientTemplatesLoading = ref(false)
+const patientJourneyGroupsLoading = ref(false)
+
+watch(
+  isPatientJourney,
+  (journey) => {
+    if (journey) patientJourneyGroupsLoading.value = true
+  },
+  { immediate: true }
+)
+
+const previewLeadLike = computed(() => {
+  if (props.lead && Object.keys(props.lead).length) return props.lead
+  const p = props.patient
+  if (!p) return {}
+  const name =
+    [p.firstName, p.lastName].filter(Boolean).join(' ').trim() ||
+    (typeof p.name === 'string' ? p.name.trim() : '') ||
+    ''
+  return {
+    ...p,
+    name: name || p.name || '',
+    email: p.email || p.emailAddress || '',
+  }
+})
 
 // Table state
 const rows = reactive([])
@@ -610,7 +668,9 @@ const filteredRows = computed(() => {
   if (!activeAutomation.value) return []
   const keys = activeAutomation.value.templateKeys || []
   let result = []
-  if (keys.length) {
+  if (isPatientJourney.value) {
+    result = rows
+  } else if (keys.length) {
     const keySet = new Set(keys)
     result = rows.filter(r => keySet.has(r.key))
   } else {
@@ -618,8 +678,13 @@ const filteredRows = computed(() => {
   }
   if (filterEnabled.value && !filterDisabled.value) result = result.filter(r => r.enabled === true)
   if (filterDisabled.value && !filterEnabled.value) result = result.filter(r => r.enabled === false)
-  if (filterSent.value === 'sent') result = result.filter(r => !!r.lastSentAt)
-  if (filterSent.value === 'never') result = result.filter(r => !r.lastSentAt)
+  if (isPatientJourney.value) {
+    if (filterSent.value === 'sent') result = result.filter(r => !!r.lastSentAt || !!r.sent)
+    if (filterSent.value === 'never') result = result.filter(r => !r.lastSentAt && !r.sent)
+  } else {
+    if (filterSent.value === 'sent') result = result.filter(r => !!r.lastSentAt)
+    if (filterSent.value === 'never') result = result.filter(r => !r.lastSentAt)
+  }
   return result
 })
 
@@ -634,6 +699,11 @@ const resolvedGroups = computed(() => {
     return props.groups
   }
   if (groupRows.value.length) return groupRows.value
+  // Patient journey: Empty array
+  // Other usecases: Static defaults when the groups API has not returned yet.
+  if (isPatientJourney.value) {
+    return []
+  }
   return crmAutomationGroups
 })
 
@@ -642,6 +712,9 @@ const isDefaultGroup = (group) =>
 
 const visibleGroups = computed(() => {
   const withoutLegacy = resolvedGroups.value.filter((group) => String(group?.source || '').toLowerCase() !== 'legacy')
+  if (isPatientJourney.value) {
+    return withoutLegacy
+  }
   if (props.includeDefaults) {
     return withoutLegacy.filter((group) => String(group?.source || '').toLowerCase() === 'system')
   }
@@ -657,13 +730,27 @@ const resolveGroupAuthor = (group) =>
 const automationCards = computed(() => {
   return visibleGroups.value.map((group) => {
     const keys = group.templateKeys || []
-    const groupRows = keys.length
-      ? rows.filter(r => keys.includes(r.key))
-      : rows.filter(r => r.groupKey === group.key)
+    let groupRows
+    if (isPatientJourney.value) {
+      const isActive = activeAutomation.value?.key === group.key
+      groupRows = isActive ? rows.slice() : []
+    } else {
+      groupRows = keys.length
+        ? rows.filter(r => keys.includes(r.key))
+        : rows.filter(r => r.groupKey === group.key)
+    }
+    const itemCount = isPatientJourney.value
+      ? (activeAutomation.value?.key === group.key ? groupRows.length : (group.itemCount ?? 0))
+      : groupRows.length
+    const enabled = isPatientJourney.value
+      ? (activeAutomation.value?.key === group.key
+        ? groupRows.some((r) => !!r.enabled)
+        : !!group.enabled)
+      : groupRows.some((r) => r.enabled)
     return {
       ...group,
-      itemCount: groupRows.length,
-      enabled: groupRows.some(r => r.enabled),
+      itemCount,
+      enabled,
       author: resolveGroupAuthor(group),
       isDefault: isDefaultGroup(group),
       hasWhatsApp: groupRows.some(r => String(r.type || 'Email').toLowerCase() === 'whatsapp'),
@@ -671,10 +758,44 @@ const automationCards = computed(() => {
   })
 })
 
-const selectAutomation = (card) => {
+const loadPatientJourneyTemplates = async (groupKey) => {
+  if (!resolvedPatientId.value || !groupKey) return
+  patientTemplatesLoading.value = true
+  try {
+    const res = await patientJourneyService.listAutomationTemplates(groupKey, resolvedPatientId.value)
+    const data = Array.isArray(res?.data) ? res.data : []
+    rows.splice(0, rows.length, ...data)
+  } catch {
+    rows.splice(0, rows.length)
+  } finally {
+    patientTemplatesLoading.value = false
+  }
+}
+
+const loadPatientJourneyGroupsOnly = async () => {
+  if (!resolvedPatientId.value) return
+  patientJourneyGroupsLoading.value = true
+  try {
+    const res = await patientJourneyService.listAutomationGroups(resolvedPatientId.value)
+    if (res?.code === 0 && Array.isArray(res.data)) {
+      groupRows.value = res.data
+    } else {
+      groupRows.value = []
+    }
+  } catch {
+    groupRows.value = []
+  } finally {
+    patientJourneyGroupsLoading.value = false
+  }
+}
+
+const selectAutomation = async (card) => {
   activeAutomation.value = card
   search.value = ''
   clearFilters()
+  if (isPatientJourney.value) {
+    await loadPatientJourneyTemplates(card?.key)
+  }
   if (props.displayMode === 'modal') {
     showGroupDialog.value = true
   }
@@ -685,6 +806,9 @@ const clearAutomationSelection = () => {
   search.value = ''
   clearFilters()
   showGroupDialog.value = false
+  if (isPatientJourney.value) {
+    rows.splice(0, rows.length)
+  }
 }
 
 const showTriggerDialog = ref(false)
@@ -800,6 +924,7 @@ const onInquiryDatePick = (val) => {
 }
 
 const openTriggerEditor = (row) => {
+  if (resolvedPatientId.value || props.readOnlyTrigger) return
   triggerEditingRow.value = row
   hydrateTriggerForm(row?.trigger || {})
   showTriggerDialog.value = true
@@ -816,6 +941,19 @@ const resolvedLeadId = computed(() => {
 })
 
 const buildPayload = (row) => {
+  if (resolvedPatientId.value) {
+    return {
+      key: row.key,
+      type: row.type || 'Email',
+      name: row.name || row.key,
+      sending: row.sending || '',
+      enabled: !!row.enabled,
+      template: row.template || '',
+      roleName: row.roleName,
+      groupKey: row.groupKey || activeAutomation.value?.key,
+      patientId: resolvedPatientId.value,
+    }
+  }
   const payload = {
     key: row.key,
     type: row.type,
@@ -836,6 +974,28 @@ const buildPayload = (row) => {
 }
 
 const toggleAutomationGroup = async (card, val) => {
+  if (resolvedPatientId.value) {
+    const enabled = !!val
+    try {
+      await patientJourneyService.toggleAutomationGroup({
+        groupKey: card.key,
+        enabled,
+        patientId: resolvedPatientId.value,
+      })
+      const keys = card?.templateKeys || []
+      const groupRows = keys.length
+        ? rows.filter(r => keys.includes(r.key))
+        : rows.filter(r => r.groupKey === card?.key)
+      groupRows.forEach((row) => {
+        row.enabled = enabled
+      })
+      await loadPatientJourneyGroupsOnly()
+    } catch (e) {
+      card.enabled = !val
+      mainStore?.setSnackbar?.({ title: e?.message || 'Failed to update automations', type: 'error' })
+    }
+    return
+  }
   const keys = card?.templateKeys || []
   const groupRows = keys.length
     ? rows.filter(r => keys.includes(r.key))
@@ -857,6 +1017,14 @@ const toggleAutomationGroup = async (card, val) => {
 }
 
 const loadRows = async () => {
+  if (resolvedPatientId.value) {
+    if (activeAutomation.value) {
+      await loadPatientJourneyTemplates(activeAutomation.value.key)
+    } else {
+      rows.splice(0, rows.length)
+    }
+    return
+  }
   try {
     const res = await crmStore.listAutomation(resolvedLeadId.value || undefined)
     const apiItems = Array.isArray(res?.data) ? res.data : []
@@ -868,6 +1036,10 @@ const loadRows = async () => {
 }
 
 const loadGroups = async () => {
+  if (resolvedPatientId.value) {
+    await loadPatientJourneyGroupsOnly()
+    return
+  }
   if (!props.useGroupsApi || (Array.isArray(props.groups) && props.groups.length)) return
   try {
     const res = await crmStore.listAutomationGroups()
@@ -879,6 +1051,12 @@ const loadGroups = async () => {
 }
 
 const refresh = async ({ skipGroups = false } = {}) => {
+  if (resolvedPatientId.value) {
+    const tasks = [loadRows()]
+    if (!skipGroups) tasks.push(loadGroups())
+    await Promise.all(tasks)
+    return
+  }
   const tasks = [loadRows()]
   if (!skipGroups) tasks.push(loadGroups())
   await Promise.all(tasks)
@@ -891,6 +1069,12 @@ onMounted(async () => {
 })
 
 watch(resolvedLeadId, () => {
+  if (resolvedPatientId.value) return
+  clearAutomationSelection()
+  refresh()
+})
+
+watch(resolvedPatientId, () => {
   clearAutomationSelection()
   refresh()
 })
@@ -913,7 +1097,7 @@ const previewItem = ref(null)
 
 const previewRecipient = computed(() => {
   return buildRecipientContext({
-    lead: props.lead || {},
+    lead: previewLeadLike.value,
     many: false,
     fallbackName: '[Patient Name]',
     fallbackEmail: '[Email]',
@@ -921,6 +1105,13 @@ const previewRecipient = computed(() => {
   })
 })
 const openEdit = async (row) => {
+  if (resolvedPatientId.value && row?.sent) {
+    mainStore?.setSnackbar?.({
+      title: 'This automation was already sent and cannot be edited.',
+      type: 'info',
+    })
+    return
+  }
   active.value = row
   show.value = true
   await nextTick()
@@ -953,6 +1144,7 @@ const openEdit = async (row) => {
 }
 
 const confirmDeleteAutomation = (row) => {
+  if (resolvedPatientId.value) return
   if (!row || defaultAutomationKeySet.has(row.key)) return
   deleteAutomationTarget.value = row
   showDeleteAutomation.value = true
@@ -1047,7 +1239,7 @@ const previewSubject = computed(() => {
   const def = resolveDefault(row)
   const rawSubject = row.subject || def.subject || def.name
   return applyCrmPlaceholders(rawSubject, {
-    lead: props.lead || null,
+    lead: previewLeadLike.value || null,
     recipient: previewRecipient.value,
     practiceName: practiceName.value,
     org: resolveOrgDetails(),
@@ -1060,7 +1252,7 @@ const previewHtml = computed(() => {
   const def = resolveDefault(row)
   const rawTemplate = row.template && row.template.trim() ? row.template : def.template || ''
   return applyCrmPlaceholders(rawTemplate, {
-    lead: props.lead || null,
+    lead: previewLeadLike.value || null,
     recipient: previewRecipient.value,
     practiceName: practiceName.value,
     org: resolveOrgDetails(),
@@ -1177,6 +1369,17 @@ const saveContent = async () => {
     }
     emit('update:rows', rows)
     const payload = buildPayload(active.value || {})
+    if (resolvedPatientId.value) {
+      const res = await patientJourneyService.saveAutomationTemplate(payload)
+      if (res?.code !== 0) {
+        mainStore?.setSnackbar?.({ title: res?.message || 'Failed to save automation', type: 'error' })
+        return
+      }
+      emit('save', payload)
+      show.value = false
+      mainStore?.setSnackbar?.({ title: 'Automation saved successfully', type: 'success' })
+      return
+    }
     const res = await crmStore.saveAutomation(payload)
     if (res?.code !== 0) {
       mainStore?.setSnackbar?.({ title: res?.message || 'Failed to save automation', type: 'error' })
@@ -1206,6 +1409,11 @@ const onToggleEnabled = async (row, val) => {
     trigger: row.trigger || def.trigger || undefined,
   })
   try {
+    if (resolvedPatientId.value) {
+      const res = await patientJourneyService.saveAutomationTemplate(payload)
+      if (res?.code !== 0) throw new Error(res?.message || 'Failed to update automation')
+      return
+    }
     await crmStore.saveAutomation(payload)
   } catch (e) {
     row.enabled = !row.enabled
@@ -1222,13 +1430,13 @@ const sendImmediateLeadMail = async (row) => {
     ? row.template
     : (def.template || '')
   const subject = applyCrmPlaceholders(rawSubject, {
-    lead: props.lead || null,
+    lead: previewLeadLike.value || null,
     recipient: previewRecipient.value,
     practiceName: practiceName.value,
     org: resolveOrgDetails(),
   })
   const html = applyCrmPlaceholders(rawTemplate, {
-    lead: props.lead || null,
+    lead: previewLeadLike.value || null,
     recipient: previewRecipient.value,
     practiceName: practiceName.value,
     org: resolveOrgDetails(),
@@ -1244,6 +1452,7 @@ const sendImmediateLeadMail = async (row) => {
 const resendingKey = ref(null)
 
 const handleResend = async (row) => {
+  if (resolvedPatientId.value) return
   if (resendingKey.value) return
   resendingKey.value = row.key
   try {
@@ -1262,6 +1471,7 @@ const handleResend = async (row) => {
 }
 
 const saveTrigger = async () => {
+  if (resolvedPatientId.value) return
   if (!triggerEditingRow.value) return
   try {
     const selectedRow = triggerEditingRow.value
