@@ -2399,6 +2399,8 @@ export const getVideoSource = async (event) => {
     }
   }
 
+  const sourceUnavailableMessage = 'Meta did not return a direct video source. Per Meta Graph API docs, page-owned video source URLs are only returned when the requesting user has a role on the owning Page.'
+
   // Try user token first
   const tokenRow = await MetaUserToken.findOne({ where: { organisationId: orgId } })
   if (tokenRow) {
@@ -2416,7 +2418,7 @@ export const getVideoSource = async (event) => {
     if (!pageToken) continue
     const resp = await fetchVideoFields(pageToken)
     if (resp?.source) return success({ source: resp.source, permalink: resp.permalink_url || null, thumbnail: resp.picture || null })
-    if (resp?.permalink_url) return success({ source: null, permalink: resp.permalink_url, thumbnail: resp.picture || null })
+    if (resp?.permalink_url) return success({ source: null, permalink: resp.permalink_url, thumbnail: resp.picture || null, warning: sourceUnavailableMessage, requiresPageRole: true })
   }
 
   return error(404, 'Video source not available — the video may require additional Meta permissions')
