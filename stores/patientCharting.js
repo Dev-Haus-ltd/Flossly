@@ -1126,7 +1126,10 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
         return res
       } catch (error) {
         this._logError('bookInDiary', error)
-        return null
+        return {
+          code: 1,
+          message: error?.data?.message || error?.message || 'Unable to book appointment.',
+        }
       }
     },
 

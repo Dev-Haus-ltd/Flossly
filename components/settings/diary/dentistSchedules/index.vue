@@ -128,7 +128,21 @@
                       >
                       Schedules
                     </span>
-                    <div>
+                    <div class="d-flex align-center" style="gap: 8px">
+                      <v-btn
+                        size="x-small"
+                        variant="outlined"
+                        color="primary"
+                        class="add-schedule-btn"
+                        :loading="copyingRotaDentistId === dentist.id"
+                        :disabled="copyingRotaDentistId === dentist.id"
+                        @click="copyRotaSchedule(dentist)"
+                      >
+                        <v-icon size="14" class="mr-1">
+                          {{ canImportRotaSchedule ? "mdi-content-copy" : "mdi-lock-outline" }}
+                        </v-icon>
+                        {{ canImportRotaSchedule ? "Import rota" : "Soar required" }}
+                      </v-btn>
                       <v-btn
                         size="x-small"
                         variant="text"
@@ -229,6 +243,7 @@
 import { ref, onMounted, computed, watch } from "vue";
 import { useDiaryStore } from "~/stores/diary";
 import { useScheduleStore } from "~/stores/schedule";
+import { LICENSE_TYPES, getLicenseTypeFromStorage, useMainStore } from "~/stores/index";
 import { useUser } from "~/composables/useUser";
 import ScheduleList from "@/components/schedule/ScheduleList.vue";
 import DentistScheduleForm from "@/components/schedule/DentistScheduleForm.vue";
@@ -246,6 +261,7 @@ const props = defineProps({
 
 const diaryStore = useDiaryStore();
 const scheduleStore = useScheduleStore();
+const mainStore = useMainStore();
 const { user } = useUser();
 
 const dentists = ref([]);
@@ -257,6 +273,7 @@ const showScheduleView = ref(false);
 const editingScheduleId = ref(null);
 const dentistSchedulesMap = ref({});
 const loadingSchedules = ref(new Set());
+const copyingRotaDentistId = ref(null);
 const deleteDialog = ref({
   open: false,
   dentistId: null,
@@ -298,6 +315,8 @@ const dentistStats = computed(() => [
 const organisationId = computed(
   () => user.value?.currentLoggedInOrgId || user.value?.organisationId,
 );
+const licenseType = computed(() => getLicenseTypeFromStorage());
+const canImportRotaSchedule = computed(() => licenseType.value === LICENSE_TYPES.SOAR);
 const schedules = computed(() => scheduleStore.getAllSchedules);
 const isScheduleLoading = computed(() => scheduleStore.getIsLoading);
 
@@ -402,6 +421,37 @@ const createSchedule = (dentist) => {
   selectedDentistId.value = dentist.id;
   editingScheduleId.value = null;
   showScheduleView.value = true;
+};
+
+const copyRotaSchedule = async (dentist) => {
+  if (!dentist?.id) return;
+  if (!canImportRotaSchedule.value) {
+    mainStore?.setSnackbar?.({
+      title: "Rota schedule import is available on the Soar plan.",
+      type: "info",
+    });
+    return;
+  }
+
+  copyingRotaDentistId.value = dentist.id;
+  try {
+    await scheduleStore.copyScheduleFromRota({
+      organisationId: organisationId.value,
+      dentistId: dentist.id,
+    });
+    await loadSchedulesForDentist(dentist.id);
+    mainStore?.setSnackbar?.({
+      title: `Imported rota schedule for ${dentist.name}.`,
+      type: "success",
+    });
+  } catch (err) {
+    mainStore?.setSnackbar?.({
+      title: err?.message || "Unable to import rota schedule.",
+      type: "error",
+    });
+  } finally {
+    copyingRotaDentistId.value = null;
+  }
 };
 
 const editSchedule = (dentist, scheduleId) => {

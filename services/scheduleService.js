@@ -103,5 +103,13 @@ export default {
         .then(resolve)
         .catch(reject)
     })
+  },
+
+  copyScheduleFromRota(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/schedule/copyFromRota', payload)
+        .then(resolve)
+        .catch(reject)
+    })
   }
 }

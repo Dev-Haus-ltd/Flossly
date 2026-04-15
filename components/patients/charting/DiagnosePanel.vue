@@ -49,78 +49,16 @@
             <span class="diag-dot" :style="{ background: rowColor(item) }" />
             <span class="diag-col diag-col--date">{{ formatDate(item.createdAt) }}</span>
             <span class="diag-col diag-col--tooth">
-              <span class="diag-tooth-label">{{ toothLabel(item).primary }}</span>
-              <span v-if="toothLabel(item).alias" class="diag-tooth-alias">{{ toothLabel(item).alias }}</span>
+              <span class="diag-tooth-label">{{ toothLabel(item) }}</span>
             </span>
             <span class="diag-col diag-col--name">{{ item.conditionLabel || item.condition || 'Finding' }}</span>
             <span class="diag-col diag-col--surface">{{ rowScopeLabel(item) }}</span>
             <button class="diag-icon-btn diag-icon-btn--danger" title="Remove" @click.stop="emit('remove', item.id || item._tempId)">
-              <v-icon size="14">mdi-trash-can-outline</v-icon>
+              <img :src="deleteIcon" alt="" class="diag-delete-icon" />
             </button>
           </div>
 
           <div v-if="isExpanded(item)" class="diag-expand">
-            <div class="diag-fields">
-              <div class="diag-field">
-                <span class="diag-field-label">Status</span>
-                <v-select
-                  v-model="draft.status"
-                  :items="diagnosisStatusOptions"
-                  item-title="title"
-                  item-value="value"
-                  variant="solo"
-                  density="compact"
-                  class="diag-input-bordered"
-                  bg-color="white"
-                  flat
-                  hide-details
-                />
-              </div>
-              <div class="diag-field">
-                <span class="diag-field-label">Completed on</span>
-                <v-text-field
-                  v-model="draft.completedOn"
-                  type="date"
-                  variant="solo"
-                  density="compact"
-                  class="diag-input-bordered"
-                  bg-color="white"
-                  flat
-                  hide-details
-                />
-              </div>
-              <div class="diag-field">
-                <span class="diag-field-label">Practitioner</span>
-                <v-select
-                  v-model="draft.practitionerId"
-                  :items="practitioners"
-                  item-title="name"
-                  item-value="id"
-                  variant="solo"
-                  density="compact"
-                  class="diag-input-bordered"
-                  bg-color="white"
-                  flat
-                  hide-details
-                  clearable
-                />
-              </div>
-              <div class="diag-field">
-                <span class="diag-field-label">Invoice desc.</span>
-                <v-text-field
-                  v-model="draft.invoiceDesc"
-                  type="text"
-                  placeholder="Optional description..."
-                  variant="solo"
-                  density="compact"
-                  class="diag-input-bordered"
-                  bg-color="white"
-                  flat
-                  hide-details
-                />
-              </div>
-            </div>
-
             <div class="diag-notes-header">
               <span class="diag-field-label">Notes</span>
               <button
@@ -173,7 +111,8 @@
 <script setup>
 import ChartRichTextEditor from './ChartRichTextEditor.vue'
 import ChartImagesPanel from './ChartImagesPanel.vue'
-import { getToothLabel, CONDITIONS, TEETH_BY_FDI } from './toothData.js'
+import { CONDITIONS, TEETH_BY_FDI } from './toothData.js'
+import deleteIcon from '../../../assets/crm/delete.svg'
 
 const props = defineProps({
   baseItems: { type: Array, default: () => [] },
@@ -188,10 +127,6 @@ const emit = defineEmits(['remove', 'update', 'add-image', 'remove-image', 'save
 const activeTab = ref('findings')
 const expandedRowId = ref(null)
 const imgUploading = ref(false)
-const diagnosisStatusOptions = [
-  { title: 'Existing', value: 'existing' },
-  { title: 'Completed', value: 'completed' },
-]
 const STATUS_ANNOTATION_CODE = '__STATUS_ANNOTATION__'
 
 const toothTypeLabels = {
@@ -210,10 +145,6 @@ const quadrantLabels = {
 
 const draft = reactive({
   id: null,
-  status: 'existing',
-  completedOn: '',
-  practitionerId: null,
-  invoiceDesc: '',
   notes: '',
 })
 
@@ -234,10 +165,6 @@ function isExpanded(item) {
 
 function resetDraft() {
   draft.id = null
-  draft.status = 'existing'
-  draft.completedOn = ''
-  draft.practitionerId = null
-  draft.invoiceDesc = ''
   draft.notes = ''
 }
 
@@ -264,10 +191,6 @@ function toggleTranscribe() {
 
 async function openExpanded(item) {
   draft.id = rowKey(item)
-  draft.status = item.status || 'existing'
-  draft.completedOn = item.completedAt ? new Date(item.completedAt).toISOString().slice(0, 10) : ''
-  draft.practitionerId = item.practitionerId ? Number(item.practitionerId) : null
-  draft.invoiceDesc = item.invoiceDesc || item.conditionLabel || item.condition || ''
   draft.notes = item.notes || ''
   expandedRowId.value = rowKey(item)
 }
@@ -292,29 +215,18 @@ async function toggleExpand(item) {
 
 function saveExpanded() {
   if (!draft.id) return
-  const practitionerName = props.practitioners.find((p) => Number(p.id) === Number(draft.practitionerId))?.name || ''
   emit('update', {
     id: draft.id,
-    status: draft.status,
     notes: draft.notes,
-    practitionerId: draft.practitionerId || null,
-    practitionerName,
-    clinicianName: practitionerName,
-    invoiceDesc: draft.invoiceDesc || '',
-    completedAt: draft.completedOn ? new Date(draft.completedOn).toISOString() : null,
   })
   emit('save-success')
   closeExpanded()
 }
 
 function toothLabel(item) {
-  const base = getToothLabel(item.fdi, props.notation)
-  const meta = TEETH_BY_FDI[item.fdi]
+  const meta = TEETH_BY_FDI[item.fdi] || {}
   const surface = item.surface ? `-${item.surface.charAt(0).toUpperCase()}` : ''
-  return {
-    primary: `${base}${surface}`,
-    alias: meta?.palmer || '',
-  }
+  return `${meta.palmer || item.fdi}${surface}`
 }
 
 function condColor(key) {
@@ -440,7 +352,7 @@ async function onAddImage(payload) {
 
 .diag-row {
   display: grid;
-  grid-template-columns: 32px 14px 150px 80px minmax(180px, 1fr) 110px 34px;
+  grid-template-columns: 32px 14px 150px 92px minmax(180px, 1fr) 110px 34px;
   gap: 8px;
   align-items: center;
   min-height: 44px;
@@ -487,6 +399,12 @@ async function onAddImage(payload) {
   background: #fee2e2;
 }
 
+.diag-delete-icon {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
 .diag-dot {
   width: 10px;
   height: 10px;
@@ -507,7 +425,6 @@ async function onAddImage(payload) {
 .diag-col--tooth {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
   color: #334155;
   font-size: 12px;
   font-weight: 600;
@@ -515,12 +432,6 @@ async function onAddImage(payload) {
 
 .diag-tooth-label {
   color: inherit;
-}
-
-.diag-tooth-alias {
-  color: #94a3b8;
-  font-size: 11px;
-  font-weight: 500;
 }
 
 .diag-col--name {
@@ -534,56 +445,9 @@ async function onAddImage(payload) {
   background: #f8fbff;
 }
 
-.diag-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.diag-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.diag-field--full {
-  grid-column: 1 / -1;
-}
-
-.diag-field span,
 .diag-field-label {
   font-size: 11px;
   color: #6b7280;
-}
-
-.diag-field input,
-.diag-field select,
-.diag-field textarea {
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  background: #fff;
-  padding: 8px 10px;
-  font-size: 13px;
-  color: #334155;
-}
-
-.diag-field input,
-.diag-field select {
-  height: 34px;
-}
-
-.diag-input-bordered :deep(.v-field) {
-  border: 1px solid #dfdfdf !important;
-  border-radius: 8px !important;
-  background: #fff !important;
-  min-height: 40px;
-  box-shadow: none !important;
-}
-
-.diag-input-bordered :deep(.v-field__input) {
-  font-size: 13px;
-  color: #334155;
 }
 
 .diag-notes-header {

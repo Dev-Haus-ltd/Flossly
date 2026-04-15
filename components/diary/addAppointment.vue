@@ -269,13 +269,14 @@ import { formatDateDDMMYYYY, clinicDateToYMD } from "@/lib/dateFormatter";
 import { useOrgStore } from "@/stores/organisation";
 import { useDentistAvailability } from "@/composables/useDentistAvailability";
 import { useUser } from "@/composables/useUser";
+import { useMainStore } from "@/stores/index";
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   initialDate: { type: String, default: "" },
   initialTime: { type: String, default: "" },
   initialDuration: { type: Number, default: 15 },
-  initialPractitioner: { type: String, default: "" },
+  initialPractitioner: { type: [String, Number], default: "" },
   practitionerOptions: { type: Array, default: () => [] },
   patientOptions: { type: Array, default: () => [] },
   preselectedPatientId: { type: [Number, String], default: null },
@@ -319,8 +320,14 @@ const errors = reactive({
 });
 
 const organisationStore = useOrgStore();
+const mainStore = useMainStore();
 const { user } = useUser();
-const { loadDentistSchedules, isTimeSlotAvailable } = useDentistAvailability();
+const {
+  loadDentistSchedules,
+  isTimeSlotAvailable,
+  getAvailableTimeSlots,
+  getAvailabilityMessage,
+} = useDentistAvailability();
 const treatmentOptions = ref([]);
 const exams = computed(() => treatmentOptions.value.map((t) => t.name));
 
@@ -341,7 +348,7 @@ const isEditing = computed(() => !!props.editAppointment?.id);
 const WORK_START = 9;
 const WORK_END = 17;
 const SLOT_MIN = 15;
-const timeOptions = computed(() => {
+const fallbackTimeOptions = computed(() => {
   const dur = Number(duration.value || 15);
   const opts = [];
   const last = WORK_END * 60 - dur;
@@ -351,6 +358,23 @@ const timeOptions = computed(() => {
     opts.push(`${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`);
   }
   return opts;
+});
+const timeOptions = computed(() => {
+  if (date.value && practitioner.value) {
+    return getAvailableTimeSlots(
+      clinicDateToYMD(date.value),
+      Number(duration.value || 15),
+      SLOT_MIN,
+    );
+  }
+  return fallbackTimeOptions.value;
+});
+
+const practitionerLabel = computed(() => {
+  const selected = props.practitionerOptions.find(
+    (option) => String(option.value) === String(practitioner.value),
+  );
+  return selected?.title || "";
 });
 
 const hasPatient = computed(() =>
@@ -367,7 +391,7 @@ const headerText = computed(() => {
   if (date.value) parts.push(formatDateDDMMYYYY(date.value));
   if (time.value) parts.push(time.value);
   if (duration.value) parts.push(`${duration.value} min`);
-  if (practitioner.value) parts.push(practitioner.value);
+  if (practitionerLabel.value) parts.push(practitionerLabel.value);
   return parts.join(" · ") || "Fill in the details below";
 });
 
@@ -525,6 +549,22 @@ watch(duration, (v) => {
 watch(practitioner, (v) => {
   if (v) errors.practitioner = "";
 });
+watch(
+  [date, practitioner, duration, () => props.modelValue],
+  async ([nextDate, nextPractitioner, _nextDuration, open]) => {
+    if (!open) return;
+    const orgId = user.value?.currentLoggedInOrgId || user.value?.organisationId;
+    if (!orgId || !nextDate || !nextPractitioner) return;
+    try {
+      await loadDentistSchedules(orgId, Number(nextPractitioner));
+      if (time.value && !timeOptions.value.includes(time.value)) {
+        time.value = timeOptions.value[0] || "";
+      }
+    } catch (error) {
+      console.error("Could not load dentist schedule", error);
+    }
+  },
+);
 
 watch(
   () => props.modelValue,
@@ -555,7 +595,7 @@ watch(
       status.value = a.status || "Pending";
       exam.value = a.treatmentName || a.exam || "";
       practitioner.value =
-        a.practitioner || a.practitionerName || props.initialPractitioner;
+        a.practitioner || a.practitionerId || props.initialPractitioner;
       selectedPatientId.value =
         a.patientId || props.preselectedPatientId || null;
       notes.value = a.notes || "";
@@ -609,25 +649,29 @@ const validate = () => {
 // ── Save (Schedule directly) ──────────────────────────────────────────────────
 const onSave = async () => {
   if (!validate()) return;
-  
-  // Validate that appointment time is within dentist's working hours
+
   const orgId = user.value?.currentLoggedInOrgId || user.value?.organisationId;
   if (orgId && practitioner.value && date.value && time.value) {
     try {
-      // Load dentist schedules to validate
-      // Note: We need dentistId but only have name. In real implementation,
-      // this should be passed from the parent component or stored
-      const schedulesList = await loadDentistSchedules(orgId, 0); // This would need actual dentist ID
-      
-      // For now, we'll show a warning but still allow save
-      // In production, this should be properly validated from the calendar context
-      console.warn("Note: Appointment time validation requires dentist ID context");
+      await loadDentistSchedules(orgId, Number(practitioner.value));
+      const bookingDate = clinicDateToYMD(date.value);
+      const slotOk = isTimeSlotAvailable(
+        bookingDate,
+        time.value,
+        Number(duration.value || 15),
+      );
+      if (!slotOk) {
+        errors.time = getAvailabilityMessage(bookingDate, {
+          name: practitionerLabel.value || "This practitioner",
+        });
+        mainStore?.setSnackbar?.({ title: errors.time, type: "error" });
+        return;
+      }
     } catch (error) {
       console.warn("Could not validate availability:", error);
-      // Continue with save even if validation fails
     }
   }
-  
+
   isSaving.value = true;
   const selectedTreatment = treatmentOptions.value.find(
     (t) => t.name.toLowerCase() === (exam.value || "").toLowerCase(),
@@ -644,6 +688,8 @@ const onSave = async () => {
     treatmentName: selectedTreatment?.name || exam.value || null,
     status: status.value,
     practitioner: practitioner.value,
+    practitionerName: practitionerLabel.value || null,
+    dentistId: practitioner.value,
     notes: notes.value,
   });
   emit("update:modelValue", false);

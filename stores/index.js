@@ -9,7 +9,7 @@ import academyIcon from '@/assets/icons/mainDrawerIcons/academy.svg'
 import settingsIcon from '@/assets/icons/mainDrawerIcons/settings.svg'
 import { DEVELOPER_EMAILS } from '@/composables/useDeveloperAccess';
 
-const LICENSE_TYPES = {
+export const LICENSE_TYPES = {
   SYSTEM: "System",
   TRIAL: "Trial",
   DRIFT: "Drift",
@@ -46,7 +46,7 @@ const LICENSE_FEATURES = {
   ]),
 };
 
-const getLicenseTypeFromStorage = () => {
+export const getLicenseTypeFromStorage = () => {
   if (typeof localStorage === "undefined") {
     return LICENSE_TYPES.TRIAL;
   }

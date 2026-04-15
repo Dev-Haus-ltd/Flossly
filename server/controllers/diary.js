@@ -24,6 +24,7 @@ import os from "os";
 import { uploadTempFile } from "../utils/storage";
 import { parseJsonBody } from "../utils/body";
 import { DEFAULT_ORGANISATION_TREATMENTS } from "~/shared/defaults/charting/treatmentDefaults.js";
+import { validateDentistScheduleWindow } from "~/server/utils/dentistScheduleAvailability.js";
 
 const pad2 = (n) => String(n).padStart(2, "0");
 const resolveTimeMode = () => {
@@ -785,14 +786,13 @@ export const createAppointment = async (event) => {
     const end = new Date(start);
     end.setMinutes(end.getMinutes() + Number(payload.duration || 10));
 
-    // Working hours validation (09:00–17:00 local)
-    const workStart = new Date(start);
-    setClinicHours(workStart, 9, 0, 0, 0);
-    const workEnd = new Date(start);
-    setClinicHours(workEnd, 17, 0, 0, 0);
-    if (start < workStart)
-      return error(400, "Appointment must start at or after 09:00");
-    if (end > workEnd) return error(400, "Appointment must end by 17:00");
+    const scheduleValidation = await validateDentistScheduleWindow({
+      organisationId: Number(orgId),
+      dentistId: Number(payload.dentistId),
+      start,
+      end,
+    });
+    if (!scheduleValidation.ok) return error(400, scheduleValidation.message);
 
     // Overlap validation for dentist and patient
     const overlapWindow = {
@@ -1616,13 +1616,13 @@ export const appointmentConflictCheck = async (event) => {
     )
       return error(400, "Invalid date/time");
     if (end <= start) return error(400, "Invalid booking time range");
-    const workStart = new Date(start);
-    setClinicHours(workStart, 9, 0, 0, 0);
-    const workEnd = new Date(start);
-    setClinicHours(workEnd, 17, 0, 0, 0);
-    if (start < workStart)
-      return error(400, "Appointment must start at or after 09:00");
-    if (end > workEnd) return error(400, "Appointment must end by 17:00");
+    const scheduleValidation = await validateDentistScheduleWindow({
+      organisationId: Number(orgId),
+      dentistId: Number(dentistId),
+      start,
+      end,
+    });
+    if (!scheduleValidation.ok) return error(400, scheduleValidation.message);
     const where = {
       organisationId: Number(orgId),
       status: { [Op.ne]: "Cancelled" },
@@ -1719,13 +1719,13 @@ export const bookFromTreatmentPlan = async (event) => {
     ) {
       return error(400, "Invalid booking time range");
     }
-    const workStart = new Date(start);
-    setClinicHours(workStart, 9, 0, 0, 0);
-    const workEnd = new Date(start);
-    setClinicHours(workEnd, 17, 0, 0, 0);
-    if (start < workStart)
-      return error(400, "Appointment must start at or after 09:00");
-    if (end > workEnd) return error(400, "Appointment must end by 17:00");
+    const scheduleValidation = await validateDentistScheduleWindow({
+      organisationId: Number(orgId),
+      dentistId: Number(dentistId),
+      start,
+      end,
+    });
+    if (!scheduleValidation.ok) return error(400, scheduleValidation.message);
 
     const overlapWhere = {
       organisationId: Number(orgId),
@@ -1860,14 +1860,13 @@ export const updateAppointment = async (event) => {
     const end =
       row.endTime instanceof Date ? row.endTime : new Date(row.endTime);
     if (start && end && !isNaN(start.getTime()) && !isNaN(end.getTime())) {
-      // Working hours (09:00–17:00)
-      const workStart = new Date(start);
-      setClinicHours(workStart, 9, 0, 0, 0);
-      const workEnd = new Date(start);
-      setClinicHours(workEnd, 17, 0, 0, 0);
-      if (start < workStart)
-        return error(400, "Appointment must start at or after 09:00");
-      if (end > workEnd) return error(400, "Appointment must end by 17:00");
+      const scheduleValidation = await validateDentistScheduleWindow({
+        organisationId: Number(orgId),
+        dentistId: Number(row.dentistId),
+        start,
+        end,
+      });
+      if (!scheduleValidation.ok) return error(400, scheduleValidation.message);
 
       // Overlaps (exclude self)
       const orgClause = { organisationId: Number(orgId) };

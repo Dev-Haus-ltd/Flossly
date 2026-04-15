@@ -46,40 +46,111 @@
           </v-col>
         </v-row>
 
-        <div class="d-flex justify-space-between align-center mb-4 flex-wrap gap-3">
-          <div class="d-flex align-center" style="gap: 12px">
+        <div class="appointments-toolbar mb-4">
+          <div class="appointments-toolbar__left">
             <v-text-field
               v-model="appointmentSearch"
-              placeholder="Search appointments..."
+              placeholder="Search appointments"
               append-inner-icon="mdi-magnify"
               variant="solo"
               density="compact"
               hide-details
               flat
-              class="custom-search"
-              style="width: 220px"
+              class="custom-search appointments-search"
             />
-            <v-select
-              v-model="appointmentStatus"
-              :items="statusOptions"
-              item-title="label"
-              item-value="value"
-              variant="solo"
-              density="compact"
-              hide-details
-              class="input-bordered"
-              bg-color="white"
-              style="width: 180px"
-            />
+            <v-menu
+              v-model="appointmentFilterMenu"
+              :close-on-content-click="false"
+              transition="fade-transition"
+              offset-y
+            >
+              <template #activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  variant="flat"
+                  density="compact"
+                  class="appointments-filter-btn"
+                >
+                  <span>Filter</span>
+                  <v-icon class="ml-2" size="18">mdi-filter-outline</v-icon>
+                </v-btn>
+              </template>
+              <v-card class="appointments-filter-card">
+                <div class="d-flex align-center justify-space-between mb-3">
+                  <div class="text-subtitle-2 font-weight-medium">Filter appointments</div>
+                  <v-btn variant="text" color="primary" density="comfortable" @click="clearAppointmentFilters">
+                    Clear
+                  </v-btn>
+                </div>
+                <div class="text-caption text-medium-emphasis mb-2">Status</div>
+                <v-select
+                  v-model="appointmentStatus"
+                  :items="statusOptions"
+                  item-title="label"
+                  item-value="value"
+                  variant="solo"
+                  flat
+                  density="compact"
+                  hide-details
+                  class="input-bordered mb-3"
+                />
+                <div class="text-caption text-medium-emphasis mb-2">Practitioner</div>
+                <v-select
+                  v-model="appointmentPractitionerId"
+                  :items="practitionerFilterOptions"
+                  item-title="title"
+                  item-value="value"
+                  variant="solo"
+                  flat
+                  density="compact"
+                  hide-details
+                  class="input-bordered mb-3"
+                />
+                <div class="text-caption text-medium-emphasis mb-2">Date</div>
+                <v-text-field
+                  v-model="appointmentDate"
+                  type="date"
+                  variant="solo"
+                  flat
+                  density="compact"
+                  hide-details
+                  class="input-bordered"
+                />
+              </v-card>
+            </v-menu>
           </div>
-          <div class="d-flex align-center" style="gap: 12px">
+          <div class="appointments-toolbar__right">
+            <div class="text-body-2 text-medium-emphasis">{{ appointmentSummary }}</div>
             <v-btn color="primary" variant="flat" rounded="lg" class="action-btn" prepend-icon="mdi-plus-circle-outline" @click="openNewAppointment">
               Add Appointment
             </v-btn>
           </div>
         </div>
 
+        <div v-if="activeAppointmentFilterChips.length" class="appointments-filter-chips mb-4">
+          <v-chip
+            v-for="chip in activeAppointmentFilterChips"
+            :key="chip.key"
+            size="small"
+            color="primary"
+            variant="elevated"
+            closable
+            @click:close="removeAppointmentFilter(chip.key)"
+          >
+            {{ chip.label }}
+          </v-chip>
+          <v-chip size="small" variant="text" color="secondary" @click="clearAppointmentFilters">
+            Clear filters
+          </v-chip>
+        </div>
+
         <v-card class="with-border rounded-lg elevation-0">
+          <div class="appointments-table-head">
+            <div>
+              <div class="text-subtitle-2 font-weight-medium">Appointment list</div>
+              <div class="text-caption text-medium-emphasis">Patient diary bookings and treatment-linked visits</div>
+            </div>
+          </div>
           <v-data-table-server
             :items="pagedAppointments"
             :items-length="appointmentTotal"
@@ -207,6 +278,9 @@ const appointmentOptions = ref({ page: 1, itemsPerPage: 10 })
 const appointmentTotal = ref(0)
 const appointmentSearch = ref('')
 const appointmentStatus = ref('all')
+const appointmentPractitionerId = ref('all')
+const appointmentDate = ref('')
+const appointmentFilterMenu = ref(false)
 const searchTimer = ref(null)
 const showAppointmentDrawer = ref(false)
 const editAppointment = ref(null)
@@ -218,6 +292,10 @@ const statusOptions = [
   { label: 'Arrived', value: 'Arrived' },
   { label: 'Cancelled', value: 'Cancelled' },
 ]
+const practitionerFilterOptions = computed(() => ([
+  { title: 'All practitioners', value: 'all' },
+  ...practitionerOptions.value,
+]))
 
 const appointmentHeaders = [
   { title: 'When', key: 'when', sortable: false },
@@ -250,6 +328,25 @@ const appointmentStatCards = computed(() => [
   { label: 'Pending', value: appointmentStats.value.pending, icon: 'https://cdn.lordicon.com/excswhey.json' },
   { label: 'Cancelled', value: appointmentStats.value.cancelled, icon: 'https://cdn.lordicon.com/tzynxkwl.json' },
 ])
+const appointmentSummary = computed(() => {
+  if (!appointmentTotal.value) return 'No appointments found'
+  return `${appointmentTotal.value} appointment${appointmentTotal.value === 1 ? '' : 's'} found`
+})
+const activeAppointmentFilterChips = computed(() => {
+  const chips = []
+  if (appointmentStatus.value !== 'all') {
+    const status = statusOptions.find((item) => item.value === appointmentStatus.value)
+    chips.push({ key: 'status', label: `Status: ${status?.label || appointmentStatus.value}` })
+  }
+  if (appointmentPractitionerId.value !== 'all') {
+    const practitioner = practitionerOptions.value.find((item) => String(item.value) === String(appointmentPractitionerId.value))
+    chips.push({ key: 'practitioner', label: `Practitioner: ${practitioner?.title || appointmentPractitionerId.value}` })
+  }
+  if (appointmentDate.value) {
+    chips.push({ key: 'date', label: `Date: ${appointmentDate.value}` })
+  }
+  return chips
+})
 
 const statusColor = (status) => {
   switch ((status || '').toLowerCase()) {
@@ -308,6 +405,8 @@ const fetchAppointments = async () => {
       patientId: route.params.id,
       search: appointmentSearch.value || undefined,
       status: appointmentStatus.value !== 'all' ? appointmentStatus.value : undefined,
+      dentistId: appointmentPractitionerId.value !== 'all' ? appointmentPractitionerId.value : undefined,
+      date: appointmentDate.value || undefined,
     }
     const res = await store.listAppointments(params)
     const rows = res?.data || []
@@ -330,7 +429,21 @@ const onAppointmentOptions = (opts) => {
   appointmentOptions.value = { ...appointmentOptions.value, ...opts }
 }
 
+const clearAppointmentFilters = () => {
+  appointmentStatus.value = 'all'
+  appointmentPractitionerId.value = 'all'
+  appointmentDate.value = ''
+}
+
+const removeAppointmentFilter = (key) => {
+  if (key === 'status') appointmentStatus.value = 'all'
+  if (key === 'practitioner') appointmentPractitionerId.value = 'all'
+  if (key === 'date') appointmentDate.value = ''
+}
+
 watch(appointmentStatus, () => { fetchAppointments() })
+watch(appointmentPractitionerId, () => { fetchAppointments() })
+watch(appointmentDate, () => { fetchAppointments() })
 watch(activeTab, (val) => {
   if (val === 'appointments') {
     fetchPractitioners()
@@ -442,6 +555,48 @@ const handleAppointmentSave = async (payload) => {
   height: 4px;
 }
 .with-border { border:1px solid #e5e7eb; }
+.appointments-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.appointments-toolbar__left,
+.appointments-toolbar__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.appointments-search {
+  width: 240px;
+}
+.appointments-filter-btn {
+  height: 40px;
+  border-radius: 8px;
+  text-transform: none;
+  background: #fafafa !important;
+  color: #4b5563;
+  box-shadow: none;
+}
+.appointments-filter-card {
+  min-width: 320px;
+  border-radius: 14px;
+  padding: 16px;
+}
+.appointments-filter-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.appointments-table-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 0;
+}
 .automation-data-table :deep(thead th) { background:#f8f9fa; font-weight:600 !important; font-size:12px !important; }
 .automation-data-table :deep(tbody td) { font-size:14px; }
 .full-width-table :deep(.v-table__wrapper) { width: 100%; }
@@ -459,4 +614,13 @@ const handleAppointmentSave = async (payload) => {
 .custom-search { height: 40px; border-radius: 8px; font-size: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
 .input-bordered :deep(.v-field) { border: 1px solid #dfdfdf !important; border-radius: 8px !important; background: #fff !important; min-height: 44px; font-size: 14px; }
 .action-btn { height: 40px; text-transform: none; font-weight: 500; font-size: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+@media (max-width: 960px) {
+  .appointments-toolbar__left,
+  .appointments-toolbar__right {
+    width: 100%;
+  }
+  .appointments-search {
+    width: 100%;
+  }
+}
 </style>

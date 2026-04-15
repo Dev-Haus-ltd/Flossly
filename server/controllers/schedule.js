@@ -1,5 +1,6 @@
 import { Op } from 'sequelize'
 import { DentistSchedule, DentistScheduleDay, DentistScheduleBreak } from '~/server/models/schedule'
+import { Rota, RotaShift } from '~/server/models'
 import { success, error } from '~/server/utils/response'
 
 // Time validation helper
@@ -12,6 +13,91 @@ const isValidTime = (time) => {
 const timeToMinutes = (time) => {
   const [hours, minutes] = time.split(':').map(Number)
   return (hours * 60) + (minutes || 0)
+}
+
+const toTimeString = (value) => {
+  const date = value instanceof Date ? value : new Date(value)
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+const weekdayFromDate = (value) => {
+  const date = value instanceof Date ? value : new Date(value)
+  const jsDay = date.getDay()
+  return jsDay === 0 ? 6 : jsDay - 1
+}
+
+const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+const buildWeekDaysFromRota = (shifts = []) => {
+  const grouped = new Map()
+  shifts.forEach((shift) => {
+    const shiftStart = new Date(shift.startDate)
+    const shiftEnd = new Date(shift.endDate)
+    if (Number.isNaN(shiftStart.getTime()) || Number.isNaN(shiftEnd.getTime()) || shiftEnd <= shiftStart) return
+    const dayOfWeek = weekdayFromDate(shiftStart)
+    if (!grouped.has(dayOfWeek)) {
+      grouped.set(dayOfWeek, {
+        startMinutes: timeToMinutes(toTimeString(shiftStart)),
+        endMinutes: timeToMinutes(toTimeString(shiftEnd)),
+        breakMinutes: Number(shift.breakTime || 0),
+      })
+      return
+    }
+    const bucket = grouped.get(dayOfWeek)
+    bucket.startMinutes = Math.min(bucket.startMinutes, timeToMinutes(toTimeString(shiftStart)))
+    bucket.endMinutes = Math.max(bucket.endMinutes, timeToMinutes(toTimeString(shiftEnd)))
+    bucket.breakMinutes = Math.max(bucket.breakMinutes, Number(shift.breakTime || 0))
+  })
+
+  return DAY_NAMES.map((dayName, dayOfWeek) => {
+    const bucket = grouped.get(dayOfWeek)
+    if (!bucket) {
+      return {
+        dayOfWeek,
+        dayName,
+        isWorkingDay: false,
+        startTime: null,
+        endTime: null,
+        breaks: [],
+      }
+    }
+    const startHours = String(Math.floor(bucket.startMinutes / 60)).padStart(2, '0')
+    const startMinutes = String(bucket.startMinutes % 60).padStart(2, '0')
+    const endHours = String(Math.floor(bucket.endMinutes / 60)).padStart(2, '0')
+    const endMinutes = String(bucket.endMinutes % 60).padStart(2, '0')
+    const breaks = []
+
+    if (bucket.breakMinutes > 0 && bucket.endMinutes - bucket.startMinutes > bucket.breakMinutes) {
+      const centeredStart = bucket.startMinutes + Math.floor((bucket.endMinutes - bucket.startMinutes - bucket.breakMinutes) / 2)
+      const centeredEnd = centeredStart + bucket.breakMinutes
+      breaks.push({
+        breakName: 'Break',
+        startTime: `${String(Math.floor(centeredStart / 60)).padStart(2, '0')}:${String(centeredStart % 60).padStart(2, '0')}`,
+        endTime: `${String(Math.floor(centeredEnd / 60)).padStart(2, '0')}:${String(centeredEnd % 60).padStart(2, '0')}`,
+      })
+    }
+
+    return {
+      dayOfWeek,
+      dayName,
+      isWorkingDay: true,
+      startTime: `${startHours}:${startMinutes}`,
+      endTime: `${endHours}:${endMinutes}`,
+      breaks,
+    }
+  })
+}
+
+const fetchCompleteSchedule = async (scheduleId) => {
+  return DentistSchedule.findByPk(scheduleId, {
+    include: [
+      {
+        association: 'days',
+        include: [{ association: 'breaks', order: [['order', 'ASC']] }],
+        order: [['order', 'ASC']],
+      },
+    ],
+  })
 }
 
 // List all schedules for a dentist
@@ -196,22 +282,113 @@ export const createSchedule = async (event) => {
     }
 
     // Fetch complete schedule with relations
-    const completeSchedule = await DentistSchedule.findByPk(schedule.id, {
-      include: [
-        {
-          association: 'days',
-          include: [
-            { association: 'breaks', order: [['order', 'ASC']] }
-          ],
-          order: [['order', 'ASC']]
-        }
-      ]
-    })
+    const completeSchedule = await fetchCompleteSchedule(schedule.id)
 
     return success(completeSchedule)
   } catch (err) {
     console.error('Create schedule error:', err)
     return error(400, err.message || 'Failed to create schedule')
+  }
+}
+
+export const copyScheduleFromRota = async (event) => {
+  try {
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? JSON.parse(body) : body
+    const organisationId = Number(payload?.organisationId || event.context.user?.orgId || 0)
+    const dentistId = Number(payload?.dentistId || 0)
+
+    if (!organisationId || !dentistId) {
+      return error(400, 'Organisation ID and dentist ID are required')
+    }
+
+    const seedShift = await RotaShift.findOne({
+      where: {
+        isDeleted: false,
+        [Op.or]: [{ dentistId }, { userId: dentistId }],
+      },
+      include: [{
+        model: Rota,
+        as: 'rota',
+        where: { organisationId },
+        attributes: ['id', 'name', 'startDate', 'endDate'],
+      }],
+      order: [['startDate', 'DESC'], ['createdAt', 'DESC']],
+    })
+
+    if (!seedShift?.rotaId) {
+      return error(404, 'No rota shifts were found for this practitioner')
+    }
+
+    const rotaShifts = await RotaShift.findAll({
+      where: {
+        rotaId: Number(seedShift.rotaId),
+        isDeleted: false,
+        [Op.or]: [{ dentistId }, { userId: dentistId }],
+      },
+      order: [['startDate', 'ASC'], ['endDate', 'ASC']],
+    })
+
+    if (!rotaShifts.length) {
+      return error(404, 'No rota shifts were found for this practitioner')
+    }
+
+    const weekDays = buildWeekDaysFromRota(rotaShifts)
+    const hasWorkingDay = weekDays.some((day) => day.isWorkingDay)
+    if (!hasWorkingDay) {
+      return error(400, 'The selected rota does not contain usable working hours')
+    }
+
+    await DentistSchedule.update(
+      { isActive: false },
+      {
+        where: {
+          organisationId,
+          dentistId,
+          isActive: true,
+        },
+      },
+    )
+
+    const rotaName = seedShift.rota?.name || 'Rota'
+    const schedule = await DentistSchedule.create({
+      organisationId,
+      dentistId,
+      scheduleName: `Imported from ${rotaName}`,
+      description: `Imported from rota ${rotaName}`,
+      startDate: seedShift.rota?.startDate || new Date(),
+      endDate: seedShift.rota?.endDate || null,
+      repeatPattern: 'weekly',
+      isActive: true,
+    })
+
+    for (const day of weekDays) {
+      const scheduleDay = await DentistScheduleDay.create({
+        scheduleId: schedule.id,
+        dayOfWeek: day.dayOfWeek,
+        dayName: day.dayName,
+        isWorkingDay: day.isWorkingDay,
+        startTime: day.isWorkingDay ? day.startTime : null,
+        endTime: day.isWorkingDay ? day.endTime : null,
+        order: day.dayOfWeek,
+      })
+
+      for (let index = 0; index < day.breaks.length; index += 1) {
+        const breakItem = day.breaks[index]
+        await DentistScheduleBreak.create({
+          scheduleDayId: scheduleDay.id,
+          breakName: breakItem.breakName || 'Break',
+          startTime: breakItem.startTime,
+          endTime: breakItem.endTime,
+          order: index,
+        })
+      }
+    }
+
+    return success(await fetchCompleteSchedule(schedule.id))
+  } catch (err) {
+    console.error('Copy schedule from rota error:', err)
+    return error(500, err.message || 'Failed to import rota schedule')
   }
 }
 

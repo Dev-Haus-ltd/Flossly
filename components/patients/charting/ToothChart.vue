@@ -93,25 +93,37 @@
               v-for="fdi in (row.arch === 'upper' ? UPPER_RIGHT : LOWER_RIGHT)"
               :key="`${row.id}-r-${fdi}`"
               class="tooth-cell"
-              :class="{ 'tooth-cell--inactive': !isRowInteractive(row.id) }"
+              :class="{ 'tooth-cell--inactive': !isRowInteractive(row.id), 'tooth-cell--profile': usesProfileRow(row.id) }"
               @mouseenter="onToothMouseEnter(fdi, $event)"
               @mouseleave="onToothMouseLeave"
               @click.capture="onToothCellClick(row.id, fdi, $event)"
             >
+              <ToothProfile
+                v-if="usesProfileRow(row.id) && hasProfileAsset(fdi)"
+                :fdi="fdi"
+                :orientation="row.arch"
+                :tooth="getDisplayTooth(row.id, fdi)"
+                :is-selected="selectedToothFdi === fdi"
+                :label="TEETH_BY_FDI[fdi]?.palmer || String(fdi)"
+              />
               <Tooth
+                v-else
                 :fdi="fdi"
                 :tooth="getTooth(fdi)"
                 :mesial-right="true"
                 :is-selected="selectedToothFdi === fdi"
                 :active-condition="isRowInteractive(row.id) ? activeCondition : null"
                 :is-bridge-pending="bridgeSelectMode && bridgeStartFdi === fdi"
-                :size="52"
+                :size="usesProfileRow(row.id) ? 60 : 52"
                 @surface-click="onSurfaceClickRow(row.id, $event)"
                 @tooth-click="onToothClickRow(row.id, $event)"
               />
-              <div v-if="getMarker(row.id, fdi)" class="tooth-marker" :class="`tooth-marker--${getMarker(row.id, fdi).type}`">
-                <span v-if="getMarker(row.id, fdi).type === 'text'">{{ getMarker(row.id, fdi).text }}</span>
+              <div v-if="markerByRow[row.id]?.[fdi]" class="tooth-marker" :class="`tooth-marker--${markerByRow[row.id][fdi].type}`">
+                <span v-if="markerByRow[row.id][fdi].type === 'text'">{{ markerByRow[row.id][fdi].text }}</span>
                 <span v-else class="tooth-marker-line" />
+                <span v-if="markerByRow[row.id][fdi].treatmentCount" class="tooth-marker-treatment-badge">
+                  {{ markerByRow[row.id][fdi].treatmentCount > 1 ? `T${markerByRow[row.id][fdi].treatmentCount}` : 'T' }}
+                </span>
               </div>
             </div>
           </div>
@@ -121,25 +133,37 @@
               v-for="fdi in (row.arch === 'upper' ? UPPER_LEFT : LOWER_LEFT)"
               :key="`${row.id}-l-${fdi}`"
               class="tooth-cell"
-              :class="{ 'tooth-cell--inactive': !isRowInteractive(row.id) }"
+              :class="{ 'tooth-cell--inactive': !isRowInteractive(row.id), 'tooth-cell--profile': usesProfileRow(row.id) }"
               @mouseenter="onToothMouseEnter(fdi, $event)"
               @mouseleave="onToothMouseLeave"
               @click.capture="onToothCellClick(row.id, fdi, $event)"
             >
+              <ToothProfile
+                v-if="usesProfileRow(row.id) && hasProfileAsset(fdi)"
+                :fdi="fdi"
+                :orientation="row.arch"
+                :tooth="getDisplayTooth(row.id, fdi)"
+                :is-selected="selectedToothFdi === fdi"
+                :label="TEETH_BY_FDI[fdi]?.palmer || String(fdi)"
+              />
               <Tooth
+                v-else
                 :fdi="fdi"
                 :tooth="getTooth(fdi)"
                 :mesial-right="false"
                 :is-selected="selectedToothFdi === fdi"
                 :active-condition="isRowInteractive(row.id) ? activeCondition : null"
                 :is-bridge-pending="bridgeSelectMode && bridgeStartFdi === fdi"
-                :size="52"
+                :size="usesProfileRow(row.id) ? 60 : 52"
                 @surface-click="onSurfaceClickRow(row.id, $event)"
                 @tooth-click="onToothClickRow(row.id, $event)"
               />
-              <div v-if="getMarker(row.id, fdi)" class="tooth-marker" :class="`tooth-marker--${getMarker(row.id, fdi).type}`">
-                <span v-if="getMarker(row.id, fdi).type === 'text'">{{ getMarker(row.id, fdi).text }}</span>
+              <div v-if="markerByRow[row.id]?.[fdi]" class="tooth-marker" :class="`tooth-marker--${markerByRow[row.id][fdi].type}`">
+                <span v-if="markerByRow[row.id][fdi].type === 'text'">{{ markerByRow[row.id][fdi].text }}</span>
                 <span v-else class="tooth-marker-line" />
+                <span v-if="markerByRow[row.id][fdi].treatmentCount" class="tooth-marker-treatment-badge">
+                  {{ markerByRow[row.id][fdi].treatmentCount > 1 ? `T${markerByRow[row.id][fdi].treatmentCount}` : 'T' }}
+                </span>
               </div>
             </div>
           </div>
@@ -172,6 +196,7 @@
 
 <script setup>
 import Tooth from './Tooth.vue'
+import ToothProfile from './ToothProfile.vue'
 import {
   TEETH_BY_FDI, createDefaultTooth, TOOTH_STATUSES,
   DECIDUOUS_UPPER_RIGHT, DECIDUOUS_UPPER_LEFT, DECIDUOUS_LOWER_RIGHT, DECIDUOUS_LOWER_LEFT,
@@ -193,6 +218,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['surface-click', 'tooth-click', 'tooth-status-change', 'tooth-diagnosis-change'])
+const STATUS_ANNOTATION_CODE = '__STATUS_ANNOTATION__'
+const DIAGNOSIS_ANNOTATION_CODE = '__DIAGNOSIS_ANNOTATION__'
 
 const PERM_UPPER_RIGHT = [18, 17, 16, 15, 14, 13, 12, 11]
 const PERM_UPPER_LEFT  = [21, 22, 23, 24, 25, 26, 27, 28]
@@ -226,6 +253,8 @@ const DIAGNOSIS_OPTIONS = [
   { value: 'impacted', label: 'Impacted' },
   { value: 'mobile', label: 'Mobile' },
 ]
+const STATUS_LABELS = Object.fromEntries(STATUS_OPTIONS.map((opt) => [opt.value, opt.label]))
+const DIAGNOSIS_LABELS = Object.fromEntries(DIAGNOSIS_OPTIONS.map((opt) => [opt.value, opt.label]))
 
 const statusPopupEl = ref(null)
 const statusPopup = reactive({
@@ -254,23 +283,51 @@ function getTooth(fdi) {
   return props.chart[fdi] || createDefaultTooth(fdi)
 }
 
+function getDisplayTooth(rowId, fdi) {
+  const tooth = getTooth(fdi)
+  if (!usesProfileRow(rowId)) return tooth
+  return {
+    ...tooth,
+    surfaces: {
+      top: null,
+      left: null,
+      center: null,
+      right: null,
+      bottom: null,
+    },
+    toothCondition: null,
+    toothConditionStatus: null,
+    bridgeStart: false,
+    bridgeEnd: false,
+    bridgePontic: false,
+    implant: false,
+    missing: false,
+  }
+}
+
 function toothNumber(fdi) {
   const p = TEETH_BY_FDI[fdi]?.palmer
   return p ? p.slice(2) : ''
+}
+
+function usesProfileRow(rowId) {
+  const row = ROWS.find((r) => r.id === rowId)
+  return !!row && row.layer === 'plan'
+}
+
+function hasProfileAsset(fdi) {
+  return Number.isFinite(Number(fdi))
 }
 
 // Fix #3 — 'both' scope previously only allowed plan rows to be interactive, silently swallowing
 // base row clicks with a confusing hint message. Now both layers are fully interactive in 'both' mode.
 function isRowInteractive(rowId) {
   const row = ROWS.find((r) => r.id === rowId)
-  if (!row) return false
-  if (props.chartScope === 'both') return true
-  return props.chartScope === row.layer
+  return !!row && row.layer === 'base'
 }
 
 function isRowDimmed(rowId) {
-  if (props.chartScope === 'both') return false
-  return !isRowInteractive(rowId)
+  return false
 }
 
 function targetRowForSelection(rowId) {
@@ -294,14 +351,38 @@ function getAnnotation(rowId, fdi) {
   return { status: '', diagnosis: '' }
 }
 
-function getMarker(rowId, fdi) {
+function buildMarker(rowId, fdi) {
+  const row = ROWS.find((r) => r.id === rowId)
+  if (!row || row.layer !== 'plan') return null
   const a = getAnnotation(rowId, fdi)
+  const treatmentCount = usesProfileRow(rowId) ? 0 : getVisibleTreatmentItems(fdi).length
   if (a.diagnosis) {
     const abbr = getDiagnosisAbbr(a.diagnosis)
-    if (abbr) return { type: 'text', text: abbr }
+    if (abbr) return { type: 'text', text: abbr, treatmentCount }
   }
-  return getStatusMarker(a.status)
+  const statusMarker = getStatusMarker(a.status)
+  if (statusMarker) return { ...statusMarker, treatmentCount }
+  if (treatmentCount) return { type: 'text', text: treatmentCount > 1 ? `T${treatmentCount}` : 'T', treatmentCount: 0 }
+  return null
 }
+
+const markerByRow = computed(() =>
+  Object.fromEntries(
+    ROWS.map((row) => {
+      const teeth = row.arch === 'upper'
+        ? [...UPPER_RIGHT.value, ...UPPER_LEFT.value]
+        : [...LOWER_RIGHT.value, ...LOWER_LEFT.value]
+      return [
+        row.id,
+        Object.fromEntries(
+          teeth
+            .map((fdi) => [fdi, buildMarker(row.id, fdi)])
+            .filter(([, marker]) => marker)
+        ),
+      ]
+    })
+  )
+)
 
 // Hover tooltip state
 const hoverTooltip = reactive({ visible: false, fdi: null, label: '', lines: [], x: 0, y: 0 })
@@ -313,14 +394,57 @@ const CONDITION_COLORS = {
   scheduled: '#10b981',
   completed: '#22c55e',
 }
+const ANNOTATION_LINE_COLORS = {
+  status: '#64748b',
+  diagnosis: '#0f172a',
+}
+const showTreatmentInChart = computed(() => props.chartScope !== 'base')
+const visibleTreatmentItems = computed(() =>
+  !showTreatmentInChart.value
+    ? []
+    :
+  (props.treatmentItems || []).filter((item) => {
+    const code = String(item?.treatmentCode || '')
+    return code !== STATUS_ANNOTATION_CODE && code !== DIAGNOSIS_ANNOTATION_CODE
+  })
+)
+
+function baseRowForFdi(fdi) {
+  return String(fdi).startsWith('1') || String(fdi).startsWith('2') || String(fdi).startsWith('5') || String(fdi).startsWith('6')
+    ? 'upper-base'
+    : 'lower-base'
+}
+
+function getBaseAnnotation(fdi) {
+  return getAnnotation(baseRowForFdi(fdi), fdi)
+}
+
+function getVisibleTreatmentItems(fdi) {
+  return visibleTreatmentItems.value.filter((item) => Number(item.fdi) === Number(fdi))
+}
 
 function onToothMouseEnter(fdi, event) {
-  const items = props.treatmentItems.filter((i) => i.fdi === fdi)
-  if (!items.length) return
-  const rect = event.currentTarget.getBoundingClientRect()
-  hoverTooltip.fdi = fdi
-  hoverTooltip.label = TEETH_BY_FDI[fdi]?.palmer || String(fdi)
-  hoverTooltip.lines = items.map((i) => {
+  const items = getVisibleTreatmentItems(fdi)
+  const annotation = getBaseAnnotation(fdi)
+  const lines = []
+
+  if (annotation.status) {
+    lines.push({
+      text: STATUS_LABELS[annotation.status] || annotation.status,
+      sub: 'Status',
+      color: ANNOTATION_LINE_COLORS.status,
+    })
+  }
+
+  if (annotation.diagnosis) {
+    lines.push({
+      text: DIAGNOSIS_LABELS[annotation.diagnosis] || annotation.diagnosis,
+      sub: 'Diagnosis',
+      color: ANNOTATION_LINE_COLORS.diagnosis,
+    })
+  }
+
+  lines.push(...items.map((i) => {
     const toothLabel = TEETH_BY_FDI[fdi]?.palmer || String(fdi)
     const surf = i.surface ? ` - ${i.surface.charAt(0).toUpperCase()}` : ''
     const label = i.treatmentName || i.conditionLabel || i.condition || 'Treatment'
@@ -332,7 +456,13 @@ function onToothMouseEnter(fdi, event) {
     const scope = i.status === 'existing' ? 'Base chart' : (i.planName || 'Treatment plan')
     const parts = [dateStr, practitioner, scope].filter(Boolean)
     return { text, sub: parts.join(' - '), color: CONDITION_COLORS[i.status] || '#0061FB' }
-  })
+  }))
+
+  if (!lines.length) return
+  const rect = event.currentTarget.getBoundingClientRect()
+  hoverTooltip.fdi = fdi
+  hoverTooltip.label = TEETH_BY_FDI[fdi]?.palmer || String(fdi)
+  hoverTooltip.lines = lines
   hoverTooltip.x = rect.right + window.scrollX + 6
   hoverTooltip.y = rect.top + window.scrollY - 4
   if (hoverTimer) clearTimeout(hoverTimer)
@@ -385,12 +515,8 @@ function onToothCellClick(rowId, fdi, event) {
   if (!isRowInteractive(rowId)) {
     event.preventDefault()
     event.stopPropagation()
-    if (props.chartScope === 'plan' && row?.layer === 'base') {
-      layerHint.value = 'Select the Base Chart tab to add treatments to the base line.'
-    } else if (props.chartScope === 'base' && row?.layer === 'plan') {
-      layerHint.value = 'Select the Treatment Plan tab to add planned treatments.'
-    } else if (props.chartScope === 'both' && row?.layer === 'base') {
-      layerHint.value = 'Select the Base Chart tab to add treatments to the base line.'
+    if (row?.layer === 'plan') {
+      layerHint.value = 'Use the middle tooth rows to select and chart treatment.'
     }
     if (layerHint.value) {
       if (layerHintTimer) clearTimeout(layerHintTimer)
@@ -515,6 +641,12 @@ onUnmounted(() => {
   justify-content: center;
 }
 
+.tooth-cell--profile {
+  width: var(--tooth-size);
+  height: 88px;
+  align-items: center;
+}
+
 .tooth-cell--inactive {
   cursor: not-allowed;
 }
@@ -545,6 +677,10 @@ onUnmounted(() => {
   color: #0f172a;
 }
 
+.tooth-marker > span:first-child {
+  line-height: 1;
+}
+
 .tooth-marker--line {
   align-items: flex-start;
   padding-top: 4px;
@@ -557,6 +693,23 @@ onUnmounted(() => {
   border-radius: 999px;
   background: #64748b;
   border: 1px solid #0f172a;
+}
+
+.tooth-marker-treatment-badge {
+  position: absolute;
+  right: 7px;
+  top: 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #0061FB;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0, 97, 251, 0.25);
 }
 
 .bridge-hint {

@@ -396,7 +396,7 @@ const plannedItems = computed(() =>
 const toothChartItems = computed(() =>
   currentStep.value === 1 ? baseChartItems.value : plannedItems.value
 )
-const toothChartStatuses = computed(() => (currentStep.value === 1 ? store.toothStatuses : {}))
+const toothChartStatuses = computed(() => store.toothStatuses)
 const planPractitioners = computed(() => {
   const map = new Map()
   ;(store.treatmentItems || []).forEach((item) => {

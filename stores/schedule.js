@@ -275,6 +275,31 @@ export const useScheduleStore = defineStore('schedule', {
       }
     },
 
+    async copyScheduleFromRota(payload) {
+      this.isSaving = true
+      this.error = null
+
+      try {
+        const response = await scheduleService.copyScheduleFromRota(payload)
+
+        if (response?.code === 0) {
+          const imported = response.data
+          this.schedules = [imported, ...this.schedules.filter((schedule) => schedule.id !== imported.id)]
+          this.currentSchedule = imported
+          return imported
+        }
+
+        this.error = response?.message || 'Failed to import rota schedule'
+        throw new Error(this.error)
+      } catch (err) {
+        this.error = err.message || 'Error importing rota schedule'
+        console.error('Copy schedule from rota error:', err)
+        throw err
+      } finally {
+        this.isSaving = false
+      }
+    },
+
     async toggleSchedule(scheduleId) {
       this.isSaving = true
       this.error = null

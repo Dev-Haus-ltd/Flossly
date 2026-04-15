@@ -1,5 +1,5 @@
-import { listSchedules, getSchedule, createSchedule, updateSchedule, updateScheduleDay, addBreak, updateBreak, deleteBreak, deleteSchedule, toggleSchedule } from '~/server/controllers/schedule'
-import { success } from '~/server/utils/response'
+import { listSchedules, getSchedule, createSchedule, updateSchedule, updateScheduleDay, addBreak, updateBreak, deleteBreak, deleteSchedule, toggleSchedule, copyScheduleFromRota } from '~/server/controllers/schedule'
+import { error } from '~/server/utils/response'
 
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, 'name')
@@ -34,6 +34,9 @@ export default defineEventHandler(async (event) => {
     
     case 'toggle':
       return await toggleSchedule(event)
+
+    case 'copyFromRota':
+      return await copyScheduleFromRota(event)
     
     default:
       return error(404, `Unknown endpoint: ${path}`)

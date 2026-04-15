@@ -78,7 +78,7 @@
           <span class="tp-col tp-col--duration">{{ Number(item.duration || 0) }} min</span>
           <span class="tp-col tp-col--price">{{ currencySymbol }}{{ formatCost(item.cost) }}</span>
           <button class="tp-icon-btn tp-icon-btn--danger" title="Remove item" @click.stop="$emit('remove', item.id || item._tempId)">
-            <v-icon size="14">mdi-trash-can-outline</v-icon>
+            <img :src="deleteIcon" alt="" class="tp-delete-icon" />
           </button>
         </div>
 
@@ -92,13 +92,18 @@
                 </label>
                 <label class="tp-field">
                   <span>Duration (min)</span>
-                  <select v-model.number="draft.duration">
-                    <option :value="0">0 min</option>
-                    <option :value="15">15 min</option>
-                    <option :value="30">30 min</option>
-                    <option :value="45">45 min</option>
-                    <option :value="60">60 min</option>
-                  </select>
+                  <v-select
+                    v-model="draft.duration"
+                    :items="durationOptions"
+                    item-title="title"
+                    item-value="value"
+                    variant="solo"
+                    density="compact"
+                    class="tp-input-bordered"
+                    bg-color="white"
+                    flat
+                    hide-details
+                  />
                 </label>
                 <label class="tp-field">
                   <span>Completed on</span>
@@ -106,33 +111,63 @@
                 </label>
                 <label class="tp-field">
                   <span>Payment plan</span>
-                  <select v-model="draft.paymentPlan">
-                    <option value="private">Private</option>
-                    <option value="nhs1">NHS Band 1</option>
-                    <option value="nhs2">NHS Band 2</option>
-                    <option value="nhs3">NHS Band 3</option>
-                  </select>
+                  <v-select
+                    v-model="draft.paymentPlan"
+                    :items="paymentPlanOptions"
+                    item-title="title"
+                    item-value="value"
+                    variant="solo"
+                    density="compact"
+                    class="tp-input-bordered"
+                    bg-color="white"
+                    flat
+                    hide-details
+                  />
                 </label>
                 <label class="tp-field">
                   <span>Practitioner</span>
-                  <select v-model.number="draft.practitionerId">
-                    <option :value="null">Select practitioner</option>
-                    <option v-for="p in practitioners" :key="p.id" :value="Number(p.id)">{{ p.name }}</option>
-                  </select>
+                  <v-select
+                    v-model="draft.practitionerId"
+                    :items="practitionerSelectOptions"
+                    item-title="name"
+                    item-value="id"
+                    variant="solo"
+                    density="compact"
+                    class="tp-input-bordered"
+                    bg-color="white"
+                    flat
+                    hide-details
+                  />
                 </label>
                 <label class="tp-field">
                   <span>Referrer</span>
-                  <select v-model.number="draft.referrerId">
-                    <option :value="null">No referrer</option>
-                    <option v-for="p in practitioners" :key="p.id" :value="Number(p.id)">{{ p.name }}</option>
-                  </select>
+                  <v-select
+                    v-model="draft.referrerId"
+                    :items="referrerSelectOptions"
+                    item-title="name"
+                    item-value="id"
+                    variant="solo"
+                    density="compact"
+                    class="tp-input-bordered"
+                    bg-color="white"
+                    flat
+                    hide-details
+                  />
                 </label>
                 <label class="tp-field">
                   <span>Status</span>
-                  <select v-model="draft.status">
-                    <option value="existing">Existing</option>
-                    <option value="completed">Completed</option>
-                  </select>
+                  <v-select
+                    v-model="draft.status"
+                    :items="baseStatusOptions"
+                    item-title="title"
+                    item-value="value"
+                    variant="solo"
+                    density="compact"
+                    class="tp-input-bordered"
+                    bg-color="white"
+                    flat
+                    hide-details
+                  />
                 </label>
                 <label class="tp-field">
                   <span>Invoice desc.</span>
@@ -193,7 +228,7 @@
             </span>
           </div>
           <div class="tp-appt-header__right">
-            <v-menu offset-y>
+            <v-menu offset-y content-class="tp-status-menu">
               <template #activator="{ props: menuProps }">
                 <v-chip
                   v-bind="menuProps"
@@ -206,21 +241,32 @@
                   <v-icon size="14" class="ml-1">mdi-chevron-down</v-icon>
                 </v-chip>
               </template>
-              <v-list density="compact">
+              <v-list density="compact" class="tp-status-menu__list">
                 <v-list-item
                   v-for="status in APPOINTMENT_STATUS_MENU_OPTIONS"
                   :key="status.value"
+                  class="tp-status-menu__item"
+                  :class="{ 'tp-status-menu__item--active': appointmentStatusMeta(appt.status).value === status.value }"
                   @click="$emit('update-appointment', { id: appt.id, patch: { status: status.value } })"
                 >
                   <template #prepend>
                     <span class="tp-status-indicator" :style="{ background: status.color }"></span>
                   </template>
                   <v-list-item-title>{{ status.label }}</v-list-item-title>
+                  <template #append>
+                    <v-icon
+                      v-if="appointmentStatusMeta(appt.status).value === status.value"
+                      size="16"
+                      color="primary"
+                    >
+                      mdi-check
+                    </v-icon>
+                  </template>
                 </v-list-item>
               </v-list>
             </v-menu>
             <button class="tp-appt-icon-btn tp-appt-icon-btn--danger" title="Delete appointment" @click="$emit('delete-appointment', appt.id)">
-              <v-icon size="15">mdi-trash-can-outline</v-icon>
+              <img :src="deleteIcon" alt="" class="tp-delete-icon" />
             </button>
             <button
               v-if="appt.diaryAppointmentId"
@@ -276,7 +322,7 @@
               <span class="tp-col tp-col--duration">{{ Number(item.duration || 0) }} min</span>
               <span class="tp-col tp-col--price">{{ currencySymbol }}{{ formatCost(item.cost) }}</span>
               <button class="tp-icon-btn tp-icon-btn--danger" title="Remove item" @click.stop="$emit('remove', item.id || item._tempId)">
-                <v-icon size="14">mdi-trash-can-outline</v-icon>
+                <img :src="deleteIcon" alt="" class="tp-delete-icon" />
               </button>
             </div>
 
@@ -290,13 +336,18 @@
                     </label>
                     <label class="tp-field">
                       <span>Duration (min)</span>
-                      <select v-model.number="draft.duration">
-                        <option :value="0">0 min</option>
-                        <option :value="15">15 min</option>
-                        <option :value="30">30 min</option>
-                        <option :value="45">45 min</option>
-                        <option :value="60">60 min</option>
-                      </select>
+                      <v-select
+                        v-model="draft.duration"
+                        :items="durationOptions"
+                        item-title="title"
+                        item-value="value"
+                        variant="solo"
+                        density="compact"
+                        class="tp-input-bordered"
+                        bg-color="white"
+                        flat
+                        hide-details
+                      />
                     </label>
                     <label class="tp-field">
                       <span>Completed on</span>
@@ -304,34 +355,63 @@
                     </label>
                     <label class="tp-field">
                       <span>Payment plan</span>
-                      <select v-model="draft.paymentPlan">
-                        <option value="private">Private</option>
-                        <option value="nhs1">NHS Band 1</option>
-                        <option value="nhs2">NHS Band 2</option>
-                        <option value="nhs3">NHS Band 3</option>
-                      </select>
+                      <v-select
+                        v-model="draft.paymentPlan"
+                        :items="paymentPlanOptions"
+                        item-title="title"
+                        item-value="value"
+                        variant="solo"
+                        density="compact"
+                        class="tp-input-bordered"
+                        bg-color="white"
+                        flat
+                        hide-details
+                      />
                     </label>
                     <label class="tp-field">
                       <span>Practitioner</span>
-                      <select v-model.number="draft.practitionerId">
-                        <option :value="null">Select practitioner</option>
-                        <option v-for="p in practitioners" :key="p.id" :value="Number(p.id)">{{ p.name }}</option>
-                      </select>
+                      <v-select
+                        v-model="draft.practitionerId"
+                        :items="practitionerSelectOptions"
+                        item-title="name"
+                        item-value="id"
+                        variant="solo"
+                        density="compact"
+                        class="tp-input-bordered"
+                        bg-color="white"
+                        flat
+                        hide-details
+                      />
                     </label>
                     <label class="tp-field">
                       <span>Referrer</span>
-                      <select v-model.number="draft.referrerId">
-                        <option :value="null">No referrer</option>
-                        <option v-for="p in practitioners" :key="p.id" :value="Number(p.id)">{{ p.name }}</option>
-                      </select>
+                      <v-select
+                        v-model="draft.referrerId"
+                        :items="referrerSelectOptions"
+                        item-title="name"
+                        item-value="id"
+                        variant="solo"
+                        density="compact"
+                        class="tp-input-bordered"
+                        bg-color="white"
+                        flat
+                        hide-details
+                      />
                     </label>
                     <label class="tp-field">
                       <span>Status</span>
-                      <select v-model="draft.status">
-                        <option value="planned">Planned</option>
-                        <option value="scheduled">Scheduled</option>
-                        <option value="completed">Completed</option>
-                      </select>
+                      <v-select
+                        v-model="draft.status"
+                        :items="plannedStatusOptions"
+                        item-title="title"
+                        item-value="value"
+                        variant="solo"
+                        density="compact"
+                        class="tp-input-bordered"
+                        bg-color="white"
+                        flat
+                        hide-details
+                      />
                     </label>
                     <label class="tp-field">
                       <span>Invoice desc.</span>
@@ -456,6 +536,7 @@ import { getToothLabel } from './toothData.js'
 import ChartRichTextEditor from './ChartRichTextEditor.vue'
 import ChartImagesPanel from './ChartImagesPanel.vue'
 import { makeTPName } from '~/shared/defaults/charting/chartingDefaults.js'
+import deleteIcon from '../../../assets/crm/delete.svg'
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
@@ -496,6 +577,36 @@ const APPOINTMENT_STATUS_OPTIONS = [
   { value: 'scheduled', label: 'Scheduled', color: '#0f766e' },
 ]
 const APPOINTMENT_STATUS_MENU_OPTIONS = APPOINTMENT_STATUS_OPTIONS.filter((option) => option.value !== 'scheduled')
+const durationOptions = [
+  { title: '0 min', value: 0 },
+  { title: '15 min', value: 15 },
+  { title: '30 min', value: 30 },
+  { title: '45 min', value: 45 },
+  { title: '60 min', value: 60 },
+]
+const paymentPlanOptions = [
+  { title: 'Private', value: 'private' },
+  { title: 'NHS Band 1', value: 'nhs1' },
+  { title: 'NHS Band 2', value: 'nhs2' },
+  { title: 'NHS Band 3', value: 'nhs3' },
+]
+const baseStatusOptions = [
+  { title: 'Existing', value: 'existing' },
+  { title: 'Completed', value: 'completed' },
+]
+const plannedStatusOptions = [
+  { title: 'Planned', value: 'planned' },
+  { title: 'Scheduled', value: 'scheduled' },
+  { title: 'Completed', value: 'completed' },
+]
+const practitionerSelectOptions = computed(() => [
+  { id: null, name: 'Select practitioner' },
+  ...props.practitioners.map((p) => ({ id: Number(p.id), name: p.name })),
+])
+const referrerSelectOptions = computed(() => [
+  { id: null, name: 'No referrer' },
+  ...props.practitioners.map((p) => ({ id: Number(p.id), name: p.name })),
+])
 
 const NHS_BAND3_KEYS = ['crown', 'bridge', 'denture', 'veneer', 'implant', 'onlay', 'inlay', 'post and core', 'post & core']
 const NHS_BAND2_KEYS = ['fill', 'extract', 'root canal', 'rct', 'composite', 'amalgam', 'deep scale', 'periodon', 'surgery']
@@ -921,10 +1032,9 @@ watch(activeView, async () => {
   background: #fff;
   border: 1px solid #e8e8e8;
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible;
   min-height: 0;
-  /* Keep treatment list panel visually aligned with the tooth chart area. */
-  height: clamp(360px, 56vh, 460px);
+  height: auto;
 }
 
 .tp-header {
@@ -1083,14 +1193,12 @@ watch(activeView, async () => {
 
 /* Fix #9 — 92px bottom padding was dead space (footer sits outside this scroll container) */
 .tp-body {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
+  flex: 0 0 auto;
+  overflow: visible;
   padding: 10px 14px 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-height: 0;
   max-height: none;
 }
 
@@ -1127,6 +1235,7 @@ watch(activeView, async () => {
   padding: 8px 10px;
   cursor: pointer;
   background: #fff;
+  overflow-x: auto;
 }
 
 .tp-col {
@@ -1200,6 +1309,12 @@ watch(activeView, async () => {
   background: #fee2e2;
 }
 
+.tp-delete-icon {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
 .tp-item-actions {
   display: flex;
   justify-content: flex-end;
@@ -1210,12 +1325,13 @@ watch(activeView, async () => {
   border-top: 1px solid #eef2f7;
   padding: 12px;
   background: #f8fbff;
+  overflow: visible;
 }
 
 /* ── 2-column expand layout ─────────────────────────────────── */
 .tp-expand-body {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
   margin-bottom: 12px;
@@ -1230,6 +1346,7 @@ watch(activeView, async () => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
 }
 
 .tp-notes-header {
@@ -1294,8 +1411,7 @@ watch(activeView, async () => {
   margin-bottom: 2px;
 }
 
-.tp-field input,
-.tp-field select {
+.tp-field input {
   height: 40px;
   border: 1px solid #dfdfdf;
   border-radius: 8px;
@@ -1304,6 +1420,23 @@ watch(activeView, async () => {
   background: #fff;
   color: #334155;
   box-shadow: none;
+}
+
+.tp-input-bordered :deep(.v-field) {
+  border: 1px solid #dfdfdf !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  min-height: 40px;
+  box-shadow: none !important;
+}
+
+.tp-input-bordered :deep(.v-field__input) {
+  font-size: 14px;
+  color: #334155;
+}
+
+.tp-input-bordered :deep(.v-field__append-inner) {
+  padding-top: 8px;
 }
 
 .tp-notes-input {
@@ -1419,6 +1552,51 @@ watch(activeView, async () => {
   height: 10px;
   border-radius: 50%;
   margin-right: 8px;
+}
+
+:deep(.tp-status-menu) {
+  border-radius: 12px !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10) !important;
+  border: 1px solid #e5e7eb !important;
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+:deep(.tp-status-menu .tp-status-menu__list) {
+  padding: 6px !important;
+  background: #fff !important;
+  border-radius: 12px !important;
+  min-width: 180px;
+}
+
+:deep(.tp-status-menu .tp-status-menu__item) {
+  border-radius: 8px !important;
+  min-height: 38px !important;
+  padding: 0 12px !important;
+  margin-bottom: 2px;
+  transition: background-color 0.15s ease;
+}
+
+:deep(.tp-status-menu .tp-status-menu__item:last-child) {
+  margin-bottom: 0;
+}
+
+:deep(.tp-status-menu .tp-status-menu__item:hover) {
+  background: #f0f4ff !important;
+}
+
+:deep(.tp-status-menu .tp-status-menu__item--active) {
+  background: #e8f1ff !important;
+}
+
+:deep(.tp-status-menu .tp-status-menu__item--active .v-list-item-title) {
+  color: #0061FB !important;
+  font-weight: 500;
+}
+
+:deep(.tp-status-menu .v-list-item-title) {
+  font-size: 13px !important;
+  color: #1f2937;
 }
 
 .tp-appt-icon-btn {
@@ -1573,6 +1751,16 @@ watch(activeView, async () => {
 @media (max-width: 1200px) {
   .tp-item-row {
     grid-template-columns: 28px 120px 70px minmax(140px, 1fr) 100px 70px 90px 34px;
+  }
+
+  .tp-expand-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .tp-expand-fields {
+    grid-template-columns: 1fr;
   }
 }
 
