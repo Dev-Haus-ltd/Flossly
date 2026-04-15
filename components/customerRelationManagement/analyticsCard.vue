@@ -45,6 +45,9 @@
         class="preview-image"
         controls
         autoplay
+        playsinline
+        preload="metadata"
+        @error="handleVideoPlaybackError"
         @ended="videoSrc = null"
       />
       <!-- Thumbnail + overlays -->
@@ -59,7 +62,7 @@
         </viewer>
         <img v-else :src="resolvedPreviewImage" :alt="title" class="preview-image" @error="handleImageError" />
 
-        <div v-if="hasVideo && !videoPermalink" class="play-button-overlay" @click="playVideo">
+        <div v-if="hasVideo && !videoSrc" class="play-button-overlay" @click="playVideo">
           <v-progress-circular v-if="videoLoading" indeterminate color="white" size="48" />
           <img v-else src="@/assets/crm/play.svg" alt="Play" class="play-button-svg" />
         </div>
@@ -67,16 +70,6 @@
           <span>{{ videoError }}</span>
         </div>
         <!-- Permalink overlay — shown when inline playback is unavailable -->
-        <a
-          v-if="videoPermalink"
-          :href="videoPermalink"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="permalink-overlay"
-        >
-          <v-icon size="20" color="white">mdi-open-in-new</v-icon>
-          <span>Open on Facebook</span>
-        </a>
       </template>
     </div>
 
@@ -108,6 +101,19 @@
     </div>
 
     <div class="card-actions">
+      <v-btn
+        v-if="videoPermalink"
+        variant="outlined"
+        rounded="lg"
+        size="small"
+        class="view-leads-btn"
+        :href="videoPermalink"
+        target="_blank"
+        rel="noopener noreferrer"
+        append-icon="mdi-open-in-new"
+      >
+        Open Video Link
+      </v-btn>
       <v-btn
         v-if="leads > 0 && viewLeadsHref"
         color="primary"
@@ -263,6 +269,11 @@ const handleImageError = () => {
   imageLoadFailed.value = true;
 };
 
+const handleVideoPlaybackError = () => {
+  videoSrc.value = null;
+  videoError.value = 'Inline playback failed for this video.';
+};
+
 const playVideo = async () => {
   if (!props.videoId || videoLoading.value) return;
   if (videoSrc.value) { videoSrc.value = null; videoPermalink.value = null; return; }
@@ -275,6 +286,7 @@ const playVideo = async () => {
       videoSrc.value = res.data.source;
     } else if (res?.code === 0 && res.data?.permalink) {
       videoPermalink.value = res.data.permalink;
+      videoError.value = 'Direct playback is unavailable for this video.';
     } else {
       videoError.value = res?.error || res?.message || 'Video not available';
     }
@@ -284,6 +296,12 @@ const playVideo = async () => {
     videoLoading.value = false;
   }
 };
+
+watch(() => props.videoId, () => {
+  videoSrc.value = null;
+  videoPermalink.value = null;
+  videoError.value = null;
+});
 </script>
 
 <style scoped lang="scss">
@@ -508,28 +526,6 @@ const playVideo = async () => {
 
   &:hover {
     background: rgba(0, 0, 0, 0.3);
-  }
-}
-
-.permalink-overlay {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  background: rgba(0, 0, 0, 0.65);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 10px;
-  text-decoration: none;
-  transition: background 0.2s ease;
-
-  &:hover {
-    background: rgba(0, 0, 0, 0.8);
   }
 }
 
