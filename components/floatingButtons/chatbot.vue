@@ -16,6 +16,7 @@
             src="@/assets/icons/Support/Chat.svg"
             alt="Chat Icon"
             class="chatbot-icon"
+            draggable="false"
           />
           <v-badge
             v-if="unreadCount > 0"

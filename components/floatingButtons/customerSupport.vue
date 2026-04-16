@@ -8,6 +8,7 @@
           src="@/assets/icons/floatButton/support.svg"
           alt="Support Menu Icon"
           class="support-icon"
+          draggable="false"
         />
       </template>
 
