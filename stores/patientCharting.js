@@ -11,6 +11,10 @@ import {
   makeDefaultPlan,
   getPlanColor,
 } from '~/shared/defaults/charting/chartingDefaults.js'
+import {
+  createEmptyTreatmentPlanContent,
+  normalizeTreatmentPlanContent,
+} from '~/shared/defaults/charting/treatmentPlanContent.js'
 
 // Module-level timer map — not reactive, just for debouncing
 const _saveTimers = {}
@@ -204,6 +208,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
         name: plan.name,
         color: plan.color,
         appointments: plan.appointments || this._defaultAppointments(),
+        content: normalizeTreatmentPlanContent(plan.content || createEmptyTreatmentPlanContent()),
         priority,
       }).catch((error) => this._logError(errorContext, error))
     },
@@ -229,6 +234,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
         name: String(plan.name || '').trim() || `Treatment Plan ${idx + 1}`,
         color: plan.color || this._nextPlanColor(idx),
         appointments: Array.isArray(plan.appointments) && plan.appointments.length ? plan.appointments : this._defaultAppointments(),
+        content: normalizeTreatmentPlanContent(plan.content || createEmptyTreatmentPlanContent()),
       }))
       const autoPattern = /^Treatment Plan\s+\d+$/i
       const autoNamed = this.plans.every((p) => autoPattern.test(String(p.name || '').trim()))
@@ -261,6 +267,31 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       this.plans[idx].appointments = this.appointments.map((a) => ({ ...a }))
       const plan = this.plans[idx]
       this._upsertPlanRemote(plan, { appointments: plan.appointments }, 'updateTreatmentPlanAppointments')
+    },
+    _deriveAppointmentMetaFromItems(planId, groupId, rows = []) {
+      const scoped = rows.filter((item) =>
+        (item.planId || DEFAULT_PLAN_ID) === planId
+        && (item.appointmentGroupId || DEFAULT_APPOINTMENT_ID) === groupId
+      )
+      if (!scoped.length) return null
+
+      const firstWithDiary = scoped.find((item) => item.appointmentId)
+      const firstWithPractitioner = scoped.find((item) => item.practitionerId || item.practitionerName || item.clinicianName)
+      const firstWithDate = scoped.find((item) => item.bookingDate || item.date)
+      const firstWithTime = scoped.find((item) => item.startTime || item.endTime)
+      const allStatuses = scoped.map((item) => String(item.status || '').trim().toLowerCase()).filter(Boolean)
+      const hasCompleted = scoped.length && allStatuses.length && allStatuses.every((status) => status === 'completed')
+      const hasScheduled = allStatuses.some((status) => status === 'scheduled')
+
+      return {
+        diaryAppointmentId: firstWithDiary?.appointmentId || null,
+        status: hasCompleted ? 'completed' : (hasScheduled || firstWithDiary?.appointmentId ? 'scheduled' : 'pending'),
+        dentistId: firstWithPractitioner?.practitionerId || null,
+        dentistName: firstWithPractitioner?.practitionerName || firstWithPractitioner?.clinicianName || '',
+        date: firstWithDate?.bookingDate || firstWithDate?.date || null,
+        startTime: firstWithTime?.startTime || null,
+        endTime: firstWithTime?.endTime || null,
+      }
     },
     // ── Initialise chart for a patient ──────────────────────────────────
     async loadChart(patientId) {
@@ -328,6 +359,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
             name: String(plan.name || '').trim() || `Treatment Plan ${idx + 1}`,
             color: plan.color || this._nextPlanColor(idx),
             appointments: Array.isArray(plan.appointments) && plan.appointments.length ? plan.appointments : this._defaultAppointments(),
+            content: normalizeTreatmentPlanContent(plan.content || createEmptyTreatmentPlanContent()),
           }))
         }
         const rows = itemRows.map((item) => ({
@@ -351,6 +383,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
               name: item.planName || `Treatment Plan ${this.plans.length + 1}`,
               color: this._nextPlanColor(this.plans.length),
               appointments: this._defaultAppointments(),
+              content: createEmptyTreatmentPlanContent(),
             })
             existingPlanIds.add(item.planId)
           }
@@ -364,9 +397,20 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
               .filter(Boolean)
           )
           const existingAppts = Array.isArray(plan.appointments) ? plan.appointments : this._defaultAppointments()
-          const merged = [...existingAppts]
+          const merged = existingAppts.map((appt) => {
+            const derived = this._deriveAppointmentMetaFromItems(plan.id, appt.id, rows)
+            return derived ? { ...appt, ...derived } : { ...appt }
+          })
           groupIds.forEach((gid) => {
-            if (!merged.some((a) => a.id === gid)) merged.push({ id: gid, name: `Appointment ${merged.length + 1}`, status: 'pending' })
+            if (!merged.some((a) => a.id === gid)) {
+              const derived = this._deriveAppointmentMetaFromItems(plan.id, gid, rows)
+              merged.push({
+                id: gid,
+                name: `Appointment ${merged.length + 1}`,
+                status: 'pending',
+                ...(derived || {}),
+              })
+            }
           })
           return { ...plan, appointments: merged.length ? merged : this._defaultAppointments() }
         })
@@ -921,6 +965,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
         name,
         color: payload?.color || this._nextPlanColor(this.plans.length),
         appointments: this._defaultAppointments(),
+        content: createEmptyTreatmentPlanContent(),
       })
       this.activePlanId = nextId
       this._syncActivePlanAppointments()
@@ -949,6 +994,14 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       this._upsertPlanRemote(plan, { color }, 'updateTreatmentPlanColor')
       this._logHistory('Treatment plan color changed', `${plan.name} -> ${color}`)
     },
+    updateTreatmentPlanContent(planId, content) {
+      const targetPlanId = planId || this.activePlanId
+      const plan = this.plans.find((p) => p.id === targetPlanId)
+      if (!plan) return
+      plan.content = normalizeTreatmentPlanContent(content || {})
+      this._upsertPlanRemote(plan, { content: plan.content }, 'updateTreatmentPlanContent')
+      this._logHistory('Treatment plan content updated', plan.name)
+    },
     deleteTreatmentPlan(planId) {
       const deletingLastPlan = this.plans.length <= 1
       const fallback = this.plans.find((p) => p.id !== planId)?.id || DEFAULT_PLAN_ID
@@ -966,6 +1019,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
           name: 'Treatment Plan 1',
           color: this._nextPlanColor(0),
           appointments: this._defaultAppointments(),
+          content: createEmptyTreatmentPlanContent(),
         }
         this.plans = [replacementPlan]
         this.activePlanId = replacementId
@@ -993,6 +1047,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
         name: newName,
         color: source.color || this._nextPlanColor(this.plans.length),
         appointments: (source.appointments || this._defaultAppointments()).map((a) => ({ ...a, id: `appt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` })),
+        content: normalizeTreatmentPlanContent(source.content || createEmptyTreatmentPlanContent()),
       })
       const sourceItems = this.treatmentPlan.filter((item) => (item.planId || DEFAULT_PLAN_ID) === planId)
       sourceItems.forEach((item) => {

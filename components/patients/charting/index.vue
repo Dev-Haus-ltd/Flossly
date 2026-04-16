@@ -136,6 +136,8 @@
       <!-- Step 2: Full treatment plan panel -->
       <div v-if="currentStep === 2" class="treatment-plan-wrap">
         <TreatmentPlanPanel
+          :patient-id="patientId"
+          :patient-name="patientName"
           :items="store.treatmentItems"
           :total="store.treatmentTotal"
           :planned-count="store.plannedCount"
@@ -148,6 +150,8 @@
           :history="store.historyEntries"
           :appointment-links="store.appointmentLinks"
           :practitioners="store.practitioners"
+          :active-plan-content="activePlanOverrides"
+          :default-plan-content="organisationPlanDefaults"
           @remove="store.removeTreatmentItemById($event)"
           @update="onTreatmentUpdate"
           @reorder="onReorder"
@@ -167,6 +171,7 @@
           @book-appointment="onBookAppointment"
           @chart-scope-change="onChartScopeChange"
           @mark-complete="onMarkComplete"
+          @update-plan-content="store.updateTreatmentPlanContent(store.activePlanId, $event)"
           @print-plan="currentStep = 3"
         />
       </div>
@@ -186,7 +191,8 @@
           :base-items="baseChartItems"
           :sections="planSections"
           :organisation-email="organisationEmail"
-          :organisation-branding="organisationPdfBranding"
+          :content="activePlanContent"
+          :default-content="organisationPlanDefaults"
           :diagnosis-chart="diagnosisSnapshotChart"
           :treatment-chart="treatmentSnapshotChart"
           :tooth-statuses="store.toothStatuses"
@@ -215,7 +221,8 @@
           :base-items="baseChartItems"
           :sections="planSections"
           :organisation-email="organisationEmail"
-          :organisation-branding="organisationPdfBranding"
+          :content="activePlanContent"
+          :default-content="organisationPlanDefaults"
           :diagnosis-chart="diagnosisSnapshotChart"
           :treatment-chart="treatmentSnapshotChart"
           :tooth-statuses="store.toothStatuses"
@@ -231,35 +238,107 @@
     </template>
 
     <!-- ── Dialogs ─────────────────────────────────────────────────── -->
-    <v-dialog v-model="bookingDialog" max-width="480">
-      <v-card rounded="lg">
-        <v-card-title class="pt-4 px-5">Book Appointment in Diary</v-card-title>
-        <v-card-text class="px-5 pb-2">
-          <v-select
-            v-model="bookingForm.dentistId"
-            :items="store.practitioners"
-            item-title="name"
-            item-value="id"
-            label="Practitioner"
-            variant="outlined"
-            density="compact"
-            class="mb-3"
-          />
-          <v-text-field v-model="bookingForm.date" label="Date" type="date" variant="outlined" density="compact" class="mb-3" />
-          <div class="d-flex gap-3 mb-3">
-            <v-text-field v-model="bookingForm.startTime" label="Start" type="time" variant="outlined" density="compact" />
-            <v-text-field v-model="bookingForm.endTime" label="End" type="time" variant="outlined" density="compact" />
+    <v-dialog v-model="bookingDialog" max-width="560">
+      <v-card rounded="xl" class="booking-card">
+        <v-card-title class="booking-card__title">Book Appointment in Diary</v-card-title>
+        <v-card-text class="booking-card__body">
+          <div class="booking-summary">
+            <div class="booking-summary__icon">
+              <v-icon size="18">mdi-calendar-check-outline</v-icon>
+            </div>
+            <div>
+              <div class="booking-summary__title">{{ bookingSummaryTitle }}</div>
+              <div class="booking-summary__sub">{{ bookingSummaryDisplay }}</div>
+            </div>
           </div>
-          <v-textarea v-model="bookingForm.notes" label="Notes" variant="outlined" density="compact" rows="2" auto-grow />
+
+          <v-card elevation="0" rounded="lg" class="booking-fields">
+            <v-row dense>
+              <v-col cols="12">
+                <label class="fld-lbl">Practitioner <span class="req-star">*</span></label>
+                <v-select
+                  v-model="bookingForm.dentistId"
+                  :items="store.practitioners"
+                  item-title="name"
+                  item-value="id"
+                  variant="solo"
+                  density="compact"
+                  class="input-bordered mb-0 mt-1"
+                  bg-color="white"
+                  flat
+                  hide-details
+                  placeholder="Select practitioner"
+                />
+              </v-col>
+
+              <v-col cols="12">
+                <label class="fld-lbl">Date <span class="req-star">*</span></label>
+                <v-text-field
+                  v-model="bookingForm.date"
+                  type="date"
+                  variant="solo"
+                  density="compact"
+                  class="input-bordered mb-0 mt-1"
+                  bg-color="white"
+                  flat
+                  hide-details
+                />
+              </v-col>
+
+              <v-col cols="6">
+                <label class="fld-lbl">Start Time <span class="req-star">*</span></label>
+                <v-text-field
+                  v-model="bookingForm.startTime"
+                  type="time"
+                  variant="solo"
+                  density="compact"
+                  class="input-bordered mb-0 mt-1"
+                  bg-color="white"
+                  flat
+                  hide-details
+                />
+              </v-col>
+
+              <v-col cols="6">
+                <label class="fld-lbl">End Time <span class="req-star">*</span></label>
+                <v-text-field
+                  v-model="bookingForm.endTime"
+                  type="time"
+                  variant="solo"
+                  density="compact"
+                  class="input-bordered mb-0 mt-1"
+                  bg-color="white"
+                  flat
+                  hide-details
+                />
+              </v-col>
+
+              <v-col cols="12">
+                <label class="fld-lbl">Notes</label>
+                <v-textarea
+                  v-model="bookingForm.notes"
+                  variant="solo"
+                  density="compact"
+                  rows="3"
+                  auto-grow
+                  class="input-bordered mb-0 mt-1"
+                  bg-color="white"
+                  flat
+                  hide-details
+                  placeholder="Add any notes for this diary booking"
+                />
+              </v-col>
+            </v-row>
+          </v-card>
+
           <div v-if="conflictWarning" class="conflict-warning mt-2">
             <v-icon size="16" color="error" class="mr-1">mdi-alert</v-icon>
             {{ conflictWarning }}
           </div>
         </v-card-text>
-        <v-card-actions class="px-5 pb-4">
-          <v-spacer />
-          <v-btn variant="text" @click="bookingDialog = false">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" rounded="lg" :loading="bookingLoading" :disabled="bookingDisabled" @click="confirmBooking">Book</v-btn>
+        <v-card-actions class="booking-card__actions">
+          <v-btn variant="outlined" class="booking-card__btn booking-card__btn--secondary" @click="bookingDialog = false">Cancel</v-btn>
+          <v-btn color="primary" variant="flat" class="booking-card__btn" :loading="bookingLoading" :disabled="bookingDisabled" @click="confirmBooking">Book</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -318,6 +397,7 @@ import { useOrgStore } from '@/stores/organisation'
 import { useCrmStore } from '@/stores/crm'
 import { CONDITIONS, getToothLabel } from './toothData.js'
 import { DEFAULT_PLAN_ID } from '~/shared/defaults/charting/chartingDefaults.js'
+import { buildOrganisationTreatmentPlanDefaults, mergeTreatmentPlanContent } from '~/shared/defaults/charting/treatmentPlanContent.js'
 
 const props = defineProps({
   patientId: { type: [String, Number], required: true },
@@ -364,18 +444,6 @@ const planSections = reactive({
   consentForm: false,
   testimonial: false,
 })
-const organisationPdfBranding = computed(() => {
-  const org = orgStore?.organisation || {}
-  const ap = org.automationPlaceholders || {}
-  return {
-    coverImageUrl: ap.coverImageUrl || '',
-    clinicImageUrl: ap.clinicImageUrl || '',
-    dentistImageUrl: ap.dentistImageUrl || '',
-    coverSubtitle: ap.coverSubtitle || '',
-    website: ap.website || ap.bookingLink || '',
-    clinicAbout: ap.clinicAbout || org.description || '',
-  }
-})
 const organisationEmail = computed(() =>
   String(
     orgStore?.organisation?.email
@@ -411,6 +479,13 @@ const planPractitioners = computed(() => {
   })
   return [...map.values()].filter((p) => p.name)
 })
+const organisationPlanDefaults = computed(() =>
+  buildOrganisationTreatmentPlanDefaults(orgStore?.organisation || {}, planPractitioners.value)
+)
+const activePlanOverrides = computed(() => activePlanObj.value?.content || {})
+const activePlanContent = computed(() =>
+  mergeTreatmentPlanContent(activePlanOverrides.value, organisationPlanDefaults.value)
+)
 
 const patientEmail = computed(() => String(props.patient?.email || '').trim())
 const patientPhone = computed(() => String(props.patient?.preferredPhone || props.patient?.mobile || '').trim())
@@ -568,21 +643,23 @@ function formatShareTooth(item) {
 
 const shareModel = computed(() => {
   const sections = []
+  const content = activePlanContent.value
 
   if (planSections.clinicInfo) {
-    const clinicText = practiceName.value || 'Practice details will be shared by the clinic.'
+    const clinicText = content.practice.about || practiceName.value || 'Practice details will be shared by the clinic.'
     sections.push({
-      title: 'About the clinic',
+      title: content.practice.title || 'About the clinic',
       text: clinicText,
       html: `<p>${clinicText}</p>`,
     })
   }
 
-  if (planSections.dentistInfo && activePractitionerName.value) {
+  if (planSections.dentistInfo && content.dentists.length) {
+    const dentistText = content.dentists.map((dentist) => `${dentist.name}${dentist.role ? ` (${dentist.role})` : ''}${dentist.bio ? `: ${dentist.bio}` : ''}`).join('\n')
     sections.push({
       title: 'About the Dentist',
-      text: activePractitionerName.value,
-      html: `<p>${activePractitionerName.value}</p>`,
+      text: dentistText,
+      html: content.dentists.map((dentist) => `<p><strong>${dentist.name}</strong>${dentist.role ? ` (${dentist.role})` : ''}${dentist.bio ? ` — ${dentist.bio}` : ''}</p>`).join(''),
     })
   }
 
@@ -618,26 +695,28 @@ const shareModel = computed(() => {
   }
 
   if (planSections.paymentPlan) {
+    const paymentText = content.paymentPlan?.intro || 'Payment arrangement details will be confirmed at reception.'
     sections.push({
       title: 'Payment Plan',
-      text: 'Payment arrangement details will be confirmed at reception.',
-      html: '<p>Payment arrangement details will be confirmed at reception.</p>',
+      text: paymentText,
+      html: `<p>${paymentText}</p>`,
     })
   }
 
   if (planSections.consentForm) {
+    const consentText = content.consentForm?.intro || 'Please review the consent points on the shared treatment plan.'
     sections.push({
       title: 'Consent Form',
-      text: 'Please review the consent points on the shared treatment plan.',
-      html: '<p>Please review the consent points on the shared treatment plan.</p>',
+      text: consentText,
+      html: `<p>${consentText}</p>`,
     })
   }
 
-  if (planSections.testimonial) {
+  if (planSections.testimonial && content.testimonials.length) {
     sections.push({
       title: 'Testimonials',
-      text: 'Patient feedback section included.',
-      html: '<p>Patient feedback section included.</p>',
+      text: content.testimonials.map((item) => `- ${item}`).join('\n'),
+      html: `<ul>${content.testimonials.map((item) => `<li>${item}</li>`).join('')}</ul>`,
     })
   }
 
@@ -768,12 +847,46 @@ const deletePlanDialog = ref(false)
 const deletePlanId = ref(null)
 const bookingForm = reactive({ date: '', startTime: '09:00', endTime: '09:30', notes: '', dentistId: null })
 const bookingDisabled = computed(() => !bookingForm.date || !bookingForm.startTime || !bookingForm.endTime || !bookingForm.dentistId || bookingLoading.value)
+const bookingAppointment = computed(() => store.appointments.find((appt) => appt.id === bookingApptId.value) || null)
+const bookingSummaryTitle = computed(() => bookingAppointment.value?.name || 'Appointment')
+const bookingSummarySubtitle = computed(() => {
+  const practitioner = store.practitioners.find((item) => Number(item.id) === Number(bookingForm.dentistId))
+  const parts = []
+  if (practitioner?.name) parts.push(practitioner.name)
+  if (bookingForm.date) parts.push(bookingForm.date)
+  if (bookingForm.startTime && bookingForm.endTime) parts.push(`${bookingForm.startTime} - ${bookingForm.endTime}`)
+  return parts.join(' • ') || 'Choose practitioner, date, and time'
+})
+
+const bookingSummaryDisplay = computed(() => {
+  const practitioner = store.practitioners.find((item) => Number(item.id) === Number(bookingForm.dentistId))
+  const parts = []
+  if (practitioner?.name) parts.push(practitioner.name)
+  if (bookingForm.date) parts.push(bookingForm.date)
+  if (bookingForm.startTime && bookingForm.endTime) parts.push(`${bookingForm.startTime} - ${bookingForm.endTime}`)
+  return parts.join(' | ') || 'Choose practitioner, date, and time'
+})
+
+function resolveBookingPractitioner(items = []) {
+  const byId = items.find((item) => item?.practitionerId)
+  if (byId?.practitionerId) return Number(byId.practitionerId)
+
+  const byName = items.find((item) => item?.practitionerName || item?.clinicianName)
+  const rawName = String(byName?.practitionerName || byName?.clinicianName || '').trim().toLowerCase()
+  if (!rawName) return null
+
+  const matched = (store.practitioners || []).find((practitioner) => String(practitioner.name || '').trim().toLowerCase() === rawName)
+  return matched?.id ? Number(matched.id) : null
+}
 
 async function onBookAppointment(appointmentId) {
   bookingApptId.value = appointmentId
-  const first = store.treatmentItems.filter(i => (i.appointmentGroupId || 'appt-1') === appointmentId)[0]
-  bookingForm.dentistId = first?.practitionerId ? Number(first.practitionerId) : null
+  const items = store.treatmentItems.filter(i => (i.appointmentGroupId || 'appt-1') === appointmentId)
+  const first = items[0]
+  bookingForm.dentistId = resolveBookingPractitioner(items)
   bookingForm.notes = first?.notes || ''
+  bookingForm.startTime = '09:00'
+  bookingForm.endTime = '09:30'
   if (!bookingForm.date) {
     const now = new Date()
     bookingForm.date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -1032,6 +1145,106 @@ onMounted(() => {
 .fade-save-leave-active { transition: opacity 0.4s; }
 .fade-save-enter-from,
 .fade-save-leave-to   { opacity: 0; }
+
+.booking-card {
+  overflow: hidden;
+}
+
+.booking-card__title {
+  padding: 18px 20px 8px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.booking-card__body {
+  background: #f5f5f5;
+  padding: 0 20px 12px;
+}
+
+.booking-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #ffffff;
+  margin-bottom: 16px;
+}
+
+.booking-summary__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #2563eb;
+  background: #eff6ff;
+  flex-shrink: 0;
+}
+
+.booking-summary__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.booking-summary__sub {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.booking-fields {
+  padding: 14px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.booking-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 0 20px 20px;
+  background: #ffffff;
+}
+
+.booking-card__btn {
+  min-width: 124px;
+  min-height: 40px;
+  border-radius: 10px;
+}
+
+.booking-card__btn--secondary {
+  border-color: #dfdfdf !important;
+  color: #374151 !important;
+}
+
+.fld-lbl {
+  font-weight: 400;
+  font-size: 14px;
+  color: #737373;
+}
+
+.req-star {
+  color: #ef4444;
+}
+
+.input-bordered :deep(.v-field) {
+  border: 1px solid #dfdfdf !important;
+  border-radius: 8px !important;
+  background-color: white !important;
+  min-height: 40px;
+  font-size: 14px;
+  box-shadow: none !important;
+}
+
+.input-bordered :deep(.v-field__input) {
+  color: #334155;
+}
 
 /* ── Conflict warning ────────────────────────────────────────────── */
 .conflict-warning {

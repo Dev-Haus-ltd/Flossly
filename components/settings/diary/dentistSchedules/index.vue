@@ -141,7 +141,7 @@
                         <v-icon size="14" class="mr-1">
                           {{ canImportRotaSchedule ? "mdi-content-copy" : "mdi-lock-outline" }}
                         </v-icon>
-                        {{ canImportRotaSchedule ? "Import rota" : "Soar required" }}
+                        {{ canImportRotaSchedule ? "Import rota" : "Trial or Soar required" }}
                       </v-btn>
                       <v-btn
                         size="x-small"
@@ -243,7 +243,7 @@
 import { ref, onMounted, computed, watch } from "vue";
 import { useDiaryStore } from "~/stores/diary";
 import { useScheduleStore } from "~/stores/schedule";
-import { LICENSE_TYPES, getLicenseTypeFromStorage, useMainStore } from "~/stores/index";
+import { LICENSE_TYPES, getLicenseTypeFromStorage, resolveUserLicenseType, useMainStore } from "~/stores/index";
 import { useUser } from "~/composables/useUser";
 import ScheduleList from "@/components/schedule/ScheduleList.vue";
 import DentistScheduleForm from "@/components/schedule/DentistScheduleForm.vue";
@@ -315,8 +315,14 @@ const dentistStats = computed(() => [
 const organisationId = computed(
   () => user.value?.currentLoggedInOrgId || user.value?.organisationId,
 );
-const licenseType = computed(() => getLicenseTypeFromStorage());
-const canImportRotaSchedule = computed(() => licenseType.value === LICENSE_TYPES.SOAR);
+const normalizedLicenseType = computed(() => {
+  const liveLicense = String(resolveUserLicenseType(user.value) || "").trim();
+  if (liveLicense) return liveLicense;
+  return String(getLicenseTypeFromStorage() || "").trim();
+});
+const canImportRotaSchedule = computed(() =>
+  [LICENSE_TYPES.TRIAL, LICENSE_TYPES.SOAR].includes(normalizedLicenseType.value),
+);
 const schedules = computed(() => scheduleStore.getAllSchedules);
 const isScheduleLoading = computed(() => scheduleStore.getIsLoading);
 

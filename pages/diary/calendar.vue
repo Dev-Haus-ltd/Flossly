@@ -310,9 +310,12 @@
         :selected-dentist-ids="selectedDentistIds"
         :appointments="appointmentsByDentist"
         :dentist-availability="dentistAvailability"
+        :highlighted-appointment-id="highlightedAppointmentId"
         @slot-click="openAppointment"
         @slot-full="onSlotFull"
         @open-notes="onOpenNotes"
+        @open-schedule-settings="openDentistSchedule"
+        @open-diary-settings="openDiarySettings"
         @update-status="onUpdateStatus"
         @move-appointment="onMoveAppointment"
         @open-appointment="onOpenExistingAppointment"
@@ -329,11 +332,12 @@
           :initial-date="dateStr"
           :initial-time="modalTime"
           :initial-duration="modalDuration"
-          :initial-practitioner="modalDentist?.name || ''"
-          :practitioner-options="dentists.map((d) => d.name)"
+          :initial-practitioner="modalDentist?.id || null"
+          :practitioner-options="practitionerOptions"
           :patient-options="patientOptions"
           :preselected-patient="preselectedPatientName"
           :preselected-patient-id="preselectedPatientId"
+          :edit-appointment="editingAppointment"
           @add-patient="onAddPatientFromAppointment"
           @save="onSaveAppointment"
           @save-to-clipboard="onSaveToClipboard"
@@ -379,6 +383,7 @@ definePageMeta({ layout: "home" });
 const search = ref("");
 const view = ref("day");
 const route = useRoute();
+const router = useRouter();
 
 const date = ref(new Date());
 const selectedDentistIds = ref([]);
@@ -400,6 +405,15 @@ const clipboardDraftCount = ref(0);
 const isDraggingOrResizing = ref(false);
 
 const dentistSelect = computed(() => dentists.value);
+const practitionerOptions = computed(() =>
+  (dentists.value || []).map((dentist) => ({
+    title: dentist.name,
+    value: dentist.id,
+  })),
+);
+const highlightedAppointmentId = computed(() =>
+  route.query?.appointmentId ? String(route.query.appointmentId) : null,
+);
 
 // Simple appointment storage keyed by dentist id
 const appointmentsByDentist = reactive({});
@@ -441,6 +455,29 @@ function applyRouteQuery(query = {}) {
   if (query?.dentistId) {
     selectedDentistIds.value = normalizeDentistQueryIds(query.dentistId);
   }
+}
+
+function openDentistSchedule(dentist) {
+  if (!dentist?.id) return;
+  router.push({
+    path: "/settings",
+    query: {
+      setting: "diary",
+      diarySection: "Dentist Schedules",
+      dentistId: String(dentist.id),
+    },
+  });
+}
+
+function openDiarySettings(payload = {}) {
+  router.push({
+    path: "/settings",
+    query: {
+      setting: "diary",
+      diarySection: payload?.section || "Appointment Reasons",
+      dentistId: payload?.dentist?.id ? String(payload.dentist.id) : undefined,
+    },
+  });
 }
 
 const prevDay = () => {
@@ -501,6 +538,7 @@ const preselectedPatientId = ref(null);
 const patientOptions = ref([]); // [{ id, name }]
 
 function openAppointment({ dentist, hour, minute, duration }) {
+  editingAppointment.value = null;
   modalDentist.value = dentist;
   modalTime.value = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
   modalDuration.value = Number(duration) || 15;
@@ -530,7 +568,11 @@ function onSaveToClipboard(draftData) {
 function onUseDraftFromClipboard(draft) {
   // Pre-fill the appointment modal with draft data
   modalDentist.value =
-    dentists.value.find((d) => d.name === draft.practitioner) || null;
+    dentists.value.find(
+      (d) =>
+        String(d.id) === String(draft.practitioner) ||
+        d.name === draft.practitioner,
+    ) || null;
   modalTime.value = draft.time;
   modalDuration.value = draft.duration;
   preselectedPatientId.value = draft.patientId;
@@ -678,7 +720,6 @@ function onOpenExistingAppointment({ appt, dentist }) {
   
   // If appointment is linked to a patient, navigate to Patient Journey view
   if (appt.patientId) {
-    const router = useRouter();
     router.push({
       path: `/patients/${appt.patientId}`,
       query: { tab: "journey" },
@@ -736,9 +777,9 @@ function onSaveAppointment(appt) {
     const apptTime = appt.time || modalTime.value;
     const apptDuration = Number(appt.duration || 15);
     const dentistId =
+      appt.dentistId ||
       modalDentist.value?.id ||
-      editingAppointment.value?.dentistId ||
-      appt.dentistId;
+      editingAppointment.value?.dentistId;
     diaryStore
       .updateAppointment({
         id: appt.id,
@@ -762,7 +803,7 @@ function onSaveAppointment(appt) {
         showError(msg);
       });
   } else {
-    const dentistId = modalDentist.value?.id;
+    const dentistId = appt.dentistId || modalDentist.value?.id;
     if (!dentistId) return;
     const payload = {
       dentistId,

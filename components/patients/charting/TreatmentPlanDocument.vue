@@ -20,8 +20,8 @@
           <img :src="coverImage" alt="Clinic cover" />
         </div>
         <div class="tpd-cover-title-wrap">
-          <div class="tpd-cover-title">{{ practiceName || 'Dental Practice' }}</div>
-          <div class="tpd-cover-subtitle">{{ organisationBranding.coverSubtitle || 'Personalised Treatment Plan' }}</div>
+          <div class="tpd-cover-title">{{ resolvedContent.cover.title || practiceName || 'Dental Practice' }}</div>
+          <div class="tpd-cover-subtitle">{{ resolvedContent.cover.subtitle || 'Personalised Treatment Plan' }}</div>
         </div>
         <div class="tpd-footer-email">{{ footerEmail }}</div>
       </section>
@@ -29,7 +29,7 @@
       <section v-if="sections.clinicInfo || sections.dentistInfo" class="tpd-page">
         <div v-if="sections.clinicInfo" class="tpd-two-col">
           <div>
-            <h2 class="tpd-h2">About the Clinic</h2>
+            <h2 class="tpd-h2">{{ resolvedContent.practice.title || 'About the Clinic' }}</h2>
             <p class="tpd-body">{{ clinicAbout }}</p>
           </div>
           <div class="tpd-media-wrap"><img :src="clinicImage" alt="Clinic" /></div>
@@ -37,11 +37,12 @@
 
         <div v-if="sections.dentistInfo && dentistsToShow.length" class="tpd-dentists">
           <div v-for="(dentist, idx) in dentistsToShow" :key="`${dentist.id || dentist.name}-${idx}`" class="tpd-dentist-card">
-            <div class="tpd-media-wrap"><img :src="dentistImage" alt="Dentist" /></div>
+            <div class="tpd-media-wrap"><img :src="dentist.imageUrl || coverImage" alt="Dentist" /></div>
             <div class="tpd-dentist-content">
               <h2 class="tpd-h2">About the Dentist</h2>
               <div class="tpd-dentist-name">{{ dentist.name }}</div>
-              <p class="tpd-body">Assigned clinician for this treatment plan.</p>
+              <p v-if="dentist.role" class="tpd-body tpd-body--tight">{{ dentist.role }}</p>
+              <p class="tpd-body">{{ dentist.bio || 'Assigned clinician for this treatment plan.' }}</p>
             </div>
           </div>
         </div>
@@ -117,12 +118,12 @@
             </div>
             <div class="tpd-pay-total"><span>Total Estimated Cost:</span><span>£{{ totalFormatted }}</span></div>
           </div>
-          <p class="tpd-body">Flexible payment options are available. Patients may choose installment plans based on the treatment schedule.</p>
+          <p class="tpd-body">{{ resolvedContent.paymentPlan.intro || 'Flexible payment options are available. Patients may choose installment plans based on the treatment schedule.' }}</p>
         </div>
 
         <div v-if="sections.consentForm" class="tpd-consent">
           <h2 class="tpd-h2">Consent Form</h2>
-          <p class="tpd-body">I confirm that I have been informed about my dental condition and the recommended treatment plan. The procedures, possible risks, benefits, and alternative treatment options have been explained to me.</p>
+          <p class="tpd-body">{{ resolvedContent.consentForm.intro || 'I confirm that I have been informed about my dental condition and the recommended treatment plan. The procedures, possible risks, benefits, and alternative treatment options have been explained to me.' }}</p>
           <div class="tpd-signatures">
             <div class="tpd-signature"><div class="line" /><div>Patient signature &amp; date</div></div>
             <div class="tpd-signature"><div class="line" /><div>Clinician signature &amp; date</div></div>
@@ -147,6 +148,7 @@
 <script setup>
 import ToothChart from './ToothChart.vue'
 import { getToothLabel } from './toothData.js'
+import { mergeTreatmentPlanContent, normalizeTreatmentPlanContent } from '~/shared/defaults/charting/treatmentPlanContent.js'
 
 const props = defineProps({
   activePlan: { type: Object, default: null },
@@ -163,7 +165,8 @@ const props = defineProps({
   sections: { type: Object, default: () => ({ clinicInfo: true, dentistInfo: true, diagnosis: true, treatmentPlan: true, paymentPlan: true, consentForm: false, testimonial: false }) },
   baseItems: { type: Array, default: () => [] },
   organisationEmail: { type: String, default: '' },
-  organisationBranding: { type: Object, default: () => ({}) },
+  content: { type: Object, default: () => ({}) },
+  defaultContent: { type: Object, default: () => ({}) },
   diagnosisChart: { type: Object, default: () => ({}) },
   treatmentChart: { type: Object, default: () => ({}) },
   toothStatuses: { type: Object, default: () => ({}) },
@@ -174,15 +177,19 @@ const emit = defineEmits(['share-email', 'share-whatsapp', 'download'])
 const docEl = ref(null)
 
 const footerEmail = computed(() => props.organisationEmail || 'info@clinic.com')
-const coverImage = computed(() => props.organisationBranding?.coverImageUrl || props.organisationBranding?.clinicImageUrl || '/assets/images/loginBanner.svg')
-const clinicImage = computed(() => props.organisationBranding?.clinicImageUrl || coverImage.value)
-const dentistImage = computed(() => props.organisationBranding?.dentistImageUrl || coverImage.value)
-const clinicAbout = computed(() => props.organisationBranding?.clinicAbout || `${props.practiceName || 'Our clinic'} provides modern, patient-focused dental care.`)
+const resolvedContent = computed(() => mergeTreatmentPlanContent(props.content || {}, props.defaultContent || {}))
+const coverImage = computed(() => resolvedContent.value.cover.imageUrl || resolvedContent.value.practice.imageUrl || '/assets/images/loginBanner.svg')
+const clinicImage = computed(() => resolvedContent.value.practice.imageUrl || coverImage.value)
+const clinicAbout = computed(() => resolvedContent.value.practice.about || `${props.practiceName || 'Our clinic'} provides modern, patient-focused dental care.`)
 const sections = computed(() => ({ clinicInfo: true, dentistInfo: true, diagnosis: true, treatmentPlan: true, paymentPlan: true, consentForm: false, testimonial: false, ...(props.sections || {}) }))
 const planItems = computed(() => props.items.filter((i) => String(i.status || '') !== 'existing'))
-const dentistsToShow = computed(() => props.practitioners?.length ? props.practitioners : (props.practitionerName ? [{ id: null, name: props.practitionerName }] : []))
+const dentistsToShow = computed(() => {
+  if (resolvedContent.value.dentists.length) return resolvedContent.value.dentists
+  if (props.practitioners?.length) return props.practitioners.map((dentist) => normalizeTreatmentPlanContent({ dentists: [dentist] }).dentists[0]).filter(Boolean)
+  return props.practitionerName ? [{ id: null, name: props.practitionerName, role: 'Dentist', bio: '', imageUrl: coverImage.value }] : []
+})
 const testimonials = computed(() => {
-  const raw = props.organisationBranding?.testimonials
+  const raw = resolvedContent.value.testimonials
   if (Array.isArray(raw) && raw.length) return raw.slice(0, 6)
   return ['Excellent service and very professional staff.', 'The treatment process was clear and comfortable.']
 })
@@ -248,6 +255,7 @@ defineExpose({ getDocumentHtml, printDoc })
 
 .tpd-h2 { font-size: 28px; font-weight: 700; margin: 0 0 18px; color: #1f1f23; line-height: 1.1; }
 .tpd-body { font-size: 14px; line-height: 1.6; color: #23252c; margin: 0 0 18px; white-space: pre-line; }
+.tpd-body--tight { margin-bottom: 8px; }
 
 .tpd-two-col { display: grid; grid-template-columns: 1.2fr 1fr; gap: 22px; align-items: start; margin-bottom: 24px; }
 .tpd-media-wrap { border-radius: 28px; overflow: hidden; background: #ddd; min-height: 240px; }

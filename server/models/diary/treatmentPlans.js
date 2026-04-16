@@ -12,6 +12,7 @@ export const DiaryTreatmentPlan = sequelize.define(
     color: { type: DataTypes.STRING(24), allowNull: true },
     priority: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
     appointmentsJson: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    contentJson: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
   },
   {
     tableName: 'DiaryTreatmentPlans',

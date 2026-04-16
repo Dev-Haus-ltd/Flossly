@@ -28,7 +28,7 @@
       </div>
 
       <div class="compact-right">
-        <v-menu offset-y @click.stop>
+        <v-menu offset-y content-class="appt-status-menu" @click.stop>
           <template #activator="{ props: menuProps }">
             <div v-bind="menuProps" class="status-badge compact-badge" @click.stop>
               <span class="status-dot"></span>
@@ -36,19 +36,30 @@
               <v-icon size="10" class="ml-1">mdi-chevron-down</v-icon>
             </div>
           </template>
-          <v-list density="compact" min-width="160">
+          <v-list density="compact" class="appt-status-menu__list">
             <v-list-item
-              v-for="s in statusOptions"
-              :key="s"
-              @click.stop="$emit('update-status', s)"
+              v-for="status in statusOptions"
+              :key="status.value"
+              class="appt-status-menu__item"
+              :class="{ 'appt-status-menu__item--active': normalizedStatus(appt.status) === status.value }"
+              @click.stop="$emit('update-status', status.label)"
             >
               <template #prepend>
                 <span
                   class="status-indicator"
-                  :style="{ background: statusColors[s]?.chip }"
+                  :style="{ background: status.color }"
                 ></span>
               </template>
-              <v-list-item-title style="font-size:13px">{{ s }}</v-list-item-title>
+              <v-list-item-title>{{ status.label }}</v-list-item-title>
+              <template #append>
+                <v-icon
+                  v-if="normalizedStatus(appt.status) === status.value"
+                  size="16"
+                  color="primary"
+                >
+                  mdi-check
+                </v-icon>
+              </template>
             </v-list-item>
           </v-list>
         </v-menu>
@@ -95,7 +106,7 @@
           </div>
         </div>
 
-        <v-menu offset-y @click.stop>
+        <v-menu offset-y content-class="appt-status-menu" @click.stop>
           <template #activator="{ props: menuProps }">
             <div v-bind="menuProps" class="status-badge full-badge" @click.stop>
               <span class="status-dot"></span>
@@ -103,19 +114,30 @@
               <v-icon size="10" class="ml-1">mdi-chevron-down</v-icon>
             </div>
           </template>
-          <v-list density="compact" min-width="160">
+          <v-list density="compact" class="appt-status-menu__list">
             <v-list-item
-              v-for="s in statusOptions"
-              :key="s"
-              @click.stop="$emit('update-status', s)"
+              v-for="status in statusOptions"
+              :key="status.value"
+              class="appt-status-menu__item"
+              :class="{ 'appt-status-menu__item--active': normalizedStatus(appt.status) === status.value }"
+              @click.stop="$emit('update-status', status.label)"
             >
               <template #prepend>
                 <span
                   class="status-indicator"
-                  :style="{ background: statusColors[s]?.chip }"
+                  :style="{ background: status.color }"
                 ></span>
               </template>
-              <v-list-item-title>{{ s }}</v-list-item-title>
+              <v-list-item-title>{{ status.label }}</v-list-item-title>
+              <template #append>
+                <v-icon
+                  v-if="normalizedStatus(appt.status) === status.value"
+                  size="16"
+                  color="primary"
+                >
+                  mdi-check
+                </v-icon>
+              </template>
             </v-list-item>
           </v-list>
         </v-menu>
@@ -187,15 +209,16 @@ if (missing.length) {
   throw new Error(`AppointmentCard missing: ${missing.join(', ')}`)
 }
 
+const normalizedStatus = (status) => String(status || '').trim().toLowerCase()
+
 const statusOptions = [
-  // 'Draft',
-  'Pending',
-  'Confirmed',
-  'Arrived',
-  'In Surgery',
-  'Complete',
-  'Cancelled',
-  'Did not attend'
+  { label: 'Pending', value: 'pending', color: '#d948a8' },
+  { label: 'Confirmed', value: 'confirmed', color: '#0061FB' },
+  { label: 'Arrived', value: 'arrived', color: '#f59e0b' },
+  { label: 'In Surgery', value: 'in surgery', color: '#8b5cf6' },
+  { label: 'Complete', value: 'complete', color: '#16a34a' },
+  { label: 'Cancelled', value: 'cancelled', color: '#6b7280' },
+  { label: 'Did not attend', value: 'did not attend', color: '#dc2626' },
 ]
 
 const iconMap = {
@@ -505,5 +528,48 @@ const onCardMouseDown = (e) => {
   flex-shrink: 0;
 }
 
-:deep(.v-list-item) { min-height: 34px !important; }
+:deep(.appt-status-menu) {
+  border-radius: 12px !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1) !important;
+  border: 1px solid #e5e7eb !important;
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+:deep(.appt-status-menu .appt-status-menu__list) {
+  padding: 6px !important;
+  background: #fff !important;
+  border-radius: 12px !important;
+  min-width: 180px;
+}
+
+:deep(.appt-status-menu .appt-status-menu__item) {
+  border-radius: 8px !important;
+  min-height: 38px !important;
+  padding: 0 12px !important;
+  margin-bottom: 2px;
+  transition: background-color 0.15s ease;
+}
+
+:deep(.appt-status-menu .appt-status-menu__item:last-child) {
+  margin-bottom: 0;
+}
+
+:deep(.appt-status-menu .appt-status-menu__item:hover) {
+  background: #f0f4ff !important;
+}
+
+:deep(.appt-status-menu .appt-status-menu__item--active) {
+  background: #e8f1ff !important;
+}
+
+:deep(.appt-status-menu .appt-status-menu__item--active .v-list-item-title) {
+  color: #0061FB !important;
+  font-weight: 500;
+}
+
+:deep(.appt-status-menu .v-list-item-title) {
+  font-size: 13px !important;
+  color: #1f2937;
+}
 </style>

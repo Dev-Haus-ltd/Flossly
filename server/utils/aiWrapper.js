@@ -1,5 +1,25 @@
 let anthropicClient = null;
 
+function parseJsonObject(raw = "") {
+  const text = String(raw || "").trim();
+  if (!text) throw new Error("Empty AI response");
+
+  const fencedMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fencedMatch?.[1]?.trim() || text;
+
+  try {
+    return JSON.parse(candidate);
+  } catch {}
+
+  const firstBrace = candidate.indexOf("{");
+  const lastBrace = candidate.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    return JSON.parse(candidate.slice(firstBrace, lastBrace + 1));
+  }
+
+  throw new Error("Failed to parse AI JSON response");
+}
+
 function getConfig() {
   return useRuntimeConfig();
 }
@@ -331,10 +351,104 @@ Return ONLY the JSON object with "automations" array. No other text.`;
   return automations;
 }
 
+export async function generateTreatmentPlanContentDraft({
+  organisationName,
+  organisationType,
+  patientName,
+  planName,
+  currentContent = {},
+  organisationDefaults = {},
+  practitioners = [],
+  research = {},
+}) {
+  const systemPrompt = `You write polished, credible marketing-style content for dental treatment plans.
+
+Return ONLY valid JSON. Do not wrap in markdown. Do not add commentary.
+
+Rules:
+- Use only the facts provided in the input. If a detail is missing, keep the field empty rather than inventing it.
+- Keep tone professional, warm, and patient-friendly.
+- Avoid clinical claims, guarantees, awards, years of experience, qualifications, or service specifics unless they were explicitly provided in the input.
+- Testimonials must sound generic and safe unless exact quotes were provided.
+- Prefer concise copy that fits a treatment plan PDF.
+
+Output schema:
+{
+  "cover": {
+    "title": "string",
+    "subtitle": "string",
+    "imageUrl": "string",
+    "sourceUrl": "string",
+    "sourceLabel": "string"
+  },
+  "practice": {
+    "title": "string",
+    "about": "string",
+    "imageUrl": "string",
+    "website": "string",
+    "phone": "string",
+    "email": "string",
+    "address": "string",
+    "sourceUrl": "string",
+    "sourceLabel": "string"
+  },
+  "dentists": [
+    {
+      "id": null,
+      "name": "string",
+      "role": "string",
+      "bio": "string",
+      "imageUrl": "string",
+      "sourceUrl": "string",
+      "sourceLabel": "string"
+    }
+  ],
+  "testimonials": ["string"],
+  "paymentPlan": { "intro": "string" },
+  "consentForm": { "intro": "string" }
+}`;
+
+  const prompt = `Build a treatment plan content draft for:
+- Organisation: ${organisationName || ""}
+- Organisation type: ${organisationType || ""}
+- Patient name: ${patientName || ""}
+- Plan name: ${planName || ""}
+
+CURRENT CONTENT:
+${JSON.stringify(currentContent, null, 2)}
+
+ORGANISATION DEFAULTS:
+${JSON.stringify(organisationDefaults, null, 2)}
+
+PRACTITIONERS:
+${JSON.stringify(practitioners, null, 2)}
+
+RESEARCH:
+${JSON.stringify(research, null, 2)}
+
+Instructions:
+- Reuse the strongest existing/default values where appropriate.
+- If research includes a better cover or clinic image URL, use it.
+- Write the practice about section in 2-4 sentences max.
+- Write each dentist bio in 2-3 sentences max.
+- Return 2-4 testimonials only if there is enough credible source material or existing defaults; otherwise return an empty array.
+- Keep paymentPlan.intro and consentForm.intro empty unless the input already provides safe non-clinical copy.`;
+
+  const responseText = await chat({
+    prompt,
+    systemPrompt,
+    temperature: 0.2,
+    maxTokens: 2200,
+  });
+
+  return parseJsonObject(responseText);
+}
+
 export const aiWrapper = {
   chat,
   summarize,
   generateAutomations,
   generateAutoReply,
+  generateTreatmentPlanContentDraft,
   getLlmModel,
 };

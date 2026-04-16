@@ -30,6 +30,10 @@ export default {
     return Post('/diary/treatmentPlanUpdate', payload)
   },
 
+  generateTreatmentPlanContent(payload) {
+    return Post('/diary/treatmentPlanGenerateContent', payload)
+  },
+
   deleteTreatmentPlan(payload) {
     return Post('/diary/treatmentPlanDelete', payload)
   },

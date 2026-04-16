@@ -17,6 +17,14 @@ export const LICENSE_TYPES = {
   SOAR: "Soar",
 };
 
+export const resolveUserLicenseType = (user) => {
+  const preference = Array.isArray(user?.preferences)
+    ? user.preferences[0]
+    : user?.preferences;
+
+  return preference?.licenseType || LICENSE_TYPES.TRIAL;
+};
+
 const LICENSE_FEATURES = {
   [LICENSE_TYPES.TRIAL]: new Set([
     "dashboard",
@@ -53,7 +61,7 @@ export const getLicenseTypeFromStorage = () => {
 
   try {
     const user = JSON.parse(localStorage.getItem("user") || "{}");
-    return user?.preferences?.licenseType || LICENSE_TYPES.TRIAL;
+    return resolveUserLicenseType(user);
   } catch {
     return LICENSE_TYPES.TRIAL;
   }

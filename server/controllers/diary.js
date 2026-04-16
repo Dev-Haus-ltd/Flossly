@@ -13,6 +13,7 @@ import {
   RotaShift,
   Rota,
   OrganisationTreatment,
+  Organisation,
   Role,
   UserOrganisation,
 } from "../models";
@@ -24,7 +25,14 @@ import os from "os";
 import { uploadTempFile } from "../utils/storage";
 import { parseJsonBody } from "../utils/body";
 import { DEFAULT_ORGANISATION_TREATMENTS } from "~/shared/defaults/charting/treatmentDefaults.js";
+import {
+  buildOrganisationTreatmentPlanDefaults,
+  createEmptyTreatmentPlanContent,
+  normalizeTreatmentPlanContent,
+} from "~/shared/defaults/charting/treatmentPlanContent.js";
 import { validateDentistScheduleWindow } from "~/server/utils/dentistScheduleAvailability.js";
+import { generateTreatmentPlanContentDraft } from "../utils/aiWrapper";
+import { gatherTreatmentPlanResearch } from "../utils/treatmentPlanResearch";
 
 const pad2 = (n) => String(n).padStart(2, "0");
 const resolveTimeMode = () => {
@@ -170,6 +178,7 @@ const normalizeTreatmentPlan = (row) => ({
   color: row.color || null,
   priority: Number(row.priority || 1),
   appointments: Array.isArray(row.appointmentsJson) ? row.appointmentsJson : [],
+  content: normalizeTreatmentPlanContent(row.contentJson || {}),
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });
@@ -1169,6 +1178,7 @@ export const createTreatmentPlan = async (event) => {
       appointmentsJson: Array.isArray(payload?.appointments)
         ? payload.appointments
         : [],
+      contentJson: normalizeTreatmentPlanContent(payload?.content || createEmptyTreatmentPlanContent()),
     });
     return success(normalizeTreatmentPlan(created));
   } catch (e) {
@@ -1204,6 +1214,8 @@ export const updateTreatmentPlan = async (event) => {
       row.appointmentsJson = Array.isArray(payload.appointments)
         ? payload.appointments
         : [];
+    if (payload.content !== undefined)
+      row.contentJson = normalizeTreatmentPlanContent(payload.content || {});
     await row.save();
     if (payload.name !== undefined) {
       await DiaryTreatmentPlanItem.update(
@@ -1214,6 +1226,112 @@ export const updateTreatmentPlan = async (event) => {
       );
     }
     return success(normalizeTreatmentPlan(row));
+  } catch (e) {
+    const msg =
+      (e &&
+        (e.message ||
+          (e.data && e.data.message) ||
+          (e.original && e.original.detail))) ||
+      "Internal server error";
+    return error(500, msg);
+  }
+};
+
+export const generateTreatmentPlanContent = async (event) => {
+  try {
+    const { orgId } = event.context.user || {};
+    if (!orgId) return error(401, "Unauthenticated");
+
+    const body = await readBody(event);
+    const payload = typeof body === "string" ? parseJsonBody(body) : body;
+    const patientId = Number(payload?.patientId || 0);
+    const planKey = String(payload?.planKey || "").trim();
+
+    if (!patientId) return error(400, "patientId is required");
+    if (!planKey) return error(400, "planKey is required");
+
+    const patient = await requirePatientInOrg(orgId, patientId);
+    if (!patient) return error(404, "Patient not found");
+
+    const [planRow, org, planItems] = await Promise.all([
+      DiaryTreatmentPlan.findOne({
+        where: { organisationId: Number(orgId), patientId, planKey },
+      }),
+      Organisation.findByPk(Number(orgId), {
+        attributes: ["id", "name", "type", "address", "contact", "description", "automationPlaceholders"],
+      }),
+      DiaryTreatmentPlanItem.findAll({
+        where: { organisationId: Number(orgId), patientId, planId: planKey },
+        attributes: ["practitionerId", "practitionerName", "clinicianName"],
+      }),
+    ]);
+
+    if (!planRow) return error(404, "Treatment plan not found");
+    if (!org) return error(404, "Organisation not found");
+
+    const practitionerMap = new Map();
+    for (const item of planItems) {
+      const id = Number(item.practitionerId || 0);
+      const key = id ? `id:${id}` : `name:${String(item.practitionerName || item.clinicianName || "").trim().toLowerCase()}`;
+      if (!key || practitionerMap.has(key)) continue;
+      practitionerMap.set(key, {
+        id: id || null,
+        name: String(item.practitionerName || item.clinicianName || "").trim(),
+      });
+    }
+
+    const practitionerIds = [...practitionerMap.values()]
+      .map((item) => Number(item.id || 0))
+      .filter(Boolean);
+
+    if (practitionerIds.length) {
+      const users = await User.findAll({
+        where: { id: practitionerIds },
+        attributes: ["id", "fullName", "email", "photo"],
+      });
+      for (const user of users) {
+        practitionerMap.set(`id:${user.id}`, {
+          id: user.id,
+          name: user.fullName,
+          role: "Dentist",
+          email: user.email || "",
+          photo: user.photo || "",
+        });
+      }
+    }
+
+    const practitioners = [...practitionerMap.values()].filter((item) => item.name);
+    const orgDefaults = buildOrganisationTreatmentPlanDefaults(org.toJSON(), practitioners);
+    const website = String(
+      org?.automationPlaceholders?.website
+      || org?.automationPlaceholders?.bookingLink
+      || ""
+    ).trim();
+
+    const research = await gatherTreatmentPlanResearch({
+      organisationName: org.name,
+      website,
+      practitioners,
+    });
+
+    const draft = normalizeTreatmentPlanContent(
+      await generateTreatmentPlanContentDraft({
+        organisationName: org.name,
+        organisationType: org.type,
+        patientName: String(payload?.patientName || "").trim(),
+        planName: planRow.name,
+        currentContent: normalizeTreatmentPlanContent(planRow.contentJson || {}),
+        organisationDefaults: orgDefaults,
+        practitioners,
+        research,
+      })
+    );
+
+    return success({
+      draft,
+      sources: research?.sources || [],
+      warnings: research?.warnings || [],
+    });
   } catch (e) {
     const msg =
       (e &&

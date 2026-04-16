@@ -40,7 +40,26 @@
               variant="text"
               @click="$emit('open-notes', dent)"
             />
-            <v-btn icon="mdi-dots-horizontal" size="x-small" variant="text" />
+            <v-menu location="bottom end" :offset="6">
+              <template #activator="{ props: menuProps }">
+                <v-btn
+                  v-bind="menuProps"
+                  icon="mdi-dots-horizontal"
+                  size="x-small"
+                  variant="text"
+                />
+              </template>
+              <v-list density="compact" min-width="220">
+                <v-list-item
+                  title="Dentist Schedules"
+                  @click="$emit('open-schedule-settings', dent)"
+                />
+                <v-list-item
+                  title="Appointment Reasons"
+                  @click="$emit('open-diary-settings', { section: 'Appointment Reasons', dentist: dent })"
+                />
+              </v-list>
+            </v-menu>
           </div>
         </div>
 
@@ -237,12 +256,15 @@ const props = defineProps({
   selectedDentistIds: { type: Array, default: () => [] },
   appointments: { type: Object, default: () => ({}) },
   dentistAvailability: { type: Object, default: () => ({}) },
+  highlightedAppointmentId: { type: [String, Number], default: null },
 });
 
 const emit = defineEmits([
   "slot-click",
   "update-status",
   "open-notes",
+  "open-schedule-settings",
+  "open-diary-settings",
   "slot-full",
   "move-appointment",
   "open-appointment",
@@ -593,6 +615,9 @@ const isHourFull = (dentistId, hour) => {
 const apptCardStyle = (appt) => {
   // Check if this appointment is being resized
   const isResizingThisAppt = resizing.active && resizing.appt?.id === appt.id;
+  const isHighlighted =
+    props.highlightedAppointmentId !== null &&
+    String(props.highlightedAppointmentId) === String(appt?.id);
 
   let s, e;
   if (isResizingThisAppt) {
@@ -614,7 +639,10 @@ const apptCardStyle = (appt) => {
     height: `${(duration / 60) * 100}%`,
     left: "4px",
     right: "4px",
-    zIndex: isResizingThisAppt ? 30 : 20, // Higher z-index during resize
+    zIndex: isResizingThisAppt ? 30 : isHighlighted ? 25 : 20,
+    boxShadow: isHighlighted
+      ? "0 0 0 2px #f59e0b, 0 10px 22px rgba(245, 158, 11, 0.28)"
+      : undefined,
   };
 };
 

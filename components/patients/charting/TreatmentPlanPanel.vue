@@ -51,6 +51,9 @@
       </div>
 
       <div class="tp-header__right">
+        <button v-if="resolvedActivePlanId" class="tp-hdr-btn" @click="openContentDrawer">
+          <v-icon size="15" class="mr-1">mdi-file-document-edit-outline</v-icon>Content
+        </button>
         <button class="tp-hdr-btn" :class="{ 'tp-hdr-btn--active': activeView === 'images' }" @click="toggleAuxView('images')">
           <v-icon size="15" class="mr-1">mdi-image-outline</v-icon>Images
         </button>
@@ -489,6 +492,7 @@
       <v-btn variant="outlined" size="small" rounded="lg" prepend-icon="mdi-calendar-plus" @click="$emit('add-appointment')">Add Appointment</v-btn>
       <v-btn variant="outlined" size="small" rounded="lg" prepend-icon="mdi-clock-outline" @click="$emit('set-interval')">Set Interval</v-btn>
       <div class="tp-footer__right">
+        <v-btn v-if="activeView === 'plan' && resolvedActivePlanId" variant="outlined" size="small" rounded="lg" prepend-icon="mdi-file-document-edit-outline" @click="openContentDrawer">Edit Content</v-btn>
         <v-btn v-if="activeView === 'plan'" variant="outlined" size="small" rounded="lg" prepend-icon="mdi-printer-outline" @click="$emit('print-plan')">Print Plan</v-btn>
         <span v-if="nhsBand" class="tp-nhs-badge" :class="`tp-nhs-badge--${nhsBand}`">NHS Band {{ nhsBand }}</span>
         <div class="tp-footer__total">
@@ -497,6 +501,84 @@
         </div>
       </div>
     </div>
+
+    <v-navigation-drawer v-model="contentDrawerOpen" location="right" temporary :width="560">
+      <v-toolbar flat color="white">
+        <v-toolbar-title class="tp-drawer__title">Treatment Plan Content</v-toolbar-title>
+        <v-spacer />
+        <v-btn icon variant="outlined" color="#8B8B8B" @click="closeContentDrawer" class="mr-4" style="width: 20px; height: 20px; min-width: 20px; border-radius: 50%; padding: 0;">
+          <v-icon size="14">mdi-close</v-icon>
+        </v-btn>
+      </v-toolbar>
+      <div class="tp-drawer__body">
+        <v-card class="pa-4 mb-4" color="white" elevation="0">
+          <div class="tp-content-toolbar">
+            <v-btn color="primary" variant="flat" rounded="lg" prepend-icon="mdi-auto-fix" :loading="aiGenerating" @click="generateAiContent">Generate AI Draft</v-btn>
+            <v-btn variant="outlined" rounded="lg" prepend-icon="mdi-refresh" @click="resetContentDraft">Reset</v-btn>
+          </div>
+          <div v-if="aiWarnings.length" class="tp-ai-feedback tp-ai-feedback--warn">
+            <div v-for="warning in aiWarnings" :key="warning">{{ warning }}</div>
+          </div>
+          <div v-if="aiSources.length" class="tp-ai-sources">
+            <div class="tp-ai-sources__title">AI sources</div>
+            <a v-for="source in aiSources" :key="`${source.label}-${source.url}`" class="tp-ai-sources__link" :href="source.url" target="_blank" rel="noopener noreferrer">
+              {{ source.label || source.url }}
+            </a>
+          </div>
+        </v-card>
+
+        <v-card class="pa-4 mb-4" color="white" elevation="0">
+          <div class="tp-content-section__title">Cover</div>
+          <v-text-field v-model="contentDraft.cover.title" label="Title" variant="outlined" density="compact" class="mb-3" hide-details />
+          <v-text-field v-model="contentDraft.cover.subtitle" label="Subtitle" variant="outlined" density="compact" class="mb-3" hide-details />
+          <v-text-field v-model="contentDraft.cover.imageUrl" label="Cover image URL" variant="outlined" density="compact" hide-details />
+        </v-card>
+
+        <v-card class="pa-4 mb-4" color="white" elevation="0">
+          <div class="tp-content-section__title">Practice</div>
+          <v-text-field v-model="contentDraft.practice.title" label="Section title" variant="outlined" density="compact" class="mb-3" hide-details />
+          <v-textarea v-model="contentDraft.practice.about" label="About the clinic" variant="outlined" density="compact" rows="4" auto-grow class="mb-3" hide-details />
+          <v-text-field v-model="contentDraft.practice.imageUrl" label="Practice image URL" variant="outlined" density="compact" class="mb-3" hide-details />
+          <v-text-field v-model="contentDraft.practice.website" label="Website" variant="outlined" density="compact" class="mb-3" hide-details />
+          <v-text-field v-model="contentDraft.practice.phone" label="Phone" variant="outlined" density="compact" class="mb-3" hide-details />
+          <v-text-field v-model="contentDraft.practice.email" label="Email" variant="outlined" density="compact" class="mb-3" hide-details />
+          <v-textarea v-model="contentDraft.practice.address" label="Address" variant="outlined" density="compact" rows="2" auto-grow hide-details />
+        </v-card>
+
+        <v-card class="pa-4 mb-4" color="white" elevation="0">
+          <div class="tp-content-section__title tp-content-section__title--split">
+            <span>Dentists</span>
+            <v-btn size="small" variant="text" prepend-icon="mdi-plus" @click="addDentistCard">Add dentist</v-btn>
+          </div>
+          <div v-for="(dentist, idx) in contentDraft.dentists" :key="`dentist-${idx}`" class="tp-content-card">
+            <div class="tp-content-card__actions">
+              <v-btn size="x-small" variant="text" color="error" prepend-icon="mdi-delete-outline" @click="removeDentistCard(idx)">Remove</v-btn>
+            </div>
+            <v-text-field v-model="dentist.name" label="Name" variant="outlined" density="compact" class="mb-3" hide-details />
+            <v-text-field v-model="dentist.role" label="Role" variant="outlined" density="compact" class="mb-3" hide-details />
+            <v-textarea v-model="dentist.bio" label="Bio" variant="outlined" density="compact" rows="3" auto-grow class="mb-3" hide-details />
+            <v-text-field v-model="dentist.imageUrl" label="Image URL" variant="outlined" density="compact" hide-details />
+          </div>
+        </v-card>
+
+        <v-card class="pa-4 mb-4" color="white" elevation="0">
+          <div class="tp-content-section__title tp-content-section__title--split">
+            <span>Testimonials</span>
+            <v-btn size="small" variant="text" prepend-icon="mdi-plus" @click="addTestimonial">Add quote</v-btn>
+          </div>
+          <div v-for="(testimonial, idx) in contentDraft.testimonials" :key="`testimonial-${idx}`" class="tp-content-card">
+            <div class="tp-content-card__actions">
+              <v-btn size="x-small" variant="text" color="error" prepend-icon="mdi-delete-outline" @click="removeTestimonial(idx)">Remove</v-btn>
+            </div>
+            <v-textarea v-model="contentDraft.testimonials[idx]" :label="`Quote ${idx + 1}`" variant="outlined" density="compact" rows="3" auto-grow hide-details />
+          </div>
+        </v-card>
+      </div>
+      <div class="tp-drawer__footer">
+        <v-btn color="white" class="text-primary" style="width: 48%; border-radius: 8px; border: 1px solid #dfdfdf" flat @click="closeContentDrawer">Back</v-btn>
+        <v-btn color="primary" class="text-white" style="width: 48%; border-radius: 8px" flat @click="saveContentDraft">Save Content</v-btn>
+      </div>
+    </v-navigation-drawer>
 
     <v-navigation-drawer v-model="planDrawerOpen" location="right" temporary :width="520">
       <v-toolbar flat color="white">
@@ -536,9 +618,13 @@ import { getToothLabel } from './toothData.js'
 import ChartRichTextEditor from './ChartRichTextEditor.vue'
 import ChartImagesPanel from './ChartImagesPanel.vue'
 import { makeTPName } from '~/shared/defaults/charting/chartingDefaults.js'
+import patientChartingService from '~/services/patientChartingService'
+import { createEmptyTreatmentPlanContent, mergeTreatmentPlanContent, normalizeTreatmentPlanContent } from '~/shared/defaults/charting/treatmentPlanContent.js'
 import deleteIcon from '../../../assets/crm/delete.svg'
 
 const props = defineProps({
+  patientId: { type: [String, Number], default: null },
+  patientName: { type: String, default: '' },
   items: { type: Array, default: () => [] },
   total: { type: Number, default: 0 },
   plannedCount: { type: Number, default: 0 },
@@ -551,13 +637,15 @@ const props = defineProps({
   history: { type: Array, default: () => [] },
   appointmentLinks: { type: Object, default: () => ({}) },
   practitioners: { type: Array, default: () => [] },
+  activePlanContent: { type: Object, default: () => ({}) },
+  defaultPlanContent: { type: Object, default: () => ({}) },
 })
 
 const emit = defineEmits([
   'remove', 'update', 'reorder', 'add-appointment', 'delete-appointment', 'update-appointment', 'book-appointment',
   'add-plan', 'select-plan', 'rename-plan', 'duplicate-plan', 'delete-plan', 'set-interval', 'link-appointment',
   'add-image', 'remove-image', 'update-plan-color', 'chart-scope-change',
-  'mark-complete', 'print-plan',
+  'mark-complete', 'print-plan', 'update-plan-content',
 ])
 const router = useRouter()
 
@@ -632,6 +720,9 @@ const resolvedActivePlanId = computed(() => {
   if (props.plans.some((p) => p.id === props.activePlanId)) return props.activePlanId
   return props.plans[0]?.id || null
 })
+const mergedPlanContent = computed(() =>
+  mergeTreatmentPlanContent(props.activePlanContent || {}, props.defaultPlanContent || {})
+)
 
 // Fix #6 — use status as the sole discriminator; avoids items with null appointmentGroupId
 // but non-existing status falling through to nowhere
@@ -890,6 +981,79 @@ async function cancelExpanded() {
 }
 
 const planDrawerOpen = ref(false)
+const contentDrawerOpen = ref(false)
+const aiGenerating = ref(false)
+const aiSources = ref([])
+const aiWarnings = ref([])
+const contentDraft = reactive(createEmptyTreatmentPlanContent())
+
+function syncContentDraft() {
+  Object.assign(contentDraft, normalizeTreatmentPlanContent(mergedPlanContent.value))
+}
+
+function openContentDrawer() {
+  syncContentDraft()
+  aiSources.value = []
+  aiWarnings.value = []
+  contentDrawerOpen.value = true
+}
+
+function closeContentDrawer() {
+  contentDrawerOpen.value = false
+}
+
+function resetContentDraft() {
+  Object.assign(contentDraft, normalizeTreatmentPlanContent(props.defaultPlanContent || {}))
+}
+
+function addDentistCard() {
+  contentDraft.dentists.push({
+    id: null,
+    name: '',
+    role: 'Dentist',
+    bio: '',
+    imageUrl: '',
+    sourceUrl: '',
+    sourceLabel: '',
+  })
+}
+
+function removeDentistCard(idx) {
+  contentDraft.dentists.splice(idx, 1)
+}
+
+function addTestimonial() {
+  contentDraft.testimonials.push('')
+}
+
+function removeTestimonial(idx) {
+  contentDraft.testimonials.splice(idx, 1)
+}
+
+async function generateAiContent() {
+  if (!props.patientId || !resolvedActivePlanId.value) return
+  aiGenerating.value = true
+  try {
+    const res = await patientChartingService.generateTreatmentPlanContent({
+      patientId: props.patientId,
+      patientName: props.patientName || '',
+      planKey: resolvedActivePlanId.value,
+    })
+    if (res?.code !== 0) throw new Error(res?.message || 'Unable to generate plan content.')
+    Object.assign(contentDraft, normalizeTreatmentPlanContent(res?.data?.draft || {}))
+    aiSources.value = Array.isArray(res?.data?.sources) ? res.data.sources : []
+    aiWarnings.value = Array.isArray(res?.data?.warnings) ? res.data.warnings : []
+  } catch (error) {
+    aiWarnings.value = [error?.message || 'Unable to generate plan content.']
+  } finally {
+    aiGenerating.value = false
+  }
+}
+
+function saveContentDraft() {
+  emit('update-plan-content', normalizeTreatmentPlanContent(contentDraft))
+  closeContentDrawer()
+}
 
 const imgUploading = ref(false)
 async function onAddImage(payload) {
@@ -1014,7 +1178,16 @@ watch(
   async () => {
     await nextTick()
     updateScrollButtons()
+    if (contentDrawerOpen.value) syncContentDraft()
   }
+)
+
+watch(
+  () => [props.activePlanContent, props.defaultPlanContent],
+  () => {
+    if (contentDrawerOpen.value) syncContentDraft()
+  },
+  { deep: true }
 )
 
 watch(activeView, async () => {
@@ -1734,6 +1907,75 @@ watch(activeView, async () => {
   font-weight: 400;
   font-size: 14px;
   color: #737373;
+}
+
+.tp-content-toolbar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.tp-content-section__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 12px;
+}
+
+.tp-content-section__title--split {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tp-content-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.tp-content-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
+
+.tp-ai-feedback {
+  font-size: 12px;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.tp-ai-feedback--warn {
+  background: #fff7ed;
+  color: #9a3412;
+  border: 1px solid #fdba74;
+}
+
+.tp-ai-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tp-ai-sources__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.tp-ai-sources__link {
+  font-size: 12px;
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.tp-ai-sources__link:hover {
+  text-decoration: underline;
 }
 
 .tp-drawer__input :deep(.v-field) {
