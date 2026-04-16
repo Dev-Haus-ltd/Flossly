@@ -114,7 +114,7 @@
                 :is-selected="selectedToothFdi === fdi"
                 :active-condition="isRowInteractive(row.id) ? activeCondition : null"
                 :is-bridge-pending="bridgeSelectMode && bridgeStartFdi === fdi"
-                :size="usesProfileRow(row.id) ? 60 : 52"
+                :size="usesProfileRow(row.id) ? profileToothSize : standardToothSize"
                 @surface-click="onSurfaceClickRow(row.id, $event)"
                 @tooth-click="onToothClickRow(row.id, $event)"
               />
@@ -154,7 +154,7 @@
                 :is-selected="selectedToothFdi === fdi"
                 :active-condition="isRowInteractive(row.id) ? activeCondition : null"
                 :is-bridge-pending="bridgeSelectMode && bridgeStartFdi === fdi"
-                :size="usesProfileRow(row.id) ? 60 : 52"
+                :size="usesProfileRow(row.id) ? profileToothSize : standardToothSize"
                 @surface-click="onSurfaceClickRow(row.id, $event)"
                 @tooth-click="onToothClickRow(row.id, $event)"
               />
@@ -278,6 +278,9 @@ const currentDiagnosis = computed(() => {
   if (!statusPopup.rowId || !statusPopup.fdi) return ''
   return getAnnotation(targetRowForSelection(statusPopup.rowId), statusPopup.fdi).diagnosis || ''
 })
+
+const standardToothSize = computed(() => 48)
+const profileToothSize = computed(() => 56)
 
 function getTooth(fdi) {
   return props.chart[fdi] || createDefaultTooth(fdi)
@@ -561,11 +564,11 @@ onUnmounted(() => {
 
 <style scoped>
 .tooth-chart {
-  --tooth-size: 52px;
-  --tooth-gap: 2px;
+  --tooth-size: 48px;
+  --tooth-gap: 1px;
   --tooth-step: calc(var(--tooth-size) + var(--tooth-gap));
   user-select: none;
-  padding: 8px 4px;
+  padding: 8px 2px;
 }
 
 .chart-grid {
@@ -661,7 +664,7 @@ onUnmounted(() => {
 }
 
 .midline-gap {
-  width: 8px;
+  width: 4px;
   flex-shrink: 0;
 }
 

@@ -50,14 +50,25 @@
           <div class="appointments-toolbar__left">
             <v-text-field
               v-model="appointmentSearch"
-              placeholder="Search appointments"
-              append-inner-icon="mdi-magnify"
+              placeholder="Search"
+              clearable
+              @click:clear="appointmentSearch = ''"
               variant="solo"
               density="compact"
               hide-details
+              bg-color="#F3F4F6"
               flat
               class="custom-search appointments-search"
-            />
+            >
+              <template #append-inner>
+                <img
+                  :src="searchicon"
+                  alt="search icon"
+                  width="14"
+                  height="14"
+                />
+              </template>
+            </v-text-field>
             <v-menu
               v-model="appointmentFilterMenu"
               :close-on-content-click="false"
@@ -144,67 +155,108 @@
           </v-chip>
         </div>
 
-        <v-card class="with-border rounded-lg elevation-0">
-          <div class="appointments-table-head">
-            <div>
-              <div class="text-subtitle-2 font-weight-medium">Appointment list</div>
-              <div class="text-caption text-medium-emphasis">Patient diary bookings and treatment-linked visits</div>
-            </div>
-          </div>
-          <v-data-table-server
-            :items="pagedAppointments"
-            :items-length="appointmentTotal"
-            :headers="appointmentHeaders"
-            :loading="appointmentLoading"
-            :items-per-page="appointmentOptions.itemsPerPage"
-            :page="appointmentOptions.page"
-            density="comfortable"
-            class="automation-data-table full-width-table"
-            @update:options="onAppointmentOptions"
-          >
-            <template #item.when="{ item }">
-              <div class="text-body-2">{{ item.when }}</div>
-            </template>
-            <template #item.duration="{ item }">
-              <div class="text-body-2 text-medium-emphasis">{{ item.duration }}</div>
-            </template>
-            <template #item.dentistName="{ item }">
-              <div class="d-flex align-center gap-2">
-                <v-avatar size="28" color="primary" class="text-white font-weight-600">
-                  {{ item.dentistInitials }}
-                </v-avatar>
-                <div class="text-body-2">{{ item.dentistName || 'Unassigned' }}</div>
+        <v-expansion-panels
+          v-model="appointmentsPanelOpen"
+          :elevation="0"
+          flat
+          multiple
+          class="appointments-panels"
+        >
+          <v-expansion-panel rounded="lg" class="border-sm pb-1">
+            <v-expansion-panel-title>
+              <div class="d-flex align-center">
+                <v-chip color="primary" label>
+                  <v-icon class="mr-2">mdi-calendar-month-outline</v-icon>
+                  Appointments
+                </v-chip>
+                <v-chip class="ml-2" color="primary" label>
+                  {{ appointmentTotal }}
+                </v-chip>
               </div>
-            </template>
-            <template #item.treatmentPlan="{ item }">
-              <div class="text-body-2 text-medium-emphasis">{{ item.treatmentPlan || '-' }}</div>
-            </template>
-            <template #item.treatmentName="{ item }">
-              <div class="text-body-2 font-weight-500">{{ item.treatmentName || 'Exam' }}</div>
-            </template>
-            <template #item.notes="{ item }">
-              <div class="text-body-2" :class="{ 'text-error': item.status?.toLowerCase() === 'cancelled' }">
-                {{ item.notes || '-' }}
-              </div>
-            </template>
-            <template #item.arrival="{ item }">
-              <div class="text-body-2 text-medium-emphasis">{{ item.arrival || '-' }}</div>
-            </template>
-            <template #item.status="{ item }">
-              <v-chip size="small" :color="statusColor(item.status)" variant="tonal" class="font-weight-medium">
-                {{ item.status }}
-              </v-chip>
-            </template>
-            <template #item.actions="{ item }">
-              <v-btn icon variant="text" color="primary" @click="openEditAppointment(item)">
-                <v-icon size="18">mdi-pencil</v-icon>
-              </v-btn>
-            </template>
-            <template #no-data>
-              <div class="text-center py-6">No appointments found</div>
-            </template>
-          </v-data-table-server>
-        </v-card>
+            </v-expansion-panel-title>
+            <v-expansion-panel-text class="pt-0">
+              <v-data-table-server
+                :items="pagedAppointments"
+                :items-length="appointmentTotal"
+                :headers="appointmentHeaders"
+                :loading="appointmentLoading"
+                :items-per-page="appointmentOptions.itemsPerPage"
+                :page="appointmentOptions.page"
+                density="comfortable"
+                class="appointments-data-table full-width-table"
+                @update:options="onAppointmentOptions"
+              >
+                <template #headers="{ columns }">
+                  <tr>
+                    <th
+                      v-for="(column, index) in columns"
+                      :key="column.key"
+                      :style="appointmentHeaderStyle(index)"
+                    >
+                      <div class="appointments-table-th">
+                        <p class="mb-0">{{ column.title }}</p>
+                      </div>
+                    </th>
+                  </tr>
+                </template>
+                <template #item.when="{ item }">
+                  <div class="text-body-2">{{ item.when }}</div>
+                </template>
+                <template #item.duration="{ item }">
+                  <div class="text-body-2 text-medium-emphasis">{{ item.duration }}</div>
+                </template>
+                <template #item.dentistName="{ item }">
+                  <div class="d-flex align-center gap-2">
+                    <v-avatar size="28" color="primary" class="text-white font-weight-600">
+                      {{ item.dentistInitials }}
+                    </v-avatar>
+                    <div class="text-body-2">{{ item.dentistName || 'Unassigned' }}</div>
+                  </div>
+                </template>
+                <template #item.treatmentPlan="{ item }">
+                  <div class="text-body-2 text-medium-emphasis">{{ item.treatmentPlan || '-' }}</div>
+                </template>
+                <template #item.treatmentName="{ item }">
+                  <div class="text-body-2 font-weight-500">{{ item.treatmentName || 'Exam' }}</div>
+                </template>
+                <template #item.notes="{ item }">
+                  <div class="text-body-2" :class="{ 'text-error': item.status?.toLowerCase() === 'cancelled' }">
+                    {{ item.notes || '-' }}
+                  </div>
+                </template>
+                <template #item.arrival="{ item }">
+                  <div class="text-body-2 text-medium-emphasis">{{ item.arrival || '-' }}</div>
+                </template>
+                <template #item.status="{ item }">
+                  <v-chip size="small" :color="statusColor(item.status)" variant="tonal" class="font-weight-medium">
+                    {{ item.status }}
+                  </v-chip>
+                </template>
+                <template #item.actions="{ item }">
+                  <div class="appointments-actions">
+                    <button
+                      class="appointments-action-btn"
+                      title="View in Diary"
+                      @click="openViewAppointment(item)"
+                    >
+                      <img :src="viewIcon" alt="View" class="appointments-action-icon" />
+                    </button>
+                    <button
+                      class="appointments-action-btn"
+                      title="Edit appointment"
+                      @click="openEditAppointment(item)"
+                    >
+                      <img :src="editIcon" alt="Edit" class="appointments-action-icon" />
+                    </button>
+                  </div>
+                </template>
+                <template #no-data>
+                  <div class="text-center py-6">No appointments found</div>
+                </template>
+              </v-data-table-server>
+            </v-expansion-panel-text>
+          </v-expansion-panel>
+        </v-expansion-panels>
 
         <AddAppointment
           v-model="showAppointmentDrawer"
@@ -234,10 +286,14 @@ import { useMainStore } from '@/stores/index'
 import AddAppointment from '@/components/diary/addAppointment.vue'
 import { ref, computed, onMounted, watch } from 'vue'
 import CommonStatCard from '@/components/Common/statCard.vue'
+import editIcon from '@/assets/icons/edit.svg'
+import viewIcon from '@/assets/icons/view.svg'
+import searchicon from '@/assets/icons/listView/serach-icon.svg'
 
 definePageMeta({ layout: 'home' })
 
 const route = useRoute()
+const router = useRouter()
 const store = useDiaryStore()
 const mainStore = useMainStore()
 const chartingStore = usePatientChartingStore()
@@ -274,6 +330,7 @@ const handleJourneySave = async (payload) => {
 // --- Appointments tab ---
 const appointmentRows = ref([])
 const appointmentLoading = ref(false)
+const appointmentsPanelOpen = ref([0])
 const appointmentOptions = ref({ page: 1, itemsPerPage: 10 })
 const appointmentTotal = ref(0)
 const appointmentSearch = ref('')
@@ -308,6 +365,17 @@ const appointmentHeaders = [
   { title: 'Appointment Status', key: 'status', sortable: false },
   { title: '', key: 'actions', sortable: false, align: 'end' },
 ]
+
+const appointmentColumnWidths = [200, 100, 200, 150, 200, 240, 140, 160, 80]
+
+const appointmentHeaderStyle = (index) => ({
+  width: `${appointmentColumnWidths[index] || 160}px`,
+  minWidth: `${appointmentColumnWidths[index] || 160}px`,
+  padding: '0px 12px',
+  fontSize: '14px',
+  backgroundColor: '#F6F6F6',
+  position: 'relative',
+})
 
 const patientOptions = computed(() => {
   if (!patient.value) return []
@@ -477,6 +545,19 @@ const openEditAppointment = (row) => {
   showAppointmentDrawer.value = true
 }
 
+const openViewAppointment = (row) => {
+  const appointmentId = row.diaryAppointmentId || row.id
+  if (!appointmentId) return
+  router.push({
+    path: '/diary/calendar',
+    query: {
+      date: row.date || '',
+      dentistId: row.dentistId ? String(row.dentistId) : '',
+      appointmentId: String(appointmentId),
+    },
+  })
+}
+
 const buildDateTime = (dateStr, timeStr) => {
   if (!dateStr || !timeStr) return null
   const t = timeStr.length === 5 ? `${timeStr}:00` : timeStr
@@ -555,6 +636,20 @@ const handleAppointmentSave = async (payload) => {
   height: 4px;
 }
 .with-border { border:1px solid #e5e7eb; }
+.border-sm {
+  border: 1px solid rgb(var(--v-theme-outline));
+  margin-bottom: 8px;
+}
+.appointments-panels :deep(.v-expansion-panel-title) {
+  border-bottom: 1px solid #e5e7eb;
+  min-height: 48px;
+}
+.appointments-panels :deep(.v-expansion-panel-text) {
+  padding: 0 !important;
+}
+.appointments-panels :deep(.v-expansion-panel-text__wrapper) {
+  padding: 0 !important;
+}
 .appointments-toolbar {
   display: flex;
   align-items: center;
@@ -591,27 +686,86 @@ const handleAppointmentSave = async (payload) => {
   gap: 8px;
   flex-wrap: wrap;
 }
-.appointments-table-head {
+.appointments-table-th {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 18px 20px 0;
+  min-height: 44px;
+  font-weight: 600;
+  color: #374151;
 }
-.automation-data-table :deep(thead th) { background:#f8f9fa; font-weight:600 !important; font-size:12px !important; }
-.automation-data-table :deep(tbody td) { font-size:14px; }
+.appointments-data-table {
+  border-top: none;
+  border-radius: unset;
+}
+.appointments-data-table :deep(.v-table__wrapper) {
+  margin-top: 0 !important;
+}
+.appointments-data-table :deep(.v-data-table tbody tr) {
+  height: 52px !important;
+}
+.appointments-data-table :deep(.v-data-table td) {
+  height: 52px !important;
+  padding: 6px 12px !important;
+  vertical-align: middle !important;
+  font-size: 14px;
+}
+.appointments-data-table :deep(.v-data-table tbody tr:hover) {
+  background: #fafafa !important;
+}
+.appointments-data-table :deep(.v-table .v-table__wrapper > table > thead > tr > th) {
+  border-right: 1px solid rgba(0, 0, 0, 0.12);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+.appointments-data-table :deep(.v-table .v-table__wrapper > table > tbody > tr > td) {
+  border-right: 1px solid rgba(0, 0, 0, 0.12);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+.appointments-data-table :deep(.v-table .v-table__wrapper > table > thead > tr > th:last-child),
+.appointments-data-table :deep(.v-table .v-table__wrapper > table > tbody > tr > td:last-child) {
+  border-right: none;
+}
+.appointments-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.appointments-action-btn {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.appointments-action-btn:hover {
+  background: #f3f4f6;
+}
+.appointments-action-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
 .full-width-table :deep(.v-table__wrapper) { width: 100%; }
 .full-width-table :deep(table) { width: 100% !important; table-layout: auto; }
-.automation-data-table :deep(tbody tr:hover) { background:#fafafa !important; }
-.automation-data-table :deep(th:nth-child(1)) { width: 200px; }
-.automation-data-table :deep(th:nth-child(2)) { width: 100px; }
-.automation-data-table :deep(th:nth-child(3)) { width: 200px; }
-.automation-data-table :deep(th:nth-child(4)) { width: 150px; }
-.automation-data-table :deep(th:nth-child(5)) { width: 200px; }
-.automation-data-table :deep(th:nth-child(6)) { width: 240px; }
-.automation-data-table :deep(th:nth-child(7)) { width: 140px; }
-.automation-data-table :deep(th:nth-child(8)) { width: 160px; }
-.automation-data-table :deep(th:nth-child(9)) { width: 80px; }
-.custom-search { height: 40px; border-radius: 8px; font-size: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.custom-search {
+  height: 46px;
+  border-radius: 8px;
+  font-size: 14px;
+  background-color: #F3F4F6 !important;
+  text-transform: none;
+  box-shadow: none;
+  color: #737373;
+  align-items: center;
+}
+.custom-search :deep(input::placeholder) {
+  color: #737373;
+  opacity: 1;
+}
 .input-bordered :deep(.v-field) { border: 1px solid #dfdfdf !important; border-radius: 8px !important; background: #fff !important; min-height: 44px; font-size: 14px; }
 .action-btn { height: 40px; text-transform: none; font-weight: 500; font-size: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
 @media (max-width: 960px) {

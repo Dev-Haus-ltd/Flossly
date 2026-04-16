@@ -136,8 +136,6 @@
       <!-- Step 2: Full treatment plan panel -->
       <div v-if="currentStep === 2" class="treatment-plan-wrap">
         <TreatmentPlanPanel
-          :patient-id="patientId"
-          :patient-name="patientName"
           :items="store.treatmentItems"
           :total="store.treatmentTotal"
           :planned-count="store.plannedCount"
@@ -150,8 +148,6 @@
           :history="store.historyEntries"
           :appointment-links="store.appointmentLinks"
           :practitioners="store.practitioners"
-          :active-plan-content="activePlanOverrides"
-          :default-plan-content="organisationPlanDefaults"
           @remove="store.removeTreatmentItemById($event)"
           @update="onTreatmentUpdate"
           @reorder="onReorder"
@@ -171,40 +167,45 @@
           @book-appointment="onBookAppointment"
           @chart-scope-change="onChartScopeChange"
           @mark-complete="onMarkComplete"
-          @update-plan-content="store.updateTreatmentPlanContent(store.activePlanId, $event)"
           @print-plan="currentStep = 3"
         />
       </div>
 
       <!-- Step 3 & 4: Two-column layout — sections control + live document preview -->
       <div v-if="currentStep === 3" class="tpd-layout">
-        <TreatmentPlanDocument
-          :active-plan="activePlanObj"
-          :plan-ref="activePlanRef"
-          :items="store.treatmentItems"
-          :appointments="store.appointments"
-          :notation="store.notation"
+        <TreatmentPlanEditorPanel
+          :patient-id="patientId"
           :patient-name="patientName"
-          :practice-name="practiceName"
-          :practitioner-name="activePractitionerName"
-          :practitioners="planPractitioners"
-          :base-items="baseChartItems"
+          :active-plan-id="store.activePlanId"
+          :active-plan="activePlanObj"
           :sections="planSections"
-          :organisation-email="organisationEmail"
           :content="activePlanContent"
           :default-content="organisationPlanDefaults"
-          :diagnosis-chart="diagnosisSnapshotChart"
-          :treatment-chart="treatmentSnapshotChart"
-          :tooth-statuses="store.toothStatuses"
-          :teeth-type="store.teethType"
-        />
-        <PlanSectionsPanel
-          :sections="planSections"
-          :base-items="baseChartItems"
-          :items="store.treatmentItems"
-          :notation="store.notation"
           @update:sections="Object.assign(planSections, $event)"
+          @update-plan-content="store.updateTreatmentPlanContent(store.activePlanId, $event)"
         />
+        <div class="tpd-preview-pane">
+          <TreatmentPlanDocument
+            :active-plan="activePlanObj"
+            :plan-ref="activePlanRef"
+            :items="store.treatmentItems"
+            :appointments="store.appointments"
+            :notation="store.notation"
+            :patient-name="patientName"
+            :practice-name="practiceName"
+            :practitioner-name="activePractitionerName"
+            :practitioners="planPractitioners"
+            :base-items="baseChartItems"
+            :sections="planSections"
+            :organisation-email="organisationEmail"
+            :content="activePlanContent"
+            :default-content="organisationPlanDefaults"
+            :diagnosis-chart="diagnosisSnapshotChart"
+            :treatment-chart="treatmentSnapshotChart"
+            :tooth-statuses="store.toothStatuses"
+            :teeth-type="store.teethType"
+          />
+        </div>
       </div>
 
       <div v-if="currentStep === 4" class="tpd-layout tpd-layout--overview">
@@ -390,7 +391,7 @@ import TreatmentPlanPanel from './TreatmentPlanPanel.vue'
 import CodesPanel from './CodesPanel.vue'
 import DiagnosePanel from './DiagnosePanel.vue'
 import TreatmentPlanDocument from './TreatmentPlanDocument.vue'
-import PlanSectionsPanel from './PlanSectionsPanel.vue'
+import TreatmentPlanEditorPanel from './TreatmentPlanEditorPanel.vue'
 import { usePatientChartingStore } from '@/stores/patientCharting'
 import { useMainStore } from '@/stores/index'
 import { useOrgStore } from '@/stores/organisation'
@@ -1124,10 +1125,19 @@ onMounted(() => {
   display: flex;
   gap: 16px;
   align-items: flex-start;
+  flex-wrap: wrap;
 }
 
 .tpd-layout--overview {
   display: block;
+}
+
+.tpd-preview-pane {
+  flex: 1;
+  min-width: 0;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 /* ── Save indicator ──────────────────────────────────────────────── */
