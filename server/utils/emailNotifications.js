@@ -1179,5 +1179,104 @@ export const sendOrganisationReferralEmail = async (data) => {
   });
 };
 
+// CONSENT FORMS NOTIFICATIONS
+export const sendConsentFormEmail = async (data) => {
+  const {
+    orgId,
+    patientEmail,
+    patientName,
+    formName,
+    practiceInfo = {},
+    customMessage = '',
+    expiryDays = 30,
+    expiresAt = null,
+    token = null,
+  } = data;
+
+  if (!patientEmail || !token) {
+    console.error('sendConsentFormEmail: Missing required fields - patientEmail or token');
+    return;
+  }
+
+const baseUrl =
+  (config?.public?.BASE_URL || process.env.BASE_URL || 'http://localhost:3000')
+    .replace(/\/+$/, '');
+
+const accessUrl = `${baseUrl}/form/${token}`;
+
+  const expiryText = expiresAt 
+    ? new Date(expiresAt).toLocaleDateString('en-GB', { 
+        day: '2-digit', 
+        month: 'long', 
+        year: 'numeric' 
+      })
+    : `in ${expiryDays} days`;
+
+  const practiceName = practiceInfo?.name || practiceInfo?.organisationName || 'Flossly';
+
+  const content = `
+    <p>Dear ${patientName || 'Patient'},</p>
+    <br/>
+    <p>We're excited to share an important document with you:</p>
+    <p><strong style="font-size: 16px; color: #0061fb;">${formName}</strong></p>
+    <br/>
+    <p>Please review and sign this digital form at your earliest convenience. Your digital signature will be secure and legally binding.</p>
+    <br/>
+    <p style="text-align:center;margin-top:30px;margin-bottom:30px;">
+      <a href="${accessUrl}" 
+         target="_blank" 
+         style="background-color: #0061fb; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 600; font-size: 16px;">
+        Review & Sign Document
+      </a>
+    </p>
+    <br/>
+    <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; border-left: 4px solid #0061fb;">
+      <p style="margin: 0 0 8px 0; font-size: 13px; color: #6b7280;"><strong>📋 Document Details</strong></p>
+      <p style="margin: 0 0 4px 0; font-size: 13px; color: #374151;">
+        <strong>Form:</strong> ${formName}
+      </p>
+      <p style="margin: 0 0 4px 0; font-size: 13px; color: #374151;">
+        <strong>Practice:</strong> ${practiceName}
+      </p>
+      <p style="margin: 0; font-size: 13px; color: #374151;">
+        <strong>Link expires:</strong> ${expiryText}
+      </p>
+    </div>
+    <br/>
+    ${customMessage ? `
+    <p><strong>Message from your practice:</strong></p>
+    <p style="font-style: italic; color: #6b7280;">${customMessage}</p>
+    <br/>
+    ` : ''}
+    <p style="font-size: 13px; color: #9ca3af;">
+      💡 <strong>Tip:</strong> The link is unique to you and secure. It will only work on the device and browser where you first open it.
+    </p>
+    <br/>
+    <p style="font-size: 13px; color: #9ca3af;">
+      If you have any questions or encounter any issues, please reply to this email or contact us for support.
+    </p>
+    <br/>
+    <p>Best regards,<br/>
+      <strong>${practiceName}</strong><br/>
+      Powered by Flossly
+    </p>
+  `;
+
+  const subject = `Please Review & Sign: ${formName}`;
+  const html = template
+    .replaceAll("{subject}", subject)
+    .replace("{content}", content);
+
+  try {
+    await sendEmail(orgId, {
+      to: [patientEmail],
+      subject,
+      html,
+    });
+  } catch (error) {
+    console.error('Error sending consent form email:', error);
+    throw error;
+  }
+};
 
 // leaves

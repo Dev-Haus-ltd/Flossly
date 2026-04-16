@@ -96,6 +96,9 @@ import { DiaryPatientForm } from "./diary/patientForm";
 import { DiaryPatientChart } from "./diary/patientCharts";
 import { DiaryTreatmentPlan } from "./diary/treatmentPlans";
 import { DiaryTreatmentPlanItem } from "./diary/treatmentPlanItems";
+import { ConsentFormTemplate } from "./diary/consentFormTemplate";
+import { ConsentFormDocument } from "./diary/consentFormDocument";
+import { ConsentFormSignatureAudit } from "./diary/consentFormSignatureAudit";
 // Organisation dictionary
 import { OrganisationTreatment } from "./organisations/organisationTreatments";
 import { CrmLeadTreatment } from "./crm/leadTreatments";
@@ -276,6 +279,30 @@ DiaryAppointment.hasMany(DiaryTreatmentPlanItem, { foreignKey: 'appointmentId', 
 DiaryPatient.hasMany(DiaryTreatmentPlan, { foreignKey: 'patientId', as: 'treatmentPlans', onDelete: 'CASCADE', hooks: true });
 DiaryTreatmentPlan.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
 DiaryTreatmentPlan.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+
+// Consent Form Associations
+ConsentFormTemplate.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+ConsentFormTemplate.belongsTo(User, { foreignKey: 'createdBy', as: 'creator', onDelete: 'SET NULL' });
+ConsentFormTemplate.belongsTo(User, { foreignKey: 'updatedBy', as: 'updater', onDelete: 'SET NULL' });
+Organisation.hasMany(ConsentFormTemplate, { foreignKey: 'organisationId', as: 'consentFormTemplates', onDelete: 'CASCADE', hooks: true });
+User.hasMany(ConsentFormTemplate, { foreignKey: 'createdBy', as: 'createdConsentTemplates', onDelete: 'SET NULL' });
+
+ConsentFormDocument.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
+ConsentFormDocument.belongsTo(ConsentFormTemplate, { foreignKey: 'templateId', as: 'template', onDelete: 'RESTRICT' });
+ConsentFormDocument.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+ConsentFormDocument.belongsTo(User, { foreignKey: 'sentBy', as: 'sentByUser', onDelete: 'SET NULL' });
+ConsentFormDocument.belongsTo(User, { foreignKey: 'voidedBy', as: 'voidedByUser', onDelete: 'SET NULL' });
+DiaryPatient.hasMany(ConsentFormDocument, { foreignKey: 'patientId', as: 'consentDocuments', onDelete: 'CASCADE', hooks: true });
+ConsentFormTemplate.hasMany(ConsentFormDocument, { foreignKey: 'templateId', as: 'documents' });
+Organisation.hasMany(ConsentFormDocument, { foreignKey: 'organisationId', as: 'consentDocuments', onDelete: 'CASCADE', hooks: true });
+User.hasMany(ConsentFormDocument, { foreignKey: 'sentBy', as: 'sentConsentDocuments', onDelete: 'SET NULL' });
+
+ConsentFormSignatureAudit.belongsTo(ConsentFormDocument, { foreignKey: 'documentId', as: 'document', onDelete: 'CASCADE', hooks: true });
+ConsentFormSignatureAudit.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
+ConsentFormSignatureAudit.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+ConsentFormSignatureAudit.belongsTo(User, { foreignKey: 'performedBy', as: 'performedByUser', onDelete: 'SET NULL' });
+ConsentFormDocument.hasMany(ConsentFormSignatureAudit, { foreignKey: 'documentId', as: 'signatureAudit', onDelete: 'CASCADE', hooks: true });
+User.hasMany(ConsentFormSignatureAudit, { foreignKey: 'performedBy', as: 'signatureAuditTrail', onDelete: 'SET NULL' });
 
 // OrganisationTreatment
 OrganisationTreatment.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
@@ -706,6 +733,9 @@ export {
   DiaryPatientChart,
   DiaryTreatmentPlan,
   DiaryTreatmentPlanItem,
+  ConsentFormTemplate,
+  ConsentFormDocument,
+  ConsentFormSignatureAudit,
   OrganisationTreatment,
   DictionaryScript,
   OrganisationScript,
