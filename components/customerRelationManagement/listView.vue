@@ -328,7 +328,7 @@
               <!-- Default renderer for other columns -->
               <template v-else-if="col.key === 'inquiryDate'">
                 <div class="pa-1">
-                  <p class="mb-0 ml-2">{{ formatDate(item[col.key]) }}</p>
+                  <p class="mb-0 ml-2">{{ formatDateTime(item[col.key]) }}</p>
                 </div>
               </template>
               <template v-else-if="col.key === 'followUpDate'">
@@ -485,7 +485,10 @@
                   <p class="ml-2 mb-0 font-weight-medium">{{ resolveLeadName(item) }}</p>
                 </div>
               </template>
-              <template v-else-if="col.key === 'inquiryDate' || col.key === 'followUpDate'">
+              <template v-else-if="col.key === 'inquiryDate'">
+                <p class="ml-2 mb-0">{{ formatDateTime(item[col.key]) }}</p>
+              </template>
+              <template v-else-if="col.key === 'followUpDate'">
                 <p class="ml-2 mb-0">{{ formatDate(item[col.key]) }}</p>
               </template>
               <template v-else-if="col.key === 'comments'">
@@ -798,7 +801,7 @@
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 import { buildRecipientContext } from '@/lib/crm/previewContext'
 import { applyCrmPlaceholders } from '@/lib/crm/placeholders'
-import { formatDateDDMMYYYY } from "@/lib/dateFormatter";
+import { formatDateDDMMYYYY, formatDateTime } from "@/lib/dateFormatter";
 import { formatAssignedUsers, formatTreatmentValue } from "@/lib/misc";
 import { getLeadDisplayName, getLeadEmail, getLeadPhone } from "@/lib/normalizers/lead";
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults'
@@ -1394,7 +1397,8 @@ const resolveLeadValue = (lead, key) => {
   if (key === 'leadSource') return lead?.leadSource?.name || lead?.leadSource || '';
   if (key === 'treatment') return formatTreatmentValue(lead?.treatment);
   if (key === 'assigned') return formatAssignedUsers(lead?.assigned || []);
-  if (key === 'inquiryDate' || key === 'followUpDate') return formatDate(lead?.[key]);
+  if (key === 'inquiryDate') return formatDateTime(lead?.[key]);
+  if (key === 'followUpDate') return formatDate(lead?.[key]);
   if (key === 'metaPage') return lead?.metaPage || lead?.pageName || '';
   if (key === 'pageName') return lead?.pageName || lead?.metaPage || '';
   if (key === 'pageId') return lead?.pageId || '';

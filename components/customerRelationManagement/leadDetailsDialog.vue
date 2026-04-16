@@ -141,7 +141,7 @@
                   </v-col>
                   <v-col cols="12" md="5">
                     <span class="value-text">{{
-                      formatDate(selectedLead.inquiryDate)
+                      formatDateTime(selectedLead.inquiryDate)
                     }}</span>
                   </v-col>
 
@@ -557,7 +557,7 @@
 </template>
 
 <script setup>
-import { formatDateOnly } from "@/lib/dateFormatter";
+import { formatDateOnly, formatDateTime } from "@/lib/dateFormatter";
 import { getLeadDisplayName } from "@/lib/normalizers/lead";
 import { crmAutomationDefaults } from '@shared/defaults/crmAutomationDefaults'
 import { useCrmStore } from '@/stores/crm'
