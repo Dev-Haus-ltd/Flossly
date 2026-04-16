@@ -585,6 +585,17 @@ const clampFloatingPosition = (nextX, nextY) => {
   };
 };
 
+const getDefaultFloatingPosition = () => {
+  if (!process.client) return { x: 8, y: 8 };
+  const el = floatingEl.value;
+  const width = el?.offsetWidth || 140;
+  const height = el?.offsetHeight || 64;
+  return clampFloatingPosition(
+    window.innerWidth - width - 20,
+    window.innerHeight - height - 20
+  );
+};
+
 const stopFloatingDrag = (persist = true) => {
   if (dragState.pointerId !== null && floatingEl.value?.hasPointerCapture?.(dragState.pointerId)) {
     floatingEl.value.releasePointerCapture(dragState.pointerId);
@@ -714,9 +725,14 @@ onMounted(() => {
     getRoles();
   }
   syncOnboardingState();
-  const next = clampFloatingPosition(x.value, y.value);
+  const next = savedPos.value
+    ? clampFloatingPosition(x.value, y.value)
+    : getDefaultFloatingPosition();
   x.value = next.x;
   y.value = next.y;
+  if (!savedPos.value) {
+    savedPos.value = { x: x.value, y: y.value };
+  }
   window.addEventListener('pointermove', onFloatingPointerMove, { passive: false });
   window.addEventListener('pointerup', onFloatingPointerUp);
   window.addEventListener('pointercancel', onFloatingPointerCancel);
