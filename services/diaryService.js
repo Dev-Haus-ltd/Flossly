@@ -124,6 +124,13 @@ export default {
         .catch(reject);
     });
   },
+  deleteAppointment(id) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/appointmentDelete", { id })
+        .then(resolve)
+        .catch(reject);
+    });
+  },
   listDentists(date) {
     const q = new URLSearchParams();
     if (date) q.append("date", date);

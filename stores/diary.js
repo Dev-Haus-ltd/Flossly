@@ -3,11 +3,28 @@ import diaryService from "~/services/diaryService";
 export const useDiaryStore = defineStore("diaryStore", {
   state: () => ({
     isLoading: false,
+    _pending: 0,
   }),
 
   getters: {},
 
   actions: {
+    _start() {
+      this._pending++;
+      this.isLoading = true;
+    },
+    _end() {
+      this._pending = Math.max(0, this._pending - 1);
+      this.isLoading = this._pending > 0;
+    },
+    async _wrap(promiseFactory) {
+      this._start();
+      try {
+        return await promiseFactory();
+      } finally {
+        this._end();
+      }
+    },
     listTreatments() {
       this.isLoading = true;
       return new Promise((resolve, reject) => {
@@ -187,6 +204,23 @@ deletePatient(patientId) {
       return new Promise((resolve, reject) => {
         diaryService
           .updateAppointment(payload)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+    deleteAppointment(appointmentId) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        const id =
+          typeof appointmentId === "object" ? appointmentId?.id : appointmentId;
+        diaryService
+          .deleteAppointment(id)
           .then((res) => {
             this.isLoading = false;
             resolve(res);

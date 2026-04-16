@@ -40,7 +40,11 @@
               variant="text"
               @click="$emit('open-notes', dent)"
             />
-            <v-menu location="bottom end" :offset="6">
+            <v-menu
+              location="bottom end"
+              :offset="8"
+              content-class="calendar-head-menu"
+            >
               <template #activator="{ props: menuProps }">
                 <v-btn
                   v-bind="menuProps"
@@ -49,14 +53,14 @@
                   variant="text"
                 />
               </template>
-              <v-list density="compact" min-width="220">
+              <v-list density="compact" min-width="220" class="calendar-head-menu__list">
                 <v-list-item
-                  title="Dentist Schedules"
-                  @click="$emit('open-schedule-settings', dent)"
-                />
-                <v-list-item
-                  title="Appointment Reasons"
-                  @click="$emit('open-diary-settings', { section: 'Appointment Reasons', dentist: dent })"
+                  :title="
+                    dentistAvailability[dent.id]?.isAvailable
+                      ? 'Turn Off Day Slots'
+                      : 'Turn On Day Slots'
+                  "
+                  @click="$emit('toggle-day-slots', dent)"
                 />
               </v-list>
             </v-menu>
@@ -88,7 +92,7 @@
             :style="{ gridRow: ri + 2, gridColumn: ci + 2 }"
             :data-dentist-id="dent.id"
             :data-hour="t.hour"
-            @click="onCellClickGuard(dent, t)"
+            @click="onCellClickGuard($event, dent, t)"
             @mousedown="onSlotMouseDown($event, dent, t)"
             @mouseup="onSlotMouseUp($event, dent, t)"
             @dragover.prevent="onSlotDragOver($event)"
@@ -103,10 +107,11 @@
 
               <AppointmentCard
                 v-for="appt in getHourAppointments(dent.id, t.hour)"
-                :key="appt.id"
+                :key="`${appt.id}-${t.hour}`"
                 :appt="appt"
-                :compact="isShortAppointment(appt)"
-                :style-obj="apptCardStyle(appt)"
+                :compact="!isPrimaryHourSegment(appt, t.hour) || isShortAppointment(appt)"
+                :show-resize-handles="isPrimaryHourSegment(appt, t.hour)"
+                :style-obj="apptCardStyle(appt, t.hour)"
                 :status-colors="statusColors"
                 :override-start="
                   resizing.active && resizing.appt?.id === appt.id
@@ -226,7 +231,7 @@
                   @click.stop="openPatient(appt)"
                 >
                   <div class="appt-title">{{ appt.patient }}</div>
-                  <div class="appt-time">{{ appt.start }} - {{ appt.end }}</div>
+                  <div class="appt-time">{{ formatAppointmentRange(appt) }}</div>
                 </div>
               </div>
             </div>
@@ -247,7 +252,11 @@
 
 <script setup>
 import AppointmentCard from "@/components/diary/calendar/AppointmentCard.vue";
-import { clinicMinutesFromTime, formatDateDDMMYYYY } from "@/lib/dateFormatter";
+import {
+  clinicMinutesFromTime,
+  formatDateDDMMYYYY,
+  formatTime12Hour,
+} from "@/lib/dateFormatter";
 
 const props = defineProps({
   date: { type: [String, Date], required: true },
@@ -263,8 +272,8 @@ const emit = defineEmits([
   "slot-click",
   "update-status",
   "open-notes",
+  "toggle-day-slots",
   "open-schedule-settings",
-  "open-diary-settings",
   "slot-full",
   "move-appointment",
   "open-appointment",
@@ -314,6 +323,8 @@ const toHHMM = (m) => {
   const n = Math.max(0, Math.round(m));
   return `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
 };
+const formatRange12Hour = (startMins, endMins) =>
+  `${formatTime12Hour(toHHMM(startMins))} - ${formatTime12Hour(toHHMM(endMins))}`;
 const initials = (name) => {
   if (!name) return "";
   const p = String(name).trim().split(" ");
@@ -482,6 +493,61 @@ const isSlotWithinWorkingHours = (dentistId, hour, minute = 0) => {
   return slotMinutes >= workStart && slotMinutes <= workEnd;
 };
 
+const getMinuteRangeAvailability = (dentist, startMinutes, endMinutes) => {
+  const availability = props.dentistAvailability[dentist?.id];
+  if (!availability?.isAvailable) {
+    return {
+      available: false,
+      message:
+        availability?.message ||
+        `${dentist?.name || "This dentist"} is not available on this day.`,
+    };
+  }
+
+  const workStart = timeToMinutes(
+    availability?.workingHours?.startTime || "09:00",
+  );
+  const workEnd = timeToMinutes(availability?.workingHours?.endTime || "17:00");
+
+  if (startMinutes < workStart || endMinutes > workEnd) {
+    return {
+      available: false,
+      message: `${dentist?.name || "This dentist"} works from ${formatTime12Hour(availability?.workingHours?.startTime)} to ${formatTime12Hour(availability?.workingHours?.endTime)}.`,
+    };
+  }
+
+  const breaks = availability?.workingHours?.breaks || [];
+  for (const breakPeriod of breaks) {
+    const breakStart = timeToMinutes(breakPeriod.startTime);
+    const breakEnd = timeToMinutes(breakPeriod.endTime);
+    if (startMinutes < breakEnd && endMinutes > breakStart) {
+      return {
+        available: false,
+        message: `${dentist?.name || "This dentist"} is unavailable between ${formatTime12Hour(breakPeriod.startTime)} and ${formatTime12Hour(breakPeriod.endTime)}.`,
+      };
+    }
+  }
+
+  return { available: true, message: "" };
+};
+
+const hasAvailableQuarterHourInHour = (dentistId, hour) => {
+  const dentist = visibleDentists.value.find(
+    (item) => String(item.id) === String(dentistId),
+  );
+  if (!dentist) return false;
+
+  const hourStart = hour * 60;
+  for (let offset = 0; offset < 60; offset += INTERVAL_MINS) {
+    const startMinutes = hourStart + offset;
+    const endMinutes = startMinutes + INTERVAL_MINS;
+    if (getMinuteRangeAvailability(dentist, startMinutes, endMinutes).available) {
+      return true;
+    }
+  }
+  return false;
+};
+
 /**
  * Check if a time slot overlaps with a break period
  * @param {Number} dentistId
@@ -537,19 +603,16 @@ const getBreakAtHour = (dentistId, hour) => {
  * Check if a time slot should be disabled
  */
 const isSlotDisabled = (dentistId, hour) => {
-  // If dentist not available at all, disable all slots
   if (!isDentistAvailable(dentistId)) return true;
-
-  // Check if hour is within working hours
-  if (!isSlotWithinWorkingHours(dentistId, hour)) return true;
-
-  // Check if slot is during a break
-  return !!getBreakAtHour(dentistId, hour);
+  return !hasAvailableQuarterHourInHour(dentistId, hour);
 };
 
 // ─── Appointment helpers ──────────────────────────────────────────────────────
 const apptStart = (appt) => toMins(appt?.start || appt?.startTime);
 const apptEnd = (appt) => toMins(appt?.end || appt?.endTime);
+const formatAppointmentTime = (time) => formatTime12Hour(time) || time || "";
+const formatAppointmentRange = (appt) =>
+  `${formatAppointmentTime(appt?.start)} - ${formatAppointmentTime(appt?.end)}`;
 
 function getAppointmentsOverlappingHour(dentistId, hour) {
   const hourStart = hour * 60;
@@ -591,13 +654,13 @@ function getHourAppointments(dentistId, hour) {
       const e = apptEnd(appt);
       return s < hourEnd && e > hourStart;
     })
-    .filter((appt) => {
-      const s = apptStart(appt);
-      const renderHour = Math.floor(s / 60);
-      return renderHour === hour || (s < WORK_START * 60 && hour === WORK_START);
-    })
     .sort((a, b) => apptStart(a) - apptStart(b));
 }
+
+const isPrimaryHourSegment = (appt, hour) => {
+  const visibleStart = Math.max(apptStart(appt), WORK_START * 60);
+  return Math.floor(visibleStart / 60) === hour;
+};
 
 const isHourFull = (dentistId, hour) => {
   const appts = getAppointmentsOverlappingHour(dentistId, hour);
@@ -612,7 +675,7 @@ const isHourFull = (dentistId, hour) => {
   return occupied >= MICRO_PER_HR;
 };
 
-const apptCardStyle = (appt) => {
+const apptCardStyle = (appt, hour) => {
   // Check if this appointment is being resized
   const isResizingThisAppt = resizing.active && resizing.appt?.id === appt.id;
   const isHighlighted =
@@ -628,9 +691,12 @@ const apptCardStyle = (appt) => {
     e = Math.min(apptEnd(appt), WORK_END * 60);
   }
 
-  const hourStart = Math.floor(s / 60) * 60;
-  const offsetMins = s - hourStart;
-  const duration = Math.max(INTERVAL_MINS, e - s);
+  const segmentHour = Number.isFinite(hour) ? hour : Math.floor(s / 60);
+  const hourStart = segmentHour * 60;
+  const segmentStart = Math.max(s, hourStart);
+  const segmentEnd = Math.min(e, hourStart + 60);
+  const offsetMins = Math.max(0, segmentStart - hourStart);
+  const duration = Math.max(INTERVAL_MINS, segmentEnd - segmentStart);
 
   return {
     ...apptStyleFor(appt.status),
@@ -659,14 +725,19 @@ const appointmentStyle = (appt) => {
 };
 
 // ─── Cell click (open appointment modal) ─────────────────────────────────────
-const onCellClick = (dent, slot) => {
-  emit("slot-click", { dentist: dent, hour: slot.hour, minute: slot.minute });
+const onCellClick = (dent, slot, minute = slot.minute) => {
+  emit("slot-click", { dentist: dent, hour: slot.hour, minute });
 };
-const onCellClickGuard = (dent, slot) => {
+const onCellClickGuard = (event, dent, slot) => {
   if (dragCreate.mouseDown || dragCreate.active) return;
 
+  const clickedMinutes = getMinutesFromMouse(event, event.currentTarget);
+  const minute = clickedMinutes === null ? slot.minute : clickedMinutes % 60;
+  const startMinutes = slot.hour * 60 + minute;
+  const endMinutes = startMinutes + INTERVAL_MINS;
+
   // Check if dentist is unavailable
-  if (!isDentistBookable(dent.id, slot.hour)){
+  if (!isDentistAvailable(dent.id)) {
     const message =
       props.dentistAvailability[dent.id]?.message ||
       `${dent.name} is not available on this day.`;
@@ -679,11 +750,18 @@ const onCellClickGuard = (dent, slot) => {
     return;
   }
 
-  // Check if slot is outside working hours
-if (!isDentistBookable(dent.id, slot.hour)) {    const availability = props.dentistAvailability[dent.id];
+  const rangeAvailability = getMinuteRangeAvailability(
+    dent,
+    startMinutes,
+    endMinutes,
+  );
+  if (!rangeAvailability.available) {
+    const availability = props.dentistAvailability[dent.id];
     const workStart = availability?.workingHours?.startTime || "9:00 AM";
     const workEnd = availability?.workingHours?.endTime || "5:00 PM";
-    const message = `${dent.name} works from ${workStart} to ${workEnd}.`;
+    const message =
+      rangeAvailability.message ||
+      `${dent.name} works from ${workStart} to ${workEnd}.`;
     emit("slot-full", {
       dentist: dent,
       hour: slot.hour,
@@ -697,7 +775,7 @@ if (!isDentistBookable(dent.id, slot.hour)) {    const availability = props.dent
     emit("slot-full", { dentist: dent, hour: slot.hour });
     return;
   }
-  onCellClick(dent, slot);
+  onCellClick(dent, slot, minute);
 };
 
 const openPatient = (appt) => {
@@ -714,11 +792,9 @@ const dragCreate = reactive({
 });
 
 const dragCreateLabel = computed(() => {
-  if (!dragCreate.startMins || !dragCreate.endMins) return "";
-  const s = toHHMM(dragCreate.startMins);
-  const e = toHHMM(dragCreate.endMins);
+  if (dragCreate.startMins === null || dragCreate.endMins === null) return "";
   const dur = dragCreate.endMins - dragCreate.startMins;
-  return `${s}–${e} (${dur} min)`;
+  return `${formatRange12Hour(dragCreate.startMins, dragCreate.endMins)} (${dur} min)`;
 });
 
 /** Get minutes from mouse position relative to ANY slot cell */
@@ -742,14 +818,13 @@ function onSlotMouseDown(event, dent, slot) {
   if (event.button !== 0) return;
   if (event.target.closest(".appointment-card")) return;
 
-  // Prevent drag-creating on disabled slots
-  if (isSlotDisabled(dent.id, slot.hour)) return;
-
   event.preventDefault();
 
   const cell = event.currentTarget;
   const mins = getMinutesFromMouse(event, cell);
   if (mins === null) return;
+  if (!getMinuteRangeAvailability(dent, mins, mins + INTERVAL_MINS).available)
+    return;
 
   dragCreate.mouseDown = true;
   dragCreate.dentistId = dent.id;
@@ -805,7 +880,7 @@ function onGlobalMouseUp(event) {
   dragCreate.mouseDown = false;
   dragCreate.active = false;
 
-  if (!start || !end || end <= start) {
+  if (start === null || end === null || end <= start) {
     resetDragCreate();
     return;
   }
@@ -1013,19 +1088,6 @@ const onClipboardDrop = (event, dentist, slot) => {
     return;
   }
 
-  if (isSlotDisabled(dentist.id, slot.hour)) {
-    const availability = props.dentistAvailability[dentist.id];
-    const workStart = availability?.workingHours?.startTime || "9:00 AM";
-    const workEnd = availability?.workingHours?.endTime || "5:00 PM";
-    emit("slot-full", {
-      dentist,
-      hour: slot.hour,
-      outOfHours: true,
-      message: `${dentist.name} works from ${workStart} to ${workEnd}. Cannot create appointment outside these hours.`,
-    });
-    return;
-  }
-
   // ─── Get the draft data ────────────────────────────────────────────────────────────
   let raw = event?.dataTransfer?.getData(CLIPBOARD_MIME);
   if (!raw) {
@@ -1072,6 +1134,20 @@ const onClipboardDrop = (event, dentist, slot) => {
 
   const newStartTime = toHHMM(newStartMinutes);
   const duration = draft.duration || INTERVAL_MINS;
+  const availability = getMinuteRangeAvailability(
+    dentist,
+    newStartMinutes,
+    newStartMinutes + duration,
+  );
+  if (!availability.available) {
+    emit("slot-full", {
+      dentist,
+      hour: slot.hour,
+      outOfHours: true,
+      message: availability.message,
+    });
+    return;
+  }
 
   // Emit the create-from-draft event
   emit("create-from-draft", {
@@ -1095,19 +1171,6 @@ const onAppointmentDrop = (event, dentist, slot) => {
       hour: slot.hour,
       unavailable: true,
       message: `${dentist.name} is not available on this day. Appointment cannot be moved here.`,
-    });
-    return;
-  }
-
-  if (isSlotDisabled(dentist.id, slot.hour)) {
-    const availability = props.dentistAvailability[dentist.id];
-    const workStart = availability?.workingHours?.startTime || "9:00 AM";
-    const workEnd = availability?.workingHours?.endTime || "5:00 PM";
-    emit("slot-full", {
-      dentist,
-      hour: slot.hour,
-      outOfHours: true,
-      message: `${dentist.name} works from ${workStart} to ${workEnd}. Cannot move appointment outside these hours.`,
     });
     return;
   }
@@ -1157,6 +1220,20 @@ const onAppointmentDrop = (event, dentist, slot) => {
 
   const newStartTime = toHHMM(newStart);
   const newEndTime = toHHMM(newStart + dur);
+  const availability = getMinuteRangeAvailability(
+    dentist,
+    newStart,
+    newStart + dur,
+  );
+  if (!availability.available) {
+    emit("slot-full", {
+      dentist,
+      hour: slot.hour,
+      outOfHours: true,
+      message: availability.message,
+    });
+    return;
+  }
 
   emit("move-appointment", {
     appointmentId: payload.appointmentId,
@@ -1446,7 +1523,8 @@ onUnmounted(() => {
 
 .appointment-overlay {
   position: absolute;
-  inset: auto 4px 0 4px;
+  left: 4px;
+  right: 4px;
   z-index: 15;
 }
 
@@ -1647,5 +1725,27 @@ onUnmounted(() => {
 }
 .appt-time {
   font-size: 11px;
+}
+:deep(.calendar-head-menu) {
+  border-radius: 12px !important;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14) !important;
+  border: 1px solid #e5e7eb !important;
+  overflow: hidden;
+}
+:deep(.calendar-head-menu .v-list) {
+  padding: 6px !important;
+  background: #ffffff !important;
+}
+:deep(.calendar-head-menu .v-list-item) {
+  min-height: 40px !important;
+  border-radius: 8px !important;
+  padding: 0 12px !important;
+}
+:deep(.calendar-head-menu .v-list-item:hover) {
+  background: #f0f4ff !important;
+}
+:deep(.calendar-head-menu .v-list-item-title) {
+  font-size: 13px !important;
+  color: #1f2937 !important;
 }
 </style>

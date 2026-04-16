@@ -392,6 +392,9 @@ import CodesPanel from './CodesPanel.vue'
 import DiagnosePanel from './DiagnosePanel.vue'
 import TreatmentPlanDocument from './TreatmentPlanDocument.vue'
 import TreatmentPlanEditorPanel from './TreatmentPlanEditorPanel.vue'
+import { useDentistAvailability } from '@/composables/useDentistAvailability'
+import { useUser } from '@/composables/useUser'
+import { formatDateDDMMYYYY, formatTime12Hour } from '@/lib/dateFormatter'
 import { usePatientChartingStore } from '@/stores/patientCharting'
 import { useMainStore } from '@/stores/index'
 import { useOrgStore } from '@/stores/organisation'
@@ -410,6 +413,8 @@ const store = usePatientChartingStore()
 const mainStore = useMainStore()
 const orgStore = useOrgStore()
 const crmStore = useCrmStore()
+const { user } = useUser()
+const { loadDentistSchedules, getTimeRangeAvailability } = useDentistAvailability()
 
 const STEPS = ['Diagnose', 'Treatment', 'Treatment Plan', 'Overview']
 const currentStep = ref(1)
@@ -849,13 +854,18 @@ const deletePlanId = ref(null)
 const bookingForm = reactive({ date: '', startTime: '09:00', endTime: '09:30', notes: '', dentistId: null })
 const bookingDisabled = computed(() => !bookingForm.date || !bookingForm.startTime || !bookingForm.endTime || !bookingForm.dentistId || bookingLoading.value)
 const bookingAppointment = computed(() => store.appointments.find((appt) => appt.id === bookingApptId.value) || null)
+const bookingSummaryDate = computed(() => formatDateDDMMYYYY(bookingForm.date))
+const bookingSummaryRange = computed(() => {
+  if (!bookingForm.startTime || !bookingForm.endTime) return ''
+  return `${formatTime12Hour(bookingForm.startTime)} - ${formatTime12Hour(bookingForm.endTime)}`
+})
 const bookingSummaryTitle = computed(() => bookingAppointment.value?.name || 'Appointment')
 const bookingSummarySubtitle = computed(() => {
   const practitioner = store.practitioners.find((item) => Number(item.id) === Number(bookingForm.dentistId))
   const parts = []
   if (practitioner?.name) parts.push(practitioner.name)
-  if (bookingForm.date) parts.push(bookingForm.date)
-  if (bookingForm.startTime && bookingForm.endTime) parts.push(`${bookingForm.startTime} - ${bookingForm.endTime}`)
+  if (bookingSummaryDate.value) parts.push(bookingSummaryDate.value)
+  if (bookingSummaryRange.value) parts.push(bookingSummaryRange.value)
   return parts.join(' • ') || 'Choose practitioner, date, and time'
 })
 
@@ -863,10 +873,37 @@ const bookingSummaryDisplay = computed(() => {
   const practitioner = store.practitioners.find((item) => Number(item.id) === Number(bookingForm.dentistId))
   const parts = []
   if (practitioner?.name) parts.push(practitioner.name)
-  if (bookingForm.date) parts.push(bookingForm.date)
-  if (bookingForm.startTime && bookingForm.endTime) parts.push(`${bookingForm.startTime} - ${bookingForm.endTime}`)
+  if (bookingSummaryDate.value) parts.push(bookingSummaryDate.value)
+  if (bookingSummaryRange.value) parts.push(bookingSummaryRange.value)
   return parts.join(' | ') || 'Choose practitioner, date, and time'
 })
+
+function addMinutesToTime(time, minutesToAdd) {
+  const [hours, minutes] = String(time || '09:00').split(':').map(Number)
+  const totalMinutes = (hours * 60) + (minutes || 0) + minutesToAdd
+  const normalized = Math.max(0, totalMinutes)
+  return `${String(Math.floor(normalized / 60)).padStart(2, '0')}:${String(normalized % 60).padStart(2, '0')}`
+}
+
+function getAppointmentBookingDefaults(appointmentId) {
+  const activeAppointment = store.appointments.find((item) => item.id === appointmentId)
+  const items = store.treatmentItems.filter(i => (i.appointmentGroupId || 'appt-1') === appointmentId)
+  const totalDuration = Math.max(
+    15,
+    Number(activeAppointment?.durationMinutes) ||
+      items.reduce((sum, item) => sum + (Number(item?.duration) || 0), 0) ||
+      30,
+  )
+  const startTime = activeAppointment?.startTime || '09:00'
+  return {
+    activeAppointment,
+    items,
+    totalDuration,
+    startTime,
+    endTime: activeAppointment?.endTime || addMinutesToTime(startTime, totalDuration),
+    date: activeAppointment?.date || bookingForm.date || new Date().toISOString().slice(0, 10),
+  }
+}
 
 function resolveBookingPractitioner(items = []) {
   const byId = items.find((item) => item?.practitionerId)
@@ -882,16 +919,13 @@ function resolveBookingPractitioner(items = []) {
 
 async function onBookAppointment(appointmentId) {
   bookingApptId.value = appointmentId
-  const items = store.treatmentItems.filter(i => (i.appointmentGroupId || 'appt-1') === appointmentId)
+  const { items, startTime, endTime, date } = getAppointmentBookingDefaults(appointmentId)
   const first = items[0]
   bookingForm.dentistId = resolveBookingPractitioner(items)
   bookingForm.notes = first?.notes || ''
-  bookingForm.startTime = '09:00'
-  bookingForm.endTime = '09:30'
-  if (!bookingForm.date) {
-    const now = new Date()
-    bookingForm.date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-  }
+  bookingForm.startTime = startTime
+  bookingForm.endTime = endTime
+  bookingForm.date = date
   bookingDialog.value = true
   conflictWarning.value = ''
 }
@@ -916,13 +950,41 @@ async function confirmBooking() {
   conflictWarning.value = ''
   const err = validateBooking()
   if (err) { conflictWarning.value = err; bookingLoading.value = false; return }
-  const check = await store.checkAppointmentConflict({ date: bookingForm.date, startTime: bookingForm.startTime, endTime: bookingForm.endTime, dentistId: bookingForm.dentistId })
+  const activeAppointment = store.appointments.find((item) => item.id === bookingApptId.value)
+  const excludeAppointmentId = activeAppointment?.diaryAppointmentId || null
+  const practitioner = store.practitioners.find((item) => Number(item.id) === Number(bookingForm.dentistId))
+  const orgId = user.value?.currentLoggedInOrgId || user.value?.organisationId
+  if (orgId && bookingForm.dentistId) {
+    try {
+      await loadDentistSchedules(orgId, Number(bookingForm.dentistId))
+      const availability = getTimeRangeAvailability(
+        bookingForm.date,
+        bookingForm.startTime,
+        bookingForm.endTime,
+        { name: practitioner?.name || 'This practitioner' },
+      )
+      if (!availability.available) {
+        conflictWarning.value = availability.message || 'Practitioner is not available for the selected time.'
+        bookingLoading.value = false
+        return
+      }
+    } catch (error) {
+      console.warn('Unable to validate practitioner schedule before booking.', error)
+    }
+  }
+  const check = await store.checkAppointmentConflict({
+    date: bookingForm.date,
+    startTime: bookingForm.startTime,
+    endTime: bookingForm.endTime,
+    dentistId: bookingForm.dentistId,
+    excludeAppointmentId,
+  })
   if (check?.hasConflict) {
-    conflictWarning.value = `Conflict: overlaps with ${check.conflicts?.[0]?.patientName || 'another appointment'} at ${check.conflicts?.[0]?.startTime || bookingForm.startTime}`
+    conflictWarning.value = `Conflict: overlaps with ${check.conflicts?.[0]?.patientName || 'another appointment'} at ${formatTime12Hour(check.conflicts?.[0]?.startTime || bookingForm.startTime)}`
     bookingLoading.value = false
     return
   }
-  const res = await store.bookInDiary({ appointmentId: bookingApptId.value, ...bookingForm })
+  const res = await store.bookInDiary({ appointmentId: bookingApptId.value, excludeAppointmentId, ...bookingForm })
   bookingLoading.value = false
   if (res?.code === 0) { bookingDialog.value = false; mainStore?.setSnackbar?.({ title: 'Appointment booked.', type: 'success' }) }
   else conflictWarning.value = res?.message || 'Unable to book appointment.'

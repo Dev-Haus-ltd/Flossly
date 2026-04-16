@@ -1,6 +1,12 @@
 import { DentistSchedule } from '~/server/models/schedule'
 
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+const resolveTimeMode = () => {
+  const publicMode = process.env.NUXT_PUBLIC_CLINIC_TIME_MODE
+  const serverMode = process.env.CLINIC_TIME_MODE
+  return String(publicMode || serverMode || 'agnostic').toLowerCase()
+}
+const USE_TZ_AGNOSTIC = resolveTimeMode() === 'agnostic'
 
 export const normalizeTimeString = (time) => {
   if (!time) return null
@@ -24,16 +30,16 @@ const formatTimeRange = (startTime, endTime) => {
 const getLocalYmd = (value) => {
   const date = value instanceof Date ? value : new Date(value)
   if (Number.isNaN(date.getTime())) return null
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
+  const year = USE_TZ_AGNOSTIC ? date.getUTCFullYear() : date.getFullYear()
+  const month = String((USE_TZ_AGNOSTIC ? date.getUTCMonth() : date.getMonth()) + 1).padStart(2, '0')
+  const day = String(USE_TZ_AGNOSTIC ? date.getUTCDate() : date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
 }
 
 export const getScheduleDayOfWeek = (value) => {
   const date = value instanceof Date ? value : new Date(value)
   if (Number.isNaN(date.getTime())) return null
-  const jsDay = date.getDay()
+  const jsDay = USE_TZ_AGNOSTIC ? date.getUTCDay() : date.getDay()
   return jsDay === 0 ? 6 : jsDay - 1
 }
 
@@ -100,8 +106,8 @@ export const validateDentistScheduleWindow = async ({
     return { ok: false, message: `${dayName} is marked as unavailable for this practitioner.` }
   }
 
-  const slotStart = (start.getHours() * 60) + start.getMinutes()
-  const slotEnd = (end.getHours() * 60) + end.getMinutes()
+  const slotStart = ((USE_TZ_AGNOSTIC ? start.getUTCHours() : start.getHours()) * 60) + (USE_TZ_AGNOSTIC ? start.getUTCMinutes() : start.getMinutes())
+  const slotEnd = ((USE_TZ_AGNOSTIC ? end.getUTCHours() : end.getHours()) * 60) + (USE_TZ_AGNOSTIC ? end.getUTCMinutes() : end.getMinutes())
   const workStart = timeToMinutes(dayConfig.startTime)
   const workEnd = timeToMinutes(dayConfig.endTime)
 

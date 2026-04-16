@@ -1,5 +1,19 @@
 import { computed, ref } from 'vue'
 import { useScheduleStore } from '@/stores/schedule'
+import { formatTime12Hour } from '@/lib/dateFormatter'
+
+const parseLocalDate = (value) => {
+  if (!value) return null
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value
+  if (typeof value === 'string') {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (match) {
+      return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    }
+  }
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
 
 /**
  * Composable for checking dentist availability based on their schedule
@@ -35,19 +49,22 @@ export const useDentistAvailability = () => {
   const getActiveScheduleForDate = (dateString) => {
     if (!dateString || !dentistSchedules.value.length) return null
 
-    const targetDate = new Date(dateString)
+    const targetDate = parseLocalDate(dateString)
+    if (!targetDate) return null
     
     return dentistSchedules.value.find(schedule => {
       // Schedule must be active
       if (!schedule.isActive) return false
 
       // Check if date falls within schedule period
-      const startDate = new Date(schedule.startDate)
+      const startDate = parseLocalDate(schedule.startDate)
+      if (!startDate) return false
       if (targetDate < startDate) return false
 
       // Check end date if it exists
       if (schedule.endDate) {
-        const endDate = new Date(schedule.endDate)
+        const endDate = parseLocalDate(schedule.endDate)
+        if (!endDate) return false
         if (targetDate > endDate) return false
       }
 
@@ -76,7 +93,8 @@ export const useDentistAvailability = () => {
    * @returns {Number} - 0-6 where Monday=0
    */
   const getDayOfWeek = (dateString) => {
-    const date = new Date(dateString)
+    const date = parseLocalDate(dateString)
+    if (!date) return null
     // JavaScript getDay: 0=Sunday, 1=Monday...
     // We need: 0=Monday, 1=Tuesday...
     const jsDay = date.getDay()
@@ -116,6 +134,73 @@ export const useDentistAvailability = () => {
     return hours * 60 + (minutes || 0)
   }
 
+  const minutesToTime = (minutes) => {
+    const hours = Math.floor(minutes / 60)
+    const mins = minutes % 60
+    return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`
+  }
+
+  const getTimeRangeAvailability = (dateString, startTime, endTime, dentist = {}) => {
+    if (!isAvailableOnDate(dateString)) {
+      return {
+        available: false,
+        code: 'unavailable_day',
+        message: `${dentist.name || 'This dentist'} is not available on this day.`,
+      }
+    }
+
+    const workingHours = getWorkingHoursForDate(dateString)
+    if (!workingHours) {
+      return {
+        available: false,
+        code: 'missing_schedule',
+        message: 'No availability information',
+      }
+    }
+
+    const slotStart = timeToMinutes(startTime)
+    const slotEnd = timeToMinutes(endTime)
+    const workStart = timeToMinutes(workingHours.startTime)
+    const workEnd = timeToMinutes(workingHours.endTime)
+
+    if (!Number.isFinite(slotStart) || !Number.isFinite(slotEnd) || slotEnd <= slotStart) {
+      return {
+        available: false,
+        code: 'invalid_range',
+        message: 'End time must be after start time.',
+      }
+    }
+
+    if (slotStart < workStart || slotEnd > workEnd) {
+      return {
+        available: false,
+        code: 'outside_hours',
+        message: `${dentist.name || 'This dentist'} works from ${formatTime12Hour(workingHours.startTime)} to ${formatTime12Hour(workingHours.endTime)}.`,
+      }
+    }
+
+    if (workingHours.breaks && workingHours.breaks.length > 0) {
+      for (const breakPeriod of workingHours.breaks) {
+        const breakStart = timeToMinutes(breakPeriod.startTime)
+        const breakEnd = timeToMinutes(breakPeriod.endTime)
+        if (slotStart < breakEnd && slotEnd > breakStart) {
+          return {
+            available: false,
+            code: 'break_overlap',
+            message: `${dentist.name || 'This dentist'} is unavailable between ${formatTime12Hour(breakPeriod.startTime)} and ${formatTime12Hour(breakPeriod.endTime)}.`,
+          }
+        }
+      }
+    }
+
+    return {
+      available: true,
+      code: 'available',
+      message: '',
+      workingHours,
+    }
+  }
+
   /**
    * Check if a time slot is within working hours and not during a break
    * @param {String} dateString - YYYY-MM-DD format
@@ -124,29 +209,13 @@ export const useDentistAvailability = () => {
    * @returns {Boolean}
    */
   const isTimeSlotAvailable = (dateString, startTime, durationMinutes = 15) => {
-    const workingHours = getWorkingHoursForDate(dateString)
-    if (!workingHours) return false
-
     const slotStart = timeToMinutes(startTime)
     const slotEnd = slotStart + durationMinutes
-    const workStart = timeToMinutes(workingHours.startTime)
-    const workEnd = timeToMinutes(workingHours.endTime)
-
-    // Check if slot is within working hours
-    if (slotStart < workStart || slotEnd > workEnd) return false
-
-    // Check if slot conflicts with breaks
-    if (workingHours.breaks && workingHours.breaks.length > 0) {
-      for (const breakPeriod of workingHours.breaks) {
-        const breakStart = timeToMinutes(breakPeriod.startTime)
-        const breakEnd = timeToMinutes(breakPeriod.endTime)
-
-        // Check for overlap
-        if (slotStart < breakEnd && slotEnd > breakStart) return false
-      }
-    }
-
-    return true
+    return getTimeRangeAvailability(
+      dateString,
+      startTime,
+      minutesToTime(slotEnd),
+    ).available
   }
 
   /**
@@ -180,12 +249,6 @@ export const useDentistAvailability = () => {
    * @param {Number} minutes
    * @returns {String} - "HH:MM"
    */
-  const minutesToTime = (minutes) => {
-    const hours = Math.floor(minutes / 60)
-    const mins = minutes % 60
-    return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`
-  }
-
   /**
    * Get a human-readable availability message
    * @param {String} dateString - YYYY-MM-DD format
@@ -204,7 +267,7 @@ export const useDentistAvailability = () => {
     const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
     const dayName = dayNames[dayOfWeek]
 
-    return `${dayName}: ${workingHours.startTime} - ${workingHours.endTime}`
+    return `${dayName}: ${formatTime12Hour(workingHours.startTime)} - ${formatTime12Hour(workingHours.endTime)}`
   }
 
   return {
@@ -212,6 +275,7 @@ export const useDentistAvailability = () => {
     isAvailableOnDate,
     getWorkingHoursForDate,
     getActiveScheduleForDate,
+    getTimeRangeAvailability,
     isTimeSlotAvailable,
     getAvailableTimeSlots,
     getAvailabilityMessage,

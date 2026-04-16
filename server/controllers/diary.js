@@ -1736,7 +1736,7 @@ export const appointmentConflictCheck = async (event) => {
     if (end <= start) return error(400, "Invalid booking time range");
     const scheduleValidation = await validateDentistScheduleWindow({
       organisationId: Number(orgId),
-      dentistId: Number(dentistId),
+      dentistId: Number(payloadDentistId),
       start,
       end,
     });
@@ -1796,6 +1796,9 @@ export const bookFromTreatmentPlan = async (event) => {
     const startTime = payload?.startTime;
     const endTime = payload?.endTime;
     const payloadDentistId = parsePositiveIntOrNull(payload?.dentistId);
+    const excludeAppointmentId = parsePositiveIntOrNull(
+      payload?.excludeAppointmentId,
+    );
     const notes = payload?.notes || null;
     if (!patientId) return error(400, "patientId is required");
     if (!treatmentItemIds.length)
@@ -1848,7 +1851,7 @@ export const bookFromTreatmentPlan = async (event) => {
     const overlapWhere = {
       organisationId: Number(orgId),
       status: { [Op.ne]: "Cancelled" },
-      ...overlapWindowClause(start, end),
+      ...overlapWindowClause(start, end, excludeAppointmentId),
     };
     const dentistOverlap = await DiaryAppointment.count({
       where: { ...overlapWhere, dentistId },
@@ -1878,18 +1881,41 @@ export const bookFromTreatmentPlan = async (event) => {
       0,
     );
 
-    const created = await DiaryAppointment.create({
-      organisationId: Number(orgId),
-      patientId,
-      dentistId,
-      treatmentId: null,
-      treatmentName,
-      status: "Pending",
-      startTime: start,
-      endTime: end,
-      notes,
-      amount,
-    });
+    let created = null;
+    if (excludeAppointmentId) {
+      created = await DiaryAppointment.findOne({
+        where: {
+          id: excludeAppointmentId,
+          organisationId: Number(orgId),
+          patientId,
+        },
+      });
+    }
+
+    if (created) {
+      created.dentistId = dentistId;
+      created.treatmentId = null;
+      created.treatmentName = treatmentName;
+      created.status = "Pending";
+      created.startTime = start;
+      created.endTime = end;
+      created.notes = notes;
+      created.amount = amount;
+      await created.save();
+    } else {
+      created = await DiaryAppointment.create({
+        organisationId: Number(orgId),
+        patientId,
+        dentistId,
+        treatmentId: null,
+        treatmentName,
+        status: "Pending",
+        startTime: start,
+        endTime: end,
+        notes,
+        amount,
+      });
+    }
 
     for (const item of selectedItems) {
       item.appointmentId = created.id;
@@ -2015,6 +2041,33 @@ export const updateAppointment = async (event) => {
     }
     await row.save();
     return success({ ok: true });
+  } catch (e) {
+    const msg =
+      (e &&
+        (e.message ||
+          (e.data && e.data.message) ||
+          (e.original && e.original.detail))) ||
+      "Internal server error";
+    return error(500, msg);
+  }
+};
+
+export const deleteAppointment = async (event) => {
+  try {
+    const { orgId } = event.context.user;
+    const body = await readBody(event);
+    const payload = typeof body === "string" ? parseJsonBody(body) : body;
+    const id = Number(payload?.id || 0);
+
+    if (!id) return error(400, "id is required");
+
+    const row = await DiaryAppointment.findOne({
+      where: { id, organisationId: Number(orgId) },
+    });
+    if (!row) return error(404, "Appointment not found");
+
+    await row.destroy();
+    return success({ ok: true, id });
   } catch (e) {
     const msg =
       (e &&

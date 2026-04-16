@@ -199,6 +199,7 @@ const totalItems = ref(0);
 const dentists = ref([]);
 const showAddPatient = ref(false);
 const editingPatient = ref(null);
+const openingPatient = ref(false);
 
 // Delete confirmation state - following lead component pattern
 const showDeleteConfirm = ref(false);
@@ -308,9 +309,21 @@ const onFilters = (f) => {
   loadPatients();
 };
 
-const openPatient = (item) => {
-  if (!item?.id) return;
-  navigateTo(`/patients/${item.id}`);
+const openPatient = async (item) => {
+  if (!item?.id || openingPatient.value) return;
+  openingPatient.value = true;
+  diaryStore._start();
+  try {
+    await navigateTo(`/patients/${item.id}`);
+  } catch (err) {
+    mainStore?.setSnackbar?.({
+      title: err?.message || "Unable to open patient details",
+      type: "error",
+    });
+  } finally {
+    diaryStore._end();
+    openingPatient.value = false;
+  }
 };
 
 const openEditPatient = (item) => {
@@ -452,7 +465,6 @@ watch(
     font-size: 12px;
   }
 }
-
 .patients-table {
   border: 1px solid rgb(var(--v-theme-outline));
   border-radius: 12px;

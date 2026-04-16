@@ -314,8 +314,8 @@
         @slot-click="openAppointment"
         @slot-full="onSlotFull"
         @open-notes="onOpenNotes"
+        @toggle-day-slots="onToggleDentistDaySlots"
         @open-schedule-settings="openDentistSchedule"
-        @open-diary-settings="openDiarySettings"
         @update-status="onUpdateStatus"
         @move-appointment="onMoveAppointment"
         @open-appointment="onOpenExistingAppointment"
@@ -367,6 +367,7 @@ import ClipboardPanel from "@/components/diary/ClipboardPanel.vue";
 import AddPatient from "@/components/diary/addPatient.vue";
 import NotesModal from "@/components/diary/NotesModal.vue";
 import { useDiaryStore } from "@/stores/diary";
+import { useScheduleStore } from "@/stores/schedule";
 import { useMainStore } from "@/stores/index";
 import { useOrgStore } from "@/stores/organisation";
 import { clinicMinutesFromTime, dateToLocalYMD } from "@/lib/dateFormatter";
@@ -389,6 +390,7 @@ const date = ref(new Date());
 const selectedDentistIds = ref([]);
 watch(view, (v) => console.log("current view ->", v));
 const diaryStore = useDiaryStore();
+const scheduleStore = useScheduleStore();
 const dentists = ref([]);
 const dentistsLoading = ref(true); // Add loading state
 const treatments = ref([]);
@@ -469,15 +471,69 @@ function openDentistSchedule(dentist) {
   });
 }
 
-function openDiarySettings(payload = {}) {
-  router.push({
-    path: "/settings",
-    query: {
-      setting: "diary",
-      diarySection: payload?.section || "Appointment Reasons",
-      dentistId: payload?.dentist?.id ? String(payload.dentist.id) : undefined,
-    },
-  });
+function getScheduleDayForDate(schedules = [], targetDate) {
+  if (!targetDate) return null;
+  const localDate = new Date(`${targetDate}T00:00:00`);
+  if (Number.isNaN(localDate.getTime())) return null;
+
+  const activeSchedule =
+    schedules.find((schedule) => {
+      if (!schedule?.isActive) return false;
+      const start = schedule.startDate
+        ? new Date(`${schedule.startDate}T00:00:00`)
+        : null;
+      const end = schedule.endDate
+        ? new Date(`${schedule.endDate}T00:00:00`)
+        : null;
+      if (start && localDate < start) return false;
+      if (end && localDate > end) return false;
+      return true;
+    }) || null;
+
+  if (!activeSchedule) return null;
+
+  const jsDay = localDate.getDay();
+  const dayOfWeek = jsDay === 0 ? 6 : jsDay - 1;
+  const day =
+    activeSchedule.days?.find((item) => Number(item.dayOfWeek) === dayOfWeek) ||
+    null;
+
+  return day ? { schedule: activeSchedule, day } : null;
+}
+
+async function onToggleDentistDaySlots(dentist) {
+  const orgId = user.value?.currentLoggedInOrgId || user.value?.organisationId;
+  if (!orgId || !dentist?.id) return;
+
+  try {
+    const schedules = await loadDentistSchedules(orgId, dentist.id);
+    const resolved = getScheduleDayForDate(schedules, dateStr.value);
+
+    if (!resolved?.day?.id) {
+      showError(`No active schedule found for ${dentist.name} on this date.`);
+      return;
+    }
+
+    const { day } = resolved;
+    await scheduleStore.updateScheduleDay({
+      scheduleDayId: day.id,
+      isWorkingDay: !day.isWorkingDay,
+      startTime: day.startTime,
+      endTime: day.endTime,
+    });
+
+    await loadDentistsAvailability();
+    showSuccess(
+      day.isWorkingDay
+        ? `${dentist.name} day slots turned off`
+        : `${dentist.name} day slots turned on`,
+    );
+  } catch (error) {
+    showError(
+      error?.message ||
+        `Unable to update day slots for ${dentist?.name || "this practitioner"}`,
+    );
+  }
 }
 
 const prevDay = () => {
@@ -542,6 +598,7 @@ function openAppointment({ dentist, hour, minute, duration }) {
   modalDentist.value = dentist;
   modalTime.value = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
   modalDuration.value = Number(duration) || 15;
+  preselectedPatientId.value = null;
   preselectedPatientName.value = "";
   showAppointment.value = true;
 }

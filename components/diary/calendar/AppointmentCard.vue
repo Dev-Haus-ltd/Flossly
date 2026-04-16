@@ -14,6 +14,7 @@
   >
     <!-- Resize handle top -->
     <div
+      v-if="showResizeHandles"
       class="resize-handle resize-handle--top"
       @mousedown.stop.prevent="onResizeStart($event, 'top')"
       title="Drag to resize"
@@ -68,6 +69,7 @@
 
     <!-- Resize handle bottom -->
     <div
+      v-if="showResizeHandles"
       class="resize-handle resize-handle--bottom"
       @mousedown.stop.prevent="onResizeStart($event, 'bottom')"
       title="Drag to resize"
@@ -89,6 +91,7 @@
   >
     <!-- Resize handle top -->
     <div
+      v-if="showResizeHandles"
       class="resize-handle resize-handle--top"
       @mousedown.stop.prevent="onResizeStart($event, 'top')"
       title="Drag to resize"
@@ -169,6 +172,7 @@
 
     <!-- Resize handle bottom -->
     <div
+      v-if="showResizeHandles"
       class="resize-handle resize-handle--bottom"
       @mousedown.stop.prevent="onResizeStart($event, 'bottom')"
       title="Drag to resize"
@@ -177,7 +181,7 @@
 </template>
 
 <script setup>
-import { clinicTimeToHM } from '@/lib/dateFormatter'
+import { formatTime12Hour } from '@/lib/dateFormatter'
 import pendingIcon from '@/assets/diary/appointment/pending.svg'
 import confirmedIcon from '@/assets/diary/appointment/confirmed.svg'
 import arrivedIcon from '@/assets/diary/appointment/arrived.svg'
@@ -192,6 +196,7 @@ const props = defineProps({
   styleObj: { type: Object, default: () => ({}) },
   statusColors: { type: Object, required: true },
   compact: { type: Boolean, default: false },
+  showResizeHandles: { type: Boolean, default: true },
   overrideStart: { type: String, default: null },
   overrideEnd: { type: String, default: null }
 })
@@ -253,18 +258,11 @@ const shortStatus = (s) => {
   return map[s] || s
 }
 
-const stripAmPm = (t) => {
-  if (!t) return ''
-  return String(t).replace(/\s*(AM|PM)/i, '').trim()
-}
-
 const displayStart = computed(() => {
-  if (props.overrideStart) return stripAmPm(props.overrideStart);
-  return stripAmPm(clinicTimeToHM(props.appt.start || props.appt.startTime));
+  return formatTime12Hour(props.overrideStart || props.appt.start || props.appt.startTime)
 })
 const displayEnd = computed(() => {
-  if (props.overrideEnd) return stripAmPm(props.overrideEnd);
-  return stripAmPm(clinicTimeToHM(props.appt.end || props.appt.endTime));
+  return formatTime12Hour(props.overrideEnd || props.appt.end || props.appt.endTime)
 })
 
 const hasNotes = computed(() => !!props.appt?.notes)

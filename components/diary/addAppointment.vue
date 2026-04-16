@@ -120,7 +120,9 @@
               >
               <v-select
                 v-model="time"
-                :items="timeOptions"
+                :items="displayTimeOptions"
+                item-title="title"
+                item-value="value"
                 variant="outlined"
                 density="compact"
                 class="mt-1"
@@ -265,7 +267,11 @@
 
 <script setup>
 import { ref, computed, watch, reactive } from "vue";
-import { formatDateDDMMYYYY, clinicDateToYMD } from "@/lib/dateFormatter";
+import {
+  formatDateDDMMYYYY,
+  clinicDateToYMD,
+  formatTime12Hour,
+} from "@/lib/dateFormatter";
 import { useOrgStore } from "@/stores/organisation";
 import { useDentistAvailability } from "@/composables/useDentistAvailability";
 import { useUser } from "@/composables/useUser";
@@ -324,7 +330,7 @@ const mainStore = useMainStore();
 const { user } = useUser();
 const {
   loadDentistSchedules,
-  isTimeSlotAvailable,
+  getTimeRangeAvailability,
   getAvailableTimeSlots,
   getAvailabilityMessage,
 } = useDentistAvailability();
@@ -369,6 +375,12 @@ const timeOptions = computed(() => {
   }
   return fallbackTimeOptions.value;
 });
+const displayTimeOptions = computed(() =>
+  timeOptions.value.map((value) => ({
+    title: formatTime12Hour(value) || value,
+    value,
+  })),
+);
 
 const practitionerLabel = computed(() => {
   const selected = props.practitionerOptions.find(
@@ -389,7 +401,7 @@ const hasPatient = computed(() =>
 const headerText = computed(() => {
   const parts = [];
   if (date.value) parts.push(formatDateDDMMYYYY(date.value));
-  if (time.value) parts.push(time.value);
+  if (time.value) parts.push(formatTime12Hour(time.value) || time.value);
   if (duration.value) parts.push(`${duration.value} min`);
   if (practitionerLabel.value) parts.push(practitionerLabel.value);
   return parts.join(" · ") || "Fill in the details below";
@@ -400,6 +412,38 @@ const customFilter = (item, queryText, itemText) => {
   const query = queryText.toLowerCase();
 
   return text.includes(query);
+};
+
+const applyIncomingAppointmentState = () => {
+  if (isEditing.value && props.editAppointment) {
+    const a = props.editAppointment;
+    date.value = a.date || props.initialDate || "";
+    time.value = a.start || a.time || props.initialTime || "";
+    duration.value = a.duration || props.initialDuration || 15;
+    status.value = a.status || "Pending";
+    exam.value = a.treatmentName || a.exam || "";
+    practitioner.value =
+      a.practitionerId || a.practitioner || props.initialPractitioner || "";
+    selectedPatientId.value =
+      a.patientId || props.preselectedPatientId || null;
+    notes.value = a.notes || "";
+  } else {
+    date.value = props.initialDate || "";
+    time.value = props.initialTime || "";
+    duration.value = props.initialDuration || 15;
+    practitioner.value = props.initialPractitioner || "";
+    status.value = "Pending";
+    exam.value = "";
+    notes.value = "";
+    selectedPatientId.value = props.preselectedPatientId || null;
+  }
+
+  if (
+    timeOptions.value.length &&
+    (!time.value || !timeOptions.value.includes(time.value))
+  ) {
+    time.value = timeOptions.value[0] || "";
+  }
 };
 const handleAddTreatment = async () => {
   if (!exam.value) return;
@@ -525,7 +569,7 @@ const saveNewTreatment = async () => {
 
 // ── Watchers ──────────────────────────────────────────────────────────────────
 watch(duration, () => {
-  if (!time.value || !timeOptions.value.includes(time.value))
+  if (timeOptions.value.length && (!time.value || !timeOptions.value.includes(time.value)))
     time.value = timeOptions.value[0] || "";
 });
 watch(hasPatient, (v) => {
@@ -557,7 +601,7 @@ watch(
     if (!orgId || !nextDate || !nextPractitioner) return;
     try {
       await loadDentistSchedules(orgId, Number(nextPractitioner));
-      if (time.value && !timeOptions.value.includes(time.value)) {
+      if (timeOptions.value.length && time.value && !timeOptions.value.includes(time.value)) {
         time.value = timeOptions.value[0] || "";
       }
     } catch (error) {
@@ -587,32 +631,22 @@ watch(
         }));
     }
 
-    if (isEditing.value && props.editAppointment) {
-      const a = props.editAppointment;
-      date.value = a.date || props.initialDate;
-      time.value = a.start || a.time || props.initialTime;
-      duration.value = a.duration || props.initialDuration || 15;
-      status.value = a.status || "Pending";
-      exam.value = a.treatmentName || a.exam || "";
-      practitioner.value =
-        a.practitioner || a.practitionerId || props.initialPractitioner;
-      selectedPatientId.value =
-        a.patientId || props.preselectedPatientId || null;
-      notes.value = a.notes || "";
-    } else {
-      date.value = props.initialDate;
-      time.value = props.initialTime;
-      duration.value = props.initialDuration || 15;
-      practitioner.value = props.initialPractitioner;
-      status.value = "Pending";
-      exam.value = "";
-      notes.value = "";
-      selectedPatientId.value = props.preselectedPatientId || null;
-    }
+    applyIncomingAppointmentState();
+  },
+);
 
-    // Ensure time is valid
-    if (!time.value || !timeOptions.value.includes(time.value))
-      time.value = timeOptions.value[0] || "";
+watch(
+  [
+    () => props.initialDate,
+    () => props.initialTime,
+    () => props.initialDuration,
+    () => props.initialPractitioner,
+    () => props.preselectedPatientId,
+    () => props.editAppointment,
+  ],
+  () => {
+    if (!props.modelValue) return;
+    applyIncomingAppointmentState();
   },
 );
 
@@ -655,15 +689,23 @@ const onSave = async () => {
     try {
       await loadDentistSchedules(orgId, Number(practitioner.value));
       const bookingDate = clinicDateToYMD(date.value);
-      const slotOk = isTimeSlotAvailable(
+      const [hours, minutes] = String(time.value).split(":").map(Number);
+      const startMinutes = hours * 60 + (minutes || 0);
+      const endMinutes = startMinutes + Number(duration.value || 15);
+      const availability = getTimeRangeAvailability(
         bookingDate,
         time.value,
-        Number(duration.value || 15),
-      );
-      if (!slotOk) {
-        errors.time = getAvailabilityMessage(bookingDate, {
+        `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`,
+        {
           name: practitionerLabel.value || "This practitioner",
-        });
+        },
+      );
+      if (!availability.available) {
+        errors.time =
+          availability.message ||
+          getAvailabilityMessage(bookingDate, {
+            name: practitionerLabel.value || "This practitioner",
+          });
         mainStore?.setSnackbar?.({ title: errors.time, type: "error" });
         return;
       }

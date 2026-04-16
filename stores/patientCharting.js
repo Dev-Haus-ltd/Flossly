@@ -1124,9 +1124,16 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
     },
 
     // ── Appointment booking ──────────────────────────────────────────────
-    async checkAppointmentConflict({ date, startTime, endTime, dentistId }) {
+    async checkAppointmentConflict({ date, startTime, endTime, dentistId, excludeAppointmentId = null }) {
       try {
-        const res = await patientChartingService.checkConflict({ date, startTime, endTime, dentistId, patientId: this.patientId })
+        const res = await patientChartingService.checkConflict({
+          date,
+          startTime,
+          endTime,
+          dentistId,
+          patientId: this.patientId,
+          excludeAppointmentId,
+        })
         return res?.data || { hasConflict: false, conflicts: [] }
       } catch (error) {
         this._logError('checkAppointmentConflict', error)
@@ -1134,7 +1141,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       }
     },
 
-    async bookInDiary({ appointmentId, date, startTime, endTime, dentistId, notes }) {
+    async bookInDiary({ appointmentId, date, startTime, endTime, dentistId, notes, excludeAppointmentId = null }) {
       const appt = this.appointments.find(a => a.id === appointmentId)
       if (!appt) return null
       const items = this.treatmentPlan.filter(i => (i.appointmentGroupId || DEFAULT_APPOINTMENT_ID) === appointmentId && (i.planId || DEFAULT_PLAN_ID) === (this.activePlanId || DEFAULT_PLAN_ID))
@@ -1158,6 +1165,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
           endTime,
           dentistId,
           notes,
+          excludeAppointmentId,
           treatmentItemIds: persistedIds,
         })
         if (res?.code === 0) {

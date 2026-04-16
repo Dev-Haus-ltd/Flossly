@@ -466,17 +466,20 @@ export const updateScheduleDay = async (event) => {
       return error(404, 'Schedule day not found')
     }
 
+    const nextStartTime = startTime ?? scheduleDay.startTime
+    const nextEndTime = endTime ?? scheduleDay.endTime
+
     // Validate if working day
     if (isWorkingDay) {
-      if (!startTime || !endTime) {
+      if (!nextStartTime || !nextEndTime) {
         return error(400, 'Working days must have start and end times')
       }
 
-      if (!isValidTime(startTime) || !isValidTime(endTime)) {
+      if (!isValidTime(nextStartTime) || !isValidTime(nextEndTime)) {
         return error(400, 'Invalid time format. Must be HH:MM or HH:MM:SS')
       }
 
-      if (timeToMinutes(startTime) >= timeToMinutes(endTime)) {
+      if (timeToMinutes(nextStartTime) >= timeToMinutes(nextEndTime)) {
         return error(400, 'Start time must be before end time')
       }
 
@@ -488,8 +491,8 @@ export const updateScheduleDay = async (event) => {
       for (const breakItem of breaks) {
         const breakStart = timeToMinutes(breakItem.startTime)
         const breakEnd = timeToMinutes(breakItem.endTime)
-        const workStart = timeToMinutes(startTime)
-        const workEnd = timeToMinutes(endTime)
+        const workStart = timeToMinutes(nextStartTime)
+        const workEnd = timeToMinutes(nextEndTime)
 
         if (breakStart < workStart || breakEnd > workEnd) {
           return error(400, `Break ${breakItem.breakName} (${breakItem.startTime} - ${breakItem.endTime}) falls outside working hours`)
@@ -499,8 +502,8 @@ export const updateScheduleDay = async (event) => {
 
     await scheduleDay.update({
       isWorkingDay,
-      startTime: isWorkingDay ? startTime : null,
-      endTime: isWorkingDay ? endTime : null
+      startTime: nextStartTime,
+      endTime: nextEndTime
     })
 
     const updated = await DentistScheduleDay.findByPk(scheduleDayId, {
