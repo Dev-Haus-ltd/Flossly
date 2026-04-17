@@ -501,6 +501,46 @@ function getScheduleDayForDate(schedules = [], targetDate) {
   return day ? { schedule: activeSchedule, day } : null;
 }
 
+const DEFAULT_DAY_SLOT_HOURS = {
+  startTime: "09:00",
+  endTime: "17:00",
+};
+
+function buildOneDayScheduleOverride(dentist, targetDate) {
+  const localDate = new Date(`${targetDate}T00:00:00`);
+  const jsDay = localDate.getDay();
+  const dayOfWeek = jsDay === 0 ? 6 : jsDay - 1;
+  const dayNames = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+  ];
+
+  return {
+    organisationId:
+      user.value?.currentLoggedInOrgId || user.value?.organisationId,
+    dentistId: dentist.id,
+    scheduleName: `${dentist.name} Calendar Override ${targetDate}`,
+    startDate: targetDate,
+    endDate: targetDate,
+    repeatPattern: "weekly",
+    isActive: true,
+    weekDays: dayNames.map((dayName, index) => ({
+      dayOfWeek: index,
+      dayName,
+      isWorkingDay: index === dayOfWeek,
+      startTime:
+        index === dayOfWeek ? DEFAULT_DAY_SLOT_HOURS.startTime : null,
+      endTime: index === dayOfWeek ? DEFAULT_DAY_SLOT_HOURS.endTime : null,
+      breaks: [],
+    })),
+  };
+}
+
 async function onToggleDentistDaySlots(dentist) {
   const orgId = user.value?.currentLoggedInOrgId || user.value?.organisationId;
   if (!orgId || !dentist?.id) return;
@@ -510,7 +550,13 @@ async function onToggleDentistDaySlots(dentist) {
     const resolved = getScheduleDayForDate(schedules, dateStr.value);
 
     if (!resolved?.day?.id) {
-      showError(`No active schedule found for ${dentist.name} on this date.`);
+      await scheduleStore.createSchedule(
+        buildOneDayScheduleOverride(dentist, dateStr.value),
+      );
+      await loadDentistsAvailability();
+      showSuccess(
+        `${dentist.name} day slots turned on (${DEFAULT_DAY_SLOT_HOURS.startTime} - ${DEFAULT_DAY_SLOT_HOURS.endTime})`,
+      );
       return;
     }
 
