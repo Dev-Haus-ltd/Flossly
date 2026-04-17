@@ -106,7 +106,6 @@
 import { CommonLoader } from "#components";
 import { isAuthenticated } from "./lib/auth.js";
 import { useFCM } from '~/composables/useFCM';
-import { useStorage } from '@vueuse/core';
 
 const authStore = useAuthStore();
 const { user, setUser } = useUser();
@@ -544,11 +543,32 @@ const showFloatingButtons = computed(() => {
 
 // Draggable floating buttons
 const floatingEl = ref(null);
-const savedPos = useStorage('floating-buttons-pos', null);
+const FLOATING_BUTTONS_STORAGE_KEY = "floating-buttons-pos";
 
-// Pre-seed initialValue from saved position so there's no top-left flash
-const _floatInitX = process.client ? (savedPos.value?.x ?? (window.innerWidth - 160)) : 0;
-const _floatInitY = process.client ? (savedPos.value?.y ?? (window.innerHeight - 80)) : 0;
+const readSavedFloatingPosition = () => {
+  if (!process.client) return null;
+  try {
+    const raw = window.localStorage.getItem(FLOATING_BUTTONS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (
+      parsed &&
+      Number.isFinite(Number(parsed.x)) &&
+      Number.isFinite(Number(parsed.y))
+    ) {
+      return { x: Number(parsed.x), y: Number(parsed.y) };
+    }
+  } catch (err) {
+  }
+  return null;
+};
+
+const writeSavedFloatingPosition = (position) => {
+  if (!process.client || !position) return;
+  try {
+    window.localStorage.setItem(FLOATING_BUTTONS_STORAGE_KEY, JSON.stringify(position));
+  } catch (err) {
+  }
+};
 
 const clampFloatingPosition = (nextX, nextY) => {
   if (!process.client) return { x: nextX, y: nextY };
@@ -575,13 +595,34 @@ let _dragMoved = false;
 let _pointerStart = null;
 let _dragOffset = null;
 const DRAG_THRESHOLD = 4;
-const floatX = ref(_floatInitX);
-const floatY = ref(_floatInitY);
+const floatX = ref(0);
+const floatY = ref(0);
 const isDragging = ref(false);
 const dragStyle = computed(() => `
   left: ${floatX.value}px;
   top: ${floatY.value}px;
 `);
+
+const applyFloatingPosition = (position, { persist = true } = {}) => {
+  const next = clampFloatingPosition(position.x, position.y);
+  floatX.value = next.x;
+  floatY.value = next.y;
+  if (persist) {
+    writeSavedFloatingPosition(next);
+  }
+};
+
+const syncFloatingPosition = ({ persistDefault = true } = {}) => {
+  if (!process.client) return;
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      if (!showFloatingButtons.value || !floatingEl.value) return;
+      const saved = readSavedFloatingPosition();
+      const next = saved || getDefaultFloatingPosition();
+      applyFloatingPosition(next, { persist: persistDefault || !!saved });
+    });
+  });
+};
 
 const stopFloatingDrag = () => {
   if (!process.client) return;
@@ -607,10 +648,7 @@ const onFloatingPointerUp = () => {
   if (!_pointerStart) return;
   isDragging.value = false;
   stopFloatingDrag();
-  const clamped = clampFloatingPosition(floatX.value, floatY.value);
-  floatX.value = clamped.x;
-  floatY.value = clamped.y;
-  savedPos.value = { x: clamped.x, y: clamped.y };
+  applyFloatingPosition({ x: floatX.value, y: floatY.value });
   _pointerStart = null;
   _dragOffset = null;
   setTimeout(() => { _dragMoved = false; }, 50);
@@ -637,18 +675,11 @@ const onFloatingPointerDown = (event) => {
 // (ClientOnly defers rendering past app.vue's onMounted, so floatingEl is null there)
 watch(floatingEl, (el) => {
   if (!el) return;
-  const saved = savedPos.value;
-  const next = saved ? clampFloatingPosition(saved.x, saved.y) : getDefaultFloatingPosition();
-  floatX.value = next.x;
-  floatY.value = next.y;
-  if (!saved) savedPos.value = { x: next.x, y: next.y };
+  syncFloatingPosition();
 });
 
 const onFloatingResize = () => {
-  const adjusted = clampFloatingPosition(floatX.value, floatY.value);
-  floatX.value = adjusted.x;
-  floatY.value = adjusted.y;
-  savedPos.value = { x: adjusted.x, y: adjusted.y };
+  applyFloatingPosition({ x: floatX.value, y: floatY.value });
 };
 
 // Suppress the click that fires after drag-release so menus don't open
@@ -724,11 +755,7 @@ onMounted(() => {
     getRoles();
   }
   syncOnboardingState();
-  const saved = savedPos.value;
-  const next = saved ? clampFloatingPosition(saved.x, saved.y) : getDefaultFloatingPosition();
-  floatX.value = next.x;
-  floatY.value = next.y;
-  if (!saved) savedPos.value = { x: next.x, y: next.y };
+  syncFloatingPosition();
   window.addEventListener('resize', onFloatingResize);
 });
 
@@ -752,8 +779,15 @@ watch(
   () => route.path,
   () => {
     syncOnboardingState();
+    syncFloatingPosition({ persistDefault: false });
   }
 );
+
+watch(showFloatingButtons, (visible) => {
+  if (visible) {
+    syncFloatingPosition({ persistDefault: false });
+  }
+});
 </script>
 
 <style lang="scss">
