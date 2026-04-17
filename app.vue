@@ -10,6 +10,7 @@
       v-if="showFloatingButtons"
       :style="dragStyle"
       :class="{ 'floating-buttons--dragging': isDragging }"
+      @pointerdown="onFloatingPointerDown"
       @click.capture="onFloatingClick"
     >
       <FloatingButtonsQuickActions
@@ -572,32 +573,65 @@ const getDefaultFloatingPosition = () => {
 
 let _dragMoved = false;
 let _pointerStart = null;
+let _dragOffset = null;
 const DRAG_THRESHOLD = 4;
+const floatX = ref(_floatInitX);
+const floatY = ref(_floatInitY);
+const isDragging = ref(false);
+const dragStyle = computed(() => `
+  left: ${floatX.value}px;
+  top: ${floatY.value}px;
+`);
 
-// Read `x` and `y` directly from useDraggable so this stays compatible with the
-// installed VueUse return shape and avoids depending on `position` internals.
-const { x: floatX, y: floatY, style: dragStyle, isDragging } = useDraggable(floatingEl, {
-  initialValue: { x: _floatInitX, y: _floatInitY },
-  capture: true,
-  onStart(_, event) {
-    _pointerStart = { x: event.clientX, y: event.clientY };
-    _dragMoved = false;
-  },
-  onMove(_, event) {
-    if (_pointerStart) {
-      const dist = Math.hypot(event.clientX - _pointerStart.x, event.clientY - _pointerStart.y);
-      if (dist >= DRAG_THRESHOLD) _dragMoved = true;
-    }
-  },
-  onEnd(pos) {
-    const clamped = clampFloatingPosition(pos.x, pos.y);
-    floatX.value = clamped.x;
-    floatY.value = clamped.y;
-    savedPos.value = { x: clamped.x, y: clamped.y };
-    _pointerStart = null;
-    setTimeout(() => { _dragMoved = false; }, 50);
-  },
-});
+const stopFloatingDrag = () => {
+  if (!process.client) return;
+  window.removeEventListener('pointermove', onFloatingPointerMove);
+  window.removeEventListener('pointerup', onFloatingPointerUp);
+  window.removeEventListener('pointercancel', onFloatingPointerUp);
+};
+
+const onFloatingPointerMove = (event) => {
+  if (!_pointerStart || !_dragOffset) return;
+  const dist = Math.hypot(event.clientX - _pointerStart.x, event.clientY - _pointerStart.y);
+  if (dist >= DRAG_THRESHOLD) _dragMoved = true;
+
+  const clamped = clampFloatingPosition(
+    event.clientX - _dragOffset.x,
+    event.clientY - _dragOffset.y,
+  );
+  floatX.value = clamped.x;
+  floatY.value = clamped.y;
+};
+
+const onFloatingPointerUp = () => {
+  if (!_pointerStart) return;
+  isDragging.value = false;
+  stopFloatingDrag();
+  const clamped = clampFloatingPosition(floatX.value, floatY.value);
+  floatX.value = clamped.x;
+  floatY.value = clamped.y;
+  savedPos.value = { x: clamped.x, y: clamped.y };
+  _pointerStart = null;
+  _dragOffset = null;
+  setTimeout(() => { _dragMoved = false; }, 50);
+};
+
+const onFloatingPointerDown = (event) => {
+  if (!process.client || event.button !== 0) return;
+  const el = floatingEl.value;
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  _pointerStart = { x: event.clientX, y: event.clientY };
+  _dragOffset = {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top,
+  };
+  _dragMoved = false;
+  isDragging.value = true;
+  window.addEventListener('pointermove', onFloatingPointerMove);
+  window.addEventListener('pointerup', onFloatingPointerUp);
+  window.addEventListener('pointercancel', onFloatingPointerUp);
+};
 
 // Re-clamp with real element dimensions once ClientOnly renders the element
 // (ClientOnly defers rendering past app.vue's onMounted, so floatingEl is null there)
@@ -690,10 +724,16 @@ onMounted(() => {
     getRoles();
   }
   syncOnboardingState();
+  const saved = savedPos.value;
+  const next = saved ? clampFloatingPosition(saved.x, saved.y) : getDefaultFloatingPosition();
+  floatX.value = next.x;
+  floatY.value = next.y;
+  if (!saved) savedPos.value = { x: next.x, y: next.y };
   window.addEventListener('resize', onFloatingResize);
 });
 
 onBeforeUnmount(() => {
+  stopFloatingDrag();
   window.removeEventListener('resize', onFloatingResize);
 });
 
