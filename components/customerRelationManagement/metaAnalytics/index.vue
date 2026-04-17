@@ -20,8 +20,12 @@
     </div>
 
     <div class="mt-5 px-5">
-      <v-row align="stretch">
-        <v-col v-for="(stat, i) in currentStats" :key="i" style="flex: 1 1 0; min-width: 0;">
+      <div class="stats-container">
+        <div
+          v-for="(stat, i) in currentStats"
+          :key="i"
+          class="stat-card"
+        >
           <CommonStatCard
             :icon="stat.icon"
             :label="stat.label"
@@ -33,8 +37,8 @@
             :info-text="stat.infoText ?? ''"
             @update:select="(v) => { if (stat.selectItems?.length) statPeriod = v }"
           />
-        </v-col>
-      </v-row>
+        </div>
+      </div>
     </div>
 
     <div class="mt-5 px-5">
@@ -986,6 +990,17 @@ const drillEmptyCopy = computed(() => {
   align-items: center;
 }
 
+.stats-container {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+}
+
+.stat-card {
+  flex: 1;
+  min-width: 0;
+}
+
 .custom-search {
   height: 46px;
   border-radius: 8px;
@@ -1043,5 +1058,18 @@ const drillEmptyCopy = computed(() => {
 .date-field {
   font-size: 13px;
   border-radius: 8px;
+}
+
+@media (max-width: 768px) {
+  .stats-container {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-container {
+    gap: 8px;
+  }
 }
 </style>
