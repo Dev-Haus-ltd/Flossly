@@ -105,7 +105,7 @@
 import { CommonLoader } from "#components";
 import { isAuthenticated } from "./lib/auth.js";
 import { useFCM } from '~/composables/useFCM';
-import { useDraggable, useStorage } from '@vueuse/core';
+import { useStorage } from '@vueuse/core';
 
 const authStore = useAuthStore();
 const { user, setUser } = useUser();
@@ -545,11 +545,9 @@ const showFloatingButtons = computed(() => {
 const floatingEl = ref(null);
 const savedPos = useStorage('floating-buttons-pos', null);
 
-const defaultPos = savedPos.value ?? (
-  process.client
-    ? { x: window.innerWidth - 148, y: window.innerHeight - 88 }
-    : { x: 0, y: 0 }
-);
+// Pre-seed initialValue from saved position so there's no top-left flash
+const _floatInitX = process.client ? (savedPos.value?.x ?? (window.innerWidth - 160)) : 0;
+const _floatInitY = process.client ? (savedPos.value?.y ?? (window.innerHeight - 80)) : 0;
 
 const clampFloatingPosition = (nextX, nextY) => {
   if (!process.client) return { x: nextX, y: nextY };
@@ -569,52 +567,54 @@ const getDefaultFloatingPosition = () => {
   const el = floatingEl.value;
   const width = el?.offsetWidth || 140;
   const height = el?.offsetHeight || 64;
-  return clampFloatingPosition(
-    window.innerWidth - width - 20,
-    window.innerHeight - height - 20
-  );
+  return clampFloatingPosition(window.innerWidth - width - 20, window.innerHeight - height - 20);
 };
 
 let _dragMoved = false;
 let _pointerStart = null;
 const DRAG_THRESHOLD = 4;
 
-const { x, y, style: dragStyle, isDragging } = useDraggable(floatingEl, {
-  initialValue: defaultPos,
-  // capture:true fires our pointerdown handler BEFORE Vuetify v-menu
-  // activators can intercept it, fixing the "first grab does nothing" bug.
+// Read `x` and `y` directly from useDraggable so this stays compatible with the
+// installed VueUse return shape and avoids depending on `position` internals.
+const { x: floatX, y: floatY, style: dragStyle, isDragging } = useDraggable(floatingEl, {
+  initialValue: { x: _floatInitX, y: _floatInitY },
   capture: true,
-  onStart(_pos, event) {
+  onStart(_, event) {
     _pointerStart = { x: event.clientX, y: event.clientY };
     _dragMoved = false;
   },
-  onMove(_pos, event) {
+  onMove(_, event) {
     if (_pointerStart) {
-      const dist = Math.hypot(
-        event.clientX - _pointerStart.x,
-        event.clientY - _pointerStart.y
-      );
+      const dist = Math.hypot(event.clientX - _pointerStart.x, event.clientY - _pointerStart.y);
       if (dist >= DRAG_THRESHOLD) _dragMoved = true;
     }
   },
   onEnd(pos) {
-    // Clamp to viewport before saving
     const clamped = clampFloatingPosition(pos.x, pos.y);
-    x.value = clamped.x;
-    y.value = clamped.y;
+    floatX.value = clamped.x;
+    floatY.value = clamped.y;
     savedPos.value = { x: clamped.x, y: clamped.y };
     _pointerStart = null;
-    // Safety: reset _dragMoved even if the post-drag click is swallowed
-    // by a Vuetify overlay so the next interaction isn't blocked.
     setTimeout(() => { _dragMoved = false; }, 50);
   },
 });
 
+// Re-clamp with real element dimensions once ClientOnly renders the element
+// (ClientOnly defers rendering past app.vue's onMounted, so floatingEl is null there)
+watch(floatingEl, (el) => {
+  if (!el) return;
+  const saved = savedPos.value;
+  const next = saved ? clampFloatingPosition(saved.x, saved.y) : getDefaultFloatingPosition();
+  floatX.value = next.x;
+  floatY.value = next.y;
+  if (!saved) savedPos.value = { x: next.x, y: next.y };
+});
+
 const onFloatingResize = () => {
-  const adjusted = clampFloatingPosition(x.value, y.value);
-  x.value = adjusted.x;
-  y.value = adjusted.y;
-  savedPos.value = { x: x.value, y: y.value };
+  const adjusted = clampFloatingPosition(floatX.value, floatY.value);
+  floatX.value = adjusted.x;
+  floatY.value = adjusted.y;
+  savedPos.value = { x: adjusted.x, y: adjusted.y };
 };
 
 // Suppress the click that fires after drag-release so menus don't open
@@ -690,14 +690,6 @@ onMounted(() => {
     getRoles();
   }
   syncOnboardingState();
-  const next = savedPos.value
-    ? clampFloatingPosition(x.value, y.value)
-    : getDefaultFloatingPosition();
-  x.value = next.x;
-  y.value = next.y;
-  if (!savedPos.value) {
-    savedPos.value = { x: x.value, y: y.value };
-  }
   window.addEventListener('resize', onFloatingResize);
 });
 
