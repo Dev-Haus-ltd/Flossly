@@ -1,48 +1,55 @@
 <template>
   <div class="mt-5">
-    <v-row>
-      <v-col cols="12" md="6">
-        <TeamFlossUserDetailsProfileEmploymentDetailsLocationCard
-          :data="userDetails"
-          @updateField="updateAddress"
-        />
-      </v-col>
-      <v-col cols="12" md="6">
-        <TeamFlossUserDetailsProfileEmploymentDetailsSalary
-          :data="userDetails.contract || {}"
-          @updateField="updateSalaryDetails"
-        />
-      </v-col>
-      <v-col cols="12" md="6">
-        <TeamFlossUserDetailsProfileEmploymentDetailsBankDetails
-          :data="userDetails.account || {}"
-          @updateField="updateBankDetails"
-        />
-      </v-col>
-      <v-col cols="12" md="6">
-        <TeamFlossUserDetailsProfileEmploymentDetailsLeaveEntitlement
-          :data="userDetails.leaveEntitlement || {}"
-          @updateField="updateLeaveDetails"
-        />
-      </v-col>
-      <v-col cols="12" md="6">
-        <TeamFlossUserDetailsProfileEmploymentDetailsEmploymentCard
-          v-if="userDetails.id"
-          :data="userDetails.contract || {}"
-          :userList="userList"
-          :roleId="userDetails.roleId"
-          @updateField="updateEmploymentData"
-          @updateRole="updaterole"
-          :rolesList="rolesList"
-        />
-      </v-col>
-      <v-col cols="12" md="6">
-        <TeamFlossUserDetailsProfileEmploymentDetailsContractDetailsCard
-          :data="userDetails.contract || {}"
-          @updateField="onContractDetailsUpdate"
-        />
-      </v-col>
-    </v-row>
+    <div class="masonry-layout">
+      <!-- Left Column -->
+      <div class="masonry-column">
+        <div class="grid-item">
+          <TeamFlossUserDetailsProfileEmploymentDetailsLocationCard
+            :data="userDetails"
+            @updateField="updateAddress"
+          />
+        </div>
+        <div class="grid-item">
+          <TeamFlossUserDetailsProfileEmploymentDetailsBankDetails
+            :data="userDetails.account || {}"
+            @updateField="updateBankDetails"
+          />
+        </div>
+        <div class="grid-item">
+          <TeamFlossUserDetailsProfileEmploymentDetailsEmploymentCard
+            v-if="userDetails.id"
+            :data="userDetails.contract || {}"
+            :userList="userList"
+            :roleId="userDetails.roleId"
+            @updateField="updateEmploymentData"
+            @updateRole="updaterole"
+            :rolesList="rolesList"
+          />
+        </div>
+      </div>
+
+      <!-- Right Column -->
+      <div class="masonry-column">
+        <div class="grid-item">
+          <TeamFlossUserDetailsProfileEmploymentDetailsSalary
+            :data="userDetails.contract || {}"
+            @updateField="updateSalaryDetails"
+          />
+        </div>
+        <div class="grid-item">
+          <TeamFlossUserDetailsProfileEmploymentDetailsLeaveEntitlement
+            :data="userDetails.leaveEntitlement || {}"
+            @updateField="updateLeaveDetails"
+          />
+        </div>
+        <div class="grid-item">
+          <TeamFlossUserDetailsProfileEmploymentDetailsContractDetailsCard
+            :data="userDetails.contract || {}"
+            @updateField="onContractDetailsUpdate"
+          />
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -166,3 +173,32 @@ const updateUserBankDetails = () => {
     });
 };
 </script>
+
+<style scoped>
+.masonry-layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.masonry-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.grid-item {
+  width: 100%;
+}
+
+@media (max-width: 960px) {
+  .masonry-layout {
+    flex-direction: column;
+    gap: 16px;
+  }
+  .masonry-column {
+    gap: 16px;
+  }
+}
+</style>
