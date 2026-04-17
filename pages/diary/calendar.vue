@@ -506,6 +506,34 @@ const DEFAULT_DAY_SLOT_HOURS = {
   endTime: "17:00",
 };
 
+function isValidWorkingHourRange(startTime, endTime) {
+  if (!startTime || !endTime) return false;
+
+  const toMinutes = (value) => {
+    const [hours, minutes] = String(value).split(":").map(Number);
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return NaN;
+    return hours * 60 + minutes;
+  };
+
+  const startMinutes = toMinutes(startTime);
+  const endMinutes = toMinutes(endTime);
+
+  return Number.isFinite(startMinutes) &&
+    Number.isFinite(endMinutes) &&
+    startMinutes < endMinutes;
+}
+
+function getDaySlotHours(day) {
+  if (isValidWorkingHourRange(day?.startTime, day?.endTime)) {
+    return {
+      startTime: day.startTime,
+      endTime: day.endTime,
+    };
+  }
+
+  return { ...DEFAULT_DAY_SLOT_HOURS };
+}
+
 function buildOneDayScheduleOverride(dentist, targetDate) {
   const localDate = new Date(`${targetDate}T00:00:00`);
   const jsDay = localDate.getDay();
@@ -561,18 +589,25 @@ async function onToggleDentistDaySlots(dentist) {
     }
 
     const { day } = resolved;
+    const nextHours = !day.isWorkingDay
+      ? getDaySlotHours(day)
+      : {
+          startTime: day.startTime,
+          endTime: day.endTime,
+        };
+
     await scheduleStore.updateScheduleDay({
       scheduleDayId: day.id,
       isWorkingDay: !day.isWorkingDay,
-      startTime: day.startTime,
-      endTime: day.endTime,
+      startTime: nextHours.startTime,
+      endTime: nextHours.endTime,
     });
 
     await loadDentistsAvailability();
     showSuccess(
       day.isWorkingDay
         ? `${dentist.name} day slots turned off`
-        : `${dentist.name} day slots turned on`,
+        : `${dentist.name} day slots turned on (${nextHours.startTime} - ${nextHours.endTime})`,
     );
   } catch (error) {
     showError(

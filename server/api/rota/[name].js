@@ -3,6 +3,7 @@ import {
   addRotaShift,
   addRotaUsers,
   completeShift,
+  deleteRotaShift,
   getAllShifts,
   getRotas,
   getRotaUsers,
