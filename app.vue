@@ -10,7 +10,6 @@
       v-if="showFloatingButtons"
       :style="dragStyle"
       :class="{ 'floating-buttons--dragging': isDragging }"
-      @pointerdown="onFloatingPointerDown"
       @click.capture="onFloatingClick"
     >
       <FloatingButtonsQuickActions
@@ -106,7 +105,7 @@
 import { CommonLoader } from "#components";
 import { isAuthenticated } from "./lib/auth.js";
 import { useFCM } from '~/composables/useFCM';
-import { useStorage } from '@vueuse/core';
+import { useDraggable, useStorage } from '@vueuse/core';
 
 const authStore = useAuthStore();
 const { user, setUser } = useUser();
@@ -552,26 +551,6 @@ const defaultPos = savedPos.value ?? (
     : { x: 0, y: 0 }
 );
 
-const x = ref(defaultPos.x);
-const y = ref(defaultPos.y);
-const isDragging = ref(false);
-const dragStyle = computed(() => ({
-  left: `${x.value}px`,
-  top: `${y.value}px`,
-  right: 'auto',
-  bottom: 'auto',
-}));
-
-let _dragMoved = false;
-const dragState = reactive({
-  pointerId: null,
-  startX: 0,
-  startY: 0,
-  originX: x.value,
-  originY: y.value,
-});
-const DRAG_THRESHOLD = 4;
-
 const clampFloatingPosition = (nextX, nextY) => {
   if (!process.client) return { x: nextX, y: nextY };
   const el = floatingEl.value;
@@ -596,60 +575,46 @@ const getDefaultFloatingPosition = () => {
   );
 };
 
-const stopFloatingDrag = (persist = true) => {
-  if (dragState.pointerId !== null && floatingEl.value?.hasPointerCapture?.(dragState.pointerId)) {
-    floatingEl.value.releasePointerCapture(dragState.pointerId);
-  }
-  dragState.pointerId = null;
-  isDragging.value = false;
-  document.body.classList.remove('floating-dragging');
-  if (persist) {
-    savedPos.value = { x: x.value, y: y.value };
-  }
-};
+let _dragMoved = false;
+let _pointerStart = null;
+const DRAG_THRESHOLD = 4;
 
-const onFloatingPointerMove = (event) => {
-  if (event.pointerId !== dragState.pointerId) return;
-  const deltaX = event.clientX - dragState.startX;
-  const deltaY = event.clientY - dragState.startY;
-  if (!_dragMoved && Math.hypot(deltaX, deltaY) >= DRAG_THRESHOLD) {
-    _dragMoved = true;
-    isDragging.value = true;
-    document.body.classList.add('floating-dragging');
-  }
-  if (!_dragMoved) return;
-  const next = clampFloatingPosition(dragState.originX + deltaX, dragState.originY + deltaY);
-  x.value = next.x;
-  y.value = next.y;
-  event.preventDefault();
-};
-
-const onFloatingPointerUp = (event) => {
-  if (event.pointerId !== dragState.pointerId) return;
-  stopFloatingDrag(true);
-};
-
-const onFloatingPointerCancel = (event) => {
-  if (dragState.pointerId !== null && event.pointerId !== dragState.pointerId) return;
-  stopFloatingDrag(false);
-};
+const { x, y, style: dragStyle, isDragging } = useDraggable(floatingEl, {
+  initialValue: defaultPos,
+  // capture:true fires our pointerdown handler BEFORE Vuetify v-menu
+  // activators can intercept it, fixing the "first grab does nothing" bug.
+  capture: true,
+  onStart(_pos, event) {
+    _pointerStart = { x: event.clientX, y: event.clientY };
+    _dragMoved = false;
+  },
+  onMove(_pos, event) {
+    if (_pointerStart) {
+      const dist = Math.hypot(
+        event.clientX - _pointerStart.x,
+        event.clientY - _pointerStart.y
+      );
+      if (dist >= DRAG_THRESHOLD) _dragMoved = true;
+    }
+  },
+  onEnd(pos) {
+    // Clamp to viewport before saving
+    const clamped = clampFloatingPosition(pos.x, pos.y);
+    x.value = clamped.x;
+    y.value = clamped.y;
+    savedPos.value = { x: clamped.x, y: clamped.y };
+    _pointerStart = null;
+    // Safety: reset _dragMoved even if the post-drag click is swallowed
+    // by a Vuetify overlay so the next interaction isn't blocked.
+    setTimeout(() => { _dragMoved = false; }, 50);
+  },
+});
 
 const onFloatingResize = () => {
   const adjusted = clampFloatingPosition(x.value, y.value);
   x.value = adjusted.x;
   y.value = adjusted.y;
   savedPos.value = { x: x.value, y: y.value };
-};
-
-const onFloatingPointerDown = (event) => {
-  if (event.button !== 0) return;
-  dragState.pointerId = event.pointerId;
-  dragState.startX = event.clientX;
-  dragState.startY = event.clientY;
-  dragState.originX = x.value;
-  dragState.originY = y.value;
-  _dragMoved = false;
-  floatingEl.value?.setPointerCapture?.(event.pointerId);
 };
 
 // Suppress the click that fires after drag-release so menus don't open
@@ -733,20 +698,11 @@ onMounted(() => {
   if (!savedPos.value) {
     savedPos.value = { x: x.value, y: y.value };
   }
-  window.addEventListener('pointermove', onFloatingPointerMove, { passive: false });
-  window.addEventListener('pointerup', onFloatingPointerUp);
-  window.addEventListener('pointercancel', onFloatingPointerCancel);
-  window.addEventListener('blur', onFloatingPointerCancel);
   window.addEventListener('resize', onFloatingResize);
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener('pointermove', onFloatingPointerMove);
-  window.removeEventListener('pointerup', onFloatingPointerUp);
-  window.removeEventListener('pointercancel', onFloatingPointerCancel);
-  window.removeEventListener('blur', onFloatingPointerCancel);
   window.removeEventListener('resize', onFloatingResize);
-  document.body.classList.remove('floating-dragging');
 });
 
 watch(loggedIn, (newVal) => {
@@ -794,7 +750,7 @@ watch(
   gap: 2px;
   width: max-content;
   height: max-content;
-  z-index: 1000;
+  z-index: 9999;
   cursor: grab;
   user-select: none;
   touch-action: none;
