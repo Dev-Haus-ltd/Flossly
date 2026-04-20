@@ -83,6 +83,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  updateConversationAutoReply(conversationId, payload) {
+    return new Promise((resolve, reject) => {
+      Post(`/dms/conversation/${conversationId}/autoReply`, payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   fetchDmHistory(params = {}) {
     const q = new URLSearchParams();
     Object.entries(params || {}).forEach(([k, v]) => {

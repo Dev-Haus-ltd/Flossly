@@ -440,6 +440,17 @@ export const listLeads = async (event) => {
     ])
     const orderKey = sortable.has(sortBy) ? sortBy : 'createdAt'
 
+    const now = new Date()
+    await CrmLead.update(
+      { autoReplyEnabled: true, autoReplyDisabledUntil: null },
+      {
+        where: {
+          organisationId: Number(logged.orgId),
+          autoReplyDisabledUntil: { [Op.lt]: now },
+        },
+      }
+    )
+
     const queryOptions = {
       where,
       include: [
@@ -2122,13 +2133,13 @@ export const sendLeadWhatsApp = async (event) => {
             method: 'POST', headers, body: { to, body: resolvedText },
           })
           const providerMessageId = resp?.message?.id || resp?.id || null
-          if (typeof lead?.save === 'function') await markWhatsAppOutbound(lead, to)
-          await logWhatsAppMessage({
-            organisationId: orgId, leadId: lead.id || null, to,
-            type: 'text', status: 'sent', providerMessageId, content: resolvedText,
-          })
-          sent += 1
-        }
+if (typeof lead?.save === 'function') await markWhatsAppOutbound(lead, to)
+        await logWhatsAppMessage({
+          organisationId: orgId, leadId: lead.id || null, to,
+          type: 'text', status: 'sent', providerMessageId, content: resolvedText,
+        })
+        sent += 1
+      }
 
         if (hasAttachments) {
           for (let attIdx = 0; attIdx < attachments.length; attIdx++) {
@@ -2179,6 +2190,12 @@ export const sendLeadWhatsApp = async (event) => {
           error: e?.data?.error?.message || e?.message || 'Failed to send',
         })
         failures.push({ leadId: lead.id || null, error: e?.data?.error?.message || e?.message || 'Failed to send' })
+      }
+
+      if (lead && typeof lead.save === 'function') {
+        lead.autoReplyEnabled = false
+        lead.autoReplyDisabledUntil = new Date(Date.now() + 12 * 60 * 60 * 1000)
+        await lead.save()
       }
     }
 

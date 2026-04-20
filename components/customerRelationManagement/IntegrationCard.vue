@@ -23,6 +23,7 @@
     <div class="card-title">{{ title }}</div>
     <div class="card-sub">{{ subtitlePrimary || '-' }}</div>
     <div class="card-sub">{{ subtitleSecondary || '-' }}</div>
+    <slot name="toggle" />
     <div class="card-divider"></div>
     <div class="card-actions">
       <slot name="actions" />

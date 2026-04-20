@@ -33,6 +33,8 @@ export const CrmLead = sequelize.define(
     followUpDate: { type: DataTypes.DATE, allowNull: true },
     comments: { type: DataTypes.TEXT, allowNull: true },
     softDeleted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    autoReplyEnabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    autoReplyDisabledUntil: { type: DataTypes.DATE, allowNull: true },
   },
   { modelName: 'CrmLeads', timestamps: true }
 )

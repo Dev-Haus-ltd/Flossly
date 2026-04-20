@@ -49,6 +49,8 @@ export const markWhatsAppOutbound = async (lead, to) => {
       lastOutboundTo: to || existing.lastOutboundTo || null,
     },
   }
+  lead.autoReplyEnabled = false
+  lead.autoReplyDisabledUntil = new Date(Date.now() + 12 * 60 * 60 * 1000)
   await lead.save()
 }
 
