@@ -125,7 +125,7 @@
           <div v-if="day.isWorkingDay" class="mb-3">
             <div class="text-caption text-grey">Working Hours</div>
             <div class="text-body-2 font-weight-medium">
-              {{ day.startTime || '--' }} – {{ day.endTime || '--' }}
+              {{ formatWorkingHours(day) }}
             </div>
           </div>
 
@@ -142,7 +142,7 @@
                   {{ breakItem.breakName }}
                 </div>
                 <div class="text-caption text-grey">
-                  {{ breakItem.startTime }} – {{ breakItem.endTime }}
+                  {{ formatBreakTime(breakItem) }}
                 </div>
               </div>
             </div>
@@ -188,6 +188,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { formatTimeTo12Hour, formatTimeToHHMM } from '@/lib/timeFormatters'
 
 const props = defineProps({
   form: { type: Object, required: true },
@@ -204,6 +205,32 @@ const formatDate = (dateString) => {
   }).format(date)
 }
 
+/**
+ * Format working hours with consistent time display
+ * @param {Object} day - Day object with startTime and endTime
+ * @returns {string} - Formatted time range (e.g., "9:00 AM - 5:00 PM")
+ */
+const formatWorkingHours = (day) => {
+  if (!day?.isWorkingDay || !day?.startTime || !day?.endTime) {
+    return 'Not working'
+  }
+  const start = formatTimeTo12Hour(day.startTime)
+  const end = formatTimeTo12Hour(day.endTime)
+  return `${start} - ${end}`
+}
+
+/**
+ * Format break time range
+ * @param {Object} breakItem - Break object with startTime and endTime
+ * @returns {string} - Formatted time range
+ */
+const formatBreakTime = (breakItem) => {
+  if (!breakItem?.startTime || !breakItem?.endTime) return '—'
+  const start = formatTimeTo12Hour(breakItem.startTime)
+  const end = formatTimeTo12Hour(breakItem.endTime)
+  return `${start} - ${end}`
+}
+
 const workingDaysCount = computed(() => {
   return props.form.weekDays?.filter(d => d.isWorkingDay).length || 0
 })
@@ -213,6 +240,7 @@ const totalBreaksCount = computed(() => {
     return total + (day.breaks?.length || 0)
   }, 0) || 0
 })
+
 </script>
 
 <style scoped lang="scss">

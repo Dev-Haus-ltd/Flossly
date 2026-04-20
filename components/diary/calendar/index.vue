@@ -1,117 +1,193 @@
-<!-- components/diary/calendar/index.vue (updated with clipboard drag drop support) -->
+<!-- components/diary/calendar/index.vue -->
+<!--
+  ARCHITECTURE: All appointment cards and break overlays are rendered in a
+  single absolutely-positioned `.overlay-layer` div that is a sibling of the
+  `.calendar-grid`. It is positioned to exactly cover the scrollable grid
+  content (excluding the sticky header row) and uses pixel coordinates derived
+  from the grid's measured row/column dimensions. This avoids any clipping from
+  `overflow: auto` on the scroll container, which is the root cause of
+  overlays being cut at hour-row boundaries.
+-->
 <template>
   <div class="calendar-wrap">
-    <!-- Day mode -->
+    <!-- ── Day mode ── -->
     <template v-if="view === 'day'">
-      <div class="calendar-grid" :style="{ '--cols': visibleDentists.length }">
-        <!-- Top-left head cell -->
-        <div class="time-head" style="grid-row: 1; grid-column: 1"></div>
+      <!--
+        .grid-scroll-host: the single scrollable container.
+        It holds both the background grid and the overlay layer as siblings,
+        so they scroll together and the overlay is never clipped by the grid.
+      -->
+      <div
+        ref="gridScrollHost"
+        class="grid-scroll-host"
+        :style="{ '--cols': visibleDentists.length }"
+        @scroll="onGridScroll"
+      >
+        <!-- ── Background grid (structure + interaction only, no appt cards) ── -->
+        <div ref="calendarGrid" class="calendar-grid">
+          <!-- Sticky header row -->
+          <div class="time-head header-sticky"></div>
 
-        <!-- Dentist headers -->
-        <div
-          v-for="(dent, ci) in visibleDentists"
-          :key="'h-' + dent.id"
-          class="dentist-head"
-          :class="{
-            'dentist-unavailable': !dentistAvailability[dent.id]?.isAvailable,
-          }"
-          :style="{ gridRow: 1, gridColumn: ci + 2 }"
-        >
-          <div class="avatar">{{ initials(dent?.name) }}</div>
-          <div class="dentist-head-text">
-            <div class="name">{{ dent.name }}</div>
-            <div class="subtitle">
-              <span v-if="dentistAvailability[dent.id]?.isAvailable">
-                Today:
-                {{
-                  filterNonDraftAppointments(appointments[dent.id] || []).length
-                }}
-                patient(s)
-              </span>
-              <span v-else class="text-error">
-                {{ dentistAvailability[dent.id]?.message || "Not available" }}
-              </span>
-            </div>
-          </div>
-          <div class="header-actions">
-            <v-btn
-              icon="mdi-file-outline"
-              size="x-small"
-              variant="text"
-              @click="$emit('open-notes', dent)"
-            />
-            <v-menu
-              location="bottom end"
-              :offset="8"
-              content-class="calendar-head-menu"
-            >
-              <template #activator="{ props: menuProps }">
-                <v-btn
-                  v-bind="menuProps"
-                  icon="mdi-dots-horizontal"
-                  size="x-small"
-                  variant="text"
-                />
-              </template>
-              <v-list density="compact" min-width="220" class="calendar-head-menu__list">
-                <v-list-item
-                  :title="
-                    dentistAvailability[dent.id]?.isAvailable
-                      ? 'Turn Off Day Slots'
-                      : 'Turn On Day Slots'
-                  "
-                  @click="$emit('toggle-day-slots', dent)"
-                />
-              </v-list>
-            </v-menu>
-          </div>
-        </div>
-
-        <!-- Hour rows -->
-        <template v-for="(t, ri) in timeSlots" :key="t.key">
-          <!-- Time label -->
-          <div class="time-cell" :style="{ gridRow: ri + 2, gridColumn: 1 }">
-            {{ t.label }}
-          </div>
-
-          <!-- Dentist slot cells -->
           <div
             v-for="(dent, ci) in visibleDentists"
-            :key="dent.id + '-' + t.key"
-            class="slot-cell"
+            :key="'h-' + dent.id"
+            class="dentist-head header-sticky"
             :class="{
-              'slot-full': isHourFull(dent.id, t.hour),
-              'slot-disabled': isSlotDisabled(dent.id, t.hour),
-              'slot-hover':
-                dragCreate.active &&
-                dragCreate.dentistId === dent.id &&
-                isHourInDragRange(t.hour),
-              'drop-hover': isHoverSlot(dent.id, t.hour),
-              'clipboard-hover': isClipboardDropTarget(dent.id, t.hour),
+              'dentist-unavailable': !dentistAvailability[dent.id]?.isAvailable,
             }"
-            :style="{ gridRow: ri + 2, gridColumn: ci + 2 }"
-            :data-dentist-id="dent.id"
-            :data-hour="t.hour"
-            @click="onCellClickGuard($event, dent, t)"
-            @mousedown="onSlotMouseDown($event, dent, t)"
-            @mouseup="onSlotMouseUp($event, dent, t)"
-            @dragover.prevent="onSlotDragOver($event)"
-            @dragenter.prevent="onSlotDragEnter($event, dent, t)"
-            @dragleave="onSlotDragLeave($event, dent, t)"
-            @drop="onAppointmentDrop($event, dent, t)"
+            :style="{ gridColumn: ci + 2 }"
           >
-            <div class="slot-grid">
-              <template v-for="i in MICRO_PER_HR" :key="i">
-                <div class="empty-micro-slot"></div>
-              </template>
+            <div class="avatar">{{ initials(dent?.name) }}</div>
+            <div class="dentist-head-text">
+              <div class="name">{{ dent.name }}</div>
+              <div class="subtitle">
+                <span v-if="dentistAvailability[dent.id]?.isAvailable">
+                  Today:
+                  {{
+                    filterNonDraftAppointments(appointments[dent.id] || [])
+                      .length
+                  }}
+                  patient(s)
+                </span>
+                <span v-else class="text-error">
+                  {{ dentistAvailability[dent.id]?.message || "Not available" }}
+                </span>
+              </div>
+            </div>
+            <div class="header-actions">
+              <v-btn
+                icon="mdi-file-outline"
+                size="x-small"
+                variant="text"
+                @click="$emit('open-notes', dent)"
+              />
+              <v-menu
+                location="bottom end"
+                :offset="8"
+                content-class="calendar-head-menu"
+              >
+                <template #activator="{ props: menuProps }">
+                  <v-btn
+                    v-bind="menuProps"
+                    icon="mdi-dots-horizontal"
+                    size="x-small"
+                    variant="text"
+                  />
+                </template>
+                <v-list
+                  density="compact"
+                  min-width="220"
+                  class="calendar-head-menu__list"
+                >
+                  <v-list-item
+                    :title="
+                      dentistAvailability[dent.id]?.isAvailable
+                        ? 'Turn Off Day Slots'
+                        : 'Turn On Day Slots'
+                    "
+                    @click="$emit('toggle-day-slots', dent)"
+                  />
+                </v-list>
+              </v-menu>
+            </div>
+          </div>
 
+          <!-- Hour rows: interaction cells only, zero appointment rendering here -->
+          <template v-for="(t, ri) in timeSlots" :key="t.key">
+            <div class="time-cell" :data-row-index="ri" :data-hour="t.hour">
+              {{ t.label }}
+            </div>
+
+            <div
+              v-for="(dent, ci) in visibleDentists"
+              :key="dent.id + '-' + t.key"
+              class="slot-cell"
+              :class="{
+                'slot-full': isHourFull(dent.id, t.hour),
+                'slot-disabled': isSlotDisabled(dent.id, t.hour),
+                'slot-hover':
+                  dragCreate.active &&
+                  dragCreate.dentistId === dent.id &&
+                  isHourInDragRange(t.hour),
+                'drop-hover': isHoverSlot(dent.id, t.hour),
+                'clipboard-hover': isClipboardDropTarget(dent.id, t.hour),
+              }"
+              :data-dentist-id="dent.id"
+              :data-dentist-col="ci"
+              :data-hour="t.hour"
+              :data-row-index="ri"
+              @click="onCellClickGuard($event, dent, t)"
+              @mousedown="onSlotMouseDown($event, dent, t)"
+              @mouseup="onSlotMouseUp($event, dent, t)"
+              @dragover.prevent="onSlotDragOver($event)"
+              @dragenter.prevent="onSlotDragEnter($event, dent, t)"
+              @dragleave="onSlotDragLeave($event, dent, t)"
+              @drop="onAppointmentDrop($event, dent, t)"
+            >
+              <!-- micro-slot dashes for visual rhythm -->
+              <div class="slot-grid">
+                <div
+                  v-for="i in MICRO_PER_HR"
+                  :key="i"
+                  class="empty-micro-slot"
+                ></div>
+              </div>
+
+              <!-- Drag-create ghost (still lives in the cell, spans only within it) -->
+              <div
+                v-if="
+                  dragCreate.active &&
+                  dragCreate.dentistId === dent.id &&
+                  getDragCreateGhostStyle(t.hour)
+                "
+                class="drag-create-ghost"
+                :style="getDragCreateGhostStyle(t.hour)"
+              >
+                <span class="ghost-label">{{ dragCreateLabel }}</span>
+              </div>
+
+              <!-- Clipboard hover indicator -->
+              <div
+                v-if="isClipboardDropTarget(dent.id, t.hour)"
+                class="clipboard-drop-indicator"
+              >
+                <span class="drop-label">Drop here</span>
+              </div>
+            </div>
+          </template>
+        </div>
+        <!-- /.calendar-grid -->
+
+        <!--
+          ── OVERLAY LAYER ──────────────────────────────────────────────────────
+          Sibling of .calendar-grid, absolute-positioned to cover the exact
+          same area. All appointment cards and break overlays live here.
+          pointer-events:none on the layer itself; cards set pointer-events:auto.
+        -->
+        <div
+          ref="overlayLayer"
+          class="overlay-layer"
+          :style="overlayLayerStyle"
+        >
+          <!-- Per-dentist column overlays -->
+          <div
+            v-for="(dent, ci) in visibleDentists"
+            :key="'ol-' + dent.id"
+            class="overlay-col"
+            :style="getOverlayColStyle(ci)"
+          >
+            <!-- Appointments -->
+            <template
+              v-for="appt in filterNonDraftAppointments(
+                appointments[dent.id] || [],
+              )"
+              :key="appt.id"
+            >
               <AppointmentCard
-                v-for="appt in getHourAppointments(dent.id, t.hour)"
-                :key="`${appt.id}-${t.hour}`"
                 :appt="appt"
-                :compact="!isPrimaryHourSegment(appt, t.hour) || isShortAppointment(appt)"
-                :show-resize-handles="isPrimaryHourSegment(appt, t.hour)"
-                :style-obj="apptCardStyle(appt, t.hour)"
+                :compact="isShortAppointment(appt)"
+                :show-resize-handles="true"
+                :style-obj="getApptOverlayStyle(appt, dent.id)"
                 :status-colors="statusColors"
                 :override-start="
                   resizing.active && resizing.appt?.id === appt.id
@@ -139,54 +215,48 @@
                 @dragstart="onAppointmentDragStart($event, appt, dent.id)"
                 @dragend="onAppointmentDragEnd"
                 @click.stop
-                class="appointment-overlay"
               />
+            </template>
 
-              <!-- Drag-create ghost preview -->
-              <div
-                v-if="
-                  dragCreate.active &&
-                  dragCreate.dentistId === dent.id &&
-                  getDragCreateGhostStyle(t.hour)
-                "
-                class="drag-create-ghost"
-                :style="getDragCreateGhostStyle(t.hour)"
-              >
-                <span class="ghost-label">{{ dragCreateLabel }}</span>
-              </div>
-
-              <!-- Clipboard drop indicator -->
-              <div
-                v-if="isClipboardDropTarget(dent.id, t.hour)"
-                class="clipboard-drop-indicator"
-              >
-                <span class="drop-label">Drop here</span>
-              </div>
-
-              <!-- Break overlay -->
-              <!-- <div v-if="getBreakAtHour(dent.id, t.hour)" class="break-overlay"> -->
-              <div
-                v-if="getBreakAtHour(dent.id, t.hour)"
-                class="break-overlay"
-                :style="getBreakAtHour(dent.id, t.hour).style"
-              >
+            <!-- Break overlays -->
+            <template
+              v-for="brk in getDentistBreaks(dent.id)"
+              :key="'brk-' + dent.id + '-' + brk.startTime"
+            >
+              <div class="break-overlay" :style="getBreakOverlayStyle(brk)">
                 <div class="break-content">
-                  <span class="break-label">{{
-                    getBreakAtHour(dent.id, t.hour)?.name
-                  }}</span>
+                  <span class="break-label">{{ brk.name }}</span>
                   <span class="break-timing"
-                    >{{ getBreakAtHour(dent.id, t.hour)?.startTime }} -
-                    {{ getBreakAtHour(dent.id, t.hour)?.endTime }}</span
+                    >{{ brk.startTime12 }} - {{ brk.endTime12 }}</span
                   >
                 </div>
               </div>
-            </div>
+            </template>
           </div>
-        </template>
+        </div>
+        <!-- /.overlay-layer -->
+
+        <!--
+          ── RESIZE CAPTURE OVERLAY ─────────────────────────────────────────────
+          FIXED: Moved inside .grid-scroll-host so it scrolls with content and
+          covers the entire scrollable area. Uses position:absolute so it
+          doesn't interfere with the fixed viewport. When resizing is active,
+          it captures all mouse events and forwards them to the resize handler.
+          pointer-events are toggled via JS so elementFromPoint can pierce it.
+        -->
+        <div
+          v-if="resizing.active"
+          ref="resizeCaptureOverlay"
+          class="resize-capture-overlay"
+          @mousemove="onResizeMove"
+          @mouseup="onResizeEnd"
+          @mouseleave="onResizeOverlayLeave"
+        ></div>
       </div>
+      <!-- /.grid-scroll-host -->
     </template>
 
-    <!-- Week mode (unchanged layout) -->
+    <!-- ── Week mode (unchanged) ── -->
     <template v-else>
       <div v-for="(d, di) in weekDates" :key="d" class="week-day-section">
         <div class="week-day-header">{{ weekLabels[di] }}</div>
@@ -231,7 +301,9 @@
                   @click.stop="openPatient(appt)"
                 >
                   <div class="appt-title">{{ appt.patient }}</div>
-                  <div class="appt-time">{{ formatAppointmentRange(appt) }}</div>
+                  <div class="appt-time">
+                    {{ formatAppointmentRange(appt) }}
+                  </div>
                 </div>
               </div>
             </div>
@@ -239,24 +311,18 @@
         </div>
       </div>
     </template>
-
-    <!-- Resize overlay (invisible, covers viewport during resize) -->
-    <div
-      v-if="resizing.active"
-      class="resize-overlay"
-      @mousemove="onResizeMove"
-      @mouseup="onResizeEnd"
-    ></div>
   </div>
 </template>
 
 <script setup>
+import { ref, computed, reactive, onMounted, onUnmounted, nextTick } from "vue";
 import AppointmentCard from "@/components/diary/calendar/AppointmentCard.vue";
 import {
   clinicMinutesFromTime,
   formatDateDDMMYYYY,
   formatTime12Hour,
 } from "@/lib/dateFormatter";
+import { formatTimeTo12Hour } from "@/lib/timeFormatters";
 
 const props = defineProps({
   date: { type: [String, Date], required: true },
@@ -284,34 +350,131 @@ const emit = defineEmits([
 const router = useRouter();
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const WORK_START = 9;
-const WORK_END = 17;
-const INTERVAL_MINS = 15; // 1 micro-slot = 15 min
-const MICRO_PER_HR = 4; // 4 micro-slots per hour row
+// WORK_START and WORK_END are now computed properties based on dentist schedules (see Derived section)
+// FALLBACK values if no schedule is available
+const DEFAULT_WORK_START = 9;
+const DEFAULT_WORK_END = 17;
+const INTERVAL_MINS = 15;
+const MICRO_PER_HR = 4;
+
+// Pixel height of one complete hour row.
+// = slot-grid padding-top(6) + 4×row(36) + 3×gap(3) + padding-bottom(6) = 165
+// If you change .slot-grid CSS, update this constant to match.
+const HOUR_ROW_PX = 165;
+
+// Pixel height of the sticky dentist-header row (must match .dentist-head height in CSS)
+const HEADER_ROW_PX = 52;
+
 const DRAG_MIME = "application/x-flossly-appointment";
 const CLIPBOARD_MIME = "application/x-flossly-draft";
 
-const isClipboardDataTransfer = (event) => {
-  if (!event?.dataTransfer) return false;
-  const types = event.dataTransfer.types || [];
+// ─── Template refs ────────────────────────────────────────────────────────────
+const gridScrollHost = ref(null);
+const calendarGrid = ref(null);
+const overlayLayer = ref(null);
+// FIX: ref for the resize capture overlay (now inside scroll host)
+const resizeCaptureOverlay = ref(null);
 
-  // Check for our custom MIME type
-  if (types.includes(CLIPBOARD_MIME)) return true;
+const scrollTop = ref(0);
+const scrollLeft = ref(0);
 
-  // Also check text/plain for clipboard drafts
-  try {
-    const raw = event.dataTransfer.getData("text/plain");
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return parsed?.type === "clipboard-draft";
-    }
-  } catch {
-    return false;
-  }
-  return false;
+// Measured DOM dimensions — updated on mount and on grid resize
+const colWidths = ref([]); // [timeLabelWidth, dentistCol0Width, dentistCol1Width, ...]
+const rowHeights = ref([]); // one entry per timeSlot row
+
+const onGridScroll = (e) => {
+  scrollTop.value = e.target.scrollTop;
+  scrollLeft.value = e.target.scrollLeft;
 };
-// ─── Clipboard drop state ─────────────────────────────────────────────────────
-const clipboardDropTarget = ref({ dentistId: null, hour: null });
+
+// ─── Overlay layer style ──────────────────────────────────────────────────────
+// The overlay-layer is absolute inside .grid-scroll-host (position:relative),
+// so it scrolls with the content and is never independently clipped.
+const overlayLayerStyle = computed(() => ({
+  position: "absolute",
+  top: "0px",
+  left: "0px",
+  width: "100%",
+  height: "100%",
+  pointerEvents: "none",
+  zIndex: 10,
+}));
+
+// ─── Column layout helpers ─────────────────────────────────────────────────────
+const getOverlayColStyle = (ci) => {
+  if (!colWidths.value.length) return { display: "none" };
+  // colWidths[0] = time-label column; colWidths[1+] = dentist columns
+  const left = colWidths.value.slice(0, ci + 1).reduce((a, b) => a + b, 0);
+  const width = colWidths.value[ci + 1] ?? 260;
+  return {
+    position: "absolute",
+    top: "0px",
+    left: `${left}px`,
+    width: `${width}px`,
+    height: "100%",
+    pointerEvents: "none",
+  };
+};
+
+// Measure grid column widths and row heights from the live DOM
+const measureGrid = async () => {
+  await nextTick();
+  const grid = calendarGrid.value;
+  if (!grid) return;
+
+  const timeLabelCell = grid.querySelector(".time-cell");
+  const dentistCells = grid.querySelectorAll(".dentist-head");
+  if (!timeLabelCell || !dentistCells.length) return;
+
+  colWidths.value = [
+    timeLabelCell.getBoundingClientRect().width,
+    ...Array.from(dentistCells).map((el) => el.getBoundingClientRect().width),
+  ];
+
+  // Collect row heights indexed by data-row-index (one cell per row is enough)
+  const byRow = {};
+  grid.querySelectorAll(".slot-cell[data-row-index]").forEach((el) => {
+    const ri = Number(el.dataset.rowIndex);
+    if (!(ri in byRow)) byRow[ri] = el.getBoundingClientRect().height;
+  });
+  rowHeights.value = Object.keys(byRow)
+    .sort((a, b) => Number(a) - Number(b))
+    .map((k) => byRow[k]);
+};
+
+// Convert absolute minutes-since-midnight to a pixel Y offset from the very
+// top of the overlay column (i.e. including the header row height).
+const minsToOverlayPx = (mins) => {
+  const relMins = mins - WORK_START.value * 60;
+  const hourIndex = Math.floor(relMins / 60);
+  const minInHour = relMins % 60;
+
+  // Sum all full hour rows above this one
+  let py = HEADER_ROW_PX;
+  for (let i = 0; i < hourIndex; i++) {
+    py += rowHeights.value[i] ?? HOUR_ROW_PX;
+  }
+  // Add fractional offset within the current row
+  const rowH = rowHeights.value[hourIndex] ?? HOUR_ROW_PX;
+  py += (minInHour / 60) * rowH;
+  return py;
+};
+
+// ResizeObserver: remeasure whenever the grid reflows
+let resizeObserver = null;
+onMounted(() => {
+  measureGrid();
+  resizeObserver = new ResizeObserver(measureGrid);
+  if (calendarGrid.value) resizeObserver.observe(calendarGrid.value);
+});
+onUnmounted(() => {
+  resizeObserver?.disconnect();
+  window.removeEventListener("mousemove", onGlobalMouseMove);
+  window.removeEventListener("mouseup", onGlobalMouseUp);
+  // FIX: Also clean up global resize listeners on unmount
+  window.removeEventListener("mousemove", onGlobalResizeMove);
+  window.removeEventListener("mouseup", onGlobalResizeEnd);
+});
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const toMins = (t) => {
@@ -323,8 +486,8 @@ const toHHMM = (m) => {
   const n = Math.max(0, Math.round(m));
   return `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
 };
-const formatRange12Hour = (startMins, endMins) =>
-  `${formatTime12Hour(toHHMM(startMins))} - ${formatTime12Hour(toHHMM(endMins))}`;
+const formatRange12Hour = (s, e) =>
+  `${formatTime12Hour(toHHMM(s))} - ${formatTime12Hour(toHHMM(e))}`;
 const initials = (name) => {
   if (!name) return "";
   const p = String(name).trim().split(" ");
@@ -342,19 +505,78 @@ const normDate = (v) => {
     : d.toISOString().slice(0, 10);
 };
 const isToday = (ds) => ds === new Date().toISOString().slice(0, 10);
+const timeToMinutes = (time) => {
+  if (!time) return 0;
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + (m || 0);
+};
+const formatTo12Hour = (time) => {
+  // Use centralized formatter
+  return formatTimeTo12Hour(time);
+};
 
 // ─── Derived ──────────────────────────────────────────────────────────────────
 const activeDate = computed(() => normDate(props.date));
+
+/**
+ * Calculate actual working hours from visible dentists' schedules
+ * Returns { startHour, endHour } based on availability data
+ * Falls back to DEFAULT_WORK_START/END if no schedules available
+ */
+const dynamicWorkingHours = computed(() => {
+  const visibleIds = visibleDentists.value.map((d) => String(d.id));
+  if (!visibleIds.length) {
+    return { startHour: DEFAULT_WORK_START, endHour: DEFAULT_WORK_END };
+  }
+
+  let minStartTime = null;
+  let maxEndTime = null;
+
+  for (const dentistId of visibleIds) {
+    const avail = props.dentistAvailability[dentistId];
+    if (avail?.isAvailable && avail?.workingHours) {
+      const startMins = timeToMinutes(avail.workingHours.startTime || "09:00");
+      const endMins = timeToMinutes(avail.workingHours.endTime || "17:00");
+
+      if (minStartTime === null || startMins < minStartTime) {
+        minStartTime = startMins;
+      }
+      if (maxEndTime === null || endMins > maxEndTime) {
+        maxEndTime = endMins;
+      }
+    }
+  }
+
+  // If no valid schedule found, use defaults
+  if (minStartTime === null || maxEndTime === null) {
+    return { startHour: DEFAULT_WORK_START, endHour: DEFAULT_WORK_END };
+  }
+
+  const startHour = Math.floor(minStartTime / 60);
+  const endHour = Math.ceil(maxEndTime / 60);
+
+  return { startHour, endHour };
+});
+
+/**
+ * Dynamic WORK_START derived from actual dentist schedules
+ */
+const WORK_START = computed(() => dynamicWorkingHours.value.startHour);
+
+/**
+ * Dynamic WORK_END derived from actual dentist schedules
+ */
+const WORK_END = computed(() => dynamicWorkingHours.value.endHour);
+
 const visibleDentists = computed(() => {
   const ids = (props.selectedDentistIds || []).map(String);
   return ids.length
     ? props.dentists.filter((d) => ids.includes(String(d.id)))
     : props.dentists;
 });
-
 const timeSlots = computed(() => {
   const s = [];
-  for (let h = WORK_START; h <= WORK_END; h++) {
+  for (let h = WORK_START.value; h <= WORK_END.value; h++) {
     const label =
       h === 0 ? "12AM" : h < 12 ? `${h}AM` : h === 12 ? "12PM" : `${h - 12}PM`;
     s.push({
@@ -366,7 +588,6 @@ const timeSlots = computed(() => {
   }
   return s;
 });
-
 const weekDates = computed(() => {
   const base = new Date(props.date);
   const diff = (base.getDay() + 6) % 7;
@@ -381,35 +602,26 @@ const weekDates = computed(() => {
 const weekLabels = computed(() =>
   weekDates.value.map((d) => formatDateDDMMYYYY(d)),
 );
-const columnHeight = computed(() => (WORK_END - WORK_START) * 100);
+const columnHeight = computed(() => (WORK_END.value - WORK_START.value) * 100);
 const nowTop = computed(() => {
   const now = new Date();
   const m = now.getHours() * 60 + now.getMinutes();
-  const total = Math.max(1, WORK_END - WORK_START) * 60;
-  return ((m - WORK_START * 60) / total) * 100;
+  return (
+    ((m - WORK_START.value * 60) / (Math.max(1, WORK_END.value - WORK_START.value) * 60)) * 100
+  );
 });
 
-// short Appointments (for compact chip display)
 const isShortAppointment = (appt) => {
-  // Check if this appointment is being resized
-  const isResizingThisAppt = resizing.active && resizing.appt?.id === appt.id;
-  const duration = isResizingThisAppt
+  const isResizingThis = resizing.active && resizing.appt?.id === appt.id;
+  const dur = isResizingThis
     ? resizing.curEnd - resizing.curStart
-    : apptEnd(appt) - apptStart(appt);
-  return duration <= INTERVAL_MINS; // 15 minutes or less is considered short
+    : toMins(appt?.end || appt?.endTime) -
+      toMins(appt?.start || appt?.startTime);
+  return dur <= INTERVAL_MINS;
 };
 
 // ─── Status colours ───────────────────────────────────────────────────────────
-// In components/diary/calendar/index.vue
-// Add Draft to statusColors
 const statusColors = {
-  // Draft: {
-  //   // Add this new status
-  //   bg: "#f5f5f5",
-  //   border: "#e0e0e0",
-  //   chip: "#9e9e9e",
-  //   text: "#424242",
-  // },
   Pending: {
     bg: "#fceaf6",
     border: "#f4c3df",
@@ -459,330 +671,234 @@ const apptStyleFor = (status) => {
 };
 
 // ─── Availability helpers ─────────────────────────────────────────────────────
-/**
- * Convert time string to minutes from midnight
- * @param {String} time - "HH:MM" format
- * @returns {Number}
- */
-const timeToMinutes = (time) => {
-  if (!time) return 0;
-  const [hours, minutes] = time.split(":").map(Number);
-  return hours * 60 + (minutes || 0);
-};
-
-/**
- * Check if a dentist is available on the displayed date
- */
-const isDentistAvailable = (dentistId) => {
-  return props.dentistAvailability[dentistId]?.isAvailable === true;
-};
-
-/**
- * Check if a specific time slot is within the dentist's working hours
- */
-const isSlotWithinWorkingHours = (dentistId, hour, minute = 0) => {
-  const availability = props.dentistAvailability[dentistId];
-  if (!availability?.isAvailable || !availability?.workingHours) return false;
-
-  const slotMinutes = hour * 60 + minute;
-  const workStart = timeToMinutes(availability.workingHours.startTime);
-  const workEnd = timeToMinutes(availability.workingHours.endTime);
-
-  // Check if slot start is within working hours (slot starts before end time)
-  // This allows the last hour slot to be available
-  return slotMinutes >= workStart && slotMinutes <= workEnd;
-};
+const isDentistAvailable = (dentistId) =>
+  props.dentistAvailability[dentistId]?.isAvailable === true;
 
 const getMinuteRangeAvailability = (dentist, startMinutes, endMinutes) => {
-  const availability = props.dentistAvailability[dentist?.id];
-  if (!availability?.isAvailable) {
+  const avail = props.dentistAvailability[dentist?.id];
+  if (!avail?.isAvailable) {
     return {
       available: false,
       message:
-        availability?.message ||
+        avail?.message ||
         `${dentist?.name || "This dentist"} is not available on this day.`,
     };
   }
-
-  const workStart = timeToMinutes(
-    availability?.workingHours?.startTime || "09:00",
-  );
-  const workEnd = timeToMinutes(availability?.workingHours?.endTime || "17:00");
-
+  const workStart = timeToMinutes(avail?.workingHours?.startTime || "09:00");
+  const workEnd = timeToMinutes(avail?.workingHours?.endTime || "17:00");
   if (startMinutes < workStart || endMinutes > workEnd) {
     return {
       available: false,
-      message: `${dentist?.name || "This dentist"} works from ${formatTime12Hour(availability?.workingHours?.startTime)} to ${formatTime12Hour(availability?.workingHours?.endTime)}.`,
+      message: `${dentist?.name} works from ${formatTime12Hour(avail?.workingHours?.startTime)} to ${formatTime12Hour(avail?.workingHours?.endTime)}.`,
     };
   }
-
-  const breaks = availability?.workingHours?.breaks || [];
-  for (const breakPeriod of breaks) {
-    const breakStart = timeToMinutes(breakPeriod.startTime);
-    const breakEnd = timeToMinutes(breakPeriod.endTime);
-    if (startMinutes < breakEnd && endMinutes > breakStart) {
+  for (const b of avail?.workingHours?.breaks || []) {
+    const bs = timeToMinutes(b.startTime);
+    const be = timeToMinutes(b.endTime);
+    if (startMinutes < be && endMinutes > bs) {
       return {
         available: false,
-        message: `${dentist?.name || "This dentist"} is unavailable between ${formatTime12Hour(breakPeriod.startTime)} and ${formatTime12Hour(breakPeriod.endTime)}.`,
+        message: `${dentist?.name} is on a break between ${formatTime12Hour(b.startTime)} and ${formatTime12Hour(b.endTime)}.`,
       };
     }
   }
-
   return { available: true, message: "" };
 };
 
 const hasAvailableQuarterHourInHour = (dentistId, hour) => {
   const dentist = visibleDentists.value.find(
-    (item) => String(item.id) === String(dentistId),
+    (d) => String(d.id) === String(dentistId),
   );
   if (!dentist) return false;
-
-  const hourStart = hour * 60;
+  const hs = hour * 60;
   for (let offset = 0; offset < 60; offset += INTERVAL_MINS) {
-    const startMinutes = hourStart + offset;
-    const endMinutes = startMinutes + INTERVAL_MINS;
-    if (getMinuteRangeAvailability(dentist, startMinutes, endMinutes).available) {
+    if (
+      getMinuteRangeAvailability(
+        dentist,
+        hs + offset,
+        hs + offset + INTERVAL_MINS,
+      ).available
+    )
       return true;
-    }
   }
   return false;
 };
 
-/**
- * Check if a time slot overlaps with a break period
- * @param {Number} dentistId
- * @param {Number} hour - The hour to check
- * @returns {Object|null} - Break info or null if no break
- */
-const formatTo12Hour = (time) => {
-  if (!time) return "";
-
-  const [hours, minutes] = time.split(":").map(Number);
-
-  const period = hours >= 12 ? "PM" : "AM";
-  const formattedHours = hours % 12 || 12; // convert 0 -> 12
-
-  return `${formattedHours}:${minutes.toString().padStart(2, "0")} ${period}`;
-};
-const getBreakAtHour = (dentistId, hour) => {
-  const availability = props.dentistAvailability[dentistId];
-  if (!availability?.isAvailable || !availability?.workingHours?.breaks)
-    return null;
-
-  const slotStart = hour * 60;
-  const slotEnd = (hour + 1) * 60;
-
-  for (const breakPeriod of availability.workingHours.breaks) {
-    const breakStart = timeToMinutes(breakPeriod.startTime);
-    const breakEnd = timeToMinutes(breakPeriod.endTime);
-
-    if (slotStart < breakEnd && slotEnd > breakStart) {
-      // 👇 calculate exact overlap inside this hour
-      const overlapStart = Math.max(slotStart, breakStart);
-      const overlapEnd = Math.min(slotEnd, breakEnd);
-
-      const top = ((overlapStart - slotStart) / 60) * 100;
-      const height = ((overlapEnd - overlapStart) / 60) * 100;
-
-      return {
-        name: breakPeriod.breakName || "Break",
-        startTime: formatTo12Hour(breakPeriod.startTime),
-        endTime: formatTo12Hour(breakPeriod.endTime),
-
-        // ✅ NEW
-        style: {
-          top: `${top}%`,
-          height: `${height}%`,
-        },
-      };
-    }
-  }
-  return null;
-};
-/**
- * Check if a time slot should be disabled
- */
-const isSlotDisabled = (dentistId, hour) => {
-  if (!isDentistAvailable(dentistId)) return true;
-  return !hasAvailableQuarterHourInHour(dentistId, hour);
-};
+const isSlotDisabled = (dentistId, hour) =>
+  !isDentistAvailable(dentistId) ||
+  !hasAvailableQuarterHourInHour(dentistId, hour);
 
 // ─── Appointment helpers ──────────────────────────────────────────────────────
 const apptStart = (appt) => toMins(appt?.start || appt?.startTime);
 const apptEnd = (appt) => toMins(appt?.end || appt?.endTime);
-const formatAppointmentTime = (time) => formatTime12Hour(time) || time || "";
 const formatAppointmentRange = (appt) =>
-  `${formatAppointmentTime(appt?.start)} - ${formatAppointmentTime(appt?.end)}`;
+  `${formatTime12Hour(appt?.start) || appt?.start || ""} - ${formatTime12Hour(appt?.end) || appt?.end || ""}`;
 
-function getAppointmentsOverlappingHour(dentistId, hour) {
-  const hourStart = hour * 60;
-  const hourEnd = (hour + 1) * 60;
-  return filterNonDraftAppointments(props.appointments[dentistId] || [])
-    .filter((appt) => {
-      if (!appt?.start && !appt?.startTime) return false;
-      const s = apptStart(appt);
-      const e = apptEnd(appt);
-      return s < hourEnd && e > hourStart;
-    })
-    .sort((a, b) => apptStart(a) - apptStart(b));
-}
+const filterNonDraftAppointments = (list) =>
+  (list || []).filter((a) => a.status !== "Draft");
 
-
-// Add this helper function to filter out draft appointments
-const filterNonDraftAppointments = (appointmentsList) => {
-  if (!appointmentsList) return [];
-  return appointmentsList.filter((appt) => appt.status !== "Draft");
-};
 const isDentistBookable = (dentistId, hour = null) => {
-  // dentist must exist and be available
   if (!isDentistAvailable(dentistId)) return false;
-
-  // if hour is provided, also check working hours + breaks
   if (hour !== null && isSlotDisabled(dentistId, hour)) return false;
-
   return true;
 };
-function getHourAppointments(dentistId, hour) {
-  if (!isDentistBookable(dentistId, hour)) return [];
 
-  const hourStart = hour * 60;
-  const hourEnd = (hour + 1) * 60;
-
+const getAppointmentsOverlappingHour = (dentistId, hour) => {
+  const hs = hour * 60,
+    he = (hour + 1) * 60;
   return filterNonDraftAppointments(props.appointments[dentistId] || [])
-    .filter((appt) => {
-      const s = apptStart(appt);
-      const e = apptEnd(appt);
-      return s < hourEnd && e > hourStart;
-    })
+    .filter((a) => apptStart(a) < he && apptEnd(a) > hs)
     .sort((a, b) => apptStart(a) - apptStart(b));
-}
-
-const isPrimaryHourSegment = (appt, hour) => {
-  const visibleStart = Math.max(apptStart(appt), WORK_START * 60);
-  return Math.floor(visibleStart / 60) === hour;
 };
 
 const isHourFull = (dentistId, hour) => {
-  const appts = getAppointmentsOverlappingHour(dentistId, hour);
   let occupied = 0;
-  appts.forEach((a) => {
-    const s = apptStart(a);
-    const e = apptEnd(a);
-    const lo = Math.max(s, hour * 60);
-    const hi = Math.min(e, (hour + 1) * 60);
+  getAppointmentsOverlappingHour(dentistId, hour).forEach((a) => {
+    const lo = Math.max(apptStart(a), hour * 60);
+    const hi = Math.min(apptEnd(a), (hour + 1) * 60);
     occupied += Math.max(0, hi - lo) / INTERVAL_MINS;
   });
   return occupied >= MICRO_PER_HR;
 };
 
-const apptCardStyle = (appt, hour) => {
-  // Check if this appointment is being resized
-  const isResizingThisAppt = resizing.active && resizing.appt?.id === appt.id;
+// ─── Overlay style helpers ────────────────────────────────────────────────────
+
+/**
+ * Pixel-perfect style for an appointment card in the overlay layer.
+ * top    = distance from top of overlay column to the appointment start
+ * height = full duration in px — never capped at a row boundary
+ *
+ * FIX: Height now correctly sums row heights across all spanned hours
+ * instead of using only the starting hour's row height.
+ */
+const getApptOverlayStyle = (appt) => {
+  const isResizing = resizing.active && resizing.appt?.id === appt.id;
   const isHighlighted =
     props.highlightedAppointmentId !== null &&
     String(props.highlightedAppointmentId) === String(appt?.id);
 
-  let s, e;
-  if (isResizingThisAppt) {
-    s = resizing.curStart;
-    e = resizing.curEnd;
-  } else {
-    s = Math.max(apptStart(appt), WORK_START * 60);
-    e = Math.min(apptEnd(appt), WORK_END * 60);
-  }
+  const rawStart = isResizing
+    ? resizing.curStart
+    : toMins(appt?.start || appt?.startTime);
+  const rawEnd = isResizing
+    ? resizing.curEnd
+    : toMins(appt?.end || appt?.endTime);
 
-  const segmentHour = Number.isFinite(hour) ? hour : Math.floor(s / 60);
-  const hourStart = segmentHour * 60;
-  const segmentStart = Math.max(s, hourStart);
-  const segmentEnd = Math.min(e, hourStart + 60);
-  const offsetMins = Math.max(0, segmentStart - hourStart);
-  const duration = Math.max(INTERVAL_MINS, segmentEnd - segmentStart);
+  const clampedStart = Math.max(rawStart, WORK_START.value * 60);
+  const clampedEnd = Math.min(rawEnd, WORK_END.value * 60);
+  const duration = Math.max(INTERVAL_MINS, rawEnd - rawStart);
+
+  const topPx = minsToOverlayPx(clampedStart);
+
+  // FIX: Compute height by summing pixel offsets from start to end,
+  // correctly spanning across multiple hour rows.
+  const bottomPx = minsToOverlayPx(Math.min(rawEnd, WORK_END.value * 60));
+  const heightPx = Math.max(bottomPx - topPx, 20); // minimum 20px so handle is always visible
 
   return {
     ...apptStyleFor(appt.status),
     position: "absolute",
-    top: `${(offsetMins / 60) * 100}%`,
-    height: `${(duration / 60) * 100}%`,
+    top: `${topPx}px`,
+    height: `${heightPx}px`,
     left: "4px",
     right: "4px",
-    zIndex: isResizingThisAppt ? 30 : isHighlighted ? 25 : 20,
+    zIndex: isResizing ? 30 : isHighlighted ? 25 : 20,
+    pointerEvents: "auto",
     boxShadow: isHighlighted
-      ? "0 0 0 2px #f59e0b, 0 10px 22px rgba(245, 158, 11, 0.28)"
+      ? "0 0 0 2px #f59e0b, 0 10px 22px rgba(245,158,11,0.28)"
       : undefined,
   };
 };
 
-// ─── Week-view style ──────────────────────────────────────────
-const appointmentStyle = (appt) => {
-  const s = apptStart(appt);
-  const e = apptEnd(appt);
-  const total = Math.max(1, WORK_END - WORK_START) * 60;
-  const dayS = WORK_START * 60;
+/**
+ * Returns a flat list of break descriptors for a dentist, ready for rendering.
+ */
+const getDentistBreaks = (dentistId) => {
+  const avail = props.dentistAvailability[dentistId];
+  if (!avail?.isAvailable || !avail?.workingHours?.breaks) return [];
+  return avail.workingHours.breaks.map((b) => ({
+    name: b.breakName || "Break",
+    startTime: b.startTime,
+    endTime: b.endTime,
+    startTime12: formatTo12Hour(b.startTime),
+    endTime12: formatTo12Hour(b.endTime),
+    startMins: timeToMinutes(b.startTime),
+    endMins: timeToMinutes(b.endTime),
+  }));
+};
+
+/**
+ * Pixel-perfect style for a break overlay in the overlay layer.
+ */
+const getBreakOverlayStyle = (brk) => {
+  const topPx = minsToOverlayPx(brk.startMins);
+  // FIX: Use minsToOverlayPx for bottom too, for multi-row accuracy
+  const bottomPx = minsToOverlayPx(brk.endMins);
+  const heightPx = bottomPx - topPx;
   return {
-    top: `${((s - dayS) / total) * 100}%`,
+    position: "absolute",
+    top: `${topPx}px`,
+    height: `${heightPx}px`,
+    left: "0px",
+    right: "0px",
+    zIndex: 101,
+    pointerEvents: "none",
+  };
+};
+
+// ─── Week-view style ──────────────────────────────────────────────────────────
+const appointmentStyle = (appt) => {
+  const s = apptStart(appt),
+    e = apptEnd(appt);
+  const total = Math.max(1, WORK_END.value - WORK_START.value) * 60;
+  return {
+    top: `${((s - WORK_START.value * 60) / total) * 100}%`,
     height: `${((e - s) / total) * 100}%`,
   };
 };
 
-// ─── Cell click (open appointment modal) ─────────────────────────────────────
-const onCellClick = (dent, slot, minute = slot.minute) => {
+// ─── Cell interaction ─────────────────────────────────────────────────────────
+const onCellClick = (dent, slot, minute = slot.minute) =>
   emit("slot-click", { dentist: dent, hour: slot.hour, minute });
-};
+
 const onCellClickGuard = (event, dent, slot) => {
   if (dragCreate.mouseDown || dragCreate.active) return;
 
-  const clickedMinutes = getMinutesFromMouse(event, event.currentTarget);
-  const minute = clickedMinutes === null ? slot.minute : clickedMinutes % 60;
-  const startMinutes = slot.hour * 60 + minute;
-  const endMinutes = startMinutes + INTERVAL_MINS;
+  const clicked = getMinutesFromMouse(event, event.currentTarget);
+  const minute = clicked === null ? slot.minute : clicked % 60;
 
-  // Check if dentist is unavailable
-  if (!isDentistAvailable(dent.id)) {
-    const message =
-      props.dentistAvailability[dent.id]?.message ||
-      `${dent.name} is not available on this day.`;
-    emit("slot-full", {
-      dentist: dent,
-      hour: slot.hour,
-      unavailable: true,
-      message,
-    });
-    return;
-  }
+  const startMins = slot.hour * 60 + minute;
 
-  const rangeAvailability = getMinuteRangeAvailability(
+  const availability = getMinuteRangeAvailability(
     dent,
-    startMinutes,
-    endMinutes,
+    startMins,
+    startMins + INTERVAL_MINS,
   );
-  if (!rangeAvailability.available) {
-    const availability = props.dentistAvailability[dent.id];
-    const workStart = availability?.workingHours?.startTime || "9:00 AM";
-    const workEnd = availability?.workingHours?.endTime || "5:00 PM";
-    const message =
-      rangeAvailability.message ||
-      `${dent.name} works from ${workStart} to ${workEnd}.`;
-    emit("slot-full", {
-      dentist: dent,
-      hour: slot.hour,
-      outOfHours: true,
-      message,
-    });
-    return;
-  }
 
-  if (isHourFull(dent.id, slot.hour)) {
-    emit("slot-full", { dentist: dent, hour: slot.hour });
-    return;
-  }
-  onCellClick(dent, slot, minute);
+  const isUnavailable = !isDentistAvailable(dent.id);
+  const isOutOfHours = !availability.available;
+
+  // ✅ ALWAYS allow opening modal
+  emit("slot-click", {
+    dentist: dent,
+    hour: slot.hour,
+    minute,
+    startMins,
+
+    // NEW META FLAGS
+    meta: {
+      isOutOfHours,
+      isUnavailable,
+      message: availability.message || null,
+    },
+  });
 };
 
 const openPatient = (appt) => {
   if (appt.patientId) router.push(`/patients/${appt.patientId}`);
 };
 
-// ─── DRAG-TO-CREATE (FIXED FOR MULTI-HOUR) ───────────────────────────────────
+// ─── Drag-to-create ───────────────────────────────────────────────────────────
 const dragCreate = reactive({
   mouseDown: false,
   active: false,
@@ -793,150 +909,111 @@ const dragCreate = reactive({
 
 const dragCreateLabel = computed(() => {
   if (dragCreate.startMins === null || dragCreate.endMins === null) return "";
-  const dur = dragCreate.endMins - dragCreate.startMins;
-  return `${formatRange12Hour(dragCreate.startMins, dragCreate.endMins)} (${dur} min)`;
+  return `${formatRange12Hour(dragCreate.startMins, dragCreate.endMins)} (${dragCreate.endMins - dragCreate.startMins} min)`;
 });
 
-/** Get minutes from mouse position relative to ANY slot cell */
 function getMinutesFromMouse(event, targetCell = null) {
   const cell = targetCell || event.currentTarget;
   if (!cell) return null;
-
   const hour = Number(cell.dataset.hour);
   const rect = cell.getBoundingClientRect();
-  if (!rect || !rect.height) return hour * 60;
-
+  if (!rect?.height) return hour * 60;
   const relY = Math.min(Math.max(event.clientY - rect.top, 0), rect.height);
-  const segH = rect.height / MICRO_PER_HR;
-  const segIdx = Math.floor(relY / Math.max(segH, 1));
-  const minuteOffset = Math.min(segIdx, MICRO_PER_HR - 1) * INTERVAL_MINS;
-
-  return hour * 60 + minuteOffset;
+  return (
+    hour * 60 +
+    Math.min(
+      Math.floor(relY / (rect.height / MICRO_PER_HR)),
+      MICRO_PER_HR - 1,
+    ) *
+      INTERVAL_MINS
+  );
 }
 
 function onSlotMouseDown(event, dent, slot) {
-  if (event.button !== 0) return;
-  if (event.target.closest(".appointment-card")) return;
-
+  if (event.button !== 0 || event.target.closest(".appointment-card")) return;
   event.preventDefault();
-
-  const cell = event.currentTarget;
-  const mins = getMinutesFromMouse(event, cell);
-  if (mins === null) return;
-  if (!getMinuteRangeAvailability(dent, mins, mins + INTERVAL_MINS).available)
+  const mins = getMinutesFromMouse(event, event.currentTarget);
+  if (
+    mins === null ||
+    !getMinuteRangeAvailability(dent, mins, mins + INTERVAL_MINS).available
+  )
     return;
-
-  dragCreate.mouseDown = true;
-  dragCreate.dentistId = dent.id;
-  dragCreate.startMins = mins;
-  dragCreate.endMins = mins + INTERVAL_MINS;
-
-  // Add global listeners
+  Object.assign(dragCreate, {
+    mouseDown: true,
+    dentistId: dent.id,
+    startMins: mins,
+    endMins: mins + INTERVAL_MINS,
+  });
   window.addEventListener("mousemove", onGlobalMouseMove);
   window.addEventListener("mouseup", onGlobalMouseUp);
 }
 
 function onGlobalMouseMove(event) {
   if (!dragCreate.mouseDown) return;
-
-  // Find the element under cursor
-  const elemUnderCursor = document.elementFromPoint(
-    event.clientX,
-    event.clientY,
-  );
-  const slotCell = elemUnderCursor?.closest?.("[data-dentist-id]");
-
-  if (!slotCell) return;
-
-  const dentistId = String(slotCell.dataset.dentistId);
-
-  // Only allow dragging within same dentist column
-  if (dentistId !== String(dragCreate.dentistId)) return;
-
+  const el = document.elementFromPoint(event.clientX, event.clientY);
+  const cell = el?.closest?.("[data-dentist-id]");
+  if (!cell || String(cell.dataset.dentistId) !== String(dragCreate.dentistId))
+    return;
   dragCreate.active = true;
-
-  const currentMins = getMinutesFromMouse(event, slotCell);
-  if (currentMins === null) return;
-
-  // Update end minutes (always keep start as earliest, end as latest)
-  if (currentMins < dragCreate.startMins) {
+  const cur = getMinutesFromMouse(event, cell);
+  if (cur === null) return;
+  if (cur < dragCreate.startMins) {
     dragCreate.endMins = dragCreate.startMins + INTERVAL_MINS;
-    dragCreate.startMins = currentMins;
+    dragCreate.startMins = cur;
   } else {
-    dragCreate.endMins = currentMins + INTERVAL_MINS;
+    dragCreate.endMins = cur + INTERVAL_MINS;
   }
 }
 
-function onGlobalMouseUp(event) {
+function onGlobalMouseUp() {
   if (!dragCreate.mouseDown) return;
-
-  const start = dragCreate.startMins;
-  const end = dragCreate.endMins;
-
-  // Clean up global listeners
+  const { startMins, endMins, dentistId } = dragCreate;
   window.removeEventListener("mousemove", onGlobalMouseMove);
   window.removeEventListener("mouseup", onGlobalMouseUp);
-
   dragCreate.mouseDown = false;
   dragCreate.active = false;
-
-  if (start === null || end === null || end <= start) {
+  if (startMins === null || endMins === null || endMins <= startMins) {
     resetDragCreate();
     return;
   }
-
-  // Emit create event
   const dentist = visibleDentists.value.find(
-    (d) => String(d.id) === String(dragCreate.dentistId),
+    (d) => String(d.id) === String(dentistId),
   );
-
   emit("slot-click", {
     dentist,
-    hour: Math.floor(start / 60),
-    minute: start % 60,
-    duration: end - start,
+    hour: Math.floor(startMins / 60),
+    minute: startMins % 60,
+    duration: endMins - startMins,
   });
-
   resetDragCreate();
 }
 
-function onSlotMouseUp(event, dent, slot) {
-  // Handled by global mouse up
+function onSlotMouseUp() {
+  /* handled by global listener */
 }
 
 function isHourInDragRange(hour) {
-  if (!dragCreate.active) return false;
-  const s = dragCreate.startMins;
-  const e = dragCreate.endMins;
-  if (s === null || e === null) return false;
-  const hourStart = hour * 60;
-  const hourEnd = (hour + 1) * 60;
-  return s < hourEnd && e > hourStart;
+  if (!dragCreate.active || dragCreate.startMins === null) return false;
+  return (
+    dragCreate.startMins < (hour + 1) * 60 && dragCreate.endMins > hour * 60
+  );
 }
 
 function getDragCreateGhostStyle(hour) {
-  if (!dragCreate.active) return null;
-  const s = dragCreate.startMins;
-  const e = dragCreate.endMins;
-  if (s === null || e === null) return null;
-
-  const hourStart = hour * 60;
-  const hourEnd = (hour + 1) * 60;
-  if (s >= hourEnd || e <= hourStart) return null;
-
-  const overlapStart = Math.max(s, hourStart);
-  const overlapEnd = Math.min(e, hourEnd);
-  const topPercent = ((overlapStart - hourStart) / 60) * 100;
-  const heightPercent = ((overlapEnd - overlapStart) / 60) * 100;
-
+  if (!dragCreate.active || dragCreate.startMins === null) return null;
+  const hs = hour * 60,
+    he = (hour + 1) * 60;
+  if (dragCreate.startMins >= he || dragCreate.endMins <= hs) return null;
+  const os = Math.max(dragCreate.startMins, hs);
+  const oe = Math.min(dragCreate.endMins, he);
   return {
-    top: `${topPercent}%`,
-    height: `${heightPercent}%`,
+    top: `${((os - hs) / 60) * 100}%`,
+    height: `${((oe - os) / 60) * 100}%`,
     position: "absolute",
     left: "4px",
     right: "4px",
     zIndex: 20,
-    backgroundColor: "rgba(99, 102, 241, 0.2)",
+    backgroundColor: "rgba(99,102,241,0.2)",
     border: "2px solid #6366f1",
     borderRadius: "6px",
     pointerEvents: "none",
@@ -944,262 +1021,172 @@ function getDragCreateGhostStyle(hour) {
 }
 
 function resetDragCreate() {
-  dragCreate.mouseDown = false;
-  dragCreate.active = false;
-  dragCreate.dentistId = null;
-  dragCreate.startMins = null;
-  dragCreate.endMins = null;
+  Object.assign(dragCreate, {
+    mouseDown: false,
+    active: false,
+    dentistId: null,
+    startMins: null,
+    endMins: null,
+  });
 }
 
-// ─── DRAG-TO-MOVE (existing appointments) ────────────────────────────────────
+// ─── Drag-to-move ─────────────────────────────────────────────────────────────
 const hoverSlot = ref({ dentistId: null, hour: null });
+const clipboardDropTarget = ref({ dentistId: null, hour: null });
 
-const buildDragPayload = (appt, dentistId) => ({
-  dentistId,
-  appointmentId: appt?.id,
-  start: appt?.start || appt?.startTime,
-  end: appt?.end || appt?.endTime,
-  date: appt?.date || activeDate.value,
-});
+const isClipboardDataTransfer = (event) => {
+  if (!event?.dataTransfer) return false;
+  if ((event.dataTransfer.types || []).includes(CLIPBOARD_MIME)) return true;
+  try {
+    return (
+      JSON.parse(event.dataTransfer.getData("text/plain"))?.type ===
+      "clipboard-draft"
+    );
+  } catch {
+    return false;
+  }
+};
 
 const onAppointmentDragStart = (event, appt, dentistId) => {
-  const p = JSON.stringify(buildDragPayload(appt, dentistId));
-  if (event?.dataTransfer) {
-    event.dataTransfer.setData(DRAG_MIME, p);
-    event.dataTransfer.setData("text/plain", p);
-    event.dataTransfer.effectAllowed = "move";
-  }
+  const p = JSON.stringify({
+    dentistId,
+    appointmentId: appt?.id,
+    start: appt?.start || appt?.startTime,
+    end: appt?.end || appt?.endTime,
+    date: appt?.date || activeDate.value,
+  });
+  event?.dataTransfer?.setData(DRAG_MIME, p);
+  event?.dataTransfer?.setData("text/plain", p);
+  if (event?.dataTransfer) event.dataTransfer.effectAllowed = "move";
 };
 const onAppointmentDragEnd = () => {
   hoverSlot.value = { dentistId: null, hour: null };
 };
-// Simplify the clipboard drop handlers
+
 const onSlotDragOver = (event) => {
   event.preventDefault();
-
-  // Get the slot info from the event target
-  const cell = event.currentTarget;
-  const dentistId = cell?.dataset?.dentistId;
-  const hour = parseInt(cell?.dataset?.hour, 10);
-
-  // Check if this slot is available for dropping
-  const isAvailable = dentistId && !isSlotDisabled(dentistId, hour);
-
-  if (event.dataTransfer) {
-    if (isAvailable) {
-      event.dataTransfer.dropEffect = isClipboardDataTransfer(event)
-        ? "copy"
-        : "move";
-    } else {
-      event.dataTransfer.dropEffect = "none"; // Not allowed
-    }
-  }
+  const { dentistId, hour } = event.currentTarget.dataset;
+  if (event.dataTransfer)
+    event.dataTransfer.dropEffect =
+      dentistId && !isSlotDisabled(dentistId, parseInt(hour, 10))
+        ? isClipboardDataTransfer(event)
+          ? "copy"
+          : "move"
+        : "none";
 };
 const onSlotDragEnter = (event, dent, slot) => {
   event.preventDefault();
-
-  // Check if dentist is available on this date and slot is within working hours
-  if (!isDentistAvailable(dent.id) || isSlotDisabled(dent.id, slot.hour)) {
-    // Don't set drop target for unavailable slots
+  if (!isDentistAvailable(dent.id) || isSlotDisabled(dent.id, slot.hour))
     return;
-  }
-
-  if (isClipboardDataTransfer(event)) {
+  if (isClipboardDataTransfer(event))
     clipboardDropTarget.value = { dentistId: dent.id, hour: slot.hour };
-    console.log("Clipboard drag entered slot", {
-      dentistId: dent.id,
-      hour: slot.hour,
-    });
-  } else {
-    hoverSlot.value = { dentistId: dent.id, hour: slot.hour };
-  }
+  else hoverSlot.value = { dentistId: dent.id, hour: slot.hour };
 };
-const isHoverSlot = (dentistId, hour) =>
-  hoverSlot.value.dentistId === dentistId && hoverSlot.value.hour === hour;
-
-// ─── CLIPBOARD DRAG AND DROP ──────────────────────────────────────────────────
-const isClipboardDropTarget = (dentistId, hour) => {
-  return (
-    clipboardDropTarget.value.dentistId === dentistId &&
-    clipboardDropTarget.value.hour === hour
-  );
-};
-
-const onSlotDragOverForClipboard = (event) => {
-  if (!isClipboardDataTransfer(event)) return;
-  event.preventDefault();
-
-  // Get the slot info from the event target
-  const cell = event.currentTarget;
-  const dentistId = cell?.dataset?.dentistId;
-  const hour = parseInt(cell?.dataset?.hour, 10);
-
-  // Check if this slot is available for dropping
-  const isAvailable = dentistId && !isSlotDisabled(dentistId, hour);
-
-  if (event.dataTransfer) {
-    event.dataTransfer.dropEffect = isAvailable ? "copy" : "none";
-  }
-};
-
-const onSlotDragEnterForClipboard = (event, dent, slot) => {
-  if (!isClipboardDataTransfer(event)) return;
-  event.preventDefault();
-
-  // Check if dentist is available on this date and slot is within working hours
-  if (!isDentistAvailable(dent.id) || isSlotDisabled(dent.id, slot.hour)) {
-    // Don't set drop target for unavailable slots
-    return;
-  }
-
-  clipboardDropTarget.value = { dentistId: dent.id, hour: slot.hour };
-  console.log("Clipboard drag entered slot", {
-    dentistId: dent.id,
-    dentistName: dent.name,
-    hour: slot.hour,
-  });
-};
-
-const onSlotDragLeaveForClipboard = (event, dent, slot) => {
-  if (!isClipboardDataTransfer(event)) return;
+const onSlotDragLeave = (event, dent, slot) => {
   if (
     clipboardDropTarget.value.dentistId === dent.id &&
     clipboardDropTarget.value.hour === slot.hour
-  ) {
+  )
     clipboardDropTarget.value = { dentistId: null, hour: null };
-  }
 };
 
-// Improve the clipboard drop handler
+const isHoverSlot = (did, h) =>
+  hoverSlot.value.dentistId === did && hoverSlot.value.hour === h;
+const isClipboardDropTarget = (did, h) =>
+  clipboardDropTarget.value.dentistId === did &&
+  clipboardDropTarget.value.hour === h;
+
 const onClipboardDrop = (event, dentist, slot) => {
   event.preventDefault();
-
-  // Clear drop target
   clipboardDropTarget.value = { dentistId: null, hour: null };
-
-  // ─── Validation: Check if dentist is available and slot is within working hours ────
   if (!isDentistAvailable(dentist.id)) {
     emit("slot-full", {
       dentist,
       hour: slot.hour,
       unavailable: true,
-      message: `${dentist.name} is not available on this day. Appointment cannot be created.`,
+      message: `${dentist.name} is not available on this day.`,
     });
     return;
   }
-
-  // ─── Get the draft data ────────────────────────────────────────────────────────────
-  let raw = event?.dataTransfer?.getData(CLIPBOARD_MIME);
-  if (!raw) {
-    raw = event?.dataTransfer?.getData("text/plain");
-  }
-
-  if (!raw) {
-    console.log("No data in clipboard drop");
-    return;
-  }
-
-  let dragData;
+  const raw =
+    event?.dataTransfer?.getData(CLIPBOARD_MIME) ||
+    event?.dataTransfer?.getData("text/plain");
+  if (!raw) return;
+  let data;
   try {
-    dragData = JSON.parse(raw);
-  } catch (e) {
-    console.error("Failed to parse clipboard data:", e);
+    data = JSON.parse(raw);
+  } catch {
     return;
   }
+  if (data.type !== "clipboard-draft" && !data.draft) return;
+  const draft = data.draft;
+  if (!draft) return;
 
-  // Check if it's a clipboard draft
-  if (dragData.type !== "clipboard-draft" && !dragData.draft) {
-    // console.log("Not a clipboard draft:", dragData);
-    return;
-  }
-
-  const draft = dragData.draft;
-  if (!draft) {
-    // console.log("No draft in clipboard data");
-    return;
-  }
-
-  // Calculate drop time based on mouse position
-  const cell = event.currentTarget;
-  const rect = cell?.getBoundingClientRect();
-  let newStartMinutes = slot.hour * 60;
-
+  const rect = event.currentTarget?.getBoundingClientRect();
+  let newStart = slot.hour * 60;
   if (rect?.height) {
     const relY = Math.min(Math.max(event.clientY - rect.top, 0), rect.height);
-    const segH = rect.height / MICRO_PER_HR;
-    const microSlot = Math.floor(relY / Math.max(segH, 1));
-    newStartMinutes =
-      slot.hour * 60 + Math.min(microSlot, MICRO_PER_HR - 1) * INTERVAL_MINS;
+    newStart =
+      slot.hour * 60 +
+      Math.min(
+        Math.floor(relY / (rect.height / MICRO_PER_HR)),
+        MICRO_PER_HR - 1,
+      ) *
+        INTERVAL_MINS;
   }
-
-  const newStartTime = toHHMM(newStartMinutes);
   const duration = draft.duration || INTERVAL_MINS;
-  const availability = getMinuteRangeAvailability(
+  const avail = getMinuteRangeAvailability(
     dentist,
-    newStartMinutes,
-    newStartMinutes + duration,
+    newStart,
+    newStart + duration,
   );
-  if (!availability.available) {
+  if (!avail.available) {
     emit("slot-full", {
       dentist,
       hour: slot.hour,
       outOfHours: true,
-      message: availability.message,
+      message: avail.message,
     });
     return;
   }
-
-  // Emit the create-from-draft event
   emit("create-from-draft", {
     draft,
     dentistId: dentist.id,
     date: activeDate.value,
-    start: newStartTime,
-    duration: duration,
+    start: toHHMM(newStart),
+    duration,
   });
 };
 
-// Update the main drop handler
 const onAppointmentDrop = (event, dentist, slot) => {
   event.preventDefault();
   event.stopPropagation();
-
-  // ─── Validation: Check if dentist is available and slot is within working hours ────
   if (!isDentistAvailable(dentist.id)) {
     emit("slot-full", {
       dentist,
       hour: slot.hour,
       unavailable: true,
-      message: `${dentist.name} is not available on this day. Appointment cannot be moved here.`,
+      message: `${dentist.name} is not available on this day.`,
     });
     return;
   }
-
-  // Clear hover states
   hoverSlot.value = { dentistId: null, hour: null };
-
-  // Handle clipboard drops
   if (isClipboardDataTransfer(event)) {
     onClipboardDrop(event, dentist, slot);
     return;
   }
 
-  // Handle appointment move drops
   const raw =
     event?.dataTransfer?.getData(DRAG_MIME) ||
     event?.dataTransfer?.getData("text/plain");
   if (!raw) return;
-
   let payload;
   try {
     payload = JSON.parse(raw);
   } catch {
     return;
   }
-
-  // Check if it's an appointment move (no type or type is not clipboard-draft)
   if (payload.type === "clipboard-draft") {
-    // This should have been caught above, but just in case
     onClipboardDrop(event, dentist, slot);
     return;
   }
@@ -1208,29 +1195,21 @@ const onAppointmentDrop = (event, dentist, slot) => {
     INTERVAL_MINS,
     toMins(payload.end) - toMins(payload.start),
   );
-
   const rect = event.currentTarget?.getBoundingClientRect?.();
   let newStart = slot.hour * 60;
   if (rect?.height) {
     const relY = Math.min(Math.max(event.clientY - rect.top, 0), rect.height);
-    const segH = rect.height / MICRO_PER_HR;
     newStart =
-      slot.hour * 60 + Math.floor(relY / Math.max(segH, 1)) * INTERVAL_MINS;
+      slot.hour * 60 +
+      Math.floor(relY / (rect.height / MICRO_PER_HR)) * INTERVAL_MINS;
   }
-
-  const newStartTime = toHHMM(newStart);
-  const newEndTime = toHHMM(newStart + dur);
-  const availability = getMinuteRangeAvailability(
-    dentist,
-    newStart,
-    newStart + dur,
-  );
-  if (!availability.available) {
+  const avail = getMinuteRangeAvailability(dentist, newStart, newStart + dur);
+  if (!avail.available) {
     emit("slot-full", {
       dentist,
       hour: slot.hour,
       outOfHours: true,
-      message: availability.message,
+      message: avail.message,
     });
     return;
   }
@@ -1246,14 +1225,14 @@ const onAppointmentDrop = (event, dentist, slot) => {
     to: {
       dentistId: dentist.id,
       date: activeDate.value || payload.date,
-      start: newStartTime,
-      end: newEndTime,
+      start: toHHMM(newStart),
+      end: toHHMM(newStart + dur),
     },
     appointment: payload,
   });
 };
 
-// ─── RESIZE ───────────────────────────────────────────────────────────────────
+// ─── Resize ───────────────────────────────────────────────────────────────────
 const resizing = reactive({
   active: false,
   direction: null,
@@ -1265,43 +1244,107 @@ const resizing = reactive({
   curEnd: null,
 });
 
+/**
+ * FIX 1: onResizeStart — use the same appt?.start || appt?.startTime fallback
+ * pattern used everywhere else in this file, so both field naming conventions work.
+ *
+ * FIX 2: Attach global window listeners for resize mousemove/mouseup so the
+ * user can move the mouse anywhere (even outside the scroll host) without
+ * losing the resize. The resize-capture-overlay (now inside .grid-scroll-host)
+ * also catches events when the pointer stays inside the scroll area.
+ */
 function onResizeStart({ event, appt, direction }, dentist) {
-  resizing.active = true;
-  resizing.direction = direction;
-  resizing.appt = appt;
-  resizing.dentist = dentist;
-  resizing.origStart = toMins(appt.start);
-  resizing.origEnd = toMins(appt.end);
-  resizing.curStart = resizing.origStart;
-  resizing.curEnd = resizing.origEnd;
+  // Prevent text selection and drag-to-move from firing during resize
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+
+  // FIX: Use the same dual-field fallback that apptStart/apptEnd use
+  const startMins = toMins(appt?.start || appt?.startTime);
+  const endMins = toMins(appt?.end || appt?.endTime);
+
+  Object.assign(resizing, {
+    active: true,
+    direction,
+    appt,
+    dentist,
+    origStart: startMins,
+    origEnd: endMins,
+    curStart: startMins,
+    curEnd: endMins,
+  });
+
   document.body.style.cursor = "ns-resize";
+  document.body.style.userSelect = "none";
+
+  // FIX: Use global window listeners so resize works even when mouse
+  // leaves the scroll container or the resize-capture-overlay
+  window.addEventListener("mousemove", onGlobalResizeMove);
+  window.addEventListener("mouseup", onGlobalResizeEnd);
 }
 
-function onResizeMove(event) {
-  if (!resizing.active) {
-    return;
+/**
+ * FIX: Replaced onResizeMove (which used a fixed-position overlay and
+ * elementFromPoint — both broken by the scroll host's overflow:auto) with a
+ * global window listener that computes the target hour row directly from
+ * measured DOM positions, correctly accounting for scroll offset.
+ *
+ * Strategy:
+ *  1. Get all slot-cell elements from the live DOM (they have data-hour).
+ *  2. Find which cell's bounding rect contains the current mouse Y.
+ *  3. Compute the snapped minute within that cell.
+ *  4. Update resizing.curStart or resizing.curEnd accordingly.
+ */
+function onGlobalResizeMove(event) {
+  if (!resizing.active) return;
+
+  const grid = calendarGrid.value;
+  if (!grid) return;
+
+  // Find which slot-cell the mouse is currently over by checking bounding rects.
+  // We only care about the dentist column that owns the appointment being resized.
+  const dentistId = String(resizing.dentist?.id);
+  const cells = Array.from(
+    grid.querySelectorAll(`.slot-cell[data-dentist-id="${dentistId}"]`),
+  );
+
+  let targetCell = null;
+  let clampedY = event.clientY;
+
+  // Find the cell whose vertical rect contains the mouse
+  for (const cell of cells) {
+    const rect = cell.getBoundingClientRect();
+    if (event.clientY >= rect.top && event.clientY <= rect.bottom) {
+      targetCell = cell;
+      break;
+    }
   }
 
-  // Temporarily hide overlay to get element under cursor
-  const overlay = document.querySelector(".resize-overlay");
-  if (overlay) overlay.style.pointerEvents = "none";
+  // If mouse is above the first cell or below the last cell, clamp to boundary
+  if (!targetCell && cells.length) {
+    const firstRect = cells[0].getBoundingClientRect();
+    const lastRect = cells[cells.length - 1].getBoundingClientRect();
 
-  const el = document.elementFromPoint(event.clientX, event.clientY);
-
-  // Restore overlay
-  if (overlay) overlay.style.pointerEvents = "auto";
-
-  const cell = el?.closest?.("[data-hour]");
-
-  if (!cell) {
-    return;
+    if (event.clientY < firstRect.top) {
+      targetCell = cells[0];
+      clampedY = firstRect.top + 1;
+    } else if (event.clientY > lastRect.bottom) {
+      targetCell = cells[cells.length - 1];
+      clampedY = lastRect.bottom - 1;
+    }
   }
 
-  const hour = Number(cell.dataset.hour);
-  const rect = cell.getBoundingClientRect();
-  const relY = Math.min(Math.max(event.clientY - rect.top, 0), rect.height);
-  const segH = rect.height / MICRO_PER_HR;
-  const mins = hour * 60 + Math.floor(relY / Math.max(segH, 1)) * INTERVAL_MINS;
+  if (!targetCell) return;
+
+  const hour = Number(targetCell.dataset.hour);
+  const rect = targetCell.getBoundingClientRect();
+  const relY = Math.min(Math.max(clampedY - rect.top, 0), rect.height);
+
+  // Snap to INTERVAL_MINS boundaries within the hour
+  const microSlotIndex = Math.min(
+    Math.floor(relY / (rect.height / MICRO_PER_HR)),
+    MICRO_PER_HR - 1,
+  );
+  const mins = hour * 60 + microSlotIndex * INTERVAL_MINS;
 
   if (resizing.direction === "bottom") {
     resizing.curEnd = Math.max(
@@ -1313,9 +1356,18 @@ function onResizeMove(event) {
   }
 }
 
-function onResizeEnd() {
+/**
+ * FIX: Global mouseup handler for resize, paired with onGlobalResizeMove.
+ * Cleans up listeners, resets cursor, and emits the move-appointment event.
+ */
+function onGlobalResizeEnd() {
   if (!resizing.active) return;
+
+  window.removeEventListener("mousemove", onGlobalResizeMove);
+  window.removeEventListener("mouseup", onGlobalResizeEnd);
+
   document.body.style.cursor = "";
+  document.body.style.userSelect = "";
 
   const newStart = toHHMM(resizing.curStart);
   const newEnd = toHHMM(resizing.curEnd);
@@ -1325,8 +1377,8 @@ function onResizeEnd() {
     from: {
       dentistId: resizing.dentist?.id,
       date: resizing.appt?.date || activeDate.value,
-      start: resizing.appt?.start,
-      end: resizing.appt?.end,
+      start: resizing.appt?.start || resizing.appt?.startTime,
+      end: resizing.appt?.end || resizing.appt?.endTime,
     },
     to: {
       dentistId: resizing.dentist?.id,
@@ -1337,7 +1389,6 @@ function onResizeEnd() {
     appointment: resizing.appt,
   });
 
-  // Open the appointment modal for editing after resize
   emit("open-appointment", {
     appt: { ...resizing.appt, start: newStart, end: newEnd },
     dentist: resizing.dentist,
@@ -1347,11 +1398,19 @@ function onResizeEnd() {
   resizing.appt = null;
 }
 
-// Clean up on unmount
-onUnmounted(() => {
-  window.removeEventListener("mousemove", onGlobalMouseMove);
-  window.removeEventListener("mouseup", onGlobalMouseUp);
-});
+/**
+ * FIX: Handler for when mouse leaves the resize-capture-overlay.
+ * We do NOT end the resize here — onGlobalResizeMove/End on window
+ * continue tracking even outside the overlay, so the resize stays live.
+ */
+function onResizeOverlayLeave() {
+  // Intentionally empty — global listeners handle out-of-bounds movement.
+}
+
+// Keep these as no-ops / aliases so any legacy references don't break,
+// but all actual work is done by the global handlers above.
+const onResizeMove = () => {};
+const onResizeEnd = () => {};
 </script>
 
 <style scoped>
@@ -1366,21 +1425,37 @@ onUnmounted(() => {
   position: relative;
 }
 
+/*
+ * ── Scroll host ──
+ * Single scrollable container. Both .calendar-grid and .overlay-layer are
+ * children, so they scroll as one unit. No overflow clipping on any child.
+ */
+.grid-scroll-host {
+  position: relative; /* containing block for .overlay-layer */
+  overflow: auto;
+  height: 73vh;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: #eef2f7;
+}
+
 /* ── Day-view grid ── */
 .calendar-grid {
   display: grid;
   grid-template-columns: 72px repeat(var(--cols, 3), minmax(260px, 1fr));
   grid-auto-rows: auto;
-  background: #eef2f7;
-  border-radius: 12px;
-  overflow: auto;
-  border: 1px solid #e5e7eb;
-  height: 73vh;
+  /* NO overflow property here — only .grid-scroll-host clips */
 }
 
-/* Header cells */
+/* Sticky header row */
+.header-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
 .time-head {
-  height: 52px;
+  height: 52px; /* = HEADER_ROW_PX */
   background: #f6f7fb;
   border-bottom: 1px solid #e5e7eb;
 }
@@ -1394,6 +1469,7 @@ onUnmounted(() => {
   border-left: 1px solid #e5e7eb;
   border-bottom: 1px solid #e5e7eb;
   min-width: 260px;
+  height: 52px; /* = HEADER_ROW_PX */
 }
 .dentist-head.dentist-unavailable {
   background: #fef2f2;
@@ -1424,7 +1500,6 @@ onUnmounted(() => {
   color: #1e2b80;
   flex-shrink: 0;
 }
-
 .dentist-head-text {
   flex: 1;
   min-width: 0;
@@ -1444,7 +1519,7 @@ onUnmounted(() => {
   margin-left: auto;
 }
 
-/* Time cells */
+/* Time label cells */
 .time-cell {
   background: linear-gradient(180deg, #f6f7fb 0%, #fff 70%);
   font-size: 11px;
@@ -1456,14 +1531,14 @@ onUnmounted(() => {
   padding: 8px 8px 0 0;
   border-right: 1px solid #e5e7eb;
   border-bottom: 1px solid #e5e7eb;
-  min-height: calc(4 * 36px + 24px);
+  /*
+   * Must equal HOUR_ROW_PX (165px):
+   *   slot-grid: pad-top 6 + 4 rows×36 + 3 gaps×3 + pad-bottom 6 = 165
+   */
+  min-height: 165px;
 }
-/* Add to the style section in calendar/index.vue */
-.slot-cell.clipboard-hover {
-  background: rgba(109, 74, 255, 0.08);
-  box-shadow: inset 0 0 0 2px #6d4aff;
-}
-/* Slot cells */
+
+/* Slot cells — interaction surface only */
 .slot-cell {
   background: #fff;
   border-left: 1px solid #e5e7eb;
@@ -1483,18 +1558,15 @@ onUnmounted(() => {
   opacity: 0.75;
 }
 .slot-cell.slot-disabled {
-  cursor: not-allowed;
+  cursor: pointer;
   background: #f5f5f5;
   opacity: 0.6;
-  position: relative;
 }
 .slot-cell.slot-disabled::after {
   content: "";
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
+  pointer-events: none;
   background: repeating-linear-gradient(
     45deg,
     transparent,
@@ -1502,7 +1574,6 @@ onUnmounted(() => {
     rgba(200, 200, 200, 0.1) 10px,
     rgba(200, 200, 200, 0.1) 20px
   );
-  pointer-events: none;
 }
 .slot-cell.drop-hover {
   background: #eef2ff;
@@ -1511,25 +1582,21 @@ onUnmounted(() => {
 .slot-cell.slot-hover {
   background: rgba(99, 102, 241, 0.04);
 }
+.slot-cell.clipboard-hover {
+  background: rgba(109, 74, 255, 0.08);
+  box-shadow: inset 0 0 0 2px #6d4aff;
+}
 
-/* Slot grid: 4 rows of compact micro-slots */
+/* Micro-slot rhythm grid */
 .slot-grid {
   display: grid;
   grid-template-rows: repeat(4, 36px);
   gap: 3px;
-  padding: 6px 8px;
+  padding: 6px 8px; /* 6+4×36+3×3+6 = 165 = HOUR_ROW_PX ✓ */
   position: relative;
+  overflow: visible;
 }
-
-.appointment-overlay {
-  position: absolute;
-  left: 4px;
-  right: 4px;
-  z-index: 15;
-}
-
 .empty-micro-slot {
-  background: transparent;
   border-radius: 5px;
   border: 1px dashed #e5e7eb;
   transition:
@@ -1541,13 +1608,12 @@ onUnmounted(() => {
   background: rgba(0, 0, 0, 0.01);
 }
 
-/* Drag-create ghost */
+/* Drag-create ghost (scoped to one cell, OK to clip) */
 .drag-create-ghost {
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  transition: none;
   z-index: 25;
 }
 .ghost-label {
@@ -1559,13 +1625,10 @@ onUnmounted(() => {
   padding: 2px 6px;
 }
 
-/* Clipboard drop indicator */
+/* Clipboard hover indicator */
 .clipboard-drop-indicator {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background: rgba(109, 74, 255, 0.15);
   border: 2px solid #6d4aff;
   border-radius: 8px;
@@ -1575,55 +1638,42 @@ onUnmounted(() => {
   z-index: 100;
   pointer-events: none;
 }
-
 .drop-label {
   background: #6d4aff;
-  color: white;
+  color: #fff;
   padding: 4px 12px;
   border-radius: 20px;
   font-size: 12px;
   font-weight: 500;
 }
 
-/* Break overlay */
+/* Break overlay (inside .overlay-col) */
 .break-overlay {
-  position: absolute;
+  /* top / height set inline via getBreakOverlayStyle() */
   left: 0;
   right: 0;
-
-  /* ❌ REMOVE THIS */
-  /* top: 0;
-  bottom: 0; */
-
   background: repeating-linear-gradient(
     45deg,
     rgba(239, 68, 68, 0.2),
     rgba(239, 68, 68, 0.2) 10px,
-    rgba(239, 68, 68, 0.35) 10px,
+    rgba(239, 68, 68, 0.35),
     rgba(239, 68, 68, 0.35) 20px
   );
-
   border: 2px solid rgba(239, 68, 68, 0.5);
   border-radius: 8px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
-  z-index: 101;
-  pointer-events: none;
 }
-
 .break-content {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
 }
-
 .break-label {
   background: rgba(239, 68, 68, 0.95);
-  color: white;
+  color: #fff;
   padding: 4px 10px;
   border-radius: 16px;
   font-size: 11px;
@@ -1632,10 +1682,9 @@ onUnmounted(() => {
   letter-spacing: 0.5px;
   white-space: nowrap;
 }
-
 .break-timing {
   background: rgba(239, 68, 68, 0.85);
-  color: white;
+  color: #fff;
   padding: 2px 8px;
   border-radius: 12px;
   font-size: 10px;
@@ -1643,11 +1692,19 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-/* Resize overlay (full-screen capture) */
-.resize-overlay {
-  position: fixed;
+/*
+ * ── Resize capture overlay ──
+ * FIX: Now position:absolute inside .grid-scroll-host (position:relative)
+ * instead of position:fixed. This means it scrolls with the grid content,
+ * covers the exact same area as the calendar, and doesn't interfere with
+ * elements outside the scroll host. z-index:200 puts it above appointment
+ * cards (z-index:20-30) and break overlays (z-index:101) so all mouse
+ * events during resize are captured reliably.
+ */
+.resize-capture-overlay {
+  position: absolute;
   inset: 0;
-  z-index: 9999;
+  z-index: 200;
   cursor: ns-resize;
 }
 
@@ -1726,6 +1783,7 @@ onUnmounted(() => {
 .appt-time {
   font-size: 11px;
 }
+
 :deep(.calendar-head-menu) {
   border-radius: 12px !important;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14) !important;
@@ -1734,7 +1792,7 @@ onUnmounted(() => {
 }
 :deep(.calendar-head-menu .v-list) {
   padding: 6px !important;
-  background: #ffffff !important;
+  background: #fff !important;
 }
 :deep(.calendar-head-menu .v-list-item) {
   min-height: 40px !important;

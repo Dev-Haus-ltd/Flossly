@@ -417,8 +417,8 @@ const validateForm = () => {
     if (form.value.code.length > 20) {
       errors.code = "Code must be less than 20 characters";
       isValid = false;
-    } else if (!/^[A-Z0-9_]+$/i.test(form.value.code)) {
-      errors.code = "Code can only contain letters, numbers, and underscores";
+    } else if (!/^[A-Z0-9_-]+$/i.test(form.value.code)) {
+      errors.code = "Code can only contain letters, numbers, dashes, and underscores";
       isValid = false;
     }
   }

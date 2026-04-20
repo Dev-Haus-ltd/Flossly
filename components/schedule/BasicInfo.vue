@@ -186,6 +186,7 @@
 
 <script setup>
 import { ref, computed } from "vue";
+import { formatTimeToHHMM, formatTimeTo12Hour } from "@/lib/timeFormatters";
 
 const props = defineProps({
   form: { type: Object, required: true },
@@ -234,7 +235,8 @@ function updateField(field, value) {
     emit("update:errors", { ...props.errors, scheduleName: "" });
   }
 }
-// helper function of fomrate date
+
+// Helper function to format date
 function formatDate(date) {
   if (!date) return null;
 
@@ -245,6 +247,7 @@ function formatDate(date) {
 
   return `${year}-${month}-${day}`;
 }
+
 // Date handlers
 const onStartDateChange = (val) => {
   if (val) {

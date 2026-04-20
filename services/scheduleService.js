@@ -52,11 +52,57 @@ export default {
   },
 
   // Update a specific day's working hours
+  // IMPORTANT: payload must include scheduleDayId, isWorkingDay, startTime (HH:MM), endTime (HH:MM)
   updateScheduleDay(payload) {
+    // Validate payload before sending
+    if (!payload.scheduleDayId) {
+      console.error('❌ updateScheduleDay: Missing scheduleDayId', payload)
+      return Promise.reject(new Error('scheduleDayId is required'))
+    }
+    
+    // Ensure times are in HH:MM format if provided
+    const validatedPayload = {
+      scheduleDayId: payload.scheduleDayId,
+      isWorkingDay: payload.isWorkingDay !== undefined ? payload.isWorkingDay : true,
+    }
+    
+    // Format startTime to HH:MM if provided
+    if (payload.startTime) {
+      const startTimeStr = String(payload.startTime).trim()
+      if (!/^\d{2}:\d{2}/.test(startTimeStr)) {
+        console.error('❌ updateScheduleDay: Invalid startTime format. Must be HH:MM', payload.startTime)
+        return Promise.reject(new Error(`Invalid startTime format: ${payload.startTime}. Expected HH:MM`))
+      }
+      validatedPayload.startTime = startTimeStr.substring(0, 5) // Ensure HH:MM
+    }
+    
+    // Format endTime to HH:MM if provided
+    if (payload.endTime) {
+      const endTimeStr = String(payload.endTime).trim()
+      if (!/^\d{2}:\d{2}/.test(endTimeStr)) {
+        console.error('❌ updateScheduleDay: Invalid endTime format. Must be HH:MM', payload.endTime)
+        return Promise.reject(new Error(`Invalid endTime format: ${payload.endTime}. Expected HH:MM`))
+      }
+      validatedPayload.endTime = endTimeStr.substring(0, 5) // Ensure HH:MM
+    }
+    
+    console.log('📡 API Call: updateScheduleDay', validatedPayload)
+    
     return new Promise((resolve, reject) => {
-      Post('/schedule/updateDay', payload)
-        .then(resolve)
-        .catch(reject)
+      Post('/schedule/updateDay', validatedPayload)
+        .then(response => {
+          if (response?.code === 0 && response?.data) {
+            console.log('✅ updateScheduleDay response:', response.data)
+            resolve(response)
+          } else {
+            console.warn('⚠️ updateScheduleDay: Unexpected response format', response)
+            resolve(response)
+          }
+        })
+        .catch(error => {
+          console.error('❌ updateScheduleDay error:', error)
+          reject(error)
+        })
     })
   },
 

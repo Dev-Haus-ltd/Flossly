@@ -263,6 +263,7 @@
 import { ref, reactive, watch } from 'vue'
 import { useScheduleStore } from '@/stores/schedule'
 import { useMainStore } from '@/stores/index'
+import { formatTimeToHHMM, formatTimeTo12Hour, timeToMinutes } from '@/lib/timeFormatters'
 
 const props = defineProps({
   weekDays: { type: Array, required: true },
@@ -299,7 +300,17 @@ const breakDialog = reactive({
 watch(
   () => props.weekDays,
   (newVal) => {
-    localWeekDays.value = newVal?.length ? [...newVal] : []
+    // Deep clone and normalize all times to HH:MM format
+    localWeekDays.value = (newVal || []).map(day => ({
+      ...day,
+      startTime: day.startTime ? formatTimeToHHMM(day.startTime) : day.startTime,
+      endTime: day.endTime ? formatTimeToHHMM(day.endTime) : day.endTime,
+      breaks: (day.breaks || []).map(brk => ({
+        ...brk,
+        startTime: brk.startTime ? formatTimeToHHMM(brk.startTime) : brk.startTime,
+        endTime: brk.endTime ? formatTimeToHHMM(brk.endTime) : brk.endTime
+      }))
+    }))
   },
   { immediate: true, deep: true }
 )
@@ -325,20 +336,10 @@ const openDeleteBreakDialog = (dayIndex, breakIndex) => {
   deleteDialog.title = 'Delete Break'
   deleteDialog.message = `Are you sure you want to delete "${breakItem.breakName}"? This action cannot be undone.`
 }
-// Convert 24-hour format to 12-hour format for display
-const formatTimeForDisplay = (time24h) => {
-  if (!time24h) return null
-  const [hours, minutes] = time24h.split(':')
-  const hour = parseInt(hours, 10)
-  const ampm = hour >= 12 ? 'PM' : 'AM'
-  const hour12 = hour % 12 || 12
-  return `${hour12}:${minutes} ${ampm}`
-}
 
-const timeToMinutes = (time24h) => {
-  if (!time24h) return 0
-  const [hours, minutes] = time24h.split(':').map(Number)
-  return (hours * 60) + (minutes || 0)
+// Format time for display using centralized formatter
+const formatTimeForDisplay = (time24h) => {
+  return formatTimeTo12Hour(time24h)
 }
 
 const validateDayTimes = (dayIndex) => {
@@ -370,15 +371,29 @@ const onDayToggle = async (day, dayIndex) => {
     day.breaks = []
   }
   
-  // If in edit mode, update the day via API
+  // If in edit mode, update the day via API and sync response back to form
   if (props.isEditMode && day.id) {
     try {
-      await scheduleStore.updateScheduleDay({
+      const response = await scheduleStore.updateScheduleDay({
         scheduleDayId: day.id,
         isWorkingDay: day.isWorkingDay,
         startTime: day.isWorkingDay ? day.startTime : null,
         endTime: day.isWorkingDay ? day.endTime : null
       })
+      
+      // CRITICAL: Sync API response back to local state
+      if (response?.code === 0 && response?.data) {
+        const updatedDay = response.data
+        
+        // Update local day with normalized times from API response
+        day.startTime = updatedDay.startTime ? formatTimeToHHMM(updatedDay.startTime) : null
+        day.endTime = updatedDay.endTime ? formatTimeToHHMM(updatedDay.endTime) : null
+        day.isWorkingDay = updatedDay.isWorkingDay
+        
+        // Re-emit updated weekDays to parent to keep form in sync
+        emit('update:weekDays', JSON.parse(JSON.stringify(localWeekDays.value)))
+      }
+      
       mainStore?.setSnackbar?.({
         message: `${day.dayName} updated successfully`,
         color: 'success'
@@ -390,9 +405,10 @@ const onDayToggle = async (day, dayIndex) => {
         color: 'error'
       })
     }
+  } else {
+    // Not in edit mode - just emit the update
+    emit('update:weekDays', localWeekDays.value)
   }
-  
-  emit('update:weekDays', localWeekDays.value)
 }
 
 const openAddBreakDialog = (dayIndex) => {
