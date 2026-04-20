@@ -1,7 +1,16 @@
 import { transporter } from "./nodeMailer";
 import { template } from "./emailTemplate";
 import { buildLeadContext, renderTokens } from './tokenRenderer.js'
+import { getS3Object } from './s3.js'
 const config = useRuntimeConfig();
+
+const streamToBuffer = (stream) =>
+  new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on('data', (chunk) => chunks.push(chunk));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', reject);
+  });
 
 /** These notifications are configured */
 
@@ -371,22 +380,24 @@ export const sendInvitationEmail = async (data) => {
 export const sendLeadBulkEmail = async ({ leads = [], subject, html, from, senderName, attachments = [] }) => {
   if (!Array.isArray(leads) || !leads.length) return { sent: 0 };
   const fromAddress = from || process.env.MAIL_FROM || "helloflossly@gmail.com";
-  const baseUrl = String(config?.public?.BASE_URL || '').replace(/\/+$/, '');
-  const normalizedAttachments = Array.isArray(attachments)
-    ? attachments
-        .map((item) => {
-          const link = String(item?.link || item?.url || item?.path || '').trim();
-          if (!link) return null;
-          const isAbsolute = /^https?:\/\//i.test(link);
-          if (!isAbsolute && !baseUrl) return null;
-          return {
-            filename: String(item?.name || item?.filename || 'Attachment.pdf'),
-            path: isAbsolute ? link : `${baseUrl}${link}`,
-            contentType: item?.contentType || undefined,
-          };
-        })
-        .filter(Boolean)
-    : [];
+
+  // Pre-fetch attachment buffers from S3 (links are S3 keys, not web URLs)
+  const resolvedAttachments = [];
+  for (const item of (Array.isArray(attachments) ? attachments : [])) {
+    const key = String(item?.link || item?.url || item?.path || '').trim();
+    if (!key) continue;
+    try {
+      const s3Obj = await getS3Object(key);
+      const content = await streamToBuffer(s3Obj.body);
+      resolvedAttachments.push({
+        filename: String(item?.name || item?.filename || 'Attachment.pdf'),
+        content,
+        contentType: item?.contentType || s3Obj.contentType || 'application/pdf',
+      });
+    } catch (_) {
+      // skip attachment that can't be fetched rather than failing the whole send
+    }
+  }
 
   let sent = 0;
   for (const lead of leads) {
@@ -404,7 +415,7 @@ export const sendLeadBulkEmail = async ({ leads = [], subject, html, from, sende
         from: fromAddress,
         subject: renderedSubject,
         html: wrapped,
-        attachments: normalizedAttachments.length ? normalizedAttachments : undefined,
+        attachments: resolvedAttachments.length ? resolvedAttachments : undefined,
       });
       sent++;
     } catch (e) {

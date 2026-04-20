@@ -131,6 +131,7 @@
             :ad-set-id="card.adSetId ?? null"
             :ad-id="card.adId ?? null"
             :drill-label="card.drillLabel"
+            :rank-label="card.rankLabel ?? null"
             @drill="onDrill(card)"
           />
         </v-col>
@@ -685,13 +686,46 @@ const sumLifetimeReachByEntity = (rows = []) => {
 };
 
 const STATUS_SORT_ORDER = { ACTIVE: 0, PAUSED: 1 };
-const sortCardsByStatus = (cards) =>
+const TOP_RANK_LABELS = ['1st Best Performer', '2nd Best Performer', '3rd Best Performer'];
+
+const getPerformanceMetrics = (card) => {
+  const leads = Number(card?.leads || 0);
+  const spend = Number(card?.spendMajor || 0);
+  const linkClicks = Number(card?.linkClicks || 0);
+  const reach = Number(card?.reach || 0);
+  const impressions = Number(card?.impressions || 0);
+  return {
+    leads,
+    spend,
+    linkClicks,
+    reach,
+    impressions,
+    efficiency: leads > 0 ? leads / Math.max(spend, 1) : 0,
+  };
+};
+
+const sortCardsByPerformance = (cards) =>
   cards.filter(Boolean).slice().sort((a, b) => {
     const aRank = STATUS_SORT_ORDER[String(a.status || '').toUpperCase()] ?? 2;
     const bRank = STATUS_SORT_ORDER[String(b.status || '').toUpperCase()] ?? 2;
     if (aRank !== bRank) return aRank - bRank;
+
+    const aMetrics = getPerformanceMetrics(a);
+    const bMetrics = getPerformanceMetrics(b);
+    if (bMetrics.efficiency !== aMetrics.efficiency) return bMetrics.efficiency - aMetrics.efficiency;
+    if (bMetrics.leads !== aMetrics.leads) return bMetrics.leads - aMetrics.leads;
+    if (aMetrics.spend !== bMetrics.spend) return aMetrics.spend - bMetrics.spend;
+    if (bMetrics.linkClicks !== aMetrics.linkClicks) return bMetrics.linkClicks - aMetrics.linkClicks;
+    if (bMetrics.reach !== aMetrics.reach) return bMetrics.reach - aMetrics.reach;
+    if (bMetrics.impressions !== aMetrics.impressions) return bMetrics.impressions - aMetrics.impressions;
     return String(a.title || '').localeCompare(String(b.title || ''), undefined, { sensitivity: 'base' });
   });
+
+const addPerformanceRanks = (cards) =>
+  cards.map((card, index) => ({
+    ...card,
+    rankLabel: TOP_RANK_LABELS[index] || null,
+  }));
 
 const filteredCampaignCount = computed(() => {
   if (!selectedStatus.value) return crmStore.metaCampaigns.length;
@@ -793,7 +827,7 @@ const currentStats = computed(() => {
 });
 
 const campaigns = computed(() =>
-  sortCardsByStatus(crmStore.metaCampaigns.map((campaign) => {
+  addPerformanceRanks(sortCardsByPerformance(crmStore.metaCampaigns.map((campaign) => {
     const campaignInsights = insightsInRange.value.filter(
       (insight) => insight.entityType === 'campaign' && insight.entityId === campaign.campaignId
     );
@@ -832,6 +866,7 @@ const campaigns = computed(() =>
       hasVideo: !!ad?.videoId,
       videoId: ad?.videoId || null,
       status: campaign.status || null,
+      spendMajor,
       cost: `${sym}${spendMajor.toFixed(2)}`,
       impressions: totalImpressions,
       linkClicks: totalLinkClicks,
@@ -839,7 +874,7 @@ const campaigns = computed(() =>
       leads: metaLeads,
       cpl: cpl > 0 ? `${sym}${cpl.toFixed(2)}` : '—',
     };
-  }))
+  })))
 );
 
 const adSetCards = computed(() => {
@@ -848,7 +883,7 @@ const adSetCards = computed(() => {
   const campaignAdSets = crmStore.metaAdSets.filter(
     (as) => as.campaignId === drill.campaign.campaignId
   );
-  return sortCardsByStatus(campaignAdSets.map((adSet) => {
+  return addPerformanceRanks(sortCardsByPerformance(campaignAdSets.map((adSet) => {
     const insights = insightsInRange.value.filter(
       (i) => i.entityType === 'adset' && i.entityId === adSet.adSetId
     );
@@ -878,6 +913,7 @@ const adSetCards = computed(() => {
       hasVideo: !!firstAd?.videoId,
       videoId: firstAd?.videoId || null,
       status: adSet.status || null,
+      spendMajor,
       cost: `${sym}${spendMajor.toFixed(2)}`,
       impressions: totalImpressions,
       linkClicks: totalLinkClicks,
@@ -886,14 +922,14 @@ const adSetCards = computed(() => {
       cpl: adSetCpl > 0 ? `${sym}${adSetCpl.toFixed(2)}` : '—',
       drillLabel: 'View Ads',
     };
-  }));
+  })));
 });
 
 const adCards = computed(() => {
   if (!drill.adSet) return [];
   const sym = currencySymbol.value;
   const adSetAds = crmStore.metaAds.filter((a) => a.adSetId === drill.adSet.adSetId);
-  return sortCardsByStatus(adSetAds.map((ad) => {
+  return addPerformanceRanks(sortCardsByPerformance(adSetAds.map((ad) => {
     const insights = insightsInRange.value.filter(
       (i) => i.entityType === 'ad' && i.entityId === ad.adId
     );
@@ -920,6 +956,7 @@ const adCards = computed(() => {
       hasVideo: !!ad.videoId,
       videoId: ad.videoId || null,
       status: ad.status || null,
+      spendMajor,
       cost: `${sym}${spendMajor.toFixed(2)}`,
       impressions: totalImpressions,
       linkClicks: totalLinkClicks,
@@ -928,7 +965,7 @@ const adCards = computed(() => {
       cpl: adCpl > 0 ? `${sym}${adCpl.toFixed(2)}` : '—',
       drillLabel: null,
     };
-  }));
+  })));
 });
 
 const displayCards = computed(() => {
@@ -944,9 +981,11 @@ const campaignsWithDrill = computed(() =>
 
 // Replace filtered campaigns with drill-aware version
 const filteredCampaigns = computed(() => {
-  if (!search.value) return campaignsWithDrill.value;
+  if (!search.value) return addPerformanceRanks(campaignsWithDrill.value);
   const q = search.value.toLowerCase();
-  return campaignsWithDrill.value.filter((c) => c.title.toLowerCase().includes(q) || c.description.toLowerCase().includes(q));
+  return addPerformanceRanks(
+    campaignsWithDrill.value.filter((c) => c.title.toLowerCase().includes(q) || c.description.toLowerCase().includes(q))
+  );
 });
 
 const drillEmptyTitle = computed(() => {

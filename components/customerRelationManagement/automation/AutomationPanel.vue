@@ -837,9 +837,23 @@ const buildPayload = (row) => {
 
 const toggleAutomationGroup = async (card, val) => {
   const keys = card?.templateKeys || []
-  const groupRows = keys.length
-    ? rows.filter(r => keys.includes(r.key))
-    : rows.filter(r => r.groupKey === card?.key)
+  let groupRows
+  if (keys.length) {
+    const rowMap = new Map(rows.map((r) => [r.key, r]))
+    const synthesized = []
+    groupRows = keys.map((key) => {
+      if (rowMap.has(key)) return rowMap.get(key)
+      const def = crmAutomationDefaults.find((d) => d.key === key)
+      if (!def) return null
+      const newRow = { ...def }
+      synthesized.push(newRow)
+      return newRow
+    }).filter(Boolean)
+    if (synthesized.length) rows.push(...synthesized)
+  } else {
+    groupRows = rows.filter((r) => r.groupKey === card?.key)
+  }
+
   const updates = []
   groupRows.forEach((row) => {
     const nextEnabled = !!val
@@ -852,6 +866,7 @@ const toggleAutomationGroup = async (card, val) => {
   try {
     await crmStore.saveAutomationBatch({ items: updates })
   } catch (e) {
+    groupRows.forEach((row) => { row.enabled = !row.enabled })
     mainStore?.setSnackbar?.({ title: e?.message || 'Failed to update automations', type: 'error' })
   }
 }

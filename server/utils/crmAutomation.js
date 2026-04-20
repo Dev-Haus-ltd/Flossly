@@ -521,7 +521,10 @@ export const previewSendNowAutomation = async (orgId, tpl) => {
   return summary;
 };
 
-export const sendImmediateCrmAutomationsForLead = async (lead) => {
+export const sendImmediateCrmAutomationsForLead = async (lead, options = {}) => {
+  const includeSendNow = options?.includeSendNow === true;
+  // forceImmediate skips the date check — use when explicitly activating a group for a lead
+  const forceImmediate = options?.forceImmediate === true;
   const templates = await CrmAutomationTemplate.findAll({
     where: { organisationId: Number(lead.organisationId) },
   });
@@ -537,10 +540,14 @@ export const sendImmediateCrmAutomationsForLead = async (lead) => {
     if (!trigger) continue;
     const isImmediate =
       (trigger.type === "inquiry_days" && trigger.days === 0) ||
-      trigger.type === "send_now";
+      (includeSendNow && trigger.type === "send_now");
     if (!isImmediate) continue;
-    const { due, sentKey } = shouldSendCrmTemplate({ lead, tpl, trigger, today, org });
-    if (!due || hasCrmSent(lead.rawData || {}, sentKey)) continue;
+    const sentKey = tpl.key;
+    if (hasCrmSent(lead.rawData || {}, sentKey)) continue;
+    if (!forceImmediate) {
+      const { due } = shouldSendCrmTemplate({ lead, tpl, trigger, today, org });
+      if (!due) continue;
+    }
     if (String(tpl?.type || "Email").toLowerCase() === "whatsapp") {
       if (!lead?.telephone) continue;
       const message = buildCrmWhatsAppMessage(lead, tpl, org);

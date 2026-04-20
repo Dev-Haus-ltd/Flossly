@@ -187,6 +187,7 @@
             :patient-options="bookingPatientOptions"
             :preselected-patient="bookingLeadName"
             :preselected-patient-id="bookingLeadPatientId"
+            @date-change="loadBookingDentists"
             @save="onSaveBookedAppointment"
           />
         </template>
@@ -561,6 +562,7 @@ const bookingTime = ref('');
 const bookingDentists = ref([]);
 const bookingInitialPractitioner = ref('');
 const bookingPatientOptions = ref([]);
+const bookingResolvedPatientId = ref(null);
 const pad = (n) => String(n).padStart(2, '0');
 const nextSlotTime = () => {
   const now = new Date();
@@ -579,7 +581,17 @@ const bookingPractitionerOptions = computed(() =>
 const bookingInitialDate = computed(() => bookingDateInput.value);
 const bookingInitialTime = computed(() => bookingTime.value);
 const bookingLeadName = computed(() => bookingLead.value?.name || '');
-const bookingLeadPatientId = computed(() => bookingLead.value?.patientId || null);
+const bookingLeadPatientId = computed(() => bookingResolvedPatientId.value || bookingLead.value?.patientId || null);
+const currentOrgLicense = computed(() => {
+  const orgId = Number(user.value?.currentLoggedInOrgId || 0);
+  const prefs = Array.isArray(user.value?.preferences) ? user.value.preferences : [];
+  const match = prefs.find((row) => Number(row?.organisationId || 0) === orgId);
+  return String(match?.licenseType || 'Trial').trim();
+});
+const canBookAppointments = computed(() => {
+  const type = String(currentOrgLicense.value || '').toLowerCase();
+  return ['soar', 'system'].includes(type);
+});
 watch(bookingPractitionerOptions, (opts) => {
   if (!bookingInitialPractitioner.value && opts.length) {
     bookingInitialPractitioner.value = opts[0];
@@ -1114,9 +1126,9 @@ const deriveTimeFromValue = (value) => {
   if (!Number.isNaN(parsed.valueOf())) return `${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`;
   return null;
 };
-const loadBookingDentists = async () => {
+const loadBookingDentists = async (date = bookingDateInput.value || new Date().toISOString().slice(0, 10)) => {
   try {
-    const res = await diaryStore.listDentists(new Date().toISOString().slice(0, 10));
+    const res = await diaryStore.listDentists(normalizeDateInput(date));
     if (res?.code === 0) {
       bookingDentists.value = (res.data || []).map((d) => ({
         id: d.id,
@@ -1145,18 +1157,110 @@ const matchingDentistName = (lead) => {
   }
   return bookingPractitionerOptions.value[0] || '';
 };
-const onBookLeads = (selection) => {
+const splitLeadName = (lead) => {
+  const rawName = String(lead?.name || '').trim();
+  if (!rawName) return { firstName: 'CRM', lastName: 'Lead' };
+  const [firstName, ...rest] = rawName.split(/\s+/);
+  return {
+    firstName: firstName || 'CRM',
+    lastName: rest.join(' ') || '-',
+  };
+};
+const ensureBookingPatientOption = (patient) => {
+  const id = Number(patient?.id || 0);
+  if (!id) return;
+  const name = `${patient?.firstName || ''} ${patient?.lastName || ''}`.trim() || patient?.name || bookingLeadName.value || 'CRM Lead';
+  const existing = bookingPatientOptions.value.find((row) => Number(row?.id || 0) === id);
+  if (existing) {
+    existing.name = name;
+    return;
+  }
+  bookingPatientOptions.value.unshift({ id, name });
+};
+const findExistingBookingPatient = async (lead) => {
+  const searchTerms = [lead?.email, lead?.telephone, lead?.name]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+
+  for (const term of searchTerms) {
+    try {
+      const res = await diaryStore.listPatients(term);
+      if (res?.code !== 0 || !Array.isArray(res?.data)) continue;
+      const match = res.data.find((patient) => {
+        const fullName = `${patient?.firstName || ''} ${patient?.lastName || ''}`.trim().toLowerCase();
+        const leadName = String(lead?.name || '').trim().toLowerCase();
+        const sameEmail = String(patient?.email || '').trim().toLowerCase() && String(patient?.email || '').trim().toLowerCase() === String(lead?.email || '').trim().toLowerCase();
+        const samePhone = String(patient?.mobile || '').trim() && String(patient?.mobile || '').trim() === String(lead?.telephone || '').trim();
+        const sameName = leadName && fullName === leadName;
+        return sameEmail || samePhone || sameName;
+      });
+      if (match) return match;
+    } catch {}
+  }
+  return null;
+};
+const ensureLeadPatient = async (lead) => {
+  if (!lead) return null;
+  const existingId = Number(lead?.patientId || 0);
+  if (existingId) {
+    const { firstName, lastName } = splitLeadName(lead);
+    const existing = {
+      id: existingId,
+      firstName,
+      lastName,
+      email: lead?.email || null,
+      mobile: lead?.telephone || null,
+    };
+    ensureBookingPatientOption(existing);
+    return existing;
+  }
+
+  const matched = await findExistingBookingPatient(lead);
+  if (matched?.id) {
+    ensureBookingPatientOption(matched);
+    return matched;
+  }
+
+  const { firstName, lastName } = splitLeadName(lead);
+  const created = await diaryStore.createPatient({
+    firstName,
+    lastName,
+    email: lead?.email || null,
+    mobile: lead?.telephone || null,
+    acquisitionSource: lead?.leadSource?.name || lead?.leadSource || 'CRM Lead',
+    occupation: lead?.occupation || null,
+  });
+  if (created?.code === 0 && created?.data?.id) {
+    ensureBookingPatientOption(created.data);
+    return created.data;
+  }
+  throw new Error(created?.message || 'Unable to create patient for this lead');
+};
+const onBookLeads = async (selection) => {
   const picked = Array.isArray(selection) ? selection : [];
   if (!picked.length) return;
   if (picked.length > 1) {
     mainStore?.setSnackbar?.({ title: 'Select only one lead to book an appointment', type: 'error' });
     return;
   }
-  bookingLead.value = picked[0];
-  bookingDateInput.value = normalizeDateInput(picked[0]?.followUpDate || new Date());
-  bookingTime.value = deriveTimeFromValue(picked[0]?.followUpDate) || nextSlotTime();
-  bookingInitialPractitioner.value = matchingDentistName(picked[0]);
-  showBookingDrawer.value = true;
+  if (!canBookAppointments.value) {
+    mainStore?.setSnackbar?.({ title: 'Upgrade to the Soar plan to book leads into the diary', type: 'warning' });
+    return;
+  }
+  const lead = picked[0];
+  bookingLead.value = lead;
+  bookingResolvedPatientId.value = null;
+  bookingDateInput.value = normalizeDateInput(lead?.followUpDate || new Date());
+  bookingTime.value = deriveTimeFromValue(lead?.followUpDate) || nextSlotTime();
+  await loadBookingDentists(bookingDateInput.value);
+  bookingInitialPractitioner.value = matchingDentistName(lead);
+  try {
+    const patient = await ensureLeadPatient(lead);
+    bookingResolvedPatientId.value = Number(patient?.id || 0) || null;
+    showBookingDrawer.value = true;
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || 'Unable to prepare patient booking', type: 'error' });
+  }
 };
 const onSaveBookedAppointment = async (appt) => {
   if (!bookingLead.value) return;
@@ -1196,6 +1300,7 @@ const onSaveBookedAppointment = async (appt) => {
       } catch (e) {}
       mainStore?.setSnackbar?.({ title: 'Appointment booked and lead converted', type: 'success' });
       bookingLead.value = null;
+      bookingResolvedPatientId.value = null;
       bookingInitialPractitioner.value = bookingPractitionerOptions.value[0] || '';
       fetchLeads(activeFilters.value);
     }

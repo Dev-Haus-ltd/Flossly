@@ -224,7 +224,7 @@
 </template>
 
 <script setup>
-import "emoji-picker-element";
+if (typeof window !== 'undefined') import("emoji-picker-element");
 import { useCrmStore } from "@/stores/crm";
 import { useMainStore } from "@/stores/index";
 
