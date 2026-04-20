@@ -1917,11 +1917,30 @@ export const bookFromTreatmentPlan = async (event) => {
       });
     }
 
-    for (const item of selectedItems) {
-      item.appointmentId = created.id;
-      if (String(item.status || "").toLowerCase() !== "completed")
-        item.status = "scheduled";
-      await item.save();
+    const selectedItemIds = selectedItems.map((item) => item.id).filter(Boolean);
+    if (selectedItemIds.length) {
+      await DiaryTreatmentPlanItem.update(
+        { appointmentId: created.id },
+        {
+          where: {
+            organisationId: Number(orgId),
+            patientId,
+            id: { [Op.in]: selectedItemIds },
+          },
+        },
+      );
+
+      await DiaryTreatmentPlanItem.update(
+        { status: "scheduled" },
+        {
+          where: {
+            organisationId: Number(orgId),
+            patientId,
+            id: { [Op.in]: selectedItemIds },
+            status: { [Op.notILike]: "completed" },
+          },
+        },
+      );
     }
 
     return success({
@@ -1935,7 +1954,7 @@ export const bookFromTreatmentPlan = async (event) => {
       date: toLocalYMD(created.startTime),
       time: toLocalHM(created.startTime),
       amount: Number(created.amount || 0),
-      linkedTreatmentItemIds: selectedItems.map((item) => item.id),
+      linkedTreatmentItemIds: selectedItemIds,
     });
   } catch (e) {
     const msg =
@@ -2065,6 +2084,21 @@ export const deleteAppointment = async (event) => {
       where: { id, organisationId: Number(orgId) },
     });
     if (!row) return error(404, "Appointment not found");
+
+    await DiaryTreatmentPlanItem.update(
+      {
+        appointmentId: null,
+        status: "planned",
+      },
+      {
+        where: {
+          organisationId: Number(orgId),
+          patientId: row.patientId,
+          appointmentId: row.id,
+          status: { [Op.notILike]: "completed" },
+        },
+      },
+    );
 
     await row.destroy();
     return success({ ok: true, id });

@@ -357,6 +357,7 @@ const searchTimer = ref(null);
 const showAppointmentDrawer = ref(false);
 const editAppointment = ref(null);
 const practitionerOptions = ref([]);
+const deletingAppointmentIds = ref(new Set());
 
 const statusOptions = [
   { label: "All statuses", value: "all" },
@@ -608,18 +609,34 @@ const openViewAppointment = (row) => {
 const deletePatientAppointment = async (row) => {
   const appointmentId = row?.diaryAppointmentId || row?.id;
   if (!appointmentId) return;
+  if (deletingAppointmentIds.value.has(String(appointmentId))) return;
 
   const confirmed = window.confirm("Delete this appointment?");
   if (!confirmed) return;
 
   try {
-    await store.deleteAppointment(appointmentId);
+    deletingAppointmentIds.value = new Set(deletingAppointmentIds.value).add(
+      String(appointmentId),
+    );
+    const res = await store.deleteAppointment(appointmentId);
+    if (res?.code !== 0) {
+      throw new Error(res?.message || "Failed to delete appointment");
+    }
+    appointmentRows.value = appointmentRows.value.filter(
+      (item) =>
+        String(item?.diaryAppointmentId || item?.id) !== String(appointmentId),
+    );
+    appointmentTotal.value = appointmentRows.value.length;
     mainStore?.setSnackbar?.({ title: "Appointment deleted", type: "success" });
     await fetchAppointments();
   } catch (error) {
     const msg =
       error?.data?.message || error?.message || "Failed to delete appointment";
     mainStore?.setSnackbar?.({ title: msg, type: "error" });
+  } finally {
+    const next = new Set(deletingAppointmentIds.value);
+    next.delete(String(appointmentId));
+    deletingAppointmentIds.value = next;
   }
 };
 
