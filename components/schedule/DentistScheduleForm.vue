@@ -250,7 +250,9 @@ function updateWeeklyErrors(newErrors) {
 }
 
 function updateWeekDays(newWeekDays) {
-  form.weekDays = newWeekDays;
+  // Deep clone to ensure reactivity and prevent mutation issues
+  form.weekDays = JSON.parse(JSON.stringify(newWeekDays));
+  console.log('📅 Form weekDays updated:', form.weekDays);
 }
 
 function validateField(field) {

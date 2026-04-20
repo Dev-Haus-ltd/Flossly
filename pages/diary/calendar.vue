@@ -1,3 +1,4 @@
+
 <template>
   <v-sheet color="background">
     <div class="cust-border d-flex align-center">
@@ -503,7 +504,7 @@ function getScheduleDayForDate(schedules = [], targetDate) {
 
 const DEFAULT_DAY_SLOT_HOURS = {
   startTime: "09:00",
-  endTime: "17:00",
+  endTime: "18:00",
 };
 
 function isValidWorkingHourRange(startTime, endTime) {

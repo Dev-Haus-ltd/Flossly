@@ -10,24 +10,34 @@
             {{ drafts.length }}
           </v-chip>
         </div>
-        <div class="header-actions">
-          <v-btn
-            icon="mdi-close"
-            size="small"
-            variant="text"
-            @click="onClose"
-            title="Close clipboard"
-          />
-          <v-btn
-            v-if="drafts.length"
-            icon="mdi-delete-outline"
-            size="small"
-            variant="text"
-            color="error"
-            @click="showClearAllConfirm = true"
-            title="Clear all drafts"
-          />
-        </div>
+        <div class="header-actions d-flex align-center">
+  <v-btn
+    v-if="drafts.length"
+    icon="mdi-delete-outline"
+    size="small"
+    variant="text"
+    color="error"
+    @click="showClearAllConfirm = true"
+    title="Clear all drafts"
+  />
+  <v-btn
+    icon
+    variant="outlined"
+    color="#8B8B8B"
+    @click="onClose"
+    class=""
+    style="
+      width: 20px;
+      height: 20px;
+      min-width: 20px;
+      border-radius: 50%;
+      padding: 0;
+    "
+    title="Close clipboard"
+  >
+    <v-icon size="14">mdi-close</v-icon>
+  </v-btn>
+</div>
       </div>
 
       <v-divider />

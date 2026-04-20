@@ -93,7 +93,7 @@
         <div class="day-name">{{ day.dayName.slice(0, 3) }}</div>
 
         <div v-if="day.isWorkingDay" class="day-time">
-{{ formatTo12Hour(day.startTime) }} - {{ formatTo12Hour(day.endTime) }}
+{{ formatTimeTo12Hour(day.startTime) }} - {{ formatTimeTo12Hour(day.endTime) }}
         </div>
 
         <div v-else class="off-text">Off</div>
@@ -108,7 +108,7 @@
 
           <!-- Break List -->
           <div v-for="(b, i) in day.breaks" :key="i" class="break-item">
-            {{ formatTo12Hour(b.startTime) }} - {{ formatTo12Hour(b.endTime) }}
+            {{ formatTimeTo12Hour(b.startTime) }} - {{ formatTimeTo12Hour(b.endTime) }}
           </div>
         </div>
       </div>
@@ -117,8 +117,10 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import editIcon from "@/assets/icons/edit.svg";
 import deleteIcon from "@/assets/icons/delete_1.svg";
+import { formatTimeTo12Hour } from "@/lib/timeFormatters"
 
 const props = defineProps({
   schedule: Object,
@@ -135,17 +137,6 @@ const formatDate = (d) => {
     month: "short",
     year: "numeric",
   });
-};
-
-const formatTo12Hour = (time) => {
-  if (!time) return "";
-
-  const [hours, minutes] = time.split(":").map(Number);
-
-  const period = hours >= 12 ? "PM" : "AM";
-  const formattedHours = hours % 12 || 12;
-
-  return `${formattedHours}:${minutes.toString().padStart(2, "0")} ${period}`;
 };
 </script>
 
