@@ -11,24 +11,7 @@
           <v-tab value="instagram">Instagram</v-tab>
         </v-tabs>
         <v-spacer />
-        <div class="d-flex align-center mr-4">
-          <v-tooltip location="bottom" text="Auto-reply with AI when enabled">
-            <template #activator="{ props: tooltipProps }">
-              <div v-bind="tooltipProps" class="d-flex align-center">
-                <v-icon size="14" :color="autoReplyEnabled ? 'success' : 'grey'" class="mr-1">{{ autoReplyEnabled ? 'mdi-robot' : 'mdi-robot-outline' }}</v-icon>
-                <span class="text-caption text-medium-emphasis mr-1">Auto-reply</span>
-                <v-switch
-                  v-model="autoReplyEnabled"
-                  color="success"
-                  density="compact"
-                  hide-details
-                  inset
-                  style="transform: scale(0.8);"
-                  @update:model-value="toggleAutoReply"
-                />
-              </div>
-            </template>
-          </v-tooltip>
+        <div class="d-flex align-center mr-2">
         </div>
       </div>
 
@@ -238,6 +221,26 @@
                   <v-icon start size="12">mdi-clock-remove-outline</v-icon>
                   Window closed
                 </v-chip>
+                <template v-if="showConversationAutoReplyToggle">
+                  <v-divider vertical class="mx-1" />
+                  <v-tooltip location="bottom" text="Auto-reply for this conversation">
+                    <template #activator="{ props: tooltipProps }">
+                      <div v-bind="tooltipProps" class="d-flex align-center">
+                        <v-icon size="12" :color="conversationAutoReplyEnabled ? 'success' : 'grey'" class="mr-1">{{ conversationAutoReplyEnabled ? 'mdi-robot' : 'mdi-robot-off-outline' }}</v-icon>
+                        <span class="text-caption text-medium-emphasis mr-1">Auto-reply</span>
+                        <v-switch
+                          v-model="conversationAutoReplyEnabled"
+                          color="success"
+                          density="compact"
+                          hide-details
+                          inset
+                          style="transform: scale(0.7);"
+                          @update:model-value="toggleConversationAutoReply"
+                        />
+                      </div>
+                    </template>
+                  </v-tooltip>
+                </template>
               </div>
             </div>
           </div>
@@ -268,6 +271,50 @@
         </v-card>
       </div>
     </div>
+
+    <v-dialog v-model="autoReplyConfigDialog" max-width="600" persistent>
+      <v-card>
+        <v-card-title class="d-flex align-center justify-space-between pa-4">
+          <span>Auto-Reply Configuration</span>
+          <v-btn icon variant="text" size="small" @click="autoReplyConfigDialog = false">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="pa-4">
+          <p class="text-caption text-medium-emphasis mb-4">
+            Provide context about your practice so the bot can respond intelligently to incoming leads. All fields are required to enable auto-reply.
+          </p>
+          <v-textarea
+            v-model="autoReplyConfig.services"
+            label="What services does your business provide?"
+            placeholder="e.g., We provide dental checkups, cleanings, teeth whitening, and orthodontics..."
+            rows="3"
+            class="mb-4"
+          />
+          <v-textarea
+            v-model="autoReplyConfig.cta"
+            label="What is the main CTA you want from the auto-reply?"
+            placeholder="e.g., We encourage new patients to book a consultation by calling us or filling out the form on our website..."
+            rows="3"
+            class="mb-4"
+          />
+          <v-textarea
+            v-model="autoReplyConfig.outOfScopeMessage"
+            label="Out-of-scope message"
+            hint="Shown when the lead asks something the bot can't handle"
+            persistent-hint
+            rows="2"
+          />
+        </v-card-text>
+        <v-divider />
+        <v-card-actions class="pa-4">
+          <v-spacer />
+          <v-btn variant="text" @click="autoReplyConfigDialog = false">Cancel</v-btn>
+          <v-btn color="primary" :loading="autoReplyConfigLoading" @click="saveAutoReplyConfig">Save Configuration</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-sheet>
 </template>
 
@@ -316,7 +363,12 @@ const messageCache = ref(new Map());
 const MESSAGE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const syncingHistory = ref(false);
 const autoReplyEnabled = ref(false);
+const whatsappAutoReplyEnabled = ref(false);
 const autoReplyLoading = ref(false);
+const autoReplyConfig = ref({ services: "", cta: "", outOfScopeMessage: "Thank you so much! Our team will contact you shortly." });
+const autoReplyConfigDialog = ref(false);
+const autoReplyConfigLoading = ref(false);
+const conversationAutoReplyEnabled = ref(true);
 let searchTimer = null;
 
 const crmStore = useCrmStore();
@@ -445,6 +497,30 @@ const windowTimeRemaining = computed(() => {
   return `${mLeft}m left`;
 });
 
+const showConversationAutoReplyToggle = computed(() => {
+  if (!autoReplyEnabled.value) return false;
+  if (!activeConversationId.value) return false;
+  const platform = activeConversation?.value?.platform;
+  return platform === 'messenger' || platform === 'instagram';
+});
+
+const toggleConversationAutoReply = async (newValue) => {
+  if (!activeConversationId.value) return;
+  try {
+    const res = await crmStore.updateConversationAutoReply(activeConversationId.value, { autoReplyEnabled: newValue });
+    if (res?.code === 0) {
+      const idx = conversations.value.findIndex(c => c.id === activeConversationId.value);
+      if (idx !== -1) {
+        conversations.value[idx].autoReplyEnabled = newValue;
+      }
+    } else {
+      conversationAutoReplyEnabled.value = !newValue;
+    }
+  } catch {
+    conversationAutoReplyEnabled.value = !newValue;
+  }
+};
+
 const canSend = computed(() => {
   return (
     !!activeConversationId.value &&
@@ -488,12 +564,28 @@ const loadAutoReplySettings = async () => {
     const res = await crmStore.getAutoReplySettings();
     if (res?.code === 0) {
       autoReplyEnabled.value = !!res.data?.autoReplyEnabled;
+      whatsappAutoReplyEnabled.value = !!res.data?.whatsappAutoReplyEnabled;
+      autoReplyConfig.value = res.data?.autoReplyConfig || { services: "", cta: "", outOfScopeMessage: "Thank you so much! Our team will contact you shortly." };
     }
   } catch {}
 };
 
+const hasValidAutoReplyConfig = computed(() => {
+  const cfg = autoReplyConfig.value;
+  if (!cfg) return false;
+  if (!cfg.services?.trim()) return false;
+  if (!cfg.cta?.trim()) return false;
+  return true;
+});
+
 const toggleAutoReply = async (newValue) => {
   if (autoReplyLoading.value) return;
+  if (newValue && !hasValidAutoReplyConfig.value) {
+    mainStore?.setSnackbar?.({ title: "Please configure Q&A before enabling auto-reply", type: "warning" });
+    autoReplyEnabled.value = false;
+    openConfigDialog();
+    return;
+  }
   autoReplyLoading.value = true;
   try {
     const res = await crmStore.updateAutoReplySettings({ autoReplyEnabled: newValue });
@@ -512,6 +604,32 @@ const toggleAutoReply = async (newValue) => {
     mainStore?.setSnackbar?.({ title: e?.message || "Failed to update auto-reply settings", type: "error" });
   } finally {
     autoReplyLoading.value = false;
+  }
+};
+
+const openConfigDialog = () => {
+  autoReplyConfigDialog.value = true;
+};
+
+const saveAutoReplyConfig = async () => {
+  autoReplyConfigLoading.value = true;
+  try {
+    const res = await crmStore.updateAutoReplySettings({
+      autoReplyEnabled: autoReplyEnabled.value,
+      whatsappAutoReplyEnabled: whatsappAutoReplyEnabled.value,
+      autoReplyConfig: autoReplyConfig.value,
+    });
+    if (res?.code === 0) {
+      autoReplyConfig.value = res.data?.autoReplyConfig || autoReplyConfig.value;
+      mainStore?.setSnackbar?.({ title: "Auto-reply config saved", type: "success" });
+      autoReplyConfigDialog.value = false;
+    } else {
+      mainStore?.setSnackbar?.({ title: res?.message || "Failed to save config", type: "error" });
+    }
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || "Failed to save config", type: "error" });
+  } finally {
+    autoReplyConfigLoading.value = false;
   }
 };
 
@@ -537,10 +655,11 @@ const selectConversation = (id, options = {}) => {
   if (!forceRefresh && activeConversationId.value === id) return;
   activeConversationId.value = id;
   draftMessage.value = "";
+  const conv = conversations.value.find((c) => c.id === id);
+  conversationAutoReplyEnabled.value = conv?.autoReplyEnabled !== false;
   loadMessages(true, { forceRefresh });
 
   // Silently refresh profile if name is a raw ID or avatar is missing
-  const conv = conversations.value.find((c) => c.id === id);
   const needsRefresh = conv && (!conv.avatarUrl || isRawId(conv.title) || conv.title === "Instagram User" || conv.title === "Messenger User");
   if (needsRefresh) {
     crmStore.refreshDmProfile({ conversationId: id }).then((res) => {
@@ -734,6 +853,7 @@ const buildConversationRow = (row) => {
     avatarText: initials || "U",
     platform: row?.platform,
     unreadCount: row?.unreadCount || 0,
+    autoReplyEnabled: row?.autoReplyEnabled !== false,
   };
 };
 

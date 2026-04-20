@@ -47,6 +47,15 @@ export const CrmDmConversation = sequelize.define(
       type: DataTypes.JSONB,
       allowNull: true,
     },
+    autoReplyEnabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
+    autoReplyDisabledUntil: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   },
   {
     modelName: "CrmDmConversations",

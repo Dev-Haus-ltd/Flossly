@@ -106,6 +106,13 @@ export const buildCrmWhatsAppTemplatePayload = (lead, tpl) => {
 };
 
 export const sendCrmAutomationEmail = async (lead, subject, html, automationName = null) => {
+  if (lead.autoReplyEnabled !== true) return;
+  if (lead.autoReplyDisabledUntil && new Date() < new Date(lead.autoReplyDisabledUntil)) return;
+  if (lead.autoReplyDisabledUntil && new Date() >= new Date(lead.autoReplyDisabledUntil)) {
+    lead.autoReplyEnabled = true;
+    lead.autoReplyDisabledUntil = null;
+    await lead.save();
+  }
   const wrapped = EMAIL_TEMPLATE.replaceAll("{subject}", subject).replace(
     "{content}",
     html
@@ -141,6 +148,13 @@ export const sendCrmAutomationEmail = async (lead, subject, html, automationName
 };
 
 export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload = null, automationName = null) => {
+  if (lead.autoReplyEnabled !== true) return;
+  if (lead.autoReplyDisabledUntil && new Date() < new Date(lead.autoReplyDisabledUntil)) return;
+  if (lead.autoReplyDisabledUntil && new Date() >= new Date(lead.autoReplyDisabledUntil)) {
+    lead.autoReplyEnabled = true;
+    lead.autoReplyDisabledUntil = null;
+    await lead.save();
+  }
   const to = normalizeWhatsAppNumber(lead?.telephone);
   if (!to) throw new Error("Missing or invalid phone number");
   const whapiConfig = await resolveWhapiConfig(lead.organisationId);

@@ -293,6 +293,17 @@ export const listDmConversations = async (event) => {
       }
     }
 
+    const now = new Date();
+    await CrmDmConversation.update(
+      { autoReplyEnabled: true, autoReplyDisabledUntil: null },
+      {
+        where: {
+          organisationId: orgId,
+          autoReplyDisabledUntil: { [Op.lt]: now },
+        },
+      }
+    );
+
     const rows = await CrmDmConversation.findAndCountAll({
       where,
       order: [["lastMessageAt", "DESC"], ["updatedAt", "DESC"]],
@@ -408,6 +419,8 @@ export const sendDmMessage = async (event) => {
       ...(conversation.metadata || {}),
       lastMessagePreview: outboundPreview.slice(0, 120),
     };
+    conversation.autoReplyEnabled = false;
+    conversation.autoReplyDisabledUntil = new Date(Date.now() + 12 * 60 * 60 * 1000);
     await conversation.save();
 
     // Attempt immediate delivery (falls back to queued if send fails).

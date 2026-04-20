@@ -23,6 +23,68 @@
           :icon-class="card.iconClass"
           :class="{ 'integration-card-disabled': card.key === 'whatsapp' && !canManageWhapi }"
         >
+          <template #toggle>
+            <template v-if="card.key === 'meta'">
+              <div class="d-flex align-center mt-1">
+                <v-icon size="14" :color="autoReplyEnabled ? 'success' : 'grey'" class="mr-1">{{ autoReplyEnabled ? 'mdi-robot' : 'mdi-robot-outline' }}</v-icon>
+                <span class="text-caption text-medium-emphasis mr-1">Auto-reply</span>
+                <v-switch
+                  v-model="autoReplyEnabled"
+                  color="success"
+                  density="compact"
+                  hide-details
+                  inset
+                  style="transform: scale(0.8);"
+                  :disabled="!isMetaConnected"
+                  @update:model-value="toggleAutoReply('meta')"
+                />
+                <v-tooltip location="bottom" text="Configure auto-reply">
+                  <template #activator="{ props: tooltipProps }">
+                    <v-btn
+                      v-bind="tooltipProps"
+                      icon
+                      variant="text"
+                      size="x-small"
+                      :disabled="!autoReplyEnabled"
+                      @click="openConfigDialog"
+                    >
+                      <v-icon size="14" :color="autoReplyEnabled ? 'primary' : 'grey'">mdi-cog</v-icon>
+                    </v-btn>
+                  </template>
+                </v-tooltip>
+              </div>
+            </template>
+            <template v-else-if="card.key === 'whatsapp' && !whapiStatusLoading && isWhatsAppConnected">
+              <div class="d-flex align-center mt-1">
+                <v-icon size="14" :color="whatsappAutoReplyEnabled ? 'success' : 'grey'" class="mr-1">{{ whatsappAutoReplyEnabled ? 'mdi-robot' : 'mdi-robot-outline' }}</v-icon>
+                <span class="text-caption text-medium-emphasis mr-1">Auto-reply</span>
+                <v-switch
+                  v-model="whatsappAutoReplyEnabled"
+                  color="success"
+                  density="compact"
+                  hide-details
+                  inset
+                  style="transform: scale(0.8);"
+                  :disabled="!isWhatsAppConnected"
+                  @update:model-value="toggleAutoReply('whatsapp')"
+                />
+                <v-tooltip location="bottom" text="Configure auto-reply">
+                  <template #activator="{ props: tooltipProps }">
+                    <v-btn
+                      v-bind="tooltipProps"
+                      icon
+                      variant="text"
+                      size="x-small"
+                      :disabled="!whatsappAutoReplyEnabled"
+                      @click="openConfigDialog"
+                    >
+                      <v-icon size="14" :color="whatsappAutoReplyEnabled ? 'primary' : 'grey'">mdi-cog</v-icon>
+                    </v-btn>
+                  </template>
+                </v-tooltip>
+              </div>
+            </template>
+          </template>
           <template #actions>
             <template v-if="card.key === 'meta'">
               <v-btn
@@ -480,6 +542,50 @@
       @confirm="doDisconnectMeta"
       @cancel="confirmDisconnectMeta = false"
     />
+
+    <v-dialog v-model="autoReplyConfigDialog" max-width="600" persistent>
+      <v-card>
+        <v-card-title class="d-flex align-center justify-space-between pa-4">
+          <span>Auto-Reply Configuration</span>
+          <v-btn icon variant="text" size="small" @click="autoReplyConfigDialog = false">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="pa-4">
+          <p class="text-caption text-medium-emphasis mb-4">
+            Provide context about your practice so the bot can respond intelligently to incoming leads. All fields are required to enable auto-reply.
+          </p>
+          <v-textarea
+            v-model="autoReplyConfig.services"
+            label="What services does your business provide?"
+            placeholder="e.g., We provide dental checkups, cleanings, teeth whitening, and orthodontics..."
+            rows="3"
+            class="mb-4"
+          />
+          <v-textarea
+            v-model="autoReplyConfig.cta"
+            label="What is the main CTA you want from the auto-reply?"
+            placeholder="e.g., We encourage new patients to book a consultation by calling us or filling out the form on our website..."
+            rows="3"
+            class="mb-4"
+          />
+          <v-textarea
+            v-model="autoReplyConfig.outOfScopeMessage"
+            label="Out-of-scope message"
+            hint="Shown when the lead asks something the bot can't handle"
+            persistent-hint
+            rows="2"
+          />
+        </v-card-text>
+        <v-divider />
+        <v-card-actions class="pa-4">
+          <v-spacer />
+          <v-btn variant="text" @click="autoReplyConfigDialog = false">Cancel</v-btn>
+          <v-btn color="primary" :loading="autoReplyConfigLoading" @click="saveAutoReplyConfig">Save Configuration</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-sheet>
 </template>
 
@@ -529,6 +635,12 @@ const whapiStatus = reactive({
   status: '',
 })
 const whapiStatusLoading = ref(true)
+const autoReplyEnabled = ref(false)
+const whatsappAutoReplyEnabled = ref(false)
+const autoReplyLoading = ref(false)
+const autoReplyConfig = ref({ services: "", cta: "", outOfScopeMessage: "Thank you so much! Our team will contact you shortly." })
+const autoReplyConfigDialog = ref(false)
+const autoReplyConfigLoading = ref(false)
 
 const leadRows = ref([])
 const leadsChartType = ref('line')
@@ -1486,11 +1598,105 @@ const loadGscAnalytics = async () => {
   }
 }
 
+const hasValidAutoReplyConfig = computed(() => {
+  const cfg = autoReplyConfig.value
+  if (!cfg) return false
+  if (!cfg.services?.trim()) return false
+  if (!cfg.cta?.trim()) return false
+  return true
+})
+
+const loadAutoReplySettings = async () => {
+  try {
+    const res = await crmStore.getAutoReplySettings()
+    if (res?.code === 0) {
+      autoReplyEnabled.value = !!res.data?.autoReplyEnabled
+      whatsappAutoReplyEnabled.value = !!res.data?.whatsappAutoReplyEnabled
+      autoReplyConfig.value = res.data?.autoReplyConfig || { services: "", cta: "", outOfScopeMessage: "Thank you so much! Our team will contact you shortly." }
+    }
+  } catch {}
+}
+
+const toggleAutoReply = async (platform) => {
+  if (autoReplyLoading.value) return
+  const targetValue = platform === 'whatsapp' ? whatsappAutoReplyEnabled.value : autoReplyEnabled.value
+  if (targetValue && !hasValidAutoReplyConfig.value) {
+    mainStore?.setSnackbar?.({ title: "Please configure Q&A before enabling auto-reply", type: "warning" })
+    if (platform === 'whatsapp') {
+      whatsappAutoReplyEnabled.value = false
+    } else {
+      autoReplyEnabled.value = false
+    }
+    openConfigDialog()
+    return
+  }
+  autoReplyLoading.value = true
+  try {
+    const payload = platform === 'whatsapp'
+      ? { whatsappAutoReplyEnabled: targetValue, autoReplyConfig: autoReplyConfig.value }
+      : { autoReplyEnabled: targetValue, autoReplyConfig: autoReplyConfig.value }
+    const res = await crmStore.updateAutoReplySettings(payload)
+    if (res?.code === 0) {
+      if (platform === 'whatsapp') {
+        whatsappAutoReplyEnabled.value = !!res.data?.whatsappAutoReplyEnabled
+      } else {
+        autoReplyEnabled.value = !!res.data?.autoReplyEnabled
+      }
+      mainStore?.setSnackbar?.({ 
+        title: targetValue ? `${platform === 'whatsapp' ? 'WhatsApp' : 'Meta'} auto-reply enabled` : `${platform === 'whatsapp' ? 'WhatsApp' : 'Meta'} auto-reply disabled`, 
+        type: "success" 
+      })
+    } else {
+      if (platform === 'whatsapp') {
+        whatsappAutoReplyEnabled.value = !targetValue
+      } else {
+        autoReplyEnabled.value = !targetValue
+      }
+      mainStore?.setSnackbar?.({ title: res?.message || "Failed to update auto-reply settings", type: "error" })
+    }
+  } catch (e) {
+    if (platform === 'whatsapp') {
+      whatsappAutoReplyEnabled.value = !targetValue
+    } else {
+      autoReplyEnabled.value = !targetValue
+    }
+    mainStore?.setSnackbar?.({ title: e?.message || "Failed to update auto-reply settings", type: "error" })
+  } finally {
+    autoReplyLoading.value = false
+  }
+}
+
+const openConfigDialog = () => {
+  autoReplyConfigDialog.value = true
+}
+
+const saveAutoReplyConfig = async () => {
+  autoReplyConfigLoading.value = true
+  try {
+    const res = await crmStore.updateAutoReplySettings({
+      autoReplyEnabled: autoReplyEnabled.value,
+      whatsappAutoReplyEnabled: whatsappAutoReplyEnabled.value,
+      autoReplyConfig: autoReplyConfig.value,
+    })
+    if (res?.code === 0) {
+      autoReplyConfig.value = res.data?.autoReplyConfig || autoReplyConfig.value
+      mainStore?.setSnackbar?.({ title: "Auto-reply config saved", type: "success" })
+      autoReplyConfigDialog.value = false
+    } else {
+      mainStore?.setSnackbar?.({ title: res?.message || "Failed to save config", type: "error" })
+    }
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || "Failed to save config", type: "error" })
+  } finally {
+    autoReplyConfigLoading.value = false
+  }
+}
+
 onMounted(async () => {
   loadUser()
   handleMetaQuery()
   startWhapiStatusStream()
-  await Promise.all([checkMetaConnection(), loadWhapiStatus(), loadLeads()])
+  await Promise.all([checkMetaConnection(), loadWhapiStatus(), loadLeads(), loadAutoReplySettings()])
   loadWhapiChannels(false)
 })
 

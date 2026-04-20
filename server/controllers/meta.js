@@ -112,10 +112,19 @@ const sendAutoReply = async ({ orgId, conversation, messageText, accessToken, se
   try {
     const org = await Organisation.findOne({
       where: { id: orgId },
-      attributes: ['name', 'type', 'autoReplyEnabled'],
+      attributes: ['name', 'type', 'autoReplyEnabled', 'autoReplyConfig'],
     });
 
     if (!org || !org.autoReplyEnabled) return;
+    if (conversation.autoReplyEnabled !== true) return;
+    if (conversation.autoReplyDisabledUntil && new Date() < conversation.autoReplyDisabledUntil) return;
+    if (conversation.autoReplyDisabledUntil && new Date() >= conversation.autoReplyDisabledUntil) {
+      conversation.autoReplyEnabled = true;
+      conversation.autoReplyDisabledUntil = null;
+      await conversation.save();
+    }
+
+    const config = org.autoReplyConfig || {};
 
     const treatments = await OrganisationTreatment.findAll({
       where: { organisationId: orgId, active: true },
@@ -144,8 +153,8 @@ const sendAutoReply = async ({ orgId, conversation, messageText, accessToken, se
       organisationName: org.name,
       organisationType: org.type,
       message: messageText,
-      treatments,
       history: conversationHistory,
+      autoReplyConfig: config,
     });
 
     if (!replyText) return;

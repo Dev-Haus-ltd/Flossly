@@ -1,41 +1,33 @@
 import { readBody } from "h3";
 import { success, error } from "../../utils/response";
-import { Organisation, OrganisationTreatment } from "../../models";
+import { Organisation } from "../../models";
 import { generateAutoReply } from "../../utils/aiWrapper";
 
 export default defineEventHandler(async (event) => {
   try {
-    const { userId, orgId } = event.context.user || {};
-    if (!orgId) return error(401, "Unauthenticated");
-
     const body = await readBody(event);
-    const { message, history = [] } = body || {};
+    const { orgId, message, history = [] } = body || {};
 
-    if (!message) {
-      return error(400, "Message is required");
-    }
+    if (!orgId) return error(400, "Organisation ID is required");
+    if (!message) return error(400, "Message is required");
 
     const org = await Organisation.findOne({
       where: { id: orgId },
-      attributes: ['name', 'type', 'autoReplyEnabled'],
+      attributes: ['name', 'type', 'autoReplyEnabled', 'autoReplyConfig'],
     });
 
     if (!org) {
       return error(404, "Organisation not found");
     }
 
-    const treatments = await OrganisationTreatment.findAll({
-      where: { organisationId: orgId, active: true },
-      attributes: ['name', 'category'],
-      limit: 20,
-    });
+    const config = org.autoReplyConfig || {};
 
     const result = await generateAutoReply({
       organisationName: org.name,
       organisationType: org.type,
       message,
-      treatments,
       history,
+      autoReplyConfig: config,
     });
 
     return success({

@@ -967,10 +967,10 @@ const sendWhatsAppAutoReply = async ({ orgId, lead, content, token, channelId })
   try {
     const org = await Organisation.findOne({
       where: { id: orgId },
-      attributes: ['name', 'type', 'autoReplyEnabled'],
+      attributes: ['name', 'type', 'whatsappAutoReplyEnabled'],
     });
 
-    if (!org || !org.autoReplyEnabled) return;
+    if (!org || !org.whatsappAutoReplyEnabled) return;
 
     const treatments = await OrganisationTreatment.findAll({
       where: { organisationId: orgId, active: true },
@@ -999,7 +999,6 @@ const sendWhatsAppAutoReply = async ({ orgId, lead, content, token, channelId })
       organisationName: org.name,
       organisationType: org.type,
       message: content,
-      treatments,
       history: conversationHistory,
     });
 
