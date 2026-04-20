@@ -615,6 +615,12 @@ export const createLead = async (event) => {
     } catch (notifyErr) {
       console.error('[CRM] Lead creation notification failed:', notifyErr?.message, notifyErr?.stack);
     }
+
+    try {
+      await sendImmediateCrmAutomationsForLead(created)
+    } catch (automationErr) {
+      console.error('[CRM] Immediate automation dispatch failed:', automationErr?.message || automationErr)
+    }
     
     return success(created)
   } catch (e) {
@@ -1783,6 +1789,16 @@ export const saveAutomation = async (event) => {
           })
       }
     }
+    if (payload?.leadId && payload?.enabled) {
+      try {
+        const lead = await CrmLead.findOne({
+          where: { organisationId: Number(orgId), id: Number(payload.leadId) },
+        })
+        if (lead) await sendImmediateCrmAutomationsForLead(lead, { includeSendNow: true, forceImmediate: true })
+      } catch (automationErr) {
+        console.error('[CRM] Lead automation activation dispatch failed:', automationErr?.message || automationErr)
+      }
+    }
     return success(out)
   } catch (e) {
     return error(500, e.message)
@@ -1810,6 +1826,24 @@ export const saveAutomationBatch = async (event) => {
         }
       }
       await transaction.commit()
+      const leadIdsToDispatch = [
+        ...new Set(
+          items
+            .filter((item) => item?.leadId && item?.enabled)
+            .map((item) => Number(item.leadId))
+            .filter(Boolean)
+        ),
+      ]
+      for (const leadId of leadIdsToDispatch) {
+        try {
+          const lead = await CrmLead.findOne({
+            where: { organisationId: Number(orgId), id: leadId },
+          })
+          if (lead) await sendImmediateCrmAutomationsForLead(lead, { includeSendNow: true, forceImmediate: true })
+        } catch (automationErr) {
+          console.error('[CRM] Batch lead automation activation dispatch failed:', automationErr?.message || automationErr)
+        }
+      }
       const sendNowJobs = []
       for (const tpl of sendNowItems) {
         const out =

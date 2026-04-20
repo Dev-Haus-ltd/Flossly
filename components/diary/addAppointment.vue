@@ -62,7 +62,7 @@
                 density="compact"
                 variant="outlined"
                 class="mt-1"
-                :placeholder="'Search patient…'"
+                :placeholder="'Search patient...'"
                 :error="!!errors.patient"
                 :error-messages="errors.patient ? [errors.patient] : []"
                 hide-details="auto"
@@ -196,7 +196,6 @@
                 :filter="customFilter"
                 @keydown.enter="handleAddTreatment"
               >
-                <!-- No data state -->
                 <template #no-data>
                   <v-list-item @click="handleAddTreatment">
                     <v-list-item-title class="text-primary text-center">
@@ -296,9 +295,9 @@ const emit = defineEmits([
   "add-patient",
   "save-to-clipboard",
   "treatment-added",
+  "date-change",
 ]);
 
-// ── State ─────────────────────────────────────────────────────────────────────
 const selectedPatientId = ref(null);
 const date = ref("");
 const time = ref("");
@@ -350,7 +349,6 @@ const durations = [10, 15, 20, 30, 45, 60, 90, 120];
 
 const isEditing = computed(() => !!props.editAppointment?.id);
 
-// ── Time options based on duration ───────────────────────────────────────────
 const WORK_START = 9;
 const WORK_END = 17;
 const SLOT_MIN = 15;
@@ -397,20 +395,18 @@ const hasPatient = computed(() =>
   ),
 );
 
-// ── Header summary ────────────────────────────────────────────────────────────
 const headerText = computed(() => {
   const parts = [];
   if (date.value) parts.push(formatDateDDMMYYYY(date.value));
   if (time.value) parts.push(formatTime12Hour(time.value) || time.value);
   if (duration.value) parts.push(`${duration.value} min`);
   if (practitionerLabel.value) parts.push(practitionerLabel.value);
-  return parts.join(" · ") || "Fill in the details below";
+  return parts.join(" | ") || "Fill in the details below";
 });
 
 const customFilter = (item, queryText, itemText) => {
   const text = itemText.toLowerCase();
   const query = queryText.toLowerCase();
-
   return text.includes(query);
 };
 
@@ -445,14 +441,13 @@ const applyIncomingAppointmentState = () => {
     time.value = timeOptions.value[0] || "";
   }
 };
+
 const handleAddTreatment = async () => {
   if (!exam.value) return;
 
   const exists = treatmentOptions.value.find(
-    (t) => t.name.toLowerCase() === exam.value.toLowerCase()
+    (t) => t.name.toLowerCase() === exam.value.toLowerCase(),
   );
-
-  // Agar already exist karta hai → kuch na karo
   if (exists) {
     exam.value = exists.name;
     return;
@@ -466,7 +461,6 @@ const handleAddTreatment = async () => {
     };
 
     const res = await organisationStore.addTreatment(payload);
-
     if (res?.code === 0) {
       const newItem = {
         id: res.data.id,
@@ -476,22 +470,22 @@ const handleAddTreatment = async () => {
       };
 
       treatmentOptions.value.push(newItem);
-
       exam.value = newItem.name;
       duration.value = newItem.defaultDuration;
-
       emit("treatment-added", newItem);
     }
   } catch (err) {
     console.error(err);
   }
 };
+
 const openAddTreatmentDialog = () => {
   newTreatmentName.value = exam.value || "";
   newTreatmentPrice.value = "";
   newTreatmentDuration.value = "";
   addTreatmentDialog.value = true;
 };
+
 const statusColor = computed(() => {
   const map = {
     Pending: { bg: "#fceaf6", chip: "#d948a8" },
@@ -502,8 +496,9 @@ const statusColor = computed(() => {
     Cancelled: { bg: "#ffeaea", chip: "#ff5353" },
     "Did not attend": { bg: "#fff2e0", chip: "#ffa12e" },
   };
-  return map[status.value] || "#6366f1";
+  return map[status.value] || { bg: "#ede8ff", chip: "#6366f1" };
 });
+
 const closeAddTreatmentDialog = () => {
   addTreatmentDialog.value = false;
   newTreatmentName.value = "";
@@ -513,15 +508,10 @@ const closeAddTreatmentDialog = () => {
 };
 
 const saveNewTreatment = async () => {
-  if (!newTreatmentName.value.trim()) {
-    // Show error
-    return;
-  }
+  if (!newTreatmentName.value.trim()) return;
 
   isAddingTreatment.value = true;
-
   try {
-    // Prepare treatment data
     const treatmentData = {
       name: newTreatmentName.value.trim(),
       price: newTreatmentPrice.value ? parseFloat(newTreatmentPrice.value) : 0,
@@ -530,11 +520,8 @@ const saveNewTreatment = async () => {
         : duration.value,
     };
 
-    // Call API to add treatment
     const response = await organisationStore.addTreatment(treatmentData);
-
     if (response?.code === 0) {
-      // Add to local options
       const newTreatment = {
         id: response.data.id,
         name: treatmentData.name,
@@ -542,23 +529,16 @@ const saveNewTreatment = async () => {
         amount: treatmentData.price,
       };
       treatmentOptions.value.push(newTreatment);
-
-      // Set as selected exam
       exam.value = treatmentData.name;
 
-      // Update duration if default duration is set
       if (treatmentData.defaultDuration) {
         duration.value = treatmentData.defaultDuration;
       }
 
-      // Emit event to parent
       emit("treatment-added", newTreatment);
-
-      // Close dialog
       closeAddTreatmentDialog();
     } else {
       console.error("Failed to add treatment:", response);
-      // You might want to show an error message here
     }
   } catch (error) {
     console.error("Error adding treatment:", error);
@@ -567,10 +547,13 @@ const saveNewTreatment = async () => {
   }
 };
 
-// ── Watchers ──────────────────────────────────────────────────────────────────
 watch(duration, () => {
-  if (timeOptions.value.length && (!time.value || !timeOptions.value.includes(time.value)))
+  if (
+    timeOptions.value.length &&
+    (!time.value || !timeOptions.value.includes(time.value))
+  ) {
     time.value = timeOptions.value[0] || "";
+  }
 });
 watch(hasPatient, (v) => {
   if (v) errors.patient = "";
@@ -593,6 +576,10 @@ watch(duration, (v) => {
 watch(practitioner, (v) => {
   if (v) errors.practitioner = "";
 });
+watch(date, (val) => {
+  if (!val) return;
+  emit("date-change", clinicDateToYMD(val));
+});
 watch(
   [date, practitioner, duration, () => props.modelValue],
   async ([nextDate, nextPractitioner, _nextDuration, open]) => {
@@ -601,7 +588,11 @@ watch(
     if (!orgId || !nextDate || !nextPractitioner) return;
     try {
       await loadDentistSchedules(orgId, Number(nextPractitioner));
-      if (timeOptions.value.length && time.value && !timeOptions.value.includes(time.value)) {
+      if (
+        timeOptions.value.length &&
+        time.value &&
+        !timeOptions.value.includes(time.value)
+      ) {
         time.value = timeOptions.value[0] || "";
       }
     } catch (error) {
@@ -618,17 +609,16 @@ watch(
       return;
     }
 
-    // Load treatments if not yet loaded
     if (!treatmentOptions.value.length) {
       const res = await organisationStore.listTreatments();
-      console.log("Loaded treatments:", res);
-      if (res?.code === 0)
+      if (res?.code === 0) {
         treatmentOptions.value = (res.data || []).map((r) => ({
           id: r.id,
           name: r.name,
           defaultDuration: r.defaultDuration || 15,
           amount: r.price ?? r.amount ?? 0,
         }));
+      }
     }
 
     applyIncomingAppointmentState();
@@ -650,7 +640,6 @@ watch(
   },
 );
 
-// ── Validation ────────────────────────────────────────────────────────────────
 const validate = () => {
   let ok = true;
   if (!hasPatient.value) {
@@ -665,6 +654,10 @@ const validate = () => {
     errors.time = "Time is required";
     ok = false;
   } else errors.time = "";
+  if (!exam.value) {
+    errors.exam = "Exam is required";
+    ok = false;
+  } else errors.exam = "";
   if (!status.value) {
     errors.status = "Status is required";
     ok = false;
@@ -680,7 +673,6 @@ const validate = () => {
   return ok;
 };
 
-// ── Save (Schedule directly) ──────────────────────────────────────────────────
 const onSave = async () => {
   if (!validate()) return;
 
@@ -695,7 +687,9 @@ const onSave = async () => {
       const availability = getTimeRangeAvailability(
         bookingDate,
         time.value,
-        `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`,
+        `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(
+          endMinutes % 60,
+        ).padStart(2, "0")}`,
         {
           name: practitionerLabel.value || "This practitioner",
         },
@@ -737,7 +731,6 @@ const onSave = async () => {
   emit("update:modelValue", false);
 };
 
-// ── Save to Clipboard as Draft ─────────────────────────────────────────────────
 const onSaveToClipboard = () => {
   if (!validate()) return;
 

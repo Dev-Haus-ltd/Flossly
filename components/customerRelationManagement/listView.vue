@@ -363,6 +363,7 @@
         v-for="(action, i) in actions"
         :key="i"
         class="action-item d-flex flex-column align-center"
+        :class="{ 'action-item--locked': isActionLocked(action.key) }"
         @click="onActionClick(action.key)"
       >
         <img :src="action.icon" :alt="action.label" class="action-icon" />
@@ -788,6 +789,24 @@
       @confirm="doDeleteArchived"
       @cancel="confirmArchivedDelete = false"
     />
+    <v-dialog v-model="showBookPlanDialog" max-width="500">
+      <v-card class="pa-4">
+        <v-card-title class="text-subtitle-1 pa-0 mb-2">
+          Soar Plan Required
+        </v-card-title>
+        <v-card-text class="pa-0">
+          This action is available on the Soar plan. Your current plan is
+          <strong>{{ currentOrgLicenseLabel }}</strong>.
+          Upgrade to Soar to unlock diary booking, patient auto-creation, lead form sending, and more.
+        </v-card-text>
+        <v-card-actions class="pa-0 mt-4">
+          <v-spacer />
+          <v-btn color="primary" variant="flat" @click="showBookPlanDialog = false">
+            OK
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
     <TeamFlossSideBarAddNewstaff
       v-model="addStaffDrawer"
       :rolesList="rolesList"
@@ -805,6 +824,7 @@ import { formatDateDDMMYYYY, formatDateTime } from "@/lib/dateFormatter";
 import { formatAssignedUsers, formatTreatmentValue } from "@/lib/misc";
 import { getLeadDisplayName, getLeadEmail, getLeadPhone } from "@/lib/normalizers/lead";
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults'
+const defaultAutomationMap = new Map(crmAutomationDefaults.map((d) => [d.key, d]))
 import DataTableColumnsAutomationGroups from '@/components/dataTableColumns/automationGroups.vue'
 import callIcon from '@/assets/crm/call.svg'
 import sendMailIcon from '@/assets/crm/sendMail.svg'
@@ -1056,6 +1076,7 @@ const automationSaving = reactive({});
 const automationGroupRows = ref([]);
 const automationGroupsLoading = ref(false);
 const automationGroupsDirty = ref(false);
+const showBookPlanDialog = ref(false);
 
 const resolveLeadName = (lead) => getLeadDisplayName(lead);
 const resolveLeadEmail = (lead) => getLeadEmail(lead);
@@ -1093,6 +1114,19 @@ const resolvePracticeName = () => {
   const org = resolveOrgDetails()
   return org?.name || '[Practice Name]'
 }
+
+const currentOrgLicense = computed(() => {
+  const orgId = Number(user.value?.currentLoggedInOrgId || 0);
+  const prefs = Array.isArray(user.value?.preferences) ? user.value.preferences : [];
+  const match = prefs.find((row) => Number(row?.organisationId || 0) === orgId);
+  return String(match?.licenseType || 'Trial').trim();
+});
+
+const currentOrgLicenseLabel = computed(() => currentOrgLicense.value || 'Trial');
+const canBookAppointments = computed(() => {
+  const type = String(currentOrgLicense.value || '').toLowerCase();
+  return ['soar', 'system'].includes(type);
+});
 
 const renderTemplateWithContext = (input, ctx, lead) => {
   const withMustache = String(input || '')
@@ -1179,6 +1213,21 @@ onBeforeUnmount(() => {
   if (typeof window === 'undefined') return;
   window.removeEventListener('crm-automation-groups-updated', markAutomationGroupsDirty);
 });
+
+const prefetchVisibleLeadAutomations = async () => {
+  const ids = [...new Set(allVisibleLeads.value.map((lead) => Number(lead?.id || 0)).filter(Boolean))];
+  if (!ids.length) return;
+  await loadAutomationGroups();
+  await Promise.all(ids.map((leadId) => loadLeadAutomations(leadId)));
+};
+
+watch(
+  () => allVisibleLeads.value.map((lead) => Number(lead?.id || 0)).filter(Boolean).join(','),
+  () => {
+    prefetchVisibleLeadAutomations();
+  },
+  { immediate: true }
+);
 
 const getLeadGroupRows = (lead, group) => {
   const rows = automationRowsCache[lead?.id] || [];
@@ -1270,49 +1319,60 @@ const toggleLeadGroup = async (lead, group, enabled) => {
   if (!leadId || !group) return;
   await loadLeadAutomations(leadId);
 
-  const rows = automationRowsCache[leadId] || [];
+  const currentRows = automationRowsCache[leadId] || [];
   const keys = group?.templateKeys || [];
   let groupRows = [];
 
   if (keys.length) {
-    const rowMap = new Map(rows.map((row) => [row?.key, row]));
+    const rowMap = new Map(currentRows.map((row) => [row?.key, row]));
+    const extraRows = [];
     groupRows = keys
       .map((key) => {
         if (rowMap.has(key)) return rowMap.get(key);
         const def = defaultAutomationMap.get(key);
         if (!def) return null;
         const nextRow = { ...def };
-        rows.push(nextRow);
+        extraRows.push(nextRow);
         rowMap.set(key, nextRow);
         return nextRow;
       })
       .filter(Boolean);
+    if (extraRows.length) {
+      automationRowsCache[leadId] = [...currentRows, ...extraRows];
+    }
   } else {
-    groupRows = rows.filter((row) => row?.groupKey === group.key);
+    groupRows = currentRows.filter((row) => row?.groupKey === group.key);
   }
 
   if (!groupRows.length) return;
 
+  const changeMap = new Map();
   const updates = [];
-  const previous = new Map();
   groupRows.forEach((row) => {
-    previous.set(row.key, !!row.enabled);
     const nextEnabled = !!enabled;
-    if (!!row.enabled !== nextEnabled) {
-      row.enabled = nextEnabled;
-      updates.push(buildAutomationPayload(row, leadId, group.key));
+    if (!!row?.enabled !== nextEnabled) {
+      changeMap.set(row.key, nextEnabled);
+      updates.push(buildAutomationPayload({ ...row, enabled: nextEnabled }, leadId, group.key));
     }
   });
 
   if (!updates.length) return;
 
+  // Optimistic update: replace the cache array so Vue reactivity propagates immediately
+  automationRowsCache[leadId] = (automationRowsCache[leadId] || []).map((row) =>
+    changeMap.has(row?.key) ? { ...row, enabled: changeMap.get(row.key) } : row
+  );
+
   automationSaving[leadId] = true;
   try {
     await crmStore.saveAutomationBatch({ items: updates });
+    delete automationRowsCache[leadId];
+    await loadLeadAutomations(leadId);
   } catch (e) {
-    groupRows.forEach((row) => {
-      if (previous.has(row.key)) row.enabled = previous.get(row.key);
-    });
+    // Roll back optimistic update
+    automationRowsCache[leadId] = (automationRowsCache[leadId] || []).map((row) =>
+      changeMap.has(row?.key) ? { ...row, enabled: !changeMap.get(row.key) } : row
+    );
     if (mainStore?.setSnackbar) {
       mainStore.setSnackbar({
         title: 'Failed to update automation group',
@@ -1398,9 +1458,15 @@ const saveEdit = async (item, field) => {
   }
 };
 
+const isActionLocked = (key) => ['book', 'sendForm'].includes(key) && !canBookAppointments.value;
+
 const onActionClick = (key) => {
   if (!selectedLeads.value.length) return;
   if (key === 'book') {
+    if (!canBookAppointments.value) {
+      showBookPlanDialog.value = true;
+      return;
+    }
     emit('book', [...selectedLeads.value])
   }
   else if (key === 'delete') confirmDelete.value = true;
@@ -1409,7 +1475,11 @@ const onActionClick = (key) => {
   else if (key === 'export') exportSelectedLeads();
   else if (key === 'whatsapp') openWhatsAppCompose();
   else if (key === 'sendPrice') openSendPriceCompose();
-  else if (['mail','sendForm','shareLocation'].includes(key)) openCompose(key)
+  else if (key === 'sendForm') {
+    if (!canBookAppointments.value) { showBookPlanDialog.value = true; return; }
+    openCompose(key)
+  }
+  else if (['mail','shareLocation'].includes(key)) openCompose(key)
 };
 
 const formatDate = (d) => {
@@ -1608,6 +1678,10 @@ const openLeadDialog = (lead) => {
 const handleLeadDialogClose = () => {
   showLeadDetailDialog.value = false;
   dialogInitialTab.value = null;
+
+  // Invalidate cache so the automations column re-fetches the updated state
+  const leadId = selectedLead.value?.id;
+  if (leadId) delete automationRowsCache[leadId];
 
   if (route.query.leadId || route.query.orgId) {
     const newQuery = { ...route.query };
@@ -2247,6 +2321,24 @@ const convertSelected = async () => {
 .action-item:hover {
   background-color: rgba(0, 0, 0, 0.04);
   transform: translateY(-1px);
+}
+
+.action-item--locked {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.action-item--locked:hover {
+  background-color: transparent;
+  transform: none;
+}
+
+.action-item--locked .action-icon {
+  filter: grayscale(1);
+}
+
+.action-item--locked .action-label {
+  color: #8a8a8a;
 }
 
 .action-label {

@@ -1,5 +1,8 @@
 <template>
   <div class="campaign-card">
+    <div v-if="rankLabel" class="rank-chip">
+      {{ rankLabel }}
+    </div>
     <div v-if="statusConfig" class="status-chip" :style="{ color: statusConfig.color, background: statusConfig.bg }">
       <span class="status-dot" :style="{ background: statusConfig.color }"></span>
       {{ statusConfig.label }}
@@ -224,6 +227,10 @@ const props = defineProps({
     type: String,
     default: null,
   },
+  rankLabel: {
+    type: String,
+    default: null,
+  },
 });
 
 const emit = defineEmits(['drill']);
@@ -353,6 +360,23 @@ watch(() => props.videoId, () => {
   pointer-events: none;
 }
 
+.rank-chip {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  line-height: 1.4;
+  color: #111827;
+  background: linear-gradient(135deg, #fde68a 0%, #fbcfe8 100%);
+  box-shadow: 0 8px 18px rgba(251, 207, 232, 0.25);
+  pointer-events: none;
+}
+
 .status-dot {
   width: 6px;
   height: 6px;
@@ -366,6 +390,7 @@ watch(() => props.videoId, () => {
   gap: 12px;
   min-height: 72px;
   padding-right: 72px; /* prevent title overlapping status chip */
+  padding-top: 28px;
 }
 
 .platform-badge {
@@ -608,6 +633,7 @@ watch(() => props.videoId, () => {
   .card-header {
     min-height: unset;
     padding-right: 64px;
+    padding-top: 26px;
   }
 }
 
@@ -620,11 +646,17 @@ watch(() => props.videoId, () => {
   .card-header {
     gap: 10px;
     padding-right: 0;
+    padding-top: 34px;
   }
 
   .status-chip {
     top: 12px;
     right: 12px;
+  }
+
+  .rank-chip {
+    top: 12px;
+    left: 12px;
   }
 
   .platform-badge,
