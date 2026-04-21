@@ -292,7 +292,7 @@
                   :toggle-group="toggleLeadGroup"
                   :on-open-menu="onAutomationMenuOpen"
                   :saving="!!automationSaving[item.id]"
-                  :groups-loading="automationGroupsLoading"
+                  :groups-loading="crmStore.automationGroupsLoading"
                   :whatsapp-enabled="props.whatsappConnected"
                 />
               </template>
@@ -509,7 +509,7 @@
                   :toggle-group="toggleLeadGroup"
                   :on-open-menu="onAutomationMenuOpen"
                   :saving="!!automationSaving[item.id]"
-                  :groups-loading="automationGroupsLoading"
+                  :groups-loading="crmStore.automationGroupsLoading"
                   :whatsapp-enabled="props.whatsappConnected"
                   readonly
                 />
@@ -1070,12 +1070,7 @@ const whatsappTokens = [
   '[Your Name]',
 ];
 const rolesList = ref([]);
-const automationRowsCache = reactive({});
-const automationLoading = reactive({});
 const automationSaving = reactive({});
-const automationGroupRows = ref([]);
-const automationGroupsLoading = ref(false);
-const automationGroupsDirty = ref(false);
 const showBookPlanDialog = ref(false);
 
 const resolveLeadName = (lead) => getLeadDisplayName(lead);
@@ -1158,67 +1153,37 @@ const whatsappRecipients = computed(() => {
 
 const hasWhatsAppRecipients = computed(() => whatsappRecipients.value.length > 0);
 
-const loadAutomationGroups = async ({ force = false } = {}) => {
-  if (!force && (automationGroupRows.value.length || automationGroupsLoading.value)) return;
-  automationGroupsLoading.value = true;
-  try {
-    const res = await crmStore.listAutomationGroups();
-    if (res?.code === 0 && Array.isArray(res.data)) {
-      automationGroupRows.value = res.data;
-    }
-  } finally {
-    automationGroupsLoading.value = false;
-  }
-};
+const loadAutomationGroups = ({ force = false } = {}) => crmStore.fetchAutomationGroups({ force });
 
-const resolvedAutomationGroups = computed(() => {
-  const groups = automationGroupRows.value.length ? automationGroupRows.value : crmAutomationGroups;
-  return groups;
-});
+const resolvedAutomationGroups = computed(() =>
+  crmStore.automationGroupRows.length ? crmStore.automationGroupRows : crmAutomationGroups
+);
 
-const loadLeadAutomations = async (leadId) => {
-  if (!leadId || automationRowsCache[leadId] || automationLoading[leadId]) return;
-  automationLoading[leadId] = true;
-  try {
-    const res = await crmStore.listAutomation(leadId);
-    const apiItems = Array.isArray(res?.data) ? res.data : [];
-    automationRowsCache[leadId] = apiItems.length ? apiItems : crmAutomationDefaults;
-  } catch (e) {
-    automationRowsCache[leadId] = crmAutomationDefaults;
-  } finally {
-    automationLoading[leadId] = false;
-  }
-};
+const loadLeadAutomations = (leadId) => crmStore.fetchLeadAutomations(leadId);
 
 const onAutomationMenuOpen = async (lead) => {
   if (!lead?.id) return;
-  const force = automationGroupsDirty.value || !automationGroupRows.value.length;
-  await Promise.all([loadAutomationGroups({ force }), loadLeadAutomations(lead.id)]);
-  automationGroupsDirty.value = false;
+  await Promise.all([crmStore.fetchAutomationGroups(), crmStore.fetchLeadAutomations(lead.id)]);
 };
 
-// Note: automation rows are loaded lazily per-lead when the menu opens.
-
-const markAutomationGroupsDirty = () => {
-  automationGroupsDirty.value = true;
-};
+const _onAutomationGroupsUpdated = () => crmStore.fetchAutomationGroups({ force: true });
 
 onMounted(() => {
   if (typeof window === 'undefined') return;
-  loadAutomationGroups();
-  window.addEventListener('crm-automation-groups-updated', markAutomationGroupsDirty);
+  crmStore.fetchAutomationGroups();
+  window.addEventListener('crm-automation-groups-updated', _onAutomationGroupsUpdated);
 });
 
 onBeforeUnmount(() => {
   if (typeof window === 'undefined') return;
-  window.removeEventListener('crm-automation-groups-updated', markAutomationGroupsDirty);
+  window.removeEventListener('crm-automation-groups-updated', _onAutomationGroupsUpdated);
 });
 
 const prefetchVisibleLeadAutomations = async () => {
   const ids = [...new Set(allVisibleLeads.value.map((lead) => Number(lead?.id || 0)).filter(Boolean))];
   if (!ids.length) return;
-  await loadAutomationGroups();
-  await Promise.all(ids.map((leadId) => loadLeadAutomations(leadId)));
+  await crmStore.fetchAutomationGroups();
+  await Promise.all(ids.map((leadId) => crmStore.fetchLeadAutomations(leadId)));
 };
 
 watch(
@@ -1230,7 +1195,7 @@ watch(
 );
 
 const getLeadGroupRows = (lead, group) => {
-  const rows = automationRowsCache[lead?.id] || [];
+  const rows = crmStore.automationRowsCache[Number(lead?.id)] || [];
   const keys = group?.templateKeys || [];
   if (keys.length) {
     const keySet = new Set(keys);
@@ -1291,9 +1256,9 @@ const buildAutomationPayload = (row, leadId, groupKey) => {
 const toggleLeadGroup = async (lead, group, enabled) => {
   const leadId = lead?.id;
   if (!leadId || !group) return;
-  await loadLeadAutomations(leadId);
+  await crmStore.fetchLeadAutomations(leadId);
 
-  const currentRows = automationRowsCache[leadId] || [];
+  const currentRows = crmStore.automationRowsCache[Number(leadId)] || [];
   const keys = group?.templateKeys || [];
   let groupRows = [];
 
@@ -1317,7 +1282,7 @@ const toggleLeadGroup = async (lead, group, enabled) => {
       })
       .filter(Boolean);
     if (extraRows.length) {
-      automationRowsCache[leadId] = [...currentRows, ...extraRows];
+      crmStore.setLeadAutomationsOptimistic(leadId, [...currentRows, ...extraRows]);
     }
   } else {
     groupRows = currentRows.filter((row) => row?.groupKey === group.key);
@@ -1337,20 +1302,25 @@ const toggleLeadGroup = async (lead, group, enabled) => {
 
   if (!updates.length) return;
 
-  // Optimistic update: replace the cache array so Vue reactivity propagates immediately
-  automationRowsCache[leadId] = (automationRowsCache[leadId] || []).map((row) =>
-    changeMap.has(row?.key) ? { ...row, enabled: changeMap.get(row.key) } : row
+  // Optimistic update via store so the column reflects the change immediately
+  crmStore.setLeadAutomationsOptimistic(
+    leadId,
+    (crmStore.automationRowsCache[Number(leadId)] || []).map((row) =>
+      changeMap.has(row?.key) ? { ...row, enabled: changeMap.get(row.key) } : row
+    )
   );
 
   automationSaving[leadId] = true;
   try {
     await crmStore.saveAutomationBatch({ items: updates });
-    delete automationRowsCache[leadId];
-    await loadLeadAutomations(leadId);
+    await crmStore.invalidateLeadAutomations(leadId);
   } catch (e) {
     // Roll back optimistic update
-    automationRowsCache[leadId] = (automationRowsCache[leadId] || []).map((row) =>
-      changeMap.has(row?.key) ? { ...row, enabled: !changeMap.get(row.key) } : row
+    crmStore.setLeadAutomationsOptimistic(
+      leadId,
+      (crmStore.automationRowsCache[Number(leadId)] || []).map((row) =>
+        changeMap.has(row?.key) ? { ...row, enabled: !changeMap.get(row.key) } : row
+      )
     );
     if (mainStore?.setSnackbar) {
       mainStore.setSnackbar({
@@ -1658,9 +1628,9 @@ const handleLeadDialogClose = () => {
   showLeadDetailDialog.value = false;
   dialogInitialTab.value = null;
 
-  // Invalidate cache so the automations column re-fetches the updated state
+  // Only re-fetch if the user actually toggled something inside the dialog
   const leadId = selectedLead.value?.id;
-  if (leadId) delete automationRowsCache[leadId];
+  if (leadId) crmStore.invalidateLeadAutomationsIfDirty(leadId);
 
   if (route.query.leadId || route.query.orgId) {
     const newQuery = { ...route.query };
