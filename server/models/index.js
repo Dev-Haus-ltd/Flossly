@@ -109,7 +109,8 @@ import { CrmLeadAssignee } from "./crm/leadAssignees";
 import { CrmAutomationTemplate } from "./crm/automationTemplates";
 import { CrmAutomationGroup } from "./crm/automationGroups";
 import { CrmAutomationGroupTemplate } from "./crm/automationGroupTemplates";
-import { FormConfig } from "./crm/formConfig";
+import { CrmAutomationDictionaryGroup } from "./crm/crmAutomationDictionaryGroups";
+import { CrmAutomationDictionaryTemplate } from "./crm/crmAutomationDictionaryTemplates";
 import { PatientAutomationDictionary } from "./patientJourney/patientAutomationDictionary";
 import { PatientAutomationTemplate } from "./patientJourney/patientAutomationTemplates";
 import { OrganisationReferral } from "./organisationReferrals";
@@ -695,7 +696,8 @@ export {
   CrmAutomationTemplate,
   CrmAutomationGroup,
   CrmAutomationGroupTemplate,
-  FormConfig,
+  CrmAutomationDictionaryGroup,
+  CrmAutomationDictionaryTemplate,
   CrmWhatsAppMessageLog,
   CrmDmConversation,
   CrmDmMessage,

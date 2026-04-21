@@ -27,6 +27,17 @@ import {
   createScriptPoolItem,
   updateScriptPoolItem,
   deleteScriptPoolItem,
+  seedCrmAutomationDictionary,
+  listCrmAutomationDictionaryGroups,
+  getCrmAutomationDictionaryGroupById,
+  createCrmAutomationDictionaryGroup,
+  updateCrmAutomationDictionaryGroup,
+  deleteCrmAutomationDictionaryGroup,
+  listCrmAutomationDictionaryTemplates,
+  getCrmAutomationDictionaryTemplateById,
+  createCrmAutomationDictionaryTemplate,
+  updateCrmAutomationDictionaryTemplate,
+  deleteCrmAutomationDictionaryTemplate,
   getOrganisationCrmFeatureFlags,
   updateOrganisationCrmFeatureFlags,
   listCrmTreatments,
@@ -235,6 +246,40 @@ export default defineEventHandler(async (event) => {
 
     case 'deleteScriptPoolItem':
       return await deleteScriptPoolItem(event);
+
+    // CRM Automation Dictionary
+    case 'seedCrmAutomationDictionary':
+      return await seedCrmAutomationDictionary(event);
+
+    case 'listCrmAutomationDictionaryGroups':
+      return await listCrmAutomationDictionaryGroups(event);
+
+    case 'getCrmAutomationDictionaryGroupById':
+      return await getCrmAutomationDictionaryGroupById(event);
+
+    case 'createCrmAutomationDictionaryGroup':
+      return await createCrmAutomationDictionaryGroup(event);
+
+    case 'updateCrmAutomationDictionaryGroup':
+      return await updateCrmAutomationDictionaryGroup(event);
+
+    case 'deleteCrmAutomationDictionaryGroup':
+      return await deleteCrmAutomationDictionaryGroup(event);
+
+    case 'listCrmAutomationDictionaryTemplates':
+      return await listCrmAutomationDictionaryTemplates(event);
+
+    case 'getCrmAutomationDictionaryTemplateById':
+      return await getCrmAutomationDictionaryTemplateById(event);
+
+    case 'createCrmAutomationDictionaryTemplate':
+      return await createCrmAutomationDictionaryTemplate(event);
+
+    case 'updateCrmAutomationDictionaryTemplate':
+      return await updateCrmAutomationDictionaryTemplate(event);
+
+    case 'deleteCrmAutomationDictionaryTemplate':
+      return await deleteCrmAutomationDictionaryTemplate(event);
 
     case 'getOrganisationCrmFeatureFlags':
       return await getOrganisationCrmFeatureFlags(event);

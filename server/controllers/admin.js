@@ -1,10 +1,12 @@
 import { success, error } from '../utils/response';
-import { 
+import {
   User, UserOrganisation, Organisation, Role, LoginHistory, UserSubscription, UserPreference,
   UserDocument, UserDocumentFolder, CrmLead, UserTask, DiaryAppointment, UserNotification, Task, TaskCategory,
   CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, FcmToken, UserPoint, UserPointsHistory, RewardPoint,
-  CrmOption, DictionaryScript, Rota, RotaShift, RotaUser, UserLeaveHistory
+  CrmOption, DictionaryScript, Rota, RotaShift, RotaUser, UserLeaveHistory,
+  CrmAutomationDictionaryGroup, CrmAutomationDictionaryTemplate,
 } from '../models';
+import { seedCrmAutomationDictionary as runSeedCrmAutomationDictionary } from '../utils/seedCrmAutomationDictionary';
 import { Op, fn, col } from 'sequelize';
 import sequelize from '../utils/db';
 import { sendInvitationEmail } from '../utils/emailNotifications';
@@ -2133,6 +2135,232 @@ export const deleteScriptPoolItem = async (event) => {
     return error(err?.statusCode || 500, err.message || 'Failed to delete script');
   }
 };
+
+// ─── CRM Automation Dictionary ────────────────────────────────────────────────
+
+const normalizeDictionaryGroupPayload = (payload = {}, existingKey = null) => ({
+  key: String(payload.key || existingKey || '')
+    .trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80),
+  title: String(payload.title || '').trim().slice(0, 150),
+  description: payload.description != null ? String(payload.description).trim().slice(0, 255) : null,
+  category: payload.category != null ? String(payload.category).trim().slice(0, 80) : null,
+  ordering: Number.isFinite(Number(payload.ordering)) ? Number(payload.ordering) : 0,
+  status: ['active', 'archived'].includes(payload.status) ? payload.status : 'active',
+})
+
+const normalizeDictionaryTemplatePayload = (payload = {}, existingKey = null) => ({
+  key: String(payload.key || existingKey || '')
+    .trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80),
+  groupKey: String(payload.groupKey || '').trim().slice(0, 80),
+  type: ['Email', 'WhatsApp'].includes(payload.type) ? payload.type : 'Email',
+  name: String(payload.name || '').trim().slice(0, 150),
+  subject: payload.subject != null ? String(payload.subject).trim().slice(0, 200) : null,
+  template: payload.template != null ? String(payload.template) : null,
+  trigger: payload.trigger != null && typeof payload.trigger === 'object' ? payload.trigger : null,
+  whatsappTemplateName: payload.whatsappTemplateName != null ? String(payload.whatsappTemplateName).trim().slice(0, 150) : null,
+  whatsappTemplateLanguage: payload.whatsappTemplateLanguage != null ? String(payload.whatsappTemplateLanguage).trim().slice(0, 10) : null,
+  ordering: Number.isFinite(Number(payload.ordering)) ? Number(payload.ordering) : 0,
+  status: ['active', 'archived'].includes(payload.status) ? payload.status : 'active',
+})
+
+export const seedCrmAutomationDictionary = async (event) => {
+  requireAdmin(event)
+  try {
+    const result = await runSeedCrmAutomationDictionary()
+    return success(result)
+  } catch (err) {
+    console.error('Seed CRM automation dictionary error:', err)
+    return error(err?.statusCode || 500, err.message || 'Failed to seed CRM automation dictionary')
+  }
+}
+
+export const listCrmAutomationDictionaryGroups = async (event) => {
+  requireAdmin(event)
+  try {
+    const query = getQuery(event) || {}
+    const where = {}
+    if (query.status) where.status = query.status
+    if (query.category) where.category = query.category
+    const items = await CrmAutomationDictionaryGroup.findAll({
+      where,
+      order: [['ordering', 'ASC'], ['title', 'ASC']],
+    })
+    return success(items)
+  } catch (err) {
+    console.error('List CRM automation dictionary groups error:', err)
+    return error(err?.statusCode || 500, err.message || 'Failed to list groups')
+  }
+}
+
+export const getCrmAutomationDictionaryGroupById = async (event) => {
+  requireAdmin(event)
+  try {
+    const query = getQuery(event) || {}
+    if (!query.id) return error(400, 'id is required')
+    const item = await CrmAutomationDictionaryGroup.findByPk(Number(query.id))
+    if (!item) return error(404, 'Group not found')
+    return success(item)
+  } catch (err) {
+    console.error('Get CRM automation dictionary group error:', err)
+    return error(err?.statusCode || 500, err.message || 'Failed to get group')
+  }
+}
+
+export const createCrmAutomationDictionaryGroup = async (event) => {
+  requireAdmin(event)
+  try {
+    const payload = await parseRequestPayload(event)
+    const next = normalizeDictionaryGroupPayload(payload)
+    if (!next.key) return error(400, 'key is required')
+    if (!next.title) return error(400, 'title is required')
+    const existing = await CrmAutomationDictionaryGroup.findOne({ where: { key: next.key } })
+    if (existing) return error(409, 'Group key already exists')
+    const created = await CrmAutomationDictionaryGroup.create(next)
+    return success(created)
+  } catch (err) {
+    console.error('Create CRM automation dictionary group error:', err)
+    return error(err?.statusCode || 500, err.message || 'Failed to create group')
+  }
+}
+
+export const updateCrmAutomationDictionaryGroup = async (event) => {
+  requireAdmin(event)
+  try {
+    const payload = await parseRequestPayload(event)
+    if (!payload?.id) return error(400, 'id is required')
+    const item = await CrmAutomationDictionaryGroup.findByPk(Number(payload.id))
+    if (!item) return error(404, 'Group not found')
+    const next = normalizeDictionaryGroupPayload(payload, item.key)
+    if (!next.key) return error(400, 'key is required')
+    if (!next.title) return error(400, 'title is required')
+    if (next.key !== item.key) {
+      const duplicate = await CrmAutomationDictionaryGroup.findOne({ where: { key: next.key, id: { [Op.ne]: item.id } } })
+      if (duplicate) return error(409, 'Group key already exists')
+    }
+    Object.assign(item, next)
+    await item.save()
+    return success(item)
+  } catch (err) {
+    console.error('Update CRM automation dictionary group error:', err)
+    return error(err?.statusCode || 500, err.message || 'Failed to update group')
+  }
+}
+
+export const deleteCrmAutomationDictionaryGroup = async (event) => {
+  requireAdmin(event)
+  try {
+    const payload = await parseRequestPayload(event)
+    if (!payload?.id) return error(400, 'id is required')
+    const item = await CrmAutomationDictionaryGroup.findByPk(Number(payload.id))
+    if (!item) return error(404, 'Group not found')
+    await sequelize.transaction(async (t) => {
+      await CrmAutomationDictionaryTemplate.destroy({ where: { groupKey: item.key }, transaction: t })
+      await item.destroy({ transaction: t })
+    })
+    return success({ deletedId: item.id })
+  } catch (err) {
+    console.error('Delete CRM automation dictionary group error:', err)
+    return error(err?.statusCode || 500, err.message || 'Failed to delete group')
+  }
+}
+
+export const listCrmAutomationDictionaryTemplates = async (event) => {
+  requireAdmin(event)
+  try {
+    const query = getQuery(event) || {}
+    const where = {}
+    if (query.groupKey) where.groupKey = query.groupKey
+    if (query.status) where.status = query.status
+    if (query.type) where.type = query.type
+    const items = await CrmAutomationDictionaryTemplate.findAll({
+      where,
+      order: [['groupKey', 'ASC'], ['ordering', 'ASC'], ['name', 'ASC']],
+    })
+    return success(items)
+  } catch (err) {
+    console.error('List CRM automation dictionary templates error:', err)
+    return error(err?.statusCode || 500, err.message || 'Failed to list templates')
+  }
+}
+
+export const getCrmAutomationDictionaryTemplateById = async (event) => {
+  requireAdmin(event)
+  try {
+    const query = getQuery(event) || {}
+    if (!query.id) return error(400, 'id is required')
+    const item = await CrmAutomationDictionaryTemplate.findByPk(Number(query.id))
+    if (!item) return error(404, 'Template not found')
+    return success(item)
+  } catch (err) {
+    console.error('Get CRM automation dictionary template error:', err)
+    return error(err?.statusCode || 500, err.message || 'Failed to get template')
+  }
+}
+
+export const createCrmAutomationDictionaryTemplate = async (event) => {
+  requireAdmin(event)
+  try {
+    const payload = await parseRequestPayload(event)
+    const next = normalizeDictionaryTemplatePayload(payload)
+    if (!next.key) return error(400, 'key is required')
+    if (!next.groupKey) return error(400, 'groupKey is required')
+    if (!next.name) return error(400, 'name is required')
+    const groupExists = await CrmAutomationDictionaryGroup.findOne({ where: { key: next.groupKey } })
+    if (!groupExists) return error(404, 'Group not found for groupKey')
+    const existing = await CrmAutomationDictionaryTemplate.findOne({ where: { key: next.key } })
+    if (existing) return error(409, 'Template key already exists')
+    const created = await CrmAutomationDictionaryTemplate.create(next)
+    return success(created)
+  } catch (err) {
+    console.error('Create CRM automation dictionary template error:', err)
+    return error(err?.statusCode || 500, err.message || 'Failed to create template')
+  }
+}
+
+export const updateCrmAutomationDictionaryTemplate = async (event) => {
+  requireAdmin(event)
+  try {
+    const payload = await parseRequestPayload(event)
+    if (!payload?.id) return error(400, 'id is required')
+    const item = await CrmAutomationDictionaryTemplate.findByPk(Number(payload.id))
+    if (!item) return error(404, 'Template not found')
+    const next = normalizeDictionaryTemplatePayload(payload, item.key)
+    if (!next.key) return error(400, 'key is required')
+    if (!next.groupKey) return error(400, 'groupKey is required')
+    if (!next.name) return error(400, 'name is required')
+    if (next.key !== item.key) {
+      const duplicate = await CrmAutomationDictionaryTemplate.findOne({ where: { key: next.key, id: { [Op.ne]: item.id } } })
+      if (duplicate) return error(409, 'Template key already exists')
+    }
+    if (next.groupKey !== item.groupKey) {
+      const groupExists = await CrmAutomationDictionaryGroup.findOne({ where: { key: next.groupKey } })
+      if (!groupExists) return error(404, 'Group not found for groupKey')
+    }
+    Object.assign(item, next)
+    await item.save()
+    return success(item)
+  } catch (err) {
+    console.error('Update CRM automation dictionary template error:', err)
+    return error(err?.statusCode || 500, err.message || 'Failed to update template')
+  }
+}
+
+export const deleteCrmAutomationDictionaryTemplate = async (event) => {
+  requireAdmin(event)
+  try {
+    const payload = await parseRequestPayload(event)
+    if (!payload?.id) return error(400, 'id is required')
+    const item = await CrmAutomationDictionaryTemplate.findByPk(Number(payload.id))
+    if (!item) return error(404, 'Template not found')
+    await item.destroy()
+    return success({ deletedId: item.id })
+  } catch (err) {
+    console.error('Delete CRM automation dictionary template error:', err)
+    return error(err?.statusCode || 500, err.message || 'Failed to delete template')
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 
 export const getOrganisationCrmFeatureFlags = async (event) => {
   requireAdmin(event);
