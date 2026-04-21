@@ -24,6 +24,7 @@ export default defineEventHandler(async (event) => {
 
       if (typeof autoReplyEnabled === "boolean") {
         conversation.autoReplyEnabled = autoReplyEnabled;
+        if (!autoReplyEnabled) conversation.autoReplyDisabledUntil = null;
         await conversation.save();
       }
 

@@ -207,6 +207,12 @@ const sendAutoReply = async ({ orgId, conversation, messageText, accessToken, se
     conversation.lastMessageAt = new Date();
     await conversation.save();
 
+    broadcastMetaEvent('dm', {
+      orgId,
+      conversationId: conversation.id,
+      platform: conversation.platform,
+    });
+
     console.log(`[Meta AutoReply] Sent auto-reply for org ${orgId}: ${replyText.slice(0, 50)}...`);
   } catch (err) {
     console.error(`[Meta AutoReply] Failed for org ${orgId}:`, err?.message || err);
