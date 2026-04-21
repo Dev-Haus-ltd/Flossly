@@ -1,6 +1,6 @@
 import { Op } from 'sequelize'
 import { parsePhoneNumber } from 'awesome-phonenumber'
-import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, MetaPage, User, UserOrganisation, CrmWhatsAppMessageLog, Organisation } from '../models'
+import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, CrmAutomationDictionaryGroup, CrmAutomationDictionaryTemplate, MetaPage, User, UserOrganisation, CrmWhatsAppMessageLog, Organisation } from '../models'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults.js'
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
 import { formatCrmTriggerPreview } from '~/lib/misc'
@@ -259,6 +259,26 @@ const validateAutomationPayload = (payload) => {
 }
 
 const seedAutomationGroups = async (orgId) => {
+  // Prefer dictionary tables; fall back to JS defaults if dictionary not yet seeded
+  const dictGroups = await CrmAutomationDictionaryGroup.findAll({
+    where: { status: 'active' },
+    order: [['ordering', 'ASC']],
+  })
+  const dictTemplates = dictGroups.length
+    ? await CrmAutomationDictionaryTemplate.findAll({
+        where: { status: 'active' },
+        order: [['groupKey', 'ASC'], ['ordering', 'ASC']],
+      })
+    : []
+  const canonicalGroups = dictGroups.length
+    ? dictGroups.map((g) => ({
+        key: g.key,
+        title: g.title,
+        description: g.description,
+        templateKeys: dictTemplates.filter((t) => t.groupKey === g.key).map((t) => t.key),
+      }))
+    : crmAutomationGroups
+
   const rows = await CrmAutomationGroup.findAll({
     where: { organisationId: Number(orgId) },
     order: [['ordering', 'ASC'], ['createdAt', 'ASC']],
@@ -268,7 +288,7 @@ const seedAutomationGroups = async (orgId) => {
 
   if (!rows.length) {
     const fresh = await CrmAutomationGroup.bulkCreate(
-      crmAutomationGroups.map((group, idx) => ({
+      canonicalGroups.map((group, idx) => ({
         organisationId: Number(orgId),
         key: group.key,
         title: group.title,
@@ -278,23 +298,23 @@ const seedAutomationGroups = async (orgId) => {
         source: 'system',
       }))
     )
-    return fresh
-  }
-
-  for (let idx = 0; idx < crmAutomationGroups.length; idx += 1) {
-    const group = crmAutomationGroups[idx]
-    if (byKey.has(group.key)) continue
-    const row = await CrmAutomationGroup.create({
-      organisationId: Number(orgId),
-      key: group.key,
-      title: group.title,
-      description: group.description || null,
-      enabled: false,
-      ordering: rows.length + created.length,
-      source: 'system',
-    })
-    created.push(row)
-    byKey.set(group.key, row)
+    fresh.forEach((g) => byKey.set(g.key, g))
+  } else {
+    for (let idx = 0; idx < canonicalGroups.length; idx++) {
+      const group = canonicalGroups[idx]
+      if (byKey.has(group.key)) continue
+      const row = await CrmAutomationGroup.create({
+        organisationId: Number(orgId),
+        key: group.key,
+        title: group.title,
+        description: group.description || null,
+        enabled: false,
+        ordering: rows.length + created.length,
+        source: 'system',
+      })
+      created.push(row)
+      byKey.set(group.key, row)
+    }
   }
 
   const groupIdByKey = new Map([...byKey.entries()].map(([key, g]) => [key, g.id]))
@@ -303,18 +323,13 @@ const seedAutomationGroups = async (orgId) => {
   })
   const existingSet = new Set(existingMappings.map((m) => `${m.groupId}:${m.templateKey}`))
   const toCreate = []
-  crmAutomationGroups.forEach((group) => {
+  canonicalGroups.forEach((group) => {
     const groupId = groupIdByKey.get(group.key)
     if (!groupId) return
     ;(group.templateKeys || []).forEach((templateKey, idx) => {
       const key = `${groupId}:${templateKey}`
       if (existingSet.has(key)) return
-      toCreate.push({
-        organisationId: Number(orgId),
-        groupId,
-        templateKey,
-        ordering: idx,
-      })
+      toCreate.push({ organisationId: Number(orgId), groupId, templateKey, ordering: idx })
     })
   })
   if (toCreate.length) await CrmAutomationGroupTemplate.bulkCreate(toCreate)
