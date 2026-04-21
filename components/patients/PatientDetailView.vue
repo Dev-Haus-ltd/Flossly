@@ -15,6 +15,9 @@
         <v-tab value="forms">Forms</v-tab>
         <v-tab value="charting">Charting</v-tab>
         <v-tab value="appointments">Appointments</v-tab>
+        <v-tab value="accounts">Accounts</v-tab>
+        <v-tab value="communication">Communication Hub</v-tab>
+        <v-tab value="tasks">Tasks</v-tab>
       </v-tabs>
 
       <PatientsIndex v-if="activeTab === 'details'" :patient="patient" />
@@ -31,11 +34,29 @@
           :patient="patient"
         />
       </div>
-      <PatientAppointments
-        v-else
+      <PatientAccounts
+        v-else-if="activeTab === 'accounts'"
         :patient="patient"
         :patient-name="patientName"
       />
+      <PatientCommunicationHub
+        v-else-if="activeTab === 'communication'"
+        :patient="patient"
+        :patient-name="patientName"
+      />
+      <PatientTasks
+        v-else-if="activeTab === 'tasks'"
+        :patient="patient"
+        :patient-name="patientName"
+      />
+      <PatientAppointments
+        v-else-if="activeTab === 'appointments'"
+        :patient="patient"
+        :patient-name="patientName"
+      />
+      <div v-else class="mt-4 text-body-2 text-medium-emphasis">
+        This section is coming soon.
+      </div>
     </div>
   </v-sheet>
 </template>
@@ -47,6 +68,9 @@ import PatientForms from "@/components/patients/PatientForms.vue";
 import PatientJourney from "@/components/patients/patientJourney.vue";
 import PatientsCharting from "@/components/patients/charting/index.vue";
 import PatientAppointments from "@/components/patients/appointments/index.vue";
+import PatientAccounts from "@/components/patients/accounts/index.vue";
+import PatientCommunicationHub from "@/components/patients/communicationHub/index.vue";
+import PatientTasks from "@/components/patients/tasks/index.vue";
 import PatientsIndex from "@/components/patients/index.vue";
 import { useDiaryStore } from "@/stores/diary";
 
@@ -84,6 +108,18 @@ const syncTabFromRoute = () => {
   }
   if (route.query.tab === "appointments") {
     activeTab.value = "appointments";
+    return;
+  }
+  if (route.query.tab === "accounts") {
+    activeTab.value = "accounts";
+    return;
+  }
+  if (route.query.tab === "communication") {
+    activeTab.value = "communication";
+    return;
+  }
+  if (route.query.tab === "tasks") {
+    activeTab.value = "tasks";
     return;
   }
   activeTab.value = "details";
