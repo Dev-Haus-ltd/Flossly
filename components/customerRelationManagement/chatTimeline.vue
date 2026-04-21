@@ -4,6 +4,26 @@
       <CommonWhatsAppNotConnectedAlert />
     </div>
     <template v-else>
+      <div class="d-flex align-center justify-space-between px-4 py-2">
+        <div class="d-flex align-center">
+          <span class="text-body-2 font-weight-medium">{{ props.leadName || 'Conversation' }}</span>
+        </div>
+        <template v-if="props.whatsappAutoReplyEnabled">
+          <div class="d-flex align-center">
+            <v-icon size="12" :color="localLeadAutoReplyEnabled ? 'success' : 'grey'" class="mr-1">{{ localLeadAutoReplyEnabled ? 'mdi-robot' : 'mdi-robot-off-outline' }}</v-icon>
+            <span class="text-caption text-medium-emphasis mr-1">Auto-reply</span>
+            <v-switch
+              v-model="localLeadAutoReplyEnabled"
+              color="success"
+              density="compact"
+              hide-details
+              inset
+              style="transform: scale(0.7);"
+              @update:model-value="toggleLeadAutoReply"
+            />
+          </div>
+        </template>
+      </div>
       <v-divider />
       <v-card-text class="chat-timeline-body">
         <div ref="scrollEl" class="chat-timeline-scroll">
@@ -77,6 +97,8 @@ const props = defineProps({
   inboundSenderLabel: { type: String, default: "Lead" },
   outboundSenderLabel: { type: String, default: "Flossly" },
   connected: { type: Boolean, default: true },
+  whatsappAutoReplyEnabled: { type: Boolean, default: false },
+  leadAutoReplyEnabled: { type: Boolean, default: true },
 });
 
 const crmStore = useCrmStore();
@@ -90,6 +112,7 @@ const pendingFiles = ref([]);
 const resolvedOrg = ref({ name: "", logo: "" });
 const resolvedLead = ref({ name: "", avatar: "" });
 const scrollEl = ref(null);
+const localLeadAutoReplyEnabled = ref(true);
 
 let whapiEventSource = null;
 let sseActive = false;
@@ -319,6 +342,21 @@ watch(
 onBeforeUnmount(() => {
   stopWhapiStream();
   revokeObjectUrls();
+});
+
+const toggleLeadAutoReply = async (newValue) => {
+  if (!props.leadId) return;
+  try {
+    await crmStore.updateLeadAutoReply({ leadId: props.leadId, autoReplyEnabled: newValue });
+  } catch {}
+};
+
+watch(() => props.leadAutoReplyEnabled, (val) => {
+  localLeadAutoReplyEnabled.value = val;
+}, { immediate: true });
+
+onMounted(() => {
+  localLeadAutoReplyEnabled.value = props.leadAutoReplyEnabled;
 });
 </script>
 

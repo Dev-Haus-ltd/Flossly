@@ -447,6 +447,8 @@
                   :lead-name="displayLeadName"
                   :lead-avatar="selectedLead?.photo"
                   :connected="whatsappEnabled"
+                  :whatsapp-auto-reply-enabled="whatsappAutoReplyEnabled"
+                  :lead-auto-reply-enabled="selectedLead?.autoReplyEnabled !== false"
                 />
               </div>
             </v-tabs-window-item>

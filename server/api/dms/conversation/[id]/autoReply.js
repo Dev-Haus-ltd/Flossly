@@ -11,13 +11,13 @@ export default defineEventHandler(async (event) => {
   const { orgId } = event.context.user || {};
   if (!orgId) return error(401, "Unauthenticated");
 
-  if (method === "PATCH") {
+  if (method === "PATCH" || method === "POST") {
     try {
       const body = await readBody(event);
       const { autoReplyEnabled } = body || {};
 
       const conversation = await CrmDmConversation.findOne({
-        where: { id: conversationId, organisationId: orgId },
+        where: { id: Number(conversationId), organisationId: orgId },
       });
 
       if (!conversation) return error(404, "Conversation not found");
