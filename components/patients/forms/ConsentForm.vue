@@ -7,11 +7,17 @@
           <v-icon size="24" color="primary">mdi-file-document-multiple</v-icon>
         </div>
         <div class="form-header-title">
-          <h2>Consent Forms</h2>
-          <p>Manage and send consent forms to patients</p>
+          <h2>{{ sendOnly ? "Send Consent Form" : "Consent Forms" }}</h2>
+          <p>
+            {{
+              sendOnly
+                ? "Select a consent form to preview and send to the patient"
+                : "Manage and send consent forms to patients"
+            }}
+          </p>
         </div>
       </div>
-      <div class="header-actions">
+      <div v-if="!sendOnly" class="header-actions">
         <v-btn
           color="primary"
           variant="flat"
@@ -73,6 +79,7 @@
           Create a new consent form to get started.
         </p>
         <v-btn
+          v-if="!sendOnly"
           color="primary"
           variant="flat"
           size="large"
@@ -93,7 +100,7 @@
         class="form-card"
         :class="{ 'form-card--selected': selectedFormId === form.id }"
       >
-        <div class="form-actions" @click.stop>
+        <div v-if="!sendOnly" class="form-actions" @click.stop>
           <v-tooltip text="Edit" location="top">
             <template #activator="{ props }">
               <span
@@ -395,6 +402,10 @@ const props = defineProps({
     type: Object,
     // default: null,
   },
+  sendOnly: {
+    type: Boolean,
+    default: false,
+  },
   disabled: {
     type: Boolean,
     default: false,
@@ -456,6 +467,7 @@ const statusOptions = [
 
 // Computed
 const isEditMode = computed(() => showEditDialog.value && !!formToEdit.value);
+const sendOnly = computed(() => props.sendOnly);
 
 // Methods
 const loadConsentForms = async () => {

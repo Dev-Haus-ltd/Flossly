@@ -171,6 +171,8 @@
               <v-select
                 v-model="practitioner"
                 :items="practitionerOptions"
+                item-title="title"
+                item-value="value"
                 variant="outlined"
                 density="compact"
                 class="mt-1"
@@ -670,6 +672,18 @@ const validate = () => {
     errors.practitioner = "Practitioner required";
     ok = false;
   } else errors.practitioner = "";
+  if (!ok) {
+    const firstError =
+      errors.patient ||
+      errors.date ||
+      errors.time ||
+      errors.exam ||
+      errors.status ||
+      errors.duration ||
+      errors.practitioner ||
+      "Complete the required appointment fields";
+    mainStore?.setSnackbar?.({ title: firstError, type: "error" });
+  }
   return ok;
 };
 

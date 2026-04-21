@@ -282,6 +282,8 @@ const props = defineProps({
   modelValue: Boolean,
   patient: { type: Object },
   patientId: { type: [String, Number], default: null }, 
+  patientEmail: { type: String, default: "" },
+  patientPhone: { type: String, default: "" },
 });
 const emit = defineEmits(["update:modelValue", "success", "close"]);
 // console.log('pateint',props?.patient)
@@ -290,7 +292,7 @@ const mainStore = useMainStore();
 const { isWhatsAppConnected, loadWhapiStatus } = useWhapiStream();
 
 // State
-const isOpen = ref(false);
+const isOpen = ref(!!props.modelValue);
 const isSending = ref(false);
 const error = ref(null);
 
@@ -300,6 +302,12 @@ const optionalMessage = ref("");
 // Computed
 const selectedForm = computed(() => props.form);
 const selectedPatient = computed(() => props.patient);
+const resolvedPatientEmail = computed(() => {
+  return String(props.patientEmail || selectedPatient.value?.email || "").trim();
+});
+const resolvedPatientPhone = computed(() => {
+  return String(props.patientPhone || selectedPatient.value?.phone || "").trim();
+});
 
 const finalPatientId = computed(() => {
   return props.patient?.id || props.patientId || null;
@@ -318,6 +326,7 @@ watch(
     isOpen.value = newVal;
     error.value = null;
   },
+  { immediate: true },
 );
 
 watch(
@@ -347,8 +356,8 @@ const handleSendForm = async () => {
     const payload = {
       templateId: selectedForm.value.id,
       patientId: finalPatientId.value,
-      patientEmail: selectedPatient.value?.email || undefined,
-      patientPhone: selectedPatient.value?.phone || undefined,
+      patientEmail: resolvedPatientEmail.value || undefined,
+      patientPhone: resolvedPatientPhone.value || undefined,
       notes: optionalMessage.value || undefined,
       expiryDays: 30,
       sendVia: sendVia.value || "email",

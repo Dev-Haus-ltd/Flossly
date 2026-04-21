@@ -789,20 +789,46 @@
       @confirm="doDeleteArchived"
       @cancel="confirmArchivedDelete = false"
     />
-    <v-dialog v-model="showBookPlanDialog" max-width="500">
-      <v-card class="pa-4">
-        <v-card-title class="text-subtitle-1 pa-0 mb-2">
-          Soar Plan Required
-        </v-card-title>
-        <v-card-text class="pa-0">
-          This action is available on the Soar plan. Your current plan is
-          <strong>{{ currentOrgLicenseLabel }}</strong>.
-          Upgrade to Soar to unlock diary booking, consent form sending, patient auto-creation, and more.
+    <v-dialog v-model="showBookPlanDialog" max-width="560">
+      <v-card class="plan-upgrade-dialog rounded-xl overflow-hidden">
+        <div class="plan-upgrade-dialog__hero">
+          <div>
+            <div class="plan-upgrade-dialog__eyebrow">Plan Access</div>
+            <div class="plan-upgrade-dialog__title">Upgrade to Soar</div>
+            <div class="plan-upgrade-dialog__subtitle">
+              Unlock deeper CRM and diary workflows for your team.
+            </div>
+          </div>
+          <v-chip size="small" color="white" variant="flat" class="plan-upgrade-dialog__chip">
+            Current: {{ currentOrgLicenseLabel }}
+          </v-chip>
+        </div>
+        <v-card-text class="plan-upgrade-dialog__body">
+          <p class="plan-upgrade-dialog__copy">
+            Your current plan covers the essentials. Soar adds the full premium workflow layer for high-volume CRM operations.
+          </p>
+          <div class="plan-upgrade-dialog__feature-list">
+            <div class="plan-upgrade-dialog__feature">
+              <v-icon size="18" color="primary">mdi-calendar-check-outline</v-icon>
+              <span>Advanced diary and patient workflow tooling</span>
+            </div>
+            <div class="plan-upgrade-dialog__feature">
+              <v-icon size="18" color="primary">mdi-robot-outline</v-icon>
+              <span>Deeper automation and premium CRM capabilities</span>
+            </div>
+            <div class="plan-upgrade-dialog__feature">
+              <v-icon size="18" color="primary">mdi-chart-line</v-icon>
+              <span>Broader growth, conversion, and team coordination features</span>
+            </div>
+          </div>
         </v-card-text>
-        <v-card-actions class="pa-0 mt-4">
+        <v-card-actions class="plan-upgrade-dialog__actions">
           <v-spacer />
+          <v-btn variant="text" @click="showBookPlanDialog = false">
+            Close
+          </v-btn>
           <v-btn color="primary" variant="flat" @click="showBookPlanDialog = false">
-            OK
+            Got it
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -859,12 +885,14 @@
 
     <!-- Consent form sender -->
     <PatientsFormsConsentFormSender
-      v-if="showConsentFormSender && selectedConsentForm && consentFormSenderLead"
+      v-if="showConsentFormSender && selectedConsentForm && consentSenderPatient"
       v-model="showConsentFormSender"
       :form="selectedConsentForm"
       :patient="consentSenderPatient"
+      :patient-email="resolveLeadEmail(consentFormSenderLead)"
+      :patient-phone="resolveLeadPhone(consentFormSenderLead)"
       @success="onConsentFormSent"
-      @close="showConsentFormSender = false"
+      @close="closeConsentFormSender"
     />
   </div>
 </template>
@@ -876,6 +904,8 @@ import { applyCrmPlaceholders } from '@/lib/crm/placeholders'
 import { formatDateDDMMYYYY, formatDateTime } from "@/lib/dateFormatter";
 import { formatAssignedUsers, formatTreatmentValue } from "@/lib/misc";
 import { getLeadDisplayName, getLeadEmail, getLeadPhone } from "@/lib/normalizers/lead";
+import { LICENSE_TYPES, resolveUserLicenseType } from '@/stores/index'
+import { useDiaryStore } from '@/stores/diary'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults'
 const defaultAutomationMap = new Map(crmAutomationDefaults.map((d) => [d.key, d]))
 import DataTableColumnsAutomationGroups from '@/components/dataTableColumns/automationGroups.vue'
@@ -891,6 +921,7 @@ import archiveIcon from '@/assets/crm/archive.svg'
 import deleteIcon from '@/assets/crm/delete.svg'
 import exportIcon from '@/assets/crm/export.svg'
 const crmStore = useCrmStore();
+const diaryStore = useDiaryStore();
 const authStore = useAuthStore();
 const { user, setUser } = useUser();
 const route = useRoute();
@@ -1119,23 +1150,24 @@ const showConsentFormSelect = ref(false);
 const selectedConsentForm = ref(null);
 const showConsentFormSender = ref(false);
 const consentFormSenderLead = ref(null);
+const consentResolvedPatient = ref(null);
 
 const consentSenderPatient = computed(() => {
-  if (!consentFormSenderLead.value) return null;
-  const lead = consentFormSenderLead.value;
-  const fullName = resolveLeadName(lead) || '';
-  const [firstName, ...rest] = fullName.split(' ');
-  return {
-    id: lead.id,
-    firstName: firstName || fullName || 'Lead',
-    lastName: rest.join(' ') || '',
-    email: resolveLeadEmail(lead) || undefined,
-    phone: resolveLeadPhone(lead) || undefined,
-  };
+  return consentResolvedPatient.value;
 });
+
+const cacheLeadPatient = (lead, patient) => {
+  const patientId = Number(patient?.id || 0);
+  if (!lead || !patientId) return;
+  lead.patientId = patientId;
+};
 
 const openConsentFormSelect = async () => {
   if (!selectedLeads.value.length) return;
+  if (selectedLeads.value.length > 1) {
+    mainStore?.setSnackbar?.({ title: 'Select only one lead to send a form', type: 'error' });
+    return;
+  }
   showConsentFormSelect.value = true;
   if (consentForms.value.length) return;
   consentFormsLoading.value = true;
@@ -1149,17 +1181,115 @@ const openConsentFormSelect = async () => {
   }
 };
 
-const selectConsentForm = (form) => {
+const splitLeadName = (lead) => {
+  const rawName = String(resolveLeadName(lead) || lead?.name || '').trim();
+  if (!rawName) return { firstName: 'CRM', lastName: 'Lead' };
+  const [firstName, ...rest] = rawName.split(/\s+/);
+  return {
+    firstName: firstName || 'CRM',
+    lastName: rest.join(' ') || '-',
+  };
+};
+
+const findExistingConsentPatient = async (lead) => {
+  const searchTerms = [resolveLeadEmail(lead), resolveLeadPhone(lead), resolveLeadName(lead)]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+
+  for (const term of searchTerms) {
+    try {
+      const res = await diaryStore.listPatients(term);
+      if (res?.code !== 0 || !Array.isArray(res?.data)) continue;
+      const match = res.data.find((patient) => {
+        const fullName = `${patient?.firstName || ''} ${patient?.lastName || ''}`.trim().toLowerCase();
+        const leadName = String(resolveLeadName(lead) || lead?.name || '').trim().toLowerCase();
+        const sameEmail = String(patient?.email || '').trim().toLowerCase() &&
+          String(patient?.email || '').trim().toLowerCase() === String(resolveLeadEmail(lead) || '').trim().toLowerCase();
+        const samePhone = String(patient?.mobile || '').trim() &&
+          String(patient?.mobile || '').trim() === String(resolveLeadPhone(lead) || '').trim();
+        const sameName = leadName && fullName === leadName;
+        return sameEmail || samePhone || sameName;
+      });
+      if (match) return match;
+    } catch {}
+  }
+  return null;
+};
+
+const ensureConsentPatient = async (lead) => {
+  const existingId = Number(lead?.patientId || 0);
+  if (existingId) {
+    const existing = await diaryStore.getPatient(existingId);
+    if (existing?.code === 0 && existing?.data?.id) return existing.data;
+  }
+
+  const matched = await findExistingConsentPatient(lead);
+  if (matched?.id) {
+    cacheLeadPatient(lead, matched);
+    return matched;
+  }
+
+  const { firstName, lastName } = splitLeadName(lead);
+  const created = await diaryStore.createPatient({
+    firstName,
+    lastName,
+    email: resolveLeadEmail(lead) || null,
+    mobile: resolveLeadPhone(lead) || null,
+    acquisitionSource: lead?.leadSource?.name || lead?.leadSource || 'CRM Lead',
+    occupation: lead?.occupation || null,
+  });
+  if (created?.code === 0 && created?.data?.id) {
+    cacheLeadPatient(lead, created.data);
+    return created.data;
+  }
+  throw new Error(created?.message || 'Unable to prepare patient for form sending');
+};
+
+const mapConsentPatient = (patient, fallbackLead = null) => {
+  const fullName = `${patient?.firstName || ''} ${patient?.lastName || ''}`.trim();
+  const { firstName, lastName } = fullName
+    ? { firstName: patient?.firstName || '', lastName: patient?.lastName || '' }
+    : splitLeadName(fallbackLead || {});
+  return {
+    id: Number(patient?.id || 0) || null,
+    firstName,
+    lastName,
+    name: fullName || resolveLeadName(fallbackLead) || 'Lead',
+    email: patient?.email || resolveLeadEmail(fallbackLead) || undefined,
+    phone: patient?.mobile || patient?.phone || resolveLeadPhone(fallbackLead) || undefined,
+  };
+};
+
+const selectConsentForm = async (form) => {
   selectedConsentForm.value = form;
   showConsentFormSelect.value = false;
-  consentFormSenderLead.value = selectedLeads.value[0];
-  showConsentFormSender.value = true;
+  const lead = selectedLeads.value[0];
+  consentFormSenderLead.value = lead || null;
+  consentResolvedPatient.value = null;
+  if (!lead) return;
+  try {
+    const patient = await ensureConsentPatient(lead);
+    consentResolvedPatient.value = mapConsentPatient(patient, lead);
+    showConsentFormSender.value = true;
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || 'Unable to prepare patient for form sending', type: 'error' });
+    selectedConsentForm.value = null;
+    consentFormSenderLead.value = null;
+  }
 };
 
 const onConsentFormSent = () => {
   showConsentFormSender.value = false;
   selectedConsentForm.value = null;
   consentFormSenderLead.value = null;
+  consentResolvedPatient.value = null;
+};
+
+const closeConsentFormSender = () => {
+  showConsentFormSender.value = false;
+  selectedConsentForm.value = null;
+  consentFormSenderLead.value = null;
+  consentResolvedPatient.value = null;
 };
 
 const showWhatsAppCompose = ref(false);
@@ -1213,17 +1343,28 @@ const resolvePracticeName = () => {
   return org?.name || '[Practice Name]'
 }
 
+const normalizeLicenseType = (value) => {
+  const raw = String(value || '').trim().toLowerCase();
+  const exact = Object.values(LICENSE_TYPES).find(
+    (license) => String(license).toLowerCase() === raw
+  );
+  return exact || LICENSE_TYPES.TRIAL;
+};
+
 const currentOrgLicense = computed(() => {
   const orgId = Number(user.value?.currentLoggedInOrgId || 0);
   const prefs = Array.isArray(user.value?.preferences) ? user.value.preferences : [];
   const match = prefs.find((row) => Number(row?.organisationId || 0) === orgId);
-  return String(match?.licenseType || 'Trial').trim();
+  return normalizeLicenseType(match?.licenseType || resolveUserLicenseType(user.value));
 });
 
-const currentOrgLicenseLabel = computed(() => currentOrgLicense.value || 'Trial');
+const currentOrgLicenseLabel = computed(() => currentOrgLicense.value || LICENSE_TYPES.TRIAL);
 const canBookAppointments = computed(() => {
-  const type = String(currentOrgLicense.value || '').toLowerCase();
-  return ['soar', 'system'].includes(type);
+  return [
+    LICENSE_TYPES.TRIAL,
+    LICENSE_TYPES.SOAR,
+    LICENSE_TYPES.SYSTEM,
+  ].includes(currentOrgLicense.value);
 });
 
 const renderTemplateWithContext = (input, ctx, lead) => {
@@ -2629,6 +2770,83 @@ const convertSelected = async () => {
 .automation-cell {
   display: flex;
   align-items: center;
+}
+
+.plan-upgrade-dialog {
+  background: #ffffff;
+}
+
+.plan-upgrade-dialog__hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px 18px;
+  background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%);
+  color: #ffffff;
+}
+
+.plan-upgrade-dialog__eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.78;
+}
+
+.plan-upgrade-dialog__title {
+  margin-top: 6px;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.plan-upgrade-dialog__subtitle {
+  margin-top: 8px;
+  max-width: 360px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.plan-upgrade-dialog__chip {
+  color: #0f172a !important;
+  font-weight: 600;
+}
+
+.plan-upgrade-dialog__body {
+  padding: 22px 24px 10px !important;
+}
+
+.plan-upgrade-dialog__copy {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #334155;
+}
+
+.plan-upgrade-dialog__feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.plan-upgrade-dialog__feature {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #0f172a;
+}
+
+.plan-upgrade-dialog__actions {
+  padding: 0 24px 20px !important;
 }
 
 </style>

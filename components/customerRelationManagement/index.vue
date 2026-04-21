@@ -223,6 +223,18 @@
           @close="addLeadDrawer = false"
           @success="handleSuccess"
         />
+        <AddAppointment
+          v-model="showBookingDrawer"
+          :initial-date="bookingInitialDate"
+          :initial-time="bookingInitialTime"
+          :initial-practitioner="bookingInitialPractitioner"
+          :practitioner-options="bookingPractitionerOptions"
+          :patient-options="bookingPatientOptions"
+          :preselected-patient="bookingLeadName"
+          :preselected-patient-id="bookingLeadPatientId"
+          @date-change="loadBookingDentists"
+          @save="onSaveBookedAppointment"
+        />
         <template v-if="!isLoading && leadSources.length > 0 && userList.length > 0">
           <!-- Add New Lead Panel - Right Side -->
           <CustomerRelationManagementAddNewLead
@@ -240,18 +252,6 @@
             :users="userList"
             @close="bulkLeadUploadDialog = false"
             @onUpdate="handleBulkUploadComplete"
-          />
-          <AddAppointment
-            v-model="showBookingDrawer"
-            :initial-date="bookingInitialDate"
-            :initial-time="bookingInitialTime"
-            :initial-practitioner="bookingInitialPractitioner"
-            :practitioner-options="bookingPractitionerOptions"
-            :patient-options="bookingPatientOptions"
-            :preselected-patient="bookingLeadName"
-            :preselected-patient-id="bookingLeadPatientId"
-            @date-change="loadBookingDentists"
-            @save="onSaveBookedAppointment"
           />
         </template>
       </ClientOnly>
@@ -490,7 +490,7 @@ import { storeToRefs } from 'pinia'
 import AddAppointment from '@/components/diary/addAppointment.vue'
 import CustomerRelationManagementMetaHealthDialog from '@/components/customerRelationManagement/metaHealthDialog.vue'
 import { useDiaryStore } from '@/stores/diary'
-import { useMainStore } from '@/stores/index'
+import { LICENSE_TYPES, resolveUserLicenseType, useMainStore } from '@/stores/index'
 import { useCrmStore } from '@/stores/crm'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
@@ -635,7 +635,7 @@ const bookingLead = ref(null);
 const bookingDateInput = ref(new Date().toISOString().slice(0,10));
 const bookingTime = ref('');
 const bookingDentists = ref([]);
-const bookingInitialPractitioner = ref('');
+const bookingInitialPractitioner = ref(null);
 const bookingPatientOptions = ref([]);
 const bookingResolvedPatientId = ref(null);
 const pad = (n) => String(n).padStart(2, '0');
@@ -650,26 +650,39 @@ const nextSlotTime = () => {
 bookingTime.value = nextSlotTime();
 const bookingPractitionerOptions = computed(() =>
   bookingDentists.value
-    .map((d) => d.name || d.fullName || '')
-    .filter((name) => !!name)
+    .map((d) => ({
+      title: d.name || d.fullName || `Dentist ${d.id}`,
+      value: Number(d.id || 0) || null,
+    }))
+    .filter((option) => option.value)
 );
 const bookingInitialDate = computed(() => bookingDateInput.value);
 const bookingInitialTime = computed(() => bookingTime.value);
 const bookingLeadName = computed(() => bookingLead.value?.name || '');
 const bookingLeadPatientId = computed(() => bookingResolvedPatientId.value || bookingLead.value?.patientId || null);
+const normalizeLicenseType = (value) => {
+  const raw = String(value || '').trim().toLowerCase();
+  const exact = Object.values(LICENSE_TYPES).find(
+    (license) => String(license).toLowerCase() === raw
+  );
+  return exact || LICENSE_TYPES.TRIAL;
+};
 const currentOrgLicense = computed(() => {
   const orgId = Number(user.value?.currentLoggedInOrgId || 0);
   const prefs = Array.isArray(user.value?.preferences) ? user.value.preferences : [];
   const match = prefs.find((row) => Number(row?.organisationId || 0) === orgId);
-  return String(match?.licenseType || 'Trial').trim();
+  return normalizeLicenseType(match?.licenseType || resolveUserLicenseType(user.value));
 });
 const canBookAppointments = computed(() => {
-  const type = String(currentOrgLicense.value || '').toLowerCase();
-  return ['soar', 'system'].includes(type);
+  return [
+    LICENSE_TYPES.TRIAL,
+    LICENSE_TYPES.SOAR,
+    LICENSE_TYPES.SYSTEM,
+  ].includes(currentOrgLicense.value);
 });
 watch(bookingPractitionerOptions, (opts) => {
   if (!bookingInitialPractitioner.value && opts.length) {
-    bookingInitialPractitioner.value = opts[0];
+    bookingInitialPractitioner.value = opts[0].value;
   }
 });
 
@@ -1225,12 +1238,13 @@ const loadBookingPatients = async () => {
     }
   } catch (e) {}
 };
-const matchingDentistName = (lead) => {
+const matchingDentistId = (lead) => {
   const assignedNames = (lead?.assigned || []).map((a) => a.fullName).filter(Boolean);
   for (const name of assignedNames) {
-    if (bookingPractitionerOptions.value.includes(name)) return name;
+    const match = bookingPractitionerOptions.value.find((option) => option.title === name);
+    if (match?.value) return match.value;
   }
-  return bookingPractitionerOptions.value[0] || '';
+  return bookingPractitionerOptions.value[0]?.value || null;
 };
 const splitLeadName = (lead) => {
   const rawName = String(lead?.name || '').trim();
@@ -1251,6 +1265,11 @@ const ensureBookingPatientOption = (patient) => {
     return;
   }
   bookingPatientOptions.value.unshift({ id, name });
+};
+const cacheLeadPatient = (lead, patient) => {
+  const patientId = Number(patient?.id || 0);
+  if (!lead || !patientId) return;
+  lead.patientId = patientId;
 };
 const findExistingBookingPatient = async (lead) => {
   const searchTerms = [lead?.email, lead?.telephone, lead?.name]
@@ -1293,6 +1312,7 @@ const ensureLeadPatient = async (lead) => {
   const matched = await findExistingBookingPatient(lead);
   if (matched?.id) {
     ensureBookingPatientOption(matched);
+    cacheLeadPatient(lead, matched);
     return matched;
   }
 
@@ -1307,6 +1327,7 @@ const ensureLeadPatient = async (lead) => {
   });
   if (created?.code === 0 && created?.data?.id) {
     ensureBookingPatientOption(created.data);
+    cacheLeadPatient(lead, created.data);
     return created.data;
   }
   throw new Error(created?.message || 'Unable to create patient for this lead');
@@ -1318,17 +1339,13 @@ const onBookLeads = async (selection) => {
     mainStore?.setSnackbar?.({ title: 'Select only one lead to book an appointment', type: 'error' });
     return;
   }
-  if (!canBookAppointments.value) {
-    mainStore?.setSnackbar?.({ title: 'Upgrade to the Soar plan to book leads into the diary', type: 'warning' });
-    return;
-  }
   const lead = picked[0];
   bookingLead.value = lead;
   bookingResolvedPatientId.value = null;
   bookingDateInput.value = normalizeDateInput(lead?.followUpDate || new Date());
   bookingTime.value = deriveTimeFromValue(lead?.followUpDate) || nextSlotTime();
   await loadBookingDentists(bookingDateInput.value);
-  bookingInitialPractitioner.value = matchingDentistName(lead);
+  bookingInitialPractitioner.value = matchingDentistId(lead);
   try {
     const patient = await ensureLeadPatient(lead);
     bookingResolvedPatientId.value = Number(patient?.id || 0) || null;
@@ -1339,12 +1356,11 @@ const onBookLeads = async (selection) => {
 };
 const onSaveBookedAppointment = async (appt) => {
   if (!bookingLead.value) return;
-  const dentistName =
-    appt.practitioner ||
-    bookingInitialPractitioner.value ||
-    bookingPractitionerOptions.value[0];
+  const dentistId = Number(
+    appt.practitioner || bookingInitialPractitioner.value || bookingPractitionerOptions.value[0]?.value || 0
+  );
   const dentist = bookingDentists.value.find(
-    (d) => (d.name || d.fullName) === dentistName
+    (d) => Number(d.id || 0) === dentistId
   );
   if (!dentist) {
     mainStore?.setSnackbar?.({ title: 'Select a practitioner to continue', type: 'error' });
@@ -1376,7 +1392,7 @@ const onSaveBookedAppointment = async (appt) => {
       mainStore?.setSnackbar?.({ title: 'Appointment booked and lead converted', type: 'success' });
       bookingLead.value = null;
       bookingResolvedPatientId.value = null;
-      bookingInitialPractitioner.value = bookingPractitionerOptions.value[0] || '';
+      bookingInitialPractitioner.value = bookingPractitionerOptions.value[0]?.value || null;
       fetchLeads(activeFilters.value);
     }
   } catch (err) {
