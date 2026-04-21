@@ -179,8 +179,9 @@ const groupInitials = (group) => {
 
 const filteredGroups = computed(() => {
   const q = String(search.value || '').trim().toLowerCase()
-  if (!q) return props.groups || []
-  return (props.groups || []).filter((group) =>
+  const base = (props.groups || []).filter((g) => (g.templateKeys || []).length > 0)
+  if (!q) return base
+  return base.filter((group) =>
     `${group?.title || ''} ${group?.key || ''} ${group?.description || ''}`
       .toLowerCase()
       .includes(q)
