@@ -17,6 +17,7 @@ export const useCrmStore = defineStore("crmStore", {
     // Automation cache — single source of truth shared by listView column and lead dialog
     automationGroupRows: [],
     automationGroupsLoading: false,
+    automationCacheOrgId: null,
     automationRowsCache: {},   // { [leadId]: CrmAutomation[] } raw API rows, unfiltered
     automationLoadingIds: {},  // { [leadId]: true } tracks in-flight per-lead fetches
     automationDirtyLeadIds: {}, // { [leadId]: true } leads whose automations changed since dialog opened
@@ -57,6 +58,24 @@ export const useCrmStore = defineStore("crmStore", {
     },
   },
   actions: {
+    _getCurrentOrgId() {
+      const { user } = useUser();
+      return Number(user.value?.currentLoggedInOrgId || 0);
+    },
+    _resetAutomationState() {
+      this.automationGroupRows = [];
+      this.automationGroupsLoading = false;
+      this.automationRowsCache = {};
+      this.automationLoadingIds = {};
+      this.automationDirtyLeadIds = {};
+    },
+    _ensureAutomationOrgScope() {
+      const currentOrgId = this._getCurrentOrgId();
+      if (!currentOrgId) return;
+      if (Number(this.automationCacheOrgId || 0) === currentOrgId) return;
+      this._resetAutomationState();
+      this.automationCacheOrgId = currentOrgId;
+    },
     _isCurrentAnalyticsOrg(orgId) {
       if (!orgId) return true;
       const { user } = useUser();
@@ -213,6 +232,7 @@ export const useCrmStore = defineStore("crmStore", {
 
     // Automation cache actions
     async fetchAutomationGroups({ force = false } = {}) {
+      this._ensureAutomationOrgScope();
       if (!force && (this.automationGroupRows.length || this.automationGroupsLoading)) return;
       this.automationGroupsLoading = true;
       try {
@@ -225,6 +245,7 @@ export const useCrmStore = defineStore("crmStore", {
       }
     },
     async fetchLeadAutomations(leadId, { force = false } = {}) {
+      this._ensureAutomationOrgScope();
       const id = Number(leadId);
       if (!id) return;
       if (!force && this.automationRowsCache[id] !== undefined) return;
@@ -241,17 +262,21 @@ export const useCrmStore = defineStore("crmStore", {
       }
     },
     syncLeadAutomations(leadId, rows = []) {
+      this._ensureAutomationOrgScope();
       const id = Number(leadId);
       if (!id) return;
       this.automationRowsCache[id] = Array.isArray(rows) ? rows : [];
     },
     setLeadAutomationsOptimistic(leadId, rows) {
+      this._ensureAutomationOrgScope();
       this.automationRowsCache[Number(leadId)] = rows;
     },
     markLeadAutomationsDirty(leadId) {
+      this._ensureAutomationOrgScope();
       this.automationDirtyLeadIds[Number(leadId)] = true;
     },
     async invalidateLeadAutomationsIfDirty(leadId) {
+      this._ensureAutomationOrgScope();
       const id = Number(leadId);
       if (!id || !this.automationDirtyLeadIds[id]) return;
       delete this.automationDirtyLeadIds[id];
@@ -259,6 +284,7 @@ export const useCrmStore = defineStore("crmStore", {
       await this.fetchLeadAutomations(id);
     },
     async invalidateLeadAutomations(leadId) {
+      this._ensureAutomationOrgScope();
       const id = Number(leadId);
       if (!id) return;
       delete this.automationDirtyLeadIds[id];
