@@ -1180,7 +1180,6 @@ onMounted(async () => {
   overflow-y: auto;
   min-height: 0;
   padding: 16px 24px;
-  background: #f7f8fb;
 }
 
 /* 24-hour window warning banner */

@@ -242,9 +242,9 @@ onMounted(async () => {
 
 .chart-title {
   font-weight: 600;
-  font-size: 16px;
+  font-size: 24px;
   margin: 0;
-  color: #111827;
+  color: #266DF0;
 }
 
 .chart-subtitle {

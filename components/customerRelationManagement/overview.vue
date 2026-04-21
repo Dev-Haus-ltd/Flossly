@@ -604,6 +604,11 @@ import whatsappLogo from '@/assets/crm/whatsapp-logo.svg'
 import googleLogo from '@/assets/crm/google-logo.svg'
 import chatbotLogo from '@/assets/crm/chatbot-logo.svg'
 
+const INTEGRATION_STATUS_CHIP_ACCENT = '#0061FB'
+const INTEGRATION_STATUS_CHIP_SUCCESS = '#33B93C'
+const INTEGRATION_STATUS_CHIP_ERROR = '#EF4444'
+const INTEGRATION_STATUS_NOT_CONNECTED_LABEL = 'Sync to Connect'
+
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
 const authStore = useAuthStore()
@@ -725,8 +730,8 @@ const integrationCards = computed(() => ([
     title: 'Meta',
     subtitlePrimary: userEmail.value || '-',
     subtitleSecondary: currentOrgName.value || '-',
-    statusLabel: isMetaConnected.value ? 'Connected' : 'Not Connected',
-    statusColor: isMetaConnected.value ? 'success' : 'grey-lighten-1',
+    statusLabel: isMetaConnected.value ? 'Connected' : INTEGRATION_STATUS_NOT_CONNECTED_LABEL,
+    statusColor: isMetaConnected.value ? INTEGRATION_STATUS_CHIP_SUCCESS : INTEGRATION_STATUS_CHIP_ACCENT,
     icon: metaLogo,
     iconClass: 'meta',
   },
@@ -736,7 +741,7 @@ const integrationCards = computed(() => ([
     subtitlePrimary: whapiStatusLoading.value ? '-' : (whapiDisplayLabel.value || userEmail.value || '-'),
     subtitleSecondary: currentOrgName.value || '-',
     statusLabel: whapiStatusLoading.value ? 'Loading…' : whapiStatusLabel.value,
-    statusColor: whapiStatusLoading.value ? 'grey-lighten-2' : whapiStatusColor.value,
+    statusColor: whapiStatusLoading.value ? INTEGRATION_STATUS_CHIP_ACCENT : whapiStatusColor.value,
     icon: whatsappLogo,
     iconClass: 'whatsapp',
   },
@@ -756,15 +761,15 @@ const integrationCards = computed(() => ([
     title: 'Chatbot',
     subtitlePrimary: userEmail.value || '-',
     subtitleSecondary: currentOrgName.value || '-',
-    statusLabel: 'Not Connected',
-    statusColor: 'grey-lighten-1',
+    statusLabel: INTEGRATION_STATUS_NOT_CONNECTED_LABEL,
+    statusColor: INTEGRATION_STATUS_CHIP_ACCENT,
     icon: chatbotLogo,
     iconClass: 'chatbot',
   },
 ]))
 
 const whapiStatusLabel = computed(() => {
-  if (!whapiStatus.status && !whapiStatus.connected) return 'Not Connected'
+  if (!whapiStatus.status && !whapiStatus.connected) return INTEGRATION_STATUS_NOT_CONNECTED_LABEL
   const raw = String(whapiStatus.status || '').trim().toLowerCase()
   if (raw.includes('stopped')) return 'Stopped'
   if (raw.includes('overdue')) return 'Overdue'
@@ -774,16 +779,15 @@ const whapiStatusLabel = computed(() => {
   if (raw.includes('activating')) return 'Activating'
   if (raw.includes('auth')) return 'Authorized'
   if (raw.includes('active') || raw.includes('live') || raw.includes('trial')) return 'Active'
-  return whapiStatus.connected ? 'Connected' : 'Not Connected'
+  return whapiStatus.connected ? 'Connected' : INTEGRATION_STATUS_NOT_CONNECTED_LABEL
 })
 
 const whapiStatusColor = computed(() => {
   const label = String(whapiStatusLabel.value || '').toLowerCase()
-  if (label === 'not connected') return 'grey-lighten-1'
-  if (label === 'connected' || label.includes('active') || label.includes('authorized')) return 'success'
-  if (label.includes('pending') || label.includes('activating') || label.includes('awaiting')) return 'warning'
-  if (label.includes('stopped') || label.includes('overdue') || label.includes('logged')) return 'error'
-  return 'grey-lighten-1'
+  if (label === 'connected' || label.includes('active') || label.includes('authorized')) {
+    return INTEGRATION_STATUS_CHIP_SUCCESS
+  }
+  return INTEGRATION_STATUS_CHIP_ACCENT
 })
 
 const whapiQrCtaLabel = computed(() => {
@@ -793,16 +797,16 @@ const whapiQrCtaLabel = computed(() => {
 })
 
 const googleStatusLabel = computed(() => {
-  if (!isGoogleConnected.value) return 'Not Connected'
+  if (!isGoogleConnected.value) return INTEGRATION_STATUS_NOT_CONNECTED_LABEL
   if (!googleStatus.tokenValid) return 'Token Expired'
   return 'Connected'
 })
 
 const googleStatusColor = computed(() => {
   const label = String(googleStatusLabel.value || '').toLowerCase()
-  if (label.includes('connected')) return 'success'
-  if (label.includes('expired')) return 'error'
-  return 'grey-lighten-1'
+  if (label === 'token expired') return INTEGRATION_STATUS_CHIP_ERROR
+  if (label === 'connected') return INTEGRATION_STATUS_CHIP_SUCCESS
+  return INTEGRATION_STATUS_CHIP_ACCENT
 })
 
 const whapiChannelOptions = computed(() => {

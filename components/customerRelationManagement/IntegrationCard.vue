@@ -8,10 +8,16 @@
       <v-chip
         :color="statusColor"
         variant="flat"
-        size="small"
         class="status-chip"
       >
-        {{ statusLabel }}
+        <img
+          class="status-chip-icon"
+          src="@/assets/icons/crm/arrow-2.svg"
+          width="20"
+          height="20"
+          alt=""
+        />
+        <span class="status-chip-text">{{ statusLabel }}</span>
       </v-chip>
     </div>
     <div class="card-title">{{ title }}</div>
@@ -83,7 +89,45 @@ defineProps({
 }
 
 .status-chip {
-  font-weight: 500;
+  --v-chip-height: 48px;
+  width: 176px;
+  max-width: 100%;
+  height: 48px;
+  min-height: 48px;
+  border-radius: 8px !important;
+  padding: 0 12px !important;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.status-chip :deep(.v-chip__content) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0;
+}
+
+.status-chip-icon {
+  flex-shrink: 0;
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
+.status-chip-text {
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 130%;
+  letter-spacing: 0;
+  text-align: center;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .card-title {
