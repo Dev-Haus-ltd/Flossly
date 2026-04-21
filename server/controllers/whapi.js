@@ -1047,6 +1047,8 @@ const sendWhatsAppAutoReply = async ({ orgId, lead, content, token, channelId })
       attachments: null,
     });
 
+    broadcastWhapiEvent("message", { orgId, leadId: lead.id });
+
     console.log(`[WhatsApp AutoReply] Sent auto-reply for org ${orgId}: ${replyText.slice(0, 50)}...`);
   } catch (err) {
     console.error(`[WhatsApp AutoReply] Failed for org ${orgId}:`, err?.message || err);
