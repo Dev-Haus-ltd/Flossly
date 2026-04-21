@@ -1330,7 +1330,12 @@ const toggleLeadGroup = async (lead, group, enabled) => {
       .map((key) => {
         if (rowMap.has(key)) return rowMap.get(key);
         const def = defaultAutomationMap.get(key);
-        if (!def) return null;
+        if (!def) {
+          const stub = { key, enabled: false, type: 'Email' };
+          extraRows.push(stub);
+          rowMap.set(key, stub);
+          return stub;
+        }
         const nextRow = { ...def };
         extraRows.push(nextRow);
         rowMap.set(key, nextRow);
