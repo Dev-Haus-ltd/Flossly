@@ -14,6 +14,12 @@ export const useCrmStore = defineStore("crmStore", {
     metaCampaignLeadCounts: {},
     metaAdSetLeadCounts: {},
     metaAdLeadCounts: {},
+    // Automation cache — single source of truth shared by listView column and lead dialog
+    automationGroupRows: [],
+    automationGroupsLoading: false,
+    automationRowsCache: {},   // { [leadId]: CrmAutomation[] } raw API rows, unfiltered
+    automationLoadingIds: {},  // { [leadId]: true } tracks in-flight per-lead fetches
+    automationDirtyLeadIds: {}, // { [leadId]: true } leads whose automations changed since dialog opened
   }),
   getters: {
     metaStats(state) {
@@ -203,6 +209,61 @@ export const useCrmStore = defineStore("crmStore", {
         window.dispatchEvent(new CustomEvent('crm-automation-groups-updated'));
       }
       return res;
+    },
+
+    // Automation cache actions
+    async fetchAutomationGroups({ force = false } = {}) {
+      if (!force && (this.automationGroupRows.length || this.automationGroupsLoading)) return;
+      this.automationGroupsLoading = true;
+      try {
+        const res = await this.listAutomationGroups();
+        if (res?.code === 0 && Array.isArray(res.data)) {
+          this.automationGroupRows = res.data;
+        }
+      } finally {
+        this.automationGroupsLoading = false;
+      }
+    },
+    async fetchLeadAutomations(leadId, { force = false } = {}) {
+      const id = Number(leadId);
+      if (!id) return;
+      if (!force && this.automationRowsCache[id] !== undefined) return;
+      if (this.automationLoadingIds[id]) return;
+      this.automationLoadingIds[id] = true;
+      try {
+        const res = await this.listAutomation(id);
+        const items = Array.isArray(res?.data) ? res.data : [];
+        this.automationRowsCache[id] = items;
+      } catch {
+        this.automationRowsCache[id] = [];
+      } finally {
+        delete this.automationLoadingIds[id];
+      }
+    },
+    syncLeadAutomations(leadId, rows = []) {
+      const id = Number(leadId);
+      if (!id) return;
+      this.automationRowsCache[id] = Array.isArray(rows) ? rows : [];
+    },
+    setLeadAutomationsOptimistic(leadId, rows) {
+      this.automationRowsCache[Number(leadId)] = rows;
+    },
+    markLeadAutomationsDirty(leadId) {
+      this.automationDirtyLeadIds[Number(leadId)] = true;
+    },
+    async invalidateLeadAutomationsIfDirty(leadId) {
+      const id = Number(leadId);
+      if (!id || !this.automationDirtyLeadIds[id]) return;
+      delete this.automationDirtyLeadIds[id];
+      delete this.automationRowsCache[id];
+      await this.fetchLeadAutomations(id);
+    },
+    async invalidateLeadAutomations(leadId) {
+      const id = Number(leadId);
+      if (!id) return;
+      delete this.automationDirtyLeadIds[id];
+      delete this.automationRowsCache[id];
+      await this.fetchLeadAutomations(id);
     },
 
     getLeadAutomationLog(leadId, params = {}) { return this._wrap(() => crmService.getLeadAutomationLog(leadId, params)); },

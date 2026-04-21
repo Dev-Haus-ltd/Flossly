@@ -698,11 +698,10 @@ const resolvedGroups = computed(() => {
   if (Array.isArray(props.groups) && props.groups.length) {
     return props.groups
   }
-  if (groupRows.value.length) return groupRows.value
-  // Patient journey: Empty array
-  // Other usecases: Static defaults when the groups API has not returned yet.
   if (isPatientJourney.value) {
-    return []
+    if (groupRows.value.length) return groupRows.value
+  } else if (crmStore.automationGroupRows.length) {
+    return crmStore.automationGroupRows
   }
   return crmAutomationGroups
 })
@@ -1025,6 +1024,14 @@ const toggleAutomationGroup = async (card, val) => {
   if (!updates.length) return
   try {
     await crmStore.saveAutomationBatch({ items: updates })
+    if (resolvedLeadId.value) {
+      await crmStore.invalidateLeadAutomations(resolvedLeadId.value)
+      const syncedRows = crmStore.automationRowsCache[Number(resolvedLeadId.value)] || []
+      const filteredRows = props.includeDefaults
+        ? syncedRows
+        : syncedRows.filter(item => !defaultAutomationKeySet.has(item.key))
+      rows.splice(0, rows.length, ...(filteredRows.length ? filteredRows : (props.includeDefaults ? crmAutomationDefaults : [])))
+    }
   } catch (e) {
     groupRows.forEach((row) => { row.enabled = !row.enabled })
     mainStore?.setSnackbar?.({ title: e?.message || 'Failed to update automations', type: 'error' })
@@ -1041,8 +1048,17 @@ const loadRows = async () => {
     return
   }
   try {
-    const res = await crmStore.listAutomation(resolvedLeadId.value || undefined)
-    const apiItems = Array.isArray(res?.data) ? res.data : []
+    let apiItems = []
+    if (resolvedLeadId.value) {
+      await crmStore.fetchLeadAutomations(resolvedLeadId.value, { force: true })
+      apiItems = crmStore.automationRowsCache[Number(resolvedLeadId.value)] || []
+    } else {
+      const res = await crmStore.listAutomation()
+      apiItems = Array.isArray(res?.data) ? res.data : []
+    }
+    if (resolvedLeadId.value) {
+      crmStore.syncLeadAutomations(resolvedLeadId.value, apiItems)
+    }
     const filteredItems = props.includeDefaults
       ? apiItems
       : apiItems.filter(item => !defaultAutomationKeySet.has(item.key))
@@ -1056,13 +1072,7 @@ const loadGroups = async () => {
     return
   }
   if (!props.useGroupsApi || (Array.isArray(props.groups) && props.groups.length)) return
-  try {
-    const res = await crmStore.listAutomationGroups()
-    if (res?.code === 0 && Array.isArray(res.data)) {
-      groupRows.value = res.data
-    }
-  } finally {
-  }
+  await crmStore.fetchAutomationGroups()
 }
 
 const refresh = async ({ skipGroups = false } = {}) => {
