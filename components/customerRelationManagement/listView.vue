@@ -797,7 +797,7 @@
         <v-card-text class="pa-0">
           This action is available on the Soar plan. Your current plan is
           <strong>{{ currentOrgLicenseLabel }}</strong>.
-          Upgrade to Soar to unlock diary booking, patient auto-creation, lead form sending, and more.
+          Upgrade to Soar to unlock diary booking, consent form sending, patient auto-creation, and more.
         </v-card-text>
         <v-card-actions class="pa-0 mt-4">
           <v-spacer />
@@ -812,6 +812,59 @@
       :rolesList="rolesList"
       @success="onStaffAdded"
       @close="addStaffDrawer = false"
+    />
+
+    <!-- Consent form picker -->
+    <v-dialog v-model="showConsentFormSelect" max-width="540">
+      <v-card class="pa-4 rounded-xl">
+        <v-card-title class="text-subtitle-1 pa-0 mb-3 d-flex justify-space-between align-center">
+          <span>Select Consent Form</span>
+          <v-btn icon variant="text" size="small" @click="showConsentFormSelect = false">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </v-card-title>
+        <v-card-text class="pa-0">
+          <div v-if="consentFormsLoading" class="d-flex justify-center py-8">
+            <v-progress-circular indeterminate color="primary" />
+          </div>
+          <v-alert v-else-if="!consentForms.length" type="info" variant="tonal" class="mb-2">
+            No consent forms found. Create one in the Forms section first.
+          </v-alert>
+          <v-list v-else density="compact" class="pa-0">
+            <v-list-item
+              v-for="form in consentForms"
+              :key="form.id"
+              :title="form.name || form.title"
+              :subtitle="form.category || 'General'"
+              rounded="lg"
+              class="mb-2"
+              style="border: 1px solid #e2e8f0;"
+              @click="selectConsentForm(form)"
+            >
+              <template #prepend>
+                <v-icon color="primary" class="mr-2">mdi-file-document-outline</v-icon>
+              </template>
+              <template #append>
+                <v-icon size="16" color="grey">mdi-chevron-right</v-icon>
+              </template>
+            </v-list-item>
+          </v-list>
+        </v-card-text>
+        <v-card-actions class="pa-0 mt-3">
+          <v-spacer />
+          <v-btn variant="text" @click="showConsentFormSelect = false">Cancel</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Consent form sender -->
+    <PatientsFormsConsentFormSender
+      v-if="showConsentFormSender && selectedConsentForm && consentFormSenderLead"
+      v-model="showConsentFormSender"
+      :form="selectedConsentForm"
+      :patient="consentSenderPatient"
+      @success="onConsentFormSent"
+      @close="showConsentFormSender = false"
     />
   </div>
 </template>
@@ -1059,6 +1112,56 @@ const converting = ref(false);
 const getPermanentDeleteMessage = (count) =>
   `Delete ${count} lead(s) permanently? This cannot be undone.`;
 const addStaffDrawer = ref(false);
+const consentStore = useConsentStore();
+const consentForms = ref([]);
+const consentFormsLoading = ref(false);
+const showConsentFormSelect = ref(false);
+const selectedConsentForm = ref(null);
+const showConsentFormSender = ref(false);
+const consentFormSenderLead = ref(null);
+
+const consentSenderPatient = computed(() => {
+  if (!consentFormSenderLead.value) return null;
+  const lead = consentFormSenderLead.value;
+  const fullName = resolveLeadName(lead) || '';
+  const [firstName, ...rest] = fullName.split(' ');
+  return {
+    id: lead.id,
+    firstName: firstName || fullName || 'Lead',
+    lastName: rest.join(' ') || '',
+    email: resolveLeadEmail(lead) || undefined,
+    phone: resolveLeadPhone(lead) || undefined,
+  };
+});
+
+const openConsentFormSelect = async () => {
+  if (!selectedLeads.value.length) return;
+  showConsentFormSelect.value = true;
+  if (consentForms.value.length) return;
+  consentFormsLoading.value = true;
+  try {
+    await consentStore.fetchTemplates();
+    consentForms.value = consentStore.templates || [];
+  } catch (e) {
+    consentForms.value = [];
+  } finally {
+    consentFormsLoading.value = false;
+  }
+};
+
+const selectConsentForm = (form) => {
+  selectedConsentForm.value = form;
+  showConsentFormSelect.value = false;
+  consentFormSenderLead.value = selectedLeads.value[0];
+  showConsentFormSender.value = true;
+};
+
+const onConsentFormSent = () => {
+  showConsentFormSender.value = false;
+  selectedConsentForm.value = null;
+  consentFormSenderLead.value = null;
+};
+
 const showWhatsAppCompose = ref(false);
 const whatsappSending = ref(false);
 const whatsappMessage = ref('');
@@ -1482,7 +1585,7 @@ const onActionClick = (key) => {
   else if (key === 'sendPrice') openSendPriceCompose();
   else if (key === 'sendForm') {
     if (!canBookAppointments.value) { showBookPlanDialog.value = true; return; }
-    openCompose(key)
+    openConsentFormSelect()
   }
   else if (['mail','shareLocation'].includes(key)) openCompose(key)
 };
@@ -2329,8 +2432,9 @@ const convertSelected = async () => {
 }
 
 .action-item--locked {
-  opacity: 0.45;
-  cursor: default;
+  opacity: 0.38;
+  cursor: not-allowed;
+  pointer-events: auto;
 }
 
 .action-item--locked:hover {
@@ -2339,11 +2443,11 @@ const convertSelected = async () => {
 }
 
 .action-item--locked .action-icon {
-  filter: grayscale(1);
+  filter: grayscale(1) opacity(0.5);
 }
 
 .action-item--locked .action-label {
-  color: #8a8a8a;
+  color: #aaaaaa;
 }
 
 .action-label {
