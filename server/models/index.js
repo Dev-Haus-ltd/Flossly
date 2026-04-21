@@ -111,6 +111,7 @@ import { CrmAutomationGroup } from "./crm/automationGroups";
 import { CrmAutomationGroupTemplate } from "./crm/automationGroupTemplates";
 import { CrmAutomationDictionaryGroup } from "./crm/crmAutomationDictionaryGroups";
 import { CrmAutomationDictionaryTemplate } from "./crm/crmAutomationDictionaryTemplates";
+import { FormConfig } from "./crm/formConfig";
 import { PatientAutomationDictionary } from "./patientJourney/patientAutomationDictionary";
 import { PatientAutomationTemplate } from "./patientJourney/patientAutomationTemplates";
 import { OrganisationReferral } from "./organisationReferrals";
@@ -698,6 +699,7 @@ export {
   CrmAutomationGroupTemplate,
   CrmAutomationDictionaryGroup,
   CrmAutomationDictionaryTemplate,
+  FormConfig,
   CrmWhatsAppMessageLog,
   CrmDmConversation,
   CrmDmMessage,
