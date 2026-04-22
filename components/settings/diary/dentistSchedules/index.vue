@@ -243,6 +243,7 @@
 import { ref, onMounted, computed, watch } from "vue";
 import { useDiaryStore } from "~/stores/diary";
 import { useScheduleStore } from "~/stores/schedule";
+import { useOrgStore } from "~/stores/organisation";
 import { LICENSE_TYPES, getLicenseTypeFromStorage, resolveUserLicenseType, useMainStore } from "~/stores/index";
 import { useUser } from "~/composables/useUser";
 import ScheduleList from "@/components/schedule/ScheduleList.vue";
@@ -261,6 +262,7 @@ const props = defineProps({
 
 const diaryStore = useDiaryStore();
 const scheduleStore = useScheduleStore();
+const orgStore = useOrgStore();
 const mainStore = useMainStore();
 const { user } = useUser();
 
@@ -489,8 +491,22 @@ const toggleScheduleStatus = async (dentistId, scheduleId) => {
   try {
     await scheduleStore.toggleSchedule(scheduleId);
     await loadSchedulesForDentist(dentistId);
+    
+    // Show feedback about toggle action
+    const schedule = dentistSchedulesMap.value[dentistId]?.find(s => s.id === scheduleId);
+    const newStatus = schedule?.isActive ? "activated" : "deactivated";
+    mainStore?.setSnackbar?.({
+      message: `${schedule?.scheduleName} has been ${newStatus}`,
+      color: "success",
+      timeout: 3000,
+    });
   } catch (err) {
     console.error("Failed to toggle schedule:", err);
+    mainStore?.setSnackbar?.({
+      message: "Failed to update schedule status",
+      color: "error",
+      timeout: 4000,
+    });
   }
 };
 
@@ -534,9 +550,37 @@ const clearSearch = () => {
   search.value = "";
 };
 
+/**
+ * Fetch organisation practice details to ensure working timings are available
+ * for the schedule form. This is called before dentist list to ensure
+ * global state is populated.
+ */
+const fetchOrganisationDetails = async () => {
+  try {
+    const res = await orgStore.getPracticeDetails();
+    if (res?.code === 0 && res.data) {
+      // Update global store with fresh organisation data including working timings
+      mainStore.organisation = res.data;
+      return res.data;
+    } else {
+      console.error("Failed to fetch organisation details:", res?.message);
+      return null;
+    }
+  } catch (error) {
+    console.error("Error fetching organisation details:", error);
+    // Don't block the flow if org details fail
+    return null;
+  }
+};
+
 const fetchDentists = async () => {
   try {
     loading.value = true;
+    
+    // CRITICAL: Fetch organisation details first to ensure working timings are available
+    // This populates mainStore.organisation which is used by useOrganisationWorkingHours
+    await fetchOrganisationDetails();
+    
     const res = await diaryStore.listDentists();
     if (res?.code === 0) {
       dentists.value = res.data || [];

@@ -181,6 +181,41 @@ export const updateOrganisationDetails = async (event) => {
       }
     }
 
+    // Handle working day timings
+    const workingTimingsRaw = firstNonEmpty(fields, 'workingTimings');
+    if (workingTimingsRaw !== undefined) {
+      try {
+        let parsedTimings = workingTimingsRaw;
+        if (typeof workingTimingsRaw === 'string') {
+          parsedTimings = JSON.parse(workingTimingsRaw);
+        }
+        
+        // Validate structure: should have days as keys with startTime and endTime
+        if (!parsedTimings || typeof parsedTimings !== 'object') {
+          return error(400, 'workingTimings must be a valid object');
+        }
+        
+        const validDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        const timeRegex = /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/; // HH:MM format
+        
+        for (const day of validDays) {
+          if (!parsedTimings[day]) {
+            return error(400, `Missing timings for ${day}`);
+          }
+          if (!parsedTimings[day].startTime || !parsedTimings[day].endTime) {
+            return error(400, `startTime and endTime required for ${day}`);
+          }
+          if (!timeRegex.test(parsedTimings[day].startTime) || !timeRegex.test(parsedTimings[day].endTime)) {
+            return error(400, `Invalid time format for ${day}. Use HH:MM format.`);
+          }
+        }
+        
+        organisation.workingTimings = parsedTimings;
+      } catch (err) {
+        return error(400, 'workingTimings must be valid JSON with proper time format (HH:MM)');
+      }
+    }
+
     // Handle logo upload (if provided)
     if (files && files.logo) {
       const logoFile = Array.isArray(files.logo) ? files.logo[0] : files.logo;

@@ -53,7 +53,7 @@
               <label class="fld-lbl"
                 >Patient <span class="req-star">*</span></label
               >
-              <v-autocomplete
+              <v-Autocomplete
                 v-model="selectedPatientId"
                 :items="patientOptions"
                 item-title="name"
@@ -77,7 +77,7 @@
                     <v-icon size="18">mdi-account-plus</v-icon>
                   </v-btn>
                 </template>
-              </v-autocomplete>
+              </v-Autocomplete>
             </v-col>
 
             <!-- Date -->
@@ -184,7 +184,7 @@
 
             <!-- Treatment with Add Option -->
             <v-col cols="12">
-              <label class="fld-lbl">Treatment / Exam</label>
+              <label class="fld-lbl">Treatment / Exam <span class="req-star">*</span></label>
               <v-combobox
                 v-model="exam"
                 :items="exams"
@@ -195,6 +195,10 @@
                 placeholder="Search or type treatment"
                 :filter="customFilter"
                 @keydown.enter="handleAddTreatment"
+                :error="!!errors.exam"
+                :error-messages="
+                  errors.exam ? [errors.exam] : []
+                "
               >
                 <!-- No data state -->
                 <template #no-data>
@@ -207,8 +211,7 @@
                 </template>
               </v-combobox>
               <div class="text-caption text-grey mt-1">
-                Type new treatment name and press Enter to add, or click +
-                button
+                Type new treatment name and press Enter to add
               </div>
             </v-col>
 
@@ -273,7 +276,6 @@ import {
   formatTime12Hour,
 } from "@/lib/dateFormatter";
 import { useOrgStore } from "@/stores/organisation";
-import { useDentistAvailability } from "@/composables/useDentistAvailability";
 import { useUser } from "@/composables/useUser";
 import { useMainStore } from "@/stores/index";
 
@@ -326,14 +328,8 @@ const errors = reactive({
 });
 
 const organisationStore = useOrgStore();
-const mainStore = useMainStore();
 const { user } = useUser();
-const {
-  loadDentistSchedules,
-  getTimeRangeAvailability,
-  getAvailableTimeSlots,
-  getAvailabilityMessage,
-} = useDentistAvailability();
+const mainStore = useMainStore();
 const treatmentOptions = ref([]);
 const exams = computed(() => treatmentOptions.value.map((t) => t.name));
 
@@ -365,16 +361,20 @@ const fallbackTimeOptions = computed(() => {
   }
   return opts;
 });
+
 const timeOptions = computed(() => {
-  if (date.value && practitioner.value) {
-    return getAvailableTimeSlots(
-      clinicDateToYMD(date.value),
-      Number(duration.value || 15),
-      SLOT_MIN,
-    );
+  const opts = [];
+
+  for (let m = 0; m < 24 * 60; m += SLOT_MIN) {
+    const h = Math.floor(m / 60);
+    const min = m % 60;
+
+    opts.push(`${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`);
   }
-  return fallbackTimeOptions.value;
+
+  return opts;
 });
+
 const displayTimeOptions = computed(() =>
   timeOptions.value.map((value) => ({
     title: formatTime12Hour(value) || value,
@@ -424,8 +424,7 @@ const applyIncomingAppointmentState = () => {
     exam.value = a.treatmentName || a.exam || "";
     practitioner.value =
       a.practitionerId || a.practitioner || props.initialPractitioner || "";
-    selectedPatientId.value =
-      a.patientId || props.preselectedPatientId || null;
+    selectedPatientId.value = a.patientId || props.preselectedPatientId || null;
     notes.value = a.notes || "";
   } else {
     date.value = props.initialDate || "";
@@ -445,34 +444,55 @@ const applyIncomingAppointmentState = () => {
     time.value = timeOptions.value[0] || "";
   }
 };
+
 const handleAddTreatment = async () => {
-  if (!exam.value) return;
+  const value = (exam.value || "").trim();
+
+  if (!value) {
+    errors.exam = "Please enter a treatment name";
+
+    mainStore.setSnackbar({
+      title: "Please enter a treatment name",
+      type: "error",
+    });
+
+    return;
+  }
 
   const exists = treatmentOptions.value.find(
-    (t) => t.name.toLowerCase() === exam.value.toLowerCase()
+    (t) => t.name.toLowerCase() === value.toLowerCase(),
   );
 
-  // Agar already exist karta hai → kuch na karo
   if (exists) {
     exam.value = exists.name;
+    duration.value = exists.defaultDuration || duration.value;
+
+    mainStore.setSnackbar({
+      title: `"${exists.name}" is already available as a treatment`,
+      type: "info",
+    });
+
     return;
   }
 
   try {
     const payload = {
-      name: exam.value.trim(),
+      name: value,
       defaultDuration: duration.value || 15,
       price: 0,
     };
 
     const res = await organisationStore.addTreatment(payload);
 
-    if (res?.code === 0) {
+    if (res?.code === 0 && res?.data) {
       const newItem = {
         id: res.data.id,
-        name: payload.name,
-        defaultDuration: payload.defaultDuration,
-        amount: payload.price,
+        name: res.data.name,
+        code: res.data.code,
+        defaultDuration: res.data.defaultDuration || 15,
+        amount: res.data.price || 0,
+        color: res.data.color || "#0061FB",
+        active: res.data.active,
       };
 
       treatmentOptions.value.push(newItem);
@@ -481,9 +501,26 @@ const handleAddTreatment = async () => {
       duration.value = newItem.defaultDuration;
 
       emit("treatment-added", newItem);
+
+      mainStore.setSnackbar({
+        title: `Treatment "${newItem.name}" created successfully`,
+        type: "success",
+      });
+
+      return;
     }
+
+    mainStore.setSnackbar({
+      title: res?.message || "Failed to create treatment",
+      type: "error",
+    });
   } catch (err) {
     console.error(err);
+
+    mainStore.setSnackbar({
+      title: err?.message || "Failed to create treatment",
+      type: "error",
+    });
   }
 };
 const openAddTreatmentDialog = () => {
@@ -569,7 +606,10 @@ const saveNewTreatment = async () => {
 
 // ── Watchers ──────────────────────────────────────────────────────────────────
 watch(duration, () => {
-  if (timeOptions.value.length && (!time.value || !timeOptions.value.includes(time.value)))
+  if (
+    timeOptions.value.length &&
+    (!time.value || !timeOptions.value.includes(time.value))
+  )
     time.value = timeOptions.value[0] || "";
 });
 watch(hasPatient, (v) => {
@@ -593,22 +633,6 @@ watch(duration, (v) => {
 watch(practitioner, (v) => {
   if (v) errors.practitioner = "";
 });
-watch(
-  [date, practitioner, duration, () => props.modelValue],
-  async ([nextDate, nextPractitioner, _nextDuration, open]) => {
-    if (!open) return;
-    const orgId = user.value?.currentLoggedInOrgId || user.value?.organisationId;
-    if (!orgId || !nextDate || !nextPractitioner) return;
-    try {
-      await loadDentistSchedules(orgId, Number(nextPractitioner));
-      if (timeOptions.value.length && time.value && !timeOptions.value.includes(time.value)) {
-        time.value = timeOptions.value[0] || "";
-      }
-    } catch (error) {
-      console.error("Could not load dentist schedule", error);
-    }
-  },
-);
 
 watch(
   () => props.modelValue,
@@ -677,42 +701,16 @@ const validate = () => {
     errors.practitioner = "Practitioner required";
     ok = false;
   } else errors.practitioner = "";
+  if (!exam.value) {
+    errors.exam = "Treatment/Exam is required";
+    ok = false;
+  } else errors.exam = "";
   return ok;
 };
 
 // ── Save (Schedule directly) ──────────────────────────────────────────────────
 const onSave = async () => {
   if (!validate()) return;
-
-  const orgId = user.value?.currentLoggedInOrgId || user.value?.organisationId;
-  if (orgId && practitioner.value && date.value && time.value) {
-    try {
-      await loadDentistSchedules(orgId, Number(practitioner.value));
-      const bookingDate = clinicDateToYMD(date.value);
-      const [hours, minutes] = String(time.value).split(":").map(Number);
-      const startMinutes = hours * 60 + (minutes || 0);
-      const endMinutes = startMinutes + Number(duration.value || 15);
-      const availability = getTimeRangeAvailability(
-        bookingDate,
-        time.value,
-        `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`,
-        {
-          name: practitionerLabel.value || "This practitioner",
-        },
-      );
-      if (!availability.available) {
-        errors.time =
-          availability.message ||
-          getAvailabilityMessage(bookingDate, {
-            name: practitionerLabel.value || "This practitioner",
-          });
-        mainStore?.setSnackbar?.({ title: errors.time, type: "error" });
-        return;
-      }
-    } catch (error) {
-      console.warn("Could not validate availability:", error);
-    }
-  }
 
   isSaving.value = true;
   const selectedTreatment = treatmentOptions.value.find(
