@@ -479,6 +479,7 @@
                   :disable-toggle="false"
                   :show-sent-status-column="true"
                   :show-resend-action="true"
+                  @go-to-automations="goToAutomations"
                 />
               </div>
             </v-tabs-window-item>
@@ -584,7 +585,9 @@ const props = defineProps({
   initialTab: { type: String, default: null },
 });
 const emit = defineEmits(['close','update:modelValue'])
+const router = useRouter()
 const onClose = () => { emit('update:modelValue', false); emit('close') }
+const goToAutomations = () => { onClose(); router.push('/crm/automations') }
 const tab = ref(props.initialTab || "lead-info");
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
