@@ -75,7 +75,8 @@
           </button>
         </div>
         <v-textarea
-          v-model="draft.rawNote"
+          :model-value="displayRawNote"
+          :readonly="isTranscribing"
           variant="solo"
           density="compact"
           rows="6"
@@ -85,32 +86,20 @@
           hide-details
           placeholder="Type or dictate your notes"
           class="cns-raw__input"
+          :class="{ 'cns-raw__input--transcribing': isTranscribing }"
+          @update:model-value="v => { if (!isTranscribing) draft.rawNote = v }"
         />
-        <div v-if="interimText" class="cns-interim">{{ interimText }}</div>
-      </div>
-
-      <div v-if="pendingResult" class="cns-review">
-        <div class="cns-review__head">
-          <v-icon size="15" color="#4f46e5">mdi-text-box-check-outline</v-icon>
-          <span>Review AI-generated note</span>
-        </div>
-        <div v-if="pendingResult.warnings.length" class="cns-warnings">
-          <div v-for="warning in pendingResult.warnings" :key="warning" class="cns-warning">
-            <v-icon size="15">mdi-alert-outline</v-icon>
-            <span>{{ warning }}</span>
-          </div>
-        </div>
-        <div class="cns-review__content" v-html="pendingResult.notes" />
-        <div class="cns-review__actions">
-          <v-btn variant="text" size="small" @click="discardPending">Discard</v-btn>
-          <v-btn color="primary" variant="flat" size="small" @click="confirmApply">Apply to note</v-btn>
-        </div>
       </div>
 
       <div class="cns-footer">
-        <div v-if="statusText" class="cns-footer__save">{{ statusText }}</div>
+        <transition name="cns-flash">
+          <div v-if="noteApplied" class="cns-applied-flash">
+            <v-icon size="15">mdi-check-circle-outline</v-icon>
+            Note applied to chart
+          </div>
+        </transition>
+        <div v-if="statusText && !noteApplied" class="cns-footer__save">{{ statusText }}</div>
         <v-btn
-          v-if="!pendingResult"
           class="cns-generate"
           color="primary"
           block
@@ -142,7 +131,7 @@ const chartingStore = usePatientChartingStore()
 const templates = ref([])
 const applyingAi = ref(false)
 const warnings = ref([])
-const pendingResult = ref(null)
+const noteApplied = ref(false)
 const saveState = ref('idle')
 const lastSavedAt = ref(null)
 const draft = reactive({
@@ -160,6 +149,11 @@ const isTranscribing = ref(false)
 const interimText = ref('')
 let recognition = null
 
+const displayRawNote = computed(() =>
+  isTranscribing.value && interimText.value
+    ? `${draft.rawNote} ${interimText.value}`.trim()
+    : draft.rawNote
+)
 const sidebarTitle = computed(() => props.item?.treatmentName || props.item?.conditionLabel || props.item?.condition || 'Clinical note')
 const itemTypeLabel = computed(() => draft.type === 'treatment_plan' ? 'Treatment Plan' : 'Diagnosis')
 const templateOptions = computed(() => {
@@ -205,7 +199,7 @@ async function loadTemplates() {
 function syncFromItem(item) {
   saveState.value = 'idle'
   warnings.value = []
-  pendingResult.value = null
+  noteApplied.value = false
   draft.id = item?.id || item?._tempId || null
   draft.type = props.type || (String(item?.status || '').toLowerCase() === 'existing' ? 'diagnosis' : 'treatment_plan')
   draft.templateId = item?.templateId || null
@@ -234,7 +228,7 @@ function selectTemplateById(value) {
 async function generateSummary() {
   if (!props.item || !draft.templateId || !draft.rawNote.trim()) return
   applyingAi.value = true
-  pendingResult.value = null
+  warnings.value = []
   try {
     const data = await chartingStore.generateClinicalNoteTemplate({
       type: draft.type,
@@ -252,36 +246,24 @@ async function generateSummary() {
       treatmentName: props.item.treatmentName || null,
       treatmentCategory: props.item.treatmentCategory || null,
     })
-    pendingResult.value = {
-      templateId: data.templateId || draft.templateId,
+    const aiWarnings = Array.isArray(data.warnings) ? data.warnings : []
+    draft.templateId = data.templateId || draft.templateId
+    emit('apply-summary', {
+      id: props.item?.id || props.item?._tempId || null,
+      templateId: draft.templateId || null,
       notes: plainTextToHtml(data.finalNote || props.item?.notes || ''),
-      warnings: Array.isArray(data.warnings) ? data.warnings : [],
-    }
+      warnings: aiWarnings,
+    })
+    if (aiWarnings.length) warnings.value = aiWarnings
+    draft.rawNote = ''
+    noteApplied.value = true
+    setTimeout(() => { noteApplied.value = false }, 2000)
   } catch (err) {
     console.error('Failed to generate note summary:', err)
     warnings.value = ['Failed to generate note. Please try again.']
   } finally {
     applyingAi.value = false
   }
-}
-
-function confirmApply() {
-  if (!pendingResult.value) return
-  draft.templateId = pendingResult.value.templateId
-  emit('apply-summary', {
-    id: props.item?.id || props.item?._tempId || null,
-    templateId: pendingResult.value.templateId || null,
-    notes: pendingResult.value.notes,
-    warnings: pendingResult.value.warnings,
-  })
-  lastSavedAt.value = new Date()
-  saveState.value = 'saved'
-  pendingResult.value = null
-  draft.rawNote = ''
-}
-
-function discardPending() {
-  pendingResult.value = null
 }
 
 function toggleTranscribe() {
@@ -469,52 +451,16 @@ onBeforeUnmount(() => {
 .cns-raw__input :deep(.v-field) {
   border: 1px solid #d1d5db;
   border-radius: 10px;
+  transition: border-color 0.2s;
 }
 
-.cns-interim {
-  padding: 8px 12px;
-  border: 1px dashed #93c5fd;
-  background: #eff6ff;
-  border-radius: 8px;
-  font-size: 13px;
-  color: #3b82f6;
-  font-style: italic;
+.cns-raw__input--transcribing :deep(.v-field) {
+  border-color: #3b82f6;
+  background: #f0f9ff !important;
 }
 
-.cns-review {
-  border: 1px solid #c7d2fe;
-  border-radius: 12px;
-  background: #f5f3ff;
-  padding: 14px;
-  display: grid;
-  gap: 12px;
-}
-
-.cns-review__head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #4338ca;
-}
-
-.cns-review__content {
-  background: #fff;
-  border: 1px solid #ddd6fe;
-  border-radius: 8px;
-  padding: 12px;
-  font-size: 13px;
-  color: #1e293b;
-  line-height: 1.6;
-  max-height: 260px;
-  overflow-y: auto;
-}
-
-.cns-review__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+.cns-raw__input--transcribing :deep(textarea) {
+  color: #1d4ed8;
 }
 
 .cns-warnings--error .cns-warning {
@@ -522,6 +468,24 @@ onBeforeUnmount(() => {
   background: #fef2f2;
   color: #991b1b;
 }
+
+.cns-applied-flash {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  background: #dcfce7;
+  border: 1px solid #86efac;
+  border-radius: 10px;
+  color: #166534;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cns-flash-enter-active { transition: opacity 0.25s ease; }
+.cns-flash-leave-active { transition: opacity 0.8s ease; }
+.cns-flash-enter-from,
+.cns-flash-leave-to { opacity: 0; }
 .cns-footer {
   margin-top: auto;
   display: grid;
