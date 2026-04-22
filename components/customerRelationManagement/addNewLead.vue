@@ -585,7 +585,19 @@ const onSubmit = async () => {
   const phoneValid = validatePhone();
   const validation = await formRef.value.validate();
   if (!validation.valid || !phoneValid || dobError.value) {
-    mainStore.setSnackbar({ title: "Please fix the highlighted fields before saving", type: "error" });
+const fieldErrors = [
+      ...validation.errors
+        .filter((e) => !e.errorMessages?.some((m) => m.toLowerCase().includes('phone')))
+        .map((e) => e.errorMessages?.[0])
+        .filter(Boolean),
+      ...(!phoneValid ? [phoneError.value] : []),
+      ...(dobError.value ? ["Date of birth cannot be in the future"] : []),
+    ];
+    const msg =
+      fieldErrors.length === 1
+        ? fieldErrors[0]
+        : "Please fix the highlighted fields before saving";
+    mainStore.setSnackbar({ title: msg, type: "error" });
     return;
   }
   try {
