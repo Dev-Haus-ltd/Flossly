@@ -20,6 +20,10 @@
           Reset
         </v-btn>
       </div>
+      <div v-if="aiGenerating" class="tpe-progress">
+        <v-progress-linear indeterminate color="primary" rounded height="3" class="mb-2" />
+        <span class="tpe-progress__label">{{ aiGeneratingStep }}</span>
+      </div>
     </div>
 
     <div v-if="aiWarnings.length" class="tpe-feedback tpe-feedback--warn">
@@ -38,6 +42,12 @@
       >
         {{ source.label || source.url }}
       </a>
+    </div>
+
+    <div v-if="showAiReviewNotice" class="tpe-review-notice">
+      <v-icon size="16" class="flex-shrink-0">mdi-information-outline</v-icon>
+      <span>AI-generated content has been applied. Please review every section carefully — the information may be inaccurate or outdated. Always verify before sharing with patients.</span>
+      <button class="tpe-review-notice__close" @click="showAiReviewNotice = false">&times;</button>
     </div>
 
     <div class="tpe-card">
@@ -100,8 +110,16 @@
           <v-textarea v-model="contentDraft.practice.about" variant="solo" density="compact" rows="4" auto-grow class="input-bordered mb-0 mt-1" bg-color="white" flat hide-details />
         </div>
         <div class="tpe-field tpe-field--full">
-          <label class="fld-lbl">Practice image URL</label>
-          <v-text-field v-model="contentDraft.practice.imageUrl" variant="solo" density="compact" class="input-bordered mb-0 mt-1" bg-color="white" flat hide-details />
+          <label class="fld-lbl">Practice image</label>
+          <div class="tpe-upload-row mt-1">
+            <CommonFileUpload isSingle @onFiles="onPracticeImageFiles" />
+            <span class="tpe-upload-hint">{{ practiceUploading ? 'Uploading...' : 'or paste a URL below' }}</span>
+          </div>
+          <v-text-field v-model="contentDraft.practice.imageUrl" variant="solo" density="compact" class="input-bordered mb-0 mt-1" bg-color="white" flat hide-details placeholder="https://..." />
+          <div v-if="contentDraft.practice.imageUrl" class="tpe-img-preview mt-2">
+            <img :src="contentDraft.practice.imageUrl" alt="Practice preview" @error="e => e.target.parentElement.classList.add('tpe-img-preview--error')" />
+            <span class="tpe-img-preview__label">Practice image</span>
+          </div>
         </div>
         <div class="tpe-field">
           <label class="fld-lbl">Website</label>
@@ -146,8 +164,16 @@
             <v-textarea v-model="dentist.bio" variant="solo" density="compact" rows="3" auto-grow class="input-bordered mb-0 mt-1" bg-color="white" flat hide-details />
           </div>
           <div class="tpe-field tpe-field--full">
-            <label class="fld-lbl">Image URL</label>
-            <v-text-field v-model="dentist.imageUrl" variant="solo" density="compact" class="input-bordered mb-0 mt-1" bg-color="white" flat hide-details />
+            <label class="fld-lbl">Photo</label>
+            <div class="tpe-upload-row mt-1">
+              <CommonFileUpload isSingle @onFiles="files => onDentistImageFiles(idx, files)" />
+              <span class="tpe-upload-hint">{{ dentistUploadingIdx === idx ? 'Uploading...' : 'or paste a URL below' }}</span>
+            </div>
+            <v-text-field v-model="dentist.imageUrl" variant="solo" density="compact" class="input-bordered mb-0 mt-1" bg-color="white" flat hide-details placeholder="https://..." />
+            <div v-if="dentist.imageUrl" class="tpe-img-preview mt-2">
+              <img :src="dentist.imageUrl" alt="Dentist preview" @error="e => e.target.parentElement.classList.add('tpe-img-preview--error')" />
+              <span class="tpe-img-preview__label">Dentist photo</span>
+            </div>
           </div>
         </div>
       </div>
@@ -209,9 +235,20 @@ const sectionOptions = [
   { key: 'testimonial', label: 'Testimonials' },
 ]
 
+const PROGRESS_STEPS = [
+  'Researching your practice online...',
+  'Looking up practitioners...',
+  'Generating content with AI...',
+  'Finalising draft...',
+]
+
 const contentDraft = reactive(createEmptyTreatmentPlanContent())
 const aiGenerating = ref(false)
+const aiGeneratingStep = ref('')
+const showAiReviewNotice = ref(false)
 const coverUploading = ref(false)
+const practiceUploading = ref(false)
+const dentistUploadingIdx = ref(-1)
 const aiWarnings = ref([])
 const aiSources = ref([])
 const syncLocked = ref(false)
@@ -268,6 +305,7 @@ function resetContentDraft() {
   Object.assign(contentDraft, normalizeTreatmentPlanContent(props.defaultContent || {}))
   aiWarnings.value = []
   aiSources.value = []
+  showAiReviewNotice.value = false
   const normalized = normalizeTreatmentPlanContent(contentDraft)
   lastEmittedContent.value = contentSignature(normalized)
   emit('update-plan-content', normalized)
@@ -329,6 +367,15 @@ async function ensureActivePlanExistsRemotely() {
 async function generateAiContent() {
   if (!props.patientId || !props.activePlanId) return
   aiGenerating.value = true
+  aiGeneratingStep.value = PROGRESS_STEPS[0]
+  showAiReviewNotice.value = false
+
+  const stepTimers = [
+    setTimeout(() => { aiGeneratingStep.value = PROGRESS_STEPS[1] }, 3500),
+    setTimeout(() => { aiGeneratingStep.value = PROGRESS_STEPS[2] }, 8000),
+    setTimeout(() => { aiGeneratingStep.value = PROGRESS_STEPS[3] }, 13000),
+  ]
+
   try {
     await ensureActivePlanExistsRemotely()
     const res = await patientChartingService.generateTreatmentPlanContent({
@@ -336,11 +383,13 @@ async function generateAiContent() {
       patientName: props.patientName || '',
       planKey: props.activePlanId,
     })
+    stepTimers.forEach(clearTimeout)
     if (res?.code !== 0) throw new Error(res?.message || 'Unable to generate plan content.')
     syncLocked.value = true
     Object.assign(contentDraft, normalizeTreatmentPlanContent(res?.data?.draft || {}))
     aiSources.value = Array.isArray(res?.data?.sources) ? res.data.sources : []
     aiWarnings.value = Array.isArray(res?.data?.warnings) ? res.data.warnings : []
+    showAiReviewNotice.value = true
     const normalized = normalizeTreatmentPlanContent(contentDraft)
     lastEmittedContent.value = contentSignature(normalized)
     emit('update-plan-content', normalized)
@@ -348,9 +397,11 @@ async function generateAiContent() {
       syncLocked.value = false
     })
   } catch (error) {
+    stepTimers.forEach(clearTimeout)
     aiWarnings.value = [error?.message || 'Unable to generate plan content.']
   } finally {
     aiGenerating.value = false
+    aiGeneratingStep.value = ''
   }
 }
 
@@ -379,6 +430,44 @@ async function onCoverFiles(files) {
     aiWarnings.value = [error?.message || 'Unable to upload cover image.']
   } finally {
     coverUploading.value = false
+  }
+}
+
+async function uploadImageFile(file) {
+  if (!file || !props.patientId) return null
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('patientId', String(props.patientId))
+  const res = await patientChartingService.uploadChartImage(formData)
+  if (res?.code !== 0 || !res?.data?.url) throw new Error(res?.message || 'Unable to upload image.')
+  return res.data.url
+}
+
+async function onPracticeImageFiles(files) {
+  const file = (Array.isArray(files) ? files : [files]).filter(Boolean).at(-1)
+  if (!file) return
+  practiceUploading.value = true
+  try {
+    contentDraft.practice.imageUrl = await uploadImageFile(file)
+    queueEmitContent()
+  } catch (e) {
+    aiWarnings.value = [e?.message || 'Unable to upload practice image.']
+  } finally {
+    practiceUploading.value = false
+  }
+}
+
+async function onDentistImageFiles(idx, files) {
+  const file = (Array.isArray(files) ? files : [files]).filter(Boolean).at(-1)
+  if (!file) return
+  dentistUploadingIdx.value = idx
+  try {
+    contentDraft.dentists[idx].imageUrl = await uploadImageFile(file)
+    queueEmitContent()
+  } catch (e) {
+    aiWarnings.value = [e?.message || 'Unable to upload dentist image.']
+  } finally {
+    dentistUploadingIdx.value = -1
   }
 }
 
@@ -559,6 +648,13 @@ onBeforeUnmount(() => {
   margin-top: 10px;
 }
 
+.tpe-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .tpe-upload-hint {
   font-size: 12px;
   color: #64748b;
@@ -615,6 +711,83 @@ onBeforeUnmount(() => {
   min-height: 40px;
   font-size: 14px;
   box-shadow: none !important;
+}
+
+.tpe-img-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.tpe-img-preview img {
+  width: 64px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+  background: #e5e7eb;
+}
+
+.tpe-img-preview__label {
+  font-size: 12px;
+  color: #10b981;
+  font-weight: 500;
+}
+
+.tpe-img-preview--error .tpe-img-preview__label {
+  color: #ef4444;
+}
+
+.tpe-img-preview--error .tpe-img-preview__label::before {
+  content: 'Could not load — ';
+}
+
+.tpe-progress {
+  padding: 10px 0 4px;
+}
+
+.tpe-progress__label {
+  font-size: 12px;
+  color: #0061fb;
+  font-weight: 500;
+}
+
+.tpe-review-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 12px;
+  color: #92400e;
+  line-height: 1.5;
+}
+
+.tpe-review-notice span {
+  flex: 1;
+}
+
+.tpe-review-notice__close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  color: #92400e;
+  padding: 0;
+  line-height: 1;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.tpe-review-notice__close:hover {
+  opacity: 1;
 }
 
 @media (max-width: 1200px) {

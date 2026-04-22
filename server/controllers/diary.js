@@ -40,6 +40,9 @@ import {
 } from "../utils/clinicalNoteTemplates";
 import { gatherTreatmentPlanResearch } from "../utils/treatmentPlanResearch";
 
+const _researchCache = new Map()
+const RESEARCH_CACHE_TTL = 30 * 60 * 1000
+
 const pad2 = (n) => String(n).padStart(2, "0");
 const resolveTimeMode = () => {
   const publicMode = process.env.NUXT_PUBLIC_CLINIC_TIME_MODE;
@@ -1315,11 +1318,14 @@ export const generateTreatmentPlanContent = async (event) => {
       || ""
     ).trim();
 
-    const research = await gatherTreatmentPlanResearch({
-      organisationName: org.name,
-      website,
-      practitioners,
-    });
+    const cacheKey = `${orgId}::${website || org.name}`
+    const cachedResearch = _researchCache.get(cacheKey)
+    const research = (cachedResearch && Date.now() - cachedResearch.ts < RESEARCH_CACHE_TTL)
+      ? cachedResearch.data
+      : await gatherTreatmentPlanResearch({ organisationName: org.name, website, practitioners })
+    if (!cachedResearch || Date.now() - cachedResearch.ts >= RESEARCH_CACHE_TTL) {
+      _researchCache.set(cacheKey, { ts: Date.now(), data: research })
+    }
 
     const draft = normalizeTreatmentPlanContent(
       await generateTreatmentPlanContentDraft({

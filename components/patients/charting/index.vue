@@ -29,6 +29,12 @@
         </template>
       </div>
 
+      <!-- ── Step guidance hint ───────────────────────────────────────── -->
+      <div class="step-hint">
+        <v-icon size="15" color="primary" class="flex-shrink-0 mt-px">{{ stepHint.icon }}</v-icon>
+        <span class="step-hint__text">{{ stepHint.text }}</span>
+      </div>
+
       <!-- ── Chart + side panel (steps 1 & 2 only) ──────────────────── -->
       <div v-if="currentStep <= 2" class="charting-body">
 
@@ -219,6 +225,14 @@
           @update-plan-content="store.updateTreatmentPlanContent(store.activePlanId, $event)"
         />
         <div class="tpd-preview-pane">
+          <div class="tpd-preview-topbar no-print">
+            <span class="tpd-preview-topbar__label">
+              <v-icon size="14" class="mr-1">mdi-eye-outline</v-icon>Live Preview
+            </span>
+            <v-btn color="primary" variant="flat" size="small" rounded="lg" append-icon="mdi-arrow-right" @click="currentStep = 4">
+              Proceed to Overview
+            </v-btn>
+          </div>
           <TreatmentPlanDocument
             :active-plan="activePlanObj"
             :plan-ref="activePlanRef"
@@ -449,6 +463,26 @@ const crmStore = useCrmStore()
 
 const STEPS = ['Diagnose', 'Treatment', 'Treatment Plan', 'Overview']
 const currentStep = ref(1)
+
+const STEP_HINTS = [
+  {
+    icon: 'mdi-tooth-outline',
+    text: 'Select a condition from the panel on the right, then click a tooth or surface on the chart to record a finding. All findings appear in the Diagnoses list below.',
+  },
+  {
+    icon: 'mdi-medical-bag',
+    text: 'Select a treatment code from the panel on the right, then click a tooth to add it to the plan. Assign a practitioner, cost, and notes to each item in the list below.',
+  },
+  {
+    icon: 'mdi-file-edit-outline',
+    text: 'Customise the treatment plan document. Click "Generate AI Draft" to auto-fill content from your practice details, then review and edit each section. The live preview updates as you type.',
+  },
+  {
+    icon: 'mdi-send-outline',
+    text: 'Review the final document. Share it directly with the patient via email or WhatsApp, or click "Download" to save a printable PDF copy.',
+  },
+]
+const stepHint = computed(() => STEP_HINTS[currentStep.value - 1] || STEP_HINTS[0])
 const whatsAppAvailable = ref(false)
 
 // Sync store mode with wizard step
@@ -891,7 +925,12 @@ function onDownloadPlan() {
   nextTick(() => {
     const docEl = document.querySelector('.tpd-doc')
     if (!docEl) { window.print(); return }
-    const html = docEl.outerHTML
+    const origin = window.location.origin
+    const rawHtml = docEl.outerHTML
+    const html = rawHtml.replace(/(<img[^>]+src=["'])([^"']+)(["'])/gi, (match, pre, src, post) => {
+      if (src.startsWith('data:') || /^https?:\/\//i.test(src)) return match
+      return `${pre}${origin}${src.startsWith('/') ? '' : '/'}${src}${post}`
+    })
     const styles = Array.from(document.styleSheets).reduce((acc, ss) => {
       try { return acc + Array.from(ss.cssRules).map(r => r.cssText).join('\n') } catch { return acc }
     }, '')
@@ -1053,6 +1092,24 @@ onMounted(() => {
   flex-direction: column;
   gap: 12px;
   padding: 16px 0;
+}
+
+/* ── Step hint ───────────────────────────────────────────────────── */
+.step-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  padding: 9px 14px;
+  font-size: 13px;
+  color: #1e3a5f;
+  line-height: 1.5;
+}
+
+.step-hint__text {
+  flex: 1;
 }
 
 /* ── Loading ─────────────────────────────────────────────────────── */
@@ -1267,6 +1324,27 @@ onMounted(() => {
   max-height: calc(100vh - 48px);
   overflow-y: auto;
   padding-right: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tpd-preview-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.tpd-preview-topbar__label {
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
 }
 
 /* ── Save indicator ──────────────────────────────────────────────── */

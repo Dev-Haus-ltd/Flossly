@@ -4,6 +4,7 @@ const normalizeUrl = (value = '') => {
   const url = asString(value)
   if (!url) return ''
   if (/^https?:\/\//i.test(url)) return url
+  if (url.startsWith('/')) return url  // allow our own server-relative S3 paths
   return ''
 }
 

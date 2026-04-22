@@ -17,7 +17,7 @@
     <div ref="docEl" class="tpd-doc">
       <section class="tpd-page tpd-page--cover">
         <div class="tpd-cover-photo">
-          <img :src="coverImage" alt="Clinic cover" />
+          <img :src="coverImage" alt="Clinic cover" @error="onImgError" />
         </div>
         <div class="tpd-cover-title-wrap">
           <div class="tpd-cover-title">{{ resolvedContent.cover.title || practiceName || 'Dental Practice' }}</div>
@@ -32,12 +32,12 @@
             <h2 class="tpd-h2">{{ resolvedContent.practice.title || 'About the Clinic' }}</h2>
             <p class="tpd-body">{{ clinicAbout }}</p>
           </div>
-          <div class="tpd-media-wrap"><img :src="clinicImage" alt="Clinic" /></div>
+          <div class="tpd-media-wrap"><img :src="clinicImage" alt="Clinic" @error="onImgError" /></div>
         </div>
 
         <div v-if="sections.dentistInfo && dentistsToShow.length" class="tpd-dentists">
           <div v-for="(dentist, idx) in dentistsToShow" :key="`${dentist.id || dentist.name}-${idx}`" class="tpd-dentist-card">
-            <div class="tpd-media-wrap"><img :src="dentist.imageUrl || coverImage" alt="Dentist" /></div>
+            <div class="tpd-media-wrap"><img :src="dentist.imageUrl || coverImage" alt="Dentist" @error="onImgError" /></div>
             <div class="tpd-dentist-content">
               <h2 class="tpd-h2">About the Dentist</h2>
               <div class="tpd-dentist-name">{{ dentist.name }}</div>
@@ -176,6 +176,22 @@ const props = defineProps({
 const emit = defineEmits(['share-email', 'share-whatsapp', 'download'])
 const docEl = ref(null)
 
+const PLACEHOLDER_IMG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23e5e7eb' width='100%25' height='100%25'/%3E%3Ctext x='50%25' y='50%25' fill='%239ca3af' font-family='sans-serif' font-size='14' text-anchor='middle' dy='.3em'%3ENo image available%3C/text%3E%3C/svg%3E"
+
+function onImgError(e) {
+  e.target.src = PLACEHOLDER_IMG
+  e.target.style.objectFit = 'contain'
+  e.target.style.padding = '20px'
+}
+
+function makeHtmlAbsolute(html) {
+  const origin = window.location.origin
+  return html.replace(/(<img[^>]+src=["'])([^"']+)(["'])/gi, (match, pre, src, post) => {
+    if (src.startsWith('data:') || /^https?:\/\//i.test(src)) return match
+    return `${pre}${origin}${src.startsWith('/') ? '' : '/'}${src}${post}`
+  })
+}
+
 const footerEmail = computed(() => props.organisationEmail || 'info@clinic.com')
 const resolvedContent = computed(() => mergeTreatmentPlanContent(props.content || {}, props.defaultContent || {}))
 const coverImage = computed(() => resolvedContent.value.cover.imageUrl || resolvedContent.value.practice.imageUrl || '/assets/images/loginBanner.svg')
@@ -217,7 +233,7 @@ function formatCost(val) {
 function printDoc() {
   const el = docEl.value
   if (!el) return
-  const html = el.outerHTML
+  const html = makeHtmlAbsolute(el.outerHTML)
   const styles = Array.from(document.styleSheets).reduce((acc, ss) => {
     try { return acc + Array.from(ss.cssRules).map((r) => r.cssText).join('\n') } catch { return acc }
   }, '')
