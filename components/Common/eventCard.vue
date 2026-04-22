@@ -107,29 +107,28 @@ const emit = defineEmits(["close"]);
 const currentIndex = ref(0);
 let autoPlayInterval = null;
 
-// Sample card data - User will replace with actual content
 const cards = ref([
   {
     imageSrc: event1,
     heading: 'The Dream Squat Conference',
     date: 'April 17th, 2026',
-    // subheading: 'Event description or subtitle goes here',
-    buttonText: 'Book Ticket'
+    buttonText: 'Book Ticket',
+    bookingUrl: 'https://www.eventbrite.co.uk/e/dream-squat-mastermind-build-launch-grow-tickets-1976588662899?aff=oddtdtcreator'
   },
   {
     imageSrc: event2,
     heading: 'The Dental Owners Club',
     date: 'April 23rd, 2026',
-    // subheading: 'Event description or subtitle goes here',
-    buttonText: 'Book Ticket'
+    buttonText: 'Book Ticket',
+    bookingUrl: 'https://dentist-times.co.uk/events'
   },
   {
     imageSrc: event3,
     heading: 'The Dentistry Show',
     date: 'May 15th and 16th, 2026',
-    // subheading: 'Event description or subtitle goes here',
-    buttonText: 'Book Ticket'
-  }
+    buttonText: 'Book Ticket',
+    bookingUrl: 'https://birmingham.dentistryshow.co.uk/?utm_term=dental%20show&utm_campaign=BDCDS26+%7C+S+%7C+NB&utm_source=adwords&utm_medium=ppc&hsa_acc=9118698844&hsa_cam=23431771172&hsa_grp=194018610680&hsa_ad=792439144061&hsa_src=g&hsa_tgt=kwd-317483273222&hsa_kw=dental%20show&hsa_mt=e&hsa_net=adwords&hsa_ver=3&gad_source=1&gad_campaignid=23431771172&gbraid=0AAAAAqkB2GPGjHTvQex96jookuABDH1h7&gclid=CjwKCAjw46HPBhAMEiwASZpLRIA_hhpp1vLVzqEXYGokA5ldJ4pReI8ewv7HtHiroHNbBvkoKbBtXhoCy2QQAvD_BwE'
+  },
 ]);
 
 // Navigation functions
@@ -145,11 +144,8 @@ const previousCard = () => {
 };
 
 const openBooking = () => {
-  window.open(
-    'https://www.eventbrite.co.uk/e/dream-squat-mastermind-build-launch-grow-tickets-1976588662899?aff=oddtdtcreator',
-    '_blank',
-    'noopener,noreferrer'
-  );
+  const url = cards.value[currentIndex.value]?.bookingUrl;
+  if (url) window.open(url, '_blank', 'noopener,noreferrer');
 };
 
 

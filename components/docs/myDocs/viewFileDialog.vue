@@ -107,6 +107,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  isHr: {
+    type: Boolean,
+    default: false,
+  },
 })
 const emit = defineEmits(["update:modelValue", "onUpdate"])
 
@@ -126,7 +130,9 @@ watch(
     const baseUrl = typeof window !== "undefined" && window.location?.origin
       ? window.location.origin
       : config.public?.BASE_URL
-    const path = props.isSystem
+    const path = props.isHr
+      ? `/api/auth/viewHrDoc?id=${props.doc?.id}`
+      : props.isSystem
       ? `/api/docs/viewSystemDoc?id=${props.doc?.id}`
       : `/api/docs/view?id=${props.doc?.id}`
     // For non-DOCX files, use iframe viewer via same-origin endpoint
