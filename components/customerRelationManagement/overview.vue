@@ -45,7 +45,7 @@
                       icon
                       variant="text"
                       size="x-small"
-                      :disabled="!autoReplyEnabled"
+                      :disabled="false"
                       @click="openConfigDialog"
                     >
                       <v-icon size="14" :color="autoReplyEnabled ? 'primary' : 'grey'">mdi-cog</v-icon>
@@ -75,7 +75,7 @@
                       icon
                       variant="text"
                       size="x-small"
-                      :disabled="!whatsappAutoReplyEnabled"
+                      :disabled="false"
                       @click="openConfigDialog"
                     >
                       <v-icon size="14" :color="whatsappAutoReplyEnabled ? 'primary' : 'grey'">mdi-cog</v-icon>

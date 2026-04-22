@@ -2291,3 +2291,28 @@ export const getLeadAutomationLog = async (event) => {
     return error(500, e.message)
   }
 }
+
+export const updateLeadAutoReply = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const { leadId, autoReplyEnabled } = payload || {}
+    if (!leadId) return error(400, 'leadId required')
+    if (typeof autoReplyEnabled !== 'boolean') return error(400, 'autoReplyEnabled must be boolean')
+
+    const lead = await CrmLead.findOne({ where: { id: Number(leadId), organisationId: Number(orgId), softDeleted: false } })
+    if (!lead) return error(404, 'Lead not found')
+
+    lead.autoReplyEnabled = autoReplyEnabled
+    if (autoReplyEnabled) {
+      lead.autoReplyDisabledUntil = null
+    }
+    await lead.save()
+
+    return success({ id: lead.id, autoReplyEnabled: lead.autoReplyEnabled })
+  } catch (e) {
+    return error(500, e.message)
+  }
+}

@@ -370,6 +370,7 @@ const autoReplyConfigDialog = ref(false);
 const autoReplyConfigLoading = ref(false);
 const conversationAutoReplyEnabled = ref(true);
 let searchTimer = null;
+let metaEventSource = null;
 
 const crmStore = useCrmStore();
 const mainStore = useMainStore();
@@ -950,6 +951,40 @@ onMounted(async () => {
   if (convoId) {
     selectConversation(convoId);
   }
+
+  startMetaStream();
+});
+
+const startMetaStream = () => {
+  if (metaEventSource) return;
+  metaEventSource = new EventSource('/api/meta/stream');
+  metaEventSource.addEventListener('dm', async (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      if (data.conversationId && data.conversationId === activeConversationId.value) {
+        await loadMessages(true, { forceRefresh: true });
+      }
+      if (data.orgId) {
+        await loadConversations(true);
+      } else {
+        await loadConversations(false);
+      }
+    } catch {}
+  });
+  metaEventSource.onerror = () => {
+    stopMetaStream();
+  };
+};
+
+const stopMetaStream = () => {
+  if (metaEventSource) {
+    metaEventSource.close();
+    metaEventSource = null;
+  }
+};
+
+onUnmounted(() => {
+  stopMetaStream();
 });
 </script>
 

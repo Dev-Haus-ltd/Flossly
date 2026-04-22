@@ -90,6 +90,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  updateLeadAutoReply(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/leads/updateAutoReply", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   fetchDmHistory(params = {}) {
     const q = new URLSearchParams();
     Object.entries(params || {}).forEach(([k, v]) => {

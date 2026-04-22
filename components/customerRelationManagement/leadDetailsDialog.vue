@@ -447,6 +447,8 @@
                   :lead-name="displayLeadName"
                   :lead-avatar="selectedLead?.photo"
                   :connected="whatsappEnabled"
+                  :whatsapp-auto-reply-enabled="whatsappAutoReplyEnabled"
+                  :lead-auto-reply-enabled="selectedLead?.autoReplyEnabled !== false"
                 />
               </div>
             </v-tabs-window-item>
@@ -588,6 +590,7 @@ const crmStore = useCrmStore()
 const mainStore = useMainStore()
 const whatsappEnabled = ref(true) // optimistic: show chat immediately, corrected by status check
 const whatsappRequiresTemplates = ref(false)
+const whatsappAutoReplyEnabled = ref(false)
 const leadTitle = computed(() => {
   const lead = props.selectedLead || {};
   const name = String(displayLeadName.value || '').trim();
@@ -650,6 +653,15 @@ const extraAnswers = computed(() => {
     .filter((item) => item.key && !skip.has(item.key))
 })
 
+const loadAutoReplySettings = async () => {
+  try {
+    const res = await crmStore.getAutoReplySettings()
+    if (res?.code === 0) {
+      whatsappAutoReplyEnabled.value = !!res.data?.whatsappAutoReplyEnabled
+    }
+  } catch {}
+}
+
 const loadWhatsAppAvailability = async () => {
   try {
     const res = await crmStore.getWhapiStatus()
@@ -661,8 +673,9 @@ const loadWhatsAppAvailability = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   loadWhatsAppAvailability()
+  loadAutoReplySettings()
 })
 const assignedUsers = computed(() => {
   const list = props.selectedLead?.assigned || [];

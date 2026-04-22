@@ -1047,6 +1047,13 @@ const sendWhatsAppAutoReply = async ({ orgId, lead, content, token, channelId })
     });
 
     if (!org || !org.whatsappAutoReplyEnabled) return;
+    if (lead.autoReplyEnabled !== true) return;
+    if (lead.autoReplyDisabledUntil && new Date() < new Date(lead.autoReplyDisabledUntil)) return;
+    if (lead.autoReplyDisabledUntil && new Date() >= new Date(lead.autoReplyDisabledUntil)) {
+      lead.autoReplyEnabled = true;
+      lead.autoReplyDisabledUntil = null;
+      await lead.save();
+    }
 
     const treatments = await OrganisationTreatment.findAll({
       where: { organisationId: orgId, active: true },
@@ -1115,6 +1122,8 @@ const sendWhatsAppAutoReply = async ({ orgId, lead, content, token, channelId })
       content: replyText,
       attachments: null,
     });
+
+    broadcastWhapiEvent("message", { orgId, leadId: lead.id });
 
     console.log(`[WhatsApp AutoReply] Sent auto-reply for org ${orgId}: ${replyText.slice(0, 50)}...`);
   } catch (err) {

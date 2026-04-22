@@ -129,6 +129,7 @@ export const useCrmStore = defineStore("crmStore", {
     refreshDmProfile(payload) { return crmService.refreshDmProfile(payload); },
     refreshAllDmProfiles(payload = {}) { return this._wrap(() => crmService.refreshAllDmProfiles(payload)); },
     updateConversationAutoReply(conversationId, payload) { return this._wrap(() => crmService.updateConversationAutoReply(conversationId, payload)); },
+    updateLeadAutoReply(payload) { return this._wrap(() => crmService.updateLeadAutoReply(payload)); },
     fetchDmHistory(params = {}) { return this._wrap(() => crmService.fetchDmHistory(params)); },
     connectionStatus() { return this._wrap(() => crmService.connectionStatus()); },
     fetchLeadsNow(params = {}) { return this._wrap(() => crmService.fetchLeadsNow(params)); },
