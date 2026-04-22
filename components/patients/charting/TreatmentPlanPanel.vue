@@ -67,7 +67,7 @@
       </div>
 
       <div v-for="item in baseChartItems" :key="rowKey(item)" :data-item-key="rowKey(item)" class="tp-item-wrap">
-        <div class="tp-item-row" @click="toggleExpand(item)">
+        <div class="tp-item-row" :class="{ 'tp-item-row--selected': isSelected(item) }" @click="onRowClick(item)">
           <button class="tp-row-toggle" :class="{ 'tp-row-toggle--open': isExpanded(item) }">
             <v-icon size="16">mdi-chevron-right</v-icon>
           </button>
@@ -176,27 +176,17 @@
               </div>
             </div>
             <div class="tp-expand-right">
-              <div class="tp-notes-header">
-                <span class="tp-notes-title">Notes</span>
-                <button
-                  class="tp-transcribe-btn"
-                  :class="{ 'tp-transcribe-btn--active': isTranscribing }"
-                  :title="speechSupported ? (isTranscribing ? 'Stop transcribing' : 'Transcribe notes by voice') : 'Speech recognition not supported in this browser'"
-                  :disabled="!speechSupported"
-                  @click="toggleTranscribe"
-                >
-                  <v-icon size="15">{{ isTranscribing ? 'mdi-microphone-off' : 'mdi-microphone' }}</v-icon>
-                  <span>{{ isTranscribing ? 'Stop' : 'Transcribe notes' }}</span>
-                </button>
-              </div>
               <label class="tp-expand-check">
                 <input v-model="draft.showOnInvoice" type="checkbox" />
                 <span>Show notes on invoice</span>
               </label>
-              <ChartRichTextEditor
-                v-model="draft.notes"
-                placeholder="Add notes for this base chart item..."
-              />
+              <div class="tp-notes-wrap">
+                <div class="tp-notes-title">Clinical notes</div>
+                <ChartRichTextEditor
+                  v-model="draft.notes"
+                  placeholder="Write notes..."
+                />
+              </div>
             </div>
           </div>
           <div class="tp-expand-actions">
@@ -287,31 +277,12 @@
             >
               <v-icon size="15" :color="(appt.status === 'scheduled' || appt.diaryAppointmentId) ? 'success' : undefined">mdi-calendar-outline</v-icon>
             </button>
-            <v-menu offset-y>
-              <template #activator="{ props: menuProps }">
-                <button class="tp-appt-icon-btn" title="Diary actions" v-bind="menuProps" @click.stop>
-                  <v-icon size="15">mdi-dots-horizontal</v-icon>
-                </button>
-              </template>
-              <v-list density="compact" min-width="220">
-                <v-list-item
-                  :disabled="!appt.diaryAppointmentId"
-                  title="Open In Diary Calendar"
-                  @click="openDiaryCalendar(appt)"
-                />
-                <v-list-item
-                  :disabled="!appointmentPractitioner(appt)?.id"
-                  title="Dentist Schedules"
-                  @click="openDentistSchedule(appt)"
-                />
-              </v-list>
-            </v-menu>
           </div>
         </div>
 
         <div class="tp-appt-items">
           <div v-for="item in planItemsForAppt(appt.id)" :key="rowKey(item)" :data-item-key="rowKey(item)" class="tp-item-wrap">
-            <div class="tp-item-row" @click="toggleExpand(item)">
+            <div class="tp-item-row" :class="{ 'tp-item-row--selected': isSelected(item) }" @click="onRowClick(item)">
               <button class="tp-row-toggle" :class="{ 'tp-row-toggle--open': isExpanded(item) }">
                 <v-icon size="16">mdi-chevron-right</v-icon>
               </button>
@@ -420,27 +391,17 @@
                   </div>
                 </div>
                 <div class="tp-expand-right">
-                  <div class="tp-notes-header">
-                    <span class="tp-notes-title">Notes</span>
-                    <button
-                      class="tp-transcribe-btn"
-                      :class="{ 'tp-transcribe-btn--active': isTranscribing }"
-                      :title="speechSupported ? (isTranscribing ? 'Stop transcribing' : 'Transcribe notes by voice') : 'Speech recognition not supported in this browser'"
-                      :disabled="!speechSupported"
-                      @click="toggleTranscribe"
-                    >
-                      <v-icon size="15">{{ isTranscribing ? 'mdi-microphone-off' : 'mdi-microphone' }}</v-icon>
-                      <span>{{ isTranscribing ? 'Stop' : 'Transcribe notes' }}</span>
-                    </button>
-                  </div>
                   <label class="tp-expand-check">
                     <input v-model="draft.showOnInvoice" type="checkbox" />
                     <span>Show notes on invoice</span>
                   </label>
-                  <ChartRichTextEditor
-                    v-model="draft.notes"
-                    placeholder="Add treatment notes for this chart item..."
-                  />
+                  <div class="tp-notes-wrap">
+                    <div class="tp-notes-title">Clinical notes</div>
+                    <ChartRichTextEditor
+                      v-model="draft.notes"
+                      placeholder="Write notes..."
+                    />
+                  </div>
                 </div>
               </div>
               <div class="tp-expand-actions">
@@ -533,13 +494,16 @@
 
 <script setup>
 import { getToothLabel } from './toothData.js'
-import ChartRichTextEditor from './ChartRichTextEditor.vue'
 import ChartImagesPanel from './ChartImagesPanel.vue'
+import ChartRichTextEditor from './ChartRichTextEditor.vue'
 import { makeTPName } from '~/shared/defaults/charting/chartingDefaults.js'
 import deleteIcon from '../../../assets/crm/delete.svg'
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
+  patientId: { type: [String, Number], default: null },
+  patientName: { type: String, default: '' },
+  selectedNoteItemId: { type: [String, Number], default: null },
   total: { type: Number, default: 0 },
   plannedCount: { type: Number, default: 0 },
   completedCount: { type: Number, default: 0 },
@@ -557,7 +521,7 @@ const emit = defineEmits([
   'remove', 'update', 'reorder', 'add-appointment', 'delete-appointment', 'update-appointment', 'book-appointment',
   'add-plan', 'select-plan', 'rename-plan', 'duplicate-plan', 'delete-plan', 'set-interval', 'link-appointment',
   'add-image', 'remove-image', 'update-plan-color', 'chart-scope-change',
-  'mark-complete', 'print-plan',
+  'mark-complete', 'print-plan', 'select-note-item',
 ])
 const router = useRouter()
 
@@ -679,6 +643,28 @@ function itemDisplayLabel(item) {
   return item.treatmentName || item.conditionLabel || item.condition || 'Treatment'
 }
 
+function isSelected(item) {
+  return String(props.selectedNoteItemId || '') === String(rowKey(item))
+}
+
+function buildItemContext(item) {
+  return {
+    itemId: rowKey(item),
+    fdi: item?.fdi || null,
+    surface: item?.surface || null,
+    condition: item?.condition || null,
+    conditionLabel: item?.conditionLabel || null,
+    treatmentCode: item?.treatmentCode || null,
+    treatmentName: item?.treatmentName || null,
+    treatmentCategory: item?.treatmentCategory || null,
+  }
+}
+
+function onRowClick(item) {
+  emit('select-note-item', item)
+  toggleExpand(item)
+}
+
 function toggleAuxView(view) {
   activeView.value = activeView.value === view ? 'plan' : view
 }
@@ -776,7 +762,7 @@ function toggleTranscribe() {
   _recognition.lang = 'en-GB'
   _recognition.onresult = (e) => {
     const text = Array.from(e.results).map(r => r[0].transcript).join(' ')
-    draft.notes = draft.notes ? `${draft.notes} ${text}` : text
+    draft.rawNote = draft.rawNote ? `${draft.rawNote} ${text}` : text
   }
   _recognition.onerror = () => { isTranscribing.value = false }
   _recognition.onend = () => { isTranscribing.value = false }
@@ -793,6 +779,8 @@ const draft = reactive({
   cost: 0,
   status: 'planned',
   notes: '',
+  templateId: null,
+  rawNote: '',
   completedOn: '',
   paymentPlan: 'private',
   referrerId: null,
@@ -812,6 +800,8 @@ function resetDraft() {
   draft.cost = 0
   draft.status = 'planned'
   draft.notes = ''
+  draft.templateId = null
+  draft.rawNote = ''
   draft.completedOn = ''
   draft.paymentPlan = 'private'
   draft.referrerId = null
@@ -832,6 +822,8 @@ async function openExpanded(item) {
   draft.cost = Number(item.cost || 0)
   draft.status = item.status || (isBaseEntry(item) ? 'existing' : 'planned')
   draft.notes = item.notes || ''
+  draft.templateId = item.templateId || null
+  draft.rawNote = ''
   draft.completedOn = item.completedAt ? new Date(item.completedAt).toISOString().slice(0, 10) : ''
   draft.paymentPlan = item.paymentPlan || 'private'
   draft.referrerId = item.referrerId ? Number(item.referrerId) : null
@@ -875,6 +867,7 @@ async function saveExpanded() {
     cost: Number(draft.cost || 0),
     status: draft.status,
     notes: draft.notes || '',
+    templateId: draft.templateId || null,
     completedAt: draft.completedOn ? new Date(draft.completedOn).toISOString() : null,
     paymentPlan: draft.paymentPlan || 'private',
     referrerId: draft.referrerId || null,
@@ -1021,6 +1014,18 @@ watch(activeView, async () => {
   else emit('chart-scope-change', 'both')
   await closeExpanded()
 })
+
+watch(
+  () => props.items,
+  (items) => {
+    if (!draft.id) return
+    const current = (items || []).find((item) => String(rowKey(item)) === String(draft.id))
+    if (!current) return
+    draft.notes = current.notes || ''
+    draft.templateId = current.templateId || null
+  },
+  { deep: true }
+)
 
 </script>
 
@@ -1237,6 +1242,11 @@ watch(activeView, async () => {
   overflow-x: auto;
 }
 
+.tp-item-row--selected {
+  background: #eff6ff;
+  box-shadow: inset 0 0 0 1px #bfdbfe;
+}
+
 .tp-col {
   font-size: 13px;
   color: #374151;
@@ -1304,6 +1314,16 @@ watch(activeView, async () => {
   color: #dc2626;
 }
 
+.tp-notes-moved {
+  border: 1px dashed #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .tp-icon-btn--danger:hover {
   background: #fee2e2;
 }
@@ -1312,6 +1332,7 @@ watch(activeView, async () => {
   width: 14px;
   height: 14px;
   display: block;
+  filter: invert(20%) sepia(96%) saturate(2647%) hue-rotate(346deg) brightness(91%) contrast(89%);
 }
 
 .tp-item-actions {

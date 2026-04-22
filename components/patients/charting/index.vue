@@ -114,61 +114,95 @@
             @toggle-favorite="store.toggleFavoriteCode($event)"
           />
         </div>
+
       </div>
 
       <!-- ── Bottom panel: switches per step ────────────────────────── -->
 
       <!-- Step 1: Diagnosis notes + findings list -->
-      <DiagnosePanel
-        v-if="currentStep === 1"
-        :base-items="baseChartItems"
-        :notation="store.notation"
-        :images="store.chartImages"
-        :history="store.historyEntries"
-        :practitioners="store.practitioners"
-        @save-success="mainStore?.setSnackbar?.({ title: 'Diagnosis saved.', type: 'success' })"
-        @remove="store.removeTreatmentItemById($event)"
-        @update="onTreatmentUpdate"
-        @add-image="onAddChartImage"
-        @remove-image="store.removeChartImage($event)"
-      />
+      <div v-if="currentStep === 1" class="notes-layout" :class="{ 'notes-layout--sidebar-open': isNoteSidebarOpen }">
+        <div class="notes-layout__main">
+          <DiagnosePanel
+            :base-items="baseChartItems"
+            :notation="store.notation"
+            :selected-note-item-id="selectedNoteItemId"
+            :images="store.chartImages"
+            :history="store.historyEntries"
+            :practitioners="store.practitioners"
+            @save-success="mainStore?.setSnackbar?.({ title: 'Diagnosis saved.', type: 'success' })"
+            @remove="store.removeTreatmentItemById($event)"
+            @update="onTreatmentUpdate"
+            @select-note-item="onSelectNoteItem"
+            @add-image="onAddChartImage"
+            @remove-image="store.removeChartImage($event)"
+          />
+        </div>
+        <div v-if="isNoteSidebarOpen" class="notes-side notes-side--panel">
+          <ChartClinicalNoteSidebar
+            :item="selectedNoteItem"
+            type="diagnosis"
+            :patient-id="patientId"
+            :patient-name="patientName"
+            @apply-template="onNoteSidebarTemplate"
+            @apply-summary="onNoteSidebarSummary"
+            @close="closeNoteSidebar"
+          />
+        </div>
+      </div>
 
       <!-- Step 2: Full treatment plan panel -->
-      <div v-if="currentStep === 2" class="treatment-plan-wrap">
-        <TreatmentPlanPanel
-          :items="store.treatmentItems"
-          :total="store.treatmentTotal"
-          :planned-count="store.plannedCount"
-          :completed-count="store.completedCount"
-          :notation="store.notation"
-          :appointments="store.appointments"
-          :plans="store.plans"
-          :active-plan-id="store.activePlanId"
-          :images="store.chartImages"
-          :history="store.historyEntries"
-          :appointment-links="store.appointmentLinks"
-          :practitioners="store.practitioners"
-          @remove="store.removeTreatmentItemById($event)"
-          @update="onTreatmentUpdate"
-          @reorder="onReorder"
-          @add-appointment="store.addAppointment()"
-          @add-plan="store.addTreatmentPlan($event)"
-          @select-plan="store.selectTreatmentPlan($event)"
-          @rename-plan="store.renameTreatmentPlan($event.id, $event.name)"
-          @duplicate-plan="store.duplicateTreatmentPlan($event)"
-          @delete-plan="onDeletePlan"
-          @update-plan-color="store.updateTreatmentPlanColor($event.id, $event.color)"
-          @set-interval="onSetInterval"
-          @link-appointment="onLinkAppointment"
-          @add-image="onAddChartImage"
-          @remove-image="store.removeChartImage($event)"
-          @delete-appointment="store.deleteAppointment($event)"
-          @update-appointment="onUpdateAppointment"
-          @book-appointment="onBookAppointment"
-          @chart-scope-change="onChartScopeChange"
-          @mark-complete="onMarkComplete"
-          @print-plan="currentStep = 3"
-        />
+      <div v-if="currentStep === 2" class="notes-layout" :class="{ 'notes-layout--sidebar-open': isNoteSidebarOpen }">
+        <div class="notes-layout__main treatment-plan-wrap">
+          <TreatmentPlanPanel
+            :items="store.treatmentItems"
+            :patient-id="patientId"
+            :patient-name="patientName"
+            :selected-note-item-id="selectedNoteItemId"
+            :total="store.treatmentTotal"
+            :planned-count="store.plannedCount"
+            :completed-count="store.completedCount"
+            :notation="store.notation"
+            :appointments="store.appointments"
+            :plans="store.plans"
+            :active-plan-id="store.activePlanId"
+            :images="store.chartImages"
+            :history="store.historyEntries"
+            :appointment-links="store.appointmentLinks"
+            :practitioners="store.practitioners"
+            @remove="store.removeTreatmentItemById($event)"
+            @update="onTreatmentUpdate"
+            @select-note-item="onSelectNoteItem"
+            @reorder="onReorder"
+            @add-appointment="store.addAppointment()"
+            @add-plan="store.addTreatmentPlan($event)"
+            @select-plan="store.selectTreatmentPlan($event)"
+            @rename-plan="store.renameTreatmentPlan($event.id, $event.name)"
+            @duplicate-plan="store.duplicateTreatmentPlan($event)"
+            @delete-plan="onDeletePlan"
+            @update-plan-color="store.updateTreatmentPlanColor($event.id, $event.color)"
+            @set-interval="onSetInterval"
+            @link-appointment="onLinkAppointment"
+            @add-image="onAddChartImage"
+            @remove-image="store.removeChartImage($event)"
+            @delete-appointment="store.deleteAppointment($event)"
+            @update-appointment="onUpdateAppointment"
+            @book-appointment="onBookAppointment"
+            @chart-scope-change="onChartScopeChange"
+            @mark-complete="onMarkComplete"
+            @print-plan="currentStep = 3"
+          />
+        </div>
+        <div v-if="isNoteSidebarOpen" class="notes-side notes-side--panel">
+          <ChartClinicalNoteSidebar
+            :item="selectedNoteItem"
+            type="treatment_plan"
+            :patient-id="patientId"
+            :patient-name="patientName"
+            @apply-template="onNoteSidebarTemplate"
+            @apply-summary="onNoteSidebarSummary"
+            @close="closeNoteSidebar"
+          />
+        </div>
       </div>
 
       <!-- Step 3 & 4: Two-column layout — sections control + live document preview -->
@@ -387,6 +421,7 @@
 <script setup>
 import ToothChart from './ToothChart.vue'
 import ToothChart3D from './ToothChart3D.vue'
+import ChartClinicalNoteSidebar from './ChartClinicalNoteSidebar.vue'
 import TreatmentPlanPanel from './TreatmentPlanPanel.vue'
 import CodesPanel from './CodesPanel.vue'
 import DiagnosePanel from './DiagnosePanel.vue'
@@ -465,6 +500,16 @@ const plannedItems = computed(() =>
 )
 const toothChartItems = computed(() =>
   currentStep.value === 1 ? baseChartItems.value : plannedItems.value
+)
+const currentStepNoteItems = computed(() => {
+  if (currentStep.value === 1) return baseChartItems.value
+  if (currentStep.value === 2) return store.treatmentItems || []
+  return []
+})
+const isNoteSidebarOpen = ref(false)
+const selectedNoteItemId = ref(null)
+const selectedNoteItem = computed(() =>
+  currentStepNoteItems.value.find((item) => String(item.id || item._tempId) === String(selectedNoteItemId.value || '')) || null
 )
 const toothChartStatuses = computed(() => store.toothStatuses)
 const planPractitioners = computed(() => {
@@ -568,6 +613,18 @@ watch(() => props.patientId, async (id, prevId) => {
   await store.loadChart(id)
 }, { immediate: true })
 
+watch([currentStep, currentStepNoteItems], () => {
+  const hasSelected = currentStepNoteItems.value.some(
+    (item) => String(item.id || item._tempId) === String(selectedNoteItemId.value || '')
+  )
+  if (hasSelected) return
+  selectedNoteItemId.value = currentStepNoteItems.value[0]?.id || currentStepNoteItems.value[0]?._tempId || null
+}, { immediate: true, deep: true })
+
+watch(currentStep, () => {
+  isNoteSidebarOpen.value = false
+})
+
 // ── Event handlers ───────────────────────────────────────────────────────────
 function onSurfaceClick({ fdi, surface }) {
   if (currentStep.value === 1 && !store.activeCondition) {
@@ -605,7 +662,26 @@ function onCodeSelect(codeId, conditionKey) {
   if (conditionKey && store.activeCondition !== conditionKey) store.setCondition(conditionKey)
 }
 
+function onSelectNoteItem(item) {
+  selectedNoteItemId.value = item?.id || item?._tempId || null
+  isNoteSidebarOpen.value = !!selectedNoteItemId.value
+}
+
 function onTreatmentUpdate({ id, ...patch }) { store.updateTreatmentItem(id, patch) }
+function onNoteSidebarTemplate({ id, ...patch }) { store.updateTreatmentItem(id, patch) }
+function onNoteSidebarSummary({ id, warnings = [], ...patch }) {
+  store.updateTreatmentItem(id, patch)
+  if (warnings.length) {
+    mainStore?.setSnackbar?.({
+      title: warnings[0],
+      type: 'warning',
+    })
+  }
+}
+
+function closeNoteSidebar() {
+  isNoteSidebarOpen.value = false
+}
 
 async function onAddChartImage(payload) {
   const res = await store.addChartImage(payload?.file, payload?.meta)
@@ -1143,6 +1219,33 @@ onMounted(() => {
   min-height: 0;
 }
 
+.notes-layout {
+  display: block;
+}
+
+.notes-layout--sidebar-open {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.notes-layout__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.notes-side {
+  width: 360px;
+  flex-shrink: 0;
+  min-height: 0;
+}
+
+.notes-side--panel {
+  align-self: stretch;
+  position: sticky;
+  top: 12px;
+}
+
 /* ── Treatment plan ──────────────────────────────────────────────── */
 .treatment-plan-wrap { width: 100%; }
 
@@ -1292,5 +1395,17 @@ onMounted(() => {
   color: #b91c1c;
   display: flex;
   align-items: center;
+}
+
+@media (max-width: 1280px) {
+  .notes-layout {
+    flex-direction: column;
+  }
+
+  .notes-side,
+  .notes-side--panel {
+    width: 100%;
+    position: static;
+  }
 }
 </style>

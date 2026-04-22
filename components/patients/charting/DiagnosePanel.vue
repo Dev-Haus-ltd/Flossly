@@ -42,7 +42,7 @@
           :data-item-key="rowKey(item)"
           class="diag-item-wrap"
         >
-          <div class="diag-row" @click="toggleExpand(item)">
+          <div class="diag-row" :class="{ 'diag-row--selected': isSelected(item) }" @click="toggleExpand(item)">
             <button class="diag-row-toggle" :class="{ 'diag-row-toggle--open': isExpanded(item) }">
               <v-icon size="16">mdi-chevron-right</v-icon>
             </button>
@@ -57,29 +57,14 @@
               <img :src="deleteIcon" alt="" class="diag-delete-icon" />
             </button>
           </div>
-
           <div v-if="isExpanded(item)" class="diag-expand">
-            <div class="diag-notes-header">
-              <span class="diag-field-label">Notes</span>
-              <button
-                class="diag-transcribe-btn"
-                :class="{ 'diag-transcribe-btn--active': isTranscribing }"
-                :title="speechSupported ? (isTranscribing ? 'Stop transcribing' : 'Transcribe notes by voice') : 'Speech recognition not supported in this browser'"
-                :disabled="!speechSupported"
-                @click="toggleTranscribe"
-              >
-                <v-icon size="15">{{ isTranscribing ? 'mdi-microphone-off' : 'mdi-microphone' }}</v-icon>
-                <span>{{ isTranscribing ? 'Stop' : 'Transcribe notes' }}</span>
-              </button>
-            </div>
-
+            <div class="diag-expand__title">Clinical notes</div>
             <ChartRichTextEditor
               v-model="draft.notes"
-              placeholder="Add diagnosis notes for this chart entry..."
+              placeholder="Write notes..."
             />
-
-            <div class="diag-expand-actions">
-              <v-btn variant="text" @click="closeExpanded">Cancel</v-btn>
+            <div class="diag-expand__actions">
+              <v-btn variant="text" @click="cancelExpanded">Cancel</v-btn>
               <v-btn color="primary" variant="flat" @click="saveExpanded">Save</v-btn>
             </div>
           </div>
@@ -109,25 +94,31 @@
 </template>
 
 <script setup>
-import ChartRichTextEditor from './ChartRichTextEditor.vue'
 import ChartImagesPanel from './ChartImagesPanel.vue'
+import ChartRichTextEditor from './ChartRichTextEditor.vue'
 import { CONDITIONS, TEETH_BY_FDI } from './toothData.js'
 import deleteIcon from '../../../assets/crm/delete.svg'
 
 const props = defineProps({
   baseItems: { type: Array, default: () => [] },
   notation: { type: String, default: 'FDI' },
+  selectedNoteItemId: { type: [String, Number], default: null },
   practitioners: { type: Array, default: () => [] },
   images: { type: Array, default: () => [] },
   history: { type: Array, default: () => [] },
 })
 
-const emit = defineEmits(['remove', 'update', 'add-image', 'remove-image', 'save-success'])
+const emit = defineEmits(['remove', 'select-note-item', 'add-image', 'remove-image', 'save-success', 'update'])
 
 const activeTab = ref('findings')
-const expandedRowId = ref(null)
 const imgUploading = ref(false)
 const STATUS_ANNOTATION_CODE = '__STATUS_ANNOTATION__'
+const expandedRowId = ref(null)
+const draft = reactive({
+  id: null,
+  notes: '',
+  templateId: null,
+})
 
 const toothTypeLabels = {
   incisor: 'Incisor',
@@ -143,84 +134,43 @@ const quadrantLabels = {
   4: 'Lower Right',
 }
 
-const draft = reactive({
-  id: null,
-  notes: '',
-})
-
-const SpeechRecognition = typeof window !== 'undefined'
-  ? (window.SpeechRecognition || window.webkitSpeechRecognition)
-  : null
-const speechSupported = !!SpeechRecognition
-const isTranscribing = ref(false)
-let _recognition = null
-
 function rowKey(item) {
   return item.id || item._tempId
 }
 
+function isSelected(item) {
+  return String(props.selectedNoteItemId || '') === String(rowKey(item))
+}
+
+function selectItem(item) {
+  emit('select-note-item', item)
+}
+
 function isExpanded(item) {
-  return expandedRowId.value === rowKey(item)
+  return String(expandedRowId.value || '') === String(rowKey(item))
 }
 
-function resetDraft() {
-  draft.id = null
-  draft.notes = ''
-}
-
-function toggleTranscribe() {
-  if (!SpeechRecognition) return
-  if (isTranscribing.value) {
-    _recognition?.stop()
-    isTranscribing.value = false
-    return
-  }
-  _recognition = new SpeechRecognition()
-  _recognition.continuous = true
-  _recognition.interimResults = false
-  _recognition.lang = 'en-GB'
-  _recognition.onresult = (e) => {
-    const text = Array.from(e.results).map((result) => result[0].transcript).join(' ')
-    draft.notes = draft.notes ? `${draft.notes} ${text}` : text
-  }
-  _recognition.onerror = () => { isTranscribing.value = false }
-  _recognition.onend = () => { isTranscribing.value = false }
-  _recognition.start()
-  isTranscribing.value = true
-}
-
-async function openExpanded(item) {
+function openExpanded(item) {
   draft.id = rowKey(item)
   draft.notes = item.notes || ''
+  draft.templateId = item.templateId || null
   expandedRowId.value = rowKey(item)
+  selectItem(item)
 }
 
 function closeExpanded() {
-  if (isTranscribing.value) {
-    _recognition?.stop()
-    isTranscribing.value = false
-  }
   expandedRowId.value = null
-  resetDraft()
+  draft.id = null
+  draft.notes = ''
+  draft.templateId = null
 }
 
-async function toggleExpand(item) {
+function toggleExpand(item) {
   if (isExpanded(item)) {
     closeExpanded()
     return
   }
-  closeExpanded()
-  await openExpanded(item)
-}
-
-function saveExpanded() {
-  if (!draft.id) return
-  emit('update', {
-    id: draft.id,
-    notes: draft.notes,
-  })
-  emit('save-success')
-  closeExpanded()
+  openExpanded(item)
 }
 
 function toothLabel(item) {
@@ -259,6 +209,37 @@ async function onAddImage(payload) {
   emit('add-image', payload)
   imgUploading.value = false
 }
+
+function saveExpanded() {
+  if (!draft.id) return
+  emit('update', {
+    id: draft.id,
+    notes: draft.notes || '',
+    templateId: draft.templateId || null,
+  })
+}
+
+function cancelExpanded() {
+  const item = props.baseItems.find((entry) => String(rowKey(entry)) === String(draft.id))
+  if (!item) {
+    closeExpanded()
+    return
+  }
+  draft.notes = item.notes || ''
+  draft.templateId = item.templateId || null
+}
+
+watch(
+  () => props.baseItems,
+  (items) => {
+    if (!draft.id) return
+    const current = (items || []).find((item) => String(rowKey(item)) === String(draft.id))
+    if (!current) return
+    draft.notes = current.notes || ''
+    draft.templateId = current.templateId || null
+  },
+  { deep: true }
+)
 </script>
 
 <style scoped>
@@ -361,7 +342,53 @@ async function onAddImage(payload) {
   background: #fff;
 }
 
-.diag-row-toggle,
+.diag-row-toggle {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.diag-row-toggle--open {
+  background: #eef4ff;
+  border-color: #0061FB;
+  color: #0061FB;
+}
+
+.diag-row-toggle--open :deep(.v-icon) {
+  transform: rotate(90deg);
+}
+
+.diag-row--selected {
+  background: #eff6ff;
+  box-shadow: inset 0 0 0 1px #bfdbfe;
+}
+
+.diag-expand {
+  border-top: 1px solid #eef2f7;
+  padding: 12px;
+  background: #f8fbff;
+  display: grid;
+  gap: 12px;
+}
+
+.diag-expand__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.diag-expand__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .diag-icon-btn {
   width: 24px;
   height: 24px;
@@ -373,22 +400,6 @@ async function onAddImage(payload) {
   justify-content: center;
   cursor: pointer;
   color: #9ca3af;
-}
-
-.diag-row-toggle {
-  border: 1px solid #d1d5db;
-  border-radius: 999px;
-  background: #fff;
-}
-
-.diag-row-toggle--open {
-  background: #eef4ff;
-  border-color: #0061fb;
-  color: #0061fb;
-}
-
-.diag-row-toggle--open :deep(.v-icon) {
-  transform: rotate(90deg);
 }
 
 .diag-icon-btn--danger {
@@ -403,6 +414,7 @@ async function onAddImage(payload) {
   width: 14px;
   height: 14px;
   display: block;
+  filter: invert(20%) sepia(96%) saturate(2647%) hue-rotate(346deg) brightness(91%) contrast(89%);
 }
 
 .diag-dot {
@@ -439,62 +451,6 @@ async function onAddImage(payload) {
   font-weight: 600;
 }
 
-.diag-expand {
-  border-top: 1px solid #eef2f7;
-  padding: 12px;
-  background: #f8fbff;
-}
-
-.diag-field-label {
-  font-size: 11px;
-  color: #6b7280;
-}
-
-.diag-notes-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.diag-transcribe-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 12px;
-  background: #f0f6ff;
-  border: 1px solid #0061fb;
-  border-radius: 20px;
-  color: #0061fb;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s, color 0.15s;
-}
-
-.diag-transcribe-btn:hover:not(:disabled) {
-  background: #e0eeff;
-}
-
-.diag-transcribe-btn--active {
-  background: #0061fb;
-  color: #fff;
-}
-
-.diag-transcribe-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.diag-expand-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 10px;
-}
-
 .diag-history-item {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
@@ -526,7 +482,7 @@ async function onAddImage(payload) {
   }
 
   .diag-row {
-    grid-template-columns: 32px 14px 110px 60px minmax(120px, 1fr) 90px 34px;
+    grid-template-columns: 28px 14px 110px 60px minmax(120px, 1fr) 90px 34px;
   }
 }
 </style>

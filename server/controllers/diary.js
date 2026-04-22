@@ -9,6 +9,7 @@ import {
   DiaryPatientChart,
   DiaryTreatmentPlan,
   DiaryTreatmentPlanItem,
+  ClinicalNoteTemplate,
   User,
   RotaShift,
   Rota,
@@ -31,7 +32,12 @@ import {
   normalizeTreatmentPlanContent,
 } from "~/shared/defaults/charting/treatmentPlanContent.js";
 import { validateDentistScheduleWindow } from "~/server/utils/dentistScheduleAvailability.js";
-import { generateTreatmentPlanContentDraft } from "../utils/aiWrapper";
+import { applyClinicalNoteTemplateDraft, generateTreatmentPlanContentDraft } from "../utils/aiWrapper";
+import {
+  getClinicalTemplateByIdForOrg,
+  listAvailableClinicalTemplates,
+  serializeClinicalTemplate,
+} from "../utils/clinicalNoteTemplates";
 import { gatherTreatmentPlanResearch } from "../utils/treatmentPlanResearch";
 
 const pad2 = (n) => String(n).padStart(2, "0");
@@ -155,6 +161,7 @@ const normalizeTreatmentPlanItem = (row) => ({
   cost: Number(row.cost || 0),
   duration: Number(row.duration || 0),
   notes: row.notes || "",
+  templateId: row.templateId || null,
   clinicianName: row.clinicianName || "",
   practitionerId: row.practitionerId || null,
   practitionerName: row.practitionerName || row.clinicianName || "",
@@ -1343,6 +1350,94 @@ export const generateTreatmentPlanContent = async (event) => {
   }
 };
 
+export const listClinicalNoteTemplates = async (event) => {
+  try {
+    const { orgId } = event.context.user || {};
+    if (!orgId) return error(401, "Unauthenticated");
+    const q = getQuery(event) || {};
+    const type = String(q.type || "").trim();
+    if (!type) return error(400, "type is required");
+    const items = await listAvailableClinicalTemplates({
+      organisationId: Number(orgId),
+      type,
+      status: String(q.status || "active"),
+    });
+    return success(items);
+  } catch (e) {
+    const msg =
+      (e &&
+        (e.message ||
+          (e.data && e.data.message) ||
+          (e.original && e.original.detail))) ||
+      "Internal server error";
+    return error(500, msg);
+  }
+};
+
+export const applyClinicalNoteTemplate = async (event) => {
+  try {
+    const { orgId } = event.context.user || {};
+    if (!orgId) return error(401, "Unauthenticated");
+    const body = await readBody(event);
+    const payload = typeof body === "string" ? parseJsonBody(body) : body;
+    const templateId = Number(payload?.templateId || 0);
+    const type = String(payload?.type || "").trim();
+    const rawNote = String(payload?.rawNote || "").trim();
+    const currentNote = String(payload?.currentNote || "");
+    if (!templateId) return error(400, "templateId is required");
+    if (!type) return error(400, "type is required");
+
+    const template = await getClinicalTemplateByIdForOrg({
+      id: templateId,
+      organisationId: Number(orgId),
+    });
+    if (String(template.type) !== type) return error(400, "Template type mismatch");
+
+    const patientId = Number(payload?.patientId || 0);
+    const patient = patientId ? await requirePatientInOrg(orgId, patientId) : null;
+    if (patientId && !patient) return error(404, "Patient not found");
+
+    const itemContext = {
+      itemId: payload?.itemId || null,
+      fdi: payload?.fdi || null,
+      surface: payload?.surface || null,
+      condition: payload?.condition || null,
+      conditionLabel: payload?.conditionLabel || null,
+      treatmentCode: payload?.treatmentCode || null,
+      treatmentName: payload?.treatmentName || null,
+      treatmentCategory: payload?.treatmentCategory || null,
+    };
+    const patientContext = {
+      patientId: patientId || null,
+      patientName: String(payload?.patientName || "").trim(),
+    };
+    const templateData = serializeClinicalTemplate(template);
+    const aiResult = await applyClinicalNoteTemplateDraft({
+      templateType: type,
+      templateTitle: templateData.title,
+      templateContent: templateData.content,
+      rawNote,
+      currentNote,
+      patientContext,
+      itemContext,
+    });
+
+    return success({
+      templateId: template.id,
+      finalNote: aiResult.finalNote,
+      warnings: aiResult.warnings || [],
+    });
+  } catch (e) {
+    const msg =
+      (e &&
+        (e.message ||
+          (e.data && e.data.message) ||
+          (e.original && e.original.detail))) ||
+      "Internal server error";
+    return error(500, msg);
+  }
+};
+
 export const deleteTreatmentPlan = async (event) => {
   try {
     const { orgId } = event.context.user;
@@ -1462,6 +1557,7 @@ export const createTreatmentPlanItem = async (event) => {
       cost: Number(payload?.cost || 0),
       duration: Number(payload?.duration || 0),
       notes: payload?.notes || null,
+      templateId: payload?.templateId ? Number(payload.templateId) : null,
       clinicianName: practitionerName,
       practitionerId,
       practitionerName,
@@ -1505,6 +1601,8 @@ export const updateTreatmentPlanItem = async (event) => {
     if (payload.duration !== undefined)
       row.duration = Number(payload.duration || 0);
     if (payload.notes !== undefined) row.notes = payload.notes || null;
+    if (payload.templateId !== undefined)
+      row.templateId = payload.templateId ? Number(payload.templateId) : null;
     if (
       payload.clinicianName !== undefined ||
       payload.practitionerName !== undefined

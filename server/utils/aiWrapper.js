@@ -443,11 +443,81 @@ Instructions:
   return parseJsonObject(responseText);
 }
 
+export async function applyClinicalNoteTemplateDraft({
+  templateType,
+  templateTitle,
+  templateContent,
+  rawNote,
+  currentNote = "",
+  patientContext = {},
+  itemContext = {},
+}) {
+  const systemPrompt = `You are a dental clinical note assistant.
+
+Return ONLY valid JSON. Do not wrap in markdown. Do not add commentary.
+
+Rules:
+- Use the selected template as the output structure whenever possible.
+- Use only the facts supplied in the raw note, current note, patient context, and item context.
+- Never invent clinical findings, treatments, dates, surfaces, or diagnoses.
+- If information is missing, leave the section concise and neutral rather than making up details.
+- If important template sections could not be completed confidently, add one or more short UI warnings.
+- Warnings are for a banner above the editor and must not be inserted into the final note body.
+
+Output schema:
+{
+  "finalNote": "string",
+  "warnings": ["string"]
+}`
+
+  const prompt = `Template type: ${templateType || ""}
+Template title: ${templateTitle || ""}
+
+TEMPLATE CONTENT:
+${templateContent || ""}
+
+CURRENT NOTE:
+${currentNote || ""}
+
+RAW NOTE:
+${rawNote || ""}
+
+PATIENT CONTEXT:
+${JSON.stringify(patientContext || {}, null, 2)}
+
+ITEM CONTEXT:
+${JSON.stringify(itemContext || {}, null, 2)}
+
+Instructions:
+- Merge the raw note into the selected template.
+- Preserve useful existing content from CURRENT NOTE only when it is consistent with the RAW NOTE and context.
+- Keep the final note readable and suitable for a patient chart.
+- If RAW NOTE is too sparse to complete important sections, return a warning like "Some information may be incomplete or inaccurate. Please review before saving."
+- If the template is not usable, return the best clean note you can plus a warning.
+- finalNote must always be returned as HTML-friendly plain text or simple structured text, not JSON fragments.`
+
+  const responseText = await chat({
+    prompt,
+    systemPrompt,
+    temperature: 0.1,
+    maxTokens: 2200,
+  })
+
+  const parsed = parseJsonObject(responseText)
+  return {
+    finalNote: String(parsed?.finalNote || currentNote || templateContent || '').trim(),
+    warnings: Array.isArray(parsed?.warnings)
+      ? parsed.warnings.map((item) => String(item || '').trim()).filter(Boolean)
+      : [],
+  }
+}
+
 export const aiWrapper = {
   chat,
   summarize,
   generateAutomations,
   generateAutoReply,
   generateTreatmentPlanContentDraft,
+  applyClinicalNoteTemplateDraft,
   getLlmModel,
 };

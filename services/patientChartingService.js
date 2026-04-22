@@ -34,6 +34,14 @@ export default {
     return Post('/diary/treatmentPlanGenerateContent', payload)
   },
 
+  listClinicalNoteTemplates(type) {
+    return Get(`/diary/clinicalNoteTemplates?type=${encodeURIComponent(type)}`)
+  },
+
+  applyClinicalNoteTemplate(payload) {
+    return Post('/diary/clinicalNoteTemplateApply', payload)
+  },
+
   deleteTreatmentPlan(payload) {
     return Post('/diary/treatmentPlanDelete', payload)
   },

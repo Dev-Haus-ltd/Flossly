@@ -131,6 +131,41 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  listClinicalNoteTemplateVersions(id) {
+    return new Promise((resolve, reject) => {
+      Get(`/organisations/clinicalNoteTemplateVersions?id=${encodeURIComponent(id)}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  createClinicalNoteTemplate(data) {
+    return new Promise((resolve, reject) => {
+      Post("/organisations/clinicalNoteTemplateCreate", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  updateClinicalNoteTemplate(data) {
+    return new Promise((resolve, reject) => {
+      Post("/organisations/clinicalNoteTemplateUpdate", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  cloneClinicalNoteTemplate(data) {
+    return new Promise((resolve, reject) => {
+      Post("/organisations/clinicalNoteTemplateClone", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  setDefaultClinicalNoteTemplate(data) {
+    return new Promise((resolve, reject) => {
+      Post("/organisations/clinicalNoteTemplateSetDefault", data)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   listTreatments() {
     return new Promise((resolve, reject) => {
       Get("/diary/treatments")

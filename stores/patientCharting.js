@@ -65,6 +65,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
     periData: {},
     softTissueData: {},
     riskData: {},
+    clinicalNoteTemplatesByType: {},
   }),
 
   getters: {
@@ -81,6 +82,34 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
     _logError(context, error) {
       const details = error?.response?.data || error?.message || error
       console.error(`[patientChartingStore] ${context}`, details)
+    },
+    async fetchClinicalNoteTemplates(type, { force = false } = {}) {
+      const normalizedType = String(type || '').trim()
+      if (!normalizedType) return []
+      if (!force && Array.isArray(this.clinicalNoteTemplatesByType[normalizedType])) {
+        return this.clinicalNoteTemplatesByType[normalizedType]
+      }
+      try {
+        const res = await patientChartingService.listClinicalNoteTemplates(normalizedType)
+        const items = Array.isArray(res?.data) ? res.data : []
+        this.clinicalNoteTemplatesByType = {
+          ...this.clinicalNoteTemplatesByType,
+          [normalizedType]: items,
+        }
+        return items
+      } catch (error) {
+        this._logError('fetchClinicalNoteTemplates', error)
+        return []
+      }
+    },
+    async generateClinicalNoteTemplate(payload = {}) {
+      try {
+        const res = await patientChartingService.applyClinicalNoteTemplate(payload)
+        return res?.data || null
+      } catch (error) {
+        this._logError('generateClinicalNoteTemplate', error)
+        throw error
+      }
     },
     async loadTreatmentCatalog() {
       try {
@@ -1252,6 +1281,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       this.periData = {}
       this.softTissueData = {}
       this.riskData = {}
+      this.clinicalNoteTemplatesByType = {}
     },
   },
 })

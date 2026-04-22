@@ -24,6 +24,7 @@ export const DiaryTreatmentPlanItem = sequelize.define(
     cost: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
     duration: { type: DataTypes.INTEGER, allowNull: true, defaultValue: 0 },
     notes: { type: DataTypes.TEXT, allowNull: true },
+    templateId: { type: DataTypes.INTEGER, allowNull: true },
     clinicianName: { type: DataTypes.STRING(120), allowNull: true },
     practitionerId: { type: DataTypes.INTEGER, allowNull: true },
     practitionerName: { type: DataTypes.STRING(120), allowNull: true },

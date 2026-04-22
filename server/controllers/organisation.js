@@ -10,6 +10,8 @@ import {
   OrganisationSurgery,
   OrganisationScript,
   DictionaryScript,
+  ClinicalNoteTemplate,
+  ClinicalNoteTemplateVersion,
   User,
   Role,
   OrganisationReferral,
@@ -26,7 +28,7 @@ import formidable from "formidable";
 import path from "path";
 import DB from "../utils/db";
 import { success, error } from "../utils/response";
-import { readBody, createError } from "h3";
+import { readBody, createError, getQuery } from "h3";
 import {
   sendTrialActivatedEmail,
   sendOrganisationReferralEmail,
@@ -36,6 +38,15 @@ import bcrypt from "bcrypt";
 import { Op } from "sequelize";
 import { uploadTempFile } from "../utils/storage";
 import { parseJsonBody } from "../utils/body";
+import {
+  cloneClinicalTemplateToOrg,
+  createClinicalTemplateWithVersion,
+  getClinicalTemplateByIdForOrg,
+  sanitizeClinicalNoteTemplatePayload,
+  serializeClinicalTemplate,
+  serializeClinicalTemplateVersion,
+  updateClinicalTemplateWithVersion,
+} from "../utils/clinicalNoteTemplates";
 
 // Role constants for access control
 // Role ID 1 = Practice Manager, Role ID 8 = Principal Dentist / Practice Owner
@@ -808,6 +819,146 @@ export const seedScripts = async (event) => {
     return success(result);
   } catch (err) {
     return error(500, err.message);
+  }
+};
+
+export const listClinicalNoteTemplateVersions = async (event) => {
+  const loggedUser = event.context.user;
+  const organisationId = Number(loggedUser?.orgId || 0);
+  try {
+    const query = getQuery(event) || {};
+    const template = await getClinicalTemplateByIdForOrg({
+      id: Number(query.id || 0),
+      organisationId,
+      includeArchived: true,
+    });
+    const versions = await ClinicalNoteTemplateVersion.findAll({
+      where: { templateId: template.id },
+      order: [['versionNumber', 'DESC'], ['id', 'DESC']],
+    });
+    return success(versions.map(serializeClinicalTemplateVersion));
+  } catch (err) {
+    console.error('Error listing clinical note template versions:', err);
+    return error(500, err.message || 'Failed to list template versions');
+  }
+};
+
+export const createClinicalNoteTemplate = async (event) => {
+  const loggedUser = event.context.user;
+  const organisationId = Number(loggedUser?.orgId || 0);
+  try {
+    const body = await readBody(event);
+    const payload = typeof body === "string" ? parseJsonBody(body) : body;
+    const next = sanitizeClinicalNoteTemplatePayload(payload, { defaultScope: 'organisation' });
+    const created = await createClinicalTemplateWithVersion({
+      scope: 'organisation',
+      organisationId,
+      type: next.type,
+      category: next.category,
+      key: next.key,
+      title: next.title,
+      content: next.content,
+      status: next.status,
+      sourceTemplateId: next.sourceTemplateId,
+      sortOrder: next.sortOrder,
+      isDefault: next.isDefault === true,
+      actorUserId: loggedUser?.userId || null,
+      changeNote: next.changeNote,
+    });
+    return success(serializeClinicalTemplate(created));
+  } catch (err) {
+    console.error('Error creating clinical note template:', err);
+    return error(500, err.message || 'Failed to create template');
+  }
+};
+
+export const updateClinicalNoteTemplate = async (event) => {
+  const loggedUser = event.context.user;
+  const organisationId = Number(loggedUser?.orgId || 0);
+  try {
+    const body = await readBody(event);
+    const payload = typeof body === "string" ? parseJsonBody(body) : body;
+    if (!payload?.id) return error(400, 'id is required');
+    const template = await ClinicalNoteTemplate.findOne({
+      where: {
+        id: Number(payload.id),
+        scope: 'organisation',
+        organisationId,
+      },
+      include: [{ model: ClinicalNoteTemplateVersion, as: 'currentVersion' }],
+    });
+    if (!template) return error(404, 'Template not found');
+    const next = sanitizeClinicalNoteTemplatePayload(payload, { existing: template, defaultScope: 'organisation' });
+    const updated = await updateClinicalTemplateWithVersion({
+      template,
+      title: next.title,
+      key: next.key,
+      category: next.category,
+      content: next.content,
+      status: next.status,
+      sortOrder: next.sortOrder,
+      isDefault: next.isDefault,
+      actorUserId: loggedUser?.userId || null,
+      changeNote: next.changeNote,
+    });
+    return success(serializeClinicalTemplate(updated));
+  } catch (err) {
+    console.error('Error updating clinical note template:', err);
+    return error(500, err.message || 'Failed to update template');
+  }
+};
+
+export const cloneClinicalNoteTemplate = async (event) => {
+  const loggedUser = event.context.user;
+  const organisationId = Number(loggedUser?.orgId || 0);
+  try {
+    const body = await readBody(event);
+    const payload = typeof body === "string" ? parseJsonBody(body) : body;
+    const sourceTemplate = await getClinicalTemplateByIdForOrg({
+      id: Number(payload?.sourceTemplateId || 0),
+      organisationId,
+      includeArchived: true,
+    });
+    const created = await cloneClinicalTemplateToOrg({
+      sourceTemplate,
+      organisationId,
+      actorUserId: loggedUser?.userId || null,
+      title: payload?.title ? String(payload.title).trim() : null,
+      changeNote: payload?.changeNote ? String(payload.changeNote).trim() : null,
+    });
+    return success(serializeClinicalTemplate(created));
+  } catch (err) {
+    console.error('Error cloning clinical note template:', err);
+    return error(500, err.message || 'Failed to clone template');
+  }
+};
+
+export const setDefaultClinicalNoteTemplate = async (event) => {
+  const loggedUser = event.context.user;
+  const organisationId = Number(loggedUser?.orgId || 0);
+  try {
+    const body = await readBody(event);
+    const payload = typeof body === "string" ? parseJsonBody(body) : body;
+    if (!payload?.id) return error(400, 'id is required');
+    const template = await ClinicalNoteTemplate.findOne({
+      where: { id: Number(payload.id), scope: 'organisation', organisationId },
+      include: [{ model: ClinicalNoteTemplateVersion, as: 'currentVersion' }],
+    });
+    if (!template) return error(404, 'Template not found');
+    const updated = await updateClinicalTemplateWithVersion({
+      template,
+      title: template.title,
+      key: template.key,
+      status: template.status,
+      sortOrder: Number(template.sortOrder || 0),
+      isDefault: payload.isDefault !== false,
+      actorUserId: loggedUser?.userId || null,
+      changeNote: payload?.changeNote ? String(payload.changeNote).trim() : 'Updated default selection',
+    });
+    return success(serializeClinicalTemplate(updated));
+  } catch (err) {
+    console.error('Error setting default clinical note template:', err);
+    return error(500, err.message || 'Failed to set default template');
   }
 };
 
