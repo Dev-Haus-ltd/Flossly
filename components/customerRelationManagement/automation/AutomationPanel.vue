@@ -20,6 +20,7 @@
         @toggle="toggleAutomationGroup"
         @edit="(card) => emit('edit-group', card)"
         @delete="(card) => emit('delete-group', card)"
+        @go-to-automations="emit('go-to-automations')"
       />
     </template>
 
@@ -555,7 +556,7 @@ const props = defineProps({
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
 const orgStore = useOrgStore()
-const emit = defineEmits(['update:rows','save','edit-group','delete-group'])
+const emit = defineEmits(['update:rows','save','edit-group','delete-group','go-to-automations'])
 
 const resolvedPatientId = computed(() => {
   const raw = props.patientId ?? props.patient?.id
