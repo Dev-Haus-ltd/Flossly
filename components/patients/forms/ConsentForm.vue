@@ -101,7 +101,12 @@
         :class="{ 'form-card--selected': selectedFormId === form.id }"
       >
         <div v-if="!sendOnly" class="form-actions" @click.stop>
-          <v-tooltip text="Edit" location="top">
+          <v-tooltip v-if="form.scope === 'system'" text="Default template — read only" location="top">
+            <template #activator="{ props }">
+              <span v-bind="props" class="default-badge">Default</span>
+            </template>
+          </v-tooltip>
+          <v-tooltip text="Edit / Customize" location="top">
             <template #activator="{ props }">
               <span
                 v-bind="props"
@@ -179,7 +184,7 @@
         <!-- Header -->
         <v-toolbar flat color="white" height="56">
           <v-toolbar-title class="title-text pl-2">
-            {{ isEditMode ? "Edit Consent Form" : "Create New Consent Form" }}
+            {{ editDialogTitle }}
           </v-toolbar-title>
           <v-spacer />
           <v-btn
@@ -205,13 +210,11 @@
             <div class="summary-dot"></div>
             <div>
               <div class="text-body-2 font-weight-medium">
-                {{ isEditMode ? "Edit Consent Form" : "New Consent Form" }}
+                {{ editDialogTitle }}
               </div>
               <div class="text-caption text-grey">
                 {{
-                  isEditMode
-                    ? "Update the form details below"
-                    : "Fill in the details below to create a new form template"
+                  editDialogSubtitle
                 }}
               </div>
             </div>
@@ -240,12 +243,13 @@
               <!-- Category -->
               <v-col cols="12" sm="6">
                 <label class="fld-lbl">Category</label>
-                <v-text-field
+                <v-combobox
                   v-model="formData.category"
+                  :items="categoryOptions"
                   variant="outlined"
                   density="compact"
                   class="mt-1"
-                  placeholder="e.g., Treatment Consent, Privacy"
+                  placeholder="Choose or create a category"
                   :error="!!errors.category"
                   :error-messages="errors.category ? [errors.category] : []"
                   hide-details="auto"
@@ -289,44 +293,17 @@
                 <label class="fld-lbl">
                   Form Content <span class="req-star">*</span>
                 </label>
-                <v-textarea
-                  v-model="formData.htmlContent"
-                  variant="outlined"
-                  density="compact"
-                  class="mt-1 code-textarea"
-                  placeholder="Paste your form HTML here..."
-                  rows="6"
-                  :error="!!errors.htmlContent"
-                  :error-messages="
-                    errors.htmlContent ? [errors.htmlContent] : []
-                  "
-                  hide-details="auto"
-                  @input="clearError('htmlContent')"
-                />
-              </v-col>
-
-              <!-- Signature Coordinates Section -->
-              <!-- NEW: Add SignaturePlacementEditor -->
-              <v-col cols="12">
-                <div class="signature-placement-editor-section">
-                  <div class="section-header mb-3">
-                    <v-icon size="18" color="primary"
-                      >mdi-cursor-default-click</v-icon
-                    >
-                    <span class="section-title">Signature Placement</span>
-                  </div>
-                  <p class="section-hint mb-3">
-                    Drag the signature box to where you want patients to sign.
-                    The system will automatically save the position.
-                  </p>
-
-                  <SignaturePlacementEditor
-                    v-model="formData.signatureCoordinates"
-                    :html-content="formData.htmlContent"
-                    mode="edit"
-                    :editor-height="500"
-                    @change="handleSignatureChange"
+                <div class="mt-1">
+                  <ChartRichTextEditor
+                    v-model="formData.htmlContent"
+                    placeholder="Write the consent form content here..."
                   />
+                  <div
+                    v-if="errors.htmlContent"
+                    class="field-error mt-2"
+                  >
+                    {{ errors.htmlContent }}
+                  </div>
                 </div>
               </v-col>
 
@@ -390,8 +367,16 @@ import { useConsentStore } from "@/stores/consent";
 import { useMainStore } from "@/stores/index";
 import ConsentFormDetail from "./ConsentFormDetail.vue";
 import ConsentFormSender from "./ConsentFormSender.vue";
-import SignaturePlacementEditor from "../../consent/SignaturePlacementEditor.vue";
+import ChartRichTextEditor from "@/components/patients/charting/ChartRichTextEditor.vue";
 import editIcon from "@/assets/icons/edit.svg";
+
+const DEFAULT_SIGNATURE_COORDINATES = Object.freeze({
+  x: 100,
+  y: 650,
+  width: 180,
+  height: 80,
+  page: 1,
+});
 
 const props = defineProps({
   patientId: {
@@ -442,13 +427,7 @@ const formData = ref({
   description: "",
   htmlContent: "",
   isActive: true,
-  signatureCoordinates: {
-    x: 100,
-    y: 100,
-    width: 150,
-    height: 50,
-    page: 1,
-  },
+  signatureCoordinates: { ...DEFAULT_SIGNATURE_COORDINATES },
 });
 
 // Errors
@@ -468,6 +447,30 @@ const statusOptions = [
 // Computed
 const isEditMode = computed(() => showEditDialog.value && !!formToEdit.value);
 const sendOnly = computed(() => props.sendOnly);
+const categoryOptions = computed(() =>
+  [...new Set(
+    (consentForms.value || [])
+      .map((form) => String(form.category || "").trim())
+      .filter(Boolean),
+  )].sort((a, b) => a.localeCompare(b)),
+);
+const isEditingSystemTemplate = computed(
+  () => isEditMode.value && formToEdit.value?.scope === "system",
+);
+const editDialogTitle = computed(() => {
+  if (!isEditMode.value) return "Create New Consent Form";
+  return isEditingSystemTemplate.value
+    ? "Customize Default Consent Form"
+    : "Edit Consent Form";
+});
+const editDialogSubtitle = computed(() => {
+  if (!isEditMode.value) {
+    return "Fill in the details below to create a new form template";
+  }
+  return isEditingSystemTemplate.value
+    ? "Saving will create an organisation-specific version of this default template"
+    : "Update the form details below";
+});
 
 // Methods
 const loadConsentForms = async () => {
@@ -557,18 +560,16 @@ const openEditDialog = (form) => {
   formToEdit.value = form;
   formData.value = {
     id: form.id,
+    key: form.key || null,
+    scope: form.scope || "organisation",
     name: form.name,
     category: form.category || "",
     description: form.description || "",
     htmlContent: form.htmlContent || "",
     isActive: form.isActive !== undefined ? form.isActive : true,
-    signatureCoordinates: form.signatureCoordinates || {
-      x: 100,
-      y: 100,
-      width: 150,
-      height: 50,
-      page: 1,
-    },
+    signatureCoordinates: form.signatureCoordinates
+      ? { ...form.signatureCoordinates }
+      : { ...DEFAULT_SIGNATURE_COORDINATES },
   };
   resetErrors();
   showEditDialog.value = true;
@@ -590,13 +591,7 @@ const resetForm = () => {
     description: "",
     htmlContent: "",
     isActive: true,
-    signatureCoordinates: {
-      x: 100,
-      y: 100,
-      width: 150,
-      height: 50,
-      page: 1,
-    },
+    signatureCoordinates: { ...DEFAULT_SIGNATURE_COORDINATES },
   };
 };
 
@@ -626,43 +621,6 @@ const validateForm = () => {
     isValid = false;
   }
 
-  const coords = formData.value.signatureCoordinates;
-  if (!coords.x || coords.x < 0 || coords.x > 800) {
-    mainStore.setSnackbar({
-      title: "Signature X position must be between 0 and 800 pixels",
-      type: "warning",
-    });
-    isValid = false;
-  }
-  if (!coords.y || coords.y < 0 || coords.y > 1000) {
-    mainStore.setSnackbar({
-      title: "Signature Y position must be between 0 and 1000 pixels",
-      type: "warning",
-    });
-    isValid = false;
-  }
-  if (!coords.width || coords.width < 50 || coords.width > 300) {
-    mainStore.setSnackbar({
-      title: "Signature width must be between 50 and 300 pixels",
-      type: "warning",
-    });
-    isValid = false;
-  }
-  if (!coords.height || coords.height < 30 || coords.height > 150) {
-    mainStore.setSnackbar({
-      message: "Signature height must be between 30 and 150 pixels",
-      color: "warning",
-    });
-    isValid = false;
-  }
-  if (!coords.page || coords.page < 1) {
-    mainStore.setSnackbar({
-      message: "Page number must be 1 or higher",
-      color: "warning",
-    });
-    isValid = false;
-  }
-
   return isValid;
 };
 
@@ -683,18 +641,14 @@ const createForm = async () => {
 
   try {
     const templateData = {
+      key: formData.value.key || null,
+      scope: formData.value.scope || "organisation",
       name: formData.value.name.trim(),
       category: formData.value.category.trim() || "General",
       description: formData.value.description.trim(),
       htmlContent: formData.value.htmlContent.trim(),
       isActive: formData.value.isActive,
-      signatureCoordinates: {
-        x: Number(formData.value.signatureCoordinates.x),
-        y: Number(formData.value.signatureCoordinates.y),
-        width: Number(formData.value.signatureCoordinates.width),
-        height: Number(formData.value.signatureCoordinates.height),
-        page: Number(formData.value.signatureCoordinates.page),
-      },
+      signatureCoordinates: { ...DEFAULT_SIGNATURE_COORDINATES },
     };
 
     await consentStore.createTemplate(templateData);
@@ -721,19 +675,17 @@ const updateForm = async () => {
 
   try {
     const templateData = {
+      key: formData.value.key || null,
+      scope: formData.value.scope || "organisation",
       id: formData.value.id, // ✅ Make sure id is included
       name: formData.value.name.trim(),
       category: formData.value.category.trim() || "General",
       description: formData.value.description.trim(),
       htmlContent: formData.value.htmlContent.trim(),
       isActive: formData.value.isActive,
-      signatureCoordinates: {
-        x: Number(formData.value.signatureCoordinates.x),
-        y: Number(formData.value.signatureCoordinates.y),
-        width: Number(formData.value.signatureCoordinates.width),
-        height: Number(formData.value.signatureCoordinates.height),
-        page: Number(formData.value.signatureCoordinates.page),
-      },
+      signatureCoordinates: formData.value.signatureCoordinates
+        ? { ...formData.value.signatureCoordinates }
+        : { ...DEFAULT_SIGNATURE_COORDINATES },
     };
 
     // ✅ Call with single object (not two arguments)
@@ -980,40 +932,6 @@ defineExpose({
   flex-shrink: 0;
 }
 
-.coordinates-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-
-  .coordinates-title {
-    font-weight: 600;
-    font-size: 13px;
-    color: #374151;
-  }
-
-  .required-badge {
-    font-size: 10px;
-    padding: 2px 8px;
-    background: rgba(0, 97, 251, 0.1);
-    border-radius: 12px;
-    color: #0061fb;
-    font-weight: 500;
-  }
-}
-
-.coordinates-hint {
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.coord-label {
-  font-size: 11px;
-  font-weight: 500;
-  color: #6b7280;
-  display: block;
-  margin-bottom: 6px;
-}
-
 .tips-section {
   background: rgba(0, 97, 251, 0.05);
   border-radius: 10px;
@@ -1046,13 +964,6 @@ defineExpose({
   }
 }
 
-.code-textarea {
-  :deep(textarea) {
-    font-family: "Monaco", "Courier New", monospace;
-    font-size: 12px;
-  }
-}
-
 // Delete Dialog
 .delete-dialog-header {
   text-align: center;
@@ -1076,6 +987,19 @@ defineExpose({
     margin: 0;
   }
 }
+.default-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: rgba(0, 97, 251, 0.1);
+  color: #0061fb;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  cursor: default;
+}
+
 .section-title {
   font-size: 14px;
   font-weight: 600;
@@ -1084,6 +1008,10 @@ defineExpose({
 .section-hint {
   font-size: 12px;
   color: #6b7280;
+}
+.field-error {
+  font-size: 11px;
+  color: #b91c1c;
 }
 .delete-dialog-body {
   text-align: center;

@@ -3,6 +3,7 @@ import { PDFDocument } from "pdf-lib";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { normalizeConsentHtmlForDigitalFlow } from "~/utils/consentHtml";
 
 // Professional CSS template for better PDF appearance
 const getProfessionalStyles = () => {
@@ -219,6 +220,7 @@ const getProfessionalStyles = () => {
 
 // Wrap HTML content with professional template
 const wrapWithProfessionalTemplate = (htmlContent, options = {}) => {
+  const normalizedHtmlContent = normalizeConsentHtmlForDigitalFlow(htmlContent);
   const {
     practiceName = "Flossly Dental Practice",
     formTitle = "Consent Form",
@@ -235,10 +237,10 @@ const wrapWithProfessionalTemplate = (htmlContent, options = {}) => {
 
   // Check if content already has styling
   const hasExistingStyle =
-    htmlContent.includes("<style") || htmlContent.includes('style="');
+    normalizedHtmlContent.includes("<style") || normalizedHtmlContent.includes('style="');
 
   // If content already has good styling, just return as is
-  if (hasExistingStyle && htmlContent.includes("signature")) {
+  if (hasExistingStyle && normalizedHtmlContent.includes("signature")) {
     return `
       <!DOCTYPE html>
       <html>
@@ -248,7 +250,7 @@ const wrapWithProfessionalTemplate = (htmlContent, options = {}) => {
         <title>${formTitle} - ${practiceName}</title>
       </head>
       <body>
-        ${htmlContent}
+        ${normalizedHtmlContent}
       </body>
       </html>
     `;
@@ -296,7 +298,7 @@ const wrapWithProfessionalTemplate = (htmlContent, options = {}) => {
       <!-- Main Content -->
       <div class="content-section">
         <div class="consent-text">
-          ${htmlContent}
+          ${normalizedHtmlContent}
         </div>
       </div>
       
@@ -369,7 +371,8 @@ export const generatePdfFromHtml = async (
     // DYNAMIC SIGNATURE PLACEHOLDER DETECTION
     // Accurately detects the actual position in rendered HTML
     // ═══════════════════════════════════════════════════════════════════════
-    const signaturePosition = await page.evaluate(() => {
+    const A4_PAGE_HEIGHT_PX = 1123;
+    const signaturePosition = await page.evaluate((PAGE_H) => {
       const placeholder =
         document.querySelector("#signature-placeholder") ||
         document.querySelector(".signature-placeholder") ||
@@ -380,20 +383,21 @@ export const generatePdfFromHtml = async (
         return null;
       }
 
-      // Get precise position from browser rendering engine
+      // getBoundingClientRect().top gives the element's absolute Y from the document
+      // top (no scroll in Puppeteer). For multi-page docs the value exceeds one
+      // A4 page height, so we convert to a page-relative Y coordinate.
       const rect = placeholder.getBoundingClientRect();
+      const pageIndex = Math.floor(rect.top / PAGE_H);
+      const yOnPage = rect.top - pageIndex * PAGE_H;
 
-      // Calculate with precision, rounded to 2 decimal places
-      const position = {
+      return {
         x: Math.round(rect.left * 100) / 100,
-        y: Math.round(rect.top * 100) / 100,
+        y: Math.round(yOnPage * 100) / 100,
         width: Math.round(rect.width * 100) / 100,
         height: Math.round(rect.height * 100) / 100,
-        page: 1,
+        page: pageIndex + 1,
       };
-
-      return position;
-    });
+    }, A4_PAGE_HEIGHT_PX);
     const pdfBuffer = await page.pdf({
       format: "A4",
       printBackground: true,
@@ -419,7 +423,7 @@ export const generatePdfFromHtml = async (
     // ═══════════════════════════════════════════════════════════════════════
     let convertedCoordinates = null;
     if (signaturePosition) {
-      convertedCoordinates = convertHtmlToPdfCoordinates(signaturePosition, 0);
+      convertedCoordinates = convertHtmlToPdfCoordinates(signaturePosition, signaturePosition.page - 1);
     }
 
     console.log("\n📄 PDF Generation Complete:", {
@@ -614,8 +618,9 @@ export const embedSignatureWithPuppeteer = async (
       waitUntil: "networkidle0",
     });
 
-    // Re-detect signature position from rendered page
-    const detectedPosition = await page.evaluate(() => {
+    // Re-detect signature position from rendered page (page-aware for multi-page docs)
+    const A4_PAGE_HEIGHT_PX = 1123;
+    const detectedPosition = await page.evaluate((PAGE_H) => {
       const placeholder =
         document.querySelector("#signature-placeholder") ||
         document.querySelector(".signature-placeholder") ||
@@ -624,26 +629,37 @@ export const embedSignatureWithPuppeteer = async (
       if (!placeholder) return null;
 
       const rect = placeholder.getBoundingClientRect();
+      const pageIndex = Math.floor(rect.top / PAGE_H);
+      const yOnPage = rect.top - pageIndex * PAGE_H;
+
       return {
         x: Math.round(rect.left * 100) / 100,
-        y: Math.round(rect.top * 100) / 100,
+        y: Math.round(yOnPage * 100) / 100,
         width: Math.round(rect.width * 100) / 100,
         height: Math.round(rect.height * 100) / 100,
-        page: 1,
+        page: pageIndex + 1,
       };
-    });
+    }, A4_PAGE_HEIGHT_PX);
 
     await browser.close();
 
-    // Use detected position, or fall back to provided coordinates
-    const finalCoordinates = detectedPosition || coordinates;
+    // Use detected position (in HTML pixel space, page-relative), or fall back to
+    // provided coordinates. When using detected position, always convert to PDF
+    // coordinate space so embedSignatureInPdf receives correct values.
+    const rawCoords = detectedPosition || coordinates;
 
-    if (!finalCoordinates) {
+    if (!rawCoords) {
       throw new Error("Unable to detect or provide signature coordinates");
     }
 
+    let finalCoordinates = rawCoords;
+    if (detectedPosition) {
+      const converted = convertHtmlToPdfCoordinates(detectedPosition, detectedPosition.page - 1);
+      if (converted) finalCoordinates = converted;
+    }
+
     console.log("\n🎯 Using coordinates for signature embedding:", {
-      source: detectedPosition ? "detected" : "provided",
+      source: detectedPosition ? "detected+converted" : "provided",
       coordinates: finalCoordinates,
     });
 

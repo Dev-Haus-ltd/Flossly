@@ -354,17 +354,15 @@
                 </p>
 
                 <div class="success-footer">
-                  <v-progress-linear
-                    :model-value="countdownProgress"
-                    color="success"
-                    height="3"
-                    class="countdown-bar"
-                  />
-                  <p class="redirect-text">
-                    Redirecting in <strong>{{ countdown }}</strong> second{{
-                      countdown > 1 ? "s" : ""
-                    }}...
-                  </p>
+                  <v-btn
+                    color="primary"
+                    variant="flat"
+                    rounded="lg"
+                    @click="handleSigningComplete"
+                    class="done-btn"
+                  >
+                    Done
+                  </v-btn>
                 </div>
               </div>
             </v-card>
@@ -378,14 +376,13 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute } from "vue-router";
 import { useConsentStore } from "@/stores/consent";
 import { useMainStore } from "@/stores/index";
 
 definePageMeta({ layout: false });
 
 const route = useRoute();
-const router = useRouter();
 const consentStore = useConsentStore();
 const mainStore = useMainStore();
 
@@ -430,10 +427,6 @@ const signatureFonts = [
   "Caveat",
   "Kaushan Script",
 ];
-// Countdown
-const countdown = ref(3);
-const countdownProgress = ref(100);
-
 // Computed
 const formTitle = computed(() => {
   return (
@@ -684,7 +677,6 @@ const submitForm = async () => {
     );
     if (result) {
       showSuccess.value = true;
-      startCountdown();
     }
   } catch (err) {
     console.error("Error submitting:", err);
@@ -697,19 +689,10 @@ const submitForm = async () => {
   }
 };
 
-const startCountdown = () => {
-  countdown.value = 5;
-  countdownProgress.value = 100;
-
-  const interval = setInterval(() => {
-    countdown.value--;
-    countdownProgress.value = (countdown.value / 5) * 100;
-
-    if (countdown.value <= 0) {
-      clearInterval(interval);
-      router.push("/");
-    }
-  }, 1000);
+const handleSigningComplete = () => {
+  showSuccess.value = false;
+  alreadySigned.value = true;
+  if (documentData.value) documentData.value.signedAt = new Date().toISOString();
 };
 
 const retryLoad = () => {

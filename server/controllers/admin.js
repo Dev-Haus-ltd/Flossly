@@ -8,6 +8,7 @@ import {
   ClinicalNoteTemplate, ClinicalNoteTemplateVersion,
 } from '../models';
 import { seedCrmAutomationDictionary as runSeedCrmAutomationDictionary } from '../utils/seedCrmAutomationDictionary';
+import { seedConsentFormTemplates as runSeedConsentFormTemplates } from '../utils/seedConsentFormTemplates';
 import { Op, fn, col } from 'sequelize';
 import sequelize from '../utils/db';
 import { sendInvitationEmail } from '../utils/emailNotifications';
@@ -2273,6 +2274,17 @@ export const seedCrmAutomationDictionary = async (event) => {
   } catch (err) {
     console.error('Seed CRM automation dictionary error:', err)
     return error(err?.statusCode || 500, err.message || 'Failed to seed CRM automation dictionary')
+  }
+}
+
+export const seedConsentFormTemplates = async (event) => {
+  requireAdmin(event)
+  try {
+    const result = await runSeedConsentFormTemplates()
+    return success(result)
+  } catch (err) {
+    console.error('Seed consent form templates error:', err)
+    return error(err?.statusCode || 500, err.message || 'Failed to seed consent form templates')
   }
 }
 

@@ -466,6 +466,12 @@ const onSave = async () => {
     payload.receiveSms === true || payload.receiveSms === "Yes";
   payload.receiveEmail =
     payload.receiveEmail === true || payload.receiveEmail === "Yes";
+  if (payload.dob instanceof Date) {
+    const d = payload.dob;
+    payload.dob = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  } else if (typeof payload.dob === 'string' && payload.dob.length > 10) {
+    payload.dob = payload.dob.slice(0, 10);
+  }
   if (props.patient?.id) payload.id = props.patient.id;
   emit("save", payload);
   emit("update:modelValue", false);

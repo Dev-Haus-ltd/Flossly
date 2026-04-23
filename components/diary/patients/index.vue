@@ -367,8 +367,7 @@ const confirmDelete = async () => {
     } else {
       if (mainStore?.setSnackbar) {
         mainStore.setSnackbar({
-          title:
-            res?.data?.message || res?.message || "Failed to delete patient",
+          title: res?.data?.message || res?.statusMessage || res?.message || "Failed to delete patient",
           type: "error",
         });
       }
@@ -377,7 +376,7 @@ const confirmDelete = async () => {
     console.error("Delete error:", err);
     if (mainStore?.setSnackbar) {
       mainStore.setSnackbar({
-        title: err?.message || "An error occurred while deleting the patient",
+        title: err?.data?.message || err?.statusMessage || err?.message || "An error occurred while deleting the patient",
         type: "error",
       });
     }

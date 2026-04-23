@@ -9,6 +9,7 @@ import {
   Organisation,
 } from "../models";
 import { success, error } from "../utils/response";
+import { normalizeConsentHtmlForDigitalFlow } from "~/utils/consentHtml";
 import {
   generateSecureToken,
   hashToken,
@@ -25,6 +26,7 @@ import {
 import {
   generatePdfFromHtml,
   embedSignatureInPdf,
+  embedSignatureWithPuppeteer,
   validateCoordinates,
 } from "../utils/consentPdfUtils";
 import {
@@ -46,14 +48,33 @@ import os from "os";
 // CONSENT FORM TEMPLATE ROUTES
 // =============================================================================
 
+const buildTemplateVisibility = (templates = []) => {
+  const organisationTemplates = templates.filter(
+    (template) => template.scope === "organisation"
+  );
+  const overriddenKeys = new Set(
+    organisationTemplates.map((template) => template.key).filter(Boolean)
+  );
+
+  const visibleSystemTemplates = templates.filter((template) => {
+    if (template.scope !== "system") return false;
+    return !template.key || !overriddenKeys.has(template.key);
+  });
+
+  return [...organisationTemplates, ...visibleSystemTemplates];
+};
+
 export const listConsentTemplates = async (event) => {
   try {
     const { orgId } = event.context.user;
 
     const templates = await ConsentFormTemplate.findAll({
       where: {
-        organisationId: Number(orgId),
         isActive: true,
+        [Op.or]: [
+          { scope: "system" },
+          { scope: "organisation", organisationId: Number(orgId) },
+        ],
       },
       include: [
         {
@@ -62,10 +83,14 @@ export const listConsentTemplates = async (event) => {
           attributes: ["id", "fullName", "email"],
         },
       ],
-      order: [["createdAt", "DESC"]],
+      order: [
+        ["scope", "ASC"],   // 'organisation' sorts before 'system' — org custom forms appear first
+        ["category", "ASC"],
+        ["name", "ASC"],
+      ],
     });
 
-    return success(templates);
+    return success(buildTemplateVisibility(templates));
   } catch (e) {
     const msg =
       (e &&
@@ -182,7 +207,10 @@ export const updateConsentTemplate = async (event) => {
     const template = await ConsentFormTemplate.findOne({
       where: {
         id: templateId,
-        organisationId: Number(orgId),
+        [Op.or]: [
+          { scope: "system" },
+          { scope: "organisation", organisationId: Number(orgId) },
+        ],
       },
     });
 
@@ -190,25 +218,68 @@ export const updateConsentTemplate = async (event) => {
       return error(404, "Template not found");
     }
 
-    if (body.name) template.name = body.name;
-    if (body.description !== undefined) template.description = body.description;
-    if (body.htmlContent) {
-      template.htmlContent = sanitizeHtmlContent(body.htmlContent);
-    }
-    if (
+    const nextSignatureCoordinates =
       body.signatureCoordinates &&
       validateCoordinates(body.signatureCoordinates)
-    ) {
-      template.signatureCoordinates = body.signatureCoordinates;
-    }
-    if (body.initialCoordinates)
-      template.initialCoordinates = body.initialCoordinates;
-    if (body.dateCoordinates) template.dateCoordinates = body.dateCoordinates;
-    if (body.category !== undefined) template.category = body.category;
-    if (body.isActive !== undefined) template.isActive = body.isActive;
+        ? body.signatureCoordinates
+        : template.signatureCoordinates;
 
-    template.updatedBy = userId;
-    await template.save();
+    const nextData = {
+      name: body.name || template.name,
+      description:
+        body.description !== undefined ? body.description : template.description,
+      htmlContent: body.htmlContent
+        ? sanitizeHtmlContent(body.htmlContent)
+        : template.htmlContent,
+      signatureCoordinates: nextSignatureCoordinates,
+      initialCoordinates:
+        body.initialCoordinates !== undefined
+          ? body.initialCoordinates
+          : template.initialCoordinates,
+      dateCoordinates:
+        body.dateCoordinates !== undefined
+          ? body.dateCoordinates
+          : template.dateCoordinates,
+      category: body.category !== undefined ? body.category : template.category,
+      isActive:
+        body.isActive !== undefined ? body.isActive : template.isActive,
+    };
+
+    if (template.scope === "system") {
+      const existingOverride = template.key
+        ? await ConsentFormTemplate.findOne({
+            where: {
+              scope: "organisation",
+              organisationId: Number(orgId),
+              key: template.key,
+            },
+          })
+        : null;
+
+      if (existingOverride) {
+        await existingOverride.update({
+          ...nextData,
+          updatedBy: userId,
+        });
+        return success(existingOverride);
+      }
+
+      const orgTemplate = await ConsentFormTemplate.create({
+        ...nextData,
+        scope: "organisation",
+        key: template.key || null,
+        organisationId: Number(orgId),
+        createdBy: userId,
+        updatedBy: userId,
+      });
+
+      return success(orgTemplate, 201);
+    }
+
+    await template.update({
+      ...nextData,
+      updatedBy: userId,
+    });
 
     return success(template);
   } catch (e) {
@@ -354,7 +425,10 @@ export const sendConsentDocument = async (event) => {
       ConsentFormTemplate.findOne({
         where: {
           id: templateId,
-          organisationId: Number(orgId),
+          [Op.or]: [
+            { scope: "system" },
+            { scope: "organisation", organisationId: Number(orgId) },
+          ],
         },
       }),
       Organisation.findOne({
@@ -367,30 +441,39 @@ export const sendConsentDocument = async (event) => {
     if (!patient) return error(404, "Patient not found");
     if (!template) return error(404, "Template not found");
 
-    // Generate PDF from HTML using Puppeteer
-const { filePath, pageCount, signaturePosition, pdfCoordinates } =
-  await generatePdfFromHtml(
-    template.htmlContent,
-    template.name,
-    {
-      practiceName: organisation?.name || "Flossly",
-      formTitle: body.title || template.name,
-      patientName: `${patient.firstName || ""} ${patient.lastName || ""}`.trim(),
-      patientEmail: body.patientEmail || patient.email,
-      showPatientInfo: true,
-    }
-  );
-    tempPdfPath = filePath;
-    const pdfContent = fs.readFileSync(filePath);
+    let pageCount = 1;
+    let signaturePosition = null;
+    let pdfCoordinates = null;
+    let unsignedS3Key = null;
+    let pdfGenerationFallbackReason = null;
 
-    // Upload to S3
-    const unsignedS3Key = await uploadConsentDocument(
-      pdfContent,
-      Number(orgId),
-      patientId,
-      "pdf",
-      "unsigned"
-    );
+    try {
+      const pdfResult = await generatePdfFromHtml(template.htmlContent, template.name, {
+        practiceName: organisation?.name || "Flossly",
+        formTitle: body.title || template.name,
+        patientName: `${patient.firstName || ""} ${patient.lastName || ""}`.trim(),
+        patientEmail: body.patientEmail || patient.email,
+        showPatientInfo: true,
+      });
+
+      tempPdfPath = pdfResult.filePath;
+      pageCount = pdfResult.pageCount || 1;
+      signaturePosition = pdfResult.signaturePosition || null;
+      pdfCoordinates = pdfResult.pdfCoordinates || null;
+
+      const pdfContent = fs.readFileSync(pdfResult.filePath);
+      unsignedS3Key = await uploadConsentDocument(
+        pdfContent,
+        Number(orgId),
+        patientId,
+        "pdf",
+        "unsigned"
+      );
+    } catch (pdfError) {
+      pdfGenerationFallbackReason =
+        pdfError?.message || "Unable to prepare unsigned PDF during send";
+      console.error("Consent send PDF preparation failed, falling back to HTML-only send:", pdfError);
+    }
 
     // Generate token
     const plainToken = generateSecureToken();
@@ -448,6 +531,8 @@ metadata: {
   detectedSignaturePosition: signaturePosition,
   // Store both to ensure we have the best available coordinates
   pdfConvertedCoordinates: pdfCoordinates,
+  pdfPreparedAtSend: !!unsignedS3Key,
+  pdfGenerationFallbackReason,
   coordinateSource: pdfCoordinates ? 'detected_and_converted' : (signaturePosition ? 'detected_raw' : (template.signatureCoordinates ? 'template' : 'default')),
   sentVia: sendVia,
 },
@@ -462,15 +547,17 @@ metadata: {
       action: "created",
       ipAddress: getClientIpAddress(event),
       userAgent: getUserAgent(event),
-      metadata: {
-        createdBy: userId,
-        templateId,
-        totalPages: pageCount,
-        signaturePageUsed: signatureCoords.page,
-        deliveryMethod: sendVia,
-      },
-      performedBy: userId,
-    });
+        metadata: {
+          createdBy: userId,
+          templateId,
+          totalPages: pageCount,
+          signaturePageUsed: signatureCoords.page,
+          pdfPreparedAtSend: !!unsignedS3Key,
+          pdfGenerationFallbackReason,
+          deliveryMethod: sendVia,
+        },
+        performedBy: userId,
+      });
 
     const deliveryErrors = [];
     const successfulDeliveries = [];
@@ -795,7 +882,9 @@ export const getConsentDocumentForSigning = async (event) => {
       name: document.template?.name,
       customTitle: document.customTitle || document.title,
       patient: document.patient,
-      htmlContent: document.template?.htmlContent,
+      htmlContent: normalizeConsentHtmlForDigitalFlow(
+        document.template?.htmlContent || ""
+      ),
       pdfUrl: pdfSignedUrl,
       tokenExpiresAt: document.tokenExpiresAt, // ✅ Return tokenExpiresAt
       expiresAt: document.tokenExpiresAt,
@@ -890,10 +979,30 @@ export const submitSignedConsent = async (event) => {
     tempSignaturePath = path.join(os.tmpdir(), `sig_${Date.now()}.png`);
     fs.writeFileSync(tempSignaturePath, signatureBuffer);
 
-    // Download unsigned PDF from S3
-    const pdfBuffer = await downloadFromS3(document.pdfS3Key);
-    tempUnsignedPdfPath = path.join(os.tmpdir(), `unsigned_${Date.now()}.pdf`);
-    fs.writeFileSync(tempUnsignedPdfPath, pdfBuffer);
+    if (document.pdfS3Key) {
+      const pdfBuffer = await downloadFromS3(document.pdfS3Key);
+      tempUnsignedPdfPath = path.join(os.tmpdir(), `unsigned_${Date.now()}.pdf`);
+      fs.writeFileSync(tempUnsignedPdfPath, pdfBuffer);
+    } else {
+      const organisation = await Organisation.findOne({
+        where: { id: Number(document.organisationId) },
+        attributes: ["id", "name"],
+      });
+
+      const pdfResult = await generatePdfFromHtml(
+        document.template.htmlContent,
+        document.customTitle || document.template.name,
+        {
+          practiceName: organisation?.name || "Flossly",
+          formTitle: document.customTitle || document.template.name,
+          patientName: document.patientSignatureName || "",
+          patientEmail: document.patientEmail || "",
+          showPatientInfo: true,
+        }
+      );
+
+      tempUnsignedPdfPath = pdfResult.filePath;
+    }
 
     // Get signature coordinates - use best available option
     // Priority: 1) Converted PDF coordinates, 2) Raw detected, 3) Stored, 4) Template, 5) Default

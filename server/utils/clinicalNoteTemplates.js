@@ -153,7 +153,21 @@ export const listAvailableClinicalTemplates = async ({ organisationId, type, sta
       ['id', 'ASC'],
     ],
   })
-  return rows.map(serializeClinicalTemplate)
+  const serialized = rows.map(serializeClinicalTemplate)
+  const organisationOverrides = new Set(
+    serialized
+      .filter((item) => item.scope === 'organisation')
+      .flatMap((item) => {
+        const pairs = [`${item.type}::${item.key}`]
+        if (item.sourceTemplateId) pairs.push(`source::${item.sourceTemplateId}`)
+        return pairs
+      }),
+  )
+
+  return serialized.filter((item) => {
+    if (item.scope !== 'system') return true
+    return !organisationOverrides.has(`source::${item.id}`) && !organisationOverrides.has(`${item.type}::${item.key}`)
+  })
 }
 
 export const createClinicalTemplateWithVersion = async ({

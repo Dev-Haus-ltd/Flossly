@@ -41,7 +41,7 @@
 import { ref, computed, watch } from 'vue'
 import AppointmentReason from './appointmentReason/index.vue'
 import DentistSchedule from './dentistSchedules/index.vue'
-import TemplateManager from '@/components/clinicalNoteTemplates/TemplateManager.vue'
+import TemplateManager from './clinicalNoteTemplates/index.vue'
 const selectedSection = ref('Appointment Reasons')
 const diaryRef = ref(null)
 const route = useRoute()

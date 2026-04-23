@@ -9,6 +9,8 @@ import {
   DiaryPatientChart,
   DiaryTreatmentPlan,
   DiaryTreatmentPlanItem,
+  ConsentFormDocument,
+  ConsentFormSignatureAudit,
   ClinicalNoteTemplate,
   User,
   RotaShift,
@@ -703,14 +705,34 @@ export const deletePatient = async (event) => {
       where: { id, organisationId: Number(orgId) },
     });
     if (!row) return error(404, "Patient not found");
-    await row.destroy();
+    const appointmentCount = await DiaryAppointment.count({
+      where: { patientId: id, organisationId: Number(orgId) },
+    });
+    if (appointmentCount > 0) {
+      return error(
+        409,
+        `This patient has ${appointmentCount} appointment${appointmentCount === 1 ? "" : "s"} and cannot be deleted. Please remove their appointments first.`
+      );
+    }
+    const patientWhere = { patientId: id, organisationId: Number(orgId) };
+    await Promise.all([
+      ConsentFormSignatureAudit.destroy({ where: patientWhere }),
+      DiaryPatientComfort.destroy({ where: patientWhere }),
+      DiaryPatientSurvey.destroy({ where: patientWhere }),
+      DiaryPatientForm.destroy({ where: patientWhere }),
+      DiaryPatientChart.destroy({ where: patientWhere }),
+      DiaryTreatmentPlanItem.destroy({ where: patientWhere }),
+      DiaryTreatmentPlan.destroy({ where: patientWhere }),
+      ConsentFormDocument.destroy({ where: patientWhere }),
+    ]);
+    await DiaryPatient.destroy({ where: { id, organisationId: Number(orgId) } });
     return success({ id });
   } catch (e) {
     const msg =
       (e &&
-        (e.message ||
-          (e.data && e.data.message) ||
-          (e.original && e.original.detail))) ||
+        (e.data && e.data.message) ||
+        e.message ||
+        (e.original && e.original.detail)) ||
       "Internal server error";
     return error(500, msg);
   }
@@ -1363,11 +1385,18 @@ export const listClinicalNoteTemplates = async (event) => {
     const q = getQuery(event) || {};
     const type = String(q.type || "").trim();
     if (!type) return error(400, "type is required");
-    const items = await listAvailableClinicalTemplates({
+    let items = await listAvailableClinicalTemplates({
       organisationId: Number(orgId),
       type,
       status: String(q.status || "active"),
     });
+    if (!items.length && type === "treatment_plan") {
+      items = await listAvailableClinicalTemplates({
+        organisationId: Number(orgId),
+        type: "diagnosis",
+        status: String(q.status || "active"),
+      });
+    }
     return success(items);
   } catch (e) {
     const msg =
@@ -1397,7 +1426,12 @@ export const applyClinicalNoteTemplate = async (event) => {
       id: templateId,
       organisationId: Number(orgId),
     });
-    if (String(template.type) !== type) return error(400, "Template type mismatch");
+    const templateType = String(template.type || "");
+    const allowDiagnosisFallback =
+      type === "treatment_plan" && templateType === "diagnosis";
+    if (templateType !== type && !allowDiagnosisFallback) {
+      return error(400, "Template type mismatch");
+    }
 
     const patientId = Number(payload?.patientId || 0);
     const patient = patientId ? await requirePatientInOrg(orgId, patientId) : null;

@@ -221,7 +221,7 @@
 import { ref, computed, onMounted } from "vue";
 import { useOrgStore } from "@/stores/organisation";
 import { useMainStore } from "@/stores/index";
-import AddAppointmentReason from "../AddAppointmentReason.vue";
+import AddAppointmentReason from "./AddAppointmentReason.vue";
 //icon
 import searchIcon from "@/assets/icons/listView/serach-icon.svg";
 import editIcon from "@/assets/icons/edit.svg";

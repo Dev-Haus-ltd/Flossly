@@ -151,14 +151,11 @@
 
         <v-card-text class="text-center py-4">
           <p class="mb-4">{{ $t('formSignedSuccessfully') || 'Your form has been signed and submitted.' }}</p>
-          <p class="text-caption text-grey">{{ $t('redirectingIn') || 'Redirecting in' }} <strong>{{ redirectCountdown }}</strong>s</p>
-
-          <v-progress-linear :value="(5 - redirectCountdown) * 20" class="mt-4" />
         </v-card-text>
 
         <v-card-actions class="justify-center pb-4">
           <v-btn color="primary" @click="handleSuccessClose">
-            {{ $t('close') || 'Close' }}
+            {{ $t('done') || 'Done' }}
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -190,6 +187,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useConsentStore } from '@/stores/consent'
 import { useMainStore } from '@/stores'
+import { normalizeConsentHtmlForDigitalFlow } from '~/utils/consentHtml'
 
 const route = useRoute()
 const consentStore = useConsentStore()
@@ -215,8 +213,6 @@ const loadingForm = ref(true)
 const showSuccessDialog = ref(false)
 const showErrorDialog = ref(false)
 const errorMessage = ref('')
-
-const redirectCountdown = ref(5)
 
 // Computed
 const canSubmit = computed(() => {
@@ -365,12 +361,7 @@ const resetForm = () => {
 }
 
 const sanitizeHtml = (html) => {
-  // Basic HTML sanitization - remove script tags and event handlers
-  if (!html) return ''
-  return html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/on\w+\s*=\s*"[^"]*"/gi, '')
-    .replace(/on\w+\s*=\s*'[^']*'/gi, '')
+  return normalizeConsentHtmlForDigitalFlow(html)
 }
 
 const selectForm = (form) => {
@@ -446,7 +437,6 @@ const submitForm = async () => {
 
     if (result) {
       showSuccessDialog.value = true
-      startRedirectCountdown()
     }
   } catch (error) {
     console.error('Error submitting form:', error)
@@ -457,20 +447,8 @@ const submitForm = async () => {
   }
 }
 
-const startRedirectCountdown = () => {
-  redirectCountdown.value = 5
-  const interval = setInterval(() => {
-    redirectCountdown.value--
-    if (redirectCountdown.value <= 0) {
-      clearInterval(interval)
-      handleSuccessClose()
-    }
-  }, 1000)
-}
-
 const handleSuccessClose = () => {
-  // Redirect to home or dashboard
-  navigateTo('/')
+  showSuccessDialog.value = false
 }
 
 // Lifecycle

@@ -106,6 +106,26 @@
 
           <!-- Action Buttons -->
           <div class="card-actions" @click.stop>
+  <!-- View PDF -->
+  <v-tooltip
+    v-if="doc.status === 'signed'"
+    text="View PDF"
+    location="top"
+  >
+    <template #activator="{ props }">
+      <v-btn
+        v-bind="props"
+        icon
+        size="small"
+        variant="text"
+        class="action-btn"
+        @click="viewDocument(doc)"
+      >
+        <v-icon size="18">mdi-eye</v-icon>
+      </v-btn>
+    </template>
+  </v-tooltip>
+
   <!-- Download -->
   <v-tooltip
     v-if="doc.status === 'signed'"
@@ -341,6 +361,30 @@
       </v-card>
     </v-dialog>
 
+    <!-- PDF Viewer Dialog -->
+    <v-dialog v-model="pdfViewerOpen" max-width="900px">
+      <v-card rounded="xl" elevation="4" style="overflow: hidden;">
+        <div class="d-flex justify-space-between align-center px-5 py-3" style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+          <div class="d-flex align-center" style="gap:10px;">
+            <v-icon color="primary" size="20">mdi-file-document</v-icon>
+            <span style="font-weight:600;font-size:14px;color:#1e293b;">{{ pdfViewerTitle }}</span>
+          </div>
+          <v-btn flat icon size="32" @click="pdfViewerOpen = false">
+            <v-icon size="20">mdi-close</v-icon>
+          </v-btn>
+        </div>
+        <div v-if="pdfViewerLoading" class="d-flex justify-center align-center" style="height:600px;">
+          <v-progress-circular indeterminate color="primary" />
+        </div>
+        <iframe
+          v-else-if="pdfViewerUrl"
+          :src="pdfViewerUrl"
+          style="width:100%;height:600px;border:none;"
+          title="Signed Consent Form"
+        />
+      </v-card>
+    </v-dialog>
+
     <!-- Success Snackbar -->
     <v-snackbar
       v-model="showSuccess"
@@ -383,6 +427,10 @@ const showSendDialog = ref(false);
 const auditDialogOpen = ref(false);
 const voidDialogOpen = ref(false);
 const selectedDocId = ref(null);
+const pdfViewerOpen = ref(false);
+const pdfViewerUrl = ref(null);
+const pdfViewerTitle = ref('');
+const pdfViewerLoading = ref(false);
 const docToVoid = ref(null);
 const voidReason = ref("");
 const voidLoading = ref(false);
@@ -499,13 +547,35 @@ const handleFormSent = async () => {
   showSuccess.value = true;
 };
 
+const viewDocument = async (doc) => {
+  pdfViewerLoading.value = true;
+  pdfViewerUrl.value = null;
+  pdfViewerTitle.value = doc.template?.name || 'Signed Consent Form';
+  pdfViewerOpen.value = true;
+  try {
+    const signed = await consentStore.getSignedDocument(doc.id);
+    if (signed?.pdfUrl) {
+      pdfViewerUrl.value = signed.pdfUrl;
+    } else {
+      pdfViewerOpen.value = false;
+      mainStore.setSnackbar({ message: "Signed PDF not available", color: "warning" });
+    }
+  } catch {
+    pdfViewerOpen.value = false;
+    mainStore.setSnackbar({ message: "Failed to load document", color: "error" });
+  } finally {
+    pdfViewerLoading.value = false;
+  }
+};
+
 const downloadDocument = async (doc) => {
   try {
     const signed = await consentStore.getSignedDocument(doc.id);
     if (signed && signed.pdfUrl) {
-      window.open(signed.pdfUrl, "_blank");
-      successMessage.value = "Download started...";
-      showSuccess.value = true;
+      const a = document.createElement('a');
+      a.href = signed.pdfUrl;
+      a.download = `${doc.template?.name || 'consent-form'}.pdf`;
+      a.click();
     }
   } catch (error) {
     mainStore.setSnackbar({

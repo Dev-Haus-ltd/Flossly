@@ -15,7 +15,7 @@
           <div>
             <h2 class="header-title">Send Consent Form</h2>
             <p class="header-subtitle">
-              Send form to patient for digital signature
+              Send a secure signing link to the patient
             </p>
           </div>
         </div>
@@ -87,8 +87,8 @@
       <!-- Send Via Options -->
       <div v-if="selectedPatient" class="info-card delivery-card">
         <div class="card-header">
-          <v-icon size="18" color="primary">mdi-truck-fast</v-icon>
-          <span>Delivery Method</span>
+          <v-icon size="18" color="primary">mdi-link-variant</v-icon>
+          <span>Send Via</span>
         </div>
 
         <div class="delivery-options">
@@ -106,7 +106,7 @@
             </div>
             <div class="option-info">
               <span class="option-title">Email</span>
-              <span class="option-desc">Send to patient's email address</span>
+              <span class="option-desc">Send the secure signing link by email</span>
             </div>
             <v-radio
               :model-value="sendVia === 'email'"
@@ -143,8 +143,8 @@
               </span>
               <span class="option-desc">{{
                 isWhatsAppAvailable
-                  ? "Send to patient's WhatsApp number"
-                  : "WhatsApp integration not configured"
+                  ? "Send the secure signing link by WhatsApp"
+                  : "WhatsApp sending is not configured"
               }}</span>
             </div>
             <v-radio
@@ -183,8 +183,8 @@
               </span>
               <span class="option-desc">{{
                 isWhatsAppAvailable
-                  ? "Send via both channels"
-                  : "WhatsApp integration not configured"
+                  ? "Send the secure signing link by both channels"
+                  : "WhatsApp sending is not configured"
               }}</span>
             </div>
             <v-radio
@@ -198,7 +198,7 @@
 
         <div class="delivery-hint">
           <v-icon size="14" color="#64748b">mdi-information</v-icon>
-          <span>A secure link will be sent for digital signature</span>
+          <span>The patient will open a secure link, review the form, and sign online</span>
         </div>
       </div>
 
@@ -264,7 +264,7 @@
         >
           <template #prepend>
           </template>
-          Send Form
+          Send Signing Link
         </v-btn>
       </v-card-actions>
     </v-card>
