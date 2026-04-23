@@ -300,7 +300,12 @@ const handleNotificationClick = async (notification) => {
     await fetchUnreadCount();
   }
   const url = buildNotificationUrl(notification);
-  if (url) await navigateTo(url);
+  if (!url) return;
+  if (/^https?:\/\//i.test(url)) {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  } else {
+    await navigateTo(url);
+  }
 };
 
 const getNotificationIconSvg = (type) => getNotificationIcon(type);

@@ -19,6 +19,7 @@ import {
   getUserHrDocuments,
   addUserHrDoc,
   removeUserDoc,
+  viewHrDocument,
   switchOrgnanisation,
   createShortLivedToken,
   exchangeShortLivedToken,
@@ -76,6 +77,8 @@ export default defineEventHandler(async (event) => {
       return await addUserHrDoc(event)
     case "removeHrDoc":
       return await removeUserDoc(event)
+    case "viewHrDoc":
+      return await viewHrDocument(event)
       case "switchOrg":
         return await switchOrgnanisation(event)
     case "createShortToken":

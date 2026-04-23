@@ -87,7 +87,15 @@
 
               <v-card class="rounded-lg pa-4" width="200">
                 <div class="d-flex flex-column">
-                  <CommonAvatar :user="event.user" :size="40" />
+                  <div class="d-flex align-center justify-space-between mb-1">
+                    <CommonAvatar :user="event.user" :size="40" />
+                    <v-icon
+                      color="error"
+                      size="18"
+                      style="cursor: pointer"
+                      @click.stop="emit('onDelete', event.id)"
+                    >mdi-trash-can-outline</v-icon>
+                  </div>
                   <h3>{{ event.user.fullName }}</h3>
                   <p>{{ formatDate(event.start) }}</p>
                   <p>{{ getTotalDays(event) + ' Days' }}</p>
@@ -123,7 +131,7 @@ import { differenceInCalendarDays } from "date-fns";
 const { events } = defineProps({
   events: Array,
 });
-const emit = defineEmits(["onUpdate"]);
+const emit = defineEmits(["onUpdate", "onDelete"]);
 const calender = ref(null)
 const addLeaveDrawer = ref(false)
 const selectedDate = ref(null)

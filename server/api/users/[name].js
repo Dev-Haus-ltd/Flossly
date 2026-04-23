@@ -3,6 +3,7 @@ import {
   allusersLeavesHistory,
   applyLeave,
   deactivateUser,
+  deleteLeave,
   deleteUser,
   leaveHistory,
   updateAllowedLeaves,
@@ -39,6 +40,8 @@ export default defineEventHandler(async (event) => {
       return await allusersLeavesHistory(event);
     case "updateLeave":
       return await updateLeaveStatus(event);
+    case "deleteLeave":
+      return await deleteLeave(event);
     case "deactivate":
       return await deactivateUser(event);
     case "activate":

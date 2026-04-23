@@ -121,6 +121,17 @@ export default {
         });
     });
   },
+  deleteLeave(data) {
+    return new Promise((resolve, reject) => {
+      Post("/users/deleteLeave", data)
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
   deactivateUser(data) {
     return new Promise((resolve, reject) => {
       Post("/users/deactivate", data)

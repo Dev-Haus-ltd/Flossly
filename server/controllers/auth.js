@@ -44,7 +44,8 @@ import requestIp from "request-ip";
 import { HrDocument } from "../models/hrDocuments";
 import path from "path";
 import { uploadBufferFile, deleteLink } from "../utils/storage";
-import { createError, setCookie } from "h3";
+import { sendS3Object } from "../utils/s3";
+import { createError, setCookie, getQuery } from "h3";
 import { success, error } from "../utils/response";
 import {
   buildOnboardingContext,
@@ -1933,6 +1934,18 @@ export const removeUserDoc = async (event) => {
     userDoc.status = "Pending";
     await userDoc.save();
     return success("Deleted");
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const viewHrDocument = async (event) => {
+  const query = getQuery(event) || {};
+  const id = query.id;
+  try {
+    const doc = await UserHrDocument.findByPk(id);
+    if (!doc) throw createError({ message: "Document not found" });
+    return await sendS3Object(event, doc.link, { filename: doc.name });
   } catch (err) {
     return error(500, err.message);
   }

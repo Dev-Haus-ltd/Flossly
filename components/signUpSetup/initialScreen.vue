@@ -36,7 +36,7 @@
               >
               <v-btn
                 class="watch-demo-btn"
-                @click="initialPage = false"
+                @click="showDemoModal = true"
                 color="primary"
                 rounded="lg"
                 size="x-large"
@@ -75,6 +75,25 @@
       </div>
     </div>
   </div>
+
+  <!-- Demo Video Modal -->
+  <v-dialog v-model="showDemoModal" max-width="900" @click:outside="closeDemoModal">
+    <v-card elevation="0" style="background: #1a1a2e; border-radius: 16px; overflow: hidden; position: relative;">
+      <v-icon
+        style="position: absolute; top: 12px; right: 12px; z-index: 10; cursor: pointer; color: #ffffff;"
+        @click="closeDemoModal"
+      >mdi-close</v-icon>
+      <div style="position: relative; padding-top: 56.25%;">
+        <iframe
+          v-if="showDemoModal"
+          style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;"
+          :src="`https://www.youtube.com/embed/my_5J6E-4RU?autoplay=1`"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen
+        ></iframe>
+      </div>
+    </v-card>
+  </v-dialog>
 </template>
 
 <script setup>
@@ -89,6 +108,11 @@ const router = useRouter();
 
 const handleLogout = () => {
   router.push("/logout");
+};
+
+const showDemoModal = ref(false);
+const closeDemoModal = () => {
+  showDemoModal.value = false;
 };
 
 </script>
