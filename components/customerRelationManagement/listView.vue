@@ -2266,7 +2266,7 @@ const convertSelected = async () => {
   background: rgb(var(--v-theme-primary));
 }
 .action-bar {
-  position: fixed;
+  position: relative;
   bottom: 30px;
   left: 50%;
   transform: translateX(-50%);
@@ -2416,20 +2416,22 @@ const convertSelected = async () => {
 
 /* Scrollbar styling for comment cell */
 .comment-scrollable::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
 }
 
 .comment-scrollable::-webkit-scrollbar-track {
-  background: transparent;
+  background: #f1f1f1;
+  border-radius: 999px;
 }
 
 .comment-scrollable::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 2px;
+  background: #d4d4d4;
+  border-radius: 999px;
+  border: 1px solid #f1f1f1;
 }
 
 .comment-scrollable::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
+  background: #c4c4c4;
 }
 
 .with-border { border: 1px solid rgb(var(--v-theme-outline)); }
