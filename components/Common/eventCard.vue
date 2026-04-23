@@ -61,12 +61,12 @@
                   <!-- <p class="event-subheading">{{ card.subheading }}</p> -->
 
                   <!-- Book Ticket Button -->
-                  <button
+                  <!-- <button
                     class="book-ticket-btn"
                     @click="openBooking"
                   >
                     {{ card.buttonText }}
-                  </button>
+                  </button> -->
                 </div>
 
                 <!-- Navigation: Left Arrow -->
@@ -108,13 +108,6 @@ const currentIndex = ref(0);
 let autoPlayInterval = null;
 
 const cards = ref([
-  {
-    imageSrc: event1,
-    heading: 'The Dream Squat Conference',
-    date: 'April 17th, 2026',
-    buttonText: 'Book Ticket',
-    bookingUrl: 'https://www.eventbrite.co.uk/e/dream-squat-mastermind-build-launch-grow-tickets-1976588662899?aff=oddtdtcreator'
-  },
   {
     imageSrc: event2,
     heading: 'The Dental Owners Club',
