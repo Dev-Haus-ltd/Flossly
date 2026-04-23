@@ -590,6 +590,22 @@ export const updateLeaveStatus = async (event) => {
   }
 };
 
+export const deleteLeave = async (event) => {
+  const body = await readBody(event);
+  try {
+    const { id } = parseJsonBody(body);
+    if (!id) return { code: 1, data: "Leave ID is required" };
+    const [, meta] = await DB.query(
+      `DELETE FROM "dev"."UserLeaveHistories" WHERE "id" = :id`,
+      { replacements: { id } }
+    );
+    if (meta?.rowCount === 0) return { code: 1, data: "No Leave found" };
+    return { code: 0, data: "Leave deleted successfully" };
+  } catch (err) {
+    return { code: 1, data: err.message || err };
+  }
+};
+
 export const allusersLeavesHistory = async (event) => {
   const { orgId } = event.context.user;
   try {

@@ -66,7 +66,6 @@ import stockImg from "@/assets/icons/dashBoard/toolbox/stock.svg"
 import twoothMatchImg from "@/assets/icons/dashBoard/toolbox/twooth.svg"
 import payrollImg from "@/assets/icons/dashBoard/toolbox/payroll.svg"
 import invoiceImg from "@/assets/icons/dashBoard/toolbox/invoice.svg"
-import cpdCoursesImg from "@/assets/icons/dashBoard/toolbox/cpd.svg"
 import patientPortalImg from "@/assets/icons/dashBoard/toolbox/patient.svg"
 import clockInImg from "@/assets/icons/dashBoard/toolbox/clock.svg"
 import emailMarketingImg from "@/assets/icons/dashBoard/toolbox/email.svg"
@@ -113,12 +112,6 @@ import teamChatImg from "@/assets/icons/dashBoard/toolbox/team.svg"
         title: "Invoice management",
         img: invoiceImg,
         details: "An invoice management app that simplifies billing, payment tracking, and reporting for smoother financial operations",
-        downloads: "650",
-      },
-      {
-        title: "CPD Courses",
-        img: cpdCoursesImg,
-        details: "A CPD courses app that helps dental professionals access, track, and manage continuing education with ease",
         downloads: "650",
       },
       {
