@@ -1,39 +1,69 @@
 /* ─── V-Select / V-Autocomplete / V-Combobox dropdown ────────────────────── */
-/* .v-select__content is the overlay wrapper Vuetify renders for all select    */
-/* dropdowns regardless of variant (solo, outlined, etc.)                      */
 
-.v-select__content {
+.v-select__content,
+.v-autocomplete__content,
+.v-combobox__content,
+.v-overlay__content {
   border-radius: 12px !important;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10) !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1) !important;
   border: 1px solid #e5e7eb !important;
   overflow: hidden;
+  background: #fff !important;
 }
-.v-select__content .v-list {
+
+.v-select__content .v-list,
+.v-autocomplete__content .v-list,
+.v-combobox__content .v-list,
+.v-overlay__content .v-list {
   padding: 6px !important;
   background: #ffffff !important;
   border-radius: 12px !important;
 }
-.v-select__content .v-list .v-list-item {
+
+.v-select__content .v-list .v-list-item,
+.v-autocomplete__content .v-list .v-list-item,
+.v-combobox__content .v-list .v-list-item,
+.v-overlay__content .v-list .v-list-item {
   border-radius: 8px !important;
   min-height: 36px !important;
   padding: 0 12px !important;
   margin-bottom: 2px;
   transition: background-color 0.15s ease;
 }
-.v-select__content .v-list .v-list-item:last-child {
+
+.v-select__content .v-list .v-list-item:last-child,
+.v-autocomplete__content .v-list .v-list-item:last-child,
+.v-combobox__content .v-list .v-list-item:last-child,
+.v-overlay__content .v-list .v-list-item:last-child {
   margin-bottom: 0;
 }
-.v-select__content .v-list .v-list-item:hover {
+
+.v-select__content .v-list .v-list-item:hover,
+.v-autocomplete__content .v-list .v-list-item:hover,
+.v-combobox__content .v-list .v-list-item:hover,
+.v-overlay__content .v-list .v-list-item:hover {
   background-color: #f0f4ff !important;
 }
-.v-select__content .v-list .v-list-item--active {
+
+.v-select__content .v-list .v-list-item--active,
+.v-autocomplete__content .v-list .v-list-item--active,
+.v-combobox__content .v-list .v-list-item--active,
+.v-overlay__content .v-list .v-list-item--active {
   background-color: #e8f1ff !important;
 }
-.v-select__content .v-list .v-list-item--active .v-list-item-title {
+
+.v-select__content .v-list .v-list-item--active .v-list-item-title,
+.v-autocomplete__content .v-list .v-list-item--active .v-list-item-title,
+.v-combobox__content .v-list .v-list-item--active .v-list-item-title,
+.v-overlay__content .v-list .v-list-item--active .v-list-item-title {
   color: #0061FB !important;
   font-weight: 500;
 }
-.v-select__content .v-list .v-list-item-title {
+
+.v-select__content .v-list .v-list-item-title,
+.v-autocomplete__content .v-list .v-list-item-title,
+.v-combobox__content .v-list .v-list-item-title,
+.v-overlay__content .v-list .v-list-item-title {
   font-size: 13px !important;
   color: #1f2937;
 }

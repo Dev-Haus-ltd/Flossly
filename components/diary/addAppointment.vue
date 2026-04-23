@@ -53,7 +53,7 @@
               <label class="fld-lbl"
                 >Patient <span class="req-star">*</span></label
               >
-              <v-autocomplete
+              <v-Autocomplete
                 v-model="selectedPatientId"
                 :items="patientOptions"
                 item-title="name"
@@ -77,7 +77,7 @@
                     <v-icon size="18">mdi-account-plus</v-icon>
                   </v-btn>
                 </template>
-              </v-autocomplete>
+              </v-Autocomplete>
             </v-col>
 
             <!-- Date -->
@@ -186,7 +186,7 @@
 
             <!-- Treatment with Add Option -->
             <v-col cols="12">
-              <label class="fld-lbl">Treatment / Exam</label>
+              <label class="fld-lbl">Treatment / Exam <span class="req-star">*</span></label>
               <v-combobox
                 v-model="exam"
                 :items="exams"
@@ -197,6 +197,10 @@
                 placeholder="Search or type treatment"
                 :filter="customFilter"
                 @keydown.enter="handleAddTreatment"
+                :error="!!errors.exam"
+                :error-messages="
+                  errors.exam ? [errors.exam] : []
+                "
               >
                 <template #no-data>
                   <v-list-item @click="handleAddTreatment">
@@ -208,8 +212,7 @@
                 </template>
               </v-combobox>
               <div class="text-caption text-grey mt-1">
-                Type new treatment name and press Enter to add, or click +
-                button
+                Type new treatment name and press Enter to add
               </div>
             </v-col>
 
@@ -327,8 +330,8 @@ const errors = reactive({
 });
 
 const organisationStore = useOrgStore();
-const mainStore = useMainStore();
 const { user } = useUser();
+const mainStore = useMainStore();
 const {
   loadDentistSchedules,
   getTimeRangeAvailability,
@@ -365,6 +368,7 @@ const fallbackTimeOptions = computed(() => {
   }
   return opts;
 });
+
 const timeOptions = computed(() => {
   if (date.value && practitioner.value) {
     return getAvailableTimeSlots(
@@ -373,8 +377,10 @@ const timeOptions = computed(() => {
       SLOT_MIN,
     );
   }
+
   return fallbackTimeOptions.value;
 });
+
 const displayTimeOptions = computed(() =>
   timeOptions.value.map((value) => ({
     title: formatTime12Hour(value) || value,
@@ -422,8 +428,7 @@ const applyIncomingAppointmentState = () => {
     exam.value = a.treatmentName || a.exam || "";
     practitioner.value =
       a.practitionerId || a.practitioner || props.initialPractitioner || "";
-    selectedPatientId.value =
-      a.patientId || props.preselectedPatientId || null;
+    selectedPatientId.value = a.patientId || props.preselectedPatientId || null;
     notes.value = a.notes || "";
   } else {
     date.value = props.initialDate || "";
@@ -445,39 +450,80 @@ const applyIncomingAppointmentState = () => {
 };
 
 const handleAddTreatment = async () => {
-  if (!exam.value) return;
+  const value = (exam.value || "").trim();
+
+  if (!value) {
+    errors.exam = "Please enter a treatment name";
+
+    mainStore.setSnackbar({
+      title: "Please enter a treatment name",
+      type: "error",
+    });
+
+    return;
+  }
 
   const exists = treatmentOptions.value.find(
-    (t) => t.name.toLowerCase() === exam.value.toLowerCase(),
+    (t) => t.name.toLowerCase() === value.toLowerCase()
   );
+
+  // Agar already exist karta hai → kuch na karo
   if (exists) {
     exam.value = exists.name;
+    duration.value = exists.defaultDuration || duration.value;
+
+    mainStore.setSnackbar({
+      title: `"${exists.name}" is already available as a treatment`,
+      type: "info",
+    });
+
     return;
   }
 
   try {
     const payload = {
-      name: exam.value.trim(),
+      name: value,
       defaultDuration: duration.value || 15,
       price: 0,
     };
 
     const res = await organisationStore.addTreatment(payload);
+
     if (res?.code === 0) {
       const newItem = {
         id: res.data.id,
-        name: payload.name,
-        defaultDuration: payload.defaultDuration,
-        amount: payload.price,
+        name: res.data.name,
+        code: res.data.code,
+        defaultDuration: res.data.defaultDuration || 15,
+        amount: res.data.price || 0,
+        color: res.data.color || "#0061FB",
+        active: res.data.active,
       };
 
       treatmentOptions.value.push(newItem);
       exam.value = newItem.name;
       duration.value = newItem.defaultDuration;
       emit("treatment-added", newItem);
+
+      mainStore.setSnackbar({
+        title: `Treatment "${newItem.name}" created successfully`,
+        type: "success",
+      });
+
+      return;
     }
+
+    mainStore.setSnackbar({
+      title: res?.message || "Failed to create treatment",
+      type: "error",
+    });
   } catch (err) {
     console.error(err);
+
+    mainStore.setSnackbar({
+      title: err?.message || "Failed to create treatment",
+      type: "error",
+    });
   }
 };
 
@@ -701,9 +747,7 @@ const onSave = async () => {
       const availability = getTimeRangeAvailability(
         bookingDate,
         time.value,
-        `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(
-          endMinutes % 60,
-        ).padStart(2, "0")}`,
+        `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`,
         {
           name: practitionerLabel.value || "This practitioner",
         },

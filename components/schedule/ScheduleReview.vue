@@ -194,7 +194,12 @@ const props = defineProps({
   form: { type: Object, required: true },
   schedule: { type: Object, default: null }
 })
-
+const weekDays = computed(() => {
+  return (props.form.weekDays || []).map(day => ({
+    ...day,
+    isWorkingDay: Boolean(day.isWorkingDay)
+  }))
+});
 const formatDate = (dateString) => {
   if (!dateString) return '—'
   const date = new Date(dateString)
@@ -214,8 +219,8 @@ const formatWorkingHours = (day) => {
   if (!day?.isWorkingDay || !day?.startTime || !day?.endTime) {
     return 'Not working'
   }
-  const start = formatTimeTo12Hour(day.startTime)
-  const end = formatTimeTo12Hour(day.endTime)
+  const start = formatTimeTo12Hour(normalizeTime(day.startTime))
+const end = formatTimeTo12Hour(normalizeTime(day.endTime))
   return `${start} - ${end}`
 }
 
@@ -226,17 +231,20 @@ const formatWorkingHours = (day) => {
  */
 const formatBreakTime = (breakItem) => {
   if (!breakItem?.startTime || !breakItem?.endTime) return '—'
-  const start = formatTimeTo12Hour(breakItem.startTime)
-  const end = formatTimeTo12Hour(breakItem.endTime)
+const start = formatTimeTo12Hour(normalizeTime(breakItem.startTime))
+const end = formatTimeTo12Hour(normalizeTime(breakItem.endTime))
   return `${start} - ${end}`
 }
 
-const workingDaysCount = computed(() => {
-  return props.form.weekDays?.filter(d => d.isWorkingDay).length || 0
-})
-
+const workingDaysCount = computed(() =>
+  weekDays.value.filter(d => d.isWorkingDay).length
+)
+const normalizeTime = (time) => {
+  if (!time) return null
+  return formatTimeToHHMM(time) // always convert once
+}
 const totalBreaksCount = computed(() => {
-  return props.form.weekDays?.reduce((total, day) => {
+  return weekDays.value.reduce((total, day) => {
     return total + (day.breaks?.length || 0)
   }, 0) || 0
 })

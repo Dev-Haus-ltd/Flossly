@@ -59,7 +59,7 @@
                       v-model="day.startTime"
                       class="custom-time-input"
                       :class="{ 'border-error': getTimeError(index) }"
-                      @change="validateDayTimes(index)"
+                      @change="onTimeChange(index)"
                     />
                   </div>
                 </div>
@@ -73,7 +73,7 @@
                       v-model="day.endTime"
                       class="custom-time-input"
                       :class="{ 'border-error': getTimeError(index) }"
-                      @change="validateDayTimes(index)"
+  @change="onTimeChange(index)"
                     />
                   </div>
                 </div>
@@ -300,19 +300,11 @@ const breakDialog = reactive({
 watch(
   () => props.weekDays,
   (newVal) => {
-    // Deep clone and normalize all times to HH:MM format
-    localWeekDays.value = (newVal || []).map(day => ({
-      ...day,
-      startTime: day.startTime ? formatTimeToHHMM(day.startTime) : day.startTime,
-      endTime: day.endTime ? formatTimeToHHMM(day.endTime) : day.endTime,
-      breaks: (day.breaks || []).map(brk => ({
-        ...brk,
-        startTime: brk.startTime ? formatTimeToHHMM(brk.startTime) : brk.startTime,
-        endTime: brk.endTime ? formatTimeToHHMM(brk.endTime) : brk.endTime
-      }))
-    }))
+    if (!Array.isArray(newVal)) return
+
+    localWeekDays.value = JSON.parse(JSON.stringify(newVal))
   },
-  { immediate: true, deep: true }
+  { immediate: true }
 )
 
 const deleteDialog = reactive({
@@ -369,9 +361,13 @@ const getTimeError = (dayIndex) => {
 const onDayToggle = async (day, dayIndex) => {
   if (!day.isWorkingDay) {
     day.breaks = []
+    day.startTime = null
+    day.endTime = null
   }
-  
-  // If in edit mode, update the day via API and sync response back to form
+
+  // emit immediately so preview updates instantly
+  emit('update:weekDays', JSON.parse(JSON.stringify(localWeekDays.value)))
+
   if (props.isEditMode && day.id) {
     try {
       const response = await scheduleStore.updateScheduleDay({
@@ -380,37 +376,58 @@ const onDayToggle = async (day, dayIndex) => {
         startTime: day.isWorkingDay ? day.startTime : null,
         endTime: day.isWorkingDay ? day.endTime : null
       })
-      
-      // CRITICAL: Sync API response back to local state
+
       if (response?.code === 0 && response?.data) {
         const updatedDay = response.data
-        
-        // Update local day with normalized times from API response
-        day.startTime = updatedDay.startTime ? formatTimeToHHMM(updatedDay.startTime) : null
-        day.endTime = updatedDay.endTime ? formatTimeToHHMM(updatedDay.endTime) : null
+
+        day.startTime = updatedDay.startTime
+          ? formatTimeToHHMM(updatedDay.startTime)
+          : null
+
+        day.endTime = updatedDay.endTime
+          ? formatTimeToHHMM(updatedDay.endTime)
+          : null
+
         day.isWorkingDay = updatedDay.isWorkingDay
-        
-        // Re-emit updated weekDays to parent to keep form in sync
+
         emit('update:weekDays', JSON.parse(JSON.stringify(localWeekDays.value)))
       }
-      
+    } catch (err) {
+      console.error('Failed to update day:', err)
+    }
+  }
+}
+const onTimeChange = async (dayIndex) => {
+  const day = localWeekDays.value[dayIndex]
+
+  validateDayTimes(dayIndex)
+
+  // Update parent immediately so preview reflects changes
+  emit('update:weekDays', JSON.parse(JSON.stringify(localWeekDays.value)))
+
+  // If edit mode, update API too
+  if (props.isEditMode && day.id) {
+    try {
+      await scheduleStore.updateScheduleDay({
+        scheduleDayId: day.id,
+        isWorkingDay: day.isWorkingDay,
+        startTime: day.startTime,
+        endTime: day.endTime
+      })
+
       mainStore?.setSnackbar?.({
-        message: `${day.dayName} updated successfully`,
+        message: `${day.dayName} working hours updated`,
         color: 'success'
       })
     } catch (err) {
-      console.error('Failed to update day:', err)
+      console.error('Failed to update day times:', err)
       mainStore?.setSnackbar?.({
         message: 'Failed to update working hours',
         color: 'error'
       })
     }
-  } else {
-    // Not in edit mode - just emit the update
-    emit('update:weekDays', localWeekDays.value)
   }
 }
-
 const openAddBreakDialog = (dayIndex) => {
   breakDialog.isEdit = false
   breakDialog.dayIndex = dayIndex
