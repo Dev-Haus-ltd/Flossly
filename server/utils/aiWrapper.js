@@ -54,7 +54,7 @@ export async function chat({ prompt, systemPrompt, model = null, temperature = 0
 }
 
 export async function generateAutoReply({ organisationName, organisationType, message, history = [], autoReplyConfig = {} }) {
-  const { services = "", cta = "", outOfScopeMessage = "Thank you so much! Our team will contact you shortly." } = autoReplyConfig;
+  const { services = "", cta = "", outOfScopeMessage = "Thank you so much! Our team will contact you shortly.", ctaScript = "" } = autoReplyConfig;
 
   const systemPrompt = `You are a warm, friendly, and professional assistant for a practice called "${organisationName}".
 
@@ -97,7 +97,13 @@ ${cta || 'If you\'d like, I can help you get started or have our team reach out 
 
 SCOPE HANDLING:
 - If the question is clearly outside the scope of the practice, respond politely and guide the user back to relevant services or offer further help
-- Do not use a fixed or repetitive sentence; keep the response natural and context-aware`;
+- Do not use a fixed or repetitive sentence; keep the response natural and context-aware
+${ctaScript ? `
+CTA REPLY SCRIPT:
+A lead has replied to or engaged with the call-to-action above. Follow the flow and intent of the script below when guiding the conversation — you do not need to use the exact wording, but the overall direction, steps, and goals should be respected:
+${ctaScript}
+
+Apply this script progressively across the conversation. Do not dump all steps into a single reply — move naturally through the flow as the lead responds.` : ""}`;
 
   const replyText = await chat({
     prompt: `A patient/customer sent this message: "${message}"
