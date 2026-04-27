@@ -1298,7 +1298,7 @@ onMounted(() => {
 }
 
 .notes-side--panel {
-  align-self: stretch;
+  align-self: flex-start;
   position: sticky;
   top: 12px;
 }
