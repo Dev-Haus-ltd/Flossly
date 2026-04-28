@@ -179,13 +179,16 @@
 
       <!-- List View (child) -->
       <CustomerRelationManagementListView
-        v-if="hasFetched && (activeLeads.length || archivedLeads.length || route.query.leadId)"
+        v-if="hasFetched && (activeLeads.length || archivedLeads.length || convertedLeads.length || route.query.leadId)"
         :active-leads="activeLeads"
         :archived-leads="archivedLeads"
+        :converted-leads="convertedLeads"
         :active-total="activeTotal"
         :archived-total="archivedTotal"
+        :converted-total="convertedTotal"
         :active-page="activePage"
         :archived-page="archivedPage"
+        :converted-page="convertedPage"
         :items-per-page="itemsPerPage"
         :loading="isLoading"
         :headers="headers"
@@ -201,6 +204,7 @@
         @alert-options-saved="onAlertOptionsSaved"
         @update:activePage="onActivePageChange"
         @update:archivedPage="onArchivedPageChange"
+        @update:convertedPage="onConvertedPageChange"
         @update:itemsPerPage="onItemsPerPageChange"
       />
 
@@ -730,10 +734,13 @@ let searchTimeout = null;
 
 const activeLeads = ref([]);
 const archivedLeads = ref([]);
+const convertedLeads = ref([]);
 const activeTotal = ref(0);
 const archivedTotal = ref(0);
+const convertedTotal = ref(0);
 const activePage = ref(1);
 const archivedPage = ref(1);
+const convertedPage = ref(1);
 const itemsPerPage = ref(25);
 
 const headers = [
@@ -1480,6 +1487,7 @@ const mapLeadRow = (l) => ({
 const fetchActiveLeads = async (filters = {}) => {
   const payload = {
     ...filters,
+    excludeConverted: true,
     search: search.value || '',
     page: activePage.value,
     pageSize: itemsPerPage.value,
@@ -1515,10 +1523,28 @@ const fetchArchivedLeads = async (filters = {}) => {
   }
 };
 
+const fetchConvertedLeads = async (filters = {}) => {
+  const payload = {
+    ...filters,
+    leadStatus: 'Converted',
+    search: search.value || '',
+    page: convertedPage.value,
+    pageSize: itemsPerPage.value,
+    sortBy: 'inquiryDate',
+    sortDir: 'DESC',
+  };
+  const res = await crmStore.listLeads(payload);
+  if (res && res.code === 0) {
+    const rows = Array.isArray(res.data?.rows) ? res.data.rows : (res.data || []);
+    convertedLeads.value = rows.map(mapLeadRow);
+    convertedTotal.value = Number(res.data?.total ?? convertedLeads.value.length);
+  }
+};
+
 const fetchLeads = async (filters = {}) => {
   isLoading.value = true;
   try {
-    await Promise.all([fetchActiveLeads(filters), fetchArchivedLeads(filters)]);
+    await Promise.all([fetchActiveLeads(filters), fetchArchivedLeads(filters), fetchConvertedLeads(filters)]);
   } finally {
     isLoading.value = false;
     hasFetched.value = true;
@@ -1528,7 +1554,7 @@ const fetchLeads = async (filters = {}) => {
 // Background refresh — does NOT toggle isLoading so the table stays mounted
 const silentRefreshLeads = async (filters = {}) => {
   try {
-    await Promise.all([fetchActiveLeads(filters), fetchArchivedLeads(filters)]);
+    await Promise.all([fetchActiveLeads(filters), fetchArchivedLeads(filters), fetchConvertedLeads(filters)]);
   } catch {}
 };
 
@@ -1542,6 +1568,12 @@ const onArchivedPageChange = async (val) => {
   if (archivedPage.value === val) return;
   archivedPage.value = val;
   await fetchArchivedLeads(activeFilters.value);
+};
+
+const onConvertedPageChange = async (val) => {
+  if (convertedPage.value === val) return;
+  convertedPage.value = val;
+  await fetchConvertedLeads(activeFilters.value);
 };
 
 const onItemsPerPageChange = async (val) => {
