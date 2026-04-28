@@ -388,6 +388,13 @@ export const listLeads = async (event) => {
       where.leadStatus = value
     }
 
+    if (String(q.excludeConverted || '').toLowerCase() === 'true') {
+      where[Op.and] = [
+        ...(where[Op.and] || []),
+        { [Op.not]: { leadStatus: 'Converted' } },
+      ]
+    }
+
     // Map option ids to names for leadSource/treatment if provided
     const optionIds = []
     if (q.leadSourceId) optionIds.push(Number(q.leadSourceId))
