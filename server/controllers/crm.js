@@ -6,7 +6,7 @@ import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/lea
 import { formatCrmTriggerPreview } from '~/lib/misc'
 import { success, error } from '../utils/response'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
-import { sendImmediateCrmAutomationsForLead, dispatchSendNowAutomation, dispatchSendNowAutomationWithOptions, previewSendNowAutomation } from '../utils/crmAutomation.js'
+import { sendImmediateCrmAutomationsForLead, dispatchSendNowAutomation, dispatchSendNowAutomationWithOptions, previewSendNowAutomation, inferTriggerFromName } from '../utils/crmAutomation.js'
 import { sendLeadCreatedNotification, sendLeadAssignedNotification, sendLeadUnassignedNotification, sendLeadStatusChangedNotification, sendNotificationToMultipleUsers } from '../utils/fcmNotification.js'
 import { decrypt } from '../utils/crypto'
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from '../utils/whatsapp'
@@ -27,6 +27,7 @@ const parseDateValue = (value) => {
   if (!isNaN(d.getTime())) return d;
   return null;
 };
+
 
 const makeSendNowJobKey = (orgId, jobId) => `${Number(orgId)}:${String(jobId || '')}`
 
@@ -999,7 +1000,8 @@ export const bulkUploadAutomations = async (event) => {
           usedKeys,
         })
 
-        const trigger = { type: 'inquiry_days', days: 0 }
+        const rawTrigger = raw.trigger && raw.trigger.type ? raw.trigger : null;
+        const trigger = rawTrigger || inferTriggerFromName(name);
         const sending = formatCrmTriggerPreview(trigger)
         const subject = type === 'Email' ? (subjectRaw || name) : ''
         const template = plainTextToHtml(contentRaw)

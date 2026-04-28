@@ -270,6 +270,7 @@ const createAutomations = async () => {
       name: a.name,
       subject: a.subject || '',
       content: a.content,
+      trigger: a.trigger || undefined,
     }))
 
     const res = await crmStore.bulkUploadAutomations({ items })

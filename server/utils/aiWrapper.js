@@ -184,6 +184,8 @@ Summary:`,
   };
 }
 
+import { inferTriggerFromName } from './crmAutomation.js'
+
 export async function generateAutomations({ organisationName, organisationType, userIdea, followUp, existingAutomations }) {
   const systemPrompt = `You are an expert CRM automation assistant specialized in creating professional, empathetic communication templates for healthcare practices, particularly ${organisationType} practices.
 
@@ -330,14 +332,16 @@ Return ONLY the JSON object with "automations" array. No other text.`;
       normalizedType = 'Email';
     }
 
+    const resolvedName = String(auto.name || `Automation ${index + 1}`).trim();
     return {
       groupName: String(auto.groupName || 'General Communications').trim(),
       type: normalizedType,
-      name: String(auto.name || `Automation ${index + 1}`).trim(),
+      name: resolvedName,
       subject: normalizedType === 'Email'
         ? String(auto.subject || auto.name || 'Message from ' + organisationName).trim()
         : '',
-      content: String(auto.content || auto.message || '').trim()
+      content: String(auto.content || auto.message || '').trim(),
+      trigger: inferTriggerFromName(resolvedName),
     };
   }).filter(auto => {
     if (!auto.content) return false;

@@ -15,6 +15,24 @@ const crmTriggersByKey = new Map(
     .filter((entry) => entry[1])
 );
 
+export const inferTriggerFromName = (name) => {
+  const lower = String(name || '').toLowerCase()
+  if (lower.includes('birthday')) {
+    if (lower.includes('month')) return { type: 'birthday_month_start', offsetDays: 0 }
+    return { type: 'birthday_offset', days: 0 }
+  }
+  if (lower.includes('black friday')) return { type: 'black_friday', offsetDays: 0 }
+  if (lower.includes('anniversary')) return { type: 'practice_anniversary', offsetDays: 0 }
+  const daysAfterMatch = lower.match(/(\d+)\s*days?\s*(after|post|follow)/)
+  if (daysAfterMatch) return { type: 'inquiry_days', days: Number(daysAfterMatch[1]) }
+  const followDaysMatch = lower.match(/follow[- ]?up.*?(\d+)|(\d+)[- ]?day.*?follow/)
+  if (followDaysMatch) {
+    const days = Number(followDaysMatch[1] || followDaysMatch[2])
+    return { type: 'inquiry_days', days: Number.isFinite(days) ? days : 3 }
+  }
+  return { type: 'inquiry_days', days: 0 }
+}
+
 export const resolveCrmTrigger = (tpl) => {
   if (tpl?.trigger) return tpl.trigger;
   const fromDefaults = crmTriggersByKey.get(tpl.key);

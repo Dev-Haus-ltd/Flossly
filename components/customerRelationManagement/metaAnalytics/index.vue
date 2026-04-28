@@ -712,9 +712,8 @@ const sortCardsByPerformance = (cards) =>
 
     const aMetrics = getPerformanceMetrics(a);
     const bMetrics = getPerformanceMetrics(b);
-    if (bMetrics.efficiency !== aMetrics.efficiency) return bMetrics.efficiency - aMetrics.efficiency;
     if (bMetrics.leads !== aMetrics.leads) return bMetrics.leads - aMetrics.leads;
-    if (aMetrics.spend !== bMetrics.spend) return aMetrics.spend - bMetrics.spend;
+    if (bMetrics.efficiency !== aMetrics.efficiency) return bMetrics.efficiency - aMetrics.efficiency;
     if (bMetrics.linkClicks !== aMetrics.linkClicks) return bMetrics.linkClicks - aMetrics.linkClicks;
     if (bMetrics.reach !== aMetrics.reach) return bMetrics.reach - aMetrics.reach;
     if (bMetrics.impressions !== aMetrics.impressions) return bMetrics.impressions - aMetrics.impressions;
