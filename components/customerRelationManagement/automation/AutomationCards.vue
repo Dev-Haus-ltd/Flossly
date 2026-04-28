@@ -12,11 +12,13 @@
           :count="card.itemCount"
           :enabled="card.enabled"
           :author="card.author"
+          :created-at="card.createdAt"
           :show-toggle="showCardToggle"
           :show-actions="allowGroupEdit"
           :disable-actions="card.isDefault"
           :selected="activeKey === card.key"
           :whatsapp-warning="!whatsappEnabled && !!card.hasWhatsApp"
+          :bulk-state="card.bulkState || null"
           @select="$emit('select', card)"
           @toggle="(val) => $emit('toggle', card, val)"
           @edit="$emit('edit', card)"
@@ -26,7 +28,7 @@
     </div>
 
     <div v-if="!cards.length" class="automation-empty">
-      <div class="automation-empty__icon">
+      <div class="automation-empty__icon" @click="$emit('go-to-automations')">
         <img :src="addFolderIcon" alt="Add automation group" />
       </div>
       <div class="automation-empty__title">Add your Automation group</div>
@@ -65,7 +67,7 @@ defineProps({
   },
 })
 
-defineEmits(['select', 'toggle', 'edit', 'delete'])
+defineEmits(['select', 'toggle', 'edit', 'delete', 'go-to-automations'])
 </script>
 
 <style scoped>
@@ -98,6 +100,7 @@ defineEmits(['select', 'toggle', 'edit', 'delete'])
   align-items: center;
   justify-content: center;
   margin-bottom: 16px;
+  cursor: pointer;
 }
 
 .automation-empty__icon img {

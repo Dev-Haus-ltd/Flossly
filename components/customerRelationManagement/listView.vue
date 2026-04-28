@@ -366,7 +366,8 @@
         :class="{ 'action-item--locked': isActionLocked(action.key) }"
         @click="onActionClick(action.key)"
       >
-        <img :src="action.icon" :alt="action.label" class="action-icon" />
+        <img v-if="action.icon" :src="action.icon" :alt="action.label" class="action-icon" />
+        <v-icon v-else-if="action.mdiIcon" size="22" color="#6d6d6d">{{ action.mdiIcon }}</v-icon>
         <span class="action-label">{{ action.label }}</span>
       </div>
 
@@ -813,6 +814,66 @@
       @success="onStaffAdded"
       @close="addStaffDrawer = false"
     />
+
+    <!-- Bulk Automations Dialog -->
+    <v-dialog v-model="showBulkAutomationsDialog" max-width="1100px" scrollable>
+      <v-card class="d-flex flex-column rounded-xl" style="min-height: 75vh;">
+        <div style="border-bottom: 1px solid rgba(0,0,0,0.12);">
+          <div class="pa-4 pb-0 d-flex justify-space-between align-center">
+            <div>
+              <h3 style="font-size: 18px; font-weight: 600;">Automations</h3>
+              <p class="text-caption text-medium-emphasis mt-1 mb-0">
+                Managing automations for {{ selectedLeads.length }} selected lead{{ selectedLeads.length !== 1 ? 's' : '' }}
+              </p>
+            </div>
+            <v-btn flat icon size="32" @click="showBulkAutomationsDialog = false">
+              <v-icon size="20">mdi-close</v-icon>
+            </v-btn>
+          </div>
+          <div class="px-4 pt-4 pb-3">
+            <v-tabs v-model="bulkAutomationsTab" hide-slider density="comfortable" :show-arrows="false" class="bulk-automation-tabs">
+              <v-tab value="automation" class="tab-text">
+                <img src="@/assets/icons/crm/settings.svg" width="22" height="22" alt="" class="mr-2" />
+                <span>Flossly Automation</span>
+              </v-tab>
+              <v-tab value="my-automations" class="tab-text">
+                <img src="@/assets/icons/crm/settings.svg" width="22" height="22" alt="" class="mr-2" />
+                <span>My Automations</span>
+              </v-tab>
+            </v-tabs>
+          </div>
+        </div>
+
+        <div class="flex-grow-1 pa-4" style="overflow-y: auto;">
+          <v-tabs-window v-model="bulkAutomationsTab">
+            <v-tabs-window-item value="automation">
+              <CustomerRelationManagementAutomation
+                :lead-id="null"
+                :lead="null"
+                :include-defaults="true"
+                :whatsapp-enabled="props.whatsappConnected"
+                :selected-lead-ids="selectedLeadIds"
+                :disable-toggle="false"
+                :show-sent-status-column="false"
+                :show-resend-action="false"
+              />
+            </v-tabs-window-item>
+            <v-tabs-window-item value="my-automations">
+              <CustomerRelationManagementAutomation
+                :lead-id="null"
+                :lead="null"
+                :include-defaults="false"
+                :whatsapp-enabled="props.whatsappConnected"
+                :selected-lead-ids="selectedLeadIds"
+                :disable-toggle="false"
+                :show-sent-status-column="false"
+                :show-resend-action="false"
+              />
+            </v-tabs-window-item>
+          </v-tabs-window>
+        </div>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -1039,6 +1100,7 @@ const ALL_ACTIONS = [
   { key: "sendPrice", label: "Send Price", icon: sendPriceIcon },
   { key: "sendForm", label: "Send Form", icon: sendFormIcon },
   { key: "shareLocation", label: "Share Location", icon: shareLocationIcon },
+  { key: "automations", label: "Automations", mdiIcon: "mdi-lightning-bolt-outline" },
   { key: "convert", label: "Convert", icon: convertIcon },
   { key: "archive", label: "Archive", icon: archiveIcon },
   { key: "delete", label: "Delete", icon: deleteIcon },
@@ -1047,6 +1109,22 @@ const ALL_ACTIONS = [
 const actions = computed(() =>
   canDelete.value ? ALL_ACTIONS : ALL_ACTIONS.filter(a => a.key !== 'delete')
 );
+const showBulkAutomationsDialog = ref(false);
+const bulkAutomationsTab = ref('automation');
+const selectedLeadIds = computed(() =>
+  selectedLeads.value.map(l => Number(l?.id)).filter(Boolean)
+);
+
+watch(showBulkAutomationsDialog, async (open) => {
+  if (!open && selectedLeads.value.length) {
+    await Promise.all(
+      selectedLeads.value
+        .map((lead) => Number(lead?.id || 0))
+        .filter(Boolean)
+        .map((id) => crmStore.invalidateLeadAutomations(id))
+    );
+  }
+});
 const confirmDelete = ref(false);
 const deleting = ref(false);
 const confirmArchive = ref(false);
@@ -1443,6 +1521,13 @@ const onActionClick = (key) => {
       return;
     }
     emit('book', [...selectedLeads.value])
+  }
+  else if (key === 'automations') {
+    bulkAutomationsTab.value = 'automation'
+    showBulkAutomationsDialog.value = true
+    selectedLeads.value.forEach(lead => {
+      if (lead?.id) crmStore.fetchLeadAutomations(lead.id)
+    })
   }
   else if (key === 'delete') confirmDelete.value = true;
   else if (key === 'archive') confirmArchive.value = true;
@@ -2266,7 +2351,7 @@ const convertSelected = async () => {
   background: rgb(var(--v-theme-primary));
 }
 .action-bar {
-  position: fixed;
+  position: relative;
   bottom: 30px;
   left: 50%;
   transform: translateX(-50%);
@@ -2416,20 +2501,22 @@ const convertSelected = async () => {
 
 /* Scrollbar styling for comment cell */
 .comment-scrollable::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
 }
 
 .comment-scrollable::-webkit-scrollbar-track {
-  background: transparent;
+  background: #f1f1f1;
+  border-radius: 999px;
 }
 
 .comment-scrollable::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 2px;
+  background: #d4d4d4;
+  border-radius: 999px;
+  border: 1px solid #f1f1f1;
 }
 
 .comment-scrollable::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
+  background: #c4c4c4;
 }
 
 .with-border { border: 1px solid rgb(var(--v-theme-outline)); }
@@ -2527,6 +2614,27 @@ const convertSelected = async () => {
   align-items: center;
 }
 
+.bulk-automation-tabs :deep(.v-tab) {
+  border-radius: 28px;
+  border: 1px solid #DBDBDB !important;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 14px;
+  font-weight: 400;
+  margin-right: 10px;
+  min-height: 38px;
+  padding: 6px 14px;
+}
+
+.bulk-automation-tabs :deep(.v-tab.v-tab--selected) {
+  background-color: #0061FB1A !important;
+  border-color: #0061FB !important;
+}
+
+.bulk-automation-tabs :deep(.v-slide-group__prev),
+.bulk-automation-tabs :deep(.v-slide-group__next) {
+  display: none !important;
+}
 </style>
 
 

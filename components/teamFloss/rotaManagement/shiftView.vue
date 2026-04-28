@@ -2,7 +2,7 @@
   <CommonConfirmDialog
     v-model="deleteDialog.open"
     title="Delete Shift"
-    message="Are you sure you want to delete this shift? This action cannot be undone."
+    message="Are you sure you want to delete this shift and its template? This will remove it from the shift library and cannot be undone."
     confirm-text="Delete"
     :loading="deleteDialog.loading"
     @confirm="confirmDeleteShift"
@@ -180,6 +180,13 @@
                           </div>
                         </v-list-item>
 
+                        <v-list-item @click="clearShift(shift)">
+                          <div class="menu-item">
+                            <v-icon size="20" color="#6D6D6D">mdi-eraser</v-icon>
+                            <span class="menu-item-title">Clear Shift</span>
+                          </div>
+                        </v-list-item>
+
                         <v-list-item @click="deleteShift(shift)">
                           <div class="menu-item">
                             <img
@@ -351,6 +358,13 @@
                           </div>
                         </v-list-item>
 
+                        <v-list-item @click="clearShift(shift)">
+                          <div class="menu-item">
+                            <v-icon size="20" color="#6D6D6D">mdi-eraser</v-icon>
+                            <span class="menu-item-title">Clear Shift</span>
+                          </div>
+                        </v-list-item>
+
                         <v-list-item @click="deleteShift(shift)">
                           <div class="menu-item">
                             <img
@@ -506,6 +520,7 @@
 
 <script setup>
 const deleteDialog = reactive({ open: false, loading: false, shift: null });
+const clearDialog = reactive({ open: false, loading: false, shift: null });
 import { differenceInCalendarDays, addDays, parseISO, format } from "date-fns";
 const { isManager } = useUser();
 const { shifts, rota, users, selectedView } = defineProps({
@@ -723,6 +738,23 @@ function formatTime(value) {
   return `${h}:${m}`;
 }
 
+const clearShift = async (shift) => {
+  try {
+    const res = await rotaStore.deleteRotaShift({
+      rotaId: rota.id,
+      shiftId: shift.id,
+    });
+    if (res.code === 0) {
+      mainStore.setSnackbar({ title: "Shift cleared", type: "success" });
+      emit("updateShifts", rota);
+    } else {
+      mainStore.setSnackbar({ title: res.message || "Failed to clear shift", type: "error" });
+    }
+  } catch (err) {
+    mainStore.setSnackbar({ title: "Something went wrong", type: "error" });
+  }
+};
+
 const deleteShift = async (shift) => {
   deleteDialog.shift = shift;
   deleteDialog.open = true;
@@ -733,7 +765,7 @@ const confirmDeleteShift = async () => {
   const shift = deleteDialog.shift;
   deleteDialog.loading = true;
   try {
-    const res = await rotaStore.deleteRotaShift({
+    const res = await rotaStore.deleteShiftAndTemplate({
       rotaId: rota.id,
       shiftId: shift.id,
     });
@@ -742,7 +774,7 @@ const confirmDeleteShift = async () => {
       deleteDialog.open = false;
       deleteDialog.shift = null;
       mainStore.setSnackbar({
-        title: "Shift deleted successfully",
+        title: "Shift and template deleted successfully",
         type: "success",
       });
       emit("updateShifts", rota);

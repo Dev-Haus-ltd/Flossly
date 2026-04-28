@@ -59,6 +59,7 @@ const handleFileChange = (e) => {
   }
 
   emit("onFiles", selectedFiles.value);
+  e.target.value = "";
 };
 
 const handleDrop = (e) => {

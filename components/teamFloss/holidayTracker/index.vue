@@ -18,6 +18,7 @@
           <TeamFlossHolidayTrackerCalender
             :events="teamHolidays"
             @onUpdate="getTeamHolidays"
+            @onDelete="deleteLeave"
           />
         </v-tabs-window-item>
 
@@ -106,6 +107,17 @@ const getTeamHolidays = () => {
 };
 const getParsedDate = (date) => {
   return formatDateDDMMYYYY(date);
+};
+
+const deleteLeave = (id) => {
+  userStore.deleteLeave({ id }).then((res) => {
+    if (res.code === 0) {
+      mainStore.setSnackbar({ title: "Leave deleted successfully", type: "success" });
+      getTeamHolidays();
+    } else {
+      mainStore.setSnackbar({ title: res.data.message || res.data, type: "error" });
+    }
+  });
 };
 
 const updateStatus = (status, id) => {

@@ -196,7 +196,12 @@ const handleNotificationClick = async (notification) => {
   }
   const url = buildNotificationUrl(notification);
   menu.value = false;
-  if (url) await navigateTo(url);
+  if (!url) return;
+  if (/^https?:\/\//i.test(url)) {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  } else {
+    await navigateTo(url);
+  }
 };
 
 // View all notifications
