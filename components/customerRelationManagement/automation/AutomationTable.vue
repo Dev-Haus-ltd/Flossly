@@ -39,17 +39,12 @@
             @update:model-value="$emit('update:search', $event)"
           >
             <template #append-inner>
-              <img
-                :src="searchicon"
-                alt="search icon"
-                width="14"
-                height="14"
-              />
+              <img :src="searchicon" alt="search icon" width="14" height="14" />
             </template>
           </v-text-field>
         </div>
 
-        <v-menu v-if="hasStatusColumn" :close-on-content-click="false">
+        <v-menu :close-on-content-click="false" transition="fade-transition" offset-y>
           <template #activator="{ props }">
             <v-btn
               v-bind="props"
@@ -59,13 +54,7 @@
               style="width: 110px"
             >
               <span>Filter</span>
-              <img
-                :src="filtericon"
-                alt="filter icon"
-                class="ml-2"
-                width="14"
-                height="14"
-              />
+              <img :src="filtericon" alt="filter icon" class="ml-2" width="14" height="14" />
               <v-badge
                 v-if="activeFilters > 0"
                 :content="activeFilters"
@@ -75,14 +64,28 @@
               />
             </v-btn>
           </template>
-          <v-card class="pa-4" min-width="280">
-            <p class="text-subtitle-2 font-weight-bold mb-3">Filter by Status</p>
+
+          <v-card style="min-width: 280px; border-radius: 12px; padding: 16px">
+            <div class="d-flex align-center justify-space-between mb-1">
+              <span style="font-weight: 500; font-size: 14px">Filter by</span>
+              <v-btn
+                variant="text"
+                density="comfortable"
+                color="primary"
+                style="text-transform: none; font-weight: 500; font-size: 13px"
+                @click="$emit('clearFilters')"
+              >Clear filters</v-btn>
+            </div>
+
+            <v-divider style="background-color: #dbdbdb" class="my-3" />
+
+            <v-label class="mb-1" style="font-size: 14px">Status</v-label>
             <v-checkbox
               :model-value="filterEnabled"
               label="Enabled only"
               density="compact"
               hide-details
-              class="mb-2"
+              class="mb-1"
               @update:model-value="$emit('update:filterEnabled', $event)"
             />
             <v-checkbox
@@ -92,9 +95,24 @@
               hide-details
               @update:model-value="$emit('update:filterDisabled', $event)"
             />
+
+            <v-divider style="background-color: #dbdbdb" class="my-3" />
+
+            <v-label class="mb-1" style="font-size: 14px">Type</v-label>
+            <v-radio-group
+              :model-value="filterType"
+              density="compact"
+              hide-details
+              @update:model-value="$emit('update:filterType', $event)"
+            >
+              <v-radio label="All" value="all" density="compact" />
+              <v-radio label="Email" value="email" density="compact" />
+              <v-radio label="WhatsApp" value="whatsapp" density="compact" />
+            </v-radio-group>
+
             <template v-if="hasLastSentColumn">
-              <v-divider class="my-3" />
-              <p class="text-subtitle-2 font-weight-bold mb-3">Filter by Sent Status</p>
+              <v-divider style="background-color: #dbdbdb" class="my-3" />
+              <v-label class="mb-1" style="font-size: 14px">Sent Status</v-label>
               <v-radio-group
                 :model-value="filterSent"
                 density="compact"
@@ -106,18 +124,24 @@
                 <v-radio label="Never sent" value="never" density="compact" />
               </v-radio-group>
             </template>
-            <v-divider class="my-3" />
-            <v-btn
-              size="small"
-              variant="text"
-              color="primary"
-              @click="$emit('clearFilters')"
-            >
-              Clear filters
-            </v-btn>
           </v-card>
         </v-menu>
       </div>
+    </div>
+
+    <div v-if="activeFilterChips.length" class="d-flex align-center flex-wrap mb-3" style="gap: 8px">
+      <v-chip
+        v-for="chip in activeFilterChips"
+        :key="chip.key"
+        size="small"
+        color="primary"
+        variant="elevated"
+        closable
+        @click:close="removeChip(chip)"
+      >{{ chip.label }}</v-chip>
+      <v-chip color="secondary" size="small" variant="text" class="ml-1" @click="$emit('clearFilters')">
+        Clear filters
+      </v-chip>
     </div>
 
     <v-card class="with-border rounded-lg elevation-0">
@@ -430,10 +454,30 @@ const props = defineProps({
     type: String,
     default: null,
   },
+  filterType: {
+    type: String,
+    default: 'all',
+  },
 })
 
 import searchicon from "@/assets/icons/listView/serach-icon.svg"
 import filtericon from "@/assets/icons/listView/filter-icon.svg"
+
+const emit = defineEmits([
+  'update:search',
+  'update:filterEnabled',
+  'update:filterDisabled',
+  'update:filterSent',
+  'update:filterType',
+  'clearFilters',
+  'back',
+  'openTrigger',
+  'openPreview',
+  'openEdit',
+  'deleteRow',
+  'toggleEnabled',
+  'resend',
+])
 
 const hasHeaderKey = (key) =>
   Array.isArray(props.headers) && props.headers.some((h) => h?.key === key)
@@ -442,6 +486,24 @@ const hasTriggerColumn = computed(() => hasHeaderKey('sending'))
 const hasStatusColumn = computed(() => hasHeaderKey('enabled'))
 const hasLastSentColumn = computed(() => hasHeaderKey('lastSentAt'))
 const hasSentStatusColumn = computed(() => hasHeaderKey('sentStatus'))
+
+const activeFilterChips = computed(() => {
+  const chips = []
+  if (props.filterEnabled) chips.push({ key: 'filterEnabled', label: 'Enabled only' })
+  if (props.filterDisabled) chips.push({ key: 'filterDisabled', label: 'Disabled only' })
+  if (props.filterType && props.filterType !== 'all')
+    chips.push({ key: 'filterType', label: `Type: ${props.filterType === 'whatsapp' ? 'WhatsApp' : 'Email'}` })
+  if (props.filterSent && props.filterSent !== 'all')
+    chips.push({ key: 'filterSent', label: props.filterSent === 'sent' ? 'Sent at least once' : 'Never sent' })
+  return chips
+})
+
+const removeChip = (chip) => {
+  if (chip.key === 'filterEnabled') emit('update:filterEnabled', false)
+  else if (chip.key === 'filterDisabled') emit('update:filterDisabled', false)
+  else if (chip.key === 'filterType') emit('update:filterType', 'all')
+  else if (chip.key === 'filterSent') emit('update:filterSent', 'all')
+}
 
 const formatRelativeTime = (dateStr) => {
   if (!dateStr) return ''
@@ -456,20 +518,6 @@ const formatRelativeTime = (dateStr) => {
   return `${months}mo ago`
 }
 
-defineEmits([
-  'update:search',
-  'update:filterEnabled',
-  'update:filterDisabled',
-  'update:filterSent',
-  'clearFilters',
-  'back',
-  'openTrigger',
-  'openPreview',
-  'openEdit',
-  'deleteRow',
-  'toggleEnabled',
-  'resend',
-])
 </script>
 
 <style scoped>
