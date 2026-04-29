@@ -622,7 +622,7 @@ const leadStats = computed(() => {
     {
       icon: "https://cdn.lordicon.com/qlpudrww.json",
       label: "Converted",
-      value: byStatus("Converted"),
+      value: convertedTotal.value || byStatus("Converted"),
       valueColor: 'primary'
     },
     {

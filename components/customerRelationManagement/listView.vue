@@ -697,6 +697,38 @@
               </template>
             </template>
           </v-data-table-server>
+          <v-card
+            v-if="selectedConvertedLeads.length"
+            class="action-bar py-4 d-flex justify-center align-center rounded-lg"
+            style="padding: 0px 50px; gap: 40px;"
+            :elevation="5"
+            flat
+          >
+            <div class="selected-count d-flex align-center">
+              <span class="selected-text">
+                {{ selectedConvertedLeads.length }}
+              </span>
+              <p class="ml-3 mt-1">Items Selected</p>
+            </div>
+            <div class="actions-container d-flex align-center" style="gap: 8px;">
+              <div
+                v-for="(action, i) in actions"
+                :key="i"
+                class="action-item d-flex flex-column align-center"
+                :class="{ 'action-item--locked': isActionLocked(action.key) }"
+                @click="onConvertedActionClick(action.key)"
+              >
+                <img v-if="action.icon" :src="action.icon" :alt="action.label" class="action-icon" />
+                <v-icon v-else-if="action.mdiIcon" size="22" color="#6d6d6d">{{ action.mdiIcon }}</v-icon>
+                <span class="action-label">{{ action.label }}</span>
+              </div>
+              <v-divider vertical class="mx-2" style="height: 40px;" />
+              <div class="action-item d-flex flex-column align-center" @click="selectedConvertedLeads = []">
+                <v-icon size="20" color="#6d6d6d">mdi-close</v-icon>
+                <span class="action-label">Close</span>
+              </div>
+            </div>
+          </v-card>
         </v-expansion-panel-text>
       </v-expansion-panel>
 
@@ -1870,6 +1902,12 @@ const onActionClick = (key) => {
   else if (['mail','shareLocation'].includes(key)) openCompose(key)
 };
 
+const onConvertedActionClick = (key) => {
+  if (!selectedConvertedLeads.value.length) return;
+  selectedLeads.value = [...selectedConvertedLeads.value];
+  onActionClick(key);
+};
+
 const formatDate = (d) => {
   return formatDateDDMMYYYY(d);
 };
@@ -2702,7 +2740,7 @@ const convertSelected = async () => {
   background: rgb(var(--v-theme-primary));
 }
 .action-bar {
-  position: relative;
+  position: fixed;
   bottom: 30px;
   left: 50%;
   transform: translateX(-50%);
