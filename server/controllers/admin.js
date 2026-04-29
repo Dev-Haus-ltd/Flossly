@@ -10,6 +10,7 @@ import {
 import { seedCrmAutomationDictionary as runSeedCrmAutomationDictionary } from '../utils/seedCrmAutomationDictionary';
 import { seedConsentFormTemplates as runSeedConsentFormTemplates } from '../utils/seedConsentFormTemplates';
 import { Op, fn, col } from 'sequelize';
+import { getRouterParam } from 'h3';
 import sequelize from '../utils/db';
 import { sendInvitationEmail } from '../utils/emailNotifications';
 import { v4 as uuidv4 } from 'uuid';
@@ -2075,8 +2076,9 @@ export const getScriptPoolItemById = async (event) => {
   requireAdmin(event);
   try {
     const query = getQuery(event) || {};
-    if (!query.id) return error(400, 'id is required');
-    const item = await DictionaryScript.findByPk(Number(query.id));
+    const idRaw = query.id ?? getRouterParam(event, 'id');
+    if (idRaw == null || idRaw === '') return error(400, 'id is required');
+    const item = await DictionaryScript.findByPk(Number(idRaw));
     if (!item) return error(404, 'Script not found');
     return success(item);
   } catch (err) {
@@ -2104,8 +2106,9 @@ export const updateScriptPoolItem = async (event) => {
   requireAdmin(event);
   try {
     const payload = await parseRequestPayload(event);
-    if (!payload?.id) return error(400, 'id is required');
-    const item = await DictionaryScript.findByPk(Number(payload.id));
+    const idRaw = payload?.id ?? getRouterParam(event, 'id');
+    if (idRaw == null || idRaw === '') return error(400, 'id is required');
+    const item = await DictionaryScript.findByPk(Number(idRaw));
     if (!item) return error(404, 'Script not found');
 
     const next = sanitizeDictionaryScriptPayload(payload, item.key);
@@ -2134,8 +2137,9 @@ export const deleteScriptPoolItem = async (event) => {
   requireAdmin(event);
   try {
     const payload = await parseRequestPayload(event);
-    if (!payload?.id) return error(400, 'id is required');
-    const item = await DictionaryScript.findByPk(Number(payload.id));
+    const idRaw = payload?.id ?? getRouterParam(event, 'id');
+    if (idRaw == null || idRaw === '') return error(400, 'id is required');
+    const item = await DictionaryScript.findByPk(Number(idRaw));
     if (!item) return error(404, 'Script not found');
     await item.destroy();
     return success({ deletedId: item.id });
@@ -2310,8 +2314,9 @@ export const getCrmAutomationDictionaryGroupById = async (event) => {
   requireAdmin(event)
   try {
     const query = getQuery(event) || {}
-    if (!query.id) return error(400, 'id is required')
-    const item = await CrmAutomationDictionaryGroup.findByPk(Number(query.id))
+    const idRaw = query.id ?? getRouterParam(event, 'id')
+    if (idRaw == null || idRaw === '') return error(400, 'id is required')
+    const item = await CrmAutomationDictionaryGroup.findByPk(Number(idRaw))
     if (!item) return error(404, 'Group not found')
     return success(item)
   } catch (err) {
@@ -2341,8 +2346,9 @@ export const updateCrmAutomationDictionaryGroup = async (event) => {
   requireAdmin(event)
   try {
     const payload = await parseRequestPayload(event)
-    if (!payload?.id) return error(400, 'id is required')
-    const item = await CrmAutomationDictionaryGroup.findByPk(Number(payload.id))
+    const idRaw = payload?.id ?? getRouterParam(event, 'id')
+    if (idRaw == null || idRaw === '') return error(400, 'id is required')
+    const item = await CrmAutomationDictionaryGroup.findByPk(Number(idRaw))
     if (!item) return error(404, 'Group not found')
     const next = normalizeDictionaryGroupPayload(payload, item.key)
     if (!next.key) return error(400, 'key is required')
@@ -2364,8 +2370,9 @@ export const deleteCrmAutomationDictionaryGroup = async (event) => {
   requireAdmin(event)
   try {
     const payload = await parseRequestPayload(event)
-    if (!payload?.id) return error(400, 'id is required')
-    const item = await CrmAutomationDictionaryGroup.findByPk(Number(payload.id))
+    const idRaw = payload?.id ?? getRouterParam(event, 'id')
+    if (idRaw == null || idRaw === '') return error(400, 'id is required')
+    const item = await CrmAutomationDictionaryGroup.findByPk(Number(idRaw))
     if (!item) return error(404, 'Group not found')
     await sequelize.transaction(async (t) => {
       await CrmAutomationDictionaryTemplate.destroy({ where: { groupKey: item.key }, transaction: t })
@@ -2401,8 +2408,9 @@ export const getCrmAutomationDictionaryTemplateById = async (event) => {
   requireAdmin(event)
   try {
     const query = getQuery(event) || {}
-    if (!query.id) return error(400, 'id is required')
-    const item = await CrmAutomationDictionaryTemplate.findByPk(Number(query.id))
+    const idRaw = query.id ?? getRouterParam(event, 'id')
+    if (idRaw == null || idRaw === '') return error(400, 'id is required')
+    const item = await CrmAutomationDictionaryTemplate.findByPk(Number(idRaw))
     if (!item) return error(404, 'Template not found')
     return success(item)
   } catch (err) {
@@ -2435,8 +2443,9 @@ export const updateCrmAutomationDictionaryTemplate = async (event) => {
   requireAdmin(event)
   try {
     const payload = await parseRequestPayload(event)
-    if (!payload?.id) return error(400, 'id is required')
-    const item = await CrmAutomationDictionaryTemplate.findByPk(Number(payload.id))
+    const idRaw = payload?.id ?? getRouterParam(event, 'id')
+    if (idRaw == null || idRaw === '') return error(400, 'id is required')
+    const item = await CrmAutomationDictionaryTemplate.findByPk(Number(idRaw))
     if (!item) return error(404, 'Template not found')
     const next = normalizeDictionaryTemplatePayload(payload, item.key)
     if (!next.key) return error(400, 'key is required')
@@ -2463,8 +2472,9 @@ export const deleteCrmAutomationDictionaryTemplate = async (event) => {
   requireAdmin(event)
   try {
     const payload = await parseRequestPayload(event)
-    if (!payload?.id) return error(400, 'id is required')
-    const item = await CrmAutomationDictionaryTemplate.findByPk(Number(payload.id))
+    const idRaw = payload?.id ?? getRouterParam(event, 'id')
+    if (idRaw == null || idRaw === '') return error(400, 'id is required')
+    const item = await CrmAutomationDictionaryTemplate.findByPk(Number(idRaw))
     if (!item) return error(404, 'Template not found')
     await item.destroy()
     return success({ deletedId: item.id })
@@ -2527,8 +2537,9 @@ export const getCrmTreatmentById = async (event) => {
   try {
     const query = getQuery(event) || {};
     const organisation = await readOrganisationId(event);
-    if (!query.id) return error(400, 'id is required');
-    const item = await getAdminCrmOptionById({ organisationId: organisation.id, category: 'treatment', id: query.id });
+    const idRaw = query.id ?? getRouterParam(event, 'id');
+    if (idRaw == null || idRaw === '') return error(400, 'id is required');
+    const item = await getAdminCrmOptionById({ organisationId: organisation.id, category: 'treatment', id: idRaw });
     return success(item);
   } catch (err) {
     console.error('Get CRM treatment error:', err);
@@ -2558,9 +2569,11 @@ export const updateCrmTreatment = async (event) => {
   requireAdmin(event);
   try {
     const payload = await parseRequestPayload(event);
-    const organisation = await readOrganisationId(event, payload);
-    if (!payload?.id) return error(400, 'id is required');
-    const item = await getAdminCrmOptionById({ organisationId: organisation.id, category: 'treatment', id: payload.id });
+    const idRaw = payload?.id ?? getRouterParam(event, 'id');
+    if (idRaw == null || idRaw === '') return error(400, 'id is required');
+    const mergedPayload = { ...payload, id: idRaw };
+    const organisation = await readOrganisationId(event, mergedPayload);
+    const item = await getAdminCrmOptionById({ organisationId: organisation.id, category: 'treatment', id: idRaw });
     if (payload?.name !== undefined) {
       const name = normalizeCrmOptionName(payload.name);
       if (!name) return error(400, 'name cannot be empty');
@@ -2582,9 +2595,11 @@ export const deleteCrmTreatment = async (event) => {
   requireAdmin(event);
   try {
     const payload = await parseRequestPayload(event);
-    const organisation = await readOrganisationId(event, payload);
-    if (!payload?.id) return error(400, 'id is required');
-    const item = await getAdminCrmOptionById({ organisationId: organisation.id, category: 'treatment', id: payload.id });
+    const idRaw = payload?.id ?? getRouterParam(event, 'id');
+    if (idRaw == null || idRaw === '') return error(400, 'id is required');
+    const mergedPayload = { ...payload, id: idRaw };
+    const organisation = await readOrganisationId(event, mergedPayload);
+    const item = await getAdminCrmOptionById({ organisationId: organisation.id, category: 'treatment', id: idRaw });
     await item.destroy();
     return success({ deletedId: item.id });
   } catch (err) {
@@ -2610,8 +2625,9 @@ export const getLeadSourceById = async (event) => {
   try {
     const query = getQuery(event) || {};
     const organisation = await readOrganisationId(event);
-    if (!query.id) return error(400, 'id is required');
-    const item = await getAdminCrmOptionById({ organisationId: organisation.id, category: 'lead_source', id: query.id });
+    const idRaw = query.id ?? getRouterParam(event, 'id');
+    if (idRaw == null || idRaw === '') return error(400, 'id is required');
+    const item = await getAdminCrmOptionById({ organisationId: organisation.id, category: 'lead_source', id: idRaw });
     return success(item);
   } catch (err) {
     console.error('Get lead source error:', err);
@@ -2641,9 +2657,11 @@ export const updateLeadSource = async (event) => {
   requireAdmin(event);
   try {
     const payload = await parseRequestPayload(event);
-    const organisation = await readOrganisationId(event, payload);
-    if (!payload?.id) return error(400, 'id is required');
-    const item = await getAdminCrmOptionById({ organisationId: organisation.id, category: 'lead_source', id: payload.id });
+    const idRaw = payload?.id ?? getRouterParam(event, 'id');
+    if (idRaw == null || idRaw === '') return error(400, 'id is required');
+    const mergedPayload = { ...payload, id: idRaw };
+    const organisation = await readOrganisationId(event, mergedPayload);
+    const item = await getAdminCrmOptionById({ organisationId: organisation.id, category: 'lead_source', id: idRaw });
     if (payload?.name !== undefined) {
       const name = normalizeCrmOptionName(payload.name);
       if (!name) return error(400, 'name cannot be empty');
@@ -2665,9 +2683,11 @@ export const deleteLeadSource = async (event) => {
   requireAdmin(event);
   try {
     const payload = await parseRequestPayload(event);
-    const organisation = await readOrganisationId(event, payload);
-    if (!payload?.id) return error(400, 'id is required');
-    const item = await getAdminCrmOptionById({ organisationId: organisation.id, category: 'lead_source', id: payload.id });
+    const idRaw = payload?.id ?? getRouterParam(event, 'id');
+    if (idRaw == null || idRaw === '') return error(400, 'id is required');
+    const mergedPayload = { ...payload, id: idRaw };
+    const organisation = await readOrganisationId(event, mergedPayload);
+    const item = await getAdminCrmOptionById({ organisationId: organisation.id, category: 'lead_source', id: idRaw });
     await item.destroy();
     return success({ deletedId: item.id });
   } catch (err) {
@@ -2693,7 +2713,7 @@ export const getCrmAlertByKey = async (event) => {
   try {
     const query = getQuery(event) || {};
     const organisation = await readOrganisationId(event);
-    const key = String(query.key || '').trim().toLowerCase();
+    const key = String(query.key || getRouterParam(event, 'key') || '').trim().toLowerCase();
     if (!key) return error(400, 'key is required');
     const item = getOrganisationAlertOptions(organisation).find((alert) => String(alert.key || '').trim().toLowerCase() === key);
     if (!item) return error(404, 'Alert not found');
@@ -2730,7 +2750,7 @@ export const updateCrmAlert = async (event) => {
   try {
     const payload = await parseRequestPayload(event);
     const organisation = await readOrganisationId(event, payload);
-    const currentKey = String(payload?.currentKey || payload?.key || '').trim().toLowerCase();
+    const currentKey = String(payload?.currentKey || payload?.key || getRouterParam(event, 'key') || '').trim().toLowerCase();
     if (!currentKey) return error(400, 'currentKey or key is required');
     const items = getOrganisationAlertOptions(organisation);
     const index = items.findIndex((item) => String(item.key || '').trim().toLowerCase() === currentKey);
@@ -2754,7 +2774,7 @@ export const deleteCrmAlert = async (event) => {
   try {
     const payload = await parseRequestPayload(event);
     const organisation = await readOrganisationId(event, payload);
-    const key = String(payload?.key || '').trim().toLowerCase();
+    const key = String(payload?.key ?? getRouterParam(event, 'key') ?? '').trim().toLowerCase();
     if (!key) return error(400, 'key is required');
     const items = getOrganisationAlertOptions(organisation);
     const next = items.filter((item) => String(item.key || '').trim().toLowerCase() !== key);

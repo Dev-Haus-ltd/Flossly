@@ -29,6 +29,24 @@ export const Post = async (url, body) => {
   return data;
 };
 
+export const Patch = async (url, body) => {
+  const args = {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  };
+  const response = await fetch(APIURL + url, args);
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw data;
+  }
+
+  return data;
+};
+
 export const Delete = async (url, itemId) => {
   const args = {
     method: "POST",
