@@ -538,8 +538,12 @@ export const createLeadViaChatbot = async (event) => {
       rawData: payload.rawData || null,
     };
     
+    if (payload.chatHistory?.length) {
+      data.rawData = { ...(data.rawData || {}), chatHistory: payload.chatHistory }
+    }
+
     const created = await CrmLead.create(data);
-    
+
     console.log('[Chatbot API] Lead created successfully:', {
       id: created.id,
       organisationId: created.organisationId,

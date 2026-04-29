@@ -412,6 +412,25 @@
                       </div>
                     </div>
                   </v-col>
+
+                  <!-- Chatbot chat history -->
+                  <v-col v-if="chatHistory.length" cols="12">
+                    <label class="cust-lbl">Chatbot Conversation History</label>
+                    <div class="chatbot-note mt-3 pa-3 rounded-lg">
+                      <div class="d-flex align-center mb-2 gap-2">
+                        <v-icon size="16" color="#0061FB">mdi-robot-outline</v-icon>
+                        <span class="chatbot-note-date text-caption text-medium-emphasis">Chatbot Session</span>
+                      </div>
+                      <div
+                        v-for="(msg, i) in chatHistory"
+                        :key="i"
+                        class="chatbot-message-line"
+                        :class="msg.role === 'user' ? 'user-line' : 'bot-line'"
+                      >
+                        <strong>{{ msg.role === 'user' ? 'User' : 'Bot' }}:</strong> {{ msg.message }}
+                      </div>
+                    </div>
+                  </v-col>
                 </v-row>
               </div>
             </v-tabs-window-item>
@@ -812,6 +831,11 @@ const onPreferencesUpdated = (newPreferences) => {
 };
 const onCommunicationSave = () => {};
 
+const chatHistory = computed(() => {
+  const h = props.selectedLead?.rawData?.chatHistory
+  return Array.isArray(h) ? h : []
+})
+
 const savingComment = ref(false)
 const saveComment = async () => {
   try {
@@ -1092,5 +1116,28 @@ const savePreferences = async () => {
 
 .automation-log-table :deep(.v-table__wrapper) {
   border: none !important;
+}
+
+.chatbot-note {
+  background: #f0f6ff;
+  border: 1px solid #c7deff;
+}
+
+.chatbot-note-date {
+  font-size: 11px;
+}
+
+.chatbot-message-line {
+  font-size: 13px;
+  padding: 2px 0;
+  white-space: pre-wrap;
+}
+
+.bot-line {
+  color: #0061FB;
+}
+
+.user-line {
+  color: #1e1e1e;
 }
 </style>
