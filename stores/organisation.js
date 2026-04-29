@@ -31,6 +31,10 @@ export const useOrgStore = defineStore("orgStore", {
           .updateOrganisation(data)
           .then((res) => {
             this.isLoading = false
+            // Update the store with the response data from backend
+            if (res.code === 0 && res.data) {
+              this.organisation = res.data;
+            }
             resolve(res);
           })
           .catch((err) => {

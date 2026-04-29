@@ -67,7 +67,7 @@
                 :error-messages="errors.patient ? [errors.patient] : []"
                 hide-details="auto"
               >
-                <template #append>
+                <template #append v-if="!hideAddPatient">
                   <v-btn
                     icon
                     size="28"
@@ -292,6 +292,8 @@ const props = defineProps({
   preselectedPatientId: { type: [Number, String], default: null },
   preselectedPatient: { type: String, default: "" },
   editAppointment: { type: Object, default: () => null },
+  hideAddPatient: { type: Boolean, default: false },
+  ignoreAvailability: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
@@ -318,7 +320,6 @@ const newTreatmentName = ref("");
 const newTreatmentPrice = ref("");
 const newTreatmentDuration = ref("");
 const isAddingTreatment = ref(false);
-
 const errors = reactive({
   patient: "",
   date: "",
@@ -368,8 +369,11 @@ const fallbackTimeOptions = computed(() => {
   }
   return opts;
 });
-
 const timeOptions = computed(() => {
+  if (props.ignoreAvailability) {
+    return fallbackTimeOptions.value;
+  }
+
   if (date.value && practitioner.value) {
     return getAvailableTimeSlots(
       clinicDateToYMD(date.value),
@@ -736,29 +740,55 @@ const validate = () => {
 const onSave = async () => {
   if (!validate()) return;
 
-  const orgId = user.value?.currentLoggedInOrgId || user.value?.organisationId;
-  if (orgId && practitioner.value && date.value && time.value) {
+  const orgId =
+    user.value?.currentLoggedInOrgId || user.value?.organisationId;
+
+  // ✅ Only run availability check if NOT CRM mode
+  if (
+    !props.ignoreAvailability &&
+    orgId &&
+    practitioner.value &&
+    date.value &&
+    time.value
+  ) {
     try {
       await loadDentistSchedules(orgId, Number(practitioner.value));
+
       const bookingDate = clinicDateToYMD(date.value);
-      const [hours, minutes] = String(time.value).split(":").map(Number);
+
+      const [hours, minutes] = String(time.value)
+        .split(":")
+        .map(Number);
+
       const startMinutes = hours * 60 + (minutes || 0);
       const endMinutes = startMinutes + Number(duration.value || 15);
+
+      const endTime = `${String(Math.floor(endMinutes / 60)).padStart(
+        2,
+        "0"
+      )}:${String(endMinutes % 60).padStart(2, "0")}`;
+
       const availability = getTimeRangeAvailability(
         bookingDate,
         time.value,
-        `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`,
+        endTime,
         {
           name: practitionerLabel.value || "This practitioner",
-        },
+        }
       );
+
       if (!availability.available) {
         errors.time =
           availability.message ||
           getAvailabilityMessage(bookingDate, {
             name: practitionerLabel.value || "This practitioner",
           });
-        mainStore?.setSnackbar?.({ title: errors.time, type: "error" });
+
+        mainStore?.setSnackbar?.({
+          title: errors.time,
+          type: "error",
+        });
+
         return;
       }
     } catch (error) {
@@ -767,25 +797,31 @@ const onSave = async () => {
   }
 
   isSaving.value = true;
+
   const selectedTreatment = treatmentOptions.value.find(
-    (t) => t.name.toLowerCase() === (exam.value || "").toLowerCase(),
+    (t) =>
+      t.name.toLowerCase() === (exam.value || "").toLowerCase()
   );
+
   emit("save", {
     id: props.editAppointment?.id || null,
-    patientId: selectedPatientId.value || props.preselectedPatientId || null,
+    patientId:
+      selectedPatientId.value || props.preselectedPatientId || null,
     patient: "",
     date: clinicDateToYMD(date.value),
     time: time.value,
     duration: duration.value,
     exam: exam.value,
     treatmentId: selectedTreatment?.id || null,
-    treatmentName: selectedTreatment?.name || exam.value || null,
+    treatmentName:
+      selectedTreatment?.name || exam.value || null,
     status: status.value,
     practitioner: practitioner.value,
     practitionerName: practitionerLabel.value || null,
     dentistId: practitioner.value,
     notes: notes.value,
   });
+
   emit("update:modelValue", false);
 };
 

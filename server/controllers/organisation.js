@@ -192,6 +192,33 @@ export const updateOrganisationDetails = async (event) => {
       }
     }
 
+    // Handle non-working days
+    const nonWorkingDaysRaw = firstNonEmpty(fields, 'nonWorkingDays');
+    if (nonWorkingDaysRaw !== undefined) {
+      try {
+        let parsedNonWorkingDays = nonWorkingDaysRaw;
+        if (typeof nonWorkingDaysRaw === 'string') {
+          parsedNonWorkingDays = JSON.parse(nonWorkingDaysRaw);
+        }
+        
+        // Validate structure: should be an array
+        if (!Array.isArray(parsedNonWorkingDays)) {
+          return error(400, 'nonWorkingDays must be an array');
+        }
+        
+        const validNonWorkingDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        for (const day of parsedNonWorkingDays) {
+          if (!validNonWorkingDays.includes(day)) {
+            return error(400, `Invalid non-working day: ${day}. Allowed values: ${validNonWorkingDays.join(', ')}`);
+          }
+        }
+        
+        organisation.nonWorkingDays = parsedNonWorkingDays;
+      } catch (err) {
+        return error(400, 'nonWorkingDays must be valid JSON array with day abbreviations (Mon, Tue, Wed, Thu, Fri, Sat, Sun)');
+      }
+    }
+
     // Handle working day timings
     const workingTimingsRaw = firstNonEmpty(fields, 'workingTimings');
     if (workingTimingsRaw !== undefined) {

@@ -289,4 +289,39 @@ export default {
         .catch(reject);
     });
   },
+
+  // --- Diary Zones ---
+  listZones({ dentistId } = {}) {
+    const q = new URLSearchParams();
+    if (dentistId) q.append("dentistId", dentistId);
+    return new Promise((resolve, reject) => {
+      Get(`/diary/zones?${q.toString()}`)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+
+  createZone(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/zoneCreate", payload)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+
+  updateZone(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/zoneUpdate", payload)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+
+  deleteZone(id) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/zoneDelete", { id })
+        .then(resolve)
+        .catch(reject);
+    });
+  },
 };

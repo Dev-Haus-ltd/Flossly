@@ -312,6 +312,7 @@
         :appointments="appointmentsByDentist"
         :dentist-availability="dentistAvailability"
         :highlighted-appointment-id="highlightedAppointmentId"
+        :zones="zones"
         @slot-click="openAppointment"
         @slot-full="onSlotFull"
         @open-notes="onOpenNotes"
@@ -369,6 +370,7 @@ import AddPatient from "@/components/diary/addPatient.vue";
 import NotesModal from "@/components/diary/NotesModal.vue";
 import { useDiaryStore } from "@/stores/diary";
 import { useScheduleStore } from "@/stores/schedule";
+import { useZonesStore } from "@/stores/zones";
 import { useMainStore } from "@/stores/index";
 import { useOrgStore } from "@/stores/organisation";
 import { clinicMinutesFromTime, dateToLocalYMD } from "@/lib/dateFormatter";
@@ -392,8 +394,10 @@ const selectedDentistIds = ref([]);
 watch(view, (v) => console.log("current view ->", v));
 const diaryStore = useDiaryStore();
 const scheduleStore = useScheduleStore();
+const zonesStore = useZonesStore();
 const dentists = ref([]);
 const dentistsLoading = ref(true); // Add loading state
+const zones = computed(() => zonesStore.getAllZones);
 const treatments = ref([]);
 const organisationStore = useOrgStore();
 const { user } = useUser();
@@ -991,6 +995,14 @@ async function loadDentists() {
   }
 }
 
+async function loadZones() {
+  try {
+    await zonesStore.fetchZones();
+  } catch (error) {
+    console.error("Failed to load zones:", error);
+  }
+}
+
 /**
  * Load and calculate availability for all dentists on the selected date
  */
@@ -1228,6 +1240,7 @@ function clearSearch() {
 onMounted(() => {
   applyRouteQuery(route.query);
   loadDentists().then(loadAppointments);
+  loadZones();
   organisationStore.listTreatments().then((res) => {
     if (res?.code === 0) treatments.value = res.data || [];
   });
