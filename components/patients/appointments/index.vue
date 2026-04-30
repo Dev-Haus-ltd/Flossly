@@ -384,6 +384,15 @@
       :edit-appointment="editAppointment"
       @save="handleAppointmentSave"
     />
+    <CommonConfirmDialog
+  v-model="deleteDialog.open"
+  :title="deleteDialog.title"
+  :message="deleteDialog.message"
+  :loading="deleteDialog.loading"
+  confirm-text="Delete"
+  @confirm="confirmDeleteAppointment"
+  @cancel="closeDeleteDialog"
+/>
   </div>
 </template>
 
@@ -430,7 +439,13 @@ const showAppointmentDrawer = ref(false);
 const editAppointment = ref(null);
 const practitionerOptions = ref([]);
 const deletingAppointmentIds = ref(new Set());
-
+const deleteDialog = ref({
+  open: false,
+  appointmentId: null,
+  loading: false,
+  title: "",
+  message: "",
+});
 const statusOptions = [
   { label: "All statuses", value: "all" },
   { label: "Pending", value: "Pending" },
@@ -772,9 +787,13 @@ const deletePatientAppointment = async (row) => {
   const appointmentId = row?.diaryAppointmentId || row?.id;
   if (!appointmentId) return;
   if (deletingAppointmentIds.value.has(String(appointmentId))) return;
-
-  const confirmed = window.confirm("Delete this appointment?");
-  if (!confirmed) return;
+ deleteDialog.value = {
+    open: true,
+    appointmentId,
+    loading: false,
+    title: "Delete Appointment",
+    message: "Are you sure you want to delete this appointment? This action cannot be undone.",
+  };
 
   try {
     deletingAppointmentIds.value = new Set(deletingAppointmentIds.value).add(
@@ -800,7 +819,56 @@ const deletePatientAppointment = async (row) => {
     deletingAppointmentIds.value = next;
   }
 };
+const confirmDeleteAppointment = async () => {
+  const appointmentId = deleteDialog.value.appointmentId;
+  if (!appointmentId) return;
 
+  deleteDialog.value.loading = true;
+
+  try {
+    deletingAppointmentIds.value = new Set(deletingAppointmentIds.value).add(
+      String(appointmentId),
+    );
+
+    const res = await store.deleteAppointment(appointmentId);
+
+    if (res?.code !== 0) {
+      throw new Error(res?.message || "Failed to delete appointment");
+    }
+
+    appointmentRows.value = appointmentRows.value.filter(
+      (item) =>
+        String(item?.diaryAppointmentId || item?.id) !== String(appointmentId),
+    );
+
+    appointmentTotal.value = appointmentRows.value.length;
+
+    mainStore?.setSnackbar?.({
+      title: "Appointment deleted",
+      type: "success",
+    });
+
+    await fetchAppointments();
+    closeDeleteDialog();
+  } catch (error) {
+    const msg =
+      error?.data?.message ||
+      error?.message ||
+      "Failed to delete appointment";
+
+    mainStore?.setSnackbar?.({ title: msg, type: "error" });
+  } finally {
+    deleteDialog.value.loading = false;
+
+    const next = new Set(deletingAppointmentIds.value);
+    next.delete(String(appointmentId));
+    deletingAppointmentIds.value = next;
+  }
+};
+const closeDeleteDialog = () => {
+  deleteDialog.value.open = false;
+  deleteDialog.value.appointmentId = null;
+};
 const buildDateTime = (dateStr, timeStr) => {
   if (!dateStr || !timeStr) return null;
   const formattedTime = timeStr.length === 5 ? `${timeStr}:00` : timeStr;

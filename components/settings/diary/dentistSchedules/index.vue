@@ -72,21 +72,40 @@
                     {{ getInitials(dentist.name) }}
                   </div>
 
-                  <div>
+                  <div class="dentist-info">
                     <h4 class="dentist-name">{{ dentist.name }}</h4>
                     <p class="dentist-role">{{ dentist.role || "Dentist" }}</p>
+
+                    <!-- NEW: Status chip below -->
+                    <v-chip
+                      :color="dentist.active !== false ? '#10B981' : '#6B7280'"
+                      size="x-small"
+                      variant="flat"
+                      class="status-chip mt-1"
+                      text-color="white"
+                    >
+                      {{ dentist.active !== false ? "Active" : "Inactive" }}
+                    </v-chip>
                   </div>
                 </div>
 
-                <v-chip
-                  :color="dentist.active !== false ? '#10B981' : '#6B7280'"
-                  size="x-small"
-                  variant="flat"
-                  class="status-chip"
-                  text-color="white"
-                >
-                  {{ dentist.active !== false ? "Active" : "Inactive" }}
-                </v-chip>
+                <div class="d-flex align-center" style="gap: 6px">
+                  <v-btn
+                    style="background-color: aliceblue"
+                    icon
+                    size="small"
+                    variant="text"
+                    @click.stop="toggleDentist(dentist.id)"
+                  >
+                    <v-icon>
+                      {{
+                        expandedDentists.has(dentist.id)
+                          ? "mdi-chevron-up"
+                          : "mdi-chevron-down"
+                      }}
+                    </v-icon>
+                  </v-btn>
+                </div>
               </div>
 
               <!-- Body: Info with Icons -->
@@ -120,7 +139,10 @@
                 </div>
 
                 <!-- Schedules Section -->
-                <div class="schedules-section mt-4 pt-3 border-t">
+                <div
+                  v-if="expandedDentists.has(dentist.id)"
+                  class="schedules-section mt-4 pt-3 border-t"
+                >
                   <div class="d-flex justify-space-between align-center mb-2">
                     <span class="schedules-label">
                       <v-icon size="14" class="mr-1"
@@ -139,9 +161,17 @@
                         @click="copyRotaSchedule(dentist)"
                       >
                         <v-icon size="14" class="mr-1">
-                          {{ canImportRotaSchedule ? "mdi-content-copy" : "mdi-lock-outline" }}
+                          {{
+                            canImportRotaSchedule
+                              ? "mdi-content-copy"
+                              : "mdi-lock-outline"
+                          }}
                         </v-icon>
-                        {{ canImportRotaSchedule ? "Import rota" : "Trial or Soar required" }}
+                        {{
+                          canImportRotaSchedule
+                            ? "Import rota"
+                            : "Trial or Soar required"
+                        }}
                       </v-btn>
                       <v-btn
                         size="x-small"
@@ -244,14 +274,19 @@ import { ref, onMounted, computed, watch } from "vue";
 import { useDiaryStore } from "~/stores/diary";
 import { useScheduleStore } from "~/stores/schedule";
 import { useOrgStore } from "~/stores/organisation";
-import { LICENSE_TYPES, getLicenseTypeFromStorage, resolveUserLicenseType, useMainStore } from "~/stores/index";
+import {
+  LICENSE_TYPES,
+  getLicenseTypeFromStorage,
+  resolveUserLicenseType,
+  useMainStore,
+} from "~/stores/index";
 import { useUser } from "~/composables/useUser";
 import ScheduleList from "@/components/schedule/ScheduleList.vue";
 import DentistScheduleForm from "@/components/schedule/DentistScheduleForm.vue";
+import ScheduleDetailsCard from "~/components/schedule/ScheduleDetailsCard.vue";
 
 // Icons
 import searchIcon from "@/assets/icons/listView/serach-icon.svg";
-import ScheduleDetailsCard from "~/components/schedule/ScheduleDetailsCard.vue";
 
 const props = defineProps({
   initialDentistId: {
@@ -276,6 +311,7 @@ const editingScheduleId = ref(null);
 const dentistSchedulesMap = ref({});
 const loadingSchedules = ref(new Set());
 const copyingRotaDentistId = ref(null);
+const expandedDentists = ref(new Set());
 const deleteDialog = ref({
   open: false,
   dentistId: null,
@@ -314,6 +350,14 @@ const dentistStats = computed(() => [
   },
 ]);
 
+const toggleDentist = (id) => {
+  if (expandedDentists.value.has(id)) {
+    expandedDentists.value.delete(id);
+  } else {
+    expandedDentists.value.add(id);
+  }
+};
+
 const organisationId = computed(
   () => user.value?.currentLoggedInOrgId || user.value?.organisationId,
 );
@@ -323,7 +367,9 @@ const normalizedLicenseType = computed(() => {
   return String(getLicenseTypeFromStorage() || "").trim();
 });
 const canImportRotaSchedule = computed(() =>
-  [LICENSE_TYPES.TRIAL, LICENSE_TYPES.SOAR].includes(normalizedLicenseType.value),
+  [LICENSE_TYPES.TRIAL, LICENSE_TYPES.SOAR].includes(
+    normalizedLicenseType.value,
+  ),
 );
 const schedules = computed(() => scheduleStore.getAllSchedules);
 const isScheduleLoading = computed(() => scheduleStore.getIsLoading);
@@ -491,9 +537,11 @@ const toggleScheduleStatus = async (dentistId, scheduleId) => {
   try {
     await scheduleStore.toggleSchedule(scheduleId);
     await loadSchedulesForDentist(dentistId);
-    
+
     // Show feedback about toggle action
-    const schedule = dentistSchedulesMap.value[dentistId]?.find(s => s.id === scheduleId);
+    const schedule = dentistSchedulesMap.value[dentistId]?.find(
+      (s) => s.id === scheduleId,
+    );
     const newStatus = schedule?.isActive ? "activated" : "deactivated";
     mainStore?.setSnackbar?.({
       message: `${schedule?.scheduleName} has been ${newStatus}`,
@@ -576,11 +624,11 @@ const fetchOrganisationDetails = async () => {
 const fetchDentists = async () => {
   try {
     loading.value = true;
-    
+
     // CRITICAL: Fetch organisation details first to ensure working timings are available
     // This populates mainStore.organisation which is used by useOrganisationWorkingHours
     await fetchOrganisationDetails();
-    
+
     const res = await diaryStore.listDentists();
     if (res?.code === 0) {
       dentists.value = res.data || [];
@@ -600,11 +648,17 @@ const fetchDentists = async () => {
 };
 
 function openInitialDentistSchedule() {
-  if (initialSelectionApplied.value || !props.initialDentistId || !dentists.value.length) {
+  if (
+    initialSelectionApplied.value ||
+    !props.initialDentistId ||
+    !dentists.value.length
+  ) {
     return;
   }
   const normalizedId = Number(props.initialDentistId);
-  const dentist = dentists.value.find((entry) => Number(entry.id) === normalizedId);
+  const dentist = dentists.value.find(
+    (entry) => Number(entry.id) === normalizedId,
+  );
   if (!dentist) return;
   initialSelectionApplied.value = true;
   const schedulesForDentist = dentistSchedulesMap.value[dentist.id] || [];
@@ -624,7 +678,7 @@ watch(
   () => {
     initialSelectionApplied.value = false;
     openInitialDentistSchedule();
-  }
+  },
 );
 </script>
 
@@ -675,7 +729,7 @@ watch(
 .card-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   padding: 16px;
   border-bottom: 1px solid #f3f4f6;
 }
@@ -695,7 +749,10 @@ watch(
   font-size: 16px;
   flex-shrink: 0;
 }
-
+.dentist-info {
+  display: flex;
+  flex-direction: column;
+}
 .dentist-name {
   font-size: 15px;
   font-weight: 600;
@@ -715,6 +772,7 @@ watch(
   font-weight: 500;
   font-size: 10px;
   padding: 4px 8px;
+  width: fit-content;
   height: auto;
 }
 

@@ -218,6 +218,16 @@
               />
             </template>
 
+            <!-- Zone overlays -->
+            <template
+              v-for="zone in getDentistZones(dent.id)"
+              :key="'zone-' + zone.id"
+            >
+              <div class="zone-overlay" :style="getZoneOverlayStyle(zone)">
+                <div class="zone-label">{{ zone.title }}</div>
+              </div>
+            </template>
+
             <!-- Break overlays -->
             <template
               v-for="brk in getDentistBreaks(dent.id)"
@@ -282,6 +292,14 @@
                 class="slot-cell"
                 @click="onCellClick(dent, t)"
               />
+              <template
+                v-for="zone in getDentistZones(dent.id, d)"
+                :key="'week-zone-' + zone.id"
+              >
+                <div class="zone-overlay zone-overlay-week" :style="getZoneOverlayStyle(zone)">
+                  <div class="zone-label">{{ zone.title }}</div>
+                </div>
+              </template>
               <div class="appt-layer">
                 <div
                   v-if="isToday(d)"
@@ -316,6 +334,8 @@
 
 <script setup>
 import { ref, computed, reactive, onMounted, onUnmounted, nextTick } from "vue";
+import { useRoute } from "vue-router";
+
 import AppointmentCard from "@/components/diary/calendar/AppointmentCard.vue";
 import {
   clinicMinutesFromTime,
@@ -331,6 +351,7 @@ const props = defineProps({
   selectedDentistIds: { type: Array, default: () => [] },
   appointments: { type: Object, default: () => ({}) },
   dentistAvailability: { type: Object, default: () => ({}) },
+  zones: { type: Array, default: () => [] },
   highlightedAppointmentId: { type: [String, Number], default: null },
 });
 
@@ -348,7 +369,7 @@ const emit = defineEmits([
 ]);
 
 const router = useRouter();
-
+const route = useRoute();
 // ─── Constants ────────────────────────────────────────────────────────────────
 // WORK_START and WORK_END are now computed properties based on dentist schedules (see Derived section)
 // FALLBACK values if no schedule is available
@@ -516,8 +537,11 @@ const formatTo12Hour = (time) => {
 };
 
 // ─── Derived ──────────────────────────────────────────────────────────────────
-const activeDate = computed(() => normDate(props.date));
-
+// const activeDate = computed(() => normDate(props.date));
+console.log("routeQuery",route.query.date)
+const activeDate = computed(() => {
+  return route.query.date || normDate(props.date);
+});
 /**
  * Calculate actual working hours from visible dentists' schedules
  * Returns { startHour, endHour } based on availability data
@@ -743,6 +767,39 @@ const isDentistBookable = (dentistId, hour = null) => {
   return true;
 };
 
+const zoneDayIndex = (dateString) => {
+  if (!dateString) return null;
+  const d = new Date(`${dateString}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  const jsDay = d.getDay();
+  return jsDay === 0 ? 6 : jsDay - 1;
+};
+
+const isZoneApplicableOnDate = (zone, dateString) => {
+  if (!zone || !dateString) return false;
+  const dayIndex = zoneDayIndex(dateString);
+  if (dayIndex === null) return false;
+  if (!Array.isArray(zone.selectedDays) || !zone.selectedDays.includes(dayIndex)) return false;
+  if (zone.startDate && zone.endDate) {
+    const start = new Date(`${zone.startDate}T00:00:00`);
+    const end = new Date(`${zone.endDate}T23:59:59`);
+    const target = new Date(`${dateString}T00:00:00`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || Number.isNaN(target.getTime())) {
+      return false;
+    }
+    if (target < start || target > end) return false;
+  }
+  return true;
+};
+
+const getDentistZones = (dentistId, dateString = activeDate.value) =>
+  (props.zones || [])
+    .filter(
+      (zone) =>
+        String(zone.dentistId) === String(dentistId) &&
+        isZoneApplicableOnDate(zone, dateString),
+    );
+
 const getAppointmentsOverlappingHour = (dentistId, hour) => {
   const hs = hour * 60,
     he = (hour + 1) * 60;
@@ -842,6 +899,42 @@ const getBreakOverlayStyle = (brk) => {
     left: "0px",
     right: "0px",
     zIndex: 101,
+    pointerEvents: "none",
+  };
+};
+
+const getZoneOverlayStyle = (zone) => {
+  const startMins = timeToMinutes(zone.startTime);
+  const endMins = timeToMinutes(zone.endTime);
+  const clampedStart = Math.max(startMins, WORK_START.value * 60);
+  const clampedEnd = Math.min(endMins, WORK_END.value * 60);
+  if (!Number.isFinite(startMins) || !Number.isFinite(endMins) || clampedEnd <= clampedStart) {
+    return { display: "none" };
+  }
+
+  const topPx = minsToOverlayPx(clampedStart);
+  const bottomPx = minsToOverlayPx(clampedEnd);
+  const heightPx = bottomPx - topPx;
+  const color = zone.color || "#0061FB";
+  const background =
+    zone.displayType === "border"
+      ? "transparent"
+      : `${color}22`;
+  const border =
+    zone.displayType === "background"
+      ? "none"
+      : `2px solid ${color}`;
+
+  return {
+    position: "absolute",
+    top: `${topPx}px`,
+    height: `${heightPx}px`,
+    left: "4px",
+    right: "4px",
+    borderRadius: "10px",
+    backgroundColor: background,
+    border,
+    zIndex: 8,
     pointerEvents: "none",
   };
 };
@@ -1689,6 +1782,33 @@ const onResizeEnd = () => {};
   border-radius: 12px;
   font-size: 10px;
   font-weight: 500;
+  white-space: nowrap;
+}
+
+.zone-overlay {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  border-radius: 10px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 8px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.zone-overlay-week {
+  left: 4px;
+  right: 4px;
+}
+.zone-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.2;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  overflow: hidden;
   white-space: nowrap;
 }
 

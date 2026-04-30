@@ -101,6 +101,7 @@ import { ClinicalNoteTemplateVersion } from "./diary/clinicalNoteTemplateVersion
 import { ConsentFormTemplate } from "./diary/consentFormTemplate";
 import { ConsentFormDocument } from "./diary/consentFormDocument";
 import { ConsentFormSignatureAudit } from "./diary/consentFormSignatureAudit";
+import { DiaryZone } from "./diary/diaryZones";
 // Organisation dictionary
 import { OrganisationTreatment } from "./organisations/organisationTreatments";
 import { CrmLeadTreatment } from "./crm/leadTreatments";
@@ -321,6 +322,14 @@ ConsentFormSignatureAudit.belongsTo(Organisation, { foreignKey: 'organisationId'
 ConsentFormSignatureAudit.belongsTo(User, { foreignKey: 'performedBy', as: 'performedByUser', onDelete: 'SET NULL' });
 ConsentFormDocument.hasMany(ConsentFormSignatureAudit, { foreignKey: 'documentId', as: 'signatureAudit', onDelete: 'CASCADE', hooks: true });
 User.hasMany(ConsentFormSignatureAudit, { foreignKey: 'performedBy', as: 'signatureAuditTrail', onDelete: 'SET NULL' });
+
+// Diary Zones Associations
+DiaryZone.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+DiaryZone.belongsTo(User, { foreignKey: 'dentistId', as: 'dentist', onDelete: 'CASCADE', hooks: true });
+DiaryZone.belongsTo(User, { foreignKey: 'createdBy', as: 'creator', onDelete: 'SET NULL' });
+DiaryZone.belongsTo(User, { foreignKey: 'updatedBy', as: 'updater', onDelete: 'SET NULL' });
+Organisation.hasMany(DiaryZone, { foreignKey: 'organisationId', as: 'zones', onDelete: 'CASCADE', hooks: true });
+User.hasMany(DiaryZone, { foreignKey: 'dentistId', as: 'diaryZones', onDelete: 'CASCADE', hooks: true });
 
 // OrganisationTreatment
 OrganisationTreatment.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
@@ -758,6 +767,7 @@ export {
   ConsentFormTemplate,
   ConsentFormDocument,
   ConsentFormSignatureAudit,
+  DiaryZone,
   OrganisationTreatment,
   DictionaryScript,
   OrganisationScript,

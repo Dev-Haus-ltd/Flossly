@@ -757,9 +757,12 @@ function formatTime(value) {
   if (!value) return "";
   const d = value instanceof Date ? value : new Date(value);
   if (isNaN(d)) return "";
-  const h = String(d.getHours()).padStart(2, "0");
-  const m = String(d.getMinutes()).padStart(2, "0");
-  return `${h}:${m}`;
+
+  return d.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true, 
+  });
 }
 
 const onUserCellChange = async (evt, targetUser, targetDay) => {

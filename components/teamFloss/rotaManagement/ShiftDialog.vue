@@ -132,6 +132,9 @@
               <v-select
                 v-model="form.startDate"
                 :items="timeOptions"
+                  item-title="title"
+  item-value="value"
+
                 variant="solo"
                 flat
                 placeholder="Select"
@@ -147,6 +150,9 @@
               <v-select
                 v-model="form.endDate"
                 :items="endTimeOptions"
+                  item-title="title"
+  item-value="value"
+
                 variant="solo"
                 flat
                 placeholder="Select"
@@ -404,10 +410,20 @@ const dentistOptions = computed(() => {
   const dentistUsers = dentist.map((el) => el.user).filter(Boolean);
   return dentistUsers;
 });
+const formatTo12Hour = (hour, minute) => {
+  const period = hour >= 12 ? "PM" : "AM";
+  const h = hour % 12 || 12;
+  return `${String(h).padStart(2, "0")}:${minute} ${period}`;
+};
+
 const timeOptions = Array.from({ length: 48 }, (_, i) => {
   const h = Math.floor(i / 2);
   const m = i % 2 === 0 ? "00" : "30";
-  return `${String(h).padStart(2, "0")}:${m}`;
+
+  return {
+    title: formatTo12Hour(h, m), // UI me show hoga
+    value: `${String(h).padStart(2, "0")}:${m}`, // backend ke liye same HH:mm
+  };
 });
 
 const toMinutes = (time) => {
@@ -438,15 +454,16 @@ const isEndTimeValid = (end) => {
   
   let diff = toMinutes(end) - toMinutes(startTimeStr);
   if (diff < 0) diff += 24 * 60;
-  return diff >= 240; // 4 hours = 240 mins
+  return diff > 0; // 4 hours = 240 mins
 };
 
 const endTimeOptions = computed(() => {
   if (!form.value.startDate) return timeOptions;
+
   return timeOptions.map((t) => ({
-    title: t,
-    value: t,
-    props: { disabled: !isEndTimeValid(t) },
+    title: t.title,
+    value: t.value,
+    props: { disabled: !isEndTimeValid(t.value) },
   }));
 });
 const nurseOptions = computed(() => {

@@ -8,3 +8,6 @@ ALTER TABLE "Organisations"
     "saturday": { "startTime": "09:00", "endTime": "17:00" },
     "sunday": { "startTime": "09:00", "endTime": "17:00" }
   }'::jsonb;
+
+ALTER TABLE "Organisations"
+ADD COLUMN "nonWorkingDays" JSONB DEFAULT '[]';

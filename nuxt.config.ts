@@ -3,9 +3,11 @@ import vuetify from "vite-plugin-vuetify";
 
 export default defineNuxtConfig({
   compatibilityDate: "2026-04-14",
+
   alias: {
     "@shared": resolve(__dirname, "shared"),
   },
+
   routeRules: {
     '/form/**': {
       headers: {
@@ -14,13 +16,16 @@ export default defineNuxtConfig({
       },
     },
   },
+
   router: {
     prefetchLinks: true,
   },
+
   experimental: {
     payloadExtraction: true,
     renderJsonPayloads: true,
   },
+
   runtimeConfig: {
     public: {
       BASE_URL: process.env.NUXT_PUBLIC_BASE_URL || process.env.BASE_URL,
@@ -119,6 +124,7 @@ export default defineNuxtConfig({
     DB_PORT: process.env.NUXT_DB_PORT || process.env.DB_PORT,
     DB_SCHEMA: process.env.NUXT_DB_SCHEMA || process.env.DB_SCHEMA,
   },
+
   modules: [
     async (options, nuxt) => {
       nuxt.hooks.hook("vite:extendConfig", (config) =>
@@ -131,6 +137,7 @@ export default defineNuxtConfig({
     "@vite-pwa/nuxt",
     // "vue-social-sharing/nuxt"
   ],
+
   pwa: {
     registerType: "autoUpdate",
     manifest: {
@@ -185,9 +192,11 @@ export default defineNuxtConfig({
       enabled: false,
     },
   },
+
   build: {
     transpile: ["v-phone-input"],
   },
+
   css: [
     "vuetify/lib/styles/main.sass",
     "@/assets/css/fonts.css",
@@ -195,6 +204,7 @@ export default defineNuxtConfig({
     "v-phone-input/styles",
     "flag-icons/css/flag-icons.min.css",
   ],
+
   // Add loading indicator for page transitions
   loading: {
     color: '#0061FB',
@@ -202,6 +212,7 @@ export default defineNuxtConfig({
     continuous: true,
     duration: 3000
   },
+
   app: {
     head: {
       title: "Flossly",
@@ -282,17 +293,21 @@ export default defineNuxtConfig({
       }
     },
   },
+
   imports: {
     dirs: ["./stores"],
   },
+
   pinia: {
     autoImports: ["defineStore", "acceptHMRUpdate"],
   },
+
   nitro: {
     externals: {
       inline: ['xlsx', '@anthropic-ai/sdk'],
     },
   },
+
   vue: {
     compilerOptions: {
       // Treat registered web components as custom elements during SSR/component resolution.
@@ -302,13 +317,19 @@ export default defineNuxtConfig({
         tag === "lottie-player",
     },
   },
+
   vite: {
     ssr: {
       noExternal: ["vuetify", "v-phone-input", "@anthropic-ai/sdk"], // add the vuetify vite plugin
     },
   },
+
   devServer: {
     port: 3000,
     host: "0.0.0.0",
+  },
+
+  devtools: {
+    enabled: true,
   },
 });

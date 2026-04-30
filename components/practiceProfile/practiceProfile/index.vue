@@ -234,33 +234,37 @@
                       </v-chip>
                     </div>
                     
-                    <div class="time-controls">
-                      <div class="time-input-group">
+                    <div class="time-controls" :class="{ 'disabled-controls': isNonWorkingDay(workingDaysKeys[index]) }">
+                      <div class="time-input-group" :class="{ 'disabled': isNonWorkingDay(workingDaysKeys[index]) }">
                         <input
                           type="time"
                           :value="organisation.workingTimings[workingDaysKeys[index]].startTime"
+                          :disabled="isNonWorkingDay(workingDaysKeys[index])"
                           @input="updateStartTime(workingDaysKeys[index], $event.target.value)"
                           class="time-input"
                           :class="{ 'time-changed': isTimeChanged(workingDaysKeys[index], 'start') }"
+                          :title="isNonWorkingDay(workingDaysKeys[index]) ? 'This day is marked as non-working' : ''"
                         />
                       </div>
                       
                       <span class="time-separator">to</span>
                       
-                      <div class="time-input-group">
+                      <div class="time-input-group" :class="{ 'disabled': isNonWorkingDay(workingDaysKeys[index]) }">
                         <input
                           type="time"
                           :value="organisation.workingTimings[workingDaysKeys[index]].endTime"
+                          :disabled="isNonWorkingDay(workingDaysKeys[index])"
                           @input="updateEndTime(workingDaysKeys[index], $event.target.value)"
                           class="time-input"
                           :class="{ 'time-changed': isTimeChanged(workingDaysKeys[index], 'end') }"
+                          :title="isNonWorkingDay(workingDaysKeys[index]) ? 'This day is marked as non-working' : ''"
                         />
                       </div>
                     </div>
                     
                     <div class="row-actions">
                       <v-btn
-                        v-if="!isDefaultTime(workingDaysKeys[index])"
+                        v-if="!isDefaultTime(workingDaysKeys[index]) && !isNonWorkingDay(workingDaysKeys[index])"
                         icon="mdi-close-circle"
                         size="small"
                         variant="text"
@@ -560,6 +564,10 @@ const isTimeChanged = (dayKey, type) => {
 };
 
 const hasTimeChanges = (dayKey) => {
+  // Non-working days should not show as having changes
+  if (isNonWorkingDay(dayKey)) {
+    return false;
+  }
   return isTimeChanged(dayKey, 'start') || isTimeChanged(dayKey, 'end');
 };
 
@@ -577,11 +585,27 @@ const isNonWorkingDay = (dayKey) => {
 };
 
 const updateStartTime = (dayKey, value) => {
+  // Prevent updates for non-working days
+  if (isNonWorkingDay(dayKey)) {
+    mainStore.setSnackbar({
+      title: 'Cannot update working hours for non-working days',
+      type: 'warning',
+    });
+    return;
+  }
   organisation.workingTimings[dayKey].startTime = value;
   markWorkingHoursDirty();
 };
 
 const updateEndTime = (dayKey, value) => {
+  // Prevent updates for non-working days
+  if (isNonWorkingDay(dayKey)) {
+    mainStore.setSnackbar({
+      title: 'Cannot update working hours for non-working days',
+      type: 'warning',
+    });
+    return;
+  }
   organisation.workingTimings[dayKey].endTime = value;
   markWorkingHoursDirty();
 };
@@ -745,6 +769,20 @@ const updateOrgDetails = () => {
           title: res?.data?.message || 'Organisation updated successfully',
           type: 'success',
         });
+        
+        // Update local organisation object with response data to sync frontend state
+        if (res.data) {
+          // Merge response data into local organisation reactive object
+          Object.keys(res.data).forEach((key) => {
+            if (key in organisation) {
+              organisation[key] = res.data[key];
+            }
+          });
+          
+          // Also update mainStore with latest organisation data
+          mainStore.organisation = res.data;
+        }
+        
         // Reset dirty fields after successful update
         Object.keys(dirtyFields).forEach((key) => delete dirtyFields[key]);
         // Update original data to reflect new state
@@ -768,6 +806,39 @@ onMounted(() => {
   getPracticeManagers();
   initializeOriginalData();
 });
+
+// Watch for prop changes to sync practice details
+watch(
+  () => props.practiceDetails,
+  (newPracticeDetails) => {
+    if (newPracticeDetails && newPracticeDetails.id) {
+      // Sync prop changes into local organisation object
+      Object.keys(newPracticeDetails).forEach((key) => {
+        if (key === 'name') {
+          organisation.fullName = newPracticeDetails.name;
+        } else if (key === 'automationPlaceholders' && newPracticeDetails[key]) {
+          Object.assign(automationPlaceholders, newPracticeDetails[key]);
+        } else if (key in organisation) {
+          organisation[key] = newPracticeDetails[key];
+        }
+      });
+      // Reinitialize original data since props have changed
+      initializeOriginalData();
+    }
+  },
+  { deep: true }
+);
+
+// Watch for changes to non-working days
+watch(
+  () => organisation.nonWorkingDays,
+  (newNonWorkingDays) => {
+    // When a day is marked as non-working, its hours shouldn't be editable
+    // This is a UI-level enforcement; backend will also validate
+    markDirty('nonWorkingDays');
+  },
+  { deep: true }
+);
 </script>
 
 <style scoped>
@@ -916,6 +987,11 @@ onMounted(() => {
   gap: 12px;
 }
 
+.time-controls.disabled-controls {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 .time-input-group {
   display: flex;
   align-items: center;
@@ -930,6 +1006,13 @@ onMounted(() => {
 .time-input-group:hover {
   border-color: #213536;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.time-input-group.disabled {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .time-icon {
@@ -947,9 +1030,19 @@ onMounted(() => {
   cursor: pointer;
 }
 
+.time-input:disabled {
+  color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .time-input.time-changed {
   color: #d97706;
   font-weight: 500;
+}
+
+.time-input.time-changed:disabled {
+  color: #9ca3af;
 }
 
 .time-input::-webkit-calendar-picker-indicator {
