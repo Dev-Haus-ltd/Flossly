@@ -187,7 +187,7 @@
               <!-- inquiry_days: days number + date picker -->
               <template v-if="triggerForm.triggerType === 'inquiry_days'">
                 <v-col cols="12" sm="6">
-                  <div class="trig-field-label">Days after enquiry</div>
+                  <div class="trig-field-label">Days after {{ resolvedLeadId ? 'activation' : 'enquiry' }}</div>
                   <v-text-field
                     v-model="triggerForm.triggerDays"
                     type="number"
@@ -631,7 +631,10 @@ const filteredRows = computed(() => {
     const t = filterType.value.toLowerCase()
     result = result.filter(r => String(r.type || 'email').toLowerCase() === t)
   }
-  return result
+  return result.map((row) => ({
+    ...row,
+    sending: row?.trigger ? formatLeadAwareTriggerPreview(row.trigger) : row?.sending,
+  }))
 })
 
 const clearFilters = () => {
@@ -780,7 +783,7 @@ const buildTriggerFromForm = () => {
 const triggerPreviewText = computed(() => {
   const nextTrigger = buildTriggerFromForm()
   if (nextTrigger?.type !== 'send_now') {
-    return formatCrmTriggerPreview(nextTrigger)
+    return formatLeadAwareTriggerPreview(nextTrigger)
   }
   const channel = String(triggerEditingRow.value?.type || 'Email').toLowerCase()
   if (channel === 'whatsapp') {
@@ -852,6 +855,15 @@ const resolvedLeadId = computed(() => {
   const id = props.leadId
   return id ? Number(id) : null
 })
+
+const formatLeadAwareTriggerPreview = (trigger = {}) => {
+  if (resolvedLeadId.value && trigger?.type === 'inquiry_days') {
+    const days = Number(trigger?.days || 0)
+    if (days === 0) return 'Immediately when automation is activated'
+    return `${days} day${days === 1 ? '' : 's'} after activation`
+  }
+  return formatCrmTriggerPreview(trigger)
+}
 
 const buildPayload = (row) => {
   const payload = {
@@ -981,11 +993,11 @@ const toggleAutomationGroup = async (card, val) => {
   }
 }
 
-const loadRows = async () => {
+const loadRows = async ({ force = false } = {}) => {
   try {
     let apiItems = []
     if (resolvedLeadId.value) {
-      await crmStore.fetchLeadAutomations(resolvedLeadId.value, { force: true })
+      await crmStore.fetchLeadAutomations(resolvedLeadId.value, { force })
       apiItems = crmStore.automationRowsCache[Number(resolvedLeadId.value)] || []
     } else {
       const res = await crmStore.listAutomation()
@@ -1001,26 +1013,39 @@ const loadRows = async () => {
   } catch {}
 }
 
-const loadGroups = async () => {
+const loadGroups = async ({ force = false } = {}) => {
   if (!props.useGroupsApi || (Array.isArray(props.groups) && props.groups.length)) return
-  await crmStore.fetchAutomationGroups()
+  await crmStore.fetchAutomationGroups({ force })
 }
 
-const refresh = async ({ skipGroups = false } = {}) => {
-  const tasks = [loadRows()]
-  if (!skipGroups) tasks.push(loadGroups())
+const refresh = async ({ skipGroups = false, forceGroups = false, forceRows = false } = {}) => {
+  const tasks = [loadRows({ force: forceRows })]
+  if (!skipGroups) tasks.push(loadGroups({ force: forceGroups }))
   await Promise.all(tasks)
 }
 
 defineExpose({ refresh })
 
+const onAutomationsUpdated = async () => {
+  await refresh({ forceGroups: true, forceRows: true })
+}
+
 onMounted(async () => {
-  await refresh()
+  await refresh({ forceGroups: true, forceRows: true })
+  if (typeof window !== 'undefined') {
+    window.addEventListener('crm-automations-updated', onAutomationsUpdated)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('crm-automations-updated', onAutomationsUpdated)
+  }
 })
 
 watch(resolvedLeadId, () => {
   clearAutomationSelection()
-  refresh()
+  refresh({ forceRows: true })
 })
 
 // Keep local rows in sync with the store cache so any external write
@@ -1416,7 +1441,7 @@ const saveTrigger = async () => {
       return
     }
     selectedRow.trigger = nextTrigger
-    selectedRow.sending = formatCrmTriggerPreview(nextTrigger)
+    selectedRow.sending = formatLeadAwareTriggerPreview(nextTrigger)
     if (isSendNow) {
       // "Send Now" should dispatch immediately, so ensure row is enabled.
       selectedRow.enabled = true

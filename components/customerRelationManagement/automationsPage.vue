@@ -297,6 +297,10 @@ const handleAIAutomationsCreated = async () => {
   await refreshAll()
 }
 
+const onAutomationsUpdated = async () => {
+  await refreshAll()
+}
+
 onMounted(async () => {
   if (!isPrivileged.value) {
     mainStore.setSnackbar({
@@ -306,7 +310,16 @@ onMounted(async () => {
     router.push('/crm')
     return
   }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('crm-automations-updated', onAutomationsUpdated)
+  }
   await refreshAll()
+})
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('crm-automations-updated', onAutomationsUpdated)
+  }
 })
 </script>
 

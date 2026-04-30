@@ -419,6 +419,7 @@
             <v-tabs-window-item value="treatment">
               <div class="pa-6">
                 <CustomerRelationManagementTreatmentIntrest
+                  v-if="tab === 'treatment'"
                   :selectedTreatment="selectedTreatment"
                   @save="onTreatmentSave"
                 />
@@ -428,6 +429,7 @@
             <v-tabs-window-item value="communication">
               <div class="pa-6">
                 <CustomerRelationManagementCommunicationLog
+                  v-if="tab === 'communication'"
                   :lead-id="selectedLead?.id"
                   :initialNotes="[]"
                   :initialPreferences="commPrefs"
@@ -443,6 +445,7 @@
             <v-tabs-window-item value="whatsapp">
               <div class="pa-6">
                 <CustomerRelationManagementChatTimeline
+                  v-if="tab === 'whatsapp'"
                   :lead-id="selectedLead?.id"
                   :lead-name="displayLeadName"
                   :lead-avatar="selectedLead?.photo"
@@ -456,6 +459,8 @@
             <v-tabs-window-item value="automation">
               <div class="pa-6">
                 <CustomerRelationManagementAutomation
+                  v-if="tab === 'automation'"
+                  :key="`automation-${selectedLead?.id || 'none'}`"
                   :lead-id="selectedLead?.id"
                   :lead="selectedLead"
                   :include-defaults="true"
@@ -471,6 +476,8 @@
             <v-tabs-window-item value="my-automations">
               <div class="pa-6">
                 <CustomerRelationManagementAutomation
+                  v-if="tab === 'my-automations'"
+                  :key="`my-automations-${selectedLead?.id || 'none'}`"
                   :lead-id="selectedLead?.id"
                   :lead="selectedLead"
                   :include-defaults="false"
@@ -574,7 +581,6 @@
 <script setup>
 import { formatDateOnly, formatDateTime } from "@/lib/dateFormatter";
 import { getLeadDisplayName } from "@/lib/normalizers/lead";
-import { crmAutomationDefaults } from '@shared/defaults/crmAutomationDefaults'
 import { useCrmStore } from '@/stores/crm'
 import { useMainStore } from '@/stores/index'
 import CustomerRelationManagementChatTimeline from "@/components/customerRelationManagement/chatTimeline.vue";
@@ -676,10 +682,6 @@ const loadWhatsAppAvailability = async () => {
   }
 }
 
-onMounted(async () => {
-  loadWhatsAppAvailability()
-  loadAutoReplySettings()
-})
 const assignedUsers = computed(() => {
   const list = props.selectedLead?.assigned || [];
   return list
@@ -696,6 +698,8 @@ const automationLogLoading = ref(false)
 const automationLogTotal = ref(0)
 const automationLogPage = ref(1)
 const automationLogItemsPerPage = ref(25)
+const treatmentLoadedLeadId = ref(null)
+const communicationLoadedLeadId = ref(null)
 const automationLogHeaders = [
   { title: 'Type', key: 'type', sortable: false },
   { title: 'Automation', key: 'name', sortable: false },
@@ -733,64 +737,95 @@ const onAutomationLogLimitChange = (limit) => {
   if (props.selectedLead?.id) loadAutomationLog(props.selectedLead.id)
 }
 
-const automationRows = ref([])
-const automationLoading = ref(false)
-const loadLeadAutomations = async (leadId) => {
-  if (!leadId || automationLoading.value) return
-  automationLoading.value = true
+const loadLeadTreatment = async (leadId, { force = false } = {}) => {
+  if (!leadId) return
+  if (!force && treatmentLoadedLeadId.value === Number(leadId)) return
   try {
-    const res = await crmStore.listAutomation(leadId)
-    const apiItems = Array.isArray(res?.data) ? res.data : []
-    automationRows.value = apiItems.length ? apiItems : crmAutomationDefaults
-  } catch (e) {
-    automationRows.value = crmAutomationDefaults
-  } finally {
-    automationLoading.value = false
+    const res = await crmStore.getLeadTreatment(leadId)
+    if (res && res.code === 0) {
+      selectedTreatment.value = res.data || {}
+      treatmentLoadedLeadId.value = Number(leadId)
+    }
+  } catch {}
+}
+
+const loadLeadCommunicationPrefs = async (leadId, { force = false } = {}) => {
+  if (!leadId) return
+  if (!force && communicationLoadedLeadId.value === Number(leadId)) return
+  try {
+    const comm = await crmStore.getLeadCommunication(leadId)
+    if (comm && comm.code === 0) {
+      commPrefs.value = comm.data || {}
+      communicationLoadedLeadId.value = Number(leadId)
+    }
+  } catch {}
+}
+
+const refreshLeadAutomationState = async ({ forceRows = false } = {}) => {
+  const leadId = Number(props.selectedLead?.id || 0)
+  if (!leadId) return
+  if (forceRows) {
+    await crmStore.fetchLeadAutomations(leadId, { force: true })
+  }
+  if (tab.value === 'automation-log') {
+    await loadAutomationLog(leadId)
   }
 }
 
-const automationItemNames = computed(() =>
-  (automationRows.value || [])
-    .filter((row) => row?.enabled)
-    .map((row) => row?.name || row?.key || 'Automation')
-)
-
-const automationItemDisplay = computed(() => ({
-  visible: automationItemNames.value.slice(0, 3),
-  overflow: automationItemNames.value.slice(3),
-}))
-
-const truncateAutomationName = (name, max = 20) => {
-  const safe = String(name || '').trim()
-  if (!safe) return ''
-  if (safe.length <= max) return safe
-  return `${safe.slice(0, Math.max(0, max - 3))}...`
+const onAutomationsUpdated = async (event) => {
+  const leadId = Number(props.selectedLead?.id || 0)
+  if (!leadId) return
+  const updatedLeadIds = Array.isArray(event?.detail?.leadIds)
+    ? event.detail.leadIds.map((id) => Number(id || 0)).filter(Boolean)
+    : []
+  const groupsChanged = event?.detail?.groupsChanged === true
+  if (!groupsChanged && updatedLeadIds.length && !updatedLeadIds.includes(leadId)) return
+  await refreshLeadAutomationState({ forceRows: true })
 }
 
+onMounted(async () => {
+  loadWhatsAppAvailability()
+  loadAutoReplySettings()
+  if (typeof window !== 'undefined') {
+    window.addEventListener('crm-automations-updated', onAutomationsUpdated)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('crm-automations-updated', onAutomationsUpdated)
+  }
+})
+
 watch(
-  () => props.selectedLead,
+  () => props.selectedLead?.id,
   async (lead) => {
-    if (!lead?.id) return
+    if (!lead) return
     automationLogRows.value = []
-    try {
-      const res = await crmStore.getLeadTreatment(lead.id)
-      if (res && res.code === 0) selectedTreatment.value = res.data || {}
-    } catch (e) {}
-    try {
-      const comm = await crmStore.getLeadCommunication(lead.id)
-      if (comm && comm.code === 0) commPrefs.value = comm.data || {}
-    } catch (e) {}
-    try {
-      await loadLeadAutomations(lead.id)
-    } catch (e) {}
+    selectedTreatment.value = {}
+    commPrefs.value = {}
+    pendingPrefs.value = null
+    treatmentLoadedLeadId.value = null
+    communicationLoadedLeadId.value = null
+    await refreshLeadAutomationState({ forceRows: true })
+    if (tab.value === 'treatment') await loadLeadTreatment(lead)
+    if (tab.value === 'communication') await loadLeadCommunicationPrefs(lead)
   },
   { immediate: true }
 )
 
-watch(tab, (val) => {
-  if (val === 'automation-log' && props.selectedLead?.id) {
+watch(tab, async (val) => {
+  const leadId = Number(props.selectedLead?.id || 0)
+  if (!leadId) return
+  if (val === 'treatment') {
+    await loadLeadTreatment(leadId)
+  }
+  if (val === 'communication') {
+    await loadLeadCommunicationPrefs(leadId)
+  }
+  if (val === 'automation-log') {
     automationLogPage.value = 1
-    loadAutomationLog(props.selectedLead.id)
+    loadAutomationLog(leadId)
   }
 })
 
