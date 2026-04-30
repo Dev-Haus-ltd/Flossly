@@ -515,7 +515,11 @@ const handleSubmit = async () => {
   
   isLoading.value = true;
   try {
-    const payload = { ...form.value };
+const payload = {
+  ...form.value,
+  startDate: form.value.startDate,
+  endDate: form.value.endDate,
+};
     // Clean up payload
     payload.title = payload.title.trim();
     emit("save", payload);

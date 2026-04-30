@@ -334,6 +334,8 @@
 
 <script setup>
 import { ref, computed, reactive, onMounted, onUnmounted, nextTick } from "vue";
+import { useRoute } from "vue-router";
+
 import AppointmentCard from "@/components/diary/calendar/AppointmentCard.vue";
 import {
   clinicMinutesFromTime,
@@ -367,7 +369,7 @@ const emit = defineEmits([
 ]);
 
 const router = useRouter();
-
+const route = useRoute();
 // ─── Constants ────────────────────────────────────────────────────────────────
 // WORK_START and WORK_END are now computed properties based on dentist schedules (see Derived section)
 // FALLBACK values if no schedule is available
@@ -535,8 +537,11 @@ const formatTo12Hour = (time) => {
 };
 
 // ─── Derived ──────────────────────────────────────────────────────────────────
-const activeDate = computed(() => normDate(props.date));
-
+// const activeDate = computed(() => normDate(props.date));
+console.log("routeQuery",route.query.date)
+const activeDate = computed(() => {
+  return route.query.date || normDate(props.date);
+});
 /**
  * Calculate actual working hours from visible dentists' schedules
  * Returns { startHour, endHour } based on availability data

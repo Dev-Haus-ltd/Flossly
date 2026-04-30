@@ -120,7 +120,7 @@
                     :src="expandIcon"
                     alt="expand"
                     class="ml-2 expand-icon"
-                    @click="navigateToCalendar"
+                    @click="navigateToCalendar(item)"
                   />
                 </div>
               </td>
@@ -415,22 +415,23 @@ const handleZoneSave = async (zone) => {
     if (zone.id) {
       await zonesStore.updateZone(zone);
       mainStore.setSnackbar({
-        message: "Zone updated successfully",
-        color: "success",
+        title: "Zone updated successfully",
+        type: "success",
       });
     } else {
       await zonesStore.createZone(zone);
       mainStore.setSnackbar({
-        message: "Zone created successfully",
-        color: "success",
+        title: "Zone created successfully",
+        type: "success",
+
       });
     }
     await zonesStore.fetchZones();
     closeModal();
   } catch (err) {
     mainStore.setSnackbar({
-      message: err?.message || "Failed to save zone",
-      color: "error",
+      title: "Failed to save zone",
+      type: "error",
     });
   }
 };
@@ -457,22 +458,28 @@ const confirmDelete = async () => {
     await zonesStore.deleteZone(deleteDialog.value.zoneId);
     await zonesStore.fetchZones();
     mainStore.setSnackbar({
-      message: "Zone deleted successfully",
-      color: "success",
+      title: "Zone deleted successfully",
+      type: "success",
     });
     closeDeleteDialog();
   } catch (err) {
     mainStore.setSnackbar({
-      message: err?.message || "Failed to delete zone",
-      color: "error",
+      title: "Failed to delete zone",
+      type: "error",
     });
   } finally {
     deleteDialog.value.loading = false;
   }
 };
 
-const navigateToCalendar = () => {
-  router.push("/diary/calendar");
+const navigateToCalendar = (zone) => {
+ router.push({
+    path: "/diary/calendar",
+    query: {
+      date: zone.startDate, 
+      
+    },
+  });
 };
 
 const clearSearch = () => {
@@ -497,8 +504,6 @@ onMounted(async () => {
 </script>
 
 <style scoped lang="scss">
-.zones-wrapper {
-}
 
 .cust-border {
   border-bottom: 1px solid #e5e7eb;

@@ -1277,6 +1277,14 @@ watch(
   },
   { deep: true }
 );
+
+// Watch date changes and update route query
+watch(date, (newDate) => {
+  const newDateStr = dateToLocalYMD(newDate);
+  if (route.query.date !== newDateStr) {
+    router.replace({ query: { ...route.query, date: newDateStr } });
+  }
+});
 </script>
 
 <style scoped lang="scss">
