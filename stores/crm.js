@@ -75,6 +75,45 @@ export const useCrmStore = defineStore("crmStore", {
       this._resetAutomationState();
       this.automationCacheOrgId = currentOrgId;
     },
+    _normalizeAutomationLeadIds(leadIds = []) {
+      return [...new Set((Array.isArray(leadIds) ? leadIds : [leadIds])
+        .map((id) => Number(id || 0))
+        .filter(Boolean))];
+    },
+    _clearAutomationLeadCaches(leadIds = []) {
+      const ids = this._normalizeAutomationLeadIds(leadIds);
+      if (!ids.length) {
+        this.automationRowsCache = {};
+        this.automationLoadingIds = {};
+        this.automationDirtyLeadIds = {};
+        return;
+      }
+      ids.forEach((id) => {
+        delete this.automationRowsCache[id];
+        delete this.automationLoadingIds[id];
+        delete this.automationDirtyLeadIds[id];
+      });
+    },
+    _notifyAutomationUpdate({ groupsChanged = false, leadIds = [] } = {}) {
+      this._ensureAutomationOrgScope();
+      const normalizedLeadIds = this._normalizeAutomationLeadIds(leadIds);
+      this._clearAutomationLeadCaches(groupsChanged ? [] : normalizedLeadIds);
+      if (groupsChanged) {
+        this.automationGroupRows = [];
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('crm-automations-updated', {
+          detail: {
+            groupsChanged,
+            leadIds: normalizedLeadIds,
+            refreshedAt: Date.now(),
+          },
+        }));
+        if (groupsChanged) {
+          window.dispatchEvent(new CustomEvent('crm-automation-groups-updated'));
+        }
+      }
+    },
     _isCurrentAnalyticsOrg(orgId) {
       if (!orgId) return true;
       const { user } = useUser();
@@ -204,27 +243,60 @@ export const useCrmStore = defineStore("crmStore", {
 
     // Automation
     listAutomation(leadId) { return this._wrap(() => crmService.listAutomation(leadId)); },
-    saveAutomation(payload) { return this._wrap(() => crmService.saveAutomation(payload)); },
-    saveAutomationBatch(payload) { return this._wrap(() => crmService.saveAutomationBatch(payload)); },
+    async saveAutomation(payload) {
+      const res = await this._wrap(() => crmService.saveAutomation(payload));
+      if (res?.code === 0) {
+        this._notifyAutomationUpdate({
+          groupsChanged: !payload?.leadId,
+          leadIds: payload?.leadId ? [payload.leadId] : [],
+        });
+      }
+      return res;
+    },
+    async saveAutomationBatch(payload) {
+      const res = await this._wrap(() => crmService.saveAutomationBatch(payload));
+      if (res?.code === 0) {
+        const items = Array.isArray(payload?.items) ? payload.items : [];
+        const leadIds = items.map((item) => item?.leadId);
+        const groupsChanged = items.some((item) => !item?.leadId);
+        this._notifyAutomationUpdate({ groupsChanged, leadIds });
+      }
+      return res;
+    },
     getAutomationSendNowStatus(params = {}) { return crmService.getAutomationSendNowStatus(params); },
-    resetAutomationOverride(payload) { return this._wrap(() => crmService.resetAutomationOverride(payload)); },
-    deleteAutomation(payload) { return this._wrap(() => crmService.deleteAutomation(payload)); },
-    bulkUploadAutomations(payload) { return this._wrap(() => crmService.bulkUploadAutomations(payload)); },
-    generateAutomationsWithAI(payload) { return this._wrap(() => crmService.generateAutomationsWithAI(payload)); },
+    async resetAutomationOverride(payload) {
+      const res = await this._wrap(() => crmService.resetAutomationOverride(payload));
+      if (res?.code === 0) {
+        this._notifyAutomationUpdate({
+          leadIds: payload?.leadId ? [payload.leadId] : [],
+        });
+      }
+      return res;
+    },
+    async deleteAutomation(payload) {
+      const res = await this._wrap(() => crmService.deleteAutomation(payload));
+      if (res?.code === 0) this._notifyAutomationUpdate({ groupsChanged: true });
+      return res;
+    },
+    async bulkUploadAutomations(payload) {
+      const res = await this._wrap(() => crmService.bulkUploadAutomations(payload));
+      if (res?.code === 0) this._notifyAutomationUpdate({ groupsChanged: true });
+      return res;
+    },
+    async generateAutomationsWithAI(payload) {
+      const res = await this._wrap(() => crmService.generateAutomationsWithAI(payload));
+      if (res?.code === 0) this._notifyAutomationUpdate({ groupsChanged: true });
+      return res;
+    },
     listAutomationGroups() { return this._wrap(() => crmService.listAutomationGroups()); },
-    generateAutomationsWithAI(payload) { return this._wrap(() => crmService.generateAutomationsWithAI(payload)); },
     async saveAutomationGroup(payload) {
       const res = await this._wrap(() => crmService.saveAutomationGroup(payload));
-      if (res?.code === 0 && typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('crm-automation-groups-updated'));
-      }
+      if (res?.code === 0) this._notifyAutomationUpdate({ groupsChanged: true });
       return res;
     },
     async deleteAutomationGroup(payload) {
       const res = await this._wrap(() => crmService.deleteAutomationGroup(payload));
-      if (res?.code === 0 && typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('crm-automation-groups-updated'));
-      }
+      if (res?.code === 0) this._notifyAutomationUpdate({ groupsChanged: true });
       return res;
     },
 
@@ -277,17 +349,15 @@ export const useCrmStore = defineStore("crmStore", {
       this._ensureAutomationOrgScope();
       const id = Number(leadId);
       if (!id || !this.automationDirtyLeadIds[id]) return;
-      delete this.automationDirtyLeadIds[id];
-      delete this.automationRowsCache[id];
-      await this.fetchLeadAutomations(id);
+      this._clearAutomationLeadCaches([id]);
+      await this.fetchLeadAutomations(id, { force: true });
     },
     async invalidateLeadAutomations(leadId) {
       this._ensureAutomationOrgScope();
       const id = Number(leadId);
       if (!id) return;
-      delete this.automationDirtyLeadIds[id];
-      delete this.automationRowsCache[id];
-      await this.fetchLeadAutomations(id);
+      this._clearAutomationLeadCaches([id]);
+      await this.fetchLeadAutomations(id, { force: true });
     },
 
     getLeadAutomationLog(leadId, params = {}) { return this._wrap(() => crmService.getLeadAutomationLog(leadId, params)); },

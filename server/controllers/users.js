@@ -8,6 +8,14 @@ import {
   UserLeaveHistory,
   UserOrganisation,
   UserPreference,
+  DiaryAppointment,
+  DiaryNote,
+  DiaryPatientForm,
+  MetaPage,
+  MetaUserToken,
+  MetaWhatsAppConfig,
+  WhapiChannelConfig,
+  ChatbotConfig,
 } from "../models";
 import { Op } from "sequelize";
 import DB from "../utils/db";
@@ -815,16 +823,29 @@ export const deleteUser = async (event) => {
       await transaction.commit();
       return success("User removed from organization successfully");
     } else {
-      const user = await User.findByPk(userId, { transaction });
-      
-      if (!user) {
-        throw createError({
-          statusCode: 404,
-          statusMessage: "User not found",
-        });
+      const userExists = await User.count({ where: { id: userId }, transaction });
+      if (!userExists) {
+        throw createError({ statusCode: 404, statusMessage: "User not found" });
       }
 
-      await user.destroy({ transaction });
+      // Null-out nullable FKs that reference this user
+      await Organisation.update(
+        { managerId: null },
+        { where: { managerId: userId }, transaction }
+      );
+
+      // Explicitly delete records with NOT NULL FKs pointing to Users
+      // (DB constraints lack CASCADE; use model methods so schema is applied automatically)
+      await DiaryAppointment.destroy({ where: { dentistId: userId }, transaction });
+      await DiaryNote.destroy({ where: { dentistId: userId }, transaction });
+      await DiaryPatientForm.destroy({ where: { createdBy: userId }, transaction });
+      await MetaPage.destroy({ where: { userId }, transaction });
+      await MetaUserToken.destroy({ where: { userId }, transaction });
+      await MetaWhatsAppConfig.destroy({ where: { userId }, transaction });
+      await WhapiChannelConfig.destroy({ where: { userId }, transaction });
+      await ChatbotConfig.destroy({ where: { userId }, transaction });
+
+      await User.destroy({ where: { id: userId }, transaction });
       await transaction.commit();
       return success("User deleted successfully");
     }

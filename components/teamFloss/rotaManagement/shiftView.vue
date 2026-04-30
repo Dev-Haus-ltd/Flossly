@@ -119,12 +119,20 @@
           class="day-col shift-cell"
           @click="addShift(user, day)"
         >
-          <div
-            v-for="(shift, i) in getShifts(user, day.date)"
-            :key="shift.id"
-            class="w-100 mx-auto"
-            :style="{ marginTop: i > 0 ? '10px' : '', maxWidth: '190px' }"
+          <draggable
+            :list="getShifts(user, day.date)"
+            group="user-shifts"
+            item-key="id"
+            :disabled="!isManager"
+            ghost-class="drag-ghost"
+            class="w-100 drag-container"
+            @change="(evt) => onUserCellChange(evt, user, day)"
           >
+            <template #item="{ element: shift, index: i }">
+              <div
+                class="w-100 mx-auto"
+                :style="{ marginTop: i > 0 ? '10px' : '', maxWidth: '190px' }"
+              >
             <!-- Hover menu wrapping the chip -->
             <v-menu open-on-hover location="bottom" :z-index="5" :attach="true">
               <template #activator="{ props }">
@@ -259,7 +267,9 @@
                 </div>
               </v-list>
             </v-menu>
-          </div>
+              </div>
+            </template>
+          </draggable>
         </div>
 
         <!-- Weekly total per user -->
@@ -296,12 +306,20 @@
           class="day-col shift-cell"
           @click="addSurgeryShift(surg, day)"
         >
-          <div
-            v-for="(shift, i) in getSurgeryShifts(surg.id, day.date)"
-            :key="shift.id"
-            class="w-100 mx-auto"
-            :style="{ marginTop: i > 0 ? '10px' : '', maxWidth: '190px' }"
+          <draggable
+            :list="getSurgeryShifts(surg.id, day.date)"
+            group="surgery-shifts"
+            item-key="id"
+            :disabled="!isManager"
+            ghost-class="drag-ghost"
+            class="w-100 drag-container"
+            @change="(evt) => onSurgeryCellChange(evt, surg, day)"
           >
+            <template #item="{ element: shift, index: i }">
+              <div
+                class="w-100 mx-auto"
+                :style="{ marginTop: i > 0 ? '10px' : '', maxWidth: '190px' }"
+              >
             <!-- Hover menu wrapping the chip -->
             <v-menu open-on-hover location="bottom" :z-index="5" :attach="true">
               <template #activator="{ props }">
@@ -437,7 +455,9 @@
                 </div>
               </v-list>
             </v-menu>
-          </div>
+              </div>
+            </template>
+          </draggable>
         </div>
 
         <!-- Weekly total per user -->
@@ -522,6 +542,7 @@
 const deleteDialog = reactive({ open: false, loading: false, shift: null });
 const clearDialog = reactive({ open: false, loading: false, shift: null });
 import { differenceInCalendarDays, addDays, parseISO, format } from "date-fns";
+import draggable from 'vuedraggable';
 const { isManager } = useUser();
 const { shifts, rota, users, selectedView } = defineProps({
   shifts: Array,
@@ -530,6 +551,9 @@ const { shifts, rota, users, selectedView } = defineProps({
   selectedView: Number,
 });
 const emit = defineEmits(["onAddShift", "updateShifts", "onAddUser", "onOpenRoomManagement"]);
+
+const localShifts = ref([...shifts]);
+watch(() => shifts, (v) => { localShifts.value = [...v]; }, { deep: true });
 
 const mainStore = useMainStore();
 const rotaStore = useRotaStore();
@@ -621,13 +645,13 @@ const gridStyle = computed(() => ({
 // Helpers
 const getShifts = (user, date) => {
   if (user.isTempUser) {
-   return shifts.filter(
+   return localShifts.value.filter(
     (s) =>
       s.locumUserId === user.id &&
       format(s.startDate, "yyyy-MM-dd") === format(date, "yyyy-MM-dd")
   );
   } else {
-   return shifts.filter(
+   return localShifts.value.filter(
     (s) =>
       s.userId === user?.user.id &&
       format(s.startDate, "yyyy-MM-dd") === format(date, "yyyy-MM-dd")
@@ -637,7 +661,7 @@ const getShifts = (user, date) => {
 }
  
 const getSurgeryShifts = (surgId, date) =>
-  shifts.filter(
+  localShifts.value.filter(
     (s) =>
       s.surgeryId === surgId &&
       format(s.startDate, "yyyy-MM-dd") === format(date, "yyyy-MM-dd")
@@ -737,6 +761,95 @@ function formatTime(value) {
   const m = String(d.getMinutes()).padStart(2, "0");
   return `${h}:${m}`;
 }
+
+const onUserCellChange = async (evt, targetUser, targetDay) => {
+  if (!evt.added) return;
+
+  const shift = evt.added.element;
+  const origStart = new Date(shift.startDate);
+  const origEnd = new Date(shift.endDate);
+  const durationMs = origEnd - origStart;
+
+  const d = targetDay.date;
+  const newStart = new Date(origStart);
+  newStart.setFullYear(d.getFullYear(), d.getMonth(), d.getDate());
+  const newEnd = new Date(newStart.getTime() + durationMs);
+
+  const newUserId = targetUser.isTempUser ? null : targetUser.user.id;
+  const newLocumUserId = targetUser.isTempUser ? targetUser.id : null;
+
+  const idx = localShifts.value.findIndex((s) => s.id === shift.id);
+  if (idx !== -1) {
+    localShifts.value[idx] = {
+      ...localShifts.value[idx],
+      startDate: newStart,
+      endDate: newEnd,
+      userId: newUserId,
+      locumUserId: newLocumUserId,
+    };
+  }
+
+  try {
+    const res = await rotaStore.updateShift({
+      id: shift.id,
+      startDate: newStart.toISOString(),
+      endDate: newEnd.toISOString(),
+      userId: newUserId,
+      locumUserId: newLocumUserId,
+    });
+    if (res.code === 0) {
+      mainStore.setSnackbar({ title: 'Shift moved successfully', type: 'success' });
+      emit('updateShifts', rota);
+    } else {
+      mainStore.setSnackbar({ title: res.message || 'Failed to move shift', type: 'error' });
+      emit('updateShifts', rota);
+    }
+  } catch {
+    emit('updateShifts', rota);
+  }
+};
+
+const onSurgeryCellChange = async (evt, targetSurg, targetDay) => {
+  if (!evt.added) return;
+
+  const shift = evt.added.element;
+  const origStart = new Date(shift.startDate);
+  const origEnd = new Date(shift.endDate);
+  const durationMs = origEnd - origStart;
+
+  const d = targetDay.date;
+  const newStart = new Date(origStart);
+  newStart.setFullYear(d.getFullYear(), d.getMonth(), d.getDate());
+  const newEnd = new Date(newStart.getTime() + durationMs);
+
+  const idx = localShifts.value.findIndex((s) => s.id === shift.id);
+  if (idx !== -1) {
+    localShifts.value[idx] = {
+      ...localShifts.value[idx],
+      startDate: newStart,
+      endDate: newEnd,
+      surgeryId: targetSurg.id,
+    };
+  }
+
+  try {
+    const res = await rotaStore.updateShift({
+      id: shift.id,
+      startDate: newStart.toISOString(),
+      endDate: newEnd.toISOString(),
+      surgeryId: targetSurg.id,
+    });
+    if (res.code === 0) {
+      mainStore.setSnackbar({ title: 'Shift moved successfully', type: 'success' });
+      emit('updateShifts', rota);
+    } else {
+      mainStore.setSnackbar({ title: res.message || 'Failed to move shift', type: 'error' });
+      emit('updateShifts', rota);
+    }
+  } catch {
+    emit('updateShifts', rota);
+  }
+};
 
 const clearShift = async (shift) => {
   try {
@@ -1018,11 +1131,19 @@ const removeStaff = async (user) => {
   height: 50px;
 }
 .add-locum-staff-btn {
-  
+
   font-weight: 400;
   font-style: normal;
   font-size: 14px;
   border: 1px solid #3adf8d;
   height: 40px;
+}
+.drag-ghost {
+  opacity: 0.4;
+  background: #e8f5ff;
+  border-radius: 12px;
+}
+.drag-container {
+  min-height: 20px;
 }
 </style>

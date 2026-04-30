@@ -202,9 +202,6 @@ export default defineNuxtConfig({
       link: [
         // Favicon
         { rel: "icon", type: "image/png", href: "/Logoicon2.svg" },
-        // PWA manifest
-        { rel: "manifest", href: "/manifest.webmanifest" },
-
       { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon-180x180.png" },
       { rel: "apple-touch-icon", sizes: "152x152", href: "/apple-touch-icon-152x152.png" },
       { rel: "apple-touch-icon", sizes: "120x120", href: "/apple-touch-icon-120x120.png" },

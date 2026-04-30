@@ -1237,31 +1237,48 @@ const resolvedAutomationGroups = computed(() =>
   crmStore.automationGroupRows.length ? crmStore.automationGroupRows : crmAutomationGroups
 );
 
-const loadLeadAutomations = (leadId) => crmStore.fetchLeadAutomations(leadId);
+const loadLeadAutomations = (leadId, { force = false } = {}) => crmStore.fetchLeadAutomations(leadId, { force });
 
 const onAutomationMenuOpen = async (lead) => {
   if (!lead?.id) return;
-  await Promise.all([crmStore.fetchAutomationGroups(), crmStore.fetchLeadAutomations(lead.id)]);
+  await Promise.all([
+    crmStore.fetchAutomationGroups({ force: true }),
+    crmStore.fetchLeadAutomations(lead.id, { force: true }),
+  ]);
 };
 
 const _onAutomationGroupsUpdated = () => crmStore.fetchAutomationGroups({ force: true });
+const _onAutomationsUpdated = (event) => prefetchVisibleLeadAutomations({
+  force: true,
+  groupsChanged: event?.detail?.groupsChanged === true,
+  leadIds: Array.isArray(event?.detail?.leadIds) ? event.detail.leadIds : [],
+});
 
 onMounted(() => {
   if (typeof window === 'undefined') return;
   crmStore.fetchAutomationGroups();
   window.addEventListener('crm-automation-groups-updated', _onAutomationGroupsUpdated);
+  window.addEventListener('crm-automations-updated', _onAutomationsUpdated);
 });
 
 onBeforeUnmount(() => {
   if (typeof window === 'undefined') return;
   window.removeEventListener('crm-automation-groups-updated', _onAutomationGroupsUpdated);
+  window.removeEventListener('crm-automations-updated', _onAutomationsUpdated);
 });
 
-const prefetchVisibleLeadAutomations = async () => {
-  const ids = [...new Set(allVisibleLeads.value.map((lead) => Number(lead?.id || 0)).filter(Boolean))];
+const prefetchVisibleLeadAutomations = async ({ force = false, groupsChanged = false, leadIds = [] } = {}) => {
+  const visibleIds = [...new Set(allVisibleLeads.value.map((lead) => Number(lead?.id || 0)).filter(Boolean))];
+  if (!visibleIds.length) return;
+  const normalizedLeadIds = [...new Set((Array.isArray(leadIds) ? leadIds : [])
+    .map((id) => Number(id || 0))
+    .filter(Boolean))];
+  const ids = groupsChanged || !normalizedLeadIds.length
+    ? visibleIds
+    : visibleIds.filter((id) => normalizedLeadIds.includes(id));
   if (!ids.length) return;
-  await crmStore.fetchAutomationGroups();
-  await Promise.all(ids.map((leadId) => crmStore.fetchLeadAutomations(leadId)));
+  await crmStore.fetchAutomationGroups({ force: force || groupsChanged });
+  await Promise.all(ids.map((leadId) => crmStore.fetchLeadAutomations(leadId, { force })));
 };
 
 watch(
@@ -1360,7 +1377,7 @@ const buildAutomationPayload = (row, leadId, groupKey) => {
 const toggleLeadGroup = async (lead, group, enabled) => {
   const leadId = lead?.id;
   if (!leadId || !group) return;
-  await crmStore.fetchLeadAutomations(leadId);
+  await crmStore.fetchLeadAutomations(leadId, { force: true });
 
   const currentRows = crmStore.automationRowsCache[Number(leadId)] || [];
   const keys = group?.templateKeys || [];
@@ -1526,7 +1543,7 @@ const onActionClick = (key) => {
     bulkAutomationsTab.value = 'automation'
     showBulkAutomationsDialog.value = true
     selectedLeads.value.forEach(lead => {
-      if (lead?.id) crmStore.fetchLeadAutomations(lead.id)
+      if (lead?.id) crmStore.fetchLeadAutomations(lead.id, { force: true })
     })
   }
   else if (key === 'delete') confirmDelete.value = true;
