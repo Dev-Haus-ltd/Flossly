@@ -636,14 +636,11 @@ export const updateShift = async (event) => {
         where: {
           rotaId: shift.rotaId,
           id: { [Op.ne]: id },
+          isDeleted: false,
           [Op.or]: conflictConditions,
           [Op.and]: [
-            {
-              [Op.or]: [
-                { startDate: { [Op.lt]: finalEndDate } },
-                { endDate: { [Op.gt]: finalStartDate } }
-              ]
-            }
+            { startDate: { [Op.lt]: finalEndDate } },
+            { endDate: { [Op.gt]: finalStartDate } }
           ]
         }
       });
