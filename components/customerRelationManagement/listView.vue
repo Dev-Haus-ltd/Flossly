@@ -593,115 +593,53 @@
       @close="handleLeadDialogClose"
     />
 
-    <v-dialog v-model="showCompose" max-width="900px">
-      <v-card class="rounded-lg">
-        <div class="d-flex justify-space-between align-center px-4 py-3">
-          <div>
-            <h5 class="mb-1 modal-title">Compose mail</h5>
-            <div class="text-caption text-medium-emphasis">{{ compose.recipients.length }} recipient(s)</div>
+    <v-dialog v-model="showCompose" max-width="860px">
+      <v-card class="rounded-lg compose-dialog-card">
+        <!-- Header -->
+        <div class="d-flex justify-space-between align-center px-5 py-3" style="background:#fafafa;border-bottom:1px solid #f0f0f0">
+          <div class="d-flex align-center" style="gap:10px">
+            <v-icon color="primary" size="20">mdi-email-fast-outline</v-icon>
+            <div>
+              <div class="font-weight-semibold" style="font-size:14px;line-height:1.2">Compose Email</div>
+              <div class="text-caption text-medium-emphasis">{{ compose.recipients.length }} recipient(s)</div>
+            </div>
           </div>
-          <v-btn icon @click="showCompose = false" flat><v-icon>mdi-close</v-icon></v-btn>
+          <v-btn icon variant="text" size="small" @click="showCompose = false"><v-icon size="18">mdi-close</v-icon></v-btn>
         </div>
-        <v-divider />
 
-        <div class="px-4 pt-4">
-          <div class="text-subtitle-2 text-grey-darken-1 mb-1">To</div>
-          <div class="d-flex align-center flex-wrap" style="gap: 6px">
-            <v-chip size="small" v-for="(e,i) in compose.recipients" :key="i" color="primary" variant="tonal">{{ e }}</v-chip>
+        <div class="compose-dialog-body">
+          <!-- Recipients -->
+          <div class="px-5 pt-3 pb-2 d-flex align-center flex-wrap" style="gap:6px;border-bottom:1px solid #f5f5f5">
+            <span class="text-caption text-grey-darken-1 mr-1" style="min-width:20px">To:</span>
+            <v-chip v-for="(e,i) in compose.recipients" :key="i" size="x-small" color="primary" variant="tonal">{{ e }}</v-chip>
+          </div>
+
+          <!-- Subject -->
+          <div class="px-5 pt-3 pb-3" style="border-bottom:1px solid #f5f5f5">
+            <label class="fld-lbl d-inline-block mb-1">Subject</label>
+            <v-text-field
+              v-model="compose.subject"
+              placeholder="Subject"
+              density="compact"
+              variant="solo"
+              class="input-bordered mb-0"
+              bg-color="white"
+              hide-details
+              flat
+            />
+          </div>
+
+          <!-- Body -->
+          <div class="px-5 pt-3 pb-4">
+            <CrmEmailTemplateEditor v-model="compose.html" />
           </div>
         </div>
 
-        <div class="px-4 pt-4">
-          <v-text-field v-model="compose.subject" single-line label="Subject" density="compact" variant="outlined" hide-details />
-        </div>
-
-        <!-- Mode toggle + library loader -->
-        <div class="px-4 pt-3 d-flex align-center gap-2 flex-wrap">
-          <v-btn-toggle v-model="composeRenderMode" density="compact" variant="outlined" divided mandatory>
-            <v-btn value="wrapped" size="small">
-              <v-icon size="14" class="mr-1">mdi-email-outline</v-icon>Flossly Builder
-            </v-btn>
-            <v-btn value="builder" size="small">
-              <v-icon size="14" class="mr-1">mdi-view-dashboard-outline</v-icon>Visual Builder
-            </v-btn>
-            <v-btn value="raw_html" size="small">
-              <v-icon size="14" class="mr-1">mdi-brush-outline</v-icon>Custom HTML
-            </v-btn>
-          </v-btn-toggle>
-          <v-btn size="small" variant="tonal" color="primary" prepend-icon="mdi-folder-open-outline" @click="showTemplatePicker = true">
-            Load from library
+        <!-- Footer -->
+        <div class="px-5 pb-4 d-flex justify-end compose-dialog-footer" style="border-top:1px solid #f0f0f0;padding-top:12px">
+          <v-btn :loading="composeLoading" flat color="primary" style="border-radius:8px;min-width:90px" @click="sendCompose">
+            <v-icon size="16" class="mr-1">mdi-send-outline</v-icon>Send
           </v-btn>
-          <v-spacer />
-          <v-btn
-            v-if="composeEmailTemplateId"
-            size="small"
-            variant="tonal"
-            color="grey-darken-1"
-            prepend-icon="mdi-content-save-edit-outline"
-            :loading="savingTemplate"
-            @click="updateLibraryTemplate"
-          >
-            Update template
-          </v-btn>
-          <v-btn
-            size="small"
-            variant="tonal"
-            color="success"
-            prepend-icon="mdi-content-save-plus-outline"
-            @click="showSaveTemplate = true"
-          >
-            Save as template
-          </v-btn>
-        </div>
-
-        <div class="px-4 pt-2 pb-4">
-          <div class="text-subtitle-2 text-grey-darken-1 mb-2">Content</div>
-          <CrmEmailTemplateEditor v-model="compose.html" :render-mode="composeRenderMode" />
-        </div>
-
-        <div class="px-4 pb-4 d-flex justify-end">
-          <v-btn :loading="composeLoading" flat color="primary" @click="sendCompose">Send</v-btn>
-        </div>
-      </v-card>
-    </v-dialog>
-
-    <!-- Email Template Picker -->
-    <CrmEmailTemplatePicker
-      v-model="showTemplatePicker"
-      @select="onComposeTemplatePicked"
-      @create="showSaveTemplate = true"
-    />
-
-    <!-- Save as template dialog -->
-    <v-dialog v-model="showSaveTemplate" max-width="440px">
-      <v-card class="rounded-lg">
-        <div class="d-flex justify-space-between align-center px-4 py-3">
-          <h5 class="modal-title">Save as template</h5>
-          <v-btn icon variant="text" @click="showSaveTemplate = false"><v-icon>mdi-close</v-icon></v-btn>
-        </div>
-        <v-divider />
-        <div class="pa-4 d-flex flex-column" style="gap: 14px">
-          <v-text-field
-            v-model="saveTemplateName"
-            label="Template name"
-            density="compact"
-            variant="outlined"
-            hide-details
-            placeholder="e.g. Welcome email"
-          />
-          <v-select
-            v-model="saveTemplateCategory"
-            :items="templateCategories"
-            label="Category (optional)"
-            density="compact"
-            variant="outlined"
-            hide-details
-            clearable
-          />
-        </div>
-        <div class="px-4 pb-4 d-flex justify-end gap-2">
-          <v-btn variant="outlined" @click="showSaveTemplate = false">Cancel</v-btn>
-          <v-btn color="primary" flat :loading="savingTemplate" @click="saveAsLibraryTemplate">Save</v-btn>
         </div>
       </v-card>
     </v-dialog>
@@ -961,7 +899,6 @@
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 import { buildRecipientContext } from '@/lib/crm/previewContext'
 import { applyCrmPlaceholders } from '@/lib/crm/placeholders'
-import emailTemplateService from '@/services/emailTemplateService'
 import { formatDateDDMMYYYY, formatDateTime } from "@/lib/dateFormatter";
 import { formatAssignedUsers, formatTreatmentValue } from "@/lib/misc";
 import { getLeadDisplayName, getLeadEmail, getLeadPhone } from "@/lib/normalizers/lead";
@@ -1846,14 +1783,6 @@ watch(
 // Compose mail dialog
 const showCompose = ref(false)
 const composeLoading = ref(false)
-const composeRenderMode = ref('wrapped')
-const composeEmailTemplateId = ref(null)
-const showTemplatePicker = ref(false)
-const showSaveTemplate = ref(false)
-const saveTemplateName = ref('')
-const saveTemplateCategory = ref(null)
-const savingTemplate = ref(false)
-const templateCategories = ['manual', 'follow_up', 'price_list', 'marketing', 'seasonal']
 let EditorCtor = null
 let Header = null
 let List = null
@@ -1934,57 +1863,8 @@ async function openCompose(actionKey) {
   })
   compose.subject = renderTemplateWithContext(def.subject, ctx, lead)
   compose.html = renderTemplateWithContext(def.html, ctx, lead)
-  composeRenderMode.value = 'wrapped'
-  composeEmailTemplateId.value = null
   showCompose.value = true
 }
-
-const onComposeTemplatePicked = (tpl) => {
-  compose.subject = tpl.subject || compose.subject
-  compose.html = tpl.template || ''
-  composeRenderMode.value = tpl.renderMode || 'wrapped'
-  composeEmailTemplateId.value = tpl.id
-}
-
-const saveAsLibraryTemplate = async () => {
-  const name = (saveTemplateName.value || '').trim()
-  if (!name) return
-  savingTemplate.value = true
-  try {
-    const res = await emailTemplateService.saveEmailTemplate({
-      name,
-      subject: compose.subject,
-      template: compose.html,
-      renderMode: composeRenderMode.value,
-      category: saveTemplateCategory.value || null,
-    })
-    if (res?.code === 0) {
-      composeEmailTemplateId.value = res.data?.id || null
-      showSaveTemplate.value = false
-      mainStore?.setSnackbar?.({ title: 'Template saved to library', type: 'success' })
-    }
-  } catch {}
-  finally { savingTemplate.value = false }
-}
-
-const updateLibraryTemplate = async () => {
-  if (!composeEmailTemplateId.value) return
-  savingTemplate.value = true
-  try {
-    const res = await emailTemplateService.saveEmailTemplate({
-      id: composeEmailTemplateId.value,
-      subject: compose.subject,
-      template: compose.html,
-      renderMode: composeRenderMode.value,
-    })
-    if (res?.code === 0) mainStore?.setSnackbar?.({ title: 'Template updated', type: 'success' })
-  } catch {}
-  finally { savingTemplate.value = false }
-}
-
-watch(() => showSaveTemplate.value, (v) => {
-  if (v) saveTemplateName.value = compose.subject || ''
-})
 
 const openSendPriceCompose = async () => {
   sendPrice.recipients = getSelectedEmails()
@@ -2128,9 +2008,7 @@ async function sendCompose() {
       leadIds,
       subject: resolvedSubject,
       html: resolvedHtml,
-      key: composeEmailTemplateId.value ? undefined : `manual_${compose.key}`,
-      renderMode: composeRenderMode.value,
-      emailTemplateId: composeEmailTemplateId.value || undefined,
+      key: `manual_${compose.key}`,
     })
     if (res && res.code === 0) {
       if (mainStore && mainStore.setSnackbar) mainStore.setSnackbar({ title: `Mail sent to ${res.data?.sent || compose.recipients.length} recipient(s)`, type: 'success' })
@@ -2657,6 +2535,25 @@ const convertSelected = async () => {
   padding: 10px;
   background: #fff;
 }
+.compose-dialog-card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88vh, 820px);
+  overflow: hidden;
+}
+
+.compose-dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  background: #fff;
+}
+
+.compose-dialog-footer {
+  flex-shrink: 0;
+  background: #fff;
+}
+
 .send-price-card {
   border-radius: 18px;
   overflow: hidden;
@@ -2706,6 +2603,20 @@ const convertSelected = async () => {
 .send-price-editor {
   min-height: 140px;
 }
+.fld-lbl {
+  font-weight: 400;
+  font-size: 14px;
+  color: #737373;
+}
+
+.input-bordered :deep(.v-field) {
+  border: 1px solid #dfdfdf !important;
+  border-radius: 8px !important;
+  background-color: white !important;
+  min-height: 40px;
+  font-size: 14px;
+}
+
 .action-item:hover { background-color: #f5f5f5; }
 
 .lead-name-cell-container {

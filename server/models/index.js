@@ -93,7 +93,6 @@ import { CrmAutomationGroup } from "./crm/automationGroups";
 import { CrmAutomationGroupTemplate } from "./crm/automationGroupTemplates";
 import { CrmAutomationDictionaryGroup } from "./crm/crmAutomationDictionaryGroups";
 import { CrmAutomationDictionaryTemplate } from "./crm/crmAutomationDictionaryTemplates";
-import { CrmEmailTemplate } from "./crm/crmEmailTemplates";
 import { PatientAutomationDictionary } from "./patientJourney/patientAutomationDictionary";
 import { PatientAutomationTemplate } from "./patientJourney/patientAutomationTemplates";
 import { OrganisationReferral } from "./organisationReferrals";
@@ -377,14 +376,8 @@ User.hasMany(UserNotification, { foreignKey: 'userId', as: 'notifications', onDe
 CrmLeadAssignee.belongsTo(CrmLead, { foreignKey: 'leadId', as: 'lead', onDelete: 'CASCADE', hooks: true });
 CrmLeadAssignee.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', hooks: true });
 
-Organisation.hasMany(CrmEmailTemplate, { foreignKey: 'organisationId', as: 'crmEmailTemplates' });
-CrmEmailTemplate.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
-CrmEmailTemplate.belongsTo(User, { foreignKey: 'createdBy', as: 'creator', onDelete: 'SET NULL' });
-
 Organisation.hasMany(CrmAutomationTemplate, { foreignKey: 'organisationId', as: 'crmAutomationTemplates' });
 CrmAutomationTemplate.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
-CrmEmailTemplate.hasMany(CrmAutomationTemplate, { foreignKey: 'emailTemplateId', as: 'automations' });
-CrmAutomationTemplate.belongsTo(CrmEmailTemplate, { foreignKey: 'emailTemplateId', as: 'emailTemplate', onDelete: 'SET NULL' });
 
 Organisation.hasMany(CrmAutomationGroup, { foreignKey: 'organisationId', as: 'crmAutomationGroups' });
 CrmAutomationGroup.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
@@ -577,7 +570,6 @@ export {
   CrmAutomationGroupTemplate,
   CrmAutomationDictionaryGroup,
   CrmAutomationDictionaryTemplate,
-  CrmEmailTemplate,
   CrmWhatsAppMessageLog,
   CrmDmConversation,
   CrmDmMessage,

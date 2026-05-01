@@ -411,8 +411,8 @@
     </v-dialog>
 
     <!-- Edit Modal -->
-    <v-dialog v-model="show" max-width="1100px" scrollable>
-      <v-card class="rounded-lg elevation-8">
+    <v-dialog v-model="show" max-width="1100px">
+      <v-card class="rounded-lg elevation-8 automation-edit-card">
         <div class="modal-header">
           <div>
             <h5 class="modal-title">{{ active?.name }}</h5>
@@ -439,82 +439,24 @@
         <div class="modal-body">
           <!-- Editor Section -->
           <div class="editor-section">
-            <div
-              v-if="String(active?.type || 'Email').toLowerCase() !== 'whatsapp'"
-              class="d-flex align-center justify-space-between mb-3"
-            >
-              <div class="text-subtitle-2 font-weight-bold text-grey-darken-2">
-                <v-icon size="18" class="mr-2">mdi-email-edit-outline</v-icon>
-                Email Content
-              </div>
-              <v-chip size="x-small" variant="tonal" color="info">
-                Use [First Name] for personalization
-              </v-chip>
-            </div>
-            <div class="mb-4" v-if="String(active?.type || 'Email').toLowerCase() !== 'whatsapp'">
-              <div class="text-subtitle-2 font-weight-bold text-grey-darken-2 mb-2">
-                <v-icon size="18" class="mr-2">mdi-email-outline</v-icon>
-                Email Subject
+            <template v-if="String(active?.type || 'Email').toLowerCase() !== 'whatsapp'">
+              <div class="d-flex align-center justify-space-between mb-3">
+                <label class="fld-lbl">Subject</label>
+                <v-chip size="x-small" variant="tonal" color="primary">Use [First Name] to personalise</v-chip>
               </div>
               <v-text-field
                 v-model="active.subject"
                 variant="solo"
                 density="compact"
                 hide-details
-                bg-color="#FFFFFF"
+                class="input-bordered mb-4"
+                bg-color="white"
                 flat
                 placeholder="Subject line for this email"
               />
-            </div>
-
-            <!-- Mode toggle + library loader (email only) -->
-            <div
-              v-if="String(active?.type || 'Email').toLowerCase() !== 'whatsapp'"
-              class="d-flex align-center flex-wrap mb-3"
-              style="gap: 8px"
-            >
-              <v-btn-toggle v-model="activeRenderMode" density="compact" variant="outlined" divided mandatory>
-                <v-btn value="wrapped" size="small">
-                  <v-icon size="13" class="mr-1">mdi-email-outline</v-icon>Flossly Builder
-                </v-btn>
-                <v-btn value="builder" size="small">
-                  <v-icon size="13" class="mr-1">mdi-view-dashboard-outline</v-icon>Visual Builder
-                </v-btn>
-                <v-btn value="raw_html" size="small">
-                  <v-icon size="13" class="mr-1">mdi-brush-outline</v-icon>Custom HTML
-                </v-btn>
-              </v-btn-toggle>
-              <v-btn size="small" variant="tonal" color="primary" prepend-icon="mdi-folder-open-outline" @click="showAutomationTemplatePicker = true">
-                Load from library
-              </v-btn>
-              <v-spacer />
-              <v-btn
-                v-if="activeEmailTemplateId"
-                size="x-small"
-                variant="tonal"
-                color="grey-darken-1"
-                prepend-icon="mdi-content-save-edit-outline"
-                :loading="savingAutomationTemplate"
-                @click="updateAutomationLibraryTemplate"
-              >
-                Update template
-              </v-btn>
-              <v-btn
-                size="x-small"
-                variant="tonal"
-                color="success"
-                prepend-icon="mdi-content-save-plus-outline"
-                @click="showAutomationSaveTemplate = true"
-              >
-                Save as template
-              </v-btn>
-            </div>
-
-            <CrmEmailTemplateEditor
-              v-if="String(active?.type || 'Email').toLowerCase() !== 'whatsapp'"
-              v-model="active.template"
-              :render-mode="activeRenderMode"
-            />
+              <div class="text-caption font-weight-medium text-uppercase text-grey-darken-1 mb-2" style="letter-spacing:.06em">Body</div>
+              <CrmEmailTemplateEditor v-model="active.template" />
+            </template>
             <div v-else ref="editorEl" class="editor"></div>
           </div>
         </div>
@@ -546,46 +488,6 @@
       </v-card>
     </v-dialog>
 
-    <!-- Email Template Picker for automation edit -->
-    <CrmEmailTemplatePicker
-      v-model="showAutomationTemplatePicker"
-      @select="onAutomationTemplatePicked"
-      @create="showAutomationSaveTemplate = true"
-    />
-
-    <!-- Save as template dialog for automation -->
-    <v-dialog v-model="showAutomationSaveTemplate" max-width="440px">
-      <v-card class="rounded-lg">
-        <div class="d-flex justify-space-between align-center px-4 py-3">
-          <h5 class="modal-title">Save as template</h5>
-          <v-btn icon variant="text" @click="showAutomationSaveTemplate = false"><v-icon>mdi-close</v-icon></v-btn>
-        </div>
-        <v-divider />
-        <div class="pa-4 d-flex flex-column" style="gap: 14px">
-          <v-text-field
-            v-model="automationSaveTemplateName"
-            label="Template name"
-            density="compact"
-            variant="outlined"
-            hide-details
-            placeholder="e.g. Welcome email"
-          />
-          <v-select
-            v-model="automationSaveTemplateCategory"
-            :items="['manual', 'follow_up', 'marketing', 'seasonal']"
-            label="Category (optional)"
-            density="compact"
-            variant="outlined"
-            hide-details
-            clearable
-          />
-        </div>
-        <div class="px-4 pb-4 d-flex justify-end" style="gap: 8px">
-          <v-btn variant="outlined" @click="showAutomationSaveTemplate = false">Cancel</v-btn>
-          <v-btn color="primary" flat :loading="savingAutomationTemplate" @click="saveAutomationAsLibraryTemplate">Save</v-btn>
-        </div>
-      </v-card>
-    </v-dialog>
   </div>
 </template>
 
@@ -604,7 +506,6 @@ import { isDefaultAutomationGroup, resolveAutomationGroupAuthor } from '@/lib/cr
 import { buildRecipientContext } from '@/lib/crm/previewContext'
 import { applyCrmPlaceholders } from '@/lib/crm/placeholders'
 import { htmlToPlainText } from '@/lib/format/text'
-import emailTemplateService from '@/services/emailTemplateService'
 
 const props = defineProps({
   leadId: { type: [Number, String], default: null },
@@ -955,8 +856,6 @@ const buildPayload = (row) => {
     template: row.template,
     whatsappTemplateName: row.whatsappTemplateName,
     whatsappTemplateLanguage: row.whatsappTemplateLanguage,
-    renderMode: activeRenderMode.value || row.renderMode || 'wrapped',
-    emailTemplateId: activeEmailTemplateId.value || row.emailTemplateId || null,
   }
   if (row.trigger) payload.trigger = row.trigger
   if (row.groupKey || activeAutomation.value?.key) {
@@ -1143,15 +1042,6 @@ let Header = null
 let List = null
 const editorEl = ref(null)
 
-// Email template library state for automation edit dialog
-const activeRenderMode = ref('wrapped')
-const activeEmailTemplateId = ref(null)
-const showAutomationTemplatePicker = ref(false)
-const showAutomationSaveTemplate = ref(false)
-const automationSaveTemplateName = ref('')
-const automationSaveTemplateCategory = ref(null)
-const savingAutomationTemplate = ref(false)
-
 const previewItem = ref(null)
 
 const previewRecipient = computed(() => {
@@ -1165,8 +1055,6 @@ const previewRecipient = computed(() => {
 })
 const openEdit = async (row) => {
   active.value = row
-  activeRenderMode.value = row.renderMode || 'wrapped'
-  activeEmailTemplateId.value = row.emailTemplateId || null
   show.value = true
 
   // WhatsApp type still uses the EditorJS ref for plain text editing
@@ -1195,55 +1083,6 @@ const openEdit = async (row) => {
     })
   }
 }
-
-const onAutomationTemplatePicked = (tpl) => {
-  if (!active.value) return
-  active.value.subject = tpl.subject || active.value.subject
-  active.value.template = tpl.template || ''
-  activeRenderMode.value = tpl.renderMode || 'wrapped'
-  activeEmailTemplateId.value = tpl.id
-}
-
-const saveAutomationAsLibraryTemplate = async () => {
-  if (!active.value) return
-  const name = (automationSaveTemplateName.value || '').trim()
-  if (!name) return
-  savingAutomationTemplate.value = true
-  try {
-    const res = await emailTemplateService.saveEmailTemplate({
-      name,
-      subject: active.value.subject || '',
-      template: active.value.template || '',
-      renderMode: activeRenderMode.value,
-      category: automationSaveTemplateCategory.value || null,
-    })
-    if (res?.code === 0) {
-      activeEmailTemplateId.value = res.data?.id || null
-      showAutomationSaveTemplate.value = false
-      mainStore?.setSnackbar?.({ title: 'Template saved to library', type: 'success' })
-    }
-  } catch {}
-  finally { savingAutomationTemplate.value = false }
-}
-
-const updateAutomationLibraryTemplate = async () => {
-  if (!activeEmailTemplateId.value || !active.value) return
-  savingAutomationTemplate.value = true
-  try {
-    const res = await emailTemplateService.saveEmailTemplate({
-      id: activeEmailTemplateId.value,
-      subject: active.value.subject || '',
-      template: active.value.template || '',
-      renderMode: activeRenderMode.value,
-    })
-    if (res?.code === 0) mainStore?.setSnackbar?.({ title: 'Template updated', type: 'success' })
-  } catch {}
-  finally { savingAutomationTemplate.value = false }
-}
-
-watch(() => showAutomationSaveTemplate.value, (v) => {
-  if (v) automationSaveTemplateName.value = active.value?.subject || active.value?.name || ''
-})
 
 const confirmDeleteAutomation = (row) => {
   if (!row || defaultAutomationKeySet.has(row.key)) return
@@ -1924,10 +1763,10 @@ watch(showGroupDialog, (v) => {
 }
 
 .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 28px;
   background: #fafafa;
-  min-height: 450px;
-  max-height: 70vh;
   overflow-y: auto;
 }
 
@@ -1936,6 +1775,20 @@ watch(showGroupDialog, (v) => {
   padding: 0;
   border-radius: 0;
   border: 0;
+}
+
+.fld-lbl {
+  font-weight: 400;
+  font-size: 14px;
+  color: #737373;
+}
+
+.input-bordered :deep(.v-field) {
+  border: 1px solid #dfdfdf !important;
+  border-radius: 8px !important;
+  background-color: white !important;
+  min-height: 40px;
+  font-size: 14px;
 }
 
 .editor {
@@ -1980,11 +1833,19 @@ watch(showGroupDialog, (v) => {
   gap: 12px;
   padding: 18px 28px;
   background: white;
+  flex-shrink: 0;
 }
 
 .modal-footer--edit {
   justify-content: flex-end;
   padding: 12px 16px;
+}
+
+.automation-edit-card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88vh, 860px);
+  overflow: hidden;
 }
 
 </style>
