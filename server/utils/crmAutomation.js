@@ -1,10 +1,10 @@
 import { crmAutomationDefaults } from "@shared/defaults/crmAutomationDefaults.js";
 import { formatYmd, parseDayOffsetFromText } from "~/lib/misc";
 import { htmlToPlainText } from "~/lib/format/text.js";
-import { template as EMAIL_TEMPLATE } from "./emailTemplate.js";
 import { transporter } from "./nodeMailer.js";
 import { buildLeadContext, renderTokens } from "./tokenRenderer.js";
-import { CrmAutomationTemplate, CrmLead, Organisation, CrmLeadAssignee, User } from "../models/index.js";
+import { applyLayout } from "./crmEmailRenderer.js";
+import { CrmAutomationTemplate, CrmEmailTemplate, CrmLead, Organisation, CrmLeadAssignee, User } from "../models/index.js";
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from "./whatsapp.js";
 import { resolveWhapiConfig } from "./whatsappProvider.js";
 import { sendCrmAutomationSentNotification, sendCrmAutomationFailedNotification } from "./fcmNotification.js";
@@ -73,12 +73,26 @@ export const buildEffectiveCrmTemplates = (lead, templatesByOrg) => {
   return effectiveTemplates;
 };
 
-export const buildCrmEmail = (lead, tpl, org = null) => {
-  const baseSubject = tpl?.subject || tpl?.name || "Message from Flossly";
-  const ctx = buildLeadContext({ lead, org, userName: "Team" });
-  const subject = renderTokens(baseSubject, ctx, { format: "text" });
-  const html = renderTokens(tpl.template || "", ctx, { format: "html" });
-  return { subject, html };
+export const buildCrmEmail = async (lead, tpl, org = null) => {
+  let templateContent = tpl?.template || ''
+  let renderMode = tpl?.renderMode || 'wrapped'
+
+  // If the automation references a library template, load its content and mode
+  if (tpl?.emailTemplateId) {
+    try {
+      const lib = await CrmEmailTemplate.findByPk(Number(tpl.emailTemplateId))
+      if (lib) {
+        templateContent = lib.template || templateContent
+        renderMode = lib.renderMode || renderMode
+      }
+    } catch {}
+  }
+
+  const baseSubject = tpl?.subject || tpl?.name || "Message from Flossly"
+  const ctx = buildLeadContext({ lead, org, userName: "Team" })
+  const subject = renderTokens(baseSubject, ctx, { format: "text" })
+  const html = renderTokens(templateContent, ctx, { format: "html" })
+  return { subject, html, renderMode }
 };
 
 
@@ -123,7 +137,7 @@ export const buildCrmWhatsAppTemplatePayload = (lead, tpl) => {
   };
 };
 
-export const sendCrmAutomationEmail = async (lead, subject, html, automationName = null) => {
+export const sendCrmAutomationEmail = async (lead, subject, html, automationName = null, renderMode = 'wrapped') => {
   if (lead.autoReplyEnabled !== true) return;
   if (lead.autoReplyDisabledUntil && new Date() < new Date(lead.autoReplyDisabledUntil)) return;
   if (lead.autoReplyDisabledUntil && new Date() >= new Date(lead.autoReplyDisabledUntil)) {
@@ -131,15 +145,12 @@ export const sendCrmAutomationEmail = async (lead, subject, html, automationName
     lead.autoReplyDisabledUntil = null;
     await lead.save();
   }
-  const wrapped = EMAIL_TEMPLATE.replaceAll("{subject}", subject).replace(
-    "{content}",
-    html
-  );
+  const finalHtml = applyLayout(html, subject, renderMode)
   await transporter.sendMail({
     to: lead.email,
     from: process.env.MAIL_FROM || "helloflossly@gmail.com",
     subject,
-    html: wrapped,
+    html: finalHtml,
   });
 
   // Send push notification to lead assignees on success
@@ -495,8 +506,8 @@ export const dispatchSendNowAutomationWithOptions = async (orgId, tpl, options =
             summary.skippedMissingRecipient += 1;
             continue;
           }
-          const { subject, html } = buildCrmEmail(lead, tpl, org);
-          await sendCrmAutomationEmail(lead, subject, html, tpl?.name);
+          const { subject, html, renderMode } = await buildCrmEmail(lead, tpl, org);
+          await sendCrmAutomationEmail(lead, subject, html, tpl?.name, renderMode);
           await markCrmSent(lead, raw, sentKey);
           if (wasAlreadySent && forceResend) summary.resent += 1;
           else summary.sent += 1;
@@ -587,8 +598,8 @@ export const sendImmediateCrmAutomationsForLead = async (lead, options = {}) => 
       await markCrmSent(lead, lead.rawData || {}, sentKey);
     } else {
       if (!lead?.email) continue;
-      const { subject, html } = buildCrmEmail(lead, tpl, org);
-      await sendCrmAutomationEmail(lead, subject, html, tpl?.name);
+      const { subject, html, renderMode } = await buildCrmEmail(lead, tpl, org);
+      await sendCrmAutomationEmail(lead, subject, html, tpl?.name, renderMode);
       await markCrmSent(lead, lead.rawData || {}, sentKey);
     }
   }

@@ -10,6 +10,7 @@ const PREFIXES = [
   "/chatbot-attachments/",
   "/chat-attachments/",
   "/meta-creatives/",
+  "/crm-email-assets/",
 ];
 
 export default defineEventHandler(async (event) => {

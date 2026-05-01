@@ -615,13 +615,93 @@
           <v-text-field v-model="compose.subject" single-line label="Subject" density="compact" variant="outlined" hide-details />
         </div>
 
+        <!-- Mode toggle + library loader -->
+        <div class="px-4 pt-3 d-flex align-center gap-2 flex-wrap">
+          <v-btn-toggle v-model="composeRenderMode" density="compact" variant="outlined" divided mandatory>
+            <v-btn value="wrapped" size="small">
+              <v-icon size="14" class="mr-1">mdi-email-outline</v-icon>Flossly Builder
+            </v-btn>
+            <v-btn value="builder" size="small">
+              <v-icon size="14" class="mr-1">mdi-view-dashboard-outline</v-icon>Visual Builder
+            </v-btn>
+            <v-btn value="raw_html" size="small">
+              <v-icon size="14" class="mr-1">mdi-brush-outline</v-icon>Custom HTML
+            </v-btn>
+          </v-btn-toggle>
+          <v-btn size="small" variant="tonal" color="primary" prepend-icon="mdi-folder-open-outline" @click="showTemplatePicker = true">
+            Load from library
+          </v-btn>
+          <v-spacer />
+          <v-btn
+            v-if="composeEmailTemplateId"
+            size="small"
+            variant="tonal"
+            color="grey-darken-1"
+            prepend-icon="mdi-content-save-edit-outline"
+            :loading="savingTemplate"
+            @click="updateLibraryTemplate"
+          >
+            Update template
+          </v-btn>
+          <v-btn
+            size="small"
+            variant="tonal"
+            color="success"
+            prepend-icon="mdi-content-save-plus-outline"
+            @click="showSaveTemplate = true"
+          >
+            Save as template
+          </v-btn>
+        </div>
+
         <div class="px-4 pt-2 pb-4">
           <div class="text-subtitle-2 text-grey-darken-1 mb-2">Content</div>
-          <div ref="composeHolder" class="editor"></div>
+          <CrmEmailTemplateEditor v-model="compose.html" :render-mode="composeRenderMode" />
         </div>
 
         <div class="px-4 pb-4 d-flex justify-end">
           <v-btn :loading="composeLoading" flat color="primary" @click="sendCompose">Send</v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
+
+    <!-- Email Template Picker -->
+    <CrmEmailTemplatePicker
+      v-model="showTemplatePicker"
+      @select="onComposeTemplatePicked"
+      @create="showSaveTemplate = true"
+    />
+
+    <!-- Save as template dialog -->
+    <v-dialog v-model="showSaveTemplate" max-width="440px">
+      <v-card class="rounded-lg">
+        <div class="d-flex justify-space-between align-center px-4 py-3">
+          <h5 class="modal-title">Save as template</h5>
+          <v-btn icon variant="text" @click="showSaveTemplate = false"><v-icon>mdi-close</v-icon></v-btn>
+        </div>
+        <v-divider />
+        <div class="pa-4 d-flex flex-column" style="gap: 14px">
+          <v-text-field
+            v-model="saveTemplateName"
+            label="Template name"
+            density="compact"
+            variant="outlined"
+            hide-details
+            placeholder="e.g. Welcome email"
+          />
+          <v-select
+            v-model="saveTemplateCategory"
+            :items="templateCategories"
+            label="Category (optional)"
+            density="compact"
+            variant="outlined"
+            hide-details
+            clearable
+          />
+        </div>
+        <div class="px-4 pb-4 d-flex justify-end gap-2">
+          <v-btn variant="outlined" @click="showSaveTemplate = false">Cancel</v-btn>
+          <v-btn color="primary" flat :loading="savingTemplate" @click="saveAsLibraryTemplate">Save</v-btn>
         </div>
       </v-card>
     </v-dialog>
@@ -881,6 +961,7 @@
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 import { buildRecipientContext } from '@/lib/crm/previewContext'
 import { applyCrmPlaceholders } from '@/lib/crm/placeholders'
+import emailTemplateService from '@/services/emailTemplateService'
 import { formatDateDDMMYYYY, formatDateTime } from "@/lib/dateFormatter";
 import { formatAssignedUsers, formatTreatmentValue } from "@/lib/misc";
 import { getLeadDisplayName, getLeadEmail, getLeadPhone } from "@/lib/normalizers/lead";
@@ -1762,11 +1843,17 @@ watch(
   { immediate: true }
 );
 
-// Compose mail dialog using Editor.js (client-only)
+// Compose mail dialog
 const showCompose = ref(false)
 const composeLoading = ref(false)
-const composeHolder = ref(null)
-let composeEditor = null
+const composeRenderMode = ref('wrapped')
+const composeEmailTemplateId = ref(null)
+const showTemplatePicker = ref(false)
+const showSaveTemplate = ref(false)
+const saveTemplateName = ref('')
+const saveTemplateCategory = ref(null)
+const savingTemplate = ref(false)
+const templateCategories = ['manual', 'follow_up', 'price_list', 'marketing', 'seasonal']
 let EditorCtor = null
 let Header = null
 let List = null
@@ -1835,7 +1922,6 @@ async function openCompose(actionKey) {
   compose.key = actionKey
   compose.recipients = getSelectedEmails()
   const def = defaultTemplates[actionKey] || defaultTemplates.mail
-  // Personalize subject/body for preview based on selection
   const many = (selectedLeads.value || []).length !== 1
   const lead = many ? null : (selectedLeads.value || [])[0]
   const ctx = buildRecipientContext({
@@ -1848,22 +1934,57 @@ async function openCompose(actionKey) {
   })
   compose.subject = renderTemplateWithContext(def.subject, ctx, lead)
   compose.html = renderTemplateWithContext(def.html, ctx, lead)
+  composeRenderMode.value = 'wrapped'
+  composeEmailTemplateId.value = null
   showCompose.value = true
-  await nextTick()
-  if (!(await ensureEditorModules())) return
-  if (composeEditor) { composeEditor.destroy(); composeEditor = null }
-  composeEditor = new EditorCtor({
-    holder: composeHolder.value,
-    tools: { header: Header, list: List },
-    data: htmlToBlocks(compose.html),
-    async onChange(api) {
-      const saved = await api.saver.save()
-      compose.html = blocksToHtml(saved)
-    }
-  })
 }
 
-watch(() => showCompose.value, (v) => { if (!v && composeEditor) { composeEditor.destroy(); composeEditor = null } })
+const onComposeTemplatePicked = (tpl) => {
+  compose.subject = tpl.subject || compose.subject
+  compose.html = tpl.template || ''
+  composeRenderMode.value = tpl.renderMode || 'wrapped'
+  composeEmailTemplateId.value = tpl.id
+}
+
+const saveAsLibraryTemplate = async () => {
+  const name = (saveTemplateName.value || '').trim()
+  if (!name) return
+  savingTemplate.value = true
+  try {
+    const res = await emailTemplateService.saveEmailTemplate({
+      name,
+      subject: compose.subject,
+      template: compose.html,
+      renderMode: composeRenderMode.value,
+      category: saveTemplateCategory.value || null,
+    })
+    if (res?.code === 0) {
+      composeEmailTemplateId.value = res.data?.id || null
+      showSaveTemplate.value = false
+      mainStore?.setSnackbar?.({ title: 'Template saved to library', type: 'success' })
+    }
+  } catch {}
+  finally { savingTemplate.value = false }
+}
+
+const updateLibraryTemplate = async () => {
+  if (!composeEmailTemplateId.value) return
+  savingTemplate.value = true
+  try {
+    const res = await emailTemplateService.saveEmailTemplate({
+      id: composeEmailTemplateId.value,
+      subject: compose.subject,
+      template: compose.html,
+      renderMode: composeRenderMode.value,
+    })
+    if (res?.code === 0) mainStore?.setSnackbar?.({ title: 'Template updated', type: 'success' })
+  } catch {}
+  finally { savingTemplate.value = false }
+}
+
+watch(() => showSaveTemplate.value, (v) => {
+  if (v) saveTemplateName.value = compose.subject || ''
+})
 
 const openSendPriceCompose = async () => {
   sendPrice.recipients = getSelectedEmails()
@@ -2003,7 +2124,14 @@ async function sendCompose() {
     })
     const resolvedSubject = renderTemplateWithContext(compose.subject, ctx, lead)
     const resolvedHtml = renderTemplateWithContext(compose.html, ctx, lead)
-    const res = await crmStore.sendLeadMail({ leadIds, subject: resolvedSubject, html: resolvedHtml, key: `manual_${compose.key}` })
+    const res = await crmStore.sendLeadMail({
+      leadIds,
+      subject: resolvedSubject,
+      html: resolvedHtml,
+      key: composeEmailTemplateId.value ? undefined : `manual_${compose.key}`,
+      renderMode: composeRenderMode.value,
+      emailTemplateId: composeEmailTemplateId.value || undefined,
+    })
     if (res && res.code === 0) {
       if (mainStore && mainStore.setSnackbar) mainStore.setSnackbar({ title: `Mail sent to ${res.data?.sent || compose.recipients.length} recipient(s)`, type: 'success' })
       showCompose.value = false

@@ -1,6 +1,7 @@
 import { transporter } from "./nodeMailer";
 import { template } from "./emailTemplate";
 import { buildLeadContext, renderTokens } from './tokenRenderer.js'
+import { applyLayout } from './crmEmailRenderer.js'
 import { getS3Object } from './s3.js'
 const config = useRuntimeConfig();
 
@@ -377,7 +378,7 @@ export const sendInvitationEmail = async (data) => {
 // Performs light-weight placeholder replacement and wraps with the app template.
 // Placeholders supported:
 // - [Patient Name], [First Name], [Your Name]
-export const sendLeadBulkEmail = async ({ leads = [], subject, html, from, senderName, attachments = [] }) => {
+export const sendLeadBulkEmail = async ({ leads = [], subject, html, from, senderName, attachments = [], renderMode = 'wrapped' }) => {
   if (!Array.isArray(leads) || !leads.length) return { sent: 0 };
   const fromAddress = from || process.env.MAIL_FROM || "helloflossly@gmail.com";
 
@@ -407,9 +408,7 @@ export const sendLeadBulkEmail = async ({ leads = [], subject, html, from, sende
     const content = renderTokens(html || '', ctx, { format: 'html' })
 
     try {
-      const wrapped = template
-        .replaceAll("{subject}", renderedSubject || "")
-        .replace("{content}", content);
+      const wrapped = applyLayout(content, renderedSubject || '', renderMode)
       await transporter.sendMail({
         to: lead.email,
         from: fromAddress,

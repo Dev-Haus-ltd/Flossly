@@ -1,11 +1,12 @@
 import { Op } from 'sequelize'
 import { parsePhoneNumber } from 'awesome-phonenumber'
-import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, CrmAutomationDictionaryGroup, CrmAutomationDictionaryTemplate, MetaPage, User, UserOrganisation, CrmWhatsAppMessageLog, Organisation } from '../models'
+import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, CrmAutomationDictionaryGroup, CrmAutomationDictionaryTemplate, CrmEmailTemplate, MetaPage, User, UserOrganisation, CrmWhatsAppMessageLog, Organisation } from '../models'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults.js'
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
 import { formatCrmTriggerPreview } from '~/lib/misc'
 import { success, error } from '../utils/response'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
+import { buildPreviewHtml } from '../utils/crmEmailRenderer.js'
 import { sendImmediateCrmAutomationsForLead, dispatchSendNowAutomation, dispatchSendNowAutomationWithOptions, previewSendNowAutomation, inferTriggerFromName } from '../utils/crmAutomation.js'
 import { sendLeadCreatedNotification, sendLeadAssignedNotification, sendLeadUnassignedNotification, sendLeadStatusChangedNotification, sendNotificationToMultipleUsers } from '../utils/fcmNotification.js'
 import { decrypt } from '../utils/crypto'
@@ -1688,6 +1689,8 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
     trigger,
     whatsappTemplateName,
     whatsappTemplateLanguage,
+    renderMode,
+    emailTemplateId,
   } = clean
   if (!key) throw new Error('key required')
 
@@ -1746,6 +1749,8 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
     if (whatsappTemplateName !== undefined) exists.whatsappTemplateName = whatsappTemplateName || null
     if (whatsappTemplateLanguage !== undefined) exists.whatsappTemplateLanguage = whatsappTemplateLanguage || null
     if (trigger !== undefined) exists.trigger = trigger
+    if (renderMode !== undefined) exists.renderMode = ['raw_html','builder'].includes(renderMode) ? renderMode : 'wrapped'
+    if (emailTemplateId !== undefined) exists.emailTemplateId = emailTemplateId ? Number(emailTemplateId) : null
     await exists.save({ transaction })
     return exists
   }
@@ -1762,6 +1767,8 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
     whatsappTemplateName: whatsappTemplateName || null,
     whatsappTemplateLanguage: whatsappTemplateLanguage || null,
     trigger: trigger ?? null,
+    renderMode: ['raw_html','builder'].includes(renderMode) ? renderMode : 'wrapped',
+    emailTemplateId: emailTemplateId ? Number(emailTemplateId) : null,
   }, { transaction })
   return created
 }
@@ -1994,9 +2001,11 @@ export const sendLeadMail = async (event) => {
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
-    const { leadIds = [], subject, html, key, attachments = [], metadata = {} } = payload || {}
+    const { leadIds = [], subject, html, key, attachments = [], metadata = {}, renderMode, emailTemplateId } = payload || {}
     const safeSubject = String(subject || '').trim()
     const safeHtml = typeof html === 'string' ? html : ''
+    const safeRenderMode = ['raw_html','builder'].includes(renderMode) ? renderMode : 'wrapped'
+    const safeEmailTemplateId = emailTemplateId ? Number(emailTemplateId) : null
     if (!safeSubject) return error(400, 'subject required')
     if (!Array.isArray(leadIds) || !leadIds.length) return error(400, 'leadIds required')
     const normalizedAttachments = Array.isArray(attachments)
@@ -2009,8 +2018,8 @@ export const sendLeadMail = async (event) => {
           .filter((item) => item.link)
       : []
 
-    // Optionally fetch a template to persist edits
-    if (key) {
+    // Persist edits back to automation template — skipped when using a library template
+    if (key && !safeEmailTemplateId) {
       const where = { organisationId: Number(orgId), key }
       const existing = await CrmAutomationTemplate.findOne({ where })
       if (existing) {
@@ -2039,6 +2048,7 @@ export const sendLeadMail = async (event) => {
       html: safeHtml,
       senderName: fullName,
       attachments: normalizedAttachments,
+      renderMode: safeRenderMode,
     })
 
     const sentAt = new Date().toISOString()
@@ -2310,6 +2320,173 @@ export const updateLeadAutoReply = async (event) => {
     await lead.save()
 
     return success({ id: lead.id, autoReplyEnabled: lead.autoReplyEnabled })
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+// ─── CRM Email Template Library ────────────────────────────────────────────
+
+export const listEmailTemplates = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const { includeArchived } = getQuery(event) || {}
+    const where = { organisationId: Number(orgId) }
+    if (!includeArchived) where.isArchived = false
+    const rows = await CrmEmailTemplate.findAll({
+      where,
+      order: [['createdAt', 'DESC']],
+    })
+    return success(rows.map((r) => r.toJSON()))
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const saveEmailTemplate = async (event) => {
+  try {
+    const { orgId, id: userId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const { id, name, subject, template, renderMode, category, description, key } = payload || {}
+    if (!name) return error(400, 'name required')
+
+    const safeRenderMode = ['raw_html','builder'].includes(renderMode) ? renderMode : 'wrapped'
+
+    if (id) {
+      const existing = await CrmEmailTemplate.findOne({ where: { id: Number(id), organisationId: Number(orgId) } })
+      if (!existing) return error(404, 'Template not found')
+      if (name !== undefined) existing.name = String(name).trim()
+      if (description !== undefined) existing.description = description || null
+      if (subject !== undefined) existing.subject = subject || null
+      if (template !== undefined) existing.template = template || null
+      if (key !== undefined) existing.key = key || null
+      existing.renderMode = safeRenderMode
+      if (category !== undefined) existing.category = category || null
+      await existing.save()
+      return success(existing.toJSON())
+    }
+
+    const created = await CrmEmailTemplate.create({
+      organisationId: Number(orgId),
+      key: key || null,
+      name: String(name).trim(),
+      description: description || null,
+      subject: subject || null,
+      template: template || null,
+      renderMode: safeRenderMode,
+      category: category || null,
+      isArchived: false,
+      createdBy: userId ? Number(userId) : null,
+    })
+    return success(created.toJSON())
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const archiveEmailTemplate = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const { id } = payload || {}
+    if (!id) return error(400, 'id required')
+    const row = await CrmEmailTemplate.findOne({ where: { id: Number(id), organisationId: Number(orgId) } })
+    if (!row) return error(404, 'Template not found')
+    row.isArchived = true
+    await row.save()
+    return success({ id: row.id, isArchived: true })
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const duplicateEmailTemplate = async (event) => {
+  try {
+    const { orgId, id: userId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const { id } = payload || {}
+    if (!id) return error(400, 'id required')
+    const source = await CrmEmailTemplate.findOne({ where: { id: Number(id), organisationId: Number(orgId) } })
+    if (!source) return error(404, 'Template not found')
+    const copy = await CrmEmailTemplate.create({
+      organisationId: Number(orgId),
+      key: null,
+      name: `Copy of ${source.name}`,
+      description: source.description || null,
+      subject: source.subject || null,
+      template: source.template || null,
+      renderMode: source.renderMode || 'wrapped',
+      category: source.category || null,
+      isArchived: false,
+      createdBy: userId ? Number(userId) : null,
+    })
+    return success(copy.toJSON())
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const previewEmailTemplate = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const { templateId, subject, template, renderMode } = payload || {}
+
+    let finalSubject = String(subject || '')
+    let finalTemplate = String(template || '')
+    let finalRenderMode = ['raw_html','builder'].includes(renderMode) ? renderMode : 'wrapped'
+
+    if (templateId) {
+      const row = await CrmEmailTemplate.findOne({ where: { id: Number(templateId), organisationId: Number(orgId) } })
+      if (!row) return error(404, 'Template not found')
+      finalSubject = finalSubject || row.subject || ''
+      finalTemplate = finalTemplate || row.template || ''
+      finalRenderMode = row.renderMode || 'wrapped'
+    }
+
+    const result = buildPreviewHtml({ subject: finalSubject, template: finalTemplate, renderMode: finalRenderMode })
+    return success(result)
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const uploadEmailAsset = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+
+    const formData = await readMultipartFormData(event)
+    if (!formData?.length) return error(400, 'No file uploaded')
+
+    const filePart = formData.find((p) => p.name === 'file')
+    if (!filePart?.data?.length) return error(400, 'Missing file')
+
+    const originalName = filePart.filename || 'image'
+    const ext = originalName.includes('.') ? originalName.slice(originalName.lastIndexOf('.')) : ''
+    const ALLOWED_EXTS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg']
+    if (ext && !ALLOWED_EXTS.includes(ext.toLowerCase())) return error(400, 'File type not allowed')
+
+    const safeName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`
+    const contentType = filePart.type || 'application/octet-stream'
+
+    const s3Path = await uploadBufferFile({
+      data: filePart.data,
+      filename: safeName,
+      contentType,
+      baseDir: `crm-email-assets/${orgId}`,
+    })
+
+    return success({ src: s3Path, url: s3Path, name: originalName, type: 'image' })
   } catch (e) {
     return error(500, e.message)
   }
