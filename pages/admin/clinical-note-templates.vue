@@ -5,5 +5,5 @@
 </template>
 
 <script setup>
-import TemplateManager from '@/components/clinicalNoteTemplates/TemplateManager.vue'
+import TemplateManager from '@/components/settings/diary/clinicalNoteTemplates/index.vue'
 </script>

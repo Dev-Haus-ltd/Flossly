@@ -305,6 +305,15 @@
             hint="Shown when the lead asks something the bot can't handle"
             persistent-hint
             rows="2"
+            class="mb-4"
+          />
+          <v-textarea
+            v-model="autoReplyConfig.ctaScript"
+            label="CTA reply script (optional)"
+            placeholder="e.g., 1. Ask for their name and best contact number. 2. Let them know a team member will call within 24 hours. 3. If they ask about pricing, explain it depends on their needs and suggest a free consultation..."
+            hint="When a lead replies to your CTA, the bot will follow this script's flow — not word-for-word, but the overall direction"
+            persistent-hint
+            rows="4"
           />
         </v-card-text>
         <v-divider />
@@ -365,7 +374,7 @@ const syncingHistory = ref(false);
 const autoReplyEnabled = ref(false);
 const whatsappAutoReplyEnabled = ref(false);
 const autoReplyLoading = ref(false);
-const autoReplyConfig = ref({ services: "", cta: "", outOfScopeMessage: "Thank you so much! Our team will contact you shortly." });
+const autoReplyConfig = ref({ services: "", cta: "", outOfScopeMessage: "Thank you so much! Our team will contact you shortly.", ctaScript: "" });
 const autoReplyConfigDialog = ref(false);
 const autoReplyConfigLoading = ref(false);
 const conversationAutoReplyEnabled = ref(true);
@@ -566,7 +575,7 @@ const loadAutoReplySettings = async () => {
     if (res?.code === 0) {
       autoReplyEnabled.value = !!res.data?.autoReplyEnabled;
       whatsappAutoReplyEnabled.value = !!res.data?.whatsappAutoReplyEnabled;
-      autoReplyConfig.value = res.data?.autoReplyConfig || { services: "", cta: "", outOfScopeMessage: "Thank you so much! Our team will contact you shortly." };
+      autoReplyConfig.value = res.data?.autoReplyConfig || { services: "", cta: "", outOfScopeMessage: "Thank you so much! Our team will contact you shortly.", ctaScript: "" };
     }
   } catch {}
 };

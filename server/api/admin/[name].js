@@ -32,6 +32,7 @@ import {
   updateClinicalNoteTemplateAdmin,
   getClinicalNoteTemplateVersionsAdmin,
   seedCrmAutomationDictionary,
+  seedConsentFormTemplates,
   listCrmAutomationDictionaryGroups,
   getCrmAutomationDictionaryGroupById,
   createCrmAutomationDictionaryGroup,
@@ -262,6 +263,10 @@ export default defineEventHandler(async (event) => {
 
     case 'getClinicalNoteTemplateVersions':
       return await getClinicalNoteTemplateVersionsAdmin(event);
+
+    // Consent Form Templates
+    case 'seedConsentFormTemplates':
+      return await seedConsentFormTemplates(event);
 
     // CRM Automation Dictionary
     case 'seedCrmAutomationDictionary':

@@ -192,6 +192,68 @@ export const updateOrganisationDetails = async (event) => {
       }
     }
 
+    // Handle non-working days
+    const nonWorkingDaysRaw = firstNonEmpty(fields, 'nonWorkingDays');
+    if (nonWorkingDaysRaw !== undefined) {
+      try {
+        let parsedNonWorkingDays = nonWorkingDaysRaw;
+        if (typeof nonWorkingDaysRaw === 'string') {
+          parsedNonWorkingDays = JSON.parse(nonWorkingDaysRaw);
+        }
+        
+        // Validate structure: should be an array
+        if (!Array.isArray(parsedNonWorkingDays)) {
+          return error(400, 'nonWorkingDays must be an array');
+        }
+        
+        const validNonWorkingDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        for (const day of parsedNonWorkingDays) {
+          if (!validNonWorkingDays.includes(day)) {
+            return error(400, `Invalid non-working day: ${day}. Allowed values: ${validNonWorkingDays.join(', ')}`);
+          }
+        }
+        
+        organisation.nonWorkingDays = parsedNonWorkingDays;
+      } catch (err) {
+        return error(400, 'nonWorkingDays must be valid JSON array with day abbreviations (Mon, Tue, Wed, Thu, Fri, Sat, Sun)');
+      }
+    }
+
+    // Handle working day timings
+    const workingTimingsRaw = firstNonEmpty(fields, 'workingTimings');
+    if (workingTimingsRaw !== undefined) {
+      try {
+        let parsedTimings = workingTimingsRaw;
+        if (typeof workingTimingsRaw === 'string') {
+          parsedTimings = JSON.parse(workingTimingsRaw);
+        }
+        
+        // Validate structure: should have days as keys with startTime and endTime
+        if (!parsedTimings || typeof parsedTimings !== 'object') {
+          return error(400, 'workingTimings must be a valid object');
+        }
+        
+        const validDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        const timeRegex = /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/; // HH:MM format
+        
+        for (const day of validDays) {
+          if (!parsedTimings[day]) {
+            return error(400, `Missing timings for ${day}`);
+          }
+          if (!parsedTimings[day].startTime || !parsedTimings[day].endTime) {
+            return error(400, `startTime and endTime required for ${day}`);
+          }
+          if (!timeRegex.test(parsedTimings[day].startTime) || !timeRegex.test(parsedTimings[day].endTime)) {
+            return error(400, `Invalid time format for ${day}. Use HH:MM format.`);
+          }
+        }
+        
+        organisation.workingTimings = parsedTimings;
+      } catch (err) {
+        return error(400, 'workingTimings must be valid JSON with proper time format (HH:MM)');
+      }
+    }
+
     // Handle logo upload (if provided)
     if (files && files.logo) {
       const logoFile = Array.isArray(files.logo) ? files.logo[0] : files.logo;
@@ -879,16 +941,48 @@ export const updateClinicalNoteTemplate = async (event) => {
     const body = await readBody(event);
     const payload = typeof body === "string" ? parseJsonBody(body) : body;
     if (!payload?.id) return error(400, 'id is required');
-    const template = await ClinicalNoteTemplate.findOne({
-      where: {
-        id: Number(payload.id),
+    const sourceTemplate = await getClinicalTemplateByIdForOrg({
+      id: Number(payload.id),
+      organisationId,
+      includeArchived: true,
+    });
+    let template = sourceTemplate;
+    if (sourceTemplate.scope === 'system') {
+      template = await ClinicalNoteTemplate.findOne({
+        where: {
+          scope: 'organisation',
+          organisationId,
+          type: sourceTemplate.type,
+          [Op.or]: [
+            { sourceTemplateId: sourceTemplate.id },
+            { key: sourceTemplate.key },
+          ],
+        },
+        include: [{ model: ClinicalNoteTemplateVersion, as: 'currentVersion' }],
+      });
+    }
+    const next = sanitizeClinicalNoteTemplatePayload(payload, { existing: template || sourceTemplate, defaultScope: 'organisation' });
+
+    if (!template && sourceTemplate.scope === 'system') {
+      const created = await createClinicalTemplateWithVersion({
         scope: 'organisation',
         organisationId,
-      },
-      include: [{ model: ClinicalNoteTemplateVersion, as: 'currentVersion' }],
-    });
+        type: sourceTemplate.type,
+        category: next.category,
+        key: next.key,
+        title: next.title,
+        content: next.content !== undefined ? next.content : sourceTemplate.currentVersion?.content || '',
+        status: next.status,
+        sourceTemplateId: sourceTemplate.id,
+        sortOrder: next.sortOrder,
+        isDefault: next.isDefault === true,
+        actorUserId: loggedUser?.userId || null,
+        changeNote: next.changeNote || `Customized from ${sourceTemplate.title}`,
+      });
+      return success(serializeClinicalTemplate(created));
+    }
+
     if (!template) return error(404, 'Template not found');
-    const next = sanitizeClinicalNoteTemplatePayload(payload, { existing: template, defaultScope: 'organisation' });
     const updated = await updateClinicalTemplateWithVersion({
       template,
       title: next.title,
@@ -940,15 +1034,50 @@ export const setDefaultClinicalNoteTemplate = async (event) => {
     const body = await readBody(event);
     const payload = typeof body === "string" ? parseJsonBody(body) : body;
     if (!payload?.id) return error(400, 'id is required');
-    const template = await ClinicalNoteTemplate.findOne({
-      where: { id: Number(payload.id), scope: 'organisation', organisationId },
-      include: [{ model: ClinicalNoteTemplateVersion, as: 'currentVersion' }],
+    const sourceTemplate = await getClinicalTemplateByIdForOrg({
+      id: Number(payload.id),
+      organisationId,
+      includeArchived: true,
     });
+    let template = sourceTemplate;
+    if (sourceTemplate.scope === 'system') {
+      template = await ClinicalNoteTemplate.findOne({
+        where: {
+          scope: 'organisation',
+          organisationId,
+          type: sourceTemplate.type,
+          [Op.or]: [
+            { sourceTemplateId: sourceTemplate.id },
+            { key: sourceTemplate.key },
+          ],
+        },
+        include: [{ model: ClinicalNoteTemplateVersion, as: 'currentVersion' }],
+      });
+      if (!template) {
+        template = await createClinicalTemplateWithVersion({
+          scope: 'organisation',
+          organisationId,
+          type: sourceTemplate.type,
+          category: sourceTemplate.category || 'user',
+          key: sourceTemplate.key,
+          title: sourceTemplate.title,
+          content: sourceTemplate.currentVersion?.content || '',
+          status: sourceTemplate.status || 'active',
+          sourceTemplateId: sourceTemplate.id,
+          sortOrder: Number(sourceTemplate.sortOrder || 0),
+          isDefault: payload.isDefault !== false,
+          actorUserId: loggedUser?.userId || null,
+          changeNote: payload?.changeNote ? String(payload.changeNote).trim() : `Customized default from ${sourceTemplate.title}`,
+        });
+        return success(serializeClinicalTemplate(template));
+      }
+    }
     if (!template) return error(404, 'Template not found');
     const updated = await updateClinicalTemplateWithVersion({
       template,
       title: template.title,
       key: template.key,
+      category: template.category,
       status: template.status,
       sortOrder: Number(template.sortOrder || 0),
       isDefault: payload.isDefault !== false,

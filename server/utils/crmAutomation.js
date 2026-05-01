@@ -15,6 +15,29 @@ const crmTriggersByKey = new Map(
     .filter((entry) => entry[1])
 );
 
+export const inferTriggerFromName = (name) => {
+  const lower = String(name || '').toLowerCase()
+  if (lower.includes('birthday')) {
+    if (lower.includes('month')) return { type: 'birthday_month_start', offsetDays: 0 }
+    return { type: 'birthday_offset', days: 0 }
+  }
+  if (lower.includes('black friday')) return { type: 'black_friday', offsetDays: 0 }
+  if (lower.includes('anniversary')) return { type: 'practice_anniversary', offsetDays: 0 }
+  const daysAfterMatch = lower.match(/(\d+)\s*days?\s*(after|post|follow)/)
+  if (daysAfterMatch) return { type: 'inquiry_days', days: Number(daysAfterMatch[1]) }
+  const followDaysMatch = lower.match(/follow[- ]?up.*?(\d+)|(\d+)[- ]?day.*?follow/)
+  if (followDaysMatch) {
+    const days = Number(followDaysMatch[1] || followDaysMatch[2])
+    return { type: 'inquiry_days', days: Number.isFinite(days) ? days : 3 }
+  }
+  const dayNumberMatch = lower.match(/\bday\s*(\d+)\b|\b(\d+)\s*day\b/)
+  if (dayNumberMatch) {
+    const days = Number(dayNumberMatch[1] || dayNumberMatch[2])
+    if (Number.isFinite(days)) return { type: 'inquiry_days', days }
+  }
+  return { type: 'inquiry_days', days: 0 }
+}
+
 export const resolveCrmTrigger = (tpl) => {
   if (tpl?.trigger) return tpl.trigger;
   const fromDefaults = crmTriggersByKey.get(tpl.key);
@@ -53,6 +76,13 @@ export const buildEffectiveCrmTemplates = (lead, templatesByOrg) => {
     effectiveTemplates.push({ key, ...override });
   });
   return effectiveTemplates;
+};
+
+const getLeadActivationAnchor = (lead, tpl) => {
+  const rawDate = tpl?.activationDate || tpl?.activatedAt || lead?.rawData?.crmAutomationActivationDates?.[tpl?.key];
+  if (!rawDate) return null;
+  const parsed = new Date(rawDate);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
 export const buildCrmEmail = (lead, tpl, org = null) => {
@@ -303,8 +333,9 @@ export const shouldSendCrmTemplate = ({ lead, tpl, trigger, today, org }) => {
     return { due: true, sentKey: tpl.key };
   }
   if (trigger.type === "inquiry_days") {
-    if (!lead?.inquiryDate) return { due: false, sentKey: tpl.key };
-    const d = daysSince(today, lead.inquiryDate);
+    const anchorDate = getLeadActivationAnchor(lead, tpl) || lead?.inquiryDate;
+    if (!anchorDate) return { due: false, sentKey: tpl.key };
+    const d = daysSince(today, anchorDate);
     return { due: d !== null && d === trigger.days, sentKey: tpl.key };
   }
   if (trigger.type === "birthday_offset") {
@@ -542,6 +573,9 @@ export const sendImmediateCrmAutomationsForLead = async (lead, options = {}) => 
   const includeSendNow = options?.includeSendNow === true;
   // forceImmediate skips the date check — use when explicitly activating a group for a lead
   const forceImmediate = options?.forceImmediate === true;
+  const targetKeys = Array.isArray(options?.targetKeys) && options.targetKeys.length
+    ? new Set(options.targetKeys.map((key) => String(key || "").trim()).filter(Boolean))
+    : null;
   const templates = await CrmAutomationTemplate.findAll({
     where: { organisationId: Number(lead.organisationId) },
   });
@@ -552,6 +586,7 @@ export const sendImmediateCrmAutomationsForLead = async (lead, options = {}) => 
   const effectiveTemplates = buildEffectiveCrmTemplates(lead, templatesByOrg);
   const today = new Date();
   for (const tpl of effectiveTemplates) {
+    if (targetKeys && !targetKeys.has(String(tpl?.key || ""))) continue;
     if (!tpl?.enabled) continue;
     const trigger = resolveCrmTrigger(tpl);
     if (!trigger) continue;

@@ -590,6 +590,7 @@ onUnmounted(() => {
 .arch-numbers-row {
   display: flex;
   align-items: center;
+  justify-content: center;
 }
 
 .quadrant-nums {
@@ -627,6 +628,7 @@ onUnmounted(() => {
 .teeth-row-wrap {
   display: flex;
   align-items: center;
+  justify-content: center;
 }
 
 .teeth-row-wrap--inactive {

@@ -3,6 +3,7 @@
     <NuxtPage :key="pageKey" class="bck-org" />
     <CommonLoader />
     <Snackbar />
+    <CommonNetworkStatusBanner />
     <ClientOnly>
     <div
       ref="floatingEl"

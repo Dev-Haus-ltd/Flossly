@@ -322,7 +322,6 @@ onBeforeUnmount(() => {
   background: #fff;
   border: 1px solid #dbe2ea;
   border-radius: 16px;
-  min-height: 100%;
   padding: 14px;
   display: grid;
   gap: 14px;

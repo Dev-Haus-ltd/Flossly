@@ -92,7 +92,7 @@ export default {
   },
   updateLeadAutoReply(payload) {
     return new Promise((resolve, reject) => {
-      Post("/leads/updateAutoReply", payload)
+      Post("/lead/updateAutoReply", payload)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });

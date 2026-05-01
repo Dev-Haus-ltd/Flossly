@@ -109,7 +109,26 @@ export const Organisation = sequelize.define(
       allowNull: false,
       defaultValue: false,
     },
-  },
+    workingTimings: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: {
+        monday: { startTime: "09:00", endTime: "17:00" },
+        tuesday: { startTime: "09:00", endTime: "17:00" },
+        wednesday: { startTime: "09:00", endTime: "17:00" },
+        thursday: { startTime: "09:00", endTime: "17:00" },
+        friday: { startTime: "09:00", endTime: "17:00" },
+        saturday: { startTime: "09:00", endTime: "17:00" },
+        sunday: { startTime: "09:00", endTime: "17:00" },
+      },
+    },
+    nonWorkingDays: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: [],
+      comment: 'Array of day abbreviations (Mon, Tue, Wed, Thu, Fri, Sat, Sun) that are non-working days',
+    },
+    },
   {
     modelName: "Organisations",
     timestamps: true,

@@ -37,6 +37,7 @@
         :filter-disabled="filterDisabled"
         :active-filters="activeFilters"
         :filter-sent="filterSent"
+        :filter-type="filterType"
         :whatsapp-enabled="props.whatsappEnabled"
         :disable-toggle="props.disableToggle"
         :show-preview-action="props.showPreviewAction"
@@ -52,6 +53,7 @@
         @update:filterEnabled="(val) => (filterEnabled = val)"
         @update:filterDisabled="(val) => (filterDisabled = val)"
         @update:filterSent="(val) => (filterSent = val)"
+        @update:filterType="(val) => (filterType = val)"
         @clearFilters="clearFilters"
         @openTrigger="openTriggerEditor"
         @openPreview="openPreview"
@@ -96,6 +98,7 @@
             :filter-disabled="filterDisabled"
             :active-filters="activeFilters"
             :filter-sent="filterSent"
+            :filter-type="filterType"
             :whatsapp-enabled="props.whatsappEnabled"
             :disable-toggle="props.disableToggle"
             :show-preview-action="props.showPreviewAction"
@@ -110,6 +113,7 @@
             @update:filterEnabled="(val) => (filterEnabled = val)"
             @update:filterDisabled="(val) => (filterDisabled = val)"
             @update:filterSent="(val) => (filterSent = val)"
+            @update:filterType="(val) => (filterType = val)"
             @clearFilters="clearFilters"
             @openTrigger="openTriggerEditor"
             @openPreview="openPreview"
@@ -199,7 +203,7 @@
               <!-- inquiry_days: days number + date picker -->
               <template v-if="triggerForm.triggerType === 'inquiry_days'">
                 <v-col cols="12" sm="6">
-                  <div class="trig-field-label">Days after enquiry</div>
+                  <div class="trig-field-label">Days after {{ resolvedLeadId ? 'activation' : 'enquiry' }}</div>
                   <v-text-field
                     v-model="triggerForm.triggerDays"
                     type="number"
@@ -549,9 +553,6 @@ const props = defineProps({
   showLastSentColumn: { type: Boolean, default: false },
   showSentStatusColumn: { type: Boolean, default: false },
   showResendAction: { type: Boolean, default: false },
-  patientId: { type: [Number, String], default: null },
-  patient: { type: Object, default: null },
-  readOnlyTrigger: { type: Boolean, default: false },
 })
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
@@ -599,6 +600,7 @@ const search = ref('')
 const filterEnabled = ref(false)
 const filterDisabled = ref(false)
 const filterSent = ref('all')
+const filterType = ref('all')
 const saving = ref(false)
 const activeAutomation = ref(null)
 const showGroupDialog = ref(false)
@@ -662,6 +664,7 @@ const activeFilters = computed(() => {
   if (filterEnabled.value) count++
   if (filterDisabled.value) count++
   if (filterSent.value !== 'all') count++
+  if (filterType.value !== 'all') count++
   return count
 })
 
@@ -679,12 +682,11 @@ const filteredRows = computed(() => {
   }
   if (filterEnabled.value && !filterDisabled.value) result = result.filter(r => r.enabled === true)
   if (filterDisabled.value && !filterEnabled.value) result = result.filter(r => r.enabled === false)
-  if (isPatientJourney.value) {
-    if (filterSent.value === 'sent') result = result.filter(r => !!r.lastSentAt || !!r.sent)
-    if (filterSent.value === 'never') result = result.filter(r => !r.lastSentAt && !r.sent)
-  } else {
-    if (filterSent.value === 'sent') result = result.filter(r => !!r.lastSentAt)
-    if (filterSent.value === 'never') result = result.filter(r => !r.lastSentAt)
+  if (filterSent.value === 'sent') result = result.filter(r => !!r.lastSentAt)
+  if (filterSent.value === 'never') result = result.filter(r => !r.lastSentAt)
+  if (filterType.value !== 'all') {
+    const t = filterType.value.toLowerCase()
+    result = result.filter(r => String(r.type || 'email').toLowerCase() === t)
   }
   return result
 })
@@ -693,6 +695,7 @@ const clearFilters = () => {
   filterEnabled.value = false
   filterDisabled.value = false
   filterSent.value = 'all'
+  filterType.value = 'all'
 }
 
 const resolvedGroups = computed(() => {
@@ -727,30 +730,35 @@ const resolveGroupAuthor = (group) =>
     fallbackName: getCurrentUserName(),
   })
 
+const bulkGroupState = computed(() => {
+  if (!props.selectedLeadIds?.length) return null
+  const total = props.selectedLeadIds.length
+  const result = {}
+  for (const group of visibleGroups.value) {
+    const keys = group.templateKeys || []
+    let enabledCount = 0
+    for (const leadId of props.selectedLeadIds) {
+      const leadRows = crmStore.automationRowsCache[Number(leadId)] || []
+      const groupRows = keys.length
+        ? leadRows.filter(r => new Set(keys).has(r.key))
+        : leadRows.filter(r => r.groupKey === group.key)
+      if (groupRows.some(r => r.enabled)) enabledCount++
+    }
+    result[group.key] = { enabledCount, totalCount: total }
+  }
+  return result
+})
+
 const automationCards = computed(() => {
   return visibleGroups.value.map((group) => {
     const keys = group.templateKeys || []
-    let groupRows
-    if (isPatientJourney.value) {
-      const isActive = activeAutomation.value?.key === group.key
-      groupRows = isActive ? rows.slice() : []
-    } else {
-      groupRows = keys.length
-        ? rows.filter(r => keys.includes(r.key))
-        : rows.filter(r => r.groupKey === group.key)
-    }
-    const itemCount = isPatientJourney.value
-      ? (activeAutomation.value?.key === group.key ? groupRows.length : (group.itemCount ?? 0))
-      : groupRows.length
-    const enabled = isPatientJourney.value
-      ? (activeAutomation.value?.key === group.key
-        ? groupRows.some((r) => !!r.enabled)
-        : !!group.enabled)
-      : groupRows.some((r) => r.enabled)
+    const groupRows = keys.length
+      ? rows.filter(r => keys.includes(r.key))
+      : rows.filter(r => r.groupKey === group.key)
     return {
       ...group,
-      itemCount,
-      enabled,
+      itemCount: groupRows.length,
+      enabled: groupRows.some(r => r.enabled),
       author: resolveGroupAuthor(group),
       isDefault: isDefaultGroup(group),
       hasWhatsApp: groupRows.some(r => String(r.type || 'Email').toLowerCase() === 'whatsapp'),
@@ -866,7 +874,7 @@ const buildTriggerFromForm = () => {
 const triggerPreviewText = computed(() => {
   const nextTrigger = buildTriggerFromForm()
   if (nextTrigger?.type !== 'send_now') {
-    return formatCrmTriggerPreview(nextTrigger)
+    return formatLeadAwareTriggerPreview(nextTrigger)
   }
   const channel = String(triggerEditingRow.value?.type || 'Email').toLowerCase()
   if (channel === 'whatsapp') {
@@ -940,6 +948,15 @@ const resolvedLeadId = computed(() => {
   return id ? Number(id) : null
 })
 
+const formatLeadAwareTriggerPreview = (trigger = {}) => {
+  if (resolvedLeadId.value && trigger?.type === 'inquiry_days') {
+    const days = Number(trigger?.days || 0)
+    if (days === 0) return 'Immediately when automation is activated'
+    return `${days} day${days === 1 ? '' : 's'} after activation`
+  }
+  return formatCrmTriggerPreview(trigger)
+}
+
 const buildPayload = (row) => {
   if (resolvedPatientId.value) {
     return {
@@ -973,29 +990,66 @@ const buildPayload = (row) => {
   return payload
 }
 
-const toggleAutomationGroup = async (card, val) => {
-  if (resolvedPatientId.value) {
-    const enabled = !!val
-    try {
-      await patientJourneyService.toggleAutomationGroup({
-        groupKey: card.key,
-        enabled,
-        patientId: resolvedPatientId.value,
-      })
-      const keys = card?.templateKeys || []
-      const groupRows = keys.length
-        ? rows.filter(r => keys.includes(r.key))
-        : rows.filter(r => r.groupKey === card?.key)
-      groupRows.forEach((row) => {
-        row.enabled = enabled
-      })
-      await loadPatientJourneyGroupsOnly()
-    } catch (e) {
-      card.enabled = !val
-      mainStore?.setSnackbar?.({ title: e?.message || 'Failed to update automations', type: 'error' })
+const toggleAutomationGroupBulk = async (card, val) => {
+  const keys = card?.templateKeys || []
+  const allUpdates = []
+
+  for (const leadId of props.selectedLeadIds) {
+    const numId = Number(leadId)
+    const leadRows = crmStore.automationRowsCache[numId] || []
+    let groupRows
+
+    if (keys.length) {
+      const rowMap = new Map(leadRows.map(r => [r.key, r]))
+      groupRows = keys.map(key => {
+        if (rowMap.has(key)) return rowMap.get(key)
+        const def = crmAutomationDefaults.find(d => d.key === key)
+        return def ? { ...def } : null
+      }).filter(Boolean)
+    } else {
+      groupRows = leadRows.filter(r => r.groupKey === card?.key)
     }
-    return
+
+    const leadUpdates = []
+    groupRows.forEach(row => {
+      if (!!row.enabled !== !!val) {
+        leadUpdates.push({
+          key: row.key,
+          type: row.type || 'Email',
+          name: row.name || row.key,
+          subject: row.subject || '',
+          sending: row.sending || '',
+          enabled: !!val,
+          template: row.template || '',
+          groupKey: row.groupKey || card?.key,
+          leadId: numId,
+        })
+      }
+    })
+
+    if (leadUpdates.length) {
+      allUpdates.push(...leadUpdates)
+      const changeKeys = new Map(leadUpdates.map(u => [u.key, u.enabled]))
+      crmStore.setLeadAutomationsOptimistic(
+        numId,
+        (crmStore.automationRowsCache[numId] || []).map(row =>
+          changeKeys.has(row.key) ? { ...row, enabled: changeKeys.get(row.key) } : row
+        )
+      )
+    }
   }
+
+  if (!allUpdates.length) return
+
+  try {
+    await crmStore.saveAutomationBatch({ items: allUpdates })
+  } catch (e) {
+    await Promise.all(props.selectedLeadIds.map(id => crmStore.invalidateLeadAutomations(Number(id))))
+    mainStore?.setSnackbar?.({ title: e?.message || 'Failed to update automations', type: 'error' })
+  }
+}
+
+const toggleAutomationGroup = async (card, val) => {
   const keys = card?.templateKeys || []
   let groupRows
   if (keys.length) {
@@ -1039,19 +1093,11 @@ const toggleAutomationGroup = async (card, val) => {
   }
 }
 
-const loadRows = async () => {
-  if (resolvedPatientId.value) {
-    if (activeAutomation.value) {
-      await loadPatientJourneyTemplates(activeAutomation.value.key)
-    } else {
-      rows.splice(0, rows.length)
-    }
-    return
-  }
+const loadRows = async ({ force = false } = {}) => {
   try {
     let apiItems = []
     if (resolvedLeadId.value) {
-      await crmStore.fetchLeadAutomations(resolvedLeadId.value, { force: true })
+      await crmStore.fetchLeadAutomations(resolvedLeadId.value, { force })
       apiItems = crmStore.automationRowsCache[Number(resolvedLeadId.value)] || []
     } else {
       const res = await crmStore.listAutomation()
@@ -1067,44 +1113,60 @@ const loadRows = async () => {
   } catch {}
 }
 
-const loadGroups = async () => {
-  if (resolvedPatientId.value) {
-    await loadPatientJourneyGroupsOnly()
-    return
-  }
+const loadGroups = async ({ force = false } = {}) => {
   if (!props.useGroupsApi || (Array.isArray(props.groups) && props.groups.length)) return
-  await crmStore.fetchAutomationGroups()
+  await crmStore.fetchAutomationGroups({ force })
 }
 
-const refresh = async ({ skipGroups = false } = {}) => {
-  if (resolvedPatientId.value) {
-    const tasks = [loadRows()]
-    if (!skipGroups) tasks.push(loadGroups())
-    await Promise.all(tasks)
-    return
-  }
-  const tasks = [loadRows()]
-  if (!skipGroups) tasks.push(loadGroups())
+const refresh = async ({ skipGroups = false, forceGroups = false, forceRows = false } = {}) => {
+  const tasks = [loadRows({ force: forceRows })]
+  if (!skipGroups) tasks.push(loadGroups({ force: forceGroups }))
   await Promise.all(tasks)
 }
 
 defineExpose({ refresh })
 
+const onAutomationsUpdated = async () => {
+  await refresh({ forceGroups: true, forceRows: true })
+}
+
 onMounted(async () => {
-  await refresh()
+  await refresh({ forceGroups: true, forceRows: true })
+  if (typeof window !== 'undefined') {
+    window.addEventListener('crm-automations-updated', onAutomationsUpdated)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('crm-automations-updated', onAutomationsUpdated)
+  }
 })
 
 watch(resolvedLeadId, () => {
   if (resolvedPatientId.value) return
   clearAutomationSelection()
-  refresh()
+  refresh({ forceRows: true })
 })
 
 watch(resolvedPatientId, () => {
   clearAutomationSelection()
-  refresh()
+  refresh({ forceRows: true })
 })
 
+// Keep local rows in sync with the store cache so any external write
+// (table column toggle, bulk dialog, invalidation) is reflected immediately
+// without needing to close and reopen the panel.
+watch(
+  () => resolvedLeadId.value ? crmStore.automationRowsCache[resolvedLeadId.value] : null,
+  (cacheRows) => {
+    if (!resolvedLeadId.value || !Array.isArray(cacheRows)) return
+    const filtered = props.includeDefaults
+      ? cacheRows
+      : cacheRows.filter(item => !defaultAutomationKeySet.has(item.key))
+    rows.splice(0, rows.length, ...(filtered.length ? filtered : (props.includeDefaults ? crmAutomationDefaults : [])))
+  }
+)
 
 // Preview dialog state
 const show = ref(false)
@@ -1511,7 +1573,7 @@ const saveTrigger = async () => {
       return
     }
     selectedRow.trigger = nextTrigger
-    selectedRow.sending = formatCrmTriggerPreview(nextTrigger)
+    selectedRow.sending = formatLeadAwareTriggerPreview(nextTrigger)
     if (isSendNow) {
       // "Send Now" should dispatch immediately, so ensure row is enabled.
       selectedRow.enabled = true

@@ -172,9 +172,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from "vue";
+import { ref, reactive, computed, onMounted, watch } from "vue";
 import { useMainStore } from "@/stores/index";
 import { useScheduleStore } from "@/stores/schedule";
+import { useOrganisationWorkingHours } from "@/composables/useOrganisationWorkingHours";
 import BasicInfoStep from "./BasicInfo.vue";
 import WeeklyConfigStep from "./WeeklyConfig.vue";
 import SchedulePreviewStep from "./ScheduleReview.vue";
@@ -189,10 +190,35 @@ const emit = defineEmits(["schedule-saved", "schedule-created"]);
 
 const mainStore = useMainStore();
 const scheduleStore = useScheduleStore();
+const orgStore = useOrgStore();
+const { getOrganisationWorkingHours, hasOrgTimingsLoaded } = useOrganisationWorkingHours();
+
+// Helper: Map full day names to abbreviations
+const dayNameToAbbrev = {
+  'Monday': 'Mon',
+  'Tuesday': 'Tue',
+  'Wednesday': 'Wed',
+  'Thursday': 'Thu',
+  'Friday': 'Fri',
+  'Saturday': 'Sat',
+  'Sunday': 'Sun'
+}
+
+// Check if a day is marked as non-working at the organisation level
+const isOrgNonWorkingDay = (dayName) => {
+  const org = mainStore?.organisation
+  if (!org || !Array.isArray(org.nonWorkingDays)) {
+    return false
+  }
+  const abbrev = dayNameToAbbrev[dayName]
+  return org.nonWorkingDays.includes(abbrev)
+}
 
 const currentStep = ref(1);
 const isSaving = ref(false);
 const error = ref(null);
+const isInitializing = ref(true);
+const isLoadingOrgData = ref(false);
 
 const isEditMode = computed(() => !!props.scheduleId);
 const currentSchedule = computed(() => scheduleStore.getCurrentSchedule);
@@ -205,7 +231,7 @@ const form = reactive({
   endDate: null,
   repeatPattern: "weekly",
   isActive: true,
-  weekDays: initializeWeekDays(),
+  weekDays: [],
 });
 
 const errors = reactive({
@@ -227,14 +253,79 @@ function initializeWeekDays() {
     "Saturday",
     "Sunday",
   ];
-  return days.map((name, index) => ({
-    dayOfWeek: index,
-    dayName: name,
-    isWorkingDay: index < 5,
-    startTime: "09:00",
-    endTime: "17:00",
-    breaks: [],
-  }));
+  return days.map((name, index) => {
+    // Check if this day is marked as org non-working
+    const isOrgNonWorking = isOrgNonWorkingDay(name)
+    // Default: weekdays are working (unless org says otherwise), weekends are not
+    const isDefaultWorkingDay = !isOrgNonWorking && index < 5
+    const orgHours = getOrganisationWorkingHours(name)
+    return {
+      dayOfWeek: index,
+      dayName: name,
+      isWorkingDay: isDefaultWorkingDay,
+      startTime: orgHours.startTime,
+      endTime: orgHours.endTime,
+      breaks: [],
+    };
+  });
+}
+
+/**
+ * Get weekdays initialized with organisation default working times
+ * This is the single source of truth for org timings
+ */
+function getWeekDaysWithOrgTimings() {
+  const days = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+  ];
+  return days.map((name, index) => {
+    // Check if this day is marked as org non-working
+    const isOrgNonWorking = isOrgNonWorkingDay(name)
+    // Default: weekdays are working (unless org says otherwise), weekends are not
+    const isDefaultWorkingDay = !isOrgNonWorking && index < 5
+    const orgHours = getOrganisationWorkingHours(name)
+    return {
+      dayOfWeek: index,
+      dayName: name,
+      isWorkingDay: isDefaultWorkingDay,
+      startTime: orgHours.startTime,
+      endTime: orgHours.endTime,
+      breaks: [],
+    };
+  });
+}
+
+/**
+ * Sync weekDays with organisation timings while preserving custom overrides
+ * Updates only the times for days that match the org defaults (not custom-set)
+ */
+function syncWeekDaysWithOrgTimings(currentWeekDays) {
+  const freshWeekDays = getWeekDaysWithOrgTimings();
+
+  return currentWeekDays.map((day, index) => {
+    const freshDay = freshWeekDays[index];
+
+    // Detect whether current day still matches old org defaults
+    const shouldUseOrgHours =
+      !day.startTime ||
+      !day.endTime ||
+      (
+        day.startTime === freshDay.startTime &&
+        day.endTime === freshDay.endTime
+      );
+
+    return {
+      ...day,
+      startTime: shouldUseOrgHours ? freshDay.startTime : day.startTime,
+      endTime: shouldUseOrgHours ? freshDay.endTime : day.endTime,
+    };
+  });
 }
 
 function updateForm(newForm) {
@@ -250,11 +341,8 @@ function updateWeeklyErrors(newErrors) {
 }
 
 function updateWeekDays(newWeekDays) {
-  // Deep clone to ensure reactivity and prevent mutation issues
-  form.weekDays = JSON.parse(JSON.stringify(newWeekDays));
-  console.log('📅 Form weekDays updated:', form.weekDays);
+  form.weekDays = newWeekDays
 }
-
 function validateField(field) {
   switch (field) {
     case "scheduleName":
@@ -364,6 +452,11 @@ function nextStep() {
     return;
   }
 
+  // Sync weekDays with current org timings before navigating to step 2
+  if (currentStep.value === 1 && !isEditMode.value) {
+    form.weekDays = syncWeekDaysWithOrgTimings(form.weekDays);
+  }
+
   if (currentStep.value < 3) {
     currentStep.value++;
   }
@@ -396,13 +489,27 @@ function resetForm() {
   form.endDate = null;
   form.repeatPattern = "weekly";
   form.isActive = true;
-  form.weekDays = initializeWeekDays();
+  form.weekDays = getWeekDaysWithOrgTimings();
 
   Object.keys(errors).forEach((key) => (errors[key] = ""));
   Object.keys(weeklyErrors).forEach((key) => delete weeklyErrors[key]);
 
   currentStep.value = 1;
 }
+
+// Watch for organisation working timings changes (real-time sync)
+watch(
+  () => mainStore?.organisation?.workingTimings,
+  (newTimings) => {
+    if (newTimings && !isEditMode.value && !isInitializing.value) {
+      // In create mode, sync weekDays with new org timings
+      // Preserve any custom overrides user may have made
+      const updatedWeekDays = syncWeekDaysWithOrgTimings(form.weekDays);
+      form.weekDays = JSON.parse(JSON.stringify(updatedWeekDays));
+    }
+  },
+  { deep: true }
+)
 
 // Save schedule
 async function saveSchedule() {
@@ -422,6 +529,21 @@ async function saveSchedule() {
   if (!props.dentistId) {
     error.value = "Dentist not selected.";
     return;
+  }
+
+  // Check if schedule includes org non-working days and show warning
+  const orgNonWorkingDaysInSchedule = form.weekDays.filter(
+    day => day.isWorkingDay && isOrgNonWorkingDay(day.dayName)
+  );
+
+  if (orgNonWorkingDaysInSchedule.length > 0) {
+    const daysList = orgNonWorkingDaysInSchedule.map(d => d.dayName).join(', ');
+    mainStore?.setSnackbar?.({
+      title: `Warning: Override of organisational settings`,
+      message: `You're creating a schedule for ${daysList}, which are marked as non-working days for your organisation.`,
+      type: 'warning',
+      timeout: 5000
+    });
   }
 
   isSaving.value = true;
@@ -470,11 +592,14 @@ async function saveSchedule() {
       savedSchedule = await scheduleStore.createSchedule(payload);
     }
 
+    // Show success message with details
+    const action = isEditMode.value ? "updated" : "created";
+    const message = `${form.scheduleName} has been ${action} successfully`;
+    
     mainStore?.setSnackbar?.({
-      message: isEditMode.value
-        ? "Schedule updated successfully!"
-        : "Schedule created successfully!",
+      message,
       color: "success",
+      timeout: 4000,
     });
 
     emit("schedule-saved", savedSchedule);
@@ -485,9 +610,16 @@ async function saveSchedule() {
   } catch (err) {
     console.error("Save error:", err);
     error.value = err.message || "Failed to save schedule";
+    
+    // Show error with more context
+    const errorMsg = err.message?.includes("validation") 
+      ? "Please check all required fields and times"
+      : error.value;
+    
     mainStore?.setSnackbar?.({
-      message: error.value,
+      message: errorMsg,
       color: "error",
+      timeout: 5000,
     });
   } finally {
     isSaving.value = false;
@@ -496,7 +628,8 @@ async function saveSchedule() {
 
 async function loadSchedule() {
   if (!isEditMode.value) {
-    form.weekDays = initializeWeekDays();
+    // In create mode, initialize with org timings
+    form.weekDays = getWeekDaysWithOrgTimings();
     return;
   }
 
@@ -513,24 +646,31 @@ async function loadSchedule() {
 
       if (fetchedSchedule.days && fetchedSchedule.days.length) {
         form.weekDays = fetchedSchedule.days
-          .map((day) => ({
-            id: day.id,
-            dayOfWeek: day.dayOfWeek,
-            dayName: day.dayName,
-            isWorkingDay: day.isWorkingDay,
-            startTime: day.startTime || "09:00",
-            endTime: day.endTime || "17:00",
-            breaks:
-              day.breaks?.map((breakItem) => ({
-                id: breakItem.id,
-                breakName: breakItem.breakName,
-                startTime: breakItem.startTime,
-                endTime: breakItem.endTime,
-              })) || [],
-          }))
+          .map((day) => {
+            // Get org timings as fallback for missing times
+            const dayKey = day.dayName?.toLowerCase() || '';
+            const orgHours = getOrganisationWorkingHours(dayKey);
+            
+            return {
+              id: day.id,
+              dayOfWeek: day.dayOfWeek,
+              dayName: day.dayName,
+              isWorkingDay: day.isWorkingDay,
+              startTime: day.startTime || orgHours.startTime,
+              endTime: day.endTime || orgHours.endTime,
+              breaks:
+                day.breaks?.map((breakItem) => ({
+                  id: breakItem.id,
+                  breakName: breakItem.breakName,
+                  startTime: breakItem.startTime,
+                  endTime: breakItem.endTime,
+                })) || [],
+            }
+          })
           .sort((a, b) => a.dayOfWeek - b.dayOfWeek);
       } else {
-        form.weekDays = initializeWeekDays();
+        // No days from database, use org timings
+        form.weekDays = getWeekDaysWithOrgTimings();
       }
     }
   } catch (err) {
@@ -538,9 +678,65 @@ async function loadSchedule() {
     error.value = "Failed to load schedule";
   }
 }
+watch(
+  () => mainStore.organisation?.workingTimings,
+  (timings) => {
+    if (!timings) return
 
-onMounted(() => {
-  loadSchedule();
+    if (!isEditMode.value) {
+      form.weekDays = getWeekDaysWithOrgTimings()
+    }
+  },
+  { immediate: true }
+)
+
+/**
+ * Fetch organisation practice details to ensure working timings are loaded
+ * This is the single entry point for loading org data in the schedule flow
+ */
+async function fetchOrganisationDetails() {
+  if (isLoadingOrgData.value) return
+  
+  isLoadingOrgData.value = true
+  try {
+    const res = await orgStore.getPracticeDetails()
+    if (res?.code === 0 && res.data) {
+      // Update global store with fresh organisation data
+      mainStore.organisation = res.data
+      
+      // Initialize form with org timings if in create mode
+      if (!isEditMode.value && hasOrgTimingsLoaded()) {
+        form.weekDays = getWeekDaysWithOrgTimings()
+      }
+      
+      return res.data
+    } else {
+      throw new Error(res?.message || 'Failed to load organisation details')
+    }
+  } catch (err) {
+    console.error('Error fetching organisation details:', err)
+    mainStore?.setSnackbar?.({
+      message: 'Failed to load organization working hours',
+      color: 'warning'
+    })
+    // Don't block form - use defaults
+    if (!isEditMode.value) {
+      form.weekDays = getWeekDaysWithOrgTimings()
+    }
+  } finally {
+    isLoadingOrgData.value = false
+  }
+}
+
+onMounted(async () => {
+  // Step 1: Fetch organisation details first to ensure working timings are available
+  await fetchOrganisationDetails()
+  
+  // Step 2: Load existing schedule if in edit mode
+  await loadSchedule()
+  
+  // Step 3: Mark initialization complete
+  isInitializing.value = false
 });
 </script>
 

@@ -1,5 +1,6 @@
 import "../models";
 import sequelize from "../utils/db";
+
 export default defineNitroPlugin(async (nitroApp) => {
   try {
     await sequelize.authenticate();

@@ -5,9 +5,20 @@ export const ConsentFormTemplate = sequelize.define(
   'ConsentFormTemplates',
   {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    scope: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'organisation',
+      comment: "'system' templates are seeded globally; 'organisation' templates belong to one org",
+    },
+    key: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      comment: 'Unique identifier for system-scoped templates (e.g. crown_consent)',
+    },
     organisationId: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: 'Organisations',
         key: 'id',
@@ -31,7 +42,7 @@ export const ConsentFormTemplate = sequelize.define(
       type: DataTypes.JSONB,
       allowNull: false,
       defaultValue: {},
-      comment: 'Object containing signature placement coordinates: { x: number, y: number, width: number, height: number, page: number }',
+      comment: 'Retained for PDF signature placement workflows: { x: number, y: number, width: number, height: number, page: number }. HTML consent forms should render signature capture below the document instead of using these coordinates.',
     },
     initialCoordinates: {
       type: DataTypes.JSONB,
@@ -56,7 +67,7 @@ export const ConsentFormTemplate = sequelize.define(
     },
     createdBy: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: 'Users',
         key: 'id',
@@ -75,18 +86,10 @@ export const ConsentFormTemplate = sequelize.define(
     tableName: 'ConsentFormTemplates',
     timestamps: true,
     indexes: [
-      {
-        fields: ['organisationId'],
-        name: 'idx_consent_templates_org',
-      },
-      {
-        fields: ['isActive'],
-        name: 'idx_consent_templates_active',
-      },
-      {
-        fields: ['category'],
-        name: 'idx_consent_templates_category',
-      },
+      { fields: ['organisationId'], name: 'idx_consent_templates_org' },
+      { fields: ['isActive'], name: 'idx_consent_templates_active' },
+      { fields: ['category'], name: 'idx_consent_templates_category' },
+      { fields: ['scope'], name: 'idx_consent_templates_scope' },
     ],
   }
 )

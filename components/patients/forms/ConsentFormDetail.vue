@@ -57,27 +57,18 @@
           <p class="description-text">{{ form.description }}</p>
         </div>
 
-        <!-- Signature Placement - Visual Editor (NO COORDINATES SHOWN) -->
-        <div class="info-card signature-placement-card">
+        <div class="preview-card">
           <div class="card-header">
-            <v-icon size="18" color="primary">mdi-cursor-default-click</v-icon>
-            <span>Signature Placement</span>
-            <v-chip
-              size="x-small"
-              color="primary"
-              variant="tonal"
-              class="ml-auto"
-            >
-              Visual
+            <v-icon size="18" color="primary">mdi-file-document-outline</v-icon>
+            <span>Form Content</span>
+            <v-chip size="x-small" color="primary" variant="tonal" class="ml-auto">
+              Preview
             </v-chip>
           </div>
-          <div class="signature-placement-preview">
-            <SignaturePlacementEditor
-              v-model="signatureCoordinates"
-              :html-content="form?.htmlContent || ''"
-              mode="preview"
-              :show-signature-placeholder="true"
-              :preview-height="400"
+          <div class="preview-container">
+            <div
+              class="form-content-preview"
+              v-html="sanitizeHtml(form?.htmlContent || '')"
             />
           </div>
         </div>
@@ -111,7 +102,7 @@
 
       <!-- Action Buttons -->
       <v-card-actions class="dialog-actions">
-        <!-- <v-btn
+        <v-btn
           variant="text"
           color="grey-darken-1"
           prepend-icon="mdi-eye-outline"
@@ -119,7 +110,7 @@
           class="action-btn view-btn"
         >
           Full View
-        </v-btn> -->
+        </v-btn>
         <v-btn
           variant="flat"
           color="primary"
@@ -154,7 +145,7 @@
           />
           <div class="modal-title">
             <h3>{{ form?.name || "Consent Form" }}</h3>
-            <p>Preview with signature placement</p>
+            <p>Full form preview</p>
           </div>
         </div>
         <v-btn
@@ -170,15 +161,18 @@
       <!-- Modal Body -->
       <v-card-text class="fullview-modal-body">
         <div class="fullview-content-wrapper">
-          <!-- Signature Placement Preview -->
           <div class="fullview-signature-section">
-            <SignaturePlacementEditor
-              v-model="signatureCoordinates"
-              :html-content="form?.htmlContent || ''"
-              mode="preview"
-              :show-signature-placeholder="true"
-              :preview-height="600"
-            />
+            <div class="fullview-html-preview">
+              <div
+                class="form-content-preview"
+                v-html="sanitizeHtml(form?.htmlContent || '')"
+              />
+              <div class="signature-bottom-preview">
+                <div class="signature-bottom-preview__label">
+                  Signature section appears here in the patient view
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </v-card-text>
@@ -187,9 +181,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from "vue";
-import { useConsentStore } from "@/stores/consent";
-import SignaturePlacementEditor from "@/components/consent/SignaturePlacementEditor.vue";
+import { ref, watch } from "vue";
+import { normalizeConsentHtmlForDigitalFlow } from "~/utils/consentHtml";
 
 const props = defineProps({
   form: {
@@ -208,22 +201,10 @@ const props = defineProps({
 
 const emit = defineEmits(["update:modelValue", "send", "close"]);
 
-const consentStore = useConsentStore();
-
 // State
 const isOpen = ref(false);
-const isLoading = ref(false);
 const isSending = ref(false);
 const showFullView = ref(false);
-const signatureCoordinates = ref(
-  props.form?.signatureCoordinates || {
-    x: 100,
-    y: 200,
-    width: 200,
-    height: 80,
-    page: 1,
-  },
-);
 
 // Watchers
 watch(
@@ -238,16 +219,6 @@ watch(
   (newVal) => {
     emit("update:modelValue", newVal);
   },
-);
-
-watch(
-  () => props.form,
-  (newForm) => {
-    if (newForm?.signatureCoordinates) {
-      signatureCoordinates.value = newForm.signatureCoordinates;
-    }
-  },
-  { deep: true },
 );
 
 // Methods
@@ -280,11 +251,7 @@ const formatDate = (dateString) => {
 };
 
 const sanitizeHtml = (html) => {
-  if (!html) return "";
-  return html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-    .replace(/on\w+\s*=\s*"[^"]*"/gi, "")
-    .replace(/on\w+\s*=\s*'[^']*'/gi, "");
+  return normalizeConsentHtmlForDigitalFlow(html);
 };
 </script>
 
@@ -378,30 +345,6 @@ const sanitizeHtml = (html) => {
       line-height: 1.6;
       color: #475569;
       margin: 0;
-    }
-  }
-
-  .signature-placement-card {
-    background: #ffffff;
-    border-radius: 14px;
-    margin-bottom: 20px;
-    border: 1px solid #e2e8f0;
-    overflow: hidden;
-
-    .card-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 14px 16px;
-      background: #f8fafc;
-      border-bottom: 1px solid #e2e8f0;
-      font-weight: 600;
-      font-size: 13px;
-      color: #1e293b;
-    }
-
-    .signature-placement-preview {
-      padding: 16px;
     }
   }
 
@@ -586,6 +529,37 @@ const sanitizeHtml = (html) => {
         border-radius: 16px;
         overflow: hidden;
         box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+      }
+
+      .fullview-html-preview {
+        padding: 24px;
+      }
+
+      .form-content-preview {
+        font-size: 14px;
+        line-height: 1.7;
+        color: #374151;
+
+        :deep(*) {
+          max-width: 100%;
+        }
+      }
+
+      .signature-bottom-preview {
+        margin-top: 24px;
+        padding-top: 24px;
+        border-top: 1px solid #e2e8f0;
+      }
+
+      .signature-bottom-preview__label {
+        padding: 18px;
+        border: 2px dashed #93c5fd;
+        border-radius: 14px;
+        background: #eff6ff;
+        font-size: 13px;
+        font-weight: 600;
+        text-align: center;
+        color: #1d4ed8;
       }
     }
   }

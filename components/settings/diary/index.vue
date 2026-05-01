@@ -41,7 +41,8 @@
 import { ref, computed, watch } from 'vue'
 import AppointmentReason from './appointmentReason/index.vue'
 import DentistSchedule from './dentistSchedules/index.vue'
-import TemplateManager from '@/components/clinicalNoteTemplates/TemplateManager.vue'
+import TemplateManager from './clinicalNoteTemplates/index.vue'
+import ZonesManager from './zones/index.vue'
 const selectedSection = ref('Appointment Reasons')
 const diaryRef = ref(null)
 const route = useRoute()
@@ -51,6 +52,7 @@ const menuItems = [
   { key: 'Appointment Reasons', label: 'Treatment Names' } , 
   { key: 'Dentist Schedules', label: 'Dentist Schedules' },
   { key: 'Clinical Note Templates', label: 'Clinical Note Templates' },
+  { key: 'Zones', label: 'Zones' },
 ]
 
 const componentsMap = {
@@ -58,6 +60,7 @@ const componentsMap = {
   'Appointment Reasons': AppointmentReason,  
   'Dentist Schedules': DentistSchedule,
   'Clinical Note Templates': TemplateManager,
+  'Zones': ZonesManager,
 }
 
 const currentComponent = computed(() => componentsMap[selectedSection.value])
@@ -92,7 +95,7 @@ watch(
 }
 
 .sidebar {
-  height: 60vh;
+  /* height: 60vh; */
   min-width: 200px;
 }
 </style>

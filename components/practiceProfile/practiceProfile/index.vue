@@ -188,10 +188,121 @@
                 />
               </div>
             </div>
+
+            <!-- Working Hours - Improved UX Version -->
+            <div class="mt-6">
+              <div class="d-flex align-center justify-space-between mb-3">
+                <label class="info-label">Default Working Hours</label>
+                <v-btn
+                  variant="text"
+                  size="small"
+                  prepend-icon="mdi-refresh"
+                  @click="resetAllWorkingHours"
+                  class="reset-all-btn"
+                >
+                  Reset All
+                </v-btn>
+              </div>
+              <div class="section-subtitle mb-4">
+                Set the default start and end times for each day of the week
+              </div>
+              
+              <v-card variant="outlined" class="working-hours-card">
+                <div class="working-hours-header">
+                  <div class="header-day">Day</div>
+                  <div class="header-hours">Working Hours</div>
+                  <div class="header-actions"></div>
+                </div>
+                
+                <div class="working-hours-list">
+                  <div 
+                    v-for="(day, index) in workingDaysLabels" 
+                    :key="day"
+                    class="working-hours-row"
+                    :class="{ 'has-changes': hasTimeChanges(workingDaysKeys[index]) }"
+                  >
+                    <div class="day-name">
+                      <span>{{ day }}</span>
+                      <v-chip 
+                        v-if="isNonWorkingDay(workingDaysKeys[index])" 
+                        size="x-small" 
+                        color="warning" 
+                        variant="tonal"
+                        class="non-working-badge"
+                      >
+                        Non-working
+                      </v-chip>
+                    </div>
+                    
+                    <div class="time-controls" :class="{ 'disabled-controls': isNonWorkingDay(workingDaysKeys[index]) }">
+                      <div class="time-input-group" :class="{ 'disabled': isNonWorkingDay(workingDaysKeys[index]) }">
+                        <input
+                          type="time"
+                          :value="organisation.workingTimings[workingDaysKeys[index]].startTime"
+                          :disabled="isNonWorkingDay(workingDaysKeys[index])"
+                          @input="updateStartTime(workingDaysKeys[index], $event.target.value)"
+                          class="time-input"
+                          :class="{ 'time-changed': isTimeChanged(workingDaysKeys[index], 'start') }"
+                          :title="isNonWorkingDay(workingDaysKeys[index]) ? 'This day is marked as non-working' : ''"
+                        />
+                      </div>
+                      
+                      <span class="time-separator">to</span>
+                      
+                      <div class="time-input-group" :class="{ 'disabled': isNonWorkingDay(workingDaysKeys[index]) }">
+                        <input
+                          type="time"
+                          :value="organisation.workingTimings[workingDaysKeys[index]].endTime"
+                          :disabled="isNonWorkingDay(workingDaysKeys[index])"
+                          @input="updateEndTime(workingDaysKeys[index], $event.target.value)"
+                          class="time-input"
+                          :class="{ 'time-changed': isTimeChanged(workingDaysKeys[index], 'end') }"
+                          :title="isNonWorkingDay(workingDaysKeys[index]) ? 'This day is marked as non-working' : ''"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div class="row-actions">
+                      <v-btn
+                        v-if="!isDefaultTime(workingDaysKeys[index]) && !isNonWorkingDay(workingDaysKeys[index])"
+                        icon="mdi-close-circle"
+                        size="small"
+                        variant="text"
+                        class="clear-time-btn"
+                        @click="resetToDefaultTime(workingDaysKeys[index])"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </v-card>
+
+              <!-- Quick Actions -->
+              <!-- <div class="quick-actions mt-3">
+                <v-btn
+                  variant="text"
+                  size="small"
+                  prepend-icon="mdi-clock-time-four"
+                  @click="applySameHoursToAll"
+                  class="quick-action-btn"
+                >
+                  Apply to all days
+                </v-btn>
+                <v-btn
+                  variant="text"
+                  size="small"
+                  prepend-icon="mdi-content-copy"
+                  @click="copyPreviousDayHours"
+                  class="quick-action-btn"
+                >
+                  Copy from previous day
+                </v-btn>
+              </div> -->
+            </div>
           </div>
         </v-card>
       </v-col>
-  </v-row>
+    </v-row>
+
     <v-row class="mt-6">
       <v-col cols="12">
         <v-card
@@ -334,6 +445,7 @@
         </v-card>
       </v-col>
     </v-row>
+
     <div class="d-flex justify-end pr-5 pt-3">
       <v-btn
         color="primary"
@@ -365,6 +477,7 @@ const orgStore = useOrgStore();
 
 // Store original values for diff comparison
 const originalData = ref({});
+const originalWorkingTimings = ref({});
 
 // Track which fields have been modified
 const dirtyFields = reactive({});
@@ -384,6 +497,15 @@ const organisation = reactive({
   pinCodeVerification: props.practiceDetails.pinCodeVerification || 'yes',
   nonWorkingDays: props.practiceDetails.nonWorkingDays || [],
   practiceAnniversaryDate: props.practiceDetails.practiceAnniversaryDate || null,
+  workingTimings: props.practiceDetails.workingTimings || {
+    monday: { startTime: '09:00', endTime: '17:00' },
+    tuesday: { startTime: '09:00', endTime: '17:00' },
+    wednesday: { startTime: '09:00', endTime: '17:00' },
+    thursday: { startTime: '09:00', endTime: '17:00' },
+    friday: { startTime: '09:00', endTime: '17:00' },
+    saturday: { startTime: '09:00', endTime: '17:00' },
+    sunday: { startTime: '09:00', endTime: '17:00' },
+  },
 });
 
 const automationPlaceholders = reactive({
@@ -400,6 +522,8 @@ const automationPlaceholders = reactive({
 const practiceManagers = ref([]);
 const menus = reactive({ cqcInspectionDate: false, practiceAnniversaryDate: false });
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const workingDaysKeys = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const workingDaysLabels = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 // Initialize original data and validate types
 const initializeOriginalData = () => {
@@ -416,12 +540,108 @@ const initializeOriginalData = () => {
     pinCodeVerification: organisation.pinCodeVerification || 'yes',
     nonWorkingDays: Array.isArray(organisation.nonWorkingDays) ? [...organisation.nonWorkingDays] : [],
     automationPlaceholders: { ...automationPlaceholders },
+    workingTimings: organisation.workingTimings ? JSON.parse(JSON.stringify(organisation.workingTimings)) : {},
   };
+  originalWorkingTimings.value = JSON.parse(JSON.stringify(organisation.workingTimings));
 };
 
 // Mark a field as dirty
 const markDirty = (fieldName) => {
   dirtyFields[fieldName] = true;
+};
+
+// Working hours helper functions
+const isDefaultTime = (dayKey) => {
+  const timings = organisation.workingTimings[dayKey];
+  return timings.startTime === '09:00' && timings.endTime === '17:00';
+};
+
+const isTimeChanged = (dayKey, type) => {
+  const original = originalWorkingTimings.value[dayKey];
+  const current = organisation.workingTimings[dayKey];
+  if (!original) return false;
+  return type === 'start' ? original.startTime !== current.startTime : original.endTime !== current.endTime;
+};
+
+const hasTimeChanges = (dayKey) => {
+  // Non-working days should not show as having changes
+  if (isNonWorkingDay(dayKey)) {
+    return false;
+  }
+  return isTimeChanged(dayKey, 'start') || isTimeChanged(dayKey, 'end');
+};
+
+const isNonWorkingDay = (dayKey) => {
+  const dayMap = {
+    monday: 'Mon',
+    tuesday: 'Tue',
+    wednesday: 'Wed',
+    thursday: 'Thu',
+    friday: 'Fri',
+    saturday: 'Sat',
+    sunday: 'Sun'
+  };
+  return organisation.nonWorkingDays.includes(dayMap[dayKey]);
+};
+
+const updateStartTime = (dayKey, value) => {
+  // Prevent updates for non-working days
+  if (isNonWorkingDay(dayKey)) {
+    mainStore.setSnackbar({
+      title: 'Cannot update working hours for non-working days',
+      type: 'warning',
+    });
+    return;
+  }
+  organisation.workingTimings[dayKey].startTime = value;
+  markWorkingHoursDirty();
+};
+
+const updateEndTime = (dayKey, value) => {
+  // Prevent updates for non-working days
+  if (isNonWorkingDay(dayKey)) {
+    mainStore.setSnackbar({
+      title: 'Cannot update working hours for non-working days',
+      type: 'warning',
+    });
+    return;
+  }
+  organisation.workingTimings[dayKey].endTime = value;
+  markWorkingHoursDirty();
+};
+
+const resetToDefaultTime = (dayKey) => {
+  organisation.workingTimings[dayKey].startTime = '09:00';
+  organisation.workingTimings[dayKey].endTime = '17:00';
+  markWorkingHoursDirty();
+};
+
+const resetAllWorkingHours = () => {
+  workingDaysKeys.forEach(dayKey => {
+    organisation.workingTimings[dayKey].startTime = '09:00';
+    organisation.workingTimings[dayKey].endTime = '17:00';
+  });
+  markWorkingHoursDirty();
+};
+
+const applySameHoursToAll = () => {
+  const firstDayKey = workingDaysKeys[0];
+  const { startTime, endTime } = organisation.workingTimings[firstDayKey];
+  workingDaysKeys.forEach(dayKey => {
+    organisation.workingTimings[dayKey].startTime = startTime;
+    organisation.workingTimings[dayKey].endTime = endTime;
+  });
+  markWorkingHoursDirty();
+};
+
+const copyPreviousDayHours = () => {
+  for (let i = workingDaysKeys.length - 1; i > 0; i--) {
+    const currentDay = workingDaysKeys[i];
+    const previousDay = workingDaysKeys[i - 1];
+    organisation.workingTimings[currentDay].startTime = organisation.workingTimings[previousDay].startTime;
+    organisation.workingTimings[currentDay].endTime = organisation.workingTimings[previousDay].endTime;
+  }
+  markWorkingHoursDirty();
 };
 
 // Handle editable div changes with proper value validation
@@ -467,6 +687,10 @@ const markAutomationDirty = () => {
   markDirty('automationPlaceholders');
 };
 
+const markWorkingHoursDirty = () => {
+  markDirty('workingTimings');
+};
+
 // Handle PIN verification toggle
 const handlePinVerification = (val) => {
   organisation.pinCodeVerification = val;
@@ -510,6 +734,8 @@ const buildUpdatePayload = () => {
       payload.append(fieldName, value || '');
     } else if (fieldName === 'automationPlaceholders') {
       payload.append(fieldName, JSON.stringify(automationPlaceholders));
+    } else if (fieldName === 'workingTimings') {
+      payload.append(fieldName, JSON.stringify(organisation.workingTimings));
     } else {
       // Text fields
       payload.append(fieldName, value || '');
@@ -543,6 +769,20 @@ const updateOrgDetails = () => {
           title: res?.data?.message || 'Organisation updated successfully',
           type: 'success',
         });
+        
+        // Update local organisation object with response data to sync frontend state
+        if (res.data) {
+          // Merge response data into local organisation reactive object
+          Object.keys(res.data).forEach((key) => {
+            if (key in organisation) {
+              organisation[key] = res.data[key];
+            }
+          });
+          
+          // Also update mainStore with latest organisation data
+          mainStore.organisation = res.data;
+        }
+        
         // Reset dirty fields after successful update
         Object.keys(dirtyFields).forEach((key) => delete dirtyFields[key]);
         // Update original data to reflect new state
@@ -566,6 +806,39 @@ onMounted(() => {
   getPracticeManagers();
   initializeOriginalData();
 });
+
+// Watch for prop changes to sync practice details
+watch(
+  () => props.practiceDetails,
+  (newPracticeDetails) => {
+    if (newPracticeDetails && newPracticeDetails.id) {
+      // Sync prop changes into local organisation object
+      Object.keys(newPracticeDetails).forEach((key) => {
+        if (key === 'name') {
+          organisation.fullName = newPracticeDetails.name;
+        } else if (key === 'automationPlaceholders' && newPracticeDetails[key]) {
+          Object.assign(automationPlaceholders, newPracticeDetails[key]);
+        } else if (key in organisation) {
+          organisation[key] = newPracticeDetails[key];
+        }
+      });
+      // Reinitialize original data since props have changed
+      initializeOriginalData();
+    }
+  },
+  { deep: true }
+);
+
+// Watch for changes to non-working days
+watch(
+  () => organisation.nonWorkingDays,
+  (newNonWorkingDays) => {
+    // When a day is marked as non-working, its hours shouldn't be editable
+    // This is a UI-level enforcement; backend will also validate
+    markDirty('nonWorkingDays');
+  },
+  { deep: true }
+);
 </script>
 
 <style scoped>
@@ -636,5 +909,244 @@ onMounted(() => {
 /* Checkbox style */
 .day-checkbox .v-input--selection-controls__input {
   border: 1px solid #dfdfdf !important;
+}
+
+/* Working hours styles - Improved UX */
+.working-hours-card {
+  border-radius: 12px !important;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+.working-hours-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 20px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  font-weight: 600;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.header-day {
+  flex: 0 0 120px;
+}
+
+.header-hours {
+  flex: 1;
+}
+
+.header-actions {
+  flex: 0 0 40px;
+}
+
+.working-hours-list {
+  background: white;
+}
+
+.working-hours-row {
+  display: flex;
+  align-items: center;
+  padding: 12px 20px;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background-color 0.2s ease;
+}
+
+.working-hours-row:hover {
+  background-color: #fafafa;
+}
+
+.working-hours-row.has-changes {
+  background-color: #fefce8;
+}
+
+.working-hours-row:last-child {
+  border-bottom: none;
+}
+
+.day-name {
+  flex: 0 0 120px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  font-size: 14px;
+  color: #1e1e1e;
+}
+
+.non-working-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+}
+
+.time-controls {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.time-controls.disabled-controls {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.time-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 6px 12px;
+  transition: all 0.2s ease;
+}
+
+.time-input-group:hover {
+  border-color: #213536;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.time-input-group.disabled {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.time-icon {
+  color: #9ca3af;
+}
+
+.time-input {
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-family: inherit;
+  color: #1e1e1e;
+  outline: none;
+  width: 100px;
+  cursor: pointer;
+}
+
+.time-input:disabled {
+  color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.time-input.time-changed {
+  color: #d97706;
+  font-weight: 500;
+}
+
+.time-input.time-changed:disabled {
+  color: #9ca3af;
+}
+
+.time-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+}
+
+.time-input::-webkit-calendar-picker-indicator:hover {
+  background-color: #f3f4f6;
+  opacity: 1;
+}
+
+.time-separator {
+  color: #9ca3af;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.row-actions {
+  flex: 0 0 40px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.clear-time-btn {
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+}
+
+.clear-time-btn:hover {
+  opacity: 1;
+}
+
+.quick-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.quick-action-btn {
+  font-size: 12px;
+  text-transform: none;
+  color: #6b7280;
+}
+
+.quick-action-btn:hover {
+  color: #213536;
+  background-color: #f3f4f6;
+}
+
+.reset-all-btn {
+  font-size: 12px;
+  text-transform: none;
+  color: #ef4444;
+}
+
+.reset-all-btn:hover {
+  background-color: #fee2e2;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .working-hours-header {
+    display: none;
+  }
+  
+  .working-hours-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+  }
+  
+  .day-name {
+    flex: auto;
+    width: 100%;
+  }
+  
+  .time-controls {
+    flex: auto;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  
+  .time-input-group {
+    flex: 1;
+  }
+  
+  .time-input {
+    width: auto;
+    flex: 1;
+  }
+  
+  .row-actions {
+    flex: auto;
+    width: 100%;
+    justify-content: flex-start;
+  }
+  
+  .quick-actions {
+    flex-direction: column;
+  }
 }
 </style>

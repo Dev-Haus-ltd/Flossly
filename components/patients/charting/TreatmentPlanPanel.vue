@@ -84,109 +84,105 @@
 
         <div v-if="isExpanded(item)" class="tp-expand">
           <div class="tp-expand-body">
-            <div class="tp-expand-left">
-              <div class="tp-expand-fields">
-                <label class="tp-field">
-                  <span>Price (£)</span>
-                  <input v-model.number="draft.cost" type="number" min="0" step="0.01" />
-                </label>
-                <label class="tp-field">
-                  <span>Duration (min)</span>
-                  <v-select
-                    v-model="draft.duration"
-                    :items="durationOptions"
-                    item-title="title"
-                    item-value="value"
-                    variant="solo"
-                    density="compact"
-                    class="tp-input-bordered"
-                    bg-color="white"
-                    flat
-                    hide-details
-                  />
-                </label>
-                <label class="tp-field">
-                  <span>Completed on</span>
-                  <input v-model="draft.completedOn" type="date" />
-                </label>
-                <label class="tp-field">
-                  <span>Payment plan</span>
-                  <v-select
-                    v-model="draft.paymentPlan"
-                    :items="paymentPlanOptions"
-                    item-title="title"
-                    item-value="value"
-                    variant="solo"
-                    density="compact"
-                    class="tp-input-bordered"
-                    bg-color="white"
-                    flat
-                    hide-details
-                  />
-                </label>
-                <label class="tp-field">
-                  <span>Practitioner</span>
-                  <v-select
-                    v-model="draft.practitionerId"
-                    :items="practitionerSelectOptions"
-                    item-title="name"
-                    item-value="id"
-                    variant="solo"
-                    density="compact"
-                    class="tp-input-bordered"
-                    bg-color="white"
-                    flat
-                    hide-details
-                  />
-                </label>
-                <label class="tp-field">
-                  <span>Referrer</span>
-                  <v-select
-                    v-model="draft.referrerId"
-                    :items="referrerSelectOptions"
-                    item-title="name"
-                    item-value="id"
-                    variant="solo"
-                    density="compact"
-                    class="tp-input-bordered"
-                    bg-color="white"
-                    flat
-                    hide-details
-                  />
-                </label>
-                <label class="tp-field">
-                  <span>Status</span>
-                  <v-select
-                    v-model="draft.status"
-                    :items="baseStatusOptions"
-                    item-title="title"
-                    item-value="value"
-                    variant="solo"
-                    density="compact"
-                    class="tp-input-bordered"
-                    bg-color="white"
-                    flat
-                    hide-details
-                  />
-                </label>
-                <label class="tp-field">
-                  <span>Invoice desc.</span>
-                  <input v-model="draft.invoiceDesc" type="text" placeholder="Invoice description..." />
-                </label>
-              </div>
-            </div>
-            <div class="tp-expand-right">
-              <label class="tp-expand-check">
-                <input v-model="draft.showOnInvoice" type="checkbox" />
-                <span>Show notes on invoice</span>
+            <div class="tp-expand-fields">
+              <label class="tp-field">
+                <span>Price (£)</span>
+                <input v-model.number="draft.cost" type="number" min="0" step="0.01" />
               </label>
-              <div class="tp-notes-wrap">
-                <div class="tp-notes-title">Clinical notes</div>
-                <ChartRichTextEditor
-                  v-model="draft.notes"
-                  placeholder="Write notes..."
+              <label class="tp-field">
+                <span>Duration (min)</span>
+                <v-select
+                  v-model="draft.duration"
+                  :items="durationOptions"
+                  item-title="title"
+                  item-value="value"
+                  variant="solo"
+                  density="compact"
+                  class="tp-input-bordered"
+                  bg-color="white"
+                  flat
+                  hide-details
                 />
-              </div>
+              </label>
+              <label class="tp-field">
+                <span>Completed on</span>
+                <input v-model="draft.completedOn" type="date" />
+              </label>
+              <label class="tp-field">
+                <span>Payment plan</span>
+                <v-select
+                  v-model="draft.paymentPlan"
+                  :items="paymentPlanOptions"
+                  item-title="title"
+                  item-value="value"
+                  variant="solo"
+                  density="compact"
+                  class="tp-input-bordered"
+                  bg-color="white"
+                  flat
+                  hide-details
+                />
+              </label>
+              <label class="tp-field">
+                <span>Practitioner</span>
+                <v-select
+                  v-model="draft.practitionerId"
+                  :items="practitionerSelectOptions"
+                  item-title="name"
+                  item-value="id"
+                  variant="solo"
+                  density="compact"
+                  class="tp-input-bordered"
+                  bg-color="white"
+                  flat
+                  hide-details
+                />
+              </label>
+              <label class="tp-field">
+                <span>Referrer</span>
+                <v-select
+                  v-model="draft.referrerId"
+                  :items="referrerSelectOptions"
+                  item-title="name"
+                  item-value="id"
+                  variant="solo"
+                  density="compact"
+                  class="tp-input-bordered"
+                  bg-color="white"
+                  flat
+                  hide-details
+                />
+              </label>
+              <label class="tp-field">
+                <span>Status</span>
+                <v-select
+                  v-model="draft.status"
+                  :items="baseStatusOptions"
+                  item-title="title"
+                  item-value="value"
+                  variant="solo"
+                  density="compact"
+                  class="tp-input-bordered"
+                  bg-color="white"
+                  flat
+                  hide-details
+                />
+              </label>
+              <label class="tp-field">
+                <span>Invoice desc.</span>
+                <input v-model="draft.invoiceDesc" type="text" placeholder="Invoice description..." />
+              </label>
+            </div>
+            <label class="tp-expand-check">
+              <input v-model="draft.showOnInvoice" type="checkbox" />
+              <span>Show notes on invoice</span>
+            </label>
+            <div class="tp-notes-wrap">
+              <div class="tp-notes-title">Clinical notes</div>
+              <ChartRichTextEditor
+                v-model="draft.notes"
+                placeholder="Write notes..."
+              />
             </div>
           </div>
           <div class="tp-expand-actions">
@@ -323,109 +319,105 @@
 
             <div v-if="isExpanded(item)" class="tp-expand">
               <div class="tp-expand-body">
-                <div class="tp-expand-left">
-                  <div class="tp-expand-fields">
-                    <label class="tp-field">
-                      <span>Price (£)</span>
-                      <input v-model.number="draft.cost" type="number" min="0" step="0.01" />
-                    </label>
-                    <label class="tp-field">
-                      <span>Duration (min)</span>
-                      <v-select
-                        v-model="draft.duration"
-                        :items="durationOptions"
-                        item-title="title"
-                        item-value="value"
-                        variant="solo"
-                        density="compact"
-                        class="tp-input-bordered"
-                        bg-color="white"
-                        flat
-                        hide-details
-                      />
-                    </label>
-                    <label class="tp-field">
-                      <span>Completed on</span>
-                      <input v-model="draft.completedOn" type="date" />
-                    </label>
-                    <label class="tp-field">
-                      <span>Payment plan</span>
-                      <v-select
-                        v-model="draft.paymentPlan"
-                        :items="paymentPlanOptions"
-                        item-title="title"
-                        item-value="value"
-                        variant="solo"
-                        density="compact"
-                        class="tp-input-bordered"
-                        bg-color="white"
-                        flat
-                        hide-details
-                      />
-                    </label>
-                    <label class="tp-field">
-                      <span>Practitioner</span>
-                      <v-select
-                        v-model="draft.practitionerId"
-                        :items="practitionerSelectOptions"
-                        item-title="name"
-                        item-value="id"
-                        variant="solo"
-                        density="compact"
-                        class="tp-input-bordered"
-                        bg-color="white"
-                        flat
-                        hide-details
-                      />
-                    </label>
-                    <label class="tp-field">
-                      <span>Referrer</span>
-                      <v-select
-                        v-model="draft.referrerId"
-                        :items="referrerSelectOptions"
-                        item-title="name"
-                        item-value="id"
-                        variant="solo"
-                        density="compact"
-                        class="tp-input-bordered"
-                        bg-color="white"
-                        flat
-                        hide-details
-                      />
-                    </label>
-                    <label class="tp-field">
-                      <span>Status</span>
-                      <v-select
-                        v-model="draft.status"
-                        :items="plannedStatusOptions"
-                        item-title="title"
-                        item-value="value"
-                        variant="solo"
-                        density="compact"
-                        class="tp-input-bordered"
-                        bg-color="white"
-                        flat
-                        hide-details
-                      />
-                    </label>
-                    <label class="tp-field">
-                      <span>Invoice desc.</span>
-                      <input v-model="draft.invoiceDesc" type="text" placeholder="Invoice description..." />
-                    </label>
-                  </div>
-                </div>
-                <div class="tp-expand-right">
-                  <label class="tp-expand-check">
-                    <input v-model="draft.showOnInvoice" type="checkbox" />
-                    <span>Show notes on invoice</span>
+                <div class="tp-expand-fields">
+                  <label class="tp-field">
+                    <span>Price (£)</span>
+                    <input v-model.number="draft.cost" type="number" min="0" step="0.01" />
                   </label>
-                  <div class="tp-notes-wrap">
-                    <div class="tp-notes-title">Clinical notes</div>
-                    <ChartRichTextEditor
-                      v-model="draft.notes"
-                      placeholder="Write notes..."
+                  <label class="tp-field">
+                    <span>Duration (min)</span>
+                    <v-select
+                      v-model="draft.duration"
+                      :items="durationOptions"
+                      item-title="title"
+                      item-value="value"
+                      variant="solo"
+                      density="compact"
+                      class="tp-input-bordered"
+                      bg-color="white"
+                      flat
+                      hide-details
                     />
-                  </div>
+                  </label>
+                  <label class="tp-field">
+                    <span>Completed on</span>
+                    <input v-model="draft.completedOn" type="date" />
+                  </label>
+                  <label class="tp-field">
+                    <span>Payment plan</span>
+                    <v-select
+                      v-model="draft.paymentPlan"
+                      :items="paymentPlanOptions"
+                      item-title="title"
+                      item-value="value"
+                      variant="solo"
+                      density="compact"
+                      class="tp-input-bordered"
+                      bg-color="white"
+                      flat
+                      hide-details
+                    />
+                  </label>
+                  <label class="tp-field">
+                    <span>Practitioner</span>
+                    <v-select
+                      v-model="draft.practitionerId"
+                      :items="practitionerSelectOptions"
+                      item-title="name"
+                      item-value="id"
+                      variant="solo"
+                      density="compact"
+                      class="tp-input-bordered"
+                      bg-color="white"
+                      flat
+                      hide-details
+                    />
+                  </label>
+                  <label class="tp-field">
+                    <span>Referrer</span>
+                    <v-select
+                      v-model="draft.referrerId"
+                      :items="referrerSelectOptions"
+                      item-title="name"
+                      item-value="id"
+                      variant="solo"
+                      density="compact"
+                      class="tp-input-bordered"
+                      bg-color="white"
+                      flat
+                      hide-details
+                    />
+                  </label>
+                  <label class="tp-field">
+                    <span>Status</span>
+                    <v-select
+                      v-model="draft.status"
+                      :items="plannedStatusOptions"
+                      item-title="title"
+                      item-value="value"
+                      variant="solo"
+                      density="compact"
+                      class="tp-input-bordered"
+                      bg-color="white"
+                      flat
+                      hide-details
+                    />
+                  </label>
+                  <label class="tp-field">
+                    <span>Invoice desc.</span>
+                    <input v-model="draft.invoiceDesc" type="text" placeholder="Invoice description..." />
+                  </label>
+                </div>
+                <label class="tp-expand-check">
+                  <input v-model="draft.showOnInvoice" type="checkbox" />
+                  <span>Show notes on invoice</span>
+                </label>
+                <div class="tp-notes-wrap">
+                  <div class="tp-notes-title">Clinical notes</div>
+                  <ChartRichTextEditor
+                    v-model="draft.notes"
+                    placeholder="Write notes..."
+                  />
                 </div>
               </div>
               <div class="tp-expand-actions">
@@ -1436,28 +1428,15 @@ watch(
   border-top: 1px solid #eef2f7;
   padding: 12px;
   background: #f8fbff;
-  overflow: visible;
+  max-height: 520px;
+  overflow-y: auto;
 }
 
-/* ── 2-column expand layout ─────────────────────────────────── */
 .tp-expand-body {
-  display: grid;
-  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
-  gap: 16px;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   margin-bottom: 12px;
-}
-
-.tp-expand-left {
-  display: flex;
-  flex-direction: column;
-}
-
-.tp-expand-right {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
 }
 
 .tp-notes-header {
@@ -1943,10 +1922,6 @@ watch(
 @media (max-width: 1200px) {
   .tp-item-row {
     grid-template-columns: 28px 120px 70px minmax(140px, 1fr) 100px 70px 90px 34px;
-  }
-
-  .tp-expand-body {
-    grid-template-columns: 1fr;
   }
 }
 
