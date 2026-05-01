@@ -243,6 +243,7 @@ export const useCrmStore = defineStore("crmStore", {
 
     // Automation
     listAutomation(leadId) { return this._wrap(() => crmService.listAutomation(leadId)); },
+    listAutomationSilent(leadId) { return crmService.listAutomation(leadId); },
     async saveAutomation(payload) {
       const res = await this._wrap(() => crmService.saveAutomation(payload));
       if (res?.code === 0) {
@@ -289,6 +290,7 @@ export const useCrmStore = defineStore("crmStore", {
       return res;
     },
     listAutomationGroups() { return this._wrap(() => crmService.listAutomationGroups()); },
+    listAutomationGroupsSilent() { return crmService.listAutomationGroups(); },
     async saveAutomationGroup(payload) {
       const res = await this._wrap(() => crmService.saveAutomationGroup(payload));
       if (res?.code === 0) this._notifyAutomationUpdate({ groupsChanged: true });
@@ -301,12 +303,14 @@ export const useCrmStore = defineStore("crmStore", {
     },
 
     // Automation cache actions
-    async fetchAutomationGroups({ force = false } = {}) {
+    async fetchAutomationGroups({ force = false, silent = false } = {}) {
       this._ensureAutomationOrgScope();
       if (!force && (this.automationGroupRows.length || this.automationGroupsLoading)) return;
       this.automationGroupsLoading = true;
       try {
-        const res = await this.listAutomationGroups();
+        const res = await (silent
+          ? this.listAutomationGroupsSilent()
+          : this.listAutomationGroups());
         if (res?.code === 0 && Array.isArray(res.data)) {
           this.automationGroupRows = res.data;
         }
@@ -314,7 +318,7 @@ export const useCrmStore = defineStore("crmStore", {
         this.automationGroupsLoading = false;
       }
     },
-    async fetchLeadAutomations(leadId, { force = false } = {}) {
+    async fetchLeadAutomations(leadId, { force = false, silent = false } = {}) {
       this._ensureAutomationOrgScope();
       const id = Number(leadId);
       if (!id) return;
@@ -322,7 +326,9 @@ export const useCrmStore = defineStore("crmStore", {
       if (this.automationLoadingIds[id]) return;
       this.automationLoadingIds[id] = true;
       try {
-        const res = await this.listAutomation(id);
+        const res = await (silent
+          ? this.listAutomationSilent(id)
+          : this.listAutomation(id));
         const items = Array.isArray(res?.data) ? res.data : [];
         this.automationRowsCache[id] = items;
       } catch {

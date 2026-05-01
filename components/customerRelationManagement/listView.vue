@@ -1239,15 +1239,35 @@ const resolvedAutomationGroups = computed(() =>
 
 const loadLeadAutomations = (leadId, { force = false } = {}) => crmStore.fetchLeadAutomations(leadId, { force });
 
+const AUTOMATION_PREFETCH_CONCURRENCY = 6;
+let automationPrefetchToken = 0;
+
+const runWithConcurrency = async (items, limit, worker) => {
+  const queue = Array.isArray(items) ? items : [];
+  const concurrency = Math.max(1, Math.min(limit, queue.length || 1));
+  let cursor = 0;
+
+  const runners = Array.from({ length: concurrency }, async () => {
+    while (cursor < queue.length) {
+      const currentIndex = cursor;
+      cursor += 1;
+      await worker(queue[currentIndex], currentIndex);
+    }
+  });
+
+  await Promise.all(runners);
+};
+
 const onAutomationMenuOpen = async (lead) => {
   if (!lead?.id) return;
   await Promise.all([
-    crmStore.fetchAutomationGroups({ force: true }),
-    crmStore.fetchLeadAutomations(lead.id, { force: true }),
+    crmStore.fetchAutomationGroups({ force: true, silent: true }),
+    crmStore.fetchLeadAutomations(lead.id, { force: true, silent: true }),
   ]);
 };
 
-const _onAutomationGroupsUpdated = () => crmStore.fetchAutomationGroups({ force: true });
+const _onAutomationGroupsUpdated = () =>
+  crmStore.fetchAutomationGroups({ force: true, silent: true });
 const _onAutomationsUpdated = (event) => prefetchVisibleLeadAutomations({
   force: true,
   groupsChanged: event?.detail?.groupsChanged === true,
@@ -1256,7 +1276,7 @@ const _onAutomationsUpdated = (event) => prefetchVisibleLeadAutomations({
 
 onMounted(() => {
   if (typeof window === 'undefined') return;
-  crmStore.fetchAutomationGroups();
+  crmStore.fetchAutomationGroups({ silent: true });
   window.addEventListener('crm-automation-groups-updated', _onAutomationGroupsUpdated);
   window.addEventListener('crm-automations-updated', _onAutomationsUpdated);
 });
@@ -1268,6 +1288,7 @@ onBeforeUnmount(() => {
 });
 
 const prefetchVisibleLeadAutomations = async ({ force = false, groupsChanged = false, leadIds = [] } = {}) => {
+  const requestToken = ++automationPrefetchToken;
   const visibleIds = [...new Set(allVisibleLeads.value.map((lead) => Number(lead?.id || 0)).filter(Boolean))];
   if (!visibleIds.length) return;
   const normalizedLeadIds = [...new Set((Array.isArray(leadIds) ? leadIds : [])
@@ -1277,8 +1298,15 @@ const prefetchVisibleLeadAutomations = async ({ force = false, groupsChanged = f
     ? visibleIds
     : visibleIds.filter((id) => normalizedLeadIds.includes(id));
   if (!ids.length) return;
-  await crmStore.fetchAutomationGroups({ force: force || groupsChanged });
-  await Promise.all(ids.map((leadId) => crmStore.fetchLeadAutomations(leadId, { force })));
+  await crmStore.fetchAutomationGroups({
+    force: force || groupsChanged,
+    silent: true,
+  });
+
+  await runWithConcurrency(ids, AUTOMATION_PREFETCH_CONCURRENCY, async (leadId) => {
+    if (requestToken !== automationPrefetchToken) return;
+    await crmStore.fetchLeadAutomations(leadId, { force, silent: true });
+  });
 };
 
 watch(
