@@ -204,8 +204,16 @@
         <p class="tp-empty__hint">Select a treatment code and click a tooth to add items.</p>
       </div>
 
-      <div v-for="appt in appointments" :key="appt.id" class="tp-appt-group">
-        <div class="tp-appt-header">
+      <div
+        v-for="appt in appointments"
+        :key="appt.id"
+        class="tp-appt-group"
+        :class="{
+          'tp-appt-group--selected': appt.id === activeAppointmentId,
+          'tp-appt-group--drag-over': dragOverAppointmentId === appt.id,
+        }"
+      >
+        <div class="tp-appt-header" @click="onSelectAppointment(appt.id)">
           <div class="tp-appt-header__left">
             <span class="tp-appt-name">{{ appt.name }}</span>
             <!-- Booking status badge -->
@@ -280,8 +288,24 @@
           </div>
         </div>
 
-        <div class="tp-appt-items">
-          <div v-for="item in planItemsForAppt(appt.id)" :key="rowKey(item)" :data-item-key="rowKey(item)" class="tp-item-wrap">
+        <div
+          class="tp-appt-items"
+          @dragover.prevent="onAppointmentDragOver(appt.id)"
+          @dragenter.prevent="onAppointmentDragOver(appt.id)"
+          @drop.prevent="onAppointmentDrop(appt.id)"
+        >
+          <div
+            v-for="item in planItemsForAppt(appt.id)"
+            :key="rowKey(item)"
+            :data-item-key="rowKey(item)"
+            class="tp-item-wrap tp-item-wrap--draggable"
+            :class="{ 'tp-item-wrap--dragging': draggedItemId === rowKey(item) }"
+            draggable="true"
+            @dragstart="onItemDragStart(appt.id, item, $event)"
+            @dragend="onItemDragEnd"
+            @dragover.prevent="onItemDragOver(appt.id, item)"
+            @drop.prevent="onItemDrop(appt.id, item)"
+          >
             <div class="tp-item-row" :class="{ 'tp-item-row--selected': isSelected(item) }" @click="onRowClick(item)">
               <button class="tp-row-toggle" :class="{ 'tp-row-toggle--open': isExpanded(item) }">
                 <v-icon size="16">mdi-chevron-right</v-icon>
@@ -509,6 +533,7 @@ const props = defineProps({
   completedCount: { type: Number, default: 0 },
   notation: { type: String, default: 'FDI' },
   appointments: { type: Array, default: () => [] },
+  activeAppointmentId: { type: String, default: '' },
   plans: { type: Array, default: () => [] },
   activePlanId: { type: String, default: 'plan-1' },
   images: { type: Array, default: () => [] },
@@ -521,7 +546,7 @@ const emit = defineEmits([
   'remove', 'update', 'reorder', 'add-appointment', 'delete-appointment', 'update-appointment', 'book-appointment',
   'add-plan', 'select-plan', 'rename-plan', 'duplicate-plan', 'delete-plan', 'set-interval', 'link-appointment',
   'add-image', 'remove-image', 'update-plan-color', 'chart-scope-change',
-  'mark-complete', 'print-plan', 'select-note-item',
+  'mark-complete', 'print-plan', 'select-note-item', 'select-appointment', 'move-item',
 ])
 const router = useRouter()
 
@@ -636,11 +661,16 @@ function rowKey(item) {
 
 function toothLabel(item) {
   const base = getToothLabel(item.fdi, props.notation || 'FDI')
-  return item.surface ? `${base}-${item.surface.charAt(0).toUpperCase()}` : base
+  const surfaces = String(item.surface || '').split('+').filter(Boolean)
+  return surfaces.length ? `${base}-${surfaces.map((surface) => surface.charAt(0).toUpperCase()).join('/')}` : base
 }
 
 function itemDisplayLabel(item) {
   return item.treatmentName || item.conditionLabel || item.condition || 'Treatment'
+}
+
+function onSelectAppointment(appointmentId) {
+  emit('select-appointment', appointmentId)
 }
 
 function isSelected(item) {
@@ -739,6 +769,59 @@ function moveItem(apptId, item, direction) {
   const to = from + direction
   if (to < 0 || to >= scoped.length) return
   emit('reorder', { appointmentId: apptId, from, to })
+}
+
+const draggedItemId = ref(null)
+const draggedFromAppointmentId = ref(null)
+const dragOverAppointmentId = ref(null)
+
+function onItemDragStart(apptId, item, event) {
+  const id = rowKey(item)
+  draggedItemId.value = id
+  draggedFromAppointmentId.value = apptId
+  dragOverAppointmentId.value = apptId
+  emit('select-appointment', apptId)
+  event?.dataTransfer?.setData('text/plain', String(id))
+  if (event?.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+}
+
+function onItemDragEnd() {
+  draggedItemId.value = null
+  draggedFromAppointmentId.value = null
+  dragOverAppointmentId.value = null
+}
+
+function onAppointmentDragOver(apptId) {
+  if (!draggedItemId.value) return
+  dragOverAppointmentId.value = apptId
+}
+
+function onItemDragOver(apptId) {
+  if (!draggedItemId.value) return
+  dragOverAppointmentId.value = apptId
+}
+
+function onItemDrop(apptId, targetItem) {
+  if (!draggedItemId.value) return
+  const scoped = planItemsForAppt(apptId)
+  const toIndex = scoped.findIndex((item) => rowKey(item) === rowKey(targetItem))
+  if (toIndex < 0) return onAppointmentDrop(apptId)
+  emit('move-item', {
+    id: draggedItemId.value,
+    toAppointmentId: apptId,
+    toIndex,
+  })
+  onItemDragEnd()
+}
+
+function onAppointmentDrop(apptId) {
+  if (!draggedItemId.value) return
+  emit('move-item', {
+    id: draggedItemId.value,
+    toAppointmentId: apptId,
+    toIndex: planItemsForAppt(apptId).length,
+  })
+  onItemDragEnd()
 }
 
 // ── Voice transcript ─────────────────────────────────────────────────────
@@ -1230,6 +1313,14 @@ watch(
   overflow: hidden;
 }
 
+.tp-item-wrap--draggable {
+  cursor: grab;
+}
+
+.tp-item-wrap--dragging {
+  opacity: 0.55;
+}
+
 .tp-item-row {
   display: grid;
   grid-template-columns: 32px 150px 90px minmax(180px, 1fr) 140px 80px 100px 34px;
@@ -1485,6 +1576,16 @@ watch(
   overflow: hidden;
 }
 
+.tp-appt-group--selected {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 2px #dbeafe;
+}
+
+.tp-appt-group--drag-over {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px #bfdbfe;
+}
+
 .tp-appt-header {
   display: flex;
   align-items: center;
@@ -1493,6 +1594,7 @@ watch(
   background: #fafafa;
   border-bottom: 1px solid #f0f0f0;
   gap: 8px;
+  cursor: pointer;
 }
 
 .tp-appt-header__left {
@@ -1649,6 +1751,7 @@ watch(
   flex-direction: column;
   gap: 6px;
   padding: 8px;
+  min-height: 56px;
 }
 
 .tp-appt-empty {
