@@ -66,12 +66,16 @@
         </div>
 
         <div v-if="validationErrors.length" class="mb-3">
-          <v-alert type="warning" variant="tonal" density="compact">
+          <v-alert
+            :type="validationErrors.some(e => !e.isWarning) ? 'error' : 'warning'"
+            variant="tonal"
+            density="compact"
+          >
             <div style="font-size: 13px">
               <strong>{{ validationErrors.length }} issues found:</strong>
               <ul class="ml-4 mt-1">
-                <li v-for="(error, idx) in validationErrors.slice(0, 5)" :key="idx">
-                  {{ error }}
+                <li v-for="(issue, idx) in validationErrors.slice(0, 5)" :key="idx">
+                  {{ issue.text }}
                 </li>
                 <li v-if="validationErrors.length > 5">
                   ...and {{ validationErrors.length - 5 }} more
@@ -107,7 +111,7 @@
                 :class="{ 'row-error': lead.hasErrors }"
               >
                 <td>{{ index + 1 }}</td>
-                <td :class="{ 'cell-error': lead.errors?.name }">
+                <td :class="{ 'cell-error': lead.errors?.name, 'cell-warning': lead.warnings?.name }">
                   <div class="relative">
                     <v-text-field
                       v-model="lead.name"
@@ -116,16 +120,16 @@
                       hide-details
                       @input="validateLead(index)"
                     />
-                    <v-tooltip v-show="lead.errors?.name" location="top">
+                    <v-tooltip v-show="lead.errors?.name || lead.warnings?.name" location="top">
                       <template #activator="{ props: tooltipProps }">
                         <div v-bind="tooltipProps" class="absolute inset-0"></div>
                       </template>
-                      <span>{{ lead.errors.name }}</span>
+                      <span>{{ lead.errors?.name || lead.warnings?.name }}</span>
                     </v-tooltip>
                   </div>
                 </td>
 
-                <td :class="{ 'cell-error': lead.errors?.email }">
+                <td :class="{ 'cell-error': lead.errors?.email, 'cell-warning': lead.warnings?.email }">
                   <div class="relative">
                     <v-text-field
                       v-model="lead.email"
@@ -134,16 +138,16 @@
                       hide-details
                       @input="validateLead(index)"
                     />
-                    <v-tooltip v-show="lead.errors?.email" location="top">
+                    <v-tooltip v-show="lead.errors?.email || lead.warnings?.email" location="top">
                       <template #activator="{ props: tooltipProps }">
                         <div v-bind="tooltipProps" class="absolute inset-0"></div>
                       </template>
-                      <span>{{ lead.errors.email }}</span>
+                      <span>{{ lead.errors?.email || lead.warnings?.email }}</span>
                     </v-tooltip>
                   </div>
                 </td>
 
-                <td :class="{ 'cell-error': lead.errors?.telephone }">
+                <td :class="{ 'cell-error': lead.errors?.telephone, 'cell-warning': lead.warnings?.telephone }">
                   <div class="relative">
                     <v-text-field
                       v-model="lead.telephone"
@@ -152,16 +156,16 @@
                       hide-details
                       @input="validateLead(index)"
                     />
-                    <v-tooltip v-show="lead.errors?.telephone" location="top">
+                    <v-tooltip v-show="lead.errors?.telephone || lead.warnings?.telephone" location="top">
                       <template #activator="{ props: tooltipProps }">
                         <div v-bind="tooltipProps" class="absolute inset-0"></div>
                       </template>
-                      <span>{{ lead.errors.telephone }}</span>
+                      <span>{{ lead.errors?.telephone || lead.warnings?.telephone }}</span>
                     </v-tooltip>
                   </div>
                 </td>
 
-                <td :class="{ 'cell-error': lead.errors?.inquiryDate }">
+                <td :class="{ 'cell-error': lead.errors?.inquiryDate, 'cell-warning': lead.warnings?.inquiryDate }">
                   <div class="relative">
                     <v-text-field
                       v-model="lead.inquiryDate"
@@ -171,16 +175,16 @@
                       hide-details
                       @change="validateLead(index)"
                     />
-                    <v-tooltip v-show="lead.errors?.inquiryDate" location="top">
+                    <v-tooltip v-show="lead.errors?.inquiryDate || lead.warnings?.inquiryDate" location="top">
                       <template #activator="{ props: tooltipProps }">
                         <div v-bind="tooltipProps" class="absolute inset-0"></div>
                       </template>
-                      <span>{{ lead.errors.inquiryDate }}</span>
+                      <span>{{ lead.errors?.inquiryDate || lead.warnings?.inquiryDate }}</span>
                     </v-tooltip>
                   </div>
                 </td>
 
-                <td :class="{ 'cell-error': lead.errors?.leadSource }">
+                <td :class="{ 'cell-error': lead.errors?.leadSource, 'cell-warning': lead.warnings?.leadSource }">
                   <div class="relative">
                     <v-select
                       v-model="lead.leadSourceId"
@@ -194,16 +198,16 @@
                       placeholder="Select"
                       @update:modelValue="(val) => onSourceChange(index, val)"
                     />
-                    <v-tooltip v-show="lead.errors?.leadSource" location="top">
+                    <v-tooltip v-show="lead.errors?.leadSource || lead.warnings?.leadSource" location="top">
                       <template #activator="{ props: tooltipProps }">
                         <div v-bind="tooltipProps" class="absolute inset-0"></div>
                       </template>
-                      <span>{{ lead.errors.leadSource }}</span>
+                      <span>{{ lead.errors?.leadSource || lead.warnings?.leadSource }}</span>
                     </v-tooltip>
                   </div>
                 </td>
 
-                <td :class="{ 'cell-error': lead.errors?.leadStatus }">
+                <td :class="{ 'cell-error': lead.errors?.leadStatus, 'cell-warning': lead.warnings?.leadStatus }">
                   <div class="relative">
                     <v-select
                       v-model="lead.leadStatus"
@@ -215,16 +219,16 @@
                       hide-details
                       @update:modelValue="() => validateLead(index)"
                     />
-                    <v-tooltip v-show="lead.errors?.leadStatus" location="top">
+                    <v-tooltip v-show="lead.errors?.leadStatus || lead.warnings?.leadStatus" location="top">
                       <template #activator="{ props: tooltipProps }">
                         <div v-bind="tooltipProps" class="absolute inset-0"></div>
                       </template>
-                      <span>{{ lead.errors.leadStatus }}</span>
+                      <span>{{ lead.errors?.leadStatus || lead.warnings?.leadStatus }}</span>
                     </v-tooltip>
                   </div>
                 </td>
 
-                <td :class="{ 'cell-error': lead.errors?.treatment }">
+                <td :class="{ 'cell-error': lead.errors?.treatment, 'cell-warning': lead.warnings?.treatment }">
                   <div class="relative">
                     <v-select
                       v-model="lead.treatmentId"
@@ -238,16 +242,16 @@
                       placeholder="Select"
                       @update:modelValue="(val) => onTreatmentChange(index, val)"
                     />
-                    <v-tooltip v-show="lead.errors?.treatment" location="top">
+                    <v-tooltip v-show="lead.errors?.treatment || lead.warnings?.treatment" location="top">
                       <template #activator="{ props: tooltipProps }">
                         <div v-bind="tooltipProps" class="absolute inset-0"></div>
                       </template>
-                      <span>{{ lead.errors.treatment }}</span>
+                      <span>{{ lead.errors?.treatment || lead.warnings?.treatment }}</span>
                     </v-tooltip>
                   </div>
                 </td>
 
-                <td :class="{ 'cell-error': lead.errors?.user }">
+                <td :class="{ 'cell-error': lead.errors?.user, 'cell-warning': lead.warnings?.user }">
                   <div class="relative">
                     <v-select
                       v-model="lead.userId"
@@ -261,16 +265,16 @@
                       placeholder="Select"
                       @update:modelValue="() => validateLead(index)"
                     />
-                    <v-tooltip v-show="lead.errors?.user" location="top">
+                    <v-tooltip v-show="lead.errors?.user || lead.warnings?.user" location="top">
                       <template #activator="{ props: tooltipProps }">
                         <div v-bind="tooltipProps" class="absolute inset-0"></div>
                       </template>
-                      <span>{{ lead.errors.user }}</span>
+                      <span>{{ lead.errors?.user || lead.warnings?.user }}</span>
                     </v-tooltip>
                   </div>
                 </td>
 
-                <td :class="{ 'cell-error': lead.errors?.followUpDate }">
+                <td :class="{ 'cell-error': lead.errors?.followUpDate, 'cell-warning': lead.warnings?.followUpDate }">
                   <div class="relative">
                     <v-text-field
                       v-model="lead.followUpDate"
@@ -280,11 +284,11 @@
                       hide-details
                       @change="validateLead(index)"
                     />
-                    <v-tooltip v-show="lead.errors?.followUpDate" location="top">
+                    <v-tooltip v-show="lead.errors?.followUpDate || lead.warnings?.followUpDate" location="top">
                       <template #activator="{ props: tooltipProps }">
                         <div v-bind="tooltipProps" class="absolute inset-0"></div>
                       </template>
-                      <span>{{ lead.errors.followUpDate }}</span>
+                      <span>{{ lead.errors?.followUpDate || lead.warnings?.followUpDate }}</span>
                     </v-tooltip>
                   </div>
                 </td>
@@ -300,19 +304,23 @@
                 </td>
 
                 <td>
-                  <v-chip :color="lead.hasErrors ? 'error' : 'success'" size="small" variant="flat">
-                    {{ lead.hasErrors ? "Invalid" : "Valid" }}
+                  <v-chip
+                    :color="lead.hasErrors ? 'error' : lead.hasWarnings ? 'warning' : 'success'"
+                    size="small"
+                    variant="flat"
+                  >
+                    {{ lead.hasErrors ? "Invalid" : lead.hasWarnings ? "Warning" : "Valid" }}
                   </v-chip>
                 </td>
                 <td>
                   <v-btn
-                    v-if="lead.hasErrors"
+                    v-if="lead.hasErrors || lead.hasWarnings"
                     icon
                     variant="text"
-                    color="error"
+                    :color="lead.hasErrors ? 'error' : 'warning'"
                     size="small"
                     @click="removeInvalidLead(index)"
-                    aria-label="Delete invalid lead"
+                    aria-label="Remove lead"
                   >
                     <v-icon>mdi-delete</v-icon>
                   </v-btn>
@@ -429,15 +437,20 @@ watch(
 watch(isOpen, (val) => emit("update:modelValue", val));
 
 const validationErrors = computed(() => {
-  const errors = [];
+  const issues = [];
   parsedLeads.value.forEach((lead, index) => {
     if (lead.errors) {
-      Object.entries(lead.errors).forEach(([field, message]) => {
-        errors.push(`Row ${index + 1}: ${message}`);
+      Object.entries(lead.errors).forEach(([, message]) => {
+        issues.push({ text: `Row ${index + 1}: ${message}`, isWarning: false });
+      });
+    }
+    if (lead.warnings) {
+      Object.entries(lead.warnings).forEach(([, message]) => {
+        issues.push({ text: `Row ${index + 1}: ${message}`, isWarning: true });
       });
     }
   });
-  return errors;
+  return issues;
 });
 
 const hasValidationErrors = computed(() =>
@@ -482,7 +495,7 @@ const processFile = async (file) => {
   const fileExtension = extractExtension(file.name);
 
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
       let json;
       if (fileExtension === "csv") {
@@ -527,6 +540,11 @@ const processFile = async (file) => {
         });
       }
 
+      // Strip phantom rows — Excel stores formatting for empty rows below real data
+      json = json.filter((row) =>
+        Object.values(row).some((v) => String(v ?? "").trim() !== "")
+      );
+
       if (!json.length) {
         excelError.value = "No rows found in the file.";
         isProcessing.value = false;
@@ -552,7 +570,25 @@ const processFile = async (file) => {
 
       const formatted = json.map((row) => normalizeRow(row));
       parsedLeads.value = formatted;
-      parsedLeads.value.forEach((lead, index) => validateLead(index, lead));
+
+      // Pre-build email frequency map once — O(n) — to avoid O(n²) duplicate scan
+      const emailMap = new Map();
+      formatted.forEach((lead) => {
+        const e = (lead.email || "").trim().toLowerCase();
+        if (e) emailMap.set(e, (emailMap.get(e) || 0) + 1);
+      });
+
+      // Validate in 100-row chunks, yielding between each to keep the UI responsive
+      const CHUNK = 100;
+      for (let i = 0; i < parsedLeads.value.length; i += CHUNK) {
+        const end = Math.min(i + CHUNK, parsedLeads.value.length);
+        for (let j = i; j < end; j++) {
+          validateLead(j, parsedLeads.value[j], emailMap);
+        }
+        if (end < parsedLeads.value.length) {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+      }
       isProcessing.value = false;
     } catch (err) {
       console.error("Error reading file:", err);
@@ -630,6 +666,8 @@ const normalizeRow = (row) => {
     comments: normalized["comments"] || "",
     errors: {},
     hasErrors: false,
+    warnings: {},
+    hasWarnings: false,
     originalLeadSource: leadSourceName,
     originalTreatment: treatmentName,
   };
@@ -654,12 +692,15 @@ const normalizeDate = (value) => {
   return null;
 };
 
-const validateLead = (index, existingLead) => {
+const validateLead = (index, existingLead, emailMap = null) => {
   const lead = existingLead || parsedLeads.value[index];
   if (!lead) return;
   if (!lead.errors) lead.errors = {};
   Object.keys(lead.errors).forEach((k) => delete lead.errors[k]);
   lead.hasErrors = false;
+  if (!lead.warnings) lead.warnings = {};
+  Object.keys(lead.warnings).forEach((k) => delete lead.warnings[k]);
+  lead.hasWarnings = false;
 
   const cleanedEmail =
     typeof lead.email === "string"
@@ -670,69 +711,73 @@ const validateLead = (index, existingLead) => {
   lead.telephone = cleanedTelephone;
 
   if (!lead.name?.trim()) {
-    lead.errors.name = "Name is required";
-    lead.hasErrors = true;
+    lead.warnings.name = "Name is missing";
+    lead.hasWarnings = true;
   }
   const email = cleanedEmail;
   if (!email) {
-    lead.errors.email = "Email is required";
-    lead.hasErrors = true;
+    lead.warnings.email = "Email is missing";
+    lead.hasWarnings = true;
   } else {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      lead.errors.email = "Invalid email format";
-      lead.hasErrors = true;
+      lead.warnings.email = "Invalid email format";
+      lead.hasWarnings = true;
     }
-    const duplicate = parsedLeads.value.find(
-      (l, i) =>
-        i !== index && (l.email || "").trim().toLowerCase() === email.toLowerCase()
-    );
-    if (duplicate) {
-      lead.errors.email = "Duplicate email in upload";
-      lead.hasErrors = true;
+    const emailKey = email.toLowerCase();
+    const isDuplicate = emailMap
+      ? (emailMap.get(emailKey) || 0) > 1
+      : parsedLeads.value.some(
+          (l, i) => i !== index && (l.email || "").trim().toLowerCase() === emailKey
+        );
+    if (isDuplicate) {
+      lead.warnings.email = "Duplicate email in upload";
+      lead.hasWarnings = true;
     }
   }
 
   if (!lead.telephone?.trim()) {
-    lead.errors.telephone = "Telephone is required";
-    lead.hasErrors = true;
+    lead.warnings.telephone = "Telephone is missing";
+    lead.hasWarnings = true;
   }
 
-  // if (lead.originalLeadSource?.trim() && !lead.leadSourceId) {
-  //   lead.errors.leadSource = `Lead source "${lead.originalLeadSource}" is invalid. Select from dropdown.`;
-  //   lead.hasErrors = true;
-  // }
+  if (lead.originalLeadSource?.trim() && !lead.leadSourceId) {
+    lead.warnings.leadSource = `Lead source "${lead.originalLeadSource}" not matched — select from dropdown.`;
+    lead.hasWarnings = true;
+  }
 
-  // if (lead.originalTreatment?.trim() && !lead.treatmentId) {
-  //   lead.errors.treatment = `Treatment "${lead.originalTreatment}" is invalid. Select from dropdown.`;
-  //   lead.hasErrors = true;
-  // }
+  if (lead.originalTreatment?.trim() && !lead.treatmentId) {
+    lead.warnings.treatment = `Treatment "${lead.originalTreatment}" not matched — select from dropdown.`;
+    lead.hasWarnings = true;
+  }
 
-  // if (lead.leadStatus) {
-  //   const status = statusLookup.value.get(lead.leadStatus.trim().toLowerCase());
-  //   if (!status) {
-  //     lead.errors.leadStatus = "Invalid lead status";
-  //     lead.hasErrors = true;
-  //   } else {
-  //     lead.leadStatus = status;
-  //   }
-  // } else {
-  //   lead.leadStatus = "New";
-  // }
+  if (lead.leadStatus) {
+    const status = statusLookup.value.get(lead.leadStatus.trim().toLowerCase());
+    if (!status) {
+      lead.warnings.leadStatus = "Unrecognised lead status — will default to New.";
+      lead.hasWarnings = true;
+      lead.leadStatus = "New";
+    } else {
+      lead.leadStatus = status;
+    }
+  } else {
+    lead.leadStatus = "New";
+  }
 
-  // if (lead.assignedUser?.trim() && !lead.userId) {
-  //   lead.errors.user = `User "${lead.assignedUser}" not found. Select from dropdown.`;
-  //   lead.hasErrors = true;
-  // }
+  if (lead.assignedUser?.trim() && !lead.userId) {
+    lead.warnings.user = `User "${lead.assignedUser}" not found — select from dropdown.`;
+    lead.hasWarnings = true;
+  }
 
-  // if (lead.inquiryDate === null && lead.originalInquiryDate) {
-  //   lead.errors.inquiryDate = "Invalid inquiry date";
-  //   lead.hasErrors = true;
-  // }
-  // if (lead.followUpDate === null && lead.originalFollowUpDate) {
-  //   lead.errors.followUpDate = "Invalid follow-up date";
-  //   lead.hasErrors = true;
-  // }
+  if (lead.inquiryDate === null && lead.originalInquiryDate) {
+    lead.warnings.inquiryDate = "Could not parse inquiry date — clear or correct it.";
+    lead.hasWarnings = true;
+  }
+
+  if (lead.followUpDate === null && lead.originalFollowUpDate) {
+    lead.warnings.followUpDate = "Could not parse follow-up date — clear or correct it.";
+    lead.hasWarnings = true;
+  }
 };
 
 const onSourceChange = (index, val) => {
@@ -760,7 +805,7 @@ const clearParsedData = () => {
 
 const removeInvalidLead = (index) => {
   const lead = parsedLeads.value[index];
-  if (!lead || !lead.hasErrors) return;
+  if (!lead || (!lead.hasErrors && !lead.hasWarnings)) return;
   parsedLeads.value.splice(index, 1);
   parsedLeads.value.forEach((_, i) => validateLead(i));
 };
@@ -877,6 +922,10 @@ const downloadSample = () => {
 
 .cell-error {
   background-color: #ffebee !important;
+}
+
+.cell-warning {
+  background-color: #fff8e1 !important;
 }
 
 .row-error {
