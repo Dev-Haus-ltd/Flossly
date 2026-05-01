@@ -1,4 +1,5 @@
 import { listTreatments, createTreatment, updateTreatment, deleteTreatment, listPatients, createPatient, updatePatient, deletePatient, listAppointments, createAppointment, updateAppointment, deleteAppointment, listDentistsForDate, getStats, getPatient, listNotes, createNote, deleteNote, getPatientComfort, savePatientComfort, updatePatientComfort, getPatientSurvey, savePatientSurvey, uploadSurveyPhotos, downloadPatientSurvey, printPatientSurvey, sharePatientSurvey, getSurveyStructure, listPatientForms, getPatientForm, savePatientForm, updatePatientForm, deletePatientForm, listPatientsPaged, getPatientStats, getPatientChart, savePatientChart, savePatientChartTooth, getPatientChartMeta, savePatientChartMeta, listTreatmentPlans, createTreatmentPlan, updateTreatmentPlan, deleteTreatmentPlan, listTreatmentPlanItems, createTreatmentPlanItem, updateTreatmentPlanItem, deleteTreatmentPlanItem, reorderTreatmentPlanItems, appointmentConflictCheck, bookFromTreatmentPlan, uploadChartImage, generateTreatmentPlanContent, listClinicalNoteTemplates, applyClinicalNoteTemplate, listZones, createZone, updateZone, deleteZone } from '~/server/controllers/diary'
+import { getAccountStats, listInvoices, createInvoice, updateInvoice, deleteInvoice, generateInvoiceFromTreatments, listPayments, createPayment, allocatePayment, deletePayment } from '~/server/controllers/accounts'
 import { success } from '~/server/utils/response'
 
 export default defineEventHandler(async (event) => {
@@ -122,6 +123,27 @@ export default defineEventHandler(async (event) => {
       return await updateZone(event)
     case 'zoneDelete':
       return await deleteZone(event)
+    // Accounts
+    case 'accountsStats':
+      return await getAccountStats(event)
+    case 'invoicesList':
+      return await listInvoices(event)
+    case 'invoiceCreate':
+      return await createInvoice(event)
+    case 'invoiceUpdate':
+      return await updateInvoice(event)
+    case 'invoiceDelete':
+      return await deleteInvoice(event)
+    case 'generateInvoiceFromTreatments':
+      return await generateInvoiceFromTreatments(event)
+    case 'paymentsList':
+      return await listPayments(event)
+    case 'paymentCreate':
+      return await createPayment(event)
+    case 'paymentAllocate':
+      return await allocatePayment(event)
+    case 'paymentDelete':
+      return await deletePayment(event)
     default:
       return { code: 1, message: 'Not found' }
   }

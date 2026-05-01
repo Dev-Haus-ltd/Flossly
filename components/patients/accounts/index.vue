@@ -1,41 +1,36 @@
 <template>
   <div class="accounts-page">
+    <!-- Stats bar -->
     <div class="accounts-stats">
       <CommonStatCard
         :icon="poundIcon"
         icon-type="image"
-        :label="activeSection === 'payments' ? 'Patient' : 'Patient Outstanding'"
-        :value="stats.outstanding"
+        label="Patient Outstanding"
+        :value="store.fmtOutstanding"
         uid="accounts-outstanding"
         hide-chip
-      />
-
-      <CommonStatCard
-        :icon="payAsYouGoIcon"
-        icon-type="image"
-        label="Pay As You Go"
-        :value="stats.payAsYouGo"
-        uid="accounts-payg"
-        hide-chip
-        :select="selectedPlan"
-        :select-items="payAsYouGoOptions"
-        @update:select="selectedPlan = $event"
       />
 
       <CommonStatCard
         :icon="poundIcon"
         icon-type="image"
         label="Total Paid"
-        :value="stats.totalPaid"
+        :value="store.fmtTotalPaid"
         uid="accounts-paid"
         hide-chip
       />
 
-      <div
-        class="finance-card"
-        :class="{ 'finance-card--summary': isFinanceSummaryCard }"
-      >
-        <template v-if="isFinanceSummaryCard">
+      <CommonStatCard
+        :icon="poundIcon"
+        icon-type="image"
+        label="Unallocated Credit"
+        :value="store.fmtUnallocated"
+        uid="accounts-unallocated"
+        hide-chip
+      />
+
+      <div class="finance-card" :class="{ 'finance-card--summary': isSecondarySection }">
+        <template v-if="isSecondarySection">
           <div class="finance-card__header">
             <img :src="financeIcon" alt="" class="finance-card__icon finance-card__icon--small" />
             <span>Finance Calculator</span>
@@ -49,35 +44,51 @@
       </div>
     </div>
 
+    <!-- Main panel -->
     <section class="accounts-panel">
-      <div
-        v-if="!['finance', 'practice-plan'].includes(activeSection)"
-        class="accounts-toolbar"
-      >
+      <!-- Toolbar -->
+      <div v-if="activeSection === 'invoices'" class="accounts-toolbar">
         <div class="accounts-toolbar__left">
           <h2>Accounts</h2>
-
           <div class="toolbar-input">
-            <input
-              v-model="searchTerm"
-              type="text"
-              placeholder="Search"
-            />
+            <input v-model="searchTerm" type="text" placeholder="Search invoices" />
             <img :src="searchIcon" alt="" />
           </div>
-
           <button type="button" class="toolbar-filter-btn">
             <span>Filters</span>
             <img :src="filterIcon" alt="" />
           </button>
         </div>
-
         <div class="accounts-toolbar__right">
-          <button type="button" class="outline-action-btn">
-            <v-icon start>mdi-plus-circle-outline</v-icon>
+          <button
+            type="button"
+            class="outline-action-btn"
+            :disabled="store.isSaving"
+            @click="generateFromTreatments"
+          >
+            <v-icon start size="16">mdi-auto-fix</v-icon>
+            <span>Generate Invoice</span>
+          </button>
+          <button type="button" class="outline-action-btn" @click="showPaymentDialog = true">
+            <v-icon start size="16">mdi-plus-circle-outline</v-icon>
             <span>Payment</span>
           </button>
+          <button type="button" class="primary-action-btn">
+            <img :src="downloadIcon" alt="" />
+            <span>Statement</span>
+          </button>
+        </div>
+      </div>
 
+      <div v-else-if="activeSection === 'payments'" class="accounts-toolbar">
+        <div class="accounts-toolbar__left">
+          <h2>Payments</h2>
+        </div>
+        <div class="accounts-toolbar__right">
+          <button type="button" class="outline-action-btn" @click="showPaymentDialog = true">
+            <v-icon start size="16">mdi-plus-circle-outline</v-icon>
+            <span>Record Payment</span>
+          </button>
           <button type="button" class="primary-action-btn">
             <img :src="downloadIcon" alt="" />
             <span>Statement</span>
@@ -86,14 +97,14 @@
       </div>
 
       <div v-else class="finance-panel-header">
-        <h2>{{ activeSection === "finance" ? "Finance" : "Accounts" }}</h2>
+        <h2>{{ activeSection === 'finance' ? 'Finance' : 'Practice Plan' }}</h2>
         <div v-if="activeSection === 'practice-plan'" class="accounts-toolbar__right">
           <button type="button" class="primary-action-btn">
-            <img :src="refunIcon" alt="" />
+            <img :src="refundIcon" alt="" />
             <span>Refund</span>
           </button>
-          <button type="button" class="outline-action-btn">
-            <v-icon start>mdi-plus-circle-outline</v-icon>
+          <button type="button" class="outline-action-btn" @click="showPaymentDialog = true">
+            <v-icon start size="16">mdi-plus-circle-outline</v-icon>
             <span>Make Payment</span>
           </button>
           <button type="button" class="primary-action-btn">
@@ -103,6 +114,7 @@
         </div>
       </div>
 
+      <!-- Body -->
       <div class="accounts-content">
         <aside class="accounts-sidebar">
           <button
@@ -117,10 +129,25 @@
           </button>
         </aside>
 
-        <PatientAccountsPayment v-if="activeSection === 'payments'" />
+        <!-- Loading -->
+        <div v-if="store.isLoading" class="loading-state">
+          <v-progress-circular indeterminate size="28" color="primary" />
+        </div>
+
+        <!-- Payments tab -->
+        <PatientAccountsPayment
+          v-else-if="activeSection === 'payments'"
+          :payments="store.payments"
+          @delete-payment="confirmDeletePayment"
+        />
+
+        <!-- Finance tab -->
         <PatientAccountsFinance v-else-if="activeSection === 'finance'" />
+
+        <!-- Practice Plan tab -->
         <PatientAccountsPracticePlan v-else-if="activeSection === 'practice-plan'" />
 
+        <!-- Invoices tab -->
         <div v-else class="accounts-table-wrap">
           <table class="accounts-table">
             <thead>
@@ -131,231 +158,281 @@
                 <th>Invoice</th>
                 <th>Status</th>
                 <th>Date</th>
-                <th>Patient</th>
                 <th>Summary</th>
                 <th>Practitioner</th>
                 <th>Balance</th>
-                <th>Total Invoices</th>
+                <th>Total</th>
                 <th class="menu-cell"></th>
               </tr>
             </thead>
 
             <tbody>
-              <tr v-for="invoice in activeRows" :key="invoice.id">
-                <td class="checkbox-cell">
-                  <input type="checkbox" />
-                </td>
-                <td>
-                  <div class="invoice-link">
-                    <a href="#" @click.prevent>{{ invoice.invoice }}</a>
-                    <img :src="expandDetailIcon" alt="" />
-                  </div>
-                </td>
-                <td>
-                  <span
-                    class="status-badge"
-                    :class="{
-                      'status-badge--paid': invoice.status === 'Paid',
-                      'status-badge--unpaid': invoice.status === 'Unpaid',
-                    }"
-                  >
-                    {{ invoice.status }}
-                  </span>
-                </td>
-                <td>{{ invoice.date }}</td>
-                <td>{{ invoice.patient }}</td>
-                <td>{{ invoice.summary }}</td>
-                <td>
-                  <div class="practitioner-cell">
-                    <div class="avatar">{{ invoice.initials }}</div>
-                    <span>{{ invoice.practitioner }}</span>
-                  </div>
-                </td>
-                <td :class="{ 'balance-due': invoice.balance.includes('due') }">
-                  {{ invoice.balance }}
-                </td>
-                <td>{{ invoice.total }}</td>
-                <td class="menu-cell">
-                  <span aria-hidden="true">&#8942;</span>
-                </td>
-              </tr>
+              <template v-if="!filteredInvoices.length">
+                <tr>
+                  <td colspan="9" class="empty-cell">
+                    {{ store.invoices.length ? 'No invoices match your search.' : 'No invoices yet. Use "Generate Invoice" to create one from completed treatments.' }}
+                  </td>
+                </tr>
+              </template>
+
+              <template v-for="invoice in filteredInvoices" :key="invoice.id">
+                <tr>
+                  <td class="checkbox-cell"><input type="checkbox" /></td>
+                  <td>
+                    <div class="invoice-link">
+                      <button type="button" class="inv-number" @click="toggleInvoice(invoice.id)">
+                        {{ invoice.invoiceNumber }}
+                      </button>
+                      <img :src="expandDetailIcon" alt="" />
+                    </div>
+                  </td>
+                  <td>
+                    <span class="status-badge" :class="statusClass(invoice.status)">
+                      {{ statusLabel(invoice.status) }}
+                    </span>
+                  </td>
+                  <td>{{ formatDate(invoice.invoiceDate) }}</td>
+                  <td>{{ invoiceSummary(invoice) }}</td>
+                  <td>
+                    <div v-if="invoice.practitionerName" class="practitioner-cell">
+                      <div class="avatar">{{ initials(invoice.practitionerName) }}</div>
+                      <span>{{ invoice.practitionerName }}</span>
+                    </div>
+                    <span v-else class="muted">—</span>
+                  </td>
+                  <td :class="{ 'balance-due': Number(invoice.balance) > 0 }">
+                    {{ fmtGbp(invoice.balance) }}
+                  </td>
+                  <td>{{ fmtGbp(invoice.total) }}</td>
+                  <td class="menu-cell">
+                    <v-menu>
+                      <template #activator="{ props: menuProps }">
+                        <button type="button" class="menu-trigger" v-bind="menuProps">&#8942;</button>
+                      </template>
+                      <v-list density="compact" min-width="160">
+                        <v-list-item
+                          title="Mark as Written Off"
+                          @click="updateStatus(invoice, 'written_off')"
+                        />
+                        <v-list-item
+                          title="Delete Invoice"
+                          class="text-error"
+                          @click="confirmDeleteInvoice(invoice.id)"
+                        />
+                      </v-list>
+                    </v-menu>
+                  </td>
+                </tr>
+
+                <!-- Expanded line items -->
+                <tr v-if="expandedInvoices.includes(invoice.id)">
+                  <td colspan="9" class="expanded-row-cell">
+                    <div class="expanded-card">
+                      <table class="expanded-table">
+                        <thead>
+                          <tr>
+                            <th>Description</th>
+                            <th>Tooth</th>
+                            <th>Qty</th>
+                            <th>Unit Price</th>
+                            <th>Total</th>
+                            <th>Practitioner</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="item in invoice.items" :key="item.id">
+                            <td>{{ item.description }}</td>
+                            <td>{{ item.fdi ? `${item.fdi}${item.surface ? '/' + item.surface : ''}` : '—' }}</td>
+                            <td>{{ item.quantity }}</td>
+                            <td>{{ fmtGbp(item.unitPrice) }}</td>
+                            <td>{{ fmtGbp(item.total) }}</td>
+                            <td>{{ item.practitionerName || '—' }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </td>
+                </tr>
+              </template>
             </tbody>
 
-            <tfoot>
+            <tfoot v-if="filteredInvoices.length">
               <tr>
-                <td colspan="7"></td>
+                <td colspan="6"></td>
                 <td class="totals-label">Totals:</td>
-                <td class="totals-value">{{ totals.balance }}</td>
-                <td class="totals-value">{{ totals.invoice }}</td>
+                <td class="totals-value">{{ store.invoiceTotals.balance }}</td>
+                <td class="totals-value">{{ store.invoiceTotals.total }}</td>
               </tr>
             </tfoot>
           </table>
         </div>
       </div>
     </section>
+
+    <!-- Record payment dialog -->
+    <PatientAccountsRecordPaymentDialog v-model="showPaymentDialog" />
+
+    <!-- Delete confirmation snackbar handled via store -->
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
-import CommonStatCard from "@/components/Common/statCard.vue";
-import PatientAccountsFinance from "@/components/patients/accounts/finance.vue";
-import PatientAccountsPayment from "@/components/patients/accounts/payment.vue";
-import PatientAccountsPracticePlan from "@/components/patients/accounts/practicePlan.vue";
-import financeIcon from "@/assets/diary/finance_icon.svg";
-import payAsYouGoIcon from "@/assets/diary/payasyougo_icon.svg";
-import poundIcon from "@/assets/diary/pound_icon.svg";
-import downloadIcon from "@/assets/diary/statements_icon.svg";
-import refunIcon from "@/assets/diary/refund_icon.svg";
-import filterIcon from "@/assets/icons/listView/filter-icon.svg";
-import searchIcon from "@/assets/icons/listView/serach-icon.svg";
-import expandDetailIcon from "@/assets/diary/expand_detail_icon.svg";
+import { ref, computed, onMounted, watch } from 'vue'
+import { useAccountsStore } from '@/stores/accounts'
+import { useMainStore } from '@/stores/index'
+import CommonStatCard from '@/components/Common/statCard.vue'
+import PatientAccountsFinance from '@/components/patients/accounts/finance.vue'
+import PatientAccountsPayment from '@/components/patients/accounts/payment.vue'
+import PatientAccountsPracticePlan from '@/components/patients/accounts/practicePlan.vue'
+import PatientAccountsRecordPaymentDialog from '@/components/patients/accounts/RecordPaymentDialog.vue'
+import financeIcon from '@/assets/diary/finance_icon.svg'
+import poundIcon from '@/assets/diary/pound_icon.svg'
+import downloadIcon from '@/assets/diary/statements_icon.svg'
+import refundIcon from '@/assets/diary/refund_icon.svg'
+import filterIcon from '@/assets/icons/listView/filter-icon.svg'
+import searchIcon from '@/assets/icons/listView/serach-icon.svg'
+import expandDetailIcon from '@/assets/diary/expand_detail_icon.svg'
 
-const selectedPlan = ref("Monthly");
-const searchTerm = ref("");
-const activeSection = ref("invoices");
+const props = defineProps({
+  patient: { type: Object, default: null },
+  patientName: { type: String, default: '' },
+})
 
-const stats = {
-  outstanding: "-\u00A355.00",
-  payAsYouGo: "\u00A355.00",
-  totalPaid: "\u00A30.00",
-};
+const store = useAccountsStore()
+const mainStore = useMainStore()
 
-const payAsYouGoOptions = ["Monthly", "Quarterly", "Yearly"];
+const patientId = computed(() => props.patient?.id ? Number(props.patient.id) : null)
+
+const activeSection = ref('invoices')
+const searchTerm = ref('')
+const showPaymentDialog = ref(false)
+const expandedInvoices = ref([])
 
 const sections = [
-  { label: "Payments", value: "payments" },
-  { label: "Invoices", value: "invoices" },
-  { label: "Finance", value: "finance" },
-  { label: "Practice Plan", value: "practice-plan" },
-];
+  { label: 'Payments', value: 'payments' },
+  { label: 'Invoices', value: 'invoices' },
+  { label: 'Finance', value: 'finance' },
+  { label: 'Practice Plan', value: 'practice-plan' },
+]
 
-const rowsBySection = {
-  payments: [
-    {
-      id: 1,
-      invoice: "01051",
-      status: "Paid",
-      date: "14 Oct 2025",
-      patient: "John Doe",
-      summary: "Hygiene Visit",
-      practitioner: "John Doe",
-      initials: "JD",
-      balance: "-",
-      total: "\u00A380.00",
-    },
-    {
-      id: 2,
-      invoice: "01052",
-      status: "Paid",
-      date: "01 Oct 2025",
-      patient: "Marta Ogrodnik",
-      summary: "Whitening Deposit",
-      practitioner: "Marta Ogrodnik",
-      initials: "MO",
-      balance: "-",
-      total: "\u00A3130.00",
-    },
-  ],
-  invoices: [
-    {
-      id: 3,
-      invoice: "01047",
-      status: "Unpaid",
-      date: "9 Oct 2025",
-      patient: "John Doe",
-      summary: "Scale & Polish",
-      practitioner: "John Doe",
-      initials: "JD",
-      balance: "\u00A355.00 due",
-      total: "\u00A360.00",
-    },
-    {
-      id: 4,
-      invoice: "110045",
-      status: "Paid",
-      date: "9 Sep 2025",
-      patient: "Marta Ogrodnik",
-      summary: "Teeth Whitening",
-      practitioner: "Marta Ogrodnik",
-      initials: "MO",
-      balance: "-",
-      total: "\u00A3130.00",
-    },
-    {
-      id: 5,
-      invoice: "101045",
-      status: "Paid",
-      date: "9 Jun 2025",
-      patient: "John Doe",
-      summary: "Periodontal Scaling & Root Planing",
-      practitioner: "John Doe",
-      initials: "JD",
-      balance: "\u00A355.00 due",
-      total: "\u00A320.00",
-    },
-    {
-      id: 6,
-      invoice: "110040",
-      status: "Paid",
-      date: "9 Jan 2025",
-      patient: "Marta Ogrodnik",
-      summary: "Scale & Polish",
-      practitioner: "Marta Ogrodnik",
-      initials: "MO",
-      balance: "-",
-      total: "\u00A3160.00",
-    },
-  ],
-  finance: [
-    {
-      id: 7,
-      invoice: "02001",
-      status: "Paid",
-      date: "2 Dec 2025",
-      patient: "Alex Brown",
-      summary: "Finance Agreement",
-      practitioner: "John Doe",
-      initials: "AB",
-      balance: "-",
-      total: "\u00A3450.00",
-    },
-  ],
-  "practice-plan": [
-    {
-      id: 8,
-      invoice: "03010",
-      status: "Paid",
-      date: "11 Nov 2025",
-      patient: "Marta Ogrodnik",
-      summary: "Practice Plan Subscription",
-      practitioner: "Marta Ogrodnik",
-      initials: "MO",
-      balance: "-",
-      total: "\u00A339.00",
-    },
-  ],
-};
+const isSecondarySection = computed(() =>
+  ['payments', 'finance', 'practice-plan'].includes(activeSection.value)
+)
 
-const activeRows = computed(() => rowsBySection[activeSection.value] || []);
+// Load data when patientId is available
+onMounted(() => {
+  if (patientId.value) store.loadAll(patientId.value)
+})
 
-const isFinanceSummaryCard = computed(() =>
-  ["payments", "finance", "practice-plan"].includes(activeSection.value),
-);
+watch(patientId, (id) => {
+  if (id) store.loadAll(id)
+})
 
-const totals = computed(() => {
-  if (activeSection.value === "invoices") {
-    return {
-      balance: "\u00A355.00",
-      invoice: "\u00A3505.00",
-    };
+// Cleanup when component unmounts to avoid stale state in next patient
+onUnmounted(() => store.reset())
+
+// Filtered invoices for the table
+const filteredInvoices = computed(() => {
+  const q = searchTerm.value.trim().toLowerCase()
+  if (!q) return store.invoices
+  return store.invoices.filter(
+    (inv) =>
+      inv.invoiceNumber.toLowerCase().includes(q) ||
+      (inv.practitionerName || '').toLowerCase().includes(q) ||
+      invoiceSummary(inv).toLowerCase().includes(q)
+  )
+})
+
+const toggleInvoice = (id) => {
+  if (expandedInvoices.value.includes(id)) {
+    expandedInvoices.value = expandedInvoices.value.filter((x) => x !== id)
+  } else {
+    expandedInvoices.value = [...expandedInvoices.value, id]
   }
+}
 
-  return {
-    balance: "-",
-    invoice: activeRows.value[0]?.total || "\u00A30.00",
-  };
-});
+// ── Formatters ──────────────────────────────────────────────────────────
+
+const fmtGbp = (v) => `£${Number(v ?? 0).toFixed(2)}`
+
+const formatDate = (d) => {
+  if (!d) return '—'
+  return new Date(d).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric',
+  })
+}
+
+const initials = (name) =>
+  String(name || '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('')
+
+const invoiceSummary = (invoice) => {
+  if (!invoice.items?.length) return invoice.planName || '—'
+  return invoice.items.map((i) => i.description).join(', ').slice(0, 60)
+}
+
+const STATUS_LABELS = {
+  unpaid: 'Unpaid',
+  part_paid: 'Part Paid',
+  paid: 'Paid',
+  written_off: 'Written Off',
+  credited: 'Credited',
+  draft: 'Draft',
+}
+const statusLabel = (s) => STATUS_LABELS[s] || s
+
+const statusClass = (s) => ({
+  'status-badge--paid': s === 'paid',
+  'status-badge--unpaid': s === 'unpaid',
+  'status-badge--part': s === 'part_paid',
+  'status-badge--written': s === 'written_off',
+  'status-badge--draft': s === 'draft',
+})
+
+// ── Actions ─────────────────────────────────────────────────────────────
+
+const generateFromTreatments = async () => {
+  const res = await store.generateFromTreatments()
+  if (res?.code === 0) {
+    const count = Array.isArray(res.data) ? res.data.length : 1
+    mainStore.setSnackbar({
+      message: `${count} invoice${count !== 1 ? 's' : ''} generated successfully`,
+      color: 'success',
+    })
+  } else {
+    mainStore.setSnackbar({ message: res?.message || 'No uninvoiced treatments found', color: 'warning' })
+  }
+}
+
+const updateStatus = async (invoice, status) => {
+  const res = await store.updateInvoice(invoice.id, { status })
+  if (res?.code !== 0) {
+    mainStore.setSnackbar({ message: 'Failed to update invoice', color: 'error' })
+  }
+}
+
+const confirmDeleteInvoice = async (id) => {
+  const res = await store.deleteInvoice(id)
+  if (res?.code === 0) {
+    mainStore.setSnackbar({ message: 'Invoice deleted', color: 'success' })
+    expandedInvoices.value = expandedInvoices.value.filter((x) => x !== id)
+  } else {
+    mainStore.setSnackbar({ message: 'Failed to delete invoice', color: 'error' })
+  }
+}
+
+const confirmDeletePayment = async (id) => {
+  const res = await store.deletePayment(id)
+  if (res?.code === 0) {
+    mainStore.setSnackbar({ message: 'Payment deleted', color: 'success' })
+  } else {
+    mainStore.setSnackbar({ message: 'Failed to delete payment', color: 'error' })
+  }
+}
 </script>
 
 <style scoped lang="scss">
@@ -375,7 +452,7 @@ const totals = computed(() => {
   border: 0;
   border-radius: 20px;
   background: #b9308a;
-  color: #ffffff;
+  color: #fff;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -386,7 +463,7 @@ const totals = computed(() => {
 }
 
 .finance-card--summary {
-  background: #ffffff;
+  background: #fff;
   border: 1px solid #f1d9ea;
   color: #3b4252;
   align-items: flex-start;
@@ -419,7 +496,7 @@ const totals = computed(() => {
 }
 
 .accounts-panel {
-  background: #ffffff;
+  background: #fff;
   border: 1px solid #e8edf3;
   border-radius: 20px;
   overflow: hidden;
@@ -432,12 +509,12 @@ const totals = computed(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-}
 
-.finance-panel-header h2 {
-  font-size: 24px;
-  font-weight: 700;
-  color: #242424;
+  h2 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #242424;
+  }
 }
 
 .accounts-toolbar {
@@ -447,6 +524,13 @@ const totals = computed(() => {
   justify-content: space-between;
   gap: 16px;
   border-bottom: 1px solid #edf1f5;
+
+  h2 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #242424;
+    margin-right: 8px;
+  }
 }
 
 .accounts-toolbar__left,
@@ -456,15 +540,8 @@ const totals = computed(() => {
   gap: 10px;
 }
 
-.accounts-toolbar h2 {
-  font-size: 24px;
-  font-weight: 700;
-  color: #242424;
-  margin-right: 8px;
-}
-
 .toolbar-input {
-  width: 120px;
+  width: 160px;
   height: 34px;
   border-radius: 8px;
   background: #f5f6f8;
@@ -472,22 +549,20 @@ const totals = computed(() => {
   align-items: center;
   gap: 8px;
   padding: 0 10px;
-}
 
-.toolbar-input input {
-  width: 100%;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  font-size: 13px;
-  color: #4b5563;
-}
+  input {
+    width: 100%;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    font-size: 13px;
+    color: #4b5563;
+  }
 
-.toolbar-input img,
-.toolbar-filter-btn img,
-.primary-action-btn img {
-  width: 14px;
-  height: 14px;
+  img {
+    width: 14px;
+    height: 14px;
+  }
 }
 
 .toolbar-filter-btn,
@@ -499,8 +574,18 @@ const totals = computed(() => {
   font-weight: 500;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding: 0 14px;
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  img {
+    width: 14px;
+    height: 14px;
+  }
 }
 
 .toolbar-filter-btn {
@@ -511,37 +596,14 @@ const totals = computed(() => {
 
 .outline-action-btn {
   border: 1px solid #0061fb;
-  background: #ffffff;
+  background: #fff;
   color: #1f2937;
-}
-
-.btn-icon-circle {
-  width: 16px;
-  height: 16px;
-  border: 1px solid #9ca3af;
-  border-radius: 50%;
-  font-size: 9px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #9ca3af;
 }
 
 .primary-action-btn {
   border: 0;
   background: #0061fb;
-  color: #ffffff;
-}
-
-.refund-action-btn {
-  height: 34px;
-  border: 0;
-  border-radius: 8px;
-  padding: 0 16px;
-  background: #8b79ff;
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 500;
+  color: #fff;
 }
 
 .accounts-content {
@@ -567,12 +629,19 @@ const totals = computed(() => {
   font-size: 13px;
   text-align: left;
   padding: 0 12px;
+
+  &.sidebar-tab--active {
+    background: #edf4f8;
+    color: #394150;
+    font-weight: 500;
+  }
 }
 
-.sidebar-tab--active {
-  background: #edf4f8;
-  color: #394150;
-  font-weight: 500;
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px;
 }
 
 .accounts-table-wrap {
@@ -582,7 +651,7 @@ const totals = computed(() => {
 .accounts-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 860px;
+  min-width: 780px;
 }
 
 .accounts-table th,
@@ -600,7 +669,7 @@ const totals = computed(() => {
   font-size: 11px;
   font-weight: 600;
   color: #757f8f;
-  background: #ffffff;
+  background: #fff;
 }
 
 .accounts-table th:last-child,
@@ -618,24 +687,28 @@ const totals = computed(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+
+  img {
+    width: 13px;
+    height: 13px;
+  }
 }
 
-.invoice-link a {
+.inv-number {
+  border: 0;
+  background: transparent;
   color: #0061fb;
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.invoice-link img {
-  width: 13px;
-  height: 13px;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
 }
 
 .status-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 50px;
+  min-width: 60px;
   height: 22px;
   border-radius: 6px;
   padding: 0 8px;
@@ -643,15 +716,11 @@ const totals = computed(() => {
   font-weight: 600;
 }
 
-.status-badge--paid {
-  background: #eaf8e6;
-  color: #5daf4d;
-}
-
-.status-badge--unpaid {
-  background: #ffe8ea;
-  color: #ff6b76;
-}
+.status-badge--paid { background: #eaf8e6; color: #5daf4d; }
+.status-badge--unpaid { background: #ffe8ea; color: #ff6b76; }
+.status-badge--part { background: #fff4d6; color: #f59e0b; }
+.status-badge--written { background: #f3f4f6; color: #9ca3af; }
+.status-badge--draft { background: #f0f4ff; color: #0061fb; }
 
 .practitioner-cell {
   display: inline-flex;
@@ -664,21 +733,77 @@ const totals = computed(() => {
   height: 24px;
   border-radius: 50%;
   background: linear-gradient(135deg, #f2c6aa, #b97a56);
-  color: #ffffff;
+  color: #fff;
   font-size: 10px;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .balance-due {
   color: #ff6b76 !important;
+  font-weight: 600;
+}
+
+.muted {
+  color: #b0b8c6;
+}
+
+.menu-trigger {
+  border: 0;
+  background: transparent;
+  color: #8b96a7;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.empty-cell {
+  text-align: center !important;
+  padding: 40px 20px !important;
+  color: #8b96a7;
+  font-size: 13px;
+  border-right: 0 !important;
+}
+
+.expanded-row-cell {
+  padding: 10px 12px !important;
+  background: #fff;
+}
+
+.expanded-card {
+  background: #f7f9fc;
+  border: 1px solid #e8edf3;
+  border-radius: 12px;
+  padding: 10px 12px;
+  overflow-x: auto;
+}
+
+.expanded-table {
+  width: 100%;
+  border-collapse: collapse;
+
+  th,
+  td {
+    border: 0;
+    padding: 7px 10px 7px 0;
+    background: transparent;
+    white-space: nowrap;
+    font-size: 11px;
+    color: #4b5563;
+  }
+
+  th {
+    color: #757f8f;
+    font-weight: 600;
+  }
 }
 
 tfoot td {
   border-bottom: 0;
-  background: #ffffff;
+  background: #fff;
 }
 
 .totals-label,
@@ -694,11 +819,7 @@ tfoot td {
 }
 
 @media (max-width: 900px) {
-  .accounts-toolbar {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
+  .accounts-toolbar,
   .finance-panel-header {
     flex-direction: column;
     align-items: flex-start;
@@ -729,11 +850,6 @@ tfoot td {
 
   .toolbar-input {
     width: 100%;
-  }
-
-  .accounts-toolbar h2 {
-    width: 100%;
-    margin-right: 0;
   }
 }
 </style>
