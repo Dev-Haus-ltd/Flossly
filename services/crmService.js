@@ -428,6 +428,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  updateOption(id, name) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/optionsUpdate", { id, name })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   deleteOption(id) {
     return new Promise((resolve, reject) => {
       Post("/lead/optionsDelete", { id })

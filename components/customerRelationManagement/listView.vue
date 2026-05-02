@@ -25,7 +25,7 @@
         <v-expansion-panel-text class="pt-0">
           <v-data-table-server
             v-model="selectedLeads"
-            :headers="headers"
+            :headers="selectedHeaders"
             :items="activeLeads"
             item-value="id"
             show-select
@@ -58,10 +58,18 @@
               />
             </template>
 
-            <!-- Editable / resizable headers -->
+            <!-- Draggable / resizable headers -->
             <template v-slot:headers="{ columns, allSelected, someSelected }">
-              <tr>
-                <template v-for="(column, i) in columns" :key="column.key">
+              <draggable
+                tag="tr"
+                :model-value="columns"
+                item-key="key"
+                direction="horizontal"
+                :disabled="isResizing"
+                handle=".th-content"
+                @update:model-value="updateHeaderOrder"
+              >
+                <template #item="{ element: column, index: i }">
                   <th
                     :style="{
                       width: column.width + 'px',
@@ -72,9 +80,15 @@
                       position: 'relative',
                     }"
                   >
-                    <div v-if="i !== 0" class="d-flex align-center th-content">
+                    <div v-if="i !== 0" class="d-flex align-center th-content" style="cursor: grab;">
                       <p class="px-1 w-100 mb-0">{{ column.title }}</p>
-
+                      <v-icon
+                        v-if="column.key !== 'name'"
+                        size="14"
+                        color="black"
+                        style="cursor: pointer; flex-shrink: 0;"
+                        @click.stop="removeHeaderFromSelected(column)"
+                      >mdi-minus</v-icon>
                       <span
                         class="resize-handle"
                         @pointerdown="startResize($event, column, i)"
@@ -94,12 +108,12 @@
                     </div>
                   </th>
                 </template>
-              </tr>
+              </draggable>
             </template>
 
             <!-- Dynamic cell templates -->
             <template
-              v-for="col in headers"
+              v-for="col in selectedHeaders"
               :key="col.key"
               v-slot:[`item.${col.key}`]="{ item }"
             >
@@ -302,6 +316,7 @@
                   :selected="item"
                   :column="col"
                   @update="updateValueRow(item, 'leadSource')"
+                  @options-updated="(e) => emit('options-refreshed', e)"
                 />
               </template>
               <template v-else-if="col.key === 'treatment'">
@@ -310,6 +325,7 @@
                   :selected="item"
                   :column="col"
                   @update="updateValueRow(item, 'treatment')"
+                  @options-updated="(e) => emit('options-refreshed', e)"
                 />
               </template>
               <template v-else-if="col.key === 'assigned'">
@@ -410,7 +426,7 @@
           <v-data-table-server
             v-else
             v-model="selectedConvertedLeads"
-            :headers="headers"
+            :headers="selectedHeaders"
             :items="convertedLeadsData"
             item-value="id"
             hover
@@ -443,8 +459,16 @@
               />
             </template>
             <template v-slot:headers="{ columns, allSelected, someSelected }">
-              <tr>
-                <template v-for="(column, i) in columns" :key="column.key">
+              <draggable
+                tag="tr"
+                :model-value="columns"
+                item-key="key"
+                direction="horizontal"
+                :disabled="isResizing"
+                handle=".th-content"
+                @update:model-value="updateHeaderOrder"
+              >
+                <template #item="{ element: column, index: i }">
                   <th
                     :style="{
                       width: column.width + 'px',
@@ -455,8 +479,15 @@
                       position: 'relative',
                     }"
                   >
-                    <div v-if="i !== 0" class="d-flex align-center th-content">
+                    <div v-if="i !== 0" class="d-flex align-center th-content" style="cursor: grab;">
                       <p class="px-1 w-100 mb-0">{{ column.title }}</p>
+                      <v-icon
+                        v-if="column.key !== 'name'"
+                        size="14"
+                        color="black"
+                        style="cursor: pointer; flex-shrink: 0;"
+                        @click.stop="removeHeaderFromSelected(column)"
+                      >mdi-minus</v-icon>
                       <span
                         class="resize-handle"
                         @pointerdown="startResize($event, column, i)"
@@ -473,10 +504,10 @@
                     </div>
                   </th>
                 </template>
-              </tr>
+              </draggable>
             </template>
             <template
-              v-for="col in headers"
+              v-for="col in selectedHeaders"
               :key="col.key"
               v-slot:[`item.${col.key}`]="{ item }"
             >
@@ -656,6 +687,7 @@
                   :selected="item"
                   :column="col"
                   @update="updateValueRow(item, 'leadSource')"
+                  @options-updated="(e) => emit('options-refreshed', e)"
                 />
               </template>
               <template v-else-if="col.key === 'treatment'">
@@ -664,6 +696,7 @@
                   :selected="item"
                   :column="col"
                   @update="updateValueRow(item, 'treatment')"
+                  @options-updated="(e) => emit('options-refreshed', e)"
                 />
               </template>
               <template v-else-if="col.key === 'assigned'">
@@ -762,7 +795,7 @@
           <v-data-table-server
             v-else
             v-model="selectedArchivedLeads"
-            :headers="headers"
+            :headers="selectedHeaders"
             :items="archivedLeads"
             item-value="id"
             hover
@@ -828,7 +861,7 @@
               </tr>
             </template>
             <template
-              v-for="col in headers"
+              v-for="col in selectedHeaders"
               :key="col.key"
               v-slot:[`item.${col.key}`]="{ item }"
             >
@@ -1246,6 +1279,7 @@
 </template>
 
 <script setup>
+import draggable from "vuedraggable"
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 import { buildRecipientContext } from '@/lib/crm/previewContext'
 import { applyCrmPlaceholders } from '@/lib/crm/placeholders'
@@ -1281,6 +1315,7 @@ const emit = defineEmits([
   'update:convertedPage',
   'update:itemsPerPage',
   'alert-options-saved',
+  'options-refreshed',
 ]);
 const props = defineProps({
   leads: { type: Array, default: () => [] },
@@ -1304,6 +1339,73 @@ const props = defineProps({
   whatsappConnected: { type: Boolean, default: false },
 });
 const openedPanels = ref([0]);
+
+// Column visibility + order management
+const selectedHeaders = ref([])
+
+const filteredAvailableHeaders = computed(() => {
+  const selectedKeys = new Set(selectedHeaders.value.map((h) => h.key))
+  return (props.headers || []).filter((h) => !selectedKeys.has(h.key))
+})
+
+const saveColumnPreferences = () => {
+  try {
+    localStorage.setItem('crmLeadTableColumns', JSON.stringify(selectedHeaders.value))
+  } catch {}
+}
+
+const addHeaderInSelected = (column) => {
+  if (!selectedHeaders.value.find((h) => h.key === column.key)) {
+    selectedHeaders.value.push(column)
+    saveColumnPreferences()
+  }
+}
+
+const removeHeaderFromSelected = (column) => {
+  if (column.key === 'name') return
+  selectedHeaders.value = selectedHeaders.value.filter((h) => h.key !== column.key)
+  saveColumnPreferences()
+}
+
+const updateHeaderOrder = (newOrder) => {
+  const selectable = newOrder.findIndex((x) => !x.title)
+  if (selectable !== -1) newOrder.splice(selectable, 1)
+  selectedHeaders.value = newOrder
+  saveColumnPreferences()
+}
+
+const getColColor = (name) => {
+  if (!name) return '#999999'
+  const colors = ['#FF6B6B','#FF8E72','#FFD93D','#6BCB77','#4D96FF','#8358E8','#FF6EC7','#00B8A9','#F15BB5','#FF7F11','#FF9F1C','#2EC4B6','#6A4C93','#8338EC','#3A86FF','#FF006E','#FB5607','#FFBE0B','#06D6A0','#118AB2','#073B4C','#EF476F','#06AED5','#4CC9F0','#8AC926','#FF595E']
+  const index = name.trim().toUpperCase().charCodeAt(0) - 65
+  return index >= 0 && index < 26 ? colors[index] : '#999999'
+}
+
+onMounted(() => {
+  try {
+    const stored = localStorage.getItem('crmLeadTableColumns')
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      if (Array.isArray(parsed) && parsed.length) {
+        const validKeys = new Set((props.headers || []).map((h) => h.key))
+        const filtered = parsed.filter((h) => validKeys.has(h.key))
+        if (filtered.length) {
+          const storedKeys = new Set(filtered.map((h) => h.key))
+          const newCols = (props.headers || []).filter((h) => !storedKeys.has(h.key))
+          selectedHeaders.value = [...filtered, ...newCols]
+          return
+        }
+      }
+    }
+  } catch {}
+  selectedHeaders.value = [...(props.headers || [])]
+})
+
+watch(() => props.headers, (v) => {
+  if (!v?.length || selectedHeaders.value.length) return
+  selectedHeaders.value = [...v]
+})
+
 const selectedLeads = ref([]);
 const isAllSelected = ref(false);
 const selectedArchivedLeads = ref([]);
@@ -1322,6 +1424,7 @@ const leadStatusOptions = [
   { name: 'Converted', color: '#0061fb' },
   { name: 'Lost', color: '#e15b64' },
   { name: 'Archived', color: '#9E9E9E' },
+  { name: 'Uploaded', color: '#8B5CF6' },
 ];
 
 const getLeadStatusColor = (status) => {
@@ -1665,9 +1768,9 @@ onBeforeUnmount(() => {
   window.removeEventListener('crm-automations-updated', _onAutomationsUpdated);
 });
 
-const prefetchVisibleLeadAutomations = async ({ force = false, groupsChanged = false, leadIds = [] } = {}) => {
+const prefetchVisibleLeadAutomations = async ({ force = false, groupsChanged = false, leadIds = [], sourceLeads = null } = {}) => {
   const requestToken = ++automationPrefetchToken;
-  const visibleIds = [...new Set(allVisibleLeads.value.map((lead) => Number(lead?.id || 0)).filter(Boolean))];
+  const visibleIds = [...new Set((sourceLeads || activeLeads.value).map((lead) => Number(lead?.id || 0)).filter(Boolean))];
   if (!visibleIds.length) return;
   const normalizedLeadIds = [...new Set((Array.isArray(leadIds) ? leadIds : [])
     .map((id) => Number(id || 0))
@@ -1688,11 +1791,28 @@ const prefetchVisibleLeadAutomations = async ({ force = false, groupsChanged = f
 };
 
 watch(
-  () => allVisibleLeads.value.map((lead) => Number(lead?.id || 0)).filter(Boolean).join(','),
+  () => activeLeads.value.map((lead) => Number(lead?.id || 0)).filter(Boolean).join(','),
   () => {
     prefetchVisibleLeadAutomations();
   },
   { immediate: true }
+);
+
+// Prefetch automations for converted leads when the converted panel is opened
+watch(openedPanels, (panels) => {
+  if (panels.includes(1) && convertedLeadsData.value.length) {
+    prefetchVisibleLeadAutomations({ sourceLeads: convertedLeadsData.value });
+  }
+});
+
+// Also handles the case where converted leads finish loading while the panel is already open
+watch(
+  () => convertedLeadsData.value.map((lead) => Number(lead?.id || 0)).filter(Boolean).join(','),
+  () => {
+    if (openedPanels.value.includes(1)) {
+      prefetchVisibleLeadAutomations({ sourceLeads: convertedLeadsData.value });
+    }
+  }
 );
 
 const getLeadGroupRows = (lead, group) => {
@@ -2020,7 +2140,7 @@ const buildCsvValue = (value, key = '') => {
 
 const exportSelectedLeads = () => {
   if (typeof window === 'undefined') return;
-  const columns = (props.headers || [])
+  const columns = (selectedHeaders.value.length ? selectedHeaders.value : props.headers || [])
     .filter((h) => h?.key && h.key !== 'data-table-select' && h.key !== 'actions')
     .map((h) => ({ key: h.key, title: h.title || h.key }));
   if (!columns.length) return;
@@ -2671,6 +2791,14 @@ const convertSelected = async () => {
     converting.value = false
   }
 }
+
+defineExpose({
+  selectedHeaders,
+  filteredAvailableHeaders,
+  addHeaderInSelected,
+  removeHeaderFromSelected,
+  getColColor,
+})
 </script>
 
 <style scoped>
@@ -2865,10 +2993,16 @@ const convertSelected = async () => {
 }
 
 .break-email {
-  white-space: nowrap;           /* prevents wrapping */
-  overflow: hidden;              /* hides overflow text */
-  text-overflow: ellipsis;       /* shows ... at end */
-  max-width: 250px;              /* adjust as needed */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 250px;
+}
+.comment-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
 }
 
 .editable-field:hover {
@@ -3107,6 +3241,17 @@ const convertSelected = async () => {
 .bulk-automation-tabs :deep(.v-slide-group__prev),
 .bulk-automation-tabs :deep(.v-slide-group__next) {
   display: none !important;
+}
+
+.crm-col-box {
+  min-width: calc(33.33% - 8px);
+  color: white;
+  border-radius: 6px;
+  text-align: center;
+  font-weight: 400;
+  font-size: 13px;
+  cursor: pointer;
+  min-height: 36px;
 }
 </style>
 
