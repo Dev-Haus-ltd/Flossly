@@ -382,7 +382,7 @@ export const listLeads = async (event) => {
     // Optional equals filters
     if (q.leadStatus) {
       const key = String(q.leadStatus).toLowerCase()
-      const map = { new: 'New', converted: 'Converted', contacted: 'Contacted', lost: 'Lost' }
+      const map = { new: 'New', converted: 'Converted', contacted: 'Contacted', lost: 'Lost', uploaded: 'Uploaded' }
       const value = map[key] || q.leadStatus
       // Use exact match against our canonical stored value
       where.leadStatus = value
@@ -760,6 +760,7 @@ export const bulkUploadLeads = async (event) => {
       ['contacted', 'Contacted'],
       ['lost', 'Lost'],
       ['archived', 'Archived'],
+      ['uploaded', 'Uploaded'],
     ])
 
     const candidateUserIds = [...new Set(leads.map((l) => Number(l.assignedUserId)).filter(Boolean))]
@@ -789,9 +790,9 @@ export const bulkUploadLeads = async (event) => {
       const name = (raw?.name || '').trim()
       const email = (raw?.email || '').trim()
       const telephone = (raw?.telephone || '').trim()
-      const leadSource = raw?.leadSource?.trim?.() || 'Manual'
+      const leadSource = raw?.leadSource?.trim?.() || null
       const treatment = raw?.treatment?.trim?.() || null
-      const rawStatus = raw?.leadStatus?.trim?.() || 'New'
+      const rawStatus = raw?.leadStatus?.trim?.() || 'Uploaded'
       const status = statusMap.get(rawStatus.toLowerCase())
       const assignedUserIdRaw = raw?.assignedUserId ? Number(raw.assignedUserId) : null
       const assignedUserId = assignedUserIdRaw && allowedUserIds.has(assignedUserIdRaw)
@@ -813,8 +814,8 @@ export const bulkUploadLeads = async (event) => {
           email,
           telephone,
           leadSource,
-          leadStatus: status || 'New',
-          softDeleted: (status || 'New') === 'Archived',
+          leadStatus: status || 'Uploaded',
+          softDeleted: (status || 'Uploaded') === 'Archived',
           treatment,
           inquiryDate: raw?.inquiryDate ? inquiryDate : new Date(),
           followUpDate,
@@ -1074,7 +1075,8 @@ export const listOptions = async (event) => {
           { name: 'New', color: '#1BA34C' },
           { name: 'Converted', color: '#0D47A1' },
           { name: 'Contacted', color: '#F39C12' },
-          { name: 'Lost', color: '#E53935' }
+          { name: 'Lost', color: '#E53935' },
+          { name: 'Uploaded', color: '#8B5CF6' }
         ]
       }
       const items = (defaults[category] || []).map((n, i) =>
@@ -1116,6 +1118,21 @@ export const deleteOption = async (event) => {
     if (!id) return error(400, 'id required')
     await CrmOption.destroy({ where: { id, organisationId: Number(orgId) } })
     return success('deleted')
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const updateOption = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const { id, name } = payload || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    if (!id || !name?.trim()) return error(400, 'id and name required')
+    await CrmOption.update({ name: name.trim() }, { where: { id, organisationId: Number(orgId) } })
+    return success({ id, name: name.trim() })
   } catch (e) {
     return error(500, e.message)
   }
