@@ -41,10 +41,11 @@
   const emit = defineEmits(["update"]);
   
   const leadStatuses = ref([
-    { key: "new", name: "New", color: "#00A856" },       // Blue
-    { key: "converted", name: "Converted", color: "#0155B9" }, // Yellow
-    { key: "contacted", name: "Contacted", color: "#ffc107" }, // Green
-    { key: "lost", name: "Lost", color: "#dc3545" },     // Red
+    { key: "new", name: "New", color: "#00A856" },
+    { key: "converted", name: "Converted", color: "#0155B9" },
+    { key: "contacted", name: "Contacted", color: "#ffc107" },
+    { key: "lost", name: "Lost", color: "#dc3545" },
+    { key: "uploaded", name: "Uploaded", color: "#8B5CF6" },
   ]);
   
   const getHexColor = () => {

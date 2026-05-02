@@ -25,7 +25,7 @@
         <v-expansion-panel-text class="pt-0">
           <v-data-table-server
             v-model="selectedLeads"
-            :headers="headers"
+            :headers="selectedHeaders"
             :items="activeLeads"
             item-value="id"
             show-select
@@ -58,10 +58,18 @@
               />
             </template>
 
-            <!-- Editable / resizable headers -->
+            <!-- Draggable / resizable headers -->
             <template v-slot:headers="{ columns, allSelected, someSelected }">
-              <tr>
-                <template v-for="(column, i) in columns" :key="column.key">
+              <draggable
+                tag="tr"
+                :model-value="columns"
+                item-key="key"
+                direction="horizontal"
+                :disabled="isResizing"
+                handle=".th-content"
+                @update:model-value="updateHeaderOrder"
+              >
+                <template #item="{ element: column, index: i }">
                   <th
                     :style="{
                       width: column.width + 'px',
@@ -72,9 +80,15 @@
                       position: 'relative',
                     }"
                   >
-                    <div v-if="i !== 0" class="d-flex align-center th-content">
+                    <div v-if="i !== 0" class="d-flex align-center th-content" style="cursor: grab;">
                       <p class="px-1 w-100 mb-0">{{ column.title }}</p>
-
+                      <v-icon
+                        v-if="column.key !== 'name'"
+                        size="14"
+                        color="black"
+                        style="cursor: pointer; flex-shrink: 0;"
+                        @click.stop="removeHeaderFromSelected(column)"
+                      >mdi-minus</v-icon>
                       <span
                         class="resize-handle"
                         @pointerdown="startResize($event, column, i)"
@@ -94,12 +108,12 @@
                     </div>
                   </th>
                 </template>
-              </tr>
+              </draggable>
             </template>
 
             <!-- Dynamic cell templates -->
             <template
-              v-for="col in headers"
+              v-for="col in selectedHeaders"
               :key="col.key"
               v-slot:[`item.${col.key}`]="{ item }"
             >
@@ -302,6 +316,7 @@
                   :selected="item"
                   :column="col"
                   @update="updateValueRow(item, 'leadSource')"
+                  @options-updated="(e) => emit('options-refreshed', e)"
                 />
               </template>
               <template v-else-if="col.key === 'treatment'">
@@ -310,6 +325,7 @@
                   :selected="item"
                   :column="col"
                   @update="updateValueRow(item, 'treatment')"
+                  @options-updated="(e) => emit('options-refreshed', e)"
                 />
               </template>
               <template v-else-if="col.key === 'assigned'">
@@ -383,6 +399,373 @@
         </v-expansion-panel-text>
       </v-expansion-panel>
 
+      <!-- Converted Leads Panel -->
+      <v-expansion-panel rounded="lg" class="border-sm pb-1">
+        <v-expansion-panel-title>
+          <div class="d-flex align-center justify-space-between w-100">
+            <div class="d-flex align-center">
+              <v-chip color="primary" label>
+                <v-icon class="mr-2">mdi-check-circle-outline</v-icon>
+                Converted Leads
+              </v-chip>
+              <v-chip class="ml-2" color="primary" label>
+                {{ props.convertedTotal || convertedLeadsData.length }}
+              </v-chip>
+            </div>
+          </div>
+        </v-expansion-panel-title>
+        <v-expansion-panel-text class="pt-0">
+          <v-alert
+            v-if="!convertedLeadsData.length"
+            type="info"
+            variant="tonal"
+            class="mb-2"
+          >
+            No converted leads yet.
+          </v-alert>
+          <v-data-table-server
+            v-else
+            v-model="selectedConvertedLeads"
+            :headers="selectedHeaders"
+            :items="convertedLeadsData"
+            item-value="id"
+            hover
+            class="resizable-table"
+            density="compact"
+            show-select
+            :loading="props.loading"
+            :items-length="props.convertedTotal || convertedLeadsData.length"
+            :page="props.convertedPage"
+            :items-per-page="props.itemsPerPage"
+            :items-per-page-options="[10, 25, 50, 100]"
+            :item-selectable="() => true"
+            @update:model-value="onConvertedSelectionChange"
+            @update:page="(val) => emit('update:convertedPage', val)"
+            @update:items-per-page="(val) => emit('update:itemsPerPage', val)"
+            return-object
+          >
+            <template
+              v-slot:[`item.data-table-select`]="{
+                internalItem,
+                isSelected,
+                toggleSelect,
+              }"
+            >
+              <input
+                type="checkbox"
+                :checked="isSelected(internalItem)"
+                @change="() => toggleSelect(internalItem)"
+                class="cust-checkbox"
+              />
+            </template>
+            <template v-slot:headers="{ columns, allSelected, someSelected }">
+              <draggable
+                tag="tr"
+                :model-value="columns"
+                item-key="key"
+                direction="horizontal"
+                :disabled="isResizing"
+                handle=".th-content"
+                @update:model-value="updateHeaderOrder"
+              >
+                <template #item="{ element: column, index: i }">
+                  <th
+                    :style="{
+                      width: column.width + 'px',
+                      minWidth: column.width + 'px',
+                      padding: '0px 7px',
+                      fontSize: '14px',
+                      backgroundColor: '#F6F6F6',
+                      position: 'relative',
+                    }"
+                  >
+                    <div v-if="i !== 0" class="d-flex align-center th-content" style="cursor: grab;">
+                      <p class="px-1 w-100 mb-0">{{ column.title }}</p>
+                      <v-icon
+                        v-if="column.key !== 'name'"
+                        size="14"
+                        color="black"
+                        style="cursor: pointer; flex-shrink: 0;"
+                        @click.stop="removeHeaderFromSelected(column)"
+                      >mdi-minus</v-icon>
+                      <span
+                        class="resize-handle"
+                        @pointerdown="startResize($event, column, i)"
+                      ></span>
+                    </div>
+                    <div v-else class="d-flex justify-center">
+                      <input
+                        type="checkbox"
+                        class="cust-checkbox ma-0"
+                        :checked="allSelected"
+                        :indeterminate.prop="someSelected && !allSelected"
+                        @change="toggleAllConverted"
+                      />
+                    </div>
+                  </th>
+                </template>
+              </draggable>
+            </template>
+            <template
+              v-for="col in selectedHeaders"
+              :key="col.key"
+              v-slot:[`item.${col.key}`]="{ item }"
+            >
+              <template v-if="col.key === 'name'">
+                <div class="lead-name-cell-container">
+                  <div class="d-flex justify-space-between align-center lead-name-cell">
+                    <div class="lead-name-field-wrapper">
+                      <input
+                        v-if="editingCell.id === item.id && editingCell.field === 'name'"
+                        v-model="editingCell.value"
+                        @blur="saveEdit(item, 'name')"
+                        @keyup.enter="saveEdit(item, 'name')"
+                        @keyup.esc="cancelEdit"
+                        class="inline-edit-input"
+                        ref="editInput"
+                        autofocus
+                      />
+                      <p
+                        v-else
+                        class="ml-2 mb-0 editable-field break-email"
+                        @click="startEdit(item, 'name')"
+                        :title="resolveLeadName(item)"
+                      >
+                        {{ resolveLeadName(item) || 'Click to edit' }}
+                      </p>
+                    </div>
+                    <img
+                      src="@/assets/dashboard/expandIcon.svg"
+                      alt="Expand"
+                      class="ml-2 mr-2 cursor-pointer"
+                      @click="openLeadDialog(item)"
+                    />
+                  </div>
+                  <div class="lead-name-border"></div>
+                </div>
+              </template>
+
+              <template v-else-if="col.key === 'email'">
+                <div class="pa-1">
+                  <input
+                    v-if="editingCell.id === item.id && editingCell.field === 'email'"
+                    v-model="editingCell.value"
+                    @blur="saveEdit(item, 'email')"
+                    @keyup.enter="saveEdit(item, 'email')"
+                    @keyup.esc="cancelEdit"
+                    type="email"
+                    class="inline-edit-input"
+                    ref="editInput"
+                    autofocus
+                  />
+                  <p
+                    v-else
+                    class="ml-2 mb-0 editable-field break-email"
+                    @click="startEdit(item, 'email')"
+                    :title="resolveLeadEmail(item)"
+                  >
+                    {{ resolveLeadEmail(item) || 'Click to edit' }}
+                  </p>
+                </div>
+              </template>
+
+              <template v-else-if="col.key === 'telephone'">
+                <div class="pa-1">
+                  <input
+                    v-if="editingCell.id === item.id && editingCell.field === 'telephone'"
+                    v-model="editingCell.value"
+                    @blur="saveEdit(item, 'telephone')"
+                    @keyup.enter="saveEdit(item, 'telephone')"
+                    @keyup.esc="cancelEdit"
+                    type="tel"
+                    class="inline-edit-input"
+                    ref="editInput"
+                    autofocus
+                  />
+                  <p
+                    v-else
+                    class="ml-2 mb-0 editable-field"
+                    @click="startEdit(item, 'telephone')"
+                  >
+                    {{ resolveLeadPhone(item) || 'Click to edit' }}
+                  </p>
+                </div>
+              </template>
+
+              <template v-else-if="col.key === 'comments'">
+                <div class="comment-cell-wrapper pa-1" @click="startEdit(item, 'comments')">
+                  <div class="comment-scrollable">
+                    {{ item.comments || 'Click to add comment' }}
+                  </div>
+                  <v-icon size="14" class="comment-edit-icon">mdi-pencil</v-icon>
+                </div>
+                <v-dialog
+                  v-model="commentMenus[item.id]"
+                  max-width="500"
+                  :retain-focus="false"
+                >
+                  <v-card class="pa-4">
+                    <v-card-title class="text-subtitle-1 pa-0 mb-3 d-flex justify-space-between align-center">
+                      <span>Edit Comment</span>
+                      <v-btn icon variant="text" size="small" @click="cancelEdit">
+                        <v-icon>mdi-close</v-icon>
+                      </v-btn>
+                    </v-card-title>
+                    <v-textarea
+                      v-model="editingCell.value"
+                      variant="outlined"
+                      density="comfortable"
+                      rows="5"
+                      hide-details
+                      autofocus
+                      placeholder="Enter comment..."
+                      @keyup.esc="cancelEdit"
+                    />
+                    <v-card-actions class="pa-0 mt-3">
+                      <v-spacer />
+                      <v-btn variant="text" @click="cancelEdit">Cancel</v-btn>
+                      <v-btn color="primary" variant="flat" @click="saveEdit(item, 'comments')">Save</v-btn>
+                    </v-card-actions>
+                  </v-card>
+                </v-dialog>
+              </template>
+
+              <template v-else-if="col.key === 'alert'">
+                <DataTableColumnsAlerts :selected="item" :alert-options="props.alertOptions" @update="updateValueRow(item, 'alert')" @options-saved="(opts) => emit('alert-options-saved', opts)" />
+              </template>
+              <template v-else-if="col.key === 'leadStatus'">
+                <div
+                  :style="`background-color: ${getLeadStatusColor(item.leadStatus)}; height: 100%;`"
+                  class="pa-1 d-flex align-center"
+                >
+                  <v-menu
+                    v-model="item.statusMenu"
+                    :close-on-content-click="false"
+                    offset-y
+                  >
+                    <template #activator="{ props }">
+                      <p v-bind="props" style="width: 100%; cursor: pointer; color: white;" class="mb-0">
+                        {{ item.leadStatus || 'Select Status' }}
+                      </p>
+                    </template>
+                    <v-card width="250" class="pa-4">
+                      <v-list>
+                        <v-list-item
+                          v-for="(status, i) in leadStatusOptions"
+                          :key="i"
+                          :style="`background-color: ${status.color}; color:#fff; margin-bottom: 6px; min-height: 30px;`"
+                          class="rounded-sm"
+                          @click="() => {
+                            item.leadStatus = status.name;
+                            item.statusMenu = false;
+                            updateValueRow(item, 'leadStatus');
+                          }"
+                        >
+                          <v-list-item-title>{{ status.name }}</v-list-item-title>
+                        </v-list-item>
+                      </v-list>
+                    </v-card>
+                  </v-menu>
+                </div>
+              </template>
+              <template v-else-if="col.key === 'automation'">
+                <DataTableColumnsAutomationGroups
+                  :lead="item"
+                  :groups="resolvedAutomationGroups"
+                  :get-display="getLeadAutomationGroupDisplay"
+                  :is-group-enabled="isLeadGroupEnabled"
+                  :toggle-group="toggleLeadGroup"
+                  :on-open-menu="onAutomationMenuOpen"
+                  :saving="!!automationSaving[item.id]"
+                  :groups-loading="crmStore.automationGroupsLoading"
+                  :whatsapp-enabled="props.whatsappConnected"
+                />
+              </template>
+              <template v-else-if="col.key === 'leadSource'">
+                <DataTableColumnsLeadSource
+                  :leadSources="leadSources"
+                  :selected="item"
+                  :column="col"
+                  @update="updateValueRow(item, 'leadSource')"
+                  @options-updated="(e) => emit('options-refreshed', e)"
+                />
+              </template>
+              <template v-else-if="col.key === 'treatment'">
+                <DataTableColumnsLeadTreatment
+                  :treatmentSources="treatmentSources"
+                  :selected="item"
+                  :column="col"
+                  @update="updateValueRow(item, 'treatment')"
+                  @options-updated="(e) => emit('options-refreshed', e)"
+                />
+              </template>
+              <template v-else-if="col.key === 'assigned'">
+                <div class="pa-1">
+                  <DataTableColumnsAssignedUsers
+                    :user-task-id="item.id"
+                    :assigned-users="item.assigned || [user]"
+                    :all-users="getLeadUsers(item)"
+                    :current-user="user"
+                    @assign="assignLead(item, $event)"
+                    @unassign="unAssign(item, $event)"
+                    @add-staff="openAddStaff"
+                  />
+                </div>
+              </template>
+              <template v-else-if="col.key === 'inquiryDate'">
+                <div class="pa-1">
+                  <p class="mb-0 ml-2">{{ formatDateTime(item[col.key]) }}</p>
+                </div>
+              </template>
+              <template v-else-if="col.key === 'followUpDate'">
+                <div class="pa-1">
+                  <DataTableColumnsDueDate
+                    :model-value="item.followUpDate"
+                    @update:modelValue="(val) => updateFollowUpDate(item, val)"
+                  />
+                </div>
+              </template>
+              <template v-else>
+                <p class="ml-2 mb-0">{{ item[col.key] }}</p>
+              </template>
+            </template>
+          </v-data-table-server>
+          <v-card
+            v-if="selectedConvertedLeads.length"
+            class="action-bar py-4 d-flex justify-center align-center rounded-lg"
+            style="padding: 0px 50px; gap: 40px;"
+            :elevation="5"
+            flat
+          >
+            <div class="selected-count d-flex align-center">
+              <span class="selected-text">
+                {{ selectedConvertedLeads.length }}
+              </span>
+              <p class="ml-3 mt-1">Items Selected</p>
+            </div>
+            <div class="actions-container d-flex align-center" style="gap: 8px;">
+              <div
+                v-for="(action, i) in actions"
+                :key="i"
+                class="action-item d-flex flex-column align-center"
+                :class="{ 'action-item--locked': isActionLocked(action.key) }"
+                @click="onConvertedActionClick(action.key)"
+              >
+                <img v-if="action.icon" :src="action.icon" :alt="action.label" class="action-icon" />
+                <v-icon v-else-if="action.mdiIcon" size="22" color="#6d6d6d">{{ action.mdiIcon }}</v-icon>
+                <span class="action-label">{{ action.label }}</span>
+              </div>
+              <v-divider vertical class="mx-2" style="height: 40px;" />
+              <div class="action-item d-flex flex-column align-center" @click="selectedConvertedLeads = []">
+                <v-icon size="20" color="#6d6d6d">mdi-close</v-icon>
+                <span class="action-label">Close</span>
+              </div>
+            </div>
+          </v-card>
+        </v-expansion-panel-text>
+      </v-expansion-panel>
+
+      <!-- Archived Leads Panel -->
       <v-expansion-panel
         rounded="lg"
         class="border-sm pb-1"
@@ -412,7 +795,7 @@
           <v-data-table-server
             v-else
             v-model="selectedArchivedLeads"
-            :headers="headers"
+            :headers="selectedHeaders"
             :items="archivedLeads"
             item-value="id"
             hover
@@ -478,7 +861,7 @@
               </tr>
             </template>
             <template
-              v-for="col in headers"
+              v-for="col in selectedHeaders"
               :key="col.key"
               v-slot:[`item.${col.key}`]="{ item }"
             >
@@ -878,6 +1261,7 @@
 </template>
 
 <script setup>
+import draggable from "vuedraggable"
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 import { buildRecipientContext } from '@/lib/crm/previewContext'
 import { applyCrmPlaceholders } from '@/lib/crm/placeholders'
@@ -912,6 +1296,7 @@ const emit = defineEmits([
   'update:archivedPage',
   'update:itemsPerPage',
   'alert-options-saved',
+  'options-refreshed',
 ]);
 const props = defineProps({
   leads: { type: Array, default: () => [] },
@@ -932,6 +1317,73 @@ const props = defineProps({
   whatsappConnected: { type: Boolean, default: false },
 });
 const openedPanels = ref([0]);
+
+// Column visibility + order management
+const selectedHeaders = ref([])
+
+const filteredAvailableHeaders = computed(() => {
+  const selectedKeys = new Set(selectedHeaders.value.map((h) => h.key))
+  return (props.headers || []).filter((h) => !selectedKeys.has(h.key))
+})
+
+const saveColumnPreferences = () => {
+  try {
+    localStorage.setItem('crmLeadTableColumns', JSON.stringify(selectedHeaders.value))
+  } catch {}
+}
+
+const addHeaderInSelected = (column) => {
+  if (!selectedHeaders.value.find((h) => h.key === column.key)) {
+    selectedHeaders.value.push(column)
+    saveColumnPreferences()
+  }
+}
+
+const removeHeaderFromSelected = (column) => {
+  if (column.key === 'name') return
+  selectedHeaders.value = selectedHeaders.value.filter((h) => h.key !== column.key)
+  saveColumnPreferences()
+}
+
+const updateHeaderOrder = (newOrder) => {
+  const selectable = newOrder.findIndex((x) => !x.title)
+  if (selectable !== -1) newOrder.splice(selectable, 1)
+  selectedHeaders.value = newOrder
+  saveColumnPreferences()
+}
+
+const getColColor = (name) => {
+  if (!name) return '#999999'
+  const colors = ['#FF6B6B','#FF8E72','#FFD93D','#6BCB77','#4D96FF','#8358E8','#FF6EC7','#00B8A9','#F15BB5','#FF7F11','#FF9F1C','#2EC4B6','#6A4C93','#8338EC','#3A86FF','#FF006E','#FB5607','#FFBE0B','#06D6A0','#118AB2','#073B4C','#EF476F','#06AED5','#4CC9F0','#8AC926','#FF595E']
+  const index = name.trim().toUpperCase().charCodeAt(0) - 65
+  return index >= 0 && index < 26 ? colors[index] : '#999999'
+}
+
+onMounted(() => {
+  try {
+    const stored = localStorage.getItem('crmLeadTableColumns')
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      if (Array.isArray(parsed) && parsed.length) {
+        const validKeys = new Set((props.headers || []).map((h) => h.key))
+        const filtered = parsed.filter((h) => validKeys.has(h.key))
+        if (filtered.length) {
+          const storedKeys = new Set(filtered.map((h) => h.key))
+          const newCols = (props.headers || []).filter((h) => !storedKeys.has(h.key))
+          selectedHeaders.value = [...filtered, ...newCols]
+          return
+        }
+      }
+    }
+  } catch {}
+  selectedHeaders.value = [...(props.headers || [])]
+})
+
+watch(() => props.headers, (v) => {
+  if (!v?.length || selectedHeaders.value.length) return
+  selectedHeaders.value = [...v]
+})
+
 const selectedLeads = ref([]);
 const isAllSelected = ref(false);
 const selectedArchivedLeads = ref([]);
@@ -948,6 +1400,7 @@ const leadStatusOptions = [
   { name: 'Converted', color: '#0061fb' },
   { name: 'Lost', color: '#e15b64' },
   { name: 'Archived', color: '#9E9E9E' },
+  { name: 'Uploaded', color: '#8B5CF6' },
 ];
 
 const getLeadStatusColor = (status) => {
@@ -1287,9 +1740,9 @@ onBeforeUnmount(() => {
   window.removeEventListener('crm-automations-updated', _onAutomationsUpdated);
 });
 
-const prefetchVisibleLeadAutomations = async ({ force = false, groupsChanged = false, leadIds = [] } = {}) => {
+const prefetchVisibleLeadAutomations = async ({ force = false, groupsChanged = false, leadIds = [], sourceLeads = null } = {}) => {
   const requestToken = ++automationPrefetchToken;
-  const visibleIds = [...new Set(allVisibleLeads.value.map((lead) => Number(lead?.id || 0)).filter(Boolean))];
+  const visibleIds = [...new Set((sourceLeads || activeLeads.value).map((lead) => Number(lead?.id || 0)).filter(Boolean))];
   if (!visibleIds.length) return;
   const normalizedLeadIds = [...new Set((Array.isArray(leadIds) ? leadIds : [])
     .map((id) => Number(id || 0))
@@ -1310,11 +1763,28 @@ const prefetchVisibleLeadAutomations = async ({ force = false, groupsChanged = f
 };
 
 watch(
-  () => allVisibleLeads.value.map((lead) => Number(lead?.id || 0)).filter(Boolean).join(','),
+  () => activeLeads.value.map((lead) => Number(lead?.id || 0)).filter(Boolean).join(','),
   () => {
     prefetchVisibleLeadAutomations();
   },
   { immediate: true }
+);
+
+// Prefetch automations for converted leads when the converted panel is opened
+watch(openedPanels, (panels) => {
+  if (panels.includes(1) && convertedLeadsData.value.length) {
+    prefetchVisibleLeadAutomations({ sourceLeads: convertedLeadsData.value });
+  }
+});
+
+// Also handles the case where converted leads finish loading while the panel is already open
+watch(
+  () => convertedLeadsData.value.map((lead) => Number(lead?.id || 0)).filter(Boolean).join(','),
+  () => {
+    if (openedPanels.value.includes(1)) {
+      prefetchVisibleLeadAutomations({ sourceLeads: convertedLeadsData.value });
+    }
+  }
 );
 
 const getLeadGroupRows = (lead, group) => {
@@ -1636,7 +2106,7 @@ const buildCsvValue = (value, key = '') => {
 
 const exportSelectedLeads = () => {
   if (typeof window === 'undefined') return;
-  const columns = (props.headers || [])
+  const columns = (selectedHeaders.value.length ? selectedHeaders.value : props.headers || [])
     .filter((h) => h?.key && h.key !== 'data-table-select' && h.key !== 'actions')
     .map((h) => ({ key: h.key, title: h.title || h.key }));
   if (!columns.length) return;
@@ -2276,6 +2746,14 @@ const convertSelected = async () => {
     converting.value = false
   }
 }
+
+defineExpose({
+  selectedHeaders,
+  filteredAvailableHeaders,
+  addHeaderInSelected,
+  removeHeaderFromSelected,
+  getColColor,
+})
 </script>
 
 <style scoped>
@@ -2470,10 +2948,16 @@ const convertSelected = async () => {
 }
 
 .break-email {
-  white-space: nowrap;           /* prevents wrapping */
-  overflow: hidden;              /* hides overflow text */
-  text-overflow: ellipsis;       /* shows ... at end */
-  max-width: 250px;              /* adjust as needed */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 250px;
+}
+.comment-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
 }
 
 .editable-field:hover {
@@ -2679,6 +3163,17 @@ const convertSelected = async () => {
 .bulk-automation-tabs :deep(.v-slide-group__prev),
 .bulk-automation-tabs :deep(.v-slide-group__next) {
   display: none !important;
+}
+
+.crm-col-box {
+  min-width: calc(33.33% - 8px);
+  color: white;
+  border-radius: 6px;
+  text-align: center;
+  font-weight: 400;
+  font-size: 13px;
+  cursor: pointer;
+  min-height: 36px;
 }
 </style>
 
