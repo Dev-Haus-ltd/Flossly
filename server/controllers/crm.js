@@ -662,6 +662,25 @@ export const createLead = async (event) => {
   }
 }
 
+export async function createLeadInternal({ orgId, name, telephone, email, treatment, leadSource, comments, rawData }) {
+  const existing = await CrmLead.findOne({ where: { organisationId: orgId, telephone } });
+  if (existing) return { leadId: existing.id, created: false };
+
+  const created = await CrmLead.create({
+    organisationId: orgId,
+    name,
+    telephone,
+    email: email || null,
+    leadSource: leadSource || "Meta DM",
+    leadStatus: "New",
+    treatment: treatment || null,
+    comments: comments || null,
+    rawData: rawData || null,
+    inquiryDate: new Date(),
+  });
+  return { leadId: created.id, created: true };
+}
+
 export const updateLead = async (event) => {
   try {
     const logged = event.context.user

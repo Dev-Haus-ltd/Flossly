@@ -1,12 +1,13 @@
 import { Op, fn, col } from 'sequelize'
 import crypto from 'crypto'
-import { CrmLead, MetaPage, Organisation, User, UserOrganisation, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight, CrmDmAccount, CrmDmConversation, CrmDmMessage, OrganisationTreatment } from '../models'
+import { CrmLead, MetaPage, Organisation, User, UserOrganisation, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight, CrmDmAccount, CrmDmConversation, CrmDmMessage, OrganisationTreatment, DiaryAppointment, DiaryPatient, Role } from '../models'
 import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
 import { addMetaClient, broadcastMetaEvent } from '../utils/metaStream'
 import { sendNotificationToMultipleUsers } from '../utils/fcmNotification'
 import { parseJsonBody } from "../utils/body"
-import { chat, generateAutoReply } from '../utils/aiWrapper'
+import { chat, generateAutoReply, generateAutoReplyWithTools } from '../utils/aiWrapper'
+import { createLeadInternal } from './crm'
 import {
   runStructureSync,
   runInsightsSync,
@@ -149,13 +150,47 @@ const sendAutoReply = async ({ orgId, conversation, messageText, accessToken, se
 
     console.log(`[Meta AutoReply] Conversation history: ${conversationHistory.length} messages for org ${orgId}`);
 
-    const { reply: replyText } = await generateAutoReply({
-      organisationName: org.name,
-      organisationType: org.type,
-      message: messageText,
-      history: conversationHistory,
-      autoReplyConfig: config,
-    });
+    let replyText;
+    let appointmentBooked = false;
+
+    if (config.bookingEnabled) {
+      const result = await generateAutoReplyWithTools({
+        organisationName: org.name,
+        organisationType: org.type,
+        message: messageText,
+        history: conversationHistory,
+        autoReplyConfig: config,
+      });
+
+      if (result.toolCall) {
+        const bookingResult = await executeBookAppointment({
+          orgId,
+          input: result.toolCall.input,
+          conversation,
+        });
+
+        const confirmationReply = await chat({
+          systemPrompt: `You are a warm, friendly, and professional assistant for a practice called "${org.name}". You help customers by confirming appointment bookings in a natural, reassuring way.`,
+          prompt: bookingResult.success
+            ? `The appointment was successfully booked for ${bookingResult.date} at ${bookingResult.time} with ${bookingResult.dentistName}. Write a warm confirmation message to the customer.`
+            : `The booking failed: ${bookingResult.reason}. Ask the customer for an alternative date/time.`,
+          history: conversationHistory,
+        });
+        replyText = confirmationReply;
+        appointmentBooked = bookingResult.success;
+      } else {
+        replyText = result.reply;
+      }
+    } else {
+      const { reply } = await generateAutoReply({
+        organisationName: org.name,
+        organisationType: org.type,
+        message: messageText,
+        history: conversationHistory,
+        autoReplyConfig: config,
+      });
+      replyText = reply;
+    }
 
     if (!replyText) return;
 
@@ -201,7 +236,7 @@ const sendAutoReply = async ({ orgId, conversation, messageText, accessToken, se
       message: replyText,
       attachments: null,
       status: 'sent',
-      metadata: { autoReply: true },
+      metadata: { autoReply: true, appointmentBooked },
     });
 
     conversation.lastMessageAt = new Date();
@@ -218,6 +253,104 @@ const sendAutoReply = async ({ orgId, conversation, messageText, accessToken, se
     console.error(`[Meta AutoReply] Failed for org ${orgId}:`, err?.message || err);
   }
 };
+
+export const executeBookAppointment = async ({ orgId, input, conversation }) => {
+  try {
+    const users = await User.findAll({
+      attributes: ['id', 'fullName', 'email', 'photo', 'roleId'],
+      where: { status: 'Active' },
+      include: [
+        { model: Role, as: 'role', attributes: ['title'] },
+        { model: UserOrganisation, as: 'userOrganisations', attributes: [], where: { organisationId: Number(orgId) } },
+      ],
+    });
+    const dentistRoleIds = new Set([1, 2, 5]);
+    const dentists = users
+      .filter((u) => {
+        const roleId = Number(u.roleId);
+        const title = (u.role?.title || '').toLowerCase();
+        return dentistRoleIds.has(roleId) || title.includes('dentist');
+      })
+      .map((u) => ({ id: u.id, name: u.fullName }));
+
+    if (dentists.length === 0) {
+      return { success: false, reason: 'No dentist available' };
+    }
+
+    const dentistId = dentists[0].id;
+    const dentistName = dentists[0].name;
+
+    const startTime = parseLocalDateTime(input.preferred_date, input.preferred_time);
+    if (!startTime || isNaN(startTime.getTime())) {
+      return { success: false, reason: 'Invalid date or time format' };
+    }
+    const endTime = new Date(startTime);
+    endTime.setMinutes(endTime.getMinutes() + 30);
+
+    const { Op } = await import('sequelize');
+    const overlapWindow = { [Op.and]: [{ startTime: { [Op.lt]: endTime } }, { endTime: { [Op.gt]: startTime } }] };
+    const notCancelled = { status: { [Op.ne]: 'Cancelled' } };
+    const overlap = await DiaryAppointment.count({
+      where: { organisationId: Number(orgId), ...overlapWindow, ...notCancelled, dentistId },
+    });
+    if (overlap > 0) {
+      return { success: false, reason: 'Dentist unavailable at that time' };
+    }
+
+    let patientId = null;
+    const nameParts = String(input.patient_name || '').split(' ');
+    const firstName = nameParts[0];
+    const lastName = nameParts.slice(1).join(' ') || '-';
+    const patient = await DiaryPatient.create({
+      organisationId: Number(orgId),
+      firstName,
+      lastName,
+    });
+    patientId = patient.id;
+
+    const appointment = await DiaryAppointment.create({
+      organisationId: Number(orgId),
+      patientId,
+      dentistId,
+      treatmentName: input.treatment || null,
+      status: 'Pending',
+      startTime,
+      endTime,
+      notes: input.notes || null,
+    });
+
+    const leadResult = await createLeadInternal({
+      orgId: Number(orgId),
+      name: input.patient_name,
+      telephone: input.patient_phone,
+      email: null,
+      treatment: input.treatment || null,
+      leadSource: 'Meta DM',
+      comments: input.notes || null,
+      rawData: conversation ? { conversationId: conversation.id, platform: conversation.platform } : null,
+    });
+
+    return {
+      success: true,
+      appointmentId: appointment.id,
+      leadId: leadResult.leadId,
+      dentistName,
+      date: input.preferred_date,
+      time: input.preferred_time,
+    };
+  } catch (err) {
+    console.error('[executeBookAppointment]', err?.message || err);
+    return { success: false, reason: 'Booking failed: ' + (err.message || 'unknown error') };
+  }
+};
+
+function parseLocalDateTime(dateStr, timeStr) {
+  if (!dateStr || !timeStr) return null;
+  const [year, month, day] = String(dateStr).split('-').map(Number);
+  const [hour, minute] = String(timeStr).split(':').map(Number);
+  if ([year, month, day, hour, minute].some(isNaN)) return null;
+  return new Date(year, month - 1, day, hour, minute, 0, 0);
+}
 
 export const authStart = async (event) => {
   const config = useRuntimeConfig()
