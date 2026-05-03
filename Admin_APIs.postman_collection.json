@@ -158,22 +158,24 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": 45,\n  \"status\": \"Disabled\"\n}"
+              "raw": "{\n  \"status\": \"Disabled\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/admin/users/123/status",
+              "raw": "{{base_url}}/api/admin/orgs/45/users/123/status",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
+                "orgs",
+                "45",
                 "users",
                 "123",
                 "status"
               ]
             },
-            "description": "Update a user's status within a specific organisation (UserOrganisations table). This controls whether the user can access that particular organisation. Valid options: Active, Disabled, Invited, Expired."
+            "description": "Update a user's status within a specific organisation (UserOrganisations table). Org id is in the URL path only; body carries status. Valid options: Active, Disabled, Invited, Expired."
           },
           "response": []
         },
@@ -223,22 +225,24 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": 10\n}"
+              "raw": "{}"
             },
             "url": {
-              "raw": "{{base_url}}/api/admin/users/123/resend-invite",
+              "raw": "{{base_url}}/api/admin/orgs/10/users/123/resend-invite",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
+                "orgs",
+                "10",
                 "users",
                 "123",
                 "resend-invite"
               ]
             },
-            "description": "Admin-assisted resend invitation email. Only works for users with status Invited. organisationId is optional."
+            "description": "Admin-assisted resend invitation email. Only works for users with status Invited. Organisation id is in the URL path only."
           },
           "response": []
         },
@@ -1435,7 +1439,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"key\": \"new_patient_intro\",\n  \"title\": \"New Patient Intro Updated\",\n  \"content\": \"Hello [Practice Name], thank you for getting in touch.\",\n  \"sortOrder\": 11\n}"
+              "raw": "{\n  \"key\": \"new_patient_intro\",\n  \"title\": \"New Patient Intro Updated\",\n  \"content\": \"Hello [Practice Name], thank you for getting in touch.\",\n  \"sortOrder\": 11\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/admin/crm/scripts-pool/1",
@@ -1465,7 +1469,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1\n}"
+              "raw": "{}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/admin/crm/scripts-pool/1",
@@ -2617,22 +2621,24 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": 1,\n  \"licenseType\": \"Glide\",\n  \"renewalDate\": \"2027-03-30T00:00:00.000Z\"\n}"
+              "raw": "{\n  \"licenseType\": \"Glide\",\n  \"renewalDate\": \"2027-03-30T00:00:00.000Z\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/users/123/update-license",
+              "raw": "{{baseUrl}}/api/admin/orgs/1/users/123/update-license",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
+                "orgs",
+                "1",
                 "users",
                 "123",
                 "update-license"
               ]
             },
-            "description": "Manually update a user's license type and renewal date for a specific organisation. The user id is in the URL path. Valid license types: System, Trial, Drift, Glide, Soar"
+            "description": "Manually update a user's license type and renewal date for a specific organisation. Org and user ids are in the URL path; body carries licenseType and renewalDate only. Valid license types: System, Trial, Drift, Glide, Soar"
           },
           "response": []
         },
@@ -2662,7 +2668,7 @@
                 "1"
               ]
             },
-            "description": "Update general information of an organisation. Allowed fields: name, address, description, postalCode, surgeryCount, teamCount, currentApp, contact, type, managerId, logo, cqcInspectionDate, status, practiceAnniversaryDate, automationPlaceholders"
+            "description": "Update general information of an organisation. The organisation id is only in the URL path. Body must contain an `updates` object. Allowed fields: name, address, description, postalCode, surgeryCount, teamCount, currentApp, contact, type, managerId, logo, cqcInspectionDate, status, practiceAnniversaryDate, automationPlaceholders"
           },
           "response": []
         },
@@ -2692,7 +2698,7 @@
                 "123"
               ]
             },
-            "description": "Update general information of a user. Allowed fields: fullName, email, dob, phone, photo, address, status, gender, nextOfKin, nextOfKinContact, requiredCpdHours, roleId"
+            "description": "Update general information of a user. The user id is only in the URL path. Body must contain an `updates` object. Allowed fields: fullName, email, dob, phone, photo, address, status, gender, nextOfKin, nextOfKinContact, requiredCpdHours, roleId"
           },
           "response": []
         }
@@ -3545,7 +3551,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"name\": \"Updated Document Name\",\n  \"type\": \"Training\"\n}"
+              "raw": "{\n  \"name\": \"Updated Document Name\",\n  \"type\": \"Training\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/admin/hr/docs/1",
@@ -3581,7 +3587,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1\n}"
+              "raw": "{}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/admin/hr/docs/1",
