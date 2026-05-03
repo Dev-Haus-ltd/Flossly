@@ -193,6 +193,27 @@ const scheduleStore = useScheduleStore();
 const orgStore = useOrgStore();
 const { getOrganisationWorkingHours, hasOrgTimingsLoaded } = useOrganisationWorkingHours();
 
+// Helper: Map full day names to abbreviations
+const dayNameToAbbrev = {
+  'Monday': 'Mon',
+  'Tuesday': 'Tue',
+  'Wednesday': 'Wed',
+  'Thursday': 'Thu',
+  'Friday': 'Fri',
+  'Saturday': 'Sat',
+  'Sunday': 'Sun'
+}
+
+// Check if a day is marked as non-working at the organisation level
+const isOrgNonWorkingDay = (dayName) => {
+  const org = mainStore?.organisation
+  if (!org || !Array.isArray(org.nonWorkingDays)) {
+    return false
+  }
+  const abbrev = dayNameToAbbrev[dayName]
+  return org.nonWorkingDays.includes(abbrev)
+}
+
 const currentStep = ref(1);
 const isSaving = ref(false);
 const error = ref(null);
@@ -233,8 +254,11 @@ function initializeWeekDays() {
     "Sunday",
   ];
   return days.map((name, index) => {
-    const isDefaultWorkingDay = index < 5;
-    const orgHours = getOrganisationWorkingHours(name);
+    // Check if this day is marked as org non-working
+    const isOrgNonWorking = isOrgNonWorkingDay(name)
+    // Default: weekdays are working (unless org says otherwise), weekends are not
+    const isDefaultWorkingDay = !isOrgNonWorking && index < 5
+    const orgHours = getOrganisationWorkingHours(name)
     return {
       dayOfWeek: index,
       dayName: name,
@@ -261,8 +285,11 @@ function getWeekDaysWithOrgTimings() {
     "Sunday",
   ];
   return days.map((name, index) => {
-    const isDefaultWorkingDay = index < 5;
-    const orgHours = getOrganisationWorkingHours(name);
+    // Check if this day is marked as org non-working
+    const isOrgNonWorking = isOrgNonWorkingDay(name)
+    // Default: weekdays are working (unless org says otherwise), weekends are not
+    const isDefaultWorkingDay = !isOrgNonWorking && index < 5
+    const orgHours = getOrganisationWorkingHours(name)
     return {
       dayOfWeek: index,
       dayName: name,
@@ -502,6 +529,21 @@ async function saveSchedule() {
   if (!props.dentistId) {
     error.value = "Dentist not selected.";
     return;
+  }
+
+  // Check if schedule includes org non-working days and show warning
+  const orgNonWorkingDaysInSchedule = form.weekDays.filter(
+    day => day.isWorkingDay && isOrgNonWorkingDay(day.dayName)
+  );
+
+  if (orgNonWorkingDaysInSchedule.length > 0) {
+    const daysList = orgNonWorkingDaysInSchedule.map(d => d.dayName).join(', ');
+    mainStore?.setSnackbar?.({
+      title: `Warning: Override of organisational settings`,
+      message: `You're creating a schedule for ${daysList}, which are marked as non-working days for your organisation.`,
+      type: 'warning',
+      timeout: 5000
+    });
   }
 
   isSaving.value = true;

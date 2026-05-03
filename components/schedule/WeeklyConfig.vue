@@ -22,7 +22,10 @@
         <v-card
           elevation="0"
           class="day-card pa-4 h-100"
-          :class="{ 'non-working-day': !day.isWorkingDay }"
+          :class="{ 
+            'non-working-day': !day.isWorkingDay,
+            'org-non-working-day': isOrgNonWorkingDay(day.dayName) && day.isWorkingDay
+          }"
         >
           <!-- Day Header -->
           <div class="d-flex justify-space-between align-center mb-4">
@@ -33,6 +36,17 @@
               <span class="text-caption text-grey">
                 {{ index < 5 ? 'Weekday' : 'Weekend' }}
               </span>
+              <!-- Org non-working indicator -->
+              <v-chip
+                v-if="isOrgNonWorkingDay(day.dayName)"
+                size="x-small"
+                color="warning"
+                variant="tonal"
+                class="ml-0 mt-1"
+              >
+                <v-icon start size="14">mdi-alert-circle</v-icon>
+                Org non-working
+              </v-chip>
             </div>
 
             <!-- Working day toggle -->
@@ -123,41 +137,54 @@
               </div>
 
               <!-- Breaks List -->
-              <div v-if="day.breaks?.length" class="space-y-2">
-                <div
-                  v-for="(breakItem, breakIndex) in day.breaks"
-                  :key="breakIndex"
-                  class="break-item pa-2 rounded d-flex justify-space-between align-center"
-                >
-                  <div class="flex-grow-1">
-                    <div class="text-caption font-weight-medium">
-                      {{ breakItem.breakName }}
-                    </div>
-                    <div class="text-caption text-grey">
-                      {{ formatTimeForDisplay(breakItem.startTime) }} - {{ formatTimeForDisplay(breakItem.endTime) }}
-                    </div>
-                  </div>
-                  <div class="d-flex gap-1">
-                    <v-btn
-                      size="x-small"
-                      variant="text"
-                      color="primary"
-                      icon="mdi-pencil"
-                      @click="openEditBreakDialog(index, breakIndex)"
-                    />
-                    <v-btn
-                      size="x-small"
-                      variant="text"
-                      color="error"
-                      icon="mdi-delete-outline"
-@click="openDeleteBreakDialog(index, breakIndex)"                      
-                    />
-                  </div>
-                </div>
-              </div>
-              <div v-else class="text-caption text-grey py-2 text-center">
-                No breaks added
-              </div>
+              <div v-if="day.breaks?.length" class="break-list">
+  <div
+    v-for="(breakItem, breakIndex) in day.breaks"
+    :key="breakIndex"
+    class="break-item"
+  >
+    <!-- Left -->
+    <div class="break-left">
+      <div class="break-icon">
+        <v-icon size="16">mdi-coffee-outline</v-icon>
+      </div>
+
+      <div class="break-info">
+        <div class="break-title">
+          {{ breakItem.breakName }}
+        </div>
+        <div class="break-time">
+          {{ formatTimeForDisplay(breakItem.startTime) }}
+          <span class="mx-1">—</span>
+          {{ formatTimeForDisplay(breakItem.endTime) }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="break-actions">
+      <v-btn
+        size="small"
+        variant="text"
+        icon="mdi-pencil"
+        @click="openEditBreakDialog(index, breakIndex)"
+      />
+      <v-btn
+        size="small"
+        variant="text"
+        icon="mdi-delete-outline"
+        color="error"
+        @click="openDeleteBreakDialog(index, breakIndex)"
+      />
+    </div>
+  </div>
+</div>
+
+<!-- Empty State -->
+<div v-else class="break-empty">
+  <v-icon size="18" class="mb-1">mdi-coffee-outline</v-icon>
+  <div>No breaks added</div>
+</div>
             </div>
           </transition>
         </v-card>
@@ -167,85 +194,103 @@
     <!-- Add/Edit Break Dialog -->
     <v-dialog v-model="breakDialog.open" max-width="480" persistent>
   <v-card class="break-dialog-card">
-    
-    <!-- Header -->
-    <div class="dialog-header">
+
+  <!-- Header -->
+  <div class="dialog-header">
+    <div class="header-left">
+      <v-icon size="20" color="primary" class="mr-2">mdi-coffee-outline</v-icon>
       <div>
         <h3 class="dialog-title">
           {{ breakDialog.isEdit ? 'Edit Break' : 'Add Break' }}
         </h3>
         <p class="dialog-subtitle">
-          Set a time range when the dentist is unavailable
+          Define a time when the dentist is unavailable
         </p>
       </div>
     </div>
+  </div>
 
-    <!-- Body -->
-    <div class="dialog-body">
-      <v-text-field
-        v-model="breakDialog.form.breakName"
-        label="Break Name"
-        placeholder="e.g. Lunch Break"
-        variant="outlined"
-        density="comfortable"
-        hide-details="auto"
-        :error="!!breakDialog.errors.breakName"
-        :error-messages="breakDialog.errors.breakName"
-      />
+  <v-divider />
 
-      <!-- Time Inputs -->
+  <!-- Body -->
+  <div class="dialog-body">
+
+    <!-- Break Name -->
+    <v-text-field
+      v-model="breakDialog.form.breakName"
+      label="Break Name"
+      placeholder="e.g. Lunch Break"
+      variant="outlined"
+      density="comfortable"
+      hide-details="auto"
+      :error="!!breakDialog.errors.breakName"
+      :error-messages="breakDialog.errors.breakName"
+    />
+
+    <!-- Time Group -->
+    <div class="time-group">
+      <div class="time-label">Time Range</div>
+
       <div class="time-row">
         <v-text-field
           v-model="breakDialog.form.startTime"
-          label="Start Time"
+          label="Start"
           type="time"
           variant="outlined"
           density="comfortable"
           hide-details="auto"
-          :error="!!breakDialog.errors.startTime"
         />
+
+        <span class="time-separator">—</span>
 
         <v-text-field
           v-model="breakDialog.form.endTime"
-          label="End Time"
+          label="End"
           type="time"
           variant="outlined"
           density="comfortable"
           hide-details="auto"
-          :error="!!breakDialog.errors.endTime"
         />
       </div>
+    </div>
 
-      <!-- Error block -->
-      <div
-        v-if="breakDialog.errors.startTime || breakDialog.errors.endTime"
-        class="error-box"
-      >
-        <div v-if="breakDialog.errors.startTime">
-          {{ breakDialog.errors.startTime }}
-        </div>
-        <div v-if="breakDialog.errors.endTime">
-          {{ breakDialog.errors.endTime }}
-        </div>
+    <!-- Error -->
+    <v-alert
+      v-if="breakDialog.errors.startTime || breakDialog.errors.endTime"
+      type="error"
+      variant="tonal"
+      density="compact"
+      class="mt-2"
+    >
+      <div v-if="breakDialog.errors.startTime">
+        {{ breakDialog.errors.startTime }}
       </div>
-    </div>
+      <div v-if="breakDialog.errors.endTime">
+        {{ breakDialog.errors.endTime }}
+      </div>
+    </v-alert>
 
-    <!-- Footer -->
-    <div class="dialog-footer">
-      <v-btn variant="text" @click="closeBreakDialog">
-        Cancel
-      </v-btn>
+  </div>
 
-      <v-btn
-        color="primary"
-        variant="flat"
-        :loading="breakDialog.saving"
-        @click="confirmAddEditBreak"
-      >
-        {{ breakDialog.isEdit ? 'Update' : 'Add Break' }}
-      </v-btn>
-    </div>
-  </v-card>
+  <v-divider />
+
+  <!-- Footer -->
+  <div class="dialog-footer">
+    <v-btn variant="text" @click="closeBreakDialog">
+      Cancel
+    </v-btn>
+
+    <v-btn
+      color="primary"
+      variant="flat"
+      :loading="breakDialog.saving"
+      @click="confirmAddEditBreak"
+    >
+      {{ breakDialog.isEdit ? 'Update' : 'Add Break' }}
+    </v-btn>
+  </div>
+
+</v-card>
 </v-dialog>
 <CommonConfirmDialog
   v-model="deleteDialog.open"
@@ -279,6 +324,27 @@ const mainStore = useMainStore()
 
 const localWeekDays = ref([])
 const timeErrors = reactive({})
+
+// Helper: Map full day names to abbreviations
+const dayNameToAbbrev = {
+  'Monday': 'Mon',
+  'Tuesday': 'Tue',
+  'Wednesday': 'Wed',
+  'Thursday': 'Thu',
+  'Friday': 'Fri',
+  'Saturday': 'Sat',
+  'Sunday': 'Sun'
+}
+
+// Check if a day is marked as non-working at the organisation level
+const isOrgNonWorkingDay = (dayName) => {
+  const org = mainStore?.organisation
+  if (!org || !Array.isArray(org.nonWorkingDays)) {
+    return false
+  }
+  const abbrev = dayNameToAbbrev[dayName]
+  return org.nonWorkingDays.includes(abbrev)
+}
 const breakDialog = reactive({
   open: false,
   isEdit: false,
@@ -359,6 +425,15 @@ const getTimeError = (dayIndex) => {
 }
 
 const onDayToggle = async (day, dayIndex) => {
+  // Check if enabling a org non-working day and show warning
+  if (day.isWorkingDay && isOrgNonWorkingDay(day.dayName)) {
+    mainStore?.setSnackbar?.({
+      title: ` ${day.dayName} is marked as non-working for your organisation`,
+      message: 'You can still create a schedule on this day, but it will override the organisation setting.',
+      type: 'warning'
+    })
+  }
+
   if (!day.isWorkingDay) {
     day.breaks = []
     day.startTime = null
@@ -691,6 +766,12 @@ const closeDeleteBreakDialog = () => {
   &.non-working-day {
     background-color: #F9FAFB;
   }
+
+  &.org-non-working-day {
+    background-color: #FFFBEB;
+    border-color: #FCD34D;
+    border-left: 4px solid #F59E0B;
+  }
 }
 
 .working-hours-preview {
@@ -759,15 +840,97 @@ const closeDeleteBreakDialog = () => {
 .h-100 {
   height: 100%;
 }
+/* List wrapper */
+.break-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Item */
+.break-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f9fafb;
+  border: 1px solid #eef2f7;
+  transition: all 0.2s ease;
+}
+
+.break-item:hover {
+  background: #f3f4f6;
+}
+
+/* Left */
+.break-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.break-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #eef4ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #3b82f6;
+}
+
+/* Info */
+.break-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.break-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #111827;
+}
+
+.break-time {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* Actions */
+.break-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.break-item:hover .break-actions {
+  opacity: 1;
+}
+
+/* Empty */
+.break-empty {
+  text-align: center;
+  font-size: 12px;
+  color: #9ca3af;
+  padding: 12px;
+}
 .break-dialog-card {
   border-radius: 16px;
-  padding: 0;
   overflow: hidden;
 }
 
 /* Header */
 .dialog-header {
-  padding: 20px 24px 10px;
+  padding: 18px 24px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
 }
 
 .dialog-title {
@@ -784,31 +947,42 @@ const closeDeleteBreakDialog = () => {
 
 /* Body */
 .dialog-body {
-  padding: 16px 24px 8px;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
+}
+
+/* Time Group */
+.time-group {
+  background: #f9fafb;
+  border: 1px solid #eef2f7;
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.time-label {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 8px;
 }
 
 .time-row {
   display: flex;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
 }
 
-/* Error */
-.error-box {
-  background: #fef2f2;
-  color: #dc2626;
-  font-size: 12px;
-  padding: 8px 10px;
-  border-radius: 8px;
+.time-separator {
+  font-size: 18px;
+  color: #9ca3af;
 }
 
 /* Footer */
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  padding: 16px 24px;
+  gap: 10px;
+  padding: 14px 24px;
 }
 </style>

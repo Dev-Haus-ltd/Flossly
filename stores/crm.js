@@ -76,6 +76,45 @@ export const useCrmStore = defineStore("crmStore", {
       this._resetAutomationState();
       this.automationCacheOrgId = currentOrgId;
     },
+    _normalizeAutomationLeadIds(leadIds = []) {
+      return [...new Set((Array.isArray(leadIds) ? leadIds : [leadIds])
+        .map((id) => Number(id || 0))
+        .filter(Boolean))];
+    },
+    _clearAutomationLeadCaches(leadIds = []) {
+      const ids = this._normalizeAutomationLeadIds(leadIds);
+      if (!ids.length) {
+        this.automationRowsCache = {};
+        this.automationLoadingIds = {};
+        this.automationDirtyLeadIds = {};
+        return;
+      }
+      ids.forEach((id) => {
+        delete this.automationRowsCache[id];
+        delete this.automationLoadingIds[id];
+        delete this.automationDirtyLeadIds[id];
+      });
+    },
+    _notifyAutomationUpdate({ groupsChanged = false, leadIds = [] } = {}) {
+      this._ensureAutomationOrgScope();
+      const normalizedLeadIds = this._normalizeAutomationLeadIds(leadIds);
+      this._clearAutomationLeadCaches(groupsChanged ? [] : normalizedLeadIds);
+      if (groupsChanged) {
+        this.automationGroupRows = [];
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('crm-automations-updated', {
+          detail: {
+            groupsChanged,
+            leadIds: normalizedLeadIds,
+            refreshedAt: Date.now(),
+          },
+        }));
+        if (groupsChanged) {
+          window.dispatchEvent(new CustomEvent('crm-automation-groups-updated'));
+        }
+      }
+    },
     _isCurrentAnalyticsOrg(orgId) {
       if (!orgId) return true;
       const { user } = useUser();
@@ -207,37 +246,74 @@ export const useCrmStore = defineStore("crmStore", {
 
     // Automation
     listAutomation(leadId) { return this._wrap(() => crmService.listAutomation(leadId)); },
-    saveAutomation(payload) { return this._wrap(() => crmService.saveAutomation(payload)); },
-    saveAutomationBatch(payload) { return this._wrap(() => crmService.saveAutomationBatch(payload)); },
+    listAutomationSilent(leadId) { return crmService.listAutomation(leadId); },
+    async saveAutomation(payload) {
+      const res = await this._wrap(() => crmService.saveAutomation(payload));
+      if (res?.code === 0) {
+        this._notifyAutomationUpdate({
+          groupsChanged: !payload?.leadId,
+          leadIds: payload?.leadId ? [payload.leadId] : [],
+        });
+      }
+      return res;
+    },
+    async saveAutomationBatch(payload) {
+      const res = await this._wrap(() => crmService.saveAutomationBatch(payload));
+      if (res?.code === 0) {
+        const items = Array.isArray(payload?.items) ? payload.items : [];
+        const leadIds = items.map((item) => item?.leadId);
+        const groupsChanged = items.some((item) => !item?.leadId);
+        this._notifyAutomationUpdate({ groupsChanged, leadIds });
+      }
+      return res;
+    },
     getAutomationSendNowStatus(params = {}) { return crmService.getAutomationSendNowStatus(params); },
-    resetAutomationOverride(payload) { return this._wrap(() => crmService.resetAutomationOverride(payload)); },
-    deleteAutomation(payload) { return this._wrap(() => crmService.deleteAutomation(payload)); },
-    bulkUploadAutomations(payload) { return this._wrap(() => crmService.bulkUploadAutomations(payload)); },
-    generateAutomationsWithAI(payload) { return this._wrap(() => crmService.generateAutomationsWithAI(payload)); },
+    async resetAutomationOverride(payload) {
+      const res = await this._wrap(() => crmService.resetAutomationOverride(payload));
+      if (res?.code === 0) {
+        this._notifyAutomationUpdate({
+          leadIds: payload?.leadId ? [payload.leadId] : [],
+        });
+      }
+      return res;
+    },
+    async deleteAutomation(payload) {
+      const res = await this._wrap(() => crmService.deleteAutomation(payload));
+      if (res?.code === 0) this._notifyAutomationUpdate({ groupsChanged: true });
+      return res;
+    },
+    async bulkUploadAutomations(payload) {
+      const res = await this._wrap(() => crmService.bulkUploadAutomations(payload));
+      if (res?.code === 0) this._notifyAutomationUpdate({ groupsChanged: true });
+      return res;
+    },
+    async generateAutomationsWithAI(payload) {
+      const res = await this._wrap(() => crmService.generateAutomationsWithAI(payload));
+      if (res?.code === 0) this._notifyAutomationUpdate({ groupsChanged: true });
+      return res;
+    },
     listAutomationGroups() { return this._wrap(() => crmService.listAutomationGroups()); },
-    generateAutomationsWithAI(payload) { return this._wrap(() => crmService.generateAutomationsWithAI(payload)); },
+    listAutomationGroupsSilent() { return crmService.listAutomationGroups(); },
     async saveAutomationGroup(payload) {
       const res = await this._wrap(() => crmService.saveAutomationGroup(payload));
-      if (res?.code === 0 && typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('crm-automation-groups-updated'));
-      }
+      if (res?.code === 0) this._notifyAutomationUpdate({ groupsChanged: true });
       return res;
     },
     async deleteAutomationGroup(payload) {
       const res = await this._wrap(() => crmService.deleteAutomationGroup(payload));
-      if (res?.code === 0 && typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('crm-automation-groups-updated'));
-      }
+      if (res?.code === 0) this._notifyAutomationUpdate({ groupsChanged: true });
       return res;
     },
 
     // Automation cache actions
-    async fetchAutomationGroups({ force = false } = {}) {
+    async fetchAutomationGroups({ force = false, silent = false } = {}) {
       this._ensureAutomationOrgScope();
       if (!force && (this.automationGroupRows.length || this.automationGroupsLoading)) return;
       this.automationGroupsLoading = true;
       try {
-        const res = await this.listAutomationGroups();
+        const res = await (silent
+          ? this.listAutomationGroupsSilent()
+          : this.listAutomationGroups());
         if (res?.code === 0 && Array.isArray(res.data)) {
           this.automationGroupRows = res.data;
         }
@@ -245,7 +321,7 @@ export const useCrmStore = defineStore("crmStore", {
         this.automationGroupsLoading = false;
       }
     },
-    async fetchLeadAutomations(leadId, { force = false } = {}) {
+    async fetchLeadAutomations(leadId, { force = false, silent = false } = {}) {
       this._ensureAutomationOrgScope();
       const id = Number(leadId);
       if (!id) return;
@@ -253,7 +329,9 @@ export const useCrmStore = defineStore("crmStore", {
       if (this.automationLoadingIds[id]) return;
       this.automationLoadingIds[id] = true;
       try {
-        const res = await this.listAutomation(id);
+        const res = await (silent
+          ? this.listAutomationSilent(id)
+          : this.listAutomation(id));
         const items = Array.isArray(res?.data) ? res.data : [];
         this.automationRowsCache[id] = items;
       } catch {
@@ -280,17 +358,15 @@ export const useCrmStore = defineStore("crmStore", {
       this._ensureAutomationOrgScope();
       const id = Number(leadId);
       if (!id || !this.automationDirtyLeadIds[id]) return;
-      delete this.automationDirtyLeadIds[id];
-      delete this.automationRowsCache[id];
-      await this.fetchLeadAutomations(id);
+      this._clearAutomationLeadCaches([id]);
+      await this.fetchLeadAutomations(id, { force: true });
     },
     async invalidateLeadAutomations(leadId) {
       this._ensureAutomationOrgScope();
       const id = Number(leadId);
       if (!id) return;
-      delete this.automationDirtyLeadIds[id];
-      delete this.automationRowsCache[id];
-      await this.fetchLeadAutomations(id);
+      this._clearAutomationLeadCaches([id]);
+      await this.fetchLeadAutomations(id, { force: true });
     },
 
     getLeadAutomationLog(leadId, params = {}) { return this._wrap(() => crmService.getLeadAutomationLog(leadId, params)); },

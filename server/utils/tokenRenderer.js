@@ -50,6 +50,16 @@ const ukMothersDayDate = () => {
 
 const valueOrEmpty = (value) => (value === undefined || value === null ? "" : String(value));
 
+const replaceMustacheTokens = (input, aliases = [], value = "") => {
+  if (!aliases.length) return input;
+  const escaped = aliases
+    .map((alias) => String(alias).trim())
+    .filter(Boolean)
+    .map((alias) => alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  if (!escaped.length) return input;
+  return input.replace(new RegExp(`\\{\\{\\s*(?:${escaped.join("|")})\\s*\\}\\}`, "gi"), String(value ?? ""));
+};
+
 export function buildLeadContext({ lead = {}, org = {}, userName = "Team" } = {}) {
   const name = getLeadDisplayName(lead) || "there";
   const firstName = (name || "").split(" ")[0] || "there";
@@ -144,12 +154,42 @@ export function buildLeadContext({ lead = {}, org = {}, userName = "Team" } = {}
 
 export function renderTokens(input, ctx = {}, options = {}) {
   const format = String(options?.format || "text").toLowerCase();
-  let output = String(input || "")
-    .replaceAll("{{name}}", ctx.name || "")
-    .replaceAll("{{firstName}}", ctx.firstName || "")
-    .replaceAll("{{email}}", ctx.email || "")
-    .replaceAll("{{yourName}}", ctx.yourName || "")
-    .replaceAll("{{info}}", ctx.info || "");
+  let output = String(input || "");
+
+  const mustacheReplacements = [
+    { aliases: ["name", "patient name"], value: ctx.name || "" },
+    { aliases: ["firstName", "firstname", "first name", "first_name"], value: ctx.firstName || "" },
+    { aliases: ["email", "patient email"], value: ctx.email || "" },
+    { aliases: ["yourName", "yourname", "your name", "your_name"], value: ctx.yourName || "" },
+    { aliases: ["info", "patient info"], value: ctx.info || "" },
+    { aliases: ["practiceName", "practice name", "practice_name", "clinic name"], value: ctx.practiceName || "" },
+    { aliases: ["phone", "phone number", "practice phone"], value: ctx.phone || "" },
+    { aliases: ["website", "practice website"], value: ctx.website || "" },
+    { aliases: ["booking link", "booking_link"], value: ctx.bookingLink || "" },
+    { aliases: ["diary booking link", "diary_booking_link"], value: ctx.diaryBookingLink || "" },
+    { aliases: ["address"], value: ctx.address || "" },
+    { aliases: ["street address", "street_address"], value: ctx.street || "" },
+    { aliases: ["city state zip code", "city, state zip code", "city_state_zip_code"], value: ctx.cityStateZip || "" },
+    { aliases: ["days and times", "office hours", "office_hours"], value: ctx.officeHours || "" },
+    { aliases: ["treatment coordinator name", "treatment_coordinator_name"], value: ctx.coordinator || "" },
+    { aliases: ["practice owner / principal dentist", "principal dentist name", "principal_dentist_name"], value: ctx.principalDentist || "" },
+    { aliases: ["location"], value: ctx.location || "" },
+    { aliases: ["date"], value: ctx.promoDate || "" },
+    { aliases: ["time"], value: ctx.promoTime || "" },
+    { aliases: ["date / time", "date/time", "date_time"], value: ctx.promoDateTime || "" },
+    { aliases: ["month"], value: ctx.promoMonth || "" },
+    { aliases: ["future date", "future_date"], value: ctx.futureDate || "" },
+    { aliases: ["date range", "date_range"], value: ctx.dateRange || "" },
+    { aliases: ["specific date", "specific_date"], value: ctx.specificDate || "" },
+    { aliases: ["mother's day date", "mothers day date", "mothers_day_date"], value: ctx.mothersDayDate || "" },
+    { aliases: ["x"], value: ctx.promoX || "" },
+    { aliases: ["y"], value: ctx.promoY || "" },
+    { aliases: ["z"], value: ctx.promoZ || "" },
+  ];
+
+  for (const entry of mustacheReplacements) {
+    output = replaceMustacheTokens(output, entry.aliases, entry.value);
+  }
 
   output = applyCrmPlaceholders(output, {
     recipient: {

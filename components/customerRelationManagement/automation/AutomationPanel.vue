@@ -203,7 +203,7 @@
               <!-- inquiry_days: days number + date picker -->
               <template v-if="triggerForm.triggerType === 'inquiry_days'">
                 <v-col cols="12" sm="6">
-                  <div class="trig-field-label">Days after enquiry</div>
+                  <div class="trig-field-label">Days after {{ resolvedLeadId ? 'activation' : 'enquiry' }}</div>
                   <v-text-field
                     v-model="triggerForm.triggerDays"
                     type="number"
@@ -427,8 +427,8 @@
     </v-dialog>
 
     <!-- Edit Modal -->
-    <v-dialog v-model="show" max-width="1100px" scrollable>
-      <v-card class="rounded-lg elevation-8">
+    <v-dialog v-model="show" max-width="1100px">
+      <v-card class="rounded-lg elevation-8 automation-edit-card">
         <div class="modal-header">
           <div>
             <h5 class="modal-title">{{ active?.name }}</h5>
@@ -455,37 +455,29 @@
         <div class="modal-body">
           <!-- Editor Section -->
           <div class="editor-section">
-            <div
-              v-if="String(active?.type || 'Email').toLowerCase() !== 'whatsapp'"
-              class="d-flex align-center justify-space-between mb-3"
-            >
-              <div class="text-subtitle-2 font-weight-bold text-grey-darken-2">
-                <v-icon size="18" class="mr-2">mdi-email-edit-outline</v-icon>
-                Email Content
-              </div>
-              <v-chip size="x-small" variant="tonal" color="info">
-                Use [First Name] for personalization
-              </v-chip>
-            </div>
-            <div
-              class="mb-4"
-              v-if="String(active?.type || 'Email').toLowerCase() !== 'whatsapp' && !isPatientJourney"
-            >
-              <div class="text-subtitle-2 font-weight-bold text-grey-darken-2 mb-2">
-                <v-icon size="18" class="mr-2">mdi-email-outline</v-icon>
-                Email Subject
+            <template v-if="String(active?.type || 'Email').toLowerCase() !== 'whatsapp'">
+              <div
+                v-if="!isPatientJourney"
+                class="d-flex align-center justify-space-between mb-3"
+              >
+                <label class="fld-lbl">Subject</label>
+                <v-chip size="x-small" variant="tonal" color="primary">Use [First Name] to personalise</v-chip>
               </div>
               <v-text-field
+                v-if="!isPatientJourney"
                 v-model="active.subject"
                 variant="solo"
                 density="compact"
                 hide-details
-                bg-color="#FFFFFF"
+                class="input-bordered mb-4"
+                bg-color="white"
                 flat
                 placeholder="Subject line for this email"
               />
-            </div>
-            <div ref="editorEl" class="editor"></div>
+              <div class="text-caption font-weight-medium text-uppercase text-grey-darken-1 mb-2" style="letter-spacing:.06em">Body</div>
+              <CrmEmailTemplateEditor v-model="active.template" />
+            </template>
+            <div v-else ref="editorEl" class="editor"></div>
           </div>
         </div>
 
@@ -515,6 +507,7 @@
         </div>
       </v-card>
     </v-dialog>
+
   </div>
 </template>
 
@@ -684,6 +677,10 @@ const filteredRows = computed(() => {
   if (filterDisabled.value && !filterEnabled.value) result = result.filter(r => r.enabled === false)
   if (filterSent.value === 'sent') result = result.filter(r => !!r.lastSentAt)
   if (filterSent.value === 'never') result = result.filter(r => !r.lastSentAt)
+  if (filterType.value !== 'all') {
+    const t = filterType.value.toLowerCase()
+    result = result.filter(r => String(r.type || 'email').toLowerCase() === t)
+  }
   return result
 })
 
@@ -870,7 +867,7 @@ const buildTriggerFromForm = () => {
 const triggerPreviewText = computed(() => {
   const nextTrigger = buildTriggerFromForm()
   if (nextTrigger?.type !== 'send_now') {
-    return formatCrmTriggerPreview(nextTrigger)
+    return formatLeadAwareTriggerPreview(nextTrigger)
   }
   const channel = String(triggerEditingRow.value?.type || 'Email').toLowerCase()
   if (channel === 'whatsapp') {
@@ -943,6 +940,15 @@ const resolvedLeadId = computed(() => {
   const id = props.leadId
   return id ? Number(id) : null
 })
+
+const formatLeadAwareTriggerPreview = (trigger = {}) => {
+  if (resolvedLeadId.value && trigger?.type === 'inquiry_days') {
+    const days = Number(trigger?.days || 0)
+    if (days === 0) return 'Immediately when automation is activated'
+    return `${days} day${days === 1 ? '' : 's'} after activation`
+  }
+  return formatCrmTriggerPreview(trigger)
+}
 
 const buildPayload = (row) => {
   if (resolvedPatientId.value) {
@@ -1080,19 +1086,11 @@ const toggleAutomationGroup = async (card, val) => {
   }
 }
 
-const loadRows = async () => {
-  if (resolvedPatientId.value) {
-    if (activeAutomation.value) {
-      await loadPatientJourneyTemplates(activeAutomation.value.key)
-    } else {
-      rows.splice(0, rows.length)
-    }
-    return
-  }
+const loadRows = async ({ force = false } = {}) => {
   try {
     let apiItems = []
     if (resolvedLeadId.value) {
-      await crmStore.fetchLeadAutomations(resolvedLeadId.value, { force: true })
+      await crmStore.fetchLeadAutomations(resolvedLeadId.value, { force })
       apiItems = crmStore.automationRowsCache[Number(resolvedLeadId.value)] || []
     } else {
       const res = await crmStore.listAutomation()
@@ -1108,42 +1106,45 @@ const loadRows = async () => {
   } catch {}
 }
 
-const loadGroups = async () => {
-  if (resolvedPatientId.value) {
-    await loadPatientJourneyGroupsOnly()
-    return
-  }
+const loadGroups = async ({ force = false } = {}) => {
   if (!props.useGroupsApi || (Array.isArray(props.groups) && props.groups.length)) return
-  await crmStore.fetchAutomationGroups()
+  await crmStore.fetchAutomationGroups({ force })
 }
 
-const refresh = async ({ skipGroups = false } = {}) => {
-  if (resolvedPatientId.value) {
-    const tasks = [loadRows()]
-    if (!skipGroups) tasks.push(loadGroups())
-    await Promise.all(tasks)
-    return
-  }
-  const tasks = [loadRows()]
-  if (!skipGroups) tasks.push(loadGroups())
+const refresh = async ({ skipGroups = false, forceGroups = false, forceRows = false } = {}) => {
+  const tasks = [loadRows({ force: forceRows })]
+  if (!skipGroups) tasks.push(loadGroups({ force: forceGroups }))
   await Promise.all(tasks)
 }
 
 defineExpose({ refresh })
 
+const onAutomationsUpdated = async () => {
+  await refresh({ forceGroups: true, forceRows: true })
+}
+
 onMounted(async () => {
-  await refresh()
+  await refresh({ forceGroups: true, forceRows: true })
+  if (typeof window !== 'undefined') {
+    window.addEventListener('crm-automations-updated', onAutomationsUpdated)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('crm-automations-updated', onAutomationsUpdated)
+  }
 })
 
 watch(resolvedLeadId, () => {
   if (resolvedPatientId.value) return
   clearAutomationSelection()
-  refresh()
+  refresh({ forceRows: true })
 })
 
 watch(resolvedPatientId, () => {
   clearAutomationSelection()
-  refresh()
+  refresh({ forceRows: true })
 })
 
 // Keep local rows in sync with the store cache so any external write
@@ -1194,33 +1195,32 @@ const openEdit = async (row) => {
   }
   active.value = row
   show.value = true
-  await nextTick()
-  if (typeof window === 'undefined') return
-  if (!EditorCtor || !Header || !List) {
-    const [{ default: E }, { default: H }, { default: L }] = await Promise.all([
-      import('@editorjs/editorjs'),
-      import('@editorjs/header'),
-      import('@editorjs/list'),
-    ])
-    EditorCtor = E; Header = H; List = L
-  }
-  if (ej) {
-    if (typeof ej.destroy === 'function') ej.destroy()
-    ej = null
-  }
-  if (!editorEl.value) {
+
+  // WhatsApp type still uses the EditorJS ref for plain text editing
+  if (String(row?.type || 'Email').toLowerCase() === 'whatsapp') {
     await nextTick()
-  }
-  if (!editorEl.value) return
-  ej = new EditorCtor({
-    holder: editorEl.value,
-    tools: { header: Header, list: List },
-    data: htmlToBlocks(row.template || ''),
-    onChange: async (api) => {
-      const saved = await api.saver.save()
-      active.value.template = blocksToHtml(saved)
+    if (typeof window === 'undefined') return
+    if (!EditorCtor || !Header || !List) {
+      const [{ default: E }, { default: H }, { default: L }] = await Promise.all([
+        import('@editorjs/editorjs'),
+        import('@editorjs/header'),
+        import('@editorjs/list'),
+      ])
+      EditorCtor = E; Header = H; List = L
     }
-  })
+    if (ej) { if (typeof ej.destroy === 'function') ej.destroy(); ej = null }
+    if (!editorEl.value) await nextTick()
+    if (!editorEl.value) return
+    ej = new EditorCtor({
+      holder: editorEl.value,
+      tools: { header: Header, list: List },
+      data: htmlToBlocks(row.template || ''),
+      onChange: async (api) => {
+        const saved = await api.saver.save()
+        active.value.template = blocksToHtml(saved)
+      }
+    })
+  }
 }
 
 const confirmDeleteAutomation = (row) => {
@@ -1443,7 +1443,8 @@ const emailPreviewHtml = computed(() => {
 const saveContent = async () => {
   saving.value = true
   try {
-    if (ej && active.value) {
+    // WhatsApp still uses the standalone EditorJS ref
+    if (ej && active.value && String(active.value?.type || 'Email').toLowerCase() === 'whatsapp') {
       const saved = await ej.save()
       active.value.template = blocksToHtml(saved)
     }
@@ -1565,7 +1566,7 @@ const saveTrigger = async () => {
       return
     }
     selectedRow.trigger = nextTrigger
-    selectedRow.sending = formatCrmTriggerPreview(nextTrigger)
+    selectedRow.sending = formatLeadAwareTriggerPreview(nextTrigger)
     if (isSendNow) {
       // "Send Now" should dispatch immediately, so ensure row is enabled.
       selectedRow.enabled = true
@@ -1920,10 +1921,10 @@ watch(showGroupDialog, (v) => {
 }
 
 .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 28px;
   background: #fafafa;
-  min-height: 450px;
-  max-height: 70vh;
   overflow-y: auto;
 }
 
@@ -1932,6 +1933,20 @@ watch(showGroupDialog, (v) => {
   padding: 0;
   border-radius: 0;
   border: 0;
+}
+
+.fld-lbl {
+  font-weight: 400;
+  font-size: 14px;
+  color: #737373;
+}
+
+.input-bordered :deep(.v-field) {
+  border: 1px solid #dfdfdf !important;
+  border-radius: 8px !important;
+  background-color: white !important;
+  min-height: 40px;
+  font-size: 14px;
 }
 
 .editor {
@@ -1976,11 +1991,19 @@ watch(showGroupDialog, (v) => {
   gap: 12px;
   padding: 18px 28px;
   background: white;
+  flex-shrink: 0;
 }
 
 .modal-footer--edit {
   justify-content: flex-end;
   padding: 12px 16px;
+}
+
+.automation-edit-card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88vh, 860px);
+  overflow: hidden;
 }
 
 </style>

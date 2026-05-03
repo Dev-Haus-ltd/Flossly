@@ -19,6 +19,7 @@ import {
   Organisation,
   Role,
   UserOrganisation,
+  DiaryZone,
 } from "../models";
 import { success, error } from "../utils/response";
 import { readBody, getQuery, createError } from "h3";
@@ -34,7 +35,10 @@ import {
   normalizeTreatmentPlanContent,
 } from "~/shared/defaults/charting/treatmentPlanContent.js";
 import { validateDentistScheduleWindow } from "~/server/utils/dentistScheduleAvailability.js";
-import { applyClinicalNoteTemplateDraft, generateTreatmentPlanContentDraft } from "../utils/aiWrapper";
+import {
+  applyClinicalNoteTemplateDraft,
+  generateTreatmentPlanContentDraft,
+} from "../utils/aiWrapper";
 import {
   getClinicalTemplateByIdForOrg,
   listAvailableClinicalTemplates,
@@ -42,8 +46,8 @@ import {
 } from "../utils/clinicalNoteTemplates";
 import { gatherTreatmentPlanResearch } from "../utils/treatmentPlanResearch";
 
-const _researchCache = new Map()
-const RESEARCH_CACHE_TTL = 30 * 60 * 1000
+const _researchCache = new Map();
+const RESEARCH_CACHE_TTL = 30 * 60 * 1000;
 
 const pad2 = (n) => String(n).padStart(2, "0");
 const resolveTimeMode = () => {
@@ -711,7 +715,7 @@ export const deletePatient = async (event) => {
     if (appointmentCount > 0) {
       return error(
         409,
-        `This patient has ${appointmentCount} appointment${appointmentCount === 1 ? "" : "s"} and cannot be deleted. Please remove their appointments first.`
+        `This patient has ${appointmentCount} appointment${appointmentCount === 1 ? "" : "s"} and cannot be deleted. Please remove their appointments first.`,
       );
     }
     const patientWhere = { patientId: id, organisationId: Number(orgId) };
@@ -725,14 +729,15 @@ export const deletePatient = async (event) => {
       DiaryTreatmentPlan.destroy({ where: patientWhere }),
       ConsentFormDocument.destroy({ where: patientWhere }),
     ]);
-    await DiaryPatient.destroy({ where: { id, organisationId: Number(orgId) } });
+    await DiaryPatient.destroy({
+      where: { id, organisationId: Number(orgId) },
+    });
     return success({ id });
   } catch (e) {
     const msg =
-      (e &&
-        (e.data && e.data.message) ||
-        e.message ||
-        (e.original && e.original.detail)) ||
+      (e && e.data && e.data.message) ||
+      e.message ||
+      (e.original && e.original.detail) ||
       "Internal server error";
     return error(500, msg);
   }
@@ -1210,7 +1215,9 @@ export const createTreatmentPlan = async (event) => {
       appointmentsJson: Array.isArray(payload?.appointments)
         ? payload.appointments
         : [],
-      contentJson: normalizeTreatmentPlanContent(payload?.content || createEmptyTreatmentPlanContent()),
+      contentJson: normalizeTreatmentPlanContent(
+        payload?.content || createEmptyTreatmentPlanContent(),
+      ),
     });
     return success(normalizeTreatmentPlan(created));
   } catch (e) {
@@ -1290,7 +1297,15 @@ export const generateTreatmentPlanContent = async (event) => {
         where: { organisationId: Number(orgId), patientId, planKey },
       }),
       Organisation.findByPk(Number(orgId), {
-        attributes: ["id", "name", "type", "address", "contact", "description", "automationPlaceholders"],
+        attributes: [
+          "id",
+          "name",
+          "type",
+          "address",
+          "contact",
+          "description",
+          "automationPlaceholders",
+        ],
       }),
       DiaryTreatmentPlanItem.findAll({
         where: { organisationId: Number(orgId), patientId, planId: planKey },
@@ -1304,7 +1319,11 @@ export const generateTreatmentPlanContent = async (event) => {
     const practitionerMap = new Map();
     for (const item of planItems) {
       const id = Number(item.practitionerId || 0);
-      const key = id ? `id:${id}` : `name:${String(item.practitionerName || item.clinicianName || "").trim().toLowerCase()}`;
+      const key = id
+        ? `id:${id}`
+        : `name:${String(item.practitionerName || item.clinicianName || "")
+            .trim()
+            .toLowerCase()}`;
       if (!key || practitionerMap.has(key)) continue;
       practitionerMap.set(key, {
         id: id || null,
@@ -1332,21 +1351,34 @@ export const generateTreatmentPlanContent = async (event) => {
       }
     }
 
-    const practitioners = [...practitionerMap.values()].filter((item) => item.name);
-    const orgDefaults = buildOrganisationTreatmentPlanDefaults(org.toJSON(), practitioners);
+    const practitioners = [...practitionerMap.values()].filter(
+      (item) => item.name,
+    );
+    const orgDefaults = buildOrganisationTreatmentPlanDefaults(
+      org.toJSON(),
+      practitioners,
+    );
     const website = String(
-      org?.automationPlaceholders?.website
-      || org?.automationPlaceholders?.bookingLink
-      || ""
+      org?.automationPlaceholders?.website ||
+        org?.automationPlaceholders?.bookingLink ||
+        "",
     ).trim();
 
-    const cacheKey = `${orgId}::${website || org.name}`
-    const cachedResearch = _researchCache.get(cacheKey)
-    const research = (cachedResearch && Date.now() - cachedResearch.ts < RESEARCH_CACHE_TTL)
-      ? cachedResearch.data
-      : await gatherTreatmentPlanResearch({ organisationName: org.name, website, practitioners })
-    if (!cachedResearch || Date.now() - cachedResearch.ts >= RESEARCH_CACHE_TTL) {
-      _researchCache.set(cacheKey, { ts: Date.now(), data: research })
+    const cacheKey = `${orgId}::${website || org.name}`;
+    const cachedResearch = _researchCache.get(cacheKey);
+    const research =
+      cachedResearch && Date.now() - cachedResearch.ts < RESEARCH_CACHE_TTL
+        ? cachedResearch.data
+        : await gatherTreatmentPlanResearch({
+            organisationName: org.name,
+            website,
+            practitioners,
+          });
+    if (
+      !cachedResearch ||
+      Date.now() - cachedResearch.ts >= RESEARCH_CACHE_TTL
+    ) {
+      _researchCache.set(cacheKey, { ts: Date.now(), data: research });
     }
 
     const draft = normalizeTreatmentPlanContent(
@@ -1355,11 +1387,13 @@ export const generateTreatmentPlanContent = async (event) => {
         organisationType: org.type,
         patientName: String(payload?.patientName || "").trim(),
         planName: planRow.name,
-        currentContent: normalizeTreatmentPlanContent(planRow.contentJson || {}),
+        currentContent: normalizeTreatmentPlanContent(
+          planRow.contentJson || {},
+        ),
         organisationDefaults: orgDefaults,
         practitioners,
         research,
-      })
+      }),
     );
 
     return success({
@@ -1434,7 +1468,9 @@ export const applyClinicalNoteTemplate = async (event) => {
     }
 
     const patientId = Number(payload?.patientId || 0);
-    const patient = patientId ? await requirePatientInOrg(orgId, patientId) : null;
+    const patient = patientId
+      ? await requirePatientInOrg(orgId, patientId)
+      : null;
     if (patientId && !patient) return error(404, "Patient not found");
 
     const itemContext = {
@@ -2055,7 +2091,9 @@ export const bookFromTreatmentPlan = async (event) => {
       });
     }
 
-    const selectedItemIds = selectedItems.map((item) => item.id).filter(Boolean);
+    const selectedItemIds = selectedItems
+      .map((item) => item.id)
+      .filter(Boolean);
     if (selectedItemIds.length) {
       await DiaryTreatmentPlanItem.update(
         { appointmentId: created.id },
@@ -2589,8 +2627,11 @@ export const savePatientComfort = async (event) => {
       });
     } catch (dbError) {
       // Handle case where table might not exist yet
-      if (dbError.message && dbError.message.includes('does not exist')) {
-        return error(500, `Database table not found. Please ensure the DiaryPatientComforts table exists. Error: ${dbError.message}`)
+      if (dbError.message && dbError.message.includes("does not exist")) {
+        return error(
+          500,
+          `Database table not found. Please ensure the DiaryPatientComforts table exists. Error: ${dbError.message}`,
+        );
       } else {
         throw dbError;
       }
@@ -3504,8 +3545,11 @@ export const savePatientForm = async (event) => {
       created = await DiaryPatientForm.create(formData);
     } catch (dbError) {
       // Handle case where table might not exist yet
-      if (dbError.message && dbError.message.includes('does not exist')) {
-        return error(500, `Database table not found. Please ensure the DiaryPatientForms table exists. Error: ${dbError.message}`)
+      if (dbError.message && dbError.message.includes("does not exist")) {
+        return error(
+          500,
+          `Database table not found. Please ensure the DiaryPatientForms table exists. Error: ${dbError.message}`,
+        );
       } else {
         throw dbError;
       }
@@ -3717,5 +3761,232 @@ export const uploadChartImage = async (event) => {
     return success({ url: link, name: file.originalFilename || baseName });
   } catch (e) {
     return error(500, (e && e.message) || "Internal server error");
+  }
+};
+
+// --- Diary Zones ---
+export const listZones = async (event) => {
+  try {
+    const { orgId } = event.context.user;
+    const q = getQuery(event) || {};
+    const dentistId = q.dentistId ? Number(q.dentistId) : null;
+
+    const where = { organisationId: Number(orgId), isActive: true };
+    if (dentistId) where.dentistId = dentistId;
+
+    const rows = await DiaryZone.findAll({
+      where,
+      include: [{ model: User, as: "dentist", attributes: ["id", "fullName"] }],
+      order: [["title", "ASC"]],
+    });
+
+    return success(
+      rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        color: row.color,
+        startTime: row.startTime,
+        endTime: row.endTime,
+        startDate: row.startDate,
+        endDate: row.endDate,
+        selectedDays: Array.isArray(row.selectedDays) ? row.selectedDays : [],
+        repeatPattern: row.repeatPattern,
+        displayType: row.displayType,
+        dentistId: row.dentistId,
+        dentistName: row.dentist?.fullName || null,
+        isActive: row.isActive,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      })),
+    );
+  } catch (e) {
+    const msg =
+      e?.message ||
+      e?.data?.message ||
+      e?.original?.detail ||
+      "Internal server error";
+    return error(500, msg);
+  }
+};
+
+export const createZone = async (event) => {
+  try {
+    const { orgId } = event.context.user;
+    const body = await readBody(event);
+    const payload = typeof body === "string" ? parseJsonBody(body) : body;
+
+    const required = [
+      "title",
+      "color",
+      "startTime",
+      "endTime",
+      "startDate",
+      "endDate",
+      "dentistId",
+      "displayType",
+    ];
+    for (const k of required) {
+      if (!payload?.[k]) return error(400, `${k} is required`);
+    }
+    const selectedDays = Array.isArray(payload.selectedDays)
+      ? payload.selectedDays.map(Number).filter((d) => d >= 0 && d <= 6)
+      : [1, 2, 3, 4, 5];
+
+    const created = await DiaryZone.create({
+      organisationId: Number(orgId),
+      dentistId: Number(payload.dentistId),
+      title: String(payload.title).trim(),
+      description: payload.description || null,
+      color: String(payload.color).trim(),
+      startTime: String(payload.startTime).trim(),
+      endTime: String(payload.endTime).trim(),
+      startDate: String(payload.startDate).trim(),
+      endDate: String(payload.endDate).trim(),
+      selectedDays,
+      repeatPattern: payload.repeatPattern || "weekly",
+      displayType: payload.displayType || "background",
+      isActive: true,
+      createdBy: event.context.user.userId || null,
+    });
+
+    // Fetch with dentist info
+    const zone = await DiaryZone.findByPk(created.id, {
+      include: [{ model: User, as: "dentist", attributes: ["id", "fullName"] }],
+    });
+
+    return success({
+      id: zone.id,
+      title: zone.title,
+      description: zone.description,
+      color: zone.color,
+      startTime: zone.startTime,
+      endTime: zone.endTime,
+      startDate: zone.startDate,
+      endDate: zone.endDate,
+      selectedDays: String(zone.selectedDays || "")
+        .split(",")
+        .map(Number)
+        .filter(Boolean),
+      repeatPattern: zone.repeatPattern,
+      displayType: zone.displayType,
+      dentistId: zone.dentistId,
+      dentistName: zone.dentist?.fullName || null,
+      isActive: zone.isActive,
+    });
+  } catch (e) {
+    const msg =
+      e?.message ||
+      e?.data?.message ||
+      e?.original?.detail ||
+      "Internal server error";
+    return error(500, msg);
+  }
+};
+
+export const updateZone = async (event) => {
+  try {
+    const { orgId } = event.context.user;
+    const body = await readBody(event);
+    const payload = typeof body === "string" ? parseJsonBody(body) : body;
+
+    const zoneId = Number(payload?.id || 0);
+    if (!zoneId) return error(400, "Zone id is required");
+
+    const zone = await DiaryZone.findOne({
+      where: { id: zoneId, organisationId: Number(orgId) },
+    });
+
+    if (!zone) return error(404, "Zone not found");
+
+    // Update fields if provided
+    if (payload.title !== undefined) zone.title = String(payload.title).trim();
+    if (payload.description !== undefined)
+      zone.description = payload.description || null;
+    if (payload.color !== undefined) zone.color = String(payload.color).trim();
+    if (payload.startTime !== undefined)
+      zone.startTime = String(payload.startTime).trim();
+    if (payload.endTime !== undefined)
+      zone.endTime = String(payload.endTime).trim();
+    if (payload.startDate !== undefined)
+      zone.startDate = String(payload.startDate).trim();
+    if (payload.endDate !== undefined)
+      zone.endDate = String(payload.endDate).trim();
+    if (payload.displayType !== undefined)
+      zone.displayType = payload.displayType || "background";
+    if (payload.repeatPattern !== undefined)
+      zone.repeatPattern = payload.repeatPattern || "weekly";
+    if (
+      payload.selectedDays !== undefined &&
+      Array.isArray(payload.selectedDays)
+    ) {
+      zone.selectedDays = payload.selectedDays
+        .map(Number)
+        .filter((d) => d >= 0 && d <= 6);
+    }
+    if (payload.isActive !== undefined)
+      zone.isActive = Boolean(payload.isActive);
+
+    zone.updatedBy = event.context.user.userId || null;
+    await zone.save();
+
+    // Fetch with dentist info
+    const updated = await DiaryZone.findByPk(zone.id, {
+      include: [{ model: User, as: "dentist", attributes: ["id", "fullName"] }],
+    });
+
+    return success({
+      id: updated.id,
+      title: updated.title,
+      description: updated.description,
+      color: updated.color,
+      startTime: updated.startTime,
+      endTime: updated.endTime,
+      startDate: updated.startDate,
+      endDate: updated.endDate,
+      selectedDays: String(updated.selectedDays || "")
+        .split(",")
+        .map(Number)
+        .filter(Boolean),
+      repeatPattern: updated.repeatPattern,
+      displayType: updated.displayType,
+      dentistId: updated.dentistId,
+      dentistName: updated.dentist?.fullName || null,
+      isActive: updated.isActive,
+    });
+  } catch (e) {
+    const msg =
+      e?.message ||
+      e?.data?.message ||
+      e?.original?.detail ||
+      "Internal server error";
+    return error(500, msg);
+  }
+};
+
+export const deleteZone = async (event) => {
+  try {
+    const { orgId } = event.context.user;
+    const body = await readBody(event);
+    const payload = typeof body === "string" ? parseJsonBody(body) : body;
+
+    const zoneId = Number(payload?.id || 0);
+    if (!zoneId) return error(400, "Zone id is required");
+
+    const zone = await DiaryZone.findOne({
+      where: { id: zoneId, organisationId: Number(orgId) },
+    });
+
+    if (!zone) return error(404, "Zone not found");
+
+    await zone.destroy();
+    return success({ id: zoneId });
+  } catch (e) {
+    const msg =
+      e?.message ||
+      e?.data?.message ||
+      e?.original?.detail ||
+      "Internal server error";
+    return error(500, msg);
   }
 };

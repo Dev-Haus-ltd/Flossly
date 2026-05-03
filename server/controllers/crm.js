@@ -774,9 +774,18 @@ export const bulkUploadLeads = async (event) => {
     const results = []
     const validLeads = []
     const seenEmails = new Set()
+    const enabledTemplates = await CrmAutomationTemplate.findAll({
+      where: { organisationId, enabled: true },
+      attributes: ['key'],
+    })
+    const bulkImportAutomationOverrides = Object.fromEntries(
+      enabledTemplates
+        .map((tpl) => String(tpl?.key || '').trim())
+        .filter(Boolean)
+        .map((key) => [key, { key, enabled: false }])
+    )
 
     leads.forEach((raw, index) => {
-      const errors = []
       const name = (raw?.name || '').trim()
       const email = (raw?.email || '').trim()
       const telephone = (raw?.telephone || '').trim()
@@ -784,37 +793,16 @@ export const bulkUploadLeads = async (event) => {
       const treatment = raw?.treatment?.trim?.() || null
       const rawStatus = raw?.leadStatus?.trim?.() || 'New'
       const status = statusMap.get(rawStatus.toLowerCase())
-      const assignedUserId = raw?.assignedUserId ? Number(raw.assignedUserId) : null
+      const assignedUserIdRaw = raw?.assignedUserId ? Number(raw.assignedUserId) : null
+      const assignedUserId = assignedUserIdRaw && allowedUserIds.has(assignedUserIdRaw)
+        ? assignedUserIdRaw
+        : null
       const inquiryDate = parseDateValue(raw?.inquiryDate)
       const followUpDate = parseDateValue(raw?.followUpDate)
       const comments = raw?.comments || null
-
-      if (!name) errors.push('Name is required')
-      if (!email) errors.push('Email is required')
-      else {
+      if (email) {
         const emailKey = email.toLowerCase()
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        if (!emailRegex.test(email)) errors.push('Invalid email format')
-        if (seenEmails.has(emailKey)) errors.push('Duplicate email in upload')
-        else seenEmails.add(emailKey)
-      }
-      if (!telephone) errors.push('Telephone is required')
-      if (!status) errors.push('Invalid lead status')
-      if (assignedUserId && !allowedUserIds.has(assignedUserId)) {
-        errors.push('Assigned user is not part of this organisation')
-      }
-      if (raw?.inquiryDate && !inquiryDate) errors.push('Invalid inquiry date')
-      if (raw?.followUpDate && !followUpDate) errors.push('Invalid follow-up date')
-
-      if (errors.length) {
-        results.push({
-          index,
-          name,
-          email,
-          status: 'failed',
-          message: errors.join('; '),
-        })
-        return
+        if (!seenEmails.has(emailKey)) seenEmails.add(emailKey)
       }
 
       validLeads.push({
@@ -828,9 +816,18 @@ export const bulkUploadLeads = async (event) => {
           leadStatus: status || 'New',
           softDeleted: (status || 'New') === 'Archived',
           treatment,
-          inquiryDate: inquiryDate || new Date(),
-          followUpDate: followUpDate || null,
+          inquiryDate: raw?.inquiryDate ? inquiryDate : new Date(),
+          followUpDate,
           comments,
+          rawData: {
+            ...(raw?.rawData && typeof raw.rawData === 'object' ? raw.rawData : {}),
+            bulkImported: true,
+            bulkImportedAt: new Date().toISOString(),
+            crmAutomationOverrides: {
+              ...(raw?.rawData?.crmAutomationOverrides || {}),
+              ...bulkImportAutomationOverrides,
+            },
+          },
         },
         assignedUserId,
       })
@@ -1709,6 +1706,20 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
     if (!lead) throw new Error('Lead not found')
     const raw = lead.rawData || {}
     const overrides = { ...(raw.crmAutomationOverrides || {}) }
+    const activationDates = { ...(raw.crmAutomationActivationDates || {}) }
+    const existingOverride = overrides[key] || {}
+    const existingTemplate = await CrmAutomationTemplate.findOne({
+      where: { organisationId: Number(orgId), key },
+      transaction,
+    })
+    const defaultTemplate = crmAutomationDefaults.find((item) => item.key === key) || null
+    const previousEnabled =
+      existingOverride?.enabled !== undefined
+        ? !!existingOverride.enabled
+        : existingTemplate?.enabled !== undefined
+          ? !!existingTemplate.enabled
+          : !!defaultTemplate?.enabled
+    const becameEnabled = !!enabled && !previousEnabled
     overrides[key] = {
       key,
       type,
@@ -1721,9 +1732,31 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
       whatsappTemplateLanguage: whatsappTemplateLanguage || '',
       trigger: trigger ?? null,
     }
-    lead.rawData = { ...raw, crmAutomationOverrides: overrides }
+    if (becameEnabled) {
+      const activatedAt = new Date().toISOString()
+      activationDates[key] = activatedAt
+      overrides[key].activationDate = activatedAt
+    } else if (!!enabled && activationDates[key]) {
+      overrides[key].activationDate = activationDates[key]
+    } else if (!enabled) {
+      delete activationDates[key]
+    }
+
+    const sentKeys = { ...(raw.automationSentKeys || {}) }
+    if (becameEnabled) {
+      Object.keys(sentKeys).forEach((sentKey) => {
+        if (sentKey === key || sentKey.startsWith(`${key}_`)) delete sentKeys[sentKey]
+      })
+    }
+
+    lead.rawData = {
+      ...raw,
+      automationSentKeys: sentKeys,
+      crmAutomationOverrides: overrides,
+      crmAutomationActivationDates: activationDates,
+    }
     await lead.save({ transaction })
-    return overrides[key]
+    return { ...overrides[key], __dispatchImmediate: becameEnabled }
   }
 
   if (groupKey) {
@@ -1783,10 +1816,12 @@ export const saveAutomation = async (event) => {
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const result = await applyAutomationSave({ orgId, payload })
+    const shouldDispatchImmediate = result?.__dispatchImmediate === true
     const out =
       result && typeof result.toJSON === 'function'
         ? result.toJSON()
         : { ...(result || {}) }
+    delete out.__dispatchImmediate
     if (payload?.trigger?.type === 'send_now' && payload?.enabled && !payload?.leadId) {
       const waitForSendNow =
         payload?.awaitSendNow === true ||
@@ -1824,12 +1859,18 @@ export const saveAutomation = async (event) => {
           })
       }
     }
-    if (payload?.leadId && payload?.enabled) {
+    if (payload?.leadId && payload?.enabled && shouldDispatchImmediate) {
       try {
         const lead = await CrmLead.findOne({
           where: { organisationId: Number(orgId), id: Number(payload.leadId) },
         })
-        if (lead) await sendImmediateCrmAutomationsForLead(lead, { includeSendNow: true, forceImmediate: true })
+        if (lead) {
+          await sendImmediateCrmAutomationsForLead(lead, {
+            includeSendNow: true,
+            forceImmediate: true,
+            targetKeys: [payload.key],
+          })
+        }
       } catch (automationErr) {
         console.error('[CRM] Lead automation activation dispatch failed:', automationErr?.message || automationErr)
       }
@@ -1853,28 +1894,33 @@ export const saveAutomationBatch = async (event) => {
     try {
       const results = []
       const sendNowItems = []
+      const immediateDispatchByLead = new Map()
       for (const item of items) {
         const res = await applyAutomationSave({ orgId, payload: item, transaction })
         results.push(res)
         if (item?.trigger?.type === 'send_now' && item?.enabled && !item?.leadId) {
           sendNowItems.push(res)
         }
+        if (item?.leadId && item?.enabled && res?.__dispatchImmediate) {
+          const leadKey = Number(item.leadId)
+          const keys = immediateDispatchByLead.get(leadKey) || new Set()
+          keys.add(String(item.key || ''))
+          immediateDispatchByLead.set(leadKey, keys)
+        }
       }
       await transaction.commit()
-      const leadIdsToDispatch = [
-        ...new Set(
-          items
-            .filter((item) => item?.leadId && item?.enabled)
-            .map((item) => Number(item.leadId))
-            .filter(Boolean)
-        ),
-      ]
-      for (const leadId of leadIdsToDispatch) {
+      for (const [leadId, keys] of immediateDispatchByLead.entries()) {
         try {
           const lead = await CrmLead.findOne({
             where: { organisationId: Number(orgId), id: leadId },
           })
-          if (lead) await sendImmediateCrmAutomationsForLead(lead, { includeSendNow: true, forceImmediate: true })
+          if (lead) {
+            await sendImmediateCrmAutomationsForLead(lead, {
+              includeSendNow: true,
+              forceImmediate: true,
+              targetKeys: [...keys],
+            })
+          }
         } catch (automationErr) {
           console.error('[CRM] Batch lead automation activation dispatch failed:', automationErr?.message || automationErr)
         }
@@ -1885,6 +1931,7 @@ export const saveAutomationBatch = async (event) => {
           tpl && typeof tpl.toJSON === 'function'
             ? tpl.toJSON()
             : { ...(tpl || {}) }
+        delete out.__dispatchImmediate
         const job = createSendNowJob({ orgId, key: out?.key })
         sendNowJobs.push({
           key: out?.key || '',
@@ -1899,7 +1946,18 @@ export const saveAutomationBatch = async (event) => {
             failSendNowJob({ orgId, jobId: job.jobId, err: e })
           })
       }
-      return success({ items: results, updated: results.length, sendNowJobs })
+      return success({
+        items: results.map((item) => {
+          const normalized =
+            item && typeof item.toJSON === 'function'
+              ? item.toJSON()
+              : { ...(item || {}) }
+          delete normalized.__dispatchImmediate
+          return normalized
+        }),
+        updated: results.length,
+        sendNowJobs,
+      })
     } catch (e) {
       await transaction.rollback()
       return error(500, e.message)
@@ -1952,13 +2010,20 @@ export const resetAutomationOverride = async (event) => {
 
     const raw = lead.rawData || {}
     const overrides = { ...(raw.crmAutomationOverrides || {}) }
-    if (overrides[key]) {
-      delete overrides[key]
+    const activationDates = { ...(raw.crmAutomationActivationDates || {}) }
+    if (overrides[key] || activationDates[key]) {
+      if (overrides[key]) delete overrides[key]
       const nextRaw = { ...raw }
+      if (activationDates[key]) delete activationDates[key]
       if (Object.keys(overrides).length) {
         nextRaw.crmAutomationOverrides = overrides
       } else {
         delete nextRaw.crmAutomationOverrides
+      }
+      if (Object.keys(activationDates).length) {
+        nextRaw.crmAutomationActivationDates = activationDates
+      } else {
+        delete nextRaw.crmAutomationActivationDates
       }
       lead.rawData = nextRaw
       await lead.save()

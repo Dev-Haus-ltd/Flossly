@@ -2,7 +2,7 @@
   <div class="treatments-wrapper">
     <!-- Header -->
     <div class="cust-border d-flex align-center">
-      <p class="mr-1">Treatments Management</p>
+      <p class="mr-1 ">Treatments Management</p>
     </div>
 
     <!-- Main Content -->
@@ -24,12 +24,7 @@
             class="custom-search"
           >
             <template #append-inner>
-                <img
-                  :src="searchIcon"
-                  alt="search icon"
-                  width="14"
-                  height="14"
-                />
+              <img :src="searchIcon" alt="search icon" width="14" height="14" />
             </template>
           </v-text-field>
 
@@ -81,46 +76,29 @@
         >
           <template v-slot:headers="{ columns }">
             <tr>
-              <template v-for="(column, i) in columns" :key="column.key">
-                <th
-                  :style="{
-                    width: column.width + 'px',
-                    padding: '0px 7px',
-                    fontSize: '14px',
-                    backgroundColor: '#F6F6F6',
-                  }"
-                >
-                  <div v-if="i !== 0" class="d-flex align-center th-content">
-                    <p class="px-1 w-100 mb-0">{{ column.title }}</p>
-                    <span
-                      class="resize-handle"
-                      @mousedown="startResize($event, column)"
-                    ></span>
-                  </div>
-                  <div v-else class="d-flex justify-center">
-                    <input
-                      type="checkbox"
-                      class="cust-checkbox ma-0"
-                      :checked="allSelected"
-                      :indeterminate.prop="someSelected"
-                      @change="toggleAllRows"
-                    />
-                  </div>
-                </th>
-              </template>
+              <th
+                v-for="column in columns"
+                :key="column.key"
+                :style="{
+                  width: column.width + 'px',
+                  padding: '0px 7px',
+                  fontSize: '14px',
+                  backgroundColor: '#F6F6F6',
+                }"
+              >
+                <div class="d-flex align-center th-content">
+                  <p class="px-1 w-100 mb-0">{{ column.title }}</p>
+                  <span
+                    class="resize-handle"
+                    @mousedown="startResize($event, column)"
+                  ></span>
+                </div>
+              </th>
             </tr>
           </template>
 
           <template v-slot:item="{ item }">
             <tr class="table-row">
-              <td class="text-center">
-                <input
-                  type="checkbox"
-                  class="cust-checkbox"
-                  :checked="isRowSelected(item)"
-                  @change="toggleRow(item)"
-                />
-              </td>
               <td class="text-left">
                 <div class="d-flex align-center" style="gap: 10px">
                   <div
@@ -140,16 +118,6 @@
                   {{ item.category || "—" }}
                 </span>
               </td>
-              <!-- <td class="text-left">
-                <span class="text-grey-darken-1">
-                  {{ formatCurrency(item.price) }}
-                </span>
-              </td> -->
-              <!-- <td class="text-left">
-                <span class="text-grey-darken-1">
-                  {{ item.duration || '—' }} min
-                </span>
-              </td> -->
               <td class="text-left">
                 <v-chip
                   :color="item.active !== false ? '#10B981' : '#6B7280'"
@@ -166,7 +134,11 @@
                   <template #activator="{ props }">
                     <span
                       v-bind="props"
-                      style="display: inline-flex; cursor: pointer; margin-right: 8px"
+                      style="
+                        display: inline-flex;
+                        cursor: pointer;
+                        margin-right: 8px;
+                      "
                       @click="editTreatment(item)"
                     >
                       <img :src="editIcon" alt="edit" width="18" height="18" />
@@ -197,8 +169,8 @@
       </div>
     </div>
 
-    <!-- Add/Edit Treatment Modal using AddAppointmentReason -->
-    <AddAppointmentReason
+    <!-- Add/Edit Treatment Modal using AddTreatment -->
+    <AddTreatment
       v-model="showTreatmentModal"
       :edit-data="editingTreatmentData"
       @save="handleSaveTreatment"
@@ -216,12 +188,11 @@
     />
   </div>
 </template>
-
 <script setup>
 import { ref, computed, onMounted } from "vue";
 import { useOrgStore } from "@/stores/organisation";
 import { useMainStore } from "@/stores/index";
-import AddAppointmentReason from "./AddAppointmentReason.vue";
+import AddTreatment from "./AddTreatment.vue";
 //icon
 import searchIcon from "@/assets/icons/listView/serach-icon.svg";
 import editIcon from "@/assets/icons/edit.svg";
@@ -253,7 +224,7 @@ const deleteDialog = ref({
 
 // Table headers with resizable columns
 const treatmentHeaders = ref([
-  { title: "", key: "checkbox", sortable: false, width: 48 },
+  // { title: "", key: "checkbox", sortable: false, width: 48 },
   { title: "Treatment Name", key: "name", align: "start", width: 220 },
   { title: "Category", key: "category", align: "start", width: 180 },
   // { title: 'Price', key: 'price', align: 'start', width: 120 },
@@ -419,7 +390,7 @@ const editTreatment = (treatment) => {
   showTreatmentModal.value = true;
 };
 
-// Handle save from AddAppointmentReason modal
+// Handle save from AddTreatment modal
 const handleSaveTreatment = async (savedTreatment) => {
   try {
     await loadTreatments();
@@ -492,11 +463,6 @@ onMounted(() => {
 </script>
 
 <style scoped lang="scss">
-.treatments-wrapper {
-  min-height: 100vh;
-  background: #fafafa;
-}
-
 .cust-border {
   border-bottom: 1px solid #e5e7eb;
   padding: 17px;
@@ -528,7 +494,6 @@ onMounted(() => {
 }
 
 .controls-left {
-
   display: flex;
   align-items: center;
   gap: 12px;
@@ -642,6 +607,7 @@ onMounted(() => {
 }
 
 .color-dot {
+  margin-left: 8px;
   width: 32px;
   height: 32px;
   border-radius: 8px;
