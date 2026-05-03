@@ -273,16 +273,22 @@ export const updateTaskCategory = async (event) => {
   try {
     const { TaskCategory } = await import('../../../../models/index.js');
     const body = await readBody(event);
-    const { id, name, description, color } = body;
+    const idParam = getRouterParam(event, 'id');
+    const { name, description, color } = body;
 
-    if (!id) {
-      return error(400, "Category ID is required");
+    if (!idParam) {
+      return error(400, "Category ID is required in the URL path");
+    }
+
+    const id = parseInt(idParam, 10);
+    if (Number.isNaN(id)) {
+      return error(400, "Category ID must be a valid number");
     }
 
     // Find the category
     const category = await TaskCategory.findOne({
       where: {
-        id: parseInt(id),
+        id,
         isDeleted: false,
         organisationId: null  // System categories only
       }
@@ -342,14 +348,16 @@ export const deleteTaskCategory = async (event) => {
 
   try {
     const { TaskCategory, Task } = await import('../../../../models/index.js');
-    const body = await readBody(event);
-    const { id } = body;
+    const idParam = getRouterParam(event, 'id');
 
-    if (!id) {
-      return error(400, "Category ID is required");
+    if (!idParam) {
+      return error(400, "Category ID is required in the URL path");
     }
 
-    const categoryId = parseInt(id);
+    const categoryId = parseInt(idParam, 10);
+    if (Number.isNaN(categoryId)) {
+      return error(400, "Category ID must be a valid number");
+    }
 
     // Find the category
     const category = await TaskCategory.findOne({

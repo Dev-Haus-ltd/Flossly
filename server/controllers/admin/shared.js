@@ -312,11 +312,10 @@ export const parseRequestPayload = async (event) => {
   return typeof body === 'string' ? parseJsonBody(body) : body;
 };
 
-export const readOrganisationId = async (event, payload = null) => {
+export const readOrganisationId = async (event) => {
   const paramOrg = getRouterParam(event, 'orgId') ?? getRouterParam(event, 'organisationId');
-  const bodySource = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
-  const organisationId = Number(paramOrg || bodySource.organisationId || bodySource.orgId || 0);
-  if (!organisationId) error(400, 'organisationId is required');
+  const organisationId = Number(paramOrg);
+  if (!organisationId) error(400, 'Organisation id is required in the URL path');
   const organisation = await Organisation.findByPk(organisationId, { attributes: ['id', 'automationPlaceholders'] });
   if (!organisation) error(404, 'Organisation not found');
   return organisation;

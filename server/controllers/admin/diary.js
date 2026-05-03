@@ -81,8 +81,7 @@ export const updateClinicalNoteTemplateAdmin = async (event) => {
   requireAdmin(event);
   try {
     const payload = await parseRequestPayload(event);
-    const idFromPath = getRouterParam(event, 'id');
-    const id = Number(payload?.id ?? idFromPath);
+    const id = Number(getRouterParam(event, 'id'));
     if (!id) return error(400, 'id is required');
     const template = await ClinicalNoteTemplate.findOne({
       where: { id, scope: 'system' },

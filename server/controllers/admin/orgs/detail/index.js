@@ -17,7 +17,7 @@ export const extendOrganisationTrial = async (event) => {
   const { extensionDays } = body;
 
   if (!organisationId || !extensionDays || extensionDays <= 0) {
-    return error(400, 'orgId and valid extensionDays are required');
+    return error(400, 'valid extensionDays is required (organisation id comes from the URL path)');
   }
 
   try {
@@ -82,7 +82,7 @@ export const updateOrganisationInfo = async (event) => {
   const { updates } = body;
 
   if (!organisationId || !updates || typeof updates !== 'object') {
-    return error(400, 'orgId and updates object are required');
+    return error(400, 'updates object is required (organisation id comes from the URL path)');
   }
 
   const allowedFields = [

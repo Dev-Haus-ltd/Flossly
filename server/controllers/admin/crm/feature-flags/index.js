@@ -26,7 +26,7 @@ export const updateOrganisationCrmFeatureFlags = async (event) => {
   requireAdmin(event);
   try {
     const payload = await parseRequestPayload(event);
-    const organisation = await readOrganisationId(event, payload);
+    const organisation = await readOrganisationId(event);
     const updates = sanitizeCrmFeatureAccessInput(payload);
     if (Object.values(updates).every((value) => value === undefined)) {
       return error(400, 'At least one of meta, whatsapp, chatbot is required');

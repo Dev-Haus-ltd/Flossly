@@ -187,8 +187,8 @@ export const updateChecklist = async (event) => {
   try {
     const { TaskChecklist } = await import('../../../../models/index.js');
     const body = await readBody(event);
+    const idParam = getRouterParam(event, 'id');
     const {
-      id,
       question,
       category,
       fieldOneTitle,
@@ -203,12 +203,17 @@ export const updateChecklist = async (event) => {
       dateValue
     } = body;
 
-    if (!id) {
-      return error(400, "Checklist ID is required");
+    if (!idParam) {
+      return error(400, "Checklist ID is required in the URL path");
+    }
+
+    const checklistId = parseInt(idParam, 10);
+    if (Number.isNaN(checklistId)) {
+      return error(400, "Checklist ID must be a valid number");
     }
 
     // Find checklist item
-    const checklist = await TaskChecklist.findByPk(id);
+    const checklist = await TaskChecklist.findByPk(checklistId);
     if (!checklist) {
       return error(404, "Checklist item not found");
     }
@@ -255,16 +260,14 @@ export const deleteChecklist = async (event) => {
 
   try {
     const { TaskChecklist } = await import('../../../../models/index.js');
-    const body = await readBody(event);
-    const { id } = body;
+    const idParam = getRouterParam(event, 'id');
 
-    if (!id) {
-      return error(400, "Checklist ID is required");
+    if (!idParam) {
+      return error(400, "Checklist ID is required in the URL path");
     }
 
-    // Validate that id is a number
-    const checklistId = parseInt(id);
-    if (isNaN(checklistId)) {
+    const checklistId = parseInt(idParam, 10);
+    if (Number.isNaN(checklistId)) {
       return error(400, "Checklist ID must be a valid number");
     }
 

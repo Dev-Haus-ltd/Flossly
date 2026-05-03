@@ -1,7 +1,7 @@
 import { success, error } from '../../../../utils/response';
 import { DictionaryScript } from '../../../../models';
 import { Op } from 'sequelize';
-import { getRouterParam, getQuery } from 'h3';
+import { getRouterParam } from 'h3';
 import {
   requireAdmin,
   parseRequestPayload,
@@ -22,8 +22,7 @@ export const listScriptsPool = async (event) => {
 export const getScriptPoolItemById = async (event) => {
   requireAdmin(event);
   try {
-    const query = getQuery(event) || {};
-    const idRaw = query.id ?? getRouterParam(event, 'id');
+    const idRaw = getRouterParam(event, 'id');
     if (idRaw == null || idRaw === '') return error(400, 'id is required');
     const item = await DictionaryScript.findByPk(Number(idRaw));
     if (!item) return error(404, 'Script not found');
@@ -53,7 +52,7 @@ export const updateScriptPoolItem = async (event) => {
   requireAdmin(event);
   try {
     const payload = await parseRequestPayload(event);
-    const idRaw = payload?.id ?? getRouterParam(event, 'id');
+    const idRaw = getRouterParam(event, 'id');
     if (idRaw == null || idRaw === '') return error(400, 'id is required');
     const item = await DictionaryScript.findByPk(Number(idRaw));
     if (!item) return error(404, 'Script not found');
@@ -83,8 +82,7 @@ export const updateScriptPoolItem = async (event) => {
 export const deleteScriptPoolItem = async (event) => {
   requireAdmin(event);
   try {
-    const payload = await parseRequestPayload(event);
-    const idRaw = payload?.id ?? getRouterParam(event, 'id');
+    const idRaw = getRouterParam(event, 'id');
     if (idRaw == null || idRaw === '') return error(400, 'id is required');
     const item = await DictionaryScript.findByPk(Number(idRaw));
     if (!item) return error(404, 'Script not found');

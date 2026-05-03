@@ -87,8 +87,7 @@ export const listCrmAutomationDictionaryGroups = async (event) => {
 export const getCrmAutomationDictionaryGroupById = async (event) => {
   requireAdmin(event);
   try {
-    const query = getQuery(event) || {};
-    const idRaw = query.id ?? getRouterParam(event, 'id');
+    const idRaw = getRouterParam(event, 'id');
     if (idRaw == null || idRaw === '') return error(400, 'id is required');
     const item = await CrmAutomationDictionaryGroup.findByPk(Number(idRaw));
     if (!item) return error(404, 'Group not found');
@@ -120,7 +119,7 @@ export const updateCrmAutomationDictionaryGroup = async (event) => {
   requireAdmin(event);
   try {
     const payload = await parseRequestPayload(event);
-    const idRaw = payload?.id ?? getRouterParam(event, 'id');
+    const idRaw = getRouterParam(event, 'id');
     if (idRaw == null || idRaw === '') return error(400, 'id is required');
     const item = await CrmAutomationDictionaryGroup.findByPk(Number(idRaw));
     if (!item) return error(404, 'Group not found');
@@ -144,7 +143,7 @@ export const deleteCrmAutomationDictionaryGroup = async (event) => {
   requireAdmin(event);
   try {
     const payload = await parseRequestPayload(event);
-    const idRaw = payload?.id ?? getRouterParam(event, 'id');
+    const idRaw = getRouterParam(event, 'id');
     if (idRaw == null || idRaw === '') return error(400, 'id is required');
     const item = await CrmAutomationDictionaryGroup.findByPk(Number(idRaw));
     if (!item) return error(404, 'Group not found');
@@ -181,8 +180,7 @@ export const listCrmAutomationDictionaryTemplates = async (event) => {
 export const getCrmAutomationDictionaryTemplateById = async (event) => {
   requireAdmin(event);
   try {
-    const query = getQuery(event) || {};
-    const idRaw = query.id ?? getRouterParam(event, 'id');
+    const idRaw = getRouterParam(event, 'id');
     if (idRaw == null || idRaw === '') return error(400, 'id is required');
     const item = await CrmAutomationDictionaryTemplate.findByPk(Number(idRaw));
     if (!item) return error(404, 'Template not found');
@@ -217,7 +215,7 @@ export const updateCrmAutomationDictionaryTemplate = async (event) => {
   requireAdmin(event);
   try {
     const payload = await parseRequestPayload(event);
-    const idRaw = payload?.id ?? getRouterParam(event, 'id');
+    const idRaw = getRouterParam(event, 'id');
     if (idRaw == null || idRaw === '') return error(400, 'id is required');
     const item = await CrmAutomationDictionaryTemplate.findByPk(Number(idRaw));
     if (!item) return error(404, 'Template not found');
@@ -246,7 +244,7 @@ export const deleteCrmAutomationDictionaryTemplate = async (event) => {
   requireAdmin(event);
   try {
     const payload = await parseRequestPayload(event);
-    const idRaw = payload?.id ?? getRouterParam(event, 'id');
+    const idRaw = getRouterParam(event, 'id');
     if (idRaw == null || idRaw === '') return error(400, 'id is required');
     const item = await CrmAutomationDictionaryTemplate.findByPk(Number(idRaw));
     if (!item) return error(404, 'Template not found');

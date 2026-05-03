@@ -1,5 +1,5 @@
 import { success, error } from '../../../../utils/response';
-import { getRouterParam, getQuery } from 'h3';
+import { getRouterParam } from 'h3';
 import {
   requireAdmin,
   parseRequestPayload,
@@ -24,9 +24,8 @@ export const listCrmAlerts = async (event) => {
 export const getCrmAlertByKey = async (event) => {
   requireAdmin(event);
   try {
-    const query = getQuery(event) || {};
     const organisation = await readOrganisationId(event);
-    const key = String(query.key || getRouterParam(event, 'key') || '').trim().toLowerCase();
+    const key = String(getRouterParam(event, 'key') || '').trim().toLowerCase();
     if (!key) return error(400, 'key is required');
     const item = getOrganisationAlertOptions(organisation).find((alert) => String(alert.key || '').trim().toLowerCase() === key);
     if (!item) return error(404, 'Alert not found');
@@ -41,7 +40,7 @@ export const createCrmAlert = async (event) => {
   requireAdmin(event);
   try {
     const payload = await parseRequestPayload(event);
-    const organisation = await readOrganisationId(event, payload);
+    const organisation = await readOrganisationId(event);
     const items = getOrganisationAlertOptions(organisation);
     if (items.length >= 30) return error(400, 'Cannot exceed 30 alert options');
     const next = sanitizeAlertOptionInput(payload);
@@ -62,9 +61,10 @@ export const updateCrmAlert = async (event) => {
   requireAdmin(event);
   try {
     const payload = await parseRequestPayload(event);
-    const organisation = await readOrganisationId(event, payload);
-    const currentKey = String(payload?.currentKey || payload?.key || getRouterParam(event, 'key') || '').trim().toLowerCase();
-    if (!currentKey) return error(400, 'currentKey or key is required');
+    const organisation = await readOrganisationId(event);
+    const pathKey = getRouterParam(event, 'key');
+    const currentKey = String(pathKey || '').trim().toLowerCase();
+    if (!currentKey) return error(400, 'key is required in the URL path');
     const items = getOrganisationAlertOptions(organisation);
     const index = items.findIndex((item) => String(item.key || '').trim().toLowerCase() === currentKey);
     if (index === -1) return error(404, 'Alert not found');
@@ -85,10 +85,9 @@ export const updateCrmAlert = async (event) => {
 export const deleteCrmAlert = async (event) => {
   requireAdmin(event);
   try {
-    const payload = await parseRequestPayload(event);
-    const organisation = await readOrganisationId(event, payload);
-    const key = String(payload?.key ?? getRouterParam(event, 'key') ?? '').trim().toLowerCase();
-    if (!key) return error(400, 'key is required');
+    const organisation = await readOrganisationId(event);
+    const key = String(getRouterParam(event, 'key') || '').trim().toLowerCase();
+    if (!key) return error(400, 'key is required in the URL path');
     const items = getOrganisationAlertOptions(organisation);
     const next = items.filter((item) => String(item.key || '').trim().toLowerCase() !== key);
     if (next.length === items.length) return error(404, 'Alert not found');

@@ -1,34 +1,20 @@
 import { success, error } from '../../utils/response';
 import {
-  User, UserOrganisation, Organisation, Role, LoginHistory, UserSubscription, UserPreference,
-  UserDocument, UserDocumentFolder, CrmLead, UserTask, DiaryAppointment, UserNotification, Task, TaskCategory,
-  CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, FcmToken, UserPoint, UserPointsHistory, RewardPoint,
-  CrmOption, DictionaryScript, Rota, RotaShift, RotaUser, UserLeaveHistory,
-  CrmAutomationDictionaryGroup, CrmAutomationDictionaryTemplate,
-  ClinicalNoteTemplate, ClinicalNoteTemplateVersion,
+  User, UserOrganisation, Organisation, Role, LoginHistory, UserPreference
 } from '../../models';
-import { seedCrmAutomationDictionary as runSeedCrmAutomationDictionary } from '../../utils/seedCrmAutomationDictionary';
-import { seedConsentFormTemplates as runSeedConsentFormTemplates } from '../../utils/seedConsentFormTemplates';
-import { Op, fn, col } from 'sequelize';
-import { getRouterParam, getQuery, readBody, setResponseHeader } from 'h3';
-import sequelize from '../../utils/db';
+import { Op } from 'sequelize';
+import { getRouterParam, getQuery, readBody } from 'h3';
 import { sendInvitationEmail } from '../../utils/emailNotifications';
 import { v4 as uuidv4 } from 'uuid';
-import stripe from '../../utils/stripe';
-import { getS3Object } from '../../utils/s3';
-import { sendNotificationToMultipleUsers } from '../../utils/fcmNotification';
-import { bulkUploadAutomations as crmBulkUploadAutomations, bulkUploadLeads as crmBulkUploadLeads } from '../crm';
-import { readFile } from 'node:fs/promises';
-import { join, extname } from 'node:path';
-import * as XLSX from 'xlsx';
-import {
-  createClinicalTemplateWithVersion,
-  sanitizeClinicalNoteTemplatePayload,
-  serializeClinicalTemplate,
-  serializeClinicalTemplateVersion,
-  updateClinicalTemplateWithVersion,
-} from '../../utils/clinicalNoteTemplates';
-import { parseJsonBody } from '../../utils/body';
+
+function organisationIdFromPath(event) {
+  const orgParam = getRouterParam(event, 'orgId') ?? getRouterParam(event, 'organisationId');
+  const organisationId = Number(orgParam);
+  if (!Number.isFinite(organisationId) || organisationId < 1) {
+    return error(400, 'Organisation id is required in the URL path');
+  }
+  return organisationId;
+}
 
 export const searchUsers = async (event) => {
   const admin = event.context.admin;
@@ -189,13 +175,15 @@ export const updateUserStatus = async (event) => {
     return error(403, "Admin access required");
   }
 
+  const organisationId = organisationIdFromPath(event);
+
   const body = await readBody(event);
-  const { organisationId, status } = body;
+  const { status } = body;
 
   const userId = getRouterParam(event, 'id');
 
-  if (!organisationId || !status) {
-    return error(400, "organisationId and status are required");
+  if (!userId || !status) {
+    return error(400, "status is required (org and user ids come from the URL path)");
   }
 
   // Valid status values matching the UserOrganisation model enum
@@ -311,7 +299,7 @@ export const resetUserPassword = async (event) => {
   const userId = getRouterParam(event, 'id');
 
   if (!userId || !newPassword) {
-    return error(400, "userId and newPassword are required");
+    return error(400, "newPassword is required");
   }
 
   // Validate password strength
@@ -365,10 +353,15 @@ export const updateUserInfo = async (event) => {
   }
 
   const body = await readBody(event);
-  const { userId, updates } = body;
+  const userId = getRouterParam(event, 'id');
+  const { updates } = body;
 
-  if (!userId || !updates || typeof updates !== 'object') {
-    return error(400, "userId and updates object are required");
+  if (!userId) {
+    return error(400, 'User id is required in the URL path');
+  }
+
+  if (!updates || typeof updates !== 'object') {
+    return error(400, 'updates object is required');
   }
 
   // Define allowed fields that can be updated
@@ -469,13 +462,14 @@ export const updateUserLicense = async (event) => {
     return error(403, "Admin access required");
   }
 
-  const body = await readBody(event) || {};
-  const paramUserId = getRouterParam(event, 'id');
-  const { userId: bodyUserId, organisationId, licenseType, renewalDate } = body;
-  const userId = bodyUserId ?? paramUserId;
+  const organisationId = organisationIdFromPath(event);
 
-  if (!userId || !organisationId || !licenseType || !renewalDate) {
-    return error(400, "organisationId, licenseType, and renewalDate are required; user is taken from the URL path or userId in the body");
+  const body = await readBody(event) || {};
+  const userId = getRouterParam(event, 'id');
+  const { licenseType, renewalDate } = body;
+
+  if (!licenseType || !renewalDate) {
+    return error(400, 'licenseType and renewalDate are required');
   }
 
   // Validate license type
@@ -554,10 +548,13 @@ export const resendInvite = async (event) => {
     return error(403, "Admin access required");
   }
 
-  const body = await readBody(event);
-  const { organisationId } = body;
+  const organisationId = organisationIdFromPath(event);
 
   const userId = getRouterParam(event, 'id');
+
+  if (!userId) {
+    return error(400, 'User id is required in the URL path');
+  }
 
   try {
     // Get user details
@@ -585,28 +582,15 @@ export const resendInvite = async (event) => {
       return error(400, `User status is "${user.status}". Only users with status "Invited" can receive resend invitations.`);
     }
 
-    // Find the organization to get details for email
-    let targetOrganisation = null;
-    
-    if (organisationId) {
-      // Specific organization requested
-      const userOrg = user.userOrganisations.find(
-        uo => uo.organisationId === parseInt(organisationId)
-      );
-      
-      if (!userOrg) {
-        return error(404, "User is not associated with the specified organization");
-      }
-      
-      targetOrganisation = userOrg.organisation;
-    } else {
-      // Use first organization if not specified
-      if (!user.userOrganisations || user.userOrganisations.length === 0) {
-        return error(400, "User is not associated with any organization");
-      }
-      
-      targetOrganisation = user.userOrganisations[0].organisation;
+    const userOrg = user.userOrganisations?.find(
+      (uo) => Number(uo.organisationId) === Number(organisationId),
+    );
+
+    if (!userOrg) {
+      return error(404, "User is not associated with the specified organisation");
     }
+
+    const targetOrganisation = userOrg.organisation;
 
     // Generate new invite token if not exists
     if (!user.inviteToken) {

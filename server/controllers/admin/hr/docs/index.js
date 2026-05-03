@@ -114,13 +114,19 @@ export const updateHrDocument = async (event) => {
   try {
     const { HrDocument } = await import('../../../../models/hrDocuments');
     const body = await readBody(event);
-    const { id, name, type } = body;
+    const idParam = getRouterParam(event, 'docId');
+    const { name, type } = body;
 
-    if (!id) {
-      return error(400, 'id is required');
+    if (!idParam) {
+      return error(400, 'Document id is required in the URL path');
     }
 
-    const document = await HrDocument.findByPk(parseInt(id));
+    const id = parseInt(idParam, 10);
+    if (Number.isNaN(id)) {
+      return error(400, 'Document id must be a valid number');
+    }
+
+    const document = await HrDocument.findByPk(id);
 
     if (!document) {
       return error(404, 'HR document not found');
@@ -156,14 +162,18 @@ export const deleteHrDocument = async (event) => {
 
   try {
     const { HrDocument } = await import('../../../../models/hrDocuments');
-    const body = await readBody(event);
-    const { id } = body;
+    const idParam = getRouterParam(event, 'docId');
 
-    if (!id) {
-      return error(400, 'id is required');
+    if (!idParam) {
+      return error(400, 'Document id is required in the URL path');
     }
 
-    const document = await HrDocument.findByPk(parseInt(id));
+    const id = parseInt(idParam, 10);
+    if (Number.isNaN(id)) {
+      return error(400, 'Document id must be a valid number');
+    }
+
+    const document = await HrDocument.findByPk(id);
 
     if (!document) {
       return error(404, 'HR document not found');
@@ -173,7 +183,7 @@ export const deleteHrDocument = async (event) => {
 
     return success({
       message: 'HR document deleted successfully',
-      deletedId: parseInt(id),
+      deletedId: id,
     });
   } catch (err) {
     console.error('Delete HR document error:', err);
